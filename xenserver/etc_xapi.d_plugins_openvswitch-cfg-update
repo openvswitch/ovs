@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # xapi plugin script to update the cache of configuration items in the
-# ovs-vswitchd configuration that are managed in the xapi database when 
+# ovs-vswitchd configuration that are managed in the xapi database when
 # integrated with Citrix management tools.
 
 # Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
@@ -22,15 +22,15 @@
 # TBD:   the system in a bad state if anything goes wrong.
 
 import XenAPIPlugin
-import XenAPI
 import os
 import subprocess
 import syslog
 import re
 
-vsctl="/usr/bin/ovs-vsctl"
-ofctl="/usr/bin/ovs-ofctl"
-cacert_filename="/etc/openvswitch/vswitchd.cacert"
+vsctl = '/usr/bin/ovs-vsctl'
+ofctl = '/usr/bin/ovs-ofctl'
+cacert_filename = '/etc/openvswitch/vswitchd.cacert'
+
 
 # Delete the CA certificate, so that we go back to boot-strapping mode
 def delete_cacert():
@@ -40,35 +40,36 @@ def delete_cacert():
         # Ignore error if file doesn't exist
         pass
 
+
 def update(session, args):
     # Refresh bridge network UUIDs in case this host joined or left a pool.
-    script = "/opt/xensource/libexec/interface-reconfigure"
+    script = '/opt/xensource/libexec/interface-reconfigure'
     try:
-        retval = subprocess.call([script, "rewrite"])
+        retval = subprocess.call([script, 'rewrite'])
         if retval != 0:
-            syslog.syslog("%s exited with status %d" % (script, retval))
+            syslog.syslog('%s exited with status %d' % (script, retval))
     except OSError, e:
-        syslog.syslog("%s: failed to execute (%s)" % (script, e.strerror))
+        syslog.syslog('%s: failed to execute (%s)' % (script, e.strerror))
 
     pools = session.xenapi.pool.get_all()
     # We assume there is only ever one pool...
     if len(pools) == 0:
-        raise XenAPIPlugin.Failure("NO_POOL_FOR_HOST", [])
+        raise XenAPIPlugin.Failure('NO_POOL_FOR_HOST', [])
     if len(pools) > 1:
-        raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
+        raise XenAPIPlugin.Failure('MORE_THAN_ONE_POOL_FOR_HOST', [])
     new_controller = False
     pool = session.xenapi.pool.get_record(pools[0])
-    controller = pool.get("vswitch_controller", "")
-    ret_str = ""
+    controller = pool.get('vswitch_controller', '')
+    ret_str = ''
     currentController = vswitchCurrentController()
-    if controller == "" and currentController != "":
+    if controller == '' and currentController != '':
         delete_cacert()
         try:
             emergency_reset(session, None)
         except:
             pass
         removeControllerCfg()
-        ret_str += "Successfully removed controller config.  "
+        ret_str += 'Successfully removed controller config.  '
     elif controller != currentController:
         delete_cacert()
         try:
@@ -77,10 +78,10 @@ def update(session, args):
             pass
         setControllerCfg(controller)
         new_controller = True
-        ret_str += "Successfully set controller to %s.  " % controller
+        ret_str += 'Successfully set controller to %s.  ' % controller
 
     try:
-        pool_fail_mode = pool["other_config"]["vswitch-controller-fail-mode"]
+        pool_fail_mode = pool['other_config']['vswitch-controller-fail-mode']
     except KeyError, e:
         pool_fail_mode = None
 
@@ -99,7 +100,8 @@ def update(session, args):
     host_mgmt_device = None
     pool_mgmt_macs = {}
     if new_controller:
-        recs = session.xenapi.PIF.get_all_records_where('field "management"="true"')
+        query = 'field "management"="true"'
+        recs = session.xenapi.PIF.get_all_records_where(query)
         for rec in recs.itervalues():
             pool_mgmt_macs[rec.get('MAC')] = rec.get('device')
 
@@ -136,11 +138,12 @@ def update(session, args):
             dib_changed = True
 
         # Change bridge fail_mode if XAPI state differs from OVS state.
-        bridge_fail_mode = vswitchCfgQuery(["get", "Bridge",
-            bridge, "fail_mode"]).strip('[]"')
+        bridge_fail_mode = vswitchCfgQuery(['get', 'Bridge',
+                                            bridge, 'fail_mode']).strip('[]"')
 
         try:
-            fail_mode = bton[bridge]["other_config"]["vswitch-controller-fail-mode"]
+            other_config = bton[bridge]['other_config']
+            fail_mode = other_config['vswitch-controller-fail-mode']
         except KeyError, e:
             fail_mode = None
 
@@ -152,98 +155,108 @@ def update(session, args):
 
         if bridge_fail_mode != fail_mode:
             vswitchCfgMod(['--', 'set', 'Bridge', bridge,
-                "fail_mode=%s" % fail_mode])
+                           'fail_mode=%s' % fail_mode])
             fail_mode_changed = True
 
         # Determine local mgmt MAC address if host being added to secure
         # pool so we can add default flows to allow management traffic
-        if new_controller and fail_mode_changed and pool_fail_mode == "secure":
-            oc = vswitchCfgQuery(["get", "Bridge", bridge, "other-config"])
+        if new_controller and fail_mode_changed and pool_fail_mode == 'secure':
+            oc = vswitchCfgQuery(['get', 'Bridge', bridge, 'other-config'])
             m = re.match('.*hwaddr="([0-9a-fA-F:].*)".*', oc)
             if m and m.group(1) in pool_mgmt_macs.keys():
                 mgmt_bridge = bridge
                 host_mgmt_mac = m.group(1)
                 host_mgmt_device = pool_mgmt_macs[host_mgmt_mac]
 
-    if host_mgmt_mac is not None and mgmt_bridge is not None and \
-        host_mgmt_device is not None:
-        tp = "idle_timeout=0,priority=0"
-        port = vswitchCfgQuery(["get", "interface", host_mgmt_device, "ofport"])
-        addFlow(mgmt_bridge, "%s,in_port=%s,arp,nw_proto=1,actions=local" % \
-            (tp, port))
-        addFlow(mgmt_bridge, "%s,in_port=local,arp,dl_src=%s,actions=%s" % \
-            (tp, host_mgmt_mac, port))
-        addFlow(mgmt_bridge, "%s,in_port=%s,dl_dst=%s,actions=local" % \
-            (tp, port, host_mgmt_mac))
-        addFlow(mgmt_bridge, "%s,in_port=local,dl_src=%s,actions=%s" % \
-            (tp, host_mgmt_mac, port))
+    if (host_mgmt_mac is not None and mgmt_bridge is not None and
+            host_mgmt_device is not None):
+        tp = 'idle_timeout=0,priority=0'
+        port = vswitchCfgQuery(['get', 'interface', host_mgmt_device,
+                                'ofport'])
+
+        addFlow(mgmt_bridge, '%s,in_port=%s,arp,nw_proto=1,actions=local' %
+                (tp, port))
+        addFlow(mgmt_bridge, '%s,in_port=local,arp,dl_src=%s,actions=%s' %
+                (tp, host_mgmt_mac, port))
+        addFlow(mgmt_bridge, '%s,in_port=%s,dl_dst=%s,actions=local' %
+                (tp, port, host_mgmt_mac))
+        addFlow(mgmt_bridge, '%s,in_port=local,dl_src=%s,actions=%s' %
+                (tp, host_mgmt_mac, port))
 
     if dib_changed:
-        ret_str += "Updated in-band management.  "
+        ret_str += 'Updated in-band management.  '
     if fail_mode_changed:
-        ret_str += "Updated fail_mode.  "
+        ret_str += 'Updated fail_mode.  '
 
     if ret_str != '':
         return ret_str
     else:
-        return "No change to configuration"
+        return 'No change to configuration'
+
 
 def vswitchCurrentController():
-    controller = vswitchCfgQuery(["get-manager"])
-    if controller == "":
+    controller = vswitchCfgQuery(['get-manager'])
+    if controller == '':
         return controller
-    if len(controller) < 4 or controller[0:4] != "ssl:":
+    if len(controller) < 4 or controller[0:4] != 'ssl:':
         return controller
     else:
         return controller.split(':')[1]
 
+
 def removeControllerCfg():
-    vswitchCfgMod(["--", "del-manager",
-                   "--", "del-ssl"])
+    vswitchCfgMod(['--', 'del-manager',
+                   '--', 'del-ssl'])
+
 
 def setControllerCfg(controller):
     # /etc/xensource/xapi-ssl.pem is mentioned twice below because it
     # contains both the private key and the certificate.
-    vswitchCfgMod(["--", "del-manager",
-                   "--", "del-ssl",
-                   "--", "--bootstrap", "set-ssl",
-                   "/etc/xensource/xapi-ssl.pem",
-                   "/etc/xensource/xapi-ssl.pem",
+    vswitchCfgMod(['--', 'del-manager',
+                   '--', 'del-ssl',
+                   '--', '--bootstrap', 'set-ssl',
+                   '/etc/xensource/xapi-ssl.pem',
+                   '/etc/xensource/xapi-ssl.pem',
                    cacert_filename,
-                   "--", "set-manager", 'ssl:' + controller + ':6632'])
+                   '--', 'set-manager', 'ssl:' + controller + ':6632'])
+
 
 def vswitchCfgQuery(action_args):
-    cmd = [vsctl, "-vconsole:off"] + action_args
+    cmd = [vsctl, '-vconsole:off'] + action_args
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
-    if len(output) == 0 or output[0] == None:
-        output = ""
+    if len(output) == 0 or output[0] is None:
+        output = ''
     else:
         output = output[0].strip()
     return output
 
+
 def vswitchCfgMod(action_args):
-    cmd = [vsctl, "--timeout=5", "-vconsole:off"] + action_args
+    cmd = [vsctl, '--timeout=5', '-vconsole:off'] + action_args
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
-        raise XenAPIPlugin.Failure("VSWITCH_CONFIG_MOD_FAILURE",
-                                   [ str(exitcode) , str(action_args) ])
+        raise XenAPIPlugin.Failure('VSWITCH_CONFIG_MOD_FAILURE',
+                                   [str(exitcode), str(action_args)])
+
 
 def emergency_reset(session, args):
-    cmd = [vsctl, "--timeout=5", "emer-reset"]
+    cmd = [vsctl, '--timeout=5', 'emer-reset']
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
-        raise XenAPIPlugin.Failure("VSWITCH_EMER_RESET_FAILURE",
-                                   [ str(exitcode) ])
+        raise XenAPIPlugin.Failure('VSWITCH_EMER_RESET_FAILURE',
+                                   [str(exitcode)])
 
-    return "Successfully reset configuration"
+    return 'Successfully reset configuration'
+
 
 def addFlow(switch, flow):
-    cmd = [ofctl, "add-flow", switch, flow]
+    cmd = [ofctl, 'add-flow', switch, flow]
     exitcode = subprocess.call(cmd)
     if exitcode != 0:
-        raise XenAPIPlugin.Failure("VSWITCH_ADD_FLOW_FAILURE",
-                                   [ str(exitcode) , str(switch), str(flow) ])
-    
-if __name__ == "__main__":
-    XenAPIPlugin.dispatch({"update": update,
-                           "emergency_reset": emergency_reset})
+        raise XenAPIPlugin.Failure('VSWITCH_ADD_FLOW_FAILURE',
+                                   [str(exitcode), str(switch), str(flow)])
+
+
+if __name__ == '__main__':
+    XenAPIPlugin.dispatch({'update': update,
+                           'emergency_reset': emergency_reset})
