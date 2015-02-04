@@ -9,6 +9,7 @@ env:
   - OPTS="--disable-ssl"
   - TESTSUITE=1 KERNEL=3.18.1
   - TESTSUITE=1 OPTS="--enable-shared"
+  - BUILD_ENV="-m32" OPTS="--disable-ssl"
   - KERNEL=3.17.7 DPDK=1
   - KERNEL=3.17.7 DPDK=1 OPTS="--enable-shared"
   - KERNEL=3.17.7

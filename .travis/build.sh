@@ -4,6 +4,7 @@ set -o errexit
 
 KERNELSRC=""
 CFLAGS="-Werror"
+SPARSE_FLAGS=""
 EXTRA_OPTS=""
 
 function install_kernel()
@@ -74,7 +75,7 @@ if [ "$DPDK" ]; then
     EXTRA_OPTS+="--with-dpdk=./dpdk-$DPDK_VER/build"
 elif [ $CC != "clang" ]; then
     # DPDK headers currently trigger sparse errors
-    CFLAGS="$CFLAGS -Wsparse-error"
+    SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
 
 configure_ovs $EXTRA_OPTS $*
@@ -86,8 +87,11 @@ fi
 
 if [ $CC = "clang" ]; then
     make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
+elif [[ $BUILD_ENV =~ "-m32" ]]; then
+    # Disable sparse for 32bit builds on 64bit machine
+    make CFLAGS="$CFLAGS $BUILD_ENV"
 else
-    make CFLAGS="$CFLAGS" C=1
+    make CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
 fi
 
 if [ $TESTSUITE ] && [ $CC != "clang" ]; then
