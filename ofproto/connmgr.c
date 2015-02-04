@@ -1000,6 +1000,10 @@ ofconn_set_protocol(struct ofconn *ofconn, enum ofputil_protocol protocol)
         uint32_t *master = ofconn->master_async_config;
         uint32_t *slave = ofconn->slave_async_config;
 
+        /* OFPR_ACTION_SET is not supported before OF1.4 */
+        master[OAM_PACKET_IN] &= ~(1u << OFPR_ACTION_SET);
+        slave [OAM_PACKET_IN] &= ~(1u << OFPR_ACTION_SET);
+
         /* OFPR_GROUP is not supported before OF1.4 */
         master[OAM_PACKET_IN] &= ~(1u << OFPR_GROUP);
         slave [OAM_PACKET_IN] &= ~(1u << OFPR_GROUP);
@@ -1252,6 +1256,7 @@ ofconn_flush(struct ofconn *ofconn)
          * reasons itself. */
         master[OAM_PACKET_IN] = ((1u << OFPR_NO_MATCH)
                                  | (1u << OFPR_ACTION)
+                                 | (1u << OFPR_ACTION_SET)
                                  | (1u << OFPR_GROUP));
         master[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
                                    | (1u << OFPPR_DELETE)

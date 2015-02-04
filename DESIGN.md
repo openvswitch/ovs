@@ -54,6 +54,7 @@ sent, an entry labeled "---" means that the message is suppressed.
     OFPR_NO_MATCH                              yes       ---
     OFPR_ACTION                                yes       ---
     OFPR_INVALID_TTL                           ---       ---
+    OFPR_ACTION_SET (OF1.4+)                   yes       ---
     OFPR_GROUP (OF1.4+)                        yes       ---
 
   OFPT_FLOW_REMOVED / NXT_FLOW_REMOVED
