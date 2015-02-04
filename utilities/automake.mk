@@ -30,6 +30,7 @@ docs += utilities/ovs-command-bashcomp.INSTALL.md
 EXTRA_DIST += \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-appctl-bashcomp.bash \
+	utilities/ovs-vsctl-bashcomp.bash \
 	utilities/ovs-command-bashcomp.INSTALL.md \
 	utilities/ovs-ctl.in \
 	utilities/ovs-dev.py \
