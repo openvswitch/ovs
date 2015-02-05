@@ -11,6 +11,5 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
 AT_CHECK([ip netns exec at_ns0 bash -c "ping -q -c 3 -i 0.3 -w 2 10.1.1.2 >/dev/null"])
 
-DEL_NAMESPACES(at_ns0, at_ns1)
-OVS_KMOD_VSWITCHD_STOP
+OVS_KMOD_VSWITCHD_STOP([], DEL_NAMESPACES(at_ns0, at_ns1))
 AT_CLEANUP
