@@ -40,7 +40,7 @@ m4_define([OVS_KMOD_VSWITCHD_STOP],
 m4_define([DEL_NAMESPACES],
    [m4_foreach([ns], [$@],
                [ip netns del ns
-               ])
+])
    ]
 )
 #
