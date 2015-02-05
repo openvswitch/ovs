@@ -1,0 +1,43 @@
+version: 1.0.{build}
+branches:
+  only: 
+  - master
+clone_folder: C:\openvswitch
+init:
+- ps: >-
+    mkdir C:\pthreads-win32
+
+    mkdir C:\ovs-build-downloads
+
+    $source = "ftp://sourceware.org/pub/pthreads-win32/pthreads-w32-2-9-1-release.zip"
+
+    $destination = "C:\pthreads-win32\pthreads-win32.zip"
+
+    Invoke-WebRequest $source -OutFile $destination
+
+    $source = "http://slproweb.com/download/Win32OpenSSL-1_0_1L.exe"
+
+    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_1L.exe"
+
+    Invoke-WebRequest $source -OutFile $destination
+
+    cd C:\pthreads-win32
+
+    7z x C:\pthreads-win32\pthreads-win32.zip
+
+    cd C:\ovs-build-downloads
+
+    .\Win32OpenSSL-1_0_1L.exe /silent /verysilent /sp- /suppressmsgboxes
+
+    Start-Sleep -s 30
+
+    cd C:\openvswitch
+
+build_script:
+- '"C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\VsDevCmd"'
+- C:\MinGW\msys\1.0\bin\bash -lc "echo \"C:/MinGW /mingw\" > /etc/fstab"
+- C:\MinGW\msys\1.0\bin\bash -lc "cp /c/pthreads-win32/Pre-built.2/dll/x86/*.dll /c/openvswitch/."
+- C:\MinGW\msys\1.0\bin\bash -lc "mv /bin/link.exe /bin/link_copy.exe"
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./boot.sh"
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=-lws2_32 --with-pthread=C:/pthreads-win32/Pre-built.2 --with-openssl=C:/OpenSSL-Win32"
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make"

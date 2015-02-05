@@ -247,6 +247,15 @@ type: External network', in the HyperV virtual network switch configuration.
 this is still a work in progress. Till the support is complete we recommend
 disabling TX/RX offloads for both the VM's as well as the HyperV.
 
+Windows autobuild service
+-------------------------
+
+AppVeyor (appveyor.com) provides a free Windows autobuild service for
+opensource projects.  Open vSwitch has integration with AppVeyor for
+continuous build.  A developer can build test his changes for Windows by
+logging into appveyor.com using a github account, creating a new project
+by linking it to his development repository in github and triggering
+a new build.
 
 TODO
 ----

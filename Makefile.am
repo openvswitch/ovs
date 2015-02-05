@@ -65,6 +65,7 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 # A list of Markdown-formatted documentation that will automatically be
 # included in the "make dist-docs" output.
 docs = \
+	appveyor.yml \
 	CONTRIBUTING.md \
 	CodingStyle.md \
 	DESIGN.md \
