@@ -9,6 +9,7 @@
 #
 m4_define([OVS_KMOD_VSWITCHD_START],
   [ AT_CHECK([modprobe openvswitch])
+    ON_EXIT([modprobe -r openvswitch])
    _OVS_VSWITCHD_START([])
    dnl Add bridges, ports, etc.
    AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
