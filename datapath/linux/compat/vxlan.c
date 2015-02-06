@@ -48,6 +48,7 @@
 #include <net/ip_tunnels.h>
 #include <net/icmp.h>
 #include <net/udp.h>
+#include <net/udp_tunnel.h>
 #include <net/rtnetlink.h>
 #include <net/route.h>
 #include <net/dsfield.h>
@@ -286,17 +287,45 @@ static void vxlan_del_work(struct work_struct *work)
 	call_rcu(&vs->rcu, rcu_free_vs);
 }
 
+static struct socket *vxlan_create_sock(struct net *net, bool ipv6,
+					__be16 port, u32 flags)
+{
+	struct socket *sock;
+	struct udp_port_cfg udp_conf;
+	int err;
+
+	memset(&udp_conf, 0, sizeof(udp_conf));
+
+	if (ipv6) {
+		udp_conf.family = AF_INET6;
+		/* The checksum flag is silently ignored but it
+		 * doesn't make sense here anyways because OVS enables
+		 * checksums on a finer granularity than per-socket.
+		 */
+	} else {
+		udp_conf.family = AF_INET;
+		udp_conf.local_ip.s_addr = htonl(INADDR_ANY);
+	}
+
+	udp_conf.local_udp_port = port;
+
+	/* Open UDP socket */
+	err = udp_sock_create(net, &udp_conf, &sock);
+	if (err < 0)
+		return ERR_PTR(err);
+
+	/* Disable multicast loopback */
+	inet_sk(sock->sk)->mc_loop = 0;
+
+	return sock;
+}
+
 static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 					      vxlan_rcv_t *rcv, void *data, u32 flags)
 {
 	struct vxlan_sock *vs;
+	struct socket *sock;
 	struct sock *sk;
-	struct sockaddr_in vxlan_addr = {
-		.sin_family = AF_INET,
-		.sin_addr.s_addr = htonl(INADDR_ANY),
-		.sin_port = port,
-	};
-	int rc;
 
 	vs = kmalloc(sizeof(*vs), GFP_KERNEL);
 	if (!vs) {
@@ -306,27 +335,14 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 
 	INIT_WORK(&vs->del_work, vxlan_del_work);
 
-	/* Create UDP socket for encapsulation receive. */
-	rc = sock_create_kern(AF_INET, SOCK_DGRAM, IPPROTO_UDP, &vs->sock);
-	if (rc < 0) {
-		pr_debug("UDP socket create failed\n");
+	sock = vxlan_create_sock(net, false, port, flags);
+	if (IS_ERR(sock)) {
 		kfree(vs);
-		return ERR_PTR(rc);
+		return ERR_CAST(sock);
 	}
 
-	/* Put in proper namespace */
-	sk = vs->sock->sk;
-	sk_change_net(sk, net);
-
-	rc = kernel_bind(vs->sock, (struct sockaddr *) &vxlan_addr,
-			sizeof(vxlan_addr));
-	if (rc < 0) {
-		pr_debug("bind for UDP socket %pI4:%u (%d)\n",
-				&vxlan_addr.sin_addr, ntohs(vxlan_addr.sin_port), rc);
-		sk_release_kernel(sk);
-		kfree(vs);
-		return ERR_PTR(rc);
-	}
+	vs->sock = sock;
+	sk = sock->sk;
 	vs->rcv = rcv;
 	vs->data = data;
 	vs->flags = (flags & VXLAN_F_RCV_FLAGS);
