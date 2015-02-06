@@ -38,6 +38,7 @@
 /time.c
 /tmp
 /tunnel.c
+/udp_tunnel.c
 /utils.c
 /vlan.c
 /vport-generic.c
