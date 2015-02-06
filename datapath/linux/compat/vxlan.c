@@ -209,7 +209,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 	return ovs_iptunnel_handle_offloads(skb, false, vxlan_gso);
 }
 
-static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, struct vxlan_sock *vs,
+static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, u32 vxflags,
 				struct vxlan_metadata *md)
 {
 	struct vxlanhdr_gbp *gbp;
@@ -230,7 +230,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		   struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		   __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md, bool xnet)
+		   struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
 	struct vxlanhdr *vxh;
 	struct udphdr *uh;
@@ -263,8 +263,8 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	vxh->vx_flags = htonl(VXLAN_HF_VNI);
 	vxh->vx_vni = md->vni;
 
-	if (vs->flags & VXLAN_F_GBP)
-		vxlan_build_gbp_hdr(vxh, vs, md);
+	if (vxflags & VXLAN_F_GBP)
+		vxlan_build_gbp_hdr(vxh, vxflags, md);
 
 	__skb_push(skb, sizeof(*uh));
 	skb_reset_transport_header(skb);
@@ -344,7 +344,7 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 	}
 	vs->rcv = rcv;
 	vs->data = data;
-	vs->flags = flags;
+	vs->flags = (flags & VXLAN_F_RCV_FLAGS);
 
 	/* Disable multicast loopback */
 	inet_sk(sk)->mc_loop = 0;

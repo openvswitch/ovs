@@ -77,6 +77,10 @@ struct vxlanhdr_gbp {
 #define VXLAN_F_GBP			0x800
 #endif
 
+#ifndef VXLAN_F_RCV_FLAGS
+#define VXLAN_F_RCV_FLAGS			VXLAN_F_GBP
+#endif
+
 #ifdef HAVE_VXLAN_METADATA
 #define USE_UPSTREAM_VXLAN
 
@@ -84,15 +88,15 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
                    struct rtable *rt, struct sk_buff *skb,
                    __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
                    __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md, bool xnet)
+		   struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
 	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
 		kfree_skb(skb);
 		return -ENOSYS;
 	}
 
-	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
-			      src_port, dst_port, md, xnet);
+	return vxlan_xmit_skb(rt, skb, src, dst, tos, ttl, df,
+			      src_port, dst_port, md, xnet, vxflags);
 }
 
 #define vxlan_xmit_skb rpl_vxlan_xmit_skb
@@ -134,7 +138,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		   struct rtable *rt, struct sk_buff *skb,
 		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		   __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md, bool xnet);
+		   struct vxlan_metadata *md, bool xnet, u32 vxflags);
 
 #define vxlan_src_port rpl_vxlan_src_port
 __be16 vxlan_src_port(__u16 port_min, __u16 port_max, struct sk_buff *skb);
