@@ -120,6 +120,8 @@ struct netdev_tunnel_config {
     ovs_be32 ip_src;
     ovs_be32 ip_dst;
 
+    uint32_t exts;
+
     uint8_t ttl;
     bool ttl_inherit;
 

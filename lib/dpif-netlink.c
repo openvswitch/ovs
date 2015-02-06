@@ -849,10 +849,24 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, struct netdev *netdev,
     }
 
     tnl_cfg = netdev_get_tunnel_config(netdev);
-    if (tnl_cfg && tnl_cfg->dst_port != 0) {
+    if (tnl_cfg && (tnl_cfg->dst_port != 0 || tnl_cfg->exts)) {
         ofpbuf_use_stack(&options, options_stub, sizeof options_stub);
-        nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
-                       ntohs(tnl_cfg->dst_port));
+        if (tnl_cfg->dst_port) {
+            nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
+                           ntohs(tnl_cfg->dst_port));
+        }
+        if (tnl_cfg->exts) {
+            size_t ext_ofs;
+            int i;
+
+            ext_ofs = nl_msg_start_nested(&options, OVS_TUNNEL_ATTR_EXTENSION);
+            for (i = 0; i < 32; i++) {
+                if (tnl_cfg->exts & (1 << i)) {
+                    nl_msg_put_flag(&options, i);
+                }
+            }
+            nl_msg_end_nested(&options, ext_ofs);
+        }
         request.options = ofpbuf_data(&options);
         request.options_len = ofpbuf_size(&options);
     }

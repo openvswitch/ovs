@@ -1904,6 +1904,26 @@
         to <code>false</code> to disable.
       </column>
 
+      <group title="Tunnel Options: vxlan only">
+
+      <column name="options" key="exts">
+        <p>Optional.  Comma separated list of optional VXLAN extensions to
+           enable. The following extensions are supported:</p>
+
+        <ul>
+          <li>
+            <code>gbp</code>: VXLAN-GBP allows to transport the group policy
+            context of a packet across the VXLAN tunnel to other network
+            peers. See the field description of <code>tun_gbp_id</code> and
+            <code>tun_gbp_flags</code> in ovs-ofctl(8) for additional
+            information.
+            (<code>https://tools.ietf.org/html/draft-smith-vxlan-group-policy</code>)
+          </li>
+        </ul>
+      </column>
+
+	  </group>
+
       <group title="Tunnel Options: gre and ipsec_gre only">
         <p>
           Only <code>gre</code> and <code>ipsec_gre</code> interfaces support

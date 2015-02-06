@@ -532,6 +532,24 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
                    !strcmp(node->key, "in_key") ||
                    !strcmp(node->key, "out_key")) {
             /* Handled separately below. */
+        } else if (!strcmp(node->key, "exts")) {
+            char *str = xstrdup(node->value);
+            char *ext, *save_ptr = NULL;
+
+            tnl_cfg.exts = 0;
+
+            ext = strtok_r(str, ",", &save_ptr);
+            while (ext) {
+                if (!strcmp(type, "vxlan") && !strcmp(ext, "gbp")) {
+                    tnl_cfg.exts |= (1 << OVS_VXLAN_EXT_GBP);
+                } else {
+                    VLOG_WARN("%s: unknown extension '%s'", name, ext);
+                }
+
+                ext = strtok_r(NULL, ",", &save_ptr);
+            }
+
+            free(str);
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->key);
         }
