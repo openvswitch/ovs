@@ -3,6 +3,7 @@ openvswitch_sources += \
 	linux/compat/exthdrs_core.c \
 	linux/compat/flex_array.c \
 	linux/compat/flow_dissector.c \
+	linux/compat/geneve.c \
 	linux/compat/gre.c \
 	linux/compat/gso.c \
 	linux/compat/genetlink-openvswitch.c \

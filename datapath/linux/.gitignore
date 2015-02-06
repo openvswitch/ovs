@@ -18,6 +18,7 @@
 /flow_netlink.c
 /flow_table.c
 /genetlink-openvswitch.c
+/geneve.c
 /genl_exec.c
 /gre.c
 /gso.c
