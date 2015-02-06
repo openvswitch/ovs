@@ -161,24 +161,6 @@ static void vxlan_set_owner(struct sock *sk, struct sk_buff *skb)
 	skb->destructor = vxlan_sock_put;
 }
 
-/* Compute source port for outgoing packet
- *   first choice to use L4 flow hash since it will spread
- *     better and maybe available from hardware
- *   secondary choice is to use jhash on the Ethernet header
- */
-__be16 vxlan_src_port(__u16 port_min, __u16 port_max, struct sk_buff *skb)
-{
-	unsigned int range = (port_max - port_min) + 1;
-	u32 hash;
-
-	hash = skb_get_hash(skb);
-	if (!hash)
-		hash = jhash(skb->data, 2 * ETH_ALEN,
-			     (__force u32) skb->protocol);
-
-	return htons((((u64) hash * range) >> 32) + port_min);
-}
-
 static void vxlan_gso(struct sk_buff *skb)
 {
 	int udp_offset = skb_transport_offset(skb);
