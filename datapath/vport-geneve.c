@@ -189,7 +189,7 @@ static int geneve_rcv(struct sock *sk, struct sk_buff *skb)
 
 	geneveh = geneve_hdr(skb);
 
-	flags = TUNNEL_KEY | TUNNEL_OPTIONS_PRESENT |
+	flags = TUNNEL_KEY | TUNNEL_GENEVE_OPT |
 		(udp_hdr(skb)->check != 0 ? TUNNEL_CSUM : 0) |
 		(geneveh->oam ? TUNNEL_OAM : 0) |
 		(geneveh->critical ? TUNNEL_CRIT_OPT : 0);
@@ -431,6 +431,10 @@ static int geneve_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
+
+	/* NOTE: If geneve_xmit_skb() is backported, opts may only be passed
+	 * in if TUNNEL_GENEVE_OPT is set, see upstream.
+	 */
 
 	sent_len = iptunnel_xmit(skb->sk, rt, skb,
 			     saddr, tun_key->ipv4_dst,

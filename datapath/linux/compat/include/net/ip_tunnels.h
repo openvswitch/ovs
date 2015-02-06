@@ -70,10 +70,22 @@ int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
 
 #endif
 
-/* Not yet upstream */
+#ifndef TUNNEL_OAM
 #define TUNNEL_OAM	__cpu_to_be16(0x0200)
 #define TUNNEL_CRIT_OPT	__cpu_to_be16(0x0400)
-#define TUNNEL_OPTIONS_PRESENT	__cpu_to_be16(0x0800)
+#endif
+
+#ifndef TUNNEL_GENEVE_OPT
+#define TUNNEL_GENEVE_OPT      __cpu_to_be16(0x0800)
+#endif
+
+#ifndef TUNNEL_VXLAN_OPT
+#define TUNNEL_VXLAN_OPT       __cpu_to_be16(0x1000)
+#endif
+
+/* Older kernels defined TUNNEL_OPTIONS_PRESENT to GENEVE only */
+#undef TUNNEL_OPTIONS_PRESENT
+#define TUNNEL_OPTIONS_PRESENT (TUNNEL_GENEVE_OPT | TUNNEL_VXLAN_OPT)
 
 bool skb_is_encapsulated(struct sk_buff *skb);
 
