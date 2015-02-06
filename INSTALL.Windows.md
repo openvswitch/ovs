@@ -96,21 +96,39 @@ For example,
 
 * Run make for the ported executables.
 
-Building the Kernel module
---------------------------
-We directly use the Visual Studio 2013 IDE to compile the kernel module. You can
-open the extensions.sln file in the IDE and build the solution.
+Building the Kernel datapath module
+-----------------------------------
+* We directly use the Visual Studio 2013 IDE to compile the kernel datapath.
+You can open the extensions.sln file in the IDE and build the solution.
+
+* The kernel datapath can be compiled from command line as well.  The top
+level 'make' will invoke building the kernel datapath, if the
+'--with-vstudioddk' argument is specified while configuring the package.
+For example,
+
+    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
+    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
+    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" \
+    --enable-ssl --with-openssl="C:/OpenSSL-Win32" \
+    --with-vstudioddk="<WDK to use>"
+
+    Possible values for "<WDK to use>" are:
+    "Win8.1 Debug", "Win8.1 Release", "Win8 Debug" and "Win8 Release".
 
 Installing the Kernel module
 ----------------------------
 Once you have built the solution, you can copy the following files to the
-target Hyper-V machines:
+target Hyper-V machines.
 
     ./datapath-windows/x64/Win8.1Debug/package/ovsext.inf
     ./datapath-windows/x64/Win8.1Debug/package/OVSExt.sys
     ./datapath-windows/x64/Win8.1Debug/package/ovsext.cat
     ./datapath-windows/misc/install.cmd
     ./datapath-windows/misc/uninstall.cmd
+
+The above path assumes that the kernel module has been built using Windows
+DDK 8.1 in Debug mode. Change the path appropriately, if a different WDK
+has been used.
 
 Steps to install the module
 ---------------------------
