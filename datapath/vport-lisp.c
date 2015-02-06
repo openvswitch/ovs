@@ -31,6 +31,7 @@
 #include <net/ip.h>
 #include <net/route.h>
 #include <net/udp.h>
+#include <net/udp_tunnel.h>
 #include <net/xfrm.h>
 
 #include "datapath.h"
@@ -291,25 +292,20 @@ out:
 #define UDP_ENCAP_LISP 1
 static int lisp_socket_init(struct lisp_port *lisp_port, struct net *net)
 {
-	struct sockaddr_in sin;
+	struct udp_port_cfg udp_conf;
 	int err;
 
-	err = sock_create_kern(AF_INET, SOCK_DGRAM, 0,
-			       &lisp_port->lisp_rcv_socket);
-	if (err)
-		goto error;
+	memset(&udp_conf, 0, sizeof(udp_conf));
 
-	/* release net ref. */
-	sk_change_net(lisp_port->lisp_rcv_socket->sk, net);
+	udp_conf.family = AF_INET;
+	udp_conf.local_ip.s_addr = htonl(INADDR_ANY);
+	udp_conf.local_udp_port = lisp_port->dst_port;
 
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = htonl(INADDR_ANY);
-	sin.sin_port = lisp_port->dst_port;
-
-	err = kernel_bind(lisp_port->lisp_rcv_socket, (struct sockaddr *)&sin,
-			  sizeof(struct sockaddr_in));
-	if (err)
-		goto error_sock;
+        err = udp_sock_create(net, &udp_conf, &lisp_port->lisp_rcv_socket);
+        if (err < 0) {
+		pr_warn("cannot register lisp protocol handler: %d\n", err);
+                return err;
+	}
 
 	udp_sk(lisp_port->lisp_rcv_socket->sk)->encap_type = UDP_ENCAP_LISP;
 	udp_sk(lisp_port->lisp_rcv_socket->sk)->encap_rcv = lisp_rcv;
@@ -317,12 +313,6 @@ static int lisp_socket_init(struct lisp_port *lisp_port, struct net *net)
 	udp_encap_enable();
 
 	return 0;
-
-error_sock:
-	sk_release_kernel(lisp_port->lisp_rcv_socket->sk);
-error:
-	pr_warn("cannot register lisp protocol handler: %d\n", err);
-	return err;
 }
 
 static int lisp_get_options(const struct vport *vport, struct sk_buff *skb)
