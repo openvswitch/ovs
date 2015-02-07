@@ -1,6 +1,7 @@
 #ifndef __NET_UDP_WRAPPER_H
 #define __NET_UDP_WRAPPER_H  1
 
+#include <linux/version.h>
 #include_next <net/udp.h>
 
 #ifndef HAVE_UDP_FLOW_SRC_PORT
@@ -32,6 +33,17 @@ static inline __be16 udp_flow_src_port(struct net *net, struct sk_buff *skb,
 
 	return htons((((u64) hash * (max - min)) >> 32) + min);
 }
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
+static inline __sum16 udp_v4_check(int len, __be32 saddr,
+				   __be32 daddr, __wsum base)
+{
+	return csum_tcpudp_magic(saddr, daddr, len, IPPROTO_UDP, base);
+}
+
+void udp_set_csum(bool nocheck, struct sk_buff *skb,
+		  __be32 saddr, __be32 daddr, int len);
 #endif
 
 #endif
