@@ -92,7 +92,9 @@ dnl Adds the shell COMMANDS to a collection executed when the current test
 dnl completes, as a cleanup action.  (The most common use is to kill a
 dnl daemon started by the test.  This is important to prevent tests that
 dnl start daemons from hanging at exit.)
-m4_define([ON_EXIT], [trap '. ./cleanup' 0; cat >>cleanup <<'EOF'
+dnl The commands will be added will be tht first one to excute.
+m4_define([ON_EXIT], [trap '. ./cleanup' 0; cat - cleanup << 'EOF' > __cleanup
 $1
 EOF
+mv __cleanup cleanup
 ])
