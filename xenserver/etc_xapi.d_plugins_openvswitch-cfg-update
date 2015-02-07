@@ -59,10 +59,11 @@ def update(session, args):
         raise XenAPIPlugin.Failure('MORE_THAN_ONE_POOL_FOR_HOST', [])
     new_controller = False
     pool = session.xenapi.pool.get_record(pools[0])
-    controller = pool.get('vswitch_controller', '')
+    controller = pool.get('vswitch_controller')
     ret_str = ''
-    currentController = vswitchCurrentController()
-    if controller == '' and currentController != '':
+    currentControllers = vswitchCurrentControllers()
+
+    if not controller and currentControllers:
         delete_cacert()
         try:
             emergency_reset(session, None)
@@ -70,7 +71,7 @@ def update(session, args):
             pass
         removeControllerCfg()
         ret_str += 'Successfully removed controller config.  '
-    elif controller != currentController:
+    elif controller not in currentControllers:
         delete_cacert()
         try:
             emergency_reset(session, None)
@@ -194,14 +195,18 @@ def update(session, args):
         return 'No change to configuration'
 
 
-def vswitchCurrentController():
-    controller = vswitchCfgQuery(['get-manager'])
-    if controller == '':
-        return controller
-    if len(controller) < 4 or controller[0:4] != 'ssl:':
-        return controller
-    else:
-        return controller.split(':')[1]
+def vswitchCurrentControllers():
+    controllers = vswitchCfgQuery(['get-manager'])
+
+    def parse_controller(controller):
+        if controller.startswith('ssl:'):
+            return controller.split(':')[1]
+
+        return controller.split(':')[0]
+
+    return [parse_controller(controller)
+            for controller in controllers.split('\n')
+            if controller]
 
 
 def removeControllerCfg():
