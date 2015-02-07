@@ -5,7 +5,6 @@ OVS_KMOD_VSWITCHD_START(
    [set-fail-mode br0 standalone -- ])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
-ON_EXIT(DEL_NAMESPACES(at_ns0, at_ns1))
 
 ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
 ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")

@@ -53,6 +53,7 @@ m4_define([ADD_NAMESPACES],
    [m4_foreach([ns], [$@],
                [DEL_NAMESPACES(ns)
                 AT_CHECK([ip netns add ns])
+                ON_EXIT(DEL_NAMESPACES(ns))
                ])
    ]
 )
