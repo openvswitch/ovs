@@ -18,8 +18,6 @@
  * This code is derived from kernel vxlan module.
  */
 
-#ifndef USE_UPSTREAM_VXLAN
-
 #include <linux/version.h>
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -61,6 +59,8 @@
 #include "datapath.h"
 #include "gso.h"
 #include "vlan.h"
+
+#ifndef USE_UPSTREAM_VXLAN
 
 /* VXLAN protocol header */
 struct vxlanhdr {
@@ -160,36 +160,6 @@ static void vxlan_set_owner(struct sock *sk, struct sk_buff *skb)
 	skb->destructor = vxlan_sock_put;
 }
 
-static void vxlan_gso(struct sk_buff *skb)
-{
-	int udp_offset = skb_transport_offset(skb);
-	struct udphdr *uh;
-
-	uh = udp_hdr(skb);
-	uh->len = htons(skb->len - udp_offset);
-
-	/* csum segment if tunnel sets skb with csum. */
-	if (unlikely(uh->check)) {
-		struct iphdr *iph = ip_hdr(skb);
-
-		uh->check = ~csum_tcpudp_magic(iph->saddr, iph->daddr,
-					       skb->len - udp_offset,
-					       IPPROTO_UDP, 0);
-		uh->check = csum_fold(skb_checksum(skb, udp_offset,
-				      skb->len - udp_offset, 0));
-
-		if (uh->check == 0)
-			uh->check = CSUM_MANGLED_0;
-
-	}
-	skb->ip_summed = CHECKSUM_NONE;
-}
-
-static struct sk_buff *handle_offloads(struct sk_buff *skb)
-{
-	return ovs_iptunnel_handle_offloads(skb, false, vxlan_gso);
-}
-
 static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, u32 vxflags,
 				struct vxlan_metadata *md)
 {
@@ -217,9 +187,12 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		   struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
 	struct vxlanhdr *vxh;
-	struct udphdr *uh;
 	int min_headroom;
 	int err;
+
+	skb = udp_tunnel_handle_offloads(skb, false, true);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
 
 	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
 			+ VXLAN_HLEN + sizeof(struct iphdr)
@@ -241,8 +214,6 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		vlan_set_tci(skb, 0);
 	}
 
-	skb_reset_inner_headers(skb);
-
 	vxh = (struct vxlanhdr *) __skb_push(skb, sizeof(*vxh));
 	vxh->vx_flags = htonl(VXLAN_HF_VNI);
 	vxh->vx_vni = md->vni;
@@ -250,26 +221,12 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	if (vxflags & VXLAN_F_GBP)
 		vxlan_build_gbp_hdr(vxh, vxflags, md);
 
-	__skb_push(skb, sizeof(*uh));
-	skb_reset_transport_header(skb);
-	uh = udp_hdr(skb);
-
-	uh->dest = dst_port;
-	uh->source = src_port;
-
-	uh->len = htons(skb->len);
-	uh->check = 0;
-
 	vxlan_set_owner(vs->sock->sk, skb);
-
-	skb = handle_offloads(skb);
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
 
 	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
 
-	return iptunnel_xmit(vs->sock->sk, rt, skb, src, dst, IPPROTO_UDP,
-			     tos, ttl, df, xnet);
+	return udp_tunnel_xmit_skb(vs->sock, rt, skb, src, dst, tos,
+				   ttl, df, src_port, dst_port, xnet);
 }
 
 static void rcu_free_vs(struct rcu_head *rcu)
@@ -283,7 +240,7 @@ static void vxlan_del_work(struct work_struct *work)
 {
 	struct vxlan_sock *vs = container_of(work, struct vxlan_sock, del_work);
 
-	sk_release_kernel(vs->sock->sk);
+	udp_tunnel_sock_release(vs->sock);
 	call_rcu(&vs->rcu, rcu_free_vs);
 }
 
@@ -314,9 +271,6 @@ static struct socket *vxlan_create_sock(struct net *net, bool ipv6,
 	if (err < 0)
 		return ERR_PTR(err);
 
-	/* Disable multicast loopback */
-	inet_sk(sock->sk)->mc_loop = 0;
-
 	return sock;
 }
 
@@ -325,7 +279,7 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 {
 	struct vxlan_sock *vs;
 	struct socket *sock;
-	struct sock *sk;
+	struct udp_tunnel_sock_cfg tunnel_cfg;
 
 	vs = kmalloc(sizeof(*vs), GFP_KERNEL);
 	if (!vs) {
@@ -342,19 +296,17 @@ static struct vxlan_sock *vxlan_socket_create(struct net *net, __be16 port,
 	}
 
 	vs->sock = sock;
-	sk = sock->sk;
 	vs->rcv = rcv;
 	vs->data = data;
 	vs->flags = (flags & VXLAN_F_RCV_FLAGS);
 
-	/* Disable multicast loopback */
-	inet_sk(sk)->mc_loop = 0;
-	rcu_assign_sk_user_data(vs->sock->sk, vs);
+	tunnel_cfg.sk_user_data = vs;
+	tunnel_cfg.encap_type = 1;
+	tunnel_cfg.encap_rcv = vxlan_udp_encap_recv;
+	tunnel_cfg.encap_destroy = NULL;
 
-	/* Mark socket as an encapsulation socket. */
-	udp_sk(sk)->encap_type = 1;
-	udp_sk(sk)->encap_rcv = vxlan_udp_encap_recv;
-	udp_encap_enable();
+	setup_udp_tunnel_sock(net, sock, &tunnel_cfg);
+
 	return vs;
 }
 
@@ -368,7 +320,6 @@ struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 void vxlan_sock_release(struct vxlan_sock *vs)
 {
 	ASSERT_OVSL();
-	rcu_assign_sk_user_data(vs->sock->sk, NULL);
 
 	queue_work(system_wq, &vs->del_work);
 }
