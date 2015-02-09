@@ -176,12 +176,12 @@ static u16 get_src_port(struct net *net, struct sk_buff *skb)
 			struct iphdr *iph;
 			int size = (sizeof(iph->saddr) * 2) / sizeof(u32);
 
-			iph = (struct iphdr *) skb_inner_network_header(skb);
+			iph = (struct iphdr *) skb_network_header(skb);
 			hash = jhash2((const u32 *)&iph->saddr, size, 0);
 		} else if (skb->protocol == htons(ETH_P_IPV6)) {
 			struct ipv6hdr *ipv6hdr;
 
-			ipv6hdr = (struct ipv6hdr *) skb_inner_network_header(skb);
+			ipv6hdr = (struct ipv6hdr *) skb_network_header(skb);
 			hash = jhash2((const u32 *)&ipv6hdr->saddr,
 				      (sizeof(struct in6_addr) * 2) / sizeof(u32), 0);
 		} else {
@@ -195,21 +195,14 @@ static u16 get_src_port(struct net *net, struct sk_buff *skb)
 	return (((u64) hash * range) >> 32) + low;
 }
 
-static void lisp_build_header(const struct vport *vport,
-			      struct sk_buff *skb)
+static void lisp_build_header(struct sk_buff *skb)
 {
-	struct net *net = ovs_dp_get_net(vport->dp);
-	struct lisp_port *lisp_port = lisp_vport(vport);
-	struct udphdr *udph = udp_hdr(skb);
-	struct lisphdr *lisph = (struct lisphdr *)(udph + 1);
+	struct lisphdr *lisph;
 	const struct ovs_key_ipv4_tunnel *tun_key;
 
 	tun_key = &OVS_CB(skb)->egress_tun_info->tunnel;
-	udph->dest = lisp_port->dst_port;
-	udph->source = htons(get_src_port(net, skb));
-	udph->check = 0;
-	udph->len = htons(skb->len - skb_transport_offset(skb));
 
+	lisph = (struct lisphdr *)__skb_push(skb, sizeof(struct lisphdr));
 	lisph->nonce_present = 0;	/* We don't support echo nonce algorithm */
 	lisph->locator_status_bits_present = 1;	/* Set LSB */
 	lisph->solicit_echo_nonce = 0;	/* No echo noncing */
@@ -236,7 +229,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	struct ethhdr *ethh;
 	__be16 protocol;
 
-	lisp_port = lisp_find_port(dev_net(skb->dev), udp_hdr(skb)->dest);
+	lisp_port = rcu_dereference_sk_user_data(sk);
 	if (unlikely(!lisp_port))
 		goto error;
 
@@ -288,11 +281,10 @@ out:
 	return 0;
 }
 
-/* Arbitrary value.  Irrelevant as long as it's not 0 since we set the handler. */
-#define UDP_ENCAP_LISP 1
 static int lisp_socket_init(struct lisp_port *lisp_port, struct net *net)
 {
 	struct udp_port_cfg udp_conf;
+	struct udp_tunnel_sock_cfg tunnel_cfg;
 	int err;
 
 	memset(&udp_conf, 0, sizeof(udp_conf));
@@ -307,10 +299,12 @@ static int lisp_socket_init(struct lisp_port *lisp_port, struct net *net)
                 return err;
 	}
 
-	udp_sk(lisp_port->lisp_rcv_socket->sk)->encap_type = UDP_ENCAP_LISP;
-	udp_sk(lisp_port->lisp_rcv_socket->sk)->encap_rcv = lisp_rcv;
+	tunnel_cfg.sk_user_data = lisp_port;
+	tunnel_cfg.encap_type = 1;
+	tunnel_cfg.encap_rcv = lisp_rcv;
+	tunnel_cfg.encap_destroy = NULL;
 
-	udp_encap_enable();
+	setup_udp_tunnel_sock(net, lisp_port->lisp_rcv_socket, &tunnel_cfg);
 
 	return 0;
 }
@@ -329,9 +323,7 @@ static void lisp_tnl_destroy(struct vport *vport)
 	struct lisp_port *lisp_port = lisp_vport(vport);
 
 	list_del_rcu(&lisp_port->list);
-	/* Release socket */
-	sk_release_kernel(lisp_port->lisp_rcv_socket->sk);
-
+	udp_tunnel_sock_release(lisp_port->lisp_rcv_socket);
 	ovs_vport_deferred_free(vport);
 }
 
@@ -387,54 +379,16 @@ error:
 	return ERR_PTR(err);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
-
-static void lisp_fix_segment(struct sk_buff *skb)
-{
-	struct udphdr *udph = udp_hdr(skb);
-
-	udph->len = htons(skb->len - skb_transport_offset(skb));
-}
-
-static struct sk_buff *handle_offloads(struct sk_buff *skb)
-{
-	return ovs_iptunnel_handle_offloads(skb, false, lisp_fix_segment);
-}
-#else
-static struct sk_buff *handle_offloads(struct sk_buff *skb)
-{
-	int err = 0;
-
-	if (skb_is_gso(skb)) {
-
-		if (skb_is_encapsulated(skb)) {
-			err = -ENOSYS;
-			goto error;
-		}
-
-		err = skb_unclone(skb, GFP_ATOMIC);
-		if (unlikely(err))
-			goto error;
-
-		skb_shinfo(skb)->gso_type |= SKB_GSO_UDP_TUNNEL;
-	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
-		skb->ip_summed = CHECKSUM_NONE;
-
-	skb->encapsulation = 1;
-	return skb;
-error:
-	kfree_skb(skb);
-	return ERR_PTR(err);
-}
-#endif
-
 static int lisp_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct ovs_key_ipv4_tunnel *tun_key;
+	struct lisp_port *lisp_port = lisp_vport(vport);
+	struct net *net = ovs_dp_get_net(vport->dp);
 	int network_offset = skb_network_offset(skb);
 	struct rtable *rt;
 	int min_headroom;
 	__be32 saddr;
+	__be16 src_port, dst_port;
 	__be16 df;
 	int sent_len;
 	int err;
@@ -482,30 +436,27 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	skb_reset_mac_header(skb);
 	vlan_set_tci(skb, 0);
 
-	skb_reset_inner_headers(skb);
-
-	__skb_push(skb, LISP_HLEN);
-	skb_reset_transport_header(skb);
-
-	lisp_build_header(vport, skb);
-
-	/* Offloading */
-	skb = handle_offloads(skb);
+	skb = udp_tunnel_handle_offloads(skb, false, false);
 	if (IS_ERR(skb)) {
 		err = PTR_ERR(skb);
 		skb = NULL;
 		goto err_free_rt;
 	}
 
+	src_port = htons(get_src_port(net, skb));
+	dst_port = lisp_port->dst_port;
+
+	lisp_build_header(skb);
+
 	skb->ignore_df = 1;
 
 	ovs_skb_set_inner_protocol(skb, skb->protocol);
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
-	sent_len = iptunnel_xmit(skb->sk, rt, skb,
-			     saddr, tun_key->ipv4_dst,
-			     IPPROTO_UDP, tun_key->ipv4_tos,
-			     tun_key->ipv4_ttl, df, false);
+	sent_len = udp_tunnel_xmit_skb(lisp_port->lisp_rcv_socket, rt, skb,
+				       saddr, tun_key->ipv4_dst,
+				       tun_key->ipv4_tos, tun_key->ipv4_ttl,
+				       df, src_port, dst_port, false);
 
 	return sent_len > 0 ? sent_len + network_offset : sent_len;
 
