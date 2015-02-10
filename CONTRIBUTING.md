@@ -27,7 +27,10 @@ In particular:
 
 Testing is also important:
 
-  - A patch that adds or deletes files should be tested with
+  - A patch that modifies existing code should be tested with
+    `make check` before submission.
+
+  - A patch that adds or deletes files should also be tested with
     `make distcheck` before submission.
 
   - A patch that modifies Linux kernel code should be at least
