@@ -1,4 +1,4 @@
-AT_BANNER([command completion unit tests - bash])
+AT_BANNER([appctl bashcomp unit tests])
 
 m4_define([GET_FORMAT], [
 echo "$@" | grep -A 1 -- "Command format" | tail -n+2
@@ -18,7 +18,7 @@ echo "available completions for keyword \"$1\": $2" \
      | sed -e 's/[ ]*$//g'
 ])
 
-AT_SETUP([bash completion - basic verification])
+AT_SETUP([appctl-bashcomp - basic verification])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
 OVS_VSWITCHD_START
 
@@ -33,7 +33,7 @@ m4_foreach(
 [ovs-ofctl],
 [ovsdb-tool]],
 [
-INPUT="$(bash ovs-command-compgen.bash debug test_command TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug test_command TAB 2>&1)"
 MATCH="$(test_command --option | sort | sed -n '/^--.*/p' | cut -d '=' -f1)
 $(test_command list-commands | tail -n +2 | cut -c3- | cut -d ' ' -f1 | sort)"
 AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
@@ -43,7 +43,7 @@ ${MATCH}
 
 
 # complete ovs-appctl --tar[TAB]
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl --tar 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl --tar 2>&1)"
 AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 [0], [dnl
 --target
@@ -51,7 +51,7 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 
 
 # complete ovs-appctl --target [TAB]
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl --target TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl --target TAB 2>&1)"
 AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 [0], [dnl
 ovs-ofctl
@@ -70,7 +70,7 @@ m4_foreach(
 [ovsdb-server],
 [ovs-ofctl]],
 [
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl --target target_daemon TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl --target target_daemon TAB 2>&1)"
 MATCH="$(ovs-appctl --option | sort | sed -n '/^--.*/p' | cut -d '=' -f1)
 $(ovs-appctl --target target_daemon list-commands | tail -n +2 | cut -c3- | cut -d ' ' -f1 | sort)"
 AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
@@ -85,12 +85,12 @@ AT_CLEANUP
 # complex completion check - bfd/set-forwarding
 # bfd/set-forwarding [interface] normal|false|true
 # test expansion of 'interface'
-AT_SETUP([bash completion - complex completion check 1])
+AT_SETUP([appctl-bashcomp - complex completion check 1])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
 OVS_VSWITCHD_START(add-port br0 p0 -- set Interface p0 type=dummy)
 
 # check the top level completion.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl bfd/set-forwarding TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl bfd/set-forwarding TAB 2>&1)"
 MATCH="$(GET_COMP_STR([normal], [])
 GET_COMP_STR([false], [])
 GET_COMP_STR([true], [])
@@ -107,14 +107,14 @@ p0
 
 
 # set argument to 'true', there should be no more completions.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl bfd/set-forwarding true TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl bfd/set-forwarding true TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
 ])
 
 
 # set argument to 'p1', there should still be the completion for booleans.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl bfd/set-forwarding p1 TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl bfd/set-forwarding p1 TAB 2>&1)"
 MATCH="$(GET_COMP_STR([normal], [])
 GET_COMP_STR([false], [])
 GET_COMP_STR([true], []))"
@@ -127,7 +127,7 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 
 
 # set argument to 'p1 false', there should still no more completions.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl bfd/set-forwarding p1 false TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl bfd/set-forwarding p1 false TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
 ])
@@ -139,13 +139,13 @@ AT_CLEANUP
 # complex completion check - lacp/show
 # lacp/show [port]
 # test expansion on 'port'
-AT_SETUP([bash completion - complex completion check 2])
+AT_SETUP([appctl-bashcomp - complex completion check 2])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
 OVS_VSWITCHD_START(add-port br0 p0 -- set Interface p0 type=dummy \
                    -- add-port br0 p1 -- set Interface p1 type=dummy)
 
 # check the top level completion.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl lacp/show TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl lacp/show TAB 2>&1)"
 MATCH="$(GET_COMP_STR([port], [br0 p0 p1]))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
 [0], [dnl
@@ -161,7 +161,7 @@ p1
 
 
 # set argument to 'p1', there should be no more completions.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl lacp/show p1 TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl lacp/show p1 TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
 ])
@@ -173,13 +173,13 @@ AT_CLEANUP
 # complex completion check - ofproto/trace
 # ofproto/trace {[dp_name] odp_flow | bridge br_flow} [-generate|packet]
 # test expansion on 'dp|dp_name' and 'bridge'
-AT_SETUP([bash completion - complex completion check 3])
+AT_SETUP([appctl-bashcomp - complex completion check 3])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
 OVS_VSWITCHD_START(add-port br0 p0 -- set Interface p0 type=dummy \
                    -- add-port br0 p1 -- set Interface p1 type=dummy)
 
 # check the top level completion.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace TAB 2>&1)"
 MATCH="$(GET_COMP_STR([bridge], [br0])
 GET_COMP_STR([odp_flow], [])
 GET_COMP_STR([dp_name], [ovs-dummy]))"
@@ -196,7 +196,7 @@ ovs-dummy
 
 
 # set argument to 'ovs-dummy', should go to the dp-name path.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace ovs-dummy TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace ovs-dummy TAB 2>&1)"
 MATCH="$(GET_COMP_STR([odp_flow], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
 [0], [dnl
@@ -207,7 +207,7 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 
 
 # set odp_flow to some random string, should go to the next level.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace ovs-dummy "in_port(123),mac(),ip,tcp" TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace ovs-dummy "in_port(123),mac(),ip,tcp" TAB 2>&1)"
 MATCH="$(GET_COMP_STR([-generate], [-generate])
 GET_COMP_STR([packet], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
@@ -222,14 +222,14 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 
 
 # set packet to some random string, there should be no more completions.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace ovs-dummy "in_port(123),mac(),ip,tcp" "ABSJDFLSDJFOIWEQR" TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace ovs-dummy "in_port(123),mac(),ip,tcp" "ABSJDFLSDJFOIWEQR" TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
 ])
 
 
 # set argument to 'br0', should go to the bridge path.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace br0 TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace br0 TAB 2>&1)"
 MATCH="$(GET_COMP_STR([br_flow], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
 [0], [dnl
@@ -240,7 +240,7 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 
 
 # set argument to some random string, should go to the odp_flow path.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ofproto/trace "in_port(123),mac(),ip,tcp" TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace "in_port(123),mac(),ip,tcp" TAB 2>&1)"
 MATCH="$(GET_COMP_STR([-generate], [-generate])
 GET_COMP_STR([packet], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
@@ -260,12 +260,12 @@ AT_CLEANUP
 # complex completion check - vlog/set
 # vlog/set {spec | PATTERN:destination:pattern}
 # test non expandable arguments
-AT_SETUP([bash completion - complex completion check 4])
+AT_SETUP([appctl-bashcomp - complex completion check 4])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
 OVS_VSWITCHD_START
 
 # check the top level completion.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl vlog/set TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl vlog/set TAB 2>&1)"
 MATCH="$(GET_COMP_STR([PATTERN:destination:pattern], [])
 GET_COMP_STR([spec], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
@@ -277,7 +277,7 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 
 
 # set argument to random 'abcd', there should be no more completions.
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl vlog/set abcd TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl vlog/set abcd TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e '/./,$!d'],
 [0], [dnl
 ])
@@ -286,14 +286,14 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([bash completion - negative test])
+AT_SETUP([appctl-bashcomp - negative test])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
 OVS_VSWITCHD_START(add-port br0 p0 -- set Interface p0 type=dummy)
 
 # negative test - incorrect subcommand
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ERROR 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ERROR 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e 's/[ \t]*$//' | sed -e '/./,$!d'], [0])
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl ERROR TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ERROR TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e 's/[ \t]*$//' | sed -e '/./!d'],
 [0], [dnl
 ])
@@ -310,20 +310,20 @@ m4_foreach(
 [ovsdb-server],
 [ovs-ofctl]],
 [
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl --target target_daemon TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl --target target_daemon TAB 2>&1)"
 MATCH="$(ovs-appctl --option | sort | sed -n '/^--.*/p' | cut -d '=' -f1)"
 AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 [0], [dnl
 ${MATCH}
 ])
-INPUT="$(bash ovs-command-compgen.bash debug ovs-appctl --target target_daemon ERROR SUBCMD TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl --target target_daemon ERROR SUBCMD TAB 2>&1)"
 AT_CHECK_UNQUOTED([echo "$INPUT" | sed -e 's/[ \t]*$//' | sed -e '/./!d'],
 [0], [dnl
 ])])
 
 
 # negative test - do not match on nested option
-INPUT="$(bash ovs-command-compgen.bash debug ovsdb-tool create TAB 2>&1)"
+INPUT="$(bash ovs-appctl-bashcomp.bash debug ovsdb-tool create TAB 2>&1)"
 AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 
 AT_CLEANUP
