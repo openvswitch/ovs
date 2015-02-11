@@ -100,9 +100,10 @@ save_interfaces () {
                         continue 2
                         ;;
                     scope)
-                        if test "$2" = link; then
+                        if test "$2" = link -a "$family" != inet6; then
                             # Omit route derived from IP address, e.g.
-                            # 172.16.0.0/16 derived from 172.16.12.34.
+                            # 172.16.0.0/16 derived from 172.16.12.34,
+                            # but preserve IPv6 link-local address.
                             continue 2
                         fi
                         ;;
