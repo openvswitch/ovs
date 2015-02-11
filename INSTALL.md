@@ -41,6 +41,8 @@ you will need the following software:
 
   - Python 2.x, for x >= 4.
 
+  - patch (The utility that is used to patch files).
+
 On Linux, you may choose to compile the kernel module that comes with
 the Open vSwitch distribution or to use the kernel module built into
 the Linux kernel (version 3.3 or later).  See the [FAQ.md] question
