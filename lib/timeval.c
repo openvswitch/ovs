@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,7 @@ DEFINE_STATIC_PER_THREAD_DATA(long long int, last_wakeup, 0);
 
 static void log_poll_interval(long long int last_wakeup);
 static struct rusage *get_recent_rusage(void);
+static int getrusage_thread(struct rusage *);
 static void refresh_rusage(void);
 static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
@@ -497,31 +498,35 @@ log_poll_interval(long long int last_wakeup)
         const struct rusage *last_rusage = get_recent_rusage();
         struct rusage rusage;
 
-        getrusage(RUSAGE_SELF, &rusage);
-        VLOG_WARN("Unreasonably long %lldms poll interval"
-                  " (%lldms user, %lldms system)",
-                  interval,
-                  timeval_diff_msec(&rusage.ru_utime,
-                                    &last_rusage->ru_utime),
-                  timeval_diff_msec(&rusage.ru_stime,
-                                    &last_rusage->ru_stime));
-        if (rusage.ru_minflt > last_rusage->ru_minflt
-            || rusage.ru_majflt > last_rusage->ru_majflt) {
-            VLOG_WARN("faults: %ld minor, %ld major",
-                      rusage.ru_minflt - last_rusage->ru_minflt,
-                      rusage.ru_majflt - last_rusage->ru_majflt);
-        }
-        if (rusage.ru_inblock > last_rusage->ru_inblock
-            || rusage.ru_oublock > last_rusage->ru_oublock) {
-            VLOG_WARN("disk: %ld reads, %ld writes",
-                      rusage.ru_inblock - last_rusage->ru_inblock,
-                      rusage.ru_oublock - last_rusage->ru_oublock);
-        }
-        if (rusage.ru_nvcsw > last_rusage->ru_nvcsw
-            || rusage.ru_nivcsw > last_rusage->ru_nivcsw) {
-            VLOG_WARN("context switches: %ld voluntary, %ld involuntary",
-                      rusage.ru_nvcsw - last_rusage->ru_nvcsw,
-                      rusage.ru_nivcsw - last_rusage->ru_nivcsw);
+        if (!getrusage_thread(&rusage)) {
+            VLOG_WARN("Unreasonably long %lldms poll interval"
+                      " (%lldms user, %lldms system)",
+                      interval,
+                      timeval_diff_msec(&rusage.ru_utime,
+                                        &last_rusage->ru_utime),
+                      timeval_diff_msec(&rusage.ru_stime,
+                                        &last_rusage->ru_stime));
+
+            if (rusage.ru_minflt > last_rusage->ru_minflt
+                || rusage.ru_majflt > last_rusage->ru_majflt) {
+                VLOG_WARN("faults: %ld minor, %ld major",
+                          rusage.ru_minflt - last_rusage->ru_minflt,
+                          rusage.ru_majflt - last_rusage->ru_majflt);
+            }
+            if (rusage.ru_inblock > last_rusage->ru_inblock
+                || rusage.ru_oublock > last_rusage->ru_oublock) {
+                VLOG_WARN("disk: %ld reads, %ld writes",
+                          rusage.ru_inblock - last_rusage->ru_inblock,
+                          rusage.ru_oublock - last_rusage->ru_oublock);
+            }
+            if (rusage.ru_nvcsw > last_rusage->ru_nvcsw
+                || rusage.ru_nivcsw > last_rusage->ru_nivcsw) {
+                VLOG_WARN("context switches: %ld voluntary, %ld involuntary",
+                          rusage.ru_nvcsw - last_rusage->ru_nvcsw,
+                          rusage.ru_nivcsw - last_rusage->ru_nivcsw);
+            }
+        } else {
+            VLOG_WARN("Unreasonably long %lldms poll interval", interval);
         }
         coverage_log();
     }
