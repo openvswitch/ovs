@@ -22,7 +22,9 @@ scripts_SCRIPTS += \
 	utilities/ovs-save
 scripts_DATA += utilities/ovs-lib
 
-check_SCRIPTS += utilities/ovs-appctl-bashcomp.bash
+check_SCRIPTS += \
+	utilities/ovs-appctl-bashcomp.bash \
+	utilities/ovs-vsctl-bashcomp.bash
 
 utilities/ovs-lib: $(top_builddir)/config.status
 

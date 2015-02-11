@@ -1,55 +1,79 @@
-Using bash command-line completion script
------------------------------------------
+Using bash command-line completion scripts
+------------------------------------------
 
-ovs-command-compgen.bash adds bash command-line completion support
-for ovs-appctl, ovs-dpctl, ovs-ofctl and ovsdb-tool commands.
+There are two completion scripts available, ovs-appctl-bashcomp.bash
+and ovs-vsctl-bashcomp.bash respectively.
 
-Features:
----------
+ovs-appctl-bashcomp
+-------------------
 
-   display available completion or complete on unfinished user input
-   (long option, subcommand, and argument).
+   ovs-appctl-bashcomp.bash adds bash command-line completion support
+   for ovs-appctl, ovs-dpctl, ovs-ofctl and ovsdb-tool commands.
 
-   once the subcommand (e.g. ofproto/trace) has been given, the
-   script will print the subcommand format.
+   Features:
+   ---------
 
-   the script can convert between keywords like 'bridge/port/interface/dp'
-   and the available record in ovsdb.
+      display available completion or complete on unfinished user input
+      (long option, subcommand, and argument).
 
-Limitations:
-------------
+      once the subcommand (e.g. ofproto/trace) has been given, the
+      script will print the subcommand format.
 
-   only support small set of important keywords
-   (dp, datapath, bridge, switch, port, interface, iface).
+      the script can convert between keywords like 'bridge/port/interface/dp'
+      and the available record in ovsdb.
 
-   does not support parsing of nested options
-   (e.g. ovsdb-tool create [db [schema]]).
+   Limitations:
+   ------------
 
-   does not support expansion on repeatitive argument
-   (e.g. ovs-dpctl show [dp...]).
+      only support small set of important keywords
+      (dp, datapath, bridge, switch, port, interface, iface).
 
-   only support matching on long options, and only in the format
-   (--option [arg], i.e. should not use --option=[arg]).
+      does not support parsing of nested options
+      (e.g. ovsdb-tool create [db [schema]]).
 
+      does not support expansion on repeatitive argument
+      (e.g. ovs-dpctl show [dp...]).
+
+      only support matching on long options, and only in the format
+      (--option [arg], i.e. should not use --option=[arg]).
+
+ovs-vsctl-bashcomp
+-------------------
+
+   ovs-vsctl-bashcomp.bash adds bash command-line completion support
+   for ovs-vsctl command.
+
+   Features:
+   ---------
+
+      display available completion and complete on user input for
+      global/local options, command, and argument.
+
+      query database and expand keywords like 'table/record/column/key'
+      to available completions.
+
+      deal with argument relations like 'one and more', 'zero or one'.
+
+      complete multiple ovs-vsctl commands cascaded via '--'.
+
+   Limitations:
+   ------------
+
+      completion of very long ovs-vsctl command can take up to several
+      seconds.
 
 How to use:
 -----------
 
-   To use the script, either copy it inside /etc/bash_completion.d/
-   or manually run it via . ovs-command-compgen.bash.
+   To use the scripts, either copy them inside /etc/bash_completion.d/ or
+   manually run it directly in bash via . ovs-appctl-bashcomp.bash or
+   . ovs-vsctl-bashcomp.bash.
 
 Test:
 -----
 
-   An unit testsuite is provided as ovs-command-compgen-test.bash.
-   To run the test, first enter ovs sandbox via:
-
-        make sandbox && cd sandbox
-
-   Then copy both ovs-command-compgen-test.bash and ovs-command-compgen.bash
-   to the current directory.  Finally, run the test via:
-
-        bash ovs-command-compgen-test.bash
+   Unit tests are added in tests/completion.at and integrated into autotest
+   framework.  To run the tests, just do make check.
 
 Bug Reporting:
 --------------

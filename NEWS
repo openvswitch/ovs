@@ -1,5 +1,7 @@
 Post-v2.3.0
 ---------------------
+   - Add bash command-line completion support for ovs-vsctl Please check
+     utilities/ovs-command-compgen.INSTALL.md for how to use.
    - The MAC learning feature now includes per-port fairness to mitigate
      MAC flooding attacks.
    - New support for a "conjunctive match" OpenFlow extension, which
