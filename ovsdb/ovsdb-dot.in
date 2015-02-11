@@ -30,7 +30,6 @@ def printEdge(tableName, type, baseType, label):
         options = {}
         options['label'] = '"%s%s"' % (label, arity)
         if baseType.ref_type == 'weak':
-            options['constraint'] = 'false'
             options['style'] = 'dotted'
         print "\t%s -> %s [%s];" % (
             tableName,
