@@ -352,11 +352,11 @@ static inline int
 raw_ctz(uint64_t n)
 {
 #ifdef _WIN64
-    uint32_t r = 0;
+    unsigned long r = 0;
     _BitScanForward64(&r, n);
     return r;
 #else
-    uint32_t low = n, high, r = 0;
+    unsigned long low = n, high, r = 0;
     if (_BitScanForward(&r, low)) {
         return r;
     }
@@ -370,11 +370,11 @@ static inline int
 raw_clz64(uint64_t n)
 {
 #ifdef _WIN64
-    uint32_t r = 0;
+    unsigned long r = 0;
     _BitScanReverse64(&r, n);
     return 63 - r;
 #else
-    uint32_t low, high = n >> 32, r = 0;
+    unsigned long low, high = n >> 32, r = 0;
     if (_BitScanReverse(&r, high)) {
         return 31 - r;
     }
