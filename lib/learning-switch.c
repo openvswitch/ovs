@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,6 +104,13 @@ static enum ofperr process_switch_features(struct lswitch *,
                                            struct ofp_header *);
 static void process_packet_in(struct lswitch *, const struct ofp_header *);
 static void process_echo_request(struct lswitch *, const struct ofp_header *);
+
+static ofp_port_t get_mac_entry_ofp_port(const struct mac_learning *ml,
+                                         const struct mac_entry *)
+    OVS_REQ_RDLOCK(ml->rwlock);
+static void set_mac_entry_ofp_port(struct mac_learning *ml,
+                                   struct mac_entry *, ofp_port_t)
+    OVS_REQ_WRLOCK(ml->rwlock);
 
 /* Creates and returns a new learning switch whose configuration is given by
  * 'cfg'.
@@ -485,14 +492,14 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
         if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
             struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src,
                                                         0);
-            if (mac->port.ofp_port != flow->in_port.ofp_port) {
+            if (get_mac_entry_ofp_port(sw->ml, mac)
+                != flow->in_port.ofp_port) {
                 VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
                             "port %"PRIu16, sw->datapath_id,
                             ETH_ADDR_ARGS(flow->dl_src),
                             flow->in_port.ofp_port);
 
-                mac->port.ofp_port = flow->in_port.ofp_port;
-                mac_learning_changed(sw->ml);
+                set_mac_entry_ofp_port(sw->ml, mac, flow->in_port.ofp_port);
             }
         }
         ovs_rwlock_unlock(&sw->ml->rwlock);
@@ -510,7 +517,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
         ovs_rwlock_rdlock(&sw->ml->rwlock);
         mac = mac_learning_lookup(sw->ml, flow->dl_dst, 0);
         if (mac) {
-            out_port = mac->port.ofp_port;
+            out_port = get_mac_entry_ofp_port(sw->ml, mac);
             if (out_port == flow->in_port.ofp_port) {
                 /* Don't send a packet back out its input port. */
                 ovs_rwlock_unlock(&sw->ml->rwlock);
@@ -649,4 +656,21 @@ static void
 process_echo_request(struct lswitch *sw, const struct ofp_header *rq)
 {
     queue_tx(sw, make_echo_reply(rq));
+}
+
+static ofp_port_t
+get_mac_entry_ofp_port(const struct mac_learning *ml,
+                       const struct mac_entry *e)
+    OVS_REQ_RDLOCK(ml->rwlock)
+{
+    void *port = mac_entry_get_port(ml, e);
+    return (OVS_FORCE ofp_port_t) (uintptr_t) port;
+}
+
+static void
+set_mac_entry_ofp_port(struct mac_learning *ml,
+                       struct mac_entry *e, ofp_port_t ofp_port)
+    OVS_REQ_WRLOCK(ml->rwlock)
+{
+    mac_entry_set_port(ml, e, (void *) (OVS_FORCE uintptr_t) ofp_port);
 }

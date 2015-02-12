@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2194,7 +2194,7 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     ovs_rwlock_wrlock(&ml->rwlock);
     LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
-        if (mac->port.p == bundle) {
+        if (mac_entry_get_port(ml, mac) == bundle) {
             if (all_ofprotos) {
                 struct ofproto_dpif *o;
 
@@ -2569,7 +2569,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     list_init(&packets);
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
-        if (e->port.p != bundle) {
+        if (mac_entry_get_port(ofproto->ml, e) != bundle) {
             void *port_void;
 
             learning_packet = bond_compose_learning_packet(bundle->bond,
@@ -3817,7 +3817,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
-        struct ofbundle *bundle = e->port.p;
+        struct ofbundle *bundle = mac_entry_get_port(ofproto->ml, e);
         char name[OFP_MAX_PORT_NAME_LEN];
 
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,

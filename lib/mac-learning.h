@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,73 @@
 #define MAC_LEARNING_H 1
 
 #include <time.h>
+#include "heap.h"
 #include "hmap.h"
 #include "list.h"
 #include "ovs-atomic.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "timeval.h"
+
+/* MAC learning table
+ * ==================
+ *
+ * A MAC learning table is a dictionary data structure that is specialized to
+ * map from an (Ethernet address, VLAN ID) pair to a user-provided pointer.  In
+ * an Ethernet switch implementation, it used to keep track of the port on
+ * which a packet from a given Ethernet address was last seen.  This knowledge
+ * is useful when the switch receives a packet to such an Ethernet address, so
+ * that the switch can send the packet directly to the correct port instead of
+ * having to flood it to every port.
+ *
+ * A few complications make the implementation into more than a simple wrapper
+ * around a hash table.  First, and most simply, MAC learning can be disabled
+ * on a per-VLAN basis. (This is most useful for RSPAN; see
+ * ovs-vswitchd.conf.db(5) documentation of the "output_vlan" column in the
+ * Mirror table for more information.).  The data structure maintains a bitmap
+ * to track such VLANs.
+ *
+ * Second, the implementation has the ability to "lock" a MAC table entry
+ * updated by a gratuitous ARP.  This is a simple feature but the rationale for
+ * it is complicated.  Please refer to the description of SLB bonding in
+ * vswitchd/INTERNALS for an explanation.
+ *
+ * Third, the implementation expires entries that are idle for longer than a
+ * configurable amount of time.  This is implemented by keeping all of the
+ * current table entries on a list ordered from least recently used (LRU) to
+ * most recently used (MRU).  Each time a MAC entry is used, it is moved to the
+ * MRU end of the list.  Periodically mac_learning_run() sweeps through the
+ * list starting from the LRU end, deleting each entry that has been idle too
+ * long.
+ *
+ * Finally, the number of MAC learning table entries has a configurable maximum
+ * size to prevent memory exhaustion.  When a new entry must be inserted but
+ * the table is already full, the implementation uses an eviction strategy
+ * based on fairness: it chooses the port that currently has greatest number of
+ * learned MACs (choosing arbitrarily in case of a tie), and among that port's
+ * entries it evicts the least recently used.  (This is a security feature
+ * because it prevents an attacker from forcing other ports' MACs out of the
+ * MAC learning table with a "MAC flooding attack" that causes the other ports'
+ * traffic to be flooded so that the attacker can easily sniff it.)  The
+ * implementation of this feature is like a specialized form of the
+ * general-purpose "eviction groups" that OVS implements in OpenFlow (see the
+ * documentation of the "groups" column in the Flow_Table table in
+ * ovs-vswitchd.conf.db(5) for details).
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Many operations require the caller to take the MAC learning table's rwlock
+ * for writing (please refer to the Clang thread safety annotations).  The
+ * important exception to this is mac_learning_lookup(), which only needs a
+ * read lock.  This is useful for the common case where a MAC learning entry
+ * being looked up already exists and does not need an update.  However,
+ * there's no deadlock-free way to upgrade a read lock to a write lock, so in
+ * the case where the lookup result means that an update is required, the
+ * caller must drop the read lock, take the write lock, and then repeat the
+ * lookup (in case some other thread has already made a change).
+ */
 
 struct mac_learning;
 
@@ -38,7 +99,7 @@ struct mac_learning;
 #define MAC_GRAT_ARP_LOCK_TIME 5
 
 /* A MAC learning table entry.
- * Guarded by owning 'mac_learning''s rwlock */
+ * Guarded by owning 'mac_learning''s rwlock. */
 struct mac_entry {
     struct hmap_node hmap_node; /* Node in a mac_learning hmap. */
     time_t expires;             /* Expiration time. */
@@ -47,14 +108,30 @@ struct mac_entry {
     uint16_t vlan;              /* VLAN tag. */
 
     /* The following are marked guarded to prevent users from iterating over or
-     * accessing a mac_entry without hodling the parent mac_learning rwlock. */
+     * accessing a mac_entry without holding the parent mac_learning rwlock. */
     struct list lru_node OVS_GUARDED; /* Element in 'lrus' list. */
 
-    /* Learned port. */
-    union {
-        void *p;
-        ofp_port_t ofp_port;
-    } port OVS_GUARDED;
+    /* Learned port.
+     *
+     * The client-specified data is mlport->port. */
+    struct mac_learning_port *mlport;
+    struct list port_lru_node; /* In mac_learning_port's "port_lru"s. */
+};
+
+static inline void *mac_entry_get_port(const struct mac_learning *ml,
+                                       const struct mac_entry *);
+void mac_entry_set_port(struct mac_learning *, struct mac_entry *, void *port);
+
+/* Information about client-provided port pointers (the 'port' member), to
+ * allow for per-port fairness.
+ *
+ * The client-provided pointer is opaque to the MAC-learning table, which never
+ * dereferences it. */
+struct mac_learning_port {
+    struct hmap_node hmap_node; /* In mac_learning's "ports_by_ptr". */
+    struct heap_node heap_node; /* In mac_learning's "ports_by_usage". */
+    void *port;                 /* Client-provided port pointer. */
+    struct list port_lrus;      /* Contains "struct mac_entry"s by port_lru. */
 };
 
 /* Sets a gratuitous ARP lock on 'mac' that will expire in
@@ -74,8 +151,7 @@ static inline bool mac_entry_is_grat_arp_locked(const struct mac_entry *mac)
 /* MAC learning table. */
 struct mac_learning {
     struct hmap table;          /* Learning table. */
-    struct list lrus OVS_GUARDED; /* In-use entries, least recently used at the
-                                     front, most recently used at the back. */
+    struct list lrus OVS_GUARDED; /* In-use entries, LRU at front. */
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
     unsigned int idle_time;     /* Max age before deleting an entry. */
@@ -83,6 +159,21 @@ struct mac_learning {
     struct ovs_refcount ref_cnt;
     struct ovs_rwlock rwlock;
     bool need_revalidate;
+
+    /* Fairness.
+     *
+     * Both of these data structures include the same "struct
+     * mac_learning_port" but indexed differently.
+     *
+     * ports_by_usage is a per-port max-heap, in which the priority is the
+     * number of MAC addresses for the port.  When the MAC learning table
+     * overflows, this allows us to evict a MAC entry from one of the ports
+     * that have the largest number of MAC entries, achieving a form of
+     * fairness.
+     *
+     * ports_by_ptr is a hash table indexed by the client-provided pointer. */
+    struct hmap ports_by_ptr;   /* struct mac_learning_port hmap_nodes. */
+    struct heap ports_by_usage; /* struct mac_learning_port heap_nodes. */
 };
 
 int mac_entry_age(const struct mac_learning *ml, const struct mac_entry *e)
@@ -116,7 +207,6 @@ struct mac_entry *mac_learning_insert(struct mac_learning *ml,
                                       const uint8_t src[ETH_ADDR_LEN],
                                       uint16_t vlan)
     OVS_REQ_WRLOCK(ml->rwlock);
-void mac_learning_changed(struct mac_learning *ml) OVS_REQ_WRLOCK(ml->rwlock);
 
 /* Lookup. */
 struct mac_entry *mac_learning_lookup(const struct mac_learning *ml,
@@ -128,5 +218,15 @@ struct mac_entry *mac_learning_lookup(const struct mac_learning *ml,
 void mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
     OVS_REQ_WRLOCK(ml->rwlock);
 void mac_learning_flush(struct mac_learning *ml) OVS_REQ_WRLOCK(ml->rwlock);
+
+/* Inlines. */
+
+static inline void *
+mac_entry_get_port(const struct mac_learning *ml OVS_UNUSED,
+                   const struct mac_entry *e)
+    OVS_REQ_RDLOCK(ml->rwlock)
+{
+    return e->mlport ? e->mlport->port : NULL;
+}
 
 #endif /* mac-learning.h */

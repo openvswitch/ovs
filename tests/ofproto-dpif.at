@@ -3101,6 +3101,72 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/' | sort],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - MAC table overflow fairness])
+OVS_VSWITCHD_START(
+  [set bridge br0 fail-mode=standalone other-config:mac-table-size=10])
+ADD_OF_PORTS([br0], 1, 2, 3, 4, 5, 6)
+
+arp='eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
+
+AT_CHECK([ovs-appctl time/stop])
+
+# Trace packets with 2 different source MACs arriving on each of the 5
+# ports, filling up the 10-entry learning table.
+for i in 0 1 2 3 4 5 6 7 8 9; do
+    p=`expr $i / 2 + 1`
+    ovs-appctl ofproto/trace ovs-dummy "in_port($p),eth(src=50:54:00:00:00:0$i,dst=ff:ff:ff:ff:ff:ff),$arp" -generate
+    ovs-appctl time/warp 1000
+done
+
+# Check for the MAC learning entries.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | sort],
+  [0], [dnl
+    1     0  50:54:00:00:00:00
+    1     0  50:54:00:00:00:01
+    2     0  50:54:00:00:00:02
+    2     0  50:54:00:00:00:03
+    3     0  50:54:00:00:00:04
+    3     0  50:54:00:00:00:05
+    4     0  50:54:00:00:00:06
+    4     0  50:54:00:00:00:07
+    5     0  50:54:00:00:00:08
+    5     0  50:54:00:00:00:09
+ port  VLAN  MAC                Age
+])
+
+# Now trace 16 new MACs on another port.
+for i in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    ovs-appctl ofproto/trace ovs-dummy "in_port(6),eth(src=50:54:00:00:0$i:ff,dst=ff:ff:ff:ff:ff:ff),$arp" -generate
+    ovs-appctl time/warp 1000
+done
+
+# Check the results.
+#
+# Our eviction algorithm on overflow is that an arbitrary (but deterministic)
+# one of the ports with the most learned MACs loses the least recently used
+# one.  Thus, the new port will end up with 3 MACs, 3 of the old ports with 1
+# MAC each, and the other 2 of the old ports with 2 MACs each.
+#
+# (If someone changes lib/heap.c to do something different with equal-priority
+# nodes, then the output below could change, but it would still follow the
+# rules explained above.)
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | sort],
+  [0], [dnl
+    1     0  50:54:00:00:00:01
+    2     0  50:54:00:00:00:03
+    3     0  50:54:00:00:00:04
+    3     0  50:54:00:00:00:05
+    4     0  50:54:00:00:00:07
+    5     0  50:54:00:00:00:08
+    5     0  50:54:00:00:00:09
+    6     0  50:54:00:00:0d:ff
+    6     0  50:54:00:00:0e:ff
+    6     0  50:54:00:00:0f:ff
+ port  VLAN  MAC                Age
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # CHECK_SFLOW_SAMPLING_PACKET(LOOPBACK_ADDR, ADDR_WITHOUT_BRACKETS)
 #
 # Test that sFlow samples packets correctly using IPv4/IPv6 sFlow collector
