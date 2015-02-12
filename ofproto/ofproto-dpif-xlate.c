@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1233,7 +1233,7 @@ OVS_REQ_RDLOCK(ml->rwlock)
         }
     }
 
-    return mac->port.p != in_xbundle->ofbundle;
+    return mac_entry_get_port(ml, mac) != in_xbundle->ofbundle;
 }
 
 
@@ -1269,7 +1269,7 @@ OVS_REQ_WRLOCK(xbridge->ml->rwlock)
         }
     }
 
-    if (mac->port.p != in_xbundle->ofbundle) {
+    if (mac_entry_get_port(xbridge->ml, mac) != in_xbundle->ofbundle) {
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
@@ -1279,8 +1279,7 @@ OVS_REQ_WRLOCK(xbridge->ml->rwlock)
                     xbridge->name, ETH_ADDR_ARGS(flow->dl_src),
                     in_xbundle->name, vlan);
 
-        mac->port.p = in_xbundle->ofbundle;
-        mac_learning_changed(xbridge->ml);
+        mac_entry_set_port(xbridge->ml, mac, in_xbundle->ofbundle);
     }
 }
 
@@ -1354,9 +1353,10 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
         case BV_DROP_IF_MOVED:
             ovs_rwlock_rdlock(&xbridge->ml->rwlock);
             mac = mac_learning_lookup(xbridge->ml, flow->dl_src, vlan);
-            if (mac && mac->port.p != in_xbundle->ofbundle &&
-                (!is_gratuitous_arp(flow, &ctx->xout->wc)
-                 || mac_entry_is_grat_arp_locked(mac))) {
+            if (mac
+                && mac_entry_get_port(xbridge->ml, mac) != in_xbundle->ofbundle
+                && (!is_gratuitous_arp(flow, &ctx->xout->wc)
+                    || mac_entry_is_grat_arp_locked(mac))) {
                 ovs_rwlock_unlock(&xbridge->ml->rwlock);
                 xlate_report(ctx, "SLB bond thinks this packet looped back, "
                              "dropping");
@@ -1441,7 +1441,7 @@ xlate_normal(struct xlate_ctx *ctx)
     /* Determine output bundle. */
     ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
     mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan);
-    mac_port = mac ? mac->port.p : NULL;
+    mac_port = mac ? mac_entry_get_port(ctx->xbridge->ml, mac) : NULL;
     ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
 
     if (mac_port) {
