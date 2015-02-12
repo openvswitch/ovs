@@ -1,3 +1,8 @@
+v2.0.3 - xx xxx xxxx
+--------------------
+   - The MAC learning feature now includes per-port fairness to mitigate
+     MAC flooding attacks.
+
 v2.0.2 - 14 Aug 2014
 ---------------------
     - Bug fixes
