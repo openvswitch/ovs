@@ -325,6 +325,7 @@ add_pr_rule(struct bond *bond, const struct match *match,
 
 static void
 update_recirc_rules(struct bond *bond)
+    OVS_REQ_WRLOCK(rwlock)
 {
     struct match match;
     struct bond_pr_rule_op *pr_op, *next_op;
@@ -946,8 +947,9 @@ bond_may_recirc(const struct bond *bond, uint32_t *recirc_id,
     }
 }
 
-void
-bond_update_post_recirc_rules(struct bond* bond, const bool force)
+static void
+bond_update_post_recirc_rules__(struct bond* bond, const bool force)
+    OVS_REQ_WRLOCK(rwlock)
 {
    struct bond_entry *e;
    bool update_rules = force;  /* Always update rules if caller forces it. */
@@ -967,6 +969,14 @@ bond_update_post_recirc_rules(struct bond* bond, const bool force)
    if (update_rules) {
         update_recirc_rules(bond);
    }
+}
+
+void
+bond_update_post_recirc_rules(struct bond* bond, const bool force)
+{
+    ovs_rwlock_wrlock(&rwlock);
+    bond_update_post_recirc_rules__(bond, force);
+    ovs_rwlock_unlock(&rwlock);
 }
 
 /* Rebalancing. */
@@ -1226,7 +1236,7 @@ bond_rebalance(struct bond *bond)
     }
 
     if (use_recirc && rebalanced) {
-        bond_update_post_recirc_rules(bond,true);
+        bond_update_post_recirc_rules__(bond,true);
     }
 
 done:
