@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,90 @@ mac_entry_lookup(const struct mac_learning *ml,
     return NULL;
 }
 
+static struct mac_learning_port *
+mac_learning_port_lookup(struct mac_learning *ml, void *port)
+{
+    struct mac_learning_port *mlport;
+
+    HMAP_FOR_EACH_IN_BUCKET (mlport, hmap_node, hash_pointer(port, ml->secret),
+                             &ml->ports_by_ptr) {
+        if (mlport->port == port) {
+            return mlport;
+        }
+    }
+    return NULL;
+}
+
+/* Changes the client-owned pointer for entry 'e' in 'ml' to 'port'.  The
+ * pointer can be retrieved with mac_entry_get_port().
+ *
+ * The MAC-learning implementation treats the data that 'port' points to as
+ * opaque and never tries to dereference it.  However, when a MAC learning
+ * table becomes overfull, so that eviction is required, the implementation
+ * does first evict MAC entries for the most common 'port's values in 'ml', so
+ * that there is a degree of fairness, that is, each port is entitled to its
+ * fair share of MAC entries. */
+void
+mac_entry_set_port(struct mac_learning *ml, struct mac_entry *e, void *port)
+    OVS_REQ_WRLOCK(ml->rwlock)
+{
+    if (mac_entry_get_port(ml, e) != port) {
+        ml->need_revalidate = true;
+
+        if (e->mlport) {
+            struct mac_learning_port *mlport = e->mlport;
+            list_remove(&e->port_lru_node);
+
+            if (list_is_empty(&mlport->port_lrus)) {
+                ovs_assert(mlport->heap_node.priority == 1);
+                hmap_remove(&ml->ports_by_ptr, &mlport->hmap_node);
+                heap_remove(&ml->ports_by_usage, &mlport->heap_node);
+                free(mlport);
+            } else {
+                ovs_assert(mlport->heap_node.priority > 1);
+                heap_change(&ml->ports_by_usage, &mlport->heap_node,
+                            mlport->heap_node.priority - 1);
+            }
+            e->mlport = NULL;
+        }
+
+        if (port) {
+            struct mac_learning_port *mlport;
+
+            mlport = mac_learning_port_lookup(ml, port);
+            if (!mlport) {
+                mlport = xzalloc(sizeof *mlport);
+                hmap_insert(&ml->ports_by_ptr, &mlport->hmap_node,
+                            hash_pointer(port, ml->secret));
+                heap_insert(&ml->ports_by_usage, &mlport->heap_node, 1);
+                mlport->port = port;
+                list_init(&mlport->port_lrus);
+            } else {
+                heap_change(&ml->ports_by_usage, &mlport->heap_node,
+                            mlport->heap_node.priority + 1);
+            }
+            list_push_back(&mlport->port_lrus, &e->port_lru_node);
+            e->mlport = mlport;
+        }
+    }
+}
+
+/* Finds one of the ports with the most MAC entries and evicts its least
+ * recently used entry. */
+static void
+evict_mac_entry_fairly(struct mac_learning *ml)
+    OVS_REQ_WRLOCK(ml->rwlock)
+{
+    struct mac_learning_port *mlport;
+    struct mac_entry *e;
+
+    mlport = CONTAINER_OF(heap_max(&ml->ports_by_usage),
+                          struct mac_learning_port, heap_node);
+    e = CONTAINER_OF(list_front(&mlport->port_lrus),
+                     struct mac_entry, port_lru_node);
+    mac_learning_expire(ml, e);
+}
+
 /* If the LRU list is not empty, stores the least-recently-used entry in '*e'
  * and returns true.  Otherwise, if the LRU list is empty, stores NULL in '*e'
  * and return false. */
@@ -109,6 +193,8 @@ mac_learning_create(unsigned int idle_time)
     ml->idle_time = normalize_idle_time(idle_time);
     ml->max_entries = MAC_DEFAULT_MAX;
     ml->need_revalidate = false;
+    hmap_init(&ml->ports_by_ptr);
+    heap_init(&ml->ports_by_usage);
     ovs_refcount_init(&ml->ref_cnt);
     ovs_rwlock_init(&ml->rwlock);
     return ml;
@@ -131,13 +217,16 @@ mac_learning_unref(struct mac_learning *ml)
     if (ml && ovs_refcount_unref(&ml->ref_cnt) == 1) {
         struct mac_entry *e, *next;
 
+        ovs_rwlock_wrlock(&ml->rwlock);
         HMAP_FOR_EACH_SAFE (e, next, hmap_node, &ml->table) {
-            hmap_remove(&ml->table, &e->hmap_node);
-            free(e);
+            mac_learning_expire(ml, e);
         }
         hmap_destroy(&ml->table);
+        hmap_destroy(&ml->ports_by_ptr);
+        heap_destroy(&ml->ports_by_usage);
 
         bitmap_free(ml->flood_vlans);
+        ovs_rwlock_unlock(&ml->rwlock);
         ovs_rwlock_destroy(&ml->rwlock);
         free(ml);
     }
@@ -207,11 +296,9 @@ mac_learning_may_learn(const struct mac_learning *ml,
  * by calling mac_learning_may_learn(), that 'src_mac' and 'vlan' are
  * learnable.
  *
- * If the returned MAC entry is new (as may be determined by calling
- * mac_entry_is_new()), then the caller must pass the new entry to
- * mac_learning_changed().  The caller must also initialize the new entry's
- * 'port' member.  Otherwise calling those functions is at the caller's
- * discretion. */
+ * If the returned MAC entry is new (that is, if it has a NULL client-provided
+ * port, as returned by mac_entry_get_port()), then the caller must initialize
+ * the new entry's port to a nonnull value with mac_entry_set_port(). */
 struct mac_entry *
 mac_learning_insert(struct mac_learning *ml,
                     const uint8_t src_mac[ETH_ADDR_LEN], uint16_t vlan)
@@ -223,8 +310,7 @@ mac_learning_insert(struct mac_learning *ml,
         uint32_t hash = mac_table_hash(ml, src_mac, vlan);
 
         if (hmap_count(&ml->table) >= ml->max_entries) {
-            get_lru(ml, &e);
-            mac_learning_expire(ml, e);
+            evict_mac_entry_fairly(ml);
         }
 
         e = xmalloc(sizeof *e);
@@ -232,37 +318,25 @@ mac_learning_insert(struct mac_learning *ml,
         memcpy(e->mac, src_mac, ETH_ADDR_LEN);
         e->vlan = vlan;
         e->grat_arp_lock = TIME_MIN;
-        e->port.p = NULL;
+        e->mlport = NULL;
+        COVERAGE_INC(mac_learning_learned);
     } else {
         list_remove(&e->lru_node);
     }
 
     /* Mark 'e' as recently used. */
     list_push_back(&ml->lrus, &e->lru_node);
+    if (e->mlport) {
+        list_remove(&e->port_lru_node);
+        list_push_back(&e->mlport->port_lrus, &e->port_lru_node);
+    }
     e->expires = time_now() + ml->idle_time;
 
     return e;
 }
 
-/* Changes 'e''s tag to a new, randomly selected one.  Causes
- * mac_learning_run() to flag for revalidation the tag that would have been
- * previously used for this entry's MAC and VLAN (either before 'e' was
- * inserted, if it is new, or otherwise before its port was updated.)
- *
- * The client should call this function after obtaining a MAC learning entry
- * from mac_learning_insert(), if the entry is either new or if its learned
- * port has changed. */
-void
-mac_learning_changed(struct mac_learning *ml)
-{
-    COVERAGE_INC(mac_learning_learned);
-    ml->need_revalidate = true;
-}
-
 /* Looks up MAC 'dst' for VLAN 'vlan' in 'ml' and returns the associated MAC
- * learning entry, if any.  If 'tag' is nonnull, then the tag that associates
- * 'dst' and 'vlan' with its currently learned port will be OR'd into
- * '*tag'. */
+ * learning entry, if any. */
 struct mac_entry *
 mac_learning_lookup(const struct mac_learning *ml,
                     const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan)
@@ -278,7 +352,7 @@ mac_learning_lookup(const struct mac_learning *ml,
     } else {
         struct mac_entry *e = mac_entry_lookup(ml, dst, vlan);
 
-        ovs_assert(e == NULL || e->port.p != NULL);
+        ovs_assert(e == NULL || mac_entry_get_port(ml, e) != NULL);
         return e;
     }
 }
@@ -287,21 +361,19 @@ mac_learning_lookup(const struct mac_learning *ml,
 void
 mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
 {
+    ml->need_revalidate = true;
+    mac_entry_set_port(ml, e, NULL);
     hmap_remove(&ml->table, &e->hmap_node);
     list_remove(&e->lru_node);
     free(e);
 }
 
-/* Expires all the mac-learning entries in 'ml'.  If not NULL, the tags in 'ml'
- * are added to 'tags'.  Otherwise the tags in 'ml' are discarded.  The client
- * is responsible for revalidating any flows that depend on 'ml', if
- * necessary. */
+/* Expires all the mac-learning entries in 'ml'. */
 void
 mac_learning_flush(struct mac_learning *ml)
 {
     struct mac_entry *e;
     while (get_lru(ml, &e)){
-        ml->need_revalidate = true;
         mac_learning_expire(ml, e);
     }
     hmap_shrink(&ml->table);
@@ -319,7 +391,6 @@ mac_learning_run(struct mac_learning *ml)
            && (hmap_count(&ml->table) > ml->max_entries
                || time_now() >= e->expires)) {
         COVERAGE_INC(mac_learning_expired);
-        ml->need_revalidate = true;
         mac_learning_expire(ml, e);
     }
 

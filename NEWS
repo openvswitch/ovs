@@ -1,5 +1,7 @@
 Post-v2.3.0
 ---------------------
+   - The MAC learning feature now includes per-port fairness to mitigate
+     MAC flooding attacks.
    - New support for a "conjunctive match" OpenFlow extension, which
      allows constructing OpenFlow matches of the form "field1 in
      {a,b,c...} AND field2 in {d,e,f...}" and generalizations.  For details,
