@@ -1116,7 +1116,7 @@ static int
 netdev_dpdk_set_miimon(struct netdev *netdev_ OVS_UNUSED,
                        long long int interval OVS_UNUSED)
 {
-    return 0;
+    return EOPNOTSUPP;
 }
 
 static int
