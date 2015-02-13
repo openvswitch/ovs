@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,15 +90,21 @@ list_replace(struct list *element, const struct list *position)
 }
 
 /* Adjusts pointers around 'list' to compensate for 'list' having been moved
- * around in memory (e.g. as a consequence of realloc()).
+ * around in memory (e.g. as a consequence of realloc()), with original
+ * location 'orig'.
  *
- * This always works if 'list' is a member of a list, or if 'list' is the head
- * of a non-empty list.  It fails badly, however, if 'list' is the head of an
- * empty list; just use list_init() in that case. */
+ * ('orig' likely points to freed memory, but this function does not
+ * dereference 'orig', it only compares it to 'list'.  In a very pedantic
+ * language lawyer sense, this still yields undefined behavior, but it works
+ * with actual compilers.) */
 void
-list_moved(struct list *list)
+list_moved(struct list *list, const struct list *orig)
 {
-    list->prev->next = list->next->prev = list;
+    if (list->next == orig) {
+        list_init(list);
+    } else {
+        list->prev->next = list->next->prev = list;
+    }
 }
 
 /* Initializes 'dst' with the contents of 'src', compensating for moving it
@@ -107,12 +113,8 @@ list_moved(struct list *list)
 void
 list_move(struct list *dst, struct list *src)
 {
-    if (!list_is_empty(src)) {
-        *dst = *src;
-        list_moved(dst);
-    } else {
-        list_init(dst);
-    }
+    *dst = *src;
+    list_moved(dst, src);
 }
 
 /* Removes 'elem' from its list and returns the element that followed it.

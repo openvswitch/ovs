@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2340,12 +2340,14 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
         char *error;
 
         if (*n_gms >= allocated_gms) {
+            struct ofputil_group_mod *new_gms;
             size_t i;
 
-            *gms = x2nrealloc(*gms, &allocated_gms, sizeof **gms);
+            new_gms = x2nrealloc(*gms, &allocated_gms, sizeof **gms);
             for (i = 0; i < *n_gms; i++) {
-                list_moved(&(*gms)[i].buckets);
+                list_moved(&new_gms[i].buckets, &(*gms)[i].buckets);
             }
+            *gms = new_gms;
         }
         error = parse_ofp_group_mod_str(&(*gms)[*n_gms], command, ds_cstr(&s),
                                         &usable);
