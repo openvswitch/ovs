@@ -384,7 +384,7 @@ struct netdev_class {
 
     /* Forces ->get_carrier() to poll 'netdev''s MII registers for link status
      * instead of checking 'netdev''s carrier.  'netdev''s MII registers will
-     * be polled once ever 'interval' milliseconds.  If 'netdev' does not
+     * be polled once every 'interval' milliseconds.  If 'netdev' does not
      * support MII, another method may be used as a fallback.  If 'interval' is
      * less than or equal to zero, reverts ->get_carrier() to its normal
      * behavior.
