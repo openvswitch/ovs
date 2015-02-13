@@ -1721,10 +1721,10 @@ port_construct(struct ofport *port_)
 
     if (netdev_vport_is_patch(netdev)) {
         /* By bailing out here, we don't submit the port to the sFlow module
-	 * to be considered for counter polling export.  This is correct
-	 * because the patch port represents an interface that sFlow considers
-	 * to be "internal" to the switch as a whole, and therefore not an
-	 * candidate for counter polling. */
+         * to be considered for counter polling export.  This is correct
+         * because the patch port represents an interface that sFlow considers
+         * to be "internal" to the switch as a whole, and therefore not a
+         * candidate for counter polling. */
         port->odp_port = ODPP_NONE;
         ofport_update_peer(port);
         return 0;
