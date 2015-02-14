@@ -39,7 +39,7 @@ s/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/skb_priority(0),tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(csum,key)),skb_mark(0x1234),recirc_id(0),dp_hash(0),/' odp-base.txt
+ sed 's/^/skb_priority(0),tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,tos=0,ttl=64,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(csum,key)),skb_mark(0x1234),recirc_id(0),dp_hash(0),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -59,13 +59,13 @@ s/\(eth([[^)]]*),?\)/\1,eth_type(0x8848),mpls(label=100,tc=7,ttl=64,bos=1)/' odp
 
  echo
  echo '# Valid forms with tunnel and VLAN headers.'
- sed 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,tos=0x8,ttl=128,tp_src=0,tp_dst=0,flags(key)),skb_mark(0),recirc_id(0),dp_hash(0),/
+ sed 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,tos=0x8,ttl=128,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(key)),skb_mark(0),recirc_id(0),dp_hash(0),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with QOS priority, tunnel, and VLAN headers.'
- sed 's/^/skb_priority(0x1234),tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,tp_src=0,tp_dst=0,flags(key)),skb_mark(0),recirc_id(0),dp_hash(0),/
+ sed 's/^/skb_priority(0x1234),tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(key)),skb_mark(0),recirc_id(0),dp_hash(0),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
@@ -117,7 +117,7 @@ skb_mark(0x1234/0xfff0),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(csum,key)),/' odp-base.txt
+ sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,tos=0,ttl=64,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(csum,key)),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -134,13 +134,13 @@ s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with tunnel and VLAN headers.'
- sed 's/^/tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,tos=0x8,ttl=128,tp_src=0,tp_dst=0,flags(key)),/
+ sed 's/^/tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,tos=0x8,ttl=128,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(key)),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99/0xff0,pcp=7/0xe),encap(/
 s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with QOS priority, tunnel, and VLAN headers.'
- sed 's/^/skb_priority(0x1234),tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,tp_src=0,tp_dst=0,flags(key)),/
+ sed 's/^/skb_priority(0x1234),tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(key)),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
@@ -276,8 +276,8 @@ push_vlan(tpid=0x9100,vid=13,pcp=5)
 push_vlan(tpid=0x9100,vid=13,pcp=5,cfi=0)
 pop_vlan
 sample(sample=9.7%,actions(1,2,3,push_vlan(vid=1,pcp=2)))
-set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(df,csum,key)))
-set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0,ttl=64,tp_src=0,tp_dst=0,flags(key)))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0,ttl=64,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(df,csum,key)))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0,ttl=64,tp_src=0,tp_dst=0,gbp_id=0,gbp_flags=0,flags(key)))
 tnl_pop(4)
 tnl_push(tnl_port(4),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x40),gre((flags=0x20,proto=0x6558),key=0x1e241)),out_port(1))
 tnl_push(tnl_port(4),header(size=46,type=3,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x40),gre((flags=0xa0,proto=0x6558),csum=0x0,key=0x1e241)),out_port(1))

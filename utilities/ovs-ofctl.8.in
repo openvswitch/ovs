@@ -1097,6 +1097,40 @@ The netmask may be specified as a dotted quad
 (e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block
 (e.g. \fB192.168.1.0/24\fR).
 .
+.IP \fBtun_gbp_id=\fIvalue\fR[\fB/\fImask\fR]
+.IQ \fBtun_gbp_flags=\fIvalue\fR[\fB/\fImask\fR]
+Matches the group policy identifier and flags in the VXLAN header. Only
+packets that arrive over a VXLAN tunnel with the "gbp" extension
+enabled can have this field set. The fields may also be referred to by
+NXM_NX_TUN_GBP_ID[] (16 bits) and NXM_NX_TUN_GBP_FLAGS[] (8 bits) in
+the context of field manipulation actions. If these fields are set and
+the packet matched by the flow is encapsulated in a VXLAN-GBP tunnel,
+then the policy identifier and flags are transmitted to the destination
+VXLAN tunnel endpoint.
+.IP
+The \fBtun_gbp_flags\fR field has the following format:
+.IP
+.in +2
+\f(CR+-+-+-+-+-+-+-+-+\fR
+.br
+\f(CR|-|D|-|-|A|-|-|-|\fR
+.br
+\f(CR+-+-+-+-+-+-+-+-+\fR
+
+.B D :=
+Don't Learn bit. When set, this bit indicates that the egress
+tunnel endpoint MUST NOT learn the source address of the encapsulated
+frame.
+
+.B A :=
+Indicates that the group policy has already been applied to
+this packet. Policies MUST NOT be applied by devices when the A bit is
+set.
+.in -2
+.IP
+For more information, please see the corresponding IETF draft:
+https://tools.ietf.org/html/draft-smith-vxlan-group-policy
+.
 .IP "\fBreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
 Matches \fIvalue\fR either exactly or with optional \fImask\fR in
 register number \fIidx\fR.  The valid range of \fIidx\fR depends on

@@ -135,6 +135,15 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " tun_dst="IP_FMT, IP_ARGS(pin.fmd.tun_dst));
     }
 
+    if (pin.fmd.gbp_id != htons(0)) {
+        ds_put_format(string, " gbp_id=%"PRIu16,
+                      ntohs(pin.fmd.gbp_id));
+    }
+
+    if (pin.fmd.gbp_flags) {
+        ds_put_format(string, " gbp_flags=0x%02"PRIx8, pin.fmd.gbp_flags);
+    }
+
     if (pin.fmd.metadata != htonll(0)) {
         ds_put_format(string, " metadata=0x%"PRIx64, ntohll(pin.fmd.metadata));
     }

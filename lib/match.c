@@ -225,6 +225,32 @@ match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask)
 }
 
 void
+match_set_tun_gbp_id_masked(struct match *match, ovs_be16 gbp_id, ovs_be16 mask)
+{
+    match->wc.masks.tunnel.gbp_id = mask;
+    match->flow.tunnel.gbp_id = gbp_id & mask;
+}
+
+void
+match_set_tun_gbp_id(struct match *match, ovs_be16 gbp_id)
+{
+    match_set_tun_gbp_id_masked(match, gbp_id, OVS_BE16_MAX);
+}
+
+void
+match_set_tun_gbp_flags_masked(struct match *match, uint8_t flags, uint8_t mask)
+{
+    match->wc.masks.tunnel.gbp_flags = mask;
+    match->flow.tunnel.gbp_flags = flags & mask;
+}
+
+void
+match_set_tun_gbp_flags(struct match *match, uint8_t flags)
+{
+    match_set_tun_gbp_flags_masked(match, flags, UINT8_MAX);
+}
+
+void
 match_set_in_port(struct match *match, ofp_port_t ofp_port)
 {
     match->wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
@@ -852,6 +878,15 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     format_ip_netmask(s, "tun_src", tnl->ip_src, wc->masks.tunnel.ip_src);
     format_ip_netmask(s, "tun_dst", tnl->ip_dst, wc->masks.tunnel.ip_dst);
 
+    if (wc->masks.tunnel.gbp_id) {
+        format_be16_masked(s, "tun_gbp_id", tnl->gbp_id,
+                           wc->masks.tunnel.gbp_id);
+    }
+
+    if (wc->masks.tunnel.gbp_flags) {
+        ds_put_format(s, "tun_gbp_flags=%#"PRIx8",", tnl->gbp_flags);
+    }
+
     if (wc->masks.tunnel.ip_tos) {
         ds_put_format(s, "tun_tos=%"PRIx8",", tnl->ip_tos);
     }
@@ -877,7 +912,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 30);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);

@@ -114,6 +114,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  - OVS_TUNNEL_KEY_ATTR_CSUM           0    --     4      4
  *  - OVS_TUNNEL_KEY_ATTR_OAM            0    --     4      4
  *  - OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS    256  --     4      260
+ *  - OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS     -    --     -      - (shared with _GENEVE_OPTS)
  *  OVS_KEY_ATTR_IN_PORT                 4    --     4      8
  *  OVS_KEY_ATTR_SKB_MARK                4    --     4      8
  *  OVS_KEY_ATTR_DP_HASH                 4    --     4      8
@@ -133,7 +134,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 512
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 30);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently

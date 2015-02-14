@@ -1480,7 +1480,7 @@ OVS_VSWITCHD_START
       instructions: meter,apply_actions,clear_actions,write_actions,write_metadata$goto
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: tun_id tun_src tun_dst metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+        supported on Set-Field: tun_id tun_src tun_dst tun_gbp_id tun_gbp_flags metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
     matching:
       dp_hash: arbitrary mask
       recirc_id: exact match or wildcard
@@ -1488,6 +1488,8 @@ OVS_VSWITCHD_START
       tun_id: arbitrary mask
       tun_src: arbitrary mask
       tun_dst: arbitrary mask
+      tun_gbp_id: arbitrary mask
+      tun_gbp_flags: arbitrary mask
       metadata: arbitrary mask
       in_port: exact match or wildcard
       in_port_oxm: exact match or wildcard
@@ -1562,7 +1564,7 @@ AT_CHECK(
 # Check that the configuration was updated.
 mv expout orig-expout
 sed 's/classifier/main/
-75s/1000000/1024/' < orig-expout > expout
+77s/1000000/1024/' < orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0 | sed '/^$/d
 /^OFPST_TABLE_FEATURES/d'], [0], [expout])
 OVS_VSWITCHD_STOP

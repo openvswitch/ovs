@@ -119,6 +119,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_TUN_TTL:
     case MFF_TUN_FLAGS:
         return !wc->masks.tunnel.tun_id;
+    case MFF_TUN_GBP_ID:
+        return !wc->masks.tunnel.gbp_id;
+    case MFF_TUN_GBP_FLAGS:
+        return !wc->masks.tunnel.gbp_flags;
     case MFF_METADATA:
         return !wc->masks.metadata;
     case MFF_IN_PORT:
@@ -372,6 +376,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_TOS:
     case MFF_TUN_TTL:
     case MFF_TUN_FLAGS:
+    case MFF_TUN_GBP_ID:
+    case MFF_TUN_GBP_FLAGS:
     case MFF_METADATA:
     case MFF_IN_PORT:
     case MFF_SKB_PRIORITY:
@@ -481,6 +487,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_TUN_FLAGS:
         value->be16 = htons(flow->tunnel.flags);
+        break;
+    case MFF_TUN_GBP_ID:
+        value->be16 = flow->tunnel.gbp_id;
+        break;
+    case MFF_TUN_GBP_FLAGS:
+        value->u8 = flow->tunnel.gbp_flags;
         break;
     case MFF_TUN_TTL:
         value->u8 = flow->tunnel.ip_ttl;
@@ -690,6 +702,12 @@ mf_set_value(const struct mf_field *mf,
     case MFF_TUN_FLAGS:
         match_set_tun_flags(match, ntohs(value->be16));
         break;
+    case MFF_TUN_GBP_ID:
+         match_set_tun_gbp_id(match, value->be16);
+         break;
+    case MFF_TUN_GBP_FLAGS:
+         match_set_tun_gbp_flags(match, value->u8);
+         break;
     case MFF_TUN_TOS:
         match_set_tun_tos(match, value->u8);
         break;
@@ -921,6 +939,12 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
     case MFF_TUN_FLAGS:
         flow->tunnel.flags = ntohs(value->be16);
+        break;
+    case MFF_TUN_GBP_ID:
+        flow->tunnel.gbp_id = value->be16;
+        break;
+    case MFF_TUN_GBP_FLAGS:
+        flow->tunnel.gbp_flags = value->u8;
         break;
     case MFF_TUN_TOS:
         flow->tunnel.ip_tos = value->u8;
@@ -1180,6 +1204,12 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
     case MFF_TUN_FLAGS:
         match_set_tun_flags_masked(match, 0, 0);
         break;
+    case MFF_TUN_GBP_ID:
+        match_set_tun_gbp_id_masked(match, 0, 0);
+        break;
+    case MFF_TUN_GBP_FLAGS:
+        match_set_tun_gbp_flags_masked(match, 0, 0);
+        break;
     case MFF_TUN_TOS:
         match_set_tun_tos_masked(match, 0, 0);
         break;
@@ -1427,6 +1457,12 @@ mf_set(const struct mf_field *mf,
         break;
     case MFF_TUN_FLAGS:
         match_set_tun_flags_masked(match, ntohs(value->be16), ntohs(mask->be16));
+        break;
+    case MFF_TUN_GBP_ID:
+        match_set_tun_gbp_id_masked(match, value->be16, mask->be16);
+        break;
+    case MFF_TUN_GBP_FLAGS:
+        match_set_tun_gbp_flags_masked(match, value->u8, mask->u8);
         break;
     case MFF_TUN_TTL:
         match_set_tun_ttl_masked(match, value->u8, mask->u8);

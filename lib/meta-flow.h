@@ -415,6 +415,34 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_TUN_TOS,
 
+    /* "tun_gbp_id".
+     *
+     * VXLAN Group Policy ID
+     *
+     * Type: be16.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_GBP_ID(38) since v2.4.
+     * OXM: none.
+     */
+    MFF_TUN_GBP_ID,
+
+    /* "tun_gbp_flags".
+     *
+     * VXLAN Group Policy flags
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_GBP_FLAGS(39) since v2.4.
+     * OXM: none.
+     */
+    MFF_TUN_GBP_FLAGS,
+
     /* "metadata".
      *
      * A scratch pad value standardized in OpenFlow 1.1+.  Initially zero, at

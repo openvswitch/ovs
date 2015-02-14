@@ -41,6 +41,9 @@ struct flow_tnl {
     uint8_t ip_ttl;
     ovs_be16 tp_src;
     ovs_be16 tp_dst;
+    ovs_be16 gbp_id;
+    uint8_t  gbp_flags;
+    uint8_t  pad1[5];        /* Pad to 64 bits. */
 };
 
 /* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port

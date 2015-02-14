@@ -1264,6 +1264,7 @@ tunnel_key_attr_len(int type)
     case OVS_TUNNEL_KEY_ATTR_TP_DST: return 2;
     case OVS_TUNNEL_KEY_ATTR_OAM: return 0;
     case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: return -2;
+    case OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS: return -2;
     case __OVS_TUNNEL_KEY_ATTR_MAX:
         return -1;
     }
@@ -1353,6 +1354,25 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
         case OVS_TUNNEL_KEY_ATTR_OAM:
             tun->flags |= FLOW_TNL_F_OAM;
             break;
+        case OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS: {
+            static const struct nl_policy vxlan_opts_policy[] = {
+                [OVS_VXLAN_EXT_GBP] = { .type = NL_A_U32 },
+            };
+            struct nlattr *ext[ARRAY_SIZE(vxlan_opts_policy)];
+
+            if (!nl_parse_nested(a, vxlan_opts_policy, ext, ARRAY_SIZE(ext))) {
+                return ODP_FIT_ERROR;
+            }
+
+            if (ext[OVS_VXLAN_EXT_GBP]) {
+                uint32_t gbp = nl_attr_get_u32(ext[OVS_VXLAN_EXT_GBP]);
+
+                tun->gbp_id = htons(gbp & 0xFFFF);
+                tun->gbp_flags = (gbp >> 16) & 0xFF;
+            }
+
+            break;
+        }
         case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: {
             if (parse_geneve_opts(a)) {
                 return ODP_FIT_ERROR;
@@ -1415,6 +1435,14 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key)
     if (tun_key->flags & FLOW_TNL_F_OAM) {
         nl_msg_put_flag(a, OVS_TUNNEL_KEY_ATTR_OAM);
     }
+    if (tun_key->gbp_flags || tun_key->gbp_id) {
+        size_t vxlan_opts_ofs;
+
+        vxlan_opts_ofs = nl_msg_start_nested(a, OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS);
+        nl_msg_put_u32(a, OVS_VXLAN_EXT_GBP,
+                       (tun_key->gbp_flags << 16) | ntohs(tun_key->gbp_id));
+        nl_msg_end_nested(a, vxlan_opts_ofs);
+    }
 
     nl_msg_end_nested(a, tun_key_ofs);
 }
@@ -1454,7 +1482,9 @@ odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
             && tun_mask->ip_tos == UINT8_MAX
             && tun_mask->ip_ttl == UINT8_MAX
             && tun_mask->tp_src == OVS_BE16_MAX
-            && tun_mask->tp_dst == OVS_BE16_MAX;
+            && tun_mask->tp_dst == OVS_BE16_MAX
+            && tun_mask->gbp_id == OVS_BE16_MAX
+            && tun_mask->gbp_flags == UINT8_MAX;
     }
 
     if (attr == OVS_KEY_ATTR_ARP) {
@@ -1799,6 +1829,8 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         format_u8u(ds, "ttl", key.ip_ttl, MASK(mask, ip_ttl), verbose);
         format_be16(ds, "tp_src", key.tp_src, MASK(mask, tp_src), verbose);
         format_be16(ds, "tp_dst", key.tp_dst, MASK(mask, tp_dst), verbose);
+        format_be16(ds, "gbp_id", key.gbp_id, MASK(mask, gbp_id), verbose);
+        format_u8x(ds, "gbp_flags", key.gbp_flags, MASK(mask, gbp_flags), verbose);
         format_tun_flags(ds, "flags", key.flags, MASK(mask, flags), verbose);
         ds_chomp(ds, ',');
         break;
@@ -2652,6 +2684,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         SCAN_FIELD("ttl=", u8, ip_ttl);
         SCAN_FIELD("tp_src=", be16, tp_src);
         SCAN_FIELD("tp_dst=", be16, tp_dst);
+        SCAN_FIELD("gbp_id=", be16, gbp_id);
+        SCAN_FIELD("gbp_flags=", u8, gbp_flags);
         SCAN_FIELD("flags(", tun_flags, flags);
     } SCAN_END(OVS_KEY_ATTR_TUNNEL);
 

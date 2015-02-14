@@ -13,6 +13,10 @@ for test_case in \
     'tun_flags=1/1                               none' \
     'tun_tos=0                                   none' \
     'tun_ttl=0                                   none' \
+    'tun_gbp_id=0                                NXM,OXM' \
+    'tun_gbp_id=0/0x1                            NXM,OXM' \
+    'tun_gbp_flags=0                             NXM,OXM' \
+    'tun_gbp_flags=0/0x1                         NXM,OXM' \
     'metadata=0                                  NXM,OXM,OpenFlow11' \
     'metadata=1/1                                NXM,OXM,OpenFlow11' \
     'in_port=1                                   any' \

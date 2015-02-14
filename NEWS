@@ -63,6 +63,7 @@ Post-v2.3.0
    - The documentation now use the term 'destination' to mean one of syslog,
      console or file for vlog logging instead of the previously used term
      'facility'.
+   - Support for VXLAN Group Policy extension
 
 
 v2.3.0 - 14 Aug 2014
