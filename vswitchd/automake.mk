@@ -48,7 +48,6 @@ vswitchd/ovs-vswitchd.conf.db.5: \
 	ovsdb/ovsdb-doc vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \
 	$(VSWITCH_PIC)
 	$(AM_V_GEN)$(OVSDB_DOC) \
-		--title="ovs-vswitchd.conf.db" \
 		$(VSWITCH_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
 		$(srcdir)/vswitchd/vswitch.ovsschema \

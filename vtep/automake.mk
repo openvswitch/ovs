@@ -48,7 +48,6 @@ man_MANS += vtep/vtep.5
 vtep/vtep.5: \
 	ovsdb/ovsdb-doc vtep/vtep.xml vtep/vtep.ovsschema $(VTEP_PIC)
 	$(AM_V_GEN)$(OVSDB_DOC) \
-		--title="vtep" \
 		$(VTEP_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
 		$(srcdir)/vtep/vtep.ovsschema \

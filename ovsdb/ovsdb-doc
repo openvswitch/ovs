@@ -264,7 +264,7 @@ def tableToNroff(schema, tableXml):
 
     return s
 
-def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
+def docsToNroff(schemaFile, xmlFile, erFile, version=None):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
     doc = xml.dom.minidom.parse(xmlFile).documentElement
 
@@ -272,8 +272,10 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
     xmlDate = os.stat(xmlFile).st_mtime
     d = date.fromtimestamp(max(schemaDate, xmlDate))
 
-    if title == None:
-        title = schema.name
+    if doc.hasAttribute('name'):
+        manpage = doc.attributes['name'].nodeValue
+    else:
+        manpage = schema.name
 
     if version == None:
         version = "UNKNOWN"
@@ -297,7 +299,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
 .SH NAME
 %s \- %s database schema
 .PP
-''' % (title, schema.version, version, textToNroff(schema.name), schema.name)
+''' % (manpage, schema.version, version, textToNroff(manpage), schema.name)
 
     tables = ""
     introNodes = []
@@ -378,7 +380,6 @@ where SCHEMA is an OVSDB schema in JSON format
 
 The following options are also available:
   --er-diagram=DIAGRAM.PIC    include E-R diagram from DIAGRAM.PIC
-  --title=TITLE               use TITLE as title instead of schema name
   --version=VERSION           use VERSION to display on document footer
   -h, --help                  display this help message\
 """ % {'argv0': argv0}
@@ -388,20 +389,17 @@ if __name__ == "__main__":
     try:
         try:
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
-                                              ['er-diagram=', 'title=',
+                                              ['er-diagram=',
                                                'version=', 'help'])
         except getopt.GetoptError, geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
         er_diagram = None
-        title = None
         version = None
         for key, value in options:
             if key == '--er-diagram':
                 er_diagram = value
-            elif key == '--title':
-                title = value
             elif key == '--version':
                 version = value
             elif key in ['-h', '--help']:
@@ -415,7 +413,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
         # XXX we should warn about undocumented tables or columns
-        s = docsToNroff(args[0], args[1], er_diagram, title, version)
+        s = docsToNroff(args[0], args[1], er_diagram, version)
         for line in s.split("\n"):
             line = line.strip()
             if len(line):

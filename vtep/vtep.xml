@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<database title="Hardware VTEP Database">
+<database name="vtep" title="Hardware VTEP Database">
   <p>
     This schema specifies relations that a VTEP can use to integrate
     physical ports into logical switches maintained by a network
