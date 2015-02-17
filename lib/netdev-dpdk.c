@@ -47,6 +47,9 @@
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
 
+#include "rte_config.h"
+#include "rte_mbuf.h"
+
 VLOG_DEFINE_THIS_MODULE(dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
@@ -264,13 +267,12 @@ __rte_pktmbuf_init(struct rte_mempool *mp,
     m->buf_len = (uint16_t)buf_len;
 
     /* keep some headroom between start of buffer and data */
-    m->pkt.data = (char*) m->buf_addr + RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
+    m->data_off = RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
 
     /* init some constant fields */
-    m->type = RTE_MBUF_PKT;
     m->pool = mp;
-    m->pkt.nb_segs = 1;
-    m->pkt.in_port = 0xff;
+    m->nb_segs = 1;
+    m->port = 0xff;
 }
 
 static void
@@ -824,7 +826,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet ** pkts,
         }
 
         /* We have to do a copy for now */
-        memcpy(mbufs[newcnt]->pkt.data, dp_packet_data(pkts[i]), size);
+        memcpy(rte_pktmbuf_mtod(mbufs[newcnt], void *), dp_packet_data(pkts[i]), size);
 
         rte_pktmbuf_data_len(mbufs[newcnt]) = size;
         rte_pktmbuf_pkt_len(mbufs[newcnt]) = size;
@@ -1269,22 +1271,6 @@ dpdk_common_init(void)
     ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
 }
 
-static int
-dpdk_class_init(void)
-{
-    int result;
-
-    result = rte_eal_pci_probe();
-    if (result) {
-        VLOG_ERR("Cannot probe PCI");
-        return -result;
-    }
-
-    VLOG_INFO("Ethernet Device Count: %d", (int)rte_eth_dev_count());
-
-    return 0;
-}
-
 /* Client Rings */
 
 static int
@@ -1509,7 +1495,7 @@ dpdk_init(int argc, char **argv)
 const struct netdev_class dpdk_class =
     NETDEV_DPDK_CLASS(
         "dpdk",
-        dpdk_class_init,
+        NULL,
         netdev_dpdk_construct,
         netdev_dpdk_set_multiq,
         netdev_dpdk_eth_send);

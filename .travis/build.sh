@@ -67,10 +67,10 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-	    DPDK_VER="1.7.1"
+	    DPDK_VER="1.8.0"
     fi
     install_dpdk $DPDK_VER
-    # Disregard bad function cassts until DPDK is fixed
+    # Disregard bad function casts until DPDK is fixed
     CFLAGS="$CFLAGS -Wno-error=bad-function-cast -Wno-error=cast-align"
     EXTRA_OPTS+="--with-dpdk=./dpdk-$DPDK_VER/build"
 elif [ $CC != "clang" ]; then

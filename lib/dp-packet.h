@@ -60,9 +60,9 @@ struct dp_packet {
 #ifdef DPDK_NETDEV
     struct rte_mbuf mbuf;       /* DPDK mbuf */
 #else
-    void *base_;                 /* First byte of allocated space. */
-    void *data_;                 /* First byte actually in use. */
-    uint32_t size_;              /* Number of bytes in use. */
+    void *base_;                /* First byte of allocated space. */
+    uint16_t data_ofs;          /* First byte actually in use. */
+    uint32_t size_;             /* Number of bytes in use. */
     uint32_t dp_hash;           /* Packet hash. */
 #endif
     uint32_t allocated;         /* Number of bytes allocated. */
@@ -382,16 +382,6 @@ static inline const void *dp_packet_get_nd_payload(const struct dp_packet *b)
 #ifdef DPDK_NETDEV
 BUILD_ASSERT_DECL(offsetof(struct dp_packet, mbuf) == 0);
 
-static inline void * dp_packet_data(const struct dp_packet *b)
-{
-    return b->mbuf.pkt.data;
-}
-
-static inline void dp_packet_set_data(struct dp_packet *b, void *d)
-{
-    b->mbuf.pkt.data = d;
-}
-
 static inline void * dp_packet_base(const struct dp_packet *b)
 {
     return b->mbuf.buf_addr;
@@ -404,27 +394,41 @@ static inline void dp_packet_set_base(struct dp_packet *b, void *d)
 
 static inline uint32_t dp_packet_size(const struct dp_packet *b)
 {
-    return b->mbuf.pkt.pkt_len;
+    return b->mbuf.pkt_len;
 }
 
 static inline void dp_packet_set_size(struct dp_packet *b, uint32_t v)
 {
-    b->mbuf.pkt.data_len = v;    /* Current seg length. */
-    b->mbuf.pkt.pkt_len = v;     /* Total length of all segments linked to
-                                  * this segment. */
+    /* netdev-dpdk does not currently support segmentation; consequently, for
+     * all intents and purposes, 'data_len' (16 bit) and 'pkt_len' (32 bit) may
+     * be used interchangably.
+     *
+     * On the datapath, it is expected that the size of packets
+     * (and thus 'v') will always be <= UINT16_MAX; this means that there is no
+     * loss of accuracy in assigning 'v' to 'data_len'.
+     *
+     * However, control ofpbufs may well be larger than UINT16_MAX (i.e. 'v' >
+     * UINT16_MAX); even though the value is truncated when assigned to
+     * 'data_len', loss of accuracy is avoided in this situation by using
+     * 'pkt_len' to represent the packet size.
+     */
+    b->mbuf.data_len = (uint16_t)v;  /* Current seg length. */
+    b->mbuf.pkt_len = v;             /* Total length of all segments linked to
+                                      * this segment. */
+
+}
+
+static inline uint16_t __packet_data(const struct dp_packet *b)
+{
+    return b->mbuf.data_off;
+}
+
+static inline void __packet_set_data(struct dp_packet *b, uint16_t v)
+{
+    b->mbuf.data_off = v;
 }
 
 #else
-static inline void * dp_packet_data(const struct dp_packet *b)
-{
-    return b->data_;
-}
-
-static inline void dp_packet_set_data(struct dp_packet *b, void *d)
-{
-    b->data_ = d;
-}
-
 static inline void * dp_packet_base(const struct dp_packet *b)
 {
     return b->base_;
@@ -444,7 +448,33 @@ static inline void dp_packet_set_size(struct dp_packet *b, uint32_t v)
 {
     b->size_ = v;
 }
+
+static inline uint16_t __packet_data(const struct dp_packet *b)
+{
+    return b->data_ofs;
+}
+
+static inline void __packet_set_data(struct dp_packet *b, uint16_t v)
+{
+    b->data_ofs = v;
+}
+
 #endif
+
+static inline void * dp_packet_data(const struct dp_packet *b)
+{
+    return __packet_data(b) != UINT16_MAX ?
+           (char *)dp_packet_base(b) + __packet_data(b) : NULL;
+}
+
+static inline void dp_packet_set_data(struct dp_packet *b, void *data)
+{
+    if (data) {
+        __packet_set_data(b, (char *)data - (char *)dp_packet_base(b));
+    } else {
+        __packet_set_data(b, UINT16_MAX);
+    }
+}
 
 static inline void dp_packet_reset_packet(struct dp_packet *b, int off)
 {
@@ -457,7 +487,7 @@ static inline void dp_packet_reset_packet(struct dp_packet *b, int off)
 static inline uint32_t dp_packet_get_dp_hash(struct dp_packet *p)
 {
 #ifdef DPDK_NETDEV
-    return p->mbuf.pkt.hash.rss;
+    return p->mbuf.hash.rss;
 #else
     return p->dp_hash;
 #endif
@@ -467,7 +497,7 @@ static inline void dp_packet_set_dp_hash(struct dp_packet *p,
                                            uint32_t hash)
 {
 #ifdef DPDK_NETDEV
-    p->mbuf.pkt.hash.rss = hash;
+    p->mbuf.hash.rss = hash;
 #else
     p->dp_hash = hash;
 #endif
