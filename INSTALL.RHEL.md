@@ -163,4 +163,4 @@ Reporting Bugs
 Please report problems to bugs@openvswitch.org.
 
 [INSTALL.md]:INSTALL.md
-[rhel/README.RHEL]:rhel/README.RHEL
+[rhel/README.RHEL.md]:rhel/README.RHEL.md
