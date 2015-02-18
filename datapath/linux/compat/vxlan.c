@@ -266,6 +266,8 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	if (IS_ERR(skb))
 		return PTR_ERR(skb);
 
+	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
+
 	return iptunnel_xmit(vs->sock->sk, rt, skb, src, dst, IPPROTO_UDP,
 			     tos, ttl, df, xnet);
 }

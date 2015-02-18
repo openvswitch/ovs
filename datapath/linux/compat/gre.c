@@ -331,6 +331,8 @@ void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 						skb->len, 0));
 		}
 	}
+
+	ovs_skb_set_inner_protocol(skb, tpi->proto);
 }
 
 #endif /* CONFIG_NET_IPGRE_DEMUX */

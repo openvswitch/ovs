@@ -174,6 +174,5 @@ bool skb_is_encapsulated(struct sk_buff *skb)
 	/* checking for inner protocol should be sufficient on newer kernel, but
 	 * old kernel just set encapsulation bit.
 	 */
-	/* XXX: set inner protocol for all tunnel in OVS. */
 	return ovs_skb_get_inner_protocol(skb) || skb_encapsulation(skb);
 }
