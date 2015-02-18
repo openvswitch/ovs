@@ -189,8 +189,9 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	struct vxlanhdr *vxh;
 	int min_headroom;
 	int err;
+	bool udp_sum = !!(vxflags & VXLAN_F_UDP_CSUM);
 
-	skb = udp_tunnel_handle_offloads(skb, false, true);
+	skb = udp_tunnel_handle_offloads(skb, udp_sum, true);
 	if (IS_ERR(skb))
 		return PTR_ERR(skb);
 
@@ -222,7 +223,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 
 	return udp_tunnel_xmit_skb(rt, skb, src, dst, tos,
 				   ttl, df, src_port, dst_port, xnet,
-				   true);
+				   !udp_sum);
 }
 
 static void rcu_free_vs(struct rcu_head *rcu)

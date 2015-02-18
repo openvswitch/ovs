@@ -79,6 +79,10 @@ struct vxlanhdr_gbp {
 #define VXLAN_F_GBP			0x800
 #endif
 
+#ifndef VXLAN_F_UDP_CSUM
+#define VXLAN_F_UDP_CSUM                0x40
+#endif
+
 #ifndef VXLAN_F_RCV_FLAGS
 #define VXLAN_F_RCV_FLAGS			VXLAN_F_GBP
 #endif

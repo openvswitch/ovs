@@ -72,7 +72,7 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 	__be64 key;
 	__be16 flags;
 
-	flags = TUNNEL_KEY;
+	flags = TUNNEL_KEY | (udp_hdr(skb)->check != 0 ? TUNNEL_CSUM : 0);
 	vxlan_port = vxlan_vport(vport);
 	if (vxlan_port->exts & VXLAN_F_GBP && md->gbp)
 		flags |= TUNNEL_VXLAN_OPT;
@@ -228,6 +228,7 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 	__be32 saddr;
 	__be16 df;
 	int err;
+	u32 vxflags;
 
 	if (unlikely(!OVS_CB(skb)->egress_tun_info)) {
 		err = -EINVAL;
@@ -253,13 +254,15 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 	src_port = udp_flow_src_port(net, skb, 0, 0, true);
 	md.vni = htonl(be64_to_cpu(tun_key->tun_id) << 8);
 	md.gbp = vxlan_ext_gbp(skb);
+	vxflags = vxlan_port->exts |
+		      (tun_key->tun_flags & TUNNEL_CSUM ? VXLAN_F_UDP_CSUM : 0);
 
 	err = vxlan_xmit_skb(vxlan_port->vs, rt, skb,
 			     saddr, tun_key->ipv4_dst,
 			     tun_key->ipv4_tos,
 			     tun_key->ipv4_ttl, df,
 			     src_port, dst_port,
-			     &md, false, vxlan_port->exts);
+			     &md, false, vxflags);
 	if (err < 0)
 		ip_rt_put(rt);
 	return err;
