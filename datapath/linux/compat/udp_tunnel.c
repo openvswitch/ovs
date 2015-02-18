@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,20,0)
 
 #include <linux/module.h>
 #include <linux/errno.h>
@@ -138,10 +138,10 @@ void ovs_udp_csum_gso(struct sk_buff *skb)
 		     skb->len - udp_offset);
 }
 
-int udp_tunnel_xmit_skb(struct socket *sock, struct rtable *rt,
-			struct sk_buff *skb, __be32 src, __be32 dst,
-			__u8 tos, __u8 ttl, __be16 df, __be16 src_port,
-			__be16 dst_port, bool xnet)
+int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
+			__be32 src, __be32 dst, __u8 tos, __u8 ttl,
+			__be16 df, __be16 src_port, __be16 dst_port,
+			bool xnet, bool nocheck)
 {
 	struct udphdr *uh;
 
@@ -153,9 +153,9 @@ int udp_tunnel_xmit_skb(struct socket *sock, struct rtable *rt,
 	uh->source = src_port;
 	uh->len = htons(skb->len);
 
-	udp_set_csum(true, skb, src, dst, skb->len);
+	udp_set_csum(nocheck, skb, src, dst, skb->len);
 
-	return iptunnel_xmit(sock->sk, rt, skb, src, dst, IPPROTO_UDP,
+	return iptunnel_xmit(skb->sk, rt, skb, src, dst, IPPROTO_UDP,
 			     tos, ttl, df, xnet);
 }
 
@@ -166,4 +166,4 @@ void udp_tunnel_sock_release(struct socket *sock)
 	sk_release_kernel(sock->sk);
 }
 
-#endif /* Linux version < 3.18 */
+#endif /* Linux version < 3.20 */

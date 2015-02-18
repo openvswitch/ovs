@@ -220,8 +220,9 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 
 	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
 
-	return udp_tunnel_xmit_skb(vs->sock, rt, skb, src, dst, tos,
-				   ttl, df, src_port, dst_port, xnet);
+	return udp_tunnel_xmit_skb(rt, skb, src, dst, tos,
+				   ttl, df, src_port, dst_port, xnet,
+				   true);
 }
 
 static void rcu_free_vs(struct rcu_head *rcu)

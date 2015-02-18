@@ -4,7 +4,7 @@
 #include <linux/version.h>
 #include <linux/kconfig.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,20,0)
 #include_next <net/udp_tunnel.h>
 
 static inline struct sk_buff *
@@ -68,10 +68,11 @@ void setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 			   struct udp_tunnel_sock_cfg *sock_cfg);
 
 /* Transmit the skb using UDP encapsulation. */
-int udp_tunnel_xmit_skb(struct socket *sock, struct rtable *rt,
-			struct sk_buff *skb, __be32 src, __be32 dst,
-			__u8 tos, __u8 ttl, __be16 df, __be16 src_port,
-			__be16 dst_port, bool xnet);
+int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
+			__be32 src, __be32 dst, __u8 tos, __u8 ttl,
+			__be16 df, __be16 src_port, __be16 dst_port,
+			bool xnet, bool nocheck);
+
 
 void udp_tunnel_sock_release(struct socket *sock);
 
@@ -100,5 +101,5 @@ static inline struct sk_buff *udp_tunnel_handle_offloads(struct sk_buff *skb,
 
 #define udp_tunnel_encap_enable(sock) udp_encap_enable()
 
-#endif /* Linux version < 3.18 */
+#endif /* Linux version < 3.20 */
 #endif
