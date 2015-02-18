@@ -205,14 +205,9 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 		return err;
 	}
 
-	if (skb_vlan_tag_present(skb)) {
-		if (unlikely(!vlan_insert_tag_set_proto(skb,
-							skb->vlan_proto,
-							skb_vlan_tag_get(skb))))
-			return -ENOMEM;
-
-		vlan_set_tci(skb, 0);
-	}
+	skb = vlan_hwaccel_push_inside(skb);
+	if (WARN_ON(!skb))
+		return -ENOMEM;
 
 	vxh = (struct vxlanhdr *) __skb_push(skb, sizeof(*vxh));
 	vxh->vx_flags = htonl(VXLAN_HF_VNI);
