@@ -35,11 +35,10 @@
 #include "compat.h"
 #include "gso.h"
 
-#ifndef USE_KERNEL_TUNNEL_API
-int iptunnel_xmit(struct sock *sk, struct rtable *rt,
-		  struct sk_buff *skb,
-		  __be32 src, __be32 dst, __u8 proto,
-		  __u8 tos, __u8 ttl, __be16 df, bool xnet)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+                      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
+                      __be16 df, bool xnet)
 {
 	int pkt_len = skb->len;
 	struct iphdr *iph;
@@ -80,6 +79,58 @@ int iptunnel_xmit(struct sock *sk, struct rtable *rt,
 	if (unlikely(net_xmit_eval(err)))
 		pkt_len = 0;
 	return pkt_len;
+}
+
+struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
+					     bool csum_help, int gso_type_mask,
+				             void (*fix_segment)(struct sk_buff *))
+{
+	int err;
+
+	if (likely(!skb_is_encapsulated(skb))) {
+		skb_reset_inner_headers(skb);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
+		skb->encapsulation = 1;
+#endif
+	} else if (skb_is_gso(skb)) {
+		err = -ENOSYS;
+		goto error;
+	}
+
+	if (gso_type_mask)
+		fix_segment = NULL;
+
+	OVS_GSO_CB(skb)->fix_segment = fix_segment;
+
+	if (skb_is_gso(skb)) {
+		err = skb_unclone(skb, GFP_ATOMIC);
+		if (unlikely(err))
+			goto error;
+		skb_shinfo(skb)->gso_type |= gso_type_mask;
+		return skb;
+	}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
+	/* If packet is not gso and we are resolving any partial checksum,
+	 * clear encapsulation flag. This allows setting CHECKSUM_PARTIAL
+	 * on the outer header without confusing devices that implement
+	 * NETIF_F_IP_CSUM with encapsulation.
+	 */
+	if (csum_help)
+		skb->encapsulation = 0;
+#endif
+
+	if (skb->ip_summed == CHECKSUM_PARTIAL && csum_help) {
+		err = skb_checksum_help(skb);
+		if (unlikely(err))
+			goto error;
+	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
+		skb->ip_summed = CHECKSUM_NONE;
+
+	return skb;
+error:
+	kfree_skb(skb);
+	return ERR_PTR(err);
 }
 
 int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)

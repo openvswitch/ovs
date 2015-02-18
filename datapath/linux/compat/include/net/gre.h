@@ -81,7 +81,7 @@ static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0) */
 #endif /* HAVE_GRE_CISCO_REGISTER */
 
-#ifndef USE_KERNEL_TUNNEL_API
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
 
 #define gre_build_header rpl_gre_build_header
 void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,

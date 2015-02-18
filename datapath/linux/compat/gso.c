@@ -167,7 +167,9 @@ drop:
 	kfree_skb(skb);
 	return err;
 }
+#endif /* 3.16 */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 static __be16 __skb_network_protocol(struct sk_buff *skb)
 {
 	__be16 type = skb->protocol;
@@ -189,16 +191,6 @@ static __be16 __skb_network_protocol(struct sk_buff *skb)
 
 	return type;
 }
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
-static void tnl_fix_segment(struct sk_buff *skb)
-{
-	if (OVS_GSO_CB(skb)->fix_segment)
-		OVS_GSO_CB(skb)->fix_segment(skb);
-}
-#else
-static void tnl_fix_segment(struct sk_buff *skb) { }
-#endif
 
 static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 					   netdev_features_t features,
@@ -240,7 +232,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 
 		memcpy(ip_hdr(skb), iph, pkt_hlen);
 		memcpy(skb->cb, cb, sizeof(cb));
-		tnl_fix_segment(skb);
+		OVS_GSO_CB(skb)->fix_segment(skb);
 
 		skb->protocol = proto;
 		skb = skb->next;
@@ -250,10 +242,28 @@ free:
 	return segs;
 }
 
+static int output_ip(struct sk_buff *skb)
+{
+	int ret = NETDEV_TX_OK;
+	int err;
+
+	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
+
+#undef ip_local_out
+	err = ip_local_out(skb);
+	if (unlikely(net_xmit_eval(err)))
+		ret = err;
+
+	return ret;
+}
+
 int rpl_ip_local_out(struct sk_buff *skb)
 {
 	int ret = NETDEV_TX_OK;
 	int id = -1;
+
+	if (!OVS_GSO_CB(skb)->fix_segment)
+		return output_ip(skb);
 
 	if (skb_is_gso(skb)) {
 		struct iphdr *iph;
@@ -274,7 +284,6 @@ int rpl_ip_local_out(struct sk_buff *skb)
 	while (skb) {
 		struct sk_buff *next_skb = skb->next;
 		struct iphdr *iph;
-		int err;
 
 		skb->next = NULL;
 
@@ -282,67 +291,9 @@ int rpl_ip_local_out(struct sk_buff *skb)
 		if (id >= 0)
 			iph->id = htons(id++);
 
-		memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
-
-#undef ip_local_out
-		err = ip_local_out(skb);
-		if (unlikely(net_xmit_eval(err)))
-			ret = err;
-
+		ret = output_ip(skb);
 		skb = next_skb;
 	}
 	return ret;
 }
-#endif /* 3.16 */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0) || \
-	!defined USE_UPSTREAM_VXLAN
-struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
-                                             bool csum_help,
-					     void (*fix_segment)(struct sk_buff *))
-{
-	int err;
-
-	/* XXX: synchronize inner header reset for compat and non compat code
-	 * so that we can do it here.
-	 */
-	/*
-	 skb_reset_inner_headers(skb);
-	 */
-
-	/* OVS compat code does not maintain encapsulation bit.
-	 * skb->encapsulation = 1; */
-
-	if (skb_is_gso(skb)) {
-		if (skb_is_encapsulated(skb)) {
-			err = -ENOSYS;
-			goto error;
-		}
-
-		OVS_GSO_CB(skb)->fix_segment = fix_segment;
-		return skb;
-	}
-
-	/* If packet is not gso and we are resolving any partial checksum,
-	 * clear encapsulation flag. This allows setting CHECKSUM_PARTIAL
-	 * on the outer header without confusing devices that implement
-	 * NETIF_F_IP_CSUM with encapsulation.
-	 */
-	/*
-	if (csum_help)
-		skb->encapsulation = 0;
-	*/
-
-	if (skb->ip_summed == CHECKSUM_PARTIAL && csum_help) {
-		err = skb_checksum_help(skb);
-		if (unlikely(err))
-			goto error;
-	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
-		skb->ip_summed = CHECKSUM_NONE;
-
-	return skb;
-error:
-	kfree_skb(skb);
-	return ERR_PTR(err);
-}
-#endif /* 3.12 || !USE_UPSTREAM_VXLAN */
+#endif /* 3.18 */

@@ -62,13 +62,11 @@
 #include "gso.h"
 #include "vlan.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 /* VXLAN protocol header */
 struct vxlanhdr {
 	__be32 vx_flags;
 	__be32 vx_vni;
 };
-#endif
 
 /* Callback from net/ipv4/udp.c to receive packets */
 static int vxlan_udp_encap_recv(struct sock *sk, struct sk_buff *skb)

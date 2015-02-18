@@ -6,6 +6,14 @@
 #include <linux/jhash.h>
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+#define SKB_GSO_GRE 0
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
+#define SKB_GSO_GRE_CSUM 0
+#endif
+
 #ifndef HAVE_IGNORE_DF_RENAME
 #define ignore_df local_df
 #endif
