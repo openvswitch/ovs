@@ -152,7 +152,7 @@ def typeAndConstraintsToNroff(column):
         type += " (must be unique within table)"
     return type
 
-def columnGroupToNroff(table, groupXml):
+def columnGroupToNroff(table, groupXml, documented_columns):
     introNodes = []
     columnNodes = []
     for node in groupXml.childNodes:
@@ -172,6 +172,7 @@ def columnGroupToNroff(table, groupXml):
     for node in columnNodes:
         if node.tagName == 'column':
             name = node.attributes['name'].nodeValue
+            documented_columns.add(name)
             column = table.columns[name]
             if node.hasAttribute('key'):
                 key = node.attributes['key'].nodeValue
@@ -219,7 +220,8 @@ def columnGroupToNroff(table, groupXml):
             summary += [('column', nameNroff, typeNroff)]
         elif node.tagName == 'group':
             title = node.attributes["title"].nodeValue
-            subSummary, subIntro, subBody = columnGroupToNroff(table, node)
+            subSummary, subIntro, subBody = columnGroupToNroff(
+                table, node, documented_columns)
             summary += [('group', title, subSummary)]
             body += '.ST "%s:"\n' % textToNroff(title)
             body += subIntro + subBody
@@ -242,15 +244,24 @@ def tableToNroff(schema, tableXml):
     tableName = tableXml.attributes['name'].nodeValue
     table = schema.tables[tableName]
 
+    documented_columns = set()
     s = """.bp
 .SH "%s TABLE"
 """ % tableName
-    summary, intro, body = columnGroupToNroff(table, tableXml)
+    summary, intro, body = columnGroupToNroff(table, tableXml,
+                                              documented_columns)
     s += intro
     s += '.SS "Summary:\n'
     s += tableSummaryToNroff(summary)
     s += '.SS "Details:\n'
     s += body
+
+    schema_columns = set(table.columns.keys())
+    undocumented_columns = schema_columns - documented_columns
+    for column in undocumented_columns:
+        raise error.Error("table %s has undocumented column %s"
+                          % (tableName, column))
+
     return s
 
 def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
@@ -305,6 +316,12 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
             summary += [(name, title)]
         else:
             introNodes += [dbNode]
+
+    documented_tables = set((name for (name, title) in summary))
+    schema_tables = set(schema.tables.keys())
+    undocumented_tables = schema_tables - documented_tables
+    for table in undocumented_tables:
+        raise error.Error("undocumented table %s" % table)
 
     s += blockXmlToNroff(introNodes) + "\n"
 
