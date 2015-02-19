@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2489,8 +2489,8 @@ port_refresh_rstp_status(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_rstp_status status;
-    const char *keys[3];
-    int64_t int_values[3];
+    const char *keys[4];
+    int64_t int_values[4];
     struct smap smap;
 
     if (port_is_synthetic(port)) {
@@ -2539,6 +2539,8 @@ port_refresh_rstp_status(struct port *port)
     int_values[1] = status.rx_count;
     keys[2] = "rstp_uptime";
     int_values[2] = status.uptime;
+    keys[3] = "rstp_error_count";
+    int_values[3] = status.error_count;
     ovsrec_port_set_rstp_statistics(port->cfg, keys, int_values,
             ARRAY_SIZE(int_values));
 }
