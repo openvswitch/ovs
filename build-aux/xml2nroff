@@ -1,0 +1,123 @@
+#! /usr/bin/python
+
+# Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from datetime import date
+import getopt
+import os
+import sys
+import xml.dom.minidom
+
+from build.nroff import *
+
+argv0 = sys.argv[0]
+
+def usage():
+    print """\
+%(argv0)s: XML to nroff converter
+Converts the XML format supplied as input into an nroff-formatted manpage.
+usage: %(argv0)s [OPTIONS] INPUT.XML
+where INPUT.XML is a manpage in an OVS-specific XML format.
+
+The following options are also available:
+  --version=VERSION           use VERSION to display on document footer
+  -h, --help                  display this help message\
+""" % {'argv0': argv0}
+    sys.exit(0)
+
+def manpage_to_nroff(xml_file, version=None):
+    doc = xml.dom.minidom.parse(xml_file).documentElement
+    d = date.fromtimestamp(os.stat(xml_file).st_mtime)
+
+    if version == None:
+        version = "UNKNOWN"
+    program = doc.attributes['program'].nodeValue
+    title = doc.attributes['title'].nodeValue
+    section = doc.attributes['section'].nodeValue
+
+    # Putting '\" p as the first line tells "man" that the manpage
+    # needs to be preprocessed by "pic".
+    s = r''''\" p
+.\" -*- nroff -*-
+.TH "%s" %s "%s" "Open vSwitch %s" "Open vSwitch Manual"
+.fp 5 L CR              \\" Make fixed-width font available as \\fL.
+.de TQ
+.  br
+.  ns
+.  TP "\\$1"
+..
+.de ST
+.  PP
+.  RS -0.15in
+.  I "\\$1"
+.  RE
+..
+''' % (textToNroff(program), textToNroff(section), textToNroff(title), textToNroff(version))
+
+    s += blockXmlToNroff(doc.childNodes) + "\n"
+
+    return s
+
+def usage():
+    print """\
+%(argv0)s: converts XML in a somewhat HTML-like format to nroff
+usage: %(argv0)s [OPTIONS] XML
+where XML is documentation in a somewhat HTML-like XML format.
+The manpage, in nroff "man" format, is output on stdout.
+
+The following options are also available:
+  --version=VERSION           use VERSION to display on document footer
+  -h, --help                  display this help message\
+""" % {'argv0': argv0}
+    sys.exit(0)
+
+if __name__ == "__main__":
+    try:
+        options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
+                                          ['version=', 'help'])
+    except getopt.GetoptError, geo:
+        sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
+        sys.exit(1)
+
+    er_diagram = None
+    title = None
+    version = None
+    for key, value in options:
+        if key == '--version':
+            version = value
+        elif key in ['-h', '--help']:
+            usage()
+        else:
+            sys.exit(0)
+
+    if len(args) != 1:
+        sys.stderr.write("%s: exactly 1 non-option arguments required "
+                         "(use --help for help)\n" % argv0)
+        sys.exit(1)
+
+    try:
+        s = manpage_to_nroff(args[0], version)
+    except error.Error, e:
+        sys.stderr.write("%s: %s\n" % (argv0, e.msg))
+        sys.exit(1)
+    for line in s.splitlines():
+        line = line.strip()
+        if line:
+            print line
+
+
+# Local variables:
+# mode: python
+# End:

@@ -104,6 +104,7 @@ EXTRA_DIST = \
 	build-aux/dist-docs \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
+	build-aux/xml2nroff \
 	$(MAN_FRAGMENTS) \
 	$(MAN_ROOTS) \
 	Vagrantfile
