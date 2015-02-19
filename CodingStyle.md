@@ -569,3 +569,10 @@ for other compilers.  You can, however, use C99 features or GCC
 extensions also supported by Clang in code that compiles only on
 GNU/Linux (such as lib/netdev-linux.c), because GCC is the system
 compiler there.
+
+## PYTHON
+
+When introducing new Python code, try to follow Python's
+[PEP 8](http://www.python.org/dev/peps/pep-0008/) style.
+Consider running the `pep8` or `flake8` tool against your
+code to find issues.
