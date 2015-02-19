@@ -9,4 +9,4 @@ EXTRA_DIST += \
 	tutorial/t-stage4
 
 sandbox: all
-	cd $(srcdir)/tutorial && MAKE=$(MAKE) ./ovs-sandbox -b $(abs_builddir)
+	cd $(srcdir)/tutorial && MAKE=$(MAKE) ./ovs-sandbox -b $(abs_builddir) $(SANDBOXFLAGS)

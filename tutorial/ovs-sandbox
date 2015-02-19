@@ -16,16 +16,36 @@
 
 set -e
 
-run () {
-    echo "$@"
+run() {
     (cd "$sandbox" && "$@") || exit 1
 }
 
+run_xterm() {
+    run xterm -e "$@" &
+}
+
+rungdb() {
+    under_gdb=$1
+    shift
+    # Remove the --detach and to put the process under gdb control.
+    # Also remove --vconsole:off to allow error message to show up
+    # on the console.
+    # Use "DISPLAY" variable to determine out if X is supported
+    if $under_gdb && [ "$DISPLAY" ]; then
+        args=`echo $@ |sed s/--detach//g | sed s/--vconsole:off//g`
+        run_xterm gdb --args $args
+    else
+        run $@
+    fi
+}
+
+gdb_vswitchd=false;
 builddir=
 srcdir=
 schema=
 installed=false
 built=false
+
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
     # configure script under the following license:
@@ -63,6 +83,7 @@ These options force ovs-sandbox to use a particular OVS build:
   -s, --srcdir=DIR     specify Open vSwitch source directory
 These options force ovs-sandbox to use an installed Open vSwitch:
   -i, --installed      use installed Open vSwitch
+  -g, --gdb-vswitchd   run ovs-vswitchd under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
 
 Other options:
@@ -97,6 +118,9 @@ EOF
         -S|--sc*)
             prev=schema
             installed=:
+            ;;
+        -g|--gdb-v*)
+            gdb_vswitchd=true
             ;;
         -*)
             echo "unrecognized option $option (use --help for help)" >&2
@@ -204,7 +228,7 @@ run ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock
 
 # Start ovs-vswitchd.
-run ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
+rungdb $gdb_vswitchd ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
     --enable-dummy=override -vvconn -vnetdev_dummy
 
 cat <<EOF

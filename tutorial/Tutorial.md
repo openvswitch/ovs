@@ -104,6 +104,27 @@ The sandbox directory contains log files for the Open vSwitch dameons.
 You can examine them while you're running in the sandboxed environment
 or after you exit.
 
+Using GDB
+---------
+
+GDB support is not required to go through the tutorial. It is added in case
+user wants to explore the internals of OVS programs.
+
+GDB can already be used to debug any running process, with the usual
+'gdb <program> <process-id>' command.
+
+'ovs-sandbox' also has a '-g' option for launching ovs-vswitchd under GDB.
+This option can be handy for setting break points before ovs-vswitchd runs,
+or for catching early segfaults.
+
+To avoid GDB mangling with the sandbox sub shell terminal, 'ovs-sandbox'
+starts a new xterm to run each GDB session.  For systems that do not support
+X windows, GDB support is effectively disabled.
+
+When launching sandbox through the build tree's make file, the '-g' option
+can be passed via the 'SANDBOXFLAGS' environment variable.
+'make sandbox SANDBOXFLAGS=-g' will start the sandbox with ovs-vswitchd
+running under GDB in its own xterm if X is available.
 
 Motivation
 ----------
