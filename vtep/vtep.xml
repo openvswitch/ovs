@@ -776,6 +776,10 @@
       addresses of the appropriate VTEP(s).
     </column>
 
+    <column name="ipaddr">
+      The IP address to which this MAC corresponds. Optional field for
+      the purpose of ARP supression.
+    </column>
   </table>
 
   <table name="Mcast_Macs_Remote" title="Multicast MACs (remote)">
