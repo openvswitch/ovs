@@ -3,7 +3,6 @@
 from datetime import date
 import getopt
 import os
-import re
 import sys
 import xml.dom.minidom
 
@@ -11,136 +10,9 @@ import ovs.json
 from ovs.db import error
 import ovs.db.schema
 
+from build.nroff import *
+
 argv0 = sys.argv[0]
-
-def textToNroff(s, font=r'\fR'):
-    def escape(match):
-        c = match.group(0)
-        if c.startswith('-'):
-            if c != '-' or font == r'\fB':
-                return '\\' + c
-            else:
-                return '-'
-        if c == '\\':
-            return r'\e'
-        elif c == '"':
-            return r'\(dq'
-        elif c == "'":
-            return r'\(cq'
-        else:
-            raise error.Error("bad escape")
-
-    # Escape - \ " ' as needed by nroff.
-    s = re.sub('(-[0-9]|[-"\'\\\\])', escape, s)
-    if s.startswith('.'):
-        s = '\\' + s
-    return s
-
-def escapeNroffLiteral(s):
-    return r'\fB%s\fR' % textToNroff(s, r'\fB')
-
-def inlineXmlToNroff(node, font):
-    if node.nodeType == node.TEXT_NODE:
-        return textToNroff(node.data, font)
-    elif node.nodeType == node.ELEMENT_NODE:
-        if node.tagName in ['code', 'em', 'option']:
-            s = r'\fB'
-            for child in node.childNodes:
-                s += inlineXmlToNroff(child, r'\fB')
-            return s + font
-        elif node.tagName == 'ref':
-            s = r'\fB'
-            if node.hasAttribute('column'):
-                s += node.attributes['column'].nodeValue
-                if node.hasAttribute('key'):
-                    s += ':' + node.attributes['key'].nodeValue
-            elif node.hasAttribute('table'):
-                s += node.attributes['table'].nodeValue
-            elif node.hasAttribute('group'):
-                s += node.attributes['group'].nodeValue
-            else:
-                raise error.Error("'ref' lacks required attributes: %s" % node.attributes.keys())
-            return s + font
-        elif node.tagName == 'var':
-            s = r'\fI'
-            for child in node.childNodes:
-                s += inlineXmlToNroff(child, r'\fI')
-            return s + font
-        else:
-            raise error.Error("element <%s> unknown or invalid here" % node.tagName)
-    else:
-        raise error.Error("unknown node %s in inline xml" % node)
-
-def blockXmlToNroff(nodes, para='.PP'):
-    s = ''
-    for node in nodes:
-        if node.nodeType == node.TEXT_NODE:
-            s += textToNroff(node.data)
-            s = s.lstrip()
-        elif node.nodeType == node.ELEMENT_NODE:
-            if node.tagName in ['ul', 'ol']:
-                if s != "":
-                    s += "\n"
-                s += ".RS\n"
-                i = 0
-                for liNode in node.childNodes:
-                    if (liNode.nodeType == node.ELEMENT_NODE
-                        and liNode.tagName == 'li'):
-                        i += 1
-                        if node.tagName == 'ul':
-                            s += ".IP \\(bu\n"
-                        else:
-                            s += ".IP %d. .25in\n" % i
-                        s += blockXmlToNroff(liNode.childNodes, ".IP")
-                    elif (liNode.nodeType != node.TEXT_NODE
-                          or not liNode.data.isspace()):
-                        raise error.Error("<%s> element may only have <li> children" % node.tagName)
-                s += ".RE\n"
-            elif node.tagName == 'dl':
-                if s != "":
-                    s += "\n"
-                s += ".RS\n"
-                prev = "dd"
-                for liNode in node.childNodes:
-                    if (liNode.nodeType == node.ELEMENT_NODE
-                        and liNode.tagName == 'dt'):
-                        if prev == 'dd':
-                            s += '.TP\n'
-                        else:
-                            s += '.TQ\n'
-                        prev = 'dt'
-                    elif (liNode.nodeType == node.ELEMENT_NODE
-                          and liNode.tagName == 'dd'):
-                        if prev == 'dd':
-                            s += '.IP\n'
-                        prev = 'dd'
-                    elif (liNode.nodeType != node.TEXT_NODE
-                          or not liNode.data.isspace()):
-                        raise error.Error("<dl> element may only have <dt> and <dd> children")
-                    s += blockXmlToNroff(liNode.childNodes, ".IP")
-                s += ".RE\n"
-            elif node.tagName == 'p':
-                if s != "":
-                    if not s.endswith("\n"):
-                        s += "\n"
-                    s += para + "\n"
-                s += blockXmlToNroff(node.childNodes, para)
-            elif node.tagName in ('h1', 'h2', 'h3'):
-                if s != "":
-                    if not s.endswith("\n"):
-                        s += "\n"
-                nroffTag = {'h1': 'SH', 'h2': 'SS', 'h3': 'ST'}[node.tagName]
-                s += ".%s " % nroffTag
-                for child_node in node.childNodes:
-                    s += inlineXmlToNroff(child_node, r'\fR')
-                s += "\n"
-            else:
-                s += inlineXmlToNroff(node, r'\fR')
-        else:
-            raise error.Error("unknown node %s in block xml" % node)
-    if s != "" and not s.endswith('\n'):
-        s += '\n'
-    return s
 
 def typeAndConstraintsToNroff(column):
     type = column.type.toEnglish(escapeNroffLiteral)
@@ -283,8 +155,9 @@ def docsToNroff(schemaFile, xmlFile, erFile, version=None):
     # Putting '\" p as the first line tells "man" that the manpage
     # needs to be preprocessed by "pic".
     s = r''''\" p
-.TH "%s" 5 " DB Schema %s" "Open vSwitch %s" "Open vSwitch Manual"
 .\" -*- nroff -*-
+.TH "%s" 5 " DB Schema %s" "Open vSwitch %s" "Open vSwitch Manual"
+.fp 5 L CR              \\" Make fixed-width font available as \\fL.
 .de TQ
 .  br
 .  ns

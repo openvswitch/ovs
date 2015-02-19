@@ -35,6 +35,12 @@ ovs_pyfiles = \
 	python/ovs/version.py \
 	python/ovs/vlog.py
 
+# These python files are used at build time but not runtime,
+# so they are not installed.
+EXTRA_DIST += \
+	python/build/__init__.py \
+	python/build/nroff.py
+
 PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
 EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
