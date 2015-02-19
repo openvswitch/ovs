@@ -21,7 +21,9 @@ def annotateSchema(schemaFile, annotationFile):
     sys.stdout.write('\n')
 
 def constify(cType, const):
-    if (const and cType.endswith('*') and not cType.endswith('**')):
+    if (const
+        and cType.endswith('*') and
+        (cType == 'char **' or not cType.endswith('**'))):
         return 'const %s' % cType
     else:
         return cType
