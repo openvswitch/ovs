@@ -42,7 +42,8 @@ rungdb() {
     fi
 }
 
-gdb_vswitchd=false;
+gdb_vswitchd=false
+gdb_ovsdb=false
 builddir=
 srcdir=
 schema=
@@ -87,6 +88,7 @@ These options force ovs-sandbox to use a particular OVS build:
 These options force ovs-sandbox to use an installed Open vSwitch:
   -i, --installed      use installed Open vSwitch
   -g, --gdb-vswitchd   run ovs-vswitchd under gdb
+  -d, --gdb-ovsdb      run ovsdb-server under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
 
 Other options:
@@ -124,6 +126,9 @@ EOF
             ;;
         -g|--gdb-v*)
             gdb_vswitchd=true
+            ;;
+        -d|--gdb-o*)
+            gdb_ovsdb=true
             ;;
         -*)
             echo "unrecognized option $option (use --help for help)" >&2
@@ -227,7 +232,7 @@ trap 'kill `cat "$sandbox"/*.pid`' 0 1 2 3 13 14 15
 # Create database and start ovsdb-server.
 touch "$sandbox"/.conf.db.~lock~
 run ovsdb-tool create conf.db "$schema"
-run ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
+rungdb $gdb_ovsdb ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock
 
 # Start ovs-vswitchd.

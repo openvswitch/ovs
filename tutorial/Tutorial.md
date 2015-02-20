@@ -115,7 +115,8 @@ GDB can already be used to debug any running process, with the usual
 
 'ovs-sandbox' also has a '-g' option for launching ovs-vswitchd under GDB.
 This option can be handy for setting break points before ovs-vswitchd runs,
-or for catching early segfaults.
+or for catching early segfaults. Similarly, a '-d' option can be used to
+run ovsdb-server under GDB. Both options can be specified at the same time.
 
 To avoid GDB mangling with the sandbox sub shell terminal, 'ovs-sandbox'
 starts a new xterm to run each GDB session.  For systems that do not support
