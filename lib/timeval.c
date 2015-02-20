@@ -115,7 +115,6 @@ init_clock(struct clock *c, clockid_t id)
     ovs_mutex_init(&c->mutex);
     atomic_init(&c->slow_path, false);
     xclock_gettime(c->id, &c->cache);
-    memset(&c->large_warp, 0, sizeof(c->large_warp));
 }
 
 static void
