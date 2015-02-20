@@ -447,7 +447,7 @@ Prints the SSL configuration.
 Deletes the current SSL configuration.
 .
 .IP "[\fB\-\-bootstrap\fR] \fBset\-ssl\fR \fIprivate-key\fR \fIcertificate\fR \fIca-cert\fR"
-Sets the SSL configuration.  The \fB\-\-bootstrap\fR option is described 
+Sets the SSL configuration.  The \fB\-\-bootstrap\fR option is described
 below.
 .
 .ST "CA Certificate Bootstrap"
@@ -469,6 +469,27 @@ for bootstrapping.
 This option is only useful if the controller sends its CA certificate
 as part of the SSL certificate chain.  The SSL protocol does not
 require the controller to send the CA certificate.
+.
+.SS "Auto-Attach Commands"
+.
+The IETF Auto-Attach SPBM draft standard describes a compact method of using
+IEEE 802.1AB Link Layer Discovery Protocol (LLDP) together with a IEEE 802.1aq
+Shortest Path Bridging (SPB) network to automatically attach network devices to
+individual services in a SPB network.  The intent here is to allow network
+applications and devices using OVS to be able to easily take advantage of
+features offered by industry standard SPB networks. A fundamental element of
+the Auto-Attach feature is to map traditional VLANs onto SPB I_SIDs. These
+commands manage the Auto-Attach I-SID/VLAN mappings.
+.
+.IP "\fBadd\-aa\-mapping \fIbridge i-sid vlan\fR"
+Creates a new Auto-Attach mapping on \fIbridge\fR for \fIi-sid\fR
+and \fIvlan\fR.
+.
+.IP "\fBdel\-aa\-mapping \fIbridge i-sid vlan\fR"
+Deletes an Auto-Attach mapping on \fIbridge\fR for \fIi-sid\fR
+and \fIvlan\fR.
+.IP "\fBget\-aa\-mapping \fIbridge\fR"
+Lists all of the Auto-Attach mappings within \fIbridge\fR on standard output.
 .
 .SS "Database Commands"
 .
@@ -533,6 +554,8 @@ identified by bridge name.
 .IP "\fBFlow_Sample_Collector_Set\fR"
 An IPFIX exporter configuration attached to a bridge for sampling
 packets on a per-flow basis using OpenFlow \fBsample\fR actions.
+.IP "\fBAutoAttach\fR"
+Configuration for Auto Attach within a bridge.
 .PP
 Record names must be specified in full and with correct
 capitalization.  Names of tables and columns are not case-sensitive,
@@ -806,7 +829,7 @@ Create a new bridge named br0 and add port eth0 to it:
 .B "ovs\-vsctl add\-port br0 eth0"
 .PP
 Alternatively, perform both operations in a single atomic transaction:
-.IP 
+.IP
 .B "ovs\-vsctl add\-br br0 \-\- add\-port br0 eth0"
 .PP
 Delete bridge \fBbr0\fR, reporting an error if it does not exist:

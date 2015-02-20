@@ -506,6 +506,10 @@
           a different type of mirror instead.
         </p>
       </column>
+
+      <column name="auto_attach">
+          Auto Attach configuration.
+      </column>
     </group>
 
     <group title="OpenFlow Configuration">
@@ -2926,6 +2930,17 @@
       </column>
     </group>
 
+    <group title="Auto Attach Configuration">
+      <p>
+          Auto Attach configuration for a particular interface.
+      </p>
+
+      <column name="lldp" key="enable" type='{"type": "boolean"}'>
+          True to enable LLDP on this <ref table="Interface"/>.  If not
+          specified, LLDP will be disabled by default.
+      </column>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.
@@ -4490,4 +4505,53 @@
     </group>
   </table>
 
+  <table name="AutoAttach">
+    <p>Auto Attach configuration within a bridge.  The IETF Auto-Attach SPBM
+       draft standard describes a compact method of using IEEE 802.1AB Link
+       Layer Discovery Protocol (LLDP) together with a IEEE 802.1aq Shortest
+       Path Bridging (SPB) network to automatically attach network devices
+       to individual services in a SPB network.  The intent here is to allow
+       network applications and devices using OVS to be able to easily take
+       advantage of features offered by industry standard SPB networks.</p>
+
+    <p>Auto Attach (AA) uses LLDP to communicate between a directly connected
+       Auto Attach Client (AAC) and Auto Attach Server (AAS). The LLDP protocol
+       is extended to add two new Type-Length-Value tuples (TLVs). The first
+       new TLV supports the ongoing discovery of directly connected AA
+       correspondents. Auto Attach operates by regularly transmitting AA
+       discovery TLVs between the AA client and AA server. By exchanging these
+       discovery messages, both the AAC and AAS learn the system name and
+       system description of their peer. In the OVS context, OVS operates as
+       the AA client and the AA server resides on a switch at the edge of the
+       SPB network.</p>
+
+     <p>Once AA discovery has been completed the AAC then uses the
+       second new TLV to deliver identifier mappings from the AAC to the AAS. A primary
+       feature of Auto Attach is to facilitate the mapping of VLANs defined
+       outside the SPB network onto service ids (ISIDs) defined within the SPM
+       network. By doing so individual external VLANs can be mapped onto
+       specific SPB network services. These VLAN id to ISID mappings can be
+       configured and managed locally using new options added to the ovs-vsctl
+       command.</p>
+
+    <p>The Auto Attach OVS feature does not provide a full implementation of
+       the LLDP protocol. Support for the mandatory TLVs as defined by the LLDP
+       standard and support for the AA TLV extensions is provided. LLDP
+       protocol support in OVS can be enabled or disabled on a port by port
+       basis. LLDP support is disabled by default.</p>
+
+    <column name="system_name">
+      The system_name string is exported in LLDP messages.  It should uniquely
+      identify the bridge in the network.
+    </column>
+
+    <column name="system_description">
+      The system_description string is exported in LLDP messages.  It should
+      describe the type of software and hardware.
+    </column>
+
+    <column name="mappings">
+      A mapping from SPB network Individual Service Identifier (ISID) to VLAN id.
+    </column>
+  </table>
 </database>

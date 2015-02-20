@@ -648,6 +648,7 @@ AT_CHECK([${PERL} $srcdir/uuidfilt.pl out1 out2], [0],
 
 
 _uuid               : <0>
+auto_attach         : []
 controller          : []
 datapath_id         : []
 datapath_type       : ""
@@ -1147,6 +1148,7 @@ AT_CHECK([RUN_OVS_VSCTL([--id=@br0 create Bridge name=br0 -- add Open_vSwitch . 
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0],
   [[<0>
 _uuid               : <1>
+auto_attach         : []
 controller          : []
 datapath_id         : []
 datapath_type       : ""

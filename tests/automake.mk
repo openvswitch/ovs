@@ -80,7 +80,8 @@ TESTSUITE_AT = \
 	tests/rstp.at \
 	tests/interface-reconfigure.at \
 	tests/vlog.at \
-	tests/vtep-ctl.at
+	tests/vtep-ctl.at \
+	tests/auto-attach.at
 
 KMOD_TESTSUITE_AT = \
 	tests/kmod-testsuite.at \
@@ -281,7 +282,8 @@ tests_ovstest_SOURCES = \
 	tests/test-util.c \
 	tests/test-uuid.c \
 	tests/test-bitmap.c \
-	tests/test-vconn.c
+	tests/test-vconn.c \
+	tests/test-aa.c
 
 if !WIN32
 tests_ovstest_SOURCES += \

@@ -33,6 +33,7 @@
 #include "jsonrpc.h"
 #include "lacp.h"
 #include "list.h"
+#include "ovs-lldp.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
 #include "meta-flow.h"
@@ -127,6 +128,9 @@ struct bridge {
     /* Port mirroring. */
     struct hmap mirrors;        /* "struct mirror" indexed by UUID. */
 
+    /* Auto Attach */
+    struct hmap mappings;       /* "struct" indexed by UUID */
+
     /* Used during reconfiguration. */
     struct shash wanted_ports;
 
@@ -134,6 +138,14 @@ struct bridge {
     struct ovsrec_port synth_local_port;
     struct ovsrec_interface synth_local_iface;
     struct ovsrec_interface *synth_local_ifacep;
+};
+
+struct aa_mapping {
+    struct hmap_node hmap_node; /* In struct bridge's "mappings" hmap. */
+    struct bridge *bridge;
+    int64_t isid;
+    int64_t vlan;
+    char *br_name;
 };
 
 /* All bridges, indexed by name. */
@@ -194,6 +206,12 @@ static bool status_txn_try_again;
 static int stats_timer_interval;
 static long long int stats_timer = LLONG_MIN;
 
+/* Each time this timer expires, the bridge fetches the list of port/VLAN
+ * membership that has been modified by the AA.
+ */
+#define AA_REFRESH_INTERVAL (1000) /* In milliseconds. */
+static long long int aa_refresh_timer = LLONG_MIN;
+
 /* In some datapaths, creating and destroying OpenFlow ports can be extremely
  * expensive.  This can cause bridge_reconfigure() to take a long time during
  * which no other work can be done.  To deal with this problem, we limit port
@@ -234,6 +252,9 @@ static void bridge_configure_stp(struct bridge *);
 static void bridge_configure_rstp(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
 static void bridge_configure_dp_desc(struct bridge *);
+static void bridge_configure_aa(struct bridge *);
+static void bridge_aa_refresh_queued(struct bridge *);
+static bool bridge_aa_need_refresh(struct bridge *);
 static void bridge_configure_remotes(struct bridge *,
                                      const struct sockaddr_in *managers,
                                      size_t n_managers);
@@ -394,7 +415,8 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_statistics);
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_bond_active_slave);
     ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
-
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_trunks);
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_vlan_mode);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_admin_state);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_duplex);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_speed);
@@ -454,6 +476,7 @@ bridge_init(const char *remote)
     cfm_init();
     ovs_numa_init();
     stp_init();
+    lldp_init();
     rstp_init();
 }
 
@@ -633,6 +656,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 iface_set_mac(br, port, iface);
                 ofproto_port_set_bfd(br->ofproto, iface->ofp_port,
                                      &iface->cfg->bfd);
+                ofproto_port_set_lldp(br->ofproto, iface->ofp_port,
+                                      &iface->cfg->lldp);
             }
         }
         bridge_configure_mirrors(br);
@@ -647,6 +672,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_rstp(br);
         bridge_configure_tables(br);
         bridge_configure_dp_desc(br);
+        bridge_configure_aa(br);
     }
     free(managers);
 
@@ -2768,6 +2794,24 @@ run_status_update(void)
             }
         }
     }
+
+    /* Refresh AA port status if necessary. */
+    if (time_msec() >= aa_refresh_timer) {
+        struct bridge *br;
+
+        HMAP_FOR_EACH (br, node, &all_bridges) {
+            if (bridge_aa_need_refresh(br)) {
+                struct ovsdb_idl_txn *txn;
+
+                txn = ovsdb_idl_txn_create(idl);
+                bridge_aa_refresh_queued(br);
+                ovsdb_idl_txn_commit(txn);
+                ovsdb_idl_txn_destroy(txn);
+            }
+        }
+
+        aa_refresh_timer = time_msec() + AA_REFRESH_INTERVAL;
+    }
 }
 
 static void
@@ -3104,6 +3148,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     hmap_init(&br->iface_by_name);
     hmap_init(&br->mirrors);
 
+    hmap_init(&br->mappings);
     hmap_insert(&all_bridges, &br->node, hash_string(br->name, 0));
 }
 
@@ -3127,6 +3172,7 @@ bridge_destroy(struct bridge *br)
         hmap_destroy(&br->ports);
         hmap_destroy(&br->iface_by_name);
         hmap_destroy(&br->mirrors);
+        hmap_destroy(&br->mappings);
         free(br->name);
         free(br->type);
         free(br);
@@ -3651,6 +3697,234 @@ bridge_configure_dp_desc(struct bridge *br)
     ofproto_set_dp_desc(br->ofproto,
                         smap_get(&br->cfg->other_config, "dp-desc"));
 }
+
+static struct aa_mapping *
+bridge_aa_mapping_find(struct bridge *br, const int64_t isid)
+{
+    struct aa_mapping *m;
+
+    HMAP_FOR_EACH_IN_BUCKET (m,
+                             hmap_node,
+                             hash_bytes(&isid, sizeof isid, 0),
+                             &br->mappings) {
+        if (isid == m->isid) {
+            return m;
+        }
+    }
+    return NULL;
+}
+
+static struct aa_mapping *
+bridge_aa_mapping_create(struct bridge *br,
+                         const int64_t isid,
+                         const int64_t vlan)
+{
+    struct aa_mapping *m;
+
+    m = xzalloc(sizeof *m);
+    m->bridge = br;
+    m->isid = isid;
+    m->vlan = vlan;
+    m->br_name = xstrdup(br->name);
+    hmap_insert(&br->mappings,
+                &m->hmap_node,
+                hash_bytes(&isid, sizeof isid, 0));
+
+    return m;
+}
+
+static void
+bridge_aa_mapping_destroy(struct aa_mapping *m)
+{
+    if (m) {
+        struct bridge *br = m->bridge;
+
+        if (br->ofproto) {
+            ofproto_aa_mapping_unregister(br->ofproto, m);
+        }
+
+        hmap_remove(&br->mappings, &m->hmap_node);
+        if (m->br_name) {
+            free(m->br_name);
+        }
+        free(m);
+    }
+}
+
+static bool
+bridge_aa_mapping_configure(struct aa_mapping *m)
+{
+    struct aa_mapping_settings s;
+
+    s.isid = m->isid;
+    s.vlan = m->vlan;
+
+    /* Configure. */
+    ofproto_aa_mapping_register(m->bridge->ofproto, m, &s);
+
+    return true;
+}
+
+static void
+bridge_configure_aa(struct bridge *br)
+{
+    const struct ovsdb_datum *mc;
+    struct ovsrec_autoattach *auto_attach = br->cfg->auto_attach;
+    struct aa_settings aa_s;
+    struct aa_mapping *m, *next;
+    size_t i;
+
+    if (!auto_attach) {
+        ofproto_set_aa(br->ofproto, NULL, NULL);
+        return;
+    }
+
+    memset(&aa_s, 0, sizeof aa_s);
+    aa_s.system_description = auto_attach->system_description;
+    aa_s.system_name = auto_attach->system_name;
+    ofproto_set_aa(br->ofproto, NULL, &aa_s);
+
+    mc = ovsrec_autoattach_get_mappings(auto_attach,
+                                        OVSDB_TYPE_INTEGER,
+                                        OVSDB_TYPE_INTEGER);
+    HMAP_FOR_EACH_SAFE (m, next, hmap_node, &br->mappings) {
+        union ovsdb_atom atom;
+
+        atom.integer = m->isid;
+        if (ovsdb_datum_find_key(mc, &atom, OVSDB_TYPE_UUID) == UINT_MAX) {
+            VLOG_INFO("Deleting isid=%"PRId64", vlan=%"PRId64,
+                      m->isid,
+                      m->vlan);
+            bridge_aa_mapping_destroy(m);
+        }
+    }
+
+    /* Add new mappings and reconfigure existing ones. */
+    for (i = 0; i < auto_attach->n_mappings; ++i) {
+        struct aa_mapping *m =
+            bridge_aa_mapping_find(br, auto_attach->key_mappings[i]);
+
+        if (!m) {
+            VLOG_INFO("Adding isid=%"PRId64", vlan=%"PRId64,
+                      auto_attach->key_mappings[i],
+                      auto_attach->value_mappings[i]);
+            m = bridge_aa_mapping_create(br,
+                                         auto_attach->key_mappings[i],
+                                         auto_attach->value_mappings[i]);
+
+            if (!bridge_aa_mapping_configure(m)) {
+                bridge_aa_mapping_destroy(m);
+            }
+        }
+    }
+}
+
+static bool
+bridge_aa_need_refresh(struct bridge *br)
+{
+    return ofproto_aa_vlan_get_queue_size(br->ofproto) > 0;
+}
+
+static void
+bridge_aa_update_trunks(struct port *port, struct bridge_aa_vlan *m)
+{
+    int64_t *trunks = NULL;
+    unsigned int i = 0;
+    bool found = false, reconfigure = false;
+
+    for (i = 0; i < port->cfg->n_trunks; i++) {
+        if (port->cfg->trunks[i] == m->vlan) {
+            found = true;
+            break;
+        }
+    }
+
+    switch (m->oper) {
+        case BRIDGE_AA_VLAN_OPER_ADD:
+            if (!found) {
+                trunks = xmalloc(sizeof *trunks * (port->cfg->n_trunks + 1));
+
+                for (i = 0; i < port->cfg->n_trunks; i++) {
+                    trunks[i] = port->cfg->trunks[i];
+                }
+                trunks[i++] = m->vlan;
+                reconfigure = true;
+            }
+
+            break;
+
+        case BRIDGE_AA_VLAN_OPER_REMOVE:
+            if (found) {
+                unsigned int j = 0;
+
+                trunks = xmalloc(sizeof *trunks * (port->cfg->n_trunks - 1));
+
+                for (i = 0; i < port->cfg->n_trunks; i++) {
+                    if (port->cfg->trunks[i] != m->vlan) {
+                        trunks[j++] = port->cfg->trunks[i];
+                    }
+                }
+                i = j;
+                reconfigure = true;
+            }
+
+            break;
+
+        case BRIDGE_AA_VLAN_OPER_UNDEF:
+        default:
+            VLOG_WARN("unrecognized operation %u", m->oper);
+            break;
+    }
+
+    if (reconfigure) {
+        /* VLAN switching under trunk mode cause the trunk port to switch all
+         * VLANs, see ovs-vswitchd.conf.db
+         */
+        if (i == 0)  {
+            static char *vlan_mode_access = "access";
+            ovsrec_port_set_vlan_mode(port->cfg, vlan_mode_access);
+        }
+
+        if (i == 1) {
+            static char *vlan_mode_trunk = "trunk";
+            ovsrec_port_set_vlan_mode(port->cfg, vlan_mode_trunk);
+        }
+
+        ovsrec_port_set_trunks(port->cfg, trunks, i);
+
+        /* Force reconfigure of the port. */
+        port_configure(port);
+    }
+}
+
+static void
+bridge_aa_refresh_queued(struct bridge *br)
+{
+    struct ovs_list *list = xmalloc(sizeof *list);
+    struct bridge_aa_vlan *node;
+
+    list_init(list);
+    ofproto_aa_vlan_get_queued(br->ofproto, list);
+
+    LIST_FOR_EACH(node, list_node, list) {
+        struct port *port;
+
+        VLOG_INFO("ifname=%s, vlan=%u, oper=%u", node->port_name, node->vlan,
+                  node->oper);
+
+        port = port_lookup(br, node->port_name);
+        if (port) {
+            bridge_aa_update_trunks(port, node);
+        }
+
+        list_remove(&node->list_node);
+        free(node->port_name);
+        free(node);
+    }
+
+    free(list);
+}
+
 
 /* Port functions. */
 

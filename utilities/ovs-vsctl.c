@@ -693,6 +693,11 @@ SSL commands:\n\
   del-ssl                     delete the SSL configuration\n\
   set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
 \n\
+Auto Attach commands:\n\
+  add-aa-mapping BRIDGE I-SID VLAN   add Auto Attach mapping to BRIDGE\n\
+  del-aa-mapping BRIDGE I-SID VLAN   delete Auto Attach mapping VLAN from BRIDGE\n\
+  get-aa-mapping BRIDGE              get Auto Attach mappings from BRIDGE\n\
+\n\
 Switch commands:\n\
   emer-reset                  reset switch to known good state\n\
 \n\
@@ -1036,6 +1041,7 @@ pre_get_info(struct vsctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_fail_mode);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_ports);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_auto_attach);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_name);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_fake_bridge);
@@ -1043,6 +1049,8 @@ pre_get_info(struct vsctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_interfaces);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_name);
+
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_autoattach_col_mappings);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_ofport);
 }
 
@@ -1655,6 +1663,7 @@ cmd_add_br(struct vsctl_context *ctx)
 
     if (!parent_name) {
         struct ovsrec_port *port;
+        struct ovsrec_autoattach *aa;
         struct ovsrec_bridge *br;
 
         iface = ovsrec_interface_insert(ctx->txn);
@@ -1665,9 +1674,12 @@ cmd_add_br(struct vsctl_context *ctx)
         ovsrec_port_set_name(port, br_name);
         ovsrec_port_set_interfaces(port, &iface, 1);
 
+        aa = ovsrec_autoattach_insert(ctx->txn);
+
         br = ovsrec_bridge_insert(ctx->txn);
         ovsrec_bridge_set_name(br, br_name);
         ovsrec_bridge_set_ports(br, &port, 1);
+        ovsrec_bridge_set_auto_attach(br, aa);
 
         ovs_insert_bridge(ctx->ovs, br);
     } else {
@@ -2523,6 +2535,175 @@ cmd_set_ssl(struct vsctl_context *ctx)
 
     ovsrec_open_vswitch_set_ssl(ctx->ovs, ssl);
 }
+
+static void
+autoattach_insert_mapping(struct ovsrec_autoattach *aa,
+                          int64_t isid,
+                          int64_t vlan)
+{
+    int64_t *key_mappings, *value_mappings;
+    size_t i;
+
+    key_mappings = xmalloc(sizeof *aa->key_mappings * (aa->n_mappings + 1));
+    value_mappings = xmalloc(sizeof *aa->value_mappings * (aa->n_mappings + 1));
+
+    for (i = 0; i < aa->n_mappings; i++) {
+        key_mappings[i] = aa->key_mappings[i];
+        value_mappings[i] = aa->value_mappings[i];
+    }
+    key_mappings[aa->n_mappings] = isid;
+    value_mappings[aa->n_mappings] = vlan;
+
+    ovsrec_autoattach_set_mappings(aa, key_mappings, value_mappings,
+                                   aa->n_mappings + 1);
+
+    free(key_mappings);
+    free(value_mappings);
+}
+
+static void
+cmd_add_aa_mapping(struct vsctl_context *ctx)
+{
+    struct vsctl_bridge *br;
+    int64_t isid, vlan;
+    char *nptr = NULL;
+
+    isid = strtoull(ctx->argv[2], &nptr, 10);
+    if (nptr == ctx->argv[2] || nptr == NULL) {
+        vsctl_fatal("Invalid argument %s", ctx->argv[2]);
+        return;
+    }
+
+    vlan = strtoull(ctx->argv[3], &nptr, 10);
+    if (nptr == ctx->argv[3] || nptr == NULL) {
+        vsctl_fatal("Invalid argument %s", ctx->argv[3]);
+        return;
+    }
+
+    vsctl_context_populate_cache(ctx);
+
+    br = find_bridge(ctx, ctx->argv[1], true);
+    if (br->parent) {
+        br = br->parent;
+    }
+
+    if (br && br->br_cfg) {
+        autoattach_insert_mapping(br->br_cfg->auto_attach, isid, vlan);
+    }
+}
+
+static void
+del_aa_mapping(struct ovsrec_autoattach *aa,
+               int64_t isid,
+               int64_t vlan)
+{
+    int64_t *key_mappings, *value_mappings;
+    size_t i, n;
+
+    key_mappings = xmalloc(sizeof *aa->key_mappings * (aa->n_mappings));
+    value_mappings = xmalloc(sizeof *value_mappings * (aa->n_mappings));
+
+    for (i = n = 0; i < aa->n_mappings; i++) {
+        if (aa->key_mappings[i] != isid && aa->value_mappings[i] != vlan) {
+            key_mappings[n] = aa->key_mappings[i];
+            value_mappings[n++] = aa->value_mappings[i];
+        }
+    }
+
+    ovsrec_autoattach_set_mappings(aa, key_mappings, value_mappings, n);
+
+    free(key_mappings);
+    free(value_mappings);
+}
+
+static void
+cmd_del_aa_mapping(struct vsctl_context *ctx)
+{
+    struct vsctl_bridge *br;
+    int64_t isid, vlan;
+    char *nptr = NULL;
+
+    isid = strtoull(ctx->argv[2], &nptr, 10);
+    if (nptr == ctx->argv[2] || nptr == NULL) {
+        vsctl_fatal("Invalid argument %s", ctx->argv[2]);
+        return;
+    }
+
+    vlan = strtoull(ctx->argv[3], &nptr, 10);
+    if (nptr == ctx->argv[3] || nptr == NULL) {
+        vsctl_fatal("Invalid argument %s", ctx->argv[3]);
+        return;
+    }
+
+    vsctl_context_populate_cache(ctx);
+
+    br = find_bridge(ctx, ctx->argv[1], true);
+    if (br->parent) {
+        br = br->parent;
+    }
+
+    if (br && br->br_cfg && br->br_cfg->auto_attach &&
+        br->br_cfg->auto_attach->key_mappings &&
+        br->br_cfg->auto_attach->value_mappings) {
+        size_t i;
+
+        for (i = 0; i < br->br_cfg->auto_attach->n_mappings; i++) {
+            if (br->br_cfg->auto_attach->key_mappings[i] == isid &&
+                br->br_cfg->auto_attach->value_mappings[i] == vlan) {
+                del_aa_mapping(br->br_cfg->auto_attach, isid, vlan);
+                break;
+            }
+        }
+    }
+}
+
+static void
+pre_aa_mapping(struct vsctl_context *ctx)
+{
+    pre_get_info(ctx);
+
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_autoattach_col_mappings);
+}
+
+static void
+verify_auto_attach(struct ovsrec_bridge *bridge)
+{
+    if (bridge) {
+        ovsrec_bridge_verify_auto_attach(bridge);
+
+        if (bridge->auto_attach) {
+            ovsrec_autoattach_verify_mappings(bridge->auto_attach);
+        }
+    }
+}
+
+static void
+cmd_get_aa_mapping(struct vsctl_context *ctx)
+{
+    struct vsctl_bridge *br;
+
+    vsctl_context_populate_cache(ctx);
+
+    br = find_bridge(ctx, ctx->argv[1], true);
+    if (br->parent) {
+        br = br->parent;
+    }
+
+    verify_auto_attach(br->br_cfg);
+
+    if (br && br->br_cfg && br->br_cfg->auto_attach &&
+        br->br_cfg->auto_attach->key_mappings &&
+        br->br_cfg->auto_attach->value_mappings) {
+        size_t i;
+
+        for (i = 0; i < br->br_cfg->auto_attach->n_mappings; i++) {
+            ds_put_format(&ctx->output, "%"PRId64" %"PRId64"\n",
+                          (long int) br->br_cfg->auto_attach->key_mappings[i],
+                          (long int) br->br_cfg->auto_attach->value_mappings[i]);
+        }
+    }
+}
+
 
 /* Parameter commands. */
 
@@ -2601,6 +2782,12 @@ static const struct vsctl_table_class tables[] = {
        &ovsrec_bridge_col_ipfix},
       {&ovsrec_table_flow_sample_collector_set, NULL,
        &ovsrec_flow_sample_collector_set_col_ipfix}}},
+
+    {&ovsrec_table_autoattach,
+     {{&ovsrec_table_bridge,
+       &ovsrec_bridge_col_name,
+       &ovsrec_bridge_col_auto_attach},
+      {NULL, NULL, NULL}}},
 
     {&ovsrec_table_flow_sample_collector_set,
      {{NULL, NULL, NULL},
@@ -4310,6 +4497,11 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"get-ssl", 0, 0, pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
     {"del-ssl", 0, 0, pre_cmd_del_ssl, cmd_del_ssl, NULL, "", RW},
     {"set-ssl", 3, 3, pre_cmd_set_ssl, cmd_set_ssl, NULL, "--bootstrap", RW},
+
+    /* Auto Attach commands. */
+    {"add-aa-mapping", 3, 3, pre_get_info, cmd_add_aa_mapping, NULL, "", RW},
+    {"del-aa-mapping", 3, 3, pre_aa_mapping, cmd_del_aa_mapping, NULL, "", RW},
+    {"get-aa-mapping", 1, 1, pre_aa_mapping, cmd_get_aa_mapping, NULL, "", RO},
 
     /* Switch commands. */
     {"emer-reset", 0, 0, pre_cmd_emer_reset, cmd_emer_reset, NULL, "", RW},
