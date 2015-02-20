@@ -1805,9 +1805,8 @@
           <dt><code>vxlan</code></dt>
           <dd>
 	    <p>
-	      An Ethernet tunnel over the experimental, UDP-based VXLAN
-	      protocol described at
-	      <code>http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03</code>.
+	      An Ethernet tunnel over the UDP-based VXLAN protocol described in
+	      RFC 7348.
 	    </p>
 	    <p>
 	      Open vSwitch uses UDP destination port 4789.  The source port used for

@@ -1183,9 +1183,9 @@ A: VXLAN stands for Virtual eXtensible Local Area Network, and is a means
    to solve the scaling challenges of VLAN networks in a multi-tenant
    environment. VXLAN is an overlay network which transports an L2 network
    over an existing L3 network. For more information on VXLAN, please see
-   the IETF draft available here:
+   RFC 7348:
 
-   http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03
+   http://tools.ietf.org/html/rfc7348
 
 ### Q: How much of the VXLAN protocol does Open vSwitch currently support?
 
