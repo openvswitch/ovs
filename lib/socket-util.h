@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@
 
 int set_nonblocking(int fd);
 void xset_nonblocking(int fd);
-int set_dscp(int fd, uint8_t dscp);
+int set_dscp(int fd, int family, uint8_t dscp);
 
 int lookup_ip(const char *host_name, struct in_addr *address);
 int lookup_ipv6(const char *host_name, struct in6_addr *address);

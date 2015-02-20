@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,46 +106,34 @@ xset_nonblocking(int fd)
     }
 }
 
+/* Sets the DSCP value of socket 'fd' to 'dscp', which must be 63 or less.
+ * 'family' must indicate the socket's address family (AF_INET or AF_INET6, to
+ * do anything useful). */
 int
-set_dscp(int fd, uint8_t dscp)
+set_dscp(int fd, int family, uint8_t dscp)
 {
+    int retval;
     int val;
-    bool success;
 
     if (dscp > 63) {
         return EINVAL;
     }
-
-    /* Note: this function is used for both of IPv4 and IPv6 sockets */
-    success = false;
     val = dscp << 2;
-    if (setsockopt(fd, IPPROTO_IP, IP_TOS, &val, sizeof val)) {
-#ifndef _WIN32
-        if (sock_errno() != ENOPROTOOPT) {
-#else
-        if (sock_errno() != WSAENOPROTOOPT) {
-#endif
-            return sock_errno();
-        }
-    } else {
-        success = true;
-    }
-    if (setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &val, sizeof val)) {
-#ifndef _WIN32
-        if (sock_errno() != ENOPROTOOPT) {
-#else
-        if (sock_errno() != WSAENOPROTOOPT) {
-#endif
-            return sock_errno();
-        }
-    } else {
-        success = true;
-    }
-    if (!success) {
+
+    switch (family) {
+    case AF_INET:
+        retval = setsockopt(fd, IPPROTO_IP, IP_TOS, &val, sizeof val);
+        break;
+
+    case AF_INET6:
+        retval = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &val, sizeof val);
+        break;
+
+    default:
         return ENOPROTOOPT;
     }
 
-    return 0;
+    return retval ? sock_errno() : 0;
 }
 
 /* Translates 'host_name', which must be a string representation of an IP
@@ -778,7 +766,7 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     /* The dscp bits must be configured before connect() to ensure that the
      * TOS field is set during the connection establishment.  If set after
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
-    error = set_dscp(fd, dscp);
+    error = set_dscp(fd, ss.ss_family, dscp);
     if (error) {
         VLOG_ERR("%s: set_dscp: %s", target, sock_strerror(error));
         goto exit;
@@ -915,7 +903,7 @@ inet_open_passive(int style, const char *target, int default_port,
     /* The dscp bits must be configured before connect() to ensure that the TOS
      * field is set during the connection establishment.  If set after
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
-    error = set_dscp(fd, dscp);
+    error = set_dscp(fd, ss.ss_family, dscp);
     if (error) {
         VLOG_ERR("%s: set_dscp: %s", target, sock_strerror(error));
         goto error;
