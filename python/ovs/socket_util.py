@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2012, 2014 Nicira, Inc.
+# Copyright (c) 2010, 2012, 2014, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -213,14 +213,16 @@ def inet_open_active(style, target, default_port, dscp):
         is_addr_inet = is_valid_ipv4_address(address[0])
         if is_addr_inet:
             sock = socket.socket(socket.AF_INET, style, 0)
+            family = socket.AF_INET
         else:
             sock = socket.socket(socket.AF_INET6, style, 0)
+            family = socket.AF_INET6
     except socket.error, e:
         return get_exception_errno(e), None
 
     try:
         set_nonblocking(sock)
-        set_dscp(sock, dscp)
+        set_dscp(sock, family, dscp)
         try:
             sock.connect(address)
         except socket.error, e:
@@ -292,21 +294,20 @@ def set_nonblocking(sock):
                  % os.strerror(get_exception_errno(e)))
 
 
-def set_dscp(sock, dscp):
+def set_dscp(sock, family, dscp):
     if dscp > 63:
         raise ValueError("Invalid dscp %d" % dscp)
 
-    # Note: this function is used for both of IPv4 and IPv6 sockets
-    success = False
     val = dscp << 2
-    try:
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, val)
-    except socket.error, e:
-        if get_exception_errno(e) != errno.ENOPROTOOPT:
+    if family == socket.AF_INET:
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, val)
+        except socket.error, e:
             raise
-    success = True
-    try:
-        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_TCLASS, val)
-    except socket.error, e:
-        if get_exception_errno(e) != errno.ENOPROTOOPT or not success:
+    elif family == socket.AF_INET6:
+        try:
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_TCLASS, val)
+        except socket.error, e:
             raise
+    else:
+        raise
