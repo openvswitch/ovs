@@ -122,7 +122,7 @@ A: All official releases have been through a comprehensive testing
    LTS release, we will provide an updated release that includes the
    fix.  Releases that are not LTS may not be fixed and may just be
    supplanted by the next major release.  The current LTS release is
-   1.9.x.
+   2.3.x.
 
 ### Q: What Linux kernel versions does each Open vSwitch release work with?
 
