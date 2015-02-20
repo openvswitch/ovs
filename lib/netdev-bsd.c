@@ -361,7 +361,7 @@ netdev_bsd_construct_tap(struct netdev *netdev_)
 
     /* Turn device UP */
     ifr_set_flags(&ifr, IFF_UP);
-    strncpy(ifr.ifr_name, kernel_name, sizeof ifr.ifr_name);
+    ovs_strlcpy(ifr.ifr_name, kernel_name, sizeof ifr.ifr_name);
     error = af_inet_ioctl(SIOCSIFFLAGS, &ifr);
     if (error) {
         destroy_tap(netdev->tap_fd, kernel_name);
@@ -875,8 +875,8 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
         struct ifmediareq ifmr;
 
         memset(&ifmr, 0, sizeof(ifmr));
-        strncpy(ifmr.ifm_name, netdev_get_kernel_name(netdev_),
-                sizeof ifmr.ifm_name);
+        ovs_strlcpy(ifmr.ifm_name, netdev_get_kernel_name(netdev_),
+                    sizeof ifmr.ifm_name);
 
         error = af_inet_ioctl(SIOCGIFMEDIA, &ifmr);
         if (!error) {
@@ -1021,8 +1021,8 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     int error;
 
     memset(&ifdr, 0, sizeof(ifdr));
-    strncpy(ifdr.ifdr_name, netdev_get_kernel_name(netdev_),
-            sizeof(ifdr.ifdr_name));
+    ovs_strlcpy(ifdr.ifdr_name, netdev_get_kernel_name(netdev_),
+                sizeof(ifdr.ifdr_name));
     error = af_link_ioctl(SIOCGIFDATA, &ifdr);
     if (!error) {
         convert_stats(netdev_, stats, &ifdr.ifdr_data);
@@ -1126,7 +1126,7 @@ netdev_bsd_get_features(const struct netdev *netdev,
     /* XXX Look into SIOCGIFCAP instead of SIOCGIFMEDIA */
 
     memset(&ifmr, 0, sizeof(ifmr));
-    strncpy(ifmr.ifm_name, netdev_get_name(netdev), sizeof ifmr.ifm_name);
+    ovs_strlcpy(ifmr.ifm_name, netdev_get_name(netdev), sizeof ifmr.ifm_name);
 
     /* We make two SIOCGIFMEDIA ioctl calls.  The first to determine the
      * number of supported modes, and a second with a buffer to retrieve
@@ -1722,7 +1722,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     int error;
 
     memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
+    ovs_strlcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_addr.sa_family = hwaddr_family;
     ifr.ifr_addr.sa_len = hwaddr_len;
     memcpy(ifr.ifr_addr.sa_data, mac, hwaddr_len);
@@ -1748,7 +1748,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
         return EOPNOTSUPP;
     }
     memset(&req, 0, sizeof(req));
-    strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
+    ovs_strlcpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
     req.addr.ss_len = sizeof(req.addr);
     req.addr.ss_family = hwaddr_family;
     sdl = (struct sockaddr_dl *)&req.addr;
@@ -1764,7 +1764,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     oldaddr = req.addr;
 
     memset(&req, 0, sizeof(req));
-    strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
+    ovs_strlcpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
     req.flags = IFLR_ACTIVE;
     sdl = (struct sockaddr_dl *)&req.addr;
     sdl->sdl_len = offsetof(struct sockaddr_dl, sdl_data) + hwaddr_len;
@@ -1777,7 +1777,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     }
 
     memset(&req, 0, sizeof(req));
-    strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
+    ovs_strlcpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
     req.addr = oldaddr;
     return af_link_ioctl(SIOCDLIFADDR, &req);
 #else

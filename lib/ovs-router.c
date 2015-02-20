@@ -72,7 +72,7 @@ ovs_router_lookup(ovs_be32 ip_dst, char output_bridge[], ovs_be32 *gw)
     if (cr) {
         struct ovs_router_entry *p = ovs_router_entry_cast(cr);
 
-        strncpy(output_bridge, p->output_bridge, IFNAMSIZ);
+        ovs_strlcpy(output_bridge, p->output_bridge, IFNAMSIZ);
         *gw = p->gw;
         return true;
     }
@@ -110,7 +110,7 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
     rt_init_match(&match, ip_dst, plen);
 
     p = xzalloc(sizeof *p);
-    strncpy(p->output_bridge, output_bridge, IFNAMSIZ);
+    ovs_strlcpy(p->output_bridge, output_bridge, sizeof p->output_bridge);
     p->gw = gw;
     p->nw_addr = match.flow.nw_dst;
     p->plen = plen;

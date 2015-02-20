@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
     arp->ip = flow->nw_src;
     memcpy(arp->mac, flow->arp_sha, ETH_ADDR_LEN);
     arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
-    strncpy(arp->br_name, name, IFNAMSIZ);
+    ovs_strlcpy(arp->br_name, name, sizeof arp->br_name);
     cmap_insert(&table, &arp->cmap_node, (OVS_FORCE uint32_t) arp->ip);
     ovs_mutex_unlock(&mutex);
     return 0;

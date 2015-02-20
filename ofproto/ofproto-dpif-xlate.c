@@ -2639,7 +2639,8 @@ build_tunnel_send(const struct xlate_ctx *ctx, const struct xport *xport,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_ARP);
-        strncpy(entry->u.tnl_arp_cache.br_name, out_dev->xbridge->name, IFNAMSIZ);
+        ovs_strlcpy(entry->u.tnl_arp_cache.br_name, out_dev->xbridge->name,
+                    sizeof entry->u.tnl_arp_cache.br_name);
         entry->u.tnl_arp_cache.d_ip = d_ip;
     }
     err = tnl_port_build_header(xport->ofport, flow,
