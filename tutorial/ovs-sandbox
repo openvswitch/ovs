@@ -21,7 +21,9 @@ run() {
 }
 
 run_xterm() {
-    run xterm -e "$@" &
+    title=$1;
+    shift
+    run xterm -T "$title" -e "$@"  &
 }
 
 rungdb() {
@@ -33,7 +35,8 @@ rungdb() {
     # Use "DISPLAY" variable to determine out if X is supported
     if $under_gdb && [ "$DISPLAY" ]; then
         args=`echo $@ |sed s/--detach//g | sed s/--vconsole:off//g`
-        run_xterm gdb --args $args
+	xterm_title=$1
+	run_xterm $xterm_title gdb --args $args
     else
         run $@
     fi
