@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
         return error;
     }
 
-    return new_fd_pstream(name, fd, punix_accept, NULL, bind_path, pstreamp);
+    return new_fd_pstream(name, fd, punix_accept, bind_path, pstreamp);
 }
 
 static int
@@ -125,7 +125,6 @@ const struct pstream_class punix_pstream_class = {
     "punix",
     false,
     punix_open,
-    NULL,
     NULL,
     NULL,
     NULL,

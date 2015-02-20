@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,10 +198,16 @@ ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
     struct shash_node *node, *next;
 
     SHASH_FOR_EACH_SAFE (node, next, &svr->remotes) {
-        if (!shash_find(new_remotes, node->name)) {
+        struct ovsdb_jsonrpc_remote *remote = node->data;
+        struct ovsdb_jsonrpc_options *options
+            = shash_find_data(new_remotes, node->name);
+
+        if (!options) {
             VLOG_INFO("%s: remote deconfigured", node->name);
             ovsdb_jsonrpc_server_del_remote(node);
-        }
+        } else if (options->dscp != remote->dscp) {
+            ovsdb_jsonrpc_server_del_remote(node);
+         }
     }
     SHASH_FOR_EACH (node, new_remotes) {
         const struct ovsdb_jsonrpc_options *options = node->data;
@@ -384,8 +390,6 @@ static int ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_wait(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_get_memory_usage(
     const struct ovsdb_jsonrpc_session *, struct simap *usage);
-static void ovsdb_jsonrpc_session_set_options(
-    struct ovsdb_jsonrpc_session *, const struct ovsdb_jsonrpc_options *);
 static void ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *,
                                              struct jsonrpc_msg *);
 static void ovsdb_jsonrpc_session_got_notify(struct ovsdb_jsonrpc_session *,
@@ -556,7 +560,10 @@ ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *remote)
 }
 
 /* Sets the options for all of the JSON-RPC sessions managed by 'remote' to
- * 'options'. */
+ * 'options'.
+ *
+ * (The dscp value can't be changed directly; the caller must instead close and
+ * re-open the session.) */
 static void
 ovsdb_jsonrpc_session_set_all_options(
     struct ovsdb_jsonrpc_remote *remote,
@@ -564,22 +571,6 @@ ovsdb_jsonrpc_session_set_all_options(
 {
     struct ovsdb_jsonrpc_session *s;
 
-    if (remote->listener) {
-        int error;
-
-        error = pstream_set_dscp(remote->listener, options->dscp);
-        if (error) {
-            VLOG_ERR("%s: set_dscp failed %s",
-                     pstream_get_name(remote->listener), ovs_strerror(error));
-        } else {
-            remote->dscp = options->dscp;
-        }
-        /*
-         * XXX race window between setting dscp to listening socket
-         * and accepting socket. Accepted socket may have old dscp value.
-         * Ignore this race window for now.
-         */
-    }
     LIST_FOR_EACH (s, node, &remote->sessions) {
         ovsdb_jsonrpc_session_set_options(s, options);
     }

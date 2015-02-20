@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2012, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2012, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ int new_fd_stream(const char *name, int fd, int connect_status,
 int new_fd_pstream(const char *name, int fd,
                    int (*accept_cb)(int fd, const struct sockaddr_storage *ss,
                                     size_t ss_len, struct stream **),
-                   int (*set_dscp_cb)(int fd, uint8_t dscp),
                    char *unlink_path,
                    struct pstream **pstreamp);
 
