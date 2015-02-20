@@ -95,6 +95,7 @@ struct vport_portids {
  * @err_stats: Points to error statistics used and maintained by vport
  * @offset_stats: Added to actual statistics as a sop to compatibility with
  * XAPI for Citrix XenServer.  Deprecated.
+ * @detach_list: list used for detaching vport in net-exit call.
  */
 struct vport {
 	struct rcu_head rcu;
@@ -111,6 +112,7 @@ struct vport {
 	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
 	struct ovs_vport_stats offset_stats;
+	struct list_head detach_list;
 };
 
 /**
