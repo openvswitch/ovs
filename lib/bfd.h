@@ -31,7 +31,7 @@ struct netdev;
 struct dp_packet;
 struct smap;
 
-void bfd_wait(const struct bfd *);
+long long int bfd_wait(const struct bfd *);
 void bfd_run(struct bfd *);
 
 bool bfd_should_send_packet(const struct bfd *);

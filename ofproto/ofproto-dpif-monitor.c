@@ -29,6 +29,7 @@
 #include "latch.h"
 #include "ofpbuf.h"
 #include "ofproto-dpif.h"
+#include "ovs-lldp.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "seq.h"
@@ -43,7 +44,7 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_monitor);
 /* Converts the heap priority to time in millisecond. */
 #define PRIO_TO_MSEC(PRIO) (LLONG_MAX - (PRIO))
 
-/* Monitored port.  It owns references to ofport, bfd, cfm structs. */
+/* Monitored port.  It owns references to ofport, bfd, cfm, and lldp structs. */
 struct mport {
     struct hmap_node hmap_node;       /* In monitor_hmap. */
     struct heap_node heap_node;       /* In monitor_heap. */
@@ -51,6 +52,7 @@ struct mport {
 
     struct cfm *cfm;                  /* Reference to cfm. */
     struct bfd *bfd;                  /* Reference to bfd. */
+    struct lldp *lldp;                /* Reference to lldp. */
     uint8_t hw_addr[OFP_ETH_ALEN];    /* Hardware address. */
 };
 
@@ -86,12 +88,13 @@ static void monitor_run(void);
 static void monitor_mport_run(struct mport *, struct dp_packet *);
 
 static void mport_register(const struct ofport_dpif *, struct bfd *,
-                           struct cfm *, uint8_t[ETH_ADDR_LEN])
+                           struct cfm *, struct lldp *, uint8_t[ETH_ADDR_LEN])
     OVS_REQUIRES(monitor_mutex);
 static void mport_unregister(const struct ofport_dpif *)
     OVS_REQUIRES(monitor_mutex);
 static void mport_update(struct mport *, struct bfd *, struct cfm *,
-                         uint8_t[ETH_ADDR_LEN]) OVS_REQUIRES(monitor_mutex);
+                         struct lldp *, uint8_t[ETH_ADDR_LEN])
+    OVS_REQUIRES(monitor_mutex);
 static struct mport *mport_find(const struct ofport_dpif *)
     OVS_REQUIRES(monitor_mutex);
 
@@ -115,7 +118,7 @@ mport_find(const struct ofport_dpif *ofport) OVS_REQUIRES(monitor_mutex)
  * if it doesn't exist.  Otherwise, just updates its fields. */
 static void
 mport_register(const struct ofport_dpif *ofport, struct bfd *bfd,
-               struct cfm *cfm, uint8_t *hw_addr)
+               struct cfm *cfm, struct lldp *lldp, uint8_t *hw_addr)
     OVS_REQUIRES(monitor_mutex)
 {
     struct mport *mport = mport_find(ofport);
@@ -126,7 +129,7 @@ mport_register(const struct ofport_dpif *ofport, struct bfd *bfd,
         hmap_insert(&monitor_hmap, &mport->hmap_node, hash_pointer(ofport, 0));
         heap_insert(&monitor_heap, &mport->heap_node, 0);
     }
-    mport_update(mport, bfd, cfm, hw_addr);
+    mport_update(mport, bfd, cfm, lldp, hw_addr);
 }
 
 /* Removes mport from monitor_hmap and monitor_heap and frees it. */
@@ -137,7 +140,7 @@ mport_unregister(const struct ofport_dpif *ofport)
     struct mport *mport = mport_find(ofport);
 
     if (mport) {
-        mport_update(mport, NULL, NULL, NULL);
+        mport_update(mport, NULL, NULL, NULL, NULL);
         hmap_remove(&monitor_hmap, &mport->hmap_node);
         heap_remove(&monitor_heap, &mport->heap_node);
         free(mport);
@@ -147,7 +150,8 @@ mport_unregister(const struct ofport_dpif *ofport)
 /* Updates the fields of an existing mport struct. */
 static void
 mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
-             uint8_t hw_addr[ETH_ADDR_LEN]) OVS_REQUIRES(monitor_mutex)
+             struct lldp *lldp, uint8_t hw_addr[ETH_ADDR_LEN])
+    OVS_REQUIRES(monitor_mutex)
 {
     ovs_assert(mport);
 
@@ -159,12 +163,16 @@ mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
         bfd_unref(mport->bfd);
         mport->bfd = bfd_ref(bfd);
     }
+    if (mport->lldp != lldp) {
+        lldp_unref(mport->lldp);
+        mport->lldp = lldp_ref(lldp);
+    }
     if (hw_addr && memcmp(mport->hw_addr, hw_addr, ETH_ADDR_LEN)) {
         memcpy(mport->hw_addr, hw_addr, ETH_ADDR_LEN);
     }
-    /* If bfd/cfm is added or reconfigured, move the mport on top of the heap
+    /* If bfd/cfm/lldp is added or reconfigured, move the mport on top of the heap
      * so that the monitor thread can run the mport next time it wakes up. */
-    if (mport->bfd || mport->cfm) {
+    if (mport->bfd || mport->cfm || mport->lldp) {
         heap_change(&monitor_heap, &mport->heap_node, LLONG_MAX);
     }
 }
@@ -260,6 +268,9 @@ monitor_mport_run(struct mport *mport, struct dp_packet *packet)
     OVS_REQUIRES(monitor_mutex)
 {
     long long int next_wake_time;
+    long long int bfd_wake_time = LLONG_MAX;
+    long long int cfm_wake_time = LLONG_MAX;
+    long long int lldp_wake_time = LLONG_MAX;
 
     if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
         dp_packet_clear(packet);
@@ -271,17 +282,27 @@ monitor_mport_run(struct mport *mport, struct dp_packet *packet)
         bfd_put_packet(mport->bfd, packet, mport->hw_addr);
         ofproto_dpif_send_packet(mport->ofport, packet);
     }
+    if (mport->lldp && lldp_should_send_packet(mport->lldp)) {
+        dp_packet_clear(packet);
+        lldp_put_packet(mport->lldp, packet, mport->hw_addr);
+        ofproto_dpif_send_packet(mport->ofport, packet);
+    }
+
     if (mport->cfm) {
         cfm_run(mport->cfm);
-        cfm_wait(mport->cfm);
+        cfm_wake_time = cfm_wait(mport->cfm);
     }
     if (mport->bfd) {
         bfd_run(mport->bfd);
-        bfd_wait(mport->bfd);
+        bfd_wake_time = bfd_wait(mport->bfd);
+    }
+    if (mport->lldp) {
+        lldp_wake_time = lldp_wait(mport->lldp);
     }
     /* Computes the next wakeup time for this mport. */
-    next_wake_time = MIN(bfd_wake_time(mport->bfd),
-                         cfm_wake_time(mport->cfm));
+    next_wake_time = MIN(bfd_wake_time,
+                         cfm_wake_time);
+    next_wake_time = MIN(next_wake_time, lldp_wake_time);
     heap_change(&monitor_heap, &mport->heap_node,
                 MSEC_TO_PRIO(next_wake_time));
 }
@@ -294,13 +315,14 @@ monitor_mport_run(struct mport *mport, struct dp_packet *packet)
 void
 ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
                                  struct bfd *bfd, struct cfm *cfm,
+                                 struct lldp *lldp,
                                  uint8_t hw_addr[ETH_ADDR_LEN])
 {
     ovs_mutex_lock(&monitor_mutex);
-    if (!cfm && !bfd) {
+    if (!cfm && !bfd && !lldp) {
         mport_unregister(ofport);
     } else {
-        mport_register(ofport, bfd, cfm, hw_addr);
+        mport_register(ofport, bfd, cfm, lldp, hw_addr);
     }
     ovs_mutex_unlock(&monitor_mutex);
 

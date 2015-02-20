@@ -38,6 +38,7 @@
 #include "lacp.h"
 #include "learn.h"
 #include "list.h"
+#include "ovs-lldp.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
 #include "meta-flow.h"
@@ -165,6 +166,7 @@ struct xport {
 
     struct cfm *cfm;                 /* CFM handle or null. */
     struct bfd *bfd;                 /* BFD handle or null. */
+    struct lldp *lldp;               /* LLDP handle or null. */
 };
 
 struct xlate_ctx {
@@ -388,8 +390,8 @@ static void xlate_xbundle_set(struct xbundle *xbundle,
                               bool floodable);
 static void xlate_xport_set(struct xport *xport, odp_port_t odp_port,
                             const struct netdev *netdev, const struct cfm *cfm,
-                            const struct bfd *bfd, int stp_port_no,
-                            const struct rstp_port *rstp_port,
+                            const struct bfd *bfd, const struct lldp *lldp,
+                            int stp_port_no, const struct rstp_port *rstp_port,
                             enum ofputil_port_config config,
                             enum ofputil_port_state state, bool is_tunnel,
                             bool may_enable);
@@ -531,7 +533,7 @@ xlate_xbundle_set(struct xbundle *xbundle,
 static void
 xlate_xport_set(struct xport *xport, odp_port_t odp_port,
                 const struct netdev *netdev, const struct cfm *cfm,
-                const struct bfd *bfd, int stp_port_no,
+                const struct bfd *bfd, const struct lldp *lldp, int stp_port_no,
                 const struct rstp_port* rstp_port,
                 enum ofputil_port_config config, enum ofputil_port_state state,
                 bool is_tunnel, bool may_enable)
@@ -556,6 +558,11 @@ xlate_xport_set(struct xport *xport, odp_port_t odp_port,
     if (xport->bfd != bfd) {
         bfd_unref(xport->bfd);
         xport->bfd = bfd_ref(bfd);
+    }
+
+    if (xport->lldp != lldp) {
+        lldp_unref(xport->lldp);
+        xport->lldp = lldp_ref(lldp);
     }
 
     if (xport->netdev != netdev) {
@@ -625,9 +632,9 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
     xlate_xport_init(new_xcfg, new_xport);
 
     xlate_xport_set(new_xport, xport->odp_port, xport->netdev, xport->cfm,
-                    xport->bfd, xport->stp_port_no, xport->rstp_port,
-                    xport->config, xport->state, xport->is_tunnel,
-                    xport->may_enable);
+                    xport->bfd, xport->lldp, xport->stp_port_no,
+                    xport->rstp_port, xport->config, xport->state,
+                    xport->is_tunnel, xport->may_enable);
 
     if (xport->peer) {
         struct xport *peer = xport_lookup(new_xcfg, xport->peer->ofport);
@@ -864,8 +871,8 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  struct ofport_dpif *ofport, ofp_port_t ofp_port,
                  odp_port_t odp_port, const struct netdev *netdev,
                  const struct cfm *cfm, const struct bfd *bfd,
-                 struct ofport_dpif *peer, int stp_port_no,
-                 const struct rstp_port *rstp_port,
+                 const struct lldp *lldp, struct ofport_dpif *peer,
+                 int stp_port_no, const struct rstp_port *rstp_port,
                  const struct ofproto_port_queue *qdscp_list, size_t n_qdscp,
                  enum ofputil_port_config config,
                  enum ofputil_port_state state, bool is_tunnel,
@@ -888,8 +895,9 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
 
     ovs_assert(xport->ofp_port == ofp_port);
 
-    xlate_xport_set(xport, odp_port, netdev, cfm, bfd, stp_port_no,
-                    rstp_port, config, state, is_tunnel, may_enable);
+    xlate_xport_set(xport, odp_port, netdev, cfm, bfd, lldp,
+                    stp_port_no, rstp_port, config, state, is_tunnel,
+                    may_enable);
 
     if (xport->peer) {
         xport->peer->peer = NULL;
@@ -951,6 +959,7 @@ xlate_xport_remove(struct xlate_cfg *xcfg, struct xport *xport)
     rstp_port_unref(xport->rstp_port);
     cfm_unref(xport->cfm);
     bfd_unref(xport->bfd);
+    lldp_unref(xport->lldp);
     free(xport);
 }
 
@@ -2529,6 +2538,11 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
                 : rstp_process_packet(xport, packet);
         }
         return SLOW_STP;
+    } else if (xport->lldp && lldp_should_process_flow(flow)) {
+        if (packet) {
+            lldp_process_packet(xport->lldp, packet);
+        }
+        return SLOW_LLDP;
     } else {
         return 0;
     }

@@ -39,7 +39,6 @@
 #include "lldp/lldpd.h"
 #include "lldp/lldpd-structs.h"
 #include "netdev.h"
-#include "ofpbuf.h"
 #include "openvswitch/types.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -736,7 +735,7 @@ lldp_should_process_flow(const struct flow *flow)
 /* Process an LLDP packet that was received on a bridge port.
  */
 void
-lldp_process_packet(struct lldp *lldp, const struct ofpbuf *p)
+lldp_process_packet(struct lldp *lldp, const struct dp_packet *p)
 {
     if (lldp) {
         lldpd_recv(lldp->lldpd,
@@ -793,7 +792,7 @@ lldp_wait(struct lldp *lldp) OVS_EXCLUDED(mutex)
 /* Prepare the LLDP packet to be sent on a bridge port.
  */
 void
-lldp_put_packet(struct lldp *lldp, struct ofpbuf *packet,
+lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
                 uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     struct lldpd *mylldpd = lldp->lldpd;

@@ -1034,16 +1034,17 @@ struct ofproto_class {
      * problem), or -1 if LACP is not enabled on 'port'.
      *
      * This function may be a null pointer if the ofproto implementation does
-     * not support LACP. */
+     * not support LACP.
+     */
     int (*port_is_lacp_current)(const struct ofport *port);
 
     /* Get LACP port stats. Returns -1 if LACP is not enabled on 'port'.
      *
      * This function may be a null pointer if the ofproto implementation does
-     * not support LACP. */
+     * not support LACP.
+     */
     int (*port_get_lacp_stats)(const struct ofport *port,
-			       struct lacp_slave_stats *stats);
-
+                               struct lacp_slave_stats *stats);
 
 /* ## ----------------------- ## */
 /* ## OpenFlow Rule Functions ## */
@@ -1358,6 +1359,77 @@ struct ofproto_class {
      * value is non-zero. */
     int (*get_cfm_status)(const struct ofport *ofport,
                           struct cfm_status *status);
+
+    /* Configures LLDP on 'ofport'.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support LLDP, as does a null pointer. */
+    int (*set_lldp)(struct ofport *ofport, const struct smap *cfg);
+
+    /* Checks the status of LLDP configured on 'ofport'.  Returns true if the
+     * port's LLDP status was successfully stored into '*status'.  Returns
+     * false if the port did not have LLDP configured, in which case '*status'
+     * is indeterminate.
+     *
+     * The caller must provide and own '*status'.  '*status' is indeterminate
+     * if the return value is non-zero. */
+    bool (*get_lldp_status)(const struct ofport *ofport,
+                            struct lldp_status *status);
+
+    /* Configures Auto Attach.
+     *
+     * If 's' is nonnull, configures Auto Attach according to its members.
+     *
+     * If 's' is null, removes any Auto Attach configuration.
+     */
+    int (*set_aa)(struct ofproto *ofproto,
+                  const struct aa_settings *s);
+
+    /* If 's' is nonnull, this function registers a mapping associated with
+     * client data pointer 'aux' in 'ofproto'.  If 'aux' is already registered
+     * then this function updates its configuration to 's'.  Otherwise, this
+     * function registers a new mapping.
+     *
+     * An implementation that does not support mapping at all may set
+     * it to NULL or return EOPNOTSUPP.  An implementation that supports
+     * only a subset of the functionality should implement what it can
+     * and return 0.
+     */
+    int (*aa_mapping_set)(struct ofproto *ofproto, void *aux,
+                          const struct aa_mapping_settings *s);
+
+    /* If 's' is nonnull, this function unregisters a mapping associated with
+     * client data pointer 'aux' in 'ofproto'.  If 'aux' is already registered
+     * then this function updates its configuration to 's'.  Otherwise, this
+     * function unregisters a new mapping.
+     *
+     * An implementation that does not support mapping at all may set
+     * it to NULL or return EOPNOTSUPP.  An implementation that supports
+     * only a subset of the functionality should implement what it can
+     * and return 0.
+     */
+    int (*aa_mapping_unset)(struct ofproto *ofproto, void *aux);
+
+    /*
+     * Returns the a list of AutoAttach VLAN operations.  When Auto Attach is
+     * enabled, the VLAN associated with an I-SID/VLAN mapping is first
+     * negotiated with an Auto Attach Server.  Once an I-SID VLAN mapping
+     * becomes active, the corresponding VLAN needs to be communicated to the
+     * bridge in order to add the VLAN to the trunk port linking the Auto
+     * Attach Client (in this case openvswitch) and the Auto Attach Server.
+     *
+     * The list entries are of type "struct bridge_aa_vlan".  Each entry
+     * specifies the operation (add or remove), the interface on which to
+     * execute the operation and the VLAN.
+     */
+    int (*aa_vlan_get_queued)(struct ofproto *ofproto, struct ovs_list *list);
+
+    /*
+     * Returns the current number of entries in the list of VLAN operations
+     * in the Auto Attach Client (see previous function description
+     * aa_vlan_get_queued).  Returns 0 if Auto Attach is disabled.
+     */
+    unsigned int (*aa_vlan_get_queue_size)(struct ofproto *ofproto);
 
     /* Configures BFD on 'ofport'.
      *

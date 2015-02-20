@@ -25,8 +25,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include "compiler.h"
+#include "dp-packet.h"
 #include "packets.h"
-#include "ofpbuf.h"
 
 VLOG_DEFINE_THIS_MODULE(lldp);
 
@@ -164,7 +164,7 @@ lldpd_af_from_lldp_proto(int proto)
 int
 lldp_send(struct lldpd *global OVS_UNUSED,
           struct lldpd_hardware *hardware,
-          struct ofpbuf *p)
+          struct dp_packet *p)
 {
     struct lldpd_port *port;
     struct lldpd_chassis *chassis;
@@ -181,16 +181,16 @@ lldp_send(struct lldpd *global OVS_UNUSED,
 
     /* The ethernet header is filled in elsewhere, we must save room for it. */
     length = hardware->h_mtu - sizeof(struct eth_header);
-    packet = ofpbuf_l3(p);
+    packet = dp_packet_l3(p);
     VLOG_DBG("LLDP PDU send to %s mtu %d incoming with ptr=%p",
               hardware->h_ifname, hardware->h_mtu, packet);
     pos = packet;
 
     /*
-     * Make room in ofpbuf for chassis ID, Port ID, System Name, System Descr,
-     * System Cap
+     * Make room in dp_packet for chassis ID, Port ID, System Name, System
+     * Descr, System Cap
      */
-    pos = ofpbuf_put_uninit(p, sizeof chassis->c_id_subtype +
+    pos = dp_packet_put_uninit(p, sizeof chassis->c_id_subtype +
                                chassis->c_id_len +
                                sizeof port->p_id_subtype +
                                port->p_id_len +
@@ -253,7 +253,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
        /*
         * Make room for 1 mgmt interface
         */
-        ofpbuf_put_uninit(p, 2 + sizeof(uint8_t) +
+        dp_packet_put_uninit(p, 2 + sizeof(uint8_t) +
                              sizeof(uint8_t) +
                              mgmt->m_addrsize +
                              sizeof(uint8_t) +
@@ -293,7 +293,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
     /* Port description */
     if (port->p_descr && *port->p_descr != '\0') {
         /* make room for port descr */
-        ofpbuf_put_uninit(p, 2 + strlen(port->p_descr));
+        dp_packet_put_uninit(p, 2 + strlen(port->p_descr));
 
         if (!(POKE_START_LLDP_TLV(LLDP_TLV_PORT_DESCR) &&
               POKE_BYTES(port->p_descr, strlen(port->p_descr)) &&
@@ -330,7 +330,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
         aa_elem_sys_id_second_byte = port->p_element.system_id.smlt_id & 0x0FF;
 
         /* make room for element type tlv */
-        ofpbuf_put_uninit(p, 2 + sizeof avaya +
+        dp_packet_put_uninit(p, 2 + sizeof avaya +
                              sizeof(uint8_t) +
                              sizeof aa_element_first_byte +
                              sizeof aa_element_second_byte +
@@ -361,7 +361,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
        /*
         * make room for aa_isid_digest
         */
-        ofpbuf_put_uninit(p, 2 + sizeof avaya +
+        dp_packet_put_uninit(p, 2 + sizeof avaya +
                              sizeof(uint8_t) +
                              sizeof msg_auth_digest);
 
@@ -387,7 +387,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
             /*
              * Make room for one isid-vlan mapping
              */
-            ofpbuf_put_uninit(p, sizeof status_vlan_word +
+            dp_packet_put_uninit(p, sizeof status_vlan_word +
                                  sizeof vlan_isid_map->isid_vlan_data.isid);
 
             if (!(POKE_UINT16(status_vlan_word) &&
@@ -403,7 +403,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
     }
 
     /* Make room for the End TLV 0x0000 */
-    ofpbuf_put_uninit(p, sizeof(uint16_t));
+    dp_packet_put_uninit(p, sizeof(uint16_t));
 
     /* END */
     if (!(POKE_START_LLDP_TLV(LLDP_TLV_END) &&

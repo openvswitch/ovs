@@ -585,7 +585,7 @@ lldpd_recv(struct lldpd *cfg,
 }
 
 uint32_t
-lldpd_send(struct lldpd_hardware *hw, struct ofpbuf *p)
+lldpd_send(struct lldpd_hardware *hw, struct dp_packet *p)
 {
     struct lldpd *cfg = hw->h_cfg;
     struct lldpd_port *port;

@@ -27,12 +27,12 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include "dp-packet.h"
 #include "list.h"
 #include "lldpd-structs.h"
 #include "lldp-tlv.h"
 #include "packets.h"
 #include "openvswitch/vlog.h"
-#include "ofpbuf.h"
 
 #define SYSCONFDIR       ""
 #define LLDPD_CTL_SOCKET ""
@@ -56,7 +56,7 @@ struct event_base;
 
 #define USING_AGENTX_SUBAGENT_MODULE 1
 
-#define PROTO_SEND_SIG struct lldpd *, struct lldpd_hardware *,struct ofpbuf *
+#define PROTO_SEND_SIG struct lldpd *, struct lldpd_hardware *,struct dp_packet *
 #define PROTO_DECODE_SIG struct lldpd *, char *, int, struct lldpd_hardware *,\
     struct lldpd_chassis **, struct lldpd_port **
 #define PROTO_GUESS_SIG char *, int
@@ -104,7 +104,7 @@ void lldpd_hardware_cleanup(struct lldpd*, struct lldpd_hardware *);
 struct lldpd_mgmt *lldpd_alloc_mgmt(int family, void *addr, size_t addrsize,
     u_int32_t iface);
 void lldpd_recv(struct lldpd *, struct lldpd_hardware *, char *, size_t);
-uint32_t lldpd_send(struct lldpd_hardware *, struct ofpbuf *);
+uint32_t lldpd_send(struct lldpd_hardware *, struct dp_packet *);
 void lldpd_loop(struct lldpd *);
 
 int lldpd_main(int, char **);

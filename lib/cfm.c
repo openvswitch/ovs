@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -564,7 +564,7 @@ cfm_should_send_ccm(struct cfm *cfm) OVS_EXCLUDED(mutex)
  * should be sent whenever cfm_should_send_ccm() indicates. */
 void
 cfm_compose_ccm(struct cfm *cfm, struct dp_packet *packet,
-                uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
+                const uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     uint16_t ccm_vlan;
     struct ccm *ccm;
@@ -629,10 +629,12 @@ cfm_compose_ccm(struct cfm *cfm, struct dp_packet *packet,
     ovs_mutex_unlock(&mutex);
 }
 
-void
+long long int
 cfm_wait(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    poll_timer_wait_until(cfm_wake_time(cfm));
+    long long int wake_time = cfm_wake_time(cfm);
+    poll_timer_wait_until(wake_time);
+    return wake_time;
 }
 
 

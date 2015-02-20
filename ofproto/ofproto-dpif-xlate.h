@@ -24,6 +24,7 @@
 #include "ofproto-dpif.h"
 #include "ofproto.h"
 #include "stp.h"
+#include "ovs-lldp.h"
 
 struct bfd;
 struct bond;
@@ -165,10 +166,9 @@ void xlate_bundle_remove(struct ofbundle *);
 
 void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       struct ofport_dpif *, ofp_port_t, odp_port_t,
-                      const struct netdev *, const struct cfm *,
-                      const struct bfd *, struct ofport_dpif *peer,
-                      int stp_port_no,
-                      const struct rstp_port *rstp_port,
+                      const struct netdev *, const struct cfm *, const struct bfd *,
+                      const struct lldp *, struct ofport_dpif *peer,
+                      int stp_port_no, const struct rstp_port *rstp_port,
                       const struct ofproto_port_queue *qdscp,
                       size_t n_qdscp, enum ofputil_port_config,
                       enum ofputil_port_state, bool is_tunnel,

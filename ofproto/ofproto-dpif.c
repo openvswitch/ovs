@@ -29,6 +29,7 @@
 #include "connmgr.h"
 #include "coverage.h"
 #include "cfm.h"
+#include "ovs-lldp.h"
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "fail-open.h"
@@ -162,6 +163,7 @@ struct ofport_dpif {
     struct ovs_list bundle_node;/* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
     struct bfd *bfd;            /* BFD, if any. */
+    struct lldp *lldp;          /* lldp, if any. */
     bool may_enable;            /* May be enabled in bonds. */
     bool is_tunnel;             /* This port is a tunnel. */
     bool is_layer3;             /* This is a layer 3 port. */
@@ -223,6 +225,7 @@ ofport_dpif_cast(const struct ofport *ofport)
 static void port_run(struct ofport_dpif *);
 static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
+static int set_lldp(struct ofport *ofport_, const struct smap *cfg);
 static void ofport_update_peer(struct ofport_dpif *);
 
 /* Reasons that we might need to revalidate every datapath flow, and
@@ -674,8 +677,8 @@ type_run(const char *type)
                     : -1;
                 xlate_ofport_set(ofproto, ofport->bundle, ofport,
                                  ofport->up.ofp_port, ofport->odp_port,
-                                 ofport->up.netdev, ofport->cfm,
-                                 ofport->bfd, ofport->peer, stp_port,
+                                 ofport->up.netdev, ofport->cfm, ofport->bfd,
+                                 ofport->lldp, ofport->peer, stp_port,
                                  ofport->rstp_port, ofport->qdscp,
                                  ofport->n_qdscp, ofport->up.pp.config,
                                  ofport->up.pp.state, ofport->is_tunnel,
@@ -1703,6 +1706,7 @@ port_construct(struct ofport *port_)
     port->bundle = NULL;
     port->cfm = NULL;
     port->bfd = NULL;
+    port->lldp = NULL;
     port->may_enable = false;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
@@ -1821,6 +1825,7 @@ port_destruct(struct ofport *port_)
     bundle_remove(port_);
     set_cfm(port_, NULL);
     set_bfd(port_, NULL);
+    set_lldp(port_, NULL);
     if (port->stp_port) {
         stp_port_disable(port->stp_port);
     }
@@ -1852,7 +1857,7 @@ port_modified(struct ofport *port_)
     }
 
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
-                                     port->up.pp.hw_addr);
+                                     port->lldp, port->up.pp.hw_addr);
 
     netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
 
@@ -1986,7 +1991,7 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
     ofport->cfm = NULL;
 out:
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
-                                     ofport->up.pp.hw_addr);
+                                     ofport->lldp, ofport->up.pp.hw_addr);
     return error;
 }
 
@@ -2028,7 +2033,7 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
-                                     ofport->up.pp.hw_addr);
+                                     ofport->lldp, ofport->up.pp.hw_addr);
     return 0;
 }
 
@@ -2054,6 +2059,82 @@ get_bfd_status(struct ofport *ofport_, struct smap *smap)
 
     return ret;
 }
+
+static int
+set_lldp(struct ofport *ofport_,
+         const struct smap *cfg)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    int error = 0;
+
+    if (cfg) {
+        if (!ofport->lldp) {
+            struct ofproto_dpif *ofproto;
+
+            ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
+            ofport->lldp = lldp_create(ofport->up.netdev, ofport_->mtu, cfg);
+        }
+
+        if (lldp_configure(ofport->lldp)) {
+            error = 0;
+            goto out;
+        }
+
+        error = EINVAL;
+    }
+    lldp_unref(ofport->lldp);
+    ofport->lldp = NULL;
+out:
+    ofproto_dpif_monitor_port_update(ofport,
+                                     ofport->bfd,
+                                     ofport->cfm,
+                                     ofport->lldp,
+                                     ofport->up.pp.hw_addr);
+    return error;
+}
+
+static bool
+get_lldp_status(const struct ofport *ofport_,
+               struct lldp_status *status OVS_UNUSED)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+
+    return ofport->lldp ? true : false;
+}
+
+static int
+set_aa(struct ofproto *ofproto OVS_UNUSED,
+       const struct aa_settings *s)
+{
+    return aa_configure(s);
+}
+
+static int
+aa_mapping_set(struct ofproto *ofproto_ OVS_UNUSED, void *aux,
+               const struct aa_mapping_settings *s)
+{
+    return aa_mapping_register(aux, s);
+}
+
+static int
+aa_mapping_unset(struct ofproto *ofproto OVS_UNUSED, void *aux)
+{
+    return aa_mapping_unregister(aux);
+}
+
+static int
+aa_vlan_get_queued(struct ofproto *ofproto OVS_UNUSED, struct ovs_list *list)
+{
+    return aa_get_vlan_queued(list);
+}
+
+static unsigned int
+aa_vlan_get_queue_size(struct ofproto *ofproto OVS_UNUSED)
+{
+    return aa_get_vlan_queue_size();
+}
+
 
 /* Spanning Tree. */
 
@@ -5604,6 +5685,13 @@ const struct ofproto_class ofproto_dpif_class = {
     set_cfm,
     cfm_status_changed,
     get_cfm_status,
+    set_lldp,
+    get_lldp_status,
+    set_aa,
+    aa_mapping_set,
+    aa_mapping_unset,
+    aa_vlan_get_queued,
+    aa_vlan_get_queue_size,
     set_bfd,
     bfd_status_changed,
     get_bfd_status,

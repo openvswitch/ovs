@@ -1038,6 +1038,83 @@ ofproto_port_set_queues(struct ofproto *ofproto, ofp_port_t ofp_port,
             : EOPNOTSUPP);
 }
 
+/* LLDP configuration. */
+void
+ofproto_port_set_lldp(struct ofproto *ofproto,
+                      ofp_port_t ofp_port,
+                      const struct smap *cfg)
+{
+    struct ofport *ofport;
+    int error;
+
+    ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure LLDP on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+        return;
+    }
+    error = (ofproto->ofproto_class->set_lldp
+             ? ofproto->ofproto_class->set_lldp(ofport, cfg)
+             : EOPNOTSUPP);
+    if (error) {
+        VLOG_WARN("%s: lldp configuration on port %"PRIu16" (%s) failed (%s)",
+                  ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
+                  ovs_strerror(error));
+    }
+}
+
+int
+ofproto_set_aa(struct ofproto *ofproto, void *aux OVS_UNUSED,
+               const struct aa_settings *s)
+{
+    if (!ofproto->ofproto_class->set_aa) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->set_aa(ofproto, s);
+    return 0;
+}
+
+int
+ofproto_aa_mapping_register(struct ofproto *ofproto, void *aux,
+                            const struct aa_mapping_settings *s)
+{
+    if (!ofproto->ofproto_class->aa_mapping_set) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->aa_mapping_set(ofproto, aux, s);
+    return 0;
+}
+
+int
+ofproto_aa_mapping_unregister(struct ofproto *ofproto, void *aux)
+{
+    if (!ofproto->ofproto_class->aa_mapping_unset) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->aa_mapping_unset(ofproto, aux);
+    return 0;
+}
+
+int
+ofproto_aa_vlan_get_queued(struct ofproto *ofproto,
+                           struct ovs_list *list)
+{
+    if (!ofproto->ofproto_class->aa_vlan_get_queued) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->aa_vlan_get_queued(ofproto, list);
+    return 0;
+}
+
+unsigned int
+ofproto_aa_vlan_get_queue_size(struct ofproto *ofproto)
+{
+    if (!ofproto->ofproto_class->aa_vlan_get_queue_size) {
+        return EOPNOTSUPP;
+    }
+    return ofproto->ofproto_class->aa_vlan_get_queue_size(ofproto);
+}
+
 /* Connectivity Fault Management configuration. */
 
 /* Clears the CFM configuration from 'ofp_port' on 'ofproto'. */
@@ -1218,7 +1295,8 @@ ofproto_mirror_unregister(struct ofproto *ofproto, void *aux)
 /* Retrieves statistics from mirror associated with client data pointer
  * 'aux' in 'ofproto'.  Stores packet and byte counts in 'packets' and
  * 'bytes', respectively.  If a particular counters is not supported,
- * the appropriate argument is set to UINT64_MAX. */
+ * the appropriate argument is set to UINT64_MAX.
+ */
 int
 ofproto_mirror_get_stats(struct ofproto *ofproto, void *aux,
                          uint64_t *packets, uint64_t *bytes)

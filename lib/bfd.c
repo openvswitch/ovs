@@ -516,10 +516,12 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
     }
 }
 
-void
+long long int
 bfd_wait(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    poll_timer_wait_until(bfd_wake_time(bfd));
+    long long int wake_time = bfd_wake_time(bfd);
+    poll_timer_wait_until(wake_time);
+    return wake_time;
 }
 
 /* Returns the next wake up time. */
