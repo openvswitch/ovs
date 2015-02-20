@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1134,21 +1134,9 @@ jsonrpc_session_set_dscp(struct jsonrpc_session *s,
                          uint8_t dscp)
 {
     if (s->dscp != dscp) {
-        if (s->pstream) {
-            int error;
+        pstream_close(s->pstream);
+        s->pstream = NULL;
 
-            error = pstream_set_dscp(s->pstream, dscp);
-            if (error) {
-                VLOG_ERR("%s: failed set_dscp %s",
-                         reconnect_get_name(s->reconnect),
-                         ovs_strerror(error));
-            }
-            /*
-             * XXX race window between setting dscp to listening socket
-             * and accepting socket. accepted socket may have old dscp value.
-             * Ignore this race window for now.
-             */
-        }
         s->dscp = dscp;
         jsonrpc_session_force_reconnect(s);
     }

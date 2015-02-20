@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,8 +173,7 @@ ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
              port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
 
-    error = new_fd_pstream(bound_name, fd, ptcp_accept, set_dscp, NULL,
-                           pstreamp);
+    error = new_fd_pstream(bound_name, fd, ptcp_accept, NULL, pstreamp);
     if (!error) {
         pstream_set_bound_port(*pstreamp, htons(port));
     }
@@ -198,7 +197,6 @@ const struct pstream_class ptcp_pstream_class = {
     "ptcp",
     true,
     ptcp_open,
-    NULL,
     NULL,
     NULL,
     NULL,

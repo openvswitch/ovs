@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -619,15 +619,6 @@ void
 pstream_wait(struct pstream *pstream)
 {
     (pstream->class->wait)(pstream);
-}
-
-int
-pstream_set_dscp(struct pstream *pstream, uint8_t dscp)
-{
-    if (pstream->class->set_dscp) {
-        return pstream->class->set_dscp(pstream, dscp);
-    }
-    return 0;
 }
 
 /* Returns the transport port on which 'pstream' is listening, or 0 if the
