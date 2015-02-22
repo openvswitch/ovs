@@ -276,7 +276,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
         lldp_tlv_end(p, start);
     }
 
-    if (!list_is_empty(&port->p_isid_vlan_maps.m_entries)) {
+    if (!list_is_empty(&port->p_isid_vlan_maps)) {
         int j;
 
         for (j = 0; j < LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH; j++) {
@@ -290,7 +290,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
 
         LIST_FOR_EACH (vlan_isid_map,
                        m_entries,
-                       &hardware->h_lport.p_isid_vlan_maps.m_entries) {
+                       &hardware->h_lport.p_isid_vlan_maps) {
             u_int16_t status_vlan_word;
             status_vlan_word =
                 (vlan_isid_map->isid_vlan_data.status << 12) |
@@ -358,7 +358,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     list_init(&chassis->c_mgmt.m_entries);
 
     port = xzalloc(sizeof *port);
-    list_init(&port->p_isid_vlan_maps.m_entries);
+    list_init(&port->p_isid_vlan_maps);
 
     length = s;
     pos = (u_int8_t*) frame;
@@ -563,9 +563,8 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                         PEEK_BYTES(isid, 3);
                         isid_vlan_map->isid_vlan_data.isid =
                             (isid[0] << 16) | (isid[1] << 8) | isid[2];
-                        list_push_back(
-                            (struct ovs_list *) &port->p_isid_vlan_maps,
-                            (struct ovs_list *) isid_vlan_map);
+                        list_push_back(&port->p_isid_vlan_maps,
+                                       &isid_vlan_map->m_entries);
                         isid_vlan_map = NULL;
                     }
                     break;

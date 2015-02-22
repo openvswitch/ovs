@@ -101,7 +101,7 @@ struct lldpd_port {
     char                 *p_descr;
     u_int16_t            p_mfs;
     struct lldpd_aa_element_tlv        p_element;
-    struct lldpd_aa_isid_vlan_maps_tlv p_isid_vlan_maps;
+    struct ovs_list p_isid_vlan_maps; /* Contains "struct lldpd_aa_isid_vlan_maps_tlv"s. */
 };
 
 /* Used to modify some port related settings */

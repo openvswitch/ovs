@@ -261,11 +261,11 @@ aa_print_isid_status_port_isid(struct lldp *lldp, struct lldpd_port *port)
 {
     struct lldpd_aa_isid_vlan_maps_tlv *mapping;
 
-    if (list_is_empty(&port->p_isid_vlan_maps.m_entries)) {
+    if (list_is_empty(&port->p_isid_vlan_maps)) {
         return;
     }
 
-    LIST_FOR_EACH (mapping, m_entries, &port->p_isid_vlan_maps.m_entries) {
+    LIST_FOR_EACH (mapping, m_entries, &port->p_isid_vlan_maps) {
         uint32_t isid = mapping->isid_vlan_data.isid;
         struct aa_mapping_internal *m = mapping_find_by_isid(lldp, isid);
 
@@ -405,8 +405,7 @@ update_mapping_on_lldp(struct lldp *lldp, struct lldpd_hardware *hardware,
     lm->isid_vlan_data.isid = m->isid;
     lm->isid_vlan_data.vlan = m->vlan;
 
-    list_push_back(&hardware->h_lport.p_isid_vlan_maps.m_entries,
-                   &lm->m_entries);
+    list_push_back(&hardware->h_lport.p_isid_vlan_maps, &lm->m_entries);
 
     /* TODO Should be done in the Auto Attach state machine when a mapping goes
      * from "pending" to "active".
@@ -584,10 +583,8 @@ aa_mapping_unregister_mapping(struct lldp *lldp,
 {
     struct lldpd_aa_isid_vlan_maps_tlv *lm, *lm_next;
 
-    LIST_FOR_EACH_SAFE (lm,
-                        lm_next,
-                        m_entries,
-                        &hw->h_lport.p_isid_vlan_maps.m_entries) {
+    LIST_FOR_EACH_SAFE (lm, lm_next, m_entries,
+                        &hw->h_lport.p_isid_vlan_maps) {
         uint32_t isid = lm->isid_vlan_data.isid;
 
         if (isid == (uint32_t) m->isid) {
@@ -866,7 +863,7 @@ lldp_create(const struct netdev *netdev,
     hw->h_lport.p_element.system_id.mlt_id[0] = 0;
     hw->h_lport.p_element.system_id.mlt_id[1] = 0;
 
-    list_init(&hw->h_lport.p_isid_vlan_maps.m_entries);
+    list_init(&hw->h_lport.p_isid_vlan_maps);
     list_init(&lldp->lldpd->g_hardware.h_entries);
     list_push_back(&lldp->lldpd->g_hardware.h_entries, &hw->h_entries);
 
@@ -954,7 +951,7 @@ lldp_create_dummy(void)
     hw->h_lport.p_element.system_id.mlt_id[0] = 0;
     hw->h_lport.p_element.system_id.mlt_id[1] = 0;
 
-    list_init(&hw->h_lport.p_isid_vlan_maps.m_entries);
+    list_init(&hw->h_lport.p_isid_vlan_maps);
     list_init(&lldp->lldpd->g_hardware.h_entries);
     list_push_back(&lldp->lldpd->g_hardware.h_entries, &hw->h_entries);
 
