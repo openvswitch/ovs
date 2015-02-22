@@ -208,7 +208,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
     lldp_tlv_put_u16(p, chassis->c_cap_enabled);
     lldp_tlv_end(p, start);
 
-    LIST_FOR_EACH (mgmt, m_entries, &chassis->c_mgmt.m_entries) {
+    LIST_FOR_EACH (mgmt, m_entries, &chassis->c_mgmt) {
         lldp_tlv_start(p, LLDP_TLV_MGMT_ADDR, &start);
         lldp_tlv_put_u8(p, mgmt->m_addrsize + 1);
         lldp_tlv_put_u8(p, lldpd_af_to_lldp_proto(mgmt->m_family));
@@ -355,7 +355,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     VLOG_DBG("receive LLDP PDU on %s", hardware->h_ifname);
 
     chassis = xzalloc(sizeof *chassis);
-    list_init(&chassis->c_mgmt.m_entries);
+    list_init(&chassis->c_mgmt);
 
     port = xzalloc(sizeof *port);
     list_init(&port->p_isid_vlan_maps);
@@ -483,7 +483,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                 VLOG_WARN("unable to allocate memory for management address");
                 goto malformed;
             }
-            list_push_back(&chassis->c_mgmt.m_entries, &mgmt->m_entries);
+            list_push_back(&chassis->c_mgmt, &mgmt->m_entries);
             break;
 
         case LLDP_TLV_ORG:

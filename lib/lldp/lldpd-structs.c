@@ -33,15 +33,12 @@ lldpd_chassis_mgmt_cleanup(struct lldpd_chassis *chassis)
     VLOG_DBG("cleanup management addresses for chassis %s",
              chassis->c_name ? chassis->c_name : "(unknown)");
 
-    LIST_FOR_EACH_SAFE (mgmt,
-                        mgmt_next,
-                        m_entries,
-                        &chassis->c_mgmt.m_entries) {
+    LIST_FOR_EACH_SAFE (mgmt, mgmt_next, m_entries, &chassis->c_mgmt) {
        list_remove(&mgmt->m_entries);
        free(mgmt);
     }
 
-    list_init(&chassis->c_mgmt.m_entries);
+    list_init(&chassis->c_mgmt);
 }
 
 void

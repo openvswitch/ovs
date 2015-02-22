@@ -181,15 +181,12 @@ lldpd_move_chassis(struct lldpd_chassis *ochassis,
      * marshaling.
      */
     memcpy(ochassis, chassis, sizeof *ochassis);
-    list_init(&ochassis->c_mgmt.m_entries);
+    list_init(&ochassis->c_mgmt);
 
     /* Copy of management addresses */
-    LIST_FOR_EACH_SAFE (mgmt,
-                        mgmt_next,
-                        m_entries,
-                        &chassis->c_mgmt.m_entries) {
+    LIST_FOR_EACH_SAFE (mgmt, mgmt_next, m_entries, &chassis->c_mgmt) {
         list_remove(&mgmt->m_entries);
-        list_insert(&ochassis->c_mgmt.m_entries, &mgmt->m_entries);
+        list_insert(&ochassis->c_mgmt, &mgmt->m_entries);
     }
 
     /* Restore saved values */

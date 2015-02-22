@@ -824,7 +824,7 @@ lldp_create(const struct netdev *netdev,
     lchassis->c_id = xmalloc(ETH_ADDR_LEN);
     netdev_get_etheraddr(netdev, (uint8_t *) lchassis->c_id);
 
-    list_init(&lchassis->c_mgmt.m_entries);
+    list_init(&lchassis->c_mgmt);
     lchassis->c_ttl = lldp->lldpd->g_config.c_tx_interval *
                       lldp->lldpd->g_config.c_tx_hold;
     lchassis->c_ttl = LLDP_CHASSIS_TTL;
@@ -921,7 +921,7 @@ lldp_create_dummy(void)
     lchassis->c_id_len = ETH_ADDR_LEN;
     lchassis->c_id = xmalloc(ETH_ADDR_LEN);
 
-    list_init(&lchassis->c_mgmt.m_entries);
+    list_init(&lchassis->c_mgmt);
     lchassis->c_ttl = LLDP_CHASSIS_TTL;
     lldpd_assign_cfg_to_protocols(lldp->lldpd);
     list_init(&lldp->lldpd->g_chassis.list);

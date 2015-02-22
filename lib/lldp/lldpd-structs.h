@@ -77,7 +77,7 @@ struct lldpd_chassis {
 
     u_int16_t       c_ttl;
 
-    struct lldpd_mgmt  c_mgmt;
+    struct ovs_list c_mgmt;     /* Contains "struct lldp_mgmt"s. */
 };
 /* WARNING: any change to this structure should also be reflected into
    `lldpd_copy_chassis()` which is not using marshaling. */
