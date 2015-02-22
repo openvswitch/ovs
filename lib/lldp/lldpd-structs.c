@@ -49,7 +49,7 @@ lldpd_chassis_cleanup(struct lldpd_chassis *chassis, bool all)
 {
     lldpd_chassis_mgmt_cleanup(chassis);
     VLOG_DBG("cleanup chassis %s",
-             chassis->c_name ? chassis->c_name : "(unkwnon)");
+             chassis->c_name ? chassis->c_name : "(unknown)");
     free(chassis->c_id);
     free(chassis->c_name);
     free(chassis->c_descr);
