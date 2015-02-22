@@ -45,7 +45,7 @@ lldpd_chassis_mgmt_cleanup(struct lldpd_chassis *chassis)
 }
 
 void
-lldpd_chassis_cleanup(struct lldpd_chassis *chassis, int all)
+lldpd_chassis_cleanup(struct lldpd_chassis *chassis, bool all)
 {
     lldpd_chassis_mgmt_cleanup(chassis);
     VLOG_DBG("cleanup chassis %s",
@@ -59,27 +59,26 @@ lldpd_chassis_cleanup(struct lldpd_chassis *chassis, int all)
 }
 
 /* Cleanup a remote port. The before last argument, `expire` is a function that
- * should be called when a remote port is removed. If the last argument is 1,
- * all remote ports are removed.
+ * should be called when a remote port is removed. If the last argument is
+ * true, all remote ports are removed.
  */
 void
 lldpd_remote_cleanup(struct lldpd_hardware *hw,
                      void(*expire)(struct lldpd_hardware *,
                                    struct lldpd_port *),
-                     int all)
+                     bool all)
 {
     struct lldpd_port *port, *port_next;
-    int del;
     time_t now = time_now();
 
     VLOG_DBG("cleanup remote port on %s", hw->h_ifname);
     LIST_FOR_EACH_SAFE (port, port_next, p_entries, &hw->h_rports.p_entries) {
-        del = all;
+        bool del = all;
         if (!all && expire &&
             (now >= port->p_lastupdate + port->p_chassis->c_ttl)) {
             hw->h_ageout_cnt++;
             hw->h_delete_cnt++;
-            del = 1;
+            del = true;
         }
         if (del) {
             if (expire) {
@@ -89,7 +88,7 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
             if (!all) {
                 list_remove(&port->p_entries);
             }
-            lldpd_port_cleanup(port, 1);
+            lldpd_port_cleanup(port, true);
             free(port);
         }
     }
@@ -101,7 +100,7 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
 /* If `all' is true, clear all information, including information that
    are not refreshed periodically. Port should be freed manually. */
 void
-lldpd_port_cleanup(struct lldpd_port *port, int all)
+lldpd_port_cleanup(struct lldpd_port *port, bool all)
 {
     /* We set these to NULL so we don't free wrong memory */
 

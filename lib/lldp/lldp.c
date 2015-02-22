@@ -600,8 +600,8 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     return 1;
 
 malformed:
-    lldpd_chassis_cleanup(chassis, 1);
-    lldpd_port_cleanup(port, 1);
+    lldpd_chassis_cleanup(chassis, true);
+    lldpd_port_cleanup(port, true);
     free(port);
     return -1;
 }

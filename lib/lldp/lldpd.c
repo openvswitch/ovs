@@ -124,7 +124,7 @@ lldpd_hardware_cleanup(struct lldpd *cfg, struct lldpd_hardware *hardware)
 {
     VLOG_DBG("cleanup hardware port %s", hardware->h_ifname);
 
-    lldpd_port_cleanup(&hardware->h_lport, 1);
+    lldpd_port_cleanup(&hardware->h_lport, true);
     if (hardware->h_ops && hardware->h_ops->cleanup) {
         hardware->h_ops->cleanup(cfg, hardware);
     }
@@ -142,10 +142,10 @@ lldpd_cleanup(struct lldpd *cfg)
     LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware.h_entries) {
         if (!hw->h_flags) {
             list_remove(&hw->h_entries);
-            lldpd_remote_cleanup(hw, NULL, 1);
+            lldpd_remote_cleanup(hw, NULL, true);
             lldpd_hardware_cleanup(cfg, hw);
         } else {
-            lldpd_remote_cleanup(hw, NULL, 0);
+            lldpd_remote_cleanup(hw, NULL, false);
         }
     }
 
@@ -336,8 +336,8 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
         } else if (count > cfg->g_config.c_max_neighbors - 1) {
             VLOG_DBG("too many neighbors for port %s, drop this new one",
                      hw->h_ifname);
-            lldpd_port_cleanup(port, 1);
-            lldpd_chassis_cleanup(chassis, 1);
+            lldpd_port_cleanup(port, true);
+            lldpd_chassis_cleanup(chassis, true);
             free(port);
             return;
         }
