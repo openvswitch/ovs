@@ -941,7 +941,7 @@ auxdata_has_vlan_tci(const struct tpacket_auxdata *aux)
 }
 
 static int
-netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
+netdev_linux_rxq_recv_sock(int fd, struct dp_packet *buffer)
 {
     size_t size;
     ssize_t retval;
@@ -954,10 +954,10 @@ netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
     struct msghdr msgh;
 
     /* Reserve headroom for a single VLAN tag */
-    ofpbuf_reserve(buffer, VLAN_HEADER_LEN);
-    size = ofpbuf_tailroom(buffer);
+    dp_packet_reserve(buffer, VLAN_HEADER_LEN);
+    size = dp_packet_tailroom(buffer);
 
-    iov.iov_base = ofpbuf_data(buffer);
+    iov.iov_base = dp_packet_data(buffer);
     iov.iov_len = size;
     msgh.msg_name = NULL;
     msgh.msg_namelen = 0;
@@ -977,7 +977,7 @@ netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
         return EMSGSIZE;
     }
 
-    ofpbuf_set_size(buffer, ofpbuf_size(buffer) + retval);
+    dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
 
     for (cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg)) {
         const struct tpacket_auxdata *aux;
@@ -1004,13 +1004,13 @@ netdev_linux_rxq_recv_sock(int fd, struct ofpbuf *buffer)
 }
 
 static int
-netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
+netdev_linux_rxq_recv_tap(int fd, struct dp_packet *buffer)
 {
     ssize_t retval;
-    size_t size = ofpbuf_tailroom(buffer);
+    size_t size = dp_packet_tailroom(buffer);
 
     do {
-        retval = read(fd, ofpbuf_data(buffer), size);
+        retval = read(fd, dp_packet_data(buffer), size);
     } while (retval < 0 && errno == EINTR);
 
     if (retval < 0) {
@@ -1019,7 +1019,7 @@ netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
         return EMSGSIZE;
     }
 
-    ofpbuf_set_size(buffer, ofpbuf_size(buffer) + retval);
+    dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
     return 0;
 }
 
@@ -1029,8 +1029,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
-    struct dp_packet *packet;
-    struct ofpbuf *buffer;
+    struct dp_packet *buffer;
     ssize_t retval;
     int mtu;
 
@@ -1038,10 +1037,8 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         mtu = ETH_PAYLOAD_MAX;
     }
 
-    packet = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
+    buffer = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
                                            DP_NETDEV_HEADROOM);
-    buffer = &packet->ofpbuf;
-
     retval = (rx->is_tap
               ? netdev_linux_rxq_recv_tap(rx->fd, buffer)
               : netdev_linux_rxq_recv_sock(rx->fd, buffer));
@@ -1051,11 +1048,11 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                          ovs_strerror(errno), netdev_rxq_get_name(rxq_));
         }
-        dp_packet_delete(packet);
+        dp_packet_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        dp_packet_set_dp_hash(packet, 0);
-        packets[0] = packet;
+        dp_packet_set_dp_hash(buffer, 0);
+        packets[0] = buffer;
         *c = 1;
     }
 
@@ -1105,8 +1102,8 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
     /* 'i' is incremented only if there's no error */
     for (i = 0; i < cnt;) {
-        const void *data = ofpbuf_data(&pkts[i]->ofpbuf);
-        size_t size = ofpbuf_size(&pkts[i]->ofpbuf);
+        const void *data = dp_packet_data(pkts[i]);
+        size_t size = dp_packet_size(pkts[i]);
         ssize_t retval;
 
         if (!is_tap_netdev(netdev_)) {

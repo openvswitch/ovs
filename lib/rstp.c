@@ -40,6 +40,7 @@
 #include "connectivity.h"
 #include "ofpbuf.h"
 #include "ofproto/ofproto.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "seq.h"
 #include "unixctl.h"
@@ -243,7 +244,7 @@ rstp_init(void)
 /* Creates and returns a new RSTP instance that initially has no ports. */
 struct rstp *
 rstp_create(const char *name, rstp_identifier bridge_address,
-            void (*send_bpdu)(struct ofpbuf *bpdu, void *port_aux,
+            void (*send_bpdu)(struct dp_packet *bpdu, void *port_aux,
                               void *rstp_aux),
             void *aux)
     OVS_EXCLUDED(rstp_mutex)

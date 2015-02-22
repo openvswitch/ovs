@@ -26,6 +26,7 @@
 
 #include "coverage.h"
 #include "dpif.h"
+#include "dp-packet.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -33,7 +34,6 @@
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -631,7 +631,7 @@ netdev_rxq_close(struct netdev_rxq *rx)
  * Returns EAGAIN immediately if no packet is ready to be received.
  *
  * Returns EMSGSIZE, and discards the packet, if the received packet is longer
- * than 'ofpbuf_tailroom(buffer)'.
+ * than 'dp_packet_tailroom(buffer)'.
  *
  * It is advised that the tailroom of 'buffer' should be
  * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an

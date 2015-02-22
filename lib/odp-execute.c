@@ -27,7 +27,6 @@
 #include "dp-packet.h"
 #include "dpif.h"
 #include "netlink.h"
-#include "ofpbuf.h"
 #include "odp-netlink.h"
 #include "odp-util.h"
 #include "packets.h"
@@ -48,10 +47,10 @@ ether_addr_copy_masked(uint8_t *dst, const uint8_t *src,
 }
 
 static void
-odp_eth_set_addrs(struct ofpbuf *packet, const struct ovs_key_ethernet *key,
+odp_eth_set_addrs(struct dp_packet *packet, const struct ovs_key_ethernet *key,
                   const struct ovs_key_ethernet *mask)
 {
-    struct eth_header *eh = ofpbuf_l2(packet);
+    struct eth_header *eh = dp_packet_l2(packet);
 
     if (eh) {
         if (!mask) {
@@ -65,10 +64,10 @@ odp_eth_set_addrs(struct ofpbuf *packet, const struct ovs_key_ethernet *key,
 }
 
 static void
-odp_set_ipv4(struct ofpbuf *packet, const struct ovs_key_ipv4 *key,
+odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
              const struct ovs_key_ipv4 *mask)
 {
-    struct ip_header *nh = ofpbuf_l3(packet);
+    struct ip_header *nh = dp_packet_l3(packet);
 
     packet_set_ipv4(
         packet,
@@ -90,10 +89,10 @@ mask_ipv6_addr(const ovs_16aligned_be32 *old, const ovs_be32 *addr,
 }
 
 static void
-odp_set_ipv6(struct ofpbuf *packet, const struct ovs_key_ipv6 *key,
+odp_set_ipv6(struct dp_packet *packet, const struct ovs_key_ipv6 *key,
              const struct ovs_key_ipv6 *mask)
 {
-    struct ovs_16aligned_ip6_hdr *nh = ofpbuf_l3(packet);
+    struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
     ovs_be32 sbuf[4], dbuf[4];
     uint8_t old_tc = ntohl(get_16aligned_be32(&nh->ip6_flow)) >> 20;
     ovs_be32 old_fl = get_16aligned_be32(&nh->ip6_flow) & htonl(0xfffff);
@@ -109,12 +108,12 @@ odp_set_ipv6(struct ofpbuf *packet, const struct ovs_key_ipv6 *key,
 }
 
 static void
-odp_set_tcp(struct ofpbuf *packet, const struct ovs_key_tcp *key,
+odp_set_tcp(struct dp_packet *packet, const struct ovs_key_tcp *key,
              const struct ovs_key_tcp *mask)
 {
-    struct tcp_header *th = ofpbuf_l4(packet);
+    struct tcp_header *th = dp_packet_l4(packet);
 
-    if (OVS_LIKELY(th && ofpbuf_get_tcp_payload(packet))) {
+    if (OVS_LIKELY(th && dp_packet_get_tcp_payload(packet))) {
         packet_set_tcp_port(packet,
                             key->tcp_src | (th->tcp_src & ~mask->tcp_src),
                             key->tcp_dst | (th->tcp_dst & ~mask->tcp_dst));
@@ -122,12 +121,12 @@ odp_set_tcp(struct ofpbuf *packet, const struct ovs_key_tcp *key,
 }
 
 static void
-odp_set_udp(struct ofpbuf *packet, const struct ovs_key_udp *key,
+odp_set_udp(struct dp_packet *packet, const struct ovs_key_udp *key,
              const struct ovs_key_udp *mask)
 {
-    struct udp_header *uh = ofpbuf_l4(packet);
+    struct udp_header *uh = dp_packet_l4(packet);
 
-    if (OVS_LIKELY(uh && ofpbuf_get_udp_payload(packet))) {
+    if (OVS_LIKELY(uh && dp_packet_get_udp_payload(packet))) {
         packet_set_udp_port(packet,
                             key->udp_src | (uh->udp_src & ~mask->udp_src),
                             key->udp_dst | (uh->udp_dst & ~mask->udp_dst));
@@ -135,12 +134,12 @@ odp_set_udp(struct ofpbuf *packet, const struct ovs_key_udp *key,
 }
 
 static void
-odp_set_sctp(struct ofpbuf *packet, const struct ovs_key_sctp *key,
+odp_set_sctp(struct dp_packet *packet, const struct ovs_key_sctp *key,
              const struct ovs_key_sctp *mask)
 {
-    struct sctp_header *sh = ofpbuf_l4(packet);
+    struct sctp_header *sh = dp_packet_l4(packet);
 
-    if (OVS_LIKELY(sh && ofpbuf_get_sctp_payload(packet))) {
+    if (OVS_LIKELY(sh && dp_packet_get_sctp_payload(packet))) {
         packet_set_sctp_port(packet,
                              key->sctp_src | (sh->sctp_src & ~mask->sctp_src),
                              key->sctp_dst | (sh->sctp_dst & ~mask->sctp_dst));
@@ -157,10 +156,10 @@ odp_set_tunnel_action(const struct nlattr *a, struct flow_tnl *tun_key)
 }
 
 static void
-set_arp(struct ofpbuf *packet, const struct ovs_key_arp *key,
+set_arp(struct dp_packet *packet, const struct ovs_key_arp *key,
         const struct ovs_key_arp *mask)
 {
-    struct arp_eth_header *arp = ofpbuf_l3(packet);
+    struct arp_eth_header *arp = dp_packet_l3(packet);
 
     if (!mask) {
         arp->ar_op = key->arp_op;
@@ -183,14 +182,14 @@ set_arp(struct ofpbuf *packet, const struct ovs_key_arp *key,
 }
 
 static void
-odp_set_nd(struct ofpbuf *packet, const struct ovs_key_nd *key,
+odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
            const struct ovs_key_nd *mask)
 {
-    const struct ovs_nd_msg *ns = ofpbuf_l4(packet);
-    const struct ovs_nd_opt *nd_opt = ofpbuf_get_nd_payload(packet);
+    const struct ovs_nd_msg *ns = dp_packet_l4(packet);
+    const struct ovs_nd_opt *nd_opt = dp_packet_get_nd_payload(packet);
 
     if (OVS_LIKELY(ns && nd_opt)) {
-        int bytes_remain = ofpbuf_l4_size(packet) - sizeof(*ns);
+        int bytes_remain = dp_packet_l4_size(packet) - sizeof(*ns);
         ovs_be32 tgt_buf[4];
         uint8_t sll_buf[ETH_ADDR_LEN] = {0};
         uint8_t tll_buf[ETH_ADDR_LEN] = {0};
@@ -246,67 +245,67 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
-        odp_eth_set_addrs(&packet->ofpbuf, nl_attr_get(a), NULL);
+        odp_eth_set_addrs(packet, nl_attr_get(a), NULL);
         break;
 
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4));
-        packet_set_ipv4(&packet->ofpbuf, ipv4_key->ipv4_src,
+        packet_set_ipv4(packet, ipv4_key->ipv4_src,
                         ipv4_key->ipv4_dst, ipv4_key->ipv4_tos,
                         ipv4_key->ipv4_ttl);
         break;
 
     case OVS_KEY_ATTR_IPV6:
         ipv6_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv6));
-        packet_set_ipv6(&packet->ofpbuf, ipv6_key->ipv6_proto,
+        packet_set_ipv6(packet, ipv6_key->ipv6_proto,
                         ipv6_key->ipv6_src, ipv6_key->ipv6_dst,
                         ipv6_key->ipv6_tclass, ipv6_key->ipv6_label,
                         ipv6_key->ipv6_hlimit);
         break;
 
     case OVS_KEY_ATTR_TCP:
-        if (OVS_LIKELY(ofpbuf_get_tcp_payload(&packet->ofpbuf))) {
+        if (OVS_LIKELY(dp_packet_get_tcp_payload(packet))) {
             const struct ovs_key_tcp *tcp_key
                 = nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp));
 
-            packet_set_tcp_port(&packet->ofpbuf, tcp_key->tcp_src,
+            packet_set_tcp_port(packet, tcp_key->tcp_src,
                                 tcp_key->tcp_dst);
         }
         break;
 
     case OVS_KEY_ATTR_UDP:
-        if (OVS_LIKELY(ofpbuf_get_udp_payload(&packet->ofpbuf))) {
+        if (OVS_LIKELY(dp_packet_get_udp_payload(packet))) {
             const struct ovs_key_udp *udp_key
                 = nl_attr_get_unspec(a, sizeof(struct ovs_key_udp));
 
-            packet_set_udp_port(&packet->ofpbuf, udp_key->udp_src,
+            packet_set_udp_port(packet, udp_key->udp_src,
                                 udp_key->udp_dst);
         }
         break;
 
     case OVS_KEY_ATTR_SCTP:
-        if (OVS_LIKELY(ofpbuf_get_sctp_payload(&packet->ofpbuf))) {
+        if (OVS_LIKELY(dp_packet_get_sctp_payload(packet))) {
             const struct ovs_key_sctp *sctp_key
                 = nl_attr_get_unspec(a, sizeof(struct ovs_key_sctp));
 
-            packet_set_sctp_port(&packet->ofpbuf, sctp_key->sctp_src,
+            packet_set_sctp_port(packet, sctp_key->sctp_src,
                                  sctp_key->sctp_dst);
         }
         break;
 
     case OVS_KEY_ATTR_MPLS:
-        set_mpls_lse(&packet->ofpbuf, nl_attr_get_be32(a));
+        set_mpls_lse(packet, nl_attr_get_be32(a));
         break;
 
     case OVS_KEY_ATTR_ARP:
-        set_arp(&packet->ofpbuf, nl_attr_get(a), NULL);
+        set_arp(packet, nl_attr_get(a), NULL);
         break;
 
     case OVS_KEY_ATTR_ND:
-        if (OVS_LIKELY(ofpbuf_get_nd_payload(&packet->ofpbuf))) {
+        if (OVS_LIKELY(dp_packet_get_nd_payload(packet))) {
             const struct ovs_key_nd *nd_key
                    = nl_attr_get_unspec(a, sizeof(struct ovs_key_nd));
-            packet_set_nd(&packet->ofpbuf, nd_key->nd_target,
+            packet_set_nd(packet, nd_key->nd_target,
                           nd_key->nd_sll, nd_key->nd_tll);
         }
         break;
@@ -356,37 +355,37 @@ odp_execute_masked_set_action(struct dp_packet *packet,
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
-        odp_eth_set_addrs(&packet->ofpbuf, nl_attr_get(a),
+        odp_eth_set_addrs(packet, nl_attr_get(a),
                           get_mask(a, struct ovs_key_ethernet));
         break;
 
     case OVS_KEY_ATTR_IPV4:
-        odp_set_ipv4(&packet->ofpbuf, nl_attr_get(a),
+        odp_set_ipv4(packet, nl_attr_get(a),
                      get_mask(a, struct ovs_key_ipv4));
         break;
 
     case OVS_KEY_ATTR_IPV6:
-        odp_set_ipv6(&packet->ofpbuf, nl_attr_get(a),
+        odp_set_ipv6(packet, nl_attr_get(a),
                      get_mask(a, struct ovs_key_ipv6));
         break;
 
     case OVS_KEY_ATTR_TCP:
-        odp_set_tcp(&packet->ofpbuf, nl_attr_get(a),
+        odp_set_tcp(packet, nl_attr_get(a),
                     get_mask(a, struct ovs_key_tcp));
         break;
 
     case OVS_KEY_ATTR_UDP:
-        odp_set_udp(&packet->ofpbuf, nl_attr_get(a),
+        odp_set_udp(packet, nl_attr_get(a),
                     get_mask(a, struct ovs_key_udp));
         break;
 
     case OVS_KEY_ATTR_SCTP:
-        odp_set_sctp(&packet->ofpbuf, nl_attr_get(a),
+        odp_set_sctp(packet, nl_attr_get(a),
                      get_mask(a, struct ovs_key_sctp));
         break;
 
     case OVS_KEY_ATTR_MPLS:
-        mh = ofpbuf_l2_5(&packet->ofpbuf);
+        mh = dp_packet_l2_5(packet);
         if (mh) {
             put_16aligned_be32(&mh->mpls_lse, nl_attr_get_be32(a)
                                | (get_16aligned_be32(&mh->mpls_lse)
@@ -395,12 +394,12 @@ odp_execute_masked_set_action(struct dp_packet *packet,
         break;
 
     case OVS_KEY_ATTR_ARP:
-        set_arp(&packet->ofpbuf, nl_attr_get(a),
+        set_arp(packet, nl_attr_get(a),
                 get_mask(a, struct ovs_key_arp));
         break;
 
     case OVS_KEY_ATTR_ND:
-        odp_set_nd(&packet->ofpbuf, nl_attr_get(a),
+        odp_set_nd(packet, nl_attr_get(a),
                    get_mask(a, struct ovs_key_nd));
         break;
 
@@ -514,7 +513,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                 uint32_t hash;
 
                 for (i = 0; i < cnt; i++) {
-                    flow_extract(&packets[i]->ofpbuf, &packets[i]->md, &flow);
+                    flow_extract(packets[i], &flow);
                     hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
 
                     /* We also store the hash value with each packet */
@@ -531,18 +530,14 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
 
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *buf = &packets[i]->ofpbuf;
-
-                eth_push_vlan(buf, htons(ETH_TYPE_VLAN), vlan->vlan_tci);
+                eth_push_vlan(packets[i], htons(ETH_TYPE_VLAN), vlan->vlan_tci);
             }
             break;
         }
 
         case OVS_ACTION_ATTR_POP_VLAN:
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *buf = &packets[i]->ofpbuf;
-
-                eth_pop_vlan(buf);
+                eth_pop_vlan(packets[i]);
             }
             break;
 
@@ -550,18 +545,14 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
             const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
 
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *buf = &packets[i]->ofpbuf;
-
-                push_mpls(buf, mpls->mpls_ethertype, mpls->mpls_lse);
+                push_mpls(packets[i], mpls->mpls_ethertype, mpls->mpls_lse);
             }
             break;
          }
 
         case OVS_ACTION_ATTR_POP_MPLS:
             for (i = 0; i < cnt; i++) {
-                struct ofpbuf *buf = &packets[i]->ofpbuf;
-
-                pop_mpls(buf, nl_attr_get_be16(a));
+                pop_mpls(packets[i], nl_attr_get_be16(a));
             }
             break;
 

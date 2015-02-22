@@ -23,7 +23,7 @@
 #include "lib/odp-util.h"
 
 struct flow;
-struct ofpbuf;
+struct dp_packet;
 struct ofproto_ipfix_bridge_exporter_options;
 struct ofproto_ipfix_flow_exporter_options;
 struct flow_tnl;
@@ -46,10 +46,10 @@ void dpif_ipfix_set_options(
     const struct ofproto_ipfix_bridge_exporter_options *,
     const struct ofproto_ipfix_flow_exporter_options *, size_t);
 
-void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct ofpbuf *,
+void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct dp_packet *,
                               const struct flow *,
                               odp_port_t, odp_port_t, const struct flow_tnl *);
-void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct ofpbuf *,
+void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct dp_packet *,
                             const struct flow *, uint32_t, uint16_t, uint32_t,
                             uint32_t);
 

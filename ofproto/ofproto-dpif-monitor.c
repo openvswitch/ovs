@@ -21,6 +21,7 @@
 
 #include "bfd.h"
 #include "cfm.h"
+#include "dp-packet.h"
 #include "guarded-list.h"
 #include "hash.h"
 #include "heap.h"
@@ -80,9 +81,9 @@ static struct latch monitor_exit_latch;
 static struct ovs_mutex monitor_mutex = OVS_MUTEX_INITIALIZER;
 
 static void *monitor_main(void *);
-static void monitor_check_send_soon(struct ofpbuf *);
+static void monitor_check_send_soon(struct dp_packet *);
 static void monitor_run(void);
-static void monitor_mport_run(struct mport *, struct ofpbuf *);
+static void monitor_mport_run(struct mport *, struct dp_packet *);
 
 static void mport_register(const struct ofport_dpif *, struct bfd *,
                            struct cfm *, uint8_t[ETH_ADDR_LEN])
@@ -194,9 +195,9 @@ monitor_run(void)
 {
     uint32_t stub[512 / 4];
     long long int prio_now;
-    struct ofpbuf packet;
+    struct dp_packet packet;
 
-    ofpbuf_use_stub(&packet, stub, sizeof stub);
+    dp_packet_use_stub(&packet, stub, sizeof stub);
     ovs_mutex_lock(&monitor_mutex);
 
     /* The monitor_check_send_soon() needs to be run twice.  The first
@@ -227,13 +228,13 @@ monitor_run(void)
         poll_timer_wait_until(MIN(next_timeout, next_mport_wakeup));
     }
     ovs_mutex_unlock(&monitor_mutex);
-    ofpbuf_uninit(&packet);
+    dp_packet_uninit(&packet);
 }
 
 /* Checks the 'send_soon' list for any mport that needs to send cfm/bfd
  * control packet immediately, and calls monitor_mport_run(). */
 static void
-monitor_check_send_soon(struct ofpbuf *packet)
+monitor_check_send_soon(struct dp_packet *packet)
     OVS_REQUIRES(monitor_mutex)
 {
     while (!guarded_list_is_empty(&send_soon)) {
@@ -255,18 +256,18 @@ monitor_check_send_soon(struct ofpbuf *packet)
  * on 'mport'.  And changes the location of 'mport' in heap based on next
  * timeout. */
 static void
-monitor_mport_run(struct mport *mport, struct ofpbuf *packet)
+monitor_mport_run(struct mport *mport, struct dp_packet *packet)
     OVS_REQUIRES(monitor_mutex)
 {
     long long int next_wake_time;
 
     if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
-        ofpbuf_clear(packet);
+        dp_packet_clear(packet);
         cfm_compose_ccm(mport->cfm, packet, mport->hw_addr);
         ofproto_dpif_send_packet(mport->ofport, packet);
     }
     if (mport->bfd && bfd_should_send_packet(mport->bfd)) {
-        ofpbuf_clear(packet);
+        dp_packet_clear(packet);
         bfd_put_packet(mport->bfd, packet, mport->hw_addr);
         ofproto_dpif_send_packet(mport->ofport, packet);
     }

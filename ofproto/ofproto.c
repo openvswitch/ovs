@@ -44,6 +44,7 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "ovs-rcu.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "pinsched.h"
 #include "pktbuf.h"
@@ -170,7 +171,7 @@ struct rule_execute {
     struct ovs_list list_node;  /* In struct ofproto's "rule_executes" list. */
     struct rule *rule;          /* Owns a reference to the rule. */
     ofp_port_t in_port;
-    struct ofpbuf *packet;      /* Owns the packet. */
+    struct dp_packet *packet;      /* Owns the packet. */
 };
 
 static void run_rule_executes(struct ofproto *) OVS_EXCLUDED(ofproto_mutex);
@@ -2757,7 +2758,7 @@ run_rule_executes(struct ofproto *ofproto)
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
         struct flow flow;
 
-        flow_extract(e->packet, NULL, &flow);
+        flow_extract(e->packet, &flow);
         flow.in_port.ofp_port = e->in_port;
         ofproto->ofproto_class->rule_execute(e->rule, &flow, e->packet);
 
@@ -2775,7 +2776,7 @@ destroy_rule_executes(struct ofproto *ofproto)
 
     guarded_list_pop_all(&ofproto->rule_executes, &executes);
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
-        ofpbuf_delete(e->packet);
+        dp_packet_delete(e->packet);
         rule_execute_destroy(e);
     }
 }
@@ -3151,7 +3152,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofputil_packet_out po;
-    struct ofpbuf *payload;
+    struct dp_packet *payload;
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts;
     struct flow flow;
@@ -3184,18 +3185,18 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         }
     } else {
         /* Ensure that the L3 header is 32-bit aligned. */
-        payload = ofpbuf_clone_data_with_headroom(po.packet, po.packet_len, 2);
+        payload = dp_packet_clone_data_with_headroom(po.packet, po.packet_len, 2);
     }
 
     /* Verify actions against packet, then send packet if successful. */
-    flow_extract(payload, NULL, &flow);
+    flow_extract(payload, &flow);
     flow.in_port.ofp_port = po.in_port;
     error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
     if (!error) {
         error = p->ofproto_class->packet_out(p, payload, &flow,
                                              po.ofpacts, po.ofpacts_len);
     }
-    ofpbuf_delete(payload);
+    dp_packet_delete(payload);
 
 exit_free_ofpacts:
     ofpbuf_uninit(&ofpacts);
@@ -6488,7 +6489,7 @@ send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
     enum ofperr error = 0;
     if (ofconn && buffer_id != UINT32_MAX) {
         struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-        struct ofpbuf *packet;
+        struct dp_packet *packet;
         ofp_port_t in_port;
 
         error = ofconn_pktbuf_retrieve(ofconn, buffer_id, &packet, &in_port);
@@ -6505,7 +6506,7 @@ send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
             if (!guarded_list_push_back(&ofproto->rule_executes,
                                         &re->list_node, 1024)) {
                 ofproto_rule_unref(rule);
-                ofpbuf_delete(re->packet);
+                dp_packet_delete(re->packet);
                 free(re);
             }
         }

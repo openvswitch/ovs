@@ -1524,7 +1524,7 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
     size_t key_ofs;
 
     ofpbuf_prealloc_tailroom(buf, (64
-                                   + ofpbuf_size(d_exec->packet)
+                                   + dp_packet_size(d_exec->packet)
                                    + ODP_KEY_METADATA_SIZE
                                    + d_exec->actions_len));
 
@@ -1535,11 +1535,11 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
     k_exec->dp_ifindex = dp_ifindex;
 
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_PACKET,
-                      ofpbuf_data(d_exec->packet),
-                      ofpbuf_size(d_exec->packet));
+                      dp_packet_data(d_exec->packet),
+                      dp_packet_size(d_exec->packet));
 
     key_ofs = nl_msg_start_nested(buf, OVS_PACKET_ATTR_KEY);
-    odp_key_from_pkt_metadata(buf, &d_exec->md);
+    odp_key_from_pkt_metadata(buf, &d_exec->packet->md);
     nl_msg_end_nested(buf, key_ofs);
 
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
@@ -1611,14 +1611,14 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
         case DPIF_OP_EXECUTE:
             /* Can't execute a packet that won't fit in a Netlink attribute. */
             if (OVS_UNLIKELY(nl_attr_oversized(
-                                 ofpbuf_size(op->u.execute.packet)))) {
+                                 dp_packet_size(op->u.execute.packet)))) {
                 /* Report an error immediately if this is the first operation.
                  * Otherwise the easiest thing to do is to postpone to the next
                  * call (when this will be the first operation). */
                 if (i == 0) {
                     VLOG_ERR_RL(&error_rl,
                                 "dropping oversized %"PRIu32"-byte packet",
-                                ofpbuf_size(op->u.execute.packet));
+                                dp_packet_size(op->u.execute.packet));
                     op->error = ENOBUFS;
                     return 1;
                 }
@@ -2002,14 +2002,14 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
     upcall->out_tun_key = a[OVS_PACKET_ATTR_EGRESS_TUN_KEY];
 
     /* Allow overwriting the netlink attribute header without reallocating. */
-    ofpbuf_use_stub(&upcall->packet,
+    dp_packet_use_stub(&upcall->packet,
                     CONST_CAST(struct nlattr *,
                                nl_attr_get(a[OVS_PACKET_ATTR_PACKET])) - 1,
                     nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]) +
                     sizeof(struct nlattr));
-    ofpbuf_set_data(&upcall->packet,
-                    (char *)ofpbuf_data(&upcall->packet) + sizeof(struct nlattr));
-    ofpbuf_set_size(&upcall->packet, nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]));
+    dp_packet_set_data(&upcall->packet,
+                    (char *)dp_packet_data(&upcall->packet) + sizeof(struct nlattr));
+    dp_packet_set_size(&upcall->packet, nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]));
 
     *dp_ifindex = ovs_header->dp_ifindex;
 

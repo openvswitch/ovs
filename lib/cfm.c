@@ -23,12 +23,12 @@
 
 #include "byte-order.h"
 #include "connectivity.h"
+#include "dp-packet.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
-#include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
@@ -563,7 +563,7 @@ cfm_should_send_ccm(struct cfm *cfm) OVS_EXCLUDED(mutex)
 /* Composes a CCM message into 'packet'.  Messages generated with this function
  * should be sent whenever cfm_should_send_ccm() indicates. */
 void
-cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
+cfm_compose_ccm(struct cfm *cfm, struct dp_packet *packet,
                 uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     uint16_t ccm_vlan;
@@ -586,7 +586,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
 
     atomic_read_relaxed(&cfm->extended, &extended);
 
-    ccm = ofpbuf_l3(packet);
+    ccm = dp_packet_l3(packet);
     ccm->mdlevel_version = 0;
     ccm->opcode = CCM_OPCODE;
     ccm->tlv_offset = 70;
@@ -747,7 +747,7 @@ cfm_should_process_flow(const struct cfm *cfm_, const struct flow *flow,
  * every packet whose flow returned true when passed to
  * cfm_should_process_flow. */
 void
-cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
+cfm_process_heartbeat(struct cfm *cfm, const struct dp_packet *p)
     OVS_EXCLUDED(mutex)
 {
     struct ccm *ccm;
@@ -758,8 +758,8 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 
     atomic_read_relaxed(&cfm->extended, &extended);
 
-    eth = ofpbuf_l2(p);
-    ccm = ofpbuf_at(p, (uint8_t *)ofpbuf_l3(p) - (uint8_t *)ofpbuf_data(p),
+    eth = dp_packet_l2(p);
+    ccm = dp_packet_at(p, (uint8_t *)dp_packet_l3(p) - (uint8_t *)dp_packet_data(p),
                     CCM_ACCEPT_LEN);
 
     if (!ccm) {

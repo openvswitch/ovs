@@ -25,6 +25,7 @@
 
 #include "byte-order.h"
 #include "classifier.h"
+#include "dp-packet.h"
 #include "flow.h"
 #include "hmap.h"
 #include "mac-learning.h"
@@ -604,7 +605,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     struct ofputil_packet_out po;
     enum ofperr error;
 
-    struct ofpbuf pkt;
+    struct dp_packet pkt;
     struct flow flow;
 
     error = ofputil_decode_packet_in(&pi, oh);
@@ -622,8 +623,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     }
 
     /* Extract flow data from 'opi' into 'flow'. */
-    ofpbuf_use_const(&pkt, pi.packet, pi.packet_len);
-    flow_extract(&pkt, NULL, &flow);
+    dp_packet_use_const(&pkt, pi.packet, pi.packet_len);
+    flow_extract(&pkt, &flow);
     flow.in_port.ofp_port = pi.fmd.in_port;
     flow.tunnel.tun_id = pi.fmd.tun_id;
 
@@ -648,8 +649,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     /* Prepare packet_out in case we need one. */
     po.buffer_id = pi.buffer_id;
     if (po.buffer_id == UINT32_MAX) {
-        po.packet = ofpbuf_data(&pkt);
-        po.packet_len = ofpbuf_size(&pkt);
+        po.packet = dp_packet_data(&pkt);
+        po.packet_len = dp_packet_size(&pkt);
     } else {
         po.packet = NULL;
         po.packet_len = 0;

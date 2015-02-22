@@ -154,7 +154,7 @@ void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
                        enum ofperr);
 
 enum ofperr ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
-                                   struct ofpbuf **bufferp, ofp_port_t *in_port);
+                                   struct dp_packet **bufferp, ofp_port_t *in_port);
 
 struct hmap *ofconn_get_bundles(struct ofconn *ofconn);
 

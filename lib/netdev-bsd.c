@@ -52,7 +52,7 @@
 #include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
-#include "ofpbuf.h"
+#include "dp_packet.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
 #include "packets.h"
@@ -569,20 +569,20 @@ proc_pkt(u_char *args_, const struct pcap_pkthdr *hdr, const u_char *packet)
  * from rxq->pcap.
  */
 static int
-netdev_rxq_bsd_recv_pcap(struct netdev_rxq_bsd *rxq, struct ofpbuf *buffer)
+netdev_rxq_bsd_recv_pcap(struct netdev_rxq_bsd *rxq, struct dp_packet *buffer)
 {
     struct pcap_arg arg;
     int ret;
 
     /* prepare the pcap argument to store the packet */
-    arg.size = ofpbuf_tailroom(buffer);
-    arg.data = ofpbuf_data(buffer);
+    arg.size = dp_packet_tailroom(buffer);
+    arg.data = dp_packet_data(buffer);
 
     for (;;) {
         ret = pcap_dispatch(rxq->pcap_handle, 1, proc_pkt, (u_char *) &arg);
 
         if (ret > 0) {
-            ofpbuf_set_size(buffer, ofpbuf_size(buffer) + arg.retval);
+            dp_packet_set_size(buffer, dp_packet_size(buffer) + arg.retval);
             return 0;
         }
         if (ret == -1) {
@@ -601,14 +601,14 @@ netdev_rxq_bsd_recv_pcap(struct netdev_rxq_bsd *rxq, struct ofpbuf *buffer)
  * 'rxq->fd' is initialized with the tap file descriptor.
  */
 static int
-netdev_rxq_bsd_recv_tap(struct netdev_rxq_bsd *rxq, struct ofpbuf *buffer)
+netdev_rxq_bsd_recv_tap(struct netdev_rxq_bsd *rxq, struct dp_packet *buffer)
 {
-    size_t size = ofpbuf_tailroom(buffer);
+    size_t size = dp_packet_tailroom(buffer);
 
     for (;;) {
-        ssize_t retval = read(rxq->fd, ofpbuf_data(buffer), size);
+        ssize_t retval = read(rxq->fd, dp_packet_data(buffer), size);
         if (retval >= 0) {
-            ofpbuf_set_size(buffer, ofpbuf_size(buffer) + retval);
+            dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
             return 0;
         } else if (errno != EINTR) {
             if (errno != EAGAIN) {
@@ -627,7 +627,6 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
     struct netdev_rxq_bsd *rxq = netdev_rxq_bsd_cast(rxq_);
     struct netdev *netdev = rxq->up.netdev;
     struct dp_packet *packet;
-    struct ofpbuf *buffer;
     ssize_t retval;
     int mtu;
 
@@ -637,16 +636,14 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
 
     packet = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
                                            DP_NETDEV_HEADROOM);
-    buffer = &packet->ofpbuf;
-
     retval = (rxq->pcap_handle
-            ? netdev_rxq_bsd_recv_pcap(rxq, buffer)
-            : netdev_rxq_bsd_recv_tap(rxq, buffer));
+            ? netdev_rxq_bsd_recv_pcap(rxq, packet)
+            : netdev_rxq_bsd_recv_tap(rxq, packet));
 
     if (retval) {
         dp_packet_delete(packet);
     } else {
-        dp_packet_pad(buffer);
+        dp_packet_pad(packet);
         dp_packet_set_dp_hash(packet, 0);
         packets[0] = packet;
         *c = 1;
@@ -703,8 +700,8 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
     }
 
     for (i = 0; i < cnt; i++) {
-        const void *data = ofpbuf_data(&pkts[i]->ofpbuf);
-        size_t size = ofpbuf_size(&pkts[i]->ofpbuf);
+        const void *data = dp_packet_data(pkts[i]);
+        size_t size = dp_packet_size(pkts[i]);
 
         while (!error) {
             ssize_t retval;

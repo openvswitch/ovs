@@ -50,6 +50,7 @@
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
@@ -1695,7 +1696,8 @@ ofctl_packet_out(int argc, char *argv[])
 
     protocol = open_vconn(argv[1], &vconn);
     for (i = 4; i < argc; i++) {
-        struct ofpbuf *packet, *opo;
+        struct dp_packet *packet;
+        struct ofpbuf *opo;
         const char *error_msg;
 
         error_msg = eth_from_hex(argv[i], &packet);
@@ -1703,11 +1705,11 @@ ofctl_packet_out(int argc, char *argv[])
             ovs_fatal(0, "%s", error_msg);
         }
 
-        po.packet = ofpbuf_data(packet);
-        po.packet_len = ofpbuf_size(packet);
+        po.packet = dp_packet_data(packet);
+        po.packet_len = dp_packet_size(packet);
         opo = ofputil_encode_packet_out(&po, protocol);
         transact_noreply(vconn, opo);
-        ofpbuf_delete(packet);
+        dp_packet_delete(packet);
     }
     vconn_close(vconn);
     ofpbuf_uninit(&ofpacts);
@@ -1938,33 +1940,33 @@ ofctl_ofp_parse_pcap(int argc OVS_UNUSED, char *argv[])
     reader = tcp_reader_open();
     first = true;
     for (;;) {
-        struct ofpbuf *packet;
+        struct dp_packet *packet;
         long long int when;
         struct flow flow;
-        const struct pkt_metadata md = PKT_METADATA_INITIALIZER(ODPP_NONE);
 
         error = ovs_pcap_read(file, &packet, &when);
         if (error) {
             break;
         }
-        flow_extract(packet, &md, &flow);
+        packet->md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+        flow_extract(packet, &flow);
         if (flow.dl_type == htons(ETH_TYPE_IP)
             && flow.nw_proto == IPPROTO_TCP
             && (is_openflow_port(flow.tp_src, argv + 2) ||
                 is_openflow_port(flow.tp_dst, argv + 2))) {
-            struct ofpbuf *payload = tcp_reader_run(reader, &flow, packet);
+            struct dp_packet *payload = tcp_reader_run(reader, &flow, packet);
             if (payload) {
-                while (ofpbuf_size(payload) >= sizeof(struct ofp_header)) {
+                while (dp_packet_size(payload) >= sizeof(struct ofp_header)) {
                     const struct ofp_header *oh;
-                    void *data = ofpbuf_data(payload);
+                    void *data = dp_packet_data(payload);
                     int length;
 
                     /* Align OpenFlow on 8-byte boundary for safe access. */
-                    ofpbuf_shift(payload, -((intptr_t) data & 7));
+                    dp_packet_shift(payload, -((intptr_t) data & 7));
 
-                    oh = ofpbuf_data(payload);
+                    oh = dp_packet_data(payload);
                     length = ntohs(oh->length);
-                    if (ofpbuf_size(payload) < length) {
+                    if (dp_packet_size(payload) < length) {
                         break;
                     }
 
@@ -1982,12 +1984,12 @@ ofctl_ofp_parse_pcap(int argc OVS_UNUSED, char *argv[])
                     printf(IP_FMT".%"PRIu16" > "IP_FMT".%"PRIu16":\n",
                            IP_ARGS(flow.nw_src), ntohs(flow.tp_src),
                            IP_ARGS(flow.nw_dst), ntohs(flow.tp_dst));
-                    ofp_print(stdout, ofpbuf_data(payload), length, verbosity + 1);
-                    ofpbuf_pull(payload, length);
+                    ofp_print(stdout, dp_packet_data(payload), length, verbosity + 1);
+                    dp_packet_pull(payload, length);
                 }
             }
         }
-        ofpbuf_delete(packet);
+        dp_packet_delete(packet);
     }
     tcp_reader_close(reader);
 }
@@ -3243,9 +3245,8 @@ ofctl_parse_pcap(int argc OVS_UNUSED, char *argv[])
     }
 
     for (;;) {
-        struct ofpbuf *packet;
+        struct dp_packet *packet;
         struct flow flow;
-        const struct pkt_metadata md = PKT_METADATA_INITIALIZER(ODPP_NONE);
         int error;
 
         error = ovs_pcap_read(pcap, &packet, NULL);
@@ -3255,10 +3256,11 @@ ofctl_parse_pcap(int argc OVS_UNUSED, char *argv[])
             ovs_fatal(error, "%s: read failed", argv[1]);
         }
 
-        flow_extract(packet, &md, &flow);
+        packet->md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+        flow_extract(packet, &flow);
         flow_print(stdout, &flow);
         putchar('\n');
-        ofpbuf_delete(packet);
+        dp_packet_delete(packet);
     }
 }
 

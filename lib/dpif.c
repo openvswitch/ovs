@@ -805,11 +805,11 @@ dpif_port_poll_wait(const struct dpif *dpif)
  * arguments must have been initialized through a call to flow_extract().
  * 'used' is stored into stats->used. */
 void
-dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
+dpif_flow_stats_extract(const struct flow *flow, const struct dp_packet *packet,
                         long long int used, struct dpif_flow_stats *stats)
 {
     stats->tcp_flags = ntohs(flow->tcp_flags);
-    stats->n_bytes = ofpbuf_size(packet);
+    stats->n_bytes = dp_packet_size(packet);
     stats->n_packets = 1;
     stats->used = used;
 }
@@ -1080,8 +1080,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
 {
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
-    struct ofpbuf *packet = &packets[0]->ofpbuf;
-    struct pkt_metadata *md = &packets[0]->md;
+    struct dp_packet *packet = *packets;
 
     ovs_assert(cnt == 1);
 
@@ -1094,6 +1093,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         struct dpif_execute execute;
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
+        struct pkt_metadata *md = &packet->md;
 
         if (md->tunnel.ip_dst) {
             /* The Linux kernel datapath throws away the tunnel information
@@ -1111,7 +1111,6 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         }
 
         execute.packet = packet;
-        execute.md = *md;
         execute.needs_help = false;
         execute.probe = false;
         aux->error = dpif_execute(aux->dpif, &execute);
@@ -1146,23 +1145,13 @@ static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux = {dpif, 0};
-    struct dp_packet packet, *pp;
+    struct dp_packet *pp;
 
     COVERAGE_INC(dpif_execute_with_help);
 
-    packet.ofpbuf = *execute->packet;
-    packet.md = execute->md;
-    pp = &packet;
-
+    pp = execute->packet;
     odp_execute_actions(&aux, &pp, 1, false, execute->actions,
                         execute->actions_len, dpif_execute_helper_cb);
-
-    /* Even though may_steal is set to false, some actions could modify or
-     * reallocate the ofpbuf memory. We need to pass those changes to the
-     * caller */
-    *execute->packet = packet.ofpbuf;
-    execute->md = packet.md;
-
     return aux.error;
 }
 
@@ -1375,8 +1364,8 @@ dpif_print_packet(struct dpif *dpif, struct dpif_upcall *upcall)
         struct ds flow;
         char *packet;
 
-        packet = ofp_packet_to_string(ofpbuf_data(&upcall->packet),
-                                      ofpbuf_size(&upcall->packet));
+        packet = ofp_packet_to_string(dp_packet_data(&upcall->packet),
+                                      dp_packet_size(&upcall->packet));
 
         ds_init(&flow);
         odp_flow_key_format(upcall->key, upcall->key_len, &flow);
@@ -1671,8 +1660,8 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet;
 
-        packet = ofp_packet_to_string(ofpbuf_data(execute->packet),
-                                      ofpbuf_size(execute->packet));
+        packet = ofp_packet_to_string(dp_packet_data(execute->packet),
+                                      dp_packet_size(execute->packet));
         ds_put_format(&ds, "%s: %sexecute ",
                       dpif_name(dpif),
                       (subexecute ? "sub-"

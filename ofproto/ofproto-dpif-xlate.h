@@ -15,6 +15,7 @@
 #ifndef OFPROTO_DPIF_XLATE_H
 #define OFPROTO_DPIF_XLATE_H 1
 
+#include "dp-packet.h"
 #include "flow.h"
 #include "meta-flow.h"
 #include "odp-util.h"
@@ -72,7 +73,7 @@ struct xlate_in {
 
     /* The packet corresponding to 'flow', or a null pointer if we are
      * revalidating without a packet to refer to. */
-    const struct ofpbuf *packet;
+    const struct dp_packet *packet;
 
     /* Should OFPP_NORMAL update the MAC learning table?  Should "learn"
      * actions update the flow table?
@@ -185,12 +186,12 @@ int xlate_lookup(const struct dpif_backer *, const struct flow *,
 void xlate_actions(struct xlate_in *, struct xlate_out *);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, ofp_port_t in_port, struct rule_dpif *,
-                   uint16_t tcp_flags, const struct ofpbuf *packet);
+                   uint16_t tcp_flags, const struct dp_packet *packet);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
 
-int xlate_send_packet(const struct ofport_dpif *, struct ofpbuf *);
+int xlate_send_packet(const struct ofport_dpif *, struct dp_packet *);
 
 struct xlate_cache *xlate_cache_new(void);
 void xlate_push_stats(struct xlate_cache *, const struct dpif_flow_stats *);

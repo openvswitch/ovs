@@ -37,13 +37,14 @@
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
+#include "ofpbuf.h"
 #include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
 #include "packets.h"
+#include "dp-packet.h"
 #include "type-props.h"
 #include "unaligned.h"
 #include "odp-util.h"
@@ -61,33 +62,32 @@ char *
 ofp_packet_to_string(const void *data, size_t len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
-    struct ofpbuf buf;
+    struct dp_packet buf;
     struct flow flow;
     size_t l4_size;
 
-    ofpbuf_use_const(&buf, data, len);
-    flow_extract(&buf, &md, &flow);
+    dp_packet_use_const(&buf, data, len);
+    flow_extract(&buf, &flow);
     flow_format(&ds, &flow);
 
-    l4_size = ofpbuf_l4_size(&buf);
+    l4_size = dp_packet_l4_size(&buf);
 
     if (flow.nw_proto == IPPROTO_TCP && l4_size >= TCP_HEADER_LEN) {
-        struct tcp_header *th = ofpbuf_l4(&buf);
+        struct tcp_header *th = dp_packet_l4(&buf);
         ds_put_format(&ds, " tcp_csum:%"PRIx16, ntohs(th->tcp_csum));
     } else if (flow.nw_proto == IPPROTO_UDP && l4_size >= UDP_HEADER_LEN) {
-        struct udp_header *uh = ofpbuf_l4(&buf);
+        struct udp_header *uh = dp_packet_l4(&buf);
         ds_put_format(&ds, " udp_csum:%"PRIx16, ntohs(uh->udp_csum));
     } else if (flow.nw_proto == IPPROTO_SCTP && l4_size >= SCTP_HEADER_LEN) {
-        struct sctp_header *sh = ofpbuf_l4(&buf);
+        struct sctp_header *sh = dp_packet_l4(&buf);
         ds_put_format(&ds, " sctp_csum:%"PRIx32,
                       ntohl(get_16aligned_be32(&sh->sctp_csum)));
     } else if (flow.nw_proto == IPPROTO_ICMP && l4_size >= ICMP_HEADER_LEN) {
-        struct icmp_header *icmph = ofpbuf_l4(&buf);
+        struct icmp_header *icmph = dp_packet_l4(&buf);
         ds_put_format(&ds, " icmp_csum:%"PRIx16,
                       ntohs(icmph->icmp_csum));
     } else if (flow.nw_proto == IPPROTO_ICMPV6 && l4_size >= ICMP6_HEADER_LEN) {
-        struct icmp6_header *icmp6h = ofpbuf_l4(&buf);
+        struct icmp6_header *icmp6h = dp_packet_l4(&buf);
         ds_put_format(&ds, " icmp6_csum:%"PRIx16,
                       ntohs(icmp6h->icmp6_cksum));
     }

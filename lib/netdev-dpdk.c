@@ -36,7 +36,6 @@
 #include "netdev-vport.h"
 #include "odp-util.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
 #include "ovs-numa.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
@@ -284,7 +283,7 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 
     __rte_pktmbuf_init(mp, opaque_arg, _m, i);
 
-    ofpbuf_init_dpdk((struct ofpbuf *) m, m->buf_len);
+    dp_packet_init_dpdk((struct dp_packet *) m, m->buf_len);
 }
 
 static struct dpdk_mp *
@@ -807,7 +806,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet ** pkts,
     }
 
     for (i = 0; i < cnt; i++) {
-        int size = ofpbuf_size(&pkts[i]->ofpbuf);
+        int size = dp_packet_size(pkts[i]);
 
         if (OVS_UNLIKELY(size > dev->max_packet_len)) {
             VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
@@ -825,7 +824,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet ** pkts,
         }
 
         /* We have to do a copy for now */
-        memcpy(mbufs[newcnt]->pkt.data, ofpbuf_data(&pkts[i]->ofpbuf), size);
+        memcpy(mbufs[newcnt]->pkt.data, dp_packet_data(pkts[i]), size);
 
         rte_pktmbuf_data_len(mbufs[newcnt]) = size;
         rte_pktmbuf_pkt_len(mbufs[newcnt]) = size;
@@ -854,7 +853,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
     int i;
 
     if (OVS_UNLIKELY(!may_steal ||
-                     pkts[0]->ofpbuf.source != OFPBUF_DPDK)) {
+                     pkts[0]->source != DPBUF_DPDK)) {
         struct netdev *netdev = &dev->up;
 
         dpdk_do_tx_copy(netdev, qid, pkts, cnt);
@@ -869,7 +868,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         int dropped = 0;
 
         for (i = 0; i < cnt; i++) {
-            int size = ofpbuf_size(&pkts[i]->ofpbuf);
+            int size = dp_packet_size(pkts[i]);
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
                     dpdk_queue_pkts(dev, qid,

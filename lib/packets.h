@@ -28,7 +28,7 @@
 #include "hash.h"
 #include "util.h"
 
-struct ofpbuf;
+struct dp_packet;
 struct ds;
 
 /* Tunnel information used in flow key and metadata. */
@@ -187,21 +187,21 @@ static inline uint32_t hash_mac(const uint8_t ea[ETH_ADDR_LEN],
 bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN]);
 bool eth_addr_from_string(const char *, uint8_t ea[ETH_ADDR_LEN]);
 
-void compose_rarp(struct ofpbuf *, const uint8_t eth_src[ETH_ADDR_LEN]);
+void compose_rarp(struct dp_packet *, const uint8_t eth_src[ETH_ADDR_LEN]);
 
-void eth_push_vlan(struct ofpbuf *, ovs_be16 tpid, ovs_be16 tci);
-void eth_pop_vlan(struct ofpbuf *);
+void eth_push_vlan(struct dp_packet *, ovs_be16 tpid, ovs_be16 tci);
+void eth_pop_vlan(struct dp_packet *);
 
-const char *eth_from_hex(const char *hex, struct ofpbuf **packetp);
+const char *eth_from_hex(const char *hex, struct dp_packet **packetp);
 void eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
                        const uint8_t mask[ETH_ADDR_LEN], struct ds *s);
 void eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
                      const uint8_t mask[ETH_ADDR_LEN],
                      uint8_t dst[ETH_ADDR_LEN]);
 
-void set_mpls_lse(struct ofpbuf *, ovs_be32 label);
-void push_mpls(struct ofpbuf *packet, ovs_be16 ethtype, ovs_be32 lse);
-void pop_mpls(struct ofpbuf *, ovs_be16 ethtype);
+void set_mpls_lse(struct dp_packet *, ovs_be32 label);
+void push_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse);
+void pop_mpls(struct dp_packet *, ovs_be16 ethtype);
 
 void set_mpls_lse_ttl(ovs_be32 *lse, uint8_t ttl);
 void set_mpls_lse_tc(ovs_be32 *lse, uint8_t tc);
@@ -766,26 +766,26 @@ struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
 
-void *eth_compose(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
+void *eth_compose(struct dp_packet *, const uint8_t eth_dst[ETH_ADDR_LEN],
                   const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
                   size_t size);
-void *snap_compose(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
+void *snap_compose(struct dp_packet *, const uint8_t eth_dst[ETH_ADDR_LEN],
                    const uint8_t eth_src[ETH_ADDR_LEN],
                    unsigned int oui, uint16_t snap_type, size_t size);
-void packet_set_ipv4(struct ofpbuf *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
+void packet_set_ipv4(struct dp_packet *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
                      uint8_t ttl);
-void packet_set_ipv6(struct ofpbuf *, uint8_t proto, const ovs_be32 src[4],
+void packet_set_ipv6(struct dp_packet *, uint8_t proto, const ovs_be32 src[4],
                      const ovs_be32 dst[4], uint8_t tc,
                      ovs_be32 fl, uint8_t hlmit);
-void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
-void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
-void packet_set_sctp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
-void packet_set_nd(struct ofpbuf *, const ovs_be32 target[4],
+void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
+void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
+void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
+void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
                    const uint8_t sll[6], const uint8_t tll[6]);
 
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
-void compose_arp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN],
+void compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
                  ovs_be32 ip_src, ovs_be32 ip_dst);
 
 #endif /* packets.h */

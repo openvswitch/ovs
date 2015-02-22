@@ -1186,11 +1186,11 @@ stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
 }
 
 static void
-stp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
+stp_process_packet(const struct xport *xport, const struct dp_packet *packet)
 {
     struct stp_port *sp = xport_get_stp_port(xport);
-    struct ofpbuf payload = *packet;
-    struct eth_header *eth = ofpbuf_data(&payload);
+    struct dp_packet payload = *packet;
+    struct eth_header *eth = dp_packet_data(&payload);
 
     /* Sink packets on ports that have STP disabled when the bridge has
      * STP enabled. */
@@ -1199,12 +1199,12 @@ stp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
     }
 
     /* Trim off padding on payload. */
-    if (ofpbuf_size(&payload) > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
-        ofpbuf_set_size(&payload, ntohs(eth->eth_type) + ETH_HEADER_LEN);
+    if (dp_packet_size(&payload) > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
+        dp_packet_set_size(&payload, ntohs(eth->eth_type) + ETH_HEADER_LEN);
     }
 
-    if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
-        stp_received_bpdu(sp, ofpbuf_data(&payload), ofpbuf_size(&payload));
+    if (dp_packet_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+        stp_received_bpdu(sp, dp_packet_data(&payload), dp_packet_size(&payload));
     }
 }
 
@@ -1239,10 +1239,10 @@ xport_rstp_should_manage_bpdu(const struct xport *xport)
 }
 
 static void
-rstp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
+rstp_process_packet(const struct xport *xport, const struct dp_packet *packet)
 {
-    struct ofpbuf payload = *packet;
-    struct eth_header *eth = ofpbuf_data(&payload);
+    struct dp_packet payload = *packet;
+    struct eth_header *eth = dp_packet_data(&payload);
 
     /* Sink packets on ports that have no RSTP. */
     if (!xport->rstp_port) {
@@ -1250,13 +1250,13 @@ rstp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
     }
 
     /* Trim off padding on payload. */
-    if (ofpbuf_size(&payload) > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
-        ofpbuf_set_size(&payload, ntohs(eth->eth_type) + ETH_HEADER_LEN);
+    if (dp_packet_size(&payload) > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
+        dp_packet_set_size(&payload, ntohs(eth->eth_type) + ETH_HEADER_LEN);
     }
 
-    if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
-        rstp_port_received_bpdu(xport->rstp_port, ofpbuf_data(&payload),
-                                ofpbuf_size(&payload));
+    if (dp_packet_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+        rstp_port_received_bpdu(xport->rstp_port, dp_packet_data(&payload),
+                                dp_packet_size(&payload));
     }
 }
 
@@ -2494,7 +2494,7 @@ fix_sflow_action(struct xlate_ctx *ctx)
 
 static enum slow_path_reason
 process_special(struct xlate_ctx *ctx, const struct flow *flow,
-                const struct xport *xport, const struct ofpbuf *packet)
+                const struct xport *xport, const struct dp_packet *packet)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
     const struct xbridge *xbridge = ctx->xbridge;
@@ -2572,14 +2572,14 @@ tnl_route_lookup_flow(const struct flow *oflow,
 }
 
 static int
-xlate_flood_packet(struct xbridge *xbridge, struct ofpbuf *packet)
+xlate_flood_packet(struct xbridge *xbridge, struct dp_packet *packet)
 {
     struct ofpact_output output;
     struct flow flow;
 
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
-    flow_extract(packet, NULL, &flow);
+    flow_extract(packet, &flow);
     flow.in_port.ofp_port = OFPP_NONE;
     output.port = OFPP_FLOOD;
     output.max_len = 0;
@@ -2594,13 +2594,13 @@ tnl_send_arp_request(const struct xport *out_dev, const uint8_t eth_src[ETH_ADDR
                      ovs_be32 ip_src, ovs_be32 ip_dst)
 {
     struct xbridge *xbridge = out_dev->xbridge;
-    struct ofpbuf packet;
+    struct dp_packet packet;
 
-    ofpbuf_init(&packet, 0);
+    dp_packet_init(&packet, 0);
     compose_arp(&packet, eth_src, ip_src, ip_dst);
 
     xlate_flood_packet(xbridge, &packet);
-    ofpbuf_uninit(&packet);
+    dp_packet_uninit(&packet);
 }
 
 static int
@@ -3203,7 +3203,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         return;
     }
 
-    packet = dp_packet_clone_from_ofpbuf(ctx->xin->packet);
+    packet = dp_packet_clone(ctx->xin->packet);
 
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->xout->odp_actions,
@@ -3215,8 +3215,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                         ofpbuf_size(ctx->xout->odp_actions), NULL);
 
     pin = xmalloc(sizeof *pin);
-    pin->up.packet_len = ofpbuf_size(&packet->ofpbuf);
-    pin->up.packet = ofpbuf_steal_data(&packet->ofpbuf);
+    pin->up.packet_len = dp_packet_size(packet);
+    pin->up.packet = dp_packet_steal_data(packet);
     pin->up.reason = reason;
     pin->up.table_id = ctx->table_id;
     pin->up.cookie = (ctx->rule
@@ -4162,7 +4162,7 @@ void
 xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
               const struct flow *flow, ofp_port_t in_port,
               struct rule_dpif *rule, uint16_t tcp_flags,
-              const struct ofpbuf *packet)
+              const struct dp_packet *packet)
 {
     xin->ofproto = ofproto;
     xin->flow = *flow;
@@ -4632,7 +4632,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
  * May modify 'packet'.
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
+xlate_send_packet(const struct ofport_dpif *ofport, struct dp_packet *packet)
 {
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     struct xport *xport;
@@ -4641,7 +4641,7 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
 
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
-    flow_extract(packet, NULL, &flow);
+    flow_extract(packet, &flow);
     flow.in_port.ofp_port = OFPP_NONE;
 
     xport = xport_lookup(xcfg, ofport);

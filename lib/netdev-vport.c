@@ -37,7 +37,7 @@
 #include "list.h"
 #include "netdev-provider.h"
 #include "odp-netlink.h"
-#include "ofpbuf.h"
+#include "dp-packet.h"
 #include "ovs-router.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -822,13 +822,13 @@ gre_hdr(struct ip_header *ip)
 }
 
 static void *
-ip_extract_tnl_md(struct ofpbuf *packet, struct flow_tnl *tnl)
+ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl)
 {
     struct ip_header *nh;
     void *l4;
 
-    nh = ofpbuf_l3(packet);
-    l4 = ofpbuf_l4(packet);
+    nh = dp_packet_l3(packet);
+    l4 = dp_packet_l4(packet);
 
     if (!nh || !l4) {
         return NULL;
@@ -851,14 +851,14 @@ ip_extract_tnl_md(struct ofpbuf *packet, struct flow_tnl *tnl)
  *
  * Return pointer to the L4 header added to 'packet'. */
 static void *
-push_ip_header(struct ofpbuf *packet,
+push_ip_header(struct dp_packet *packet,
                const void *header, int size, int *ip_tot_size)
 {
     struct eth_header *eth;
     struct ip_header *ip;
 
-    eth = ofpbuf_push_uninit(packet, size);
-    *ip_tot_size = ofpbuf_size(packet) - sizeof (struct eth_header);
+    eth = dp_packet_push_uninit(packet, size);
+    *ip_tot_size = dp_packet_size(packet) - sizeof (struct eth_header);
 
     memcpy(eth, header, size);
     ip = ip_hdr(eth);
@@ -889,7 +889,7 @@ gre_header_len(ovs_be16 flags)
 }
 
 static int
-parse_gre_header(struct ofpbuf *packet,
+parse_gre_header(struct dp_packet *packet,
                  struct flow_tnl *tnl)
 {
     const struct gre_base_hdr *greh;
@@ -906,7 +906,7 @@ parse_gre_header(struct ofpbuf *packet,
     }
 
     hlen = gre_header_len(greh->flags);
-    if (hlen > ofpbuf_size(packet)) {
+    if (hlen > dp_packet_size(packet)) {
         return -EINVAL;
     }
 
@@ -914,9 +914,9 @@ parse_gre_header(struct ofpbuf *packet,
     if (greh->flags & htons(GRE_CSUM)) {
         ovs_be16 pkt_csum;
 
-        pkt_csum = csum(greh, ofpbuf_size(packet) -
+        pkt_csum = csum(greh, dp_packet_size(packet) -
                               ((const unsigned char *)greh -
-                               (const unsigned char *)ofpbuf_l2(packet)));
+                               (const unsigned char *)dp_packet_l2(packet)));
         if (pkt_csum) {
             return -EINVAL;
         }
@@ -944,16 +944,15 @@ reset_tnl_md(struct pkt_metadata *md)
 }
 
 static void
-gre_extract_md(struct dp_packet *dpif_pkt)
+gre_extract_md(struct dp_packet *packet)
 {
-    struct ofpbuf *packet = &dpif_pkt->ofpbuf;
-    struct pkt_metadata *md = &dpif_pkt->md;
+    struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
     int hlen = sizeof(struct eth_header) +
                sizeof(struct ip_header) + 4;
 
     memset(md, 0, sizeof *md);
-    if (hlen > ofpbuf_size(packet)) {
+    if (hlen > dp_packet_size(packet)) {
         return;
     }
 
@@ -962,7 +961,7 @@ gre_extract_md(struct dp_packet *dpif_pkt)
         reset_tnl_md(md);
     }
 
-    ofpbuf_reset_packet(packet, hlen);
+    dp_packet_reset_packet(packet, hlen);
 }
 
 static int
@@ -978,7 +977,7 @@ netdev_gre_pop_header(struct netdev *netdev_ OVS_UNUSED,
 }
 
 static void
-netdev_gre_push_header__(struct ofpbuf *packet,
+netdev_gre_push_header__(struct dp_packet *packet,
                          const void *header, int size)
 {
     struct gre_base_hdr *greh;
@@ -1002,8 +1001,7 @@ netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
     int i;
 
     for (i = 0; i < cnt; i++) {
-        netdev_gre_push_header__(&packets[i]->ofpbuf,
-                                   data->header, data->header_len);
+        netdev_gre_push_header__(packets[i], data->header, data->header_len);
         packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
     }
     return 0;
@@ -1057,16 +1055,15 @@ netdev_gre_build_header(const struct netdev *netdev,
 }
 
 static void
-vxlan_extract_md(struct dp_packet *dpif_pkt)
+vxlan_extract_md(struct dp_packet *packet)
 {
-    struct ofpbuf *packet = &dpif_pkt->ofpbuf;
-    struct pkt_metadata *md = &dpif_pkt->md;
+    struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
     struct udp_header *udp;
     struct vxlanhdr *vxh;
 
     memset(md, 0, sizeof *md);
-    if (VXLAN_HLEN > ofpbuf_size(packet)) {
+    if (VXLAN_HLEN > dp_packet_size(packet)) {
         return;
     }
 
@@ -1088,7 +1085,7 @@ vxlan_extract_md(struct dp_packet *dpif_pkt)
     tnl->tp_dst = udp->udp_dst;
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
 
-    ofpbuf_reset_packet(packet, VXLAN_HLEN);
+    dp_packet_reset_packet(packet, VXLAN_HLEN);
 }
 
 static int
@@ -1151,7 +1148,7 @@ netdev_vxlan_push_header__(struct dp_packet *packet,
     struct udp_header *udp;
     int ip_tot_size;
 
-    udp = push_ip_header(&packet->ofpbuf, header, size, &ip_tot_size);
+    udp = push_ip_header(packet, header, size, &ip_tot_size);
 
     /* set udp src port */
     udp->udp_src = get_src_port(packet);

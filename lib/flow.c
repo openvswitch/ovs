@@ -32,7 +32,7 @@
 #include "hash.h"
 #include "jhash.h"
 #include "match.h"
-#include "ofpbuf.h"
+#include "dp-packet.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "odp-util.h"
@@ -403,8 +403,7 @@ invalid:
  *      otherwise UINT16_MAX.
  */
 void
-flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
-             struct flow *flow)
+flow_extract(struct dp_packet *packet, struct flow *flow)
 {
     struct {
         struct miniflow mf;
@@ -414,18 +413,18 @@ flow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
     COVERAGE_INC(flow_extract);
 
     miniflow_initialize(&m.mf, m.buf);
-    miniflow_extract(packet, md, &m.mf);
+    miniflow_extract(packet, &m.mf);
     miniflow_expand(&m.mf, flow);
 }
 
 /* Caller is responsible for initializing 'dst' with enough storage for
  * FLOW_U64S * 8 bytes. */
 void
-miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
-                 struct miniflow *dst)
+miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 {
-    void *data = ofpbuf_data(packet);
-    size_t size = ofpbuf_size(packet);
+    const struct pkt_metadata *md = &packet->md;
+    void *data = dp_packet_data(packet);
+    size_t size = dp_packet_size(packet);
     uint64_t *values = miniflow_values(dst);
     struct mf_ctx mf = { 0, values, values + FLOW_U64S };
     char *l2;
@@ -433,26 +432,24 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
     uint8_t nw_frag, nw_tos, nw_ttl, nw_proto;
 
     /* Metadata. */
-    if (md) {
-        if (md->tunnel.ip_dst) {
-            miniflow_push_words(mf, tunnel, &md->tunnel,
-                                sizeof md->tunnel / sizeof(uint64_t));
-        }
-        if (md->skb_priority || md->pkt_mark) {
-            miniflow_push_uint32(mf, skb_priority, md->skb_priority);
-            miniflow_push_uint32(mf, pkt_mark, md->pkt_mark);
-        }
-        miniflow_push_uint32(mf, dp_hash, md->dp_hash);
-        miniflow_push_uint32(mf, in_port, odp_to_u32(md->in_port.odp_port));
-        if (md->recirc_id) {
-            miniflow_push_uint32(mf, recirc_id, md->recirc_id);
-            miniflow_pad_to_64(mf, conj_id);
-        }
+    if (md->tunnel.ip_dst) {
+        miniflow_push_words(mf, tunnel, &md->tunnel,
+                            sizeof md->tunnel / sizeof(uint64_t));
+    }
+    if (md->skb_priority || md->pkt_mark) {
+        miniflow_push_uint32(mf, skb_priority, md->skb_priority);
+        miniflow_push_uint32(mf, pkt_mark, md->pkt_mark);
+    }
+    miniflow_push_uint32(mf, dp_hash, md->dp_hash);
+    miniflow_push_uint32(mf, in_port, odp_to_u32(md->in_port.odp_port));
+    if (md->recirc_id) {
+        miniflow_push_uint32(mf, recirc_id, md->recirc_id);
+        miniflow_pad_to_64(mf, conj_id);
     }
 
     /* Initialize packet's layer pointer and offsets. */
     l2 = data;
-    ofpbuf_set_frame(packet, data);
+    dp_packet_set_frame(packet, data);
 
     /* Must have full Ethernet header to proceed. */
     if (OVS_UNLIKELY(size < sizeof(struct eth_header))) {
@@ -508,7 +505,7 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
         if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
             goto out;
         }
-        ofpbuf_set_l2_pad_size(packet, size - tot_len);
+        dp_packet_set_l2_pad_size(packet, size - tot_len);
         size = tot_len;   /* Never pull padding. */
 
         /* Push both source and destination address at once. */
@@ -544,7 +541,7 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
         if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
             goto out;
         }
-        ofpbuf_set_l2_pad_size(packet, size - plen);
+        dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;   /* Never pull padding. */
 
         miniflow_push_words(mf, ipv6_src, &nh->ip6_src,
@@ -1707,7 +1704,7 @@ flow_set_mpls_lse(struct flow *flow, int idx, ovs_be32 lse)
 }
 
 static size_t
-flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
+flow_compose_l4(struct dp_packet *p, const struct flow *flow)
 {
     size_t l4_len = 0;
 
@@ -1717,7 +1714,7 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             struct tcp_header *tcp;
 
             l4_len = sizeof *tcp;
-            tcp = ofpbuf_put_zeros(b, l4_len);
+            tcp = dp_packet_put_zeros(p, l4_len);
             tcp->tcp_src = flow->tp_src;
             tcp->tcp_dst = flow->tp_dst;
             tcp->tcp_ctl = TCP_CTL(ntohs(flow->tcp_flags), 5);
@@ -1725,21 +1722,21 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             struct udp_header *udp;
 
             l4_len = sizeof *udp;
-            udp = ofpbuf_put_zeros(b, l4_len);
+            udp = dp_packet_put_zeros(p, l4_len);
             udp->udp_src = flow->tp_src;
             udp->udp_dst = flow->tp_dst;
         } else if (flow->nw_proto == IPPROTO_SCTP) {
             struct sctp_header *sctp;
 
             l4_len = sizeof *sctp;
-            sctp = ofpbuf_put_zeros(b, l4_len);
+            sctp = dp_packet_put_zeros(p, l4_len);
             sctp->sctp_src = flow->tp_src;
             sctp->sctp_dst = flow->tp_dst;
         } else if (flow->nw_proto == IPPROTO_ICMP) {
             struct icmp_header *icmp;
 
             l4_len = sizeof *icmp;
-            icmp = ofpbuf_put_zeros(b, l4_len);
+            icmp = dp_packet_put_zeros(p, l4_len);
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
             icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
@@ -1747,7 +1744,7 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             struct igmp_header *igmp;
 
             l4_len = sizeof *igmp;
-            igmp = ofpbuf_put_zeros(b, l4_len);
+            igmp = dp_packet_put_zeros(p, l4_len);
             igmp->igmp_type = ntohs(flow->tp_src);
             igmp->igmp_code = ntohs(flow->tp_dst);
             put_16aligned_be32(&igmp->group, flow->igmp_group_ip4);
@@ -1756,7 +1753,7 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
             struct icmp6_hdr *icmp;
 
             l4_len = sizeof *icmp;
-            icmp = ofpbuf_put_zeros(b, l4_len);
+            icmp = dp_packet_put_zeros(p, l4_len);
             icmp->icmp6_type = ntohs(flow->tp_src);
             icmp->icmp6_code = ntohs(flow->tp_dst);
 
@@ -1767,26 +1764,26 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
                 struct nd_opt_hdr *nd_opt;
 
                 l4_len += sizeof *nd_target;
-                nd_target = ofpbuf_put_zeros(b, sizeof *nd_target);
+                nd_target = dp_packet_put_zeros(p, sizeof *nd_target);
                 *nd_target = flow->nd_target;
 
                 if (!eth_addr_is_zero(flow->arp_sha)) {
                     l4_len += 8;
-                    nd_opt = ofpbuf_put_zeros(b, 8);
+                    nd_opt = dp_packet_put_zeros(p, 8);
                     nd_opt->nd_opt_len = 1;
                     nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
                     memcpy(nd_opt + 1, flow->arp_sha, ETH_ADDR_LEN);
                 }
                 if (!eth_addr_is_zero(flow->arp_tha)) {
                     l4_len += 8;
-                    nd_opt = ofpbuf_put_zeros(b, 8);
+                    nd_opt = dp_packet_put_zeros(p, 8);
                     nd_opt->nd_opt_len = 1;
                     nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
                     memcpy(nd_opt + 1, flow->arp_tha, ETH_ADDR_LEN);
                 }
             }
             icmp->icmp6_cksum = (OVS_FORCE uint16_t)
-                csum(icmp, (char *)ofpbuf_tail(b) - (char *)icmp);
+                csum(icmp, (char *)dp_packet_tail(p) - (char *)icmp);
         }
     }
     return l4_len;
@@ -1799,26 +1796,26 @@ flow_compose_l4(struct ofpbuf *b, const struct flow *flow)
  * valid. It hasn't got some checksums filled in, for one, and lots of fields
  * are just zeroed.) */
 void
-flow_compose(struct ofpbuf *b, const struct flow *flow)
+flow_compose(struct dp_packet *p, const struct flow *flow)
 {
     size_t l4_len;
 
     /* eth_compose() sets l3 pointer and makes sure it is 32-bit aligned. */
-    eth_compose(b, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
+    eth_compose(p, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
     if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
-        struct eth_header *eth = ofpbuf_l2(b);
-        eth->eth_type = htons(ofpbuf_size(b));
+        struct eth_header *eth = dp_packet_l2(p);
+        eth->eth_type = htons(dp_packet_size(p));
         return;
     }
 
     if (flow->vlan_tci & htons(VLAN_CFI)) {
-        eth_push_vlan(b, htons(ETH_TYPE_VLAN), flow->vlan_tci);
+        eth_push_vlan(p, htons(ETH_TYPE_VLAN), flow->vlan_tci);
     }
 
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         struct ip_header *ip;
 
-        ip = ofpbuf_put_zeros(b, sizeof *ip);
+        ip = dp_packet_put_zeros(p, sizeof *ip);
         ip->ip_ihl_ver = IP_IHL_VER(5, 4);
         ip->ip_tos = flow->nw_tos;
         ip->ip_ttl = flow->nw_ttl;
@@ -1833,17 +1830,17 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
             }
         }
 
-        ofpbuf_set_l4(b, ofpbuf_tail(b));
+        dp_packet_set_l4(p, dp_packet_tail(p));
 
-        l4_len = flow_compose_l4(b, flow);
+        l4_len = flow_compose_l4(p, flow);
 
-        ip = ofpbuf_l3(b);
-        ip->ip_tot_len = htons(b->l4_ofs - b->l3_ofs + l4_len);
+        ip = dp_packet_l3(p);
+        ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + l4_len);
         ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_16aligned_ip6_hdr *nh;
 
-        nh = ofpbuf_put_zeros(b, sizeof *nh);
+        nh = dp_packet_put_zeros(p, sizeof *nh);
         put_16aligned_be32(&nh->ip6_flow, htonl(6 << 28) |
                            htonl(flow->nw_tos << 20) | flow->ipv6_label);
         nh->ip6_hlim = flow->nw_ttl;
@@ -1852,18 +1849,18 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         memcpy(&nh->ip6_src, &flow->ipv6_src, sizeof(nh->ip6_src));
         memcpy(&nh->ip6_dst, &flow->ipv6_dst, sizeof(nh->ip6_dst));
 
-        ofpbuf_set_l4(b, ofpbuf_tail(b));
+        dp_packet_set_l4(p, dp_packet_tail(p));
 
-        l4_len = flow_compose_l4(b, flow);
+        l4_len = flow_compose_l4(p, flow);
 
-        nh = ofpbuf_l3(b);
+        nh = dp_packet_l3(p);
         nh->ip6_plen = htons(l4_len);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct arp_eth_header *arp;
 
-        arp = ofpbuf_put_zeros(b, sizeof *arp);
-        ofpbuf_set_l3(b, arp);
+        arp = dp_packet_put_zeros(p, sizeof *arp);
+        dp_packet_set_l3(p, arp);
         arp->ar_hrd = htons(1);
         arp->ar_pro = htons(ETH_TYPE_IP);
         arp->ar_hln = ETH_ADDR_LEN;
@@ -1882,14 +1879,14 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
     if (eth_type_mpls(flow->dl_type)) {
         int n;
 
-        b->l2_5_ofs = b->l3_ofs;
+        p->l2_5_ofs = p->l3_ofs;
         for (n = 1; n < FLOW_MAX_MPLS_LABELS; n++) {
             if (flow->mpls_lse[n - 1] & htonl(MPLS_BOS_MASK)) {
                 break;
             }
         }
         while (n > 0) {
-            push_mpls(b, flow->dl_type, flow->mpls_lse[--n]);
+            push_mpls(p, flow->dl_type, flow->mpls_lse[--n]);
         }
     }
 }

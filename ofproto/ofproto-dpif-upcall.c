@@ -159,7 +159,7 @@ struct upcall {
     const struct flow *flow;       /* Parsed representation of the packet. */
     const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
     int pmd_id;                    /* Datapath poll mode driver id. */
-    const struct ofpbuf *packet;   /* Packet associated with this upcall. */
+    const struct dp_packet *packet;   /* Packet associated with this upcall. */
     ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
 
     enum dpif_upcall_type type;    /* Datapath type of the upcall. */
@@ -288,7 +288,7 @@ static enum upcall_type classify_upcall(enum dpif_upcall_type type,
                                         const struct nlattr *userdata);
 
 static int upcall_receive(struct upcall *, const struct dpif_backer *,
-                          const struct ofpbuf *packet, enum dpif_upcall_type,
+                          const struct dp_packet *packet, enum dpif_upcall_type,
                           const struct nlattr *userdata, const struct flow *,
                           const ovs_u128 *ufid, const int pmd_id);
 static void upcall_uninit(struct upcall *);
@@ -647,7 +647,6 @@ recv_upcalls(struct handler *handler)
         struct dpif_upcall *dupcall = &dupcalls[n_upcalls];
         struct upcall *upcall = &upcalls[n_upcalls];
         struct flow *flow = &flows[n_upcalls];
-        struct pkt_metadata md;
         int error;
 
         ofpbuf_use_stub(recv_buf, recv_stubs[n_upcalls],
@@ -690,8 +689,8 @@ recv_upcalls(struct handler *handler)
             upcall->vsp_adjusted = true;
         }
 
-        md = pkt_metadata_from_flow(flow);
-        flow_extract(&dupcall->packet, &md, flow);
+        pkt_metadata_from_flow(&dupcall->packet.md, flow);
+        flow_extract(&dupcall->packet, flow);
 
         error = process_upcall(udpif, upcall, NULL);
         if (error) {
@@ -704,14 +703,14 @@ recv_upcalls(struct handler *handler)
 cleanup:
         upcall_uninit(upcall);
 free_dupcall:
-        ofpbuf_uninit(&dupcall->packet);
+        dp_packet_uninit(&dupcall->packet);
         ofpbuf_uninit(recv_buf);
     }
 
     if (n_upcalls) {
         handle_upcalls(handler->udpif, upcalls, n_upcalls);
         for (i = 0; i < n_upcalls; i++) {
-            ofpbuf_uninit(&dupcalls[i].packet);
+            dp_packet_uninit(&dupcalls[i].packet);
             ofpbuf_uninit(&recv_bufs[i]);
             upcall_uninit(&upcalls[i]);
         }
@@ -892,7 +891,7 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
  * since the 'upcall->put_actions' remains uninitialized. */
 static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
-               const struct ofpbuf *packet, enum dpif_upcall_type type,
+               const struct dp_packet *packet, enum dpif_upcall_type type,
                const struct nlattr *userdata, const struct flow *flow,
                const ovs_u128 *ufid, const int pmd_id)
 {
@@ -933,7 +932,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     struct xlate_in xin;
 
     stats.n_packets = 1;
-    stats.n_bytes = ofpbuf_size(upcall->packet);
+    stats.n_bytes = dp_packet_size(upcall->packet);
     stats.used = time_msec();
     stats.tcp_flags = ntohs(upcall->flow->tcp_flags);
 
@@ -964,12 +963,12 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
      *
      * Copy packets before they are modified by execution. */
     if (upcall->xout.fail_open) {
-        const struct ofpbuf *packet = upcall->packet;
+        const struct dp_packet *packet = upcall->packet;
         struct ofproto_packet_in *pin;
 
         pin = xmalloc(sizeof *pin);
-        pin->up.packet = xmemdup(ofpbuf_data(packet), ofpbuf_size(packet));
-        pin->up.packet_len = ofpbuf_size(packet);
+        pin->up.packet = xmemdup(dp_packet_data(packet), dp_packet_size(packet));
+        pin->up.packet_len = dp_packet_size(packet);
         pin->up.reason = OFPR_NO_MATCH;
         pin->up.table_id = 0;
         pin->up.cookie = OVS_BE64_MAX;
@@ -1008,7 +1007,7 @@ upcall_uninit(struct upcall *upcall)
 }
 
 static int
-upcall_cb(const struct ofpbuf *packet, const struct flow *flow, ovs_u128 *ufid,
+upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufid,
           int pmd_id, enum dpif_upcall_type type,
           const struct nlattr *userdata, struct ofpbuf *actions,
           struct flow_wildcards *wc, struct ofpbuf *put_actions, void *aux)
@@ -1069,7 +1068,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
                struct ofpbuf *odp_actions)
 {
     const struct nlattr *userdata = upcall->userdata;
-    const struct ofpbuf *packet = upcall->packet;
+    const struct dp_packet *packet = upcall->packet;
     const struct flow *flow = upcall->flow;
 
     switch (classify_upcall(upcall->type, userdata)) {
@@ -1162,7 +1161,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
     n_ops = 0;
     for (i = 0; i < n_upcalls; i++) {
         struct upcall *upcall = &upcalls[i];
-        const struct ofpbuf *packet = upcall->packet;
+        const struct dp_packet *packet = upcall->packet;
         struct ukey_op *op;
 
         if (upcall->vsp_adjusted) {
@@ -1172,7 +1171,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
              * VLAN.  So, we must remove the VLAN header from the packet before
              * trying to execute the actions. */
             if (ofpbuf_size(upcall->xout.odp_actions)) {
-                eth_pop_vlan(CONST_CAST(struct ofpbuf *, upcall->packet));
+                eth_pop_vlan(CONST_CAST(struct dp_packet *, upcall->packet));
             }
 
             /* Remove the flow vlan tags inserted by vlan splinter logic
@@ -1209,9 +1208,9 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op = &ops[n_ops++];
             op->ukey = NULL;
             op->dop.type = DPIF_OP_EXECUTE;
-            op->dop.u.execute.packet = CONST_CAST(struct ofpbuf *, packet);
+            op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
-                                    &op->dop.u.execute.md);
+                                    &op->dop.u.execute.packet->md);
             op->dop.u.execute.actions = ofpbuf_data(upcall->xout.odp_actions);
             op->dop.u.execute.actions_len = ofpbuf_size(upcall->xout.odp_actions);
             op->dop.u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;

@@ -866,7 +866,7 @@ struct rstp {
     struct ovs_refcount ref_cnt;
 
     /* Interface to client. */
-    void (*send_bpdu)(struct ofpbuf *bpdu, void *port_aux, void *rstp_aux);
+    void (*send_bpdu)(struct dp_packet *bpdu, void *port_aux, void *rstp_aux);
     void *aux;
 
     bool root_changed;

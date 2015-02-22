@@ -1191,7 +1191,7 @@ struct ofproto_class {
      *
      * Returns 0 if successful, otherwise an OpenFlow error code. */
     enum ofperr (*rule_execute)(struct rule *rule, const struct flow *flow,
-                                struct ofpbuf *packet);
+                                struct dp_packet *packet);
 
     /* If the datapath can properly implement changing 'rule''s actions to the
      * 'ofpacts_len' bytes in 'ofpacts', returns 0.  Otherwise, returns an enum
@@ -1292,7 +1292,7 @@ struct ofproto_class {
      * statistics should not be included in OpenFlow flow statistics.
      *
      * Returns 0 if successful, otherwise an OpenFlow error code. */
-    enum ofperr (*packet_out)(struct ofproto *ofproto, struct ofpbuf *packet,
+    enum ofperr (*packet_out)(struct ofproto *ofproto, struct dp_packet *packet,
                               const struct flow *flow,
                               const struct ofpact *ofpacts,
                               size_t ofpacts_len);

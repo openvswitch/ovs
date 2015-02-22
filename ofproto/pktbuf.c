@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include "coverage.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "dp-packet.h"
 #include "timeval.h"
 #include "util.h"
 #include "openvswitch/vconn.h"
@@ -48,7 +48,7 @@ COVERAGE_DEFINE(pktbuf_reuse_error);
 #define OVERWRITE_MSECS 5000
 
 struct packet {
-    struct ofpbuf *buffer;
+    struct dp_packet *buffer;
     uint32_t cookie;
     long long int timeout;
     ofp_port_t in_port;
@@ -79,7 +79,7 @@ pktbuf_destroy(struct pktbuf *pb)
         size_t i;
 
         for (i = 0; i < PKTBUF_CNT; i++) {
-            ofpbuf_delete(pb->packets[i].buffer);
+            dp_packet_delete(pb->packets[i].buffer);
         }
         free(pb);
     }
@@ -112,7 +112,7 @@ pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
         if (time_msec() < p->timeout) {
             return UINT32_MAX;
         }
-        ofpbuf_delete(p->buffer);
+        dp_packet_delete(p->buffer);
     }
 
     /* Don't use maximum cookie value since all-1-bits ID is special. */
@@ -121,7 +121,7 @@ pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
     }
 
     /* Use 2 bytes of headroom to 32-bit align the L3 header. */
-    p->buffer = ofpbuf_clone_data_with_headroom(buffer, buffer_size, 2);
+    p->buffer = dp_packet_clone_data_with_headroom(buffer, buffer_size, 2);
 
     p->timeout = time_msec() + OVERWRITE_MSECS;
     p->in_port = in_port;
@@ -169,7 +169,7 @@ pktbuf_get_null(void)
  *
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
 enum ofperr
-pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
+pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct dp_packet **bufferp,
                 ofp_port_t *in_port)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 20);
@@ -190,7 +190,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
 
     p = &pb->packets[id & PKTBUF_MASK];
     if (p->cookie == id >> PKTBUF_BITS) {
-        struct ofpbuf *buffer = p->buffer;
+        struct dp_packet *buffer = p->buffer;
         if (buffer) {
             *bufferp = buffer;
             if (in_port) {
@@ -228,7 +228,7 @@ pktbuf_discard(struct pktbuf *pb, uint32_t id)
 {
     struct packet *p = &pb->packets[id & PKTBUF_MASK];
     if (p->cookie == id >> PKTBUF_BITS) {
-        ofpbuf_delete(p->buffer);
+        dp_packet_delete(p->buffer);
         p->buffer = NULL;
     }
 }
