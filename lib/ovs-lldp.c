@@ -307,15 +307,13 @@ aa_print_isid_status_port_isid(struct lldp *lldp, struct lldpd_port *port)
                   mapping->isid_vlan_data.vlan,
                   mapping->isid_vlan_data.status);
 
-        /* Update the status of our internal state for the mapping.
-         */
+        /* Update the status of our internal state for the mapping. */
         if (m) {
-            VLOG_INFO("Setting status for ISID=%u to %u",
-                      isid,
-                      mapping->isid_vlan_data.status);
+            VLOG_INFO("Setting status for ISID=%"PRIu32" to %"PRIu16,
+                      isid, mapping->isid_vlan_data.status);
             m->status = mapping->isid_vlan_data.status;
         } else {
-            VLOG_WARN("Couldn't find mapping for I-SID=%u", isid);
+            VLOG_WARN("Couldn't find mapping for I-SID=%"PRIu32, isid);
         }
     }
 }
