@@ -69,7 +69,7 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
     time_t now = time_now();
 
     VLOG_DBG("cleanup remote port on %s", hw->h_ifname);
-    LIST_FOR_EACH_SAFE (port, port_next, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH_SAFE (port, port_next, p_entries, &hw->h_rports) {
         bool del = all;
         if (!all && expire &&
             (now >= port->p_lastupdate + port->p_chassis->c_ttl)) {
@@ -90,7 +90,7 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
         }
     }
     if (all) {
-        list_init(&hw->h_rports.p_entries);
+        list_init(&hw->h_rports);
     }
 }
 

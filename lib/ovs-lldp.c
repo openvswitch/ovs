@@ -200,7 +200,7 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
 {
     struct lldpd_port *port;
 
-    LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
         if (memcmp(&port->p_element.system_id,
                    &system_id_null,
                    sizeof port->p_element.system_id)) {
@@ -291,7 +291,7 @@ aa_print_isid_status_port(struct lldp *lldp, struct lldpd_hardware *hw)
 {
     struct lldpd_port *port;
 
-    LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
         aa_print_isid_status_port_isid(lldp, port);
     }
 }

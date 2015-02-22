@@ -90,7 +90,7 @@ lldpd_alloc_hardware(struct lldpd *cfg, char *name, int index)
     hw->h_lport.p_chassis = (struct lldpd_chassis *)
     list_front(&cfg->g_chassis.list);
     hw->h_lport.p_chassis->c_refcount++;
-    list_init(&hw->h_rports.p_entries);
+    list_init(&hw->h_rports);
 
     return hw;
 }
@@ -259,7 +259,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
         s -= 4;
     }
 
-    LIST_FOR_EACH (oport, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (oport, p_entries, &hw->h_rports) {
         if ((oport->p_lastframe != NULL) &&
             (oport->p_lastframe->size == s) &&
             (memcmp(oport->p_lastframe->frame, frame, s) == 0)) {
@@ -301,7 +301,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     /* Do we already have the same MSAP somewhere? */
     VLOG_DBG("search for the same MSAP");
 
-    LIST_FOR_EACH (oport, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (oport, p_entries, &hw->h_rports) {
         if (port->p_protocol == oport->p_protocol) {
             count++;
             if ((port->p_id_subtype == oport->p_id_subtype) &&
@@ -386,7 +386,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     port->p_lastframe = xmalloc(s + sizeof(struct lldpd_frame));
     port->p_lastframe->size = s;
     memcpy(port->p_lastframe->frame, frame, s);
-    list_insert(&hw->h_rports.p_entries, &port->p_entries);
+    list_insert(&hw->h_rports, &port->p_entries);
 
     port->p_chassis = chassis;
     port->p_chassis->c_refcount++;
@@ -404,7 +404,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
      * of the chassis that was attached to it is decreased.
      */
     /* coverity[use_after_free] TAILQ_REMOVE does the right thing */
-    i = list_size((struct ovs_list *) &hw->h_rports);
+    i = list_size(&hw->h_rports);
     VLOG_DBG("%"PRIuSIZE " neighbors for %s", i, hw->h_ifname);
 
     if (!oport)  {
@@ -432,7 +432,7 @@ lldpd_hide_ports(struct lldpd *cfg,
         protocols[i] = 0;
     }
 
-    LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
         protocols[port->p_protocol]++;
     }
 
@@ -460,7 +460,7 @@ lldpd_hide_ports(struct lldpd *cfg,
     }
 
     /* We set the p_hidden flag to 1 if the protocol is disabled */
-    LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
         if (mask == SMART_OUTGOING) {
             port->p_hidden_out = protocols[port->p_protocol] ? false : true;
         } else {
@@ -473,7 +473,7 @@ lldpd_hide_ports(struct lldpd *cfg,
         (SMART_OUTGOING_ONE_NEIGH | SMART_INCOMING_ONE_NEIGH)) {
         found = false;
 
-        LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+        LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
             if (mask == SMART_OUTGOING) {
                 if (found) {
                     port->p_hidden_out = true;
@@ -499,7 +499,7 @@ lldpd_hide_ports(struct lldpd *cfg,
     }
 
     k = j = 0;
-    LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+    LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
         if (!(((mask == SMART_OUTGOING) && port->p_hidden_out) ||
               ((mask == SMART_INCOMING) && port->p_hidden_in))) {
             k++;
@@ -609,7 +609,7 @@ lldpd_send(struct lldpd_hardware *hw, struct dp_packet *p)
             }
         }
 
-        LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
+        LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
             /* If this remote port is disabled, we don't consider it */
             if (port->p_hidden_out) {
                 continue;

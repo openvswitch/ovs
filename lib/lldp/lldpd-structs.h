@@ -203,7 +203,7 @@ struct lldpd_hardware {
                                       * is a change
                                       */
     struct lldpd_port h_lport;  /* Port attached to this hardware port */
-    struct lldpd_port h_rports; /* Remote ports */
+    struct ovs_list h_rports;   /* Contains "struct lldp_port"s. */
 };
 
 struct lldpd_interface;
