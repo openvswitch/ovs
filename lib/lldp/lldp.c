@@ -246,8 +246,8 @@ lldp_send(struct lldpd *global OVS_UNUSED,
         /* Element type should be first 4 most significant bits, so bitwise OR
          * that with the first 4 bits of the 12-bit-wide mgmt_vlan
          */
-        aa_element_first_byte = ((port->p_element.type & 0xF) << 4) |
-            ((port->p_element.mgmt_vlan >> 8) & 0xF);
+        aa_element_first_byte = (((port->p_element.type & 0xF) << 4) |
+                                 ((port->p_element.mgmt_vlan >> 8) & 0xF));
 
         /* Second byte should just be the remaining 8 bits of .mgmt_vlan */
         aa_element_second_byte = port->p_element.mgmt_vlan & 0x0FF;

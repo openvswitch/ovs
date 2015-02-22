@@ -218,14 +218,10 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
             chassisid_to_string((uint8_t *) &port->p_element.system_id,
                 sizeof port->p_element.system_id, &system);
 
-            ds_put_format(ds,
-                          "\tAuto Attach Primary Server Id: %s\n",
-                          id);
-            ds_put_format(ds,
-                          "\tAuto Attach Primary Server Descr: %s\n",
+            ds_put_format(ds, "\tAuto Attach Primary Server Id: %s\n", id);
+            ds_put_format(ds, "\tAuto Attach Primary Server Descr: %s\n",
                           descr);
-            ds_put_format(ds,
-                          "\tAuto Attach Primary Server System Id: %s\n",
+            ds_put_format(ds, "\tAuto Attach Primary Server System Id: %s\n",
                           system);
 
             free(id);
@@ -405,15 +401,13 @@ update_mapping_on_lldp(struct lldp *lldp, struct lldpd_hardware *hardware,
     /* TODO Should be done in the Auto Attach state machine when a mapping goes
      * from "pending" to "active".
      */
-    {
-        struct bridge_aa_vlan *node = xmalloc(sizeof *node);
+    struct bridge_aa_vlan *node = xmalloc(sizeof *node);
 
-        node->port_name = xstrdup(hardware->h_ifname);
-        node->vlan = m->vlan;
-        node->oper = BRIDGE_AA_VLAN_OPER_ADD;
+    node->port_name = xstrdup(hardware->h_ifname);
+    node->vlan = m->vlan;
+    node->oper = BRIDGE_AA_VLAN_OPER_ADD;
 
-        list_push_back(&lldp->active_mapping_queue, &node->list_node);
-    }
+    list_push_back(&lldp->active_mapping_queue, &node->list_node);
 }
 
 /* Bridge will poll the list of VLAN that needs to be auto configure based on
@@ -587,15 +581,13 @@ aa_mapping_unregister_mapping(struct lldp *lldp,
             /* TODO Should be done in the AA SM when a mapping goes
              * from "pending" to "active".
              */
-            {
-                struct bridge_aa_vlan *node = xmalloc(sizeof *node);
+            struct bridge_aa_vlan *node = xmalloc(sizeof *node);
 
-                node->port_name = xstrdup(hw->h_ifname);
-                node->vlan = (uint32_t) m->vlan;
-                node->oper = BRIDGE_AA_VLAN_OPER_REMOVE;
+            node->port_name = xstrdup(hw->h_ifname);
+            node->vlan = m->vlan;
+            node->oper = BRIDGE_AA_VLAN_OPER_REMOVE;
 
-                list_push_back(&lldp->active_mapping_queue, &node->list_node);
-            }
+            list_push_back(&lldp->active_mapping_queue, &node->list_node);
 
             break;
         }

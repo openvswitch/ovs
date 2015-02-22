@@ -156,13 +156,13 @@ struct lldpd_frame {
 struct lldpd_hardware;
 struct lldpd;
 struct lldpd_ops {
-    int(*send)(struct lldpd *,
-               struct lldpd_hardware*,
-               char *, size_t); /* Function to send a frame */
-    int(*recv)(struct lldpd *,
-               struct lldpd_hardware*,
-               int, char *, size_t); /* Function to receive a frame */
-    int(*cleanup)(struct lldpd *, struct lldpd_hardware *); /* Cleanup */
+    int (*send)(struct lldpd *,
+                struct lldpd_hardware *,
+                char *, size_t); /* Function to send a frame */
+    int (*recv)(struct lldpd *,
+                struct lldpd_hardware *,
+                int, char *, size_t); /* Function to receive a frame */
+    int (*cleanup)(struct lldpd *, struct lldpd_hardware *); /* Cleanup */
 };
 
 /* An interface is uniquely identified by h_ifindex, h_ifname and h_ops. This
