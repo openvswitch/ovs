@@ -26,7 +26,7 @@
 #define ETH_TYPE_LLDP   0x88cc
 
 /* Dummy MAC addresses */
-static char chassis_mac[ETH_ADDR_LEN] = { 0x5e, 0x10, 0x8e, 0xe7, 0x84, 0xad };
+static uint8_t chassis_mac[ETH_ADDR_LEN] = { 0x5e, 0x10, 0x8e, 0xe7, 0x84, 0xad };
 static uint8_t eth_src[ETH_ADDR_LEN] = { 0x5e, 0x10, 0x8e, 0xe7, 0x84, 0xad };
 
 /* LLDP multicast address */
@@ -61,7 +61,7 @@ check_received_chassis(struct lldpd_chassis *schassis,
 {
     assert(rchassis->c_id_subtype == schassis->c_id_subtype);
     assert(rchassis->c_id_len == schassis->c_id_len);
-    assert(strncmp(rchassis->c_id, schassis->c_id, schassis->c_id_len) == 0);
+    assert(memcmp(rchassis->c_id, schassis->c_id, schassis->c_id_len) == 0);
     assert(strcmp(rchassis->c_name, schassis->c_name) == 0);
     assert(strcmp(rchassis->c_descr, schassis->c_descr) == 0);
     assert(rchassis->c_cap_available == schassis->c_cap_available);

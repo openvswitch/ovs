@@ -207,7 +207,7 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
 
             if (port->p_chassis) {
                 if (port->p_chassis->c_id_len > 0) {
-                    chassisid_to_string((uint8_t *) port->p_chassis->c_id,
+                    chassisid_to_string(port->p_chassis->c_id,
                                         port->p_chassis->c_id_len, &id);
                 }
 
@@ -808,7 +808,7 @@ lldp_create(const struct netdev *netdev,
     lchassis->c_id_subtype = LLDP_CHASSISID_SUBTYPE_LLADDR;
     lchassis->c_id_len = ETH_ADDR_LEN;
     lchassis->c_id = xmalloc(ETH_ADDR_LEN);
-    netdev_get_etheraddr(netdev, (uint8_t *) lchassis->c_id);
+    netdev_get_etheraddr(netdev, lchassis->c_id);
 
     list_init(&lchassis->c_mgmt);
     lchassis->c_ttl = lldp->lldpd->g_config.c_tx_interval *

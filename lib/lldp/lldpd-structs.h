@@ -67,7 +67,7 @@ struct lldpd_chassis {
     u_int16_t       c_index;      /* Monotonic index */
     u_int8_t        c_protocol;   /* Protocol used to get this chassis */
     u_int8_t        c_id_subtype;
-    char            *c_id;
+    uint8_t         *c_id;        /* Typically an Ethernet address. */
     int             c_id_len;
     char            *c_name;
     char            *c_descr;

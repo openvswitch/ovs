@@ -344,7 +344,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     bool ttl_received = false;
     int tlv_size, tlv_type, tlv_subtype;
     u_int8_t *pos, *tlv;
-    char *b;
+    void *b;
     struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map = NULL;
     u_int8_t msg_auth_digest[LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH];
     struct lldpd_mgmt *mgmt;
