@@ -216,8 +216,9 @@ A: Tunnel virtual ports are not supported, as described in the
 
 ### Q: What Linux kernel versions does IPFIX flow monitoring work with?
 
-A: IPFIX flow monitoring requires the Linux kernel module from Open
-   vSwitch version 1.10.90 or later.
+A: IPFIX flow monitoring requires the Linux kernel module from Linux
+   3.10 or later, or the out-of-tree module from Open vSwitch version
+   1.10.90 or later.
 
 ### Q: Should userspace or kernel be upgraded first to minimize downtime?
 
