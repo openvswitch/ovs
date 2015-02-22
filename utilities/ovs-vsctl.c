@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2698,8 +2698,8 @@ cmd_get_aa_mapping(struct vsctl_context *ctx)
 
         for (i = 0; i < br->br_cfg->auto_attach->n_mappings; i++) {
             ds_put_format(&ctx->output, "%"PRId64" %"PRId64"\n",
-                          (long int) br->br_cfg->auto_attach->key_mappings[i],
-                          (long int) br->br_cfg->auto_attach->value_mappings[i]);
+                          br->br_cfg->auto_attach->key_mappings[i],
+                          br->br_cfg->auto_attach->value_mappings[i]);
         }
     }
 }
