@@ -482,16 +482,12 @@ aa_configure(const struct aa_settings *s)
 
         LIST_FOR_EACH (chassis, list, &lldp->lldpd->g_chassis.list) {
             /* System Description */
-            if (chassis->c_descr) {
-                free(chassis->c_descr);
-            }
+            free(chassis->c_descr);
             chassis->c_descr = s->system_description[0] ?
                 xstrdup(s->system_description) : xstrdup(PACKAGE_STRING);
 
             /* System Name */
-            if (chassis->c_name) {
-                free(chassis->c_name);
-            }
+            free(chassis->c_name);
             chassis->c_name = xstrdup(s->system_name);
         }
     }
