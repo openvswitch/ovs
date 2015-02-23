@@ -28,7 +28,7 @@
 #include "timer.h"
 
 /* Transmit every LLDPD_TX_INTERVAL seconds. */
-#define LLDP_DEFAULT_TRANSMIT_INTERVAL_MS LLDPD_TX_INTERVAL * 1000
+#define LLDP_DEFAULT_TRANSMIT_INTERVAL_MS (LLDPD_TX_INTERVAL * 1000)
 
 struct flow;
 struct netdev;

@@ -38,7 +38,7 @@
 
 #define LLDPD_TX_INTERVAL      5
 #define LLDPD_TX_HOLD          4
-#define LLDPD_TTL              LLDPD_TX_INTERVAL * LLDPD_TX_HOLD
+#define LLDPD_TTL              (LLDPD_TX_INTERVAL * LLDPD_TX_HOLD)
 
 #define PROTO_SEND_SIG struct lldpd *, struct lldpd_hardware *,struct dp_packet *
 #define PROTO_DECODE_SIG struct lldpd *, char *, int, struct lldpd_hardware *,\
