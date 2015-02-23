@@ -104,11 +104,6 @@ struct lldpd_port {
     struct ovs_list p_isid_vlan_maps; /* Contains "struct lldpd_aa_isid_vlan_maps_tlv"s. */
 };
 
-/* Used to modify some port related settings */
-struct lldpd_port_set {
-    char *ifname;
-};
-
 /* Smart mode / Hide mode */
 #define SMART_INCOMING_FILTER     (1<<0) /* Incoming filtering enabled */
 #define SMART_INCOMING_ONE_PROTO  (1<<1) /* On reception, keep only 1 proto */

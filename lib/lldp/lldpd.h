@@ -27,7 +27,6 @@
 #include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/un.h>
 #include "dp-packet.h"
 #include "list.h"
 #include "lldpd-structs.h"
@@ -35,27 +34,11 @@
 #include "packets.h"
 #include "openvswitch/vlog.h"
 
-#define SYSCONFDIR       ""
-#define LLDPD_CTL_SOCKET ""
-#define LLDPCLI_PATH     ""
-#define PRIVSEP_USER     ""
-#define PRIVSEP_GROUP    ""
-#define PRIVSEP_CHROOT   ""
-
 #define ETHERTYPE_LLDP 0x88cc
-
-struct event;
-struct event_base;
 
 #define LLDPD_TX_INTERVAL      5
 #define LLDPD_TX_HOLD          4
 #define LLDPD_TTL              LLDPD_TX_INTERVAL * LLDPD_TX_HOLD
-#define LLDPD_TX_MSGDELAY      1
-#define LLDPD_MAX_NEIGHBORS    4
-#define LLDPD_FAST_TX_INTERVAL 1
-#define LLDPD_FAST_INIT        4
-
-#define USING_AGENTX_SUBAGENT_MODULE 1
 
 #define PROTO_SEND_SIG struct lldpd *, struct lldpd_hardware *,struct dp_packet *
 #define PROTO_DECODE_SIG struct lldpd *, char *, int, struct lldpd_hardware *,\

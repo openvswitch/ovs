@@ -24,23 +24,15 @@
 #include "hmap.h"
 #include "list.h"
 #include "lldp/lldpd.h"
-#include "ovsdb-data.h"
-#include "ovs-thread.h"
 #include "packets.h"
 #include "timer.h"
 
 /* Transmit every LLDPD_TX_INTERVAL seconds. */
 #define LLDP_DEFAULT_TRANSMIT_INTERVAL_MS LLDPD_TX_INTERVAL * 1000
 
-struct flow_wildcards;
 struct flow;
 struct netdev;
 struct smap;
-
-struct lldp_status {
-    /* TODO should reflect lldp stack detail */
-    char *stackdetail; /* Added because MSVC doesn't like empty structs */
-};
 
 /* Structure per LLDP instance (at the moment per port when enabled).
  */
