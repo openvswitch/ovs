@@ -66,9 +66,8 @@ lldpd_get_hardware(struct lldpd *cfg, char *name, int index,
     struct lldpd_hardware *hw;
 
     LIST_FOR_EACH (hw, h_entries, &cfg->g_hardware.h_entries) {
-        if ((strcmp(hw->h_ifname, name) == 0) &&
-            (hw->h_ifindex == index) &&
-            ((!ops) || (ops == hw->h_ops))) {
+        if (!strcmp(hw->h_ifname, name) && hw->h_ifindex == index
+            && (!ops || ops == hw->h_ops)) {
             return hw;
         }
     }
@@ -260,9 +259,9 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     }
 
     LIST_FOR_EACH (oport, p_entries, &hw->h_rports) {
-        if ((oport->p_lastframe != NULL) &&
-            (oport->p_lastframe->size == s) &&
-            (memcmp(oport->p_lastframe->frame, frame, s) == 0)) {
+        if (oport->p_lastframe &&
+            oport->p_lastframe->size == s &&
+            !memcmp(oport->p_lastframe->frame, frame, s)) {
             /* Already received the same frame */
             VLOG_DBG("duplicate frame, no need to decode");
             oport->p_lastupdate = time_now();
@@ -304,13 +303,13 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     LIST_FOR_EACH (oport, p_entries, &hw->h_rports) {
         if (port->p_protocol == oport->p_protocol) {
             count++;
-            if ((port->p_id_subtype == oport->p_id_subtype) &&
-                (port->p_id_len == oport->p_id_len) &&
-                (memcmp(port->p_id, oport->p_id, port->p_id_len) == 0) &&
-                (chassis->c_id_subtype == oport->p_chassis->c_id_subtype) &&
-                (chassis->c_id_len == oport->p_chassis->c_id_len) &&
-                (memcmp(chassis->c_id, oport->p_chassis->c_id,
-                chassis->c_id_len) == 0)) {
+            if (port->p_id_subtype == oport->p_id_subtype &&
+                port->p_id_len == oport->p_id_len &&
+                !memcmp(port->p_id, oport->p_id, port->p_id_len) &&
+                chassis->c_id_subtype == oport->p_chassis->c_id_subtype &&
+                chassis->c_id_len == oport->p_chassis->c_id_len &&
+                !memcmp(chassis->c_id, oport->p_chassis->c_id,
+                        chassis->c_id_len)) {
                 ochassis = oport->p_chassis;
                 VLOG_DBG("MSAP is already known");
                 found = true;
@@ -446,7 +445,7 @@ lldpd_hide_ports(struct lldpd *cfg,
         }
     }
     for (i = 0; i <= LLDPD_MODE_MAX; i++) {
-        if ((protocols[i] == min) && !found) {
+        if (protocols[i] == min && !found) {
             /* If we need a tie breaker, we take the first protocol only */
             if (cfg->g_config.c_smart & mask &
                 (SMART_OUTGOING_ONE_PROTO | SMART_INCOMING_ONE_PROTO)) {
@@ -499,8 +498,8 @@ lldpd_hide_ports(struct lldpd *cfg,
 
     k = j = 0;
     LIST_FOR_EACH (port, p_entries, &hw->h_rports) {
-        if (!(((mask == SMART_OUTGOING) && port->p_hidden_out) ||
-              ((mask == SMART_INCOMING) && port->p_hidden_in))) {
+        if (!((mask == SMART_OUTGOING && port->p_hidden_out) ||
+              (mask == SMART_INCOMING && port->p_hidden_in))) {
             k++;
             protocols[port->p_protocol] = 1;
         }

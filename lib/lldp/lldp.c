@@ -412,7 +412,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
         case LLDP_TLV_PORT_ID:
             CHECK_TLV_SIZE(2, "Port Id");
             tlv_subtype = PEEK_UINT8;
-            if ((tlv_subtype == 0) || (tlv_subtype > 7)) {
+            if (tlv_subtype == 0 || tlv_subtype > 7) {
                 VLOG_WARN("unknown subtype for tlv id received on %s",
                           hardware->h_ifname);
                 goto malformed;
@@ -541,7 +541,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                      */
                     num_mappings = tlv_size - 4 -
                         LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH;
-                    if ((num_mappings % 5) != 0) {
+                    if (num_mappings % 5 != 0) {
                         VLOG_INFO("malformed vlan-isid mappings tlv received");
                         goto malformed;
                     }
@@ -599,10 +599,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     }
 
     /* Some random check */
-    if ((chassis->c_id == NULL) ||
-        (port->p_id == NULL) ||
-        (!ttl_received) ||
-        (gotend == 0)) {
+    if (!chassis->c_id || !port->p_id || !ttl_received || !gotend) {
         VLOG_WARN("some mandatory tlv are missing for frame received "
                   "on %s", hardware->h_ifname);
         goto malformed;
