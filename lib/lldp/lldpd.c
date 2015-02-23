@@ -599,7 +599,7 @@ lldpd_send(struct lldpd_hardware *hw, struct dp_packet *p)
         /* We send only if we have at least one remote system
          * speaking this protocol or if the protocol is forced */
         if (cfg->g_protocols[i].enabled > 1) {
-            if ((lldp_size = cfg->g_protocols[i].send(cfg, hw, p)) != E2BIG) {
+            if ((lldp_size = cfg->g_protocols[i].send(cfg, hw, p)) != -E2BIG) {
                 sent++;
                 continue;
             } else {
