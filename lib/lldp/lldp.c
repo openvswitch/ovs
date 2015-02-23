@@ -331,7 +331,9 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     const char avaya_oid[] = LLDP_TLV_ORG_AVAYA;
     const char dcbx[] = LLDP_TLV_ORG_DCBX;
     char orgid[3];
-    int length, gotend = 0, ttl_received = 0, af;
+    int length, af;
+    bool gotend = false;
+    bool ttl_received = false;
     int tlv_size, tlv_type, tlv_subtype;
     u_int8_t *pos, *tlv;
     char *b;
@@ -368,7 +370,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
         goto malformed;
     }
 
-    while (length && (!gotend)) {
+    while (length && !gotend) {
         if (length < 2) {
             VLOG_WARN("tlv header too short received on %s",
                       hardware->h_ifname);
@@ -395,7 +397,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                 VLOG_DBG("extra data after lldp end on %s",
                          hardware->h_ifname);
             }
-            gotend = 1;
+            gotend = true;
             break;
 
         case LLDP_TLV_CHASSIS_ID:
@@ -423,7 +425,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
         case LLDP_TLV_TTL:
             CHECK_TLV_SIZE(2, "TTL");
             chassis->c_ttl = PEEK_UINT16;
-            ttl_received = 1;
+            ttl_received = true;
             break;
 
         case LLDP_TLV_PORT_DESCR:

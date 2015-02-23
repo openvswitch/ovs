@@ -242,7 +242,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     int guess = LLDPD_MODE_LLDP;
     struct eth_header eheader;
     int count = 0;
-    int found = 0;
+    bool found = false;
 
     VLOG_DBG("decode a received frame on %s size %d", hw->h_ifname,s);
 
@@ -316,7 +316,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
                 chassis->c_id_len) == 0)) {
                 ochassis = oport->p_chassis;
                 VLOG_DBG("MSAP is already known");
-                found = 1;
+                found = true;
                 break;
             }
         }
@@ -345,7 +345,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
 
     /* No, but do we already know the system? */
     if (!oport) {
-        int found = 0;
+        bool found = false;
         VLOG_DBG("MSAP is unknown, search for the chassis");
 
         LIST_FOR_EACH (ochassis, list, &cfg->g_chassis.list) {
@@ -354,7 +354,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
                     (chassis->c_id_len == ochassis->c_id_len) &&
                     (memcmp(chassis->c_id, ochassis->c_id,
                     chassis->c_id_len) == 0)) {
-                    found=1;
+                    found = true;
                     break;
                 }
         }
@@ -424,7 +424,8 @@ lldpd_hide_ports(struct lldpd *cfg,
     struct lldpd_port *port;
     int protocols[LLDPD_MODE_MAX + 1];
     char buffer[256];
-    int i, j, k, found = 0;
+    bool found = false;
+    int i, j, k;
     unsigned int min;
 
     VLOG_DBG("apply smart filter for port %s", hw->h_ifname);
@@ -453,7 +454,7 @@ lldpd_hide_ports(struct lldpd *cfg,
             /* If we need a tie breaker, we take the first protocol only */
             if (cfg->g_config.c_smart & mask &
                 (SMART_OUTGOING_ONE_PROTO | SMART_INCOMING_ONE_PROTO)) {
-                found = 1;
+                found = true;
             }
             protocols[i] = 1;
         } else {
@@ -464,32 +465,32 @@ lldpd_hide_ports(struct lldpd *cfg,
     /* We set the p_hidden flag to 1 if the protocol is disabled */
     LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
         if (mask == SMART_OUTGOING) {
-            port->p_hidden_out = protocols[port->p_protocol] ? 0 : 1;
+            port->p_hidden_out = protocols[port->p_protocol] ? false : true;
         } else {
-            port->p_hidden_in = protocols[port->p_protocol] ? 0 : 1;
+            port->p_hidden_in = protocols[port->p_protocol] ? false : true;
         }
     }
 
     /* If we want only one neighbor, we take the first one */
     if (cfg->g_config.c_smart & mask &
         (SMART_OUTGOING_ONE_NEIGH | SMART_INCOMING_ONE_NEIGH)) {
-        found = 0;
+        found = false;
 
         LIST_FOR_EACH (port, p_entries, &hw->h_rports.p_entries) {
             if (mask == SMART_OUTGOING) {
                 if (found) {
-                    port->p_hidden_out = 1;
+                    port->p_hidden_out = true;
                 }
                 if (!port->p_hidden_out) {
-                    found = 1;
+                    found = true;
                 }
             }
             if (mask == SMART_INCOMING) {
                 if (found) {
-                    port->p_hidden_in = 1;
+                    port->p_hidden_in = true;
                 }
                 if (!port->p_hidden_in) {
-                    found = 1;
+                    found = true;
                 }
             }
         }
