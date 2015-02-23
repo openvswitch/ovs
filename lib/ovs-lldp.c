@@ -480,7 +480,7 @@ aa_configure(const struct aa_settings *s)
     HMAP_FOR_EACH (lldp, hmap_node, all_lldps) {
         struct lldpd_chassis *chassis;
 
-        LIST_FOR_EACH (chassis, list, &lldp->lldpd->g_chassis.list) {
+        LIST_FOR_EACH (chassis, list, &lldp->lldpd->g_chassis) {
             /* System Description */
             free(chassis->c_descr);
             chassis->c_descr = s->system_description[0] ?
@@ -803,8 +803,8 @@ lldp_create(const struct netdev *netdev,
                       lldp->lldpd->g_config.c_tx_hold;
     lchassis->c_ttl = LLDP_CHASSIS_TTL;
     lldpd_assign_cfg_to_protocols(lldp->lldpd);
-    list_init(&lldp->lldpd->g_chassis.list);
-    list_push_back(&lldp->lldpd->g_chassis.list, &lchassis->list);
+    list_init(&lldp->lldpd->g_chassis);
+    list_push_back(&lldp->lldpd->g_chassis, &lchassis->list);
 
     if ((hw = lldpd_alloc_hardware(lldp->lldpd,
                                    (char *) netdev_get_name(netdev),
@@ -895,8 +895,8 @@ lldp_create_dummy(void)
     list_init(&lchassis->c_mgmt);
     lchassis->c_ttl = LLDP_CHASSIS_TTL;
     lldpd_assign_cfg_to_protocols(lldp->lldpd);
-    list_init(&lldp->lldpd->g_chassis.list);
-    list_push_back(&lldp->lldpd->g_chassis.list, &lchassis->list);
+    list_init(&lldp->lldpd->g_chassis);
+    list_push_back(&lldp->lldpd->g_chassis, &lchassis->list);
 
     hw = lldpd_alloc_hardware(lldp->lldpd, "dummy-hw", 0);
 

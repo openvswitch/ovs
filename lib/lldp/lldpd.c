@@ -86,7 +86,7 @@ lldpd_alloc_hardware(struct lldpd *cfg, char *name, int index)
     hw->h_cfg = cfg;
     ovs_strlcpy(hw->h_ifname, name, sizeof hw->h_ifname);
     hw->h_ifindex = index;
-    hw->h_lport.p_chassis = CONTAINER_OF(list_front(&cfg->g_chassis.list),
+    hw->h_lport.p_chassis = CONTAINER_OF(list_front(&cfg->g_chassis),
                                          struct lldpd_chassis, list);
     hw->h_lport.p_chassis->c_refcount++;
     list_init(&hw->h_rports);
@@ -150,7 +150,7 @@ lldpd_cleanup(struct lldpd *cfg)
 
     VLOG_DBG("cleanup all chassis");
 
-    LIST_FOR_EACH_SAFE (chassis, chassis_next, list, &cfg->g_chassis.list) {
+    LIST_FOR_EACH_SAFE (chassis, chassis_next, list, &cfg->g_chassis) {
         if (chassis->c_refcount == 0) {
             list_remove(&chassis->list);
             lldpd_chassis_cleanup(chassis, 1);
@@ -344,7 +344,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
         bool found = false;
         VLOG_DBG("MSAP is unknown, search for the chassis");
 
-        LIST_FOR_EACH (ochassis, list, &cfg->g_chassis.list) {
+        LIST_FOR_EACH (ochassis, list, &cfg->g_chassis) {
                 if ((chassis->c_protocol == ochassis->c_protocol) &&
                     (chassis->c_id_subtype == ochassis->c_id_subtype) &&
                     (chassis->c_id_len == ochassis->c_id_len) &&
@@ -375,8 +375,8 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
         VLOG_DBG("unknown chassis, add it to the list");
         chassis->c_index = ++cfg->g_lastrid;
         chassis->c_refcount = 0;
-        list_push_back(&cfg->g_chassis.list, &chassis->list);
-        listsize = list_size(&cfg->g_chassis.list);
+        list_push_back(&cfg->g_chassis, &chassis->list);
+        listsize = list_size(&cfg->g_chassis);
         VLOG_DBG("%"PRIuSIZE " different systems are known", listsize);
     }
 

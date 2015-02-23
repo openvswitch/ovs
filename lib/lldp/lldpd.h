@@ -84,7 +84,7 @@ struct lldpd {
     struct protocol     *g_protocols;
     int                 g_lastrid;
 
-    struct lldpd_chassis g_chassis;
+    struct ovs_list     g_chassis; /* Contains "struct lldp_chassis". */
     struct lldpd_hardware g_hardware;
 };
 
