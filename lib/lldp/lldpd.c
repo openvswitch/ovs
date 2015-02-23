@@ -87,8 +87,8 @@ lldpd_alloc_hardware(struct lldpd *cfg, char *name, int index)
     hw->h_cfg = cfg;
     ovs_strlcpy(hw->h_ifname, name, sizeof hw->h_ifname);
     hw->h_ifindex = index;
-    hw->h_lport.p_chassis = (struct lldpd_chassis *)
-    list_front(&cfg->g_chassis.list);
+    hw->h_lport.p_chassis = CONTAINER_OF(list_front(&cfg->g_chassis.list),
+                                         struct lldpd_chassis, list);
     hw->h_lport.p_chassis->c_refcount++;
     list_init(&hw->h_rports);
 
