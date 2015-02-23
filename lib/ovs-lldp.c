@@ -179,7 +179,7 @@ aa_print_lldp_and_aa_stats(struct ds *ds, struct lldp *lldp)
         return;
     }
 
-    LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware.h_entries) {
+    LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
         ds_put_format(ds, "\ttx cnt: %"PRIu64"\n", hw->h_tx_cnt);
         ds_put_format(ds, "\trx cnt: %"PRIu64"\n", hw->h_rx_cnt);
         ds_put_format(ds, "\trx discarded cnt: %"PRIu64"\n",
@@ -244,7 +244,7 @@ aa_print_element_status(struct ds *ds, struct lldp *lldp) OVS_REQUIRES(mutex)
         return;
     }
 
-    LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware.h_entries) {
+    LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
         aa_print_element_status_port(ds, hw);
     }
 }
@@ -305,7 +305,7 @@ aa_print_isid_status(struct ds *ds, struct lldp *lldp) OVS_REQUIRES(mutex)
 
     ds_put_format(ds, "LLDP: %s\n", lldp->name);
 
-    LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware.h_entries) {
+    LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
         aa_print_isid_status_port(lldp, hw);
     }
 
@@ -546,7 +546,7 @@ aa_mapping_register(void *aux, const struct aa_mapping_settings *s)
                     hash_pointer(m->aux, 0));
 
         /* Configure the mapping on each port of the LLDP stack. */
-        LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware.h_entries) {
+        LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
             update_mapping_on_lldp(lldp, hw, m);
         }
     }
@@ -622,7 +622,7 @@ aa_mapping_unregister(void *aux)
             free(m);
 
             /* Remove from all the lldp instances */
-            LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware.h_entries) {
+            LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
                 if (hw->h_ifname) {
                     VLOG_INFO("\t\t hardware->h_ifname=%s", hw->h_ifname);
                 }
@@ -672,11 +672,8 @@ void
 lldp_process_packet(struct lldp *lldp, const struct dp_packet *p)
 {
     if (lldp) {
-        lldpd_recv(lldp->lldpd,
-                   (struct lldpd_hardware *)
-                       lldp->lldpd->g_hardware.h_entries.next,
-                   (char *) p->data_,
-                   p->size_);
+        lldpd_recv(lldp->lldpd, lldpd_first_hardware(lldp->lldpd),
+                   (char *) p->data_, p->size_);
     }
 }
 
@@ -730,8 +727,7 @@ lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
                 uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     struct lldpd *mylldpd = lldp->lldpd;
-    struct lldpd_hardware *hw = (struct lldpd_hardware *)
-        mylldpd->g_hardware.h_entries.next;
+    struct lldpd_hardware *hw = lldpd_first_hardware(mylldpd);
     uint32_t lldp_size = 0;
     static const uint8_t eth_addr_lldp[6] =
         {0x01, 0x80, 0xC2, 0x00, 0x00, 0x0e};
@@ -838,8 +834,8 @@ lldp_create(const struct netdev *netdev,
     hw->h_lport.p_element.system_id.mlt_id[1] = 0;
 
     list_init(&hw->h_lport.p_isid_vlan_maps);
-    list_init(&lldp->lldpd->g_hardware.h_entries);
-    list_push_back(&lldp->lldpd->g_hardware.h_entries, &hw->h_entries);
+    list_init(&lldp->lldpd->g_hardware);
+    list_push_back(&lldp->lldpd->g_hardware, &hw->h_entries);
 
     ovs_mutex_lock(&mutex);
 
@@ -923,8 +919,8 @@ lldp_create_dummy(void)
     hw->h_lport.p_element.system_id.mlt_id[1] = 0;
 
     list_init(&hw->h_lport.p_isid_vlan_maps);
-    list_init(&lldp->lldpd->g_hardware.h_entries);
-    list_push_back(&lldp->lldpd->g_hardware.h_entries, &hw->h_entries);
+    list_init(&lldp->lldpd->g_hardware);
+    list_push_back(&lldp->lldpd->g_hardware, &hw->h_entries);
 
     return lldp;
 }

@@ -200,14 +200,13 @@ test_aa_send(void)
     lldp = lldp_create_dummy();
     if ((lldp == NULL) ||
         (lldp->lldpd == NULL) ||
-        (lldp->lldpd->g_hardware.h_entries.next == NULL)) {
-
+        list_is_empty(&lldp->lldpd->g_hardware)) {
         printf("Error: unable to create dummy lldp instance");
         return 1;
     }
 
     /* Populate instance with local chassis info */
-    hw = (struct lldpd_hardware *) lldp->lldpd->g_hardware.h_entries.next;
+    hw = lldpd_first_hardware(lldp->lldpd);
     ch = hw->h_lport.p_chassis;
     ch->c_id_subtype = chassis.c_id_subtype;
     ch->c_id = chassis.c_id;

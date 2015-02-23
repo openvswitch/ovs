@@ -85,8 +85,15 @@ struct lldpd {
     int                 g_lastrid;
 
     struct ovs_list     g_chassis; /* Contains "struct lldp_chassis". */
-    struct lldpd_hardware g_hardware;
+    struct ovs_list     g_hardware; /* Contains "struct lldpd_hardware". */
 };
+
+static inline struct lldpd_hardware *
+lldpd_first_hardware(struct lldpd *lldpd)
+{
+    return CONTAINER_OF(list_front(&lldpd->g_hardware),
+                        struct lldpd_hardware, h_entries);
+}
 
 /* lldpd.c */
 struct lldpd_hardware *lldpd_get_hardware(struct lldpd *,

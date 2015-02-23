@@ -65,7 +65,7 @@ lldpd_get_hardware(struct lldpd *cfg, char *name, int index,
 {
     struct lldpd_hardware *hw;
 
-    LIST_FOR_EACH (hw, h_entries, &cfg->g_hardware.h_entries) {
+    LIST_FOR_EACH (hw, h_entries, &cfg->g_hardware) {
         if (!strcmp(hw->h_ifname, name) && hw->h_ifindex == index
             && (!ops || ops == hw->h_ops)) {
             return hw;
@@ -138,7 +138,7 @@ lldpd_cleanup(struct lldpd *cfg)
 
     VLOG_DBG("cleanup all ports");
 
-    LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware.h_entries) {
+    LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware) {
         if (!hw->h_flags) {
             list_remove(&hw->h_entries);
             lldpd_remote_cleanup(hw, NULL, true);
@@ -543,7 +543,7 @@ lldpd_hide_all(struct lldpd *cfg)
 
     VLOG_DBG("apply smart filter results on all ports");
 
-    LIST_FOR_EACH (hw, h_entries, &cfg->g_hardware.h_entries) {
+    LIST_FOR_EACH (hw, h_entries, &cfg->g_hardware) {
         if (cfg->g_config.c_smart & SMART_INCOMING_FILTER) {
             lldpd_hide_ports(cfg, hw, SMART_INCOMING);
         }
