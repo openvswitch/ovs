@@ -517,13 +517,8 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                               port->p_element.mgmt_vlan);
                     PEEK_BYTES(&port->p_element.system_id.system_mac,
                                sizeof port->p_element.system_id.system_mac);
-                    VLOG_INFO("System mac: 0x%.2X%.2X%.2X%.2X%.2X%.2X",
-                              port->p_element.system_id.system_mac[0],
-                              port->p_element.system_id.system_mac[1],
-                              port->p_element.system_id.system_mac[2],
-                              port->p_element.system_id.system_mac[3],
-                              port->p_element.system_id.system_mac[4],
-                              port->p_element.system_id.system_mac[5]);
+                    VLOG_INFO("System mac: "ETH_ADDR_FMT,
+                              ETH_ADDR_ARGS(port->p_element.system_id.system_mac));
                     aa_system_id_word = PEEK_UINT16;
                     port->p_element.system_id.conn_type =
                         aa_system_id_word >> 12;
