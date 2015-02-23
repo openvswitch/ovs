@@ -90,7 +90,7 @@ struct lldpd_port {
     struct lldpd_frame   *p_lastframe; /* Frame received during last update */
     u_int8_t             p_protocol;   /* Protocol used to get this port */
     u_int8_t             p_hidden_in:1; /* Considered hidden for reception */
-    u_int8_t             p_hidden_out:2; /* Considered hidden for emission */
+    u_int8_t             p_hidden_out:1; /* Considered hidden for emission */
     /* Important: all fields that should be ignored to check if a port has
      * been changed should be before p_id_subtype. Check
      * `lldpd_reset_timer()`.
