@@ -403,7 +403,6 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
      * freed with lldpd_port_cleanup() and therefore, the refcount
      * of the chassis that was attached to it is decreased.
      */
-    /* coverity[use_after_free] TAILQ_REMOVE does the right thing */
     i = list_size(&hw->h_rports);
     VLOG_DBG("%"PRIuSIZE " neighbors for %s", i, hw->h_ifname);
 
