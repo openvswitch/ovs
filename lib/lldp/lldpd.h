@@ -80,16 +80,9 @@ struct protocol {
 #define SMART_HIDDEN(port) (port->p_hidden_in)
 
 struct lldpd {
-    int                 g_sock;
     struct lldpd_config g_config;
     struct protocol     *g_protocols;
     int                 g_lastrid;
-
-    /* Unix socket handling */
-    const char          *g_ctlname;
-    int                 g_ctl;
-
-    char                *g_lsb_release;
 
     struct lldpd_chassis g_chassis;
     struct lldpd_hardware g_hardware;
