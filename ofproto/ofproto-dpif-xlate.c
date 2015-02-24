@@ -4545,12 +4545,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
              * packet, so drop it now if forwarding is disabled. */
             if (in_port && (!xport_stp_forward_state(in_port) ||
                             !xport_rstp_forward_state(in_port))) {
+                /* Drop all actions added by do_xlate_actions() above. */
                 ctx.xout->odp_actions->size = sample_actions_len;
+            } else if (ctx.action_set.size) {
+                /* Translate action set only if not dropping the packet. */
+                xlate_action_set(&ctx);
             }
-        }
-
-        if (ctx.action_set.size) {
-            xlate_action_set(&ctx);
         }
 
         if (ctx.xbridge->has_in_band
