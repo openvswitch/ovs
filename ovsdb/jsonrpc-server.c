@@ -314,20 +314,26 @@ ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
     SHASH_FOR_EACH (node, &svr->remotes) {
         struct ovsdb_jsonrpc_remote *remote = node->data;
 
-        if (remote->listener && svr->n_sessions < svr->max_sessions) {
-            struct stream *stream;
-            int error;
+        if (remote->listener) {
+            if (svr->n_sessions < svr->max_sessions) {
+                struct stream *stream;
+                int error;
 
-            error = pstream_accept(remote->listener, &stream);
-            if (!error) {
-                struct jsonrpc_session *js;
-                js = jsonrpc_session_open_unreliably(jsonrpc_open(stream),
-                                                     remote->dscp);
-                ovsdb_jsonrpc_session_create(remote, js);
-            } else if (error != EAGAIN) {
-                VLOG_WARN_RL(&rl, "%s: accept failed: %s",
+                error = pstream_accept(remote->listener, &stream);
+                if (!error) {
+                    struct jsonrpc_session *js;
+                    js = jsonrpc_session_open_unreliably(jsonrpc_open(stream),
+                                                         remote->dscp);
+                    ovsdb_jsonrpc_session_create(remote, js);
+                } else if (error != EAGAIN) {
+                    VLOG_WARN_RL(&rl, "%s: accept failed: %s",
+                                 pstream_get_name(remote->listener),
+                                 ovs_strerror(error));
+                }
+            } else {
+                VLOG_WARN_RL(&rl, "%s: connection exceeded maximum (%d)",
                              pstream_get_name(remote->listener),
-                             ovs_strerror(error));
+                             svr->max_sessions);
             }
         }
 
