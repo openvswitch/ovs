@@ -3307,6 +3307,9 @@ compose_recirculate_action(struct xlate_ctx *ctx,
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "Failed to add post recirculation flow %s",
                     match_to_string(&match, 0));
+        if (!ctx->rule) {
+            ofproto_dpif_free_recirc_id(ctx->xbridge->ofproto, id);
+        }
         return;
     }
     /* If ctx has no rule then associate the recirc id, which
