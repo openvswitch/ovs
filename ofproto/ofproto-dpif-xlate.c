@@ -3684,30 +3684,30 @@ static void
 xlate_sample_action(struct xlate_ctx *ctx,
                     const struct ofpact_sample *os)
 {
-  union user_action_cookie cookie;
-  /* Scale the probability from 16-bit to 32-bit while representing
-   * the same percentage. */
-  uint32_t probability = (os->probability << 16) | os->probability;
+    union user_action_cookie cookie;
+    /* Scale the probability from 16-bit to 32-bit while representing
+     * the same percentage. */
+    uint32_t probability = (os->probability << 16) | os->probability;
 
-  if (!ctx->xbridge->variable_length_userdata) {
-      static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    if (!ctx->xbridge->variable_length_userdata) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
-      VLOG_ERR_RL(&rl, "ignoring NXAST_SAMPLE action because datapath "
-                  "lacks support (needs Linux 3.10+ or kernel module from "
-                  "OVS 1.11+)");
-      return;
-  }
+        VLOG_ERR_RL(&rl, "ignoring NXAST_SAMPLE action because datapath "
+                    "lacks support (needs Linux 3.10+ or kernel module from "
+                    "OVS 1.11+)");
+        return;
+    }
 
-  ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                                        ctx->xout->odp_actions,
-                                        &ctx->xout->wc,
-                                        ctx->xbridge->masked_set_action);
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->xout->odp_actions,
+                                          &ctx->xout->wc,
+                                          ctx->xbridge->masked_set_action);
 
-  compose_flow_sample_cookie(os->probability, os->collector_set_id,
-                             os->obs_domain_id, os->obs_point_id, &cookie);
-  compose_sample_action(ctx->xbridge, ctx->xout->odp_actions, &ctx->xin->flow,
-                        probability, &cookie, sizeof cookie.flow_sample,
-                        ODPP_NONE);
+    compose_flow_sample_cookie(os->probability, os->collector_set_id,
+                               os->obs_domain_id, os->obs_point_id, &cookie);
+    compose_sample_action(ctx->xbridge, ctx->xout->odp_actions,
+                          &ctx->xin->flow, probability, &cookie,
+                          sizeof cookie.flow_sample, ODPP_NONE);
 }
 
 static bool
