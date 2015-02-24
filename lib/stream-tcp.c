@@ -251,6 +251,5 @@ const struct pstream_class pwindows_pstream_class = {
     NULL,
     NULL,
     NULL,
-    NULL,
 };
 #endif
