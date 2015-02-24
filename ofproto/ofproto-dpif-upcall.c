@@ -989,7 +989,12 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
                           &upcall->put_actions);
     }
 
-    upcall->ukey = ukey_create_from_upcall(upcall);
+    /* This function is also called for slow-pathed flows.  As we are only
+     * going to create new datapath flows for actual datapath misses, there is
+     * no point in creating a ukey otherwise. */
+    if (upcall->type == DPIF_UC_MISS) {
+        upcall->ukey = ukey_create_from_upcall(upcall);
+    }
 }
 
 static void
