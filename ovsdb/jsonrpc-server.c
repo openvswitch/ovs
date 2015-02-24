@@ -121,7 +121,7 @@ ovsdb_jsonrpc_server_create(void)
 {
     struct ovsdb_jsonrpc_server *server = xzalloc(sizeof *server);
     ovsdb_server_init(&server->up);
-    server->max_sessions = 64;
+    server->max_sessions = 330;   /* Random limit. */
     shash_init(&server->remotes);
     return server;
 }
