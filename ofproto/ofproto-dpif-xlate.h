@@ -210,11 +210,8 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
                        struct rstp *, const struct mcast_snooping *,
                        const struct mbridge *, const struct dpif_sflow *,
                        const struct dpif_ipfix *, const struct netflow *,
-                       bool forward_bpdu,
-                       bool has_in_band, bool enable_recirc,
-                       bool variable_length_userdata,
-                       size_t mpls_label_stack_length,
-                       bool masked_set_action);
+                       bool forward_bpdu, bool has_in_band,
+                       const struct dpif_backer_support *support);
 void xlate_remove_ofproto(struct ofproto_dpif *);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,

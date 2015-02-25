@@ -271,30 +271,11 @@ struct dpif_backer {
 
     bool recv_set_enable; /* Enables or disables receiving packets. */
 
-    /* Recirculation. */
-    bool enable_recirc;   /* True if the datapath supports recirculation */
-
-    /* True if the datapath supports unique flow identifiers */
-    bool enable_ufid;
-
-    /* True if the datapath supports variable-length
-     * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
-     * False if the datapath supports only 8-byte (or shorter) userdata. */
-    bool variable_length_userdata;
-
-    /* True if the datapath supports masked data in OVS_ACTION_ATTR_SET
-     * actions. */
-    bool masked_set_action;
-
-    /* Maximum number of MPLS label stack entries that the datapath supports
-     * in a match */
-    size_t max_mpls_depth;
-
     /* Version string of the datapath stored in OVSDB. */
     char *dp_version_string;
 
-    /* True if the datapath supports tnl_push and pop actions. */
-    bool enable_tnl_push_pop;
+    /* Datapath feature support. */
+    struct dpif_backer_support support;
     struct atomic_count tnl_count;
 };
 
@@ -370,19 +351,19 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
 size_t
 ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *ofproto)
 {
-    return ofproto->backer->max_mpls_depth;
+    return ofproto->backer->support.max_mpls_depth;
 }
 
 bool
 ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *ofproto)
 {
-    return ofproto->backer->enable_recirc;
+    return ofproto->backer->support.recirc;
 }
 
 bool
 ofproto_dpif_get_enable_ufid(struct dpif_backer *backer)
 {
-    return backer->enable_ufid;
+    return backer->support.ufid;
 }
 
 static void ofproto_trace(struct ofproto_dpif *, struct flow *,
@@ -646,10 +627,7 @@ type_run(const char *type)
                               ofproto->netflow,
                               ofproto->up.forward_bpdu,
                               connmgr_has_in_band(ofproto->up.connmgr),
-                              ofproto->backer->enable_recirc,
-                              ofproto->backer->variable_length_userdata,
-                              ofproto->backer->max_mpls_depth,
-                              ofproto->backer->masked_set_action);
+                              &ofproto->backer->support);
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
@@ -873,10 +851,7 @@ struct odp_garbage {
 };
 
 static bool check_variable_length_userdata(struct dpif_backer *backer);
-static size_t check_max_mpls_depth(struct dpif_backer *backer);
-static bool check_recirc(struct dpif_backer *backer);
-static bool check_ufid(struct dpif_backer *backer);
-static bool check_masked_set_action(struct dpif_backer *backer);
+static void check_support(struct dpif_backer *backer);
 
 static int
 open_dpif_backer(const char *type, struct dpif_backer **backerp)
@@ -971,12 +946,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     shash_add(&all_dpif_backers, type, backer);
 
-    backer->enable_recirc = check_recirc(backer);
-    backer->max_mpls_depth = check_max_mpls_depth(backer);
-    backer->masked_set_action = check_masked_set_action(backer);
-    backer->enable_ufid = check_ufid(backer);
-
-    backer->enable_tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
+    check_support(backer);
     atomic_count_init(&backer->tnl_count, 0);
 
     error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
@@ -994,7 +964,8 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     /* This check fails if performed before udpif threads have been set,
      * as the kernel module checks that the 'pid' in userspace action
      * is non-zero. */
-    backer->variable_length_userdata = check_variable_length_userdata(backer);
+    backer->support.variable_length_userdata
+        = check_variable_length_userdata(backer);
     backer->dp_version_string = dpif_get_dp_version(backer->dpif);
 
     return error;
@@ -1003,7 +974,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 bool
 ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto)
 {
-    return ofproto_use_tnl_push_pop && ofproto->backer->enable_tnl_push_pop &&
+    return ofproto_use_tnl_push_pop && ofproto->backer->support.tnl_push_pop &&
            atomic_count_get(&ofproto->backer->tnl_count);
 }
 
@@ -1226,6 +1197,19 @@ check_masked_set_action(struct dpif_backer *backer)
                   dpif_name(backer->dpif));
     }
     return !error;
+}
+
+static void
+check_support(struct dpif_backer *backer)
+{
+    /* This feature needs to be tested after udpif threads are set. */
+    backer->support.variable_length_userdata = false;
+
+    backer->support.recirc = check_recirc(backer);
+    backer->support.max_mpls_depth = check_max_mpls_depth(backer);
+    backer->support.masked_set_action = check_masked_set_action(backer);
+    backer->support.ufid = check_ufid(backer);
+    backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
 }
 
 static int
