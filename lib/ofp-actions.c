@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2121,7 +2121,7 @@ decode_ofpat_set_field(const struct ofp12_action_set_field *oasf,
         return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
     }
 
-    /* The value must be valid for match.  The OpenFlow 1.5 draft also says,
+    /* The value must be valid for match.  OpenFlow 1.5 also says,
      * "In an OXM_OF_VLAN_VID set-field action, the OFPVID_PRESENT bit must be
      * a 1-bit in oxm_value and in oxm_mask." */
     if (!mf_is_value_valid(sf->field, &sf->value)

@@ -1153,7 +1153,7 @@ least-significant.  \fBxreg1\fR similarly overlays \fBreg2\fR and
 \fBreg3\fR, and so on.
 .IP
 These fields were added in Open vSwitch 2.3 to conform with the
-OpenFlow 1.5 (draft) specification.  OpenFlow 1.5 calls these fields
+OpenFlow 1.5 specification.  OpenFlow 1.5 calls these fields
 just the ``packet registers,'' but Open vSwitch already had 32-bit
 registers by that name, which is why Open vSwitch refers to the
 standard registers as ``extended registers''.
@@ -1174,7 +1174,7 @@ output group in the OpenFlow action set), then the value will be
 \fBUNSET\fR.
 .IP
 This field was introduced in Open vSwitch 2.4 to conform with the
-OpenFlow 1.5 (draft) specification.
+OpenFlow 1.5 specification.
 .
 .IP \fBconj_id=\fIvalue\fR
 Matches the given 32-bit \fIvalue\fR against the conjunction ID.  This
@@ -1485,7 +1485,7 @@ significant 16 bits of register 0 into the VLAN TCI field.
 .IP
 In OpenFlow 1.0 through 1.4, \fBmove\fR ordinarily uses an Open
 vSwitch extension to OpenFlow.  In OpenFlow 1.5, \fBmove\fR uses the
-OpenFlow 1.5 (draft) standard \fBcopy_field\fR action.  The ONF has
+OpenFlow 1.5 standard \fBcopy_field\fR action.  The ONF has
 also made \fBcopy_field\fR available as an extension to OpenFlow 1.3.
 Open vSwitch 2.4 and later understands this extension and uses it if a
 controller uses it, but for backward compatibility with older versions
@@ -2269,7 +2269,7 @@ The 32-bit integer group id of the bucket.  Values greater than
 0xffffff00 are reserved.
 .
 This field was added in Open vSwitch 2.4 to conform with the OpenFlow
-1.5 (draft) specification. It is not supported when earlier versions
+1.5 specification. It is not supported when earlier versions
 of OpenFlow are used.  Open vSwitch will automatically allocate bucket
 ids when they are not specified.
 .IP \fBactions=\fR[\fIaction\fR][\fB,\fIaction\fR...]\fR

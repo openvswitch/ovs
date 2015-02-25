@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -577,7 +577,7 @@ enum OVS_PACKED_ENUM mf_field_id {
 #if FLOW_N_XREGS == 4
     /* "xreg<N>".
      *
-     * OpenFlow 1.5 (draft) ``extended register".  Each extended register
+     * OpenFlow 1.5 ``extended register".  Each extended register
      * overlays two of the Nicira extension 32-bit registers: xreg0 overlays
      * reg0 and reg1, with reg0 supplying the most-significant bits of xreg0
      * and reg1 the least-significant.  xreg1 similarly overlays reg2 and reg3,

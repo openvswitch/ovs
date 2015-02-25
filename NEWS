@@ -25,10 +25,10 @@ Post-v2.3.0
      release.  See ovs-vswitchd(8) for details.
    - OpenFlow:
      * IPv6 flow label and neighbor discovery fields are now modifiable.
-     * OpenFlow 1.5 (draft) extended registers are now supported.
-     * The OpenFlow 1.5 (draft) actset_output field is now supported.
-     * OpenFlow 1.5 (draft) Copy-Field action is now supported.
-     * OpenFlow 1.5 (draft) masked Set-Field action is now supported.
+     * OpenFlow 1.5 extended registers are now supported.
+     * The OpenFlow 1.5 actset_output field is now supported.
+     * OpenFlow 1.5 Copy-Field action is now supported.
+     * OpenFlow 1.5 masked Set-Field action is now supported.
      * OpenFlow 1.3+ table features requests are now supported (read-only).
      * Nicira extension "move" actions may now be included in action sets.
      * "resubmit" actions may now be included in action sets.  The resubmit
