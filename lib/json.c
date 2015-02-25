@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -830,6 +830,7 @@ json_string_unescape(const char *in, size_t in_len, char **outp)
              * lexer will never pass in a string that ends in a single
              * backslash, but json_string_unescape() has other callers that
              * are not as careful.*/
+            ds_clear(&out);
             ds_put_cstr(&out, "quoted string may not end with backslash");
             goto exit;
         }
