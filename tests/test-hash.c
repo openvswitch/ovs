@@ -151,8 +151,8 @@ check_256byte_hash(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
     const int n_bits = 256 * 8;
     int i, j;
 
-    for (i = 0; i < n_bits; i++) {
-        for (j = i + 1; j < n_bits; j++) {
+    for (i = 0; i <= n_bits; i++) {
+        for (j = i + 1; j <= n_bits; j++) {
             OVS_PACKED(struct offset_ovs_u128 {
                 uint32_t a;
                 ovs_u128 b[16];
@@ -161,6 +161,8 @@ check_256byte_hash(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
             ovs_u128 out0, out1, out2;
 
             in0 = in0_data.b;
+            /* When, i or j == n_bits, the set_bit128() will just
+            * zero set the input variables. */
             set_bit128(in0, i);
             set_bit128(in1, i);
             set_bit128(in2, j);
