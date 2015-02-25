@@ -25,7 +25,7 @@ extern "C" {
 
 /* A packet received from a netdev and passed to a dpif. */
 
-struct dpif_packet {
+struct dp_packet {
     struct ofpbuf ofpbuf;       /* Packet data. */
 #ifndef DPDK_NETDEV
     uint32_t dp_hash;           /* Packet hash. */
@@ -33,21 +33,21 @@ struct dpif_packet {
     struct pkt_metadata md;
 };
 
-struct dpif_packet *dpif_packet_new_with_headroom(size_t size,
+struct dp_packet *dp_packet_new_with_headroom(size_t size,
                                                   size_t headroom);
 
-struct dpif_packet *dpif_packet_clone_from_ofpbuf(const struct ofpbuf *b);
+struct dp_packet *dp_packet_clone_from_ofpbuf(const struct ofpbuf *b);
 
-struct dpif_packet *dpif_packet_clone(struct dpif_packet *p);
+struct dp_packet *dp_packet_clone(struct dp_packet *p);
 
-static inline void dpif_packet_delete(struct dpif_packet *p)
+static inline void dp_packet_delete(struct dp_packet *p)
 {
     struct ofpbuf *buf = &p->ofpbuf;
 
     ofpbuf_delete(buf);
 }
 
-static inline uint32_t dpif_packet_get_dp_hash(struct dpif_packet *p)
+static inline uint32_t dp_packet_get_dp_hash(struct dp_packet *p)
 {
 #ifdef DPDK_NETDEV
     return p->ofpbuf.mbuf.pkt.hash.rss;
@@ -56,7 +56,7 @@ static inline uint32_t dpif_packet_get_dp_hash(struct dpif_packet *p)
 #endif
 }
 
-static inline void dpif_packet_set_dp_hash(struct dpif_packet *p,
+static inline void dp_packet_set_dp_hash(struct dp_packet *p,
                                            uint32_t hash)
 {
 #ifdef DPDK_NETDEV
@@ -70,4 +70,4 @@ static inline void dpif_packet_set_dp_hash(struct dpif_packet *p,
 }
 #endif
 
-#endif /* packet-dpif.h */
+#endif /* dp-packet.h */

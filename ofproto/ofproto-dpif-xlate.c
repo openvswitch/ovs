@@ -31,6 +31,7 @@
 #include "cfm.h"
 #include "connmgr.h"
 #include "coverage.h"
+#include "dp-packet.h"
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "in-band.h"
@@ -52,7 +53,6 @@
 #include "ofproto/ofproto-dpif-sflow.h"
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
-#include "packet-dpif.h"
 #include "ovs-router.h"
 #include "tnl-ports.h"
 #include "tunnel.h"
@@ -3196,14 +3196,14 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           uint16_t controller_id)
 {
     struct ofproto_packet_in *pin;
-    struct dpif_packet *packet;
+    struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
     if (!ctx->xin->packet) {
         return;
     }
 
-    packet = dpif_packet_clone_from_ofpbuf(ctx->xin->packet);
+    packet = dp_packet_clone_from_ofpbuf(ctx->xin->packet);
 
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->xout->odp_actions,
@@ -3244,7 +3244,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         }
     }
     ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
-    dpif_packet_delete(packet);
+    dp_packet_delete(packet);
 }
 
 static void

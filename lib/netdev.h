@@ -60,7 +60,7 @@ extern "C" {
  *      netdev and access each of those from a different thread.)
  */
 
-struct dpif_packet;
+struct dp_packet;
 struct netdev;
 struct netdev_class;
 struct netdev_rxq;
@@ -174,21 +174,21 @@ void netdev_rxq_close(struct netdev_rxq *);
 
 const char *netdev_rxq_get_name(const struct netdev_rxq *);
 
-int netdev_rxq_recv(struct netdev_rxq *rx, struct dpif_packet **buffers,
+int netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **buffers,
                     int *cnt);
 void netdev_rxq_wait(struct netdev_rxq *);
 int netdev_rxq_drain(struct netdev_rxq *);
 
 /* Packet transmission. */
-int netdev_send(struct netdev *, int qid, struct dpif_packet **, int cnt,
+int netdev_send(struct netdev *, int qid, struct dp_packet **, int cnt,
                 bool may_steal);
 void netdev_send_wait(struct netdev *, int qid);
 
 int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data);
 int netdev_push_header(const struct netdev *netdev,
-                       struct dpif_packet **buffers, int cnt,
+                       struct dp_packet **buffers, int cnt,
                        const struct ovs_action_push_tnl *data);
-int netdev_pop_header(struct netdev *netdev, struct dpif_packet **buffers,
+int netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers,
                       int cnt);
 
 /* Hardware address. */

@@ -29,6 +29,7 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
+#include "dp-packet.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
@@ -39,7 +40,6 @@
 #include "ofpbuf.h"
 #include "ovs-router.h"
 #include "packets.h"
-#include "packet-dpif.h"
 #include "poll-loop.h"
 #include "route-table.h"
 #include "shash.h"
@@ -944,7 +944,7 @@ reset_tnl_md(struct pkt_metadata *md)
 }
 
 static void
-gre_extract_md(struct dpif_packet *dpif_pkt)
+gre_extract_md(struct dp_packet *dpif_pkt)
 {
     struct ofpbuf *packet = &dpif_pkt->ofpbuf;
     struct pkt_metadata *md = &dpif_pkt->md;
@@ -967,7 +967,7 @@ gre_extract_md(struct dpif_packet *dpif_pkt)
 
 static int
 netdev_gre_pop_header(struct netdev *netdev_ OVS_UNUSED,
-                      struct dpif_packet **pkt, int cnt)
+                      struct dp_packet **pkt, int cnt)
 {
     int i;
 
@@ -996,7 +996,7 @@ netdev_gre_push_header__(struct ofpbuf *packet,
 
 static int
 netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
-                       struct dpif_packet **packets, int cnt,
+                       struct dp_packet **packets, int cnt,
                        const struct ovs_action_push_tnl *data)
 {
     int i;
@@ -1057,7 +1057,7 @@ netdev_gre_build_header(const struct netdev *netdev,
 }
 
 static void
-vxlan_extract_md(struct dpif_packet *dpif_pkt)
+vxlan_extract_md(struct dp_packet *dpif_pkt)
 {
     struct ofpbuf *packet = &dpif_pkt->ofpbuf;
     struct pkt_metadata *md = &dpif_pkt->md;
@@ -1093,7 +1093,7 @@ vxlan_extract_md(struct dpif_packet *dpif_pkt)
 
 static int
 netdev_vxlan_pop_header(struct netdev *netdev_ OVS_UNUSED,
-                        struct dpif_packet **pkt, int cnt)
+                        struct dp_packet **pkt, int cnt)
 {
     int i;
 
@@ -1134,18 +1134,18 @@ netdev_vxlan_build_header(const struct netdev *netdev,
 }
 
 static ovs_be16
-get_src_port(struct dpif_packet *packet)
+get_src_port(struct dp_packet *packet)
 {
     uint32_t hash;
 
-    hash = dpif_packet_get_dp_hash(packet);
+    hash = dp_packet_get_dp_hash(packet);
 
     return htons((((uint64_t) hash * (tnl_udp_port_max - tnl_udp_port_min)) >> 32) +
                  tnl_udp_port_min);
 }
 
 static void
-netdev_vxlan_push_header__(struct dpif_packet *packet,
+netdev_vxlan_push_header__(struct dp_packet *packet,
                            const void *header, int size)
 {
     struct udp_header *udp;
@@ -1161,7 +1161,7 @@ netdev_vxlan_push_header__(struct dpif_packet *packet,
 
 static int
 netdev_vxlan_push_header(const struct netdev *netdev OVS_UNUSED,
-                         struct dpif_packet **packets, int cnt,
+                         struct dp_packet **packets, int cnt,
                          const struct ovs_action_push_tnl *data)
 {
     int i;

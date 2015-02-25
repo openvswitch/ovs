@@ -25,6 +25,7 @@
 
 #include "coverage.h"
 #include "dpctl.h"
+#include "dp-packet.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "netdev.h"
@@ -35,7 +36,6 @@
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "route-table.h"
@@ -1075,7 +1075,7 @@ struct dpif_execute_helper_aux {
 /* This is called for actions that need the context of the datapath to be
  * meaningful. */
 static void
-dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
+dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
@@ -1146,7 +1146,7 @@ static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux = {dpif, 0};
-    struct dpif_packet packet, *pp;
+    struct dp_packet packet, *pp;
 
     COVERAGE_INC(dpif_execute_with_help);
 

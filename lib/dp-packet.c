@@ -15,14 +15,14 @@
  */
 
 #include <config.h>
-#include "packet-dpif.h"
+#include "dp-packet.h"
 
 #include "ofpbuf.h"
 
-struct dpif_packet *
-dpif_packet_new_with_headroom(size_t size, size_t headroom)
+struct dp_packet *
+dp_packet_new_with_headroom(size_t size, size_t headroom)
 {
-    struct dpif_packet *p = xmalloc(sizeof *p);
+    struct dp_packet *p = xmalloc(sizeof *p);
     struct ofpbuf *b = &p->ofpbuf;
 
     ofpbuf_init(b, size + headroom);
@@ -32,10 +32,10 @@ dpif_packet_new_with_headroom(size_t size, size_t headroom)
     return p;
 }
 
-struct dpif_packet *
-dpif_packet_clone_from_ofpbuf(const struct ofpbuf *b)
+struct dp_packet *
+dp_packet_clone_from_ofpbuf(const struct ofpbuf *b)
 {
-    struct dpif_packet *p = xmalloc(sizeof *p);
+    struct dp_packet *p = xmalloc(sizeof *p);
     size_t headroom = ofpbuf_headroom(b);
 
     ofpbuf_init(&p->ofpbuf, ofpbuf_size(b) + headroom);
@@ -57,15 +57,15 @@ dpif_packet_clone_from_ofpbuf(const struct ofpbuf *b)
     return p;
 }
 
-struct dpif_packet *
-dpif_packet_clone(struct dpif_packet *p)
+struct dp_packet *
+dp_packet_clone(struct dp_packet *p)
 {
-    struct dpif_packet *newp;
+    struct dp_packet *newp;
 
-    newp = dpif_packet_clone_from_ofpbuf(&p->ofpbuf);
+    newp = dp_packet_clone_from_ofpbuf(&p->ofpbuf);
     memcpy(&newp->md, &p->md, sizeof p->md);
 
-    dpif_packet_set_dp_hash(newp, dpif_packet_get_dp_hash(p));
+    dp_packet_set_dp_hash(newp, dp_packet_get_dp_hash(p));
 
     return newp;
 }

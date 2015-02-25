@@ -264,13 +264,13 @@ struct netdev_class {
      * a packet on actual transmit.  It uses partial header build by
      * build_header() which is passed as data. */
     int (*push_header)(const struct netdev *netdev,
-                       struct dpif_packet **buffers, int cnt,
+                       struct dp_packet **buffers, int cnt,
                        const struct ovs_action_push_tnl *data);
 
     /* Pop tunnel header from packet, build tunnel metadata and resize packet
      * for further processing. */
     int  (*pop_header)(struct netdev *netdev,
-                       struct dpif_packet **buffers, int cnt);
+                       struct dp_packet **buffers, int cnt);
 
     /* Returns the id of the numa node the 'netdev' is on.  If there is no
      * such info, returns NETDEV_NUMA_UNSPEC. */
@@ -309,7 +309,7 @@ struct netdev_class {
      * network device from being usefully used by the netdev-based "userspace
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
-    int (*send)(struct netdev *netdev, int qid, struct dpif_packet **buffers,
+    int (*send)(struct netdev *netdev, int qid, struct dp_packet **buffers,
                 int cnt, bool may_steal);
 
     /* Registers with the poll loop to wake up from the next call to
@@ -710,7 +710,7 @@ struct netdev_class {
      * Caller is expected to pass array of size MAX_RX_BATCH.
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*rxq_recv)(struct netdev_rxq *rx, struct dpif_packet **pkts,
+    int (*rxq_recv)(struct netdev_rxq *rx, struct dp_packet **pkts,
                     int *cnt);
 
     /* Registers with the poll loop to wake up from the next call to

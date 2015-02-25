@@ -20,6 +20,7 @@
 
 #include <errno.h>
 
+#include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "flow.h"
@@ -29,7 +30,6 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
@@ -808,7 +808,7 @@ netdev_dummy_rxq_dealloc(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **arr,
+netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
                       int *c)
 {
     struct netdev_rxq_dummy *rx = netdev_rxq_dummy_cast(rxq_);
@@ -835,8 +835,8 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **arr,
     dp_packet_pad(packet);
 
     /* This performs a (sometimes unnecessary) copy */
-    arr[0] = dpif_packet_clone_from_ofpbuf(packet);
-    dpif_packet_set_dp_hash(arr[0], 0);
+    arr[0] = dp_packet_clone_from_ofpbuf(packet);
+    dp_packet_set_dp_hash(arr[0], 0);
     ofpbuf_delete(packet);
     *c = 1;
     return 0;
@@ -876,7 +876,7 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 
 static int
 netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
-                  struct dpif_packet **pkts, int cnt, bool may_steal)
+                  struct dp_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     int error = 0;
@@ -925,7 +925,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 
     if (may_steal) {
         for (i = 0; i < cnt; i++) {
-            dpif_packet_delete(pkts[i]);
+            dp_packet_delete(pkts[i]);
         }
     }
 

@@ -24,12 +24,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dp-packet.h"
 #include "dpif.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "odp-netlink.h"
 #include "odp-util.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "flow.h"
 #include "unaligned.h"
@@ -225,7 +225,7 @@ odp_set_nd(struct ofpbuf *packet, const struct ovs_key_nd *key,
 }
 
 static void
-odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
+odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 {
     enum ovs_key_attr type = nl_attr_type(a);
     const struct ovs_key_ipv4 *ipv4_key;
@@ -313,7 +313,7 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
 
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a);
-        dpif_packet_set_dp_hash(packet, md->dp_hash);
+        dp_packet_set_dp_hash(packet, md->dp_hash);
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
@@ -337,7 +337,7 @@ odp_execute_set_action(struct dpif_packet *packet, const struct nlattr *a)
 #define get_mask(a, type) ((const type *)(const void *)(a + 1) + 1)
 
 static void
-odp_execute_masked_set_action(struct dpif_packet *packet,
+odp_execute_masked_set_action(struct dp_packet *packet,
                               const struct nlattr *a)
 {
     struct pkt_metadata *md = &packet->md;
@@ -406,8 +406,8 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
 
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a)
-            | (dpif_packet_get_dp_hash(packet) & ~*get_mask(a, uint32_t));
-        dpif_packet_set_dp_hash(packet, md->dp_hash);
+            | (dp_packet_get_dp_hash(packet) & ~*get_mask(a, uint32_t));
+        dp_packet_set_dp_hash(packet, md->dp_hash);
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
@@ -431,7 +431,7 @@ odp_execute_masked_set_action(struct dpif_packet *packet,
 }
 
 static void
-odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
+odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
                    const struct nlattr *action,
                    odp_execute_cb dp_execute_action)
 {
@@ -446,7 +446,7 @@ odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
         case OVS_SAMPLE_ATTR_PROBABILITY:
             if (random_uint32() >= nl_attr_get_u32(a)) {
                 if (steal) {
-                    dpif_packet_delete(packet);
+                    dp_packet_delete(packet);
                 }
                 return;
             }
@@ -468,7 +468,7 @@ odp_execute_sample(void *dp, struct dpif_packet *packet, bool steal,
 }
 
 void
-odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt, bool steal,
+odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
 {
@@ -518,7 +518,7 @@ odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt, bool steal,
                     hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
 
                     /* We also store the hash value with each packet */
-                    dpif_packet_set_dp_hash(packets[i], hash ? hash : 1);
+                    dp_packet_set_dp_hash(packets[i], hash ? hash : 1);
                 }
             } else {
                 /* Assert on unknown hash algorithm.  */
@@ -598,7 +598,7 @@ odp_execute_actions(void *dp, struct dpif_packet **packets, int cnt, bool steal,
 
     if (steal) {
         for (i = 0; i < cnt; i++) {
-            dpif_packet_delete(packets[i]);
+            dp_packet_delete(packets[i]);
         }
     }
 }

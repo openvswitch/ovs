@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
+#include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "list.h"
 #include "netdev-dpdk.h"
@@ -39,7 +40,6 @@
 #include "ovs-numa.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "shash.h"
 #include "sset.h"
@@ -238,7 +238,7 @@ dpdk_rte_mzalloc(size_t sz)
 /* XXX this function should be called only by pmd threads (or by non pmd
  * threads holding the nonpmd_mempool_mutex) */
 void
-free_dpdk_buf(struct dpif_packet *p)
+free_dpdk_buf(struct dp_packet *p)
 {
     struct rte_mbuf *pkt = (struct rte_mbuf *) p;
 
@@ -252,16 +252,16 @@ __rte_pktmbuf_init(struct rte_mempool *mp,
                    unsigned i OVS_UNUSED)
 {
     struct rte_mbuf *m = _m;
-    uint32_t buf_len = mp->elt_size - sizeof(struct dpif_packet);
+    uint32_t buf_len = mp->elt_size - sizeof(struct dp_packet);
 
-    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dpif_packet));
+    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dp_packet));
 
     memset(m, 0, mp->elt_size);
 
     /* start of buffer is just after mbuf structure */
-    m->buf_addr = (char *)m + sizeof(struct dpif_packet);
+    m->buf_addr = (char *)m + sizeof(struct dp_packet);
     m->buf_physaddr = rte_mempool_virt2phy(mp, m) +
-                    sizeof(struct dpif_packet);
+                    sizeof(struct dp_packet);
     m->buf_len = (uint16_t)buf_len;
 
     /* keep some headroom between start of buffer and data */
@@ -731,7 +731,7 @@ dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
 }
 
 static int
-netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
+netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
                      int *c)
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq_);
@@ -789,7 +789,7 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
 
 /* Tx function. Transmit packets indefinitely */
 static void
-dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
+dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet ** pkts,
                 int cnt)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -849,7 +849,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
 
 static inline void
 netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
-                   struct dpif_packet **pkts, int cnt, bool may_steal)
+                   struct dp_packet **pkts, int cnt, bool may_steal)
 {
     int i;
 
@@ -861,7 +861,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
         if (may_steal) {
             for (i = 0; i < cnt; i++) {
-                dpif_packet_delete(pkts[i]);
+                dp_packet_delete(pkts[i]);
             }
         }
     } else {
@@ -880,7 +880,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
                 VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
                              (int)size , dev->max_packet_len);
 
-                dpif_packet_delete(pkts[i]);
+                dp_packet_delete(pkts[i]);
                 dropped++;
                 next_tx_idx = i + 1;
             }
@@ -901,7 +901,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
 static int
 netdev_dpdk_eth_send(struct netdev *netdev, int qid,
-                     struct dpif_packet **pkts, int cnt, bool may_steal)
+                     struct dp_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
@@ -1371,7 +1371,7 @@ dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id) OVS_REQUIRES(dp
 
 static int
 netdev_dpdk_ring_send(struct netdev *netdev, int qid OVS_UNUSED,
-                      struct dpif_packet **pkts, int cnt, bool may_steal)
+                      struct dp_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 

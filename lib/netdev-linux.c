@@ -48,6 +48,7 @@
 #include <unistd.h>
 
 #include "coverage.h"
+#include "dp-packet.h"
 #include "dpif-netlink.h"
 #include "dpif-netdev.h"
 #include "dynamic-string.h"
@@ -62,7 +63,6 @@
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-atomic.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink-link.h"
@@ -1024,12 +1024,12 @@ netdev_linux_rxq_recv_tap(int fd, struct ofpbuf *buffer)
 }
 
 static int
-netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
+netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
                       int *c)
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
-    struct dpif_packet *packet;
+    struct dp_packet *packet;
     struct ofpbuf *buffer;
     ssize_t retval;
     int mtu;
@@ -1038,7 +1038,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
         mtu = ETH_PAYLOAD_MAX;
     }
 
-    packet = dpif_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
+    packet = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
                                            DP_NETDEV_HEADROOM);
     buffer = &packet->ofpbuf;
 
@@ -1051,10 +1051,10 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                          ovs_strerror(errno), netdev_rxq_get_name(rxq_));
         }
-        dpif_packet_delete(packet);
+        dp_packet_delete(packet);
     } else {
         dp_packet_pad(buffer);
-        dpif_packet_set_dp_hash(packet, 0);
+        dp_packet_set_dp_hash(packet, 0);
         packets[0] = packet;
         *c = 1;
     }
@@ -1098,7 +1098,7 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
  * expected to do additional queuing of packets. */
 static int
 netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                  struct dpif_packet **pkts, int cnt, bool may_steal)
+                  struct dp_packet **pkts, int cnt, bool may_steal)
 {
     int i;
     int error = 0;
@@ -1180,7 +1180,7 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
     if (may_steal) {
         for (i = 0; i < cnt; i++) {
-            dpif_packet_delete(pkts[i]);
+            dp_packet_delete(pkts[i]);
         }
     }
 
