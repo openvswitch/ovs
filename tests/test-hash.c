@@ -152,28 +152,32 @@ check_256byte_hash(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
     int i, j;
 
     for (i = 0; i <= n_bits; i++) {
-        for (j = i + 1; j <= n_bits; j++) {
-            OVS_PACKED(struct offset_ovs_u128 {
-                uint32_t a;
-                ovs_u128 b[16];
-            }) in0_data;
-            ovs_u128 *in0, in1[16], in2[16];
-            ovs_u128 out0, out1, out2;
+        OVS_PACKED(struct offset_ovs_u128 {
+            uint32_t a;
+            ovs_u128 b[16];
+        }) in0_data;
+        ovs_u128 *in0, in1[16];
+        ovs_u128 out0, out1;
 
-            in0 = in0_data.b;
-            /* When, i or j == n_bits, the set_bit128() will just
-            * zero set the input variables. */
-            set_bit128(in0, i);
-            set_bit128(in1, i);
+        in0 = in0_data.b;
+        /* When, i or j == n_bits, the set_bit128() will just
+         * zero set the input variables. */
+        set_bit128(in0, i);
+        set_bit128(in1, i);
+        hash(in0, sizeof(ovs_u128) * 16, 0, &out0);
+        hash(in1, sizeof(ovs_u128) * 16, 0, &out1);
+        if (!ovs_u128_equal(&out0, &out1)) {
+            printf("%s hash not the same for non-64 aligned data "
+                   "%016"PRIx64"%016"PRIx64" != %016"PRIx64"%016"PRIx64"\n",
+                   name, out0.u64.lo, out0.u64.hi, out1.u64.lo, out1.u64.hi);
+        }
+
+        for (j = i + 1; j <= n_bits; j++) {
+            ovs_u128 in2[16];
+            ovs_u128 out2;
+
             set_bit128(in2, j);
-            hash(in0, sizeof(ovs_u128) * 16, 0, &out0);
-            hash(in1, sizeof(ovs_u128) * 16, 0, &out1);
             hash(in2, sizeof(ovs_u128) * 16, 0, &out2);
-            if (!ovs_u128_equal(&out0, &out1)) {
-                printf("%s hash not the same for non-64 aligned data "
-                       "%016"PRIx64"%016"PRIx64" != %016"PRIx64"%016"PRIx64"\n",
-                       name, out0.u64.lo, out0.u64.hi, out1.u64.lo, out1.u64.hi);
-            }
             if ((out1.u64.lo & unique_mask) == (out2.u64.lo & unique_mask)) {
                 printf("%s has a partial collision:\n", name);
                 printf("hash(1 << %4d) == %016"PRIx64"%016"PRIx64"\n", i,
