@@ -1126,6 +1126,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         execute.packet = packet;
         execute.needs_help = false;
         execute.probe = false;
+        execute.mtu = 0;
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &execute, true, aux->error);
 
@@ -1693,6 +1694,7 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
             ds_put_format(&ds, " failed (%s)", ovs_strerror(error));
         }
         ds_put_format(&ds, " on packet %s", packet);
+        ds_put_format(&ds, " mtu %d", execute->mtu);
         vlog(THIS_MODULE, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
         ds_destroy(&ds);
         free(packet);
