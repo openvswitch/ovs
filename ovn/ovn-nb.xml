@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<database name="ovn-nb" title="OVN Northbound Database">
+  <p>
+    This database is the interface between OVN and the cloud management system
+    (CMS), such as OpenStack, running above it.  The CMS produces almost all of
+    the contents of the database.  The <code>ovs-nbd</code> program monitors
+    the database contents, transforms it, and stores it into the <ref
+    db="OVN"/> database.
+  </p>
+
+  <p>
+    We generally speak of ``the'' CMS, but one can imagine scenarios in
+    which multiple CMSes manage different parts of an OVN deployment.
+  </p>
+
+  <h2>External IDs</h2>
+
+  <p>
+    Each of the tables in this database contains a special column, named
+    <code>external_ids</code>.  This column has the same form and purpose each
+    place it appears.
+  </p>
+
+  <dl>
+    <dt><code>external_ids</code>: map of string-string pairs</dt>
+    <dd>
+      Key-value pairs for use by the CMS.  The CMS might use certain pairs, for
+      example, to identify entities in its own configuration that correspond to
+      those in this database.
+    </dd>
+  </dl>
+
+  <table name="Logical_Switch" title="L2 logical switch">
+    <p>
+      Each row represents one L2 logical switch.  A given switch's ports are
+      the <ref table="Logical_Port"/> rows whose <ref table="Logical_Port"
+      column="switch"/> column points to its row.
+    </p>
+
+    <column name="router_port">
+      <p>
+        The router port to which this logical switch is connected, or empty if
+        this logical switch is not connected to any router.  A switch may be
+        connected to at most one logical router, but this is not a significant
+        restriction because logical routers may be connected into arbitrary
+        topologies.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Port" title="L2 logical switch port">
+    <p>
+      A port within an L2 logical switch.
+    </p>
+
+    <column name="switch">
+      The logical switch to which the logical port is connected.
+    </column>
+
+    <column name="name">
+      The logical port name.  The name used here must match those used in the
+      <ref key="iface-id" table="Interface" column="external_ids"
+      db="Open_vSwitch"/> in the <ref db="Open_vSwitch"/> database's <ref
+      table="Interface" db="Open_vSwitch"/> table, because hypervisors use <ref
+      key="iface-id" table="Interface" column="external_ids"
+      db="Open_vSwitch"/> as a lookup key for logical ports.
+    </column>
+
+    <column name="up">
+      This column is populated by <code>ovn-nbd</code>, rather than by the CMS
+      plugin as is most of this database.  When a logical port is bound to a
+      physical location in the OVN database <ref db="OVN" table="Bindings"/>
+      table, <code>ovn-nbd</code> sets this column to <code>true</code>;
+      otherwise, or if the port becomes unbound later, it sets it to
+      <code>false</code>.  This allows the CMS to wait for a VM's networking to
+      become active before it allows the VM to start.
+    </column>
+
+    <column name="macs">
+      The logical port's own Ethernet address or addresses, each in the form
+      <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+      Like a physical Ethernet NIC, a logical port ordinarily has a single
+      fixed Ethernet address.  The string <code>unknown</code> is also allowed
+      to indicate that the logical port has an unknown set of (additional)
+      source addresses.
+    </column>
+
+    <column name="port_security">
+      <p>
+        A set of L2 (Ethernet) or L3 (IPv4 or IPv6) addresses or L2+L3 pairs
+        from which the logical port is allowed to send packets and to which it
+        is allowed to receive packets.  If this column is empty, all addresses
+        are permitted.
+      </p>
+
+      <p>
+        Exact syntax is TBD.  One could simply use comma- or space-separated L2
+        and L3 addresses in each set member, or replace this by a subset of the
+        general-purpose expression language used for the <ref column="match"
+        table="Pipeline" db="OVN"/> column in the OVN database's <ref
+        table="Pipeline" db="OVN"/> table.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="ACL" title="Access Control List (ACL) rule">
+    <p>
+      Each row in this table represents one ACL rule for the logical switch in
+      its <ref column="switch"/> column.  The <ref column="action"/> column for
+      the highest-<ref column="priority"/> matching row in this table
+      determines a packet's treatment.  If no row matches, packets are allowed
+      by default.  (Default-deny treatment is possible: add a rule with <ref
+      column="priority"/> 0, <code>true</code> as <ref column="match"/>, and
+      <code>deny</code> as <ref column="action"/>.)
+    </p>
+
+    <column name="switch">
+      The switch to which the ACL rule applies.  The expression in the
+      <ref column="match"/> column may match against logical ports
+      within this switch.
+    </column>
+
+    <column name="priority">
+      The ACL rule's priority.  Rules with numerically higher priority take
+      precedence over those with lower.  If two ACL rules with the same
+      priority both match, then the one actually applied to a packet is
+      undefined.
+    </column>
+
+    <column name="match">
+      The packets that the ACL should match, in the same expression language
+      used for the <ref column="match" table="Pipeline" db="OVN"/> column in
+      the OVN database's <ref table="Pipeline" db="OVN"/> table.  Match
+      <code>inport</code> and <code>outport</code> against names of logical
+      ports within <ref column="switch"/> to implement ingress and egress ACLs,
+      respectively.  In logical switches connected to logical routers, the
+      special port name <code>ROUTER</code> refers to the logical router port.
+    </column>
+
+    <column name="action">
+      <p>The action to take when the ACL rule matches:</p>
+      
+      <ul>
+	<li>
+	  <code>allow</code>: Forward the packet.
+	</li>
+
+	<li>
+	  <code>allow-related</code>: Forward the packet and related traffic
+	  (e.g. inbound replies to an outbound connection).
+	</li>
+
+	<li>
+	  <code>drop</code>: Silently drop the packet.
+	</li>
+
+	<li>
+	  <code>reject</code>: Drop the packet, replying with a RST for TCP or
+	  ICMP unreachable message for other IP-based protocols.
+	</li>
+      </ul>
+    </column>
+
+    <column name="log">
+      If set to <code>true</code>, packets that match the ACL will trigger a
+      log message on the transport node or nodes that perform ACL processing.
+      Logging may be combined with any <ref column="action"/>.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Router" title="L3 logical router">
+    <p>
+      Each row represents one L3 logical router.  A given router's ports are
+      the <ref table="Logical_Router_Port"/> rows whose <ref
+      table="Logical_Router_Port" column="router"/> column points to its row.
+    </p>
+
+    <column name="ip">
+      The logical router's own IP address.  The logical router uses this
+      address for ICMP replies (e.g. network unreachable messages) and other
+      traffic that it originates and responds to traffic destined to this
+      address (e.g. ICMP echo requests).
+    </column>
+
+    <column name="default_gw">
+      IP address to use as default gateway, if any.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Router_Port" title="L3 logical router port">
+    <p>
+      A port within an L3 logical router.
+    </p>
+
+    <p>
+      A router port is always attached to a switch port.  The connection can be
+      identified by following the <ref column="router_port"
+      table="Logical_Port"/> column from an appropriate <ref
+      table="Logical_Port"/> row.
+    </p>
+
+    <column name="router">
+      The router to which the port belongs.
+    </column>
+
+    <column name="network">
+      The IP network and netmask of the network on the router port.  Used for
+      routing.
+    </column>
+
+    <column name="mac">
+      The Ethernet address that belongs to this router port.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+</database>

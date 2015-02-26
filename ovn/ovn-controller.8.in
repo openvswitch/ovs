@@ -1,0 +1,41 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovn\-controller 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovn\-controller
+.
+.SH NAME
+ovn\-controller \- OVN local controller
+.
+.SH SYNOPSIS
+\fBovn\-controller\fR [\fIoptions\fR]
+.
+.SH DESCRIPTION
+\fBovn\-controller\fR is the local controller daemon for OVN, the Open
+Virtual Network.  It connects northbound to the OVN database (see
+\fBovn\fR(5)) over the OVSDB protocol, and southbound to the Open
+vSwitch database (see \fBovs-vswitchd.conf.db\fR(5)) over the OVSDB
+protocol and to \fBovs\-vswitchd\fR(8) via OpenFlow.  Each hypervisor
+and software gateway in an OVN deployment runs its own independent
+copy of \fBovn\-controller\fR; thus, \fBovn\-controller\fR's
+southbound connections are machine-local and do not run over a
+physical network.
+.PP
+XXX this is completely skeletal.
+.
+.SH OPTIONS
+.SS "Public Key Infrastructure Options"
+.so lib/ssl.man
+.so lib/ssl-peer-ca-cert.man
+.ds DD
+.so lib/daemon.man
+.so lib/vlog.man
+.so lib/unixctl.man
+.so lib/common.man
+.
+.SH "SEE ALSO"
+.
+\fBovn\-architecture\fR(7)

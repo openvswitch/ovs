@@ -1,0 +1,306 @@
+* Flow match expression handling library.
+
+  ovn-controller is the primary user of flow match expressions, but
+  the same syntax and I imagine the same code ought to be useful in
+  ovn-nbd for ACL match expressions.
+
+** Definition of data structures to represent a match expression as a
+   syntax tree.
+
+** Definition of data structures to represent variables (fields).
+
+   Fields need names and prerequisites.  Most fields are numeric and
+   thus need widths.  We need also need a way to represent nominal
+   fields (currently just logical port names).  It might be
+   appropriate to associate fields directly with OXM/NXM code points;
+   we have to decide whether we want OVN to use the OVS flow structure
+   or work with OXM more directly.
+
+   Probably should be defined so that the data structure is also
+   useful for references to fields in action parsing.
+
+** Lexical analysis.
+
+   Probably should be defined so that the lexer can be reused for
+   parsing actions.
+
+** Parsing into syntax tree.
+
+** Semantic checking against variable definitions.
+
+** Applying prerequisites.
+
+** Simplification into conjunction-of-disjunctions (CoD) form.
+
+** Transformation from CoD form into OXM matches.
+
+* ovn-controller
+
+** Flow table handling in ovn-controller.
+
+   ovn-controller has to transform logical datapath flows from the
+   database into OpenFlow flows.
+
+*** Definition (or choice) of data structure for flows and flow table.
+
+    It would be natural enough to use "struct flow" and "struct
+    classifier" for this.  Maybe that is what we should do.  However,
+    "struct classifier" is optimized for searches based on packet
+    headers, whereas all we care about here can be implemented with a
+    hash table.  Also, we may want to make it easy to add and remove
+    support for fields without recompiling, which is not possible with
+    "struct flow" or "struct classifier".
+
+    On the other hand, we may find that it is difficult to decide that
+    two OXM flow matches are identical (to normalize them) without a
+    lot of domain-specific knowledge that is already embedded in struct
+    flow.  It's also going to be a pain to come up with a way to make
+    anything other than "struct flow" work with the ofputil_*()
+    functions for encoding and decoding OpenFlow.
+
+    It's also possible we could use struct flow without struct
+    classifier.
+
+*** Assembling conjunctive flows from flow match expressions.
+
+    This transformation explodes logical datapath flows into multiple
+    OpenFlow flow table entries, since a flow match expression in CoD
+    form requires several OpenFlow flow table entries.  It also
+    requires merging together OpenFlow flow tables entries that contain
+    "conjunction" actions (really just concatenating their actions).
+
+*** Translating logical datapath port names into port numbers.
+
+    Logical ports are specified by name in logical datapath flows, but
+    OpenFlow only works in terms of numbers.
+
+*** Translating logical datapath actions into OpenFlow actions.
+
+    Some of the logical datapath actions do not have natural
+    representations as OpenFlow actions: they require
+    packet-in/packet-out round trips through ovn-controller.  The
+    trickiest part of that is going to be making sure that the
+    packet-out resumes the control flow that was broken off by the
+    packet-in.  That's tricky; we'll probably have to restrict control
+    flow or add OVS features to make resuming in general possible.  Not
+    sure which is better at this point.
+
+*** OpenFlow flow table synchronization.
+
+    The internal representation of the OpenFlow flow table has to be
+    synced across the controller connection to OVS.  This probably
+    boils down to the "flow monitoring" feature of OF1.4 which was then
+    made available as a "standard extension" to OF1.3.  (OVS hasn't
+    implemented this for OF1.4 yet, but the feature is based on a OVS
+    extension to OF1.0, so it should be straightforward to add it.)
+
+    We probably need some way to catch cases where OVS and OVN don't
+    see eye-to-eye on what exactly constitutes a flow, so that OVN
+    doesn't waste a lot of CPU time hammering at OVS trying to install
+    something that it's not going to do.
+
+*** Logical/physical translation.
+
+    When a packet comes into the integration bridge, the first stage of
+    processing needs to translate it from a physical to a logical
+    context.  When a packet leaves the integration bridge, the final
+    stage of processing needs to translate it back into a physical
+    context.  ovn-controller needs to populate the OpenFlow flows
+    tables to do these translations.
+
+*** Determine how to split logical pipeline across physical nodes.
+
+    From the original OVN architecture document:
+
+    The pipeline processing is split between the ingress and egress
+    transport nodes.  In particular, the logical egress processing may
+    occur at either hypervisor.  Processing the logical egress on the
+    ingress hypervisor requires more state about the egress vif's
+    policies, but reduces traffic on the wire that would eventually be
+    dropped.  Whereas, processing on the egress hypervisor can reduce
+    broadcast traffic on the wire by doing local replication.  We
+    initially plan to process logical egress on the egress hypervisor
+    so that less state needs to be replicated.  However, we may change
+    this behavior once we gain some experience writing the logical
+    flows.
+
+    The split pipeline processing split will influence how tunnel keys
+    are encoded.
+
+** Interaction with Open_vSwitch and OVN databases:
+
+*** Monitor VIFs attached to the integration bridge in Open_vSwitch.
+
+    In response to changes, add or remove corresponding rows in
+    Bindings table in OVN.
+
+*** Populate Chassis row in OVN at startup.  Maintain Chassis row over time.
+
+    (Warn if any other Chassis claims the same IP address.)
+
+*** Remove Chassis and Bindings rows from OVN on exit.
+
+*** Monitor Chassis table in OVN.
+
+    Populate Port records for tunnels to other chassis into
+    Open_vSwitch database.  As a scale optimization later on, one can
+    populate only records for tunnels to other chassis that have
+    logical networks in common with this one.
+
+*** Monitor Pipeline table in OVN, trigger flow table recomputation on change.
+
+** ovn-controller parameters and configuration.
+
+*** Tunnel encapsulation to publish.
+
+    Default: VXLAN? Geneve?
+
+*** Location of Open_vSwitch database.
+
+    We can probably use the same default as ovs-vsctl.
+
+*** Location of OVN database.
+
+    Probably no useful default.
+
+*** SSL configuration.
+
+    Can probably get this from Open_vSwitch database.
+
+* ovn-nbd
+
+** Monitor OVN_Northbound database, trigger Pipeline recomputation on change.
+
+** Translate each OVN_Northbound entity into Pipeline logical datapath flows.
+
+   We have to first sit down and figure out what the general
+   translation of each entity is.  The original OVN architecture
+   description at
+   http://openvswitch.org/pipermail/dev/2015-January/050380.html had
+   some sketches of these, but they need to be completed and
+   elaborated.
+
+   Initially, the simplest way to do this is probably to write
+   straight C code to do a full translation of the entire
+   OVN_Northbound database into the format for the Pipeline table in
+   the OVN database.  As scale increases, this will probably be too
+   inefficient since a small change in OVN_Northbound requires a full
+   recomputation.  At that point, we probably want to adopt a more
+   systematic approach, such as something akin to the "nlog" system
+   used in NVP (see Koponen et al. "Network Virtualization in
+   Multi-tenant Datacenters", NSDI 2014).
+
+** Push logical datapath flows to Pipeline table.
+
+** Monitor OVN database Bindings table.
+
+   Sync rows in the OVN Bindings table to the "up" column in the
+   OVN_Northbound database.
+
+* ovsdb-server
+
+  ovsdb-server should have adequate features for OVN but it probably
+  needs work for scale and possibly for availability as deployments
+  grow.  Here are some thoughts.
+
+  Andy Zhou is looking at these issues.
+
+** Scaling number of connections.
+
+   In typical use today a given ovsdb-server has only a single-digit
+   number of simultaneous connections.  The OVN database will have a
+   connection from every hypervisor.  This use case needs testing and
+   probably coding work.  Here are some possible improvements.
+
+*** Reducing amount of data sent to clients.
+
+    Currently, whenever a row monitored by a client changes,
+    ovsdb-server sends the client every monitored column in the row,
+    even if only one column changes.  It might be valuable to reduce
+    this only to the columns that changes.
+
+    Also, whenever a column changes, ovsdb-server sends the entire
+    contents of the column.  It might be valuable, for columns that
+    are sets or maps, to send only added or removed values or
+    key-values pairs.
+
+    Currently, clients monitor the entire contents of a table.  It
+    might make sense to allow clients to monitor only rows that
+    satisfy specific criteria, e.g. to allow an ovn-controller to
+    receive only Pipeline rows for logical networks on its hypervisor.
+
+*** Reducing redundant data and code within ovsdb-server.
+
+    Currently, ovsdb-server separately composes database update
+    information to send to each of its clients.  This is fine for a
+    small number of clients, but it wastes time and memory when
+    hundreds of clients all want the same updates (as will be in the
+    case in OVN).
+
+    (This is somewhat opposed to the idea of letting a client monitor
+    only some rows in a table, since that would increase the diversity
+    among clients.)
+
+*** Multithreading.
+
+    If it turns out that other changes don't let ovsdb-server scale
+    adequately, we can multithread ovsdb-server.  Initially one might
+    only break protocol handling into separate threads, leaving the
+    actual database work serialized through a lock.
+
+** Increasing availability.
+
+   Database availability might become an issue.  The OVN system
+   shouldn't grind to a halt if the database becomes unavailable, but
+   it would become impossible to bring VIFs up or down, etc.
+
+   My current thought on how to increase availability is to add
+   clustering to ovsdb-server, probably via the Raft consensus
+   algorithm.  As an experiment, I wrote an implementation of Raft
+   for Open vSwitch that you can clone from:
+
+       https://github.com/blp/ovs-reviews.git raft
+
+** Reducing startup time.
+
+   As-is, if ovsdb-server restarts, every client will fetch a fresh
+   copy of the part of the database that it cares about.  With
+   hundreds of clients, this could cause heavy CPU load on
+   ovsdb-server and use excessive network bandwidth.  It would be
+   better to allow incremental updates even across connection loss.
+   One way might be to use "Difference Digests" as described in
+   Epstein et al., "What's the Difference? Efficient Set
+   Reconciliation Without Prior Context".  (I'm not yet aware of
+   previous non-academic use of this technique.)
+
+* Miscellaneous:
+
+** Write ovn-nbctl utility.
+
+   The idea here is that we need a utility to act on the OVN_Northbound
+   database in a way similar to a CMS, so that we can do some testing
+   without an actual CMS in the picture.
+
+   No details yet.
+
+** Init scripts for ovn-controller (on HVs), ovn-nbd, OVN DB server.
+
+** Distribution packaging.
+
+* Not yet scoped:
+
+** Neutron plugin.
+
+*** Create stackforge/networking-ovn repository based on OpenStack's
+cookiecutter git repo generator
+
+*** Document mappings between Neutron data model and the OVN northbound DB
+
+*** Create a Neutron ML2 mechanism driver that implements the mappings
+on Neutron resource requests
+
+*** Add synchronization for when we need to sanity check that the OVN
+northbound DB reflects the current state of the world as intended by
+Neutron (needed for various failure scenarios)
+
+** Gateways.

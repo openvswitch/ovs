@@ -1,0 +1,62 @@
+{
+    "name": "OVN_Northbound",
+    "tables": {
+        "Logical_Switch": {
+            "columns": {
+                "router_port": {"type": {"key": {"type": "uuid",
+                                                 "refTable": "Logical_Router_Port",
+                                                 "refType": "strong"},
+                                         "min": 0, "max": 1}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}}},
+        "Logical_Port": {
+            "columns": {
+                "switch": {"type": {"key": {"type": "uuid",
+                                            "refTable": "Logical_Switch",
+                                            "refType": "strong"}}},
+                "name": {"type": "string"},
+                "macs": {"type": {"key": "string",
+                                  "min": 0,
+                                  "max": "unlimited"}},
+                "port_security": {"type": {"key": "string",
+                                           "min": 0,
+                                           "max": "unlimited"}},
+                "up": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["name"]]},
+        "ACL": {
+            "columns": {
+                "switch": {"type": {"key": {"type": "uuid",
+                                            "refTable": "Logical_Switch",
+                                            "refType": "strong"}}},
+                "priority": {"type": {"key": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 65535}}},
+                "match": {"type": "string"},
+                "action": {"type": {"key": {"type": "string",
+                                            "enum": ["set", ["allow", "allow-related", "drop", "reject"]]}}},
+                "log": {"type": "boolean"},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}}},
+        "Logical_Router": {
+            "columns": {
+                "ip": {"type": "string"},
+                "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}}},
+        "Logical_Router_Port": {
+            "columns": {
+                "router": {"type": {"key": {"type": "uuid",
+                                            "refTable": "Logical_Router",
+                                            "refType": "strong"}}},
+                "network": {"type": "string"},
+                "mac": {"type": "string"},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}}}},
+    "version": "1.0.0"}

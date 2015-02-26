@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manpage program="ovn-architecture" section="7" title="OVN Architecture">
+  <h1>Name</h1>
+  <p>ovn-architecture -- Open Virtual Network architecture</p>
+
+  <h1>Description</h1>
+
+  <p>
+    OVN, the Open Virtual Network, is a system to support virtual network
+    abstraction.  OVN complements the existing capabilities of OVS to add
+    native support for virtual network abstractions, such as virtual L2 and L3
+    overlays and security groups.  Services such as DHCP are also desirable
+    features.  Just like OVS, OVN's design goal is to have a production-quality
+    implementation that can operate at significant scale.
+  </p>
+
+  <p>
+    An OVN deployment consists of several components:
+  </p>
+
+  <ul>
+    <li>
+      <p>
+        A <dfn>Cloud Management System</dfn> (<dfn>CMS</dfn>), which is
+        OVN's ultimate client (via its users and administrators).  OVN
+        integration requires installing a CMS-specific plugin and
+        related software (see below).  OVN initially targets OpenStack
+        as CMS.
+      </p>
+
+      <p>
+        We generally speak of ``the'' CMS, but one can imagine scenarios in
+        which multiple CMSes manage different parts of an OVN deployment.
+      </p>
+    </li>
+
+    <li>
+      An OVN Database physical or virtual node (or, eventually, cluster)
+      installed in a central location.
+    </li>
+
+    <li>
+      One or more (usually many) <dfn>hypervisors</dfn>.  Hypervisors must run
+      Open vSwitch and implement the interface described in
+      <code>IntegrationGuide.md</code> in the OVS source tree.  Any hypervisor
+      platform supported by Open vSwitch is acceptable.
+    </li>
+
+    <li>
+      <p>
+	Zero or more <dfn>gateways</dfn>.  A gateway extends a tunnel-based
+	logical network into a physical network by bidirectionally forwarding
+	packets between tunnels and a physical Ethernet port.  This allows
+	non-virtualized machines to participate in logical networks.  A gateway
+	may be a physical host, a virtual machine, or an ASIC-based hardware
+	switch that supports the <code>vtep</code>(5) schema.  (Support for the
+	latter will come later in OVN implementation.)
+      </p>
+
+      <p>
+	Hypervisors and gateways are together called <dfn>transport node</dfn>
+	or <dfn>chassis</dfn>.
+      </p>
+    </li>
+  </ul>
+
+  <p>
+    The diagram below shows how the major components of OVN and related
+    software interact.  Starting at the top of the diagram, we have:
+  </p>
+
+  <ul>
+    <li>
+      The Cloud Management System, as defined above.
+    </li>
+
+    <li>
+      <p>
+	The <dfn>OVN/CMS Plugin</dfn> is the component of the CMS that
+	interfaces to OVN.  In OpenStack, this is a Neutron plugin.
+	The plugin's main purpose is to translate the CMS's notion of logical
+	network configuration, stored in the CMS's configuration database in a
+	CMS-specific format, into an intermediate representation understood by
+	OVN.
+      </p>
+
+      <p>
+	This component is necessarily CMS-specific, so a new plugin needs to be
+	developed for each CMS that is integrated with OVN.  All of the
+	components below this one in the diagram are CMS-independent.
+      </p>
+    </li>
+
+    <li>
+      <p>
+	The <dfn>OVN Northbound Database</dfn> receives the intermediate
+	representation of logical network configuration passed down by the
+	OVN/CMS Plugin.  The database schema is meant to be ``impedance
+	matched'' with the concepts used in a CMS, so that it directly supports
+	notions of logical switches, routers, ACLs, and so on.  See
+	<code>ovs-nb</code>(5) for details.
+      </p>
+
+      <p>
+	The OVN Northbound Database has only two clients: the OVN/CMS Plugin
+	above it and <code>ovn-nbd</code> below it.
+      </p>
+    </li>
+
+    <li>
+      <code>ovn-nbd</code>(8) connects to the OVN Northbound Database above it
+      and the OVN Database below it.  It translates the logical network
+      configuration in terms of conventional network concepts, taken from the
+      OVN Northbound Database, into logical datapath flows in the OVN Database
+      below it.
+    </li>
+
+    <li>
+      <p>
+	The <dfn>OVN Database</dfn> is the center of the system.  Its clients
+	are <code>ovn-nbd</code>(8) above it and <code>ovn-controller</code>(8)
+	on every transport node below it.
+      </p>
+
+      <p>
+	The OVN Database contains three kinds of data: <dfn>Physical
+	Network</dfn> (PN) tables that specify how to reach hypervisor and
+	other nodes, <dfn>Logical Network</dfn> (LN) tables that describe the
+	logical network in terms of ``logical datapath flows,'' and
+	<dfn>Binding</dfn> tables that link logical network components'
+	locations to the physical network.  The hypervisors populate the PN and
+	Binding tables, whereas <code>ovn-nbd</code>(8) populates the LN
+	tables.
+      </p>
+
+      <p>
+	OVN Database performance must scale with the number of transport nodes.
+	This will likely require some work on <code>ovsdb-server</code>(1) as
+	we encounter bottlenecks.  Clustering for availability may be needed.
+      </p>
+    </li>
+  </ul>
+
+  <p>
+    The remaining components are replicated onto each hypervisor:
+  </p>
+
+  <ul>
+    <li>
+      <code>ovn-controller</code>(8) is OVN's agent on each hypervisor and
+      software gateway.  Northbound, it connects to the OVN Database to learn
+      about OVN configuration and status and to populate the PN and <code>Bindings</code>
+      tables with the hypervisor's status.  Southbound, it connects to
+      <code>ovs-vswitchd</code>(8) as an OpenFlow controller, for control over
+      network traffic, and to the local <code>ovsdb-server</code>(1) to allow
+      it to monitor and control Open vSwitch configuration.
+    </li>
+
+    <li>
+      <code>ovs-vswitchd</code>(8) and <code>ovsdb-server</code>(1) are
+      conventional components of Open vSwitch.
+    </li>
+  </ul>
+
+  <pre fixed="yes">
+                                  CMS
+                                   |
+                                   |
+                       +-----------|-----------+
+                       |           |           |
+                       |     OVN/CMS Plugin    |
+                       |           |           |
+                       |           |           |
+                       |   OVN Northbound DB   |
+                       |           |           |
+                       |           |           |
+                       |        ovn-nbd        |
+                       |           |           |
+                       +-----------|-----------+
+                                   |
+                                   |
+                                +------+
+                                |OVN DB|
+                                +------+
+                                   |
+                                   |
+                +------------------+------------------+
+                |                  |                  |
+ HV 1           |                  |    HV n          |
++---------------|---------------+  .  +---------------|---------------+
+|               |               |  .  |               |               |
+|        ovn-controller         |  .  |        ovn-controller         |
+|         |          |          |  .  |         |          |          |
+|         |          |          |     |         |          |          |
+|  ovs-vswitchd   ovsdb-server  |     |  ovs-vswitchd   ovsdb-server  |
+|                               |     |                               |
++-------------------------------+     +-------------------------------+
+  </pre>
+
+  <h3>Life Cycle of a VIF</h3>
+
+  <p>
+    Tables and their schemas presented in isolation are difficult to
+    understand.  Here's an example.
+  </p>
+
+  <p>
+    The steps in this example refer often to details of the OVN and OVN
+    Northbound database schemas.  Please see <code>ovn</code>(5) and
+    <code>ovn-nb</code>(5), respectively, for the full story on these
+    databases.
+  </p>
+
+  <ol>
+    <li>
+      A VIF's life cycle begins when a CMS administrator creates a new VIF
+      using the CMS user interface or API and adds it to a switch (one
+      implemented by OVN as a logical switch).  The CMS updates its own
+      configuration.  This includes associating unique, persistent identifier
+      <var>vif-id</var> and Ethernet address <var>mac</var> with the VIF.
+    </li>
+
+    <li>
+      The CMS plugin updates the OVN Northbound database to include the new
+      VIF, by adding a row to the <code>Logical_Port</code> table.  In the new
+      row, <code>name</code> is <var>vif-id</var>, <code>mac</code> is
+      <var>mac</var>, <code>switch</code> points to the OVN logical switch's
+      Logical_Switch record, and other columns are initialized appropriately.
+    </li>
+
+    <li>
+      <code>ovs-nbd</code> receives the OVN Northbound database update.  In
+      turn, it makes the corresponding updates to the OVN database, by adding
+      rows to the OVN database <code>Pipeline</code> table to reflect the new
+      port, e.g. add a flow to recognize that packets destined to the new
+      port's MAC address should be delivered to it, and update the flow that
+      delivers broadcast and multicast packets to include the new port.
+    </li>
+
+    <li>
+      On every hypervisor, <code>ovn-controller</code> receives the
+      <code>Pipeline</code> table updates that <code>ovs-nbd</code> made in the
+      previous step.  As long as the VM that owns the VIF is powered off,
+      <code>ovn-controller</code> cannot do much; it cannot, for example,
+      arrange to send packets to or receive packets from the VIF, because the
+      VIF does not actually exist anywhere.
+    </li>
+
+    <li>
+      Eventually, a user powers on the VM that owns the VIF.  On the hypervisor
+      where the VM is powered on, the integration between the hypervisor and
+      Open vSwitch (described in <code>IntegrationGuide.md</code>) adds the VIF
+      to the OVN integration bridge and stores <var>vif-id</var> in
+      <code>external-ids</code>:<code>iface-id</code> to indicate that the
+      interface is an instantiation of the new VIF.  (None of this code is new
+      in OVN; this is pre-existing integration work that has already been done
+      on hypervisors that support OVS.)
+    </li>
+
+    <li>
+      On the hypervisor where the VM is powered on, <code>ovn-controller</code>
+      notices <code>external-ids</code>:<code>iface-id</code> in the new
+      Interface.  In response, it updates the local hypervisor's OpenFlow
+      tables so that packets to and from the VIF are properly handled.
+      Afterward, it updates the <code>Bindings</code> table in the OVN DB,
+      adding a row that links the logical port from
+      <code>external-ids</code>:<code>iface-id</code> to the hypervisor.
+    </li>
+
+    <li>
+      Some CMS systems, including OpenStack, fully start a VM only when its
+      networking is ready.  To support this, <code>ovn-nbd</code> notices the
+      new row in the <code>Bindings</code> table, and pushes this upward by
+      updating the <ref column="up" table="Logical_Port" db="OVN_NB"/> column
+      in the OVN Northbound database's <ref table="Logical_Port" db="OVN_NB"/>
+      table to indicate that the VIF is now up.  The CMS, if it uses this
+      feature, can then react by allowing the VM's execution to proceed.
+    </li>
+
+    <li>
+      On every hypervisor but the one where the VIF resides,
+      <code>ovn-controller</code> notices the new row in the
+      <code>Bindings</code> table.  This provides <code>ovn-controller</code>
+      the physical location of the logical port, so each instance updates the
+      OpenFlow tables of its switch (based on logical datapath flows in the OVN
+      DB <code>Pipeline</code> table) so that packets to and from the VIF can
+      be properly handled via tunnels.
+    </li>
+
+    <li>
+      Eventually, a user powers off the VM that owns the VIF.  On the
+      hypervisor where the VM was powered on, the VIF is deleted from the OVN
+      integration bridge.
+    </li>
+
+    <li>
+      On the hypervisor where the VM was powered on,
+      <code>ovn-controller</code> notices that the VIF was deleted.  In
+      response, it removes the logical port's row from the
+      <code>Bindings</code> table.
+    </li>
+
+    <li>
+      On every hypervisor, <code>ovn-controller</code> notices the row removed
+      from the <code>Bindings</code> table.  This means that
+      <code>ovn-controller</code> no longer knows the physical location of the
+      logical port, so each instance updates its OpenFlow table to reflect
+      that.
+    </li>
+
+    <li>
+      Eventually, when the VIF (or its entire VM) is no longer needed by
+      anyone, an administrator deletes the VIF using the CMS user interface or
+      API.  The CMS updates its own configuration.
+    </li>
+
+    <li>
+      The CMS plugin removes the VIF from the OVN Northbound database,
+      by deleting its row in the <code>Logical_Port</code> table.
+    </li>
+
+    <li>
+      <code>ovs-nbd</code> receives the OVN Northbound update and in turn
+      updates the OVN database accordingly, by removing or updating the
+      rows from the OVN database <code>Pipeline</code> table that were related
+      to the now-destroyed VIF.
+    </li>
+
+    <li>
+      On every hypervisor, <code>ovn-controller</code> receives the
+      <code>Pipeline</code> table updates that <code>ovs-nbd</code> made in the
+      previous step.  <code>ovn-controller</code> updates OpenFlow tables to
+      reflect the update, although there may not be much to do, since the VIF
+      had already become unreachable when it was removed from the
+      <code>Bindings</code> table in a previous step.
+    </li>
+  </ol>
+
+</manpage>
