@@ -197,7 +197,61 @@
 +-------------------------------+     +-------------------------------+
   </pre>
 
-  <h3>Life Cycle of a VIF</h3>
+  <h2>Chassis Setup</h2>
+
+  <p>
+    Each chassis in an OVN deployment must be configured with an Open vSwitch
+    bridge dedicated for OVN's use, called the <dfn>integration bridge</dfn>.
+    System startup scripts create this bridge prior to starting
+    <code>ovn-controller</code>.  The ports on the integration bridge include:
+  </p>
+
+  <ul>
+    <li>
+      On any chassis, tunnel ports that OVN uses to maintain logical network
+      connectivity.  <code>ovn-controller</code> adds, updates, and removes
+      these tunnel ports.
+    </li>
+
+    <li>
+      On a hypervisor, any VIFs that are to be attached to logical networks.
+      The hypervisor itself, or the integration between Open vSwitch and the
+      hypervisor (described in <code>IntegrationGuide.md</code>) takes care of
+      this.  (This is not part of OVN or new to OVN; this is pre-existing
+      integration work that has already been done on hypervisors that support
+      OVS.)
+    </li>
+
+    <li>
+      On a gateway, the physical port used for logical network connectivity.
+      System startup scripts add this port to the bridge prior to starting
+      <code>ovn-controller</code>.  This can be a patch port to another bridge,
+      instead of a physical port, in more sophisticated setups.
+    </li>
+  </ul>
+
+  <p>
+    Other ports should not be attached to the integration bridge.  In
+    particular, physical ports attached to the underlay network (as opposed to
+    gateway ports, which are physical ports attached to logical networks) must
+    not be attached to the integration bridge.  Underlay physical ports should
+    instead be attached to a separate Open vSwitch bridge (they need not be
+    attached to any bridge at all, in fact).
+  </p>
+
+  <p>
+    The integration bridge must be configured with failure mode ``secure'' to
+    avoid switching packets between isolated logical networks before
+    <code>ovn-controller</code> starts up.  See <code>Controller Failure
+    Settings</code> in <code>ovs-vsctl</code>(8) for more information.
+  </p>
+
+  <p>
+    The customary name for the integration bridge is <code>br-int</code>, but
+    another name may be used.
+  </p>
+
+  <h2>Life Cycle of a VIF</h2>
 
   <p>
     Tables and their schemas presented in isolation are difficult to
