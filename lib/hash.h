@@ -33,6 +33,7 @@ hash_rot(uint32_t x, int k)
 }
 
 uint32_t hash_bytes(const void *, size_t n_bytes, uint32_t basis);
+/* The hash input must be a word larger than 128 bits. */
 void hash_bytes128(const void *_, size_t n_bytes, uint32_t basis,
                    ovs_u128 *out);
 

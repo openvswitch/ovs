@@ -69,15 +69,6 @@ hash_int_cb(uint32_t input)
     return hash_int(input, 0);
 }
 
-static uint32_t
-hash_bytes128_cb(uint32_t input)
-{
-    ovs_u128 hash;
-
-    hash_bytes128(&input, sizeof input, 0, &hash);
-    return hash.u64.lo;
-}
-
 static void
 check_word_hash(uint32_t (*hash)(uint32_t), const char *name,
                 int min_unique)
@@ -249,7 +240,6 @@ test_hash_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
      * function.
      */
     check_word_hash(hash_int_cb, "hash_int", 12);
-    check_word_hash(hash_bytes128_cb, "hash_bytes128", 12);
 
     /* Check that all hashes computed with hash_bytes128 with 1-bit (or no
      * 1-bits) set within 16 128-bit words have different values in their
