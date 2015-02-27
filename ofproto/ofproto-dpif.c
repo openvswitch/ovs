@@ -1077,7 +1077,7 @@ check_recirc(struct dpif_backer *backer)
     return enable_recirc;
 }
 
-/* Tests whether 'dpif' supports userspace flow ids. We can skip serializing
+/* Tests whether 'dpif' supports unique flow ids. We can skip serializing
  * some flow attributes for datapaths that support this feature.
  *
  * Returns true if 'dpif' supports UFID for flow operations.
@@ -1101,10 +1101,10 @@ check_ufid(struct dpif_backer *backer)
     enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, &ufid);
 
     if (enable_ufid) {
-        VLOG_INFO("%s: Datapath supports userspace flow ids",
+        VLOG_INFO("%s: Datapath supports unique flow ids",
                   dpif_name(backer->dpif));
     } else {
-        VLOG_INFO("%s: Datapath does not support userspace flow ids",
+        VLOG_INFO("%s: Datapath does not support unique flow ids",
                   dpif_name(backer->dpif));
     }
     return enable_ufid;
