@@ -242,94 +242,77 @@ check_256byte_hash(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
 static void
 test_hash_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    /* Check that all hashes computed with hash_words with one 1-bit (or no
-     * 1-bits) set within a single 32-bit word have different values in all
-     * 11-bit consecutive runs.
+    /*
+     * The following tests check that all hashes computed with hash_function
+     * with one 1-bit (or no 1-bits) set within a X-bit word have different
+     * values in all N-bit consecutive comparisons.
+     *
+     *    test_function(hash_function, test_name, N)
      *
      * Given a random distribution, the probability of at least one collision
-     * in any set of 11 bits is approximately
+     * in any set of N bits is approximately
      *
-     *                      1 - (proportion of same_bits)
-     *                          **(binomial_coefficient(n_bits_in_data + 1, 2))
-     *                   == 1 - ((2**11 - 1)/2**11)**C(33,2)
-     *                   == 1 - (2047/2048)**528
-     *                   =~ 0.22
+     *                      1 - (prob of no collisions)
+     *                          **(combination of all possible comparisons)
+     *                   == 1 - ((2**N - 1)/2**N)**C(X+1,2)
+     *                   == p
      *
-     * There are 21 ways to pick 11 consecutive bits in a 32-bit word, so if we
+     * There are (X-N) ways to pick N consecutive bits in a X-bit word, so if we
      * assumed independence then the chance of having no collisions in any of
-     * those 11-bit runs would be (1-0.22)**21 =~ .0044.  Obviously
-     * independence must be a bad assumption :-)
+     * those X-bit runs would be (1-p)**(X-N) == q.  If this q is very small
+     * and we can also find a relatively small 'magic number' N such that there
+     * is no collision in any comparison, then it means we have a pretty good
+     * hash function.
+     *
+     * The values of each parameters mentioned above for the tested hash
+     * functions are summarized as follow:
+     *
+     * hash_function       X      N        p             q
+     * -------------      ---    ---    -------       -------
+     *
+     * hash_words_cb       32     11     0.22          0.0044
+     * jhash_words_cb      32     11     0.22          0.0044
+     * hash_int_cb         32     12     0.12          0.0078
+     * hash_bytes128      128     19     0.0156        0.174
+     *
      */
     check_word_hash(hash_words_cb, "hash_words", 11);
     check_word_hash(jhash_words_cb, "jhash_words", 11);
+    check_word_hash(hash_int_cb, "hash_int", 12);
+    check_hash_bytes128(hash_bytes128, "hash_bytes128", 19);
 
-    /* Check that all hash functions of with one 1-bit (or no 1-bits) set
-     * within three 32-bit words have different values in their lowest 12
-     * bits.
+    /*
+     * The following tests check that all hashes computed with hash_function
+     * with one 1-bit (or no 1-bits) set within Y X-bit word have different
+     * values in their lowest N bits.
+     *
+     *    test_function(hash_function, test_name, N)
      *
      * Given a random distribution, the probability of at least one collision
-     * in 12 bits is approximately
+     * in any set of N bits is approximately
      *
-     *                      1 - ((2**12 - 1)/2**12)**C(97,2)
-     *                   == 1 - (4095/4096)**4656
-     *                   =~ 0.68
+     *                      1 - (prob of no collisions)
+     *                          **(combination of all possible comparisons)
+     *                   == 1 - ((2**N - 1)/2**N)**C(Y*X+1,2)
+     *                   == p
      *
-     * so we are doing pretty well to not have any collisions in 12 bits.
+     * If this p is not very small and we can also find a relatively small
+     * 'magic number' N such that there is no collision in any comparison,
+     * then it means we have a pretty good hash function.
+     *
+     * The values of each parameters mentioned above for the tested hash
+     * functions are summarized as follow:
+     *
+     * hash_function       Y      X      N        p
+     * -------------      ---    ---    ---    -------
+     *
+     * hash_words          3      32     12     0.68
+     * jhash_words         3      32     12     0.68
+     * hash_bytes128      16     128     23     0.22
+     *
      */
     check_3word_hash(hash_words, "hash_words");
     check_3word_hash(jhash_words, "jhash_words");
-
-    /* Check that all hashes computed with hash_int with one 1-bit (or no
-     * 1-bits) set within a single 32-bit word have different values in all
-     * 12-bit consecutive runs.
-     *
-     * Given a random distribution, the probability of at least one collision
-     * in any set of 12 bits is approximately
-     *
-     *                      1 - ((2**12 - 1)/2**12)**C(33,2)
-     *                   == 1 - (4,095/4,096)**528
-     *                   =~ 0.12
-     *
-     * There are 20 ways to pick 12 consecutive bits in a 32-bit word, so if we
-     * assumed independence then the chance of having no collisions in any of
-     * those 12-bit runs would be (1-0.12)**20 =~ 0.078.  This refutes our
-     * assumption of independence, which makes it seem like a good hash
-     * function.
-     */
-    check_word_hash(hash_int_cb, "hash_int", 12);
-
-    /* Check that all hashes computed with hash_bytes128 with one 1-bit (or no
-     * 1-bits) set within a single 128-bit word have different values in all
-     * 19-bit consecutive runs.
-     *
-     * Given a random distribution, the probability of at least one collision
-     * in any set of 19 bits is approximately
-     *
-     *                      1 - ((2**19 - 1)/2**19)**C(129,2)
-     *                   == 1 - (524,287/524,288)**8256
-     *                   =~ 0.0156
-     *
-     * There are 111 ways to pick 19 consecutive bits in a 128-bit word, so if
-     * we assumed independence then the chance of having no collisions in any of
-     * those 19-bit runs would be (1-0.0156)**111 =~ 0.174.  This refutes our
-     * assumption of independence, which makes it seem like a good hash
-     * function.
-     */
-    check_hash_bytes128(hash_bytes128, "hash_bytes128", 19);
-
-    /* Check that all hashes computed with hash_bytes128 with 1-bit (or no
-     * 1-bits) set within 16 128-bit words have different values in their
-     * lowest 23 bits.
-     *
-     * Given a random distribution, the probability of at least one collision
-     * in any set of 23 bits is approximately
-     *
-     *                      1 - ((2**23 - 1)/2**23)**C(2049,2)
-     *                   == 1 - (8,388,607/8,388,608)**2,098,176
-     *                   =~ 0.22
-     *
-     * so we are doing pretty well to not have any collisions in 23 bits.
-     */
     check_256byte_hash(hash_bytes128, "hash_bytes128", 23);
 }
 
