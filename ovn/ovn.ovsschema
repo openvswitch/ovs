@@ -4,8 +4,7 @@
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
-                "encap": {"type": {"key": {"type": "string",
-                                           "enum": ["set", ["stt", "vxlan", "gre"]]}}},
+                "encap": {"type": "string"},
                 "encap_options": {"type": {"key": "string",
                                            "value": "string",
                                            "min": 0,
