@@ -513,7 +513,7 @@ def add_binding(binding, ls):
 def del_binding(binding, ls):
     vlog.info("removing binding %s" % binding)
 
-    vlan, pp_name = binding.split("-")
+    vlan, pp_name = binding.split("-", 1)
     pbinding = binding+"-p"
     lbinding = binding+"-l"
 
