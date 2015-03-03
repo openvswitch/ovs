@@ -299,7 +299,7 @@ enum ofperr {
     /* OF1.1+(4,5).  Unsupported wildcard specified in the match. */
     OFPERR_OFPBMC_BAD_WILDCARDS,
 
-    /* OF1.1+(4,6).  Unsupported field in the match. */
+    /* NX1.0(0,263), OF1.1+(4,6).  Unsupported field in the match. */
     OFPERR_OFPBMC_BAD_FIELD,
 
     /* NX1.0(1,258), OF1.1+(4,7).  Unsupported value in a match
