@@ -22,7 +22,6 @@
 #include <net/if.h>
 #ifndef _WIN32
 #include <netinet/in.h>
-#include <netinet/if_ether.h>
 #endif
 #include <sys/socket.h>
 #include <sys/types.h>

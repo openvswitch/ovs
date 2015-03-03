@@ -177,7 +177,7 @@ test_aa_send(void)
     /* Local chassis info */
     chassis.c_id_subtype = LLDP_CHASSISID_SUBTYPE_LLADDR;
     chassis.c_id = chassis_mac;
-    chassis.c_id_len = ETHER_ADDR_LEN;
+    chassis.c_id_len = ETH_ADDR_LEN;
     chassis.c_name = "Dummy chassis";
     chassis.c_descr = "Long dummy chassis description";
     chassis.c_cap_available = LLDP_CAP_BRIDGE;
@@ -272,7 +272,7 @@ test_aa_send(void)
     }
 
     /* Decode the constructed LLDPPDU */
-    assert(lldp_decode(NULL, packet.data_, packet.size_, hw,
+    assert(lldp_decode(NULL, dp_packet_data(&packet), dp_packet_size(&packet), hw,
                        &nchassis, &nport) != -1);
 
     /* Expecting returned pointers to allocated structures */

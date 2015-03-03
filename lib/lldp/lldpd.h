@@ -20,7 +20,6 @@
 #define _LLDPD_H
 
 #ifndef _WIN32
-#include <netinet/if_ether.h>
 #include <netinet/in.h>
 #endif
 #include <stdlib.h>

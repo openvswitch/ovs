@@ -34,7 +34,6 @@
 #ifndef _WIN32
 #include <grp.h>
 #include <libgen.h>
-#include <netinet/if_ether.h>
 #include <pwd.h>
 #include <sys/select.h>
 #include <sys/utsname.h>
