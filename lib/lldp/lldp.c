@@ -1,5 +1,6 @@
 /* -*- mode: c; c-file-style: "openbsd" -*- */
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2008 Vincent Bernat <bernat@luffy.cx>
  * Copyright (c) 2014 Michael Chapman
  *
@@ -30,49 +31,9 @@
 
 VLOG_DEFINE_THIS_MODULE(lldp);
 
-/* This set of macro are used to build packets. The current position in buffer
- * is `pos'. The length of the remaining space in buffer is `length'. `type'
- * should be a member of `types'.
- *
- * This was stolen from ladvd which was adapted from Net::CDP. The original
- * author of those macros, Michael Chapman, has relicensed those macros under
- * the ISC license.
- */
-
-#define POKE(value, type, func)               \
-    ((length >= sizeof type) &&              \
-        (                                     \
-            type = func(value),               \
-            memcpy(pos, &type, sizeof type), \
-            length -= sizeof type,           \
-            pos += sizeof type,              \
-            1                                 \
-        )                                     \
-    )
-#define POKE_UINT8(value) POKE(value, types.f_uint8, )
-#define POKE_UINT16(value) POKE(value, types.f_uint16, htons)
-#define POKE_UINT32(value) POKE(value, types.f_uint32, htonl)
-#define POKE_BYTES(value, bytes)       \
-    ((length >= (bytes)) &&            \
-        (                              \
-            memcpy(pos, value, bytes), \
-            length -= (bytes),         \
-            pos += (bytes),            \
-            1                          \
-        )                              \
-    )
-#define POKE_SAVE(where) (where = pos, 1)
-#define POKE_RESTORE(where)            \
-    do {                               \
-        if ((where) > pos)             \
-            length -= ((where) - pos); \
-        else                           \
-            length += (pos - (where)); \
-        pos = (where);                 \
-    } while(0)
-
-/* This set of macro are used to parse packets. The same variable as for POKE_
- * are used. There is no check on boundaries.
+/* This set of macro are used to parse packets. The current position in buffer
+ * is `pos'. The length of the remaining space in buffer is `length'.  There is
+ * no check on boundaries.
  */
 
 #define PEEK(type, func)                  \
@@ -103,23 +64,6 @@ VLOG_DEFINE_THIS_MODULE(lldp);
      (length -= (bytes),       \
      pos += (bytes),           \
      memcmp(pos-bytes, value, bytes))
-#define PEEK_SAVE POKE_SAVE
-#define PEEK_RESTORE POKE_RESTORE
-
-/* LLDP specific. We need a `tlv' pointer. */
-#define POKE_START_LLDP_TLV(type) \
-    (                             \
-        tlv = pos,                \
-        POKE_UINT16(type << 9)    \
-    )
-#define POKE_END_LLDP_TLV                                    \
-    (                                                        \
-        memcpy(&types.f_uint16, tlv, sizeof(uint16_t)),      \
-        types.f_uint16 |= htons((pos - (tlv + 2)) & 0x01ff), \
-        memcpy(tlv, &types.f_uint16, sizeof(uint16_t)),      \
-        1                                                    \
-    )
-
 #define CHECK_TLV_SIZE(x, name)                             \
     do {                                                    \
         if (tlv_size < (x)) {                               \
@@ -128,6 +72,7 @@ VLOG_DEFINE_THIS_MODULE(lldp);
             goto malformed;                                 \
         }                                                   \
     } while (0)
+#define PEEK_SAVE(where) (where = pos, 1)
 
 static union {
     uint8_t  f_uint8;
@@ -161,17 +106,51 @@ lldpd_af_from_lldp_proto(int proto)
     }
 }
 
+static void
+lldp_tlv_put_u8(struct dp_packet *p, uint8_t x)
+{
+    dp_packet_put(p, &x, sizeof x);
+}
+
+static void
+lldp_tlv_put_u16(struct dp_packet *p, uint16_t x)
+{
+    ovs_be16 nx = htons(x);
+    dp_packet_put(p, &nx, sizeof nx);
+}
+
+static void
+lldp_tlv_put_u32(struct dp_packet *p, uint32_t x)
+{
+    ovs_be32 nx = htonl(x);
+    dp_packet_put(p, &nx, sizeof nx);
+}
+
+static void
+lldp_tlv_start(struct dp_packet *p, uint8_t tlv, unsigned int *start)
+{
+    *start = dp_packet_size(p);
+    lldp_tlv_put_u16(p, tlv << 9);
+}
+
+static void
+lldp_tlv_end(struct dp_packet *p, unsigned int start)
+{
+    ovs_be16 *tlv = dp_packet_at_assert(p, start, 2);
+    *tlv |= htons((dp_packet_size(p) - (start + 2)) & 0x1ff);
+}
+
 int
 lldp_send(struct lldpd *global OVS_UNUSED,
           struct lldpd_hardware *hardware,
           struct dp_packet *p)
 {
+    unsigned int orig_size = dp_packet_size(p);
+    unsigned int start;
+
     struct lldpd_port *port;
     struct lldpd_chassis *chassis;
-    struct lldpd_frame *frame;
-    uint8_t *packet, *pos, *tlv;
     struct lldpd_mgmt *mgmt;
-    int length, proto;
     const uint8_t avaya[] = LLDP_TLV_ORG_AVAYA;
     struct lldpd_aa_isid_vlan_maps_tlv *vlan_isid_map;
     uint8_t msg_auth_digest[LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH];
@@ -180,126 +159,71 @@ lldp_send(struct lldpd *global OVS_UNUSED,
     chassis = port->p_chassis;
 
     /* The ethernet header is filled in elsewhere, we must save room for it. */
-    length = hardware->h_mtu - sizeof(struct eth_header);
-    packet = dp_packet_l3(p);
-    VLOG_DBG("LLDP PDU send to %s mtu %d incoming with ptr=%p",
-              hardware->h_ifname, hardware->h_mtu, packet);
-    pos = packet;
-
-    /*
-     * Make room in dp_packet for chassis ID, Port ID, System Name, System
-     * Descr, System Cap
-     */
-    pos = dp_packet_put_uninit(p, sizeof chassis->c_id_subtype +
-                               chassis->c_id_len +
-                               sizeof port->p_id_subtype +
-                               port->p_id_len +
-                               sizeof chassis->c_ttl +
-                               strlen(chassis->c_name) +
-                               strlen(chassis->c_descr) +
-                               sizeof chassis->c_cap_available +
-                               sizeof chassis->c_cap_enabled + 12);
+    VLOG_DBG("LLDP PDU send to %s mtu %d incoming",
+              hardware->h_ifname, hardware->h_mtu);
 
     /* Chassis ID */
-    if (!(POKE_START_LLDP_TLV(LLDP_TLV_CHASSIS_ID) &&
-          POKE_UINT8(chassis->c_id_subtype) &&
-          POKE_BYTES(chassis->c_id, chassis->c_id_len) &&
-          POKE_END_LLDP_TLV)) {
-        goto toobig;
-    }
+    lldp_tlv_start(p, LLDP_TLV_CHASSIS_ID, &start);
+    lldp_tlv_put_u8(p, chassis->c_id_subtype);
+    dp_packet_put(p, chassis->c_id, chassis->c_id_len);
+    lldp_tlv_end(p, start);
 
     /* Port ID */
-    if (!(POKE_START_LLDP_TLV(LLDP_TLV_PORT_ID) &&
-          POKE_UINT8(port->p_id_subtype) &&
-          POKE_BYTES(port->p_id, port->p_id_len) &&
-          POKE_END_LLDP_TLV)) {
-        goto toobig;
-    }
+    lldp_tlv_start(p, LLDP_TLV_PORT_ID, &start);
+    lldp_tlv_put_u8(p, port->p_id_subtype);
+    dp_packet_put(p, port->p_id, port->p_id_len);
+    lldp_tlv_end(p, start);
 
     /* Time to live */
-    if (!(POKE_START_LLDP_TLV(LLDP_TLV_TTL) &&
-          POKE_UINT16(chassis->c_ttl) &&
-          POKE_END_LLDP_TLV)) {
-        goto toobig;
-    }
+    lldp_tlv_start(p, LLDP_TLV_TTL, &start);
+    lldp_tlv_put_u16(p, chassis->c_ttl);
+    lldp_tlv_end(p, start);
 
     /* System name */
     if (chassis->c_name && *chassis->c_name != '\0') {
-        if (!(POKE_START_LLDP_TLV(LLDP_TLV_SYSTEM_NAME) &&
-              POKE_BYTES(chassis->c_name, strlen(chassis->c_name)) &&
-              POKE_END_LLDP_TLV)) {
-            goto toobig;
-        }
+        lldp_tlv_start(p, LLDP_TLV_SYSTEM_NAME, &start);
+        dp_packet_put(p, chassis->c_name, strlen(chassis->c_name));
+        lldp_tlv_end(p, start);
     }
 
     /* System description (skip it if empty) */
     if (chassis->c_descr && *chassis->c_descr != '\0') {
-        if (!(POKE_START_LLDP_TLV(LLDP_TLV_SYSTEM_DESCR) &&
-              POKE_BYTES(chassis->c_descr, strlen(chassis->c_descr)) &&
-              POKE_END_LLDP_TLV)) {
-            goto toobig;
-        }
+        lldp_tlv_start(p, LLDP_TLV_SYSTEM_DESCR, &start);
+        dp_packet_put(p, chassis->c_descr, strlen(chassis->c_descr));
+        lldp_tlv_end(p, start);
     }
 
     /* System capabilities */
-    if (!(POKE_START_LLDP_TLV(LLDP_TLV_SYSTEM_CAP) &&
-          POKE_UINT16(chassis->c_cap_available) &&
-          POKE_UINT16(chassis->c_cap_enabled) &&
-          POKE_END_LLDP_TLV)) {
-        goto toobig;
-    }
+    lldp_tlv_start(p, LLDP_TLV_SYSTEM_CAP, &start);
+    lldp_tlv_put_u16(p, chassis->c_cap_available);
+    lldp_tlv_put_u16(p, chassis->c_cap_enabled);
+    lldp_tlv_end(p, start);
 
     LIST_FOR_EACH (mgmt, m_entries, &chassis->c_mgmt.m_entries) {
-       /*
-        * Make room for 1 mgmt interface
-        */
-        dp_packet_put_uninit(p, 2 + sizeof(uint8_t) +
-                             sizeof(uint8_t) +
-                             mgmt->m_addrsize +
-                             sizeof(uint8_t) +
-                             sizeof(uint32_t) +
-                             sizeof(uint8_t));
-
-        proto = lldpd_af_to_lldp_proto(mgmt->m_family);
-        if (!(POKE_START_LLDP_TLV(LLDP_TLV_MGMT_ADDR) &&
-              /* Size of the address, including its type */
-              POKE_UINT8(mgmt->m_addrsize + 1) &&
-              POKE_UINT8(proto) &&
-              POKE_BYTES(&mgmt->m_addr, mgmt->m_addrsize))) {
-            goto toobig;
-        }
+        lldp_tlv_start(p, LLDP_TLV_MGMT_ADDR, &start);
+        lldp_tlv_put_u8(p, mgmt->m_addrsize + 1);
+        lldp_tlv_put_u8(p, lldpd_af_to_lldp_proto(mgmt->m_family));
+        dp_packet_put(p, &mgmt->m_addr, mgmt->m_addrsize);
 
         /* Interface port type, OID */
         if (mgmt->m_iface == 0) {
-            if (!(/* We don't know the management interface */
-                  POKE_UINT8(LLDP_MGMT_IFACE_UNKNOWN) &&
-                  POKE_UINT32(0))) {
-                goto toobig;
-            }
+            /* We don't know the management interface */
+            lldp_tlv_put_u8(p, LLDP_MGMT_IFACE_UNKNOWN);
+            lldp_tlv_put_u32(p, 0);
         } else {
-            if (!(/* We have the index of the management interface */
-                  POKE_UINT8(LLDP_MGMT_IFACE_IFINDEX) &&
-                  POKE_UINT32(mgmt->m_iface))) {
-                goto toobig;
-            }
+            /* We have the index of the management interface */
+            lldp_tlv_put_u8(p, LLDP_MGMT_IFACE_IFINDEX);
+            lldp_tlv_put_u32(p, mgmt->m_iface);
         }
-        if (!(/* We don't provide an OID for management */
-              POKE_UINT8(0) &&
-              POKE_END_LLDP_TLV)) {
-            goto toobig;
-        }
+        lldp_tlv_put_u8(p, 0);
+        lldp_tlv_end(p, start);
     }
 
     /* Port description */
     if (port->p_descr && *port->p_descr != '\0') {
-        /* make room for port descr */
-        dp_packet_put_uninit(p, 2 + strlen(port->p_descr));
-
-        if (!(POKE_START_LLDP_TLV(LLDP_TLV_PORT_DESCR) &&
-              POKE_BYTES(port->p_descr, strlen(port->p_descr)) &&
-              POKE_END_LLDP_TLV)) {
-            goto toobig;
-        }
+        lldp_tlv_start(p, LLDP_TLV_PORT_DESCR, &start);
+        dp_packet_put(p, port->p_descr, strlen(port->p_descr));
+        lldp_tlv_end(p, start);
     }
 
     /* Add Auto Attach tlvs to packet */
@@ -329,52 +253,31 @@ lldp_send(struct lldpd *global OVS_UNUSED,
         /* Second byte should just be the remaining 8 bits of .smlt_id */
         aa_elem_sys_id_second_byte = port->p_element.system_id.smlt_id & 0x0FF;
 
-        /* make room for element type tlv */
-        dp_packet_put_uninit(p, 2 + sizeof avaya +
-                             sizeof(uint8_t) +
-                             sizeof aa_element_first_byte +
-                             sizeof aa_element_second_byte +
-                             sizeof port->p_element.system_id.system_mac +
-                             sizeof aa_elem_sys_id_first_byte +
-                             sizeof aa_elem_sys_id_second_byte +
-                             sizeof port->p_element.system_id.mlt_id);
-
-        if (!(POKE_START_LLDP_TLV(LLDP_TLV_ORG) &&
-              POKE_BYTES(avaya, sizeof avaya) &&
-              POKE_UINT8(LLDP_TLV_AA_ELEMENT_SUBTYPE) &&
-              POKE_UINT8(aa_element_first_byte) &&
-              POKE_UINT8(aa_element_second_byte) &&
-              POKE_BYTES(&port->p_element.system_id.system_mac,
-              sizeof port->p_element.system_id.system_mac) &&
-              POKE_UINT8(aa_elem_sys_id_first_byte) &&
-              POKE_UINT8(aa_elem_sys_id_second_byte) &&
-              POKE_BYTES(&port->p_element.system_id.mlt_id,
-              sizeof port->p_element.system_id.mlt_id) &&
-              POKE_END_LLDP_TLV)) {
-            goto toobig;
-        }
+        lldp_tlv_start(p, LLDP_TLV_ORG, &start);
+        dp_packet_put(p, avaya, sizeof avaya);
+        lldp_tlv_put_u8(p, LLDP_TLV_AA_ELEMENT_SUBTYPE);
+        lldp_tlv_put_u8(p, aa_element_first_byte);
+        lldp_tlv_put_u8(p, aa_element_second_byte);
+        dp_packet_put(p, &port->p_element.system_id.system_mac,
+                      sizeof port->p_element.system_id.system_mac);
+        lldp_tlv_put_u8(p, aa_elem_sys_id_first_byte);
+        lldp_tlv_put_u8(p, aa_elem_sys_id_second_byte);
+        dp_packet_put(p, &port->p_element.system_id.mlt_id,
+                      sizeof port->p_element.system_id.mlt_id);
+        lldp_tlv_end(p, start);
     }
 
     if (!list_is_empty(&port->p_isid_vlan_maps.m_entries)) {
         int j;
 
-       /*
-        * make room for aa_isid_digest
-        */
-        dp_packet_put_uninit(p, 2 + sizeof avaya +
-                             sizeof(uint8_t) +
-                             sizeof msg_auth_digest);
-
         for (j = 0; j < LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH; j++) {
             msg_auth_digest[j] = 0;
         }
 
-        if (!(POKE_START_LLDP_TLV(LLDP_TLV_ORG) &&
-              POKE_BYTES(avaya, sizeof avaya) &&
-              POKE_UINT8(LLDP_TLV_AA_ISID_VLAN_ASGNS_SUBTYPE) &&
-              POKE_BYTES(msg_auth_digest, sizeof msg_auth_digest))) {
-            goto toobig;
-        }
+        lldp_tlv_start(p, LLDP_TLV_ORG, &start);
+        dp_packet_put(p, avaya, sizeof avaya);
+        lldp_tlv_put_u8(p, LLDP_TLV_AA_ISID_VLAN_ASGNS_SUBTYPE);
+        dp_packet_put(p, msg_auth_digest, sizeof msg_auth_digest);
 
         LIST_FOR_EACH (vlan_isid_map,
                        m_entries,
@@ -384,59 +287,34 @@ lldp_send(struct lldpd *global OVS_UNUSED,
                 (vlan_isid_map->isid_vlan_data.status << 12) |
                 vlan_isid_map->isid_vlan_data.vlan;
 
-            /*
-             * Make room for one isid-vlan mapping
-             */
-            dp_packet_put_uninit(p, sizeof status_vlan_word +
-                                 sizeof vlan_isid_map->isid_vlan_data.isid);
-
-            if (!(POKE_UINT16(status_vlan_word) &&
-                  POKE_BYTES(&vlan_isid_map->isid_vlan_data.isid,
-                      sizeof vlan_isid_map->isid_vlan_data.isid))) {
-                goto toobig;
-            }
+            lldp_tlv_put_u16(p, status_vlan_word);
+            dp_packet_put(p, &vlan_isid_map->isid_vlan_data.isid,
+                          sizeof vlan_isid_map->isid_vlan_data.isid);
         }
 
-        if (!(POKE_END_LLDP_TLV)) {
-           goto toobig;
-        }
+        lldp_tlv_end(p, start);
     }
-
-    /* Make room for the End TLV 0x0000 */
-    dp_packet_put_uninit(p, sizeof(uint16_t));
 
     /* END */
-    if (!(POKE_START_LLDP_TLV(LLDP_TLV_END) &&
-          POKE_END_LLDP_TLV)) {
-        goto toobig;
-    }
+    lldp_tlv_start(p, LLDP_TLV_END, &start);
+    lldp_tlv_end(p, start);
 
     hardware->h_tx_cnt++;
 
-    /* We assume that LLDP frame is the reference */
-    if ((frame = malloc(sizeof(int) + pos - packet)) != NULL) {
-        frame->size = pos - packet;
-        length = frame->size;
-        memcpy(&frame->frame, packet, frame->size);
-
-        if ((hardware->h_lport.p_lastframe == NULL) ||
-            (hardware->h_lport.p_lastframe->size != frame->size) ||
-            (memcmp(hardware->h_lport.p_lastframe->frame, frame->frame,
-            frame->size) != 0)) {
-            free(hardware->h_lport.p_lastframe);
-            hardware->h_lport.p_lastframe = frame;
-            hardware->h_lport.p_lastchange = time(NULL);
-        } else {
-            free(frame);
-        }
+    const char *lldp = dp_packet_at_assert(p, orig_size, 0);
+    unsigned int lldp_len = dp_packet_size(p) - orig_size;
+    if (!hardware->h_lport.p_lastframe
+        || hardware->h_lport.p_lastframe->size != lldp_len
+        || memcmp(hardware->h_lport.p_lastframe->frame, lldp, lldp_len)) {
+        struct lldpd_frame *frame = xmalloc(sizeof *frame + lldp_len);
+        frame->size = lldp_len;
+        memcpy(frame->frame, lldp, lldp_len);
+        free(hardware->h_lport.p_lastframe);
+        hardware->h_lport.p_lastframe = frame;
+        hardware->h_lport.p_lastchange = time(NULL);
     }
 
-    return length;
-
-toobig:
-    free(packet);
-
-    return E2BIG;
+    return dp_packet_size(p);
 }
 
 int

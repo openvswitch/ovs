@@ -153,7 +153,7 @@ test_aa_send(void)
     struct lldpd_aa_isid_vlan_maps_tlv map[2];
 
     uint32_t      stub[512 / 4];
-    struct ofpbuf packet;
+    struct dp_packet packet;
 
     int n;
 
@@ -202,8 +202,8 @@ test_aa_send(void)
     map_init[1].isid_vlan_data.isid[2] = 6;
 
     /* Prepare an empty packet buffer */
-    ofpbuf_use_stub(&packet, stub, sizeof stub);
-    ofpbuf_clear(&packet);
+    dp_packet_use_stub(&packet, stub, sizeof stub);
+    dp_packet_clear(&packet);
 
     /* Create a dummy lldp instance */
     lldp = lldp_create_dummy();
