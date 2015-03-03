@@ -143,8 +143,8 @@ struct bridge {
 struct aa_mapping {
     struct hmap_node hmap_node; /* In struct bridge's "mappings" hmap. */
     struct bridge *bridge;
-    int64_t isid;
-    int64_t vlan;
+    uint32_t isid;
+    uint16_t vlan;
     char *br_name;
 };
 
@@ -3792,9 +3792,8 @@ bridge_configure_aa(struct bridge *br)
 
         atom.integer = m->isid;
         if (ovsdb_datum_find_key(mc, &atom, OVSDB_TYPE_UUID) == UINT_MAX) {
-            VLOG_INFO("Deleting isid=%"PRId64", vlan=%"PRId64,
-                      m->isid,
-                      m->vlan);
+            VLOG_INFO("Deleting isid=%"PRIu32", vlan=%"PRIu16,
+                      m->isid, m->vlan);
             bridge_aa_mapping_destroy(m);
         }
     }

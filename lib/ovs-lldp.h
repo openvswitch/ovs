@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2014 Wind River Systems, Inc.
  * Copyright (c) 2015 Avaya, Inc.
  *
@@ -64,8 +65,8 @@ struct aa_settings {
 /* Configuration of Auto Attach mappings.
  */
 struct aa_mapping_settings {
-    int64_t isid;
-    int64_t vlan;
+    uint32_t isid;
+    uint16_t vlan;
 };
 
 enum bridge_aa_vlan_oper {
@@ -80,7 +81,7 @@ enum bridge_aa_vlan_oper {
 struct bridge_aa_vlan {
     struct ovs_list list_node;
     char *port_name;
-    uint32_t vlan;
+    uint16_t vlan;
     enum bridge_aa_vlan_oper oper;
 };
 

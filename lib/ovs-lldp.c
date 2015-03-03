@@ -78,8 +78,8 @@ enum aa_status {
 struct aa_mapping_internal {
     struct hmap_node hmap_node_isid;
     struct hmap_node hmap_node_aux;
-    int64_t          isid;
-    int64_t          vlan;
+    uint32_t         isid;
+    uint16_t         vlan;
     void             *aux;
     enum aa_status   status;
 };
@@ -119,14 +119,12 @@ chassisid_to_string(uint8_t *array, size_t len, char **str)
 /* Find an Auto Attach mapping keyed by I-SID.
  */
 static struct aa_mapping_internal *
-mapping_find_by_isid(struct lldp *lldp, const uint64_t isid)
+mapping_find_by_isid(struct lldp *lldp, uint32_t isid)
     OVS_REQUIRES(mutex)
 {
     struct aa_mapping_internal *m;
 
-    HMAP_FOR_EACH_IN_BUCKET (m,
-                             hmap_node_isid,
-                             hash_bytes(&isid, sizeof isid, 0),
+    HMAP_FOR_EACH_IN_BUCKET (m, hmap_node_isid, hash_int(isid, 0),
                              &lldp->mappings_by_isid) {
         if (isid == m->isid) {
             return m;
@@ -323,11 +321,8 @@ aa_print_isid_status(struct ds *ds, struct lldp *lldp) OVS_REQUIRES(mutex)
     ds_put_format(ds, "-------- ---- ----------- --------\n");
 
     HMAP_FOR_EACH (m, hmap_node_isid, &lldp->mappings_by_isid) {
-        ds_put_format(ds, "%-8ld %-4ld %-11s %-11s\n",
-                          (long int) m->isid,
-                          (long int) m->vlan,
-                          "Switch",
-                          aa_status_to_str(m->status));
+        ds_put_format(ds, "%-8"PRIu32" %-4"PRIu16" %-11s %-11s\n",
+                      m->isid, m->vlan, "Switch", aa_status_to_str(m->status));
     }
 }
 
@@ -520,8 +515,8 @@ aa_mapping_register(void *aux, const struct aa_mapping_settings *s)
     struct aa_mapping_internal *bridge_m;
     struct lldp *lldp;
 
-    VLOG_INFO("Adding mapping ISID=%ld, VLAN=%ld, aux=%p", (long int) s->isid,
-              (long int) s->vlan, aux);
+    VLOG_INFO("Adding mapping ISID=%"PRIu32", VLAN=%"PRIu16", aux=%p",
+              s->isid, s->vlan, aux);
 
     ovs_mutex_lock(&mutex);
 
@@ -534,11 +529,9 @@ aa_mapping_register(void *aux, const struct aa_mapping_settings *s)
     bridge_m->vlan = s->vlan;
     bridge_m->aux = aux;
     bridge_m->status = AA_STATUS_PENDING;
-    hmap_insert(all_mappings,
-                &bridge_m->hmap_node_isid,
-                hash_bytes((const void *) &bridge_m->isid,
-                           sizeof bridge_m->isid,
-                           0));
+    hmap_insert(all_mappings, &bridge_m->hmap_node_isid,
+                hash_int(bridge_m->isid, 0));
+
 
     /* Update mapping on the all the LLDP instances. */
     HMAP_FOR_EACH (lldp, hmap_node, all_lldps) {
@@ -556,11 +549,8 @@ aa_mapping_register(void *aux, const struct aa_mapping_settings *s)
         m->vlan = s->vlan;
         m->status = AA_STATUS_PENDING;
         m->aux = aux;
-        hmap_insert(&lldp->mappings_by_isid,
-                    &m->hmap_node_isid,
-                    hash_bytes((const void *) &m->isid,
-                               sizeof m->isid,
-                               0));
+        hmap_insert(&lldp->mappings_by_isid, &m->hmap_node_isid,
+                    hash_int(m->isid, 0));
         hmap_insert(&lldp->mappings_by_aux,
                     &m->hmap_node_aux,
                     hash_pointer(m->aux, 0));
@@ -587,7 +577,7 @@ aa_mapping_unregister_mapping(struct lldp *lldp,
                         &hw->h_lport.p_isid_vlan_maps) {
         uint32_t isid = lm->isid_vlan_data.isid;
 
-        if (isid == (uint32_t) m->isid) {
+        if (isid == m->isid) {
             VLOG_INFO("\t\t Removing lport, isid=%u, vlan=%u",
                       isid,
                       lm->isid_vlan_data.vlan);
@@ -626,17 +616,15 @@ aa_mapping_unregister(void *aux)
     HMAP_FOR_EACH (lldp, hmap_node, all_lldps) {
         struct lldpd_hardware *hw;
         struct aa_mapping_internal *m = mapping_find_by_aux(lldp, aux);
-        int64_t isid_tmp = -1, vlan_tmp = -1;
 
         /* Remove from internal hash tables. */
         if (m) {
-            struct aa_mapping_internal *p =
-                mapping_find_by_isid(lldp, m->isid);
+            uint32_t isid = m->isid;
+            uint16_t vlan = m->vlan;
+            struct aa_mapping_internal *p = mapping_find_by_isid(lldp, isid);
 
-            isid_tmp = m->isid;
-            vlan_tmp = m->vlan;
-            VLOG_INFO("\t Removing mapping ISID=%ld, VLAN=%ld (lldp->name=%s)",
-                      (long int) m->isid, (long int) m->vlan, lldp->name);
+            VLOG_INFO("\t Removing mapping ISID=%"PRIu32", VLAN=%"PRIu16
+                      " (lldp->name=%s)", isid, vlan, lldp->name);
 
             if (p) {
                 hmap_remove(&lldp->mappings_by_isid, &p->hmap_node_isid);
@@ -654,13 +642,11 @@ aa_mapping_unregister(void *aux)
                 aa_mapping_unregister_mapping(lldp, hw, m);
             }
 
-            if (isid_tmp >= 0 && vlan_tmp >= 0) {
-                /* Remove from the all_mappings */
-                HMAP_FOR_EACH (m, hmap_node_isid, all_mappings) {
-                    if (m && isid_tmp == m->isid && vlan_tmp == m->vlan) {
-                         hmap_remove(all_mappings, &m->hmap_node_isid);
-                         break;
-                    }
+            /* Remove from the all_mappings */
+            HMAP_FOR_EACH (m, hmap_node_isid, all_mappings) {
+                if (m && isid == m->isid && vlan == m->vlan) {
+                    hmap_remove(all_mappings, &m->hmap_node_isid);
+                    break;
                 }
             }
         }
@@ -878,11 +864,8 @@ lldp_create(const struct netdev *netdev,
         }
 
         p = xmemdup(m, sizeof *p);
-        hmap_insert(&lldp->mappings_by_isid,
-                    &p->hmap_node_isid,
-                    hash_bytes((const void *) &p->isid,
-                               sizeof p->isid,
-                               0));
+        hmap_insert(&lldp->mappings_by_isid, &p->hmap_node_isid,
+                    hash_int(p->isid, 0));
         hmap_insert(&lldp->mappings_by_aux,
                     &p->hmap_node_aux,
                     hash_pointer(p->aux, 0));
