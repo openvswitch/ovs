@@ -877,7 +877,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
      * restarted) at just the right time such that feature probes from the
      * previous run are still present in the datapath. */
     error = dpif_flow_put(dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_PROBE,
-                          ofpbuf_data(key), ofpbuf_size(key), NULL, 0, NULL, 0,
+                          key->data, key->size, NULL, 0, NULL, 0,
                           ufid, PMD_ID_NULL, NULL);
     if (error) {
         if (error != EINVAL) {
@@ -888,14 +888,14 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
     }
 
     ofpbuf_use_stack(&reply, &stub, sizeof stub);
-    error = dpif_flow_get(dpif, ofpbuf_data(key), ofpbuf_size(key), ufid,
+    error = dpif_flow_get(dpif, key->data, key->size, ufid,
                           PMD_ID_NULL, &reply, &flow);
     if (!error
         && (!ufid || (flow.ufid_present && ovs_u128_equal(ufid, &flow.ufid)))) {
         enable_feature = true;
     }
 
-    error = dpif_flow_del(dpif, ofpbuf_data(key), ofpbuf_size(key), ufid,
+    error = dpif_flow_del(dpif, key->data, key->size, ufid,
                           PMD_ID_NULL, NULL);
     if (error) {
         VLOG_WARN("%s: failed to delete %s feature probe flow",
@@ -1103,8 +1103,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
             odp_put_tunnel_action(&md->tunnel, &execute_actions);
             ofpbuf_put(&execute_actions, action, NLA_ALIGN(action->nla_len));
 
-            execute.actions = ofpbuf_data(&execute_actions);
-            execute.actions_len = ofpbuf_size(&execute_actions);
+            execute.actions = execute_actions.data;
+            execute.actions_len = execute_actions.size;
         } else {
             execute.actions = action;
             execute.actions_len = NLA_ALIGN(action->nla_len);

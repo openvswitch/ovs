@@ -1140,8 +1140,7 @@ eth_from_packet_or_flow(const char *s)
     }
 
     /* Convert odp_key to flow. */
-    fitness = odp_flow_key_to_flow(ofpbuf_data(&odp_key),
-                                   ofpbuf_size(&odp_key), &flow);
+    fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
     if (fitness == ODP_FIT_ERROR) {
         ofpbuf_uninit(&odp_key);
         return NULL;

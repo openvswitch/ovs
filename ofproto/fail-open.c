@@ -232,7 +232,7 @@ fail_open_flushed(struct fail_open *fo)
 
         match_init_catchall(&match);
         ofproto_add_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY,
-                         ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts));
+                         ofpacts.data, ofpacts.size);
 
         ofpbuf_uninit(&ofpacts);
     }

@@ -452,7 +452,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         if (!error) {
             enum ofperr err;
 
-            err = ofpacts_check(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &fm->match.flow,
+            err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match.flow,
                                 OFPP_MAX, fm->table_id, 255, usable_protocols);
             if (!err && !usable_protocols) {
                 err = OFPERR_OFPBAC_MATCH_INCONSISTENT;
@@ -468,7 +468,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             return error;
         }
 
-        fm->ofpacts_len = ofpbuf_size(&ofpacts);
+        fm->ofpacts_len = ofpacts.size;
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
     } else {
         fm->ofpacts_len = 0;
@@ -1151,8 +1151,8 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
         ofpbuf_uninit(&ofpacts);
         return error;
     }
-    bucket->ofpacts = ofpbuf_data(&ofpacts);
-    bucket->ofpacts_len = ofpbuf_size(&ofpacts);
+    bucket->ofpacts = ofpacts.data;
+    bucket->ofpacts_len = ofpacts.size;
 
     return NULL;
 }

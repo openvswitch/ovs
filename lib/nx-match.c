@@ -283,16 +283,16 @@ static enum ofperr
 nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
                  const struct mf_field **field)
 {
-    if (ofpbuf_size(b) < 4) {
+    if (b->size < 4) {
         goto bad_len;
     }
 
-    *header = ((uint64_t) ntohl(get_unaligned_be32(ofpbuf_data(b)))) << 32;
+    *header = ((uint64_t) ntohl(get_unaligned_be32(b->data))) << 32;
     if (is_experimenter_oxm(*header)) {
-        if (ofpbuf_size(b) < 8) {
+        if (b->size < 8) {
             goto bad_len;
         }
-        *header = ntohll(get_unaligned_be64(ofpbuf_data(b)));
+        *header = ntohll(get_unaligned_be64(b->data));
     }
     if (nxm_length(*header) <= nxm_experimenter_len(*header)) {
         VLOG_WARN_RL(&rl, "OXM header "NXM_HEADER_FMT" has invalid length %d "
@@ -316,7 +316,7 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
 
 bad_len:
     VLOG_DBG_RL(&rl, "encountered partial (%"PRIu32"-byte) OXM entry",
-                ofpbuf_size(b));
+                b->size);
 error:
     *header = 0;
     *field = NULL;
@@ -343,7 +343,7 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
     if (!payload) {
         VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" calls for %u-byte "
                     "payload but only %"PRIu32" bytes follow OXM header",
-                    NXM_HEADER_ARGS(*header), payload_len, ofpbuf_size(b));
+                    NXM_HEADER_ARGS(*header), payload_len, b->size);
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
@@ -453,8 +453,8 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
     }
 
     ofpbuf_use_const(&b, p, match_len);
-    while (ofpbuf_size(&b)) {
-        const uint8_t *pos = ofpbuf_data(&b);
+    while (b.size) {
+        const uint8_t *pos = b.data;
         const struct mf_field *field;
         union mf_value value;
         union mf_value mask;
@@ -505,7 +505,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         if (!p) {
             VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
                         "multiple of 8, is longer than space in message (max "
-                        "length %"PRIu32")", match_len, ofpbuf_size(b));
+                        "length %"PRIu32")", match_len, b->size);
             return OFPERR_OFPBMC_BAD_LEN;
         }
     }
@@ -541,11 +541,11 @@ nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
 static enum ofperr
 oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
 {
-    struct ofp11_match_header *omh = ofpbuf_data(b);
+    struct ofp11_match_header *omh = b->data;
     uint8_t *p;
     uint16_t match_len;
 
-    if (ofpbuf_size(b) < sizeof *omh) {
+    if (b->size < sizeof *omh) {
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
@@ -562,7 +562,7 @@ oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
     if (!p) {
         VLOG_DBG_RL(&rl, "oxm length %u, rounded up to a "
                     "multiple of 8, is longer than space in message (max "
-                    "length %"PRIu32")", match_len, ofpbuf_size(b));
+                    "length %"PRIu32")", match_len, b->size);
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
@@ -813,7 +813,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
            ovs_be64 cookie, ovs_be64 cookie_mask)
 {
     const struct flow *flow = &match->flow;
-    const size_t start_len = ofpbuf_size(b);
+    const size_t start_len = b->size;
     int match_len;
     int i;
 
@@ -965,7 +965,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
         }
     }
 
-    match_len = ofpbuf_size(b) - start_len;
+    match_len = b->size - start_len;
     return match_len;
 }
 
@@ -1006,7 +1006,7 @@ oxm_put_match(struct ofpbuf *b, const struct match *match,
 {
     int match_len;
     struct ofp11_match_header *omh;
-    size_t start_len = ofpbuf_size(b);
+    size_t start_len = b->size;
     ovs_be64 cookie = htonll(0), cookie_mask = htonll(0);
 
     ofpbuf_put_uninit(b, sizeof *omh);
@@ -1068,7 +1068,7 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
 
     ofpbuf_use_const(&b, p, match_len);
     ds_init(&s);
-    while (ofpbuf_size(&b)) {
+    while (b.size) {
         union mf_value value;
         union mf_value mask;
         enum ofperr error;
@@ -1100,12 +1100,12 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
         ds_put_char(&s, ')');
     }
 
-    if (ofpbuf_size(&b)) {
+    if (b.size) {
         if (s.length) {
             ds_put_cstr(&s, ", ");
         }
 
-        ds_put_format(&s, "<%u invalid bytes>", ofpbuf_size(&b));
+        ds_put_format(&s, "<%u invalid bytes>", b.size);
     }
 
     return ds_steal_cstr(&s);
@@ -1114,7 +1114,7 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
 char *
 oxm_match_to_string(const struct ofpbuf *p, unsigned int match_len)
 {
-    const struct ofp11_match_header *omh = ofpbuf_data(p);
+    const struct ofp11_match_header *omh = p->data;
     uint16_t match_len_;
     struct ds s;
 
@@ -1230,10 +1230,10 @@ static int
 nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 {
     const char *full_s = s;
-    const size_t start_len = ofpbuf_size(b);
+    const size_t start_len = b->size;
 
     if (!strcmp(s, "<any>")) {
-        /* Ensure that 'ofpbuf_data(b)' isn't actually null. */
+        /* Ensure that 'b->data' isn't actually null. */
         ofpbuf_prealloc_tailroom(b, 1);
         return 0;
     }
@@ -1282,7 +1282,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
         s++;
     }
 
-    return ofpbuf_size(b) - start_len;
+    return b->size - start_len;
 }
 
 int
@@ -1298,7 +1298,7 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
 {
     int match_len;
     struct ofp11_match_header *omh;
-    size_t start_len = ofpbuf_size(b);
+    size_t start_len = b->size;
 
     ofpbuf_put_uninit(b, sizeof *omh);
     match_len = nx_match_from_string_raw(s, b) + sizeof *omh;
@@ -1475,9 +1475,9 @@ nx_stack_pop(struct ofpbuf *stack)
 {
     union mf_subvalue *v = NULL;
 
-    if (ofpbuf_size(stack)) {
+    if (stack->size) {
 
-        ofpbuf_set_size(stack, ofpbuf_size(stack) - sizeof *v);
+        stack->size -= sizeof *v;
         v = (union mf_subvalue *) ofpbuf_tail(stack);
     }
 

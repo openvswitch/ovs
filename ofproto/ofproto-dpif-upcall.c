@@ -980,8 +980,8 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 
     if (!upcall->xout.slow) {
         ofpbuf_use_const(&upcall->put_actions,
-                         ofpbuf_data(upcall->xout.odp_actions),
-                         ofpbuf_size(upcall->xout.odp_actions));
+                         upcall->xout.odp_actions->data,
+                         upcall->xout.odp_actions->size);
     } else {
         ofpbuf_init(&upcall->put_actions, 0);
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
@@ -1033,8 +1033,8 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
     }
 
     if (upcall.xout.slow && put_actions) {
-        ofpbuf_put(put_actions, ofpbuf_data(&upcall.put_actions),
-                   ofpbuf_size(&upcall.put_actions));
+        ofpbuf_put(put_actions, upcall.put_actions.data,
+                   upcall.put_actions.size);
     }
 
     if (OVS_LIKELY(wc)) {
@@ -1170,7 +1170,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
              * actions were composed assuming that the packet contained no
              * VLAN.  So, we must remove the VLAN header from the packet before
              * trying to execute the actions. */
-            if (ofpbuf_size(upcall->xout.odp_actions)) {
+            if (upcall->xout.odp_actions->size) {
                 eth_pop_vlan(CONST_CAST(struct dp_packet *, upcall->packet));
             }
 
@@ -1200,19 +1200,19 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->dop.u.flow_put.mask_len = ukey->mask_len;
             op->dop.u.flow_put.ufid = upcall->ufid;
             op->dop.u.flow_put.stats = NULL;
-            op->dop.u.flow_put.actions = ofpbuf_data(ukey->actions);
-            op->dop.u.flow_put.actions_len = ofpbuf_size(ukey->actions);
+            op->dop.u.flow_put.actions = ukey->actions->data;
+            op->dop.u.flow_put.actions_len = ukey->actions->size;
         }
 
-        if (ofpbuf_size(upcall->xout.odp_actions)) {
+        if (upcall->xout.odp_actions->size) {
             op = &ops[n_ops++];
             op->ukey = NULL;
             op->dop.type = DPIF_OP_EXECUTE;
             op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
                                     &op->dop.u.execute.packet->md);
-            op->dop.u.execute.actions = ofpbuf_data(upcall->xout.odp_actions);
-            op->dop.u.execute.actions_len = ofpbuf_size(upcall->xout.odp_actions);
+            op->dop.u.execute.actions = upcall->xout.odp_actions->data;
+            op->dop.u.execute.actions_len = upcall->xout.odp_actions->size;
             op->dop.u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
             op->dop.u.execute.probe = false;
         }
@@ -1329,8 +1329,7 @@ ukey_create_from_upcall(const struct upcall *upcall)
                                UINT32_MAX, max_mpls, recirc);
     }
 
-    return ukey_create__(ofpbuf_data(&keybuf), ofpbuf_size(&keybuf),
-                         ofpbuf_data(&maskbuf), ofpbuf_size(&maskbuf),
+    return ukey_create__(keybuf.data, keybuf.size, maskbuf.data, maskbuf.size,
                          true, upcall->ufid, upcall->pmd_id,
                          &upcall->put_actions, upcall->dump_seq,
                          upcall->reval_seq, 0);
@@ -1646,8 +1645,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (!xout.slow) {
-        ofpbuf_use_const(&xout_actions, ofpbuf_data(xout.odp_actions),
-                         ofpbuf_size(xout.odp_actions));
+        ofpbuf_use_const(&xout_actions, xout.odp_actions->data,
+                         xout.odp_actions->size);
     } else {
         ofpbuf_use_stack(&xout_actions, slow_path_buf, sizeof slow_path_buf);
         compose_slow_path(udpif, &xout, &flow, flow.in_port.odp_port,

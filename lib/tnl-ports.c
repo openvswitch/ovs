@@ -169,15 +169,15 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         ofpbuf_use_stack(&buf, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&buf, &flow, &wc.masks,
                                flow.in_port.odp_port, true);
-        key = ofpbuf_data(&buf);
-        key_len = ofpbuf_size(&buf);
+        key = buf.data;
+        key_len = buf.size;
         /* mask*/
         ofpbuf_use_stack(&buf, &maskbuf, sizeof maskbuf);
         odp_flow_key_from_mask(&buf, &wc.masks, &flow,
                                odp_to_u32(wc.masks.in_port.odp_port),
                                SIZE_MAX, false);
-        mask = ofpbuf_data(&buf);
-        mask_len = ofpbuf_size(&buf);
+        mask = buf.data;
+        mask_len = buf.size;
 
         /* build string. */
         odp_flow_format(key, key_len, mask, mask_len, NULL, &ds, false);

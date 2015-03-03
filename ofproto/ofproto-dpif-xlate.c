@@ -2736,13 +2736,13 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 /* Forwarding is disabled by STP and RSTP.  Let OFPP_NORMAL and
                  * the learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
-                size_t old_size = ofpbuf_size(ctx->xout->odp_actions);
+                size_t old_size = ctx->xout->odp_actions->size;
                 mirror_mask_t old_mirrors = ctx->xout->mirrors;
                 xlate_table_action(ctx, flow->in_port.ofp_port, table_id,
                                    true, true);
                 ctx->xout->mirrors = old_mirrors;
                 ctx->base_flow = old_base_flow;
-                ofpbuf_set_size(ctx->xout->odp_actions, old_size);
+                ctx->xout->odp_actions->size = old_size;
             }
         }
 
@@ -2926,9 +2926,9 @@ xlate_resubmit_resource_check(struct xlate_ctx *ctx)
                     MAX_RESUBMIT_RECURSION);
     } else if (ctx->resubmits >= MAX_RESUBMITS + MAX_INTERNAL_RESUBMITS) {
         VLOG_ERR_RL(&rl, "over %d resubmit actions", MAX_RESUBMITS);
-    } else if (ofpbuf_size(ctx->xout->odp_actions) > UINT16_MAX) {
+    } else if (ctx->xout->odp_actions->size > UINT16_MAX) {
         VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of actions");
-    } else if (ofpbuf_size(&ctx->stack) >= 65536) {
+    } else if (ctx->stack.size >= 65536) {
         VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of stack");
     } else {
         return true;
@@ -3008,7 +3008,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
 
     ofpacts_execute_action_set(&action_list, &action_set);
     ctx->recurse++;
-    do_xlate_actions(ofpbuf_data(&action_list), ofpbuf_size(&action_list), ctx);
+    do_xlate_actions(action_list.data, action_list.size, ctx);
     ctx->recurse--;
 
     ofpbuf_uninit(&action_set);
@@ -3211,8 +3211,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                                           ctx->xbridge->masked_set_action);
 
     odp_execute_actions(NULL, &packet, 1, false,
-                        ofpbuf_data(ctx->xout->odp_actions),
-                        ofpbuf_size(ctx->xout->odp_actions), NULL);
+                        ctx->xout->odp_actions->data,
+                        ctx->xout->odp_actions->size, NULL);
 
     pin = xmalloc(sizeof *pin);
     pin->up.packet_len = dp_packet_size(packet);
@@ -3754,7 +3754,7 @@ xlate_action_set(struct xlate_ctx *ctx)
     ctx->in_action_set = true;
     ofpbuf_use_stub(&action_list, action_list_stub, sizeof action_list_stub);
     ofpacts_execute_action_set(&action_list, &ctx->action_set);
-    do_xlate_actions(ofpbuf_data(&action_list), ofpbuf_size(&action_list), ctx);
+    do_xlate_actions(action_list.data, action_list.size, ctx);
     ctx->in_action_set = false;
     ofpbuf_uninit(&action_list);
 }
@@ -4215,8 +4215,7 @@ xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
     dst->odp_actions = &dst->odp_actions_buf;
     ofpbuf_use_stub(dst->odp_actions, dst->odp_actions_stub,
                     sizeof dst->odp_actions_stub);
-    ofpbuf_put(dst->odp_actions, ofpbuf_data(src->odp_actions),
-               ofpbuf_size(src->odp_actions));
+    ofpbuf_put(dst->odp_actions, src->odp_actions->data, src->odp_actions->size);
 }
 
 static struct skb_priority_to_dscp *
@@ -4267,8 +4266,8 @@ actions_output_to_local_port(const struct xlate_ctx *ctx)
     const struct nlattr *a;
     unsigned int left;
 
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, ofpbuf_data(ctx->xout->odp_actions),
-                             ofpbuf_size(ctx->xout->odp_actions)) {
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, ctx->xout->odp_actions->data,
+                             ctx->xout->odp_actions->size) {
         if (nl_attr_type(a) == OVS_ACTION_ATTR_OUTPUT
             && nl_attr_get_odp_port(a) == local_odp_port) {
             return true;
@@ -4322,8 +4321,7 @@ count_output_actions(const struct ofpbuf *odp_actions)
     size_t left;
     int n = 0;
 
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, ofpbuf_data(odp_actions),
-                             ofpbuf_size(odp_actions)) {
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, odp_actions->data, odp_actions->size) {
         if (a->nla_type == OVS_ACTION_ATTR_OUTPUT) {
             n++;
         }
@@ -4341,7 +4339,7 @@ static bool
 too_many_output_actions(const struct ofpbuf *odp_actions OVS_UNUSED)
 {
 #ifdef __linux__
-    return (ofpbuf_size(odp_actions) / NL_A_U32_SIZE > netdev_max_backlog()
+    return (odp_actions->size / NL_A_U32_SIZE > netdev_max_backlog()
             && count_output_actions(odp_actions) > netdev_max_backlog());
 #else
     /* OSes other than Linux might have similar limits, but we don't know how
@@ -4524,7 +4522,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         add_sflow_action(&ctx);
         add_ipfix_action(&ctx);
-        sample_actions_len = ofpbuf_size(ctx.xout->odp_actions);
+        sample_actions_len = ctx.xout->odp_actions->size;
 
         if (tnl_may_send && (!in_port || may_receive(in_port, &ctx))) {
             do_xlate_actions(ofpacts, ofpacts_len, &ctx);
@@ -4533,11 +4531,11 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
              * packet, so drop it now if forwarding is disabled. */
             if (in_port && (!xport_stp_forward_state(in_port) ||
                             !xport_rstp_forward_state(in_port))) {
-                ofpbuf_set_size(ctx.xout->odp_actions, sample_actions_len);
+                ctx.xout->odp_actions->size = sample_actions_len;
             }
         }
 
-        if (ofpbuf_size(&ctx.action_set)) {
+        if (ctx.action_set.size) {
             xlate_action_set(&ctx);
         }
 
@@ -4554,7 +4552,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    if (nl_attr_oversized(ofpbuf_size(ctx.xout->odp_actions))) {
+    if (nl_attr_oversized(ctx.xout->odp_actions->size)) {
         /* These datapath actions are too big for a Netlink attribute, so we
          * can't hand them to the kernel directly.  dpif_execute() can execute
          * them one by one with help, so just mark the result as SLOW_ACTION to

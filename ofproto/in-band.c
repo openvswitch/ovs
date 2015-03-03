@@ -390,7 +390,7 @@ in_band_run(struct in_band *ib)
         switch (rule->op) {
         case ADD:
             ofproto_add_flow(ib->ofproto, &rule->match, rule->priority,
-                             ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts));
+                             ofpacts.data, ofpacts.size);
             break;
 
         case DEL:

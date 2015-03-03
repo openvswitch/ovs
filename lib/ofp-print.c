@@ -1355,9 +1355,9 @@ ofp_print_error_msg(struct ds *string, const struct ofp_header *oh)
     ds_put_format(string, " %s\n", ofperr_get_name(error));
 
     if (error == OFPERR_OFPHFC_INCOMPATIBLE || error == OFPERR_OFPHFC_EPERM) {
-        ds_put_printable(string, ofpbuf_data(&payload), ofpbuf_size(&payload));
+        ds_put_printable(string, payload.data, payload.size);
     } else {
-        s = ofp_to_string(ofpbuf_data(&payload), ofpbuf_size(&payload), 1);
+        s = ofp_to_string(payload.data, payload.size, 1);
         ds_put_cstr(string, s);
         free(s);
     }

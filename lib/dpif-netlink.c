@@ -867,8 +867,8 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, struct netdev *netdev,
             }
             nl_msg_end_nested(&options, ext_ofs);
         }
-        request.options = ofpbuf_data(&options);
-        request.options_len = ofpbuf_size(&options);
+        request.options = options.data;
+        request.options_len = options.size;
     }
 
     request.port_no = *port_nop;
@@ -1469,7 +1469,7 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
 
     n_flows = 0;
     while (!n_flows
-           || (n_flows < max_flows && ofpbuf_size(&thread->nl_flows))) {
+           || (n_flows < max_flows && thread->nl_flows.size)) {
         struct dpif_netlink_flow datapath_flow;
         struct ofpbuf nl_flow;
         int error;
@@ -1973,7 +1973,7 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
     struct ofpbuf b;
     int type;
 
-    ofpbuf_use_const(&b, ofpbuf_data(buf), ofpbuf_size(buf));
+    ofpbuf_use_const(&b, buf->data, buf->size);
 
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
@@ -2393,7 +2393,7 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
 
     dpif_netlink_vport_init(vport);
 
-    ofpbuf_use_const(&b, ofpbuf_data(buf), ofpbuf_size(buf));
+    ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
     ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
@@ -2561,7 +2561,7 @@ dpif_netlink_dp_from_ofpbuf(struct dpif_netlink_dp *dp, const struct ofpbuf *buf
 
     dpif_netlink_dp_init(dp);
 
-    ofpbuf_use_const(&b, ofpbuf_data(buf), ofpbuf_size(buf));
+    ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
     ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
@@ -2719,7 +2719,7 @@ dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
 
     dpif_netlink_flow_init(flow);
 
-    ofpbuf_use_const(&b, ofpbuf_data(buf), ofpbuf_size(buf));
+    ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
     ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);

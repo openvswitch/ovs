@@ -3331,7 +3331,7 @@ handle_table_features_request(struct ofconn *ofconn,
 
     ofpbuf_use_const(&msg, request, ntohs(request->length));
     ofpraw_pull_assert(&msg);
-    if (ofpbuf_size(&msg) || ofpmp_more(request)) {
+    if (msg.size || ofpmp_more(request)) {
         return OFPERR_OFPTFFC_EPERM;
     }
 
@@ -6293,7 +6293,7 @@ static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    const struct ofp_header *oh = ofpbuf_data(msg);
+    const struct ofp_header *oh = msg->data;
     enum ofptype type;
     enum ofperr error;
 
@@ -6474,7 +6474,7 @@ handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 {
     int error = handle_openflow__(ofconn, ofp_msg);
     if (error) {
-        ofconn_send_error(ofconn, ofpbuf_data(ofp_msg), error);
+        ofconn_send_error(ofconn, ofp_msg->data, error);
     }
     COVERAGE_INC(ofproto_recv_openflow);
 }

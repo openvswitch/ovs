@@ -1573,19 +1573,19 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
 
         /* Key */
-        offset = ofpbuf_size(key_buf);
+        offset = key_buf->size;
         flow->key = ofpbuf_tail(key_buf);
         odp_flow_key_from_flow(key_buf, &netdev_flow->flow, &wc.masks,
                                netdev_flow->flow.in_port.odp_port, true);
-        flow->key_len = ofpbuf_size(key_buf) - offset;
+        flow->key_len = key_buf->size - offset;
 
         /* Mask */
-        offset = ofpbuf_size(mask_buf);
+        offset = mask_buf->size;
         flow->mask = ofpbuf_tail(mask_buf);
         odp_flow_key_from_mask(mask_buf, &wc.masks, &netdev_flow->flow,
                                odp_to_u32(wc.masks.in_port.odp_port),
                                SIZE_MAX, true);
-        flow->mask_len = ofpbuf_size(mask_buf) - offset;
+        flow->mask_len = mask_buf->size - offset;
 
         /* Actions */
         actions = dp_netdev_flow_get_actions(netdev_flow);
@@ -2711,13 +2711,14 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         packet_str = ofp_packet_to_string(dp_packet_data(packet_),
                                           dp_packet_size(packet_));
 
-        odp_flow_key_format(ofpbuf_data(&key), ofpbuf_size(&key), &ds);
+        odp_flow_key_format(key.data, key.size, &ds);
 
         VLOG_DBG("%s: %s upcall:\n%s\n%s", dp->name,
                  dpif_upcall_type_to_string(type), ds_cstr(&ds), packet_str);
 
         ofpbuf_uninit(&key);
         free(packet_str);
+
         ds_destroy(&ds);
     }
 
@@ -2947,13 +2948,9 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
             dp_netdev_execute_actions(pmd, &packets[i], 1, true,
-                                      ofpbuf_data(&actions),
-                                      ofpbuf_size(&actions));
+                                      actions.data, actions.size);
 
-            add_actions = ofpbuf_size(&put_actions)
-                ? &put_actions
-                : &actions;
-
+            add_actions = put_actions.size ? &put_actions : &actions;
             if (OVS_LIKELY(error != ENOSPC)) {
                 /* XXX: There's a race window where a flow covering this packet
                  * could have already been installed since we last did the flow
@@ -2965,8 +2962,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 netdev_flow = dp_netdev_pmd_lookup_flow(pmd, &keys[i]);
                 if (OVS_LIKELY(!netdev_flow)) {
                     netdev_flow = dp_netdev_flow_add(pmd, &match, &ufid,
-                                                     ofpbuf_data(add_actions),
-                                                     ofpbuf_size(add_actions));
+                                                     add_actions->data,
+                                                     add_actions->size);
                 }
                 ovs_mutex_unlock(&pmd->flow_mutex);
 
@@ -3183,8 +3180,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
                                          NULL);
                 if (!error || error == ENOSPC) {
                     dp_netdev_execute_actions(pmd, &packets[i], 1, may_steal,
-                                              ofpbuf_data(&actions),
-                                              ofpbuf_size(&actions));
+                                              actions.data, actions.size);
                 } else if (may_steal) {
                     dp_packet_delete(packets[i]);
                 }

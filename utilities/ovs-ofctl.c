@@ -505,7 +505,7 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
     ofpmsg_update_length(request);
     run(vconn_transact(vconn, request, &reply), "talking to %s",
         vconn_get_name(vconn));
-    ofp_print(stdout, ofpbuf_data(reply), ofpbuf_size(reply), verbosity + 1);
+    ofp_print(stdout, reply->data, reply->size, verbosity + 1);
     ofpbuf_delete(reply);
 }
 
@@ -524,13 +524,13 @@ dump_trivial_transaction(const char *vconn_name, enum ofpraw raw)
 static void
 dump_stats_transaction(struct vconn *vconn, struct ofpbuf *request)
 {
-    const struct ofp_header *request_oh = ofpbuf_data(request);
+    const struct ofp_header *request_oh = request->data;
     ovs_be32 send_xid = request_oh->xid;
     enum ofpraw request_raw;
     enum ofpraw reply_raw;
     bool done = false;
 
-    ofpraw_decode_partial(&request_raw, ofpbuf_data(request), ofpbuf_size(request));
+    ofpraw_decode_partial(&request_raw, request->data, request->size);
     reply_raw = ofpraw_stats_request_to_reply(request_raw,
                                               request_oh->version);
 
@@ -540,20 +540,20 @@ dump_stats_transaction(struct vconn *vconn, struct ofpbuf *request)
         struct ofpbuf *reply;
 
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) ofpbuf_data(reply))->xid;
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
             enum ofpraw raw;
 
-            ofp_print(stdout, ofpbuf_data(reply), ofpbuf_size(reply), verbosity + 1);
+            ofp_print(stdout, reply->data, reply->size, verbosity + 1);
 
-            ofpraw_decode(&raw, ofpbuf_data(reply));
+            ofpraw_decode(&raw, reply->data);
             if (ofptype_from_ofpraw(raw) == OFPTYPE_ERROR) {
                 done = true;
             } else if (raw == reply_raw) {
-                done = !ofpmp_more(ofpbuf_data(reply));
+                done = !ofpmp_more(reply->data);
             } else {
                 ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(ofpbuf_data(reply), ofpbuf_size(reply),
+                          ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));
             }
         } else {
@@ -593,7 +593,7 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
     run(vconn_transact_multiple_noreply(vconn, requests, &reply),
         "talking to %s", vconn_get_name(vconn));
     if (reply) {
-        ofp_print(stderr, ofpbuf_data(reply), ofpbuf_size(reply), verbosity + 2);
+        ofp_print(stderr, reply->data, reply->size, verbosity + 2);
         exit(1);
     }
     ofpbuf_delete(reply);
@@ -664,7 +664,7 @@ ofctl_show(int argc OVS_UNUSED, char *argv[])
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
 
     has_ports = ofputil_switch_features_has_ports(reply);
-    ofp_print(stdout, ofpbuf_data(reply), ofpbuf_size(reply), verbosity + 1);
+    ofp_print(stdout, reply->data, reply->size, verbosity + 1);
     ofpbuf_delete(reply);
 
     if (!has_ports) {
@@ -731,8 +731,8 @@ fetch_port_by_features(struct vconn *vconn,
     run(vconn_transact(vconn, request, &reply),
         "talking to %s", vconn_get_name(vconn));
 
-    oh = ofpbuf_data(reply);
-    if (ofptype_decode(&type, ofpbuf_data(reply))
+    oh = reply->data;
+    if (ofptype_decode(&type, reply->data)
         || type != OFPTYPE_FEATURES_REPLY) {
         ovs_fatal(0, "%s: received bad features reply", vconn_get_name(vconn));
     }
@@ -783,7 +783,7 @@ fetch_port_by_stats(struct vconn *vconn,
 
     request = ofputil_encode_port_desc_stats_request(vconn_get_version(vconn),
                                                      port_no);
-    send_xid = ((struct ofp_header *) ofpbuf_data(request))->xid;
+    send_xid = ((struct ofp_header *) request->data)->xid;
 
     send_openflow_buffer(vconn, request);
     while (!done) {
@@ -791,9 +791,9 @@ fetch_port_by_stats(struct vconn *vconn,
         struct ofpbuf *reply;
 
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) ofpbuf_data(reply))->xid;
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
-            struct ofp_header *oh = ofpbuf_data(reply);
+            struct ofp_header *oh = reply->data;
             enum ofptype type;
             struct ofpbuf b;
             uint16_t flags;
@@ -802,7 +802,7 @@ fetch_port_by_stats(struct vconn *vconn,
             if (ofptype_pull(&type, &b)
                 || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(ofpbuf_data(reply), ofpbuf_size(reply),
+                          ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));
             }
 
@@ -906,7 +906,7 @@ try_set_protocol(struct vconn *vconn, enum ofputil_protocol want,
         run(vconn_transact_noreply(vconn, request, &reply),
             "talking to %s", vconn_get_name(vconn));
         if (reply) {
-            char *s = ofp_to_string(ofpbuf_data(reply), ofpbuf_size(reply), 2);
+            char *s = ofp_to_string(reply->data, reply->size, 2);
             VLOG_DBG("%s: failed to set protocol, switch replied: %s",
                      vconn_get_name(vconn), s);
             free(s);
@@ -1040,7 +1040,7 @@ ofctl_dump_flows(int argc, char *argv[])
         size_t i;
 
         vconn = prepare_dump_flows(argc, argv, false, &request);
-        send_xid = ((struct ofp_header *) ofpbuf_data(request))->xid;
+        send_xid = ((struct ofp_header *) request->data)->xid;
         send_openflow_buffer(vconn, request);
 
         fses = NULL;
@@ -1310,13 +1310,13 @@ openflow_from_hex(const char *hex, struct ofpbuf **msgp)
         return "Trailing garbage in hex data";
     }
 
-    if (ofpbuf_size(msg) < sizeof(struct ofp_header)) {
+    if (msg->size < sizeof(struct ofp_header)) {
         ofpbuf_delete(msg);
         return "Message too short for OpenFlow";
     }
 
-    oh = ofpbuf_data(msg);
-    if (ofpbuf_size(msg) != ntohs(oh->length)) {
+    oh = msg->data;
+    if (msg->size != ntohs(oh->length)) {
         ofpbuf_delete(msg);
         return "Message size does not match length in OpenFlow header";
     }
@@ -1349,7 +1349,7 @@ ofctl_send(struct unixctl_conn *conn, int argc,
         }
 
         fprintf(stderr, "send: ");
-        ofp_print(stderr, ofpbuf_data(msg), ofpbuf_size(msg), verbosity);
+        ofp_print(stderr, msg->data, msg->size, verbosity);
 
         error = vconn_send_block(vconn, msg);
         if (error) {
@@ -1498,8 +1498,8 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
                 free(s);
             }
 
-            ofptype_decode(&type, ofpbuf_data(b));
-            ofp_print(stderr, ofpbuf_data(b), ofpbuf_size(b), verbosity + 2);
+            ofptype_decode(&type, b->data);
+            ofp_print(stderr, b->data, b->size, verbosity + 2);
             fflush(stderr);
 
             switch ((int) type) {
@@ -1514,7 +1514,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
                 if (reply_to_echo_requests) {
                     struct ofpbuf *reply;
 
-                    reply = make_echo_reply(ofpbuf_data(b));
+                    reply = make_echo_reply(b->data);
                     retval = vconn_send_block(vconn, reply);
                     if (retval) {
                         ovs_fatal(retval, "failed to send echo reply");
@@ -1594,7 +1594,7 @@ ofctl_monitor(int argc, char *argv[])
             run(vconn_transact_noreply(vconn, spif, &reply),
                 "talking to %s", vconn_get_name(vconn));
             if (reply) {
-                char *s = ofp_to_string(ofpbuf_data(reply), ofpbuf_size(reply), 2);
+                char *s = ofp_to_string(reply->data, reply->size, 2);
                 VLOG_DBG("%s: failed to set packet in format to nxm, controller"
                         " replied: %s. Falling back to the switch default.",
                         vconn_get_name(vconn), s);
@@ -1665,7 +1665,7 @@ ofctl_probe(int argc OVS_UNUSED, char *argv[])
     open_vconn(argv[1], &vconn);
     request = make_echo_request(vconn_get_version(vconn));
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
-    if (ofpbuf_size(reply) != sizeof(struct ofp_header)) {
+    if (reply->size != sizeof(struct ofp_header)) {
         ovs_fatal(0, "reply does not match request");
     }
     ofpbuf_delete(reply);
@@ -1691,8 +1691,8 @@ ofctl_packet_out(int argc, char *argv[])
 
     po.buffer_id = UINT32_MAX;
     po.in_port = str_to_port_no(argv[1], argv[2]);
-    po.ofpacts = ofpbuf_data(&ofpacts);
-    po.ofpacts_len = ofpbuf_size(&ofpacts);
+    po.ofpacts = ofpacts.data;
+    po.ofpacts_len = ofpacts.size;
 
     protocol = open_vconn(argv[1], &vconn);
     for (i = 4; i < argc; i++) {
@@ -1897,7 +1897,7 @@ ofctl_ofp_parse(int argc OVS_UNUSED, char *argv[])
             ovs_fatal(0, "%s: unexpected end of file mid-message", filename);
         }
 
-        ofp_print(stdout, ofpbuf_data(&b), ofpbuf_size(&b), verbosity + 2);
+        ofp_print(stdout, b.data, b.size, verbosity + 2);
     }
     ofpbuf_uninit(&b);
 
@@ -2022,18 +2022,18 @@ ofctl_ping(int argc, char *argv[])
         run(vconn_transact(vconn, ofpbuf_clone(request), &reply), "transact");
         xgettimeofday(&end);
 
-        rpy_hdr = ofpbuf_data(reply);
+        rpy_hdr = reply->data;
         if (ofptype_pull(&type, reply)
             || type != OFPTYPE_ECHO_REPLY
-            || ofpbuf_size(reply) != payload
-            || memcmp(ofpbuf_l3(request), ofpbuf_l3(reply), payload)) {
+            || reply->size != payload
+            || memcmp(request->msg, reply->msg, payload)) {
             printf("Reply does not match request.  Request:\n");
-            ofp_print(stdout, request, ofpbuf_size(request), verbosity + 2);
+            ofp_print(stdout, request, request->size, verbosity + 2);
             printf("Reply:\n");
-            ofp_print(stdout, reply, ofpbuf_size(reply), verbosity + 2);
+            ofp_print(stdout, reply, reply->size, verbosity + 2);
         }
         printf("%"PRIu32" bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
-               ofpbuf_size(reply), argv[1], ntohl(rpy_hdr->xid),
+               reply->size, argv[1], ntohl(rpy_hdr->xid),
                    (1000*(double)(end.tv_sec - start.tv_sec))
                    + (.001*(end.tv_usec - start.tv_usec)));
         ofpbuf_delete(request);
@@ -2475,12 +2475,12 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
             do {
                 run(vconn_recv_block(vconn, &reply),
                     "OpenFlow packet receive failed");
-            } while (((struct ofp_header *) ofpbuf_data(reply))->xid != send_xid);
+            } while (((struct ofp_header *) reply->data)->xid != send_xid);
 
-            error = ofptype_decode(&type, ofpbuf_data(reply));
+            error = ofptype_decode(&type, reply->data);
             if (error || type != OFPTYPE_FLOW_STATS_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(ofpbuf_data(reply), ofpbuf_size(reply),
+                          ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));
             }
         }
@@ -2493,7 +2493,7 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
             return true;
 
         case EOF:
-            more = ofpmp_more(reply->frame);
+            more = ofpmp_more(reply->header);
             ofpbuf_delete(reply);
             reply = NULL;
             if (!more) {
@@ -2530,7 +2530,7 @@ read_flows_from_switch(struct vconn *vconn,
     fsr.table_id = 0xff;
     fsr.cookie = fsr.cookie_mask = htonll(0);
     request = ofputil_encode_flow_stats_request(&fsr, protocol);
-    send_xid = ((struct ofp_header *) ofpbuf_data(request))->xid;
+    send_xid = ((struct ofp_header *) request->data)->xid;
     send_openflow_buffer(vconn, request);
 
     reply = NULL;
@@ -2829,7 +2829,7 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,
         struct ofpbuf *msg;
 
         msg = ofputil_encode_flow_mod(fm, protocol);
-        ofp_print(stdout, ofpbuf_data(msg), ofpbuf_size(msg), verbosity);
+        ofp_print(stdout, msg->data, msg->size, verbosity);
         ofpbuf_delete(msg);
 
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
@@ -2922,15 +2922,14 @@ ofctl_parse_nxm__(bool oxm, enum ofp_version version)
             } else {
                 match_len = nx_put_match(&nx_match, &match,
                                          cookie, cookie_mask);
-                out = nx_match_to_string(ofpbuf_data(&nx_match), match_len);
+                out = nx_match_to_string(nx_match.data, match_len);
             }
 
             puts(out);
             free(out);
 
             if (verbosity > 0) {
-                ovs_hex_dump(stdout, ofpbuf_data(&nx_match),
-                             ofpbuf_size(&nx_match), 0, false);
+                ovs_hex_dump(stdout, nx_match.data, nx_match.size, 0, false);
             }
         } else {
             printf("nx_pull_match() returned error %s\n",
@@ -3027,11 +3026,11 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
 
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
-        size = ofpbuf_size(&of_in);
+        size = of_in.size;
         error = (instructions
                  ? ofpacts_pull_openflow_instructions
                  : ofpacts_pull_openflow_actions)(
-                     &of_in, ofpbuf_size(&of_in), version, &ofpacts);
+                     &of_in, of_in.size, version, &ofpacts);
         if (!error && instructions) {
             /* Verify actions, enforce consistency. */
             enum ofputil_protocol protocol;
@@ -3039,8 +3038,7 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
 
             memset(&flow, 0, sizeof flow);
             protocol = ofputil_protocols_from_ofp_version(version);
-            error = ofpacts_check_consistency(ofpbuf_data(&ofpacts),
-                                              ofpbuf_size(&ofpacts),
+            error = ofpacts_check_consistency(ofpacts.data, ofpacts.size,
                                               &flow, OFPP_MAX,
                                               table_id ? atoi(table_id) : 0,
                                               255, protocol);
@@ -3058,24 +3056,22 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
         /* Print cls_rule. */
         ds_init(&s);
         ds_put_cstr(&s, "actions=");
-        ofpacts_format(ofpbuf_data(&ofpacts), ofpbuf_size(&ofpacts), &s);
+        ofpacts_format(ofpacts.data, ofpacts.size, &s);
         puts(ds_cstr(&s));
         ds_destroy(&s);
 
         /* Convert back to ofp10 actions and print differences from input. */
         ofpbuf_init(&of_out, 0);
         if (instructions) {
-           ofpacts_put_openflow_instructions( ofpbuf_data(&ofpacts),
-                                              ofpbuf_size(&ofpacts),
-                                              &of_out, version);
+           ofpacts_put_openflow_instructions(ofpacts.data, ofpacts.size,
+                                             &of_out, version);
         } else {
-           ofpacts_put_openflow_actions( ofpbuf_data(&ofpacts),
-                                         ofpbuf_size(&ofpacts),
+           ofpacts_put_openflow_actions(ofpacts.data, ofpacts.size,
                                          &of_out, version);
         }
 
-        print_differences("", ofpbuf_data(&of_in), ofpbuf_size(&of_in),
-                          ofpbuf_data(&of_out), ofpbuf_size(&of_out));
+        print_differences("", of_in.data, of_in.size,
+                          of_out.data, of_out.size);
         putchar('\n');
 
         ofpbuf_uninit(&ofpacts);
@@ -3141,9 +3137,9 @@ ofctl_parse_ofp10_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         if (ofpbuf_put_hex(&match_expout, ds_cstr(&expout), NULL)[0] != '\0') {
             ovs_fatal(0, "Trailing garbage in hex data");
         }
-        if (ofpbuf_size(&match_expout) != sizeof(struct ofp10_match)) {
+        if (match_expout.size != sizeof(struct ofp10_match)) {
             ovs_fatal(0, "Input is %"PRIu32" bytes, expected %"PRIuSIZE,
-                      ofpbuf_size(&match_expout), sizeof(struct ofp10_match));
+                      match_expout.size, sizeof(struct ofp10_match));
         }
 
         /* Parse hex bytes for input. */
@@ -3156,18 +3152,18 @@ ofctl_parse_ofp10_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         if (ofpbuf_put_hex(&match_in, ds_cstr(&in), NULL)[0] != '\0') {
             ovs_fatal(0, "Trailing garbage in hex data");
         }
-        if (ofpbuf_size(&match_in) != sizeof(struct ofp10_match)) {
+        if (match_in.size != sizeof(struct ofp10_match)) {
             ovs_fatal(0, "Input is %"PRIu32" bytes, expected %"PRIuSIZE,
-                      ofpbuf_size(&match_in), sizeof(struct ofp10_match));
+                      match_in.size, sizeof(struct ofp10_match));
         }
 
         /* Convert to cls_rule and print. */
-        ofputil_match_from_ofp10_match(ofpbuf_data(&match_in), &match);
+        ofputil_match_from_ofp10_match(match_in.data, &match);
         match_print(&match);
 
         /* Convert back to ofp10_match and print differences from input. */
         ofputil_match_to_ofp10_match(&match, &match_out);
-        print_differences("", ofpbuf_data(&match_expout), ofpbuf_size(&match_expout),
+        print_differences("", match_expout.data, match_expout.size,
                           &match_out, sizeof match_out);
 
         /* Normalize, then convert and compare again. */
@@ -3205,13 +3201,13 @@ ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         if (ofpbuf_put_hex(&match_in, ds_cstr(&in), NULL)[0] != '\0') {
             ovs_fatal(0, "Trailing garbage in hex data");
         }
-        if (ofpbuf_size(&match_in) != sizeof(struct ofp11_match)) {
+        if (match_in.size != sizeof(struct ofp11_match)) {
             ovs_fatal(0, "Input is %"PRIu32" bytes, expected %"PRIuSIZE,
-                      ofpbuf_size(&match_in), sizeof(struct ofp11_match));
+                      match_in.size, sizeof(struct ofp11_match));
         }
 
         /* Convert to match. */
-        error = ofputil_match_from_ofp11_match(ofpbuf_data(&match_in), &match);
+        error = ofputil_match_from_ofp11_match(match_in.data, &match);
         if (error) {
             printf("bad ofp11_match: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&match_in);
@@ -3224,7 +3220,7 @@ ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert back to ofp11_match and print differences from input. */
         ofputil_match_to_ofp11_match(&match, &match_out);
 
-        print_differences("", ofpbuf_data(&match_in), ofpbuf_size(&match_in),
+        print_differences("", match_in.data, match_in.size,
                           &match_out, sizeof match_out);
         putchar('\n');
 
@@ -3310,7 +3306,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     /* Convert to and from NXM. */
     ofpbuf_init(&nxm, 0);
     nxm_match_len = nx_put_match(&nxm, &match, htonll(0), htonll(0));
-    nxm_s = nx_match_to_string(ofpbuf_data(&nxm), nxm_match_len);
+    nxm_s = nx_match_to_string(nxm.data, nxm_match_len);
     error = nx_pull_match(&nxm, nxm_match_len, &nxm_match, NULL, NULL);
     printf("NXM: %s -> ", nxm_s);
     if (error) {
@@ -3416,19 +3412,19 @@ ofctl_encode_error_reply(int argc OVS_UNUSED, char *argv[])
     if (ofpbuf_put_hex(&request, argv[2], NULL)[0] != '\0') {
         ovs_fatal(0, "Trailing garbage in hex data");
     }
-    if (ofpbuf_size(&request) < sizeof(struct ofp_header)) {
+    if (request.size < sizeof(struct ofp_header)) {
         ovs_fatal(0, "Request too short");
     }
 
-    oh = ofpbuf_data(&request);
-    if (ofpbuf_size(&request) != ntohs(oh->length)) {
+    oh = request.data;
+    if (request.size != ntohs(oh->length)) {
         ovs_fatal(0, "Request size inconsistent");
     }
 
-    reply = ofperr_encode_reply(error, ofpbuf_data(&request));
+    reply = ofperr_encode_reply(error, request.data);
     ofpbuf_uninit(&request);
 
-    ovs_hex_dump(stdout, ofpbuf_data(reply), ofpbuf_size(reply), 0, false);
+    ovs_hex_dump(stdout, reply->data, reply->size, 0, false);
     ofpbuf_delete(reply);
 }
 
@@ -3466,7 +3462,7 @@ ofctl_ofp_print(int argc, char *argv[])
     if (ofpbuf_put_hex(&packet, buffer, NULL)[0] != '\0') {
         ovs_fatal(0, "trailing garbage following hex bytes");
     }
-    ofp_print(stdout, ofpbuf_data(&packet), ofpbuf_size(&packet), verbosity);
+    ofp_print(stdout, packet.data, packet.size, verbosity);
     ofpbuf_uninit(&packet);
     ds_destroy(&line);
 }
@@ -3480,8 +3476,8 @@ ofctl_encode_hello(int argc OVS_UNUSED, char *argv[])
     struct ofpbuf *hello;
 
     hello = ofputil_encode_hello(bitmap);
-    ovs_hex_dump(stdout, ofpbuf_data(hello), ofpbuf_size(hello), 0, false);
-    ofp_print(stdout, ofpbuf_data(hello), ofpbuf_size(hello), verbosity);
+    ovs_hex_dump(stdout, hello->data, hello->size, 0, false);
+    ofp_print(stdout, hello->data, hello->size, verbosity);
     ofpbuf_delete(hello);
 }
 

@@ -175,7 +175,7 @@ bundle_parse__(const char *s, char **save_ptr,
         }
         ofpbuf_put(ofpacts, &slave_port, sizeof slave_port);
 
-        bundle = ofpacts->frame;
+        bundle = ofpacts->header;
         bundle->n_slaves++;
     }
     ofpact_update_len(ofpacts, &bundle->ofpact);
