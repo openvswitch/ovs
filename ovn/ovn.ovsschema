@@ -4,12 +4,9 @@
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
-                "encap": {"type": "string"},
-                "encap_options": {"type": {"key": "string",
-                                           "value": "string",
-                                           "min": 0,
-                                           "max": "unlimited"}},
-                "ip": {"type": "string"},
+                "encaps": {"type": {"key": {"type": "uuid",
+                                            "refTable": "Encap"},
+                                    "min": 1, "max": "unlimited"}},
                 "gateway_ports": {"type": {"key": "string",
                                            "value": {"type": "uuid",
                                                      "refTable": "Gateway",
@@ -18,6 +15,14 @@
                                            "max": "unlimited"}}},
             "isRoot": true,
             "indexes": [["name"]]},
+        "Encap": {
+            "columns": {
+                "type": {"type": "string"},
+                "options": {"type": {"key": "string",
+                                     "value": "string",
+                                     "min": 0,
+                                     "max": "unlimited"}},
+                "ip": {"type": "string"}}},
         "Gateway": {
             "columns": {"attached_port": {"type": "string"},
                         "vlan_map": {"type": {"key": {"type": "integer",

@@ -124,23 +124,16 @@
       not prescribe a particular format for chassis names.
     </column>
 
-    <group title="Encapsulation">
+    <group title="Encapsulation Configuration">
       <p>
-        These columns together identify how OVN may transmit logical dataplane
-        packets to this chassis.
+        OVN uses encapsulation to transmit logical dataplane packets
+        between chassis.
       </p>
 
-      <column name="encap">
-        The encapsulation to use to transmit packets to this chassis.
-      </column>
-
-      <column name="encap_options">
-        Options for configuring the encapsulation, e.g. IPsec parameters when
-        IPsec support is introduced.  No options are currently defined.
-      </column>
-
-      <column name="ip">
-        The IPv4 address of the encapsulation tunnel endpoint.
+      <column name="encaps">
+        Points to supported encapsulation configurations to transmit
+        logical dataplane packets to this chassis.  Each entry is a <ref
+        table="Encap"/> record that describes the configuration.
       </column>
     </group>
 
@@ -158,6 +151,32 @@
         function.
       </column>
     </group>
+  </table>
+
+  <table name="Encap" title="Encapsulation Types">
+    <p>
+      The <ref column="encaps" table="Chassis"/> column in the <ref
+      table="Chassis"/> table refers to rows in this table to identify
+      how OVN may transmit logical dataplane packets to this chassis.
+      Each chassis, via <code>ovn-controller</code>(8), adds and updates
+      its own rows and keeps a copy of the remaining rows to determine
+      how to reach other chassis.
+    </p>
+
+    <column name="type">
+      The encapsulation to use to transmit packets to this chassis.
+      Examples include <code>geneve</code>, <code>vxlan</code>, and
+      <code>stt</code>.
+    </column>
+
+    <column name="options">
+      Options for configuring the encapsulation, e.g. IPsec parameters when
+      IPsec support is introduced.  No options are currently defined.
+    </column>
+
+    <column name="ip">
+      The IPv4 address of the encapsulation tunnel endpoint.
+    </column>
   </table>
 
   <table name="Gateway" title="Physical Network Gateway Ports">
