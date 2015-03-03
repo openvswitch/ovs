@@ -1,5 +1,6 @@
 /* -*- mode: c; c-file-style: "openbsd" -*- */
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2008 Vincent Bernat <bernat@luffy.cx>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -60,8 +61,6 @@ struct event_base;
 #define PROTO_DECODE_SIG struct lldpd *, char *, int, struct lldpd_hardware *,\
     struct lldpd_chassis **, struct lldpd_port **
 #define PROTO_GUESS_SIG char *, int
-
-#define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
 
 struct protocol {
     int  mode;       /* > 0 mode identifier (unique per protocol) */
