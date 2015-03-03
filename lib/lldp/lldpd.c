@@ -30,7 +30,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #ifndef _WIN32
 #include <grp.h>
@@ -43,6 +42,7 @@
 #include "compiler.h"
 #include "list.h"
 #include "packets.h"
+#include "timeval.h"
 
 VLOG_DEFINE_THIS_MODULE(lldpd);
 
@@ -268,7 +268,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
             (memcmp(oport->p_lastframe->frame, frame, s) == 0)) {
             /* Already received the same frame */
             VLOG_DBG("duplicate frame, no need to decode");
-            oport->p_lastupdate = time(NULL);
+            oport->p_lastupdate = time_now();
             return;
         }
     }
@@ -385,7 +385,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     }
 
     /* Add port */
-    port->p_lastchange = port->p_lastupdate = time(NULL);
+    port->p_lastchange = port->p_lastupdate = time_now();
     port->p_lastframe = xmalloc(s + sizeof(struct lldpd_frame));
     port->p_lastframe->size = s;
     memcpy(port->p_lastframe->frame, frame, s);

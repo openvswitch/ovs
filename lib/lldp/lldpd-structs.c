@@ -1,5 +1,6 @@
 /* -*- mode: c; c-file-style: "openbsd" -*- */
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2008 Vincent Bernat <bernat@luffy.cx>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -18,9 +19,9 @@
 #include <config.h>
 #include "lldpd-structs.h"
 #include <stdlib.h>
-#include <time.h>
 #include <unistd.h>
 #include "lldpd.h"
+#include "timeval.h"
 
 VLOG_DEFINE_THIS_MODULE(lldpd_structs);
 
@@ -69,7 +70,7 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
 {
     struct lldpd_port *port, *port_next;
     int del;
-    time_t now = time(NULL);
+    time_t now = time_now();
 
     VLOG_DBG("cleanup remote port on %s", hw->h_ifname);
     LIST_FOR_EACH_SAFE (port, port_next, p_entries, &hw->h_rports.p_entries) {
