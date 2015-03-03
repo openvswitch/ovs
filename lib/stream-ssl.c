@@ -634,15 +634,14 @@ ssl_do_tx(struct stream *stream)
 
     for (;;) {
         int old_state = SSL_get_state(sslv->ssl);
-        int ret = SSL_write(sslv->ssl,
-                            ofpbuf_data(sslv->txbuf), ofpbuf_size(sslv->txbuf));
+        int ret = SSL_write(sslv->ssl, sslv->txbuf->data, sslv->txbuf->size);
         if (old_state != SSL_get_state(sslv->ssl)) {
             sslv->rx_want = SSL_NOTHING;
         }
         sslv->tx_want = SSL_NOTHING;
         if (ret > 0) {
             ofpbuf_pull(sslv->txbuf, ret);
-            if (ofpbuf_size(sslv->txbuf) == 0) {
+            if (sslv->txbuf->size == 0) {
                 return 0;
             }
         } else {
