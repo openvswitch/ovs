@@ -1,7 +1,8 @@
 /* aa-structs.h */
 /* contains tlv structures for various auto attach functionality */
 
-/* Copyright (c) 2014 Avaya, Inc
+/* Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2014 Avaya, Inc
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -38,7 +39,7 @@ struct lldpd_aa_element_tlv {
 struct lldpd_aa_isid_vlan_map_data {
     uint16_t status;
     uint16_t vlan;
-    uint8_t  isid[3];
+    uint32_t isid;
 };
 
 struct lldpd_aa_isid_vlan_maps_tlv {

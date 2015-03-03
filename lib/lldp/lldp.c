@@ -127,6 +127,15 @@ lldp_tlv_put_u32(struct dp_packet *p, uint32_t x)
 }
 
 static void
+lldp_tlv_put_isid(struct dp_packet *p, uint32_t isid)
+{
+    uint8_t *data = dp_packet_put_uninit(p, 3);
+    data[0] = isid >> 16;
+    data[1] = isid >> 8;
+    data[2] = isid;
+}
+
+static void
 lldp_tlv_start(struct dp_packet *p, uint8_t tlv, unsigned int *start)
 {
     *start = dp_packet_size(p);
@@ -288,8 +297,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
                 vlan_isid_map->isid_vlan_data.vlan;
 
             lldp_tlv_put_u16(p, status_vlan_word);
-            dp_packet_put(p, &vlan_isid_map->isid_vlan_data.isid,
-                          sizeof vlan_isid_map->isid_vlan_data.isid);
+            lldp_tlv_put_isid(p, vlan_isid_map->isid_vlan_data.isid);
         }
 
         lldp_tlv_end(p, start);
@@ -540,6 +548,8 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
 
                     num_mappings /= 5; /* Each mapping is 5 Bytes */
                     for(; num_mappings > 0; num_mappings--) {
+                        uint8_t isid[3];
+
                         isid_vlan_map = xzalloc(sizeof *isid_vlan_map);
                         aa_status_vlan_word = PEEK_UINT16;
 
@@ -550,8 +560,9 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                         /* Vlan is last 12 bits */
                         isid_vlan_map->isid_vlan_data.vlan =
                             aa_status_vlan_word & 0x0FFF;
-                        PEEK_BYTES(&isid_vlan_map->isid_vlan_data.isid,
-                            sizeof isid_vlan_map->isid_vlan_data.isid);
+                        PEEK_BYTES(isid, 3);
+                        isid_vlan_map->isid_vlan_data.isid =
+                            (isid[0] << 16) | (isid[1] << 8) | isid[2];
                         list_push_back(
                             (struct ovs_list *) &port->p_isid_vlan_maps,
                             (struct ovs_list *) isid_vlan_map);

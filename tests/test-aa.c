@@ -117,12 +117,8 @@ check_received_aa(struct lldpd_port *sport,
                received_map->isid_vlan_data.status);
         assert(smap[i].isid_vlan_data.vlan ==
                received_map->isid_vlan_data.vlan);
-        assert(smap[i].isid_vlan_data.isid[0] ==
-               received_map->isid_vlan_data.isid[0]);
-        assert(smap[i].isid_vlan_data.isid[1] ==
-               received_map->isid_vlan_data.isid[1]);
-        assert(smap[i].isid_vlan_data.isid[2] ==
-               received_map->isid_vlan_data.isid[2]);
+        assert(smap[i].isid_vlan_data.isid ==
+               received_map->isid_vlan_data.isid);
 
         /* Next mapping sent */
         i++;
@@ -191,15 +187,11 @@ test_aa_send(void)
     /* ISID/VLAN mappings */
     map_init[0].isid_vlan_data.status  = 0xC;
     map_init[0].isid_vlan_data.vlan    = 0x64;
-    map_init[0].isid_vlan_data.isid[0] = 1;
-    map_init[0].isid_vlan_data.isid[1] = 2;
-    map_init[0].isid_vlan_data.isid[2] = 3;
+    map_init[0].isid_vlan_data.isid    = 0x010203;
 
     map_init[1].isid_vlan_data.status  = 0xD;
     map_init[1].isid_vlan_data.vlan    = 0xF;
-    map_init[1].isid_vlan_data.isid[0] = 4;
-    map_init[1].isid_vlan_data.isid[1] = 5;
-    map_init[1].isid_vlan_data.isid[2] = 6;
+    map_init[1].isid_vlan_data.isid    = 0x040506;
 
     /* Prepare an empty packet buffer */
     dp_packet_use_stub(&packet, stub, sizeof stub);
@@ -262,15 +254,11 @@ test_aa_send(void)
     /* Populate instance with two auto attach isid/vlan mappings */
     map[0].isid_vlan_data.status  = map_init[0].isid_vlan_data.status;
     map[0].isid_vlan_data.vlan    = map_init[0].isid_vlan_data.vlan;
-    map[0].isid_vlan_data.isid[0] = map_init[0].isid_vlan_data.isid[0];
-    map[0].isid_vlan_data.isid[1] = map_init[0].isid_vlan_data.isid[1];
-    map[0].isid_vlan_data.isid[2] = map_init[0].isid_vlan_data.isid[2];
+    map[0].isid_vlan_data.isid    = map_init[0].isid_vlan_data.isid;
 
     map[1].isid_vlan_data.status  = map_init[1].isid_vlan_data.status;
     map[1].isid_vlan_data.vlan    = map_init[1].isid_vlan_data.vlan;
-    map[1].isid_vlan_data.isid[0] = map_init[1].isid_vlan_data.isid[0];
-    map[1].isid_vlan_data.isid[1] = map_init[1].isid_vlan_data.isid[1];
-    map[1].isid_vlan_data.isid[2] = map_init[1].isid_vlan_data.isid[2];
+    map[1].isid_vlan_data.isid    = map_init[1].isid_vlan_data.isid;
 
     list_init(&hw->h_lport.p_isid_vlan_maps.m_entries);
     list_push_back(&hw->h_lport.p_isid_vlan_maps.m_entries,

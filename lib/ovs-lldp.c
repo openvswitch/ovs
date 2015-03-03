@@ -101,38 +101,6 @@ static struct hmap *const all_mappings OVS_GUARDED_BY(mutex) = &all_mappings__;
 
 static struct lldp_aa_element_system_id system_id_null;
 
-/* Convert an array to an integer.  I-SID are stored in an array of bytes
- * in the LLDP hardware structrure.
- */
-static uint32_t
-array_to_int(uint8_t *array, size_t len)
-{
-    uint32_t res = 0;
-    unsigned int i = 0;
-
-    ovs_assert(len <= sizeof(uint32_t));
-
-    for (i = 0; i < len; i++) {
-        res = res | (array[len - i - 1] << (i * 8));
-    }
-
-    return res;
-}
-
-/* Convert an integer to an array of byte.
- */
-static void
-int_to_array(uint8_t *array, size_t len, uint32_t value)
-{
-    unsigned int i;
-
-    ovs_assert(len <= sizeof(uint32_t));
-
-    for (i = 0; i < len; i++) {
-        array[len - i - 1] = value >> (8 * i);
-    }
-}
-
 /* Convert an LLDP chassis ID to a string.
  */
 static void
@@ -298,8 +266,7 @@ aa_print_isid_status_port_isid(struct lldp *lldp, struct lldpd_port *port)
     }
 
     LIST_FOR_EACH (mapping, m_entries, &port->p_isid_vlan_maps.m_entries) {
-        uint32_t isid = array_to_int(mapping->isid_vlan_data.isid,
-            sizeof mapping->isid_vlan_data.isid);
+        uint32_t isid = mapping->isid_vlan_data.isid;
         struct aa_mapping_internal *m = mapping_find_by_isid(lldp, isid);
 
         VLOG_INFO("h_rport: isid=%u, vlan=%u, status=%d",
@@ -435,9 +402,7 @@ update_mapping_on_lldp(struct lldp *lldp, struct lldpd_hardware *hardware,
         VLOG_INFO("\t\t hardware->h_ifname=%s", hardware->h_ifname);
     }
 
-    int_to_array(lm->isid_vlan_data.isid,
-                 ARRAY_SIZE(lm->isid_vlan_data.isid),
-                 (uint32_t) m->isid);
+    lm->isid_vlan_data.isid = m->isid;
     lm->isid_vlan_data.vlan = m->vlan;
 
     list_push_back(&hardware->h_lport.p_isid_vlan_maps.m_entries,
@@ -623,8 +588,7 @@ aa_mapping_unregister_mapping(struct lldp *lldp,
                         lm_next,
                         m_entries,
                         &hw->h_lport.p_isid_vlan_maps.m_entries) {
-        uint32_t isid = array_to_int(lm->isid_vlan_data.isid,
-                                     sizeof lm->isid_vlan_data.isid);
+        uint32_t isid = lm->isid_vlan_data.isid;
 
         if (isid == (uint32_t) m->isid) {
             VLOG_INFO("\t\t Removing lport, isid=%u, vlan=%u",
