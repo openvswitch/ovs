@@ -1,5 +1,6 @@
 /* -*- mode: c; c-file-style: "openbsd" -*- */
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2008 Vincent Bernat <bernat@luffy.cx>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -149,7 +150,7 @@ struct lldpd_config {
 
 struct lldpd_frame {
     int size;
-    unsigned char frame[1];
+    unsigned char frame[];
 };
 
 struct lldpd_hardware;

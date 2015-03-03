@@ -1,5 +1,6 @@
 /* -*- mode: c; c-file-style: "openbsd" -*- */
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2008 Vincent Bernat <bernat@luffy.cx>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -82,10 +83,7 @@ lldpd_alloc_hardware(struct lldpd *cfg, char *name, int index)
 
     VLOG_DBG("allocate a new local hardware interface (%s)", name);
 
-    if ((hw = (struct lldpd_hardware *) calloc(1, sizeof *hw)) == NULL) {
-        return NULL;
-    }
-
+    hw = xzalloc(sizeof *hw);
     hw->h_cfg = cfg;
     ovs_strlcpy(hw->h_ifname, name, sizeof hw->h_ifname);
     hw->h_ifindex = index;
@@ -112,11 +110,7 @@ lldpd_alloc_mgmt(int family, void *addrptr, size_t addrsize, u_int32_t iface)
         errno = EOVERFLOW;
         return NULL;
     }
-    mgmt = calloc(1, sizeof *mgmt);
-    if (mgmt == NULL) {
-        errno = ENOMEM;
-        return NULL;
-    }
+    mgmt = xzalloc(sizeof *mgmt);
     mgmt->m_family = family;
     memcpy(&mgmt->m_addr, addrptr, addrsize);
     mgmt->m_addrsize = addrsize;
@@ -392,10 +386,9 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
 
     /* Add port */
     port->p_lastchange = port->p_lastupdate = time(NULL);
-    if ((port->p_lastframe = malloc(s + sizeof(struct lldpd_frame))) != NULL) {
-        port->p_lastframe->size = s;
-        memcpy(port->p_lastframe->frame, frame, s);
-    }
+    port->p_lastframe = xmalloc(s + sizeof(struct lldpd_frame));
+    port->p_lastframe->size = s;
+    memcpy(port->p_lastframe->frame, frame, s);
     list_insert(&hw->h_rports.p_entries, &port->p_entries);
 
     port->p_chassis = chassis;

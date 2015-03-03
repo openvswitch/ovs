@@ -344,17 +344,10 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
 
     VLOG_DBG("receive LLDP PDU on %s", hardware->h_ifname);
 
-    if ((chassis = calloc(1, sizeof *chassis)) == NULL) {
-        VLOG_WARN("failed to allocate remote chassis");
-        return -1;
-    }
+    chassis = xzalloc(sizeof *chassis);
     list_init(&chassis->c_mgmt.m_entries);
 
-    if ((port = calloc(1, sizeof *port)) == NULL) {
-        VLOG_WARN("failed to allocate remote port");
-        free(chassis);
-        return -1;
-    }
+    port = xzalloc(sizeof *port);
     list_init(&port->p_isid_vlan_maps.m_entries);
 
     length = s;
@@ -414,12 +407,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                           hardware->h_ifname);
                 goto malformed;
             }
-            if ((b = (char *) calloc(1, tlv_size - 1)) == NULL) {
-                VLOG_WARN("unable to allocate memory for id tlv received "
-                          "on %s",
-                          hardware->h_ifname);
-                goto malformed;
-            }
+            b = xzalloc(tlv_size - 1);
             PEEK_BYTES(b, tlv_size - 1);
             if (tlv_type == LLDP_TLV_PORT_ID) {
                 port->p_id_subtype = tlv_subtype;
@@ -445,12 +433,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                 VLOG_DBG("empty tlv received on %s", hardware->h_ifname);
                 break;
             }
-            if ((b = (char *) calloc(1, tlv_size + 1)) == NULL) {
-                VLOG_WARN("unable to allocate memory for string tlv "
-                          "received on %s",
-                          hardware->h_ifname);
-                goto malformed;
-            }
+            b = xzalloc(tlv_size + 1);
             PEEK_BYTES(b, tlv_size);
             if (tlv_type == LLDP_TLV_PORT_DESCR) {
                 port->p_descr = b;
@@ -555,13 +538,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
 
                     num_mappings /= 5; /* Each mapping is 5 Bytes */
                     for(; num_mappings > 0; num_mappings--) {
-                        isid_vlan_map = (struct lldpd_aa_isid_vlan_maps_tlv *)
-                            calloc(1, sizeof *isid_vlan_map);
-                        if (!isid_vlan_map) {
-                            VLOG_WARN("unable to allocate memory "
-                                      "for aa_isid_vlan_maps_tlv struct");
-                            goto malformed;
-                        }
+                        isid_vlan_map = xzalloc(sizeof *isid_vlan_map);
                         aa_status_vlan_word = PEEK_UINT16;
 
                         /* Status is first 4 most-significant bits. */

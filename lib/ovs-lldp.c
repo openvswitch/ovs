@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2015 Nicira, Inc.
  * Copyright (c) 2014 WindRiver, Inc.
  * Copyright (c) 2015 Avaya, Inc.
  *
@@ -967,12 +968,7 @@ lldp_create_dummy(void)
     list_init(&lldp->lldpd->g_chassis.list);
     list_push_back(&lldp->lldpd->g_chassis.list, &lchassis->list);
 
-    if ((hw = lldpd_alloc_hardware(lldp->lldpd,
-                                   "dummy-hw",
-                                   0)) == NULL) {
-        VLOG_WARN("Unable to allocate space for dummy-hw");
-        out_of_memory();
-    }
+    hw = lldpd_alloc_hardware(lldp->lldpd, "dummy-hw", 0);
 
     ovs_refcount_init(&lldp->ref_cnt);
 #ifndef _WIN32
