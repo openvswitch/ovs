@@ -449,7 +449,6 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 {
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
-	struct sk_buff *sample_skb;
 	int rem;
 
 	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
@@ -469,28 +468,24 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 	rem = nla_len(acts_list);
 	a = nla_data(acts_list);
 
-	/* Actions list is either empty or only contains a single user-space
-	 * action, the latter being a special case as it is the only known
-	 * usage of the sample action.
-	 * In these special cases don't clone the skb as there are no
-	 * side-effects in the nested actions.
-	 * Otherwise, clone in case the nested actions have side effects. */
-	if (likely(rem == 0 ||
-		   (nla_type(a) == OVS_ACTION_ATTR_USERSPACE &&
-		    last_action(a, rem)))) {
-		sample_skb = skb;
-		skb_get(skb);
-	} else {
-		sample_skb = skb_clone(skb, GFP_ATOMIC);
-	}
+	/* Actions list is empty, do nothing */
+	if (unlikely(!rem))
+		return 0;
 
-	/* Note that do_execute_actions() never consumes skb.
-	 * In the case where skb has been cloned above it is the clone that
-	 * is consumed.  Otherwise the skb_get(skb) call prevents
-	 * consumption by do_execute_actions(). Thus, it is safe to simply
-	 * return the error code and let the caller (also
-	 * do_execute_actions()) free skb on error. */
-	return do_execute_actions(dp, sample_skb, a, rem);
+	/* The only known usage of sample action is having a single user-space
+	 * action. Treat this usage as a special case.
+	 * The output_userspace() should clone the skb to be sent to the
+	 * user space. This skb will be consumed by its caller. */
+	if (likely(nla_type(a) == OVS_ACTION_ATTR_USERSPACE &&
+		   last_action(a, rem)))
+		return output_userspace(dp, skb, a);
+
+	skb = skb_clone(skb, GFP_ATOMIC);
+	if (!skb)
+		/* Skip the sample action when out of memory. */
+		return 0;
+
+	return do_execute_actions(dp, skb, a, rem);
 }
 
 static void execute_hash(struct sk_buff *skb, const struct nlattr *attr)
