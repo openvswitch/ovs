@@ -477,4 +477,4 @@ static inline void dp_packet_set_dp_hash(struct dp_packet *p,
 }
 #endif
 
-#endif /* dp_packet.h */
+#endif /* dp-packet.h */
