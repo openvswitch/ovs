@@ -28,13 +28,24 @@ def constify(cType, const):
     else:
         return cType
 
-def cMembers(prefix, columnName, column, const):
+def cMembers(prefix, tableName, columnName, column, const):
+    comment = ""
     type = column.type
 
     if type.is_smap():
-        return [{'name': columnName,
-                 'type': 'struct smap ',
-                 'comment': ''}]
+        comment = """
+/* Sets the "%(c)s" column's value from the "%(t)s" table in 'row'
+ * to '%(c)s'.
+ *
+ * The caller retains ownership of '%(c)s' and everything in it. */""" \
+             % {'c': columnName,
+                't': tableName}
+        return (comment, [{'name': columnName,
+                           'type': 'struct smap ',
+                           'comment': ''}])
+
+    comment = """\n/* Sets the "%s" column from the "%s" table in """\
+              """'row' to\n""" % (columnName, tableName)
 
     if type.n_min == 1 and type.n_max == 1:
         singleton = True
@@ -46,25 +57,65 @@ def cMembers(prefix, columnName, column, const):
         else:
             pointer = '*'
 
+
     if type.value:
-        key = {'name': "key_%s" % columnName,
+        keyName = "key_%s" % columnName
+        valueName = "value_%s" % columnName
+
+        key = {'name': keyName,
                'type': constify(type.key.toCType(prefix) + pointer, const),
                'comment': ''}
-        value = {'name': "value_%s" % columnName,
+        value = {'name': valueName,
                  'type': constify(type.value.toCType(prefix) + pointer, const),
                  'comment': ''}
+
+        if singleton:
+            comment += " * the map with key '%s' and value '%s'\n *" \
+                       % (keyName, valueName)
+        else:
+            comment += " * the map with keys '%s' and values '%s'\n *" \
+                       % (keyName, valueName)
         members = [key, value]
     else:
         m = {'name': columnName,
              'type': constify(type.key.toCType(prefix) + pointer, const),
              'comment': type.cDeclComment()}
+
+        if singleton:
+            comment += " * '%s'" % columnName
+        else:
+            comment += " * the '%s' set" % columnName
         members = [m]
 
     if not singleton and not type.is_optional_pointer():
-        members.append({'name': 'n_%s' % columnName,
+        sizeName = "n_%s" % columnName
+
+        comment += " with '%s' entries" % sizeName
+        members.append({'name': sizeName,
                         'type': 'size_t ',
                         'comment': ''})
-    return members
+
+    comment += ".\n"
+
+    if type.is_optional() and not type.is_optional_pointer():
+        comment += """ *
+ * '%s' may be 0 or 1; if it is 0, then '%s'
+ * may be NULL.\n""" \
+        % ("n_%s" % columnName, columnName)
+
+    if type.is_optional_pointer():
+        comment += """ *
+ * If "%s" is null, the column will be the empty set,
+ * otherwise it will contain the specified value.\n""" % columnName
+
+    if type.constraintsToEnglish():
+        comment += """ *
+ * Argument constraints: %s\n""" \
+        % type.constraintsToEnglish(lambda s : '"%s"' % s)
+
+    comment += " *\n * The caller retains ownership of the arguments. */"
+
+    return (comment, members)
 
 def printCIDLHeader(schemaFile):
     schema = parseSchema(schemaFile)
@@ -92,7 +143,9 @@ def printCIDLHeader(schemaFile):
         print "\tstruct ovsdb_idl_row header_;"
         for columnName, column in sorted(table.columns.iteritems()):
             print "\n\t/* %s column. */" % columnName
-            for member in cMembers(prefix, columnName, column, False):
+            comment, members = cMembers(prefix, tableName,
+                                        columnName, column, False)
+            for member in members:
                 print "\t%(type)s%(name)s;%(comment)s" % member
         print "};"
 
@@ -147,8 +200,9 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
             if column.type.is_smap():
                 args = ['const struct smap *']
             else:
-                args = ['%(type)s%(name)s' % member for member
-                        in cMembers(prefix, columnName, column, True)]
+                comment, members = cMembers(prefix, tableName, columnName,
+                                            column, True)
+                args = ['%(type)s%(name)s' % member for member in members]
             print '%s);' % ', '.join(args)
 
         print
@@ -524,9 +578,12 @@ const struct ovsdb_datum *
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
 
+            comment, members = cMembers(prefix, tableName, columnName,
+                                        column, True)
+
             if type.is_smap():
-                print """
-void
+                print comment
+                print """void
 %(s)s_set_%(c)s(const struct %(s)s *row, const struct smap *%(c)s)
 {
     struct ovsdb_datum datum;
@@ -554,15 +611,13 @@ void
                         &%(s)s_columns[%(S)s_COL_%(C)s],
                         &datum);
 }
-""" % {'s': structName,
+""" % {'t': tableName,
+       's': structName,
        'S': structName.upper(),
        'c': columnName,
        'C': columnName.upper()}
                 continue
 
-
-            print '\nvoid'
-            members = cMembers(prefix, columnName, column, True)
             keyVar = members[0]['name']
             nVar = None
             valueVar = None
@@ -573,6 +628,9 @@ void
             else:
                 if len(members) > 1:
                     nVar = members[1]['name']
+
+            print comment
+            print 'void'
             print '%(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)' % \
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
