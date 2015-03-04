@@ -52,7 +52,6 @@
 #include "dpif-netdev.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
-#include "dp_packet.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
 #include "packets.h"
