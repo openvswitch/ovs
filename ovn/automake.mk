@@ -75,3 +75,43 @@ SUFFIXES += .xml
 		--version=$(VERSION) $< > $@.tmp && mv $@.tmp $@
 
 EXTRA_DIST += ovn/TODO
+
+# ovn IDL
+OVSIDL_BUILT += \
+	$(srcdir)/ovn/ovn-idl.c \
+	$(srcdir)/ovn/ovn-idl.h \
+	$(srcdir)/ovn/ovn.ovsidl
+EXTRA_DIST += $(srcdir)/ovn/ovn-idl.ann
+OVN_IDL_FILES = \
+	$(srcdir)/ovn/ovn.ovsschema \
+	$(srcdir)/ovn/ovn-idl.ann
+$(srcdir)/ovn/ovn-idl.ovsidl: $(OVN_IDL_FILES)
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_IDL_FILES) > $@.tmp && \
+	mv $@.tmp $@
+CLEANFILES += ovn/ovn-idl.c ovn/ovn-idl.h
+
+# ovn-nb IDL
+OVSIDL_BUILT += \
+	$(srcdir)/ovn/ovn-nb-idl.c \
+	$(srcdir)/ovn/ovn-nb-idl.h \
+	$(srcdir)/ovn/ovn-nb.ovsidl
+EXTRA_DIST += $(srcdir)/ovn/ovn-nb-idl.ann
+OVN_NB_IDL_FILES = \
+	$(srcdir)/ovn/ovn-nb.ovsschema \
+	$(srcdir)/ovn/ovn-nb-idl.ann
+$(srcdir)/ovn/ovn-nb-idl.ovsidl: $(OVN_NB_IDL_FILES)
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_NB_IDL_FILES) > $@.tmp && \
+	mv $@.tmp $@
+CLEANFILES += ovn/ovn-nb-idl.c ovn/ovn-nb-idl.h
+
+# libovn
+lib_LTLIBRARIES += ovn/libovn.la
+ovn_libovn_la_LDFLAGS = \
+        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        -Wl,--version-script=$(top_builddir)/ovn/libovn.sym \
+        $(AM_LDFLAGS)
+ovn_libovn_la_SOURCES = \
+	ovn/ovn-idl.c \
+	ovn/ovn-idl.h \
+	ovn/ovn-nb-idl.c \
+	ovn/ovn-nb-idl.h

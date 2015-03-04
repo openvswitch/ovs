@@ -3,6 +3,12 @@
 /ovn.pic
 /ovn-architecture.7
 /ovn-controller.8
+/ovn-idl.c
+/ovn-idl.h
+/ovn-idl.ovsidl
 /ovn-nb.5
 /ovn-nb.gv
 /ovn-nb.pic
+/ovn-nb-idl.c
+/ovn-nb-idl.h
+/ovn-nb-idl.ovsidl
