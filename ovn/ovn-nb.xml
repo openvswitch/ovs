@@ -73,12 +73,46 @@
     </column>
 
     <column name="name">
-      The logical port name.  The name used here must match those used in the
+      <p>
+      The logical port name.
+      </p>
+
+      <p>
+      For entities (VMs or containers) that are spawned in the hypervisor,
+      the name used here must match those used in the <ref key="iface-id"
+      table="Interface" column="external_ids" db="Open_vSwitch"/> in the
+      <ref db="Open_vSwitch"/> database's <ref table="Interface"
+      db="Open_vSwitch"/> table, because hypervisors use <ref key="iface-id"
+      table="Interface" column="external_ids" db="Open_vSwitch"/> as a lookup
+      key to identify the network interface of that entity.
+      </p>
+
+      <p>
+      For containers that are spawned inside a VM, the name can be
+      any unique identifier.  In such a case, <ref column="parent_name"/>
+      must be populated.
+      </p>
+    </column>
+
+    <column name="parent_name">
+      When <ref column="name"/> identifies the interface of a container
+      spawned inside a tenant VM, this column represents the VM interface
+      through which the container interface sends its network traffic.
+      The name used here must match those used in the <ref key="iface-id"
+      table="Interface" column="external_ids" db="Open_vSwitch"/> in the
+      <ref db="Open_vSwitch"/> table, because hypervisors in this case use
       <ref key="iface-id" table="Interface" column="external_ids"
-      db="Open_vSwitch"/> in the <ref db="Open_vSwitch"/> database's <ref
-      table="Interface" db="Open_vSwitch"/> table, because hypervisors use <ref
-      key="iface-id" table="Interface" column="external_ids"
-      db="Open_vSwitch"/> as a lookup key for logical ports.
+      db="Open_vSwitch"/> as a lookup key to identify the network interface
+      of the tenant VM.
+    </column>
+
+    <column name="tag">
+      When <ref column="name"/> identifies the interface of a container
+      spawned inside a tenant VM, this column identifies the VLAN tag in
+      the network traffic associated with that container's network interface.
+      When there are multiple container interfaces inside a VM, all of
+      them send their network traffic through a single VM network interface and
+      this value helps OVN identify the correct container interface.
     </column>
 
     <column name="up">
@@ -87,8 +121,9 @@
       physical location in the OVN database <ref db="OVN" table="Bindings"/>
       table, <code>ovn-nbd</code> sets this column to <code>true</code>;
       otherwise, or if the port becomes unbound later, it sets it to
-      <code>false</code>.  This allows the CMS to wait for a VM's networking to
-      become active before it allows the VM to start.
+      <code>false</code>.  This allows the CMS to wait for a VM's
+      (or container's) networking to become active before it allows the
+      VM (or container) to start.
     </column>
 
     <column name="macs">

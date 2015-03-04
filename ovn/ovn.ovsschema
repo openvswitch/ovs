@@ -45,6 +45,12 @@
         "Bindings": {
             "columns": {
                 "logical_port": {"type": "string"},
+                "parent_port": {"type": {"key": "string", "min": 0, "max": 1}},
+                "tag": {
+                     "type": {"key": {"type": "integer",
+                                      "minInteger": 0,
+                                      "maxInteger": 4095},
+                              "min": 0, "max": 1}},
                 "chassis": {"type": "string"},
                 "mac": {"type": {"key": "string",
                                  "min": 0,

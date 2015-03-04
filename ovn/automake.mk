@@ -74,7 +74,9 @@ SUFFIXES += .xml
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/xml2nroff \
 		--version=$(VERSION) $< > $@.tmp && mv $@.tmp $@
 
-EXTRA_DIST += ovn/TODO
+EXTRA_DIST += \
+	ovn/TODO \
+	ovn/CONTAINERS.OpenStack.md
 
 # ovn IDL
 OVSIDL_BUILT += \

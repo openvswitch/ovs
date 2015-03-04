@@ -467,34 +467,64 @@
   <table name="Bindings" title="Physical-Logical Bindings">
     <p>
       Each row in this table identifies the physical location of a logical
-      port.  Each hypervisor, via <code>ovn-controller</code>, populates this
-      table with rows for the logical ports that are located on its hypervisor,
-      which <code>ovn-controller</code> in turn finds out by monitoring the
-      local hypervisor's Open_vSwitch database, which identifies logical ports
-      via the conventions described in <code>IntegrationGuide.md</code>.
+      port.
     </p>
 
     <p>
-      When a chassis shuts down gracefully, it should remove its bindings.
+      For every <code>Logical_Port</code> record in <code>OVN_Northbound</code>
+      database, <code>ovn-ndb</code> creates a record in this table.
+      <code>ovn-nbd</code> is responsible for populating every column except
+      the <code>chassis</code> column.
+    </p>
+
+    <p>
+      <code>ovn-controller</code> populates the <code>chassis</code> column
+      for the records that identify the logical ports that are located on its
+      hypervisor, which <code>ovn-controller</code> in turn finds out by
+      monitoring the local hypervisor's Open_vSwitch database, which
+      identifies logical ports via the conventions described in
+      <code>IntegrationGuide.md</code>.
+    </p>
+
+    <p>
+      When a chassis shuts down gracefully, it should cleanup the
+      <code>chassis</code> column that it previously had populated.
       (This is not critical because resources hosted on the chassis are equally
       unreachable regardless of whether their rows are present.)  To handle the
       case where a VM is shut down abruptly on one chassis, then brought up
-      again on a different one, <code>ovn-controller</code> must delete any
-      existing <ref table="Binding"/> record for a logical port when it adds a
-      new one.
+      again on a different one, <code>ovn-controller</code> must overwrite the
+      <code>chassis</code> column with new information.
     </p>
 
     <column name="logical_port">
-      A logical port, taken from <ref key="iface-id" table="Interface"
-      column="external_ids" db="Open_vSwitch"/> in the Open_vSwitch database's
-      <ref table="Interface" db="Open_vSwitch"/> table.  OVN does not prescribe
-      a particular format for the logical port ID.
+      A logical port, taken from <ref table="Logical_Port" column="name"
+      db="OVN_Northbound"/> in the OVN_Northbound database's
+      <ref table="Logical_Port" db="OVN_Northbound"/> table.  OVN does not
+      prescribe a particular format for the logical port ID.
+    </column>
+
+    <column name="parent_port">
+      For containers created inside a VM, this is taken from
+      <ref table="Logical_Port" column="parent_name" db="OVN_Northbound"/>
+      in the OVN_Northbound database's <ref table="Logical_Port"
+      db="OVN_Northbound"/> table.  It is left empty if
+      <ref column="logical_port"/> belongs to a VM or a container created
+      in the hypervisor.
+    </column>
+
+    <column name="tag">
+      When <ref column="logical_port"/> identifies the interface of a container
+      spawned inside a VM, this column identifies the VLAN tag in
+      the network traffic associated with that container's network interface.
+      It is left empty if <ref column="logical_port"/> belongs to a VM or a
+      container created in the hypervisor.
     </column>
 
     <column name="chassis">
       The physical location of the logical port.  To successfully identify a
       chassis, this column must match the <ref table="Chassis" column="name"/>
-      column in some row in the <ref table="Chassis"/> table.
+      column in some row in the <ref table="Chassis"/> table.  This is
+      populated by <code>ovn-controller</code>.
     </column>
 
     <column name="mac">
