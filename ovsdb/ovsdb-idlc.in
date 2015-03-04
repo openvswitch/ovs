@@ -132,10 +132,7 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
         for columnName, column in sorted(table.columns.iteritems()):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
 
-        print """
-/* Functions for fetching columns as \"struct ovsdb_datum\"s.  (This is
-   rarely useful.  More often, it is easier to access columns by using
-   the members of %(s)s directly.) */""" % {'s': structName}
+        print
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.value:
                 valueParam = ', enum ovsdb_atomic_type value_type'
