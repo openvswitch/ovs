@@ -248,8 +248,7 @@ static void bridge_configure_mac_table(struct bridge *);
 static void bridge_configure_mcast_snooping(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_ipfix(struct bridge *);
-static void bridge_configure_stp(struct bridge *);
-static void bridge_configure_rstp(struct bridge *);
+static void bridge_configure_spanning_tree(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
 static void bridge_configure_dp_desc(struct bridge *);
 static void bridge_configure_aa(struct bridge *);
@@ -668,8 +667,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
         bridge_configure_ipfix(br);
-        bridge_configure_stp(br);
-        bridge_configure_rstp(br);
+        bridge_configure_spanning_tree(br);
         bridge_configure_tables(br);
         bridge_configure_dp_desc(br);
         bridge_configure_aa(br);
@@ -1444,18 +1442,10 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
 
 /* Set spanning tree configuration on 'br'. */
 static void
-bridge_configure_stp(struct bridge *br)
+bridge_configure_stp(struct bridge *br, bool enable_stp)
 {
-    struct ofproto_rstp_status rstp_status;
-
-    ofproto_get_rstp_status(br->ofproto, &rstp_status);
-    if (!br->cfg->stp_enable) {
+    if (!enable_stp) {
         ofproto_set_stp(br->ofproto, NULL);
-    } else if (rstp_status.enabled) {
-        /* Do not activate STP if RSTP is enabled. */
-        VLOG_ERR("STP cannot be enabled if RSTP is running.");
-        ofproto_set_stp(br->ofproto, NULL);
-        ovsrec_bridge_set_stp_enable(br->cfg, false);
     } else {
         struct ofproto_stp_settings br_s;
         const char *config_str;
@@ -1546,18 +1536,10 @@ bridge_configure_stp(struct bridge *br)
 }
 
 static void
-bridge_configure_rstp(struct bridge *br)
+bridge_configure_rstp(struct bridge *br, bool enable_rstp)
 {
-    struct ofproto_stp_status stp_status;
-
-    ofproto_get_stp_status(br->ofproto, &stp_status);
-    if (!br->cfg->rstp_enable) {
+    if (!enable_rstp) {
         ofproto_set_rstp(br->ofproto, NULL);
-    } else if (stp_status.enabled) {
-        /* Do not activate RSTP if STP is enabled. */
-        VLOG_ERR("RSTP cannot be enabled if STP is running.");
-        ofproto_set_rstp(br->ofproto, NULL);
-        ovsrec_bridge_set_rstp_enable(br->cfg, false);
     } else {
         struct ofproto_rstp_settings br_s;
         const char *config_str;
@@ -1650,6 +1632,22 @@ bridge_configure_rstp(struct bridge *br)
             }
         }
     }
+}
+
+static void
+bridge_configure_spanning_tree(struct bridge *br)
+{
+    bool enable_rstp = br->cfg->rstp_enable;
+    bool enable_stp = br->cfg->stp_enable;
+
+    if (enable_rstp && enable_stp) {
+        VLOG_WARN("%s: RSTP and STP are mutually exclusive but both are "
+                  "configured; enabling RSTP", br->name);
+        enable_stp = false;
+    }
+
+    bridge_configure_stp(br, enable_stp);
+    bridge_configure_rstp(br, enable_rstp);
 }
 
 static bool
