@@ -232,7 +232,7 @@ netdev_windows_netdev_from_ofpbuf(struct netdev_windows_netdev_info *info,
 
     netdev_windows_info_init(info);
 
-    ofpbuf_use_const(&b, ofpbuf_data(buf), ofpbuf_size(buf));
+    ofpbuf_use_const(&b, buf->data, buf->size);
     nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     genl = ofpbuf_try_pull(&b, sizeof *genl);
     ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
