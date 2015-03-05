@@ -6,4 +6,4 @@
 # it can generate more programmer-friendly data structures.
 
 s["idlPrefix"] = "vteprec_"
-s["idlHeader"] = "\"lib/vtep-idl.h\""
+s["idlHeader"] = "\"vtep/vtep-idl.h\""

@@ -43,7 +43,7 @@
 #include "smap.h"
 #include "sset.h"
 #include "svec.h"
-#include "lib/vtep-idl.h"
+#include "vtep/vtep-idl.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
