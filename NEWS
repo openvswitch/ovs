@@ -71,6 +71,7 @@ Post-v2.3.0
      Auto-Attach.
    - The default OpenFlow and OVSDB ports are now the IANA-assigned
      numbers.  OpenFlow is 6653 and OVSDB is 6640.
+   - Support for DPDK vHost.
 
 
 v2.3.0 - 14 Aug 2014

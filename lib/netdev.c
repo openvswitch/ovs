@@ -108,7 +108,8 @@ bool
 netdev_is_pmd(const struct netdev *netdev)
 {
     return (!strcmp(netdev->netdev_class->type, "dpdk") ||
-            !strcmp(netdev->netdev_class->type, "dpdkr"));
+            !strcmp(netdev->netdev_class->type, "dpdkr") ||
+            !strcmp(netdev->netdev_class->type, "dpdkvhost"));
 }
 
 static void

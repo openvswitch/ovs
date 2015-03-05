@@ -170,7 +170,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
-    DPDK_LIB=-lintel_dpdk
+    DPDK_LIB="-lintel_dpdk -lfuse "
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
@@ -214,7 +214,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     #
     # These options are specified inside a single -Wl directive to prevent
     # autotools from reordering them.
-    DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
+    DPDK_vswitchd_LDFLAGS=-Wl,$DPDK_LIB
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
   else

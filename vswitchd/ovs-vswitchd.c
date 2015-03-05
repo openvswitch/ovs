@@ -252,11 +252,13 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nDPDK options:\n"
-           "  --dpdk options          Initialize DPDK datapath.\n");
+           "  --dpdk options            Initialize DPDK datapath.\n"
+           "  --cuse_dev_name BASENAME  override default character device name\n"
+           "                            for use with userspace vHost.\n");
     printf("\nOther options:\n"
-           "  --unixctl=SOCKET        override default control socket name\n"
-           "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n");
+           "  --unixctl=SOCKET          override default control socket name\n"
+           "  -h, --help                display this help message\n"
+           "  -V, --version             display version information\n");
     exit(EXIT_SUCCESS);
 }
 
