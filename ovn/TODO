@@ -291,16 +291,11 @@
 
 ** Neutron plugin.
 
-*** Create stackforge/networking-ovn repository based on OpenStack's
-cookiecutter git repo generator
+   This is being developed on OpenStack's development infrastructure
+   to be along side most of the other Neutron plugins.
 
-*** Document mappings between Neutron data model and the OVN northbound DB
+   http://git.openstack.org/cgit/stackforge/networking-ovn
 
-*** Create a Neutron ML2 mechanism driver that implements the mappings
-on Neutron resource requests
-
-*** Add synchronization for when we need to sanity check that the OVN
-northbound DB reflects the current state of the world as intended by
-Neutron (needed for various failure scenarios)
+   http://git.openstack.org/cgit/stackforge/networking-ovn/tree/doc/source/todo.rst
 
 ** Gateways.
