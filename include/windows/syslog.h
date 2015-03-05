@@ -26,7 +26,6 @@
 #define LOG_INFO        6       /* informational */
 #define LOG_DEBUG       7       /* debug-level messages */
 #define LOG_NDELAY      8       /* don't delay open */
-#define LOG_DAEMON      24      /* system daemons */
 
 #define LOG_KERN      (0<<3)  /* kernel messages */
 #define LOG_USER      (1<<3)  /* user-level messages */
