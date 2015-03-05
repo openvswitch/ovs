@@ -25,6 +25,7 @@
 
 #include "coverage.h"
 #include "dpctl.h"
+#include "dp-packet.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "netdev.h"
@@ -35,7 +36,6 @@
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "route-table.h"
@@ -805,11 +805,11 @@ dpif_port_poll_wait(const struct dpif *dpif)
  * arguments must have been initialized through a call to flow_extract().
  * 'used' is stored into stats->used. */
 void
-dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
+dpif_flow_stats_extract(const struct flow *flow, const struct dp_packet *packet,
                         long long int used, struct dpif_flow_stats *stats)
 {
     stats->tcp_flags = ntohs(flow->tcp_flags);
-    stats->n_bytes = ofpbuf_size(packet);
+    stats->n_bytes = dp_packet_size(packet);
     stats->n_packets = 1;
     stats->used = used;
 }
@@ -877,7 +877,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
      * restarted) at just the right time such that feature probes from the
      * previous run are still present in the datapath. */
     error = dpif_flow_put(dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_PROBE,
-                          ofpbuf_data(key), ofpbuf_size(key), NULL, 0, NULL, 0,
+                          key->data, key->size, NULL, 0, NULL, 0,
                           ufid, PMD_ID_NULL, NULL);
     if (error) {
         if (error != EINVAL) {
@@ -888,14 +888,14 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
     }
 
     ofpbuf_use_stack(&reply, &stub, sizeof stub);
-    error = dpif_flow_get(dpif, ofpbuf_data(key), ofpbuf_size(key), ufid,
+    error = dpif_flow_get(dpif, key->data, key->size, ufid,
                           PMD_ID_NULL, &reply, &flow);
     if (!error
         && (!ufid || (flow.ufid_present && ovs_u128_equal(ufid, &flow.ufid)))) {
         enable_feature = true;
     }
 
-    error = dpif_flow_del(dpif, ofpbuf_data(key), ofpbuf_size(key), ufid,
+    error = dpif_flow_del(dpif, key->data, key->size, ufid,
                           PMD_ID_NULL, NULL);
     if (error) {
         VLOG_WARN("%s: failed to delete %s feature probe flow",
@@ -1075,13 +1075,12 @@ struct dpif_execute_helper_aux {
 /* This is called for actions that need the context of the datapath to be
  * meaningful. */
 static void
-dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
+dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
-    struct ofpbuf *packet = &packets[0]->ofpbuf;
-    struct pkt_metadata *md = &packets[0]->md;
+    struct dp_packet *packet = *packets;
 
     ovs_assert(cnt == 1);
 
@@ -1094,6 +1093,7 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
         struct dpif_execute execute;
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
+        struct pkt_metadata *md = &packet->md;
 
         if (md->tunnel.ip_dst) {
             /* The Linux kernel datapath throws away the tunnel information
@@ -1103,15 +1103,14 @@ dpif_execute_helper_cb(void *aux_, struct dpif_packet **packets, int cnt,
             odp_put_tunnel_action(&md->tunnel, &execute_actions);
             ofpbuf_put(&execute_actions, action, NLA_ALIGN(action->nla_len));
 
-            execute.actions = ofpbuf_data(&execute_actions);
-            execute.actions_len = ofpbuf_size(&execute_actions);
+            execute.actions = execute_actions.data;
+            execute.actions_len = execute_actions.size;
         } else {
             execute.actions = action;
             execute.actions_len = NLA_ALIGN(action->nla_len);
         }
 
         execute.packet = packet;
-        execute.md = *md;
         execute.needs_help = false;
         execute.probe = false;
         aux->error = dpif_execute(aux->dpif, &execute);
@@ -1146,23 +1145,13 @@ static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dpif_execute_helper_aux aux = {dpif, 0};
-    struct dpif_packet packet, *pp;
+    struct dp_packet *pp;
 
     COVERAGE_INC(dpif_execute_with_help);
 
-    packet.ofpbuf = *execute->packet;
-    packet.md = execute->md;
-    pp = &packet;
-
+    pp = execute->packet;
     odp_execute_actions(&aux, &pp, 1, false, execute->actions,
                         execute->actions_len, dpif_execute_helper_cb);
-
-    /* Even though may_steal is set to false, some actions could modify or
-     * reallocate the ofpbuf memory. We need to pass those changes to the
-     * caller */
-    *execute->packet = packet.ofpbuf;
-    execute->md = packet.md;
-
     return aux.error;
 }
 
@@ -1375,8 +1364,8 @@ dpif_print_packet(struct dpif *dpif, struct dpif_upcall *upcall)
         struct ds flow;
         char *packet;
 
-        packet = ofp_packet_to_string(ofpbuf_data(&upcall->packet),
-                                      ofpbuf_size(&upcall->packet));
+        packet = ofp_packet_to_string(dp_packet_data(&upcall->packet),
+                                      dp_packet_size(&upcall->packet));
 
         ds_init(&flow);
         odp_flow_key_format(upcall->key, upcall->key_len, &flow);
@@ -1671,8 +1660,8 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet;
 
-        packet = ofp_packet_to_string(ofpbuf_data(execute->packet),
-                                      ofpbuf_size(execute->packet));
+        packet = ofp_packet_to_string(dp_packet_data(execute->packet),
+                                      dp_packet_size(execute->packet));
         ds_put_format(&ds, "%s: %sexecute ",
                       dpif_name(dpif),
                       (subexecute ? "sub-"

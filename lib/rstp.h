@@ -43,7 +43,7 @@ extern struct ovs_mutex rstp_mutex;
 
 #define RSTP_MAX_PORTS 4095
 
-struct ofpbuf;
+struct dp_packet;
 
 /* Bridge priority defaults [Table 17-2] */
 #define RSTP_MIN_PRIORITY 0
@@ -140,7 +140,7 @@ void rstp_init(void)
     OVS_EXCLUDED(rstp_mutex);
 
 struct rstp * rstp_create(const char *, rstp_identifier bridge_id,
-                          void (*send_bpdu)(struct ofpbuf *, void *port_aux,
+                          void (*send_bpdu)(struct dp_packet *, void *port_aux,
                                             void *rstp_aux),
                           void *aux)
     OVS_EXCLUDED(rstp_mutex);

@@ -29,6 +29,7 @@
 #include "connectivity.h"
 #include "ofpbuf.h"
 #include "ovs-atomic.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "seq.h"
 #include "unixctl.h"
@@ -144,7 +145,7 @@ struct stp {
     /* Interface to client. */
     bool fdb_needs_flush;          /* MAC learning tables needs flushing. */
     struct stp_port *first_changed_port;
-    void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux);
+    void (*send_bpdu)(struct dp_packet *bpdu, int port_no, void *aux);
     void *aux;
 
     struct ovs_refcount ref_cnt;
@@ -258,7 +259,7 @@ stp_init(void)
  */
 struct stp *
 stp_create(const char *name, stp_identifier bridge_id,
-           void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux),
+           void (*send_bpdu)(struct dp_packet *bpdu, int port_no, void *aux),
            void *aux)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
@@ -1569,19 +1570,19 @@ stp_send_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
 {
     struct eth_header *eth;
     struct llc_header *llc;
-    struct ofpbuf *pkt;
+    struct dp_packet *pkt;
 
     /* Skeleton. */
-    pkt = ofpbuf_new(ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
-    eth = ofpbuf_put_zeros(pkt, sizeof *eth);
-    llc = ofpbuf_put_zeros(pkt, sizeof *llc);
-    ofpbuf_set_frame(pkt, eth);
-    ofpbuf_set_l3(pkt, ofpbuf_put(pkt, bpdu, bpdu_size));
+    pkt = dp_packet_new(ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
+    eth = dp_packet_put_zeros(pkt, sizeof *eth);
+    llc = dp_packet_put_zeros(pkt, sizeof *llc);
+    dp_packet_set_frame(pkt, eth);
+    dp_packet_set_l3(pkt, dp_packet_put(pkt, bpdu, bpdu_size));
 
     /* 802.2 header. */
     memcpy(eth->eth_dst, eth_addr_stp, ETH_ADDR_LEN);
     /* p->stp->send_bpdu() must fill in source address. */
-    eth->eth_type = htons(ofpbuf_size(pkt) - ETH_HEADER_LEN);
+    eth->eth_type = htons(dp_packet_size(pkt) - ETH_HEADER_LEN);
 
     /* LLC header. */
     llc->llc_dsap = STP_LLC_DSAP;

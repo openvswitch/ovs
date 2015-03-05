@@ -389,7 +389,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "netdev.h"
-#include "ofpbuf.h"
+#include "dp-packet.h"
 #include "openflow/openflow.h"
 #include "ovs-numa.h"
 #include "packets.h"
@@ -505,7 +505,7 @@ struct dpif_flow_stats {
     uint16_t tcp_flags;
 };
 
-void dpif_flow_stats_extract(const struct flow *, const struct ofpbuf *packet,
+void dpif_flow_stats_extract(const struct flow *, const struct dp_packet *packet,
                              long long int used, struct dpif_flow_stats *);
 void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
 
@@ -699,8 +699,7 @@ struct dpif_execute {
     bool probe;                     /* Suppress error messages. */
 
     /* Input, but possibly modified as a side effect of execution. */
-    struct ofpbuf *packet;          /* Packet to execute. */
-    struct pkt_metadata md;         /* Packet metadata. */
+    struct dp_packet *packet;          /* Packet to execute. */
 };
 
 /* Queries the dpif for a flow entry.
@@ -777,7 +776,7 @@ const char *dpif_upcall_type_to_string(enum dpif_upcall_type);
 struct dpif_upcall {
     /* All types. */
     enum dpif_upcall_type type;
-    struct ofpbuf packet;       /* Packet data. */
+    struct dp_packet packet;       /* Packet data. */
     struct nlattr *key;         /* Flow key. */
     size_t key_len;             /* Length of 'key' in bytes. */
     ovs_u128 ufid;              /* Unique flow identifier for 'key'. */
@@ -805,7 +804,7 @@ struct dpif_upcall {
  *
  * Returns 0 if successful, ENOSPC if the flow limit has been reached and no
  * flow should be installed, or some otherwise a positive errno value. */
-typedef int upcall_callback(const struct ofpbuf *packet,
+typedef int upcall_callback(const struct dp_packet *packet,
                             const struct flow *flow,
                             ovs_u128 *ufid,
                             int pmd_id,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1815,8 +1815,8 @@ ovs_scan(const char *s, const char *format, ...)
 }
 
 /*
- * This function is similar to ocs_scan(), extra parameter `n` is added to
- * return number of scanned characters.
+ * This function is similar to ovs_scan(), with an extra parameter `n` added to
+ * return the number of scanned characters.
  */
 bool
 ovs_scan_len(const char *s, int *n, const char *format, ...)

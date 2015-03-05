@@ -33,6 +33,7 @@
 
 #include "cmap.h"
 #include "csum.h"
+#include "dp-packet.h"
 #include "dpif.h"
 #include "dpif-provider.h"
 #include "dummy.h"
@@ -54,7 +55,6 @@
 #include "ofpbuf.h"
 #include "ovs-numa.h"
 #include "ovs-rcu.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "pvector.h"
@@ -415,12 +415,12 @@ static void do_del_port(struct dp_netdev *dp, struct dp_netdev_port *)
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
-                                      struct dpif_packet **, int c,
+                                      struct dp_packet **, int c,
                                       bool may_steal,
                                       const struct nlattr *actions,
                                       size_t actions_len);
 static void dp_netdev_input(struct dp_netdev_pmd_thread *,
-                            struct dpif_packet **, int cnt);
+                            struct dp_packet **, int cnt);
 
 static void dp_netdev_disable_upcall(struct dp_netdev *);
 void dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd);
@@ -1323,16 +1323,16 @@ static void
 netdev_flow_key_from_flow(struct netdev_flow_key *dst,
                           const struct flow *src)
 {
-    struct ofpbuf packet;
+    struct dp_packet packet;
     uint64_t buf_stub[512 / 8];
-    struct pkt_metadata md = pkt_metadata_from_flow(src);
 
     miniflow_initialize(&dst->mf, dst->buf);
 
-    ofpbuf_use_stub(&packet, buf_stub, sizeof buf_stub);
+    dp_packet_use_stub(&packet, buf_stub, sizeof buf_stub);
+    pkt_metadata_from_flow(&packet.md, src);
     flow_compose(&packet, src);
-    miniflow_extract(&packet, &md, &dst->mf);
-    ofpbuf_uninit(&packet);
+    miniflow_extract(&packet, &dst->mf);
+    dp_packet_uninit(&packet);
 
     dst->len = netdev_flow_key_size(count_1bits(dst->mf.map));
     dst->hash = 0; /* Not computed yet. */
@@ -1573,19 +1573,19 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
 
         /* Key */
-        offset = ofpbuf_size(key_buf);
+        offset = key_buf->size;
         flow->key = ofpbuf_tail(key_buf);
         odp_flow_key_from_flow(key_buf, &netdev_flow->flow, &wc.masks,
                                netdev_flow->flow.in_port.odp_port, true);
-        flow->key_len = ofpbuf_size(key_buf) - offset;
+        flow->key_len = key_buf->size - offset;
 
         /* Mask */
-        offset = ofpbuf_size(mask_buf);
+        offset = mask_buf->size;
         flow->mask = ofpbuf_tail(mask_buf);
         odp_flow_key_from_mask(mask_buf, &wc.masks, &netdev_flow->flow,
                                odp_to_u32(wc.masks.in_port.odp_port),
                                SIZE_MAX, true);
-        flow->mask_len = ofpbuf_size(mask_buf) - offset;
+        flow->mask_len = mask_buf->size - offset;
 
         /* Actions */
         actions = dp_netdev_flow_get_actions(netdev_flow);
@@ -2046,16 +2046,12 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_pmd_thread *pmd;
-    struct dpif_packet packet, *pp;
+    struct dp_packet *pp;
 
-    if (ofpbuf_size(execute->packet) < ETH_HEADER_LEN ||
-        ofpbuf_size(execute->packet) > UINT16_MAX) {
+    if (dp_packet_size(execute->packet) < ETH_HEADER_LEN ||
+        dp_packet_size(execute->packet) > UINT16_MAX) {
         return EINVAL;
     }
-
-    packet.ofpbuf = *execute->packet;
-    packet.md = execute->md;
-    pp = &packet;
 
     /* Tries finding the 'pmd'.  If NULL is returned, that means
      * the current thread is a non-pmd thread and should use
@@ -2072,6 +2068,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         ovs_mutex_lock(&dp->port_mutex);
     }
 
+    pp = execute->packet;
     dp_netdev_execute_actions(pmd, &pp, 1, false, execute->actions,
                               execute->actions_len);
     if (pmd->core_id == NON_PMD_CORE_ID) {
@@ -2080,11 +2077,6 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         ovs_mutex_unlock(&dp->non_pmd_mutex);
     }
 
-    /* Even though may_steal is set to false, some actions could modify or
-     * reallocate the ofpbuf memory. We need to pass those changes to the
-     * caller */
-    *execute->packet = packet.ofpbuf;
-    execute->md = packet.md;
     return 0;
 }
 
@@ -2230,7 +2222,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct dp_netdev_port *port,
                            struct netdev_rxq *rxq)
 {
-    struct dpif_packet *packets[NETDEV_MAX_RX_BATCH];
+    struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
     int error, cnt;
 
     error = netdev_rxq_recv(rxq, packets, &cnt);
@@ -2693,13 +2685,12 @@ dp_netdev_count_packet(struct dp_netdev_pmd_thread *pmd,
 }
 
 static int
-dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dpif_packet *packet_,
+dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
                  struct flow *flow, struct flow_wildcards *wc, ovs_u128 *ufid,
                  enum dpif_upcall_type type, const struct nlattr *userdata,
                  struct ofpbuf *actions, struct ofpbuf *put_actions)
 {
     struct dp_netdev *dp = pmd->dp;
-    struct ofpbuf *packet = &packet_->ofpbuf;
 
     if (type == DPIF_UC_MISS) {
         dp_netdev_count_packet(pmd, DP_STAT_MISS, 1);
@@ -2711,40 +2702,40 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dpif_packet *packet_,
 
     if (OVS_UNLIKELY(!VLOG_DROP_DBG(&upcall_rl))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
-        struct ofpbuf key;
         char *packet_str;
+        struct ofpbuf key;
 
         ofpbuf_init(&key, 0);
         odp_flow_key_from_flow(&key, flow, &wc->masks, flow->in_port.odp_port,
                                true);
+        packet_str = ofp_packet_to_string(dp_packet_data(packet_),
+                                          dp_packet_size(packet_));
 
-        packet_str = ofp_packet_to_string(ofpbuf_data(packet),
-                                          ofpbuf_size(packet));
-
-        odp_flow_key_format(ofpbuf_data(&key), ofpbuf_size(&key), &ds);
+        odp_flow_key_format(key.data, key.size, &ds);
 
         VLOG_DBG("%s: %s upcall:\n%s\n%s", dp->name,
                  dpif_upcall_type_to_string(type), ds_cstr(&ds), packet_str);
 
         ofpbuf_uninit(&key);
         free(packet_str);
+
         ds_destroy(&ds);
     }
 
-    return dp->upcall_cb(packet, flow, ufid, pmd->core_id, type, userdata,
+    return dp->upcall_cb(packet_, flow, ufid, pmd->core_id, type, userdata,
                          actions, wc, put_actions, dp->upcall_aux);
 }
 
 static inline uint32_t
-dpif_netdev_packet_get_dp_hash(struct dpif_packet *packet,
+dpif_netdev_packet_get_dp_hash(struct dp_packet *packet,
                                const struct miniflow *mf)
 {
     uint32_t hash;
 
-    hash = dpif_packet_get_dp_hash(packet);
+    hash = dp_packet_get_dp_hash(packet);
     if (OVS_UNLIKELY(!hash)) {
         hash = miniflow_hash_5tuple(mf, 0);
-        dpif_packet_set_dp_hash(packet, hash);
+        dp_packet_set_dp_hash(packet, hash);
     }
     return hash;
 }
@@ -2756,16 +2747,16 @@ struct packet_batch {
 
     struct dp_netdev_flow *flow;
 
-    struct dpif_packet *packets[NETDEV_MAX_RX_BATCH];
+    struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
 };
 
 static inline void
-packet_batch_update(struct packet_batch *batch, struct dpif_packet *packet,
+packet_batch_update(struct packet_batch *batch, struct dp_packet *packet,
                     const struct miniflow *mf)
 {
     batch->tcp_flags |= miniflow_get_tcp_flags(mf);
     batch->packets[batch->packet_count++] = packet;
-    batch->byte_count += ofpbuf_size(&packet->ofpbuf);
+    batch->byte_count += dp_packet_size(packet);
 }
 
 static inline void
@@ -2797,7 +2788,7 @@ packet_batch_execute(struct packet_batch *batch,
 }
 
 static inline bool
-dp_netdev_queue_batches(struct dpif_packet *pkt,
+dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct dp_netdev_flow *flow, const struct miniflow *mf,
                         struct packet_batch *batches, size_t *n_batches,
                         size_t max_batches)
@@ -2832,9 +2823,9 @@ dp_netdev_queue_batches(struct dpif_packet *pkt,
 }
 
 static inline void
-dpif_packet_swap(struct dpif_packet **a, struct dpif_packet **b)
+dp_packet_swap(struct dp_packet **a, struct dp_packet **b)
 {
-    struct dpif_packet *tmp = *a;
+    struct dp_packet *tmp = *a;
     *a = *b;
     *b = tmp;
 }
@@ -2848,7 +2839,7 @@ dpif_packet_swap(struct dpif_packet **a, struct dpif_packet **b)
  * 'packets' array (they have been moved to the beginning of the vector).
  */
 static inline size_t
-emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
+emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
                size_t cnt, struct netdev_flow_key *keys)
 {
     struct netdev_flow_key key;
@@ -2862,12 +2853,12 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
 
-        if (OVS_UNLIKELY(ofpbuf_size(&packets[i]->ofpbuf) < ETH_HEADER_LEN)) {
-            dpif_packet_delete(packets[i]);
+        if (OVS_UNLIKELY(dp_packet_size(packets[i]) < ETH_HEADER_LEN)) {
+            dp_packet_delete(packets[i]);
             continue;
         }
 
-        miniflow_extract(&packets[i]->ofpbuf, &packets[i]->md, &key.mf);
+        miniflow_extract(packets[i], &key.mf);
         key.len = 0; /* Not computed yet. */
         key.hash = dpif_netdev_packet_get_dp_hash(packets[i], &key.mf);
 
@@ -2876,7 +2867,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
                                                   batches, &n_batches,
                                                   ARRAY_SIZE(batches)))) {
             if (i != notfound_cnt) {
-                dpif_packet_swap(&packets[i], &packets[notfound_cnt]);
+                dp_packet_swap(&packets[i], &packets[notfound_cnt]);
             }
 
             keys[notfound_cnt++] = key;
@@ -2892,7 +2883,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dpif_packet **packets,
 
 static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
-                     struct dpif_packet **packets, size_t cnt,
+                     struct dp_packet **packets, size_t cnt,
                      struct netdev_flow_key *keys)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
@@ -2957,13 +2948,9 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
             dp_netdev_execute_actions(pmd, &packets[i], 1, true,
-                                      ofpbuf_data(&actions),
-                                      ofpbuf_size(&actions));
+                                      actions.data, actions.size);
 
-            add_actions = ofpbuf_size(&put_actions)
-                ? &put_actions
-                : &actions;
-
+            add_actions = put_actions.size ? &put_actions : &actions;
             if (OVS_LIKELY(error != ENOSPC)) {
                 /* XXX: There's a race window where a flow covering this packet
                  * could have already been installed since we last did the flow
@@ -2975,8 +2962,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 netdev_flow = dp_netdev_pmd_lookup_flow(pmd, &keys[i]);
                 if (OVS_LIKELY(!netdev_flow)) {
                     netdev_flow = dp_netdev_flow_add(pmd, &match, &ufid,
-                                                     ofpbuf_data(add_actions),
-                                                     ofpbuf_size(add_actions));
+                                                     add_actions->data,
+                                                     add_actions->size);
                 }
                 ovs_mutex_unlock(&pmd->flow_mutex);
 
@@ -2992,7 +2979,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
         for (i = 0; i < cnt; i++) {
             if (OVS_UNLIKELY(!rules[i])) {
-                dpif_packet_delete(packets[i]);
+                dp_packet_delete(packets[i]);
                 dropped_cnt++;
             }
         }
@@ -3002,7 +2989,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
     n_batches = 0;
     for (i = 0; i < cnt; i++) {
-        struct dpif_packet *packet = packets[i];
+        struct dp_packet *packet = packets[i];
         struct dp_netdev_flow *flow;
 
         if (OVS_UNLIKELY(!rules[i])) {
@@ -3023,7 +3010,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
 static void
 dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
-                struct dpif_packet **packets, int cnt)
+                struct dp_packet **packets, int cnt)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
@@ -3054,13 +3041,13 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
 }
 
 static void
-dp_netdev_drop_packets(struct dpif_packet ** packets, int cnt, bool may_steal)
+dp_netdev_drop_packets(struct dp_packet ** packets, int cnt, bool may_steal)
 {
     if (may_steal) {
         int i;
 
         for (i = 0; i < cnt; i++) {
-            dpif_packet_delete(packets[i]);
+            dp_packet_delete(packets[i]);
         }
     }
 }
@@ -3068,7 +3055,7 @@ dp_netdev_drop_packets(struct dpif_packet ** packets, int cnt, bool may_steal)
 static int
 push_tnl_action(const struct dp_netdev *dp,
                    const struct nlattr *attr,
-                   struct dpif_packet **packets, int cnt)
+                   struct dp_packet **packets, int cnt)
 {
     struct dp_netdev_port *tun_port;
     const struct ovs_action_push_tnl *data;
@@ -3085,18 +3072,18 @@ push_tnl_action(const struct dp_netdev *dp,
 }
 
 static void
-dp_netdev_clone_pkt_batch(struct dpif_packet **tnl_pkt,
-                          struct dpif_packet **packets, int cnt)
+dp_netdev_clone_pkt_batch(struct dp_packet **tnl_pkt,
+                          struct dp_packet **packets, int cnt)
 {
     int i;
 
     for (i = 0; i < cnt; i++) {
-        tnl_pkt[i] = dpif_packet_clone(packets[i]);
+        tnl_pkt[i] = dp_packet_clone(packets[i]);
     }
 }
 
 static void
-dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
+dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -3119,7 +3106,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dpif_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+            struct dp_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
             int err;
 
             if (!may_steal) {
@@ -3145,7 +3132,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
             p = dp_netdev_lookup_port(dp, portno);
             if (p) {
-                struct dpif_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+                struct dp_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
                 int err;
 
                 if (!may_steal) {
@@ -3186,17 +3173,16 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
                 ofpbuf_clear(&actions);
 
-                flow_extract(&packets[i]->ofpbuf, &packets[i]->md, &flow);
+                flow_extract(packets[i], &flow);
                 dpif_flow_hash(dp->dpif, &flow, sizeof flow, &ufid);
                 error = dp_netdev_upcall(pmd, packets[i], &flow, NULL, &ufid,
                                          DPIF_UC_ACTION, userdata,&actions,
                                          NULL);
                 if (!error || error == ENOSPC) {
                     dp_netdev_execute_actions(pmd, &packets[i], 1, may_steal,
-                                              ofpbuf_data(&actions),
-                                              ofpbuf_size(&actions));
+                                              actions.data, actions.size);
                 } else if (may_steal) {
-                    dpif_packet_delete(packets[i]);
+                    dp_packet_delete(packets[i]);
                 }
             }
             ofpbuf_uninit(&actions);
@@ -3211,15 +3197,15 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
             (*depth)++;
             for (i = 0; i < cnt; i++) {
-                struct dpif_packet *recirc_pkt;
+                struct dp_packet *recirc_pkt;
 
                 recirc_pkt = (may_steal) ? packets[i]
-                                    : dpif_packet_clone(packets[i]);
+                                    : dp_packet_clone(packets[i]);
 
                 recirc_pkt->md.recirc_id = nl_attr_get_u32(a);
 
                 /* Hash is private to each packet */
-                recirc_pkt->md.dp_hash = dpif_packet_get_dp_hash(packets[i]);
+                recirc_pkt->md.dp_hash = dp_packet_get_dp_hash(packets[i]);
 
                 dp_netdev_input(pmd, &recirc_pkt, 1);
             }
@@ -3249,7 +3235,7 @@ dp_execute_cb(void *aux_, struct dpif_packet **packets, int cnt,
 
 static void
 dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
-                          struct dpif_packet **packets, int cnt,
+                          struct dp_packet **packets, int cnt,
                           bool may_steal,
                           const struct nlattr *actions, size_t actions_len)
 {

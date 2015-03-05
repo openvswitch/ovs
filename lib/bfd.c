@@ -24,6 +24,7 @@
 #include "byte-order.h"
 #include "connectivity.h"
 #include "csum.h"
+#include "dp-packet.h"
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "flow.h"
@@ -515,10 +516,12 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
     }
 }
 
-void
+long long int
 bfd_wait(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    poll_timer_wait_until(bfd_wake_time(bfd));
+    long long int wake_time = bfd_wake_time(bfd);
+    poll_timer_wait_until(wake_time);
+    return wake_time;
 }
 
 /* Returns the next wake up time. */
@@ -585,7 +588,7 @@ bfd_should_send_packet(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 }
 
 void
-bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
+bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
                uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     long long int min_tx, min_rx;
@@ -609,8 +612,8 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
      * set. */
     ovs_assert(!(bfd->flags & FLAG_POLL) || !(bfd->flags & FLAG_FINAL));
 
-    ofpbuf_reserve(p, 2); /* Properly align after the ethernet header. */
-    eth = ofpbuf_put_uninit(p, sizeof *eth);
+    dp_packet_reserve(p, 2); /* Properly align after the ethernet header. */
+    eth = dp_packet_put_uninit(p, sizeof *eth);
     memcpy(eth->eth_src,
            eth_addr_is_zero(bfd->local_eth_src) ? eth_src
                                                 : bfd->local_eth_src,
@@ -621,7 +624,7 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
            ETH_ADDR_LEN);
     eth->eth_type = htons(ETH_TYPE_IP);
 
-    ip = ofpbuf_put_zeros(p, sizeof *ip);
+    ip = dp_packet_put_zeros(p, sizeof *ip);
     ip->ip_ihl_ver = IP_IHL_VER(5, 4);
     ip->ip_tot_len = htons(sizeof *ip + sizeof *udp + sizeof *msg);
     ip->ip_ttl = MAXTTL;
@@ -631,12 +634,12 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
     put_16aligned_be32(&ip->ip_dst, bfd->ip_dst);
     ip->ip_csum = csum(ip, sizeof *ip);
 
-    udp = ofpbuf_put_zeros(p, sizeof *udp);
+    udp = dp_packet_put_zeros(p, sizeof *udp);
     udp->udp_src = htons(bfd->udp_src);
     udp->udp_dst = htons(BFD_DEST_PORT);
     udp->udp_len = htons(sizeof *udp + sizeof *msg);
 
-    msg = ofpbuf_put_uninit(p, sizeof *msg);
+    msg = dp_packet_put_uninit(p, sizeof *msg);
     msg->vers_diag = (BFD_VERSION << 5) | bfd->diag;
     msg->flags = (bfd->state & STATE_MASK) | bfd->flags;
 
@@ -702,14 +705,14 @@ bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
 
 void
 bfd_process_packet(struct bfd *bfd, const struct flow *flow,
-                   const struct ofpbuf *p) OVS_EXCLUDED(mutex)
+                   const struct dp_packet *p) OVS_EXCLUDED(mutex)
 {
     uint32_t rmt_min_rx, pkt_your_disc;
     enum state rmt_state;
     enum flags flags;
     uint8_t version;
     struct msg *msg;
-    const uint8_t *l7 = ofpbuf_get_udp_payload(p);
+    const uint8_t *l7 = dp_packet_get_udp_payload(p);
 
     if (!l7) {
         return; /* No UDP payload. */
@@ -728,11 +731,11 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         goto out;
     }
 
-    msg = ofpbuf_at(p, l7 - (uint8_t *)ofpbuf_data(p), BFD_PACKET_LEN);
+    msg = dp_packet_at(p, l7 - (uint8_t *)dp_packet_data(p), BFD_PACKET_LEN);
     if (!msg) {
         VLOG_INFO_RL(&rl, "%s: Received too-short BFD control message (only "
                      "%"PRIdPTR" bytes long, at least %d required).",
-                     bfd->name, (uint8_t *) ofpbuf_tail(p) - l7,
+                     bfd->name, (uint8_t *) dp_packet_tail(p) - l7,
                      BFD_PACKET_LEN);
         goto out;
     }
@@ -741,7 +744,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
      * If the Length field is greater than the payload of the encapsulating
      * protocol, the packet MUST be discarded.
      *
-     * Note that we make this check implicity.  Above we use ofpbuf_at() to
+     * Note that we make this check implicitly.  Above we use dp_packet_at() to
      * ensure that there are at least BFD_PACKET_LEN bytes in the payload of
      * the encapsulating protocol.  Below we require msg->length to be exactly
      * BFD_PACKET_LEN bytes. */

@@ -26,6 +26,7 @@
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "ofproto-dpif.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "sset.h"
@@ -970,11 +971,11 @@ dpif_ipfix_unref(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
 
 static void
 ipfix_init_header(uint32_t export_time_sec, uint32_t seq_number,
-                  uint32_t obs_domain_id, struct ofpbuf *msg)
+                  uint32_t obs_domain_id, struct dp_packet *msg)
 {
     struct ipfix_header *hdr;
 
-    hdr = ofpbuf_put_zeros(msg, sizeof *hdr);
+    hdr = dp_packet_put_zeros(msg, sizeof *hdr);
     hdr->version = htons(IPFIX_VERSION);
     hdr->length = htons(sizeof *hdr);  /* Updated in ipfix_send_msg. */
     hdr->export_time = htonl(export_time_sec);
@@ -983,16 +984,16 @@ ipfix_init_header(uint32_t export_time_sec, uint32_t seq_number,
 }
 
 static void
-ipfix_send_msg(const struct collectors *collectors, struct ofpbuf *msg)
+ipfix_send_msg(const struct collectors *collectors, struct dp_packet *msg)
 {
     struct ipfix_header *hdr;
 
     /* Adjust the length in the header. */
-    hdr = ofpbuf_data(msg);
-    hdr->length = htons(ofpbuf_size(msg));
+    hdr = dp_packet_data(msg);
+    hdr->length = htons(dp_packet_size(msg));
 
-    collectors_send(collectors, ofpbuf_data(msg), ofpbuf_size(msg));
-    ofpbuf_set_size(msg, 0);
+    collectors_send(collectors, dp_packet_data(msg), dp_packet_size(msg));
+    dp_packet_set_size(msg, 0);
 }
 
 static uint16_t
@@ -1011,7 +1012,7 @@ static void
 ipfix_define_template_entity(enum ipfix_entity_id id,
                              enum ipfix_entity_size size,
                              enum ipfix_entity_enterprise enterprise,
-                             struct ofpbuf *msg)
+                             struct dp_packet *msg)
 {
     struct ipfix_template_field_specifier *field;
     size_t field_size;
@@ -1022,7 +1023,7 @@ ipfix_define_template_entity(enum ipfix_entity_id id,
         /* No enterprise number */
         field_size = sizeof *field - sizeof(ovs_be32);
     }
-    field = ofpbuf_put_zeros(msg, field_size);
+    field = dp_packet_put_zeros(msg, field_size);
     field->element_id = htons(id);
     if (size) {
         field->field_length = htons(size);
@@ -1039,7 +1040,7 @@ ipfix_define_template_entity(enum ipfix_entity_id id,
 static uint16_t
 ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
                              enum ipfix_proto_l4 l4, enum ipfix_proto_tunnel tunnel,
-                             struct ofpbuf *msg)
+                             struct dp_packet *msg)
 {
     uint16_t count = 0;
 
@@ -1134,34 +1135,34 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
 static void
 ipfix_init_template_msg(void *msg_stub, uint32_t export_time_sec,
                         uint32_t seq_number, uint32_t obs_domain_id,
-                        struct ofpbuf *msg, size_t *set_hdr_offset)
+                        struct dp_packet *msg, size_t *set_hdr_offset)
 {
     struct ipfix_set_header *set_hdr;
 
-    ofpbuf_use_stub(msg, msg_stub, sizeof msg_stub);
+    dp_packet_use_stub(msg, msg_stub, sizeof msg_stub);
 
     ipfix_init_header(export_time_sec, seq_number, obs_domain_id, msg);
-    *set_hdr_offset = ofpbuf_size(msg);
+    *set_hdr_offset = dp_packet_size(msg);
 
     /* Add a Template Set. */
-    set_hdr = ofpbuf_put_zeros(msg, sizeof *set_hdr);
+    set_hdr = dp_packet_put_zeros(msg, sizeof *set_hdr);
     set_hdr->set_id = htons(IPFIX_SET_ID_TEMPLATE);
 }
 
 static void
 ipfix_send_template_msg(const struct collectors *collectors,
-                        struct ofpbuf *msg, size_t set_hdr_offset)
+                        struct dp_packet *msg, size_t set_hdr_offset)
 {
     struct ipfix_set_header *set_hdr;
 
     /* Send template message. */
     set_hdr = (struct ipfix_set_header*)
-              ((uint8_t*)ofpbuf_data(msg) + set_hdr_offset);
-    set_hdr->length = htons(ofpbuf_size(msg) - set_hdr_offset);
+              ((uint8_t*)dp_packet_data(msg) + set_hdr_offset);
+    set_hdr->length = htons(dp_packet_size(msg) - set_hdr_offset);
 
     ipfix_send_msg(collectors, msg);
 
-    ofpbuf_uninit(msg);
+    dp_packet_uninit(msg);
 }
 
 static void
@@ -1169,7 +1170,7 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                          uint32_t export_time_sec, uint32_t obs_domain_id)
 {
     uint64_t msg_stub[DIV_ROUND_UP(MAX_MESSAGE_LEN, 8)];
-    struct ofpbuf msg;
+    struct dp_packet msg;
     size_t set_hdr_offset, tmpl_hdr_offset;
     struct ipfix_template_record_header *tmpl_hdr;
     uint16_t field_count;
@@ -1195,7 +1196,7 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                      * And then reinitialize the msg to construct a new
                      * packet for the following templates.
                      */
-                    if (ofpbuf_size(&msg) >= MAX_MESSAGE_LEN) {
+                    if (dp_packet_size(&msg) >= MAX_MESSAGE_LEN) {
                         /* Send template message. */
                         ipfix_send_template_msg(exporter->collectors,
                                                 &msg, set_hdr_offset);
@@ -1207,14 +1208,14 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                                                 &set_hdr_offset);
                     }
 
-                    tmpl_hdr_offset = ofpbuf_size(&msg);
-                    tmpl_hdr = ofpbuf_put_zeros(&msg, sizeof *tmpl_hdr);
+                    tmpl_hdr_offset = dp_packet_size(&msg);
+                    tmpl_hdr = dp_packet_put_zeros(&msg, sizeof *tmpl_hdr);
                     tmpl_hdr->template_id = htons(
                         ipfix_get_template_id(l2, l3, l4, tunnel));
                     field_count =
                         ipfix_define_template_fields(l2, l3, l4, tunnel, &msg);
                     tmpl_hdr = (struct ipfix_template_record_header*)
-                        ((uint8_t*)ofpbuf_data(&msg) + tmpl_hdr_offset);
+                        ((uint8_t*)dp_packet_data(&msg) + tmpl_hdr_offset);
                     tmpl_hdr->field_count = htons(field_count);
                 }
             }
@@ -1358,14 +1359,14 @@ ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
 
 static void
 ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
-                       const struct ofpbuf *packet, const struct flow *flow,
+                       const struct dp_packet *packet, const struct flow *flow,
                        uint64_t packet_delta_count, uint32_t obs_domain_id,
                        uint32_t obs_point_id, odp_port_t output_odp_port,
                        const struct dpif_ipfix_port *tunnel_port,
                        const struct flow_tnl *tunnel_key)
 {
     struct ipfix_flow_key *flow_key;
-    struct ofpbuf msg;
+    struct dp_packet msg;
     enum ipfix_proto_l2 l2;
     enum ipfix_proto_l3 l3;
     enum ipfix_proto_l4 l4;
@@ -1374,8 +1375,8 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     uint16_t ethernet_total_length;
 
     flow_key = &entry->flow_key;
-    ofpbuf_use_stack(&msg, flow_key->flow_key_msg_part,
-                     sizeof flow_key->flow_key_msg_part);
+    dp_packet_use_stub(&msg, flow_key->flow_key_msg_part,
+                       sizeof flow_key->flow_key_msg_part);
 
     /* Choose the right template ID matching the protocols in the
      * sampled packet. */
@@ -1430,13 +1431,13 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
 
     ethernet_header_length = (l2 == IPFIX_PROTO_L2_VLAN)
         ? VLAN_ETH_HEADER_LEN : ETH_HEADER_LEN;
-    ethernet_total_length = ofpbuf_size(packet);
+    ethernet_total_length = dp_packet_size(packet);
 
     /* Common Ethernet entities. */
     {
         struct ipfix_data_record_flow_key_common *data_common;
 
-        data_common = ofpbuf_put_zeros(&msg, sizeof *data_common);
+        data_common = dp_packet_put_zeros(&msg, sizeof *data_common);
         data_common->observation_point_id = htonl(obs_point_id);
         data_common->flow_direction =
             (output_odp_port == ODPP_NONE) ? INGRESS_FLOW : EGRESS_FLOW;
@@ -1453,7 +1454,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         uint16_t vlan_id = vlan_tci_to_vid(flow->vlan_tci);
         uint8_t priority = vlan_tci_to_pcp(flow->vlan_tci);
 
-        data_vlan = ofpbuf_put_zeros(&msg, sizeof *data_vlan);
+        data_vlan = dp_packet_put_zeros(&msg, sizeof *data_vlan);
         data_vlan->vlan_id = htons(vlan_id);
         data_vlan->dot1q_vlan_id = htons(vlan_id);
         data_vlan->dot1q_priority = priority;
@@ -1462,7 +1463,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     if (l3 != IPFIX_PROTO_L3_UNKNOWN) {
         struct ipfix_data_record_flow_key_ip *data_ip;
 
-        data_ip = ofpbuf_put_zeros(&msg, sizeof *data_ip);
+        data_ip = dp_packet_put_zeros(&msg, sizeof *data_ip);
         data_ip->ip_version = (l3 == IPFIX_PROTO_L3_IPV4) ? 4 : 6;
         data_ip->ip_ttl = flow->nw_ttl;
         data_ip->protocol_identifier = flow->nw_proto;
@@ -1473,13 +1474,13 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         if (l3 == IPFIX_PROTO_L3_IPV4) {
             struct ipfix_data_record_flow_key_ipv4 *data_ipv4;
 
-            data_ipv4 = ofpbuf_put_zeros(&msg, sizeof *data_ipv4);
+            data_ipv4 = dp_packet_put_zeros(&msg, sizeof *data_ipv4);
             data_ipv4->source_ipv4_address = flow->nw_src;
             data_ipv4->destination_ipv4_address = flow->nw_dst;
         } else {  /* l3 == IPFIX_PROTO_L3_IPV6 */
             struct ipfix_data_record_flow_key_ipv6 *data_ipv6;
 
-            data_ipv6 = ofpbuf_put_zeros(&msg, sizeof *data_ipv6);
+            data_ipv6 = dp_packet_put_zeros(&msg, sizeof *data_ipv6);
             memcpy(data_ipv6->source_ipv6_address, &flow->ipv6_src,
                    sizeof flow->ipv6_src);
             memcpy(data_ipv6->destination_ipv6_address, &flow->ipv6_dst,
@@ -1491,13 +1492,13 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     if (l4 == IPFIX_PROTO_L4_TCP_UDP_SCTP) {
         struct ipfix_data_record_flow_key_transport *data_transport;
 
-        data_transport = ofpbuf_put_zeros(&msg, sizeof *data_transport);
+        data_transport = dp_packet_put_zeros(&msg, sizeof *data_transport);
         data_transport->source_transport_port = flow->tp_src;
         data_transport->destination_transport_port = flow->tp_dst;
     } else if (l4 == IPFIX_PROTO_L4_ICMP) {
         struct ipfix_data_record_flow_key_icmp *data_icmp;
 
-        data_icmp = ofpbuf_put_zeros(&msg, sizeof *data_icmp);
+        data_icmp = dp_packet_put_zeros(&msg, sizeof *data_icmp);
         data_icmp->icmp_type = ntohs(flow->tp_src) & 0xff;
         data_icmp->icmp_code = ntohs(flow->tp_dst) & 0xff;
     }
@@ -1506,7 +1507,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         struct ipfix_data_record_flow_key_tunnel *data_tunnel;
         const uint8_t *tun_id;
 
-        data_tunnel = ofpbuf_put_zeros(&msg, sizeof *data_tunnel +
+        data_tunnel = dp_packet_put_zeros(&msg, sizeof *data_tunnel +
                                              tunnel_port->tunnel_key_length);
         data_tunnel->tunnel_source_ipv4_address = tunnel_key->ip_src;
         data_tunnel->tunnel_destination_ipv4_address = tunnel_key->ip_dst;
@@ -1532,7 +1533,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
                tunnel_port->tunnel_key_length);
     }
 
-    flow_key->flow_key_msg_part_size = ofpbuf_size(&msg);
+    flow_key->flow_key_msg_part_size = dp_packet_size(&msg);
 
     {
         struct timeval now;
@@ -1578,20 +1579,20 @@ static void
 ipfix_put_data_set(uint32_t export_time_sec,
                    struct ipfix_flow_cache_entry *entry,
                    enum ipfix_flow_end_reason flow_end_reason,
-                   struct ofpbuf *msg)
+                   struct dp_packet *msg)
 {
     size_t set_hdr_offset;
     struct ipfix_set_header *set_hdr;
 
-    set_hdr_offset = ofpbuf_size(msg);
+    set_hdr_offset = dp_packet_size(msg);
 
     /* Put a Data Set. */
-    set_hdr = ofpbuf_put_zeros(msg, sizeof *set_hdr);
+    set_hdr = dp_packet_put_zeros(msg, sizeof *set_hdr);
     set_hdr->set_id = htons(entry->flow_key.template_id);
 
     /* Copy the flow key part of the data record. */
 
-    ofpbuf_put(msg, entry->flow_key.flow_key_msg_part,
+    dp_packet_put(msg, entry->flow_key.flow_key_msg_part,
                entry->flow_key.flow_key_msg_part_size);
 
     /* Put the non-key part of the data record. */
@@ -1609,7 +1610,7 @@ ipfix_put_data_set(uint32_t export_time_sec,
         flow_end_delta_usec = export_time_usec
             - entry->flow_end_timestamp_usec;
 
-        data_aggregated_common = ofpbuf_put_zeros(
+        data_aggregated_common = dp_packet_put_zeros(
             msg, sizeof *data_aggregated_common);
         data_aggregated_common->flow_start_delta_microseconds = htonl(
             flow_start_delta_usec);
@@ -1625,7 +1626,7 @@ ipfix_put_data_set(uint32_t export_time_sec,
     if (entry->octet_delta_sum_of_squares) {  /* IP packet. */
         struct ipfix_data_record_aggregated_ip *data_aggregated_ip;
 
-        data_aggregated_ip = ofpbuf_put_zeros(
+        data_aggregated_ip = dp_packet_put_zeros(
             msg, sizeof *data_aggregated_ip);
         data_aggregated_ip->octet_delta_count = htonll(
             entry->octet_delta_count);
@@ -1637,8 +1638,8 @@ ipfix_put_data_set(uint32_t export_time_sec,
             entry->maximum_ip_total_length);
     }
 
-    set_hdr = (struct ipfix_set_header*)((uint8_t*)ofpbuf_data(msg) + set_hdr_offset);
-    set_hdr->length = htons(ofpbuf_size(msg) - set_hdr_offset);
+    set_hdr = (struct ipfix_set_header*)((uint8_t*)dp_packet_data(msg) + set_hdr_offset);
+    set_hdr->length = htons(dp_packet_size(msg) - set_hdr_offset);
 }
 
 /* Send an IPFIX message with a single data record. */
@@ -1649,20 +1650,20 @@ ipfix_send_data_msg(struct dpif_ipfix_exporter *exporter,
                     enum ipfix_flow_end_reason flow_end_reason)
 {
     uint64_t msg_stub[DIV_ROUND_UP(MAX_MESSAGE_LEN, 8)];
-    struct ofpbuf msg;
-    ofpbuf_use_stub(&msg, msg_stub, sizeof msg_stub);
+    struct dp_packet msg;
+    dp_packet_use_stub(&msg, msg_stub, sizeof msg_stub);
 
     ipfix_init_header(export_time_sec, exporter->seq_number++,
                       entry->flow_key.obs_domain_id, &msg);
     ipfix_put_data_set(export_time_sec, entry, flow_end_reason, &msg);
     ipfix_send_msg(exporter->collectors, &msg);
 
-    ofpbuf_uninit(&msg);
+    dp_packet_uninit(&msg);
 }
 
 static void
 dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
-                  const struct ofpbuf *packet, const struct flow *flow,
+                  const struct dp_packet *packet, const struct flow *flow,
                   uint64_t packet_delta_count, uint32_t obs_domain_id,
                   uint32_t obs_point_id, odp_port_t output_odp_port,
                   const struct dpif_ipfix_port *tunnel_port,
@@ -1679,7 +1680,7 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
 }
 
 void
-dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct ofpbuf *packet,
+dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                          const struct flow *flow,
                          odp_port_t input_odp_port, odp_port_t output_odp_port,
                          const struct flow_tnl *output_tunnel_key)
@@ -1714,7 +1715,7 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct ofpbuf *packet,
 }
 
 void
-dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct ofpbuf *packet,
+dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                        const struct flow *flow, uint32_t collector_set_id,
                        uint16_t probability, uint32_t obs_domain_id,
                        uint32_t obs_point_id) OVS_EXCLUDED(mutex)

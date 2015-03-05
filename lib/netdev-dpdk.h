@@ -3,7 +3,7 @@
 
 #include <config.h>
 
-struct dpif_packet;
+struct dp_packet;
 
 /* Reserves cpu core 0 for all non-pmd threads.  Changing the value of this
  * macro will allow pmd thread to be pinned on cpu core 0.  This may not be
@@ -27,7 +27,7 @@ struct dpif_packet;
 
 int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
-void free_dpdk_buf(struct dpif_packet *);
+void free_dpdk_buf(struct dp_packet *);
 int pmd_thread_setaffinity_cpu(int cpu);
 void thread_set_nonpmd(void);
 
@@ -51,7 +51,7 @@ netdev_dpdk_register(void)
 }
 
 static inline void
-free_dpdk_buf(struct dpif_packet *buf OVS_UNUSED)
+free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
 {
     /* Nothing */
 }

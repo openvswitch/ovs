@@ -164,8 +164,8 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     }
     ofpact_pad(ofpacts);
 
-    fm->ofpacts = ofpbuf_data(ofpacts);
-    fm->ofpacts_len = ofpbuf_size(ofpacts);
+    fm->ofpacts = ofpacts->data;
+    fm->ofpacts_len = ofpacts->size;
 }
 
 /* Perform a bitwise-OR on 'wc''s fields that are relevant as sources in
@@ -380,7 +380,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             char *error;
 
             spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
-            learn = ofpacts->frame;
+            learn = ofpacts->header;
             learn->n_specs++;
 
             error = learn_parse_spec(orig, name, value, spec);

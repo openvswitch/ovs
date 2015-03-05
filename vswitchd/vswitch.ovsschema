@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.11.1",
- "cksum": "1038213587 21518",
+ "version": "7.11.2",
+ "cksum": "320332148 22294",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -118,7 +118,11 @@
                           "maxInteger": 254},
                   "value": {"type": "uuid",
                             "refTable": "Flow_Table"},
-                  "min": 0, "max": "unlimited"}}},
+                  "min": 0, "max": "unlimited"}},
+       "auto_attach": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "AutoAttach"},
+                  "min": 0, "max": 1}}},
      "indexes": [["name"]]},
    "Port": {
      "columns": {
@@ -274,6 +278,9 @@
          "type": {"key": {"type": "boolean"},
                   "min": 0, "max": 1},
          "ephemeral": true},
+       "lldp": {
+           "type": {"key": "string", "value": "string",
+               "min": 0, "max": "unlimited"}},
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "statistics": {
@@ -580,4 +587,18 @@
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}},
-     "maxRows": 1}}}
+     "maxRows": 1},
+   "AutoAttach": {
+     "columns": {
+       "system_name": {
+         "type": "string"},
+       "system_description": {
+         "type": "string"},
+       "mappings": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 16777215},
+                  "value": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4095},
+                  "min": 0, "max": "unlimited"}}}}}}

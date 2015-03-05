@@ -1133,7 +1133,7 @@ ofconn_send_error(const struct ofconn *ofconn,
 /* Same as pktbuf_retrieve(), using the pktbuf owned by 'ofconn'. */
 enum ofperr
 ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
-                       struct ofpbuf **bufferp, ofp_port_t *in_port)
+                       struct dp_packet **bufferp, ofp_port_t *in_port)
 {
     return pktbuf_retrieve(ofconn->pktbuf, id, bufferp, in_port);
 }
@@ -1979,8 +1979,8 @@ connmgr_flushed(struct connmgr *mgr)
         ofpact_pad(&ofpacts);
 
         match_init_catchall(&match);
-        ofproto_add_flow(mgr->ofproto, &match, 0, ofpbuf_data(&ofpacts),
-                                                  ofpbuf_size(&ofpacts));
+        ofproto_add_flow(mgr->ofproto, &match, 0, ofpacts.data,
+                                                  ofpacts.size);
 
         ofpbuf_uninit(&ofpacts);
     }

@@ -812,8 +812,8 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             if (end[0] != ')') {
                 return -EINVAL;
             }
-            user_data = ofpbuf_data(&buf);
-            user_data_size = ofpbuf_size(&buf);
+            user_data = buf.data;
+            user_data_size = buf.size;
             n = (end + 1) - s;
         }
     }
@@ -1154,7 +1154,7 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
         return 0;
     }
 
-    old_size = ofpbuf_size(actions);
+    old_size = actions->size;
     for (;;) {
         int retval;
 
@@ -1165,7 +1165,7 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
 
         retval = parse_odp_action(s, port_names, actions);
         if (retval < 0 || !strchr(delimiters, s[retval])) {
-            ofpbuf_set_size(actions, old_size);
+            actions->size = old_size;
             return -retval;
         }
         s += retval;
@@ -2028,7 +2028,7 @@ generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
         nl_msg_end_nested(ofp, nested_mask);
     }
 
-    return ofpbuf_base(ofp);
+    return ofp->base;
 }
 
 int
@@ -2830,7 +2830,7 @@ int
 odp_flow_from_string(const char *s, const struct simap *port_names,
                      struct ofpbuf *key, struct ofpbuf *mask)
 {
-    const size_t old_size = ofpbuf_size(key);
+    const size_t old_size = key->size;
     for (;;) {
         int retval;
 
@@ -2841,7 +2841,7 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
 
         retval = parse_odp_key_mask_attr(s, port_names, key, mask);
         if (retval < 0) {
-            ofpbuf_set_size(key, old_size);
+            key->size = old_size;
             return -retval;
         }
         s += retval;
@@ -3826,7 +3826,7 @@ odp_put_userspace_action(uint32_t pid,
     offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_USERSPACE);
     nl_msg_put_u32(odp_actions, OVS_USERSPACE_ATTR_PID, pid);
     if (userdata) {
-        userdata_ofs = ofpbuf_size(odp_actions) + NLA_HDRLEN;
+        userdata_ofs = odp_actions->size + NLA_HDRLEN;
 
         /* The OVS kernel module before OVS 1.11 and the upstream Linux kernel
          * module before Linux 3.10 required the userdata to be exactly 8 bytes

@@ -368,7 +368,7 @@ test_send_plain_hello(int argc OVS_UNUSED, char *argv[])
 
     hello = ofpraw_alloc_xid(OFPRAW_OFPT_HELLO, OFP13_VERSION,
                              htonl(0x12345678), 0);
-    test_send_hello(type, ofpbuf_data(hello), ofpbuf_size(hello), 0);
+    test_send_hello(type, hello->data, hello->size, 0);
     ofpbuf_delete(hello);
 }
 
@@ -386,7 +386,7 @@ test_send_long_hello(int argc OVS_UNUSED, char *argv[])
                              htonl(0x12345678), EXTRA_BYTES);
     ofpbuf_put_zeros(hello, EXTRA_BYTES);
     ofpmsg_update_length(hello);
-    test_send_hello(type, ofpbuf_data(hello), ofpbuf_size(hello), 0);
+    test_send_hello(type, hello->data, hello->size, 0);
     ofpbuf_delete(hello);
 }
 
@@ -400,7 +400,7 @@ test_send_echo_hello(int argc OVS_UNUSED, char *argv[])
 
     echo = ofpraw_alloc_xid(OFPRAW_OFPT_ECHO_REQUEST, OFP13_VERSION,
                              htonl(0x12345678), 0);
-    test_send_hello(type, ofpbuf_data(echo), ofpbuf_size(echo), EPROTO);
+    test_send_hello(type, echo->data, echo->size, EPROTO);
     ofpbuf_delete(echo);
 }
 
@@ -426,8 +426,8 @@ test_send_invalid_version_hello(int argc OVS_UNUSED, char *argv[])
 
     hello = ofpraw_alloc_xid(OFPRAW_OFPT_HELLO, OFP13_VERSION,
                              htonl(0x12345678), 0);
-    ((struct ofp_header *) ofpbuf_data(hello))->version = 0;
-    test_send_hello(type, ofpbuf_data(hello), ofpbuf_size(hello), EPROTO);
+    ((struct ofp_header *) hello->data)->version = 0;
+    test_send_hello(type, hello->data, hello->size, EPROTO);
     ofpbuf_delete(hello);
 }
 

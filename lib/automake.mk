@@ -60,6 +60,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dirs.h \
 	lib/dpctl.c \
 	lib/dpctl.h \
+	lib/dp-packet.h \
+	lib/dp-packet.c \
 	lib/dpif-netdev.c \
 	lib/dpif-netdev.h \
 	lib/dpif-provider.h \
@@ -160,6 +162,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-atomic-pthreads.h \
 	lib/ovs-atomic-x86_64.h \
 	lib/ovs-atomic.h \
+	lib/ovs-lldp.c \
+	lib/ovs-lldp.h \
 	lib/ovs-rcu.c \
 	lib/ovs-rcu.h \
 	lib/ovs-router.h \
@@ -177,8 +181,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovsdb-parser.h \
 	lib/ovsdb-types.c \
 	lib/ovsdb-types.h \
-	lib/packet-dpif.c \
-	lib/packet-dpif.h \
 	lib/packets.c \
 	lib/packets.h \
 	lib/pcap-file.c \
@@ -267,7 +269,15 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vswitch-idl.c \
 	lib/vswitch-idl.h \
 	lib/vtep-idl.c \
-	lib/vtep-idl.h
+	lib/vtep-idl.h \
+	lib/lldp/aa-structs.h \
+	lib/lldp/lldp.c \
+	lib/lldp/lldp-const.h \
+	lib/lldp/lldp-tlv.h \
+	lib/lldp/lldpd.c \
+	lib/lldp/lldpd.h \
+	lib/lldp/lldpd-structs.c \
+	lib/lldp/lldpd-structs.h
 
 if WIN32
 lib_libopenvswitch_la_SOURCES += \

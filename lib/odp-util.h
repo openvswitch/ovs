@@ -40,6 +40,7 @@ struct pkt_metadata;
     SPR(SLOW_BFD,        "bfd",        "Consists of BFD packets")       \
     SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
     SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
+    SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")    \
     SPR(SLOW_CONTROLLER, "controller",                                  \
         "Sends \"packet-in\" messages to the OpenFlow controller")      \
     SPR(SLOW_ACTION,     "action",                                      \

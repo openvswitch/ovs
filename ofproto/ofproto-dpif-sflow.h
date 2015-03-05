@@ -46,7 +46,7 @@ void dpif_sflow_del_port(struct dpif_sflow *, odp_port_t odp_port);
 void dpif_sflow_run(struct dpif_sflow *);
 void dpif_sflow_wait(struct dpif_sflow *);
 
-void dpif_sflow_received(struct dpif_sflow *, const struct ofpbuf *,
+void dpif_sflow_received(struct dpif_sflow *, const struct dp_packet *,
                          const struct flow *, odp_port_t odp_port,
                          const union user_action_cookie *);
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2010, 2011, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include "packets.h"
 
 struct flow;
-struct ofpbuf;
+struct dp_packet;
 struct netdev;
 struct flow_wildcards;
 
@@ -93,13 +93,14 @@ struct cfm *cfm_ref(const struct cfm *);
 void cfm_unref(struct cfm *);
 void cfm_run(struct cfm *);
 bool cfm_should_send_ccm(struct cfm *);
-void cfm_compose_ccm(struct cfm *, struct ofpbuf *packet, uint8_t eth_src[ETH_ADDR_LEN]);
-void cfm_wait(struct cfm *);
+void cfm_compose_ccm(struct cfm *, struct dp_packet *,
+                     const uint8_t eth_src[ETH_ADDR_LEN]);
+long long int cfm_wait(struct cfm *);
 bool cfm_configure(struct cfm *, const struct cfm_settings *);
 void cfm_set_netdev(struct cfm *, const struct netdev *);
 bool cfm_should_process_flow(const struct cfm *cfm, const struct flow *,
                              struct flow_wildcards *);
-void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
+void cfm_process_heartbeat(struct cfm *, const struct dp_packet *packet);
 bool cfm_check_status_change(struct cfm *);
 int cfm_get_fault(const struct cfm *);
 uint64_t cfm_get_flap_count(const struct cfm *);

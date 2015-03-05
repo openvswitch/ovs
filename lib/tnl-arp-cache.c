@@ -28,7 +28,6 @@
 #include "netdev.h"
 #include "ovs-thread.h"
 #include "packets.h"
-#include "packet-dpif.h"
 #include "poll-loop.h"
 #include "seq.h"
 #include "timeval.h"

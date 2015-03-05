@@ -67,7 +67,7 @@ nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp)
         int code = EPROTO;
         if (!err) {
             VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%"PRIu32" bytes < %"PRIuSIZE")",
-                        ofpbuf_size(msg), NLMSG_HDRLEN + sizeof *err);
+                        msg->size, NLMSG_HDRLEN + sizeof *err);
         } else if (err->error <= 0 && err->error > INT_MIN) {
             code = -err->error;
         }
@@ -113,7 +113,7 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg,
 {
     struct nlmsghdr *nlmsghdr;
 
-    ovs_assert(ofpbuf_size(msg) == 0);
+    ovs_assert(msg->size == 0);
 
     nl_msg_reserve(msg, NLMSG_HDRLEN + expected_payload);
     nlmsghdr = nl_msg_put_uninit(msg, NLMSG_HDRLEN);
@@ -152,7 +152,7 @@ nl_msg_put_genlmsghdr(struct ofpbuf *msg, size_t expected_payload,
     struct genlmsghdr *genlmsghdr;
 
     nl_msg_put_nlmsghdr(msg, GENL_HDRLEN + expected_payload, family, flags);
-    ovs_assert(ofpbuf_size(msg) == NLMSG_HDRLEN);
+    ovs_assert(msg->size == NLMSG_HDRLEN);
     genlmsghdr = nl_msg_put_uninit(msg, GENL_HDRLEN);
     genlmsghdr->cmd = cmd;
     genlmsghdr->version = version;
@@ -432,7 +432,7 @@ nl_msg_push_string(struct ofpbuf *msg, uint16_t type, const char *value)
 size_t
 nl_msg_start_nested(struct ofpbuf *msg, uint16_t type)
 {
-    size_t offset = ofpbuf_size(msg);
+    size_t offset = msg->size;
     nl_msg_put_unspec(msg, type, NULL, 0);
     return offset;
 }
@@ -443,7 +443,7 @@ void
 nl_msg_end_nested(struct ofpbuf *msg, size_t offset)
 {
     struct nlattr *attr = ofpbuf_at_assert(msg, offset, sizeof *attr);
-    attr->nla_len = ofpbuf_size(msg) - offset;
+    attr->nla_len = msg->size - offset;
 }
 
 /* Appends a nested Netlink attribute of the given 'type', with the 'size'
@@ -459,17 +459,17 @@ nl_msg_put_nested(struct ofpbuf *msg,
 
 /* If 'buffer' begins with a valid "struct nlmsghdr", pulls the header and its
  * payload off 'buffer', stores header and payload in 'msg->data' and
- * 'ofpbuf_size(msg)', and returns a pointer to the header.
+ * 'msg->size', and returns a pointer to the header.
  *
  * If 'buffer' does not begin with a "struct nlmsghdr" or begins with one that
  * is invalid, returns NULL and clears 'buffer' and 'msg'. */
 struct nlmsghdr *
 nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
 {
-    if (ofpbuf_size(buffer) >= sizeof(struct nlmsghdr)) {
+    if (buffer->size >= sizeof(struct nlmsghdr)) {
         struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(buffer);
         size_t len = nlmsghdr->nlmsg_len;
-        if (len >= sizeof *nlmsghdr && len <= ofpbuf_size(buffer)) {
+        if (len >= sizeof *nlmsghdr && len <= buffer->size) {
             ofpbuf_use_const(msg, nlmsghdr, len);
             ofpbuf_pull(buffer, len);
             return nlmsghdr;
@@ -477,8 +477,8 @@ nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
     }
 
     ofpbuf_clear(buffer);
-    ofpbuf_set_data(msg, NULL);
-    ofpbuf_set_size(msg, 0);
+    msg->data = NULL;
+    msg->size = 0;
     return NULL;
 }
 
@@ -729,13 +729,13 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
 
     memset(attrs, 0, n_attrs * sizeof *attrs);
 
-    if (ofpbuf_size(msg) < nla_offset) {
+    if (msg->size < nla_offset) {
         VLOG_DBG_RL(&rl, "missing headers in nl_policy_parse");
         return false;
     }
 
     NL_ATTR_FOR_EACH (nla, left, ofpbuf_at(msg, nla_offset, 0),
-                      ofpbuf_size(msg) - nla_offset)
+                      msg->size - nla_offset)
     {
         uint16_t type = nl_attr_type(nla);
         if (type < n_attrs && policy[type].type != NL_A_NO_ATTR) {
@@ -799,7 +799,7 @@ nl_attr_find__(const struct nlattr *attrs, size_t size, uint16_t type)
 const struct nlattr *
 nl_attr_find(const struct ofpbuf *buf, size_t hdr_len, uint16_t type)
 {
-    return nl_attr_find__(ofpbuf_at(buf, hdr_len, 0), ofpbuf_size(buf) - hdr_len,
+    return nl_attr_find__(ofpbuf_at(buf, hdr_len, 0), buf->size - hdr_len,
                           type);
 }
 

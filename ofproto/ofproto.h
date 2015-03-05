@@ -46,6 +46,12 @@ struct ofport;
 struct ofproto;
 struct shash;
 struct simap;
+struct smap;
+struct netdev_stats;
+struct ovs_list;
+struct lldp_status;
+struct aa_settings;
+struct aa_mapping_settings;
 
 /* Needed for the lock annotations. */
 extern struct ovs_mutex ofproto_mutex;
@@ -434,6 +440,16 @@ int ofproto_mirror_register(struct ofproto *, void *aux,
 int ofproto_mirror_unregister(struct ofproto *, void *aux);
 int ofproto_mirror_get_stats(struct ofproto *, void *aux,
                              uint64_t *packets, uint64_t *bytes);
+
+void ofproto_port_set_lldp(struct ofproto *ofproto, ofp_port_t ofp_port,
+                           const struct smap *cfg);
+int ofproto_set_aa(struct ofproto *ofproto, void *aux,
+                   const struct aa_settings *s);
+int ofproto_aa_mapping_register(struct ofproto *ofproto, void *aux,
+                             const struct aa_mapping_settings *s);
+int ofproto_aa_mapping_unregister(struct ofproto *ofproto, void *aux);
+int ofproto_aa_vlan_get_queued(struct ofproto *ofproto, struct ovs_list *list);
+unsigned int ofproto_aa_vlan_get_queue_size(struct ofproto *ofproto);
 
 int ofproto_set_flood_vlans(struct ofproto *, unsigned long *flood_vlans);
 bool ofproto_is_mirror_output_bundle(const struct ofproto *, void *aux);

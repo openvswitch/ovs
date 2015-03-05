@@ -22,7 +22,7 @@
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
-#include "ofpbuf.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
@@ -181,11 +181,11 @@ compose_lacp_pdu(const struct lacp_info *actor,
  * supported by OVS.  Otherwise, it returns a pointer to the lacp_pdu contained
  * within 'b'. */
 static const struct lacp_pdu *
-parse_lacp_packet(const struct ofpbuf *b)
+parse_lacp_packet(const struct dp_packet *p)
 {
     const struct lacp_pdu *pdu;
 
-    pdu = ofpbuf_at(b, (uint8_t *)ofpbuf_l3(b) - (uint8_t *)ofpbuf_data(b),
+    pdu = dp_packet_at(p, (uint8_t *)dp_packet_l3(p) - (uint8_t *)dp_packet_data(p),
                     LACP_PDU_LEN);
 
     if (pdu && pdu->subtype == 1
@@ -319,7 +319,7 @@ lacp_is_active(const struct lacp *lacp) OVS_EXCLUDED(mutex)
  */
 void
 lacp_process_packet(struct lacp *lacp, const void *slave_,
-                    const struct ofpbuf *packet)
+                    const struct dp_packet *packet)
     OVS_EXCLUDED(mutex)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);

@@ -17,6 +17,10 @@ Upstream Copyright Holders:
 	Copyright (C) 2000 The NetBSD Foundation, Inc.
 	Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
 	Copyright (c) 1982, 1986, 1990, 1993 The Regents of the University of California.
+	Copyright (c) 2008, 2012 Vincent Bernat <bernat@luffy.cx>
+	Copyright (c) 2014 Michael Chapman
+	Copyright (c) 2014 WindRiver, Inc.
+	Copyright (c) 2014 Avaya, Inc.
 
 License:
 
@@ -203,6 +207,17 @@ License:
     This file is free software; the Free Software Foundation
     gives unlimited permission to copy and/or distribute it,
     with or without modifications, as long as this notice is preserved.
+
+* The following files are licensed under the ISC-license
+
+    lib/lldp/aa-structs.h
+    lib/lldp/lldpd.c
+    lib/lldp/lldpd.h
+    lib/lldp/lldpd-structs.c
+    lib/lldp/lldpd-structs.h
+    lib/lldp/lldp.c
+    lib/lldp/lldp-tlv.h
+    lib/lldp/lldp-const.h
 
 * All other components of this package are licensed under
   The Apache License Version 2.0.

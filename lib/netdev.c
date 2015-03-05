@@ -26,6 +26,7 @@
 
 #include "coverage.h"
 #include "dpif.h"
+#include "dp-packet.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -33,7 +34,6 @@
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -631,7 +631,7 @@ netdev_rxq_close(struct netdev_rxq *rx)
  * Returns EAGAIN immediately if no packet is ready to be received.
  *
  * Returns EMSGSIZE, and discards the packet, if the received packet is longer
- * than 'ofpbuf_tailroom(buffer)'.
+ * than 'dp_packet_tailroom(buffer)'.
  *
  * It is advised that the tailroom of 'buffer' should be
  * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
@@ -641,7 +641,7 @@ netdev_rxq_close(struct netdev_rxq *rx)
  * This function may be set to null if it would always return EOPNOTSUPP
  * anyhow. */
 int
-netdev_rxq_recv(struct netdev_rxq *rx, struct dpif_packet **buffers, int *cnt)
+netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **buffers, int *cnt)
 {
     int retval;
 
@@ -716,7 +716,7 @@ netdev_set_multiq(struct netdev *netdev, unsigned int n_txq,
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_send(struct netdev *netdev, int qid, struct dpif_packet **buffers,
+netdev_send(struct netdev *netdev, int qid, struct dp_packet **buffers,
             int cnt, bool may_steal)
 {
     int error;
@@ -731,7 +731,7 @@ netdev_send(struct netdev *netdev, int qid, struct dpif_packet **buffers,
 }
 
 int
-netdev_pop_header(struct netdev *netdev, struct dpif_packet **buffers, int cnt)
+netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int cnt)
 {
     return (netdev->netdev_class->pop_header
              ? netdev->netdev_class->pop_header(netdev, buffers, cnt)
@@ -749,7 +749,7 @@ netdev_build_header(const struct netdev *netdev, struct ovs_action_push_tnl *dat
 
 int
 netdev_push_header(const struct netdev *netdev,
-                   struct dpif_packet **buffers, int cnt,
+                   struct dp_packet **buffers, int cnt,
                    const struct ovs_action_push_tnl *data)
 {
     if (netdev->netdev_class->push_header) {

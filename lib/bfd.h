@@ -28,20 +28,20 @@ struct dpif_flow_stats;
 struct flow;
 struct flow_wildcards;
 struct netdev;
-struct ofpbuf;
+struct dp_packet;
 struct smap;
 
-void bfd_wait(const struct bfd *);
+long long int bfd_wait(const struct bfd *);
 void bfd_run(struct bfd *);
 
 bool bfd_should_send_packet(const struct bfd *);
-void bfd_put_packet(struct bfd *bfd, struct ofpbuf *packet,
+void bfd_put_packet(struct bfd *bfd, struct dp_packet *packet,
                     uint8_t eth_src[ETH_ADDR_LEN]);
 
 bool bfd_should_process_flow(const struct bfd *, const struct flow *,
                              struct flow_wildcards *);
 void bfd_process_packet(struct bfd *, const struct flow *,
-                        const struct ofpbuf *);
+                        const struct dp_packet *);
 
 struct bfd *bfd_configure(struct bfd *, const char *name,
                           const struct smap *smap,

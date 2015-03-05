@@ -28,13 +28,24 @@ def constify(cType, const):
     else:
         return cType
 
-def cMembers(prefix, columnName, column, const):
+def cMembers(prefix, tableName, columnName, column, const):
+    comment = ""
     type = column.type
 
     if type.is_smap():
-        return [{'name': columnName,
-                 'type': 'struct smap ',
-                 'comment': ''}]
+        comment = """
+/* Sets the "%(c)s" column's value from the "%(t)s" table in 'row'
+ * to '%(c)s'.
+ *
+ * The caller retains ownership of '%(c)s' and everything in it. */""" \
+             % {'c': columnName,
+                't': tableName}
+        return (comment, [{'name': columnName,
+                           'type': 'struct smap ',
+                           'comment': ''}])
+
+    comment = """\n/* Sets the "%s" column from the "%s" table in """\
+              """'row' to\n""" % (columnName, tableName)
 
     if type.n_min == 1 and type.n_max == 1:
         singleton = True
@@ -46,25 +57,65 @@ def cMembers(prefix, columnName, column, const):
         else:
             pointer = '*'
 
+
     if type.value:
-        key = {'name': "key_%s" % columnName,
+        keyName = "key_%s" % columnName
+        valueName = "value_%s" % columnName
+
+        key = {'name': keyName,
                'type': constify(type.key.toCType(prefix) + pointer, const),
                'comment': ''}
-        value = {'name': "value_%s" % columnName,
+        value = {'name': valueName,
                  'type': constify(type.value.toCType(prefix) + pointer, const),
                  'comment': ''}
+
+        if singleton:
+            comment += " * the map with key '%s' and value '%s'\n *" \
+                       % (keyName, valueName)
+        else:
+            comment += " * the map with keys '%s' and values '%s'\n *" \
+                       % (keyName, valueName)
         members = [key, value]
     else:
         m = {'name': columnName,
              'type': constify(type.key.toCType(prefix) + pointer, const),
              'comment': type.cDeclComment()}
+
+        if singleton:
+            comment += " * '%s'" % columnName
+        else:
+            comment += " * the '%s' set" % columnName
         members = [m]
 
     if not singleton and not type.is_optional_pointer():
-        members.append({'name': 'n_%s' % columnName,
+        sizeName = "n_%s" % columnName
+
+        comment += " with '%s' entries" % sizeName
+        members.append({'name': sizeName,
                         'type': 'size_t ',
                         'comment': ''})
-    return members
+
+    comment += ".\n"
+
+    if type.is_optional() and not type.is_optional_pointer():
+        comment += """ *
+ * '%s' may be 0 or 1; if it is 0, then '%s'
+ * may be NULL.\n""" \
+        % ("n_%s" % columnName, columnName)
+
+    if type.is_optional_pointer():
+        comment += """ *
+ * If "%s" is null, the column will be the empty set,
+ * otherwise it will contain the specified value.\n""" % columnName
+
+    if type.constraintsToEnglish():
+        comment += """ *
+ * Argument constraints: %s\n""" \
+        % type.constraintsToEnglish(lambda s : '"%s"' % s)
+
+    comment += " *\n * The caller retains ownership of the arguments. */"
+
+    return (comment, members)
 
 def printCIDLHeader(schemaFile):
     schema = parseSchema(schemaFile)
@@ -92,7 +143,9 @@ def printCIDLHeader(schemaFile):
         print "\tstruct ovsdb_idl_row header_;"
         for columnName, column in sorted(table.columns.iteritems()):
             print "\n\t/* %s column. */" % columnName
-            for member in cMembers(prefix, columnName, column, False):
+            comment, members = cMembers(prefix, tableName,
+                                        columnName, column, False)
+            for member in members:
                 print "\t%(type)s%(name)s;%(comment)s" % member
         print "};"
 
@@ -132,10 +185,7 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
         for columnName, column in sorted(table.columns.iteritems()):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
 
-        print """
-/* Functions for fetching columns as \"struct ovsdb_datum\"s.  (This is
-   rarely useful.  More often, it is easier to access columns by using
-   the members of %(s)s directly.) */""" % {'s': structName}
+        print
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.value:
                 valueParam = ', enum ovsdb_atomic_type value_type'
@@ -150,8 +200,9 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
             if column.type.is_smap():
                 args = ['const struct smap *']
             else:
-                args = ['%(type)s%(name)s' % member for member
-                        in cMembers(prefix, columnName, column, True)]
+                comment, members = cMembers(prefix, tableName, columnName,
+                                            column, True)
+                args = ['%(type)s%(name)s' % member for member in members]
             print '%s);' % ', '.join(args)
 
         print
@@ -373,10 +424,11 @@ static void
 
         # Row Initialization function.
         print """
+/* Clears the contents of 'row' in table "%(t)s". */
 void
 %(s)s_init(struct %(s)s *row)
 {
-    memset(row, 0, sizeof *row); """ % {'s': structName}
+    memset(row, 0, sizeof *row); """ % {'s': structName, 't': tableName}
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.is_smap():
                 print "    smap_init(&row->%s);" % columnName
@@ -384,18 +436,28 @@ void
 
         # First, next functions.
         print '''
+/* Searches table "%(t)s" in 'idl' for a row with UUID 'uuid'.  Returns
+ * a pointer to the row if there is one, otherwise a null pointer.  */
 const struct %(s)s *
 %(s)s_get_for_uuid(const struct ovsdb_idl *idl, const struct uuid *uuid)
 {
     return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], uuid));
 }
 
+/* Returns a row in table "%(t)s" in 'idl', or a null pointer if that
+ * table is empty.
+ *
+ * Database tables are internally maintained as hash tables, so adding or
+ * removing rows while traversing the same table can cause some rows to be
+ * visited twice or not at apply. */
 const struct %(s)s *
 %(s)s_first(const struct ovsdb_idl *idl)
 {
     return %(s)s_cast(ovsdb_idl_first_row(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
 }
 
+/* Returns a row following 'row' within its table, or a null pointer if 'row'
+ * is the last row in its table. */
 const struct %(s)s *
 %(s)s_next(const struct %(s)s *row)
 {
@@ -403,28 +465,65 @@ const struct %(s)s *
 }''' % {'s': structName,
         'p': prefix,
         'P': prefix.upper(),
+        't': tableName,
         'T': tableName.upper()}
 
         print '''
+/* Deletes 'row' from table "%(t)s".  'row' may be freed, so it must not be
+ * accessed afterward.
+ *
+ * The caller must have started a transaction with ovsdb_idl_txn_create(). */
 void
 %(s)s_delete(const struct %(s)s *row)
 {
     ovsdb_idl_txn_delete(&row->header_);
 }
 
+/* Inserts and returns a new row in the table "%(t)s" in the database
+ * with open transaction 'txn'.
+ *
+ * The new row is assigned a randomly generated provisional UUID.
+ * ovsdb-server will assign a different UUID when 'txn' is committed,
+ * but the IDL will replace any uses of the provisional UUID in the
+ * data to be to be committed by the UUID assigned by ovsdb-server. */
 struct %(s)s *
 %(s)s_insert(struct ovsdb_idl_txn *txn)
 {
     return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_classes[%(P)sTABLE_%(T)s], NULL));
-}
-''' % {'s': structName,
-       'p': prefix,
-       'P': prefix.upper(),
-       'T': tableName.upper()}
+}''' % {'s': structName,
+        'p': prefix,
+        'P': prefix.upper(),
+        't': tableName,
+        'T': tableName.upper()}
 
         # Verify functions.
         for columnName, column in sorted(table.columns.iteritems()):
             print '''
+/* Causes the original contents of column "%(c)s" in 'row' to be
+ * verified as a prerequisite to completing the transaction.  That is, if
+ * "%(c)s" in 'row' changed (or if 'row' was deleted) between the
+ * time that the IDL originally read its contents and the time that the
+ * transaction commits, then the transaction aborts and ovsdb_idl_txn_commit()
+ * returns TXN_AGAIN_WAIT or TXN_AGAIN_NOW (depending on whether the database
+ * change has already been received).
+ *
+ * The intention is that, to ensure that no transaction commits based on dirty
+ * reads, an application should call this function any time "%(c)s" is
+ * read as part of a read-modify-write operation.
+ *
+ * In some cases this function reduces to a no-op, because the current value
+ * of "%(c)s" is already known:
+ *
+ *   - If 'row' is a row created by the current transaction (returned by
+ *     %(s)s_insert()).
+ *
+ *   - If "%(c)s" has already been modified (with
+ *     %(s)s_set_%(c)s()) within the current transaction.
+ *
+ * Because of the latter property, always call this function *before*
+ * %(s)s_set_%(c)s() for a given read-modify-write.
+ *
+ * The caller must have started a transaction with ovsdb_idl_txn_create(). */
 void
 %(s)s_verify_%(c)s(const struct %(s)s *row)
 {
@@ -446,10 +545,11 @@ void
                 valueType = ''
                 valueComment = ''
             print """
-/* Returns the %(c)s column's value in 'row' as a struct ovsdb_datum.
- * This is useful occasionally: for example, ovsdb_datum_find_key() is an
- * easier and more efficient way to search for a given key than implementing
- * the same operation on the "cooked" form in 'row'.
+/* Returns the "%(c)s" column's value from the "%(t)s" table in 'row'
+ * as a struct ovsdb_datum.  This is useful occasionally: for example,
+ * ovsdb_datum_find_key() is an easier and more efficient way to search
+ * for a given key than implementing the same operation on the "cooked"
+ * form in 'row'.
  *
  * 'key_type' must be %(kt)s.%(vc)s
  * (This helps to avoid silent bugs if someone changes %(c)s's
@@ -460,14 +560,17 @@ void
  * Various kinds of changes can invalidate the returned value: modifying
  * 'column' within 'row', deleting 'row', or completing an ongoing transaction.
  * If the returned value is needed for a long time, it is best to make a copy
- * of it with ovsdb_datum_clone(). */
+ * of it with ovsdb_datum_clone().
+ *
+ * This function is rarely useful, since it is easier to access the value
+ * directly through the "%(c)s" member in %(s)s. */
 const struct ovsdb_datum *
 %(s)s_get_%(c)s(const struct %(s)s *row,
 \tenum ovsdb_atomic_type key_type OVS_UNUSED%(v)s)
 {
     ovs_assert(key_type == %(kt)s);%(vt)s
     return ovsdb_idl_read(&row->header_, &%(s)s_col_%(c)s);
-}""" % {'s': structName, 'c': columnName,
+}""" % {'t': tableName, 's': structName, 'c': columnName,
        'kt': column.type.key.toAtomicType(),
        'v': valueParam, 'vt': valueType, 'vc': valueComment}
 
@@ -475,24 +578,27 @@ const struct ovsdb_datum *
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
 
+            comment, members = cMembers(prefix, tableName, columnName,
+                                        column, True)
+
             if type.is_smap():
-                print """
-void
-%(s)s_set_%(c)s(const struct %(s)s *row, const struct smap *smap)
+                print comment
+                print """void
+%(s)s_set_%(c)s(const struct %(s)s *row, const struct smap *%(c)s)
 {
     struct ovsdb_datum datum;
 
     ovs_assert(inited);
-    if (smap) {
+    if (%(c)s) {
         struct smap_node *node;
         size_t i;
 
-        datum.n = smap_count(smap);
+        datum.n = smap_count(%(c)s);
         datum.keys = xmalloc(datum.n * sizeof *datum.keys);
         datum.values = xmalloc(datum.n * sizeof *datum.values);
 
         i = 0;
-        SMAP_FOR_EACH (node, smap) {
+        SMAP_FOR_EACH (node, %(c)s) {
             datum.keys[i].string = xstrdup(node->key);
             datum.values[i].string = xstrdup(node->value);
             i++;
@@ -505,15 +611,13 @@ void
                         &%(s)s_columns[%(S)s_COL_%(C)s],
                         &datum);
 }
-""" % {'s': structName,
+""" % {'t': tableName,
+       's': structName,
        'S': structName.upper(),
        'c': columnName,
        'C': columnName.upper()}
                 continue
 
-
-            print '\nvoid'
-            members = cMembers(prefix, columnName, column, True)
             keyVar = members[0]['name']
             nVar = None
             valueVar = None
@@ -524,6 +628,9 @@ void
             else:
                 if len(members) > 1:
                     nVar = members[1]['name']
+
+            print comment
+            print 'void'
             print '%(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)' % \
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}

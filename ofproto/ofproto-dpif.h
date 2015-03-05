@@ -143,15 +143,15 @@ ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                   ofp_port_t realdev_ofp_port,
                                   ovs_be16 vlan_tci);
 bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *,
-                     struct ofpbuf *packet);
+                     struct dp_packet *packet);
 
 int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
                                  struct rule_dpif *, const struct ofpact *,
-                                 size_t ofpacts_len, struct ofpbuf *);
+                                 size_t ofpacts_len, struct dp_packet *);
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofproto_packet_in *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);
-int ofproto_dpif_send_packet(const struct ofport_dpif *, struct ofpbuf *);
+int ofproto_dpif_send_packet(const struct ofport_dpif *, struct dp_packet *);
 void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
 struct rule_dpif *ofproto_dpif_refresh_rule(struct rule_dpif *);
 

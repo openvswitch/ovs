@@ -32,7 +32,7 @@ struct dpif_flow_stats;
 struct ds;
 struct flow_wildcards;
 struct minimask;
-struct ofpbuf;
+struct dp_packet;
 struct pkt_metadata;
 
 /* This sequence number should be incremented whenever anything involving flows
@@ -194,8 +194,7 @@ struct flow_metadata {
     ofp_port_t in_port;              /* OpenFlow port or zero. */
 };
 
-void flow_extract(struct ofpbuf *, const struct pkt_metadata *md,
-                  struct flow *);
+void flow_extract(struct dp_packet *, struct flow *);
 
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_unwildcard_tp_ports(const struct flow *, struct flow_wildcards *);
@@ -232,7 +231,7 @@ void flow_set_mpls_tc(struct flow *, int idx, uint8_t tc);
 void flow_set_mpls_bos(struct flow *, int idx, uint8_t stack);
 void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
-void flow_compose(struct ofpbuf *, const struct flow *);
+void flow_compose(struct dp_packet *, const struct flow *);
 
 static inline uint64_t
 flow_get_xreg(const struct flow *flow, int idx)
@@ -451,8 +450,7 @@ struct pkt_metadata;
 /* The 'dst->values' must be initialized with a buffer with space for
  * FLOW_U64S.  'dst->map' is ignored on input and set on output to
  * indicate which fields were extracted. */
-void miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *,
-                      struct miniflow *dst);
+void miniflow_extract(struct dp_packet *packet, struct miniflow *dst);
 void miniflow_init(struct miniflow *, const struct flow *);
 void miniflow_init_with_minimask(struct miniflow *, const struct flow *,
                                  const struct minimask *);
@@ -746,19 +744,15 @@ flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
     }
 }
 
-static inline struct pkt_metadata
-pkt_metadata_from_flow(const struct flow *flow)
+static inline void
+pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
-    struct pkt_metadata md;
-
-    md.recirc_id = flow->recirc_id;
-    md.dp_hash = flow->dp_hash;
-    md.tunnel = flow->tunnel;
-    md.skb_priority = flow->skb_priority;
-    md.pkt_mark = flow->pkt_mark;
-    md.in_port = flow->in_port;
-
-    return md;
+    md->recirc_id = flow->recirc_id;
+    md->dp_hash = flow->dp_hash;
+    md->tunnel = flow->tunnel;
+    md->skb_priority = flow->skb_priority;
+    md->pkt_mark = flow->pkt_mark;
+    md->in_port = flow->in_port;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

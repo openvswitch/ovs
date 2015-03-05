@@ -39,6 +39,7 @@
 #include "odp-util.h"
 #include "ofpbuf.h"
 #include "packets.h"
+#include "dp-packet.h"
 #include "poll-loop.h"
 #include "seq.h"
 #include "match.h"
@@ -718,13 +719,13 @@ bond_should_send_learning_packets(struct bond *bond)
  * See bond_should_send_learning_packets() for description of usage. The
  * caller should send the composed packet on the port associated with
  * port_aux and takes ownership of the returned ofpbuf. */
-struct ofpbuf *
+struct dp_packet *
 bond_compose_learning_packet(struct bond *bond,
                              const uint8_t eth_src[ETH_ADDR_LEN],
                              uint16_t vlan, void **port_aux)
 {
     struct bond_slave *slave;
-    struct ofpbuf *packet;
+    struct dp_packet *packet;
     struct flow flow;
 
     ovs_rwlock_rdlock(&rwlock);
@@ -733,7 +734,7 @@ bond_compose_learning_packet(struct bond *bond,
     memcpy(flow.dl_src, eth_src, ETH_ADDR_LEN);
     slave = choose_output_slave(bond, &flow, NULL, vlan);
 
-    packet = ofpbuf_new(0);
+    packet = dp_packet_new(0);
     compose_rarp(packet, eth_src);
     if (vlan) {
         eth_push_vlan(packet, htons(ETH_TYPE_VLAN), htons(vlan));

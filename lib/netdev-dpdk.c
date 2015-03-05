@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
+#include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "list.h"
 #include "netdev-dpdk.h"
@@ -35,11 +36,9 @@
 #include "netdev-vport.h"
 #include "odp-util.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
 #include "ovs-numa.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
-#include "packet-dpif.h"
 #include "packets.h"
 #include "shash.h"
 #include "sset.h"
@@ -47,6 +46,9 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+
+#include "rte_config.h"
+#include "rte_mbuf.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -238,7 +240,7 @@ dpdk_rte_mzalloc(size_t sz)
 /* XXX this function should be called only by pmd threads (or by non pmd
  * threads holding the nonpmd_mempool_mutex) */
 void
-free_dpdk_buf(struct dpif_packet *p)
+free_dpdk_buf(struct dp_packet *p)
 {
     struct rte_mbuf *pkt = (struct rte_mbuf *) p;
 
@@ -252,26 +254,25 @@ __rte_pktmbuf_init(struct rte_mempool *mp,
                    unsigned i OVS_UNUSED)
 {
     struct rte_mbuf *m = _m;
-    uint32_t buf_len = mp->elt_size - sizeof(struct dpif_packet);
+    uint32_t buf_len = mp->elt_size - sizeof(struct dp_packet);
 
-    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dpif_packet));
+    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dp_packet));
 
     memset(m, 0, mp->elt_size);
 
     /* start of buffer is just after mbuf structure */
-    m->buf_addr = (char *)m + sizeof(struct dpif_packet);
+    m->buf_addr = (char *)m + sizeof(struct dp_packet);
     m->buf_physaddr = rte_mempool_virt2phy(mp, m) +
-                    sizeof(struct dpif_packet);
+                    sizeof(struct dp_packet);
     m->buf_len = (uint16_t)buf_len;
 
     /* keep some headroom between start of buffer and data */
-    m->pkt.data = (char*) m->buf_addr + RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
+    m->data_off = RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
 
     /* init some constant fields */
-    m->type = RTE_MBUF_PKT;
     m->pool = mp;
-    m->pkt.nb_segs = 1;
-    m->pkt.in_port = 0xff;
+    m->nb_segs = 1;
+    m->port = 0xff;
 }
 
 static void
@@ -284,7 +285,7 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 
     __rte_pktmbuf_init(mp, opaque_arg, _m, i);
 
-    ofpbuf_init_dpdk((struct ofpbuf *) m, m->buf_len);
+    dp_packet_init_dpdk((struct dp_packet *) m, m->buf_len);
 }
 
 static struct dpdk_mp *
@@ -731,7 +732,7 @@ dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
 }
 
 static int
-netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dpif_packet **packets,
+netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
                      int *c)
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq_);
@@ -789,7 +790,7 @@ dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
 
 /* Tx function. Transmit packets indefinitely */
 static void
-dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
+dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet ** pkts,
                 int cnt)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -807,7 +808,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
     }
 
     for (i = 0; i < cnt; i++) {
-        int size = ofpbuf_size(&pkts[i]->ofpbuf);
+        int size = dp_packet_size(pkts[i]);
 
         if (OVS_UNLIKELY(size > dev->max_packet_len)) {
             VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
@@ -825,7 +826,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
         }
 
         /* We have to do a copy for now */
-        memcpy(mbufs[newcnt]->pkt.data, ofpbuf_data(&pkts[i]->ofpbuf), size);
+        memcpy(rte_pktmbuf_mtod(mbufs[newcnt], void *), dp_packet_data(pkts[i]), size);
 
         rte_pktmbuf_data_len(mbufs[newcnt]) = size;
         rte_pktmbuf_pkt_len(mbufs[newcnt]) = size;
@@ -849,19 +850,19 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dpif_packet ** pkts,
 
 static inline void
 netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
-                   struct dpif_packet **pkts, int cnt, bool may_steal)
+                   struct dp_packet **pkts, int cnt, bool may_steal)
 {
     int i;
 
     if (OVS_UNLIKELY(!may_steal ||
-                     pkts[0]->ofpbuf.source != OFPBUF_DPDK)) {
+                     pkts[0]->source != DPBUF_DPDK)) {
         struct netdev *netdev = &dev->up;
 
         dpdk_do_tx_copy(netdev, qid, pkts, cnt);
 
         if (may_steal) {
             for (i = 0; i < cnt; i++) {
-                dpif_packet_delete(pkts[i]);
+                dp_packet_delete(pkts[i]);
             }
         }
     } else {
@@ -869,7 +870,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         int dropped = 0;
 
         for (i = 0; i < cnt; i++) {
-            int size = ofpbuf_size(&pkts[i]->ofpbuf);
+            int size = dp_packet_size(pkts[i]);
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
                     dpdk_queue_pkts(dev, qid,
@@ -880,7 +881,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
                 VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
                              (int)size , dev->max_packet_len);
 
-                dpif_packet_delete(pkts[i]);
+                dp_packet_delete(pkts[i]);
                 dropped++;
                 next_tx_idx = i + 1;
             }
@@ -901,7 +902,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
 static int
 netdev_dpdk_eth_send(struct netdev *netdev, int qid,
-                     struct dpif_packet **pkts, int cnt, bool may_steal)
+                     struct dp_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
@@ -1270,22 +1271,6 @@ dpdk_common_init(void)
     ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
 }
 
-static int
-dpdk_class_init(void)
-{
-    int result;
-
-    result = rte_eal_pci_probe();
-    if (result) {
-        VLOG_ERR("Cannot probe PCI");
-        return -result;
-    }
-
-    VLOG_INFO("Ethernet Device Count: %d", (int)rte_eth_dev_count());
-
-    return 0;
-}
-
 /* Client Rings */
 
 static int
@@ -1371,7 +1356,7 @@ dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id) OVS_REQUIRES(dp
 
 static int
 netdev_dpdk_ring_send(struct netdev *netdev, int qid OVS_UNUSED,
-                      struct dpif_packet **pkts, int cnt, bool may_steal)
+                      struct dp_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
@@ -1510,7 +1495,7 @@ dpdk_init(int argc, char **argv)
 const struct netdev_class dpdk_class =
     NETDEV_DPDK_CLASS(
         "dpdk",
-        dpdk_class_init,
+        NULL,
         netdev_dpdk_construct,
         netdev_dpdk_set_multiq,
         netdev_dpdk_eth_send);

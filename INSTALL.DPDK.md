@@ -16,13 +16,13 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required DPDK 1.7
+Required DPDK 1.8.0
 
 1. Configure build & install DPDK:
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-1.7.1
+     export DPDK_DIR=/usr/src/dpdk-1.8.0
      cd $DPDK_DIR
      ```
 
@@ -158,7 +158,7 @@ Using the DPDK with ovs-vswitchd:
    ```
 
 6. Add bridge & ports
-          
+
    To use ovs-vswitchd with DPDK, create a bridge with datapath_type
    "netdev" in the configuration database.  For example:
 

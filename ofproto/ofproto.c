@@ -44,6 +44,7 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "ovs-rcu.h"
+#include "dp-packet.h"
 #include "packets.h"
 #include "pinsched.h"
 #include "pktbuf.h"
@@ -170,7 +171,7 @@ struct rule_execute {
     struct ovs_list list_node;  /* In struct ofproto's "rule_executes" list. */
     struct rule *rule;          /* Owns a reference to the rule. */
     ofp_port_t in_port;
-    struct ofpbuf *packet;      /* Owns the packet. */
+    struct dp_packet *packet;      /* Owns the packet. */
 };
 
 static void run_rule_executes(struct ofproto *) OVS_EXCLUDED(ofproto_mutex);
@@ -1037,6 +1038,83 @@ ofproto_port_set_queues(struct ofproto *ofproto, ofp_port_t ofp_port,
             : EOPNOTSUPP);
 }
 
+/* LLDP configuration. */
+void
+ofproto_port_set_lldp(struct ofproto *ofproto,
+                      ofp_port_t ofp_port,
+                      const struct smap *cfg)
+{
+    struct ofport *ofport;
+    int error;
+
+    ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure LLDP on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+        return;
+    }
+    error = (ofproto->ofproto_class->set_lldp
+             ? ofproto->ofproto_class->set_lldp(ofport, cfg)
+             : EOPNOTSUPP);
+    if (error) {
+        VLOG_WARN("%s: lldp configuration on port %"PRIu16" (%s) failed (%s)",
+                  ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
+                  ovs_strerror(error));
+    }
+}
+
+int
+ofproto_set_aa(struct ofproto *ofproto, void *aux OVS_UNUSED,
+               const struct aa_settings *s)
+{
+    if (!ofproto->ofproto_class->set_aa) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->set_aa(ofproto, s);
+    return 0;
+}
+
+int
+ofproto_aa_mapping_register(struct ofproto *ofproto, void *aux,
+                            const struct aa_mapping_settings *s)
+{
+    if (!ofproto->ofproto_class->aa_mapping_set) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->aa_mapping_set(ofproto, aux, s);
+    return 0;
+}
+
+int
+ofproto_aa_mapping_unregister(struct ofproto *ofproto, void *aux)
+{
+    if (!ofproto->ofproto_class->aa_mapping_unset) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->aa_mapping_unset(ofproto, aux);
+    return 0;
+}
+
+int
+ofproto_aa_vlan_get_queued(struct ofproto *ofproto,
+                           struct ovs_list *list)
+{
+    if (!ofproto->ofproto_class->aa_vlan_get_queued) {
+        return EOPNOTSUPP;
+    }
+    ofproto->ofproto_class->aa_vlan_get_queued(ofproto, list);
+    return 0;
+}
+
+unsigned int
+ofproto_aa_vlan_get_queue_size(struct ofproto *ofproto)
+{
+    if (!ofproto->ofproto_class->aa_vlan_get_queue_size) {
+        return EOPNOTSUPP;
+    }
+    return ofproto->ofproto_class->aa_vlan_get_queue_size(ofproto);
+}
+
 /* Connectivity Fault Management configuration. */
 
 /* Clears the CFM configuration from 'ofp_port' on 'ofproto'. */
@@ -1217,7 +1295,8 @@ ofproto_mirror_unregister(struct ofproto *ofproto, void *aux)
 /* Retrieves statistics from mirror associated with client data pointer
  * 'aux' in 'ofproto'.  Stores packet and byte counts in 'packets' and
  * 'bytes', respectively.  If a particular counters is not supported,
- * the appropriate argument is set to UINT64_MAX. */
+ * the appropriate argument is set to UINT64_MAX.
+ */
 int
 ofproto_mirror_get_stats(struct ofproto *ofproto, void *aux,
                          uint64_t *packets, uint64_t *bytes)
@@ -2757,7 +2836,7 @@ run_rule_executes(struct ofproto *ofproto)
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
         struct flow flow;
 
-        flow_extract(e->packet, NULL, &flow);
+        flow_extract(e->packet, &flow);
         flow.in_port.ofp_port = e->in_port;
         ofproto->ofproto_class->rule_execute(e->rule, &flow, e->packet);
 
@@ -2775,7 +2854,7 @@ destroy_rule_executes(struct ofproto *ofproto)
 
     guarded_list_pop_all(&ofproto->rule_executes, &executes);
     LIST_FOR_EACH_SAFE (e, next, list_node, &executes) {
-        ofpbuf_delete(e->packet);
+        dp_packet_delete(e->packet);
         rule_execute_destroy(e);
     }
 }
@@ -3151,7 +3230,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofputil_packet_out po;
-    struct ofpbuf *payload;
+    struct dp_packet *payload;
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts;
     struct flow flow;
@@ -3184,18 +3263,18 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         }
     } else {
         /* Ensure that the L3 header is 32-bit aligned. */
-        payload = ofpbuf_clone_data_with_headroom(po.packet, po.packet_len, 2);
+        payload = dp_packet_clone_data_with_headroom(po.packet, po.packet_len, 2);
     }
 
     /* Verify actions against packet, then send packet if successful. */
-    flow_extract(payload, NULL, &flow);
+    flow_extract(payload, &flow);
     flow.in_port.ofp_port = po.in_port;
     error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
     if (!error) {
         error = p->ofproto_class->packet_out(p, payload, &flow,
                                              po.ofpacts, po.ofpacts_len);
     }
-    ofpbuf_delete(payload);
+    dp_packet_delete(payload);
 
 exit_free_ofpacts:
     ofpbuf_uninit(&ofpacts);
@@ -3330,7 +3409,7 @@ handle_table_features_request(struct ofconn *ofconn,
 
     ofpbuf_use_const(&msg, request, ntohs(request->length));
     ofpraw_pull_assert(&msg);
-    if (ofpbuf_size(&msg) || ofpmp_more(request)) {
+    if (msg.size || ofpmp_more(request)) {
         return OFPERR_OFPTFFC_EPERM;
     }
 
@@ -6292,7 +6371,7 @@ static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    const struct ofp_header *oh = ofpbuf_data(msg);
+    const struct ofp_header *oh = msg->data;
     enum ofptype type;
     enum ofperr error;
 
@@ -6473,7 +6552,7 @@ handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 {
     int error = handle_openflow__(ofconn, ofp_msg);
     if (error) {
-        ofconn_send_error(ofconn, ofpbuf_data(ofp_msg), error);
+        ofconn_send_error(ofconn, ofp_msg->data, error);
     }
     COVERAGE_INC(ofproto_recv_openflow);
 }
@@ -6488,7 +6567,7 @@ send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
     enum ofperr error = 0;
     if (ofconn && buffer_id != UINT32_MAX) {
         struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-        struct ofpbuf *packet;
+        struct dp_packet *packet;
         ofp_port_t in_port;
 
         error = ofconn_pktbuf_retrieve(ofconn, buffer_id, &packet, &in_port);
@@ -6505,7 +6584,7 @@ send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
             if (!guarded_list_push_back(&ofproto->rule_executes,
                                         &re->list_node, 1024)) {
                 ofproto_rule_unref(rule);
-                ofpbuf_delete(re->packet);
+                dp_packet_delete(re->packet);
                 free(re);
             }
         }
