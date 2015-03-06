@@ -464,6 +464,38 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
                         nl_attr_get_size(subactions), dp_execute_action);
 }
 
+static bool
+requires_datapath_assistance(const struct nlattr *a)
+{
+    enum ovs_action_attr type = nl_attr_type(a);
+
+    switch (type) {
+        /* These only make sense in the context of a datapath. */
+    case OVS_ACTION_ATTR_OUTPUT:
+    case OVS_ACTION_ATTR_TUNNEL_PUSH:
+    case OVS_ACTION_ATTR_TUNNEL_POP:
+    case OVS_ACTION_ATTR_USERSPACE:
+    case OVS_ACTION_ATTR_RECIRC:
+        return true;
+
+    case OVS_ACTION_ATTR_SET:
+    case OVS_ACTION_ATTR_SET_MASKED:
+    case OVS_ACTION_ATTR_PUSH_VLAN:
+    case OVS_ACTION_ATTR_POP_VLAN:
+    case OVS_ACTION_ATTR_SAMPLE:
+    case OVS_ACTION_ATTR_HASH:
+    case OVS_ACTION_ATTR_PUSH_MPLS:
+    case OVS_ACTION_ATTR_POP_MPLS:
+        return false;
+
+    case OVS_ACTION_ATTR_UNSPEC:
+    case __OVS_ACTION_ATTR_MAX:
+        OVS_NOT_REACHED();
+    }
+
+    return false;
+}
+
 void
 odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                     const struct nlattr *actions, size_t actions_len,
@@ -477,13 +509,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
         int type = nl_attr_type(a);
         bool last_action = (left <= NLA_ALIGN(a->nla_len));
 
-        switch ((enum ovs_action_attr) type) {
-            /* These only make sense in the context of a datapath. */
-        case OVS_ACTION_ATTR_OUTPUT:
-        case OVS_ACTION_ATTR_TUNNEL_PUSH:
-        case OVS_ACTION_ATTR_TUNNEL_POP:
-        case OVS_ACTION_ATTR_USERSPACE:
-        case OVS_ACTION_ATTR_RECIRC:
+        if (requires_datapath_assistance(a)) {
             if (dp_execute_action) {
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
@@ -497,8 +523,10 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                     return;
                 }
             }
-            break;
+            continue;
+        }
 
+        switch ((enum ovs_action_attr) type) {
         case OVS_ACTION_ATTR_HASH: {
             const struct ovs_action_hash *hash_act = nl_attr_get(a);
 
@@ -578,6 +606,11 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
             }
             break;
 
+        case OVS_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_TUNNEL_PUSH:
+        case OVS_ACTION_ATTR_TUNNEL_POP:
+        case OVS_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_RECIRC:
         case OVS_ACTION_ATTR_UNSPEC:
         case __OVS_ACTION_ATTR_MAX:
             OVS_NOT_REACHED();
