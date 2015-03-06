@@ -772,6 +772,40 @@ A: If you add them one at a time with ovs-vsctl, it can take a long
 
    takes seconds, not minutes or hours, in the OVS sandbox environment.
 
+### Q: I created a bridge named br0.  My bridge shows up in "ovs-vsctl
+    show", but "ovs-ofctl show br0" just prints "br0 is not a bridge
+    or a socket".
+
+A: Open vSwitch wasn't able to create the bridge.  Check the
+   ovs-vswitchd log for details (Debian and Red Hat packaging for Open
+   vSwitch put it in /var/log/openvswitch/ovs-vswitchd.log).
+
+   In general, the Open vSwitch database reflects the desired
+   configuration state.  ovs-vswitchd monitors the database and, when
+   it changes, reconfigures the system to reflect the new desired
+   state.  This normally happens very quickly.  Thus, a discrepancy
+   between the database and the actual state indicates that
+   ovs-vswitchd could not implement the configuration, and so one
+   should check the log to find out why.  (Another possible cause is
+   that ovs-vswitchd is not running.  This will make "ovs-vsctl"
+   commands hang, if they change the configuration, unless one
+   specifies "--no-wait".)
+
+### Q: I have a bridge br0.  I added a new port vif1.0, and it shows
+    up in "ovs-vsctl show", but "ovs-vsctl list port" says that it has
+    OpenFlow port ("ofport") -1, and "ovs-ofctl show br0" doesn't show
+    vif1.0 at all.
+
+A: Open vSwitch wasn't able to create the port.  Check the
+   ovs-vswitchd log for details (Debian and Red Hat packaging for Open
+   vSwitch put it in /var/log/openvswitch/ovs-vswitchd.log).  Please
+   see the previous question for more information.
+
+   You may want to upgrade to Open vSwitch 2.3 (or later), in which
+   ovs-vsctl will immediately report when there is an issue creating a
+   port.
+
+
 Quality of Service (QoS)
 ------------------------
 
