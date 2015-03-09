@@ -135,7 +135,8 @@ AC_CONFIG_FILES([
     ovsdb/libovsdb.sym
     ofproto/libofproto.sym
     lib/libsflow.sym
-    lib/libopenvswitch.sym])
+    lib/libopenvswitch.sym
+    vtep/libvtep.sym])
 
 OVS_ENABLE_OPTION([-Wall])
 OVS_ENABLE_OPTION([-Wextra])

@@ -2,7 +2,7 @@
 OVSIDL_BUILT += \
 	vtep/vtep-idl.c \
 	vtep/vtep-idl.h \
-	vtep/vtep.ovsidl
+	vtep/vtep-idl.ovsidl
 EXTRA_DIST += vtep/vtep-idl.ann
 VTEP_IDL_FILES = \
 	$(srcdir)/vtep/vtep.ovsschema \
