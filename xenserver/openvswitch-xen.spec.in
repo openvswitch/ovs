@@ -7,15 +7,25 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-# When building, the rpmbuild command line should define
-# openvswitch_version, kernel_name, kernel_version, and kernel_flavor
-# using -D arguments.
+# For XenServer version < 6.5, when building, the rpmbuild command line
+# should define openvswitch_version, kernel_name, kernel_version and
+# kernel_flavor using -D arguments.
 # for example:
 #
 #    rpmbuild -D "openvswitch_version 1.1.0+build123"
 #      -D "kernel_name  NAME-xen"
 #      -D "kernel_version 2.6.32.12-0.7.1.xs5.6.100.323.170596"
 #      -D "kernel_flavor xen"
+#      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
+#
+# For XenServer version >= 6.5, replace kernel_flavor with xen_version which
+# should be the `uname -r` output.
+# for example:
+#
+#    rpmbuild -D "openvswitch_version 2.3.0+build123"
+#      -D "kernel_name  NAME-xen"
+#      -D "kernel_version 3.10.41-323.380416"
+#      -D "xen_version 3.10.0+2"
 #      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
 #
 # If tests have to be skipped while building, specify the '--without check'
@@ -33,13 +43,15 @@
 %define kernel_flavor xen
 %endif
 
+%if %{?xen_version:0}%{!?xen_version:1}
 %define xen_version %{kernel_version}%{kernel_flavor}
+%endif
 
 # bump this when breaking compatibility with userspace
 %define module_abi_version 0
 
 # build-supplemental-pack.sh requires this naming for kernel module packages
-%define module_package modules-%{kernel_flavor}-%{kernel_version}
+%define module_package modules%{?kernel_flavor:-%{kernel_flavor}}-%{kernel_version}
 
 %bcond_without check
 
@@ -65,12 +77,12 @@ traffic.
 Summary: Open vSwitch kernel module
 Group: System Environment/Kernel
 License: GPLv2
-Provides: %{name}-modules-%{kernel_flavor} = %{kernel_version}, openvswitch.ko.%{module_abi_version}
-Requires: kernel-%{kernel_name} = %{kernel_version}
+Provides: %{name}-modules%{?kernel_flavor:-%{kernel_flavor}} = %{kernel_version}, openvswitch.ko.%{module_abi_version}
+Requires: kernel%{?kernel_flavor:-%{kernel_flavor}} = %{kernel_version}
 
 %description %{module_package}
 Open vSwitch Linux kernel module compiled against kernel version
-%{xen_version}.
+%{kernel_version}%{?kernel_flavor:%{kernel_flavor}}.
 
 %prep
 %setup -q -n openvswitch-%{openvswitch_version}
