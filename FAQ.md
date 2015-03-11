@@ -110,6 +110,15 @@ A: You can start by joining the mailing lists and helping to answer
 
    http://openvswitch.org/mlists/
 
+### Q: Why can I no longer connect to my OpenFlow controller or OVSDB
+manager?
+
+A: Starting in OVS 2.4, we switched the default ports to the
+   IANA-specified port numbers for OpenFlow (6633->6653) and OVSDB
+   (6632->6640).  We recommend using these port numbers, but if you
+   cannot, all the programs allow overriding the default port.  See the
+   appropriate man page.
+
 
 Releases
 --------
@@ -1188,7 +1197,7 @@ A: The configuration for VLANs in the Open vSwitch database (e.g. via
    tags, like this:
 
        ovs-vsctl add-br br0
-       ovs-vsctl set-controller br0 tcp:192.168.0.10:6633
+       ovs-vsctl set-controller br0 tcp:192.168.0.10:6653
        ovs-vsctl add-port br0 eth0
        ovs-vsctl add-port br0 tap0 tag=9
        ovs-vsctl add-port br0 tap1 tag=10

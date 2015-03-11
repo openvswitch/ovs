@@ -35,9 +35,7 @@ struct stream;
 /* Default port numbers.
  *
  * OVSDB_OLD_PORT defines the original port number used by OVS.
- * OVSDB_PORT defines the official port number assigned by IANA.  By
- * default, we still uses OVSDB_OLD_PORT, but we present a warning that
- * that will change. */
+ * OVSDB_PORT defines the official port number assigned by IANA. */
 #define OVSDB_OLD_PORT 6632
 #define OVSDB_PORT 6640
 

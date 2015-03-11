@@ -224,7 +224,7 @@ def setControllerCfg(controller):
                    '/etc/xensource/xapi-ssl.pem',
                    '/etc/xensource/xapi-ssl.pem',
                    cacert_filename,
-                   '--', 'set-manager', 'ssl:' + controller + ':6632'])
+                   '--', 'set-manager', 'ssl:' + controller + ':6640'])
 
 
 def vswitchCfgQuery(action_args):

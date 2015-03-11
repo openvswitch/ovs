@@ -3480,9 +3480,7 @@
             column="ssl"/> column in the <ref table="Open_vSwitch"/>
             table must point to a valid SSL configuration when this form
             is used.</p>
-            <p>If <var>port</var> is not specified, it currently
-            defaults to 6633.  In the future, the default will change to
-            6653, which is the IANA-defined value.</p>
+            <p>If <var>port</var> is not specified, it defaults to 6653.</p>
             <p>SSL support is an optional feature that is not always built as
             part of Open vSwitch.</p>
           </dd>
@@ -3493,12 +3491,10 @@
               <var>ip</var>, which must be expressed as an IP address (not a
               DNS name), where <var>ip</var> can be IPv4 or IPv6 address.  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>tcp:[::1]:6633</code>.
+              e.g. <code>tcp:[::1]:6653</code>.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults to
-              6633.  In the future, the default will change to 6653, which is
-              the IANA-defined value.
+              If <var>port</var> is not specified, it defaults to 6653.
             </p>
           </dd>
         </dl>
@@ -3515,20 +3511,18 @@
               DNS name), is specified, then connections are restricted to the
               specified local IP address (either IPv4 or IPv6).  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>pssl:6633:[::1]</code>.
+              e.g. <code>pssl:6653:[::1]</code>.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults to
-              6633.  If <var>ip</var> is not specified then it listens only on
+              If <var>port</var> is not specified, it defaults to
+              6653.  If <var>ip</var> is not specified then it listens only on
               IPv4 (but not IPv6) addresses.  The
               <ref table="Open_vSwitch" column="ssl"/>
               column in the <ref table="Open_vSwitch"/> table must point to a
               valid SSL configuration when this form is used.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults to
-              6633.  In the future, the default will change to 6653, which is
-              the IANA-defined value.
+              If <var>port</var> is not specified, it currently to 6653.
             </p>
             <p>
               SSL support is an optional feature that is not always built as
@@ -3543,13 +3537,11 @@
               DNS name), is specified, then connections are restricted to the
               specified local IP address (either IPv4 or IPv6).  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>ptcp:6633:[::1]</code>. If <var>ip</var> is not
+              e.g. <code>ptcp:6653:[::1]</code>. If <var>ip</var> is not
               specified then it listens only on IPv4 addresses.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults to
-              6633.  In the future, the default will change to 6653, which is
-              the IANA-defined value.
+              If <var>port</var> is not specified, it defaults to 6653.
             </p>
           </dd>
         </dl>
@@ -3894,9 +3886,7 @@
               form is used.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults
-              to 6632.  In the future, the default will change to 6640,
-              which is the IANA-defined value.
+              If <var>port</var> is not specified, it defaults to 6640.
             </p>
             <p>
               SSL support is an optional feature that is not always
@@ -3911,12 +3901,10 @@
               <var>ip</var>, which must be expressed as an IP address (not a
               DNS name), where <var>ip</var> can be IPv4 or IPv6 address.  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>tcp:[::1]:6632</code>.
+              e.g. <code>tcp:[::1]:6640</code>.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults
-              to 6632.  In the future, the default will change to 6640,
-              which is the IANA-defined value.
+              If <var>port</var> is not specified, it defaults to 6640.
             </p>
           </dd>
           <dt><code>pssl:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
@@ -3929,16 +3917,14 @@
               connections are restricted to the specified local IP address
               (either IPv4 or IPv6 address).  If <var>ip</var> is an IPv6
               address, wrap in square brackets,
-              e.g. <code>pssl:6632:[::1]</code>.  If <var>ip</var> is not
+              e.g. <code>pssl:6640:[::1]</code>.  If <var>ip</var> is not
               specified then it listens only on IPv4 (but not IPv6) addresses.
               The <ref table="Open_vSwitch" column="ssl"/> column in the <ref
               table="Open_vSwitch"/> table must point to a valid SSL
               configuration when this form is used.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults
-              to 6632.  In the future, the default will change to 6640,
-              which is the IANA-defined value.
+              If <var>port</var> is not specified, it defaults to 6640.
             </p>
             <p>
               SSL support is an optional feature that is not always built as
@@ -3955,13 +3941,11 @@
               connections are restricted to the specified local IP address
               (either IPv4 or IPv6 address).  If <var>ip</var> is an IPv6
               address, wrap it in square brackets,
-              e.g. <code>ptcp:6632:[::1]</code>.  If <var>ip</var> is not
+              e.g. <code>ptcp:6640:[::1]</code>.  If <var>ip</var> is not
               specified then it listens only on IPv4 addresses.
             </p>
             <p>
-              If <var>port</var> is not specified, it currently defaults
-              to 6632.  In the future, the default will change to 6640,
-              which is the IANA-defined value.
+              If <var>port</var> is not specified, it defaults to 6640.
             </p>
           </dd>
         </dl>

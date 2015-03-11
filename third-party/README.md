@@ -27,7 +27,7 @@ Clearly, tcpdump can only parse unencrypted packets, so you will need to
 connect the controller and datapath using plain TCP.  To look at the
 traffic, tcpdump will be started in a manner similar to the following:
 
-    sudo ./tcpdump -s0 -i eth0 port 6633
+    sudo ./tcpdump -s0 -i eth0 port 6653
 
 The "-s0" flag indicates that tcpdump should capture the entire packet.
 If the OpenFlow message is not received in its entirety, "[|openflow]" will 

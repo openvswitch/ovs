@@ -676,13 +676,13 @@ stream_open_with_default_port(const char *name_,
 
     if ((!strncmp(name_, "tcp:", 4) || !strncmp(name_, "ssl:", 4))
         && count_fields(name_) < 3) {
-        if (default_port == OFP_OLD_PORT) {
-            VLOG_WARN_ONCE("The default OpenFlow port number will change "
-                           "from %d to %d in a future release",
+        if (default_port == OFP_PORT) {
+            VLOG_WARN_ONCE("The default OpenFlow port number has changed "
+                           "from %d to %d",
                            OFP_OLD_PORT, OFP_PORT);
-        } else if (default_port == OVSDB_OLD_PORT) {
-            VLOG_WARN_ONCE("The default OVSDB port number will change "
-                           "from %d to %d in a future release",
+        } else if (default_port == OVSDB_PORT) {
+            VLOG_WARN_ONCE("The default OVSDB port number has changed "
+                           "from %d to %d",
                            OVSDB_OLD_PORT, OVSDB_PORT);
         }
         name = xasprintf("%s:%d", name_, default_port);

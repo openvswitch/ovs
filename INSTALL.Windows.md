@@ -148,11 +148,11 @@ Steps to run the user processes & configure VXLAN ports
 ovsdb\ovsdb-tool.exe create conf.db .\vswitchd\vswitch.ovsschema
 
 02> Run ovsdb-server
-ovsdb\ovsdb-server.exe -v --remote=ptcp:6632:127.0.0.1 conf.db
+ovsdb\ovsdb-server.exe -v --remote=ptcp:6640:127.0.0.1 conf.db
 
 03> Create integration bridge & pif bridge
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-br br-int
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-br br-pif
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-br br-int
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-br br-pif
 
 04> Dump the ports
 utilities\ovs-dpctl.exe show
@@ -176,24 +176,24 @@ system@ovs-system:
 
 
 05> Add the physical NIC and the internal port to br-pif
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-pif <port name>
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-pif <port name>
 
 Eg:
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-pif external.1
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-pif internal
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-pif external.1
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-pif internal
 
 06> Add the VIFs to br-int
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-int <port name>
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-int <port name>
 
 Eg:
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-int vmNICEmu.1000048
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-int vmNICSyn.1000049
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-int vmNICEmu.1000048
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-int vmNICSyn.1000049
 
 07> Verify the status
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 show
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 show
 
 Eg:
-$ utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 show
+$ utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 show
 4cd86499-74df-48bd-a64d-8d115b12a9f2
     Bridge br-pif
         Port internal
@@ -214,28 +214,28 @@ $ utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 show
 
 
 09> Run vswitchd
-vswitchd\ovs-vswitchd.exe -v tcp:127.0.0.1:6632
+vswitchd\ovs-vswitchd.exe -v tcp:127.0.0.1:6640
 
 10> You can figure out the port name to MAC address mapping now. (optional)
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 list interface
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 list interface
 
 //********** VXLAN PORT CONFIGURATION (Supports Multiple ports) ************//
 (Remove all patch ports added to create VLAN networks.)
 11> Add the vxlan port between 172.168.201.101 <-> 172.168.201.102
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-int vxlan-1
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-1 type=vxlan
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-1 options:local_ip=172.168.201.101
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-1 options:remote_ip=172.168.201.102
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-1 options:in_key=flow
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-1 options:out_key=flow
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-int vxlan-1
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-1 type=vxlan
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-1 options:local_ip=172.168.201.101
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-1 options:remote_ip=172.168.201.102
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-1 options:in_key=flow
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-1 options:out_key=flow
 
 12> Add the vxlan port between 172.168.201.101 <-> 172.168.201.105
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 add-port br-int vxlan-2
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 type=vxlan
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 options:local_ip=172.168.201.102
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 options:remote_ip=172.168.201.105
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 options:in_key=flow
-utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6632 set Interface vxlan-2 options:out_key=flow
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 add-port br-int vxlan-2
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-2 type=vxlan
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-2 options:local_ip=172.168.201.102
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-2 options:remote_ip=172.168.201.105
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-2 options:in_key=flow
+utilities\ovs-vsctl.exe --db=tcp:127.0.0.1:6640 set Interface vxlan-2 options:out_key=flow
 
 
 //********** VLAN CONFIGURATION (Using patch ports) ************//

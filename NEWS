@@ -69,6 +69,8 @@ Post-v2.3.0
    - Initial support for the IETF Auto-Attach SPBM draft standard. This
      contains rudimentary support for the LLDP protocol as needed for
      Auto-Attach.
+   - The default OpenFlow and OVSDB ports are now the IANA-assigned
+     numbers.  OpenFlow is 6653 and OVSDB is 6640.
 
 
 v2.3.0 - 14 Aug 2014

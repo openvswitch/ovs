@@ -5,11 +5,11 @@
 # This is a space-delimited list of connection methods:
 #
 # * "pssl:[PORT]": Listen for SSL connections on the specified PORT
-#   (default: 6633).  The private key, certificate, and CA certificate
+#   (default: 6653).  The private key, certificate, and CA certificate
 #   must be specified below.
 #
 # * "ptcp:[PORT]": Listen for TCP connections on the specified PORT
-#   (default: 6633).  Not recommended for security reasons.
+#   (default: 6653).  Not recommended for security reasons.
 #
 LISTEN="pssl:"
 

@@ -140,7 +140,7 @@ vtep-ctl set Physical_Switch br0 tunnel_ips=10.2.2.1
 7. Configure the VTEP database's manager to point at an NVC:
 
       ```
-vtep-ctl set-manager tcp:<CONTROLLER IP>:6632
+vtep-ctl set-manager tcp:<CONTROLLER IP>:6640
       ```
 
    Where CONTROLLER IP is your controller's IP address that is accessible

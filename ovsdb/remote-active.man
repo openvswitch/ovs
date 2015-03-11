@@ -2,14 +2,14 @@
 The specified SSL \fIport\fR on the host at the given \fIip\fR, which
 must be expressed as an IP address (not a DNS name) in IPv4 or IPv6 address
 format.  If \fIip\fR is an IPv6 address, then wrap \fIip\fR with square
-brackets, e.g.: \fBssl:[::1]:6632\fR.
+brackets, e.g.: \fBssl:[::1]:6640\fR.
 The \fB\-\-private\-key\fR, \fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
 options are mandatory when this form is used.
 .
 .IP "\fBtcp:\fIip\fB:\fIport\fR"
 Connect to the given TCP \fIport\fR on \fIip\fR, where \fIip\fR can be IPv4
 or IPv6 address. If \fIip\fR is an IPv6 address, then wrap \fIip\fR with
-square brackets, e.g.: \fBtcp:[::1]:6632\fR.
+square brackets, e.g.: \fBtcp:[::1]:6640\fR.
 .
 .IP "\fBunix:\fIfile\fR"
 On POSIX, connect to the Unix domain server socket named \fIfile\fR.

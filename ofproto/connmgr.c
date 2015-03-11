@@ -740,8 +740,7 @@ update_in_band_remotes(struct connmgr *mgr)
         } sa;
 
         if (ofconn->band == OFPROTO_IN_BAND
-            && stream_parse_target_with_default_port(target, OFP_OLD_PORT,
-                                                     &sa.ss)
+            && stream_parse_target_with_default_port(target, OFP_PORT, &sa.ss)
             && sa.ss.ss_family == AF_INET) {
             addrs[n_addrs++] = sa.in;
         }

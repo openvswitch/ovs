@@ -535,7 +535,7 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
                 struct sockaddr_in in;
             } sa;
 
-            if (stream_parse_target_with_default_port(target, OVSDB_OLD_PORT,
+            if (stream_parse_target_with_default_port(target, OVSDB_PORT,
                                                       &sa.ss)
                 && sa.ss.ss_family == AF_INET) {
                 managers[n_managers++] = sa.in;
