@@ -3493,7 +3493,7 @@
               <var>ip</var>, which must be expressed as an IP address (not a
               DNS name), where <var>ip</var> can be IPv4 or IPv6 address.  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>tcp:[::1]:6632</code>.
+              e.g. <code>tcp:[::1]:6633</code>.
             </p>
             <p>
               If <var>port</var> is not specified, it currently defaults to
@@ -3515,7 +3515,7 @@
               DNS name), is specified, then connections are restricted to the
               specified local IP address (either IPv4 or IPv6).  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>pssl:6632:[::1]</code>.
+              e.g. <code>pssl:6633:[::1]</code>.
             </p>
             <p>
               If <var>port</var> is not specified, it currently defaults to
@@ -3543,7 +3543,7 @@
               DNS name), is specified, then connections are restricted to the
               specified local IP address (either IPv4 or IPv6).  If
               <var>ip</var> is an IPv6 address, wrap it in square brackets,
-              e.g. <code>ptcp:6632:[::1]</code>. If <var>ip</var> is not
+              e.g. <code>ptcp:6633:[::1]</code>. If <var>ip</var> is not
               specified then it listens only on IPv4 addresses.
             </p>
             <p>
