@@ -34,7 +34,7 @@
     <p>
       Each row represents one L2 logical switch.  A given switch's ports are
       the <ref table="Logical_Port"/> rows whose <ref table="Logical_Port"
-      column="switch"/> column points to its row.
+      column="lswitch"/> column points to its row.
     </p>
 
     <column name="router_port">
@@ -59,7 +59,7 @@
       A port within an L2 logical switch.
     </p>
 
-    <column name="switch">
+    <column name="lswitch">
       The logical switch to which the logical port is connected.
     </column>
 
@@ -118,7 +118,7 @@
   <table name="ACL" title="Access Control List (ACL) rule">
     <p>
       Each row in this table represents one ACL rule for the logical switch in
-      its <ref column="switch"/> column.  The <ref column="action"/> column for
+      its <ref column="lswitch"/> column.  The <ref column="action"/> column for
       the highest-<ref column="priority"/> matching row in this table
       determines a packet's treatment.  If no row matches, packets are allowed
       by default.  (Default-deny treatment is possible: add a rule with <ref
@@ -126,7 +126,7 @@
       <code>deny</code> as <ref column="action"/>.)
     </p>
 
-    <column name="switch">
+    <column name="lswitch">
       The switch to which the ACL rule applies.  The expression in the
       <ref column="match"/> column may match against logical ports
       within this switch.
@@ -144,7 +144,7 @@
       used for the <ref column="match" table="Pipeline" db="OVN"/> column in
       the OVN database's <ref table="Pipeline" db="OVN"/> table.  Match
       <code>inport</code> and <code>outport</code> against names of logical
-      ports within <ref column="switch"/> to implement ingress and egress ACLs,
+      ports within <ref column="lswitch"/> to implement ingress and egress ACLs,
       respectively.  In logical switches connected to logical routers, the
       special port name <code>ROUTER</code> refers to the logical router port.
     </column>

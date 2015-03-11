@@ -12,9 +12,9 @@
                              "min": 0, "max": "unlimited"}}}},
         "Logical_Port": {
             "columns": {
-                "switch": {"type": {"key": {"type": "uuid",
-                                            "refTable": "Logical_Switch",
-                                            "refType": "strong"}}},
+                "lswitch": {"type": {"key": {"type": "uuid",
+                                             "refTable": "Logical_Switch",
+                                             "refType": "strong"}}},
                 "name": {"type": "string"},
                 "macs": {"type": {"key": "string",
                                   "min": 0,
@@ -29,9 +29,9 @@
             "indexes": [["name"]]},
         "ACL": {
             "columns": {
-                "switch": {"type": {"key": {"type": "uuid",
-                                            "refTable": "Logical_Switch",
-                                            "refType": "strong"}}},
+                "lswitch": {"type": {"key": {"type": "uuid",
+                                             "refTable": "Logical_Switch",
+                                             "refType": "strong"}}},
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
                                               "maxInteger": 65535}}},
