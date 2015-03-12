@@ -49,6 +49,9 @@ srcdir=
 schema=
 installed=false
 built=false
+ovn=false
+ovnschema=
+ovnnbschema=
 
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
@@ -90,6 +93,7 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -g, --gdb-vswitchd   run ovs-vswitchd under gdb
   -d, --gdb-ovsdb      run ovsdb-server under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
+  -o, --ovn            enable OVN
 
 Other options:
   -h, --help           Print this usage message.
@@ -129,6 +133,9 @@ EOF
             ;;
         -d|--gdb-o*)
             gdb_ovsdb=true
+            ;;
+        -o|--ovn)
+            ovn=true
             ;;
         -*)
             echo "unrecognized option $option (use --help for help)" >&2
@@ -180,6 +187,18 @@ if $built; then
         echo >&2 'source directory not found, please use --srcdir'
         exit 1
     fi
+    if $ovn; then
+        ovnschema=$srcdir/ovn/ovn.ovsschema
+        if test ! -e "$ovnschema"; then
+            echo >&2 'source directory not found, please use --srcdir'
+            exit 1
+        fi
+        ovnnbschema=$srcdir/ovn/ovn-nb.ovsschema
+        if test ! -e "$ovnnbschema"; then
+            echo >&2 'source directory not found, please use --srcdir'
+            exit 1
+        fi
+    fi
 
     # Put built tools early in $PATH.
     if test ! -e $builddir/vswitchd/ovs-vswitchd; then
@@ -187,6 +206,9 @@ if $built; then
         exit 1
     fi
     PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
+    if $ovn; then
+        PATH=$builddir/ovn:$PATH
+    fi
     export PATH
 else
     case $schema in
@@ -205,6 +227,10 @@ else
     esac
     if test ! -r "$schema"; then
         echo "can't find vswitch.ovsschema, please specify --schema" >&2
+        exit 1
+    fi
+    if $ovn; then
+        echo "running with ovn is only supported from the build dir." >&2
         exit 1
     fi
 fi
@@ -232,8 +258,16 @@ trap 'kill `cat "$sandbox"/*.pid`' 0 1 2 3 13 14 15
 # Create database and start ovsdb-server.
 touch "$sandbox"/.conf.db.~lock~
 run ovsdb-tool create conf.db "$schema"
+ovsdb_server_args=
+if $ovn; then
+    touch "$sandbox"/.ovn.db.~lock~
+    touch "$sandbox"/.ovnnb.db.~lock~
+    run ovsdb-tool create ovn.db "$ovnschema"
+    run ovsdb-tool create ovnnb.db "$ovnnbschema"
+    ovsdb_server_args="ovn.db ovnnb.db conf.db"
+fi
 rungdb $gdb_ovsdb ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
-    --remote=punix:"$sandbox"/db.sock
+    --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
 
 # Start ovs-vswitchd.
 rungdb $gdb_vswitchd ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
