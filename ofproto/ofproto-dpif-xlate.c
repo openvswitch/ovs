@@ -2765,6 +2765,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->xout->odp_actions->size;
                 mirror_mask_t old_mirrors = ctx->xout->mirrors;
+
                 xlate_table_action(ctx, flow->in_port.ofp_port, table_id,
                                    true, true);
                 ctx->xout->mirrors = old_mirrors;
@@ -2779,6 +2780,13 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->action_set = old_action_set;
         ofpbuf_uninit(&ctx->stack);
         ctx->stack = old_stack;
+
+        /* The fact that the peer bridge exits (for any reason) does not mean
+         * that the original bridge should exit.  Specifically, if the peer
+         * bridge recirculates (which typically modifies the packet), the
+         * original bridge must continue processing with the original, not the
+         * recirculated packet! */
+        ctx->exit = false;
 
         if (ctx->xin->resubmit_stats) {
             netdev_vport_inc_tx(xport->netdev, ctx->xin->resubmit_stats);
