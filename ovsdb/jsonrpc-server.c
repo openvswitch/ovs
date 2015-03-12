@@ -1147,6 +1147,13 @@ compare_ovsdb_monitor_column(const void *a_, const void *b_)
     return a->column < b->column ? -1 : a->column > b->column;
 }
 
+static void
+ovsdb_monitor_add_select(struct ovsdb_monitor_table *mt,
+                         enum ovsdb_monitor_selection select)
+{
+    mt->select |= select;
+}
+
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor_table *mt,
                                     const struct json *monitor_request,
@@ -1189,8 +1196,8 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor_table *mt,
     } else {
         select = OJMS_INITIAL | OJMS_INSERT | OJMS_DELETE | OJMS_MODIFY;
     }
-    mt->select |= select;
 
+    ovsdb_monitor_add_select(mt, select);
     if (columns) {
         size_t i;
 
