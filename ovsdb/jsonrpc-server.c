@@ -43,6 +43,7 @@ VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server);
 
 struct ovsdb_jsonrpc_remote;
 struct ovsdb_jsonrpc_session;
+struct ovsdb_jsonrpc_monitor;
 
 /* Message rate-limiting. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -81,6 +82,7 @@ static void ovsdb_jsonrpc_trigger_complete_done(
 static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_create(
     struct ovsdb_jsonrpc_session *, struct ovsdb *, struct json *params,
     const struct json *request_id);
+static void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
 static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_cancel(
     struct ovsdb_jsonrpc_session *,
     struct json_array *params,
@@ -1092,7 +1094,7 @@ static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class;
 
 struct ovsdb_jsonrpc_monitor *ovsdb_jsonrpc_monitor_find(
     struct ovsdb_jsonrpc_session *, const struct json *monitor_id);
-static void ovsdb_monitor_destroy(struct ovsdb_replica *);
+static void ovsdb_monitor_destroy(struct ovsdb_monitor *);
 static struct json *ovsdb_monitor_get_initial(
     const struct ovsdb_monitor *);
 
@@ -1252,16 +1254,16 @@ ovsdb_monitor_create(struct ovsdb *db,
                      struct ovsdb_jsonrpc_monitor *jsonrpc_monitor,
                      const struct ovsdb_replica_class *replica_class)
 {
-    struct ovsdb_monitor *m;
+    struct ovsdb_monitor *dbmon;
 
-    m = xzalloc(sizeof *m);
+    dbmon = xzalloc(sizeof *dbmon);
 
-    ovsdb_replica_init(&m->replica, replica_class);
-    ovsdb_add_replica(db, &m->replica);
-    m->jsonrpc_monitor = jsonrpc_monitor;
-    shash_init(&m->tables);
+    ovsdb_replica_init(&dbmon->replica, replica_class);
+    ovsdb_add_replica(db, &dbmon->replica);
+    dbmon->jsonrpc_monitor = jsonrpc_monitor;
+    shash_init(&dbmon->tables);
 
-    return m;
+    return dbmon;
 }
 
 static void
@@ -1389,7 +1391,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
 
 error:
     if (m) {
-        ovsdb_remove_replica(m->db, &m->dbmon->replica);
+        ovsdb_jsonrpc_monitor_destroy(m);
     }
 
     json = ovsdb_error_to_json(error);
@@ -1413,7 +1415,7 @@ ovsdb_jsonrpc_monitor_cancel(struct ovsdb_jsonrpc_session *s,
             return jsonrpc_create_error(json_string_create("unknown monitor"),
                                         request_id);
         } else {
-            ovsdb_remove_replica(m->db, &m->dbmon->replica);
+            ovsdb_jsonrpc_monitor_destroy(m);
             return jsonrpc_create_reply(json_object_create(), request_id);
         }
     }
@@ -1425,7 +1427,7 @@ ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
     struct ovsdb_jsonrpc_monitor *m, *next;
 
     HMAP_FOR_EACH_SAFE (m, next, node, &s->monitors) {
-        ovsdb_remove_replica(m->db, &m->dbmon->replica);
+        ovsdb_jsonrpc_monitor_destroy(m);
     }
 }
 
@@ -1834,14 +1836,22 @@ ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon)
 }
 
 static void
-ovsdb_monitor_destroy(struct ovsdb_replica *replica)
+ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m)
 {
-    struct ovsdb_monitor *m = ovsdb_monitor_cast(replica);
-    struct ovsdb_jsonrpc_monitor *jsonrpc_monitor = m->jsonrpc_monitor;
+    json_destroy(m->monitor_id);
+    hmap_remove(&m->session->monitors, &m->node);
+    ovsdb_monitor_destroy(m->dbmon);
+    free(m);
+}
+
+static void
+ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
+{
     struct shash_node *node;
 
-    json_destroy(jsonrpc_monitor->monitor_id);
-    SHASH_FOR_EACH (node, &m->tables) {
+    list_remove(&dbmon->replica.node);
+
+    SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
         struct ovsdb_monitor_row *row, *next;
 
@@ -1854,13 +1864,20 @@ ovsdb_monitor_destroy(struct ovsdb_replica *replica)
         free(mt->columns);
         free(mt);
     }
-    shash_destroy(&m->tables);
-    hmap_remove(&jsonrpc_monitor->session->monitors, &jsonrpc_monitor->node);
-    free(jsonrpc_monitor);
-    free(m);
+    shash_destroy(&dbmon->tables);
+    free(dbmon);
+}
+
+static void
+ovsdb_monitor_destroy_callback(struct ovsdb_replica *replica)
+{
+    struct ovsdb_monitor *dbmon = ovsdb_monitor_cast(replica);
+    struct ovsdb_jsonrpc_monitor *m = dbmon->jsonrpc_monitor;
+
+    ovsdb_jsonrpc_monitor_destroy(m);
 }
 
 static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class = {
     ovsdb_monitor_commit,
-    ovsdb_monitor_destroy
+    ovsdb_monitor_destroy_callback,
 };
