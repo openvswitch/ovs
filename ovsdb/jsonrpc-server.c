@@ -1676,8 +1676,8 @@ ovsdb_monitor_compose_row_update(
  * be used as part of the initial reply to a "monitor" request, false if it is
  * going to be used as part of an "update" notification. */
 static struct json *
-ovsdb_jsonrpc_monitor_compose_table_update(
-    const struct ovsdb_jsonrpc_monitor *monitor, bool initial)
+ovsdb_monitor_compose_table_update(
+    const struct ovsdb_monitor *dbmon, bool initial)
 {
     struct shash_node *node;
     unsigned long int *changed;
@@ -1685,7 +1685,7 @@ ovsdb_jsonrpc_monitor_compose_table_update(
     size_t max_columns;
 
     max_columns = 0;
-    SHASH_FOR_EACH (node, &monitor->dbmon->tables) {
+    SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
 
         max_columns = MAX(max_columns, mt->n_columns);
@@ -1693,7 +1693,7 @@ ovsdb_jsonrpc_monitor_compose_table_update(
     changed = xmalloc(bitmap_n_bytes(max_columns));
 
     json = NULL;
-    SHASH_FOR_EACH (node, &monitor->dbmon->tables) {
+    SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
         struct ovsdb_monitor_row *row, *next;
         struct json *table_json = NULL;
@@ -1730,6 +1730,13 @@ ovsdb_jsonrpc_monitor_compose_table_update(
     free(changed);
 
     return json;
+}
+
+static struct json *
+ovsdb_jsonrpc_monitor_compose_table_update(
+    const struct ovsdb_jsonrpc_monitor *monitor, bool initial)
+{
+    return ovsdb_monitor_compose_table_update(monitor->dbmon, initial);
 }
 
 static bool
