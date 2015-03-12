@@ -1155,15 +1155,17 @@ ovsdb_monitor_add_select(struct ovsdb_monitor_table *mt,
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor_table *mt,
+ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
+                                    const struct ovsdb_table *table,
                                     const struct json *monitor_request,
                                     size_t *allocated_columns)
 {
-    const struct ovsdb_table_schema *ts = mt->table->schema;
+    const struct ovsdb_table_schema *ts = table->schema;
     enum ovsdb_monitor_selection select;
     const struct json *columns, *select_json;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
+    struct ovsdb_monitor_table *mt;
 
     ovsdb_parser_init(&parser, monitor_request, "table %s", ts->name);
     columns = ovsdb_parser_member(&parser, "columns", OP_ARRAY | OP_OPTIONAL);
@@ -1197,6 +1199,7 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor_table *mt,
         select = OJMS_INITIAL | OJMS_INSERT | OJMS_DELETE | OJMS_MODIFY;
     }
 
+    mt = shash_find_data(&dbmon->tables, table->schema->name);
     ovsdb_monitor_add_select(mt, select);
     if (columns) {
         size_t i;
@@ -1255,6 +1258,44 @@ ovsdb_monitor_create(struct ovsdb *db,
     return m;
 }
 
+static void
+ovsdb_monitor_add_table(struct ovsdb_monitor *m,
+                        const struct ovsdb_table *table)
+{
+    struct ovsdb_monitor_table *mt;
+
+    mt = xzalloc(sizeof *mt);
+    mt->table = table;
+    hmap_init(&mt->changes);
+    shash_add(&m->tables, table->schema->name, mt);
+}
+
+/* Check for duplicated column names. Return the first
+ * duplicated column's name if found. Otherwise return
+ * NULL.  */
+static const char * OVS_WARN_UNUSED_RESULT
+ovsdb_monitor_table_check_duplicates(struct ovsdb_monitor *m,
+                          const struct ovsdb_table *table)
+{
+    struct ovsdb_monitor_table *mt;
+    int i;
+
+    mt = shash_find_data(&m->tables, table->schema->name);
+
+    if (mt) {
+        /* Check for duplicate columns. */
+        qsort(mt->columns, mt->n_columns, sizeof *mt->columns,
+              compare_ovsdb_monitor_column);
+        for (i = 1; i < mt->n_columns; i++) {
+            if (mt->columns[i].column == mt->columns[i - 1].column) {
+                return mt->columns[i].column->name;
+            }
+        }
+    }
+
+    return NULL;
+}
+
 static struct jsonrpc_msg *
 ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                              struct json *params,
@@ -1292,7 +1333,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
 
     SHASH_FOR_EACH (node, json_object(monitor_requests)) {
         const struct ovsdb_table *table;
-        struct ovsdb_monitor_table *mt;
+        const char *column_name;
         size_t allocated_columns;
         const struct json *mr_value;
         size_t i;
@@ -1304,10 +1345,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
             goto error;
         }
 
-        mt = xzalloc(sizeof *mt);
-        mt->table = table;
-        hmap_init(&mt->changes);
-        shash_add(&m->dbmon->tables, table->schema->name, mt);
+        ovsdb_monitor_add_table(m->dbmon, table);
 
         /* Parse columns. */
         mr_value = node->data;
@@ -1317,29 +1355,26 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
 
             for (i = 0; i < array->n; i++) {
                 error = ovsdb_jsonrpc_parse_monitor_request(
-                    mt, array->elems[i], &allocated_columns);
+                    m->dbmon, table, array->elems[i], &allocated_columns);
                 if (error) {
                     goto error;
                 }
             }
         } else {
             error = ovsdb_jsonrpc_parse_monitor_request(
-                mt, mr_value, &allocated_columns);
+                m->dbmon, table, mr_value, &allocated_columns);
             if (error) {
                 goto error;
             }
         }
 
-        /* Check for duplicate columns. */
-        qsort(mt->columns, mt->n_columns, sizeof *mt->columns,
-              compare_ovsdb_monitor_column);
-        for (i = 1; i < mt->n_columns; i++) {
-            if (mt->columns[i].column == mt->columns[i - 1].column) {
-                error = ovsdb_syntax_error(mr_value, NULL, "column %s "
-                                           "mentioned more than once",
-                                           mt->columns[i].column->name);
-                goto error;
-            }
+        column_name = ovsdb_monitor_table_check_duplicates(m->dbmon, table);
+
+        if (column_name) {
+            error = ovsdb_syntax_error(mr_value, NULL, "column %s "
+                                       "mentioned more than once",
+                                        column_name);
+            goto error;
         }
     }
 
