@@ -1740,19 +1740,28 @@ ovsdb_jsonrpc_monitor_compose_table_update(
 }
 
 static bool
+ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &dbmon->tables) {
+        struct ovsdb_monitor_table *mt = node->data;
+
+        if (!hmap_is_empty(&mt->changes)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool
 ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *s)
 {
     struct ovsdb_jsonrpc_monitor *m;
 
     HMAP_FOR_EACH (m, node, &s->monitors) {
-        struct shash_node *node;
-
-        SHASH_FOR_EACH (node, &m->dbmon->tables) {
-            struct ovsdb_monitor_table *mt = node->data;
-
-            if (!hmap_is_empty(&mt->changes)) {
-                return true;
-            }
+        if (ovsdb_monitor_needs_flush(m->dbmon)) {
+            return true;
         }
     }
 
