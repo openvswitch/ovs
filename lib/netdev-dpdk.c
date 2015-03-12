@@ -68,9 +68,23 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define MBUF_SIZE(mtu)       (MTU_TO_MAX_LEN(mtu) + (512) + \
                              sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
 
-/* XXX: mempool size should be based on system resources. */
-#define NB_MBUF              (4096 * 64)
-#define MP_CACHE_SZ          (256 * 2)
+/* Max and min number of packets in the mempool.  OVS tries to allocate a
+ * mempool with MAX_NB_MBUF: if this fails (because the system doesn't have
+ * enough hugepages) we keep halving the number until the allocation succeeds
+ * or we reach MIN_NB_MBUF */
+
+#define MAX_NB_MBUF          (4096 * 64)
+#define MIN_NB_MBUF          (4096 * 4)
+#define MP_CACHE_SZ          RTE_MEMPOOL_CACHE_MAX_SIZE
+
+/* MAX_NB_MBUF can be divided by 2 many times, until MIN_NB_MBUF */
+BUILD_ASSERT_DECL(MAX_NB_MBUF % ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF) == 0);
+
+/* The smallest possible NB_MBUF that we're going to try should be a multiple
+ * of MP_CACHE_SZ. This is advised by DPDK documentation. */
+BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
+                  % MP_CACHE_SZ == 0);
+
 #define SOCKET0              0
 
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
@@ -310,6 +324,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
 {
     struct dpdk_mp *dmp = NULL;
     char mp_name[RTE_MEMPOOL_NAMESIZE];
+    unsigned mp_size;
 
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
@@ -323,20 +338,25 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     dmp->mtu = mtu;
     dmp->refcount = 1;
 
-    if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d", dmp->mtu,
-                 dmp->socket_id) < 0) {
-        return NULL;
-    }
+    mp_size = MAX_NB_MBUF;
+    do {
+        if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d_%u",
+                     dmp->mtu, dmp->socket_id, mp_size) < 0) {
+            return NULL;
+        }
 
-    dmp->mp = rte_mempool_create(mp_name, NB_MBUF, MBUF_SIZE(mtu),
-                                 MP_CACHE_SZ,
-                                 sizeof(struct rte_pktmbuf_pool_private),
-                                 rte_pktmbuf_pool_init, NULL,
-                                 ovs_rte_pktmbuf_init, NULL,
-                                 socket_id, 0);
+        dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
+                                     MP_CACHE_SZ,
+                                     sizeof(struct rte_pktmbuf_pool_private),
+                                     rte_pktmbuf_pool_init, NULL,
+                                     ovs_rte_pktmbuf_init, NULL,
+                                     socket_id, 0);
+    } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
 
     if (dmp->mp == NULL) {
         return NULL;
+    } else {
+        VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size );
     }
 
     list_push_back(&dpdk_mp_list, &dmp->list_node);
