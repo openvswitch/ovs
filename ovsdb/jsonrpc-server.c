@@ -1121,12 +1121,16 @@ ovsdb_jsonrpc_monitor_find(struct ovsdb_jsonrpc_session *s,
 }
 
 static void
-ovsdb_add_monitor_column(struct ovsdb_monitor_table *mt,
+ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
+                         const struct ovsdb_table *table,
                          const struct ovsdb_column *column,
                          enum ovsdb_monitor_selection select,
                          size_t *allocated_columns)
 {
+    struct ovsdb_monitor_table *mt;
     struct ovsdb_monitor_column *c;
+
+    mt = shash_find_data(&dbmon->tables, table->schema->name);
 
     if (mt->n_columns >= *allocated_columns) {
         mt->columns = x2nrealloc(mt->columns, allocated_columns,
@@ -1148,9 +1152,12 @@ compare_ovsdb_monitor_column(const void *a_, const void *b_)
 }
 
 static void
-ovsdb_monitor_add_select(struct ovsdb_monitor_table *mt,
-                         enum ovsdb_monitor_selection select)
+ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
+                               const struct ovsdb_table *table,
+                               enum ovsdb_monitor_selection select)
 {
+    struct ovsdb_monitor_table * mt;
+    mt = shash_find_data(&dbmon->tables, table->schema->name);
     mt->select |= select;
 }
 
@@ -1165,7 +1172,6 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
     const struct json *columns, *select_json;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
-    struct ovsdb_monitor_table *mt;
 
     ovsdb_parser_init(&parser, monitor_request, "table %s", ts->name);
     columns = ovsdb_parser_member(&parser, "columns", OP_ARRAY | OP_OPTIONAL);
@@ -1199,8 +1205,7 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
         select = OJMS_INITIAL | OJMS_INSERT | OJMS_DELETE | OJMS_MODIFY;
     }
 
-    mt = shash_find_data(&dbmon->tables, table->schema->name);
-    ovsdb_monitor_add_select(mt, select);
+    ovsdb_monitor_table_add_select(dbmon, table, select);
     if (columns) {
         size_t i;
 
@@ -1219,12 +1224,13 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
             }
 
             s = columns->u.array.elems[i]->u.string;
-            column = shash_find_data(&mt->table->schema->columns, s);
+            column = shash_find_data(&table->schema->columns, s);
             if (!column) {
                 return ovsdb_syntax_error(columns, NULL, "%s is not a valid "
                                           "column name", s);
             }
-            ovsdb_add_monitor_column(mt, column, select, allocated_columns);
+            ovsdb_monitor_add_column(dbmon, table, column, select,
+                                     allocated_columns);
         }
     } else {
         struct shash_node *node;
@@ -1232,7 +1238,7 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
         SHASH_FOR_EACH (node, &ts->columns) {
             const struct ovsdb_column *column = node->data;
             if (column->index != OVSDB_COL_UUID) {
-                ovsdb_add_monitor_column(mt, column, select,
+                ovsdb_monitor_add_column(dbmon, table, column, select,
                                          allocated_columns);
             }
         }
