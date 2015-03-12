@@ -193,9 +193,14 @@ struct xlate_ctx {
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
 
-    bool use_recirc;            /* Should generate recirc? */
-    struct xlate_recirc recirc; /* Information used for generating
-                                 * recirculation actions */
+    /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
+     * This is a trigger for recirculation in cases where translating an action
+     * or looking up a flow requires access to the fields of the packet after
+     * the MPLS label stack that was originally present.
+     *
+     * XXX: output to a table and patch port do not currently recirculate even
+     * if this is true. */
+    bool was_mpls;
 
     /* OpenFlow 1.1+ action set.
      *
@@ -312,7 +317,16 @@ static bool input_vid_is_valid(uint16_t vid, struct xbundle *, bool warn);
 static uint16_t input_vid_to_vlan(const struct xbundle *, uint16_t vid);
 static void output_normal(struct xlate_ctx *, const struct xbundle *,
                           uint16_t vlan);
-static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port);
+
+/* Optional bond recirculation parameter to compose_output_action(). */
+struct xlate_bond_recirc {
+    uint32_t recirc_id;  /* !0 Use recirculation instead of output. */
+    uint8_t  hash_alg;   /* !0 Compute hash for recirc before. */
+    uint32_t hash_basis;  /* Compute hash for recirc before. */
+};
+
+static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port,
+                                  const struct xlate_bond_recirc *xr);
 
 static struct xbridge *xbridge_lookup(const struct ofproto_dpif *);
 static struct xbundle *xbundle_lookup(const struct ofbundle *);
@@ -1245,27 +1259,27 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     uint16_t vid;
     ovs_be16 tci, old_tci;
     struct xport *xport;
+    struct xlate_bond_recirc xr;
+    bool use_recirc = false;
 
     vid = output_vlan_to_vid(out_xbundle, vlan);
     if (list_is_empty(&out_xbundle->xports)) {
         /* Partially configured bundle with no slaves.  Drop the packet. */
         return;
     } else if (!out_xbundle->bond) {
-        ctx->use_recirc = false;
         xport = CONTAINER_OF(list_front(&out_xbundle->xports), struct xport,
                              bundle_node);
     } else {
-        struct ofport_dpif *ofport;
-        struct xlate_recirc *xr = &ctx->recirc;
         struct flow_wildcards *wc = &ctx->xout->wc;
+        struct ofport_dpif *ofport;
 
         if (ctx->xbridge->enable_recirc) {
-            ctx->use_recirc = bond_may_recirc(
-                out_xbundle->bond, &xr->recirc_id, &xr->hash_basis);
+            use_recirc = bond_may_recirc(
+                out_xbundle->bond, &xr.recirc_id, &xr.hash_basis);
 
-            if (ctx->use_recirc) {
+            if (use_recirc) {
                 /* Only TCP mode uses recirculation. */
-                xr->hash_alg = OVS_HASH_ALG_L4;
+                xr.hash_alg = OVS_HASH_ALG_L4;
                 bond_update_post_recirc_rules(out_xbundle->bond, false);
 
                 /* Recirculation does not require unmasking hash fields. */
@@ -1282,9 +1296,9 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
             return;
         }
 
-        /* If ctx->xout->use_recirc is set, the main thread will handle stats
+        /* If use_recirc is set, the main thread will handle stats
          * accounting for this bond. */
-        if (!ctx->use_recirc) {
+        if (!use_recirc) {
             if (ctx->xin->resubmit_stats) {
                 bond_account(out_xbundle->bond, &ctx->xin->flow, vid,
                              ctx->xin->resubmit_stats->n_bytes);
@@ -1312,7 +1326,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     }
     *flow_tci = tci;
 
-    compose_output_action(ctx, xport->ofp_port);
+    compose_output_action(ctx, xport->ofp_port, use_recirc ? &xr : NULL);
     *flow_tci = old_tci;
 }
 
@@ -1838,7 +1852,7 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
 
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
-                        bool check_stp)
+                        const struct xlate_bond_recirc *xr, bool check_stp)
 {
     const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
     struct flow_wildcards *wc = &ctx->xout->wc;
@@ -1993,9 +2007,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                                               &ctx->xout->odp_actions,
                                               &ctx->xout->wc);
 
-        if (ctx->use_recirc) {
+        if (xr) {
             struct ovs_action_hash *act_hash;
-            struct xlate_recirc *xr = &ctx->recirc;
 
             /* Hash action. */
             act_hash = nl_msg_put_unspec_uninit(&ctx->xout->odp_actions,
@@ -2025,9 +2038,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 }
 
 static void
-compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
+compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port,
+                      const struct xlate_bond_recirc *xr)
 {
-    compose_output_action__(ctx, ofp_port, true);
+    compose_output_action__(ctx, ofp_port, xr, true);
 }
 
 static void
@@ -2336,9 +2350,9 @@ flood_packets(struct xlate_ctx *ctx, bool all)
         }
 
         if (all) {
-            compose_output_action__(ctx, xport->ofp_port, false);
+            compose_output_action__(ctx, xport->ofp_port, NULL, false);
         } else if (!(xport->config & OFPUTIL_PC_NO_FLOOD)) {
-            compose_output_action(ctx, xport->ofp_port);
+            compose_output_action(ctx, xport->ofp_port, NULL);
         }
     }
 
@@ -2541,7 +2555,7 @@ xlate_output_action(struct xlate_ctx *ctx,
 
     switch (port) {
     case OFPP_IN_PORT:
-        compose_output_action(ctx, ctx->xin->flow.in_port.ofp_port);
+        compose_output_action(ctx, ctx->xin->flow.in_port.ofp_port, NULL);
         break;
     case OFPP_TABLE:
         xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
@@ -2564,7 +2578,7 @@ xlate_output_action(struct xlate_ctx *ctx,
     case OFPP_LOCAL:
     default:
         if (port != ctx->xin->flow.in_port.ofp_port) {
-            compose_output_action(ctx, port);
+            compose_output_action(ctx, port, NULL);
         } else {
             xlate_report(ctx, "skipping output to input port");
         }
@@ -2623,7 +2637,7 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     /* Add datapath actions. */
     flow_priority = ctx->xin->flow.skb_priority;
     ctx->xin->flow.skb_priority = priority;
-    compose_output_action(ctx, ofp_port);
+    compose_output_action(ctx, ofp_port, NULL);
     ctx->xin->flow.skb_priority = flow_priority;
 
     /* Update NetFlow output port. */
@@ -3395,7 +3409,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
     ctx.exit = false;
-    ctx.use_recirc = false;
+    ctx.was_mpls = false;
 
     if (!xin->ofpacts && !ctx.rule) {
         ctx.table_id = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
@@ -3509,7 +3523,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         if (ctx.xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
-            compose_output_action(&ctx, OFPP_LOCAL);
+            compose_output_action(&ctx, OFPP_LOCAL, NULL);
         }
 
         fix_sflow_action(&ctx);

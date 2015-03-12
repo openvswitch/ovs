@@ -33,12 +33,6 @@ struct dpif_sflow;
 struct mac_learning;
 struct xlate_cache;
 
-struct xlate_recirc {
-    uint32_t recirc_id;  /* !0 Use recirculation instead of output. */
-    uint8_t  hash_alg;   /* !0 Compute hash for recirc before. */
-    uint32_t hash_basis;  /* Compute hash for recirc before. */
-};
-
 struct xlate_out {
     /* Wildcards relevant in translation.  Any fields that were used to
      * calculate the action must be set for caching and kernel
