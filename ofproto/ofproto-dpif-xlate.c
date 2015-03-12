@@ -223,11 +223,13 @@ struct xlate_ctx {
      * 'action_set' accumulates "struct ofpact"s added by OFPACT_WRITE_ACTIONS.
      * When translation is otherwise complete, ofpacts_execute_action_set()
      * converts it to a set of "struct ofpact"s that can be translated into
-     * datapath actions.   */
+     * datapath actions. */
     bool action_set_has_group;  /* Action set contains OFPACT_GROUP? */
     struct ofpbuf action_set;   /* Action set. */
     uint64_t action_set_stub[1024 / 8];
 };
+
+static void xlate_action_set(struct xlate_ctx *ctx);
 
 /* A controller may use OFPP_NONE as the ingress port to indicate that
  * it did not arrive on a "real" port.  'ofpp_none_bundle' exists for
@@ -2733,8 +2735,11 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         uint8_t table_id = rule_dpif_lookup_get_init_table_id(&ctx->xin->flow);
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
+        struct ofpbuf old_action_set = ctx->action_set;
+        uint64_t actset_stub[1024 / 8];
 
         ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
+        ofpbuf_use_stub(&ctx->action_set, actset_stub, sizeof actset_stub);
         ctx->xbridge = peer->xbridge;
         flow->in_port.ofp_port = peer->ofp_port;
         flow->metadata = htonll(0);
@@ -2750,6 +2755,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             if (xport_stp_forward_state(peer) && xport_rstp_forward_state(peer)) {
                 xlate_table_action(ctx, flow->in_port.ofp_port, table_id,
                                    true, true);
+                if (ctx->action_set.size) {
+                    /* Translate action set only if not dropping the packet. */
+                    xlate_action_set(ctx);
+                }
             } else {
                 /* Forwarding is disabled by STP and RSTP.  Let OFPP_NORMAL and
                  * the learning action look at the packet, then drop it. */
@@ -2766,6 +2775,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         ctx->xin->flow = old_flow;
         ctx->xbridge = xport->xbridge;
+        ofpbuf_uninit(&ctx->action_set);
+        ctx->action_set = old_action_set;
         ofpbuf_uninit(&ctx->stack);
         ctx->stack = old_stack;
 
@@ -3778,6 +3789,8 @@ xlate_action_set(struct xlate_ctx *ctx)
     ctx->in_action_set = true;
     ofpbuf_use_stub(&action_list, action_list_stub, sizeof action_list_stub);
     ofpacts_execute_action_set(&action_list, &ctx->action_set);
+    /* Clear the action set, as it is not needed any more. */
+    ofpbuf_clear(&ctx->action_set);
     do_xlate_actions(action_list.data, action_list.size, ctx);
     ctx->in_action_set = false;
     ofpbuf_uninit(&action_list);
