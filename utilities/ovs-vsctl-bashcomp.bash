@@ -630,6 +630,11 @@ _ovs_vsctl_bashcomp () {
     local cur valid_globals cmd_args raw_cmd cmd_pos valid_globals valid_opts
     local test="false"
 
+    # Does not support BASH_VERSION < 4.0
+    if [ ${BASH_VERSINFO[0]} -lt 4 ]; then
+        return 0
+    fi
+
     # Prepare the COMP_* variables based on input.
     if [ "$1" = "test" ]; then
         test="true"
