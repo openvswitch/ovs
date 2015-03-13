@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -399,8 +399,8 @@ static struct tcmsg *tc_make_request(const struct netdev *, int type,
                                      unsigned int flags, struct ofpbuf *);
 static int tc_transact(struct ofpbuf *request, struct ofpbuf **replyp);
 static int tc_add_del_ingress_qdisc(struct netdev *netdev, bool add);
-static int tc_add_policer(struct netdev *netdev, int kbits_rate,
-                          int kbits_burst);
+static int tc_add_policer(struct netdev *,
+                          uint32_t kbits_rate, uint32_t kbits_burst);
 
 static int tc_parse_qdisc(const struct ofpbuf *, const char **kind,
                           struct nlattr **options);
@@ -4028,12 +4028,13 @@ tc_add_del_ingress_qdisc(struct netdev *netdev, bool add)
  *              mtu 65535 drop
  *
  * The configuration and stats may be seen with the following command:
- *     /sbin/tc -s filter show <devname> eth0 parent ffff:
+ *     /sbin/tc -s filter show dev <devname> parent ffff:
  *
  * Returns 0 if successful, otherwise a positive errno value.
  */
 static int
-tc_add_policer(struct netdev *netdev, int kbits_rate, int kbits_burst)
+tc_add_policer(struct netdev *netdev,
+               uint32_t kbits_rate, uint32_t kbits_burst)
 {
     struct tc_police tc_police;
     struct ofpbuf request;
@@ -4047,8 +4048,22 @@ tc_add_policer(struct netdev *netdev, int kbits_rate, int kbits_burst)
     tc_police.action = TC_POLICE_SHOT;
     tc_police.mtu = mtu;
     tc_fill_rate(&tc_police.rate, ((uint64_t) kbits_rate * 1000)/8, mtu);
-    tc_police.burst = tc_bytes_to_ticks(tc_police.rate.rate,
-                                        kbits_burst * 1024);
+
+    /* The following appears wrong in two ways:
+     *
+     * - tc_bytes_to_ticks() should take "bytes" as quantity for both of its
+     *   arguments (or at least consistently "bytes" as both or "bits" as
+     *   both), but this supplies bytes for the first argument and bits for the
+     *   second.
+     *
+     * - In networking a kilobit is usually 1000 bits but this uses 1024 bits.
+     *
+     * However if you "fix" those problems then "tc filter show ..." shows
+     * "125000b", meaning 125,000 bits, when OVS configures it for 1000 kbit ==
+     * 1,000,000 bits, whereas this actually ends up doing the right thing from
+     * tc's point of view.  Whatever. */
+    tc_police.burst = tc_bytes_to_ticks(
+        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024);
 
     tcmsg = tc_make_request(netdev, RTM_NEWTFILTER,
                             NLM_F_EXCL | NLM_F_CREATE, &request);
