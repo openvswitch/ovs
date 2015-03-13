@@ -1748,11 +1748,25 @@ A: Add your new message to "enum ofpraw" and "enum ofptype" in
 
 A: Add new members for your field to "struct flow" in lib/flow.h, and
    add new enumerations for your new field to "enum mf_field_id" in
-   lib/meta-flow.h, following the existing pattern.  Then recompile
-   and fix all of the new warnings, implementing new functionality for
-   the new field or header as needed.  (If you configure with
-   --enable-Werror, as described in [INSTALL.md], then it is
-   impossible to miss any warnings.)
+   lib/meta-flow.h, following the existing pattern.  Also, add support
+   to miniflow_extract() in lib/flow.c for extracting your new field
+   from a packet into struct miniflow.  Then recompile and fix all of
+   the new warnings, implementing new functionality for the new field
+   or header as needed.  (If you configure with --enable-Werror, as
+   described in [INSTALL.md], then it is impossible to miss any
+   warnings.)
+
+   If you want kernel datapath support for your new field, you also
+   need to modify the kernel module for the operating systems you are
+   interested in.  This isn't mandatory, since fields understood only
+   by userspace work too (with a performance penalty), so it's
+   reasonable to start development without it.  If you implement
+   kernel module support for Linux, then the Linux kernel "netdev"
+   mailing list is the place to submit that support first; please read
+   up on the Linux kernel development process separately.  The Windows
+   datapath kernel module support, on the other hand, is maintained
+   within the OVS tree, so patches for that can go directly to
+   ovs-dev.
 
 ### Q: How do I add support for a new OpenFlow action?
 
