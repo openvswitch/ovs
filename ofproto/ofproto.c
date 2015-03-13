@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -4295,21 +4295,30 @@ delete_flow__(struct rule *rule, struct ofopgroup *group,
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
 delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
+               enum ofputil_flow_mod_flags flags,
                const struct ofp_header *request,
                const struct rule_collection *rules,
                enum ofp_flow_removed_reason reason)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofopgroup *group;
+    enum ofperr error;
     size_t i;
 
+    error = OFPERR_OFPBRC_EPERM;
     group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
     for (i = 0; i < rules->n; i++) {
-        delete_flow__(rules->rules[i], group, reason);
+        struct rule *rule = rules->rules[i];
+
+        if (rule_is_modifiable(rule, flags)) {
+            /* At least one rule is modifiable, don't report EPERM error. */
+            error = 0;
+            delete_flow__(rule, group, reason);
+        }
     }
     ofopgroup_submit(group);
 
-    return 0;
+    return error;
 }
 
 /* Implements OFPFC_DELETE. */
@@ -4330,7 +4339,8 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, ofconn, request, &rules, OFPRR_DELETE);
+        error = delete_flows__(ofproto, ofconn, fm->flags, request,
+                               &rules, OFPRR_DELETE);
     }
     rule_collection_destroy(&rules);
 
@@ -4355,7 +4365,8 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     rule_criteria_destroy(&criteria);
 
     if (!error && rules.n > 0) {
-        error = delete_flows__(ofproto, ofconn, request, &rules, OFPRR_DELETE);
+        error = delete_flows__(ofproto, ofconn, fm->flags, request,
+                               &rules, OFPRR_DELETE);
     }
     rule_collection_destroy(&rules);
 
@@ -5145,7 +5156,8 @@ handle_delete_meter(struct ofconn *ofconn, const struct ofp_header *oh,
         }
     }
     if (rules.n > 0) {
-        delete_flows__(ofproto, ofconn, oh, &rules, OFPRR_METER_DELETE);
+        delete_flows__(ofproto, ofconn, OFPUTIL_FF_NO_READONLY,
+                       oh, &rules, OFPRR_METER_DELETE);
     }
 
     /* Delete the meters. */
