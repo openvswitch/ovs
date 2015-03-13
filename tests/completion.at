@@ -608,7 +608,7 @@ AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "add Bridge br0 other_config ran
 [0], [dnl
 ${MATCH}
 ])
-MATCH="$(PREPARE_MATCH_NOSPACE(random_key=abc))"
+MATCH="$(PREPARE_MATCH_NOSPACE(abc))"
 AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "add Bridge br0 other_config random_key=abc"],
 [0], [dnl
 ${MATCH}
@@ -638,14 +638,14 @@ AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "set Bridge br0 other"],
 ${MATCH}
 ])
 # then, with the ':' we should complete on key.
-TMP="$(ovs-vsctl --no-heading --columns=other_config list Bridge br0 | tr -d '{\"}' | tr -s ', ' '\n' | cut -d'=' -f1 | xargs printf "other_config:%s\n")"
+TMP="$(ovs-vsctl --no-heading --columns=other_config list Bridge br0 | tr -d '{\"}' | tr -s ', ' '\n' | cut -d'=' -f1)"
 MATCH="$(PREPARE_MATCH_NOSPACE(${TMP}))"
 AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "set Bridge br0 other_config:"],
 [0], [dnl
 ${MATCH}
 ])
 # finally, if user fill in some value, we should just complete on user input.
-MATCH="$(PREPARE_MATCH_NOSPACE(other_config:random_val1=12345))"
+MATCH="$(PREPARE_MATCH_NOSPACE(random_val1))"
 AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "set Bridge br0 other_config:random_val1=12345"],
 [0], [dnl
 ${MATCH}
@@ -677,14 +677,14 @@ AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "set-manager "],
 ${MATCH}
 ])
 # filename completion on unix, punix.
-MATCH="$(PREPARE_MATCH_NOSPACE(unix:testsuite.log))"
+MATCH="$(PREPARE_MATCH_NOSPACE(testsuite.log))"
 AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "set-manager unix:test"],
 [0], [dnl
 ${MATCH}
 ])
 # no completion on other type, just return available types.
 # in real environment, bash will not complete on anything.
-MATCH="$(PREPARE_MATCH_NOSPACE(pssl: ptcp: punix: ssl: tcp: unix:))"
+MATCH="$(PREPARE_MATCH_NOSPACE(pssl: ptcp: punix: tcp: unix:))"
 AT_CHECK_UNQUOTED([ovs-vsctl-bashcomp.bash test "set-manager ssl:something"],
 [0], [dnl
 ${MATCH}

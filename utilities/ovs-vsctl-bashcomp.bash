@@ -202,7 +202,7 @@ _ovs_vsctl_complete_key_given_table_column () {
     keys=$(_ovs_vsctl --no-heading --columns="$3" list \
                      "$2" \
            | tr -d '{\"}' | tr -s ', ' '\n' | cut -d'=' -f1 \
-           | xargs printf "$4%s\n" | _ovs_vsctl_check_startswith_string "$1")
+           | xargs printf "$4%s\n" | _ovs_vsctl_check_startswith_string "$4$1")
     result="${keys}"
     printf -- "%s\n" "${result}"
 }
@@ -604,6 +604,43 @@ _ovs_vsctl_process_messages () {
     fi
 }
 
+# colon, equal sign will mess up the completion output, just
+# removes the colon-word and equal-word prefix from COMPREPLY items.
+#
+# Implementation of this function refers to the __ltrim_colon_completions
+# function defined in bash_completion module.
+#
+# $1:  Current argument
+# $2:  $COMP_WORDBREAKS
+# $3:  ${COMPREPLY[@]}
+_ovs_vsctl_trim_compreply() {
+    local cur comp_wordbreaks
+    local compreply
+
+    cur=$1 && shift
+    comp_wordbreaks=$1 && shift
+    compreply=( $@ )
+
+    if [[ "$cur" == *:* && "$comp_wordbreaks" == *:* ]]; then
+        local colon_word=${cur%${cur##*:}}
+        local i=${#compreply[*]}
+        cur=${cur##*:}
+        while [ $((--i)) -ge 0 ]; do
+            compreply[$i]=${compreply[$i]#"$colon_word"}
+        done
+    fi
+
+    if [[ "$cur" == *=* && "$comp_wordbreaks" == *=* ]]; then
+        local equal_word=${cur%${cur##*=}}
+        local i=${#compreply[*]}
+        while [ $((--i)) -ge 0 ]; do
+            compreply[$i]=${compreply[$i]#"$equal_word"}
+        done
+    fi
+
+    printf "%s " "${compreply[@]}"
+}
+
 # The general strategy here is that the same functions that decide
 # completions can also capture the necessary context for later
 # completions.  This means that there is no distinction between the
@@ -627,7 +664,7 @@ _ovs_vsctl_process_messages () {
 # status of the function _ovs_vsctl_complete_argument represents where
 # it has determined that the next argument will be.
 _ovs_vsctl_bashcomp () {
-    local cur valid_globals cmd_args raw_cmd cmd_pos valid_globals valid_opts
+    local words cword valid_globals cmd_args raw_cmd cmd_pos valid_globals valid_opts
     local test="false"
 
     # Does not support BASH_VERSION < 4.0
@@ -645,6 +682,12 @@ _ovs_vsctl_bashcomp () {
                   <<< "$tmp"
         export COMP_WORDS
         export COMP_CWORD="$((${#COMP_WORDS[@]}-1))"
+    else
+        # If not in test mode, reassembles the COMP_WORDS and COMP_CWORD
+        # using just space as word break.
+        _get_comp_words_by_ref -n "\"'><=;|&(:" -w words -i cword
+        COMP_WORDS=( "${words[@]}" )
+        COMP_CWORD=${cword}
     fi
 
     # Extract the conf.db path.
@@ -654,20 +697,18 @@ _ovs_vsctl_bashcomp () {
     fi
 
     # If having trouble accessing the database, return.
-    if ! _ovs_vsctl get-manager 2>/dev/null; then
+    if ! _ovs_vsctl get-manager 1>/dev/null 2>/dev/null; then
         return 1;
     fi
 
     _OVS_VSCTL_PARSED_ARGS=()
     _OVS_VSCTL_NEW_RECORDS=()
     cmd_pos=-1
-    cur=${COMP_WORDS[COMP_CWORD]}
     valid_globals=true
     valid_opts=true
     valid_commands=true
     given_opts=""
     index=1
-    export COMP_WORDBREAKS=" "
     for word in "${COMP_WORDS[@]:1:${COMP_CWORD}} "; do
         _OVS_VSCTL_COMP_NOSPACE=false
         local completion
@@ -753,6 +794,8 @@ _ovs_vsctl_bashcomp () {
         completion="$(sort -u <<< "$(tr ' ' '\n' <<< ${completion})")"
         if [ $index -eq $COMP_CWORD ]; then
             if [ "$test" = "true" ]; then
+                completion="$(_ovs_vsctl_trim_compreply "$word" ":=" ${completion} | \
+                              tr ' ' '\n')"
                 if [ "${_OVS_VSCTL_COMP_NOSPACE}" = "true" ]; then
                     printf "%s" "$completion" | sed -e '/^$/d'
                 else
@@ -767,6 +810,8 @@ _ovs_vsctl_bashcomp () {
                     compopt +o nospace
                     COMPREPLY=( $(compgen -W "${completion}" -- $word) )
                 fi
+                COMPREPLY=( $(_ovs_vsctl_trim_compreply "$word" \
+                              "${COMP_WORDBREAKS}" ${COMPREPLY[@]}) )
             fi
         fi
         index=$(($index+1))
