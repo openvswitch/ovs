@@ -378,8 +378,8 @@ ovsdb_monitor_compose_row_update(
  * be used as part of the initial reply to a "monitor" request, false if it is
  * going to be used as part of an "update" notification. */
 struct json *
-ovsdb_monitor_compose_table_update(const struct ovsdb_monitor *dbmon,
-                                   bool initial, uint64_t *unflushed)
+ovsdb_monitor_compose_update(const struct ovsdb_monitor *dbmon,
+                             bool initial, uint64_t *unflushed)
 {
     struct shash_node *node;
     unsigned long int *changed;
