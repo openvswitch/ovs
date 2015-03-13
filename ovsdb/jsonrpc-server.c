@@ -90,7 +90,7 @@ static void ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *);
 static bool ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *);
 static struct json *ovsdb_jsonrpc_monitor_compose_table_update(
-    const struct ovsdb_jsonrpc_monitor *monitor, bool initial);
+    struct ovsdb_jsonrpc_monitor *monitor, bool initial);
 
 
 /* JSON-RPC database server. */
@@ -1037,6 +1037,8 @@ struct ovsdb_jsonrpc_monitor {
     struct hmap_node node;      /* In ovsdb_jsonrpc_session's "monitors". */
     struct json *monitor_id;
     struct ovsdb_monitor *dbmon;
+    uint64_t unflushed;         /* The first transaction that has not been
+                                       flushed to the jsonrpc remote client. */
 };
 
 static struct ovsdb_jsonrpc_monitor *
@@ -1181,6 +1183,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     m->session = s;
     m->db = db;
     m->dbmon = ovsdb_monitor_create(db, m);
+    m->unflushed = 0;
     hmap_insert(&s->monitors, &m->node, json_hash(monitor_id, 0));
     m->monitor_id = json_clone(monitor_id);
 
@@ -1280,9 +1283,10 @@ ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
 
 static struct json *
 ovsdb_jsonrpc_monitor_compose_table_update(
-    const struct ovsdb_jsonrpc_monitor *monitor, bool initial)
+    struct ovsdb_jsonrpc_monitor *monitor, bool initial)
 {
-    return ovsdb_monitor_compose_table_update(monitor->dbmon, initial);
+    return ovsdb_monitor_compose_table_update(monitor->dbmon, initial,
+                                      &monitor->unflushed);
 }
 
 static bool
@@ -1291,7 +1295,7 @@ ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *s)
     struct ovsdb_jsonrpc_monitor *m;
 
     HMAP_FOR_EACH (m, node, &s->monitors) {
-        if (ovsdb_monitor_needs_flush(m->dbmon)) {
+        if (ovsdb_monitor_needs_flush(m->dbmon, m->unflushed)) {
             return true;
         }
     }

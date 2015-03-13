@@ -49,6 +49,7 @@ struct ovsdb_monitor {
     struct shash tables;     /* Holds "struct ovsdb_monitor_table"s. */
     struct ovs_list jsonrpc_monitors;  /* Contains "jsonrpc_monitor_node"s. */
     struct ovsdb *db;
+    uint64_t n_transactions;      /* Count number of committed transactions. */
 };
 
 struct jsonrpc_monitor_node {
@@ -214,6 +215,7 @@ ovsdb_monitor_create(struct ovsdb *db,
     ovsdb_add_replica(db, &dbmon->replica);
     list_init(&dbmon->jsonrpc_monitors);
     dbmon->db = db;
+    dbmon->n_transactions = 0;
     shash_init(&dbmon->tables);
 
     jm = xzalloc(sizeof *jm);
@@ -376,13 +378,15 @@ ovsdb_monitor_compose_row_update(
  * be used as part of the initial reply to a "monitor" request, false if it is
  * going to be used as part of an "update" notification. */
 struct json *
-ovsdb_monitor_compose_table_update(
-    const struct ovsdb_monitor *dbmon, bool initial)
+ovsdb_monitor_compose_table_update(const struct ovsdb_monitor *dbmon,
+                                   bool initial, uint64_t *unflushed)
 {
     struct shash_node *node;
     unsigned long int *changed;
     struct json *json;
     size_t max_columns;
+
+    *unflushed = dbmon->n_transactions + 1;
 
     max_columns = 0;
     SHASH_FOR_EACH (node, &dbmon->tables) {
@@ -432,18 +436,11 @@ ovsdb_monitor_compose_table_update(
 }
 
 bool
-ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon)
+ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon,
+                          uint64_t next_transaction)
 {
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, &dbmon->tables) {
-        struct ovsdb_monitor_table *mt = node->data;
-
-        if (!hmap_is_empty(&mt->changes)) {
-            return true;
-        }
-    }
-    return false;
+    ovs_assert(next_transaction <= dbmon->n_transactions + 1);
+    return (next_transaction <= dbmon->n_transactions);
 }
 
 void
@@ -596,6 +593,7 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
 
     ovsdb_monitor_init_aux(&aux, m);
     ovsdb_txn_for_each_change(txn, ovsdb_monitor_change_cb, &aux);
+    m->n_transactions++;
 
     return NULL;
 }

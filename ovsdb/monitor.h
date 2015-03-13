@@ -46,14 +46,15 @@ const char * OVS_WARN_UNUSED_RESULT
 ovsdb_monitor_table_check_duplicates(struct ovsdb_monitor *,
                           const struct ovsdb_table *);
 
-struct json *ovsdb_monitor_compose_table_update(
-    const struct ovsdb_monitor *dbmon, bool initial);
+struct json *ovsdb_monitor_compose_table_update(const struct ovsdb_monitor *dbmon,
+                          bool initial, uint64_t *unflushed_transaction);
 
 void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
                                     const struct ovsdb_table *table,
                                     enum ovsdb_monitor_selection select);
 
-bool ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon);
+bool ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon,
+                               uint64_t next_transaction);
 
 void ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon);
 #endif
