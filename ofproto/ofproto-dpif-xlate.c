@@ -4376,7 +4376,7 @@ void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    struct flow_wildcards *wc = &xout->wc;
+    struct flow_wildcards *wc = NULL;
     struct flow *flow = &xin->flow;
     struct rule_dpif *rule = NULL;
 
@@ -4433,25 +4433,32 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (!ctx.xbridge) {
         return;
     }
-
     ctx.rule = xin->rule;
 
     ctx.base_flow = *flow;
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
     ctx.orig_tunnel_ip_dst = flow->tunnel.ip_dst;
 
-    flow_wildcards_init_catchall(wc);
-    memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-    if (is_ip_any(flow)) {
-        wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    if (!xin->skip_wildcards) {
+        wc = &xout->wc;
+        flow_wildcards_init_catchall(wc);
+        memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
+        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+        if (is_ip_any(flow)) {
+            wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+        }
+        if (ctx.xbridge->enable_recirc) {
+            /* Always exactly match recirc_id when datapath supports
+             * recirculation.  */
+            wc->masks.recirc_id = UINT32_MAX;
+        }
+        if (ctx.xbridge->netflow) {
+            netflow_mask_wc(flow, wc);
+        }
     }
     is_icmp = is_icmpv4(flow) || is_icmpv6(flow);
 
     tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
-    if (ctx.xbridge->netflow) {
-        netflow_mask_wc(flow, wc);
-    }
 
     ctx.recurse = 0;
     ctx.resubmits = 0;
@@ -4465,8 +4472,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.was_mpls = false;
 
     if (!xin->ofpacts && !ctx.rule) {
-        rule = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
-                                xin->skip_wildcards ? NULL : wc,
+        rule = rule_dpif_lookup(ctx.xbridge->ofproto, flow, wc,
                                 ctx.xin->xcache != NULL,
                                 ctx.xin->resubmit_stats, &ctx.table_id);
         if (ctx.xin->resubmit_stats) {
@@ -4628,23 +4634,25 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
 
-    /* Clear the metadata and register wildcard masks, because we won't
-     * use non-header fields as part of the cache. */
-    flow_wildcards_clear_non_packet_fields(wc);
+    if (wc) {
+        /* Clear the metadata and register wildcard masks, because we won't
+         * use non-header fields as part of the cache. */
+        flow_wildcards_clear_non_packet_fields(wc);
 
-    /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow uses
-     * the low 8 bits of the 16-bit tp_src and tp_dst members to represent
-     * these fields.  The datapath interface, on the other hand, represents
-     * them with just 8 bits each.  This means that if the high 8 bits of the
-     * masks for these fields somehow become set, then they will get chopped
-     * off by a round trip through the datapath, and revalidation will spot
-     * that as an inconsistency and delete the flow.  Avoid the problem here by
-     * making sure that only the low 8 bits of either field can be unwildcarded
-     * for ICMP.
-     */
-    if (is_icmp) {
-        wc->masks.tp_src &= htons(UINT8_MAX);
-        wc->masks.tp_dst &= htons(UINT8_MAX);
+        /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow
+         * uses the low 8 bits of the 16-bit tp_src and tp_dst members to
+         * represent these fields.  The datapath interface, on the other hand,
+         * represents them with just 8 bits each.  This means that if the high
+         * 8 bits of the masks for these fields somehow become set, then they
+         * will get chopped off by a round trip through the datapath, and
+         * revalidation will spot that as an inconsistency and delete the flow.
+         * Avoid the problem here by making sure that only the low 8 bits of
+         * either field can be unwildcarded for ICMP.
+         */
+        if (is_icmp) {
+            wc->masks.tp_src &= htons(UINT8_MAX);
+            wc->masks.tp_dst &= htons(UINT8_MAX);
+        }
     }
 }
 
