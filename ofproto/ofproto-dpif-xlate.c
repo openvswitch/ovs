@@ -200,8 +200,9 @@ struct xlate_ctx {
     bool in_group;              /* Currently translating ofgroup, if true. */
     bool in_action_set;         /* Currently translating action_set, if true. */
 
-    uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
+    ovs_be64 rule_cookie;       /* Cookie of the rule being translated. */
+    uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
@@ -2915,6 +2916,7 @@ static void
 xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
 {
     struct rule_dpif *old_rule = ctx->rule;
+    ovs_be64 old_cookie = ctx->rule_cookie;
     const struct rule_actions *actions;
 
     if (ctx->xin->resubmit_stats) {
@@ -2924,8 +2926,10 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     ctx->resubmits++;
     ctx->recurse++;
     ctx->rule = rule;
+    ctx->rule_cookie = rule_dpif_get_flow_cookie(rule);
     actions = rule_dpif_get_actions(rule);
     do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx);
+    ctx->rule_cookie = old_cookie;
     ctx->rule = old_rule;
     ctx->recurse--;
 }
@@ -3233,9 +3237,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     pin->up.packet = dp_packet_steal_data(packet);
     pin->up.reason = reason;
     pin->up.table_id = ctx->table_id;
-    pin->up.cookie = (ctx->rule
-                      ? rule_dpif_get_flow_cookie(ctx->rule)
-                      : OVS_BE64_MAX);
+    pin->up.cookie = ctx->rule_cookie;
 
     flow_get_metadata(&ctx->xin->flow, &pin->up.fmd);
 
@@ -4457,6 +4459,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.in_action_set = false;
     ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
+    ctx.rule_cookie = OVS_BE64_MAX;
     ctx.exit = false;
     ctx.use_recirc = false;
     ctx.was_mpls = false;
@@ -4491,6 +4494,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         ofpacts = actions->ofpacts;
         ofpacts_len = actions->ofpacts_len;
+
+        ctx.rule_cookie = rule_dpif_get_flow_cookie(ctx.rule);
     } else {
         OVS_NOT_REACHED();
     }
