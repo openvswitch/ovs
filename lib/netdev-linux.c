@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/utsname.h>
 #include <netpacket/packet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
@@ -4405,6 +4406,31 @@ tc_del_qdisc(struct netdev *netdev_)
     return error;
 }
 
+static bool
+getqdisc_is_safe(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static bool safe = false;
+
+    if (ovsthread_once_start(&once)) {
+        struct utsname utsname;
+        int major, minor;
+
+        if (uname(&utsname) == -1) {
+            VLOG_WARN("uname failed (%s)", ovs_strerror(errno));
+        } else if (!ovs_scan(utsname.release, "%d.%d", &major, &minor)) {
+            VLOG_WARN("uname reported bad OS release (%s)", utsname.release);
+        } else if (major < 2 || (major == 2 && minor < 35)) {
+            VLOG_INFO("disabling unsafe RTM_GETQDISC in Linux kernel %s",
+                      utsname.release);
+        } else {
+            safe = true;
+        }
+        ovsthread_once_done(&once);
+    }
+    return safe;
+}
+
 /* If 'netdev''s qdisc type and parameters are not yet known, queries the
  * kernel to determine what they are.  Returns 0 if successful, otherwise a
  * positive errno value. */
@@ -4434,18 +4460,21 @@ tc_query_qdisc(const struct netdev *netdev_)
      * create will have a class with handle 1:0.  The built-in qdiscs only have
      * a class with handle 0:0.
      *
-     * We could check for Linux 2.6.35+ and use a more straightforward method
-     * there. */
+     * On Linux 2.6.35+ we use the straightforward method because it allows us
+     * to handle non-builtin qdiscs without handle 1:0 (e.g. codel).  However,
+     * in such a case we get no response at all from the kernel (!) if a
+     * builtin qdisc is in use (which is later caught by "!error &&
+     * !qdisc->size"). */
     tcmsg = tc_make_request(netdev_, RTM_GETQDISC, NLM_F_ECHO, &request);
     if (!tcmsg) {
         return ENODEV;
     }
-    tcmsg->tcm_handle = tc_make_handle(1, 0);
-    tcmsg->tcm_parent = 0;
+    tcmsg->tcm_handle = tc_make_handle(getqdisc_is_safe() ? 0 : 1, 0);
+    tcmsg->tcm_parent = getqdisc_is_safe() ? TC_H_ROOT : 0;
 
     /* Figure out what tc class to instantiate. */
     error = tc_transact(&request, &qdisc);
-    if (!error) {
+    if (!error && qdisc->size) {
         const char *kind;
 
         error = tc_parse_qdisc(qdisc, &kind, NULL);
@@ -4455,15 +4484,15 @@ tc_query_qdisc(const struct netdev *netdev_)
             ops = tc_lookup_linux_name(kind);
             if (!ops) {
                 static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 1);
-                VLOG_INFO_RL(&rl2, "unknown qdisc \"%s\"", kind);
+                VLOG_DBG_RL(&rl2, "unknown qdisc \"%s\"", kind);
 
                 ops = &tc_ops_other;
             }
         }
-    } else if (error == ENOENT) {
-        /* Either it's a built-in qdisc, or it's a qdisc set up by some
-         * other entity that doesn't have a handle 1:0.  We will assume
-         * that it's the system default qdisc. */
+    } else if ((!error && !qdisc->size) || error == ENOENT) {
+        /* Either it's a built-in qdisc, or (on Linux pre-2.6.35) it's a qdisc
+         * set up by some other entity that doesn't have a handle 1:0.  We will
+         * assume that it's the system default qdisc. */
         ops = &tc_ops_default;
         error = 0;
     } else {
