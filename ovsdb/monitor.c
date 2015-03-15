@@ -230,12 +230,22 @@ ovsdb_monitor_row_destroy(const struct ovsdb_monitor_table *mt,
     }
 }
 
+static void
+ovsdb_monitor_add_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
+                                  struct ovsdb_jsonrpc_monitor *jsonrpc_monitor)
+{
+    struct jsonrpc_monitor_node *jm;
+
+    jm = xzalloc(sizeof *jm);
+    jm->jsonrpc_monitor = jsonrpc_monitor;
+    list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
+}
+
 struct ovsdb_monitor *
 ovsdb_monitor_create(struct ovsdb *db,
                      struct ovsdb_jsonrpc_monitor *jsonrpc_monitor)
 {
     struct ovsdb_monitor *dbmon;
-    struct jsonrpc_monitor_node *jm;
 
     dbmon = xzalloc(sizeof *dbmon);
 
@@ -246,10 +256,7 @@ ovsdb_monitor_create(struct ovsdb *db,
     dbmon->n_transactions = 0;
     shash_init(&dbmon->tables);
 
-    jm = xzalloc(sizeof *jm);
-    jm->jsonrpc_monitor = jsonrpc_monitor;
-    list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
-
+    ovsdb_monitor_add_jsonrpc_monitor(dbmon, jsonrpc_monitor);
     return dbmon;
 }
 
