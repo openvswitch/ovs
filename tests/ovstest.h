@@ -32,7 +32,7 @@
  * ovstest.
  *
  * With ovstest, each test programs now becomes a sub program of ovstest.
- * For example, 'mytest' program, can now be invoked as 'ovs mytest'.
+ * For example, 'mytest' program, can now be invoked as 'ovstest mytest'.
  *
  * 'ovstest --help' will list all test programs can be invoked.
  *
