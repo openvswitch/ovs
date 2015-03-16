@@ -211,7 +211,7 @@ main(int argc, char *argv[])
     char *error;
     int i;
 
-    proctitle_init(argc, argv);
+    ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
     service_start(&argc, &argv);
     fatal_ignore_sigpipe();
@@ -1242,7 +1242,7 @@ parse_options(int *argcp, char **argvp[],
         {"ca-cert",     required_argument, NULL, 'C'},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
     int argc = *argcp;
     char **argv = *argvp;
 

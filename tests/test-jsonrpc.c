@@ -35,16 +35,16 @@
 
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
-static struct command *get_all_commands(void);
+static struct ovs_cmdl_command *get_all_commands(void);
 
 static void
 test_jsonrpc_main(int argc, char *argv[])
 {
-    proctitle_init(argc, argv);
+    ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
     service_start(&argc, &argv);
     parse_options(argc, argv);
-    run_command(argc - optind, argv + optind, get_all_commands());
+    ovs_cmdl_run_command(argc - optind, argv + optind, get_all_commands());
 }
 
 static void
@@ -62,7 +62,7 @@ parse_options(int argc, char *argv[])
         STREAM_SSL_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -327,7 +327,7 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     usage();
 }
 
-static struct command all_commands[] = {
+static struct ovs_cmdl_command all_commands[] = {
     { "listen", NULL, 1, 1, do_listen },
     { "request", NULL, 3, 3, do_request },
     { "notify", NULL, 3, 3, do_notify },
@@ -335,7 +335,7 @@ static struct command all_commands[] = {
     { NULL, NULL, 0, 0, NULL },
 };
 
-static struct command *
+static struct ovs_cmdl_command *
 get_all_commands(void)
 {
     return all_commands;

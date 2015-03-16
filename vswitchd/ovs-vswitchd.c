@@ -75,7 +75,7 @@ main(int argc, char *argv[])
     argc -= retval;
     argv += retval;
 
-    proctitle_init(argc, argv);
+    ovs_cmdl_proctitle_init(argc, argv);
     service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
     fatal_ignore_sigpipe();
@@ -165,7 +165,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"dpdk", required_argument, NULL, OPT_DPDK},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int c;

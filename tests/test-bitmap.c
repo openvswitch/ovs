@@ -148,7 +148,7 @@ run_benchmarks(int argc OVS_UNUSED, char *argv[])
     printf("\n");
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     {"check", NULL, 0, 0, run_tests},
     {"benchmark", NULL, 1, 1, run_benchmarks},
     {NULL, NULL, 0, 0, NULL},
@@ -158,7 +158,7 @@ static void
 test_bitmap_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    run_command(argc - 1, argv + 1, commands);
+    ovs_cmdl_run_command(argc - 1, argv + 1, commands);
 }
 
 OVSTEST_REGISTER("test-bitmap", test_bitmap_main);

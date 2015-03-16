@@ -1049,7 +1049,7 @@ test_file_name(int argc, char *argv[])
 }
 #endif /* _WIN32 */
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     {"ctz", NULL, 0, 0, test_ctz},
     {"clz", NULL, 0, 0, test_clz},
     {"round_up_pow2", NULL, 0, 0, test_round_up_pow2},
@@ -1080,7 +1080,7 @@ parse_options(int argc, char *argv[])
         VLOG_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -1111,7 +1111,7 @@ test_util_main(int argc, char *argv[])
      * POSIX doesn't define the circumstances in which stderr is
      * fully buffered either. */
     setvbuf(stderr, NULL, _IONBF, 0);
-    run_command(argc - optind, argv + optind, commands);
+    ovs_cmdl_run_command(argc - optind, argv + optind, commands);
 }
 
 OVSTEST_REGISTER("test-util", test_util_main);

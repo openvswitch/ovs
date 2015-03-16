@@ -123,7 +123,7 @@ parse_command_line(int argc, char *argv[])
         VLOG_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
-    char *short_options_ = long_options_to_short_options(long_options);
+    char *short_options_ = ovs_cmdl_long_options_to_short_options(long_options);
     char *short_options = xasprintf("+%s", short_options_);
     const char *target;
     int e_options;
@@ -160,7 +160,7 @@ parse_command_line(int argc, char *argv[])
             break;
 
         case 'o':
-            print_options(long_options);
+            ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
         case 'T':

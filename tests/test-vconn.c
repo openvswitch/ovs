@@ -431,7 +431,7 @@ test_send_invalid_version_hello(int argc OVS_UNUSED, char *argv[])
     ofpbuf_delete(hello);
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     {"refuse-connection", NULL, 1, 1, test_refuse_connection},
     {"accept-then-close", NULL, 1, 1, test_accept_then_close},
     {"read-hello", NULL, 1, 1, test_read_hello},
@@ -453,7 +453,7 @@ test_vconn_main(int argc, char *argv[])
 
     time_alarm(10);
 
-    run_command(argc - 1, argv + 1, commands);
+    ovs_cmdl_run_command(argc - 1, argv + 1, commands);
 }
 
 OVSTEST_REGISTER("test-vconn", test_vconn_main);

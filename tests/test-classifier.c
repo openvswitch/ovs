@@ -1400,7 +1400,7 @@ test_minimask_combine(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     minimask_destroy(&minicatchall);
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     /* Classifier tests. */
     {"empty", NULL, 0, 0, test_empty},
     {"destroy-null", NULL, 0, 0, test_destroy_null},
@@ -1424,7 +1424,7 @@ test_classifier_main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     init_values();
-    run_command(argc - 1, argv + 1, commands);
+    ovs_cmdl_run_command(argc - 1, argv + 1, commands);
 }
 
 OVSTEST_REGISTER("test-classifier", test_classifier_main);

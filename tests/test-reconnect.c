@@ -34,7 +34,7 @@ static int now;
 static void diff_stats(const struct reconnect_stats *old,
                        const struct reconnect_stats *new,
                        int delta);
-static const struct command *get_all_commands(void);
+static const struct ovs_cmdl_command *get_all_commands(void);
 
 static void
 test_reconnect_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
@@ -67,7 +67,7 @@ test_reconnect_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         svec_parse_words(&args, line);
         svec_terminate(&args);
         if (!svec_is_empty(&args)) {
-            run_command(args.n, args.names, get_all_commands());
+            ovs_cmdl_run_command(args.n, args.names, get_all_commands());
         }
         svec_destroy(&args);
 
@@ -268,7 +268,7 @@ do_listen_error(int argc OVS_UNUSED, char *argv[])
     reconnect_listen_error(reconnect, now, atoi(argv[1]));
 }
 
-static const struct command all_commands[] = {
+static const struct ovs_cmdl_command all_commands[] = {
     { "enable", NULL, 0, 0, do_enable },
     { "disable", NULL, 0, 0, do_disable },
     { "force-reconnect", NULL, 0, 0, do_force_reconnect },
@@ -287,7 +287,7 @@ static const struct command all_commands[] = {
     { NULL, NULL, 0, 0, NULL },
 };
 
-static const struct command *
+static const struct ovs_cmdl_command *
 get_all_commands(void)
 {
     return all_commands;

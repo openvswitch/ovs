@@ -44,7 +44,7 @@
 /* -m, --more: Verbosity level for "show-log" command output. */
 static int show_log_verbosity;
 
-static const struct command *get_all_commands(void);
+static const struct ovs_cmdl_command *get_all_commands(void);
 
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
@@ -58,7 +58,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
-    run_command(argc - optind, argv + optind, get_all_commands());
+    ovs_cmdl_run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }
 
@@ -73,7 +73,7 @@ parse_options(int argc, char *argv[])
         {"version", no_argument, NULL, 'V'},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int c;
@@ -92,7 +92,7 @@ parse_options(int argc, char *argv[])
             usage();
 
         case 'o':
-            print_options(long_options);
+            ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
         case 'V':
@@ -566,10 +566,10 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 do_list_commands(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-     print_commands(get_all_commands());
+     ovs_cmdl_print_commands(get_all_commands());
 }
 
-static const struct command all_commands[] = {
+static const struct ovs_cmdl_command all_commands[] = {
     { "create", "[db [schema]]", 0, 2, do_create },
     { "compact", "[db [dst]]", 0, 2, do_compact },
     { "convert", "[db [schema [dst]]]", 0, 3, do_convert },
@@ -586,7 +586,7 @@ static const struct command all_commands[] = {
     { NULL, NULL, 0, 0, NULL },
 };
 
-static const struct command *get_all_commands(void)
+static const struct ovs_cmdl_command *get_all_commands(void)
 {
     return all_commands;
 }

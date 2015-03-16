@@ -636,7 +636,7 @@ benchmark_hmap(void)
     free(elements);
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     {"check", NULL, 0, 1, run_tests},
     {"benchmark", NULL, 3, 4, run_benchmarks},
     {NULL, NULL, 0, 0, NULL},
@@ -646,7 +646,7 @@ static void
 test_cmap_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     set_program_name(argv[0]);
-    run_command(argc - optind, argv + optind, commands);
+    ovs_cmdl_run_command(argc - optind, argv + optind, commands);
 }
 
 OVSTEST_REGISTER("test-cmap", test_cmap_main);

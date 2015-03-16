@@ -53,14 +53,14 @@
 
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
-static struct command *get_all_commands(void);
+static struct ovs_cmdl_command *get_all_commands(void);
 
 int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     parse_options(argc, argv);
-    run_command(argc - optind, argv + optind, get_all_commands());
+    ovs_cmdl_run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }
 
@@ -73,7 +73,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         unsigned long int timeout;
@@ -1507,7 +1507,7 @@ do_transact_print(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 do_transact(int argc, char *argv[])
 {
-    static const struct command do_transact_commands[] = {
+    static const struct ovs_cmdl_command do_transact_commands[] = {
         { "commit", NULL, 0, 0, do_transact_commit },
         { "abort", NULL, 0, 0, do_transact_abort },
         { "insert", NULL, 2, 3, do_transact_insert },
@@ -1569,7 +1569,7 @@ do_transact(int argc, char *argv[])
             fputs(args[j], stdout);
         }
         fputs(":", stdout);
-        run_command(n_args, args, do_transact_commands);
+        ovs_cmdl_run_command(n_args, args, do_transact_commands);
         putchar('\n');
 
         for (j = 0; j < n_args; j++) {
@@ -1962,7 +1962,7 @@ do_idl(int argc, char *argv[])
     printf("%03d: done\n", step);
 }
 
-static struct command all_commands[] = {
+static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io },
     { "default-atoms", NULL, 0, 0, do_default_atoms },
     { "default-data", NULL, 0, 0, do_default_data },
@@ -1993,7 +1993,7 @@ static struct command all_commands[] = {
     { NULL, NULL, 0, 0, NULL },
 };
 
-static struct command *
+static struct ovs_cmdl_command *
 get_all_commands(void)
 {
     return all_commands;

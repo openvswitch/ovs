@@ -105,7 +105,7 @@ struct sort_criterion {
 static struct sort_criterion *criteria;
 static size_t n_criteria, allocated_criteria;
 
-static const struct command *get_all_commands(void);
+static const struct ovs_cmdl_command *get_all_commands(void);
 
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
@@ -121,7 +121,7 @@ main(int argc, char *argv[])
     service_start(&argc, &argv);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
-    run_command(argc - optind, argv + optind, get_all_commands());
+    ovs_cmdl_run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }
 
@@ -179,7 +179,7 @@ parse_options(int argc, char *argv[])
         STREAM_SSL_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
     uint32_t versions;
     enum ofputil_protocol version_protocols;
 
@@ -243,7 +243,7 @@ parse_options(int argc, char *argv[])
             usage();
 
         case 'o':
-            print_options(long_options);
+            ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
         case OPT_STRICT:
@@ -2267,7 +2267,7 @@ ofctl_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static void
 ofctl_list_commands(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    print_commands(get_all_commands());
+    ovs_cmdl_print_commands(get_all_commands());
 }
 
 /* replace-flows and diff-flows commands. */
@@ -3481,7 +3481,7 @@ ofctl_encode_hello(int argc OVS_UNUSED, char *argv[])
     ofpbuf_delete(hello);
 }
 
-static const struct command all_commands[] = {
+static const struct ovs_cmdl_command all_commands[] = {
     { "show", "switch",
       1, 1, ofctl_show },
     { "monitor", "switch [misslen] [invalid_ttl] [watch:[...]]",
@@ -3597,7 +3597,7 @@ static const struct command all_commands[] = {
     { NULL, NULL, 0, 0, NULL },
 };
 
-static const struct command *get_all_commands(void)
+static const struct ovs_cmdl_command *get_all_commands(void)
 {
     return all_commands;
 }

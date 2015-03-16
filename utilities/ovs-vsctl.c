@@ -332,7 +332,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     size_t n_options;
     size_t i;
 
-    tmp = long_options_to_short_options(global_long_options);
+    tmp = ovs_cmdl_long_options_to_short_options(global_long_options);
     short_options = xasprintf("+%s", tmp);
     free(tmp);
 
