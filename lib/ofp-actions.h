@@ -156,11 +156,7 @@ enum {
  *       originate from OpenFlow, then setting 'raw' to zero should be fine:
  *       code to translate the ofpact to OpenFlow must tolerate this case.)
  */
-/* Alignment. */
-#define OFPACT_ALIGNTO 8
-#define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
-
-OVS_ALIGNED_STRUCT(OFPACT_ALIGNTO, ofpact) {
+struct ofpact {
     /* We want the space advantage of an 8-bit type here on every
      * implementation, without giving up the advantage of having a useful type
      * on implementations that support packed enums. */
@@ -174,7 +170,11 @@ OVS_ALIGNED_STRUCT(OFPACT_ALIGNTO, ofpact) {
     uint16_t len;               /* Length of the action, in bytes, including
                                  * struct ofpact, excluding padding. */
 };
-BUILD_ASSERT_DECL(sizeof(struct ofpact) == OFPACT_ALIGNTO);
+BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
+
+/* Alignment. */
+#define OFPACT_ALIGNTO 8
+#define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
 
 static inline struct ofpact *
 ofpact_next(const struct ofpact *ofpact)
