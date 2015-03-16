@@ -54,7 +54,7 @@ const char * OVS_WARN_UNUSED_RESULT
 ovsdb_monitor_table_check_duplicates(struct ovsdb_monitor *,
                           const struct ovsdb_table *);
 
-struct json *ovsdb_monitor_compose_update(const struct ovsdb_monitor *dbmon,
+struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
                                 bool initial, uint64_t *unflushed_transaction);
 
 void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,

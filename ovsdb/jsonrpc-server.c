@@ -1294,7 +1294,7 @@ static struct json *
 ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
                                      bool initial)
 {
-    return ovsdb_monitor_compose_update(m->dbmon, initial, &m->unflushed);
+    return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed);
 }
 
 static bool

@@ -54,6 +54,15 @@ struct ovsdb_monitor {
     struct ovsdb *db;
     uint64_t n_transactions;      /* Count number of committed transactions. */
     struct hmap_node hmap_node;   /* Elements within ovsdb_monitors.  */
+    struct hmap json_cache;       /* Contains "ovsdb_monitor_json_cache_node"s.*/
+};
+
+/* A json object of updates between 'from_txn' and 'dbmon->n_transactions'
+ * inclusive.  */
+struct ovsdb_monitor_json_cache_node {
+    struct hmap_node hmap_node;   /* Elements in json cache. */
+    uint64_t from_txn;
+    struct json *json;            /* Null, or a cloned of json */
 };
 
 struct jsonrpc_monitor_node {
@@ -119,6 +128,50 @@ static void ovsdb_monitor_changes_destroy(
                                   struct ovsdb_monitor_changes *changes);
 static void ovsdb_monitor_table_track_changes(struct ovsdb_monitor_table *mt,
                                   uint64_t unflushed);
+
+static struct ovsdb_monitor_json_cache_node *
+ovsdb_monitor_json_cache_search(const struct ovsdb_monitor *dbmon,
+                                uint64_t from_txn)
+{
+    struct ovsdb_monitor_json_cache_node *node;
+    uint32_t hash = hash_uint64(from_txn);
+
+    HMAP_FOR_EACH_WITH_HASH(node, hmap_node, hash, &dbmon->json_cache) {
+        if (node->from_txn == from_txn) {
+            return node;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+ovsdb_monitor_json_cache_insert(struct ovsdb_monitor *dbmon,
+                                uint64_t from_txn, struct json *json)
+{
+    struct ovsdb_monitor_json_cache_node *node;
+    uint32_t hash;
+
+    node = xmalloc(sizeof *node);
+
+    hash = hash_uint64(from_txn);
+    node->from_txn = from_txn;
+    node->json = json ? json_clone(json) : NULL;
+
+    hmap_insert(&dbmon->json_cache, &node->hmap_node, hash);
+}
+
+static void
+ovsdb_monitor_json_cache_flush(struct ovsdb_monitor *dbmon)
+{
+    struct ovsdb_monitor_json_cache_node *node, *next;
+
+    HMAP_FOR_EACH_SAFE(node, next, hmap_node, &dbmon->json_cache) {
+        hmap_remove(&dbmon->json_cache, &node->hmap_node);
+        json_destroy(node->json);
+        free(node);
+    }
+}
 
 static int
 compare_ovsdb_monitor_column(const void *a_, const void *b_)
@@ -259,6 +312,7 @@ ovsdb_monitor_create(struct ovsdb *db,
     dbmon->n_transactions = 0;
     shash_init(&dbmon->tables);
     hmap_node_nullify(&dbmon->hmap_node);
+    hmap_init(&dbmon->json_cache);
 
     ovsdb_monitor_add_jsonrpc_monitor(dbmon, jsonrpc_monitor);
     return dbmon;
@@ -488,29 +542,16 @@ ovsdb_monitor_compose_row_update(
 }
 
 /* Constructs and returns JSON for a <table-updates> object (as described in
- * RFC 7047) for all the outstanding changes within 'monitor', and deletes all
- * the outstanding changes from 'monitor'.  Returns NULL if no update needs to
- * be sent.
- *
- * The caller should specify 'initial' as true if the returned JSON is going to
- * be used as part of the initial reply to a "monitor" request, false if it is
- * going to be used as part of an "update" notification.
- *
- * 'unflushed' should point to value that is the transaction ID that did
- * was not updated. The update contains changes between
- * ['unflushed, ovsdb->n_transcations]. Before the function returns, this
- * value will be updated to ovsdb->n_transactions + 1, ready for the next
- * update.  */
-struct json *
-ovsdb_monitor_compose_update(const struct ovsdb_monitor *dbmon,
-                             bool initial, uint64_t *unflushed)
+ * RFC 7047) for all the outstanding changes within 'monitor', starting from
+ * 'transaction'.  */
+static struct json*
+ovsdb_monitor_compose_update(struct ovsdb_monitor *dbmon,
+                             bool initial, uint64_t transaction)
 {
     struct shash_node *node;
     unsigned long int *changed;
     struct json *json;
     size_t max_columns;
-    uint64_t prev_txn = *unflushed;
-    uint64_t next_txn = dbmon->n_transactions + 1;
 
     max_columns = 0;
     SHASH_FOR_EACH (node, &dbmon->tables) {
@@ -527,9 +568,8 @@ ovsdb_monitor_compose_update(const struct ovsdb_monitor *dbmon,
         struct ovsdb_monitor_changes *changes;
         struct json *table_json = NULL;
 
-        changes = ovsdb_monitor_table_find_changes(mt, prev_txn);
+        changes = ovsdb_monitor_table_find_changes(mt, transaction);
         if (!changes) {
-            ovsdb_monitor_table_track_changes(mt, next_txn);
             continue;
         }
 
@@ -557,13 +597,48 @@ ovsdb_monitor_compose_update(const struct ovsdb_monitor *dbmon,
                 json_object_put(table_json, uuid, row_json);
             }
         }
+    }
+    free(changed);
+
+    return json;
+}
+
+/* Returns JSON for a <table-updates> object (as described in RFC 7047)
+ * for all the outstanding changes within 'monitor' that starts from
+ * '*unflushed' transaction id.
+ *
+ * The caller should specify 'initial' as true if the returned JSON is going to
+ * be used as part of the initial reply to a "monitor" request, false if it is
+ * going to be used as part of an "update" notification. */
+struct json *
+ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
+                         bool initial, uint64_t *unflushed)
+{
+    struct ovsdb_monitor_json_cache_node *cache_node;
+    struct shash_node *node;
+    struct json *json;
+    uint64_t prev_txn = *unflushed;
+    uint64_t next_txn = dbmon->n_transactions + 1;
+
+    /* Return a clone of cached json if one exists. Otherwise,
+     * generate a new one and add it to the cache.  */
+    cache_node = ovsdb_monitor_json_cache_search(dbmon, prev_txn);
+    if (cache_node) {
+        json = cache_node->json ? json_clone(cache_node->json) : NULL;
+    } else {
+        json = ovsdb_monitor_compose_update(dbmon, initial, prev_txn);
+        ovsdb_monitor_json_cache_insert(dbmon, prev_txn, json);
+    }
+
+    /* Maintain transaction id of 'changes'. */
+    SHASH_FOR_EACH (node, &dbmon->tables) {
+        struct ovsdb_monitor_table *mt = node->data;
 
         ovsdb_monitor_table_untrack_changes(mt, prev_txn);
         ovsdb_monitor_table_track_changes(mt, next_txn);
     }
-
     *unflushed = next_txn;
-    free(changed);
+
     return json;
 }
 
@@ -822,6 +897,9 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
         hmap_remove(&ovsdb_monitors, &dbmon->hmap_node);
     }
 
+    ovsdb_monitor_json_cache_flush(dbmon);
+    hmap_destroy(&dbmon->json_cache);
+
     SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
         struct ovsdb_monitor_changes *changes, *next;
@@ -845,6 +923,7 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
     struct ovsdb_monitor *m = ovsdb_monitor_cast(replica);
     struct ovsdb_monitor_aux aux;
 
+    ovsdb_monitor_json_cache_flush(m);
     ovsdb_monitor_init_aux(&aux, m);
     ovsdb_txn_for_each_change(txn, ovsdb_monitor_change_cb, &aux);
     m->n_transactions++;
