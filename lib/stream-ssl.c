@@ -317,7 +317,7 @@ ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
         return error;
     }
 
-    error = inet_open_active(SOCK_STREAM, suffix, OFP_OLD_PORT, NULL, &fd,
+    error = inet_open_active(SOCK_STREAM, suffix, OFP_PORT, NULL, &fd,
                              dscp);
     if (fd >= 0) {
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
@@ -800,7 +800,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
         return retval;
     }
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_OLD_PORT, &ss, dscp, true);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_PORT, &ss, dscp, true);
     if (fd < 0) {
         return -fd;
     }

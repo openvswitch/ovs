@@ -3803,16 +3803,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
                  struct flow_wildcards *wc, bool take_ref,
                  const struct dpif_flow_stats *stats, uint8_t *table_id)
 {
-    *table_id = 0;
-
-    if (ofproto_dpif_get_enable_recirc(ofproto)) {
-        /* Always exactly match recirc_id since datapath supports
-         * recirculation.  */
-        if (wc) {
-            wc->masks.recirc_id = UINT32_MAX;
-        }
-        *table_id = rule_dpif_lookup_get_init_table_id(flow);
-    }
+    *table_id = rule_dpif_lookup_get_init_table_id(flow);
 
     return rule_dpif_lookup_from_table(ofproto, flow, wc, take_ref, stats,
                                        table_id, flow->in_port.ofp_port, true,

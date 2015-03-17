@@ -49,7 +49,7 @@ static double max_rate;
 
 static double timeout;
 
-static const struct command *get_all_commands(void);
+static const struct ovs_cmdl_command *get_all_commands(void);
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void);
@@ -81,10 +81,13 @@ time_in_msec(void)
 int
 main(int argc, char *argv[])
 {
+    struct ovs_cmdl_context ctx = { .argc = 0, };
     set_program_name(argv[0]);
     vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_EMER);
     parse_options(argc, argv);
-    run_command(argc - optind, argv + optind, get_all_commands());
+    ctx.argc = argc - optind;
+    ctx.argv = argv + optind;
+    ovs_cmdl_run_command(&ctx, get_all_commands());
     return 0;
 }
 
@@ -141,7 +144,7 @@ parse_options(int argc, char *argv[])
         {"version", no_argument, NULL, 'V'},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     local_addr.s_addr = htonl(INADDR_ANY);
     local_min_port = local_max_port = 0;
@@ -244,7 +247,7 @@ Other options:\n\
 }
 
 static void
-cmd_listen(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+cmd_listen(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct pollfd *fds;
     int n_fds;
@@ -370,7 +373,7 @@ bind_local_port(int fd, unsigned short int *local_port,
 }
 
 static void
-cmd_rate(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+cmd_rate(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     unsigned short int local_port;
     unsigned short int remote_port;
@@ -520,7 +523,7 @@ timer_end(long long int start, bool error,
 }
 
 static void
-cmd_latency(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+cmd_latency(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     unsigned short int local_port;
     unsigned short int remote_port;
@@ -611,12 +614,12 @@ cmd_latency(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-cmd_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+cmd_help(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     usage();
 }
 
-static const struct command all_commands[] = {
+static const struct ovs_cmdl_command all_commands[] = {
     { "listen", NULL, 0, 0, cmd_listen },
     { "rate", NULL, 0, 0, cmd_rate },
     { "latency", NULL, 0, 0, cmd_latency },
@@ -624,7 +627,7 @@ static const struct command all_commands[] = {
     { NULL, NULL, 0, 0, NULL },
 };
 
-static const struct command *get_all_commands(void)
+static const struct ovs_cmdl_command *get_all_commands(void)
 {
   return all_commands;
 }

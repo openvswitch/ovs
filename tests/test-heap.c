@@ -273,8 +273,7 @@ test_insert_delete_raw__(struct element *elements,
 }
 
 static void
-test_heap_insert_delete_same_order(int argc OVS_UNUSED,
-                                   char *argv[] OVS_UNUSED)
+test_heap_insert_delete_same_order(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_ELEMS = 7 };
 
@@ -297,8 +296,7 @@ test_heap_insert_delete_same_order(int argc OVS_UNUSED,
 }
 
 static void
-test_heap_insert_delete_reverse_order(int argc OVS_UNUSED,
-                                      char *argv[] OVS_UNUSED)
+test_heap_insert_delete_reverse_order(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_ELEMS = 7 };
 
@@ -327,8 +325,7 @@ test_heap_insert_delete_reverse_order(int argc OVS_UNUSED,
 }
 
 static void
-test_heap_insert_delete_every_order(int argc OVS_UNUSED,
-                                    char *argv[] OVS_UNUSED)
+test_heap_insert_delete_every_order(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_ELEMS = 5 };
 
@@ -363,8 +360,7 @@ test_heap_insert_delete_every_order(int argc OVS_UNUSED,
 }
 
 static void
-test_heap_insert_delete_same_order_with_dups(int argc OVS_UNUSED,
-                                             char *argv[] OVS_UNUSED)
+test_heap_insert_delete_same_order_with_dups(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_ELEMS = 7 };
 
@@ -410,7 +406,7 @@ test_heap_insert_delete_same_order_with_dups(int argc OVS_UNUSED,
 }
 
 static void
-test_heap_raw_insert(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_heap_raw_insert(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_ELEMS = 7 };
 
@@ -436,7 +432,7 @@ test_heap_raw_insert(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-test_heap_raw_delete(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_heap_raw_delete(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_ELEMS = 16 };
 
@@ -463,7 +459,7 @@ test_heap_raw_delete(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     }
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     { "insert-delete-same-order", NULL, 0, 0,
       test_heap_insert_delete_same_order, },
     { "insert-delete-reverse-order", NULL, 0, 0,
@@ -480,9 +476,14 @@ static const struct command commands[] = {
 static void
 test_heap_main(int argc, char *argv[])
 {
+    struct ovs_cmdl_context ctx = {
+        .argc = argc - 1,
+        .argv = argv + 1,
+    };
+
     set_program_name(argv[0]);
 
-    run_command(argc - 1, argv + 1, commands);
+    ovs_cmdl_run_command(&ctx, commands);
 }
 
 OVSTEST_REGISTER("test-heap", test_heap_main);

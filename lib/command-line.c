@@ -30,7 +30,7 @@ VLOG_DEFINE_THIS_MODULE(command_line);
  * passed to getopt() with the corresponding short options.  The caller is
  * responsible for freeing the string. */
 char *
-long_options_to_short_options(const struct option options[])
+ovs_cmdl_long_options_to_short_options(const struct option options[])
 {
     char short_options[UCHAR_MAX * 3 + 1];
     char *p = short_options;
@@ -52,15 +52,15 @@ long_options_to_short_options(const struct option options[])
     return xstrdup(short_options);
 }
 
-/* Given the 'struct command' array, prints the usage of all commands. */
+/* Given the 'struct ovs_cmdl_command' array, prints the usage of all commands. */
 void
-print_commands(const struct command commands[])
+ovs_cmdl_print_commands(const struct ovs_cmdl_command commands[])
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
     ds_put_cstr(&ds, "The available commands are:\n");
     for (; commands->name; commands++) {
-        const struct command *c = commands;
+        const struct ovs_cmdl_command *c = commands;
         ds_put_format(&ds, "  %-23s %s\n", c->name, c->usage ? c->usage : "");
     }
     printf("%s", ds.string);
@@ -69,7 +69,7 @@ print_commands(const struct command commands[])
 
 /* Given the GNU-style options in 'options', prints all options. */
 void
-print_options(const struct option options[])
+ovs_cmdl_print_options(const struct option options[])
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
@@ -92,19 +92,25 @@ print_options(const struct option options[])
  * null pointer.
  *
  * Command-line options should be stripped off, so that a typical invocation
- * looks like "run_command(argc - optind, argv + optind, my_commands);". */
+ * looks like:
+ *    struct ovs_cmdl_context ctx = {
+ *        .argc = argc - optind,
+ *        .argv = argv + optind,
+ *    };
+ *    ovs_cmdl_run_command(&ctx, my_commands);
+ * */
 void
-run_command(int argc, char *argv[], const struct command commands[])
+ovs_cmdl_run_command(struct ovs_cmdl_context *ctx, const struct ovs_cmdl_command commands[])
 {
-    const struct command *p;
+    const struct ovs_cmdl_command *p;
 
-    if (argc < 1) {
+    if (ctx->argc < 1) {
         ovs_fatal(0, "missing command name; use --help for help");
     }
 
     for (p = commands; p->name != NULL; p++) {
-        if (!strcmp(p->name, argv[0])) {
-            int n_arg = argc - 1;
+        if (!strcmp(p->name, ctx->argv[0])) {
+            int n_arg = ctx->argc - 1;
             if (n_arg < p->min_args) {
                 VLOG_FATAL( "'%s' command requires at least %d arguments",
                             p->name, p->min_args);
@@ -112,7 +118,7 @@ run_command(int argc, char *argv[], const struct command commands[])
                 VLOG_FATAL("'%s' command takes at most %d arguments",
                            p->name, p->max_args);
             } else {
-                p->handler(argc, argv);
+                p->handler(ctx);
                 if (ferror(stdout)) {
                     VLOG_FATAL("write to stdout failed");
                 }
@@ -124,7 +130,7 @@ run_command(int argc, char *argv[], const struct command commands[])
         }
     }
 
-    VLOG_FATAL("unknown command '%s'; use --help for help", argv[0]);
+    VLOG_FATAL("unknown command '%s'; use --help for help", ctx->argv[0]);
 }
 
 /* Process title. */
@@ -150,7 +156,7 @@ static char *saved_proctitle OVS_GUARDED_BY(proctitle_mutex);
  * before anything else, period, at the very beginning of program
  * execution.  */
 void
-proctitle_init(int argc, char **argv)
+ovs_cmdl_proctitle_init(int argc, char **argv)
 {
     int i;
 
@@ -190,7 +196,7 @@ proctitle_init(int argc, char **argv)
 /* Changes the name of the process, as shown by "ps", to the program name
  * followed by 'format', which is formatted as if by printf(). */
 void
-proctitle_set(const char *format, ...)
+ovs_cmdl_proctitle_set(const char *format, ...)
 {
     va_list args;
     int n;
@@ -225,7 +231,7 @@ out:
 
 /* Restores the process's original command line, as seen by "ps". */
 void
-proctitle_restore(void)
+ovs_cmdl_proctitle_restore(void)
 {
     ovs_mutex_lock(&proctitle_mutex);
     if (saved_proctitle) {
@@ -239,20 +245,20 @@ proctitle_restore(void)
 /* Stubs that don't do anything on non-Linux systems. */
 
 void
-proctitle_init(int argc OVS_UNUSED, char **argv OVS_UNUSED)
+ovs_cmdl_proctitle_init(int argc OVS_UNUSED, char **argv OVS_UNUSED)
 {
 }
 
 #if !(defined(__FreeBSD__) || defined(__NetBSD__))
 /* On these platforms we #define this to setproctitle. */
 void
-proctitle_set(const char *format OVS_UNUSED, ...)
+ovs_cmdl_proctitle_set(const char *format OVS_UNUSED, ...)
 {
 }
 #endif
 
 void
-proctitle_restore(void)
+ovs_cmdl_proctitle_restore(void)
 {
 }
 #endif  /* !__linux__ */

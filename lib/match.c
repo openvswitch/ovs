@@ -925,7 +925,7 @@ match_format(const struct match *match, struct ds *s, int priority)
                              wc->masks.recirc_id);
     }
 
-    if (f->dp_hash && wc->masks.dp_hash) {
+    if (wc->masks.dp_hash) {
         format_uint32_masked(s, "dp_hash", f->dp_hash,
                              wc->masks.dp_hash);
     }

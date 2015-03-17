@@ -147,13 +147,10 @@ Use this option more than once to add flows from multiple files.
 .
 .SH EXAMPLES
 .PP
-To bind locally to port 6633 (the default) and wait for incoming
+To bind locally to port 6653 (the default) and wait for incoming
 connections from OpenFlow switches:
 .IP
 \fB% ovs\-testcontroller ptcp:\fR
-.PP
-In the future, the default port number will change to 6653, which is the
-IANA-defined value.
 .SH "BUGS"
 .PP
 Configuring a Citrix XenServer to connect to a particular controller

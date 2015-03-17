@@ -695,7 +695,7 @@ set_prefix_fields(struct classifier *cls)
 
 /* Tests an empty classifier. */
 static void
-test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_empty(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct classifier cls;
     struct tcls tcls;
@@ -712,14 +712,14 @@ test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 /* Destroys a null classifier. */
 static void
-test_destroy_null(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_destroy_null(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     classifier_destroy(NULL);
 }
 
 /* Tests classification with one rule at a time. */
 static void
-test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_single_rule(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     unsigned int wc_fields;     /* Hilarious. */
 
@@ -754,7 +754,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 /* Tests replacing one rule by another. */
 static void
-test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_rule_replacement(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     unsigned int wc_fields;
 
@@ -849,7 +849,7 @@ next_permutation(int *a, int n)
 
 /* Tests classification with rules that have the same matching criteria. */
 static void
-test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     enum { N_RULES = 3 };
     int n_pris;
@@ -968,7 +968,7 @@ array_contains(int *array, int n, int value)
 /* Tests classification with two rules at a time that fall into the same
  * table but different lists. */
 static void
-test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_many_rules_in_one_table(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     int iteration;
 
@@ -1090,13 +1090,13 @@ test_many_rules_in_n_tables(int n_tables)
 }
 
 static void
-test_many_rules_in_two_tables(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_many_rules_in_two_tables(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     test_many_rules_in_n_tables(2);
 }
 
 static void
-test_many_rules_in_five_tables(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_many_rules_in_five_tables(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     test_many_rules_in_n_tables(5);
 }
@@ -1256,7 +1256,7 @@ wildcard_extra_bits(struct flow_wildcards *mask)
 }
 
 static void
-test_miniflow(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct flow flow;
     unsigned int idx;
@@ -1322,7 +1322,7 @@ test_miniflow(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-test_minimask_has_extra(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_minimask_has_extra(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct flow_wildcards catchall;
     struct minimask minicatchall;
@@ -1360,7 +1360,7 @@ test_minimask_has_extra(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-test_minimask_combine(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_minimask_combine(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct flow_wildcards catchall;
     struct minimask minicatchall;
@@ -1400,7 +1400,7 @@ test_minimask_combine(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     minimask_destroy(&minicatchall);
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     /* Classifier tests. */
     {"empty", NULL, 0, 0, test_empty},
     {"destroy-null", NULL, 0, 0, test_destroy_null},
@@ -1422,9 +1422,13 @@ static const struct command commands[] = {
 static void
 test_classifier_main(int argc, char *argv[])
 {
+    struct ovs_cmdl_context ctx = {
+        .argc = argc - 1,
+        .argv = argv + 1,
+    };
     set_program_name(argv[0]);
     init_values();
-    run_command(argc - 1, argv + 1, commands);
+    ovs_cmdl_run_command(&ctx, commands);
 }
 
 OVSTEST_REGISTER("test-classifier", test_classifier_main);

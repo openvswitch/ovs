@@ -2591,6 +2591,15 @@ scan_mpls_bos(const char *s, ovs_be32 *key, ovs_be32 *mask)
         do {                                    \
             len = 0;
 
+/* Init as fully-masked as mask will not be scanned. */
+#define SCAN_BEGIN_FULLY_MASKED(NAME, TYPE)     \
+    SCAN_IF(NAME);                              \
+        TYPE skey, smask;                       \
+        memset(&skey, 0, sizeof skey);          \
+        memset(&smask, 0xff, sizeof smask);     \
+        do {                                    \
+            len = 0;
+
 /* VLAN needs special initialization. */
 #define SCAN_BEGIN_INIT(NAME, TYPE, KEY_INIT, MASK_INIT)  \
     SCAN_IF(NAME);                                        \
@@ -2652,9 +2661,9 @@ scan_mpls_bos(const char *s, ovs_be32 *key, ovs_be32 *mask)
         SCAN_TYPE(SCAN_AS, &skey, &smask);           \
     } SCAN_END_SINGLE(ATTR)
 
-#define SCAN_SINGLE_NO_MASK(NAME, TYPE, SCAN_AS, ATTR)       \
-    SCAN_BEGIN(NAME, TYPE) {                         \
-        SCAN_TYPE(SCAN_AS, &skey, NULL);           \
+#define SCAN_SINGLE_FULLY_MASKED(NAME, TYPE, SCAN_AS, ATTR) \
+    SCAN_BEGIN_FULLY_MASKED(NAME, TYPE) {                   \
+        SCAN_TYPE(SCAN_AS, &skey, NULL);                    \
     } SCAN_END_SINGLE(ATTR)
 
 /* scan_port needs one extra argument. */
@@ -2673,7 +2682,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 {
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
     SCAN_SINGLE("skb_mark(", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);
-    SCAN_SINGLE_NO_MASK("recirc_id(", uint32_t, u32, OVS_KEY_ATTR_RECIRC_ID);
+    SCAN_SINGLE_FULLY_MASKED("recirc_id(", uint32_t, u32,
+                             OVS_KEY_ATTR_RECIRC_ID);
     SCAN_SINGLE("dp_hash(", uint32_t, u32, OVS_KEY_ATTR_DP_HASH);
 
     SCAN_BEGIN("tunnel(", struct flow_tnl) {

@@ -116,7 +116,7 @@ parse_options(int argc, char *argv[])
         {"version", no_argument, NULL, 'V'},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int option;

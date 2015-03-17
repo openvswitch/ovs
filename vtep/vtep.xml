@@ -90,7 +90,7 @@
           <dt><code>ssl:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
             <p>
-              The specified SSL <var>port</var> (default: 6632) on the host at
+              The specified SSL <var>port</var> (default: 6640) on the host at
               the given <var>ip</var>, which must be expressed as an IP address
               (not a DNS name).
             </p>
@@ -102,7 +102,7 @@
 
           <dt><code>tcp:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
-            The specified TCP <var>port</var> (default: 6632) on the host at
+            The specified TCP <var>port</var> (default: 6640) on the host at
             the given <var>ip</var>, which must be expressed as an IP address
             (not a DNS name).
           </dd>
@@ -110,7 +110,7 @@
           <dd>
             <p>
               Listens for SSL connections on the specified TCP <var>port</var>
-              (default: 6632).  If <var>ip</var>, which must be expressed as an
+              (default: 6640).  If <var>ip</var>, which must be expressed as an
               IP address (not a DNS name), is specified, then connections are
               restricted to the specified local IP address.
             </p>
@@ -118,7 +118,7 @@
           <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
           <dd>
             Listens for connections on the specified TCP <var>port</var>
-            (default: 6632).  If <var>ip</var>, which must be expressed as an
+            (default: 6640).  If <var>ip</var>, which must be expressed as an
             IP address (not a DNS name), is specified, then connections are
             restricted to the specified local IP address.
           </dd>

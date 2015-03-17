@@ -91,7 +91,7 @@ parse_options(int argc, char *argv[])
         VLOG_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         unsigned long int timeout;
@@ -133,7 +133,7 @@ parse_options(int argc, char *argv[])
             usage(NULL);
 
         case 'o':
-            print_options(long_options);
+            ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
         case 'V':

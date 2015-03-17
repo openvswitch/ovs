@@ -249,12 +249,12 @@ run_test(void (*function)(hash_func *))
 }
 
 static void
-run_tests(int argc, char *argv[])
+run_tests(struct ovs_cmdl_context *ctx)
 {
     int n;
     int i;
 
-    n = argc >= 2 ? atoi(argv[1]) : 100;
+    n = ctx->argc >= 2 ? atoi(ctx->argv[1]) : 100;
     for (i = 0; i < n; i++) {
         run_test(test_cmap_insert_replace_delete);
     }
@@ -282,12 +282,12 @@ elapsed(const struct timeval *start)
 }
 
 static void
-run_benchmarks(int argc, char *argv[] OVS_UNUSED)
+run_benchmarks(struct ovs_cmdl_context *ctx)
 {
-    n_elems = strtol(argv[1], NULL, 10);
-    n_threads = strtol(argv[2], NULL, 10);
-    mutation_frac = strtod(argv[3], NULL) / 100.0 * UINT32_MAX;
-    n_batch = argc > 4 ? strtol(argv[4], NULL, 10) : 1;
+    n_elems = strtol(ctx->argv[1], NULL, 10);
+    n_threads = strtol(ctx->argv[2], NULL, 10);
+    mutation_frac = strtod(ctx->argv[3], NULL) / 100.0 * UINT32_MAX;
+    n_batch = ctx->argc > 4 ? strtol(ctx->argv[4], NULL, 10) : 1;
 
     if (n_batch > N_BATCH_MAX) {
         n_batch = N_BATCH_MAX;
@@ -636,17 +636,22 @@ benchmark_hmap(void)
     free(elements);
 }
 
-static const struct command commands[] = {
+static const struct ovs_cmdl_command commands[] = {
     {"check", NULL, 0, 1, run_tests},
     {"benchmark", NULL, 3, 4, run_benchmarks},
     {NULL, NULL, 0, 0, NULL},
 };
 
 static void
-test_cmap_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+test_cmap_main(int argc, char *argv[])
 {
+    struct ovs_cmdl_context ctx = {
+        .argc = argc - optind,
+        .argv = argv + optind,
+    };
+
     set_program_name(argv[0]);
-    run_command(argc - optind, argv + optind, commands);
+    ovs_cmdl_run_command(&ctx, commands);
 }
 
 OVSTEST_REGISTER("test-cmap", test_cmap_main);

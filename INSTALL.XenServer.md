@@ -80,6 +80,28 @@ where:
     The "xen" flavor is the main running kernel flavor and the "kdump" flavor is
     the crashdump kernel flavor. Commonly, one would specify "xen" here.
 
+For XenServer 6.5 or above, the kernel version naming no longer contains
+KERNEL_FLAVOR.  Correspondingly, the the final "rpmbuild" step changes to:
+
+   ```
+   VERSION=<Open vSwitch version>
+   KERNEL_NAME=<Xen Kernel name>
+   KERNEL_VERSION=<Xen Kernel version>
+   XEN_VERSION=<Xen Kernel flavor(suffix) >
+   rpmbuild \
+        -D "openvswitch_version $VERSION" \
+        -D "kernel_name $KERNEL_NAME" \
+        -D "kernel_version $KERNEL_VERSION" \
+        -D "xen_version $XEN_VERSION" \
+        -bb xenserver/openvswitch-xen.spec
+   ```
+
+where:
+
+    `<Xen Version>` is the output of `uname -r`.  Since XenServer 6.5, the
+    directory name in 'lib/modules/' becomes a shortened expression of the
+    KERNEL_VERSION.
+
 Installing Open vSwitch for XenServer
 -------------------------------------
 

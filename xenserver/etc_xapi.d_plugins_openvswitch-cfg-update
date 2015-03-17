@@ -71,7 +71,8 @@ def update(session, args):
             pass
         removeControllerCfg()
         ret_str += 'Successfully removed controller config.  '
-    elif controller not in currentControllers:
+    # controller cannot be empty, otherwise, this will always be True.
+    elif controller and controller not in currentControllers:
         delete_cacert()
         try:
             emergency_reset(session, None)
@@ -223,7 +224,7 @@ def setControllerCfg(controller):
                    '/etc/xensource/xapi-ssl.pem',
                    '/etc/xensource/xapi-ssl.pem',
                    cacert_filename,
-                   '--', 'set-manager', 'ssl:' + controller + ':6632'])
+                   '--', 'set-manager', 'ssl:' + controller + ':6640'])
 
 
 def vswitchCfgQuery(action_args):

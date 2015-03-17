@@ -5,7 +5,7 @@ it listens only on IPv4 (but not IPv6) addresses, but
 specifying \fIip\fR limits connections to those from the given
 \fIip\fR, either IPv4 or IPv6 address.  If \fIip\fR is
 an IPv6 address, then wrap \fIip\fR with square brackets, e.g.:
-\fBpssl:6632:[::1]\fR.  The \fB\-\-private\-key\fR,
+\fBpssl:6640:[::1]\fR.  The \fB\-\-private\-key\fR,
 \fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR options are mandatory
 when this form is used.
 .
@@ -16,7 +16,7 @@ it listens only on IPv4 (but not IPv6) addresses, but
 \fIip\fR may be specified to listen only for connections to the given
 \fIip\fR, either IPv4 or IPv6 address.  If \fIip\fR is
 an IPv6 address, then wrap \fIip\fR with square brackets, e.g.:
-\fBptcp:6632:[::1]\fR.
+\fBptcp:6640:[::1]\fR.
 .
 .IP "\fBpunix:\fIfile\fR"
 On POSIX, listen on the Unix domain server socket named \fIfile\fR for a

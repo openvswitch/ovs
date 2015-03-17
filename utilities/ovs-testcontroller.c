@@ -103,7 +103,7 @@ main(int argc, char *argv[])
     int retval;
     int i;
 
-    proctitle_init(argc, argv);
+    ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
@@ -277,7 +277,7 @@ parse_options(int argc, char *argv[])
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int indexptr;

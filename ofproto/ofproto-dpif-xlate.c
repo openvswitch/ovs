@@ -200,8 +200,9 @@ struct xlate_ctx {
     bool in_group;              /* Currently translating ofgroup, if true. */
     bool in_action_set;         /* Currently translating action_set, if true. */
 
-    uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
+    ovs_be64 rule_cookie;       /* Cookie of the rule being translated. */
+    uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
@@ -2730,7 +2731,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         struct flow old_flow = ctx->xin->flow;
         enum slow_path_reason special;
         uint8_t table_id = rule_dpif_lookup_get_init_table_id(&ctx->xin->flow);
+        struct ofpbuf old_stack = ctx->stack;
+        union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
 
+        ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
         ctx->xbridge = peer->xbridge;
         flow->in_port.ofp_port = peer->ofp_port;
         flow->metadata = htonll(0);
@@ -2762,6 +2766,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         ctx->xin->flow = old_flow;
         ctx->xbridge = xport->xbridge;
+        ofpbuf_uninit(&ctx->stack);
+        ctx->stack = old_stack;
 
         if (ctx->xin->resubmit_stats) {
             netdev_vport_inc_tx(xport->netdev, ctx->xin->resubmit_stats);
@@ -2915,6 +2921,7 @@ static void
 xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
 {
     struct rule_dpif *old_rule = ctx->rule;
+    ovs_be64 old_cookie = ctx->rule_cookie;
     const struct rule_actions *actions;
 
     if (ctx->xin->resubmit_stats) {
@@ -2924,8 +2931,10 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     ctx->resubmits++;
     ctx->recurse++;
     ctx->rule = rule;
+    ctx->rule_cookie = rule_dpif_get_flow_cookie(rule);
     actions = rule_dpif_get_actions(rule);
     do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx);
+    ctx->rule_cookie = old_cookie;
     ctx->rule = old_rule;
     ctx->recurse--;
 }
@@ -3233,9 +3242,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     pin->up.packet = dp_packet_steal_data(packet);
     pin->up.reason = reason;
     pin->up.table_id = ctx->table_id;
-    pin->up.cookie = (ctx->rule
-                      ? rule_dpif_get_flow_cookie(ctx->rule)
-                      : OVS_BE64_MAX);
+    pin->up.cookie = ctx->rule_cookie;
 
     flow_get_metadata(&ctx->xin->flow, &pin->up.fmd);
 
@@ -4374,7 +4381,7 @@ void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    struct flow_wildcards *wc = &xout->wc;
+    struct flow_wildcards *wc = NULL;
     struct flow *flow = &xin->flow;
     struct rule_dpif *rule = NULL;
 
@@ -4431,25 +4438,32 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (!ctx.xbridge) {
         return;
     }
-
     ctx.rule = xin->rule;
 
     ctx.base_flow = *flow;
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
     ctx.orig_tunnel_ip_dst = flow->tunnel.ip_dst;
 
-    flow_wildcards_init_catchall(wc);
-    memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-    if (is_ip_any(flow)) {
-        wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    if (!xin->skip_wildcards) {
+        wc = &xout->wc;
+        flow_wildcards_init_catchall(wc);
+        memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
+        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+        if (is_ip_any(flow)) {
+            wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+        }
+        if (ctx.xbridge->enable_recirc) {
+            /* Always exactly match recirc_id when datapath supports
+             * recirculation.  */
+            wc->masks.recirc_id = UINT32_MAX;
+        }
+        if (ctx.xbridge->netflow) {
+            netflow_mask_wc(flow, wc);
+        }
     }
     is_icmp = is_icmpv4(flow) || is_icmpv6(flow);
 
     tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
-    if (ctx.xbridge->netflow) {
-        netflow_mask_wc(flow, wc);
-    }
 
     ctx.recurse = 0;
     ctx.resubmits = 0;
@@ -4457,13 +4471,13 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.in_action_set = false;
     ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
+    ctx.rule_cookie = OVS_BE64_MAX;
     ctx.exit = false;
     ctx.use_recirc = false;
     ctx.was_mpls = false;
 
     if (!xin->ofpacts && !ctx.rule) {
-        rule = rule_dpif_lookup(ctx.xbridge->ofproto, flow,
-                                xin->skip_wildcards ? NULL : wc,
+        rule = rule_dpif_lookup(ctx.xbridge->ofproto, flow, wc,
                                 ctx.xin->xcache != NULL,
                                 ctx.xin->resubmit_stats, &ctx.table_id);
         if (ctx.xin->resubmit_stats) {
@@ -4491,6 +4505,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         ofpacts = actions->ofpacts;
         ofpacts_len = actions->ofpacts_len;
+
+        ctx.rule_cookie = rule_dpif_get_flow_cookie(ctx.rule);
     } else {
         OVS_NOT_REACHED();
     }
@@ -4623,23 +4639,25 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
 
-    /* Clear the metadata and register wildcard masks, because we won't
-     * use non-header fields as part of the cache. */
-    flow_wildcards_clear_non_packet_fields(wc);
+    if (wc) {
+        /* Clear the metadata and register wildcard masks, because we won't
+         * use non-header fields as part of the cache. */
+        flow_wildcards_clear_non_packet_fields(wc);
 
-    /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow uses
-     * the low 8 bits of the 16-bit tp_src and tp_dst members to represent
-     * these fields.  The datapath interface, on the other hand, represents
-     * them with just 8 bits each.  This means that if the high 8 bits of the
-     * masks for these fields somehow become set, then they will get chopped
-     * off by a round trip through the datapath, and revalidation will spot
-     * that as an inconsistency and delete the flow.  Avoid the problem here by
-     * making sure that only the low 8 bits of either field can be unwildcarded
-     * for ICMP.
-     */
-    if (is_icmp) {
-        wc->masks.tp_src &= htons(UINT8_MAX);
-        wc->masks.tp_dst &= htons(UINT8_MAX);
+        /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow
+         * uses the low 8 bits of the 16-bit tp_src and tp_dst members to
+         * represent these fields.  The datapath interface, on the other hand,
+         * represents them with just 8 bits each.  This means that if the high
+         * 8 bits of the masks for these fields somehow become set, then they
+         * will get chopped off by a round trip through the datapath, and
+         * revalidation will spot that as an inconsistency and delete the flow.
+         * Avoid the problem here by making sure that only the low 8 bits of
+         * either field can be unwildcarded for ICMP.
+         */
+        if (is_icmp) {
+            wc->masks.tp_src &= htons(UINT8_MAX);
+            wc->masks.tp_dst &= htons(UINT8_MAX);
+        }
     }
 }
 

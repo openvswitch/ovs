@@ -1,10 +1,9 @@
 .IP "\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]"
 .IQ "\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]"
 Listens for OpenFlow connections on \fIport\fR.  The default
-\fIport\fR is 6633, but a future version of Open vSwitch will change
-the default to the IANA-defined port 6653.  By default, connections
+\fIport\fR is 6653.  By default, connections
 are allowed from any IPv4 address.  Specify \fIip\fR as an IPv4
-address or a bracketed IPv6 address (e.g. \fBptcp:6633:[::1]\fR).  DNS
+address or a bracketed IPv6 address (e.g. \fBptcp:6653:[::1]\fR).  DNS
 names may not be used.  For \fBpssl\fR, the
 \fB\-\-private\-key\fR,\fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
 options are mandatory.

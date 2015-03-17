@@ -178,7 +178,7 @@ test_netflow_main(int argc, char *argv[])
     int sock;
     int n;
 
-    proctitle_init(argc, argv);
+    ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
     service_start(&argc, &argv);
     parse_options(argc, argv);
@@ -248,7 +248,7 @@ parse_options(int argc, char *argv[])
         VLOG_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
-    char *short_options = long_options_to_short_options(long_options);
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
         int c = getopt_long(argc, argv, short_options, long_options, NULL);

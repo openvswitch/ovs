@@ -125,7 +125,7 @@
          else if (length > 0 && (sport == LDP_PORT || dport == LDP_PORT)) {
                  ldp_print(bp, length);
 -        }
-+        } else if (sport == OFP_OLD_PORT || dport == OFP_OLD_PORT) {
++        } else if (sport == OFP_PORT || dport == OFP_PORT) {
 +                   openflow_print(bp, length);
 +        }
  

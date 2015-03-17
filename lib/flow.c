@@ -872,6 +872,9 @@ flow_format(struct ds *ds, const struct flow *flow)
     if (!flow->recirc_id) {
         WC_UNMASK_FIELD(wc, recirc_id);
     }
+    if (!flow->dp_hash) {
+        WC_UNMASK_FIELD(wc, dp_hash);
+    }
     for (int i = 0; i < FLOW_N_REGS; i++) {
         if (!flow->regs[i]) {
             WC_UNMASK_FIELD(wc, regs[i]);
