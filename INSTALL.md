@@ -259,6 +259,10 @@ Building the Sources
    For improved warnings if you installed "sparse" (see "Prerequisites"),
    add C=1 to the command line.
 
+   Some versions of Clang and ccache are not completely compatible.
+   If you see unusual warnings when you use both together, consider
+   disabling ccache for use with Clang.
+
 2. Consider running the testsuite.  Refer to "Running the Testsuite"
    below, for instructions.
 
