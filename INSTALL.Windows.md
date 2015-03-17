@@ -35,11 +35,13 @@ install Windows Driver Kit (WDK) 8.1 Update.
 It is important to get the Visual Studio related environment variables and to
 have the $PATH inside the bash to point to the proper compiler and linker. One
 easy way to achieve this is to get into the "Developer Command prompt for visual
-studio" and through it enter into the bash shell available from msys.
+studio" and through it enter into the bash shell available from msys by typing
+'bash --login'.
 
 If after the above step, a 'which link' inside MSYS's bash says,
 "/bin/link.exe", rename /bin/link.exe to something else so that the
-Visual studio's linker is used.
+Visual studio's linker is used. You should also see a 'which sort' report
+"/bin/sort.exe".
 
 * For pthread support, install the library, dll and includes of pthreads-win32
 project from
