@@ -10,6 +10,7 @@ on a specific platform, please see one of these files:
   - [INSTALL.RHEL.md]
   - [INSTALL.XenServer.md]
   - [INSTALL.NetBSD.md]
+  - [INSTALL.Windows.md]
   - [INSTALL.DPDK.md]
 
 Build Requirements
@@ -27,6 +28,9 @@ you will need the following software:
       * Clang.  Clang 3.4 and later provide useful static semantic
         analysis and thread-safety checks.  For Ubuntu, there are
         nightly built packages available on clang's website.
+
+      * MSVC 2013.  See [INSTALL.Windows] for additional Windows build
+        instructions.
 
     While OVS may be compatible with other compilers, optimal
     support for atomic operations may be missing, making OVS very
