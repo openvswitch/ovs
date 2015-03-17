@@ -2731,7 +2731,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         struct flow old_flow = ctx->xin->flow;
         enum slow_path_reason special;
         uint8_t table_id = rule_dpif_lookup_get_init_table_id(&ctx->xin->flow);
+        struct ofpbuf old_stack = ctx->stack;
+        union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
 
+        ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
         ctx->xbridge = peer->xbridge;
         flow->in_port.ofp_port = peer->ofp_port;
         flow->metadata = htonll(0);
@@ -2763,6 +2766,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         ctx->xin->flow = old_flow;
         ctx->xbridge = xport->xbridge;
+        ofpbuf_uninit(&ctx->stack);
+        ctx->stack = old_stack;
 
         if (ctx->xin->resubmit_stats) {
             netdev_vport_inc_tx(xport->netdev, ctx->xin->resubmit_stats);

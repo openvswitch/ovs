@@ -1518,7 +1518,7 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
     } else {
         if (!VLOG_DROP_WARN(&rl)) {
             char *flow_str = flow_to_string(flow);
-            VLOG_WARN_RL(&rl, "Failed to pop from an empty stack. On flow \n"
+            VLOG_WARN_RL(&rl, "Failed to pop from an empty stack. On flow\n"
                            " %s", flow_str);
             free(flow_str);
         }
