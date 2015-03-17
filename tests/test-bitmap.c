@@ -121,7 +121,7 @@ run_test(void (*function)(void))
 }
 
 static void
-run_tests(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+run_tests(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     run_test(test_bitmap_equal);
     run_test(test_bitmap_scan);
@@ -129,9 +129,9 @@ run_tests(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-run_benchmarks(int argc OVS_UNUSED, char *argv[])
+run_benchmarks(struct ovs_cmdl_context *ctx)
 {
-    int n_iter = strtol(argv[1], NULL, 10);
+    int n_iter = strtol(ctx->argv[1], NULL, 10);
     struct timeval start;
 
     xgettimeofday(&start);
@@ -157,8 +157,13 @@ static const struct ovs_cmdl_command commands[] = {
 static void
 test_bitmap_main(int argc, char *argv[])
 {
+    struct ovs_cmdl_context ctx = {
+        .argc = argc - 1,
+        .argv = argv + 1,
+    };
+
     set_program_name(argv[0]);
-    ovs_cmdl_run_command(argc - 1, argv + 1, commands);
+    ovs_cmdl_run_command(&ctx, commands);
 }
 
 OVSTEST_REGISTER("test-bitmap", test_bitmap_main);

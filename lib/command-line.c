@@ -92,19 +92,25 @@ ovs_cmdl_print_options(const struct option options[])
  * null pointer.
  *
  * Command-line options should be stripped off, so that a typical invocation
- * looks like "run_command(argc - optind, argv + optind, my_commands);". */
+ * looks like:
+ *    struct ovs_cmdl_context ctx = {
+ *        .argc = argc - optind,
+ *        .argv = argv + optind,
+ *    };
+ *    ovs_cmdl_run_command(&ctx, my_commands);
+ * */
 void
-ovs_cmdl_run_command(int argc, char *argv[], const struct ovs_cmdl_command commands[])
+ovs_cmdl_run_command(struct ovs_cmdl_context *ctx, const struct ovs_cmdl_command commands[])
 {
     const struct ovs_cmdl_command *p;
 
-    if (argc < 1) {
+    if (ctx->argc < 1) {
         ovs_fatal(0, "missing command name; use --help for help");
     }
 
     for (p = commands; p->name != NULL; p++) {
-        if (!strcmp(p->name, argv[0])) {
-            int n_arg = argc - 1;
+        if (!strcmp(p->name, ctx->argv[0])) {
+            int n_arg = ctx->argc - 1;
             if (n_arg < p->min_args) {
                 VLOG_FATAL( "'%s' command requires at least %d arguments",
                             p->name, p->min_args);
@@ -112,7 +118,7 @@ ovs_cmdl_run_command(int argc, char *argv[], const struct ovs_cmdl_command comma
                 VLOG_FATAL("'%s' command takes at most %d arguments",
                            p->name, p->max_args);
             } else {
-                p->handler(argc, argv);
+                p->handler(ctx);
                 if (ferror(stdout)) {
                     VLOG_FATAL("write to stdout failed");
                 }
@@ -124,7 +130,7 @@ ovs_cmdl_run_command(int argc, char *argv[], const struct ovs_cmdl_command comma
         }
     }
 
-    VLOG_FATAL("unknown command '%s'; use --help for help", argv[0]);
+    VLOG_FATAL("unknown command '%s'; use --help for help", ctx->argv[0]);
 }
 
 /* Process title. */
