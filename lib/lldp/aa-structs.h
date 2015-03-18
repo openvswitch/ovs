@@ -26,12 +26,14 @@
 struct lldp_aa_element_system_id {
     uint8_t  system_mac[6];
     uint16_t conn_type;
-    uint16_t smlt_id;
-    uint8_t  mlt_id[2];
+    uint16_t rsvd;
+    uint8_t  rsvd2[2];
 };
 
 struct lldpd_aa_element_tlv {
     uint16_t                         type;
+    uint16_t                         vlan_tagging;
+    uint16_t                         auto_prov_mode;
     uint16_t                         mgmt_vlan;
     struct lldp_aa_element_system_id system_id;
 };

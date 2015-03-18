@@ -98,12 +98,12 @@ check_received_aa(struct lldpd_port *sport,
            sport->p_element.system_id.system_mac[5]);
     assert(rport->p_element.system_id.conn_type ==
            sport->p_element.system_id.conn_type);
-    assert(rport->p_element.system_id.smlt_id ==
-           sport->p_element.system_id.smlt_id);
-    assert(rport->p_element.system_id.mlt_id[0] ==
-           sport->p_element.system_id.mlt_id[0]);
-    assert(rport->p_element.system_id.mlt_id[1] ==
-           sport->p_element.system_id.mlt_id[1]);
+    assert(rport->p_element.system_id.rsvd ==
+           sport->p_element.system_id.rsvd);
+    assert(rport->p_element.system_id.rsvd2[0] ==
+           sport->p_element.system_id.rsvd2[0]);
+    assert(rport->p_element.system_id.rsvd2[1] ==
+           sport->p_element.system_id.rsvd2[1]);
 
     /* Should receive 2 mappings */
     assert(!list_is_empty(&rport->p_isid_vlan_maps));
@@ -160,7 +160,8 @@ test_aa_send(void)
     hardware.h_lport.p_mfs = 1516;
 
     /* Auto attach element discovery info */
-    hardware.h_lport.p_element.type = LLDP_TLV_AA_ELEM_TYPE_TAG_CLIENT;
+    hardware.h_lport.p_element.type =
+        LLDP_TLV_AA_ELEM_TYPE_CLIENT_VIRTUAL_SWITCH;
     hardware.h_lport.p_element.mgmt_vlan = 0xCDC;
     hardware.h_lport.p_element.system_id.system_mac[0] = 0x1;
     hardware.h_lport.p_element.system_id.system_mac[1] = 0x2;
@@ -170,9 +171,9 @@ test_aa_send(void)
     hardware.h_lport.p_element.system_id.system_mac[5] = 0x6;
 
     hardware.h_lport.p_element.system_id.conn_type = 0x5;
-    hardware.h_lport.p_element.system_id.smlt_id = 0x3CC;
-    hardware.h_lport.p_element.system_id.mlt_id[0] = 0xB;
-    hardware.h_lport.p_element.system_id.mlt_id[1] = 0xE;
+    hardware.h_lport.p_element.system_id.rsvd = 0x3CC;
+    hardware.h_lport.p_element.system_id.rsvd2[0] = 0xB;
+    hardware.h_lport.p_element.system_id.rsvd2[1] = 0xE;
 
     /* Local chassis info */
     chassis.c_id_subtype = LLDP_CHASSISID_SUBTYPE_LLADDR;
@@ -242,12 +243,12 @@ test_aa_send(void)
 
     hw->h_lport.p_element.system_id.conn_type =
         hardware.h_lport.p_element.system_id.conn_type;
-    hw->h_lport.p_element.system_id.smlt_id =
-        hardware.h_lport.p_element.system_id.smlt_id;
-    hw->h_lport.p_element.system_id.mlt_id[0] =
-        hardware.h_lport.p_element.system_id.mlt_id[0];
-    hw->h_lport.p_element.system_id.mlt_id[1] =
-        hardware.h_lport.p_element.system_id.mlt_id[1];
+    hw->h_lport.p_element.system_id.rsvd =
+        hardware.h_lport.p_element.system_id.rsvd;
+    hw->h_lport.p_element.system_id.rsvd2[0] =
+        hardware.h_lport.p_element.system_id.rsvd2[0];
+    hw->h_lport.p_element.system_id.rsvd2[1] =
+        hardware.h_lport.p_element.system_id.rsvd2[1];
 
     /* Populate instance with two auto attach isid/vlan mappings */
     map[0].isid_vlan_data.status  = map_init[0].isid_vlan_data.status;
