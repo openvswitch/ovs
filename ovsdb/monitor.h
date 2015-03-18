@@ -52,7 +52,7 @@ void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
 
 bool ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon);
 
-struct json *ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon);
+void ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon);
 
 void ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon);
 #endif

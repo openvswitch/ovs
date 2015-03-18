@@ -505,12 +505,11 @@ ovsdb_monitor_change_cb(const struct ovsdb_row *old,
     return true;
 }
 
-struct json *
+void
 ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon)
 {
     struct ovsdb_monitor_aux aux;
     struct shash_node *node;
-    struct json *json;
 
     ovsdb_monitor_init_aux(&aux, dbmon);
     SHASH_FOR_EACH (node, &dbmon->tables) {
@@ -524,8 +523,6 @@ ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon)
             }
         }
     }
-    json = ovsdb_monitor_compose_table_update(dbmon, true);
-    return json ? json : json_object_create();
 }
 
 void
