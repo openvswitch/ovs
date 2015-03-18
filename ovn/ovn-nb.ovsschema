@@ -3,6 +3,7 @@
     "tables": {
         "Logical_Switch": {
             "columns": {
+                "name": {"type": "string"},
                 "router_port": {"type": {"key": {"type": "uuid",
                                                  "refTable": "Logical_Router_Port",
                                                  "refType": "strong"},

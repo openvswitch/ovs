@@ -37,6 +37,15 @@
       column="lswitch"/> column points to its row.
     </p>
 
+    <column name="name">
+      <p>
+        A name for the logical switch.  This name has no special meaning or purpose
+        other than to provide convenience for human interaction with the ovn-nb
+        database.  There is no requirement for the name to be unique.  The
+        logical switch's UUID should be used as the unique identifier.
+      </p>
+    </column>
+
     <column name="router_port">
       <p>
         The router port to which this logical switch is connected, or empty if
