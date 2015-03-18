@@ -3149,6 +3149,33 @@
           information on how this classifier works.
         </dd>
       </dl>
+      <dl>
+        <dt><code>linux-sfq</code></dt>
+        <dd>
+          Linux ``Stochastic Fairness Queueing'' classifier. See
+          <code>tc-sfq</code>(8) (also at
+          <code>http://linux.die.net/man/8/tc-sfq</code>) for information on
+          how this classifier works.
+        </dd>
+      </dl>
+      <dl>
+        <dt><code>linux-codel</code></dt>
+        <dd>
+          Linux ``Controlled Delay'' classifier. See <code>tc-codel</code>(8)
+          (also at
+          <code>http://man7.org/linux/man-pages/man8/tc-codel.8.html</code>)
+          for information on how this classifier works.
+        </dd>
+      </dl>
+      <dl>
+        <dt><code>linux-fq_codel</code></dt>
+        <dd>
+          Linux ``Fair Queuing with Controlled Delay'' classifier. See
+          <code>tc-fq_codel</code>(8) (also at
+          <code>http://man7.org/linux/man-pages/man8/tc-fq_codel.8.html</code>)
+          for information on how this classifier works.
+        </dd>
+      </dl>
     </column>
 
     <column name="queues">

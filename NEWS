@@ -1,5 +1,6 @@
 Post-v2.3.0
 ---------------------
+   - Added support for SFQ, FQ_CoDel and CoDel qdiscs. 
    - Add bash command-line completion support for ovs-vsctl Please check
      utilities/ovs-command-compgen.INSTALL.md for how to use.
    - The MAC learning feature now includes per-port fairness to mitigate

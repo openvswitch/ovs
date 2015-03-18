@@ -4382,7 +4382,7 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
 
     ofpbuf_init(&queues_buf, 0);
 
-    if (!qos || qos->type[0] == '\0' || qos->n_queues < 1) {
+    if (!qos || qos->type[0] == '\0') {
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
         const struct ovsdb_datum *queues;
