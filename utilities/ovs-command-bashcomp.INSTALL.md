@@ -65,9 +65,16 @@ ovs-vsctl-bashcomp
 How to use:
 -----------
 
-   To use the scripts, either copy them inside /etc/bash_completion.d/ or
-   manually run it directly in bash via . ovs-appctl-bashcomp.bash or
-   . ovs-vsctl-bashcomp.bash.
+   The bashcomp scripts should be placed at /etc/bash_completion.d/
+   to be available for all bash sessions.  Running 'make install'
+   will place the scripts to $(sysconfdir)/bash_completion.d/.  So user
+   should specify --sysconfdir=/etc at configuration.  Meanwhile, if OVS is
+   installed from packages, the scripts will automatically be placed inside
+   /etc/bash_completion.d/.
+
+   If you just want to run the scripts in one bash, you can remove them from
+   /etc/bash_completion.d/ and run the scripts via '. ovs-appctl-bashcomp.bash'
+   or '. ovs-vsctl-bashcomp.bash'.
 
 Test:
 -----

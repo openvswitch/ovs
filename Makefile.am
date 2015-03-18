@@ -137,6 +137,7 @@ OVSIDL_BUILT =
 pkgdata_DATA =
 sbin_SCRIPTS =
 scripts_SCRIPTS =
+completion_SCRIPTS =
 scripts_DATA =
 SUFFIXES =
 check_DATA =
@@ -144,6 +145,7 @@ check_SCRIPTS =
 pkgconfig_DATA =
 
 scriptsdir = $(pkgdatadir)/scripts
+completiondir = $(sysconfdir)/bash_completion.d
 pkgconfigdir = $(libdir)/pkgconfig
 
 # This ensures that files added to EXTRA_DIST are always distributed,

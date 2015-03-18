@@ -430,6 +430,8 @@ exit 0
 
 %files
 %defattr(-,root,root)
+/etc/bash_completion.d/ovs-appctl-bashcomp.bash
+/etc/bash_completion.d/ovs-vsctl-bashcomp.bash
 /etc/init.d/openvswitch
 /etc/init.d/openvswitch-xapi-update
 /etc/xapi.d/plugins/openvswitch-cfg-update
