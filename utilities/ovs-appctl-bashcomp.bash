@@ -589,8 +589,9 @@ _ovs_command_complete() {
           COMPREPLY=( $(compgen -W "$(echo $_COMP_WORDLIST | tr ' ' '\n' \
                                  | sort -u | sed -e '/NO_EXPAN/d')" -- $cur) )
       else
+          compopt -o nospace
           # If there is no completions, just complete on file path.
-          COMPREPLY=( $(compgen -o filenames -A file -- $cur) )
+          _filedir
       fi
   fi
 
