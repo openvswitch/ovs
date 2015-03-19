@@ -290,7 +290,7 @@
     </li>
 
     <li>
-      <code>ovs-nbd</code> receives the OVN Northbound database update.  In
+      <code>ovn-nbd</code> receives the OVN Northbound database update.  In
       turn, it makes the corresponding updates to the OVN database, by adding
       rows to the OVN database <code>Pipeline</code> table to reflect the new
       port, e.g. add a flow to recognize that packets destined to the new
@@ -303,7 +303,7 @@
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovs-nbd</code> made in the
+      <code>Pipeline</code> table updates that <code>ovn-nbd</code> made in the
       previous step.  As long as the VM that owns the VIF is powered off,
       <code>ovn-controller</code> cannot do much; it cannot, for example,
       arrange to send packets to or receive packets from the VIF, because the
@@ -385,7 +385,7 @@
     </li>
 
     <li>
-      <code>ovs-nbd</code> receives the OVN Northbound update and in turn
+      <code>ovn-nbd</code> receives the OVN Northbound update and in turn
       updates the OVN database accordingly, by removing or updating the
       rows from the OVN database <code>Pipeline</code> table and
       <code>Bindings</code> table that were related to the now-destroyed VIF.
@@ -393,7 +393,7 @@
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovs-nbd</code> made in the
+      <code>Pipeline</code> table updates that <code>ovn-nbd</code> made in the
       previous step.  <code>ovn-controller</code> updates OpenFlow tables to
       reflect the update, although there may not be much to do, since the VIF
       had already become unreachable when it was removed from the

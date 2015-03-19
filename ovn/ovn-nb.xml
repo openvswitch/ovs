@@ -3,7 +3,7 @@
   <p>
     This database is the interface between OVN and the cloud management system
     (CMS), such as OpenStack, running above it.  The CMS produces almost all of
-    the contents of the database.  The <code>ovs-nbd</code> program monitors
+    the contents of the database.  The <code>ovn-nbd</code> program monitors
     the database contents, transforms it, and stores it into the <ref
     db="OVN"/> database.
   </p>
