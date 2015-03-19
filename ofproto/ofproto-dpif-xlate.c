@@ -2158,6 +2158,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, const struct ofputil_bucket *bucket)
 {
     uint64_t action_list_stub[1024 / 8];
     struct ofpbuf action_list, action_set;
+    struct flow old_flow = ctx->xin->flow;
 
     ofpbuf_use_const(&action_set, bucket->ofpacts, bucket->ofpacts_len);
     ofpbuf_use_stub(&action_list, action_list_stub, sizeof action_list_stub);
@@ -2169,6 +2170,25 @@ xlate_group_bucket(struct xlate_ctx *ctx, const struct ofputil_bucket *bucket)
 
     ofpbuf_uninit(&action_set);
     ofpbuf_uninit(&action_list);
+
+    /* Roll back flow to previous state.
+     * This is equivalent to cloning the packet for each bucket.
+     *
+     * As a side effect any subsequently applied actions will
+     * also effectively be applied to a clone of the packet taken
+     * just before applying the all or indirect group.
+     *
+     * Note that group buckets are action sets, hence they cannot modify the
+     * main action set.  Also any stack actions are ignored when executing an
+     * action set, so group buckets cannot change the stack either. */
+    ctx->xin->flow = old_flow;
+
+    /* The fact that the group bucket exits (for any reason) does not mean that
+     * the translation after the group action should exit.  Specifically, if
+     * the group bucket recirculates (which typically modifies the packet), the
+     * actions after the group action must continue processing with the
+     * original, not the recirculated packet! */
+    ctx->exit = false;
 }
 
 static void
@@ -2176,19 +2196,11 @@ xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     const struct ofputil_bucket *bucket;
     const struct list *buckets;
-    struct flow old_flow = ctx->xin->flow;
 
     group_dpif_get_buckets(group, &buckets);
 
     LIST_FOR_EACH (bucket, list_node, buckets) {
         xlate_group_bucket(ctx, bucket);
-        /* Roll back flow to previous state.
-         * This is equivalent to cloning the packet for each bucket.
-         *
-         * As a side effect any subsequently applied actions will
-         * also effectively be applied to a clone of the packet taken
-         * just before applying the all or indirect group. */
-        ctx->xin->flow = old_flow;
     }
 }
 
