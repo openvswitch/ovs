@@ -3133,18 +3133,9 @@ xlate_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     uint32_t basis;
 
     basis = flow_hash_symmetric_l4(&ctx->xin->flow, 0);
+    flow_mask_hash_fields(&ctx->xin->flow, wc, NX_HASH_FIELDS_SYMMETRIC_L4);
     bucket = group_best_live_bucket(ctx, group, basis);
     if (bucket) {
-        memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-        memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
-        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-        memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
-        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-        memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
-
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
     }
