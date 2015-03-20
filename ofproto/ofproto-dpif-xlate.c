@@ -3092,7 +3092,7 @@ xlate_ff_group(struct xlate_ctx *ctx, struct group_dpif *group)
 }
 
 static void
-xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
+xlate_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
     struct ofputil_bucket *bucket;
@@ -3113,6 +3113,19 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    }
+}
+
+static void
+xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
+{
+    const char *selection_method = group_dpif_get_selection_method(group);
+
+    if (selection_method[0] == '\0') {
+        xlate_default_select_group(ctx, group);
+    } else {
+        /* Parsing of groups should ensure this never happens */
+        OVS_NOT_REACHED();
     }
 }
 

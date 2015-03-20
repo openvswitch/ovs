@@ -4241,6 +4241,12 @@ group_dpif_get_type(const struct group_dpif *group)
 {
     return group->up.type;
 }
+
+const char *
+group_dpif_get_selection_method(const struct group_dpif *group)
+{
+    return group->up.props.selection_method;
+}
 
 /* Sends 'packet' out 'ofport'.
  * May modify 'packet'.
