@@ -16,8 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required DPDK 1.8.0
-Optional `fuse`, `fuse-devel`
+Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
 
 1. Configure build & install DPDK:
   1. Set `$DPDK_DIR`
@@ -32,7 +31,12 @@ Optional `fuse`, `fuse-devel`
 
      `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
 
-     Then run `make install` to build and isntall the library.
+     Update `config/common_linuxapp` so that DPDK is built with vhost
+     libraries:
+
+     `CONFIG_RTE_LIBRTE_VHOST=y`
+
+     Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
      `make install T=x86_64-native-linuxapp-gcc`
@@ -300,18 +304,11 @@ in future releases when supported in DPDK and that vhost-cuse will eventually
 be deprecated. See [DPDK Docs] for more info on vhost.
 
 Prerequisites:
-1.  DPDK 1.8 with vhost support enabled and recompile OVS as above.
-
-     Update `config/common_linuxapp` so that DPDK is built with vhost
-     libraries:
-
-     `CONFIG_RTE_LIBRTE_VHOST=y`
-
-2.  Insert the Cuse module:
+1.  Insert the Cuse module:
 
       `modprobe cuse`
 
-3.  Build and insert the `eventfd_link` module:
+2.  Build and insert the `eventfd_link` module:
 
      `cd $DPDK_DIR/lib/librte_vhost/eventfd_link/`
      `make`
