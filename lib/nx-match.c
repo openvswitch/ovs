@@ -1067,6 +1067,84 @@ oxm_put_match(struct ofpbuf *b, const struct match *match,
     return match_len;
 }
 
+/* Appends to 'b' the nx_match format that expresses the tlv corresponding
+ * to 'id'. If mask is not all-ones then it is also formated as the value
+ * of the tlv. */
+static void
+nx_format_mask_tlv(struct ds *ds, enum mf_field_id id,
+                   const union mf_value *mask)
+{
+    const struct mf_field *mf = mf_from_id(id);
+
+    ds_put_format(ds, "%s", mf->name);
+
+    if (!is_all_ones(mask, mf->n_bytes)) {
+        ds_put_char(ds, '=');
+        mf_format(mf, mask, NULL, ds);
+    }
+
+    ds_put_char(ds, ',');
+}
+
+/* Appends a string representation of 'fa_' to 'ds'.
+ * The TLVS value of 'fa_' is treated as a mask and
+ * only the name of fields is formated if it is all ones. */
+void
+oxm_format_field_array(struct ds *ds, const struct field_array *fa)
+{
+    size_t start_len = ds->length;
+    int i;
+
+    for (i = 0; i < MFF_N_IDS; i++) {
+        if (bitmap_is_set(fa->used.bm, i)) {
+            nx_format_mask_tlv(ds, i, &fa->value[i]);
+        }
+    }
+
+    if (ds->length > start_len) {
+        ds_chomp(ds, ',');
+    }
+}
+
+/* Appends to 'b' a series of OXM TLVs corresponding to the series
+ * of enum mf_field_id and value tuples in 'fa_'.
+ *
+ * OXM differs slightly among versions of OpenFlow.  Specify the OpenFlow
+ * version in use as 'version'.
+ *
+ * This function can cause 'b''s data to be reallocated.
+ *
+ * Returns the number of bytes appended to 'b'.  May return zero. */
+int
+oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
+                    enum ofp_version version)
+{
+    size_t start_len = b->size;
+    int i;
+
+    /* Field arrays are only used with the group selection method
+     * property and group properties are only available in OpenFlow * 1.5+.
+     * So the following assertion should never fail.
+     *
+     * If support for older OpenFlow versions is desired then some care
+     * will need to be taken of different TLVs that handle the same
+     * flow fields. In particular:
+     * - VLAN_TCI, VLAN_VID and MFF_VLAN_PCP
+     * - IP_DSCP_MASK and DSCP_SHIFTED
+     * - REGS and XREGS
+     */
+    ovs_assert(version >= OFP15_VERSION);
+
+    for (i = 0; i < MFF_N_IDS; i++) {
+        if (bitmap_is_set(fa->used.bm, i)) {
+            nxm_put_unmasked(b, i, version, &fa->value[i],
+                             mf_from_id(i)->n_bytes);
+        }
+    }
+
+    return b->size - start_len;
+}
+
 static void
 nx_put_header__(struct ofpbuf *b, uint64_t header, bool masked)
 {
