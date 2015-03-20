@@ -1,0 +1,85 @@
+{
+  "name": "idltest",
+  "version": "1.2.3",
+  "tables": {
+    "link1": {
+      "columns": {
+        "i": {
+          "type": "integer"
+        },
+        "k": {
+          "type": {
+            "key": {
+              "type": "uuid",
+              "refTable": "link1"
+            }
+          }
+        },
+        "ka": {
+          "type": {
+            "key": {
+              "type": "uuid",
+              "refTable": "link1"
+            },
+            "max": "unlimited",
+            "min": 0
+          }
+        }
+      }
+    },
+    "simple": {
+      "columns": {
+        "b": {
+          "type": "boolean"
+        },
+        "ba": {
+          "type": {
+            "key": "boolean",
+            "max": 1,
+            "min": 0
+          }
+        },
+        "i": {
+          "type": "integer"
+        },
+        "ia": {
+          "type": {
+            "key": "integer",
+            "max": "unlimited",
+            "min": 0
+          }
+        },
+        "r": {
+          "type": "real"
+        },
+        "ra": {
+          "type": {
+            "key": "real",
+            "max": "unlimited",
+            "min": 0
+          }
+        },
+        "s": {
+          "type": "string"
+        },
+        "sa": {
+          "type": {
+            "key": "string",
+            "max": "unlimited",
+            "min": 0
+          }
+        },
+        "u": {
+          "type": "uuid"
+        },
+        "ua": {
+          "type": {
+            "key": "uuid",
+            "max": "unlimited",
+            "min": 0
+          }
+        }
+      }
+    }
+  }
+}

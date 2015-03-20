@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2011, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2011, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,15 @@ ovsdb_parser_has_error(const struct ovsdb_parser *parser)
 }
 
 struct ovsdb_error *
+ovsdb_parser_destroy(struct ovsdb_parser *parser)
+{
+    free(parser->name);
+    sset_destroy(&parser->used);
+
+    return parser->error;
+}
+
+struct ovsdb_error *
 ovsdb_parser_finish(struct ovsdb_parser *parser)
 {
     if (!parser->error) {
@@ -157,8 +166,5 @@ ovsdb_parser_finish(struct ovsdb_parser *parser)
         }
     }
 
-    free(parser->name);
-    sset_destroy(&parser->used);
-
-    return parser->error;
+    return ovsdb_parser_destroy(parser);
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,7 +72,8 @@ bool ovsdb_parser_has_error(const struct ovsdb_parser *);
 struct ovsdb_error *ovsdb_parser_get_error(const struct ovsdb_parser *);
 struct ovsdb_error *ovsdb_parser_finish(struct ovsdb_parser *)
     OVS_WARN_UNUSED_RESULT;
-void ovsdb_parser_destroy(struct ovsdb_parser *);
+struct ovsdb_error *ovsdb_parser_destroy(struct ovsdb_parser *)
+    OVS_WARN_UNUSED_RESULT;
 
 bool ovsdb_parser_is_id(const char *string);
 

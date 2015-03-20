@@ -235,7 +235,7 @@ tests_test_lib_LDADD = lib/libopenvswitch.la
 # idltest schema and IDL
 OVSIDL_BUILT += tests/idltest.c tests/idltest.h tests/idltest.ovsidl
 IDLTEST_IDL_FILES = tests/idltest.ovsschema tests/idltest.ann
-EXTRA_DIST += $(IDLTEST_IDL_FILES)
+EXTRA_DIST += $(IDLTEST_IDL_FILES) tests/idltest2.ovsschema
 tests/idltest.ovsidl: $(IDLTEST_IDL_FILES)
 	$(AM_V_GEN)$(OVSDB_IDLC) -C $(srcdir) annotate $(IDLTEST_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
