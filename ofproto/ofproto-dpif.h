@@ -138,6 +138,8 @@ void group_dpif_get_buckets(const struct group_dpif *group,
                             const struct ovs_list **buckets);
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
 const char *group_dpif_get_selection_method(const struct group_dpif *group);
+uint64_t group_dpif_get_selection_method_param(const struct group_dpif *group);
+const struct field_array *group_dpif_get_fields(const struct group_dpif *group);
 
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,

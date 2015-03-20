@@ -352,6 +352,41 @@ mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
     }
 }
 
+/* Set bits of 'bm' corresponding to the field 'mf' and it's prerequisities. */
+void
+mf_bitmap_set_field_and_prereqs(const struct mf_field *mf, struct mf_bitmap *bm)
+{
+    bitmap_set1(bm->bm, mf->id);
+
+    switch (mf->prereqs) {
+    case MFP_ND:
+    case MFP_ND_SOLICIT:
+    case MFP_ND_ADVERT:
+        bitmap_set1(bm->bm, MFF_TCP_SRC);
+        bitmap_set1(bm->bm, MFF_TCP_DST);
+        /* Fall through. */
+    case MFP_TCP:
+    case MFP_UDP:
+    case MFP_SCTP:
+    case MFP_ICMPV4:
+    case MFP_ICMPV6:
+        /* nw_frag always unwildcarded. */
+        bitmap_set1(bm->bm, MFF_IP_PROTO);
+        /* Fall through. */
+    case MFP_ARP:
+    case MFP_IPV4:
+    case MFP_IPV6:
+    case MFP_MPLS:
+    case MFP_IP_ANY:
+        bitmap_set1(bm->bm, MFF_ETH_TYPE);
+        break;
+    case MFP_VLAN_VID:
+        bitmap_set1(bm->bm, MFF_VLAN_TCI);
+        break;
+    case MFP_NONE:
+        break;
+    }
+}
 
 /* Returns true if 'value' may be a valid value *as part of a masked match*,
  * false otherwise.

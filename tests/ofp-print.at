@@ -2026,7 +2026,7 @@ AT_CLEANUP
 AT_SETUP([OFPST_GROUP_DESC reply - OF1.5])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
-06 13 00 98 00 00 00 02 00 07 00 00 00 00 00 00 \
+06 13 00 d8 00 00 00 02 00 07 00 00 00 00 00 00 \
 00 88 01 00 00 00 20 00 00 78 00 00 00 00 00 00 \
 00 28 00 10 00 00 00 00 00 00 00 10 00 00 00 01 \
 00 00 00 00 00 00 00 00 00 00 00 08 00 64 00 00 \
@@ -2037,9 +2037,14 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 28 00 10 00 00 00 02 00 00 00 10 00 00 00 03 \
 00 00 00 00 00 00 00 00 00 00 00 08 00 c8 00 00 \
 00 01 00 08 00 00 00 03 \
+ff ff 00 3b 00 00 15 40 00 00 00 01 00 00 00 00 \
+68 61 73 68 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 \
+80 00 18 04 ff ff ff 00 80 00 1a 02 ff ff 80 00 \
+14 01 ff 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5) (xid=0x2):
- group_id=8192,type=select,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+ group_id=8192,type=select,selection_method=hash,fields=ip_dst=255.255.255.0,nw_proto,tcp_src,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 
@@ -2845,7 +2850,7 @@ AT_CLEANUP
 AT_SETUP([OFPT_GROUP_MOD add - OF1.5])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
-06 0f 00 90 11 22 33 44 00 00 01 00 87 65 43 21 \
+06 0f 00 b8 11 22 33 44 00 00 01 00 87 65 43 21 \
 00 78 00 00 ff ff ff ff 00 28 00 10 00 00 00 00 \
 00 00 00 10 00 00 00 01 00 00 00 00 00 00 00 00 \
 00 00 00 08 00 64 00 00 00 01 00 08 00 00 00 01 \
@@ -2854,9 +2859,12 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 01 00 08 00 00 00 02 00 28 00 10 00 00 00 02 \
 00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
 00 00 00 08 00 c8 00 00 00 01 00 08 00 00 00 03 \
+ff ff 00 28 00 00 15 40 00 00 00 01 00 00 00 00 \
+68 61 73 68 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 07 \
 "], [0], [dnl
 OFPT_GROUP_MOD (OF1.5) (xid=0x11223344):
- ADD group_id=2271560481,type=select,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+ ADD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 

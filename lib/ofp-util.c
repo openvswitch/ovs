@@ -7819,14 +7819,11 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
-    /* Only allow selection method property if the selection_method field
-     * matches a suported method. As no methods are currently supported
-     * this check is a no-op that always fails. As selection methods are
-     * added they should be checked against the selection_method field
-     * here. */
-    log_property(false, "ntr selection method '%s' is not supported",
-                 prop->selection_method);
-    return OFPERR_OFPBPC_BAD_VALUE;
+    if (strcmp("hash", prop->selection_method)) {
+        log_property(false, "ntr selection method '%s' is not supported",
+                     prop->selection_method);
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
 
     strcpy(gp->selection_method, prop->selection_method);
     gp->selection_method_param = ntohll(prop->selection_method_param);

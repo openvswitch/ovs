@@ -38,6 +38,9 @@ Post-v2.3.0
        is executed last, and only if the action set has no "output" or "group"
        action.
      * OpenFlow 1.4+ flow "importance" is now maintained in the flow table.
+     * A new Netronome extension to OpenFlow 1.5+ allows control over the
+       fields hashed for OpenFlow select groups.  See "selection_method" and
+       related options in ovs-ofctl(8) for details.
    - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
      MD5 is no longer secure and some operating systems have started to disable
      it in OpenSSL.

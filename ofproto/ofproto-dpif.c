@@ -4265,6 +4265,18 @@ ofproto_dpif_send_packet(const struct ofport_dpif *ofport, struct dp_packet *pac
     ovs_mutex_unlock(&ofproto->stats_mutex);
     return error;
 }
+
+uint64_t
+group_dpif_get_selection_method_param(const struct group_dpif *group)
+{
+    return group->up.props.selection_method_param;
+}
+
+const struct field_array *
+group_dpif_get_fields(const struct group_dpif *group)
+{
+    return &group->up.props.fields;
+}
 
 /* Return the version string of the datapath that backs up
  * this 'ofproto'.
