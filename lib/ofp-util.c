@@ -38,6 +38,7 @@
 #include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "openflow/netronome-ext.h"
 #include "packets.h"
 #include "random.h"
 #include "unaligned.h"
@@ -57,6 +58,14 @@ static enum ofputil_table_miss ofputil_table_miss_from_config(
 struct ofp_prop_header {
     ovs_be16 type;
     ovs_be16 len;
+};
+
+struct ofp_prop_experimenter {
+    ovs_be16 type;          /* OFP*_EXPERIMENTER. */
+    ovs_be16 length;        /* Length in bytes of this property. */
+    ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
+                             * in struct ofp_experimenter_header. */
+    ovs_be32 exp_type;      /* Experimenter defined. */
 };
 
 /* Pulls a property, beginning with struct ofp_prop_header, from the beginning
@@ -7020,6 +7029,13 @@ ofputil_encode_group_stats_request(enum ofp_version ofp_version,
     return request;
 }
 
+void
+ofputil_uninit_group_desc(struct ofputil_group_desc *gd)
+{
+    ofputil_bucket_list_destroy(&gd->buckets);
+    free(&gd->props.fields);
+}
+
 /* Decodes the OpenFlow group description request in 'oh', returning the group
  * whose description is requested, or OFPG_ALL if stats for all groups was
  * requested. */
@@ -7721,6 +7737,199 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
     return 0;
 }
 
+static void
+ofputil_init_group_properties(struct ofputil_group_props *gp)
+{
+    memset(gp, 0, sizeof *gp);
+}
+
+static enum ofperr
+parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
+                                      enum ofp11_group_type group_type,
+                                      enum ofp15_group_mod_command group_cmd,
+                                      struct ofputil_group_props *gp)
+{
+    struct ntr_group_prop_selection_method *prop = payload->data;
+    size_t fields_len, method_len;
+    enum ofperr error;
+
+    switch (group_type) {
+    case OFPGT11_SELECT:
+        break;
+    case OFPGT11_ALL:
+    case OFPGT11_INDIRECT:
+    case OFPGT11_FF:
+        log_property(false, "ntr selection method property is only allowed "
+                     "for select groups");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    switch (group_cmd) {
+    case OFPGC15_ADD:
+    case OFPGC15_MODIFY:
+        break;
+    case OFPGC15_DELETE:
+    case OFPGC15_INSERT_BUCKET:
+    case OFPGC15_REMOVE_BUCKET:
+        log_property(false, "ntr selection method property is only allowed "
+                     "for add and delete group modifications");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    if (payload->size < sizeof *prop) {
+        log_property(false, "ntr selection method property length "
+                     "%u is not valid", payload->size);
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    method_len = strnlen(prop->selection_method, NTR_MAX_SELECTION_METHOD_LEN);
+
+    if (method_len == NTR_MAX_SELECTION_METHOD_LEN) {
+        log_property(false, "ntr selection method is not null terminated");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+
+    /* Only allow selection method property if the selection_method field
+     * matches a suported method. As no methods are currently supported
+     * this check is a no-op that always fails. As selection methods are
+     * added they should be checked against the selection_method field
+     * here. */
+    log_property(false, "ntr selection method '%s' is not supported",
+                 prop->selection_method);
+    return OFPERR_OFPBPC_BAD_VALUE;
+
+    strcpy(gp->selection_method, prop->selection_method);
+    gp->selection_method_param = ntohll(prop->selection_method_param);
+
+    if (!method_len && gp->selection_method_param) {
+        log_property(false, "ntr selection method parameter is non-zero but "
+                     "selection method is empty");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+
+    ofpbuf_pull(payload, sizeof *prop);
+
+    fields_len = ntohs(prop->length) - sizeof *prop;
+    if (!method_len && fields_len) {
+        log_property(false, "ntr selection method parameter is zero "
+                     "but fields are provided");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+
+    error = oxm_pull_field_array(payload->data, fields_len,
+                                 &gp->fields);
+    if (error) {
+        log_property(false, "ntr selection method fields are invalid");
+        return error;
+    }
+
+    return 0;
+}
+
+static enum ofperr
+parse_group_prop_ntr(struct ofpbuf *payload, uint32_t exp_type,
+                     enum ofp11_group_type group_type,
+                     enum ofp15_group_mod_command group_cmd,
+                     struct ofputil_group_props *gp)
+{
+    enum ofperr error;
+
+    switch (exp_type) {
+    case NTRT_SELECTION_METHOD:
+        error = parse_group_prop_ntr_selection_method(payload, group_type,
+                                                      group_cmd, gp);
+        break;
+
+    default:
+        log_property(false, "unknown group property ntr experimenter type "
+                     "%"PRIu32, exp_type);
+        error = OFPERR_OFPBPC_BAD_TYPE;
+        break;
+    }
+
+    return error;
+}
+
+static enum ofperr
+parse_ofp15_group_prop_exp(struct ofpbuf *payload,
+                           enum ofp11_group_type group_type,
+                           enum ofp15_group_mod_command group_cmd,
+                           struct ofputil_group_props *gp)
+{
+    struct ofp_prop_experimenter *prop = payload->data;
+    uint16_t experimenter;
+    uint32_t exp_type;
+    enum ofperr error;
+
+    if (payload->size < sizeof *prop) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    experimenter = ntohl(prop->experimenter);
+    exp_type = ntohl(prop->exp_type);
+
+    switch (experimenter) {
+    case NTR_VENDOR_ID:
+        error = parse_group_prop_ntr(payload, exp_type, group_type,
+                                     group_cmd, gp);
+        break;
+
+    default:
+        log_property(false, "unknown group property experimenter %"PRIu16,
+                     experimenter);
+        error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
+        break;
+    }
+
+    return error;
+}
+
+static enum ofperr
+parse_ofp15_group_properties(struct ofpbuf *msg,
+                             enum ofp11_group_type group_type,
+                             enum ofp15_group_mod_command group_cmd,
+                             struct ofputil_group_props *gp,
+                             size_t properties_len)
+{
+    struct ofpbuf properties;
+
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, properties_len),
+                     properties_len);
+
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = ofputil_pull_property(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPGPT15_EXPERIMENTER:
+            error = parse_ofp15_group_prop_exp(&payload, group_type,
+                                               group_cmd, gp);
+            break;
+
+        default:
+            log_property(false, "unknown group property %"PRIu16, type);
+            error = OFPERR_OFPBPC_BAD_TYPE;
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
 static int
 ofputil_decode_ofp11_group_desc_reply(struct ofputil_group_desc *gd,
                                       struct ofpbuf *msg,
@@ -7764,6 +7973,7 @@ ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
 {
     struct ofp15_group_desc_stats *ogds;
     uint16_t length, bucket_list_len;
+    int error;
 
     if (!msg->header) {
         ofpraw_pull_assert(msg);
@@ -7795,9 +8005,22 @@ ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
                      "bucket list length %u", bucket_list_len);
         return OFPERR_OFPBRC_BAD_LEN;
     }
+    error = ofputil_pull_ofp15_buckets(msg, bucket_list_len, version,
+                                       &gd->buckets);
+    if (error) {
+        return error;
+    }
 
-    return ofputil_pull_ofp15_buckets(msg, bucket_list_len, version,
-                                      &gd->buckets);
+    /* By definition group desc messages don't have a group mod command.
+     * However, parse_group_prop_ntr_selection_method() checks to make sure
+     * that the command is OFPGC15_ADD or OFPGC15_DELETE to guard
+     * against group mod messages with other commands supplying
+     * a NTR selection method group experimenter property.
+     * Such properties are valid for group desc replies so
+     * claim that the group mod command is OFPGC15_ADD to
+     * satisfy the check in parse_group_prop_ntr_selection_method() */
+    return parse_ofp15_group_properties(msg, gd->type, OFPGC15_ADD, &gd->props,
+                                        msg->size);
 }
 
 /* Converts a group description reply in 'msg' into an abstract
@@ -7814,6 +8037,8 @@ int
 ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
                                 struct ofpbuf *msg, enum ofp_version version)
 {
+    ofputil_init_group_properties(&gd->props);
+
     switch (version)
     {
     case OFP11_VERSION:
@@ -7829,6 +8054,12 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
     default:
         OVS_NOT_REACHED();
     }
+}
+
+void
+ofputil_uninit_group_mod(struct ofputil_group_mod *gm)
+{
+    ofputil_bucket_list_destroy(&gm->buckets);
 }
 
 static struct ofpbuf *
@@ -8064,14 +8295,14 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
     }
 
     bucket_list_len = ntohs(ogm->bucket_array_len);
-    if (bucket_list_len < msg->size) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "group has %u trailing bytes",
-                     msg->size - bucket_list_len);
-        return OFPERR_OFPGMFC_BAD_BUCKET;
+    error = ofputil_pull_ofp15_buckets(msg, bucket_list_len, ofp_version,
+                                       &gm->buckets);
+    if (error) {
+        return error;
     }
 
-    return ofputil_pull_ofp15_buckets(msg, bucket_list_len, ofp_version,
-                                      &gm->buckets);
+    return parse_ofp15_group_properties(msg, gm->type, gm->command, &gm->props,
+                                        msg->size);
 }
 
 /* Converts OpenFlow group mod message 'oh' into an abstract group mod in
@@ -8087,6 +8318,8 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
 
     ofpbuf_use_const(&msg, oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
+
+    ofputil_init_group_properties(&gm->props);
 
     switch (ofp_version)
     {

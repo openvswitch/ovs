@@ -589,6 +589,52 @@ oxm_pull_match_loose(struct ofpbuf *b, struct match *match)
 {
     return oxm_pull_match__(b, false, match);
 }
+
+/* Verify an array of OXM TLVs treating value of each TLV as a mask,
+ * disallowing masks in each TLV and ignoring pre-requisites. */
+enum ofperr
+oxm_pull_field_array(const void *fields_data, size_t fields_len,
+                     struct field_array *fa)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, fields_data, fields_len);
+    while (b.size) {
+        const uint8_t *pos = b.data;
+        const struct mf_field *field;
+        union mf_value value;
+        enum ofperr error;
+        uint64_t header;
+
+        error = nx_pull_entry__(&b, false, &header, &field, &value, NULL);
+        if (error) {
+            VLOG_DBG_RL(&rl, "error pulling field array field");
+            return error;
+        } else if (!field) {
+            VLOG_DBG_RL(&rl, "unknown field array field");
+            error = OFPERR_OFPBMC_BAD_FIELD;
+        } else if (bitmap_is_set(fa->used.bm, field->id)) {
+            VLOG_DBG_RL(&rl, "duplicate field array field '%s'", field->name);
+            error = OFPERR_OFPBMC_DUP_FIELD;
+        } else if (!mf_is_mask_valid(field, &value)) {
+            VLOG_DBG_RL(&rl, "bad mask in field array field '%s'", field->name);
+            return OFPERR_OFPBMC_BAD_MASK;
+        } else {
+            field_array_set(field->id, &value, fa);
+        }
+
+        if (error) {
+            const uint8_t *start = fields_data;
+
+            VLOG_DBG_RL(&rl, "error parsing OXM at offset %"PRIdPTR" "
+                        "within field array (%s)", pos - start,
+                        ofperr_to_string(error));
+            return error;
+        }
+    }
+
+    return 0;
+}
 
 /* nx_put_match() and helpers.
  *

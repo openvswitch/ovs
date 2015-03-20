@@ -499,6 +499,8 @@ struct ofgroup {
 
     struct ovs_list buckets;        /* Contains "struct ofputil_bucket"s. */
     const uint32_t n_buckets;
+
+    const struct ofputil_group_props props;
 };
 
 bool ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,

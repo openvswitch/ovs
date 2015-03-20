@@ -2278,3 +2278,12 @@ mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s)
     }
     ds_put_char(s, '0');
 }
+
+void
+field_array_set(enum mf_field_id id, const union mf_value *value,
+                struct field_array *fa)
+{
+    ovs_assert(id < MFF_N_IDS);
+    bitmap_set1(fa->used.bm, id);
+    fa->value[id] = *value;
+}

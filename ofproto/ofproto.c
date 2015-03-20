@@ -5929,6 +5929,9 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
     *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
         list_size(&(*ofgroup)->buckets);
 
+    memcpy(CONST_CAST(struct ofputil_group_props *, &(*ofgroup)->props),
+           &gm->props, sizeof (struct ofputil_group_props));
+
     /* Construct called BEFORE any locks are held. */
     error = ofproto->ofproto_class->group_construct(*ofgroup);
     if (error) {

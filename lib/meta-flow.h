@@ -1574,6 +1574,12 @@ union mf_subvalue {
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 
+/* An array of fields with values */
+struct field_array {
+    struct mf_bitmap used;
+    union mf_value value[MFF_N_IDS];
+};
+
 /* Finding mf_fields. */
 const struct mf_field *mf_from_name(const char *name);
 
@@ -1651,5 +1657,9 @@ void mf_format(const struct mf_field *,
                const union mf_value *value, const union mf_value *mask,
                struct ds *);
 void mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s);
+
+/* Field Arrays. */
+void field_array_set(enum mf_field_id id, const union mf_value *,
+                     struct field_array *);
 
 #endif /* meta-flow.h */

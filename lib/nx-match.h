@@ -55,6 +55,8 @@ enum ofperr nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
                                 ovs_be64 *cookie_mask);
 enum ofperr oxm_pull_match(struct ofpbuf *, struct match *);
 enum ofperr oxm_pull_match_loose(struct ofpbuf *, struct match *);
+enum ofperr oxm_pull_field_array(const void *, size_t fields_len,
+                                 struct field_array *);
 int nx_put_match(struct ofpbuf *, const struct match *,
                  ovs_be64 cookie, ovs_be64 cookie_mask);
 int oxm_put_match(struct ofpbuf *, const struct match *, enum ofp_version);
