@@ -170,7 +170,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
-    DPDK_LIB="-lintel_dpdk -lfuse "
+    DPDK_LIB="-lintel_dpdk"
+    DPDK_EXTRA_LIB="-lfuse"
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
@@ -187,7 +188,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     found=false
     save_LIBS=$LIBS
     for extras in "" "-ldl"; do
-        LIBS="$DPDK_LIB $extras $save_LIBS"
+        LIBS="$DPDK_LIB $extras $save_LIBS $DPDK_EXTRA_LIB"
         AC_LINK_IFELSE(
            [AC_LANG_PROGRAM([#include <rte_config.h>
                              #include <rte_eal.h>],
@@ -206,7 +207,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
     OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
 
-    # DPDK 1.7 pmd drivers are not linked unless --whole-archive is used.
+    # DPDK pmd drivers are not linked unless --whole-archive is used.
     #
     # This happens because the rest of the DPDK code doesn't use any symbol in
     # the pmd driver objects, and the drivers register themselves using an
@@ -214,7 +215,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     #
     # These options are specified inside a single -Wl directive to prevent
     # autotools from reordering them.
-    DPDK_vswitchd_LDFLAGS=-Wl,$DPDK_LIB
+    DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
   else
