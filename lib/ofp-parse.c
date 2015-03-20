@@ -1158,6 +1158,67 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
 }
 
 static char * OVS_WARN_UNUSED_RESULT
+parse_select_group_field(char *s, struct field_array *fa,
+                         enum ofputil_protocol *usable_protocols)
+{
+    char *save_ptr = NULL;
+    char *name;
+
+    for (name = strtok_r(s, "=, \t\r\n", &save_ptr); name;
+         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+        const struct mf_field *mf = mf_from_name(name);
+
+        if (mf) {
+            char *error;
+            const char *value_str;
+            union mf_value value;
+
+            if (bitmap_is_set(fa->used.bm, mf->id)) {
+                return xasprintf("%s: duplicate field", name);
+            }
+
+            value_str = strtok_r(NULL, ", \t\r\n", &save_ptr);
+            if (value_str) {
+                error = mf_parse_value(mf, value_str, &value);
+                if (error) {
+                    return error;
+                }
+
+                /* The mask cannot be all-zeros */
+                if (is_all_zeros(&value, mf->n_bytes)) {
+                    return xasprintf("%s: values are wildcards here "
+                                     "and must not be all-zeros", s);
+                }
+
+                /* The values parsed are masks for fields used
+                 * by the selection method */
+                if (!mf_is_mask_valid(mf, &value)) {
+                    return xasprintf("%s: invalid mask for field %s",
+                                     value_str, mf->name);
+                }
+            } else {
+                memset(&value, 0xff, mf->n_bytes);
+            }
+
+            field_array_set(mf->id, &value, fa);
+
+            if (is_all_ones(&value, mf->n_bytes)) {
+                *usable_protocols &= mf->usable_protocols_exact;
+            } else if (mf->usable_protocols_bitwise == mf->usable_protocols_cidr
+                       || ip_is_cidr(value.be32)) {
+                *usable_protocols &= mf->usable_protocols_cidr;
+            } else {
+                *usable_protocols &= mf->usable_protocols_bitwise;
+            }
+        } else {
+            return xasprintf("%s: unknown field %s", s, name);
+        }
+    }
+
+    return NULL;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
                           char *string,
                           enum ofputil_protocol *usable_protocols)
@@ -1327,6 +1388,39 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         } else if (!strcmp(name, "bucket")) {
             error = xstrdup("bucket is not needed");
             goto out;
+        } else if (!strcmp(name, "selection_method")) {
+            if (!(fields & F_GROUP_TYPE)) {
+                error = xstrdup("selection method is not needed");
+                goto out;
+            }
+            if (strlen(value) >= NTR_MAX_SELECTION_METHOD_LEN) {
+                error = xasprintf("selection method is longer than %u"
+                                  " bytes long",
+                                  NTR_MAX_SELECTION_METHOD_LEN - 1);
+                goto out;
+            }
+            memset(gm->props.selection_method, '\0',
+                   NTR_MAX_SELECTION_METHOD_LEN);
+            strcpy(gm->props.selection_method, value);
+            *usable_protocols &= OFPUTIL_P_OF15_UP;
+        } else if (!strcmp(name, "selection_method_param")) {
+            if (!(fields & F_GROUP_TYPE)) {
+                error = xstrdup("selection method param is not needed");
+                goto out;
+            }
+            error = str_to_u64(value, &gm->props.selection_method_param);
+            *usable_protocols &= OFPUTIL_P_OF15_UP;
+        } else if (!strcmp(name, "fields")) {
+            if (!(fields & F_GROUP_TYPE)) {
+                error = xstrdup("fields are not needed");
+                goto out;
+            }
+            error = parse_select_group_field(value, &gm->props.fields,
+                                             usable_protocols);
+            if (error) {
+                goto out;
+            }
+            *usable_protocols &= OFPUTIL_P_OF15_UP;
         } else {
             error = xasprintf("unknown keyword %s", name);
             goto out;
