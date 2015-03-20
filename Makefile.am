@@ -358,6 +358,7 @@ dist-docs:
 	VERSION=$(VERSION) $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
 .PHONY: dist-docs
 
+include Documentation/automake.mk
 include m4/automake.mk
 include lib/automake.mk
 include ofproto/automake.mk

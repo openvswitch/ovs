@@ -1,0 +1,153 @@
+Proposal for Group Selection Method Property
+Version: 0.0.3
+
+Author: Simon Horman <simon.horman@netronome.com>, et al.
+Initial Public Revision: September 2014
+
+
+Contents
+========
+
+1. Introduction
+2. How it Works
+3. Experimenter Id
+4. Experimenter Messages
+5. History
+
+
+1. Introduction
+===============
+
+This text describes a Netronome Extension to (draft) OpenFlow 1.5 that allows a
+controller to provide more information on the selection method for select
+groups.  This proposal is in the form of an enhanced select group type.
+
+This may subsequently be proposed as an extension or update to
+the OpenFlow specification.
+
+
+2. How it works
+===============
+
+A new Netronome group experimenter property is defined which provides
+compatibility with the group mod message defined in draft Open Flow 1.5
+(also known as ONF EXT-350) and allows parameters for the selection
+method of select groups to be passed by the controller. In particular it
+allows controllers to:
+
+* Specify the fields used for bucket selection by the select group.
+
+* Designate the selection method used.
+
+* Provide a non-field parameter to the selection method.
+
+
+3. Experimenter ID
+==================
+
+The Experimenter ID of this extension is:
+
+NTR_VENDOR_ID = 0x00001540
+
+
+4. Group Experimenter Property
+==============================
+
+The following group property experimenter type defined by this extension.
+
+enum ntr_group_mod_subtype {
+	NTRT_SELECTION_METHOD = 1,
+};
+
+
+Modifications to the group table from the controller may be done with a
+OFPT_GROUP_MOD message described (draft) Open Flow 1.5.  Group Entry
+Message. Of relevance here is that (draft) Open Flow 1.5 group messages
+have properties.
+
+This proposal is defined in terms of an implementation of struct
+ofp_group_prop_experimenter which is described in (draft) Open Flow 1.5.
+The implementation is:
+
+struct ntr_group_prop_selection_method {
+    ovs_be16 type;                  /* OFPGPT_EXPERIMENTER. */
+    ovs_be16 length;                /* Length in bytes of this property. */
+    ovs_be32 experimenter;          /* NTR_VENDOR_ID. */
+    ovs_be32 exp_type;              /* NTRT_SELECTION_METHOD. */
+    ovs_be32 pad;
+    char selection_method[NTR_MAX_SELECTION_METHOD_LEN];
+                                    /* Null-terminated */
+    ovs_be64 selection_method_param;  /* Non-Field parameter for
+                                       * bucket selection. */
+
+    /* Followed by:
+     *   - Exactly (length - 40) (possibly 0) bytes containing OXM TLVs, then
+     *   - Exactly ((length + 7)/8*8 - length) (between 0 and 7) bytes of
+     *     all-zero bytes
+     * In summary, ntr_group_prop_selection_method is padded as needed,
+     * to make its overall size a multiple of 8, to preserve alignment
+     * in structures using it.
+     */
+    /* uint8_t field_array[0]; */   /* Zero or more fields encoded as
+                                     * OXM TLVs where the has_mask bit must
+                                     * be zero and the value it specifies is
+                                     * a mask to apply to packet fields and
+                                     * then input them to the selection
+                                     * method of a select group. */
+    /* uint8_t pad2[0]; */
+};
+OFP_ASSERT(sizeof(struct ntr_group_mod) == 40);
+
+
+This property may only be used with group mod messages whose:
+* command is OFPGC_ADD or OFPGC_MODIFY; and
+* type is OFPGT_SELECT
+
+
+The type field is the OFPGPT_EXPERIMENTER which is
+defined in EXT-350 as 0xffff.
+
+
+The experimenter field is the Experimenter ID (see 3).
+
+
+The exp_type field is NTRT_SELECTION_METHOD.
+
+
+The group selection_method is a null-terminated string which if non-zero
+length specifies a selection method known to an underlying layer of the
+switch. The value of NTR_MAX_SELECTION_METHOD_LEN is 16.
+
+The group selection_method may be zero-length to request compatibility with
+Open Flow 1.4.
+
+
+The selection_method_param provides a non-field parameter for
+the group selection_method. It must be all-zeros unless the
+group selection_method is non-zero length.
+
+The selection_method_param may for example be used as an initial value for
+the hash of a hash group selection method.
+
+
+The fields field is an ofp_match structure which includes the fields which
+should be used as inputs to bucket selection. ofp_match is described in
+Open Flow 1.4 section 7.2.2 Flow Match Structures.
+
+Fields must not be specified unless the group selection_method is non-zero
+length.
+
+The pre-requisites for fields specified must be satisfied in the match for
+any flow that uses the group.
+
+Masking is allowed but not required for fields whose TLVs allow masking.
+
+The fields may for example be used as the fields that are hashed
+by a hash group selection method.
+
+
+5. History
+==========
+
+This proposal has been developed independently of any similar work in this
+area. No such work is known.
