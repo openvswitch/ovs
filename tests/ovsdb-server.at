@@ -163,7 +163,7 @@ ordinals
 ], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
   [[ovstest test-jsonrpc request unix:socket get_schema [\"nonexistent\"]]], [0],
-  [[{"error":null,"id":0,"result":{"details":"get_schema request specifies unknown database nonexistent","error":"unknown database","syntax":"[\"nonexistent\"]"}}
+  [[{"error":{"details":"get_schema request specifies unknown database nonexistent","error":"unknown database","syntax":"[\"nonexistent\"]"},"id":0,"result":null}
 ]], [], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP

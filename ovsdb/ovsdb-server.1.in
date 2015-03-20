@@ -251,7 +251,34 @@ vSwitch 2.4 and later extend <condition> to allow the use of \fB<\fR,
 of 0 or 1 integer'' and ``set of 0 or 1 real''.  These conditions
 evaluate to false when the column is empty, and otherwise as described
 in RFC 7047 for integer and real types.
-
+.
+.SH "BUGS"
+.
+In Open vSwitch before version 2.4, when \fBovsdb\-server\fR sent
+JSON-RPC error responses to some requests, it incorrectly formulated
+them with the \fBresult\fR and \fBerror\fR swapped, so that the
+response appeared to indicate success (with a nonsensical result)
+rather than an error.  The requests that suffered from this problem
+were:
+.
+.IP \fBtransact\fR
+.IQ \fBget_schema\fR
+Only if the request names a nonexistent database.
+.IP \fBmonitor\fR
+.IQ \fBlock\fR
+.IQ \fBunlock\fR
+In all error cases.
+.
+.PP
+Of these cases, the only error that a well-written application is
+likely to encounter in practice is \fBmonitor\fR of tables or columns
+that do not exist, in an situation where the application has been
+upgraded but the old database schema is still temporarily in use.  To
+handle this situation gracefully, we recommend that clients should
+treat a \fBmonitor\fR response with a \fBresult\fR that contains an
+\fBerror\fR key-value pair as an error (assuming that the database
+being monitored does not contain a table named \fBerror\fR).
+.
 .SH "SEE ALSO"
 .
 .BR ovsdb\-tool (1).
