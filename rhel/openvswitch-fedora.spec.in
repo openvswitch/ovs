@@ -200,6 +200,8 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
+%{_sysconfdir}/bash_completion.d/ovs-appctl-bashcomp.bash
+%{_sysconfdir}/bash_completion.d/ovs-vsctl-bashcomp.bash
 %dir %{_sysconfdir}/openvswitch
 %config %ghost %{_sysconfdir}/openvswitch/conf.db
 %config %ghost %{_sysconfdir}/openvswitch/system-id.conf
