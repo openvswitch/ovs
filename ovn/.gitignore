@@ -12,3 +12,5 @@
 /ovn-nb-idl.c
 /ovn-nb-idl.h
 /ovn-nb-idl.ovsidl
+/ovn-nbctl
+/ovn-nbctl.8

@@ -66,8 +66,8 @@ ovn/ovn-nb.5: \
 		$(srcdir)/ovn/ovn-nb.xml > $@.tmp && \
 	mv $@.tmp $@
 
-man_MANS += ovn/ovn-controller.8 ovn/ovn-architecture.7
-EXTRA_DIST += ovn/ovn-controller.8.in ovn/ovn-architecture.7.xml
+man_MANS += ovn/ovn-controller.8 ovn/ovn-architecture.7 ovn/ovn-nbctl.8
+EXTRA_DIST += ovn/ovn-controller.8.in ovn/ovn-architecture.7.xml ovn/ovn-nbctl.8.xml
 
 SUFFIXES += .xml
 %: %.xml
@@ -115,3 +115,7 @@ ovn_libovn_la_SOURCES = \
 	ovn/ovn-idl.h \
 	ovn/ovn-nb-idl.c \
 	ovn/ovn-nb-idl.h
+
+bin_PROGRAMS += ovn/ovn-nbctl
+ovn_ovn_nbctl_SOURCES = ovn/ovn-nbctl.c
+ovn_ovn_nbctl_LDADD = ovn/libovn.la ovsdb/libovsdb.la lib/libopenvswitch.la
