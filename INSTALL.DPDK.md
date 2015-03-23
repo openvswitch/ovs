@@ -430,6 +430,7 @@ qemu-wrap.py -cpu host -boot c -hda <disk image> -m 4096 -smp 4
   --enable-kvm -nographic -vnc none -net none -netdev tap,id=net1,
   script=no,downscript=no,ifname=if1,vhost=on -device virtio-net-pci,
   netdev=net1,mac=00:00:00:00:00:01
+```
 
 DPDK vhost VM configuration with libvirt:
 -----------------------------------------
