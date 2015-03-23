@@ -110,8 +110,7 @@ A: You can start by joining the mailing lists and helping to answer
 
    http://openvswitch.org/mlists/
 
-### Q: Why can I no longer connect to my OpenFlow controller or OVSDB
-manager?
+### Q: Why can I no longer connect to my OpenFlow controller or OVSDB manager?
 
 A: Starting in OVS 2.4, we switched the default ports to the
    IANA-specified port numbers for OpenFlow (6633->6653) and OVSDB
@@ -692,8 +691,7 @@ A: In version 1.9.0, OVS switched to using a single datapath that is
    shared by all bridges of that type.  The "ovs-appctl dpif/*"
    commands provide similar functionality that is scoped by the bridge.
 
-### Q: I created a GRE port using ovs-vsctl so why can't I send traffic or
-   see the port in the datapath?
+### Q: I created a GRE port using ovs-vsctl so why can't I send traffic or see the port in the datapath?
 
 A: On Linux kernels before 3.11, the OVS GRE module and Linux GRE module
    cannot be loaded at the same time. It is likely that on your system the
@@ -733,9 +731,7 @@ A: It depends on mechanisms and configurations you want to use.
    you want to use ebtables rules.)  On NetBSD, you might want to
    consider using the bridge(4) with BRIDGE_IPF option.
 
-### Q: It seems that Open vSwitch does nothing when I removed a port and
-   then immediately put it back.  For example, consider that p1 is
-   a port of type=internal:
+### Q: It seems that Open vSwitch does nothing when I removed a port and then immediately put it back.  For example, consider that p1 is a port of type=internal:
 
        ovs-vsctl del-port br0 p1 -- \
            add-port br0 p1 -- \
@@ -761,9 +757,7 @@ A: It's an expected behaviour.
        ovs-vsctl add-port br0 p1 -- \
            set interface p1 type=internal
 
-### Q: I want to add thousands of ports to an Open vSwitch bridge, but
-   it takes too long (minutes or hours) to do it with ovs-vsctl.  How
-   can I do it faster?
+### Q: I want to add thousands of ports to an Open vSwitch bridge, but it takes too long (minutes or hours) to do it with ovs-vsctl.  How can I do it faster?
 
 A: If you add them one at a time with ovs-vsctl, it can take a long
    time to add thousands of ports to an Open vSwitch bridge.  This is
@@ -781,9 +775,7 @@ A: If you add them one at a time with ovs-vsctl, it can take a long
 
    takes seconds, not minutes or hours, in the OVS sandbox environment.
 
-### Q: I created a bridge named br0.  My bridge shows up in "ovs-vsctl
-    show", but "ovs-ofctl show br0" just prints "br0 is not a bridge
-    or a socket".
+### Q: I created a bridge named br0.  My bridge shows up in "ovs-vsctl show", but "ovs-ofctl show br0" just prints "br0 is not a bridge or a socket".
 
 A: Open vSwitch wasn't able to create the bridge.  Check the
    ovs-vswitchd log for details (Debian and Red Hat packaging for Open
@@ -800,10 +792,7 @@ A: Open vSwitch wasn't able to create the bridge.  Check the
    commands hang, if they change the configuration, unless one
    specifies "--no-wait".)
 
-### Q: I have a bridge br0.  I added a new port vif1.0, and it shows
-    up in "ovs-vsctl show", but "ovs-vsctl list port" says that it has
-    OpenFlow port ("ofport") -1, and "ovs-ofctl show br0" doesn't show
-    vif1.0 at all.
+### Q: I have a bridge br0.  I added a new port vif1.0, and it shows up in "ovs-vsctl show", but "ovs-vsctl list port" says that it has OpenFlow port ("ofport") -1, and "ovs-ofctl show br0" doesn't show vif1.0 at all.
 
 A: Open vSwitch wasn't able to create the port.  Check the
    ovs-vswitchd log for details (Debian and Red Hat packaging for Open
