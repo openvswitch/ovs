@@ -110,8 +110,7 @@ A: You can start by joining the mailing lists and helping to answer
 
    http://openvswitch.org/mlists/
 
-### Q: Why can I no longer connect to my OpenFlow controller or OVSDB
-manager?
+### Q: Why can I no longer connect to my OpenFlow controller or OVSDB manager?
 
 A: Starting in OVS 2.4, we switched the default ports to the
    IANA-specified port numbers for OpenFlow (6633->6653) and OVSDB
