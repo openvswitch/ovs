@@ -76,6 +76,7 @@ Post-v2.3.0
    - The default OpenFlow and OVSDB ports are now the IANA-assigned
      numbers.  OpenFlow is 6653 and OVSDB is 6640.
    - Support for DPDK vHost.
+   - Support for outer UDP checksums in Geneve and VXLAN.
 
 
 v2.3.0 - 14 Aug 2014

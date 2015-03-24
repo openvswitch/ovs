@@ -2057,24 +2057,28 @@
 
 	  </group>
 
-      <group title="Tunnel Options: gre and ipsec_gre only">
+      <group title="Tunnel Options: gre, ipsec_gre, geneve, and vxlan">
         <p>
-          Only <code>gre</code> and <code>ipsec_gre</code> interfaces support
-          these options.
+          <code>gre</code>, <code>ipsec_gre</code>, <code>geneve</code>, and
+          <code>vxlan</code> interfaces support these options.
         </p>
 
         <column name="options" key="csum" type='{"type": "boolean"}'>
           <p>
-            Optional.  Compute GRE checksums on outgoing packets.  Default is
-            disabled, set to <code>true</code> to enable.  Checksums present on
-            incoming packets will be validated regardless of this setting.
+            Optional.  Compute encapsulation header (either GRE or UDP) 
+            checksums on outgoing packets.  Default is disabled, set to
+            <code>true</code> to enable.  Checksums present on incoming
+            packets will be validated regardless of this setting.
 	  </p>
 
-	  <p>
-	    GRE checksums impose a significant performance penalty because they
-	    cover the entire packet.  The encapsulated L3, L4, and L7 packet
-	    contents typically have their own checksums, so this additional
-	    checksum only adds value for the GRE and encapsulated L2 headers.
+          <p>
+            When using the upstream Linux kernel module, computation of
+            checksums for <code>geneve</code> and <code>vxlan</code> requires
+            Linux kernel version 4.0 or higher. <code>gre</code> supports
+            checksums for all versions of Open vSwitch that support GRE.
+            The out of tree kernel module distributed as part of OVS
+            can compute all tunnel checksums on any kernel version that it
+            is compatible with.
           </p>
 
           <p>

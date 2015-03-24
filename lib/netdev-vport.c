@@ -426,7 +426,8 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
 
-    has_csum = strstr(type, "gre");
+    has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
+               strstr(type, "vxlan");
     ipsec_mech_set = false;
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
