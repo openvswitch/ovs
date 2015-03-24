@@ -17,7 +17,7 @@
 #define portid pid
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#ifndef HAVE_GENL_NOTIFY_TAKES_FAMILY
 struct rpl_genl_family {
 	struct genl_family	compat_family;
 	unsigned int            id;
@@ -122,7 +122,11 @@ static inline int genl_has_listeners(struct genl_family *family,
 static inline int rpl_genl_has_listeners(struct genl_family *family,
 				         struct net *net, unsigned int group)
 {
+#ifdef HAVE_GENL_NOTIFY_TAKES_FAMILY
     return genl_has_listeners(family, net->genl_sock, group);
+#else
+    return genl_has_listeners(&family->compat_family, net->genl_sock, group);
+#endif
 }
 
 #define genl_has_listeners rpl_genl_has_listeners

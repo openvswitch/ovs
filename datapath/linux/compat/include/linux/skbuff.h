@@ -14,8 +14,11 @@
 #define SKB_GSO_UDP_TUNNEL 0
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
+#ifndef HAVE_SKB_GSO_GRE_CSUM
 #define SKB_GSO_GRE_CSUM 0
+#endif
+
+#ifndef HAVE_SKB_GSO_UDP_TUNNEL_CSUM
 #define SKB_GSO_UDP_TUNNEL_CSUM 0
 #endif
 
