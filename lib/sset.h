@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ struct sset_node *sset_at_position(const struct sset *,
           : false);                                 \
          (NAME) = (NEXT))
 
+const char **sset_array(const struct sset *);
 const char **sset_sort(const struct sset *);
 
 /* Implementation helper macros. */

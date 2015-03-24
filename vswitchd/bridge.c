@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
+
 #include "async-append.h"
 #include "bfd.h"
 #include "bitmap.h"
@@ -26,6 +27,7 @@
 #include "coverage.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dpif.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
@@ -317,6 +319,7 @@ static ofp_port_t iface_get_requested_ofp_port(
     const struct ovsrec_interface *);
 static ofp_port_t iface_pick_ofport(const struct ovsrec_interface *);
 
+
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
  * This is deprecated.  It is only for compatibility with broken device drivers
@@ -334,6 +337,8 @@ static void configure_splinter_port(struct port *);
 static void add_vlan_splinter_ports(struct bridge *,
                                     const unsigned long int *splinter_vlans,
                                     struct shash *ports);
+
+static void discover_types(const struct ovsrec_open_vswitch *cfg);
 
 static void
 bridge_init_ofproto(const struct ovsrec_open_vswitch *cfg)
@@ -394,6 +399,8 @@ bridge_init(const char *remote)
 
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_cur_cfg);
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_statistics);
+    ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_datapath_types);
+    ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_iface_types);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_external_ids);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_ovs_version);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_db_version);
@@ -570,6 +577,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ofproto_set_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
         smap_get_int(&ovs_cfg->other_config, "n-revalidator-threads", 0));
+
+    if (ovs_cfg) {
+        discover_types(ovs_cfg);
+    }
 
     /* Destroy "struct bridge"s, "struct port"s, and "struct iface"s according
      * to 'ovs_cfg', with only very minimal configuration otherwise.
@@ -2940,6 +2951,7 @@ bridge_run(void)
 
         if (cfg) {
             ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
+            discover_types(cfg);
         }
 
         /* If we are completing our initial configuration for this run
@@ -5022,4 +5034,32 @@ mirror_refresh_stats(struct mirror *m)
     }
 
     ovsrec_mirror_set_statistics(m->cfg, keys, values, stat_cnt);
+}
+
+/*
+ * Add registered netdev and dpif types to ovsdb to allow external
+ * applications to query the capabilities of the Open vSwitch instance
+ * running on the node.
+ */
+static void
+discover_types(const struct ovsrec_open_vswitch *cfg)
+{
+    struct sset types;
+
+    /* Datapath types. */
+    sset_init(&types);
+    dp_enumerate_types(&types);
+    const char **datapath_types = sset_array(&types);
+    ovsrec_open_vswitch_set_datapath_types(cfg, datapath_types,
+                                           sset_count(&types));
+    free(datapath_types);
+    sset_destroy(&types);
+
+    /* Port types. */
+    sset_init(&types);
+    netdev_enumerate_types(&types);
+    const char **iface_types = sset_array(&types);
+    ovsrec_open_vswitch_set_iface_types(cfg, iface_types, sset_count(&types));
+    free(iface_types);
+    sset_destroy(&types);
 }

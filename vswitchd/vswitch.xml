@@ -423,6 +423,28 @@
 
     </group>
 
+    <group title="Capabilities">
+      <p>
+        These columns report capabilities of the Open vSwitch instance.
+      </p>
+      <column name="datapath_types">
+        <p>
+          This column reports the different dpifs registered with the system.
+          These are the values that this instance supports in the <ref
+          column="datapath_type" table="Bridge"/> column of the <ref
+          table="Bridge"/> table.
+        </p>
+      </column>
+      <column name="iface_types">
+        <p>
+          This column reports the different netdevs registered with the system.
+          These are the values that this instance supports in the <ref
+          column="type" table="Interface"/> column of the <ref
+          table="Interface"/> table.
+        </p>
+      </column>
+    </group>
+
     <group title="Database Configuration">
       <p>
         These columns primarily configure the Open vSwitch database
@@ -928,9 +950,12 @@
 
     <group title="Other Features">
       <column name="datapath_type">
-        Name of datapath provider.  The kernel datapath has
-        type <code>system</code>.  The userspace datapath has
-        type <code>netdev</code>.
+        Name of datapath provider.  The kernel datapath has type
+        <code>system</code>.  The userspace datapath has type
+        <code>netdev</code>.  A manager may refer to the <ref
+        table="Open_vSwitch" column="datapath_types"/> column of the <ref
+        table="Open_vSwitch"/> table for a list of the types accepted by this
+        Open vSwitch instance.
       </column>
 
       <column name="external_ids" key="bridge-id">
@@ -1747,7 +1772,10 @@
     <group title="System-Specific Details">
       <column name="type">
         <p>
-          The interface type, one of:
+          The interface type.  The types supported by a particular instance of
+          Open vSwitch are listed in the <ref table="Open_vSwitch"
+          column="iface_types"/> column in the <ref table="Open_vSwitch"/>
+          table.  The following types are defined:
         </p>
 
         <dl>
