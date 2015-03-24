@@ -2841,6 +2841,14 @@ const struct netdev_class netdev_internal_class =
 
 #define CODEL_N_QUEUES 0x0000
 
+/* In sufficiently new kernel headers these are defined as enums in
+ * <linux/pkt_sched.h>.  Define them here as macros to help out with older
+ * kernels.  (This overrides any enum definition in the header file but that's
+ * harmless.) */
+#define TCA_CODEL_TARGET   1
+#define TCA_CODEL_LIMIT    2
+#define TCA_CODEL_INTERVAL 3
+
 struct codel {
     struct tc tc;
     uint32_t target;
@@ -3051,6 +3059,17 @@ static const struct tc_ops tc_ops_codel = {
 /* FQ-CoDel traffic control class. */
 
 #define FQCODEL_N_QUEUES 0x0000
+
+/* In sufficiently new kernel headers these are defined as enums in
+ * <linux/pkt_sched.h>.  Define them here as macros to help out with older
+ * kernels.  (This overrides any enum definition in the header file but that's
+ * harmless.) */
+#define TCA_FQ_CODEL_TARGET     1
+#define TCA_FQ_CODEL_LIMIT      2
+#define TCA_FQ_CODEL_INTERVAL   3
+#define TCA_FQ_CODEL_ECN        4
+#define TCA_FQ_CODEL_FLOWS      5
+#define TCA_FQ_CODEL_QUANTUM    6
 
 struct fqcodel {
     struct tc tc;
