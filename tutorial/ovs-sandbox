@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (c) 2013 Nicira, Inc.
+# Copyright (c) 2013, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -234,6 +234,9 @@ touch "$sandbox"/.conf.db.~lock~
 run ovsdb-tool create conf.db "$schema"
 rungdb $gdb_ovsdb ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock
+
+# Initialize database.
+run ovs-vsctl --no-wait -- init
 
 # Start ovs-vswitchd.
 rungdb $gdb_vswitchd ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
