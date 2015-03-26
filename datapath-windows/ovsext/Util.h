@@ -27,6 +27,7 @@
 #define OVS_DATAPATH_POOL_TAG           'DSVO'
 #define OVS_EVENT_POOL_TAG              'ESVO'
 #define OVS_FLOW_POOL_TAG               'LSVO'
+#define OVS_VXLAN_POOL_TAG              'XSVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
