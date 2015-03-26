@@ -433,14 +433,14 @@ OvsAllocateMDLAndData(NDIS_HANDLE ndisHandle,
     PMDL mdl;
     PVOID data;
 
-    data = OvsAllocateMemory(dataSize);
+    data = OvsAllocateMemoryWithTag(dataSize, OVS_MDL_POOL_TAG);
     if (data == NULL) {
         return NULL;
     }
 
     mdl = NdisAllocateMdl(ndisHandle, data, dataSize);
     if (mdl == NULL) {
-        OvsFreeMemory(data);
+        OvsFreeMemoryWithTag(data, OVS_MDL_POOL_TAG);
     }
 
     return mdl;
@@ -454,7 +454,7 @@ OvsFreeMDLAndData(PMDL mdl)
 
     data = MmGetMdlVirtualAddress(mdl);
     NdisFreeMdl(mdl);
-    OvsFreeMemory(data);
+    OvsFreeMemoryWithTag(data, OVS_MDL_POOL_TAG);
 }
 
 
