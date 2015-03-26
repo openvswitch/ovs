@@ -23,6 +23,7 @@
 #define OVS_NBL_ONLY_POOL_TAG           'OSVO'
 #define OVS_NET_BUFFER_POOL_TAG         'NSVO'
 #define OVS_OTHER_POOL_TAG              'MSVO'
+#define OVS_DATAPATH_POOL_TAG           'DSVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);

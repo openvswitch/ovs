@@ -349,6 +349,37 @@ extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 NDIS_SPIN_LOCK ovsCtrlLockObj;
 PNDIS_SPIN_LOCK gOvsCtrlLock;
 
+NTSTATUS
+InitUserDumpState(POVS_OPEN_INSTANCE instance,
+                  POVS_MESSAGE ovsMsg)
+{
+    /* Clear the dumpState from a previous dump sequence. */
+    ASSERT(instance->dumpState.ovsMsg == NULL);
+    ASSERT(ovsMsg);
+
+    instance->dumpState.ovsMsg =
+        (POVS_MESSAGE)OvsAllocateMemoryWithTag(sizeof(OVS_MESSAGE),
+                                               OVS_DATAPATH_POOL_TAG);
+    if (instance->dumpState.ovsMsg == NULL) {
+        return STATUS_NO_MEMORY;
+    }
+    RtlCopyMemory(instance->dumpState.ovsMsg, ovsMsg,
+                  sizeof *instance->dumpState.ovsMsg);
+    RtlZeroMemory(instance->dumpState.index,
+                  sizeof instance->dumpState.index);
+
+    return STATUS_SUCCESS;
+}
+
+VOID
+FreeUserDumpState(POVS_OPEN_INSTANCE instance)
+{
+    if (instance->dumpState.ovsMsg != NULL) {
+        OvsFreeMemoryWithTag(instance->dumpState.ovsMsg,
+                             OVS_DATAPATH_POOL_TAG);
+        RtlZeroMemory(&instance->dumpState, sizeof instance->dumpState);
+    }
+}
 
 VOID
 OvsInit()
@@ -497,7 +528,8 @@ OvsAddOpenInstance(POVS_DEVICE_EXTENSION ovsExt,
                    PFILE_OBJECT fileObject)
 {
     POVS_OPEN_INSTANCE instance =
-        (POVS_OPEN_INSTANCE) OvsAllocateMemory(sizeof (OVS_OPEN_INSTANCE));
+        (POVS_OPEN_INSTANCE)OvsAllocateMemoryWithTag(sizeof(OVS_OPEN_INSTANCE),
+                                                     OVS_DATAPATH_POOL_TAG);
     UINT32 i;
 
     if (instance == NULL) {
@@ -508,7 +540,7 @@ OvsAddOpenInstance(POVS_DEVICE_EXTENSION ovsExt,
 
     if (ovsNumberOfOpenInstances >= OVS_MAX_OPEN_INSTANCES) {
         OvsReleaseCtrlLock();
-        OvsFreeMemory(instance);
+        OvsFreeMemoryWithTag(instance, OVS_DATAPATH_POOL_TAG);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
     RtlZeroMemory(instance, sizeof (OVS_OPEN_INSTANCE));
@@ -559,7 +591,7 @@ OvsRemoveOpenInstance(PFILE_OBJECT fileObject)
     OvsReleaseCtrlLock();
     ASSERT(instance->eventQueue == NULL);
     ASSERT (instance->packetQueue == NULL);
-    OvsFreeMemory(instance);
+    OvsFreeMemoryWithTag(instance, OVS_DATAPATH_POOL_TAG);
 }
 
 NTSTATUS
