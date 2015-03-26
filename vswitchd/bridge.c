@@ -574,10 +574,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
         smap_get_int(&ovs_cfg->other_config, "n-revalidator-threads", 0));
 
-    if (ovs_cfg) {
-        discover_types(ovs_cfg);
-    }
-
     /* Destroy "struct bridge"s, "struct port"s, and "struct iface"s according
      * to 'ovs_cfg', with only very minimal configuration otherwise.
      *
