@@ -306,7 +306,7 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
         OvsInitPhysNicVport(vport, virtExtVport, nicParam->NicIndex);
         status = InitHvVportCommon(switchContext, vport, TRUE);
         if (status != NDIS_STATUS_SUCCESS) {
-            OvsFreeMemory(vport);
+            OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
             goto add_nic_done;
         }
     }
@@ -658,7 +658,7 @@ OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
     SIZE_T wstrSize = length * sizeof(WCHAR);
     UINT i;
 
-    PWSTR wsName = OvsAllocateMemory(wstrSize);
+    PWSTR wsName = OvsAllocateMemoryWithTag(wstrSize, OVS_VPORT_POOL_TAG);
     if (!wsName) {
         return NULL;
     }
@@ -666,7 +666,7 @@ OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
         wsName[i] = name[i];
     }
     vport = OvsFindVportByHvNameW(switchContext, wsName, wstrSize);
-    OvsFreeMemory(wsName);
+    OvsFreeMemoryWithTag(wsName, OVS_VPORT_POOL_TAG);
     return vport;
 }
 
@@ -703,7 +703,8 @@ POVS_VPORT_ENTRY
 OvsAllocateVport(VOID)
 {
     POVS_VPORT_ENTRY vport;
-    vport = (POVS_VPORT_ENTRY)OvsAllocateMemory(sizeof (OVS_VPORT_ENTRY));
+    vport = (POVS_VPORT_ENTRY)OvsAllocateMemoryWithTag(
+        sizeof(OVS_VPORT_ENTRY), OVS_VPORT_POOL_TAG);
     if (vport == NULL) {
         return NULL;
     }
@@ -1073,7 +1074,7 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
             ASSERT(switchContext->numPhysicalNics == 0);
             switchContext->virtualExternalPortId = 0;
             switchContext->virtualExternalVport = NULL;
-            OvsFreeMemory(vport);
+            OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
             if (vportDeallocated) {
                 *vportDeallocated = TRUE;
             }
@@ -1151,7 +1152,7 @@ OvsRemoveAndDeleteVport(POVS_SWITCH_CONTEXT switchContext,
         } else {
             switchContext->numNonHvVports--;
         }
-        OvsFreeMemory(vport);
+        OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
         if (vportDeallocated) {
             *vportDeallocated = TRUE;
         }
@@ -1189,19 +1190,20 @@ OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
          OvsInitVportWithPortParam(vport, portParam);
          status = InitHvVportCommon(switchContext, vport, TRUE);
          if (status != NDIS_STATUS_SUCCESS) {
-             OvsFreeMemory(vport);
+             OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
              goto cleanup;
          }
     }
+
 cleanup:
     if (status != NDIS_STATUS_SUCCESS) {
         OvsClearAllSwitchVports(switchContext);
     }
 
-    if (portArray != NULL) {
-        OvsFreeMemory(portArray);
-    }
+    OvsFreeSwitchPortsArray(portArray);
+
     OVS_LOG_TRACE("Exit: status: %x", status);
+
     return status;
 }
 
@@ -1248,7 +1250,7 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
                                     nicParam->NicIndex);
                 status = InitHvVportCommon(switchContext, vport, TRUE);
                 if (status != NDIS_STATUS_SUCCESS) {
-                    OvsFreeMemory(vport);
+                    OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
                     vport = NULL;
                 }
             }
@@ -1268,9 +1270,8 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
     }
 cleanup:
 
-    if (nicArray != NULL) {
-        OvsFreeMemory(nicArray);
-    }
+    OvsFreeSwitchNicsArray(nicArray);
+
     OVS_LOG_TRACE("Exit: status: %x", status);
     return status;
 }
@@ -2129,7 +2130,7 @@ Cleanup:
                     OvsCleanupVxlanTunnel(vport);
                 }
             }
-            OvsFreeMemory(vport);
+            OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
         }
 
         NlBuildErrorMsg(msgIn, msgError, nlError);
