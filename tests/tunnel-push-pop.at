@@ -75,5 +75,21 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_push(tnl_port(3),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x40),gre((flags=0x20,proto=0x6558),key=0x1c8)),out_port(100))
 ])
 
+dnl Check decapsulation of GRE packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 '001b213cac30001b213cab6408004500007e79464000402f99080101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
+  port  3: rx pkts=1, bytes=98, drop=0, errs=0, frame=0, over=0, crc=0
+])
+
+dnl Check GRE only accepts encapsulated Ethernet frames
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 '001b213cac30001b213cab6408004500007e79464000402f99080101025c0101025820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
+  port  3: rx pkts=1, bytes=98, drop=0, errs=0, frame=0, over=0, crc=0
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP

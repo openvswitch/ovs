@@ -911,6 +911,10 @@ parse_gre_header(struct dp_packet *packet,
         return -EINVAL;
     }
 
+    if (greh->protocol != htons(ETH_TYPE_TEB)) {
+        return -EINVAL;
+    }
+
     hlen = gre_header_len(greh->flags);
     if (hlen > dp_packet_size(packet)) {
         return -EINVAL;
