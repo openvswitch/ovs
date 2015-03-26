@@ -25,8 +25,10 @@
 #define OVS_OTHER_POOL_TAG              'MSVO'
 
 VOID *OvsAllocateMemory(size_t size);
+VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
 VOID *OvsAllocateAlignedMemory(size_t size, UINT16 align);
 VOID OvsFreeMemory(VOID *ptr);
+VOID OvsFreeMemoryWithTag(VOID *ptr, ULONG tag);
 VOID OvsFreeAlignedMemory(VOID *ptr);
 
 #define LIST_FORALL(_headPtr, _itemPtr) \
