@@ -23,4 +23,7 @@ NDIS_STATUS OvsGetPortsOnSwitch(POVS_SWITCH_CONTEXT switchContext,
                                 PNDIS_SWITCH_PORT_ARRAY *portArrayOut);
 NDIS_STATUS OvsGetNicsOnSwitch(POVS_SWITCH_CONTEXT switchContext,
                                PNDIS_SWITCH_NIC_ARRAY *nicArrayOut);
+VOID OvsFreeSwitchPortsArray(PNDIS_SWITCH_PORT_ARRAY portsArray);
+VOID OvsFreeSwitchNicsArray(PNDIS_SWITCH_NIC_ARRAY nicsArray);
+
 #endif /* __OID_H_ */
