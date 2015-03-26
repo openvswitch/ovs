@@ -21,6 +21,7 @@
 #include "odp-util.h"
 #include "ofpbuf.h"
 #include "ofproto-dpif-mirror.h"
+#include "ofproto-dpif-rid.h"
 #include "ofproto-dpif.h"
 #include "ofproto.h"
 #include "stp.h"
@@ -54,10 +55,71 @@ struct xlate_out {
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
+    /* Recirculation IDs on which references are held. */
+    unsigned n_recircs;
+    union {
+        uint32_t recirc[2];   /* When n_recircs == 1 or 2 */
+        uint32_t *recircs;    /* When 'n_recircs' > 2 */
+    };
+
     uint64_t odp_actions_stub[256 / 8];
     struct ofpbuf odp_actions_buf;
     struct ofpbuf *odp_actions;
 };
+
+/* Helpers to abstract the recirculation union away. */
+static inline void
+xlate_out_add_recirc(struct xlate_out *xout, uint32_t id)
+{
+    if (OVS_LIKELY(xout->n_recircs < ARRAY_SIZE(xout->recirc))) {
+        xout->recirc[xout->n_recircs++] = id;
+    } else {
+        if (xout->n_recircs == ARRAY_SIZE(xout->recirc)) {
+            uint32_t *recircs = xmalloc(sizeof xout->recirc + sizeof id);
+
+            memcpy(recircs, xout->recirc, sizeof xout->recirc);
+            xout->recircs = recircs;
+        } else {
+            xout->recircs = xrealloc(xout->recircs,
+                                     (xout->n_recircs + 1) * sizeof id);
+        }
+        xout->recircs[xout->n_recircs++] = id;
+    }
+}
+
+static inline const uint32_t *
+xlate_out_get_recircs(const struct xlate_out *xout)
+{
+    if (OVS_LIKELY(xout->n_recircs <= ARRAY_SIZE(xout->recirc))) {
+        return xout->recirc;
+    } else {
+        return xout->recircs;
+    }
+}
+
+static inline void
+xlate_out_take_recircs(struct xlate_out *xout)
+{
+    if (OVS_UNLIKELY(xout->n_recircs > ARRAY_SIZE(xout->recirc))) {
+        free(xout->recircs);
+    }
+    xout->n_recircs = 0;
+}
+
+static inline void
+xlate_out_free_recircs(struct xlate_out *xout)
+{
+    if (OVS_LIKELY(xout->n_recircs <= ARRAY_SIZE(xout->recirc))) {
+        for (int i = 0; i < xout->n_recircs; i++) {
+            recirc_free_id(xout->recirc[i]);
+        }
+    } else {
+        for (int i = 0; i < xout->n_recircs; i++) {
+            recirc_free_id(xout->recircs[i]);
+        }
+        free(xout->recircs);
+    }
+}
 
 struct xlate_in {
     struct ofproto_dpif *ofproto;
@@ -137,6 +199,10 @@ struct xlate_in {
      * odp_actions stored in xlate_out.  If NULL, the default buffer will be
      * used. */
     struct ofpbuf *odp_actions;
+
+    /* The recirculation context related to this translation, as returned by
+     * xlate_lookup. */
+    const struct recirc_id_node *recirc;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,

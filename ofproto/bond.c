@@ -28,6 +28,7 @@
 #include "ofpbuf.h"
 #include "ofproto/ofproto-provider.h"
 #include "ofproto/ofproto-dpif.h"
+#include "ofproto/ofproto-dpif-rid.h"
 #include "connectivity.h"
 #include "coverage.h"
 #include "dynamic-string.h"
@@ -289,7 +290,7 @@ bond_unref(struct bond *bond)
     hmap_destroy(&bond->pr_rule_ops);
 
     if (bond->recirc_id) {
-        ofproto_dpif_free_recirc_id(bond->ofproto, bond->recirc_id);
+        recirc_free_id(bond->recirc_id);
     }
 
     free(bond);
@@ -446,10 +447,10 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
 
     if (bond->balance != BM_AB) {
         if (!bond->recirc_id) {
-            bond->recirc_id = ofproto_dpif_alloc_recirc_id(bond->ofproto);
+            bond->recirc_id = recirc_alloc_id(bond->ofproto);
         }
     } else if (bond->recirc_id) {
-        ofproto_dpif_free_recirc_id(bond->ofproto, bond->recirc_id);
+        recirc_free_id(bond->recirc_id);
         bond->recirc_id = 0;
     }
 

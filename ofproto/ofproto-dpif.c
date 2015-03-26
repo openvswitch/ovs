@@ -255,13 +255,6 @@ COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_mac_learning);
 COVERAGE_DEFINE(rev_mcast_snooping);
 
-/* Stores mapping between 'recirc_id' and 'ofproto-dpif'. */
-struct dpif_backer_recirc_node {
-    struct cmap_node cmap_node;
-    struct ofproto_dpif *ofproto;
-    uint32_t recirc_id;
-};
-
 /* All datapaths of a given type share a single dpif backer instance. */
 struct dpif_backer {
     char *type;
@@ -279,9 +272,6 @@ struct dpif_backer {
     bool recv_set_enable; /* Enables or disables receiving packets. */
 
     /* Recirculation. */
-    struct recirc_id_pool *rid_pool;       /* Recirculation ID pool. */
-    struct cmap recirc_map;         /* Map of 'recirc_id's to 'ofproto's. */
-    struct ovs_mutex recirc_mutex;  /* Protects 'recirc_map'. */
     bool enable_recirc;   /* True if the datapath supports recirculation */
 
     /* True if the datapath supports unique flow identifiers */
@@ -395,8 +385,6 @@ ofproto_dpif_get_enable_ufid(struct dpif_backer *backer)
     return backer->enable_ufid;
 }
 
-static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *ofproto,
-                                        ofp_port_t ofp_port);
 static void ofproto_trace(struct ofproto_dpif *, struct flow *,
                           const struct dp_packet *packet,
                           const struct ofpact[], size_t ofpacts_len,
@@ -857,27 +845,6 @@ dealloc(struct ofproto *ofproto_)
     free(ofproto);
 }
 
-/* Called when 'ofproto' is destructed.  Checks for and clears any
- * recirc_id leak. */
-static void
-dpif_backer_recirc_clear_ofproto(struct dpif_backer *backer,
-                                 struct ofproto_dpif *ofproto)
-{
-    struct dpif_backer_recirc_node *node;
-
-    ovs_mutex_lock(&backer->recirc_mutex);
-    CMAP_FOR_EACH (node, cmap_node, &backer->recirc_map) {
-        if (node->ofproto == ofproto) {
-            VLOG_ERR("recirc_id %"PRIu32", not freed when ofproto (%s) "
-                     "is destructed", node->recirc_id, ofproto->up.name);
-            cmap_remove(&backer->recirc_map, &node->cmap_node,
-                        node->recirc_id);
-            ovsrcu_postpone(free, node);
-        }
-    }
-    ovs_mutex_unlock(&backer->recirc_mutex);
-}
-
 static void
 close_dpif_backer(struct dpif_backer *backer)
 {
@@ -893,9 +860,6 @@ close_dpif_backer(struct dpif_backer *backer)
     ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
     hmap_destroy(&backer->odp_to_ofport_map);
     shash_find_and_delete(&all_dpif_backers, backer->type);
-    recirc_id_pool_destroy(backer->rid_pool);
-    cmap_destroy(&backer->recirc_map);
-    ovs_mutex_destroy(&backer->recirc_mutex);
     free(backer->type);
     free(backer->dp_version_string);
     dpif_close(backer->dpif);
@@ -928,6 +892,8 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     char *backer_name;
     const char *name;
     int error;
+
+    recirc_init();
 
     backer = shash_find_data(&all_dpif_backers, type);
     if (backer) {
@@ -1010,9 +976,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->max_mpls_depth = check_max_mpls_depth(backer);
     backer->masked_set_action = check_masked_set_action(backer);
     backer->enable_ufid = check_ufid(backer);
-    backer->rid_pool = recirc_id_pool_create();
-    ovs_mutex_init(&backer->recirc_mutex);
-    cmap_init(&backer->recirc_map);
 
     backer->enable_tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
     atomic_count_init(&backer->tnl_count, 0);
@@ -1365,7 +1328,6 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     uint64_t ofpacts_stub[128 / 8];
     struct ofpbuf ofpacts;
     struct rule *unused_rulep OVS_UNUSED;
-    struct ofpact_resubmit *resubmit;
     struct match match;
     int error;
     int id;
@@ -1408,22 +1370,6 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     match_set_recirc_id(&match, 0);
     error = ofproto_dpif_add_internal_flow(ofproto, &match, 2, 0, &ofpacts,
                                            &unused_rulep);
-    if (error) {
-        return error;
-    }
-
-    /* Continue rule lookups for not-matched recirc rules from table 0.
-     *
-     * (priority=1), actions=resubmit(, 0)
-     */
-    resubmit = ofpact_put_RESUBMIT(&ofpacts);
-    resubmit->in_port = OFPP_IN_PORT;
-    resubmit->table_id = 0;
-
-    match_init_catchall(&match);
-    error = ofproto_dpif_add_internal_flow(ofproto, &match, 1, 0, &ofpacts,
-                                           &unused_rulep);
-
     return error;
 }
 
@@ -1461,7 +1407,7 @@ destruct(struct ofproto *ofproto_)
     }
     guarded_list_destroy(&ofproto->pins);
 
-    dpif_backer_recirc_clear_ofproto(ofproto->backer, ofproto);
+    recirc_free_ofproto(ofproto, ofproto->up.name);
 
     mbridge_unref(ofproto->mbridge);
 
@@ -2743,7 +2689,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
 {
     struct ofport_dpif *port;
 
-    port = get_ofp_port(bundle->ofproto, ofp_port);
+    port = ofp_port_to_ofport(bundle->ofproto, ofp_port);
     if (!port) {
         return false;
     }
@@ -3249,8 +3195,8 @@ set_mcast_snooping_port(struct ofproto *ofproto_, void *aux,
 
 /* Ports. */
 
-static struct ofport_dpif *
-get_ofp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
+struct ofport_dpif *
+ofp_port_to_ofport(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(&ofproto->up, ofp_port);
     return ofport ? ofport_dpif_cast(ofport) : NULL;
@@ -3444,7 +3390,7 @@ static int
 port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
+    struct ofport_dpif *ofport = ofp_port_to_ofport(ofproto, ofp_port);
     int error = 0;
 
     if (!ofport) {
@@ -3756,21 +3702,13 @@ static void
 rule_dpif_set_recirc_id(struct rule_dpif *rule, uint32_t id)
     OVS_REQUIRES(rule->up.mutex)
 {
-    ovs_assert(!rule->recirc_id);
-    rule->recirc_id = id;
-}
-
-/* Returns 'rule''s recirculation id. */
-uint32_t
-rule_dpif_get_recirc_id(struct rule_dpif *rule)
-    OVS_REQUIRES(rule->up.mutex)
-{
-    if (!rule->recirc_id) {
-        struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
-        rule_dpif_set_recirc_id(rule, ofproto_dpif_alloc_recirc_id(ofproto));
+    ovs_assert(!rule->recirc_id || rule->recirc_id == id);
+    if (rule->recirc_id == id) {
+        /* Release the new reference to the same id. */
+        recirc_free_id(id);
+    } else {
+        rule->recirc_id = id;
     }
-    return rule->recirc_id;
 }
 
 /* Sets 'rule''s recirculation id. */
@@ -3782,32 +3720,6 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
     ovs_mutex_lock(&rule->up.mutex);
     rule_dpif_set_recirc_id(rule, id);
     ovs_mutex_unlock(&rule->up.mutex);
-}
-
-/* Lookup 'flow' in table 0 of 'ofproto''s classifier.
- * If 'wc' is non-null, sets the fields that were relevant as part of
- * the lookup. Returns the table id where a match or miss occurred via
- * 'table_id'.  This will be zero unless there was a miss and
- * OFPTC11_TABLE_MISS_CONTINUE is in effect for the sequence of tables
- * where misses occur, or TBL_INTERNAL if the rule has a non-zero
- * recirculation ID, and a match was found in the internal table, or if
- * there was no match and one of the special rules (drop_frags_rule,
- * miss_rule, or no_packet_in_rule) was returned.
- *
- * The return value is the found rule, which is valid at least until the next
- * RCU quiescent period.  If the rule needs to stay around longer,
- * a non-zero 'take_ref' must be passed in to cause a reference to be taken
- * on it before this returns. */
-struct rule_dpif *
-rule_dpif_lookup(struct ofproto_dpif *ofproto, struct flow *flow,
-                 struct flow_wildcards *wc, bool take_ref,
-                 const struct dpif_flow_stats *stats, uint8_t *table_id)
-{
-    *table_id = rule_dpif_lookup_get_init_table_id(flow);
-
-    return rule_dpif_lookup_from_table(ofproto, flow, wc, take_ref, stats,
-                                       table_id, flow->in_port.ofp_port, true,
-                                       true);
 }
 
 /* The returned rule (if any) is valid at least until the next RCU quiescent
@@ -3943,7 +3855,7 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
             || miss_config == OFPUTIL_TABLE_MISS_CONTROLLER) {
             struct ofport_dpif *port;
 
-            port = get_ofp_port(ofproto, old_in_port);
+            port = ofp_port_to_ofport(ofproto, old_in_port);
             if (!port) {
                 VLOG_WARN_RL(&rl, "packet-in on unknown OpenFlow port %"PRIu16,
                              old_in_port);
@@ -4034,9 +3946,7 @@ rule_destruct(struct rule *rule_)
 
     ovs_mutex_destroy(&rule->stats_mutex);
     if (rule->recirc_id) {
-        struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
-        ofproto_dpif_free_recirc_id(ofproto, rule->recirc_id);
+        recirc_free_id(rule->recirc_id);
     }
 }
 
@@ -5476,7 +5386,7 @@ vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
 static odp_port_t
 ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
-    const struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
+    const struct ofport_dpif *ofport = ofp_port_to_ofport(ofproto, ofp_port);
     return ofport ? ofport->odp_port : ODPP_NONE;
 }
 
@@ -5508,61 +5418,6 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
         return port->up.ofp_port;
     } else {
         return OFPP_NONE;
-    }
-}
-
-struct ofproto_dpif *
-ofproto_dpif_recirc_get_ofproto(const struct dpif_backer *backer,
-                                uint32_t recirc_id)
-{
-    struct dpif_backer_recirc_node *node;
-
-    node = CONTAINER_OF(cmap_find(&backer->recirc_map, recirc_id),
-                        struct dpif_backer_recirc_node, cmap_node);
-
-    return node ? node->ofproto : NULL;
-}
-
-uint32_t
-ofproto_dpif_alloc_recirc_id(struct ofproto_dpif *ofproto)
-{
-    struct dpif_backer *backer = ofproto->backer;
-    uint32_t recirc_id = recirc_id_alloc(backer->rid_pool);
-
-    if (recirc_id) {
-        struct dpif_backer_recirc_node *node = xmalloc(sizeof *node);
-
-        node->recirc_id = recirc_id;
-        node->ofproto = ofproto;
-
-        ovs_mutex_lock(&backer->recirc_mutex);
-        cmap_insert(&backer->recirc_map, &node->cmap_node, node->recirc_id);
-        ovs_mutex_unlock(&backer->recirc_mutex);
-    }
-
-    return recirc_id;
-}
-
-void
-ofproto_dpif_free_recirc_id(struct ofproto_dpif *ofproto, uint32_t recirc_id)
-{
-    struct dpif_backer *backer = ofproto->backer;
-    struct dpif_backer_recirc_node *node;
-
-    node = CONTAINER_OF(cmap_find(&backer->recirc_map, recirc_id),
-                        struct dpif_backer_recirc_node, cmap_node);
-    if (node) {
-        ovs_mutex_lock(&backer->recirc_mutex);
-        cmap_remove(&backer->recirc_map, &node->cmap_node, node->recirc_id);
-        ovs_mutex_unlock(&backer->recirc_mutex);
-        recirc_id_free(backer->rid_pool, node->recirc_id);
-
-        /* 'recirc_id' should never be freed by non-owning 'ofproto'. */
-        ovs_assert(node->ofproto == ofproto);
-
-        /* RCU postpone the free, since other threads may be referring
-         * to 'node' at same time. */
-        ovsrcu_postpone(free, node);
     }
 }
 
