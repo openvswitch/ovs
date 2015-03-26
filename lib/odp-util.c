@@ -516,8 +516,9 @@ format_udp_tnl_push_header(struct ds *ds, const struct ip_header *ip)
     const struct udp_header *udp;
 
     udp = (const struct udp_header *) (ip + 1);
-    ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16"),",
-                  ntohs(udp->udp_src), ntohs(udp->udp_dst));
+    ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16",csum=0x%"PRIx16"),",
+                  ntohs(udp->udp_src), ntohs(udp->udp_dst),
+                  ntohs(udp->udp_csum));
 
     return udp + 1;
 }
@@ -854,7 +855,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     struct ip_header *ip;
     struct udp_header *udp;
     struct gre_base_hdr *greh;
-    uint16_t gre_proto, dl_type, udp_src, udp_dst;
+    uint16_t gre_proto, dl_type, udp_src, udp_dst, csum;
     ovs_be32 sip, dip;
     uint32_t tnl_type = 0, header_len = 0;
     void *l3, *l4;
@@ -899,14 +900,14 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     /* Tunnel header */
     udp = (struct udp_header *) l4;
     greh = (struct gre_base_hdr *) l4;
-    if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16"),",
-                         &udp_src, &udp_dst)) {
+    if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16",csum=0x%"SCNx16"),",
+                         &udp_src, &udp_dst, &csum)) {
         uint32_t vx_flags, vni;
 
         udp->udp_src = htons(udp_src);
         udp->udp_dst = htons(udp_dst);
         udp->udp_len = 0;
-        udp->udp_csum = 0;
+        udp->udp_csum = htons(csum);
 
         if (ovs_scan_len(s, &n, "vxlan(flags=0x%"SCNx32",vni=0x%"SCNx32"))",
                             &vx_flags, &vni)) {
@@ -942,8 +943,6 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
 
         if (greh->flags & htons(GRE_CSUM)) {
-            uint16_t csum;
-
             if (!ovs_scan_len(s, &n, ",csum=0x%"SCNx16, &csum)) {
                 return -EINVAL;
             }

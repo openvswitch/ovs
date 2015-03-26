@@ -891,6 +891,18 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl)
         return NULL;
     }
 
+    if (udp->udp_csum) {
+        uint32_t csum = packet_csum_pseudoheader(dp_packet_l3(packet));
+
+        csum = csum_continue(csum, udp, dp_packet_size(packet) -
+                             ((const unsigned char *)udp -
+                              (const unsigned char *)dp_packet_l2(packet)));
+        if (csum_finish(csum)) {
+            return NULL;
+        }
+        tnl->flags |= FLOW_TNL_F_CSUM;
+    }
+
     tnl->tp_src = udp->udp_src;
     tnl->tp_dst = udp->udp_dst;
 
@@ -919,13 +931,25 @@ push_udp_header(struct dp_packet *packet, const void *header, int size)
     /* set udp src port */
     udp->udp_src = get_src_port(packet);
     udp->udp_len = htons(ip_tot_size - sizeof (struct ip_header));
-    /* udp_csum is zero */
+
+    if (udp->udp_csum) {
+        uint32_t csum = packet_csum_pseudoheader(ip_hdr(dp_packet_data(packet)));
+
+        csum = csum_continue(csum, udp,
+                             ip_tot_size - sizeof (struct ip_header));
+        udp->udp_csum = csum_finish(csum);
+
+        if (!udp->udp_csum) {
+            udp->udp_csum = htons(0xffff);
+        }
+    }
 
     return udp + 1;
 }
 
 static void *
 udp_build_header(struct netdev_tunnel_config *tnl_cfg,
+                 const struct flow *tnl_flow,
                  struct ovs_action_push_tnl *data)
 {
     struct ip_header *ip;
@@ -936,6 +960,13 @@ udp_build_header(struct netdev_tunnel_config *tnl_cfg,
 
     udp = (struct udp_header *) (ip + 1);
     udp->udp_dst = tnl_cfg->dst_port;
+
+    if (tnl_flow->tunnel.flags & FLOW_TNL_F_CSUM) {
+        /* Write a value in now to mark that we should compute the checksum
+         * later. 0xffff is handy because it is transparent to the
+         * calculation. */
+        udp->udp_csum = htons(0xffff);
+    }
 
     return udp + 1;
 }
@@ -1183,7 +1214,7 @@ netdev_vxlan_build_header(const struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     tnl_cfg = &dev->tnl_cfg;
 
-    vxh = udp_build_header(tnl_cfg, data);
+    vxh = udp_build_header(tnl_cfg, tnl_flow, data);
 
     put_16aligned_be32(&vxh->vx_flags, htonl(VXLAN_FLAGS));
     put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(tnl_flow->tunnel.tun_id) << 8));
@@ -1288,7 +1319,7 @@ netdev_geneve_build_header(const struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     tnl_cfg = &dev->tnl_cfg;
 
-    gnh = udp_build_header(tnl_cfg, data);
+    gnh = udp_build_header(tnl_cfg, tnl_flow, data);
 
     gnh->oam = !!(tnl_flow->tunnel.flags & FLOW_TNL_F_OAM);
     gnh->proto_type = htons(ETH_TYPE_TEB);
