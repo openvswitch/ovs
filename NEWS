@@ -62,8 +62,8 @@ Post-v2.3.0
    - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
      containers. If and when there is a native integration of Open vSwitch
      with Docker, the wrapper script will be retired.
-   - Added support for DPDK Tunneling. VXLAN and GRE are supported protocols.
-     This is generic tunneling mechanism for userspace datapath.
+   - Added support for DPDK Tunneling. VXLAN, GRE, and Geneve are supported
+     protocols. This is generic tunneling mechanism for userspace datapath.
    - Support for multicast snooping (IGMPv1 and IGMPv2)
    - Support for Linux kernels up to 3.19.x
    - The documentation now use the term 'destination' to mean one of syslog,

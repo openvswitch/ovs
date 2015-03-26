@@ -61,6 +61,11 @@ static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(60, 5);
                       sizeof(struct udp_header) +         \
                       sizeof(struct vxlanhdr))
 
+#define GENEVE_BASE_HLEN   (sizeof(struct eth_header) +         \
+                            sizeof(struct ip_header)  +         \
+                            sizeof(struct udp_header) +         \
+                            sizeof(struct genevehdr))
+
 #define DEFAULT_TTL 64
 
 struct netdev_vport {
@@ -1204,6 +1209,112 @@ netdev_vxlan_push_header(const struct netdev *netdev OVS_UNUSED,
 }
 
 static void
+geneve_extract_md(struct dp_packet *packet)
+{
+    struct pkt_metadata *md = &packet->md;
+    struct flow_tnl *tnl = &md->tunnel;
+    struct genevehdr *gnh;
+    unsigned int hlen;
+
+    memset(md, 0, sizeof *md);
+    if (GENEVE_BASE_HLEN > dp_packet_size(packet)) {
+        VLOG_WARN_RL(&err_rl, "geneve packet too small: min header=%u packet size=%u\n",
+                     (unsigned int)GENEVE_BASE_HLEN, dp_packet_size(packet));
+        return;
+    }
+
+    gnh = udp_extract_tnl_md(packet, tnl);
+    if (!gnh) {
+        return;
+    }
+
+    hlen = GENEVE_BASE_HLEN + gnh->opt_len * 4;
+    if (hlen > dp_packet_size(packet)) {
+        VLOG_WARN_RL(&err_rl, "geneve packet too small: header len=%u packet size=%u\n",
+                     hlen, dp_packet_size(packet));
+        reset_tnl_md(md);
+        return;
+    }
+
+    if (gnh->ver != 0) {
+        VLOG_WARN_RL(&err_rl, "unknown geneve version: %"PRIu8"\n", gnh->ver);
+        reset_tnl_md(md);
+        return;
+    }
+
+    if (gnh->opt_len && gnh->critical) {
+        VLOG_WARN_RL(&err_rl, "unknown geneve critical options: %"PRIu8" bytes\n",
+                     gnh->opt_len * 4);
+        reset_tnl_md(md);
+        return;
+    }
+
+    if (gnh->proto_type != htons(ETH_TYPE_TEB)) {
+        VLOG_WARN_RL(&err_rl, "unknown geneve encapsulated protocol: %#x\n",
+                     ntohs(gnh->proto_type));
+        reset_tnl_md(md);
+        return;
+    }
+
+    tnl->flags |= gnh->oam ? FLOW_TNL_F_OAM : 0;
+    tnl->tun_id = htonll(ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
+    tnl->flags |= FLOW_TNL_F_KEY;
+
+    dp_packet_reset_packet(packet, hlen);
+}
+
+static int
+netdev_geneve_pop_header(struct netdev *netdev_ OVS_UNUSED,
+                         struct dp_packet **pkt, int cnt)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        geneve_extract_md(pkt[i]);
+    }
+    return 0;
+}
+
+static int
+netdev_geneve_build_header(const struct netdev *netdev,
+                           struct ovs_action_push_tnl *data,
+                           const struct flow *tnl_flow)
+{
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
+    struct netdev_tunnel_config *tnl_cfg;
+    struct genevehdr *gnh;
+
+    /* XXX: RCUfy tnl_cfg. */
+    ovs_mutex_lock(&dev->mutex);
+    tnl_cfg = &dev->tnl_cfg;
+
+    gnh = udp_build_header(tnl_cfg, data);
+
+    gnh->oam = !!(tnl_flow->tunnel.flags & FLOW_TNL_F_OAM);
+    gnh->proto_type = htons(ETH_TYPE_TEB);
+    put_16aligned_be32(&gnh->vni, htonl(ntohll(tnl_flow->tunnel.tun_id) << 8));
+
+    ovs_mutex_unlock(&dev->mutex);
+    data->header_len = GENEVE_BASE_HLEN;
+    data->tnl_type = OVS_VPORT_TYPE_GENEVE;
+    return 0;
+}
+
+static int
+netdev_geneve_push_header(const struct netdev *netdev OVS_UNUSED,
+                          struct dp_packet **packets, int cnt,
+                          const struct ovs_action_push_tnl *data)
+{
+    int i;
+
+    for (i = 0; i < cnt; i++) {
+        push_udp_header(packets[i], data->header, data->header_len);
+        packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
+    }
+    return 0;
+}
+
+static void
 netdev_vport_range(struct unixctl_conn *conn, int argc,
                    const char *argv[], void *aux OVS_UNUSED)
 {
@@ -1332,7 +1443,9 @@ netdev_vport_tunnel_register(void)
     /* The name of the dpif_port should be short enough to accomodate adding
      * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
-        TUNNEL_CLASS("geneve", "genev_sys", NULL, NULL, NULL),
+        TUNNEL_CLASS("geneve", "genev_sys", netdev_geneve_build_header,
+                                            netdev_geneve_push_header,
+                                            netdev_geneve_pop_header),
         TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
                                        netdev_gre_push_header,
                                        netdev_gre_pop_header),

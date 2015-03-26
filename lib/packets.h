@@ -733,6 +733,25 @@ struct geneve_opt {
     uint8_t   opt_data[];
 };
 
+struct genevehdr {
+#ifdef WORDS_BIGENDIAN
+    uint8_t ver:2;
+    uint8_t opt_len:6;
+    uint8_t oam:1;
+    uint8_t critical:1;
+    uint8_t rsvd1:6;
+#else
+    uint8_t opt_len:6;
+    uint8_t ver:2;
+    uint8_t rsvd1:6;
+    uint8_t critical:1;
+    uint8_t oam:1;
+#endif
+    ovs_be16 proto_type;
+    ovs_16aligned_be32 vni;
+    struct geneve_opt options[];
+};
+
 /* GRE protocol header */
 struct gre_base_hdr {
     ovs_be16 flags;

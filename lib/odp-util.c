@@ -559,6 +559,14 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         ds_put_format(ds, "vxlan(flags=0x%"PRIx32",vni=0x%"PRIx32")",
                       ntohl(get_16aligned_be32(&vxh->vx_flags)),
                       ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
+    } else if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
+        const struct genevehdr *gnh;
+
+        gnh = format_udp_tnl_push_header(ds, ip);
+
+        ds_put_format(ds, "geneve(%svni=0x%"PRIx32")",
+                      gnh->oam ? "oam," : "",
+                      ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
     } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
         const struct gre_base_hdr *greh;
         ovs_16aligned_be32 *options;
@@ -893,7 +901,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     greh = (struct gre_base_hdr *) l4;
     if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16"),",
                          &udp_src, &udp_dst)) {
-        uint32_t vx_flags, vx_vni;
+        uint32_t vx_flags, vni;
 
         udp->udp_src = htons(udp_src);
         udp->udp_dst = htons(udp_dst);
@@ -901,14 +909,28 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         udp->udp_csum = 0;
 
         if (ovs_scan_len(s, &n, "vxlan(flags=0x%"SCNx32",vni=0x%"SCNx32"))",
-                            &vx_flags, &vx_vni)) {
+                            &vx_flags, &vni)) {
             struct vxlanhdr *vxh = (struct vxlanhdr *) (udp + 1);
 
             put_16aligned_be32(&vxh->vx_flags, htonl(vx_flags));
-            put_16aligned_be32(&vxh->vx_vni, htonl(vx_vni << 8));
+            put_16aligned_be32(&vxh->vx_vni, htonl(vni << 8));
             tnl_type = OVS_VPORT_TYPE_VXLAN;
             header_len = sizeof *eth + sizeof *ip +
                          sizeof *udp + sizeof *vxh;
+        } else if (ovs_scan_len(s, &n, "geneve(")) {
+            struct genevehdr *gnh = (struct genevehdr *) (udp + 1);
+
+            if (ovs_scan_len(s, &n, "oam,")) {
+                gnh->oam = 1;
+            }
+            if (!ovs_scan_len(s, &n, "vni=0x%"SCNx32"))", &vni)) {
+                return -EINVAL;
+            }
+            gnh->proto_type = htons(ETH_TYPE_TEB);
+            put_16aligned_be32(&gnh->vni, htonl(vni << 8));
+            tnl_type = OVS_VPORT_TYPE_GENEVE;
+            header_len = sizeof *eth + sizeof *ip +
+                         sizeof *udp + sizeof *gnh;
         } else {
             return -EINVAL;
         }
