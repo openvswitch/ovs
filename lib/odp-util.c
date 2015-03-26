@@ -510,6 +510,18 @@ format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
     ds_put_format(ds, ")");
 }
 
+static const void *
+format_udp_tnl_push_header(struct ds *ds, const struct ip_header *ip)
+{
+    const struct udp_header *udp;
+
+    udp = (const struct udp_header *) (ip + 1);
+    ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16"),",
+                  ntohs(udp->udp_src), ntohs(udp->udp_dst));
+
+    return udp + 1;
+}
+
 static void
 format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 {
@@ -541,15 +553,9 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 
     if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
         const struct vxlanhdr *vxh;
-        const struct udp_header *udp;
 
-        /* UDP */
-        udp = (const struct udp_header *) (ip + 1);
-        ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16"),",
-                      ntohs(udp->udp_src), ntohs(udp->udp_dst));
+        vxh = format_udp_tnl_push_header(ds, ip);
 
-        /* VxLan */
-        vxh = (const struct vxlanhdr *)   (udp + 1);
         ds_put_format(ds, "vxlan(flags=0x%"PRIx32",vni=0x%"PRIx32")",
                       ntohl(get_16aligned_be32(&vxh->vx_flags)),
                       ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
@@ -887,7 +893,6 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     greh = (struct gre_base_hdr *) l4;
     if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16"),",
                          &udp_src, &udp_dst)) {
-        struct vxlanhdr *vxh;
         uint32_t vx_flags, vx_vni;
 
         udp->udp_src = htons(udp_src);
@@ -895,16 +900,18 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         udp->udp_len = 0;
         udp->udp_csum = 0;
 
-        vxh = (struct vxlanhdr *) (udp + 1);
-        if (!ovs_scan_len(s, &n, "vxlan(flags=0x%"SCNx32",vni=0x%"SCNx32"))",
+        if (ovs_scan_len(s, &n, "vxlan(flags=0x%"SCNx32",vni=0x%"SCNx32"))",
                             &vx_flags, &vx_vni)) {
+            struct vxlanhdr *vxh = (struct vxlanhdr *) (udp + 1);
+
+            put_16aligned_be32(&vxh->vx_flags, htonl(vx_flags));
+            put_16aligned_be32(&vxh->vx_vni, htonl(vx_vni << 8));
+            tnl_type = OVS_VPORT_TYPE_VXLAN;
+            header_len = sizeof *eth + sizeof *ip +
+                         sizeof *udp + sizeof *vxh;
+        } else {
             return -EINVAL;
         }
-        put_16aligned_be32(&vxh->vx_flags, htonl(vx_flags));
-        put_16aligned_be32(&vxh->vx_vni, htonl(vx_vni << 8));
-        tnl_type = OVS_VPORT_TYPE_VXLAN;
-        header_len = sizeof *eth + sizeof *ip +
-                     sizeof *udp + sizeof *vxh;
     } else if (ovs_scan_len(s, &n, "gre((flags=0x%"SCNx16",proto=0x%"SCNx16")",
                          &greh->flags, &gre_proto)){
 

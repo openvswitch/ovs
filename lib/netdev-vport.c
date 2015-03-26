@@ -876,6 +876,65 @@ push_ip_header(struct dp_packet *packet,
     return ip + 1;
 }
 
+static void *
+udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl)
+{
+    struct udp_header *udp;
+
+    udp = ip_extract_tnl_md(packet, tnl);
+    if (!udp) {
+        return NULL;
+    }
+
+    tnl->tp_src = udp->udp_src;
+    tnl->tp_dst = udp->udp_dst;
+
+    return udp + 1;
+}
+
+static ovs_be16
+get_src_port(struct dp_packet *packet)
+{
+    uint32_t hash;
+
+    hash = dp_packet_get_dp_hash(packet);
+
+    return htons((((uint64_t) hash * (tnl_udp_port_max - tnl_udp_port_min)) >> 32) +
+                 tnl_udp_port_min);
+}
+
+static void *
+push_udp_header(struct dp_packet *packet, const void *header, int size)
+{
+    struct udp_header *udp;
+    int ip_tot_size;
+
+    udp = push_ip_header(packet, header, size, &ip_tot_size);
+
+    /* set udp src port */
+    udp->udp_src = get_src_port(packet);
+    udp->udp_len = htons(ip_tot_size - sizeof (struct ip_header));
+    /* udp_csum is zero */
+
+    return udp + 1;
+}
+
+static void *
+udp_build_header(struct netdev_tunnel_config *tnl_cfg,
+                 struct ovs_action_push_tnl *data)
+{
+    struct ip_header *ip;
+    struct udp_header *udp;
+
+    ip = ip_hdr(data->header);
+    ip->ip_proto = IPPROTO_UDP;
+
+    udp = (struct udp_header *) (ip + 1);
+    udp->udp_dst = tnl_cfg->dst_port;
+
+    return udp + 1;
+}
+
 static int
 gre_header_len(ovs_be16 flags)
 {
@@ -1068,7 +1127,6 @@ vxlan_extract_md(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
-    struct udp_header *udp;
     struct vxlanhdr *vxh;
 
     memset(md, 0, sizeof *md);
@@ -1076,11 +1134,10 @@ vxlan_extract_md(struct dp_packet *packet)
         return;
     }
 
-    udp = ip_extract_tnl_md(packet, tnl);
-    if (!udp) {
+    vxh = udp_extract_tnl_md(packet, tnl);
+    if (!vxh) {
         return;
     }
-    vxh = (struct vxlanhdr *) (udp + 1);
 
     if (get_16aligned_be32(&vxh->vx_flags) != htonl(VXLAN_FLAGS) ||
        (get_16aligned_be32(&vxh->vx_vni) & htonl(0xff))) {
@@ -1090,8 +1147,6 @@ vxlan_extract_md(struct dp_packet *packet)
         reset_tnl_md(md);
         return;
     }
-    tnl->tp_src = udp->udp_src;
-    tnl->tp_dst = udp->udp_dst;
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
     tnl->flags |= FLOW_TNL_F_KEY;
 
@@ -1117,21 +1172,14 @@ netdev_vxlan_build_header(const struct netdev *netdev,
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
-    struct ip_header *ip;
-    struct udp_header *udp;
     struct vxlanhdr *vxh;
 
     /* XXX: RCUfy tnl_cfg. */
     ovs_mutex_lock(&dev->mutex);
     tnl_cfg = &dev->tnl_cfg;
 
-    ip = ip_hdr(data->header);
-    ip->ip_proto = IPPROTO_UDP;
+    vxh = udp_build_header(tnl_cfg, data);
 
-    udp = (struct udp_header *) (ip + 1);
-    udp->udp_dst = tnl_cfg->dst_port;
-
-    vxh = (struct vxlanhdr *) (udp + 1);
     put_16aligned_be32(&vxh->vx_flags, htonl(VXLAN_FLAGS));
     put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(tnl_flow->tunnel.tun_id) << 8));
 
@@ -1139,32 +1187,6 @@ netdev_vxlan_build_header(const struct netdev *netdev,
     data->header_len = VXLAN_HLEN;
     data->tnl_type = OVS_VPORT_TYPE_VXLAN;
     return 0;
-}
-
-static ovs_be16
-get_src_port(struct dp_packet *packet)
-{
-    uint32_t hash;
-
-    hash = dp_packet_get_dp_hash(packet);
-
-    return htons((((uint64_t) hash * (tnl_udp_port_max - tnl_udp_port_min)) >> 32) +
-                 tnl_udp_port_min);
-}
-
-static void
-netdev_vxlan_push_header__(struct dp_packet *packet,
-                           const void *header, int size)
-{
-    struct udp_header *udp;
-    int ip_tot_size;
-
-    udp = push_ip_header(packet, header, size, &ip_tot_size);
-
-    /* set udp src port */
-    udp->udp_src = get_src_port(packet);
-    udp->udp_len = htons(ip_tot_size - sizeof (struct ip_header));
-    /* udp_csum is zero */
 }
 
 static int
@@ -1175,8 +1197,7 @@ netdev_vxlan_push_header(const struct netdev *netdev OVS_UNUSED,
     int i;
 
     for (i = 0; i < cnt; i++) {
-        netdev_vxlan_push_header__(packets[i],
-                                   data->header, VXLAN_HLEN);
+        push_udp_header(packets[i], data->header, VXLAN_HLEN);
         packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
     }
     return 0;
