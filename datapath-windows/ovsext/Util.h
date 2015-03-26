@@ -25,6 +25,7 @@
 #define OVS_OTHER_POOL_TAG              'MSVO'
 #define OVS_MDL_POOL_TAG                'BSVO'
 #define OVS_DATAPATH_POOL_TAG           'DSVO'
+#define OVS_EVENT_POOL_TAG              'ESVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
