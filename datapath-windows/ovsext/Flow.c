@@ -1512,7 +1512,7 @@ OvsDeleteFlowTable(OVS_DATAPATH *datapath)
     }
 
     DeleteAllFlows(datapath);
-    OvsFreeMemory(datapath->flowTable);
+    OvsFreeMemoryWithTag(datapath->flowTable, OVS_FLOW_POOL_TAG);
     datapath->flowTable = NULL;
     NdisFreeRWLock(datapath->lock);
 
@@ -1534,8 +1534,8 @@ OvsAllocateFlowTable(OVS_DATAPATH *datapath,
     PLIST_ENTRY bucket;
     int i;
 
-    datapath->flowTable = OvsAllocateMemory(OVS_FLOW_TABLE_SIZE *
-                                            sizeof (LIST_ENTRY));
+    datapath->flowTable = OvsAllocateMemoryWithTag(
+        OVS_FLOW_TABLE_SIZE * sizeof(LIST_ENTRY), OVS_FLOW_POOL_TAG);
     if (!datapath->flowTable) {
         return NDIS_STATUS_RESOURCES;
     }
@@ -1976,7 +1976,7 @@ VOID
 FreeFlow(OvsFlow *flow)
 {
     ASSERT(flow);
-    OvsFreeMemory(flow);
+    OvsFreeMemoryWithTag(flow, OVS_FLOW_POOL_TAG);
 }
 
 NTSTATUS
@@ -2259,7 +2259,8 @@ OvsPrepareFlow(OvsFlow **flow,
 
     do {
         *flow = localFlow =
-            OvsAllocateMemory(sizeof(OvsFlow) + put->actionsLen);
+            OvsAllocateMemoryWithTag(sizeof(OvsFlow) + put->actionsLen,
+                                     OVS_FLOW_POOL_TAG);
         if (localFlow == NULL) {
             status = STATUS_NO_MEMORY;
             break;
