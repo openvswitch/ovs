@@ -31,6 +31,7 @@
 #define OVS_IPHELPER_POOL_TAG           'HSVO'
 #define OVS_OID_POOL_TAG                'ASVO'
 #define OVS_SWITCH_POOL_TAG             'SSVO'
+#define OVS_USER_POOL_TAG               'USVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
