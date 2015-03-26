@@ -1011,7 +1011,8 @@ netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
 
 static int
 netdev_gre_build_header(const struct netdev *netdev,
-                        struct ovs_action_push_tnl *data)
+                        struct ovs_action_push_tnl *data,
+                        const struct flow *tnl_flow)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
@@ -1041,7 +1042,7 @@ netdev_gre_build_header(const struct netdev *netdev,
     if (tnl_cfg->out_key_present) {
         greh->flags |= htons(GRE_KEY);
         put_16aligned_be32(options, (OVS_FORCE ovs_be32)
-                                    ((OVS_FORCE uint64_t) tnl_cfg->out_key >> 32));
+                                    ((OVS_FORCE uint64_t) tnl_flow->tunnel.tun_id >> 32));
         options++;
     }
 
@@ -1103,7 +1104,8 @@ netdev_vxlan_pop_header(struct netdev *netdev_ OVS_UNUSED,
 
 static int
 netdev_vxlan_build_header(const struct netdev *netdev,
-                          struct ovs_action_push_tnl *data)
+                          struct ovs_action_push_tnl *data,
+                          const struct flow *tnl_flow)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
@@ -1123,7 +1125,7 @@ netdev_vxlan_build_header(const struct netdev *netdev,
 
     vxh = (struct vxlanhdr *) (udp + 1);
     put_16aligned_be32(&vxh->vx_flags, htonl(VXLAN_FLAGS));
-    put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(tnl_cfg->out_key) << 8));
+    put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(tnl_flow->tunnel.tun_id) << 8));
 
     ovs_mutex_unlock(&dev->mutex);
     data->header_len = VXLAN_HLEN;

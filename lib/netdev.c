@@ -43,6 +43,7 @@
 #include "sset.h"
 #include "svec.h"
 #include "openvswitch/vlog.h"
+#include "flow.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev);
 
@@ -740,10 +741,11 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int cnt)
 }
 
 int
-netdev_build_header(const struct netdev *netdev, struct ovs_action_push_tnl *data)
+netdev_build_header(const struct netdev *netdev, struct ovs_action_push_tnl *data,
+                    const struct flow *tnl_flow)
 {
     if (netdev->netdev_class->build_header) {
-        return netdev->netdev_class->build_header(netdev, data);
+        return netdev->netdev_class->build_header(netdev, data, tnl_flow);
     }
     return EOPNOTSUPP;
 }

@@ -709,7 +709,7 @@ tnl_port_build_header(const struct ofport_dpif *ofport,
     put_16aligned_be32(&ip->ip_src, ip_src);
     put_16aligned_be32(&ip->ip_dst, tnl_flow->tunnel.ip_dst);
 
-    res = netdev_build_header(tnl_port->netdev, data);
+    res = netdev_build_header(tnl_port->netdev, data, tnl_flow);
     ip->ip_csum = csum(ip, sizeof *ip);
     fat_rwlock_unlock(&rwlock);
 
