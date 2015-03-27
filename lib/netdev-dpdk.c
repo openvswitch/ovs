@@ -1586,6 +1586,11 @@ destroy_device(volatile struct virtio_net *dev)
              * setting the virtio_dev to NULL.
              */
             ovsrcu_synchronize();
+            /*
+             * As call to ovsrcu_synchronize() will end the quiescent state,
+             * put thread back into quiescent state before returning.
+             */
+            ovsrcu_quiesce_start();
         }
     }
     ovs_mutex_unlock(&dpdk_mutex);
@@ -1614,6 +1619,8 @@ static void *
 start_cuse_session_loop(void *dummy OVS_UNUSED)
 {
      pthread_detach(pthread_self());
+     /* Put the cuse thread into quiescent state. */
+     ovsrcu_quiesce_start();
      rte_vhost_driver_session_start();
      return NULL;
 }
@@ -1621,7 +1628,6 @@ start_cuse_session_loop(void *dummy OVS_UNUSED)
 static int
 dpdk_vhost_class_init(void)
 {
-    pthread_t thread;
     int err = -1;
 
     rte_vhost_driver_callback_register(&virtio_net_device_ops);
@@ -1637,9 +1643,8 @@ dpdk_vhost_class_init(void)
         return -1;
     }
 
-    /* start_cuse_session_loop blocks OVS RCU quiescent state, so directly use
-     * pthread API. */
-    return pthread_create(&thread, NULL, start_cuse_session_loop, NULL);
+    ovs_thread_create("cuse_thread", start_cuse_session_loop, NULL);
+    return 0;
 }
 
 static void
