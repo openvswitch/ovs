@@ -1040,7 +1040,7 @@ netdev_gre_build_header(const struct netdev *netdev,
     greh->flags = 0;
 
     options = (ovs_16aligned_be32 *) (greh + 1);
-    if (tnl_cfg->csum) {
+    if (tnl_flow->tunnel.flags & FLOW_TNL_F_CSUM) {
         greh->flags |= htons(GRE_CSUM);
         put_16aligned_be32(options, 0);
         options++;
