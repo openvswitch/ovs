@@ -996,10 +996,8 @@ netdev_gre_push_header__(struct dp_packet *packet,
     greh = push_ip_header(packet, header, size,  &ip_tot_size);
 
     if (greh->flags & htons(GRE_CSUM)) {
-        ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
-
-        put_16aligned_be32(options,
-                           (OVS_FORCE ovs_be32) csum(greh, ip_tot_size - sizeof (struct ip_header)));
+        ovs_be16 *csum_opt = (ovs_be16 *) (greh + 1);
+        *csum_opt = csum(greh, ip_tot_size - sizeof (struct ip_header));
     }
 }
 

@@ -565,7 +565,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                            greh->flags, ntohs(greh->protocol));
         options = (ovs_16aligned_be32 *)(greh + 1);
         if (greh->flags & htons(GRE_CSUM)) {
-            ds_put_format(ds, ",csum=0x%"PRIx32, ntohl(get_16aligned_be32(options)));
+            ds_put_format(ds, ",csum=0x%"PRIx16, ntohs(*((ovs_be16 *)options)));
             options++;
         }
         if (greh->flags & htons(GRE_KEY)) {
@@ -913,12 +913,14 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
 
         if (greh->flags & htons(GRE_CSUM)) {
-            uint32_t csum;
+            uint16_t csum;
 
-            if (!ovs_scan_len(s, &n, ",csum=0x%"SCNx32, &csum)) {
+            if (!ovs_scan_len(s, &n, ",csum=0x%"SCNx16, &csum)) {
                 return -EINVAL;
             }
-            put_16aligned_be32(options, htonl(csum));
+
+            memset(options, 0, sizeof *options);
+            *((ovs_be16 *)options) = htons(csum);
             options++;
         }
         if (greh->flags & htons(GRE_KEY)) {
