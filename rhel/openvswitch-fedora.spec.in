@@ -38,7 +38,7 @@ BuildRequires: groff graphviz
 
 Requires: openssl iproute module-init-tools
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
-Requires: kernel >= 3.15.0-0
+#Requires: kernel >= 3.15.0-0
 
 Requires(post): systemd-units
 Requires(preun): systemd-units
