@@ -559,9 +559,11 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
                                &tnl_cfg.out_key_flow);
 
     ovs_mutex_lock(&dev->mutex);
-    dev->tnl_cfg = tnl_cfg;
-    tunnel_check_status_change__(dev);
-    netdev_change_seq_changed(dev_);
+    if (memcmp(&dev->tnl_cfg, &tnl_cfg, sizeof tnl_cfg)) {
+        dev->tnl_cfg = tnl_cfg;
+        tunnel_check_status_change__(dev);
+        netdev_change_seq_changed(dev_);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -733,9 +735,11 @@ set_patch_config(struct netdev *dev_, const struct smap *args)
     }
 
     ovs_mutex_lock(&dev->mutex);
-    free(dev->peer);
-    dev->peer = xstrdup(peer);
-    netdev_change_seq_changed(dev_);
+    if (!dev->peer || strcmp(dev->peer, peer)) {
+        free(dev->peer);
+        dev->peer = xstrdup(peer);
+        netdev_change_seq_changed(dev_);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
