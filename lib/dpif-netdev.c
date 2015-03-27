@@ -2941,6 +2941,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                                      &ufid, DPIF_UC_MISS, NULL, &actions,
                                      &put_actions);
             if (OVS_UNLIKELY(error && error != ENOSPC)) {
+                dp_packet_delete(packets[i]);
+                dp_netdev_count_packet(pmd, DP_STAT_LOST, 1);
                 continue;
             }
 
@@ -2984,6 +2986,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             }
         }
 
+        dp_netdev_count_packet(pmd, DP_STAT_MISS, dropped_cnt);
         dp_netdev_count_packet(pmd, DP_STAT_LOST, dropped_cnt);
     }
 
