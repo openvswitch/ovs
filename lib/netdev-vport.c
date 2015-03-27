@@ -842,6 +842,7 @@ ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl)
     tnl->ip_src = get_16aligned_be32(&nh->ip_src);
     tnl->ip_dst = get_16aligned_be32(&nh->ip_dst);
     tnl->ip_tos = nh->ip_tos;
+    tnl->ip_ttl = nh->ip_ttl;
 
     return l4;
 }
