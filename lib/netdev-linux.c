@@ -3497,6 +3497,7 @@ static const struct tc_ops tc_ops_sfq = {
 /* HTB traffic control class. */
 
 #define HTB_N_QUEUES 0xf000
+#define HTB_RATE2QUANTUM 10
 
 struct htb {
     struct tc tc;
@@ -3555,7 +3556,7 @@ htb_setup_qdisc__(struct netdev *netdev)
     nl_msg_put_string(&request, TCA_KIND, "htb");
 
     memset(&opt, 0, sizeof opt);
-    opt.rate2quantum = 10;
+    opt.rate2quantum = HTB_RATE2QUANTUM;
     opt.version = 3;
     opt.defcls = 1;
 
@@ -3589,6 +3590,11 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     memset(&opt, 0, sizeof opt);
     tc_fill_rate(&opt.rate, class->min_rate, mtu);
     tc_fill_rate(&opt.ceil, class->max_rate, mtu);
+    /* Makes sure the quantum is at least MTU.  Setting quantum will
+     * make htb ignore the r2q for this class. */
+    if ((class->min_rate / HTB_RATE2QUANTUM) < mtu) {
+        opt.quantum = mtu;
+    }
     opt.buffer = tc_calc_buffer(opt.rate.rate, mtu, class->burst);
     opt.cbuffer = tc_calc_buffer(opt.ceil.rate, mtu, class->burst);
     opt.prio = class->priority;
