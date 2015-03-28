@@ -1915,14 +1915,12 @@ static int
 set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct cfm *old = ofport->cfm;
     int error = 0;
 
     if (s) {
         if (!ofport->cfm) {
-            struct ofproto_dpif *ofproto;
-
-            ofproto = ofproto_dpif_cast(ofport->up.ofproto);
-            ofproto->backer->need_revalidate = REV_RECONFIGURE;
             ofport->cfm = cfm_create(ofport->up.netdev);
         }
 
@@ -1936,6 +1934,9 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
     cfm_unref(ofport->cfm);
     ofport->cfm = NULL;
 out:
+    if (ofport->cfm != old) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    }
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
                                      ofport->lldp, ofport->up.pp.hw_addr);
     return error;
