@@ -552,7 +552,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         vxh = (const struct vxlanhdr *)   (udp + 1);
         ds_put_format(ds, "vxlan(flags=0x%"PRIx32",vni=0x%"PRIx32")",
                       ntohl(get_16aligned_be32(&vxh->vx_flags)),
-                      ntohl(get_16aligned_be32(&vxh->vx_vni)));
+                      ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
     } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
         const struct gre_base_hdr *greh;
         ovs_16aligned_be32 *options;
@@ -901,7 +901,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
             return -EINVAL;
         }
         put_16aligned_be32(&vxh->vx_flags, htonl(vx_flags));
-        put_16aligned_be32(&vxh->vx_vni, htonl(vx_vni));
+        put_16aligned_be32(&vxh->vx_vni, htonl(vx_vni << 8));
         tnl_type = OVS_VPORT_TYPE_VXLAN;
         header_len = sizeof *eth + sizeof *ip +
                      sizeof *udp + sizeof *vxh;
