@@ -29,6 +29,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
+#include "ovs-atomic.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"

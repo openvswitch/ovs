@@ -24,6 +24,7 @@
 #include "hmap.h"
 #include "list.h"
 #include "lldp/lldpd.h"
+#include "ovs-atomic.h"
 #include "packets.h"
 #include "timer.h"
 
