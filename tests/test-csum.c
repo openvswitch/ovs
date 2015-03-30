@@ -20,11 +20,13 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "crc32c.h"
 #include "ovstest.h"
+#include "packets.h"
 #include "random.h"
 #include "unaligned.h"
 #include "util.h"
@@ -175,6 +177,34 @@ test_crc32c(void)
     mark('#');
 }
 
+/* Check the IP pseudoheader calculation. */
+static void
+test_pseudo(void)
+{
+    /* Try an IP header similar to one that the tunnel code
+     * might generate. */
+    struct ip_header ip = {
+        .ip_ihl_ver = IP_IHL_VER(5, 4),
+        .ip_tos = 0,
+        .ip_tot_len = htons(134),
+        .ip_id = 0,
+        .ip_frag_off = htons(IP_DF),
+        .ip_ttl = 64,
+        .ip_proto = IPPROTO_UDP,
+        .ip_csum = htons(0x1265),
+        .ip_src = { .hi = htons(0x1400), .lo = htons(0x0002) },
+        .ip_dst = { .hi = htons(0x1400), .lo = htons(0x0001) }
+    };
+
+    assert(packet_csum_pseudoheader(&ip) == 0x8628);
+
+    /* And also test something totally different to check for
+     * corner cases. */
+    memset(&ip, 0xff, sizeof ip);
+    assert(packet_csum_pseudoheader(&ip) == 0x5c2fb);
+
+    mark('#');
+}
 
 static void
 test_csum_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
@@ -239,6 +269,7 @@ test_csum_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     test_rfc1624();
     test_crc32c();
+    test_pseudo();
 
     /* Test recalc_csum16(). */
     for (i = 0; i < 32; i++) {

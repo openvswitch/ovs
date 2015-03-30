@@ -806,5 +806,6 @@ void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
 void compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
                  ovs_be32 ip_src, ovs_be32 ip_dst);
+uint32_t packet_csum_pseudoheader(const struct ip_header *);
 
 #endif /* packets.h */
