@@ -49,6 +49,7 @@ struct udp_port_cfg {
 				use_udp6_rx_checksums:1;
 };
 
+#define udp_sock_create rpl_udp_sock_create
 int udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
 		    struct socket **sockp);
 
