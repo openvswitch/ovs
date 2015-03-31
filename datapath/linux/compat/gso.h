@@ -52,6 +52,15 @@ static inline int skb_inner_network_offset(const struct sk_buff *skb)
 	return skb_inner_network_header(skb) - skb->data;
 }
 
+/* We don't actually store the transport offset on backports because
+ * we don't use it anywhere. Slightly rename this version to avoid
+ * future users from picking it up accidentially.
+ */
+static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
+{
+	return 0;
+}
+
 static inline void skb_set_inner_network_header(const struct sk_buff *skb,
 						int offset)
 {
@@ -62,6 +71,14 @@ static inline void skb_set_inner_network_header(const struct sk_buff *skb,
 static inline void skb_set_inner_transport_header(const struct sk_buff *skb,
 						  int offset)
 { }
+
+#else
+
+static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
+{
+	return skb_inner_transport_header(skb) - skb->data;
+}
+
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)

@@ -1,10 +1,22 @@
 #ifndef __LINUX_SKBUFF_WRAPPER_H
 #define __LINUX_SKBUFF_WRAPPER_H 1
 
+#include <linux/version.h>
+#include <linux/types.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+/* This should be before skbuff.h to make sure that we rewrite
+ * the calls there. */
+struct sk_buff;
+
+int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
+		     gfp_t gfp_mask);
+#define pskb_expand_head rpl_pskb_expand_head
+#endif
+
 #include_next <linux/skbuff.h>
 
 #include <linux/jhash.h>
-#include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
 #define SKB_GSO_GRE 0
