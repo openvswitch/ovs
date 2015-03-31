@@ -2826,12 +2826,6 @@ run_status_update(void)
 static void
 status_update_wait(void)
 {
-    /* This prevents the process from constantly waking up on
-     * connectivity seq, when there is no connection to ovsdb. */
-    if (!ovsdb_idl_has_lock(idl)) {
-        return;
-    }
-
     /* If the 'status_txn' is non-null (transaction incomplete), waits for the
      * transaction to complete.  If the status update to database needs to be
      * run again (transaction fails), registers a timeout in
@@ -3019,9 +3013,9 @@ bridge_wait(void)
         }
 
         poll_timer_wait_until(stats_timer);
+        status_update_wait();
     }
 
-    status_update_wait();
     system_stats_wait();
 }
 
