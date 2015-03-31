@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -430,12 +430,16 @@ ovsdb_idl_verify_write_only(struct ovsdb_idl *idl)
     idl->verify_write_only = true;
 }
 
+/* Returns true if 'idl' is currently connected or trying to connect. */
 bool
 ovsdb_idl_is_alive(const struct ovsdb_idl *idl)
 {
     return jsonrpc_session_is_alive(idl->session);
 }
 
+/* Returns the last error reported on a connection by 'idl'.  The return value
+ * is 0 only if no connection made by 'idl' has ever encountered an error.  See
+ * jsonrpc_get_status() for return value interpretation. */
 int
 ovsdb_idl_get_last_error(const struct ovsdb_idl *idl)
 {
