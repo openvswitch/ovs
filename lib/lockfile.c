@@ -82,6 +82,14 @@ lockfile_name(const char *filename_)
      * symlink, not one for each. */
     filename = follow_symlinks(filename_);
     slash = strrchr(filename, '/');
+
+#ifdef _WIN32
+    char *backslash = strrchr(filename, '\\');
+    if (backslash && (!slash || backslash > slash)) {
+        slash = backslash;
+    }
+#endif
+
     lockname = (slash
                 ? xasprintf("%.*s/.%s.~lock~",
                             (int) (slash - filename), filename, slash + 1)
