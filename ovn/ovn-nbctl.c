@@ -583,6 +583,7 @@ main(int argc, char *argv[])
     struct nbctl_context nb_ctx = { .idl = NULL, };
     enum ovsdb_idl_txn_status txn_status;
     unsigned int seqno;
+    int res = 0;
 
     fatal_ignore_sigpipe();
     set_program_name(argv[0]);
@@ -604,6 +605,8 @@ main(int argc, char *argv[])
             int retval = ovsdb_idl_get_last_error(nb_ctx.idl);
             VLOG_ERR("%s: database connection failed (%s)",
                     db, ovs_retval_to_string(retval));
+            res = 1;
+            break;
         }
 
         if (seqno != ovsdb_idl_get_seqno(nb_ctx.idl)) {
@@ -628,5 +631,5 @@ main(int argc, char *argv[])
     }
     ovsdb_idl_destroy(nb_ctx.idl);
 
-    exit(0);
+    exit(res);
 }
