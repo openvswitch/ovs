@@ -91,7 +91,9 @@ lswitch_by_name_or_uuid(struct nbctl_context *nb_ctx, const char *id)
         is_uuid = true;
         lswitch = nbrec_logical_switch_get_for_uuid(nb_ctx->idl,
                                                     &lswitch_uuid);
-    } else {
+    }
+
+    if (!lswitch) {
         const struct nbrec_logical_switch *iter;
 
         NBREC_LOGICAL_SWITCH_FOR_EACH(iter, nb_ctx->idl) {
@@ -225,7 +227,9 @@ lport_by_name_or_uuid(struct nbctl_context *nb_ctx, const char *id)
     if (uuid_from_string(&lport_uuid, id)) {
         is_uuid = true;
         lport = nbrec_logical_port_get_for_uuid(nb_ctx->idl, &lport_uuid);
-    } else {
+    }
+
+    if (!lport) {
         NBREC_LOGICAL_PORT_FOR_EACH(lport, nb_ctx->idl) {
             if (!strcmp(lport->name, id)) {
                 break;
