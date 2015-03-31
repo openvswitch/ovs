@@ -416,7 +416,7 @@ parse_options(int argc, char *argv[])
         VLOG_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
-        {"database", required_argument, NULL, 'd'},
+        {"db", required_argument, NULL, 'd'},
         {"help", no_argument, NULL, 'h'},
         {"options", no_argument, NULL, 'o'},
         {"version", no_argument, NULL, 'V'},

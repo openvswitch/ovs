@@ -26,7 +26,7 @@
     <p><code>lport-get-macs</code> <var>lport</var></p>
 
     <h1>Options</h1>
-    <p><code>-d</code> <var>database</var> | <code>--database</code> <var>database</var></p>
+    <p><code>-d</code> <var>database</var> | <code>--db</code> <var>database</var></p>
     <p><code>-h</code> | <code>--help</code></p>
     <p><code>-o</code> | <code>--options</code></p>
     <p><code>-V</code> | <code>--version</code></p>
