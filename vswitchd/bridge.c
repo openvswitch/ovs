@@ -203,6 +203,9 @@ static bool status_txn_try_again;
  * timeout in 'STATUS_CHECK_AGAIN_MSEC' to check again. */
 #define STATUS_CHECK_AGAIN_MSEC 100
 
+/* Statistics update to database. */
+static struct ovsdb_idl_txn *stats_txn;
+
 /* Each time this timer expires, the bridge fetches interface and mirror
  * statistics and pushes them into the database. */
 static int stats_timer_interval;
@@ -2693,7 +2696,6 @@ refresh_controller_status(void)
 static void
 run_stats_update(void)
 {
-    static struct ovsdb_idl_txn *stats_txn;
     const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(idl);
     int stats_interval;
 
@@ -2745,6 +2747,18 @@ run_stats_update(void)
             ovsdb_idl_txn_destroy(stats_txn);
             stats_txn = NULL;
         }
+    }
+}
+
+static void
+stats_update_wait(void)
+{
+    /* If the 'stats_txn' is non-null (transaction incomplete), waits for the
+     * transaction to complete.  Otherwise, waits for the 'stats_timer'. */
+    if (stats_txn) {
+        ovsdb_idl_txn_wait(stats_txn);
+    } else {
+        poll_timer_wait_until(stats_timer);
     }
 }
 
@@ -3011,8 +3025,7 @@ bridge_wait(void)
         HMAP_FOR_EACH (br, node, &all_bridges) {
             ofproto_wait(br->ofproto);
         }
-
-        poll_timer_wait_until(stats_timer);
+        stats_update_wait();
         status_update_wait();
     }
 
