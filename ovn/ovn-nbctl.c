@@ -614,6 +614,8 @@ main(int argc, char *argv[])
             ovs_cmdl_run_command(&ctx, get_all_commands());
             txn_status = ovsdb_idl_txn_commit_block(nb_ctx.txn);
             if (txn_status == TXN_TRY_AGAIN) {
+                ovsdb_idl_txn_destroy(nb_ctx.txn);
+                nb_ctx.txn = NULL;
                 continue;
             } else {
                 break;
