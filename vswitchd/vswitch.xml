@@ -980,18 +980,47 @@
 
       <column name="other_config" key="forward-bpdu"
               type='{"type": "boolean"}'>
-        Option to allow forwarding of BPDU frames when NORMAL action is
-        invoked.  Frames with reserved Ethernet addresses (e.g. STP
-        BPDU) will be forwarded when this option is enabled and the
-        switch is not providing that functionality.  If STP is enabled
-        on the port, STP BPDUs will never be forwarded.  If the Open
-        vSwitch bridge is used to connect different Ethernet networks,
-        and if Open vSwitch node does not run STP, then this option
-        should be enabled.  Default is disabled, set to
-        <code>true</code> to enable.
 
-        The following destination MAC addresss will not be forwarded when this
-        option is enabled.
+	<p>
+          Controls forwarding of BPDUs and other network control frames when
+          NORMAL action is invoked.  When this option is <code>false</code> or
+          unset, frames with reserved Ethernet addresses (see table below) will
+          not be forwarded.  When this option is <code>true</code>, such frames
+          will not be treated specially.
+	</p>
+
+	<p>
+	  The above general rule has the following exceptions:
+	</p>
+
+	<ul>
+	  <li>
+	    If STP is enabled on the bridge (see the <ref column="stp_enable"
+	    table="Bridge"/> column in the <ref table="Bridge"/> table), the
+	    bridge processes all received STP packets and never passes them to
+	    OpenFlow or forwards them.  This is true even if STP is disabled on
+	    an individual port.
+	  </li>
+
+	  <li>
+	    If LLDP is enabled on an interface (see the <ref column="lldp"
+	    table="Interface"/> column in the <ref table="Interface"/> table),
+	    the interface processes received LLDP packets and never passes them
+	    to OpenFlow or forwards them.
+	  </li>
+	</ul>
+
+	<p>
+	  Set this option to <code>true</code> if the Open vSwitch bridge
+	  connects different Ethernet networks and is not configured to
+	  participate in STP.
+	</p>
+
+        <p>
+	  This option affects packets with the following destination MAC
+	  addresses:
+	</p>
+
         <dl>
           <dt><code>01:80:c2:00:00:00</code></dt>
           <dd>IEEE 802.1D Spanning Tree Protocol (STP).</dd>
