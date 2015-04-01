@@ -1842,7 +1842,16 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
                 get_dpif_flow_stats(netdev_flow, put->stats);
             }
             if (put->flags & DPIF_FP_ZERO_STATS) {
-                memset(&netdev_flow->stats, 0, sizeof netdev_flow->stats);
+                /* XXX: The userspace datapath uses thread local statistics
+                 * (for flows), which should be updated only by the owning
+                 * thread.  Since we cannot write on stats memory here,
+                 * we choose not to support this flag.  Please note:
+                 * - This feature is currently used only by dpctl commands with
+                 *   option --clear.
+                 * - Should the need arise, this operation can be implemented
+                 *   by keeping a base value (to be update here) for each
+                 *   counter, and subtracting it before outputting the stats */
+                error = EOPNOTSUPP;
             }
 
             ovsrcu_postpone(dp_netdev_actions_free, old_actions);
