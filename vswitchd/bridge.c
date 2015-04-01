@@ -2895,7 +2895,10 @@ bridge_run(void)
          * disable system stats collection. */
         system_stats_enable(false);
         return;
-    } else if (!ovsdb_idl_has_lock(idl)) {
+    } else if (!ovsdb_idl_has_lock(idl)
+               || !ovsdb_idl_has_ever_connected(idl)) {
+        /* Returns if not holding the lock or not done retrieving db
+         * contents. */
         return;
     }
     cfg = ovsrec_open_vswitch_first(idl);
