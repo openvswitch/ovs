@@ -19,6 +19,7 @@
 #include <stdio.h>
 
 #include "command-line.h"
+#include "daemon.h"
 #include "dirs.h"
 #include "fatal-signal.h"
 #include "ovn/ovn-idl.h"
@@ -52,19 +53,20 @@ Options:\n\
   -o, --options             list available options\n\
   -V, --version             display version information\n\
 ", program_name, program_name, default_db(), default_db());
+    daemon_usage();
     vlog_usage();
     stream_usage("database", true, true, false);
 }
 
 static void
-ovnnb_db_changed(struct ovsdb_idl *idl OVS_UNUSED)
+ovnnb_db_changed(void)
 {
     /* XXX */
     printf("ovn-nbd: ovn-nb db contents have changed.\n");
 }
 
 static void
-ovn_db_changed(struct ovsdb_idl *idl OVS_UNUSED)
+ovn_db_changed(void)
 {
     /* XXX */
     printf("ovn-nbd: ovn db contents have changed.\n");
@@ -84,6 +86,7 @@ static void
 parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     enum {
+        DAEMON_OPTION_ENUMS,
         VLOG_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
@@ -92,6 +95,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         {"help", no_argument, NULL, 'h'},
         {"options", no_argument, NULL, 'o'},
         {"version", no_argument, NULL, 'V'},
+        DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
@@ -107,6 +111,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         }
 
         switch (c) {
+        DAEMON_OPTION_HANDLERS;
         VLOG_OPTION_HANDLERS;
         STREAM_SSL_OPTION_HANDLERS;
 
@@ -159,6 +164,9 @@ main(int argc, char *argv[])
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
     parse_options(argc, argv);
+
+    daemonize();
+
     nbrec_init();
     ovnrec_init();
 
@@ -168,6 +176,8 @@ main(int argc, char *argv[])
     /* There is only a small subset of changes to the ovn db that ovn-nbd has to
      * care about, so we'll enable monitoring those directly. */
     ovn_idl = ovsdb_idl_create(ovn_db, &ovnrec_idl_class, false, true);
+    ovsdb_idl_add_table(ovn_idl, &ovnrec_table_bindings);
+    ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_logical_port);
     ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_chassis);
 
     /*
@@ -206,12 +216,12 @@ main(int argc, char *argv[])
 
         if (ovnnb_seqno != ovsdb_idl_get_seqno(ovnnb_idl)) {
             ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
-            ovnnb_db_changed(ovnnb_idl);
+            ovnnb_db_changed();
         }
 
         if (ovn_seqno != ovsdb_idl_get_seqno(ovn_idl)) {
             ovn_seqno = ovsdb_idl_get_seqno(ovn_idl);
-            ovn_db_changed(ovn_idl);
+            ovn_db_changed();
         }
 
         if (ovnnb_seqno == ovsdb_idl_get_seqno(ovnnb_idl) &&
@@ -222,6 +232,7 @@ main(int argc, char *argv[])
         }
     }
 
+    ovsdb_idl_destroy(ovn_idl);
     ovsdb_idl_destroy(ovnnb_idl);
 
     exit(res);
