@@ -196,6 +196,14 @@ To use 'clang' compiler:
 
       `% ./configure CC=clang`
 
+To supply special flags to the C compiler, specify them as CFLAGS on
+the configure command line.  If you want the default CFLAGS, which
+include "-g" to build debug symbols and "-O2" to enable optimizations,
+you must include them yourself.  For example, to build with the
+default CFLAGS plus "-mssse3", you might run configure as follows:
+
+      `% ./configure CFLAGS="-g -O2 -mssse3"`
+
 To build the Linux kernel module, so that you can run the
 kernel-based switch, pass the location of the kernel build
 directory on --with-linux.  For example, to build for a running
