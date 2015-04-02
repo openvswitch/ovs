@@ -35,8 +35,8 @@ rungdb() {
     # Use "DISPLAY" variable to determine out if X is supported
     if $under_gdb && [ "$DISPLAY" ]; then
         args=`echo $@ |sed s/--detach//g | sed s/--vconsole:off//g`
-	xterm_title=$1
-	run_xterm $xterm_title gdb --args $args
+        xterm_title=$1
+        run_xterm $xterm_title gdb --args $args
     else
         run $@
     fi
@@ -44,6 +44,7 @@ rungdb() {
 
 gdb_vswitchd=false
 gdb_ovsdb=false
+gdb_ovn_nbd=false
 builddir=
 srcdir=
 schema=
@@ -92,6 +93,7 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -i, --installed      use installed Open vSwitch
   -g, --gdb-vswitchd   run ovs-vswitchd under gdb
   -d, --gdb-ovsdb      run ovsdb-server under gdb
+  --gdb-ovn-nbd        run ovn-nbd under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
   -o, --ovn            enable OVN
 
@@ -131,8 +133,11 @@ EOF
         -g|--gdb-v*)
             gdb_vswitchd=true
             ;;
-        -d|--gdb-o*)
+        -d|--gdb-ovsdb)
             gdb_ovsdb=true
+            ;;
+        --gdb-ovn-nbd)
+            gdb_ovn_nbd=true
             ;;
         -o|--ovn)
             ovn=true
@@ -272,6 +277,10 @@ rungdb $gdb_ovsdb ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log
 # Start ovs-vswitchd.
 rungdb $gdb_vswitchd ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
     --enable-dummy=override -vvconn -vnetdev_dummy
+
+if $ovn; then
+    rungdb $gdb_ovn_nbd ovn-nbd --detach --no-chdir --pidfile -vconsole:off --log-file
+fi
 
 cat <<EOF
 
