@@ -32,6 +32,13 @@
 
 VLOG_DEFINE_THIS_MODULE(ovn_nbd);
 
+struct nbd_context {
+    struct ovsdb_idl *ovnnb_idl;
+    struct ovsdb_idl *ovn_idl;
+    struct ovsdb_idl_txn *ovnnb_txn;
+    struct ovsdb_idl_txn *ovn_txn;
+};
+
 static const char *ovnnb_db;
 static const char *ovn_db;
 
@@ -59,17 +66,49 @@ Options:\n\
 }
 
 static void
-ovnnb_db_changed(void)
+ovnnb_db_changed(struct nbd_context *ctx OVS_UNUSED)
 {
     /* XXX */
     printf("ovn-nbd: ovn-nb db contents have changed.\n");
 }
 
+/*
+ * The only change we get notified about is if the 'chassis' column of the
+ * 'Bindings' table changes.  When this column is not empty, it means we need to
+ * set the corresponding logical port as 'up' in the northbound DB.
+ */
 static void
-ovn_db_changed(void)
+ovn_db_changed(struct nbd_context *ctx)
 {
-    /* XXX */
-    printf("ovn-nbd: ovn db contents have changed.\n");
+    const struct ovnrec_bindings *bindings;
+
+    VLOG_DBG("Recalculating port up states for ovn-nb db.");
+
+    OVNREC_BINDINGS_FOR_EACH(bindings, ctx->ovn_idl) {
+        const struct nbrec_logical_port *lport;
+        struct uuid lport_uuid;
+
+        if (!uuid_from_string(&lport_uuid, bindings->logical_port)) {
+            VLOG_WARN("Invalid logical port UUID '%s' in Bindings table.",
+                    bindings->logical_port);
+            continue;
+        }
+
+        lport = nbrec_logical_port_get_for_uuid(ctx->ovnnb_idl, &lport_uuid);
+        if (!lport) {
+            VLOG_WARN("No logical port '%s' found in OVN-nb db.",
+                    bindings->logical_port);
+            continue;
+        }
+
+        if (*bindings->chassis && (!lport->up || !*lport->up)) {
+            bool up = true;
+            nbrec_logical_port_set_up(lport, &up, 1);
+        } else if (!*bindings->chassis && (!lport->up || *lport->up)) {
+            bool up = false;
+            nbrec_logical_port_set_up(lport, &up, 1);
+        }
+    }
 }
 
 static const char *
@@ -158,6 +197,11 @@ main(int argc, char *argv[])
     struct ovsdb_idl *ovnnb_idl, *ovn_idl;
     unsigned int ovnnb_seqno, ovn_seqno;
     int res = EXIT_SUCCESS;
+    struct nbd_context ctx = {
+        .ovn_txn = NULL,
+    };
+    bool ovnnb_changes_pending = false;
+    bool ovn_changes_pending = false;
 
     fatal_ignore_sigpipe();
     set_program_name(argv[0]);
@@ -171,11 +215,13 @@ main(int argc, char *argv[])
     ovnrec_init();
 
     /* We want to detect all changes to the ovn-nb db. */
-    ovnnb_idl = ovsdb_idl_create(ovnnb_db, &nbrec_idl_class, true, true);
+    ctx.ovnnb_idl = ovnnb_idl = ovsdb_idl_create(ovnnb_db,
+            &nbrec_idl_class, true, true);
 
     /* There is only a small subset of changes to the ovn db that ovn-nbd has to
      * care about, so we'll enable monitoring those directly. */
-    ovn_idl = ovsdb_idl_create(ovn_db, &ovnrec_idl_class, false, true);
+    ctx.ovn_idl = ovn_idl = ovsdb_idl_create(ovn_db,
+            &ovnrec_idl_class, false, true);
     ovsdb_idl_add_table(ovn_idl, &ovnrec_table_bindings);
     ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_logical_port);
     ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_chassis);
@@ -216,18 +262,95 @@ main(int argc, char *argv[])
 
         if (ovnnb_seqno != ovsdb_idl_get_seqno(ovnnb_idl)) {
             ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
-            ovnnb_db_changed();
+            ovnnb_changes_pending = true;
         }
 
         if (ovn_seqno != ovsdb_idl_get_seqno(ovn_idl)) {
             ovn_seqno = ovsdb_idl_get_seqno(ovn_idl);
-            ovn_db_changed();
+            ovn_changes_pending = true;
+        }
+
+        /*
+         * If there are any pending changes, we delay recalculating the
+         * necessary updates until after an existing transaction finishes.
+         * This avoids the possibility of rapid updates causing ovn-nbd to never
+         * be able to successfully make the corresponding updates to the other
+         * db.  Instead, pending changes are batched up until the next time we
+         * get a chance to calculate the new state and apply it.
+         */
+
+        if (ovnnb_changes_pending && !ctx.ovn_txn) {
+            /*
+             * The OVN-nb db contents have changed, so create a transaction for
+             * updating the OVN DB.
+             */
+            ctx.ovn_txn = ovsdb_idl_txn_create(ctx.ovn_idl);
+            ovnnb_db_changed(&ctx);
+            ovnnb_changes_pending = false;
+        }
+
+        if (ovn_changes_pending && !ctx.ovnnb_txn) {
+            /*
+             * The OVN db contents have changed, so create a transaction for
+             * updating the northbound DB.
+             */
+            ctx.ovnnb_txn = ovsdb_idl_txn_create(ctx.ovnnb_idl);
+            ovn_db_changed(&ctx);
+            ovn_changes_pending = false;
+        }
+
+        if (ctx.ovnnb_txn) {
+            enum ovsdb_idl_txn_status txn_status;
+            txn_status = ovsdb_idl_txn_commit(ctx.ovnnb_txn);
+            switch (txn_status) {
+            case TXN_UNCOMMITTED:
+            case TXN_INCOMPLETE:
+                /* Come back around and try to commit this transaction again */
+                break;
+            case TXN_ABORTED:
+            case TXN_TRY_AGAIN:
+            case TXN_NOT_LOCKED:
+            case TXN_ERROR:
+                /* Something went wrong, so try creating a new transaction. */
+                ovn_changes_pending = true;
+            case TXN_UNCHANGED:
+            case TXN_SUCCESS:
+                ovsdb_idl_txn_destroy(ctx.ovnnb_txn);
+                ctx.ovnnb_txn = NULL;
+            }
+        }
+
+        if (ctx.ovn_txn) {
+            enum ovsdb_idl_txn_status txn_status;
+            txn_status = ovsdb_idl_txn_commit(ctx.ovn_txn);
+            switch (txn_status) {
+            case TXN_UNCOMMITTED:
+            case TXN_INCOMPLETE:
+                /* Come back around and try to commit this transaction again */
+                break;
+            case TXN_ABORTED:
+            case TXN_TRY_AGAIN:
+            case TXN_NOT_LOCKED:
+            case TXN_ERROR:
+                /* Something went wrong, so try creating a new transaction. */
+                ovnnb_changes_pending = true;
+            case TXN_UNCHANGED:
+            case TXN_SUCCESS:
+                ovsdb_idl_txn_destroy(ctx.ovn_txn);
+                ctx.ovn_txn = NULL;
+            }
         }
 
         if (ovnnb_seqno == ovsdb_idl_get_seqno(ovnnb_idl) &&
                 ovn_seqno == ovsdb_idl_get_seqno(ovn_idl)) {
             ovsdb_idl_wait(ovnnb_idl);
             ovsdb_idl_wait(ovn_idl);
+            if (ctx.ovnnb_txn) {
+                ovsdb_idl_txn_wait(ctx.ovnnb_txn);
+            }
+            if (ctx.ovn_txn) {
+                ovsdb_idl_txn_wait(ctx.ovn_txn);
+            }
             poll_block();
         }
     }
