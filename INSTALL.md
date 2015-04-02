@@ -204,6 +204,12 @@ default CFLAGS plus "-mssse3", you might run configure as follows:
 
       `% ./configure CFLAGS="-g -O2 -mssse3"`
 
+Note that these CFLAGS are not applied when building the Linux
+kernel module.  Custom CFLAGS for the kernel module are supplied
+using the EXTRA_CFLAGS variable when running make.  So, for example:
+
+      `% make EXTRA_CFLAGS="-Wno-error=date-time"
+
 To build the Linux kernel module, so that you can run the
 kernel-based switch, pass the location of the kernel build
 directory on --with-linux.  For example, to build for a running
