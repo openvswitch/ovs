@@ -472,9 +472,9 @@
 
     <p>
       For every <code>Logical_Port</code> record in <code>OVN_Northbound</code>
-      database, <code>ovn-ndb</code> creates a record in this table.
-      <code>ovn-nbd</code> is responsible for populating every column except
-      the <code>chassis</code> column.
+      database, <code>ovn-nbd</code> creates a record in this table.
+      <code>ovn-nbd</code> populates and maintains every column except
+      the <code>chassis</code> column, which it leaves empty in new records.
     </p>
 
     <p>
