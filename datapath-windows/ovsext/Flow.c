@@ -319,7 +319,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     rc = OvsPutFlowIoctl(&mappedFlow, sizeof (struct OvsFlowPut),
                          &stats);
     if (rc != STATUS_SUCCESS) {
-        OVS_LOG_ERROR("OvsFlowPut failed.");
+        OVS_LOG_ERROR("OvsPutFlowIoctl failed.");
         goto done;
     }
 

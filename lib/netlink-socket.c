@@ -273,63 +273,27 @@ nl_sock_destroy(struct nl_sock *sock)
 
 #ifdef _WIN32
 /* Reads the pid for 'sock' generated in the kernel datapath. The function
- * follows a transaction semantic. Eventually this function should call into
- * nl_transact. */
+ * uses a separate IOCTL instead of a transaction semantic to avoid unnecessary
+ * message overhead. */
 static int
 get_sock_pid_from_kernel(struct nl_sock *sock)
 {
-    struct nl_transaction txn;
-    struct ofpbuf request;
-    uint64_t request_stub[128];
-    struct ofpbuf reply;
-    uint64_t reply_stub[128];
-    struct ovs_header *ovs_header;
-    struct nlmsghdr *nlmsg;
-    uint32_t seq;
-    int retval;
-    DWORD bytes;
-    int ovs_msg_size = sizeof (struct nlmsghdr) + sizeof (struct genlmsghdr) +
-                       sizeof (struct ovs_header);
+    uint32_t pid = 0;
+    int retval = 0;
+    DWORD bytes = 0;
 
-    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
-    txn.request = &request;
-    ofpbuf_use_stub(&reply, reply_stub, sizeof reply_stub);
-    txn.reply = &reply;
-
-    seq = nl_sock_allocate_seq(sock, 1);
-    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
-                          OVS_CTRL_CMD_WIN_GET_PID, OVS_WIN_CONTROL_VERSION);
-    nlmsg = nl_msg_nlmsghdr(txn.request);
-    nlmsg->nlmsg_seq = seq;
-
-    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
-    ovs_header->dp_ifindex = 0;
-    ovs_header = ofpbuf_put_uninit(&reply, ovs_msg_size);
-
-    if (!DeviceIoControl(sock->handle, OVS_IOCTL_TRANSACT,
-                         txn.request->data, txn.request->size,
-                         txn.reply->data, txn.reply->size,
+    if (!DeviceIoControl(sock->handle, OVS_IOCTL_GET_PID,
+                         NULL, 0, &pid, sizeof(pid),
                          &bytes, NULL)) {
         retval = EINVAL;
-        goto done;
     } else {
-        if (bytes < ovs_msg_size) {
+        if (bytes < sizeof(pid)) {
             retval = EINVAL;
-            goto done;
+        } else {
+            sock->pid = pid;
         }
-
-        nlmsg = nl_msg_nlmsghdr(txn.reply);
-        if (nlmsg->nlmsg_seq != seq) {
-            retval = EINVAL;
-            goto done;
-        }
-        sock->pid = nlmsg->nlmsg_pid;
     }
-    retval = 0;
 
-done:
-    ofpbuf_uninit(&request);
-    ofpbuf_uninit(&reply);
     return retval;
 }
 #endif  /* _WIN32 */

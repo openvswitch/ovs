@@ -87,8 +87,7 @@ typedef struct _NETLINK_FAMILY {
 } NETLINK_FAMILY, *PNETLINK_FAMILY;
 
 /* Handlers for the various netlink commands. */
-static NetlinkCmdHandler OvsGetPidCmdHandler,
-                         OvsPendEventCmdHandler,
+static NetlinkCmdHandler OvsPendEventCmdHandler,
                          OvsPendPacketCmdHandler,
                          OvsSubscribeEventCmdHandler,
                          OvsSubscribePacketCmdHandler,
@@ -110,6 +109,8 @@ static NTSTATUS HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                 UINT32 *replyLen);
 static NTSTATUS HandleDpTransactionCommon(
                     POVS_USER_PARAMS_CONTEXT usrParamsCtx, UINT32 *replyLen);
+static NTSTATUS OvsGetPidHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                    UINT32 *replyLen);
 
 /*
  * The various netlink families, along with the supported commands. Most of
@@ -120,11 +121,6 @@ static NTSTATUS HandleDpTransactionCommon(
 
 /* Netlink control family: this is a Windows specific family. */
 NETLINK_CMD nlControlFamilyCmdOps[] = {
-    { .cmd             = OVS_CTRL_CMD_WIN_GET_PID,
-      .handler         = OvsGetPidCmdHandler,
-      .supportedDevOp  = OVS_TRANSACTION_DEV_OP,
-      .validateDpIndex = FALSE,
-    },
     { .cmd = OVS_CTRL_CMD_WIN_PEND_REQ,
       .handler = OvsPendEventCmdHandler,
       .supportedDevOp = OVS_WRITE_DEV_OP,
@@ -736,6 +732,24 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
      * operation.
      */
     switch (code) {
+    case OVS_IOCTL_GET_PID:
+        /* Both input buffer and output buffer use the same location. */
+        outputBuffer = irp->AssociatedIrp.SystemBuffer;
+        if (outputBufferLen != 0) {
+            InitUserParamsCtx(irp, instance, 0, NULL,
+                              inputBuffer, inputBufferLen,
+                              outputBuffer, outputBufferLen,
+                              &usrParamsCtx);
+
+            ASSERT(outputBuffer);
+        } else {
+            status = STATUS_NDIS_INVALID_LENGTH;
+            goto done;
+        }
+
+        status = OvsGetPidHandler(&usrParamsCtx, &replyLen);
+        goto done;
+
     case OVS_IOCTL_TRANSACT:
         /* Both input buffer and output buffer are mandatory. */
         if (outputBufferLen != 0) {
@@ -947,11 +961,9 @@ ValidateNetlinkCmd(UINT32 devOp,
             }
 
             /* Validate the PID. */
-            if (ovsMsg->genlMsg.cmd != OVS_CTRL_CMD_WIN_GET_PID) {
-                if (ovsMsg->nlMsg.nlmsgPid != instance->pid) {
-                    status = STATUS_INVALID_PARAMETER;
-                    goto done;
-                }
+            if (ovsMsg->nlMsg.nlmsgPid != instance->pid) {
+                status = STATUS_INVALID_PARAMETER;
+                goto done;
             }
 
             status = STATUS_SUCCESS;
@@ -992,38 +1004,33 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 /*
  * --------------------------------------------------------------------------
- *  Command Handler for 'OVS_CTRL_CMD_WIN_GET_PID'.
+ *  Handler for 'OVS_IOCTL_GET_PID'.
  *
  *  Each handle on the device is assigned a unique PID when the handle is
- *  created. On platforms that support netlink natively, the PID is available
- *  to userspace when the netlink socket is created. However, without native
- *  netlink support on Windows, OVS datapath generates the PID and lets the
- *  userspace query it.
- *
- *  This function implements the query.
+ *  created. This function passes the PID to userspace using METHOD_BUFFERED
+ *  method.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
-OvsGetPidCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                    UINT32 *replyLen)
+OvsGetPidHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                 UINT32 *replyLen)
 {
-    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
-    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    NTSTATUS status = STATUS_SUCCESS;
+    PUINT32 msgOut = (PUINT32)usrParamsCtx->outputBuffer;
 
     if (usrParamsCtx->outputLength >= sizeof *msgOut) {
         POVS_OPEN_INSTANCE instance =
             (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
 
         RtlZeroMemory(msgOut, sizeof *msgOut);
-        msgOut->nlMsg.nlmsgSeq = msgIn->nlMsg.nlmsgSeq;
-        msgOut->nlMsg.nlmsgPid = instance->pid;
+        RtlCopyMemory(msgOut, &instance->pid, sizeof(*msgOut));
         *replyLen = sizeof *msgOut;
-        /* XXX: We might need to return the DP index as well. */
     } else {
-        return STATUS_NDIS_INVALID_LENGTH;
+        *replyLen = sizeof *msgOut;
+        status = STATUS_NDIS_INVALID_LENGTH;
     }
 
-    return STATUS_SUCCESS;
+    return status;
 }
 
 /*
