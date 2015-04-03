@@ -132,7 +132,7 @@ lex_token_format_masked_integer(const struct lex_token *token, struct ds *s)
  * losslessly parsed back by the lexer.  (LEX_T_END and LEX_T_ERROR can't be
  * parsed back.) */
 void
-lex_token_format(struct lex_token *token, struct ds *s)
+lex_token_format(const struct lex_token *token, struct ds *s)
 {
     switch (token->type) {
     case LEX_T_END:

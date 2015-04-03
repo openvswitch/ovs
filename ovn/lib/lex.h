@@ -89,7 +89,7 @@ void lex_token_init(struct lex_token *);
 void lex_token_destroy(struct lex_token *);
 void lex_token_swap(struct lex_token *, struct lex_token *);
 
-void lex_token_format(struct lex_token *, struct ds *);
+void lex_token_format(const struct lex_token *, struct ds *);
 const char *lex_token_parse(struct lex_token *, const char *input,
                             const char **startp);
 
