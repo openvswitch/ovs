@@ -128,16 +128,6 @@ lex_token_format_masked_integer(const struct lex_token *token, struct ds *s)
     }
 }
 
-static void
-lex_token_format_string(const char *s, struct ds *ds)
-{
-    struct json json = {
-        .type = JSON_STRING,
-        .u.string = CONST_CAST(char *, s),
-    };
-    json_to_ds(&json, 0, ds);
-}
-
 /* Appends a string representation of 'token' to 's', in a format that can be
  * losslessly parsed back by the lexer.  (LEX_T_END and LEX_T_ERROR can't be
  * parsed back.) */
@@ -155,14 +145,12 @@ lex_token_format(struct lex_token *token, struct ds *s)
 
     case LEX_T_ERROR:
         ds_put_cstr(s, "error(");
-        lex_token_format_string(token->s, s);
+        json_string_escape(token->s, s);
         ds_put_char(s, ')');
         break;
 
     case LEX_T_STRING:
-        lex_token_format_string(token->s, s);
-        break;
-
+        json_string_escape(token->s, s);
         break;
 
     case LEX_T_INTEGER:

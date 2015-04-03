@@ -283,16 +283,6 @@ find_bitwise_range(const union mf_subvalue *sv, int width,
 }
 
 static void
-expr_format_string(const char *s, struct ds *ds)
-{
-    struct json json = {
-        .type = JSON_STRING,
-        .u.string = CONST_CAST(char *, s),
-    };
-    json_to_ds(&json, 0, ds);
-}
-
-static void
 expr_format_cmp(const struct expr *e, struct ds *s)
 {
     /* The common case is numerical comparisons.
@@ -300,7 +290,7 @@ expr_format_cmp(const struct expr *e, struct ds *s)
     if (!e->cmp.symbol->width) {
         ds_put_format(s, "%s %s ", e->cmp.symbol->name,
                       expr_relop_to_string(e->cmp.relop));
-        expr_format_string(e->cmp.string, s);
+        json_string_escape(e->cmp.string, s);
         return;
     }
 
