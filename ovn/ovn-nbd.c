@@ -22,12 +22,15 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "fatal-signal.h"
+#include "hash.h"
+#include "hmap.h"
 #include "ovn/ovn-idl.h"
 #include "ovn/ovn-nb-idl.h"
 #include "poll-loop.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "util.h"
+#include "uuid.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovn_nbd);
@@ -65,11 +68,136 @@ Options:\n\
     stream_usage("database", true, true, false);
 }
 
-static void
-ovnnb_db_changed(struct nbd_context *ctx OVS_UNUSED)
+static int
+compare_strings(const void *a_, const void *b_)
 {
-    /* XXX */
-    printf("ovn-nbd: ovn-nb db contents have changed.\n");
+    char *const *a = a_;
+    char *const *b = b_;
+    return strcmp(*a, *b);
+}
+
+/*
+ * Determine whether 2 arrays of MAC addresses are the same.  It's possible that
+ * the lists could be *very* long and this check is being done a lot (every
+ * time the OVN_Northbound database changes).
+ */
+static bool
+macs_equal(char **binding_macs_, size_t b_n_macs,
+           char **lport_macs_, size_t l_n_macs)
+{
+    char **binding_macs, **lport_macs;
+    size_t bytes, i;
+
+    if (b_n_macs != l_n_macs) {
+        return false;
+    }
+
+    bytes = b_n_macs * sizeof binding_macs_[0];
+    binding_macs = xmalloc(bytes);
+    lport_macs = xmalloc(bytes);
+
+    memcpy(binding_macs, binding_macs_, bytes);
+    memcpy(lport_macs, lport_macs_, bytes);
+
+    qsort(binding_macs, b_n_macs, sizeof binding_macs[0], compare_strings);
+    qsort(lport_macs, l_n_macs, sizeof lport_macs[0], compare_strings);
+
+    for (i = 0; i < b_n_macs; i++) {
+        if (strcmp(binding_macs[i], lport_macs[i])) {
+            break;
+        }
+    }
+
+    free(binding_macs);
+    free(lport_macs);
+
+    return (i == b_n_macs) ? true : false;
+}
+
+/*
+ * When a change has occurred in the OVN_Northbound database, we go through and
+ * make sure that the contents of the Bindings table in the OVN database are up
+ * to date with the logical ports defined in the OVN_Northbound database.
+ */
+static void
+set_bindings(struct nbd_context *ctx)
+{
+    struct hmap bindings_hmap;
+    const struct ovnrec_bindings *binding;
+    const struct nbrec_logical_port *lport;
+
+    struct binding_hash_node {
+        struct hmap_node node;
+        const struct ovnrec_bindings *binding;
+    } *hash_node, *hash_node_next;
+
+    /*
+     * We will need to look up a binding for every logical port.  We don't want
+     * to have to do an O(n) search for every binding, so start out by hashing
+     * them on the logical port.
+     *
+     * As we go through every logical port, we will update the binding if it
+     * exists or create one otherwise.  When the update is done, we'll remove it
+     * from the hashmap.  At the end, any bindings left in the hashmap are for
+     * logical ports that have been deleted.
+     */
+    hmap_init(&bindings_hmap);
+
+    OVNREC_BINDINGS_FOR_EACH(binding, ctx->ovn_idl) {
+        struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
+
+        hash_node->binding = binding;
+        hmap_insert(&bindings_hmap, &hash_node->node,
+                hash_string(binding->logical_port, 0));
+    }
+
+    NBREC_LOGICAL_PORT_FOR_EACH(lport, ctx->ovnnb_idl) {
+        HMAP_FOR_EACH_WITH_HASH(hash_node, node,
+                hash_string(lport->name, 0), &bindings_hmap) {
+            if (!strcmp(lport->name, hash_node->binding->logical_port)) {
+                break;
+            }
+        }
+
+        if (hash_node) {
+            /* We found an existing binding for this logical port.  Update its
+             * contents.  Right now the only thing we expect that could change
+             * is the list of MAC addresses. */
+
+            binding = hash_node->binding;
+            hmap_remove(&bindings_hmap, &hash_node->node);
+            free(hash_node);
+            hash_node = NULL;
+
+            if (!macs_equal(binding->mac, binding->n_mac,
+                        lport->macs, lport->n_macs)) {
+                ovnrec_bindings_set_mac(binding,
+                        (const char **) lport->macs, lport->n_macs);
+            }
+        } else {
+            /* There is no binding for this logical port, so create one. */
+
+            binding = ovnrec_bindings_insert(ctx->ovn_txn);
+            ovnrec_bindings_set_logical_port(binding, lport->name);
+            ovnrec_bindings_set_mac(binding,
+                    (const char **) lport->macs, lport->n_macs);
+        }
+    }
+
+    HMAP_FOR_EACH_SAFE(hash_node, hash_node_next, node, &bindings_hmap) {
+        hmap_remove(&bindings_hmap, &hash_node->node);
+        ovnrec_bindings_delete(hash_node->binding);
+        free(hash_node);
+    }
+    hmap_destroy(&bindings_hmap);
+}
+
+static void
+ovnnb_db_changed(struct nbd_context *ctx)
+{
+    VLOG_DBG("ovn-nbd: ovn-nb db contents have changed.\n");
+
+    set_bindings(ctx);
 }
 
 /*
@@ -225,6 +353,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_table(ovn_idl, &ovnrec_table_bindings);
     ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_logical_port);
     ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_chassis);
+    ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_mac);
 
     /*
      * The loop here just runs the IDL in a loop waiting for the seqno to
