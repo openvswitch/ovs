@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -392,7 +392,13 @@ AC_DEFUN([OVS_CHECK_STRTOK_R],
         [AC_LANG_PROGRAM([#include <stdio.h>
                           #include <string.h>
                          ],
-                         [[char string[] = ":::";
+                         [[#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 8
+                           /* Assume bug is present, because relatively minor
+                              changes in compiler settings (e.g. optimization
+                              level) can make it crop up. */
+                           return 1;
+                           #else
+                           char string[] = ":::";
                            char *save_ptr = (char *) 0xc0ffee;
                            char *token1, *token2;
                            token1 = strtok_r(string, ":", &save_ptr);
@@ -400,6 +406,7 @@ AC_DEFUN([OVS_CHECK_STRTOK_R],
                            freopen ("/dev/null", "w", stdout);
                            printf ("%s %s\n", token1, token2);
                            return 0;
+                           #endif
                           ]])],
         [ovs_cv_strtok_r_bug=no],
         [ovs_cv_strtok_r_bug=yes],
