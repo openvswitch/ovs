@@ -231,4 +231,5 @@ u32 __skb_get_hash(struct sk_buff *skb)
 #endif
 	return hash;
 }
+EXPORT_SYMBOL_GPL(__skb_get_hash);
 #endif

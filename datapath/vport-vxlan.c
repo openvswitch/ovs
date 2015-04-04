@@ -26,6 +26,7 @@
 #include <linux/net.h>
 #include <linux/rculist.h>
 #include <linux/udp.h>
+#include <linux/module.h>
 
 #include <net/icmp.h>
 #include <net/ip.h>
@@ -53,6 +54,8 @@ struct vxlan_port {
 	char name[IFNAMSIZ];
 	u32 exts; /* VXLAN_F_* in <net/vxlan.h> */
 };
+
+static struct vport_ops ovs_vxlan_vport_ops;
 
 static inline struct vxlan_port *vxlan_vport(const struct vport *vport)
 {
@@ -293,7 +296,7 @@ static const char *vxlan_get_name(const struct vport *vport)
 	return vxlan_port->name;
 }
 
-const struct vport_ops ovs_vxlan_vport_ops = {
+static struct vport_ops ovs_vxlan_vport_ops = {
 	.type			= OVS_VPORT_TYPE_VXLAN,
 	.create			= vxlan_tnl_create,
 	.destroy		= vxlan_tnl_destroy,
@@ -301,4 +304,22 @@ const struct vport_ops ovs_vxlan_vport_ops = {
 	.get_options		= vxlan_get_options,
 	.send			= vxlan_tnl_send,
 	.get_egress_tun_info	= vxlan_get_egress_tun_info,
+	.owner			= THIS_MODULE,
 };
+
+static int __init ovs_vxlan_tnl_init(void)
+{
+	return ovs_vport_ops_register(&ovs_vxlan_vport_ops);
+}
+
+static void __exit ovs_vxlan_tnl_exit(void)
+{
+	ovs_vport_ops_unregister(&ovs_vxlan_vport_ops);
+}
+
+module_init(ovs_vxlan_tnl_init);
+module_exit(ovs_vxlan_tnl_exit);
+
+MODULE_DESCRIPTION("OVS: VXLAN switching port");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("vport-type-4");

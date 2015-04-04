@@ -24,6 +24,7 @@
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/net.h>
+#include <linux/module.h>
 #include <linux/rculist.h>
 #include <linux/udp.h>
 
@@ -110,6 +111,7 @@ struct lisp_port {
 };
 
 static LIST_HEAD(lisp_ports);
+static struct vport_ops ovs_lisp_vport_ops;
 
 static inline struct lisp_port *lisp_vport(const struct vport *vport)
 {
@@ -493,7 +495,7 @@ static int lisp_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
 					  lisp_port->dst_port);
 }
 
-const struct vport_ops ovs_lisp_vport_ops = {
+static struct vport_ops ovs_lisp_vport_ops = {
 	.type			= OVS_VPORT_TYPE_LISP,
 	.create			= lisp_tnl_create,
 	.destroy		= lisp_tnl_destroy,
@@ -501,4 +503,22 @@ const struct vport_ops ovs_lisp_vport_ops = {
 	.get_options		= lisp_get_options,
 	.send			= lisp_send,
 	.get_egress_tun_info	= lisp_get_egress_tun_info,
+	.owner			= THIS_MODULE,
 };
+
+static int __init ovs_lisp_tnl_init(void)
+{
+	return ovs_vport_ops_register(&ovs_lisp_vport_ops);
+}
+
+static void __exit ovs_lisp_tnl_exit(void)
+{
+	ovs_vport_ops_unregister(&ovs_lisp_vport_ops);
+}
+
+module_init(ovs_lisp_tnl_init);
+module_exit(ovs_lisp_tnl_exit);
+
+MODULE_DESCRIPTION("OVS: LISP switching port");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("vport-type-105");

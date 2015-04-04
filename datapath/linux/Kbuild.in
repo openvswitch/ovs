@@ -18,10 +18,10 @@ ccflags-y += -include $(builddir)/kcompat.h
 # right place, even though it's conceptually incorrect.
 NOSTDINC_FLAGS += -I$(top_srcdir)/include -I$(srcdir)/compat -I$(srcdir)/compat/include
 
-obj-m := $(patsubst %,%.o,$(build_modules))
+obj-m := $(subst _,-,$(patsubst %,%.o,$(build_modules)))
 
 define module_template
 $(1)-y = $$(notdir $$(patsubst %.c,%.o,$($(1)_sources)))
 endef
 
-$(foreach module,$(build_modules),$(eval $(call module_template,$(module))))
+$(foreach module,$(build_multi_modules),$(eval $(call module_template,$(module))))

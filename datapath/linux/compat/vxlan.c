@@ -225,6 +225,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 				   ttl, df, src_port, dst_port, xnet,
 				   !udp_sum);
 }
+EXPORT_SYMBOL_GPL(vxlan_xmit_skb);
 
 static void rcu_free_vs(struct rcu_head *rcu)
 {
@@ -313,6 +314,7 @@ struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 {
 	return vxlan_socket_create(net, port, rcv, data, flags);
 }
+EXPORT_SYMBOL_GPL(vxlan_sock_add);
 
 void vxlan_sock_release(struct vxlan_sock *vs)
 {
@@ -320,5 +322,6 @@ void vxlan_sock_release(struct vxlan_sock *vs)
 
 	queue_work(system_wq, &vs->del_work);
 }
+EXPORT_SYMBOL_GPL(vxlan_sock_release);
 
 #endif /* !USE_UPSTREAM_VXLAN */

@@ -23,6 +23,7 @@
 #include <linux/kconfig.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/percpu.h>
 #include <linux/rcupdate.h>
@@ -39,20 +40,7 @@
 static void ovs_vport_record_error(struct vport *,
 				   enum vport_err_type err_type);
 
-/* List of statically compiled vport implementations.  Don't forget to also
- * add yours to the list at the bottom of vport.h.
- */
-static const struct vport_ops *vport_ops_list[] = {
-	&ovs_netdev_vport_ops,
-	&ovs_internal_vport_ops,
-	&ovs_geneve_vport_ops,
-#if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
-	&ovs_gre_vport_ops,
-	&ovs_gre64_vport_ops,
-#endif
-	&ovs_vxlan_vport_ops,
-	&ovs_lisp_vport_ops,
-};
+static LIST_HEAD(vport_ops_list);
 
 /* Protected by RCU read lock for reading, ovs_mutex for writing. */
 static struct hlist_head *dev_table;
@@ -88,6 +76,32 @@ static struct hlist_head *hash_bucket(const struct net *net, const char *name)
 	unsigned int hash = jhash(name, strlen(name), (unsigned long) net);
 	return &dev_table[hash & (VPORT_HASH_BUCKETS - 1)];
 }
+
+int ovs_vport_ops_register(struct vport_ops *ops)
+{
+	int err = -EEXIST;
+	struct vport_ops *o;
+
+	ovs_lock();
+	list_for_each_entry(o, &vport_ops_list, list)
+	if (ops->type == o->type)
+		goto errout;
+
+	list_add_tail(&ops->list, &vport_ops_list);
+	err = 0;
+errout:
+	ovs_unlock();
+	return err;
+}
+EXPORT_SYMBOL_GPL(ovs_vport_ops_register);
+
+void ovs_vport_ops_unregister(struct vport_ops *ops)
+{
+	ovs_lock();
+	list_del(&ops->list);
+	ovs_unlock();
+}
+EXPORT_SYMBOL_GPL(ovs_vport_ops_unregister);
 
 /**
  *	ovs_vport_locate - find a port that has already been created
@@ -154,6 +168,18 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 
 	return vport;
 }
+EXPORT_SYMBOL_GPL(ovs_vport_alloc);
+
+static struct vport_ops *ovs_vport_lookup(const struct vport_parms *parms)
+{
+	struct vport_ops *ops;
+
+	list_for_each_entry(ops, &vport_ops_list, list)
+		if (ops->type == parms->type)
+			return ops;
+
+	return NULL;
+}
 
 /**
  *	ovs_vport_free - uninitialize and free vport
@@ -171,6 +197,7 @@ void ovs_vport_free(struct vport *vport)
 	free_percpu(vport->percpu_stats);
 	kfree(vport);
 }
+EXPORT_SYMBOL_GPL(ovs_vport_free);
 
 /**
  *	ovs_vport_add - add vport device (for kernel callers)
@@ -182,31 +209,40 @@ void ovs_vport_free(struct vport *vport)
  */
 struct vport *ovs_vport_add(const struct vport_parms *parms)
 {
+	struct vport_ops *ops;
 	struct vport *vport;
-	int err = 0;
-	int i;
 
-	for (i = 0; i < ARRAY_SIZE(vport_ops_list); i++) {
-		if (vport_ops_list[i]->type == parms->type) {
-			struct hlist_head *bucket;
+	ops = ovs_vport_lookup(parms);
+	if (ops) {
+		struct hlist_head *bucket;
 
-			vport = vport_ops_list[i]->create(parms);
-			if (IS_ERR(vport)) {
-				err = PTR_ERR(vport);
-				goto out;
-			}
+		if (!try_module_get(ops->owner))
+			return ERR_PTR(-EAFNOSUPPORT);
 
-			bucket = hash_bucket(ovs_dp_get_net(vport->dp),
-					     vport->ops->get_name(vport));
-			hlist_add_head_rcu(&vport->hash_node, bucket);
+		vport = ops->create(parms);
+		if (IS_ERR(vport)) {
+			module_put(ops->owner);
 			return vport;
 		}
+
+		bucket = hash_bucket(ovs_dp_get_net(vport->dp),
+				     vport->ops->get_name(vport));
+		hlist_add_head_rcu(&vport->hash_node, bucket);
+		return vport;
 	}
 
-	err = -EAFNOSUPPORT;
+	/* Unlock to attempt module load and return -EAGAIN if load
+	 * was successful as we need to restart the port addition
+	 * workflow.
+	 */
+	ovs_unlock();
+	request_module("vport-type-%d", parms->type);
+	ovs_lock();
 
-out:
-	return ERR_PTR(err);
+	if (!ovs_vport_lookup(parms))
+		return ERR_PTR(-EAFNOSUPPORT);
+	else
+		return ERR_PTR(-EAGAIN);
 }
 
 /**
@@ -238,6 +274,7 @@ void ovs_vport_del(struct vport *vport)
 	ASSERT_OVSL();
 
 	hlist_del_rcu(&vport->hash_node);
+	module_put(vport->ops->owner);
 	vport->ops->destroy(vport);
 }
 
@@ -467,6 +504,7 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 
 	ovs_dp_process_packet(skb, &key);
 }
+EXPORT_SYMBOL_GPL(ovs_vport_receive);
 
 /**
  *	ovs_vport_send - send a packet on a device
@@ -544,6 +582,7 @@ void ovs_vport_deferred_free(struct vport *vport)
 
 	call_rcu(&vport->rcu, free_vport_rcu);
 }
+EXPORT_SYMBOL_GPL(ovs_vport_deferred_free);
 
 int ovs_tunnel_get_egress_info(struct ovs_tunnel_info *egress_tun_info,
 			       struct net *net,
@@ -592,6 +631,7 @@ int ovs_tunnel_get_egress_info(struct ovs_tunnel_info *egress_tun_info,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(ovs_tunnel_get_egress_info);
 
 int ovs_vport_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
 				  struct ovs_tunnel_info *info)

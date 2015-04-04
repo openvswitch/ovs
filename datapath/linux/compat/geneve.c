@@ -118,6 +118,7 @@ int geneve_xmit_skb(struct geneve_sock *gs, struct rtable *rt,
 				   tos, ttl, df, src_port, dst_port, xnet,
 				   !csum);
 }
+EXPORT_SYMBOL_GPL(geneve_xmit_skb);
 
 /* Callback from net/ipv4/udp.c to receive packets */
 static int geneve_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
@@ -226,6 +227,7 @@ struct geneve_sock *geneve_sock_add(struct net *net, __be16 port,
 {
 	return geneve_socket_create(net, port, rcv, data, ipv6);
 }
+EXPORT_SYMBOL_GPL(geneve_sock_add);
 
 static void rcu_free_gs(struct rcu_head *rcu)
 {
@@ -239,3 +241,4 @@ void geneve_sock_release(struct geneve_sock *gs)
 	udp_tunnel_sock_release(gs->sock);
 	call_rcu(&gs->rcu, rcu_free_gs);
 }
+EXPORT_SYMBOL_GPL(geneve_sock_release);
