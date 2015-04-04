@@ -1744,7 +1744,7 @@ static int
 ifr_get_flags(const struct ifreq *ifr)
 {
 #ifdef HAVE_STRUCT_IFREQ_IFR_FLAGSHIGH
-    return (ifr->ifr_flagshigh << 16) | ifr->ifr_flags;
+    return (ifr->ifr_flagshigh << 16) | (ifr->ifr_flags & 0xffff);
 #else
     return ifr->ifr_flags;
 #endif
@@ -1753,9 +1753,11 @@ ifr_get_flags(const struct ifreq *ifr)
 static void
 ifr_set_flags(struct ifreq *ifr, int flags)
 {
-    ifr->ifr_flags = flags;
 #ifdef HAVE_STRUCT_IFREQ_IFR_FLAGSHIGH
+    ifr->ifr_flags = flags & 0xffff;
     ifr->ifr_flagshigh = flags >> 16;
+#else
+    ifr->ifr_flags = flags;
 #endif
 }
 
