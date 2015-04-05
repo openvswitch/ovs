@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2013, 2014 Nicira, Inc.
+# Copyright (c) 2013, 2014, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -269,7 +269,8 @@ def modinst():
         pass  # Module isn't loaded
 
     try:
-        _sh("rm /lib/modules/%s/extra/openvswitch.ko" % uname())
+        _sh("rm -f /lib/modules/%s/extra/openvswitch.ko" % uname())
+        _sh("rm -f /lib/modules/%s/extra/vport-*.ko" % uname())
     except subprocess.CalledProcessError, e:
         pass  # Module isn't installed
 
