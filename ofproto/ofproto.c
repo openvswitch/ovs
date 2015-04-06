@@ -2961,9 +2961,9 @@ static void
 learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct learned_cookie *c, *next;
+    struct learned_cookie *c;
 
-    LIST_FOR_EACH_SAFE (c, next, u.list_node, dead_cookies) {
+    LIST_FOR_EACH_POP (c, u.list_node, dead_cookies) {
         struct rule_criteria criteria;
         struct rule_collection rules;
         struct match match;
@@ -2977,7 +2977,6 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
         rule_criteria_destroy(&criteria);
         rule_collection_destroy(&rules);
 
-        list_remove(&c->u.list_node);
         free(c);
     }
 }

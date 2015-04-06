@@ -67,7 +67,7 @@ recirc_run(void)
     /* Do maintenance at most 4 times / sec. */
     ovs_mutex_lock(&mutex);
     if (now - last > 250) {
-        struct recirc_id_node *node, *next;
+        struct recirc_id_node *node;
 
         last = now;
 
@@ -86,8 +86,7 @@ recirc_run(void)
         /* Delete the expired.  These have been lingering for at least 250 ms,
          * which should be enough for any ongoing recirculations to be
          * finished. */
-        LIST_FOR_EACH_SAFE (node, next, exp_node, &expired) {
-            list_remove(&node->exp_node);
+        LIST_FOR_EACH_POP (node, exp_node, &expired) {
             cmap_remove(&id_map, &node->id_node, node->id);
             ovsrcu_postpone(free, node);
         }

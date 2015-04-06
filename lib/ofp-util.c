@@ -6886,10 +6886,9 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
 void
 ofputil_bucket_list_destroy(struct ovs_list *buckets)
 {
-    struct ofputil_bucket *bucket, *next_bucket;
+    struct ofputil_bucket *bucket;
 
-    LIST_FOR_EACH_SAFE (bucket, next_bucket, list_node, buckets) {
-        list_remove(&bucket->list_node);
+    LIST_FOR_EACH_POP (bucket, list_node, buckets) {
         free(bucket->ofpacts);
         free(bucket);
     }

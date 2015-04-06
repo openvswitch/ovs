@@ -164,7 +164,7 @@ static void
 lldpd_move_chassis(struct lldpd_chassis *ochassis,
     struct lldpd_chassis *chassis)
 {
-    struct lldpd_mgmt *mgmt, *mgmt_next;
+    struct lldpd_mgmt *mgmt;
     int refcount = ochassis->c_refcount;
     int index = ochassis->c_index;
     struct ovs_list listcopy;
@@ -182,8 +182,7 @@ lldpd_move_chassis(struct lldpd_chassis *ochassis,
     list_init(&ochassis->c_mgmt);
 
     /* Copy of management addresses */
-    LIST_FOR_EACH_SAFE (mgmt, mgmt_next, m_entries, &chassis->c_mgmt) {
-        list_remove(&mgmt->m_entries);
+    LIST_FOR_EACH_POP (mgmt, m_entries, &chassis->c_mgmt) {
         list_insert(&ochassis->c_mgmt, &mgmt->m_entries);
     }
 

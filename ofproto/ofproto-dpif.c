@@ -886,7 +886,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     struct dpif_port port;
     struct shash_node *node;
     struct ovs_list garbage_list;
-    struct odp_garbage *garbage, *next;
+    struct odp_garbage *garbage;
 
     struct sset names;
     char *backer_name;
@@ -964,9 +964,8 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     }
     dpif_port_dump_done(&port_dump);
 
-    LIST_FOR_EACH_SAFE (garbage, next, list_node, &garbage_list) {
+    LIST_FOR_EACH_POP (garbage, list_node, &garbage_list) {
         dpif_port_del(backer->dpif, garbage->odp_port);
-        list_remove(&garbage->list_node);
         free(garbage);
     }
 
@@ -1377,7 +1376,7 @@ static void
 destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofproto_packet_in *pin, *next_pin;
+    struct ofproto_packet_in *pin;
     struct rule_dpif *rule;
     struct oftable *table;
     struct ovs_list pins;
@@ -1400,8 +1399,7 @@ destruct(struct ofproto *ofproto_)
     }
 
     guarded_list_pop_all(&ofproto->pins, &pins);
-    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
-        list_remove(&pin->list_node);
+    LIST_FOR_EACH_POP (pin, list_node, &pins) {
         free(CONST_CAST(void *, pin->up.packet));
         free(pin);
     }
@@ -1456,13 +1454,12 @@ run(struct ofproto *ofproto_)
     /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
     if (!ofproto_get_flow_restore_wait()) {
-        struct ofproto_packet_in *pin, *next_pin;
+        struct ofproto_packet_in *pin;
         struct ovs_list pins;
 
         guarded_list_pop_all(&ofproto->pins, &pins);
-        LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
+        LIST_FOR_EACH_POP (pin, list_node, &pins) {
             connmgr_send_packet_in(ofproto->up.connmgr, pin);
-            list_remove(&pin->list_node);
             free(CONST_CAST(void *, pin->up.packet));
             free(pin);
         }

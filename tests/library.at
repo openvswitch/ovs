@@ -38,7 +38,7 @@ AT_CHECK([ovstest test-atomic])
 AT_CLEANUP
 
 AT_SETUP([test linked lists])
-AT_CHECK([ovstest test-list], [0], [..
+AT_CHECK([ovstest test-list], [0], [...
 ])
 AT_CLEANUP
 

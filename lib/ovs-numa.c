@@ -380,10 +380,9 @@ ovs_numa_dump_cores_on_numa(int numa_id)
 void
 ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
 {
-    struct ovs_numa_info *iter, *next;
+    struct ovs_numa_info *iter;
 
-    LIST_FOR_EACH_SAFE (iter, next, list_node, &dump->dump) {
-        list_remove(&iter->list_node);
+    LIST_FOR_EACH_POP (iter, list_node, &dump->dump) {
         free(iter);
     }
 

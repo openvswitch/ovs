@@ -421,12 +421,9 @@ aa_get_vlan_queued(struct ovs_list *list)
     ovs_mutex_lock(&mutex);
 
     HMAP_FOR_EACH (lldp, hmap_node, all_lldps) {
-        struct bridge_aa_vlan *node, *node_next;
+        struct bridge_aa_vlan *node;
 
-        LIST_FOR_EACH_SAFE (node,
-                            node_next,
-                            list_node,
-                            &lldp->active_mapping_queue) {
+        LIST_FOR_EACH_POP (node, list_node, &lldp->active_mapping_queue) {
             struct bridge_aa_vlan *copy;
 
             copy = xmalloc(sizeof *copy);
@@ -437,7 +434,6 @@ aa_get_vlan_queued(struct ovs_list *list)
             list_push_back(list, &copy->list_node);
 
             /* Cleanup */
-            list_remove(&node->list_node);
             free(node->port_name);
             free(node);
         }

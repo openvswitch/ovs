@@ -28,13 +28,12 @@ VLOG_DEFINE_THIS_MODULE(lldpd_structs);
 void
 lldpd_chassis_mgmt_cleanup(struct lldpd_chassis *chassis)
 {
-    struct lldpd_mgmt *mgmt, *mgmt_next;
+    struct lldpd_mgmt *mgmt;
 
     VLOG_DBG("cleanup management addresses for chassis %s",
              chassis->c_name ? chassis->c_name : "(unknown)");
 
-    LIST_FOR_EACH_SAFE (mgmt, mgmt_next, m_entries, &chassis->c_mgmt) {
-       list_remove(&mgmt->m_entries);
+    LIST_FOR_EACH_POP (mgmt, m_entries, &chassis->c_mgmt) {
        free(mgmt);
     }
 

@@ -465,10 +465,9 @@ dp_packet_to_string(const struct dp_packet *b, size_t maxbytes)
 void
 dp_packet_list_delete(struct ovs_list *list)
 {
-    struct dp_packet *b, *next;
+    struct dp_packet *b;
 
-    LIST_FOR_EACH_SAFE (b, next, list_node, list) {
-        list_remove(&b->list_node);
+    LIST_FOR_EACH_POP (b, list_node, list) {
         dp_packet_delete(b);
     }
 }

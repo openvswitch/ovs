@@ -477,10 +477,9 @@ ofpbuf_to_string(const struct ofpbuf *b, size_t maxbytes)
 void
 ofpbuf_list_delete(struct ovs_list *list)
 {
-    struct ofpbuf *b, *next;
+    struct ofpbuf *b;
 
-    LIST_FOR_EACH_SAFE (b, next, list_node, list) {
-        list_remove(&b->list_node);
+    LIST_FOR_EACH_POP (b, list_node, list) {
         ofpbuf_delete(b);
     }
 }

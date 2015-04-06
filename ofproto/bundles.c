@@ -100,11 +100,10 @@ ofp_bundle_create(uint32_t id, uint16_t flags)
 static void
 ofp_bundle_remove(struct ofconn *ofconn, struct ofp_bundle *item)
 {
-    struct bundle_message *msg, *next;
+    struct bundle_message *msg;
     struct hmap *bundles;
 
-    LIST_FOR_EACH_SAFE (msg, next, node, &item->msg_list) {
-        list_remove(&msg->node);
+    LIST_FOR_EACH_POP (msg, node, &item->msg_list) {
         free(msg->msg);
         free(msg);
     }

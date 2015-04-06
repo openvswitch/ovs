@@ -949,14 +949,13 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
 static void
 xlate_xbundle_remove(struct xlate_cfg *xcfg, struct xbundle *xbundle)
 {
-    struct xport *xport, *next;
+    struct xport *xport;
 
     if (!xbundle) {
         return;
     }
 
-    LIST_FOR_EACH_SAFE (xport, next, bundle_node, &xbundle->xports) {
-        list_remove(&xport->bundle_node);
+    LIST_FOR_EACH_POP (xport, bundle_node, &xbundle->xports) {
         xport->xbundle = NULL;
     }
 
