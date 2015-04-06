@@ -123,6 +123,16 @@ struct hmap_node *hmap_random_node(const struct hmap *);
  * iteration).
  *
  * HASH is only evaluated once.
+ *
+ *
+ * Warning
+ * -------
+ *
+ * When the loop terminates, &NODE->MEMBER will equal NULL.  Unless MEMBER is
+ * the first member in its struct, this means that NODE itself will not be
+ * NULL.
+ *
+ * (This is true for all of the HMAP_FOR_EACH_*() macros.)
  */
 #define HMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, HMAP)               \
     for (INIT_CONTAINER(NODE, hmap_first_with_hash(HMAP, HASH), MEMBER); \
