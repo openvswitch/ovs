@@ -167,8 +167,8 @@ HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
      * Update properties only for NETDEV ports for supprting PS script
      * We don't allow changing the names of the internal or external ports
      */
-    if (vport == NULL || ( vport->portType != NdisSwitchPortTypeSynthetic) || 
-        ( vport->portType != NdisSwitchPortTypeEmulated)) {
+    if (vport == NULL || (( vport->portType != NdisSwitchPortTypeSynthetic) &&
+        ( vport->portType != NdisSwitchPortTypeEmulated))) {
         goto update_port_done;
     }
 
