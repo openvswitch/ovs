@@ -24,6 +24,7 @@
     <p><code>lport-get-external-id</code> <var>lport</var> [<var>key</var>]</p>
     <p><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>] [<var>mac</var>] [...]</p>
     <p><code>lport-get-macs</code> <var>lport</var></p>
+    <p><code>lport-get-up</code> <var>lport</var></p>
 
     <h1>Options</h1>
     <p><code>-d</code> <var>database</var> | <code>--db</code> <var>database</var></p>

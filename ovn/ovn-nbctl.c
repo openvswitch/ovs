@@ -67,6 +67,7 @@ Logical Port Commands:\n\
                             Set MAC addresses for the logical port. Specify\n\
                             more than one using additional arguments.\n\
   lport-get-macs <lport>    Get a list of MAC addresses on the port.\n\
+  lport-get-up <lport>      Get state of the port ('up' or 'down').\n\
 \n\
 Options:\n\
   --db=DATABASE             connect to DATABASE\n\
@@ -408,6 +409,21 @@ do_lport_get_macs(struct ovs_cmdl_context *ctx)
         printf("%s\n", lport->macs[i]);
     }
 }
+
+static void
+do_lport_get_up(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    printf("%s\n", (lport->up && *lport->up) ? "up" : "down");
+}
 
 static void
 parse_options(int argc, char *argv[])
@@ -551,6 +567,13 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_get_macs,
+    },
+    {
+        .name = "lport-get-up",
+        .usage = "<lport>",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_up,
     },
 
     {
