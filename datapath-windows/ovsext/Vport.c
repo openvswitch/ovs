@@ -404,6 +404,7 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
                                             nicParam->PortId,
                                             nicParam->NicIndex);
     if (vport == NULL) {
+        NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
         OVS_LOG_WARN("Vport search failed.");
         goto update_nic_done;
     }
