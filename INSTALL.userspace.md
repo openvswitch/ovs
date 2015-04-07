@@ -76,7 +76,7 @@ Other settings
 On NetBSD, depending on your network topology and applications, the
 following configuration might help.  See sysctl(7).
 
-    sysctl net.inet.ip.checkinterface=1
+    sysctl -w net.inet.ip.checkinterface=1
 
 Bug Reporting
 -------------
