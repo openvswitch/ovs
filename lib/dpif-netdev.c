@@ -239,10 +239,10 @@ struct dp_netdev_port {
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
 struct dp_netdev_flow_stats {
-    long long int used;             /* Last used time, in monotonic msecs. */
-    long long int packet_count;     /* Number of packets matched. */
-    long long int byte_count;       /* Number of bytes matched. */
-    uint16_t tcp_flags;             /* Bitwise-OR of seen tcp_flags values. */
+    atomic_llong used;             /* Last used time, in monotonic msecs. */
+    atomic_ullong packet_count;    /* Number of packets matched. */
+    atomic_ullong byte_count;      /* Number of bytes matched. */
+    atomic_uint16_t tcp_flags;     /* Bitwise-OR of seen tcp_flags values. */
 };
 
 /* A flow in 'dp_netdev_pmd_thread's 'flow_table'.
@@ -338,7 +338,7 @@ static void dp_netdev_actions_free(struct dp_netdev_actions *);
 /* Contained by struct dp_netdev_pmd_thread's 'stats' member.  */
 struct dp_netdev_pmd_stats {
     /* Indexed by DP_STAT_*. */
-    unsigned long long int n[DP_N_STATS];
+    atomic_ullong n[DP_N_STATS];
 };
 
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
@@ -746,6 +746,21 @@ dpif_netdev_destroy(struct dpif *dpif)
     return 0;
 }
 
+/* Add 'n' to the atomic variable 'var' non-atomically and using relaxed
+ * load/store semantics.  While the increment is not atomic, the load and
+ * store operations are, making it impossible to read inconsistent values.
+ *
+ * This is used to update thread local stats counters. */
+static void
+non_atomic_ullong_add(atomic_ullong *var, unsigned long long n)
+{
+    unsigned long long tmp;
+
+    atomic_read_relaxed(var, &tmp);
+    tmp += n;
+    atomic_store_relaxed(var, tmp);
+}
+
 static int
 dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
@@ -754,10 +769,15 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 
     stats->n_flows = stats->n_hit = stats->n_missed = stats->n_lost = 0;
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        unsigned long long n;
         stats->n_flows += cmap_count(&pmd->flow_table);
-        stats->n_hit += pmd->stats.n[DP_STAT_HIT];
-        stats->n_missed += pmd->stats.n[DP_STAT_MISS];
-        stats->n_lost += pmd->stats.n[DP_STAT_LOST];
+
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_HIT], &n);
+        stats->n_hit += n;
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_MISS], &n);
+        stats->n_missed += n;
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_LOST], &n);
+        stats->n_lost += n;
     }
     stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
@@ -1545,13 +1565,24 @@ dp_netdev_pmd_find_flow(const struct dp_netdev_pmd_thread *pmd,
 }
 
 static void
-get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow,
+get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow_,
                     struct dpif_flow_stats *stats)
 {
-    stats->n_packets = netdev_flow->stats.packet_count;
-    stats->n_bytes = netdev_flow->stats.byte_count;
-    stats->used = netdev_flow->stats.used;
-    stats->tcp_flags = netdev_flow->stats.tcp_flags;
+    struct dp_netdev_flow *netdev_flow;
+    unsigned long long n;
+    long long used;
+    uint16_t flags;
+
+    netdev_flow = CONST_CAST(struct dp_netdev_flow *, netdev_flow_);
+
+    atomic_read_relaxed(&netdev_flow->stats.packet_count, &n);
+    stats->n_packets = n;
+    atomic_read_relaxed(&netdev_flow->stats.byte_count, &n);
+    stats->n_bytes = n;
+    atomic_read_relaxed(&netdev_flow->stats.used, &used);
+    stats->used = used;
+    atomic_read_relaxed(&netdev_flow->stats.tcp_flags, &flags);
+    stats->tcp_flags = flags;
 }
 
 /* Converts to the dpif_flow format, using 'key_buf' and 'mask_buf' for
@@ -2678,19 +2709,22 @@ static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow, int cnt, int size,
                     uint16_t tcp_flags)
 {
-    long long int now = time_msec();
+    long long now = time_msec();
+    uint16_t flags;
 
-    netdev_flow->stats.used = MAX(now, netdev_flow->stats.used);
-    netdev_flow->stats.packet_count += cnt;
-    netdev_flow->stats.byte_count += size;
-    netdev_flow->stats.tcp_flags |= tcp_flags;
+    atomic_store_relaxed(&netdev_flow->stats.used, now);
+    non_atomic_ullong_add(&netdev_flow->stats.packet_count, cnt);
+    non_atomic_ullong_add(&netdev_flow->stats.byte_count, size);
+    atomic_read_relaxed(&netdev_flow->stats.tcp_flags, &flags);
+    flags |= tcp_flags;
+    atomic_store_relaxed(&netdev_flow->stats.tcp_flags, flags);
 }
 
 static void
 dp_netdev_count_packet(struct dp_netdev_pmd_thread *pmd,
                        enum dp_stat_type type, int cnt)
 {
-    pmd->stats.n[type] += cnt;
+    non_atomic_ullong_add(&pmd->stats.n[type], cnt);
 }
 
 static int
