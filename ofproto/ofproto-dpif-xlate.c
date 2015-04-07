@@ -66,7 +66,7 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
  * recursive or not. */
 #define MAX_RESUBMITS (MAX_RESUBMIT_RECURSION * MAX_RESUBMIT_RECURSION)
 
-struct ovs_rwlock xlate_rwlock = OVS_RWLOCK_INITIALIZER;
+struct fat_rwlock xlate_rwlock;
 
 struct xbridge {
     struct hmap_node hmap_node;   /* Node in global 'xbridges' map. */
@@ -639,7 +639,7 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     const struct xport *xport;
     int error = ENODEV;
 
-    ovs_rwlock_rdlock(&xlate_rwlock);
+    fat_rwlock_rdlock(&xlate_rwlock);
     if (odp_flow_key_to_flow(key, key_len, flow) == ODP_FIT_ERROR) {
         error = EINVAL;
         goto exit;
@@ -721,7 +721,7 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     }
 
 exit:
-    ovs_rwlock_unlock(&xlate_rwlock);
+    fat_rwlock_unlock(&xlate_rwlock);
     return error;
 }
 
@@ -3231,9 +3231,9 @@ void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     OVS_EXCLUDED(xlate_rwlock)
 {
-    ovs_rwlock_rdlock(&xlate_rwlock);
+    fat_rwlock_rdlock(&xlate_rwlock);
     xlate_actions__(xin, xout);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    fat_rwlock_unlock(&xlate_rwlock);
 }
 
 /* Returns the maximum number of packets that the Linux kernel is willing to
@@ -3609,15 +3609,15 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     flow_extract(packet, NULL, &flow);
     flow.in_port.ofp_port = OFPP_NONE;
 
-    ovs_rwlock_rdlock(&xlate_rwlock);
+    fat_rwlock_rdlock(&xlate_rwlock);
     xport = xport_lookup(ofport);
     if (!xport) {
-        ovs_rwlock_unlock(&xlate_rwlock);
+        fat_rwlock_unlock(&xlate_rwlock);
         return EINVAL;
     }
     output.port = xport->ofp_port;
     output.max_len = 0;
-    ovs_rwlock_unlock(&xlate_rwlock);
+    fat_rwlock_unlock(&xlate_rwlock);
 
     return ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
                                         &output.ofpact, sizeof output,

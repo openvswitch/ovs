@@ -59,7 +59,7 @@ enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
 BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
 /* For lock annotation below only. */
-extern struct ovs_rwlock xlate_rwlock;
+extern struct fat_rwlock xlate_rwlock;
 
 /* Ofproto-dpif -- DPIF based ofproto implementation.
  *

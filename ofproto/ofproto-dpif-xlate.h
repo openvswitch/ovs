@@ -136,7 +136,7 @@ struct xlate_in {
     struct xlate_cache *xcache;
 };
 
-extern struct ovs_rwlock xlate_rwlock;
+extern struct fat_rwlock xlate_rwlock;
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
                        struct dpif *, struct rule_dpif *miss_rule,

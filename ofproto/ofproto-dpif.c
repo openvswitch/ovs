@@ -410,6 +410,8 @@ init(const struct shash *iface_hints)
 {
     struct shash_node *node;
 
+    fat_rwlock_init(&xlate_rwlock);
+
     /* Make a local copy, since we don't own 'iface_hints' elements. */
     SHASH_FOR_EACH(node, iface_hints) {
         const struct iface_hint *orig_hint = node->data;
@@ -598,7 +600,7 @@ type_run(const char *type)
                 continue;
             }
 
-            ovs_rwlock_wrlock(&xlate_rwlock);
+            fat_rwlock_wrlock(&xlate_rwlock);
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->miss_rule,
                               ofproto->no_packet_in_rule, ofproto->ml,
@@ -631,7 +633,7 @@ type_run(const char *type)
                                  ofport->up.pp.config, ofport->up.pp.state,
                                  ofport->is_tunnel, ofport->may_enable);
             }
-            ovs_rwlock_unlock(&xlate_rwlock);
+            fat_rwlock_unlock(&xlate_rwlock);
         }
 
         udpif_revalidate(backer->udpif);
@@ -1311,9 +1313,9 @@ destruct(struct ofproto *ofproto_)
     struct list pins;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    ovs_rwlock_wrlock(&xlate_rwlock);
+    fat_rwlock_wrlock(&xlate_rwlock);
     xlate_remove_ofproto(ofproto);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    fat_rwlock_unlock(&xlate_rwlock);
 
     /* Ensure that the upcall processing threads have no remaining references
      * to the ofproto or anything in it. */
@@ -1666,9 +1668,9 @@ port_destruct(struct ofport *port_)
     const char *dp_port_name;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    ovs_rwlock_wrlock(&xlate_rwlock);
+    fat_rwlock_wrlock(&xlate_rwlock);
     xlate_ofport_remove(port);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    fat_rwlock_unlock(&xlate_rwlock);
 
     dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
                                               sizeof namebuf);
@@ -2315,9 +2317,9 @@ bundle_destroy(struct ofbundle *bundle)
     ofproto = bundle->ofproto;
     mbridge_unregister_bundle(ofproto->mbridge, bundle);
 
-    ovs_rwlock_wrlock(&xlate_rwlock);
+    fat_rwlock_wrlock(&xlate_rwlock);
     xlate_bundle_remove(bundle);
-    ovs_rwlock_unlock(&xlate_rwlock);
+    fat_rwlock_unlock(&xlate_rwlock);
 
     LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
