@@ -220,7 +220,8 @@ static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
                                                     odp_port_t);
 
 enum dp_stat_type {
-    DP_STAT_HIT,                /* Packets that matched in the flow table. */
+    DP_STAT_EXACT_HIT,          /* Packets that had an exact match (emc). */
+    DP_STAT_MASKED_HIT,         /* Packets that matched in the flow table. */
     DP_STAT_MISS,               /* Packets that did not match. */
     DP_STAT_LOST,               /* Packets not passed up to the client. */
     DP_N_STATS
@@ -772,7 +773,9 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
         unsigned long long n;
         stats->n_flows += cmap_count(&pmd->flow_table);
 
-        atomic_read_relaxed(&pmd->stats.n[DP_STAT_HIT], &n);
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_MASKED_HIT], &n);
+        stats->n_hit += n;
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_EXACT_HIT], &n);
         stats->n_hit += n;
         atomic_read_relaxed(&pmd->stats.n[DP_STAT_MISS], &n);
         stats->n_missed += n;
@@ -2810,7 +2813,8 @@ packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 
 static inline void
 packet_batch_execute(struct packet_batch *batch,
-                     struct dp_netdev_pmd_thread *pmd)
+                     struct dp_netdev_pmd_thread *pmd,
+                     enum dp_stat_type hit_type)
 {
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
@@ -2823,7 +2827,7 @@ packet_batch_execute(struct packet_batch *batch,
     dp_netdev_execute_actions(pmd, batch->packets, batch->packet_count, true,
                               actions->actions, actions->size);
 
-    dp_netdev_count_packet(pmd, DP_STAT_HIT, batch->packet_count);
+    dp_netdev_count_packet(pmd, hit_type, batch->packet_count);
 }
 
 static inline bool
@@ -2914,7 +2918,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd);
+        packet_batch_execute(&batches[i], pmd, DP_STAT_EXACT_HIT);
     }
 
     return notfound_cnt;
@@ -3051,7 +3055,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd);
+        packet_batch_execute(&batches[i], pmd, DP_STAT_MASKED_HIT);
     }
 }
 
