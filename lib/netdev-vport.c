@@ -1093,6 +1093,7 @@ vxlan_extract_md(struct dp_packet *packet)
     tnl->tp_src = udp->udp_src;
     tnl->tp_dst = udp->udp_dst;
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
+    tnl->flags |= FLOW_TNL_F_KEY;
 
     dp_packet_reset_packet(packet, VXLAN_HLEN);
 }
