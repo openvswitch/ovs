@@ -717,8 +717,13 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
     /* Check if the extension is enabled. */
     if (NULL == gOvsSwitchContext) {
-        status = STATUS_DEVICE_NOT_READY;
-        goto done;
+        status = STATUS_NOT_FOUND;
+        goto exit;
+    }
+
+    if (!OvsAcquireSwitchContext()) {
+        status = STATUS_NOT_FOUND;
+        goto exit;
     }
 
     /* Concurrent netlink operations are not supported. */
@@ -908,6 +913,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     status = InvokeNetlinkCmdHandler(&usrParamsCtx, nlFamilyOps, &replyLen);
 
 done:
+    OvsReleaseSwitchContext(gOvsSwitchContext);
+
+exit:
     KeMemoryBarrier();
     instance->inUse = 0;
 

@@ -42,6 +42,12 @@ extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern NDIS_HANDLE gOvsExtDriverHandle;
 extern NDIS_HANDLE gOvsExtDriverObject;
 
+/*
+ * Reference count used to prevent premature deallocation of the global switch
+ * context structure, gOvsSwitchContext.
+ */
+volatile LONG      gOvsSwitchContextRefCount = 1;
+
 static NDIS_STATUS OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
                                    POVS_SWITCH_CONTEXT *switchContextOut);
 static NDIS_STATUS OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext);
@@ -423,6 +429,7 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     switchContext->isActivateFailed = FALSE;
     switchContext->dpNo = OVS_DP_NUMBER;
     ovsTimeIncrementPerTick = KeQueryTimeIncrement() / 10000;
+
     OVS_LOG_TRACE("Exit: Succesfully initialized switchContext: %p",
                   switchContext);
     return NDIS_STATUS_SUCCESS;
@@ -430,6 +437,12 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
 static VOID
 OvsUninitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
+{
+    OvsReleaseSwitchContext(switchContext);
+}
+
+VOID
+OvsDeleteSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 {
     OVS_LOG_TRACE("Enter: Delete switchContext:%p", switchContext);
 
@@ -455,6 +468,49 @@ OvsUninitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     OvsDeleteFlowTable(&switchContext->datapath);
     OvsCleanupBufferPool(switchContext);
     OVS_LOG_TRACE("Exit: Delete switchContext: %p", switchContext);
+}
+
+VOID
+OvsReleaseSwitchContext(POVS_SWITCH_CONTEXT switchContext)
+{
+    LONG ref = 0;
+    LONG newRef = 0;
+    LONG icxRef = 0;
+
+    do {
+        ref = gOvsSwitchContextRefCount;
+        newRef = (0 == ref) ? 0 : ref - 1;
+        icxRef = InterlockedCompareExchange(&gOvsSwitchContextRefCount,
+                                            newRef,
+                                            ref);
+    } while (icxRef != ref);
+
+    if (ref == 1) {
+        OvsDeleteSwitchContext(switchContext);
+    }
+}
+
+BOOLEAN
+OvsAcquireSwitchContext(VOID)
+{
+    LONG ref = 0;
+    LONG newRef = 0;
+    LONG icxRef = 0;
+    BOOLEAN ret = FALSE;
+
+    do {
+        ref = gOvsSwitchContextRefCount;
+        newRef = (0 == ref) ? 0 : ref + 1;
+        icxRef = InterlockedCompareExchange(&gOvsSwitchContextRefCount,
+                                            newRef,
+                                            ref);
+    } while (icxRef != ref);
+
+    if (ref != 0) {
+        ret = TRUE;
+    }
+
+    return ret;
 }
 
 /*
