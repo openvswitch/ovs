@@ -2701,10 +2701,6 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
 {
     struct dp_netdev *dp = pmd->dp;
 
-    if (type == DPIF_UC_MISS) {
-        dp_netdev_count_packet(pmd, DP_STAT_MISS, 1);
-    }
-
     if (OVS_UNLIKELY(!dp->upcall_cb)) {
         return ENODEV;
     }
@@ -2916,6 +2912,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
         uint64_t actions_stub[512 / 8], slow_stub[512 / 8];
         struct ofpbuf actions, put_actions;
+        int miss_cnt = 0, lost_cnt = 0;
         ovs_u128 ufid;
 
         ofpbuf_use_stub(&actions, actions_stub, sizeof actions_stub);
@@ -2940,6 +2937,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
 
+            miss_cnt++;
+
             miniflow_expand(&keys[i].mf, &match.flow);
 
             ofpbuf_clear(&actions);
@@ -2951,7 +2950,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                                      &put_actions);
             if (OVS_UNLIKELY(error && error != ENOSPC)) {
                 dp_packet_delete(packets[i]);
-                dp_netdev_count_packet(pmd, DP_STAT_LOST, 1);
+                lost_cnt++;
                 continue;
             }
 
@@ -2985,6 +2984,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         ofpbuf_uninit(&actions);
         ofpbuf_uninit(&put_actions);
         fat_rwlock_unlock(&dp->upcall_rwlock);
+        dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
+        dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
     } else if (OVS_UNLIKELY(any_miss)) {
         int dropped_cnt = 0;
 
