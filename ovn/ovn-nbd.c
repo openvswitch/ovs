@@ -39,7 +39,7 @@ struct nbd_context {
     struct ovsdb_idl *ovnnb_idl;
     struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnnb_txn;
-    struct ovsdb_idl_txn *ovn_txn;
+    struct ovsdb_idl_txn *ovnsb_txn;
 };
 
 static const char *ovnnb_db;
@@ -178,7 +178,7 @@ set_bindings(struct nbd_context *ctx)
         } else {
             /* There is no binding for this logical port, so create one. */
 
-            binding = sbrec_bindings_insert(ctx->ovn_txn);
+            binding = sbrec_bindings_insert(ctx->ovnsb_txn);
             sbrec_bindings_set_logical_port(binding, lport->name);
             sbrec_bindings_set_mac(binding,
                     (const char **) lport->macs, lport->n_macs);
@@ -327,7 +327,7 @@ main(int argc, char *argv[])
     unsigned int ovnnb_seqno, ovn_seqno;
     int res = EXIT_SUCCESS;
     struct nbd_context ctx = {
-        .ovn_txn = NULL,
+        .ovnsb_txn = NULL,
     };
     bool ovnnb_changes_pending = false;
     bool ovn_changes_pending = false;
@@ -409,12 +409,12 @@ main(int argc, char *argv[])
          * get a chance to calculate the new state and apply it.
          */
 
-        if (ovnnb_changes_pending && !ctx.ovn_txn) {
+        if (ovnnb_changes_pending && !ctx.ovnsb_txn) {
             /*
              * The OVN-nb db contents have changed, so create a transaction for
              * updating the OVN DB.
              */
-            ctx.ovn_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
+            ctx.ovnsb_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
             ovnnb_db_changed(&ctx);
             ovnnb_changes_pending = false;
         }
@@ -450,9 +450,9 @@ main(int argc, char *argv[])
             }
         }
 
-        if (ctx.ovn_txn) {
+        if (ctx.ovnsb_txn) {
             enum ovsdb_idl_txn_status txn_status;
-            txn_status = ovsdb_idl_txn_commit(ctx.ovn_txn);
+            txn_status = ovsdb_idl_txn_commit(ctx.ovnsb_txn);
             switch (txn_status) {
             case TXN_UNCOMMITTED:
             case TXN_INCOMPLETE:
@@ -466,8 +466,8 @@ main(int argc, char *argv[])
                 ovnnb_changes_pending = true;
             case TXN_UNCHANGED:
             case TXN_SUCCESS:
-                ovsdb_idl_txn_destroy(ctx.ovn_txn);
-                ctx.ovn_txn = NULL;
+                ovsdb_idl_txn_destroy(ctx.ovnsb_txn);
+                ctx.ovnsb_txn = NULL;
             }
         }
 
@@ -478,8 +478,8 @@ main(int argc, char *argv[])
             if (ctx.ovnnb_txn) {
                 ovsdb_idl_txn_wait(ctx.ovnnb_txn);
             }
-            if (ctx.ovn_txn) {
-                ovsdb_idl_txn_wait(ctx.ovn_txn);
+            if (ctx.ovnsb_txn) {
+                ovsdb_idl_txn_wait(ctx.ovnsb_txn);
             }
             poll_block();
         }
