@@ -921,6 +921,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         } else if (ovs_scan_len(s, &n, "geneve(")) {
             struct genevehdr *gnh = (struct genevehdr *) (udp + 1);
 
+            memset(gnh, 0, sizeof *gnh);
             if (ovs_scan_len(s, &n, "oam,")) {
                 gnh->oam = 1;
             }
