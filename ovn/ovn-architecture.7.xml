@@ -109,21 +109,21 @@
 
     <li>
       <code>ovn-nbd</code>(8) connects to the OVN Northbound Database above it
-      and the OVN Database below it.  It translates the logical network
-      configuration in terms of conventional network concepts, taken from the
-      OVN Northbound Database, into logical datapath flows in the OVN Database
-      below it.
+      and the OVN Southbound Database below it.  It translates the
+      logical network configuration in terms of conventional network
+      concepts, taken from the OVN Northbound Database, into logical
+      datapath flows in the OVN Southbound Database below it.
     </li>
 
     <li>
       <p>
-	The <dfn>OVN Database</dfn> is the center of the system.  Its clients
-	are <code>ovn-nbd</code>(8) above it and <code>ovn-controller</code>(8)
-	on every transport node below it.
+    The <dfn>OVN Southbound Database</dfn> is the center of the system.
+    Its clients are <code>ovn-nbd</code>(8) above it and
+    <code>ovn-controller</code>(8) on every transport node below it.
       </p>
 
       <p>
-	The OVN Database contains three kinds of data: <dfn>Physical
+	The OVN Southbound Database contains three kinds of data: <dfn>Physical
 	Network</dfn> (PN) tables that specify how to reach hypervisor and
 	other nodes, <dfn>Logical Network</dfn> (LN) tables that describe the
 	logical network in terms of ``logical datapath flows,'' and
@@ -134,9 +134,10 @@
       </p>
 
       <p>
-	OVN Database performance must scale with the number of transport nodes.
-	This will likely require some work on <code>ovsdb-server</code>(1) as
-	we encounter bottlenecks.  Clustering for availability may be needed.
+    OVN Southbound Database performance must scale with the number of
+    transport nodes.  This will likely require some work on
+    <code>ovsdb-server</code>(1) as we encounter bottlenecks.
+    Clustering for availability may be needed.
       </p>
     </li>
   </ul>
@@ -148,13 +149,14 @@
   <ul>
     <li>
       <code>ovn-controller</code>(8) is OVN's agent on each hypervisor and
-      software gateway.  Northbound, it connects to the OVN Database to learn
-      about OVN configuration and status and to populate the PN table and the
-      <code>Chassis</code> column in <code>Bindings</code> table with the
-      hypervisor's status.  Southbound, it connects to
-      <code>ovs-vswitchd</code>(8) as an OpenFlow controller, for control over
-      network traffic, and to the local <code>ovsdb-server</code>(1) to allow
-      it to monitor and control Open vSwitch configuration.
+      software gateway.  Northbound, it connects to the OVN Southbound
+      Database to learn about OVN configuration and status and to
+      populate the PN table and the <code>Chassis</code> column in
+      <code>Bindings</code> table with the hypervisor's status.
+      Southbound, it connects to <code>ovs-vswitchd</code>(8) as an
+      OpenFlow controller, for control over network traffic, and to the
+      local <code>ovsdb-server</code>(1) to allow it to monitor and
+      control Open vSwitch configuration.
     </li>
 
     <li>
@@ -180,14 +182,14 @@
                        +-----------|-----------+
                                    |
                                    |
-                                +------+
-                                |OVN DB|
-                                +------+
+                         +-------------------+
+                         | OVN Southbound DB |
+                         +-------------------+
                                    |
                                    |
                 +------------------+------------------+
                 |                  |                  |
- HV 1           |                  |    HV n          |
+  HV 1          |                  |    HV n          |
 +---------------|---------------+  .  +---------------|---------------+
 |               |               |  .  |               |               |
 |        ovn-controller         |  .  |        ovn-controller         |
@@ -267,7 +269,7 @@
 
   <p>
     The steps in this example refer often to details of the OVN and OVN
-    Northbound database schemas.  Please see <code>ovn</code>(5) and
+    Northbound database schemas.  Please see <code>ovn-sb</code>(5) and
     <code>ovn-nb</code>(5), respectively, for the full story on these
     databases.
   </p>
@@ -290,14 +292,15 @@
     </li>
 
     <li>
-      <code>ovn-nbd</code> receives the OVN Northbound database update.  In
-      turn, it makes the corresponding updates to the OVN database, by adding
-      rows to the OVN database <code>Pipeline</code> table to reflect the new
-      port, e.g. add a flow to recognize that packets destined to the new
-      port's MAC address should be delivered to it, and update the flow that
-      delivers broadcast and multicast packets to include the new port.  It
-      also creates a record in the <code>Bindings</code> table and populates
-      all its columns except the column that identifies the
+      <code>ovn-nbd</code> receives the OVN Northbound database update.
+      In turn, it makes the corresponding updates to the OVN Southbound
+      database, by adding rows to the OVN Southbound database
+      <code>Pipeline</code> table to reflect the new port, e.g. add a
+      flow to recognize that packets destined to the new port's MAC
+      address should be delivered to it, and update the flow that
+      delivers broadcast and multicast packets to include the new port.
+      It also creates a record in the <code>Bindings</code> table and
+      populates all its columns except the column that identifies the
       <code>chassis</code>.
     </li>
 
@@ -386,9 +389,10 @@
 
     <li>
       <code>ovn-nbd</code> receives the OVN Northbound update and in turn
-      updates the OVN database accordingly, by removing or updating the
-      rows from the OVN database <code>Pipeline</code> table and
-      <code>Bindings</code> table that were related to the now-destroyed VIF.
+      updates the OVN Southbound database accordingly, by removing or
+      updating the rows from the OVN Southbound database
+      <code>Pipeline</code> table and <code>Bindings</code> table that
+      were related to the now-destroyed VIF.
     </li>
 
     <li>
@@ -482,10 +486,11 @@
 
     <li>
       <code>ovn-nbd</code> receives the OVN Northbound database update.  In
-      turn, it makes the corresponding updates to the OVN database, by adding
-      rows to the OVN database's <code>Pipeline</code> table to reflect the new
-      port and also by creating a new row in the <code>Bindings</code> table
-      and populating all its columns except the column that identifies the
+      turn, it makes the corresponding updates to the OVN Southbound
+      database, by adding rows to the OVN Southbound database's
+      <code>Pipeline</code> table to reflect the new port and also by
+      creating a new row in the <code>Bindings</code> table and
+      populating all its columns except the column that identifies the
       <code>chassis</code>.
     </li>
 
@@ -521,10 +526,11 @@
 
     <li>
       <code>ovn-nbd</code> receives the OVN Northbound update and in turn
-      updates the OVN database accordingly, by removing or updating the
-      rows from the OVN database <code>Pipeline</code> table that were related
-      to the now-destroyed CIF.  It also deletes the row in the
-      <code>Bindings</code> table for that CIF.
+      updates the OVN Southbound database accordingly, by removing or
+      updating the rows from the OVN Southbound database
+      <code>Pipeline</code> table that were related to the now-destroyed
+      CIF.  It also deletes the row in the <code>Bindings</code> table
+      for that CIF.
     </li>
 
     <li>

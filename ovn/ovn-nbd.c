@@ -24,8 +24,8 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"
-#include "ovn/ovn-idl.h"
 #include "ovn/ovn-nb-idl.h"
+#include "ovn/ovn-sb-idl.h"
 #include "poll-loop.h"
 #include "stream.h"
 #include "stream-ssl.h"
@@ -37,13 +37,13 @@ VLOG_DEFINE_THIS_MODULE(ovn_nbd);
 
 struct nbd_context {
     struct ovsdb_idl *ovnnb_idl;
-    struct ovsdb_idl *ovn_idl;
+    struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnnb_txn;
     struct ovsdb_idl_txn *ovn_txn;
 };
 
 static const char *ovnnb_db;
-static const char *ovn_db;
+static const char *ovnsb_db;
 
 static const char *default_db(void);
 
@@ -57,7 +57,7 @@ usage: %s [OPTIONS]\n\
 Options:\n\
   --ovnnb-db=DATABASE       connect to ovn-nb database at DATABASE\n\
                             (default: %s)\n\
-  --ovn-db=DATABASE         connect to ovn database at DATABASE\n\
+  --ovnsb-db=DATABASE       connect to ovn-sb database at DATABASE\n\
                             (default: %s)\n\
   -h, --help                display this help message\n\
   -o, --options             list available options\n\
@@ -116,19 +116,20 @@ macs_equal(char **binding_macs_, size_t b_n_macs,
 
 /*
  * When a change has occurred in the OVN_Northbound database, we go through and
- * make sure that the contents of the Bindings table in the OVN database are up
- * to date with the logical ports defined in the OVN_Northbound database.
+ * make sure that the contents of the Bindings table in the OVN_Southbound
+ * database are up to date with the logical ports defined in the
+ * OVN_Northbound database.
  */
 static void
 set_bindings(struct nbd_context *ctx)
 {
     struct hmap bindings_hmap;
-    const struct ovnrec_bindings *binding;
+    const struct sbrec_bindings *binding;
     const struct nbrec_logical_port *lport;
 
     struct binding_hash_node {
         struct hmap_node node;
-        const struct ovnrec_bindings *binding;
+        const struct sbrec_bindings *binding;
     } *hash_node, *hash_node_next;
 
     /*
@@ -143,7 +144,7 @@ set_bindings(struct nbd_context *ctx)
      */
     hmap_init(&bindings_hmap);
 
-    OVNREC_BINDINGS_FOR_EACH(binding, ctx->ovn_idl) {
+    SBREC_BINDINGS_FOR_EACH(binding, ctx->ovnsb_idl) {
         struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
 
         hash_node->binding = binding;
@@ -171,22 +172,22 @@ set_bindings(struct nbd_context *ctx)
 
             if (!macs_equal(binding->mac, binding->n_mac,
                         lport->macs, lport->n_macs)) {
-                ovnrec_bindings_set_mac(binding,
+                sbrec_bindings_set_mac(binding,
                         (const char **) lport->macs, lport->n_macs);
             }
         } else {
             /* There is no binding for this logical port, so create one. */
 
-            binding = ovnrec_bindings_insert(ctx->ovn_txn);
-            ovnrec_bindings_set_logical_port(binding, lport->name);
-            ovnrec_bindings_set_mac(binding,
+            binding = sbrec_bindings_insert(ctx->ovn_txn);
+            sbrec_bindings_set_logical_port(binding, lport->name);
+            sbrec_bindings_set_mac(binding,
                     (const char **) lport->macs, lport->n_macs);
         }
     }
 
     HMAP_FOR_EACH_SAFE(hash_node, hash_node_next, node, &bindings_hmap) {
         hmap_remove(&bindings_hmap, &hash_node->node);
-        ovnrec_bindings_delete(hash_node->binding);
+        sbrec_bindings_delete(hash_node->binding);
         free(hash_node);
     }
     hmap_destroy(&bindings_hmap);
@@ -206,13 +207,13 @@ ovnnb_db_changed(struct nbd_context *ctx)
  * set the corresponding logical port as 'up' in the northbound DB.
  */
 static void
-ovn_db_changed(struct nbd_context *ctx)
+ovnsb_db_changed(struct nbd_context *ctx)
 {
-    const struct ovnrec_bindings *bindings;
+    const struct sbrec_bindings *bindings;
 
     VLOG_DBG("Recalculating port up states for ovn-nb db.");
 
-    OVNREC_BINDINGS_FOR_EACH(bindings, ctx->ovn_idl) {
+    SBREC_BINDINGS_FOR_EACH(bindings, ctx->ovnsb_idl) {
         const struct nbrec_logical_port *lport;
         struct uuid lport_uuid;
 
@@ -257,7 +258,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         VLOG_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
-        {"ovn-db", required_argument, NULL, 'd'},
+        {"ovnsb-db", required_argument, NULL, 'd'},
         {"ovnnb-db", required_argument, NULL, 'D'},
         {"help", no_argument, NULL, 'h'},
         {"options", no_argument, NULL, 'o'},
@@ -283,7 +284,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         STREAM_SSL_OPTION_HANDLERS;
 
         case 'd':
-            ovn_db = optarg;
+            ovnsb_db = optarg;
             break;
 
         case 'D':
@@ -307,8 +308,8 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         }
     }
 
-    if (!ovn_db) {
-        ovn_db = default_db();
+    if (!ovnsb_db) {
+        ovnsb_db = default_db();
     }
 
     if (!ovnnb_db) {
@@ -322,7 +323,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
-    struct ovsdb_idl *ovnnb_idl, *ovn_idl;
+    struct ovsdb_idl *ovnnb_idl, *ovnsb_idl;
     unsigned int ovnnb_seqno, ovn_seqno;
     int res = EXIT_SUCCESS;
     struct nbd_context ctx = {
@@ -340,7 +341,7 @@ main(int argc, char *argv[])
     daemonize();
 
     nbrec_init();
-    ovnrec_init();
+    sbrec_init();
 
     /* We want to detect all changes to the ovn-nb db. */
     ctx.ovnnb_idl = ovnnb_idl = ovsdb_idl_create(ovnnb_db,
@@ -348,12 +349,12 @@ main(int argc, char *argv[])
 
     /* There is only a small subset of changes to the ovn db that ovn-nbd has to
      * care about, so we'll enable monitoring those directly. */
-    ctx.ovn_idl = ovn_idl = ovsdb_idl_create(ovn_db,
-            &ovnrec_idl_class, false, true);
-    ovsdb_idl_add_table(ovn_idl, &ovnrec_table_bindings);
-    ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_logical_port);
-    ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_chassis);
-    ovsdb_idl_add_column(ovn_idl, &ovnrec_bindings_col_mac);
+    ctx.ovnsb_idl = ovnsb_idl = ovsdb_idl_create(ovnsb_db,
+            &sbrec_idl_class, false, true);
+    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_bindings);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_logical_port);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_chassis);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_mac);
 
     /*
      * The loop here just runs the IDL in a loop waiting for the seqno to
@@ -368,10 +369,10 @@ main(int argc, char *argv[])
      */
 
     ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
-    ovn_seqno = ovsdb_idl_get_seqno(ovn_idl);
+    ovn_seqno = ovsdb_idl_get_seqno(ovnsb_idl);
     for (;;) {
         ovsdb_idl_run(ovnnb_idl);
-        ovsdb_idl_run(ovn_idl);
+        ovsdb_idl_run(ovnsb_idl);
 
         if (!ovsdb_idl_is_alive(ovnnb_idl)) {
             int retval = ovsdb_idl_get_last_error(ovnnb_idl);
@@ -381,10 +382,10 @@ main(int argc, char *argv[])
             break;
         }
 
-        if (!ovsdb_idl_is_alive(ovn_idl)) {
-            int retval = ovsdb_idl_get_last_error(ovn_idl);
+        if (!ovsdb_idl_is_alive(ovnsb_idl)) {
+            int retval = ovsdb_idl_get_last_error(ovnsb_idl);
             VLOG_ERR("%s: database connection failed (%s)",
-                    ovn_db, ovs_retval_to_string(retval));
+                    ovnsb_db, ovs_retval_to_string(retval));
             res = EXIT_FAILURE;
             break;
         }
@@ -394,8 +395,8 @@ main(int argc, char *argv[])
             ovnnb_changes_pending = true;
         }
 
-        if (ovn_seqno != ovsdb_idl_get_seqno(ovn_idl)) {
-            ovn_seqno = ovsdb_idl_get_seqno(ovn_idl);
+        if (ovn_seqno != ovsdb_idl_get_seqno(ovnsb_idl)) {
+            ovn_seqno = ovsdb_idl_get_seqno(ovnsb_idl);
             ovn_changes_pending = true;
         }
 
@@ -413,7 +414,7 @@ main(int argc, char *argv[])
              * The OVN-nb db contents have changed, so create a transaction for
              * updating the OVN DB.
              */
-            ctx.ovn_txn = ovsdb_idl_txn_create(ctx.ovn_idl);
+            ctx.ovn_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
             ovnnb_db_changed(&ctx);
             ovnnb_changes_pending = false;
         }
@@ -424,7 +425,7 @@ main(int argc, char *argv[])
              * updating the northbound DB.
              */
             ctx.ovnnb_txn = ovsdb_idl_txn_create(ctx.ovnnb_idl);
-            ovn_db_changed(&ctx);
+            ovnsb_db_changed(&ctx);
             ovn_changes_pending = false;
         }
 
@@ -471,9 +472,9 @@ main(int argc, char *argv[])
         }
 
         if (ovnnb_seqno == ovsdb_idl_get_seqno(ovnnb_idl) &&
-                ovn_seqno == ovsdb_idl_get_seqno(ovn_idl)) {
+                ovn_seqno == ovsdb_idl_get_seqno(ovnsb_idl)) {
             ovsdb_idl_wait(ovnnb_idl);
-            ovsdb_idl_wait(ovn_idl);
+            ovsdb_idl_wait(ovnsb_idl);
             if (ctx.ovnnb_txn) {
                 ovsdb_idl_txn_wait(ctx.ovnnb_txn);
             }
@@ -484,7 +485,7 @@ main(int argc, char *argv[])
         }
     }
 
-    ovsdb_idl_destroy(ovn_idl);
+    ovsdb_idl_destroy(ovnsb_idl);
     ovsdb_idl_destroy(ovnnb_idl);
 
     exit(res);

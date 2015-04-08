@@ -1,35 +1,35 @@
-# OVN schema and IDL
-EXTRA_DIST += ovn/ovn.ovsschema
-pkgdata_DATA += ovn/ovn.ovsschema
+# OVN southbound schema and IDL
+EXTRA_DIST += ovn/ovn-sb.ovsschema
+pkgdata_DATA += ovn/ovn-sb.ovsschema
 
-# OVN E-R diagram
+# OVN southbound E-R diagram
 #
 # If "python" or "dot" is not available, then we do not add graphical diagram
 # to the documentation.
 if HAVE_PYTHON
 if HAVE_DOT
-ovn/ovn.gv: ovsdb/ovsdb-dot.in ovn/ovn.ovsschema
-	$(AM_V_GEN)$(OVSDB_DOT) --no-arrows $(srcdir)/ovn/ovn.ovsschema > $@
-ovn/ovn.pic: ovn/ovn.gv ovsdb/dot2pic
-	$(AM_V_GEN)(dot -T plain < ovn/ovn.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
+ovn/ovn-sb.gv: ovsdb/ovsdb-dot.in ovn/ovn-sb.ovsschema
+	$(AM_V_GEN)$(OVSDB_DOT) --no-arrows $(srcdir)/ovn/ovn-sb.ovsschema > $@
+ovn/ovn-sb.pic: ovn/ovn-sb.gv ovsdb/dot2pic
+	$(AM_V_GEN)(dot -T plain < ovn/ovn-sb.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
 	mv $@.tmp $@
-OVN_PIC = ovn/ovn.pic
-OVN_DOT_DIAGRAM_ARG = --er-diagram=$(OVN_PIC)
-DISTCLEANFILES += ovn/ovn.gv ovn/ovn.pic
+OVN_SB_PIC = ovn/ovn-sb.pic
+OVN_SB_DOT_DIAGRAM_ARG = --er-diagram=$(OVN_SB_PIC)
+DISTCLEANFILES += ovn/ovn-sb.gv ovn/ovn-sb.pic
 endif
 endif
 
-# OVN schema documentation
-EXTRA_DIST += ovn/ovn.xml
-DISTCLEANFILES += ovn/ovn.5
-man_MANS += ovn/ovn.5
-ovn/ovn.5: \
-	ovsdb/ovsdb-doc ovn/ovn.xml ovn/ovn.ovsschema $(OVN_PIC)
+# OVN southbound schema documentation
+EXTRA_DIST += ovn/ovn-sb.xml
+DISTCLEANFILES += ovn/ovn-sb.5
+man_MANS += ovn/ovn-sb.5
+ovn/ovn-sb.5: \
+	ovsdb/ovsdb-doc ovn/ovn-sb.xml ovn/ovn-sb.ovsschema $(OVN_SB_PIC)
 	$(AM_V_GEN)$(OVSDB_DOC) \
-		$(OVN_DOT_DIAGRAM_ARG) \
+		$(OVN_SB_DOT_DIAGRAM_ARG) \
 		--version=$(VERSION) \
-		$(srcdir)/ovn/ovn.ovsschema \
-		$(srcdir)/ovn/ovn.xml > $@.tmp && \
+		$(srcdir)/ovn/ovn-sb.ovsschema \
+		$(srcdir)/ovn/ovn-sb.xml > $@.tmp && \
 	mv $@.tmp $@
 
 # OVN northbound schema and IDL
@@ -78,19 +78,19 @@ EXTRA_DIST += \
 	ovn/TODO \
 	ovn/CONTAINERS.OpenStack.md
 
-# ovn IDL
+# ovn-sb IDL
 OVSIDL_BUILT += \
-	$(srcdir)/ovn/ovn-idl.c \
-	$(srcdir)/ovn/ovn-idl.h \
-	$(srcdir)/ovn/ovn.ovsidl
-EXTRA_DIST += $(srcdir)/ovn/ovn-idl.ann
-OVN_IDL_FILES = \
-	$(srcdir)/ovn/ovn.ovsschema \
-	$(srcdir)/ovn/ovn-idl.ann
-$(srcdir)/ovn/ovn-idl.ovsidl: $(OVN_IDL_FILES)
-	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_IDL_FILES) > $@.tmp && \
+	$(srcdir)/ovn/ovn-sb-idl.c \
+	$(srcdir)/ovn/ovn-sb-idl.h \
+	$(srcdir)/ovn/ovn-sb.ovsidl
+EXTRA_DIST += $(srcdir)/ovn/ovn-sb-idl.ann
+OVN_SB_IDL_FILES = \
+	$(srcdir)/ovn/ovn-sb.ovsschema \
+	$(srcdir)/ovn/ovn-sb-idl.ann
+$(srcdir)/ovn/ovn-sb-idl.ovsidl: $(OVN_SB_IDL_FILES)
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_SB_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
-CLEANFILES += ovn/ovn-idl.c ovn/ovn-idl.h
+CLEANFILES += ovn/ovn-sb-idl.c ovn/ovn-sb-idl.h
 
 # ovn-nb IDL
 OVSIDL_BUILT += \
@@ -113,8 +113,8 @@ ovn_libovn_la_LDFLAGS = \
         -Wl,--version-script=$(top_builddir)/ovn/libovn.sym \
         $(AM_LDFLAGS)
 ovn_libovn_la_SOURCES = \
-	ovn/ovn-idl.c \
-	ovn/ovn-idl.h \
+	ovn/ovn-sb-idl.c \
+	ovn/ovn-sb-idl.h \
 	ovn/ovn-nb-idl.c \
 	ovn/ovn-nb-idl.h
 

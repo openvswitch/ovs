@@ -15,8 +15,8 @@ ovn\-controller \- OVN local controller
 .
 .SH DESCRIPTION
 \fBovn\-controller\fR is the local controller daemon for OVN, the Open
-Virtual Network.  It connects northbound to the OVN database (see
-\fBovn\fR(5)) over the OVSDB protocol, and southbound to the Open
+Virtual Network.  It connects up to the OVN Southbound database (see
+\fBovn\-sb\fR(5)) over the OVSDB protocol, and down to the Open
 vSwitch database (see \fBovs-vswitchd.conf.db\fR(5)) over the OVSDB
 protocol and to \fBovs\-vswitchd\fR(8) via OpenFlow.  Each hypervisor
 and software gateway in an OVN deployment runs its own independent

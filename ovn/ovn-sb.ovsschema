@@ -1,5 +1,5 @@
 {
-    "name": "OVN",
+    "name": "OVN_Southbound",
     "tables": {
         "Chassis": {
             "columns": {

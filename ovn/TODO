@@ -159,7 +159,7 @@
 
     We can probably use the same default as ovs-vsctl.
 
-*** Location of OVN database.
+*** Location of OVN Southbound database.
 
     Probably no useful default.
 
@@ -183,16 +183,16 @@
    Initially, the simplest way to do this is probably to write
    straight C code to do a full translation of the entire
    OVN_Northbound database into the format for the Pipeline table in
-   the OVN database.  As scale increases, this will probably be too
-   inefficient since a small change in OVN_Northbound requires a full
-   recomputation.  At that point, we probably want to adopt a more
-   systematic approach, such as something akin to the "nlog" system
-   used in NVP (see Koponen et al. "Network Virtualization in
-   Multi-tenant Datacenters", NSDI 2014).
+   the OVN Southbound database.  As scale increases, this will probably
+   be too inefficient since a small change in OVN_Northbound requires a
+   full recomputation.  At that point, we probably want to adopt a more
+   systematic approach, such as something akin to the "nlog" system used
+   in NVP (see Koponen et al. "Network Virtualization in Multi-tenant
+   Datacenters", NSDI 2014).
 
 ** Push logical datapath flows to Pipeline table.
 
-** Monitor OVN database Bindings table.
+** Monitor OVN Southbound database Bindings table.
 
    Sync rows in the OVN Bindings table to the "up" column in the
    OVN_Northbound database.
@@ -208,9 +208,9 @@
 ** Scaling number of connections.
 
    In typical use today a given ovsdb-server has only a single-digit
-   number of simultaneous connections.  The OVN database will have a
-   connection from every hypervisor.  This use case needs testing and
-   probably coding work.  Here are some possible improvements.
+   number of simultaneous connections.  The OVN Southbound database will
+   have a connection from every hypervisor.  This use case needs testing
+   and probably coding work.  Here are some possible improvements.
 
 *** Reducing amount of data sent to clients.
 

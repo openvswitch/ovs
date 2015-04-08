@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<database name="ovn" title="OVN Database">
+<database name="ovn-sb" title="OVN Southbound Database">
   <p>
     This database holds logical and physical configuration and state for the
     Open Virtual Network (OVN) system to support virtual network abstraction.
@@ -7,17 +7,18 @@
   </p>
 
   <p>
-    The OVN database sits at the center of the OVN architecture.  It is the one
-    component that speaks both southbound directly to all the hypervisors and
-    gateways, via <code>ovn-controller</code>, and northbound to the Cloud
-    Management System, via <code>ovn-nbd</code>:
+    The OVN Southbound database sits at the center of the OVN
+    architecture.  It is the one component that speaks both southbound
+    directly to all the hypervisors and gateways, via
+    <code>ovn-controller</code>, and northbound to the Cloud Management
+    System, via <code>ovn-nbd</code>:
   </p>
 
   <h2>Database Structure</h2>
 
   <p>
-    The OVN database contains three classes of data with different properties,
-    as described in the sections below.
+    The OVN Southbound database contains three classes of data with
+    different properties, as described in the sections below.
   </p>
 
   <h3>Physical Network (PN) data</h3>
