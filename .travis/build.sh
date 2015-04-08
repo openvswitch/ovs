@@ -38,9 +38,9 @@ function install_kernel()
 function install_dpdk()
 {
     if [ -n "$DPDK_GIT" ]; then
-	git clone $DPDK_GIT dpdk-$1
-	cd dpdk-$1
-	git checkout v$1
+        git clone $DPDK_GIT dpdk-$1
+        cd dpdk-$1
+        git checkout v$1
     else
         wget http://www.dpdk.org/browse/dpdk/snapshot/dpdk-$1.tar.gz
         tar xzvf dpdk-$1.tar.gz > /dev/null
@@ -68,13 +68,13 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-	    DPDK_VER="1.8.0"
+        DPDK_VER="1.8.0"
     fi
     install_dpdk $DPDK_VER
     # Disregard bad function casts until DPDK is fixed
     CFLAGS="$CFLAGS -Wno-error=bad-function-cast -Wno-error=cast-align"
     EXTRA_OPTS+="--with-dpdk=./dpdk-$DPDK_VER/build"
-elif [ $CC != "clang" ]; then
+elif [ "$CC" != "clang" ]; then
     # DPDK headers currently trigger sparse errors
     SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
@@ -82,11 +82,11 @@ fi
 configure_ovs $EXTRA_OPTS $*
 
 # Only build datapath if we are testing kernel w/o running testsuite
-if [ $KERNEL ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
+if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
     cd datapath
 fi
 
-if [ $CC = "clang" ]; then
+if [ "$CC" = "clang" ]; then
     make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 elif [[ $BUILD_ENV =~ "-m32" ]]; then
     # Disable sparse for 32bit builds on 64bit machine
@@ -95,7 +95,7 @@ else
     make CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
 fi
 
-if [ $TESTSUITE ] && [ $CC != "clang" ]; then
+if [ "$TESTSUITE" ] && [ "$CC" != "clang" ]; then
     if ! make distcheck; then
         # testsuite.log is necessary for debugging.
         cat */_build/tests/testsuite.log
