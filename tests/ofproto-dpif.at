@@ -6,7 +6,7 @@ AT_CHECK([ovs-appctl revalidator/wait])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif, active-backup bonding])
+AT_SETUP([ofproto-dpif - active-backup bonding])
 # Create br0 with interfaces p1, p2 and p7, creating bond0 with p1 and p2
 #    and br1 with interfaces p3, p4 and p8.
 # toggle p1,p2 of bond0 up and down to test bonding in active-backup mode.
@@ -53,7 +53,7 @@ recirc_id=0,rarp,in_port=4,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_ds
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif, balance-slb bonding])
+AT_SETUP([ofproto-dpif - balance-slb bonding])
 # Create br0 with interfaces bond0(p1, p2, p3) and p7,
 #    and br1 with interfaces p4, p5, p6 and p8.
 #    p1 <-> p4, p2 <-> p5, p3 <-> p6
@@ -96,7 +96,7 @@ AT_CHECK([test `egrep 'in_port\(6\)' br1_flows.txt |wc -l` -gt 3])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif, balance-tcp bonding])
+AT_SETUP([ofproto-dpif - balance-tcp bonding])
 # Create br0 with interfaces bond0(p1, p2, p3) and p7,
 #    and br1 with interfaces bond1(p4, p5, p6) and p8.
 #    bond0 <-> bond1
@@ -149,7 +149,7 @@ OVS_VSWITCHD_STOP()
 AT_CLEANUP
 
 # Makes sure recirculation does not change the way packet is handled.
-AT_SETUP([ofproto-dpif, balance-tcp bonding, different recirc flow ])
+AT_SETUP([ofproto-dpif - balance-tcp bonding, different recirc flow ])
 OVS_VSWITCHD_START(
   [add-bond br0 bond0 p1 p2 bond_mode=balance-tcp lacp=active \
        other-config:lacp-time=fast other-config:bond-rebalance-interval=0 -- \
@@ -5214,7 +5214,7 @@ AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([idle_age and hard_age increase over time])
+AT_SETUP([ofproto-dpif - idle_age and hard_age increase over time])
 OVS_VSWITCHD_START
 
 # get_ages DURATION HARD IDLE
