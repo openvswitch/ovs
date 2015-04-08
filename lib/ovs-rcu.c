@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "ovs-rcu.h"
+#include "fatal-signal.h"
 #include "guarded-list.h"
 #include "list.h"
 #include "ovs-thread.h"
@@ -313,6 +314,18 @@ ovsrcu_thread_exit_cb(void *perthread)
     ovsrcu_unregister__(perthread);
 }
 
+/* Cancels the callback to ovsrcu_thread_exit_cb().
+ *
+ * Cancelling the call to the destructor during the main thread exit
+ * is needed while using pthreads-win32 library in Windows. It has been
+ * observed that in pthreads-win32, a call to the destructor during
+ * main thread exit causes undefined behavior. */
+static void
+ovsrcu_cancel_thread_exit_cb(void *aux OVS_UNUSED)
+{
+    pthread_setspecific(perthread_key, NULL);
+}
+
 static void
 ovsrcu_init_module(void)
 {
@@ -320,6 +333,7 @@ ovsrcu_init_module(void)
     if (ovsthread_once_start(&once)) {
         global_seqno = seq_create();
         xpthread_key_create(&perthread_key, ovsrcu_thread_exit_cb);
+        fatal_signal_add_hook(ovsrcu_cancel_thread_exit_cb, NULL, NULL, true);
         list_init(&ovsrcu_threads);
         ovs_mutex_init(&ovsrcu_threads_mutex);
 

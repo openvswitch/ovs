@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "compiler.h"
+#include "fatal-signal.h"
 #include "hash.h"
 #include "list.h"
 #include "netdev-dpdk.h"
@@ -668,6 +669,18 @@ ovsthread_key_destruct__(void *slots_)
     free(slots);
 }
 
+/* Cancels the callback to ovsthread_key_destruct__().
+ *
+ * Cancelling the call to the destructor during the main thread exit
+ * is needed while using pthreads-win32 library in Windows. It has been
+ * observed that in pthreads-win32, a call to the destructor during
+ * main thread exit causes undefined behavior. */
+static void
+ovsthread_cancel_ovsthread_key_destruct__(void *aux OVS_UNUSED)
+{
+    pthread_setspecific(tsd_key, NULL);
+}
+
 /* Initializes '*keyp' as a thread-specific data key.  The data items are
  * initially null in all threads.
  *
@@ -684,6 +697,8 @@ ovsthread_key_create(ovsthread_key_t *keyp, void (*destructor)(void *))
 
     if (ovsthread_once_start(&once)) {
         xpthread_key_create(&tsd_key, ovsthread_key_destruct__);
+        fatal_signal_add_hook(ovsthread_cancel_ovsthread_key_destruct__,
+                              NULL, NULL, true);
         ovsthread_once_done(&once);
     }
 
