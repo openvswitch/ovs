@@ -920,13 +920,14 @@ get_src_port(struct dp_packet *packet)
                  tnl_udp_port_min);
 }
 
-static void *
-push_udp_header(struct dp_packet *packet, const void *header, int size)
+static void
+push_udp_header(struct dp_packet *packet,
+                const struct ovs_action_push_tnl *data)
 {
     struct udp_header *udp;
     int ip_tot_size;
 
-    udp = push_ip_header(packet, header, size, &ip_tot_size);
+    udp = push_ip_header(packet, data->header, data->header_len, &ip_tot_size);
 
     /* set udp src port */
     udp->udp_src = get_src_port(packet);
@@ -943,8 +944,6 @@ push_udp_header(struct dp_packet *packet, const void *header, int size)
             udp->udp_csum = htons(0xffff);
         }
     }
-
-    return udp + 1;
 }
 
 static void *
@@ -1042,14 +1041,8 @@ parse_gre_header(struct dp_packet *packet,
     return hlen;
 }
 
-static void
-reset_tnl_md(struct pkt_metadata *md)
-{
-    memset(&md->tunnel, 0, sizeof(md->tunnel));
-}
-
-static void
-gre_extract_md(struct dp_packet *packet)
+static int
+netdev_gre_pop_header(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
@@ -1058,58 +1051,33 @@ gre_extract_md(struct dp_packet *packet)
 
     memset(md, 0, sizeof *md);
     if (hlen > dp_packet_size(packet)) {
-        return;
+        return EINVAL;
     }
 
     hlen = parse_gre_header(packet, tnl);
     if (hlen < 0) {
-        reset_tnl_md(md);
+        return -hlen;
     }
 
     dp_packet_reset_packet(packet, hlen);
-}
 
-static int
-netdev_gre_pop_header(struct netdev *netdev_ OVS_UNUSED,
-                      struct dp_packet **pkt, int cnt)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        gre_extract_md(pkt[i]);
-    }
     return 0;
 }
 
 static void
-netdev_gre_push_header__(struct dp_packet *packet,
-                         const void *header, int size)
+netdev_gre_push_header(struct dp_packet *packet,
+                       const struct ovs_action_push_tnl *data)
 {
     struct gre_base_hdr *greh;
     int ip_tot_size;
 
-    greh = push_ip_header(packet, header, size,  &ip_tot_size);
+    greh = push_ip_header(packet, data->header, data->header_len, &ip_tot_size);
 
     if (greh->flags & htons(GRE_CSUM)) {
         ovs_be16 *csum_opt = (ovs_be16 *) (greh + 1);
         *csum_opt = csum(greh, ip_tot_size - sizeof (struct ip_header));
     }
 }
-
-static int
-netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
-                       struct dp_packet **packets, int cnt,
-                       const struct ovs_action_push_tnl *data)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        netdev_gre_push_header__(packets[i], data->header, data->header_len);
-        packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
-    }
-    return 0;
-}
-
 
 static int
 netdev_gre_build_header(const struct netdev *netdev,
@@ -1158,8 +1126,8 @@ netdev_gre_build_header(const struct netdev *netdev,
     return 0;
 }
 
-static void
-vxlan_extract_md(struct dp_packet *packet)
+static int
+netdev_vxlan_pop_header(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
@@ -1167,12 +1135,12 @@ vxlan_extract_md(struct dp_packet *packet)
 
     memset(md, 0, sizeof *md);
     if (VXLAN_HLEN > dp_packet_size(packet)) {
-        return;
+        return EINVAL;
     }
 
     vxh = udp_extract_tnl_md(packet, tnl);
     if (!vxh) {
-        return;
+        return EINVAL;
     }
 
     if (get_16aligned_be32(&vxh->vx_flags) != htonl(VXLAN_FLAGS) ||
@@ -1180,24 +1148,13 @@ vxlan_extract_md(struct dp_packet *packet)
         VLOG_WARN_RL(&err_rl, "invalid vxlan flags=%#x vni=%#x\n",
                      ntohl(get_16aligned_be32(&vxh->vx_flags)),
                      ntohl(get_16aligned_be32(&vxh->vx_vni)));
-        reset_tnl_md(md);
-        return;
+        return EINVAL;
     }
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
     tnl->flags |= FLOW_TNL_F_KEY;
 
     dp_packet_reset_packet(packet, VXLAN_HLEN);
-}
 
-static int
-netdev_vxlan_pop_header(struct netdev *netdev_ OVS_UNUSED,
-                        struct dp_packet **pkt, int cnt)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        vxlan_extract_md(pkt[i]);
-    }
     return 0;
 }
 
@@ -1226,21 +1183,7 @@ netdev_vxlan_build_header(const struct netdev *netdev,
 }
 
 static int
-netdev_vxlan_push_header(const struct netdev *netdev OVS_UNUSED,
-                         struct dp_packet **packets, int cnt,
-                         const struct ovs_action_push_tnl *data)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        push_udp_header(packets[i], data->header, VXLAN_HLEN);
-        packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
-    }
-    return 0;
-}
-
-static void
-geneve_extract_md(struct dp_packet *packet)
+netdev_geneve_pop_header(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
@@ -1251,40 +1194,36 @@ geneve_extract_md(struct dp_packet *packet)
     if (GENEVE_BASE_HLEN > dp_packet_size(packet)) {
         VLOG_WARN_RL(&err_rl, "geneve packet too small: min header=%u packet size=%u\n",
                      (unsigned int)GENEVE_BASE_HLEN, dp_packet_size(packet));
-        return;
+        return EINVAL;
     }
 
     gnh = udp_extract_tnl_md(packet, tnl);
     if (!gnh) {
-        return;
+        return EINVAL;
     }
 
     hlen = GENEVE_BASE_HLEN + gnh->opt_len * 4;
     if (hlen > dp_packet_size(packet)) {
         VLOG_WARN_RL(&err_rl, "geneve packet too small: header len=%u packet size=%u\n",
                      hlen, dp_packet_size(packet));
-        reset_tnl_md(md);
-        return;
+        return EINVAL;
     }
 
     if (gnh->ver != 0) {
         VLOG_WARN_RL(&err_rl, "unknown geneve version: %"PRIu8"\n", gnh->ver);
-        reset_tnl_md(md);
-        return;
+        return EINVAL;
     }
 
     if (gnh->opt_len && gnh->critical) {
         VLOG_WARN_RL(&err_rl, "unknown geneve critical options: %"PRIu8" bytes\n",
                      gnh->opt_len * 4);
-        reset_tnl_md(md);
-        return;
+        return EINVAL;
     }
 
     if (gnh->proto_type != htons(ETH_TYPE_TEB)) {
         VLOG_WARN_RL(&err_rl, "unknown geneve encapsulated protocol: %#x\n",
                      ntohs(gnh->proto_type));
-        reset_tnl_md(md);
-        return;
+        return EINVAL;
     }
 
     tnl->flags |= gnh->oam ? FLOW_TNL_F_OAM : 0;
@@ -1292,17 +1231,7 @@ geneve_extract_md(struct dp_packet *packet)
     tnl->flags |= FLOW_TNL_F_KEY;
 
     dp_packet_reset_packet(packet, hlen);
-}
 
-static int
-netdev_geneve_pop_header(struct netdev *netdev_ OVS_UNUSED,
-                         struct dp_packet **pkt, int cnt)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        geneve_extract_md(pkt[i]);
-    }
     return 0;
 }
 
@@ -1328,20 +1257,6 @@ netdev_geneve_build_header(const struct netdev *netdev,
     ovs_mutex_unlock(&dev->mutex);
     data->header_len = GENEVE_BASE_HLEN;
     data->tnl_type = OVS_VPORT_TYPE_GENEVE;
-    return 0;
-}
-
-static int
-netdev_geneve_push_header(const struct netdev *netdev OVS_UNUSED,
-                          struct dp_packet **packets, int cnt,
-                          const struct ovs_action_push_tnl *data)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        push_udp_header(packets[i], data->header, data->header_len);
-        packets[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
-    }
     return 0;
 }
 
@@ -1475,7 +1390,7 @@ netdev_vport_tunnel_register(void)
      * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
         TUNNEL_CLASS("geneve", "genev_sys", netdev_geneve_build_header,
-                                            netdev_geneve_push_header,
+                                            push_udp_header,
                                             netdev_geneve_pop_header),
         TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
                                        netdev_gre_push_header,
@@ -1484,7 +1399,7 @@ netdev_vport_tunnel_register(void)
         TUNNEL_CLASS("gre64", "gre64_sys", NULL,  NULL, NULL),
         TUNNEL_CLASS("ipsec_gre64", "gre64_sys", NULL, NULL, NULL),
         TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
-                                           netdev_vxlan_push_header,
+                                           push_udp_header,
                                            netdev_vxlan_pop_header),
         TUNNEL_CLASS("lisp", "lisp_sys", NULL, NULL, NULL)
     };

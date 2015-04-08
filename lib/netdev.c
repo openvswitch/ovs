@@ -34,6 +34,7 @@
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
+#include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -735,9 +736,23 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet **buffers,
 int
 netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int cnt)
 {
-    return (netdev->netdev_class->pop_header
-             ? netdev->netdev_class->pop_header(netdev, buffers, cnt)
-             : EOPNOTSUPP);
+    int i;
+
+    if (!netdev->netdev_class->pop_header) {
+        return EOPNOTSUPP;
+    }
+
+    for (i = 0; i < cnt; i++) {
+        int err;
+
+        err = netdev->netdev_class->pop_header(buffers[i]);
+        if (err) {
+            struct flow_tnl *tunnel_md = &buffers[i]->md.tunnel;
+            memset(tunnel_md, 0, sizeof *tunnel_md);
+        }
+    }
+
+    return 0;
 }
 
 int
@@ -755,11 +770,18 @@ netdev_push_header(const struct netdev *netdev,
                    struct dp_packet **buffers, int cnt,
                    const struct ovs_action_push_tnl *data)
 {
-    if (netdev->netdev_class->push_header) {
-        return netdev->netdev_class->push_header(netdev, buffers, cnt, data);
-    } else {
+    int i;
+
+    if (!netdev->netdev_class->push_header) {
         return -EINVAL;
     }
+
+    for (i = 0; i < cnt; i++) {
+        netdev->netdev_class->push_header(buffers[i], data);
+        buffers[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
+    }
+
+    return 0;
 }
 
 /* Registers with the poll loop to wake up from the next call to poll_block()
