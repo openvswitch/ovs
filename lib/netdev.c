@@ -747,8 +747,7 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int cnt)
 
         err = netdev->netdev_class->pop_header(buffers[i]);
         if (err) {
-            struct flow_tnl *tunnel_md = &buffers[i]->md.tunnel;
-            memset(tunnel_md, 0, sizeof *tunnel_md);
+            dp_packet_clear(buffers[i]);
         }
     }
 
