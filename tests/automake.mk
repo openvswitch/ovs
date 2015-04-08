@@ -200,9 +200,9 @@ clean-local:
 
 AUTOTEST = $(AUTOM4TE) --language=autotest
 $(TESTSUITE): package.m4 $(TESTSUITE_AT) $(COMMON_MACROS_AT) $(TESTSUITE_PATCH)
-	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
-	patch -p0 $@.tmp $(TESTSUITE_PATCH)
-	$(AM_V_at)mv $@.tmp $@
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o testsuite.tmp $@.at
+	patch -p0 testsuite.tmp $(TESTSUITE_PATCH)
+	$(AM_V_at)mv testsuite.tmp $@
 
 $(KMOD_TESTSUITE): package.m4 $(KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
