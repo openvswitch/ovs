@@ -730,7 +730,7 @@ struct geneve_opt {
     uint8_t   r2:1;
     uint8_t   r1:1;
 #endif
-    uint8_t   opt_data[];
+    /* Option data */
 };
 
 struct genevehdr {
