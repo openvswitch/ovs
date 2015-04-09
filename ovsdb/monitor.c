@@ -47,8 +47,13 @@ static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class;
 struct ovsdb_monitor {
     struct ovsdb_replica replica;
     struct shash tables;     /* Holds "struct ovsdb_monitor_table"s. */
-    struct ovsdb_jsonrpc_monitor *jsonrpc_monitor;
+    struct ovs_list jsonrpc_monitors;  /* Contains "jsonrpc_monitor_node"s. */
     struct ovsdb *db;
+};
+
+struct jsonrpc_monitor_node {
+    struct ovsdb_jsonrpc_monitor *jsonrpc_monitor;
+    struct ovs_list node;
 };
 
 /* A particular column being monitored. */
@@ -81,6 +86,8 @@ struct ovsdb_monitor_table {
      * updated but not yet flushed to the jsonrpc connection. */
     struct hmap changes;
 };
+
+static void ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon);
 
 static int
 compare_ovsdb_monitor_column(const void *a_, const void *b_)
@@ -199,14 +206,19 @@ ovsdb_monitor_create(struct ovsdb *db,
                      struct ovsdb_jsonrpc_monitor *jsonrpc_monitor)
 {
     struct ovsdb_monitor *dbmon;
+    struct jsonrpc_monitor_node *jm;
 
     dbmon = xzalloc(sizeof *dbmon);
 
     ovsdb_replica_init(&dbmon->replica, &ovsdb_jsonrpc_replica_class);
     ovsdb_add_replica(db, &dbmon->replica);
-    dbmon->jsonrpc_monitor = jsonrpc_monitor;
+    list_init(&dbmon->jsonrpc_monitors);
     dbmon->db = db;
     shash_init(&dbmon->tables);
+
+    jm = xzalloc(sizeof *jm);
+    jm->jsonrpc_monitor = jsonrpc_monitor;
+    list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
 
     return dbmon;
 }
@@ -526,6 +538,31 @@ ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon)
 }
 
 void
+ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
+                   struct ovsdb_jsonrpc_monitor *jsonrpc_monitor)
+{
+    struct jsonrpc_monitor_node *jm;
+
+    /* Find and remove the jsonrpc monitor from the list.  */
+    LIST_FOR_EACH(jm, node, &dbmon->jsonrpc_monitors) {
+        if (jm->jsonrpc_monitor == jsonrpc_monitor) {
+            list_remove(&jm->node);
+            free(jm);
+
+            /* Destroy ovsdb monitor if this is the last user.  */
+            if (list_is_empty(&dbmon->jsonrpc_monitors)) {
+                ovsdb_monitor_destroy(dbmon);
+            }
+
+            return;
+        };
+    }
+
+    /* Should never reach here. jsonrpc_monitor should be on the list.  */
+    OVS_NOT_REACHED();
+}
+
+static void
 ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
 {
     struct shash_node *node;
@@ -567,9 +604,14 @@ static void
 ovsdb_monitor_destroy_callback(struct ovsdb_replica *replica)
 {
     struct ovsdb_monitor *dbmon = ovsdb_monitor_cast(replica);
-    struct ovsdb_jsonrpc_monitor *m = dbmon->jsonrpc_monitor;
+    struct jsonrpc_monitor_node *jm, *next;
 
-    ovsdb_jsonrpc_monitor_destroy(m);
+    /* Delete all front end monitors. Removing the last front
+     * end monitor will also destroy the corresponding 'ovsdb_monitor'.
+     * ovsdb monitor will also be destroied.  */
+    LIST_FOR_EACH_SAFE(jm, next, node, &dbmon->jsonrpc_monitors) {
+        ovsdb_jsonrpc_monitor_destroy(jm->jsonrpc_monitor);
+    }
 }
 
 static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class = {

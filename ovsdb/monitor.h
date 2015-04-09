@@ -30,6 +30,9 @@ enum ovsdb_monitor_selection {
 struct ovsdb_monitor *ovsdb_monitor_create(struct ovsdb *db,
                         struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
 
+void ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
+                               struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
+
 void ovsdb_monitor_add_table(struct ovsdb_monitor *m,
                              const struct ovsdb_table *table);
 
@@ -53,6 +56,4 @@ void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
 bool ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon);
 
 void ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon);
-
-void ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon);
 #endif

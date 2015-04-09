@@ -1304,7 +1304,7 @@ ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m)
 {
     json_destroy(m->monitor_id);
     hmap_remove(&m->session->monitors, &m->node);
-    ovsdb_monitor_destroy(m->dbmon);
+    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m);
     free(m);
 }
 
