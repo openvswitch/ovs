@@ -129,17 +129,6 @@
 
 ** Interaction with Open_vSwitch and OVN databases:
 
-*** Monitor VIFs attached to the integration bridge in Open_vSwitch.
-
-    In response to changes, add or remove corresponding rows in
-    Bindings table in OVN.
-
-*** Populate Chassis row in OVN at startup.  Maintain Chassis row over time.
-
-    (Warn if any other Chassis claims the same IP address.)
-
-*** Remove Chassis and Bindings rows from OVN on exit.
-
 *** Monitor Chassis table in OVN.
 
     Populate Port records for tunnels to other chassis into
@@ -154,14 +143,6 @@
 *** Tunnel encapsulation to publish.
 
     Default: VXLAN? Geneve?
-
-*** Location of Open_vSwitch database.
-
-    We can probably use the same default as ovs-vsctl.
-
-*** Location of OVN Southbound database.
-
-    Probably no useful default.
 
 *** SSL configuration.
 

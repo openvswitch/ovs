@@ -371,3 +371,4 @@ include vtep/automake.mk
 include datapath-windows/automake.mk
 include datapath-windows/include/automake.mk
 include ovn/automake.mk
+include ovn/controller/automake.mk

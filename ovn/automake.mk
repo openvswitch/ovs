@@ -66,8 +66,8 @@ ovn/ovn-nb.5: \
 		$(srcdir)/ovn/ovn-nb.xml > $@.tmp && \
 	mv $@.tmp $@
 
-man_MANS += ovn/ovn-controller.8 ovn/ovn-architecture.7 ovn/ovn-nbctl.8
-EXTRA_DIST += ovn/ovn-controller.8.in ovn/ovn-architecture.7.xml ovn/ovn-nbctl.8.xml
+man_MANS += ovn/ovn-architecture.7 ovn/ovn-nbctl.8
+EXTRA_DIST += ovn/ovn-architecture.7.xml ovn/ovn-nbctl.8.xml
 
 SUFFIXES += .xml
 %: %.xml
