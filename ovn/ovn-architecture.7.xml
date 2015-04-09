@@ -357,7 +357,7 @@
 
     <li>
       Eventually, a user powers off the VM that owns the VIF.  On the
-      hypervisor where the VM was powered on, the VIF is deleted from the OVN
+      hypervisor where the VM was powered off, the VIF is deleted from the OVN
       integration bridge.
     </li>
 
