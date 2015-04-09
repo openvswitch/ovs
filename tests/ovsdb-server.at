@@ -751,6 +751,13 @@ add_ports () {
 add=`add_ports`
 
 AT_CAPTURE_FILE([ovsdb-client.err])
+AT_CAPTURE_FILE([ovsdb-client-nonblock.err])
+
+
+# Start an ovsdb-client monitoring all changes to the database,
+# By default, it is non-blocking, and will get update message
+# for each ovsdb-server transaactions.
+AT_CHECK([ovsdb-client --detach --no-chdir --pidfile=nonblock.pid monitor ALL >ovsdb-client-nonblock.out 2>ovsdb-client-nonblock.err])
 
 # Start an ovsdb-client monitoring all changes to the database,
 # make it block to force the buffers to fill up, and then execute
@@ -763,8 +770,10 @@ for i in `seq 1 $n_iterations`; do
 done
 AT_CHECK([ovs-appctl -t ovsdb-client ovsdb-client/unblock])
 OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client.out])
+OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client-nonblock.out])
 AT_CHECK([ovs-appctl -t ovsdb-client exit])
 OVS_WAIT_WHILE([test -e ovsdb-client.pid])
+AT_CHECK([kill `cat nonblock.pid`])
 
 # Count the number of updates in the ovsdb-client output, by counting
 # the number of changes to the Open_vSwitch table.  (All of our
@@ -773,8 +782,11 @@ OVS_WAIT_WHILE([test -e ovsdb-client.pid])
 #
 # Check that the counter is what we expect.
 logged_updates=`grep -c '^Open_vSwitch' ovsdb-client.out`
-echo "logged_updates=$logged_updates (expected less than $n_updates)"
-AT_CHECK([test $logged_updates -lt $n_updates])
+logged_nonblock_updates=`grep -c '^Open_vSwitch' ovsdb-client-nonblock.out`
+echo "logged_nonblock_updates=$logged_nonblock_updates (expected less or equal to $n_updates)"
+echo "logged_updates=$logged_updates (expected less than $logged_nonblock_updates)"
+AT_CHECK([test $logged_nonblock_updates -le $n_updates])
+AT_CHECK([test $logged_updates -lt $logged_nonblock_updates])
 AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
   ["xyzzy$counter"
 ])
