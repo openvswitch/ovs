@@ -329,9 +329,10 @@
       notices <code>external-ids</code>:<code>iface-id</code> in the new
       Interface.  In response, it updates the local hypervisor's OpenFlow
       tables so that packets to and from the VIF are properly handled.
-      Afterward, in the OVN DB, it updates the <code>Bindings</code> table's
-      <code>chassis</code> column for the row that links the logical port
-      from <code>external-ids</code>:<code>iface-id</code> to the hypervisor.
+      Afterward, in the OVN Southbound DB, it updates the
+      <code>Bindings</code> table's <code>chassis</code> column for the
+      row that links the logical port from
+      <code>external-ids</code>:<code>iface-id</code> to the hypervisor.
     </li>
 
     <li>

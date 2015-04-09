@@ -347,8 +347,8 @@ main(int argc, char *argv[])
     ctx.ovnnb_idl = ovnnb_idl = ovsdb_idl_create(ovnnb_db,
             &nbrec_idl_class, true, true);
 
-    /* There is only a small subset of changes to the ovn db that ovn-nbd has to
-     * care about, so we'll enable monitoring those directly. */
+    /* There is only a small subset of changes to the ovn-sb db that ovn-nbd
+     * has to care about, so we'll enable monitoring those directly. */
     ctx.ovnsb_idl = ovnsb_idl = ovsdb_idl_create(ovnsb_db,
             &sbrec_idl_class, false, true);
     ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_bindings);
@@ -360,12 +360,12 @@ main(int argc, char *argv[])
      * The loop here just runs the IDL in a loop waiting for the seqno to
      * change, which indicates that the contents of the db have changed.
      *
-     * If the contents of the ovn-nb db change, the mappings to the ovn db must
-     * be recalculated.
+     * If the contents of the ovn-nb db change, the mappings to the ovn-sb
+     * db must be recalculated.
      *
-     * If the contents of the ovn db change, it means the 'up' state of a port
-     * may have changed, as that's the only type of change ovn-nbd is watching
-     * for.
+     * If the contents of the ovn-sb db change, it means the 'up' state of
+     * a port may have changed, as that's the only type of change ovn-nbd is
+     * watching for.
      */
 
     ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
@@ -412,7 +412,7 @@ main(int argc, char *argv[])
         if (ovnnb_changes_pending && !ctx.ovnsb_txn) {
             /*
              * The OVN-nb db contents have changed, so create a transaction for
-             * updating the OVN DB.
+             * updating the OVN-sb DB.
              */
             ctx.ovnsb_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
             ovsdb_idl_txn_add_comment(ctx.ovnsb_txn,
@@ -423,7 +423,7 @@ main(int argc, char *argv[])
 
         if (ovn_changes_pending && !ctx.ovnnb_txn) {
             /*
-             * The OVN db contents have changed, so create a transaction for
+             * The OVN-sb db contents have changed, so create a transaction for
              * updating the northbound DB.
              */
             ctx.ovnnb_txn = ovsdb_idl_txn_create(ctx.ovnnb_idl);
