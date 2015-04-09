@@ -416,6 +416,57 @@ type: External network', in the HyperV virtual network switch configuration.
 this is still a work in progress. Till the support is complete we recommend
 disabling TX/RX offloads for both the VM's as well as the HyperV.
 
+Windows Services
+----------------
+Open vSwitch daemons come with support to run as a Windows service. The
+instructions here assume that you have installed the Open vSwitch utilities
+and daemons via 'make install'. The commands shown here can be run from
+MSYS bash or Windows command prompt.
+
+* Create the database.
+
+  % ovsdb-tool create C:/openvswitch/etc/openvswitch/conf.db \
+        "C:/openvswitch/usr/share/openvswitch/vswitch.ovsschema"
+
+* Create the ovsdb-server service and start it.
+
+  % sc create ovsdb-server binpath="C:/Shares/openvswitch/ovsdb/ovsdb-server.exe C:/openvswitch/etc/openvswitch/conf.db -vfile:info --log-file --pidfile --remote=punix:db.sock --service --service-monitor"
+
+  One of the common issues with creating a Windows service is with mungled
+  paths. You can make sure that the correct path has been registered with
+  the Windows services manager by running:
+
+  % sc qc ovsdb-server
+
+  Start the service.
+
+  % sc start ovsdb-server
+
+  Check that the service is healthy by running:
+
+  % sc query ovsdb-server
+
+* Initialize the database.
+
+  % ovs-vsctl --no-wait init
+
+* Create the ovs-vswitchd service and start it.
+
+  % sc create ovs-vswitchd binpath="C:/Shares/openvswitch/vswitchd/ovs-vswitchd.exe --pidfile -vfile:info --log-file  --service --service-monitor"
+
+  % sc start ovs-vswitchd
+
+  Check that the service is healthy by running:
+
+  % sc query ovs-vswitchd
+
+* To stop and delete the services, run:
+
+  % sc stop ovs-vswitchd
+  % sc stop ovsdb-server
+  % sc delete ovs-vswitchd
+  % sc delete ovsdb-server
+
 Windows autobuild service
 -------------------------
 AppVeyor (appveyor.com) provides a free Windows autobuild service for
