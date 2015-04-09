@@ -51,8 +51,8 @@ schema=
 installed=false
 built=false
 ovn=false
-ovnschema=
-ovnnbschema=
+ovnsb_schema=
+ovnnb_schema=
 
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
@@ -193,13 +193,13 @@ if $built; then
         exit 1
     fi
     if $ovn; then
-        ovnschema=$srcdir/ovn/ovn.ovsschema
-        if test ! -e "$ovnschema"; then
+        ovnsb_schema=$srcdir/ovn/ovn-sb.ovsschema
+        if test ! -e "$ovnsb_schema"; then
             echo >&2 'source directory not found, please use --srcdir'
             exit 1
         fi
-        ovnnbschema=$srcdir/ovn/ovn-nb.ovsschema
-        if test ! -e "$ovnnbschema"; then
+        ovnnb_schema=$srcdir/ovn/ovn-nb.ovsschema
+        if test ! -e "$ovnnb_schema"; then
             echo >&2 'source directory not found, please use --srcdir'
             exit 1
         fi
@@ -265,11 +265,11 @@ touch "$sandbox"/.conf.db.~lock~
 run ovsdb-tool create conf.db "$schema"
 ovsdb_server_args=
 if $ovn; then
-    touch "$sandbox"/.ovn.db.~lock~
+    touch "$sandbox"/.ovnsb.db.~lock~
     touch "$sandbox"/.ovnnb.db.~lock~
-    run ovsdb-tool create ovn.db "$ovnschema"
-    run ovsdb-tool create ovnnb.db "$ovnnbschema"
-    ovsdb_server_args="ovn.db ovnnb.db conf.db"
+    run ovsdb-tool create ovnsb.db "$ovnsb_schema"
+    run ovsdb-tool create ovnnb.db "$ovnnb_schema"
+    ovsdb_server_args="ovnsb.db ovnnb.db conf.db"
 fi
 rungdb $gdb_ovsdb ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
