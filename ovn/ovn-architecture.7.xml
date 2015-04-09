@@ -358,12 +358,12 @@
 
     <li>
       Eventually, a user powers off the VM that owns the VIF.  On the
-      hypervisor where the VM was powered on, the VIF is deleted from the OVN
+      hypervisor where the VM was powered off, the VIF is deleted from the OVN
       integration bridge.
     </li>
 
     <li>
-      On the hypervisor where the VM was powered on,
+      On the hypervisor where the VM was powered off,
       <code>ovn-controller</code> notices that the VIF was deleted.  In
       response, it removes the <code>Chassis</code> column content in the
       <code>Bindings</code> table for the logical port.
