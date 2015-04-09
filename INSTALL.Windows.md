@@ -46,7 +46,8 @@ Visual studio's linker is used. You should also see a 'which sort' report
 * For pthread support, install the library, dll and includes of pthreads-win32
 project from
 ftp://sourceware.org/pub/pthreads-win32/prebuilt-dll-2-9-1-release to a
-directory (e.g.: C:/pthread).
+directory (e.g.: C:/pthread). You should add the pthread-win32's dll
+path (e.g.: C:\pthread\dll\x86) to the Windows' PATH environment variable.
 
 * Get the Open vSwitch sources from either cloning the repo using git
 or from a distribution tar ball.
@@ -73,9 +74,31 @@ or from a distribution tar ball.
 
     % make
 
-* To run all the unit tests:
+  For faster compilation, you can pass the '-j' argument to make.  For
+  example, to run 4 jobs simultaneously, run 'make -j4'.
+
+  Note: MSYS 1.0.18 has a bug that causes parallel make to hang. You
+  can overcome this by downgrading to MSYS 1.0.17.  A simple way to
+  downgrade is to exit all MinGW sessions and then run the command
+  'mingw-get upgrade msys-core-bin=1.0.17-1' from MSVC developers command
+  prompt.
+
+* To run all the unit tests in Open vSwitch, one at a time:
 
     % make check
+
+  To run all the unit tests in Open vSwitch, up to 8 in parallel:
+
+    % make check TESTSUITEFLAGS="-j8"
+
+* To install all the compiled executables on the local machine, run:
+
+    % make install
+
+  The above command will install the Open vSwitch executables in
+  C:/openvswitch.  You can add 'C:\openvswitch\usr\bin' and
+  'C:\openvswitch\usr\sbin' to Windows' PATH environment variable
+  for easy access.
 
 OpenSSL, Open vSwitch and Visual C++
 ------------------------------------
@@ -165,45 +188,52 @@ not a bug in Open vSwitch.
 
 Steps to run the user processes & configure ports
 -------------------------------------------------
-NOTE: The userspace executables built in Open vSwitch for Hyper-V links
-statically with the pthread library mentioned above.  However, the pthread
-library has been found to have a dependency on a DLL file called
-"pthreadVC2.dll" which is part of the pthread package and typically resides in
-"C:\pthread\dll\x86".  In order to resolve the dependency, add the location of
-the DLL file to Windows environment variable %Path%.  An alternative is to copy
-the DLL file into each of the directories where the OVS executables are
-located.  Without having this DLL dependency resolved, the OVS executables will
-not run.  They exit without showing any error/output.
+The following steps assume that you have installed the Open vSwitch
+utilities in the local machine via 'make install'.
 
-01> Create the OVSDB file
-    % ovsdb\ovsdb-tool.exe create conf.db .\vswitchd\vswitch.ovsschema
+01> Create the database.
+    % ovsdb-tool create C:\openvswitch\etc\openvswitch\conf.db \
+        C:\openvswitch\usr\share\openvswitch\vswitch.ovsschema
 
-02> Start ovsdb-server [IN A NEW CONSOLE]
-    % ovsdb\ovsdb-server.exe -v --remote=punix:db.sock conf.db
+02> Start the ovsdb-server and initialize the database.
+    % ovsdb-server -vfile:info --remote=punix:db.sock --log-file --pidfile \
+        --detach
+    % ovs-vsctl --no-wait init
 
-03> Start ovs-vswitchd [IN A NEW CONSOLE]
-    % vswitchd\ovs-vswitchd.exe -v
+    If you would like to terminate the started ovsdb-server, run:
+    % ovs-appctl -t ovsdb-server exit
+
+    (Note that the logfile is created at C:/openvswitch/var/log/openvswitch/)
+
+03> Start ovs-vswitchd.
+    % ovs-vswitchd -vfile:info --log-file --pidfile --detach
+
+    If you would like to terminate the started ovs-vswitchd, run:
+    % ovs-appctl exit
+
+    (Note that the logfile is created at C:/openvswitch/var/log/openvswitch/)
 
 04> Create integration bridge & pif bridge
-    % utilities\ovs-vsctl.exe add-br br-int
-    % utilities\ovs-vsctl.exe add-br br-pif
+    % ovs-vsctl add-br br-int
+    % ovs-vsctl add-br br-pif
 
-NOTE: There's a known bug that running the ovs-vsctl.exe command does not
-terminate.  This is generally solved by having ovs-vswitchd.exe running.  If
-you face the issue despite that, hit Ctrl-C to terminate ovs-vsctl.exe and
+NOTE: There's a known bug that running the ovs-vsctl command does not
+terminate.  This is generally solved by having ovs-vswitchd running.  If
+you face the issue despite that, hit Ctrl-C to terminate ovs-vsctl and
 check the output to see if your command succeeded.
 
-NOTE: There's a known bug that the ports added to OVSDB via ovs-vsctl.exe don't
-get to the kernel datapath immediately, ie. they don't whow up in the output of
-"ovs-dpctl.exe show" even though they show up in output of "ovs-vsctl.exe
-show".  In order to workaround this issue, restart ovs-vswitchd.exe.
+NOTE: There's a known bug that the ports added to OVSDB via ovs-vsctl don't
+get to the kernel datapath immediately, ie. they don't show up in the output of
+"ovs-dpctl show" even though they show up in output of "ovs-vsctl show".
+In order to workaround this issue, restart ovs-vswitchd. (You can terminate
+ovs-vswitchd by running 'ovs-appctl exit'.)
 
 05> Dump the ports in the kernel datapath
-.\    % utilities\ovs-dpctl.exe show
+    % ovs-dpctl show
 
 * Sample output is as follows:
 
-    % utilities\ovs-dpctl.exe show
+    % ovs-dpctl show
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
@@ -211,10 +241,10 @@ show".  In order to workaround this issue, restart ovs-vswitchd.exe.
             port 1: br-int (internal)     <<< internal port on 'br-int' bridge
 
 06> Dump the ports in the OVSDB
-    % utilities\ovs-vsctl.exe show
+    % ovs-vsctl show
 
 * Sample output is as follows:
-    % .\ovs-vsctl.exe show
+    % ovs-vsctl show
     a56ec7b5-5b1f-49ec-a795-79f6eb63228b
         Bridge br-pif
             Port br-pif
@@ -240,13 +270,13 @@ Interal port is the virtual adapter created on the Hyper-V switch using the
 switch using the instructions above.  In OVS for Hyper-V, we use a 'internal'
 as a special name to refer to that adapter.
 
-    % utilities\ovs-vsctl.exe add-port br-pif external.1
-    % utilities\ovs-vsctl.exe add-port br-pif internal
+    % ovs-vsctl add-port br-pif external.1
+    % ovs-vsctl add-port br-pif internal
 
 * Dumping the ports should show the additional ports that were just added.
   Sample output shows up as follows:
 
-    % utilities\ovs-dpctl.exe show
+    % ovs-dpctl show
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
@@ -256,7 +286,7 @@ as a special name to refer to that adapter.
             port 1: br-int (internal
             port 3: external.1            <<< Physical NIC
 
-    % .\ovs-vsctl.exe show
+    % ovs-vsctl show
     a56ec7b5-5b1f-49ec-a795-79f6eb63228b
         Bridge br-pif
             Port internal
@@ -299,10 +329,10 @@ with OVS extension enabled.
 08b> Add the VIFs to br-int in ovsdb
 
     Eg:
-    % utilities\ovs-vsctl.exe add-port br-int ovs-port-a
+    % ovs-vsctl add-port br-int ovs-port-a
 
 09> Verify the status
-    % utilities\ovs-dpctl.exe show
+    % ovs-dpctl show
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
@@ -312,7 +342,7 @@ with OVS extension enabled.
             port 1: br-int (internal
             port 3: external.1
 
-    % utilities\ovs-vsctl.exe show
+    % ovs-vsctl show
     4cd86499-74df-48bd-a64d-8d115b12a9f2
         Bridge br-pif
             Port internal
@@ -337,18 +367,18 @@ used to configure VLAN tagging functionality between two VMs on different
 Hyper-Vs.  The following examples demonstrate how it can be done:
 
 01> Add a patch port from br-int to br-pif
-    % utilities/ovs-vsctl.exe -- add-port br-int patch-to-pif
-    % utilities/ovs-vsctl.exe -- set interface patch-to-pif type=patch \
+    % ovs-vsctl add-port br-int patch-to-pif
+    % ovs-vsctl set interface patch-to-pif type=patch \
                                  options:peer=patch-to-int
 
 02> Add a patch port from br-pif to br-int
-    % utilities/ovs-vsctl.exe -- add-port br-pif patch-to-int
-    % utilities/ovs-vsctl.exe -- set interface patch-to-int type=patch \
+    % ovs-vsctl add-port br-pif patch-to-int
+    % ovs-vsctl set interface patch-to-int type=patch \
                                  options:peer=patch-to-pif
 
 03> Re-Add the VIF ports with the VLAN tag
-    % utilities\ovs-vsctl.exe add-port br-int ovs-port-a tag=900
-    % utilities\ovs-vsctl.exe add-port br-int ovs-port-b tag=900
+    % ovs-vsctl add-port br-int ovs-port-a tag=900
+    % ovs-vsctl add-port br-int ovs-port-b tag=900
 
 Steps to add VXLAN tunnels
 --------------------------
@@ -359,24 +389,20 @@ Note that, any patch ports created between br-int and br-pif MUST be beleted
 prior to adding VXLAN tunnels.
 
 01> Add the vxlan port between 172.168.201.101 <-> 172.168.201.102
-    % utilities\ovs-vsctl.exe add-port br-int vxlan-1
-    % utilities\ovs-vsctl.exe set Interface vxlan-1 type=vxlan
-    % utilities\ovs-vsctl.exe set Interface vxlan-1 \
-                                  options:local_ip=172.168.201.101
-    % utilities\ovs-vsctl.exe set Interface vxlan-1 \
-                                  options:remote_ip=172.168.201.102
-    % utilities\ovs-vsctl.exe set Interface vxlan-1 options:in_key=flow
-    % utilities\ovs-vsctl.exe set Interface vxlan-1 options:out_key=flow
+    % ovs-vsctl add-port br-int vxlan-1
+    % ovs-vsctl set Interface vxlan-1 type=vxlan
+    % ovs-vsctl set Interface vxlan-1 options:local_ip=172.168.201.101
+    % ovs-vsctl set Interface vxlan-1 options:remote_ip=172.168.201.102
+    % ovs-vsctl set Interface vxlan-1 options:in_key=flow
+    % ovs-vsctl set Interface vxlan-1 options:out_key=flow
 
 02> Add the vxlan port between 172.168.201.101 <-> 172.168.201.105
-    % utilities\ovs-vsctl.exe add-port br-int vxlan-2
-    % utilities\ovs-vsctl.exe set Interface vxlan-2 type=vxlan
-    % utilities\ovs-vsctl.exe set Interface vxlan-2 \
-                                  options:local_ip=172.168.201.102
-    % utilities\ovs-vsctl.exe set Interface vxlan-2 \
-                                  options:remote_ip=172.168.201.105
-    % utilities\ovs-vsctl.exe set Interface vxlan-2 options:in_key=flow
-    % utilities\ovs-vsctl.exe set Interface vxlan-2 options:out_key=flow
+    % ovs-vsctl add-port br-int vxlan-2
+    % ovs-vsctl set Interface vxlan-2 type=vxlan
+    % ovs-vsctl set Interface vxlan-2 options:local_ip=172.168.201.102
+    % ovs-vsctl set Interface vxlan-2 options:remote_ip=172.168.201.105
+    % ovs-vsctl set Interface vxlan-2 options:in_key=flow
+    % ovs-vsctl set Interface vxlan-2 options:out_key=flow
 
 
 Requirements
