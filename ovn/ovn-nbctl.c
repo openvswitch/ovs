@@ -23,6 +23,7 @@
 #include "fatal-signal.h"
 #include "ovn/ovn-nb-idl.h"
 #include "poll-loop.h"
+#include "process.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "util.h"
@@ -607,6 +608,7 @@ main(int argc, char *argv[])
     enum ovsdb_idl_txn_status txn_status;
     unsigned int seqno;
     int res = 0;
+    char *args;
 
     fatal_ignore_sigpipe();
     set_program_name(argv[0]);
@@ -614,6 +616,8 @@ main(int argc, char *argv[])
     vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
     parse_options(argc, argv);
     nbrec_init();
+
+    args = process_escape_args(argv);
 
     nb_ctx.idl = ovsdb_idl_create(db, &nbrec_idl_class, true, false);
     ctx.pvt = &nb_ctx;
@@ -634,6 +638,7 @@ main(int argc, char *argv[])
 
         if (seqno != ovsdb_idl_get_seqno(nb_ctx.idl)) {
             nb_ctx.txn = ovsdb_idl_txn_create(nb_ctx.idl);
+            ovsdb_idl_txn_add_comment(nb_ctx.txn, "ovn-nbctl: %s", args);
             ovs_cmdl_run_command(&ctx, get_all_commands());
             txn_status = ovsdb_idl_txn_commit_block(nb_ctx.txn);
             if (txn_status == TXN_TRY_AGAIN) {
@@ -655,6 +660,7 @@ main(int argc, char *argv[])
         ovsdb_idl_txn_destroy(nb_ctx.txn);
     }
     ovsdb_idl_destroy(nb_ctx.idl);
+    free(args);
 
     exit(res);
 }
