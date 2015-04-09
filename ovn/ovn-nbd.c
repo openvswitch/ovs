@@ -415,6 +415,8 @@ main(int argc, char *argv[])
              * updating the OVN DB.
              */
             ctx.ovnsb_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
+            ovsdb_idl_txn_add_comment(ctx.ovnsb_txn,
+                                      "ovn-nbd: northbound db changed");
             ovnnb_db_changed(&ctx);
             ovnnb_changes_pending = false;
         }
@@ -425,6 +427,8 @@ main(int argc, char *argv[])
              * updating the northbound DB.
              */
             ctx.ovnnb_txn = ovsdb_idl_txn_create(ctx.ovnnb_idl);
+            ovsdb_idl_txn_add_comment(ctx.ovnnb_txn,
+                                      "ovn-nbd: southbound db changed");
             ovnsb_db_changed(&ctx);
             ovn_changes_pending = false;
         }
