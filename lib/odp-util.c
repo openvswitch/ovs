@@ -577,7 +577,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         greh = (const struct gre_base_hdr *) l4;
 
         ds_put_format(ds, "gre((flags=0x%"PRIx16",proto=0x%"PRIx16")",
-                           greh->flags, ntohs(greh->protocol));
+                           ntohs(greh->flags), ntohs(greh->protocol));
         options = (ovs_16aligned_be32 *)(greh + 1);
         if (greh->flags & htons(GRE_CSUM)) {
             ds_put_format(ds, ",csum=0x%"PRIx16, ntohs(*((ovs_be16 *)options)));
@@ -855,7 +855,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     struct ip_header *ip;
     struct udp_header *udp;
     struct gre_base_hdr *greh;
-    uint16_t gre_proto, dl_type, udp_src, udp_dst, csum;
+    uint16_t gre_proto, gre_flags, dl_type, udp_src, udp_dst, csum;
     ovs_be32 sip, dip;
     uint32_t tnl_type = 0, header_len = 0;
     void *l3, *l4;
@@ -937,9 +937,10 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
             return -EINVAL;
         }
     } else if (ovs_scan_len(s, &n, "gre((flags=0x%"SCNx16",proto=0x%"SCNx16")",
-                         &greh->flags, &gre_proto)){
+                         &gre_flags, &gre_proto)){
 
         tnl_type = OVS_VPORT_TYPE_GRE;
+        greh->flags = htons(gre_flags);
         greh->protocol = htons(gre_proto);
         ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);
 
