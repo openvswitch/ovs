@@ -239,6 +239,24 @@ type).
 ..
 .so lib/dpctl.man
 .
+.SS "DPIF-NETDEV COMMANDS"
+These commands are used to expose internal information (mostly statistics)
+about the ``dpif-netdev'' userspace datapath. If there is only one datapath
+(as is often the case, unless \fBdpctl/\fR commands are used), the \fIdp\fR
+argument can be omitted.
+.IP "\fBdpif-netdev/pmd-stats-show\fR [\fIdp\fR]"
+Shows performance statistics for each pmd thread of the datapath \fIdp\fR.
+The special thread ``main'' sums up the statistics of every non pmd thread.
+The sum of ``emc hits'', ``masked hits'' and ``miss'' is the number of
+packets received by the datapath.  Cycles are counted using the TSC or similar
+facilities (when available on the platform).  To reset these counters use
+\fBdpif-netdev/pmd-stats-clear\fR. The duration of one cycle depends on the
+measuring infrastructure.
+.IP "\fBdpif-netdev/pmd-stats-clear\fR [\fIdp\fR]"
+Resets to zero the per pmd thread performance numbers shown by the
+\fBdpif-netdev/pmd-stats-show\fR command.  It will NOT reset datapath or
+bridge statistics, only the values shown by the above command.
+.
 .so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man

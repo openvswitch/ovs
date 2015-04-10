@@ -250,6 +250,14 @@ Using the DPDK with ovs-vswitchd:
    Note, core 0 is always reserved from non-pmd threads and should never be set
    in the cpu mask.
 
+   To understand where most of the time is spent and whether the caches are
+   effective, these commands can be used:
+
+   ```
+   ovs-appctl dpif-netdev/pmd-stats-clear #To reset statistics
+   ovs-appctl dpif-netdev/pmd-stats-show
+   ```
+
 DPDK Rings :
 ------------
 
