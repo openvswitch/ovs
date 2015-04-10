@@ -181,6 +181,7 @@ test_crc32c(void)
 static void
 test_pseudo(void)
 {
+    ovs_be16 csum;
     /* Try an IP header similar to one that the tunnel code
      * might generate. */
     struct ip_header ip = {
@@ -196,12 +197,14 @@ test_pseudo(void)
         .ip_dst = { .hi = htons(0x1400), .lo = htons(0x0001) }
     };
 
-    assert(packet_csum_pseudoheader(&ip) == 0x8628);
+    csum = csum_finish(packet_csum_pseudoheader(&ip));
+    assert(csum == htons(0xd779));
 
     /* And also test something totally different to check for
      * corner cases. */
     memset(&ip, 0xff, sizeof ip);
-    assert(packet_csum_pseudoheader(&ip) == 0x5c2fb);
+    csum = csum_finish(packet_csum_pseudoheader(&ip));
+    assert(csum == htons(0xff3c));
 
     mark('#');
 }
