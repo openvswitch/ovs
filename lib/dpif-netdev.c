@@ -3353,6 +3353,7 @@ dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
 
 const struct dpif_class dpif_netdev_class = {
     "netdev",
+    NULL,                       /* init */
     dpif_netdev_enumerate,
     dpif_netdev_port_open_type,
     dpif_netdev_open,

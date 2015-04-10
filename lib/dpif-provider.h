@@ -90,6 +90,14 @@ struct dpif_class {
      * the type assumed if no type is specified when opening a dpif. */
     const char *type;
 
+    /* Called when the dpif provider is registered, typically at program
+     * startup.  Returning an error from this function will prevent any
+     * datapath with this class from being created.
+     *
+     * This function may be set to null if a datapath class needs no
+     * initialization at registration time. */
+    int (*init)(void);
+
     /* Enumerates the names of all known created datapaths (of class
      * 'dpif_class'), if possible, into 'all_dps'.  The caller has already
      * initialized 'all_dps' and other dpif classes might already have added
