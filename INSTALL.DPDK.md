@@ -95,7 +95,7 @@ Using the DPDK with ovs-vswitchd:
      1. insert uio.ko: `modprobe uio`
      2. insert igb_uio.ko: `insmod $DPDK_BUILD/kmod/igb_uio.ko`
      3. Bind network device to igb_uio:
-	    `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1`
+         `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1`
 
    * VFIO:
 
@@ -106,7 +106,7 @@ Using the DPDK with ovs-vswitchd:
      2. Set correct permissions on vfio device: `sudo /usr/bin/chmod a+x /dev/vfio`
         and: `sudo /usr/bin/chmod 0666 /dev/vfio/*`
      3. Bind network device to vfio-pci:
-	    `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1`
+        `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1`
 
 3. Mount the hugetable filsystem
 
