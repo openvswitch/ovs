@@ -12,6 +12,7 @@ openvswitch_sources += \
 	linux/compat/net_namespace.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
+	linux/compat/stt.c \
 	linux/compat/udp.c \
 	linux/compat/udp_tunnel.c \
 	linux/compat/vxlan.c	\
@@ -75,6 +76,7 @@ openvswitch_headers += \
 	linux/compat/include/net/udp.h \
 	linux/compat/include/net/udp_tunnel.h \
 	linux/compat/include/net/sock.h \
+	linux/compat/include/net/stt.h \
 	linux/compat/include/net/vxlan.h \
 	linux/compat/include/net/sctp/checksum.h
 EXTRA_DIST += linux/compat/build-aux/export-check-whitelist

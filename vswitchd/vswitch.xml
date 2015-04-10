@@ -1892,6 +1892,25 @@
             </p>
           </dd>
 
+          <dt><code>stt</code></dt>
+          <dd>
+             The Stateless TCP Tunnel (STT) is particularly useful when tunnel
+             endpoints are in end-systems, as it utilizes the capabilities of
+             standard network interface cards to improve performance.  STT utilizes
+             a TCP-like header inside the IP header. It is stateless, i.e., there is
+             no TCP connection state of any kind associated with the tunnel.  The
+             TCP-like header is used to leverage the capabilities of existing
+             network interface cards, but should not be interpreted as implying
+             any sort of connection state between endpoints.
+             Since the STT protocol does not engage in the usual TCP 3-way handshake,
+             so it will have difficulty traversing stateful firewalls.
+             The protocol is documented at
+             http://www.ietf.org/archive/id/draft-davie-stt-06.txt
+
+             All traffic uses a default destination port of 7471. STT is only
+             available in kernel datapath on kernel 3.5 or newer.
+          </dd>
+
           <dt><code>patch</code></dt>
           <dd>
             A pair of virtual devices that act as a patch cable.
@@ -1909,7 +1928,7 @@
         These options apply to interfaces with <ref column="type"/> of
         <code>geneve</code>, <code>gre</code>, <code>ipsec_gre</code>,
         <code>gre64</code>, <code>ipsec_gre64</code>, <code>vxlan</code>,
-        and <code>lisp</code>.
+        <code>lisp</code> and <code>stt</code>.
       </p>
 
       <p>
@@ -1998,8 +2017,8 @@
           </li>
           <li>
             A positive 24-bit (for Geneve, VXLAN, and LISP), 32-bit (for GRE)
-            or 64-bit (for GRE64) number.  The tunnel receives only packets
-            with the specified key.
+            or 64-bit (for GRE64 and STT) number.  The tunnel receives only
+            packets with the specified key.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets with any
@@ -2025,8 +2044,8 @@
           </li>
           <li>
             A positive 24-bit (for Geneve, VXLAN and LISP), 32-bit (for GRE) or
-            64-bit (for GRE64) number.  Packets sent through the tunnel will
-            have the specified key.
+            64-bit (for GRE64 and STT) number.  Packets sent through the tunnel
+            will have the specified key.
           </li>
           <li>
             The word <code>flow</code>.  Packets sent through the tunnel will

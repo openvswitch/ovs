@@ -48,8 +48,8 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
  * used to indicate the type of tunnel (0x01 = VxLAN, 0x02 = GRE) and the three
  * least significant bytes hold the value of the layer 2 overlay network
  * segment identifier: a 24-bit VxLAN tunnel's VNI or a 24-bit GRE tunnel's
- * TNI. This is not compatible with GRE-64, as implemented in OVS, as its
- * tunnel IDs are 64-bit.
+ * TNI. This is not compatible with GRE-64 or STT, as implemented in OVS, as
+ * their tunnel IDs are 64-bit.
  *
  * Two new enterprise information elements are defined which are similar to
  * laryerSegmentId but support 64-bit IDs:
@@ -64,6 +64,7 @@ enum dpif_ipfix_tunnel_type {
     DPIF_IPFIX_TUNNEL_VXLAN = 0x01,
     DPIF_IPFIX_TUNNEL_GRE = 0x02,
     DPIF_IPFIX_TUNNEL_LISP = 0x03,
+    DPIF_IPFIX_TUNNEL_STT = 0x04,
     DPIF_IPFIX_TUNNEL_IPSEC_GRE = 0x05,
     DPIF_IPFIX_TUNNEL_GENEVE = 0x07,
     NUM_DPIF_IPFIX_TUNNEL
@@ -299,7 +300,7 @@ static uint8_t tunnel_protocol[NUM_DPIF_IPFIX_TUNNEL] = {
     IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_VXLAN */
     IPPROTO_GRE,    /* DPIF_IPFIX_TUNNEL_GRE */
     IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_LISP*/
-    0          ,    /* reserved */
+    IPPROTO_TCP,    /* DPIF_IPFIX_TUNNEL_STT*/
     IPPROTO_GRE,    /* DPIF_IPFIX_TUNNEL_IPSEC_GRE */
     0          ,    /* reserved */
     IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_GENEVE*/
@@ -353,6 +354,7 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 32);
  * VxLAN: 24-bit VIN,
  * GRE: 32- or 64-bit key,
  * LISP: 24-bit instance ID
+ * STT: 64-bit key
  */
 #define MAX_TUNNEL_KEY_LEN 8
 
@@ -607,6 +609,9 @@ dpif_ipfix_add_tunnel_port(struct dpif_ipfix *di, struct ofport *ofport,
     } else if (strcmp(type, "geneve") == 0) {
         dip->tunnel_type = DPIF_IPFIX_TUNNEL_GENEVE;
         dip->tunnel_key_length = 3;
+    } else if (strcmp(type, "stt") == 0) {
+        dip->tunnel_type = DPIF_IPFIX_TUNNEL_STT;
+        dip->tunnel_key_length = 8;
     } else {
         free(dip);
         goto out;

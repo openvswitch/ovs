@@ -35,6 +35,7 @@
 /random32.c
 /reciprocal_div.c
 /skbuff-openvswitch.c
+/stt.c
 /table.c
 /time.c
 /tmp
@@ -50,6 +51,7 @@
 /vport-lisp.c
 /vport-netdev.c
 /vport-patch.c
+/vport-stt.c
 /vport-vxlan.c
 /vport.c
 /vxlan.c

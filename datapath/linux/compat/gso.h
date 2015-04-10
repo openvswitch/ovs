@@ -26,6 +26,15 @@ struct ovs_gso_cb {
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
+static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
+{
+	OVS_GSO_CB(skb)->fix_segment = NULL;
+}
+#else
+static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
+{
+
+}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)

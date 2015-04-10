@@ -218,6 +218,7 @@ A: Support for tunnels was added to the upstream Linux kernel module
 | VXLAN    |    3.12
 | Geneve   |    3.18
 | LISP     | <not upstream>
+| STT      | <not upstream>
 
    If you are using a version of the kernel that is older than the one
    listed above, it is still possible to use that tunnel protocol. However,

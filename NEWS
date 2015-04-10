@@ -80,6 +80,7 @@ Post-v2.3.0
    - The kernel vports with dependencies are no longer part of the overall
      openvswitch.ko but built and loaded automatically as individual kernel
      modules (vport-*.ko).
+   - Support for STT tunneling.
 
 
 v2.3.0 - 14 Aug 2014
