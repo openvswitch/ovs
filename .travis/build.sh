@@ -9,7 +9,9 @@ EXTRA_OPTS=""
 
 function install_kernel()
 {
-    if [[ "$1" =~ ^3.* ]]; then
+    if [[ "$1" =~ ^4.* ]]; then
+        PREFIX="v4.x"
+    elif [[ "$1" =~ ^3.* ]]; then
         PREFIX="v3.x"
     else
         PREFIX="v2.6/longterm/v2.6.32"
