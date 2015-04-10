@@ -227,6 +227,12 @@ enum dp_stat_type {
     DP_N_STATS
 };
 
+enum pmd_cycles_counter_type {
+    PMD_CYCLES_POLLING,         /* Cycles spent polling NICs. */
+    PMD_CYCLES_PROCESSING,      /* Cycles spent processing packets */
+    PMD_N_CYCLES
+};
+
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
     struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
@@ -342,6 +348,12 @@ struct dp_netdev_pmd_stats {
     atomic_ullong n[DP_N_STATS];
 };
 
+/* Contained by struct dp_netdev_pmd_thread's 'cycle' member.  */
+struct dp_netdev_pmd_cycles {
+    /* Indexed by PMD_CYCLES_*. */
+    atomic_ullong n[PMD_N_CYCLES];
+};
+
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
  * the performance overhead of interrupt processing.  Therefore netdev can
  * not implement rx-wait for these devices.  dpif-netdev needs to poll
@@ -383,6 +395,12 @@ struct dp_netdev_pmd_thread {
 
     /* Statistics. */
     struct dp_netdev_pmd_stats stats;
+
+    /* Cycles counters */
+    struct dp_netdev_pmd_cycles cycles;
+
+    /* Used to count cicles. See 'cycles_counter_end()' */
+    unsigned long long last_cycles;
 
     struct latch exit_latch;        /* For terminating the pmd thread. */
     atomic_uint change_seq;         /* For reloading pmd ports. */
@@ -2259,6 +2277,39 @@ dp_netdev_actions_free(struct dp_netdev_actions *actions)
     free(actions);
 }
 
+static inline unsigned long long
+cycles_counter(void)
+{
+#ifdef DPDK_NETDEV
+    return rte_get_tsc_cycles();
+#else
+    return 0;
+#endif
+}
+
+/* Fake mutex to make sure that the calls to cycles_count_* are balanced */
+extern struct ovs_mutex cycles_counter_fake_mutex;
+
+/* Start counting cycles.  Must be followed by 'cycles_count_end()' */
+static inline void
+cycles_count_start(struct dp_netdev_pmd_thread *pmd)
+    OVS_ACQUIRES(&cycles_counter_fake_mutex)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    pmd->last_cycles = cycles_counter();
+}
+
+/* Stop counting cycles and add them to the counter 'type' */
+static inline void
+cycles_count_end(struct dp_netdev_pmd_thread *pmd,
+                 enum pmd_cycles_counter_type type)
+    OVS_RELEASES(&cycles_counter_fake_mutex)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    unsigned long long interval = cycles_counter() - pmd->last_cycles;
+
+    non_atomic_ullong_add(&pmd->cycles.n[type], interval);
+}
 
 static void
 dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
@@ -2268,7 +2319,9 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
     int error, cnt;
 
+    cycles_count_start(pmd);
     error = netdev_rxq_recv(rxq, packets, &cnt);
+    cycles_count_end(pmd, PMD_CYCLES_POLLING);
     if (!error) {
         int i;
 
@@ -2278,7 +2331,9 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
         for (i = 0; i < cnt; i++) {
             packets[i]->md = PKT_METADATA_INITIALIZER(port->port_no);
         }
+        cycles_count_start(pmd);
         dp_netdev_input(pmd, packets, cnt);
+        cycles_count_end(pmd, PMD_CYCLES_PROCESSING);
     } else if (error != EAGAIN && error != EOPNOTSUPP) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
