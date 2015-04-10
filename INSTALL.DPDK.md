@@ -555,10 +555,16 @@ Restrictions:
   - DPDK-vHost support works with 1G huge pages.
 
   ivshmem:
-  - The shared memory is currently restricted to the use of a 1GB
-    huge pages.
-  - All huge pages are shared amongst the host, clients, virtual
-    machines etc.
+  - If you run Open vSwitch with smaller page sizes (e.g. 2MB), you may be
+    unable to share any rings or mempools with a virtual machine.
+    This is because the current implementation of ivshmem works by sharing
+    a single 1GB huge page from the host operating system to any guest
+    operating system through the Qemu ivshmem device. When using smaller
+    page sizes, multiple pages may be required to hold the ring descriptors
+    and buffer pools. The Qemu ivshmem device does not allow you to share
+    multiple file descriptors to the guest operating system. However, if you
+    want to share dpdkr rings with other processes on the host, you can do
+    this with smaller page sizes.
 
 Bug Reporting:
 --------------
