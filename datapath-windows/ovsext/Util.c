@@ -24,6 +24,21 @@
 
 extern NDIS_HANDLE gOvsExtDriverHandle;
 
+VOID*
+OvsAllocateMemoryWithTag(size_t size, ULONG tag)
+{
+    OVS_VERIFY_IRQL_LE(DISPATCH_LEVEL);
+    return NdisAllocateMemoryWithTagPriority(gOvsExtDriverHandle,
+        (UINT32)size, tag, NormalPoolPriority);
+}
+
+VOID
+OvsFreeMemoryWithTag(VOID *ptr, ULONG tag)
+{
+    ASSERT(ptr);
+    NdisFreeMemoryWithTagPriority(gOvsExtDriverHandle, ptr, tag);
+}
+
 VOID *
 OvsAllocateMemory(size_t size)
 {

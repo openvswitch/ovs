@@ -59,7 +59,8 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
 {
     POVS_VXLAN_VPORT vxlanPort;
 
-    vxlanPort = OvsAllocateMemory(sizeof (*vxlanPort));
+    vxlanPort = OvsAllocateMemoryWithTag(sizeof (*vxlanPort),
+                                         OVS_VXLAN_POOL_TAG);
     if (vxlanPort == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -86,7 +87,7 @@ OvsCleanupVxlanTunnel(POVS_VPORT_ENTRY vport)
         return;
     }
 
-    OvsFreeMemory(vport->priv);
+    OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
     vport->priv = NULL;
 }
 

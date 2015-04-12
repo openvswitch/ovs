@@ -239,7 +239,7 @@ ovsrcu_postpone__(void (*function)(void *aux), void *aux)
 static bool
 ovsrcu_call_postponed(void)
 {
-    struct ovsrcu_cbset *cbset, *next_cbset;
+    struct ovsrcu_cbset *cbset;
     struct ovs_list cbsets;
 
     guarded_list_pop_all(&flushed_cbsets, &cbsets);
@@ -249,13 +249,12 @@ ovsrcu_call_postponed(void)
 
     ovsrcu_synchronize();
 
-    LIST_FOR_EACH_SAFE (cbset, next_cbset, list_node, &cbsets) {
+    LIST_FOR_EACH_POP (cbset, list_node, &cbsets) {
         struct ovsrcu_cb *cb;
 
         for (cb = cbset->cbs; cb < &cbset->cbs[cbset->n_cbs]; cb++) {
             cb->function(cb->aux);
         }
-        list_remove(&cbset->list_node);
         free(cbset);
     }
 

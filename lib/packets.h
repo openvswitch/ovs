@@ -730,7 +730,26 @@ struct geneve_opt {
     uint8_t   r2:1;
     uint8_t   r1:1;
 #endif
-    uint8_t   opt_data[];
+    /* Option data */
+};
+
+struct genevehdr {
+#ifdef WORDS_BIGENDIAN
+    uint8_t ver:2;
+    uint8_t opt_len:6;
+    uint8_t oam:1;
+    uint8_t critical:1;
+    uint8_t rsvd1:6;
+#else
+    uint8_t opt_len:6;
+    uint8_t ver:2;
+    uint8_t rsvd1:6;
+    uint8_t critical:1;
+    uint8_t oam:1;
+#endif
+    ovs_be16 proto_type;
+    ovs_16aligned_be32 vni;
+    struct geneve_opt options[];
 };
 
 /* GRE protocol header */
@@ -787,5 +806,6 @@ void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
 void compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
                  ovs_be32 ip_src, ovs_be32 ip_dst);
+uint32_t packet_csum_pseudoheader(const struct ip_header *);
 
 #endif /* packets.h */

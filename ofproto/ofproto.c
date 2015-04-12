@@ -2961,9 +2961,9 @@ static void
 learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct learned_cookie *c, *next;
+    struct learned_cookie *c;
 
-    LIST_FOR_EACH_SAFE (c, next, u.list_node, dead_cookies) {
+    LIST_FOR_EACH_POP (c, u.list_node, dead_cookies) {
         struct rule_criteria criteria;
         struct rule_collection rules;
         struct match match;
@@ -2977,7 +2977,6 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
         rule_criteria_destroy(&criteria);
         rule_collection_destroy(&rules);
 
-        list_remove(&c->u.list_node);
         free(c);
     }
 }
@@ -5827,6 +5826,8 @@ append_group_desc(struct ofgroup *group, struct ovs_list *replies)
 
     gds.group_id = group->group_id;
     gds.type = group->type;
+    gds.props = group->props;
+
     ofputil_append_group_desc_reply(&gds, &group->buckets, replies);
 }
 
@@ -5928,6 +5929,9 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
     list_move(&(*ofgroup)->buckets, &gm->buckets);
     *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
         list_size(&(*ofgroup)->buckets);
+
+    memcpy(CONST_CAST(struct ofputil_group_props *, &(*ofgroup)->props),
+           &gm->props, sizeof (struct ofputil_group_props));
 
     /* Construct called BEFORE any locks are held. */
     error = ofproto->ofproto_class->group_construct(*ofgroup);

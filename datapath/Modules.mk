@@ -2,7 +2,14 @@
 #
 # Some modules should be built but not distributed, e.g. third-party
 # hwtable modules.
-both_modules = openvswitch
+build_multi_modules = \
+	openvswitch
+both_modules = \
+	$(build_multi_modules) \
+	vport_geneve \
+	vport_gre \
+	vport_lisp \
+	vport_vxlan
 build_modules = $(both_modules)	# Modules to build
 dist_modules = $(both_modules)	# Modules to distribute
 
@@ -14,12 +21,13 @@ openvswitch_sources = \
 	flow_netlink.c \
 	flow_table.c \
 	vport.c \
-	vport-geneve.c \
-	vport-gre.c \
 	vport-internal_dev.c \
-	vport-lisp.c \
-	vport-netdev.c \
-	vport-vxlan.c
+	vport-netdev.c
+
+vport_geneve_sources = vport-geneve.c
+vport_vxlan_sources = vport-vxlan.c
+vport_gre_sources = vport-gre.c
+vport_lisp_sources = vport-lisp.c
 
 openvswitch_headers = \
 	compat.h \

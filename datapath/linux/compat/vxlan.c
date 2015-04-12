@@ -191,10 +191,6 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	int err;
 	bool udp_sum = !!(vxflags & VXLAN_F_UDP_CSUM);
 
-	skb = udp_tunnel_handle_offloads(skb, udp_sum, true);
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
-
 	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
 			+ VXLAN_HLEN + sizeof(struct iphdr)
 			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
@@ -209,6 +205,10 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 	skb = vlan_hwaccel_push_inside(skb);
 	if (WARN_ON(!skb))
 		return -ENOMEM;
+
+	skb = udp_tunnel_handle_offloads(skb, udp_sum, true);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
 
 	vxh = (struct vxlanhdr *) __skb_push(skb, sizeof(*vxh));
 	vxh->vx_flags = htonl(VXLAN_HF_VNI);
@@ -225,6 +225,7 @@ int vxlan_xmit_skb(struct vxlan_sock *vs,
 				   ttl, df, src_port, dst_port, xnet,
 				   !udp_sum);
 }
+EXPORT_SYMBOL_GPL(vxlan_xmit_skb);
 
 static void rcu_free_vs(struct rcu_head *rcu)
 {
@@ -313,6 +314,7 @@ struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
 {
 	return vxlan_socket_create(net, port, rcv, data, flags);
 }
+EXPORT_SYMBOL_GPL(vxlan_sock_add);
 
 void vxlan_sock_release(struct vxlan_sock *vs)
 {
@@ -320,5 +322,6 @@ void vxlan_sock_release(struct vxlan_sock *vs)
 
 	queue_work(system_wq, &vs->del_work);
 }
+EXPORT_SYMBOL_GPL(vxlan_sock_release);
 
 #endif /* !USE_UPSTREAM_VXLAN */

@@ -2248,6 +2248,40 @@ remove the in the group whose \fBbucket_id\fR is \fIid\fR.
 It is an error if there is no bucket persent group in whose \fBbucket_id\fR is
 \fIid\fR.
 
+.IP \fBselection_method\fR=\fImethod\fR
+The selection method used to select a bucket for a select group.
+This is a string of 1 to 15 bytes in length known to lower layers.
+This field is optional for \fBadd\-group\fR, \fBadd\-groups\fR and
+\fBmod\-group\fR commands on groups of type \fBselect\fR. Prohibited
+otherwise. The default value is the empty string.
+.IP
+This option will use a Netronome OpenFlow extension which is only supported
+when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
+
+.IP \fBselection_method_param\fR=\fIparam\fR
+64-bit integer parameter to the selection method selected by the
+\fBselection_method\fR field.  The parameter's use is defined by the
+lower-layer that implements the \fBselection_method\fR.  It is optional if
+the \fBselection_method\fR field is specified as a non-empty string.
+Prohibited otherwise. The default value is zero.
+.IP
+This option will use a Netronome OpenFlow extension which is only supported
+when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
+
+.IP \fBfields\fR=\fIparam\fR
+The field parameters to selection method selected by the
+\fBselection_method\fR field.  The syntax is described in \fBFlow Syntax\fR
+with the additional restrictions that if a value is provided it is
+treated as a wildcard mask and wildcard masks following a slash are
+prohibited. The pre-requisites of fields must be provided by any flows that
+output to the group. The use of the fields is defined by the lower-layer
+that implements the \fBselection_method\fR.  They are optional if the
+\fBselection_method\fR field is specified as a non-empty string.
+Prohibited otherwise. The default is no fields.
+.IP
+This option will use a Netronome OpenFlow extension which is only supported
+when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
+
 .IP \fBbucket\fR=\fIbucket_parameters\fR
 The \fBadd-group\fR, \fBadd-groups\fR and \fBmod-group\fR commands
 require at least one bucket field. Bucket fields must appear after

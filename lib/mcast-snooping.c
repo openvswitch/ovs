@@ -307,10 +307,9 @@ static void
 mcast_snooping_flush_group(struct mcast_snooping *ms, struct mcast_group *grp)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
-    struct mcast_group_bundle *b, *next_b;
+    struct mcast_group_bundle *b;
 
-    LIST_FOR_EACH_SAFE (b, next_b, bundle_node, &grp->bundle_lru) {
-        list_remove(&b->bundle_node);
+    LIST_FOR_EACH_POP (b, bundle_node, &grp->bundle_lru) {
         free(b);
     }
     mcast_snooping_flush_group__(ms, grp);

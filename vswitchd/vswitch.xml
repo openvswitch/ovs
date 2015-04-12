@@ -423,6 +423,28 @@
 
     </group>
 
+    <group title="Capabilities">
+      <p>
+        These columns report capabilities of the Open vSwitch instance.
+      </p>
+      <column name="datapath_types">
+        <p>
+          This column reports the different dpifs registered with the system.
+          These are the values that this instance supports in the <ref
+          column="datapath_type" table="Bridge"/> column of the <ref
+          table="Bridge"/> table.
+        </p>
+      </column>
+      <column name="iface_types">
+        <p>
+          This column reports the different netdevs registered with the system.
+          These are the values that this instance supports in the <ref
+          column="type" table="Interface"/> column of the <ref
+          table="Interface"/> table.
+        </p>
+      </column>
+    </group>
+
     <group title="Database Configuration">
       <p>
         These columns primarily configure the Open vSwitch database
@@ -928,9 +950,12 @@
 
     <group title="Other Features">
       <column name="datapath_type">
-        Name of datapath provider.  The kernel datapath has
-        type <code>system</code>.  The userspace datapath has
-        type <code>netdev</code>.
+        Name of datapath provider.  The kernel datapath has type
+        <code>system</code>.  The userspace datapath has type
+        <code>netdev</code>.  A manager may refer to the <ref
+        table="Open_vSwitch" column="datapath_types"/> column of the <ref
+        table="Open_vSwitch"/> table for a list of the types accepted by this
+        Open vSwitch instance.
       </column>
 
       <column name="external_ids" key="bridge-id">
@@ -955,18 +980,47 @@
 
       <column name="other_config" key="forward-bpdu"
               type='{"type": "boolean"}'>
-        Option to allow forwarding of BPDU frames when NORMAL action is
-        invoked.  Frames with reserved Ethernet addresses (e.g. STP
-        BPDU) will be forwarded when this option is enabled and the
-        switch is not providing that functionality.  If STP is enabled
-        on the port, STP BPDUs will never be forwarded.  If the Open
-        vSwitch bridge is used to connect different Ethernet networks,
-        and if Open vSwitch node does not run STP, then this option
-        should be enabled.  Default is disabled, set to
-        <code>true</code> to enable.
 
-        The following destination MAC addresss will not be forwarded when this
-        option is enabled.
+	<p>
+          Controls forwarding of BPDUs and other network control frames when
+          NORMAL action is invoked.  When this option is <code>false</code> or
+          unset, frames with reserved Ethernet addresses (see table below) will
+          not be forwarded.  When this option is <code>true</code>, such frames
+          will not be treated specially.
+	</p>
+
+	<p>
+	  The above general rule has the following exceptions:
+	</p>
+
+	<ul>
+	  <li>
+	    If STP is enabled on the bridge (see the <ref column="stp_enable"
+	    table="Bridge"/> column in the <ref table="Bridge"/> table), the
+	    bridge processes all received STP packets and never passes them to
+	    OpenFlow or forwards them.  This is true even if STP is disabled on
+	    an individual port.
+	  </li>
+
+	  <li>
+	    If LLDP is enabled on an interface (see the <ref column="lldp"
+	    table="Interface"/> column in the <ref table="Interface"/> table),
+	    the interface processes received LLDP packets and never passes them
+	    to OpenFlow or forwards them.
+	  </li>
+	</ul>
+
+	<p>
+	  Set this option to <code>true</code> if the Open vSwitch bridge
+	  connects different Ethernet networks and is not configured to
+	  participate in STP.
+	</p>
+
+        <p>
+	  This option affects packets with the following destination MAC
+	  addresses:
+	</p>
+
         <dl>
           <dt><code>01:80:c2:00:00:00</code></dt>
           <dd>IEEE 802.1D Spanning Tree Protocol (STP).</dd>
@@ -1747,7 +1801,10 @@
     <group title="System-Specific Details">
       <column name="type">
         <p>
-          The interface type, one of:
+          The interface type.  The types supported by a particular instance of
+          Open vSwitch are listed in the <ref table="Open_vSwitch"
+          column="iface_types"/> column in the <ref table="Open_vSwitch"/>
+          table.  The following types are defined:
         </p>
 
         <dl>
@@ -2029,24 +2086,28 @@
 
 	  </group>
 
-      <group title="Tunnel Options: gre and ipsec_gre only">
+      <group title="Tunnel Options: gre, ipsec_gre, geneve, and vxlan">
         <p>
-          Only <code>gre</code> and <code>ipsec_gre</code> interfaces support
-          these options.
+          <code>gre</code>, <code>ipsec_gre</code>, <code>geneve</code>, and
+          <code>vxlan</code> interfaces support these options.
         </p>
 
         <column name="options" key="csum" type='{"type": "boolean"}'>
           <p>
-            Optional.  Compute GRE checksums on outgoing packets.  Default is
-            disabled, set to <code>true</code> to enable.  Checksums present on
-            incoming packets will be validated regardless of this setting.
+            Optional.  Compute encapsulation header (either GRE or UDP) 
+            checksums on outgoing packets.  Default is disabled, set to
+            <code>true</code> to enable.  Checksums present on incoming
+            packets will be validated regardless of this setting.
 	  </p>
 
-	  <p>
-	    GRE checksums impose a significant performance penalty because they
-	    cover the entire packet.  The encapsulated L3, L4, and L7 packet
-	    contents typically have their own checksums, so this additional
-	    checksum only adds value for the GRE and encapsulated L2 headers.
+          <p>
+            When using the upstream Linux kernel module, computation of
+            checksums for <code>geneve</code> and <code>vxlan</code> requires
+            Linux kernel version 4.0 or higher. <code>gre</code> supports
+            checksums for all versions of Open vSwitch that support GRE.
+            The out of tree kernel module distributed as part of OVS
+            can compute all tunnel checksums on any kernel version that it
+            is compatible with.
           </p>
 
           <p>
@@ -3147,6 +3208,33 @@
           Linux "Hierarchical Fair Service Curve" classifier.
           See <code>http://linux-ip.net/articles/hfsc.en/</code> for
           information on how this classifier works.
+        </dd>
+      </dl>
+      <dl>
+        <dt><code>linux-sfq</code></dt>
+        <dd>
+          Linux ``Stochastic Fairness Queueing'' classifier. See
+          <code>tc-sfq</code>(8) (also at
+          <code>http://linux.die.net/man/8/tc-sfq</code>) for information on
+          how this classifier works.
+        </dd>
+      </dl>
+      <dl>
+        <dt><code>linux-codel</code></dt>
+        <dd>
+          Linux ``Controlled Delay'' classifier. See <code>tc-codel</code>(8)
+          (also at
+          <code>http://man7.org/linux/man-pages/man8/tc-codel.8.html</code>)
+          for information on how this classifier works.
+        </dd>
+      </dl>
+      <dl>
+        <dt><code>linux-fq_codel</code></dt>
+        <dd>
+          Linux ``Fair Queuing with Controlled Delay'' classifier. See
+          <code>tc-fq_codel</code>(8) (also at
+          <code>http://man7.org/linux/man-pages/man8/tc-fq_codel.8.html</code>)
+          for information on how this classifier works.
         </dd>
       </dl>
     </column>

@@ -881,12 +881,10 @@ int
 vconn_transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests,
                                 struct ofpbuf **replyp)
 {
-    struct ofpbuf *request, *next;
+    struct ofpbuf *request;
 
-    LIST_FOR_EACH_SAFE (request, next, list_node, requests) {
+    LIST_FOR_EACH_POP (request, list_node, requests) {
         int error;
-
-        list_remove(&request->list_node);
 
         error = vconn_transact_noreply(vconn, request, replyp);
         if (error || *replyp) {

@@ -22,6 +22,10 @@ scripts_SCRIPTS += \
 	utilities/ovs-save
 scripts_DATA += utilities/ovs-lib
 
+completion_SCRIPTS += \
+	utilities/ovs-appctl-bashcomp.bash \
+	utilities/ovs-vsctl-bashcomp.bash
+
 check_SCRIPTS += \
 	utilities/ovs-appctl-bashcomp.bash \
 	utilities/ovs-vsctl-bashcomp.bash
@@ -46,7 +50,8 @@ EXTRA_DIST += \
 	utilities/ovs-save \
 	utilities/ovs-tcpundump.in \
 	utilities/ovs-test.in \
-	utilities/ovs-vlan-test.in
+	utilities/ovs-vlan-test.in \
+	utilities/qemu-wrap.py
 MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
 	utilities/ovs-benchmark.1.in \

@@ -35,6 +35,7 @@
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
+static struct vport_ops ovs_netdev_vport_ops;
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
@@ -274,13 +275,23 @@ struct vport *ovs_netdev_get_vport(struct net_device *dev)
 #endif
 }
 
-const struct vport_ops ovs_netdev_vport_ops = {
+static struct vport_ops ovs_netdev_vport_ops = {
 	.type		= OVS_VPORT_TYPE_NETDEV,
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
 	.get_name	= ovs_netdev_get_name,
 	.send		= netdev_send,
 };
+
+int __init ovs_netdev_init(void)
+{
+	return ovs_vport_ops_register(&ovs_netdev_vport_ops);
+}
+
+void ovs_netdev_exit(void)
+{
+	ovs_vport_ops_unregister(&ovs_netdev_vport_ops);
+}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) && \
     !defined HAVE_RHEL_OVS_HOOK

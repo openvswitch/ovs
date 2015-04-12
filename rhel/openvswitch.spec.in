@@ -123,6 +123,8 @@ exit 0
 
 %files
 %defattr(-,root,root)
+/etc/bash_completion.d/ovs-appctl-bashcomp.bash
+/etc/bash_completion.d/ovs-vsctl-bashcomp.bash
 /etc/init.d/openvswitch
 %config(noreplace) /etc/logrotate.d/openvswitch
 /etc/sysconfig/network-scripts/ifup-ovs

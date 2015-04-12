@@ -1590,6 +1590,12 @@ union mf_subvalue {
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 
+/* An array of fields with values */
+struct field_array {
+    struct mf_bitmap used;
+    union mf_value value[MFF_N_IDS];
+};
+
 /* Finding mf_fields. */
 const struct mf_field *mf_from_name(const char *name);
 
@@ -1611,6 +1617,8 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 /* Prerequisites. */
 bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
 void mf_mask_field_and_prereqs(const struct mf_field *, struct flow *mask);
+void mf_bitmap_set_field_and_prereqs(const struct mf_field *mf, struct
+                                     mf_bitmap *bm);
 
 static inline bool
 mf_is_l3_or_higher(const struct mf_field *mf)
@@ -1667,5 +1675,9 @@ void mf_format(const struct mf_field *,
                const union mf_value *value, const union mf_value *mask,
                struct ds *);
 void mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s);
+
+/* Field Arrays. */
+void field_array_set(enum mf_field_id id, const union mf_value *,
+                     struct field_array *);
 
 #endif /* meta-flow.h */

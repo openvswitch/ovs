@@ -235,53 +235,69 @@ lldp_send(struct lldpd *global OVS_UNUSED,
         lldp_tlv_end(p, start);
     }
 
-    /* Add Auto Attach tlvs to packet */
+    /* Add Auto Attach tlvs V3.1 to packet. LLDP FA element v3.1 format:
+    TLV Type[127]   TLV Length[50 octets] Avaya OUI[00-04-0D] Subtype[11]
+    7 bits                9 bits                3 octets      1 octet
+    HMAC-SHA Digest  Element Type   State   Mgmt VLAN   Rsvd    System ID
+      32 octets       6 bits        6 bits   12 bits    1 octet 10 octets
+    */
     /* AA-ELEMENT */
     if (port->p_element.type != 0) {
-        u_int8_t aa_element_first_byte;
-        u_int8_t aa_element_second_byte = 0;
+        u_int16_t aa_element_first_word = 0;
+        u_int16_t aa_element_second_word = 0;
+        u_int16_t aa_element_state = 0;
         u_int8_t aa_elem_sys_id_first_byte;
         u_int8_t aa_elem_sys_id_second_byte;
 
-        /* Element type should be first 4 most significant bits, so bitwise OR
-         * that with the first 4 bits of the 12-bit-wide mgmt_vlan
-         */
-        aa_element_first_byte = (((port->p_element.type & 0xF) << 4) |
-                                 ((port->p_element.mgmt_vlan >> 8) & 0xF));
+        /* Link VLAN Tagging Requirements (bit 1),
+         * Automatic Provisioning Mode (bit 2/3) (left to right, 1 based) */
+        aa_element_state = ((port->p_element.vlan_tagging & 0x1) << 5) |
+            ((port->p_element.auto_prov_mode & 0x3) << 3);
 
-        /* Second byte should just be the remaining 8 bits of .mgmt_vlan */
-        aa_element_second_byte = port->p_element.mgmt_vlan & 0x0FF;
+        /* Element first word should be first 6 most significant bits of
+         * element type, bitwise OR that with the next 6 bits of the state,
+         * bitwise OR with the first 4 bits of mgmt vlan id.
+         * Element type should be LLDP_TLV_AA_ELEM_TYPE_VIRTUAL_SWITCH for
+         * AA client */
+        aa_element_first_word = (port->p_element.type << 10) |
+            (aa_element_state << 4) |
+            ((port->p_element.mgmt_vlan & 0x0F00)>> 8);
 
-        /* .conn_type should be 4 most sig. bits, so bitwise OR that
-         * with the first 4 bits of the 12-bit-wide .smlt_id
-         */
+        /* Element second type should be the first 8 most significant bits
+         * of the remaining 8 bits of mgmt vlan id. */
+        aa_element_second_word = (port->p_element.mgmt_vlan & 0xFF) << 8;
+
+        /* System id first byte should be first 3 most significant bits of
+         * connecion type, bitwise OR that with the device state and bitwise
+         * OR that with the first 2 most significant bitsof rsvd (10 bits). */
         aa_elem_sys_id_first_byte =
-            ((port->p_element.system_id.conn_type & 0xF) << 4) |
-            ((port->p_element.system_id.smlt_id >> 8) & 0xF);
+            ((port->p_element.system_id.conn_type & 0x7) << 5) |
+            ((port->p_element.system_id.rsvd >> 8) & 0x3);
 
-        /* Second byte should just be the remaining 8 bits of .smlt_id */
-        aa_elem_sys_id_second_byte = port->p_element.system_id.smlt_id & 0x0FF;
+        /* Second byte should just be the remaining 8 bits of 10 bits rsvd */
+        aa_elem_sys_id_second_byte =
+            (port->p_element.system_id.rsvd & 0xFF);
+
+        memset(msg_auth_digest, 0, sizeof msg_auth_digest);
 
         lldp_tlv_start(p, LLDP_TLV_ORG, &start);
         dp_packet_put(p, avaya, sizeof avaya);
         lldp_tlv_put_u8(p, LLDP_TLV_AA_ELEMENT_SUBTYPE);
-        lldp_tlv_put_u8(p, aa_element_first_byte);
-        lldp_tlv_put_u8(p, aa_element_second_byte);
+        dp_packet_put(p, msg_auth_digest, sizeof msg_auth_digest);
+        lldp_tlv_put_u16(p, aa_element_first_word);
+        lldp_tlv_put_u16(p, aa_element_second_word);
         dp_packet_put(p, &port->p_element.system_id.system_mac,
                       sizeof port->p_element.system_id.system_mac);
         lldp_tlv_put_u8(p, aa_elem_sys_id_first_byte);
         lldp_tlv_put_u8(p, aa_elem_sys_id_second_byte);
-        dp_packet_put(p, &port->p_element.system_id.mlt_id,
-                      sizeof port->p_element.system_id.mlt_id);
+        dp_packet_put(p, &port->p_element.system_id.rsvd2,
+                      sizeof port->p_element.system_id.rsvd2);
         lldp_tlv_end(p, start);
     }
 
     if (!list_is_empty(&port->p_isid_vlan_maps)) {
-        int j;
 
-        for (j = 0; j < LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH; j++) {
-            msg_auth_digest[j] = 0;
-        }
+        memset(msg_auth_digest, 0, sizeof msg_auth_digest);
 
         lldp_tlv_start(p, LLDP_TLV_ORG, &start);
         dp_packet_put(p, avaya, sizeof avaya);
@@ -314,6 +330,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
     if (!hardware->h_lport.p_lastframe
         || hardware->h_lport.p_lastframe->size != lldp_len
         || memcmp(hardware->h_lport.p_lastframe->frame, lldp, lldp_len)) {
+
         struct lldpd_frame *frame = xmalloc(sizeof *frame + lldp_len);
         frame->size = lldp_len;
         memcpy(frame->frame, lldp, lldp_len);
@@ -327,8 +344,8 @@ lldp_send(struct lldpd *global OVS_UNUSED,
 
 int
 lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
-    struct lldpd_hardware *hardware, struct lldpd_chassis **newchassis,
-    struct lldpd_port **newport)
+            struct lldpd_hardware *hardware, struct lldpd_chassis **newchassis,
+            struct lldpd_port **newport)
 {
     struct lldpd_chassis *chassis;
     struct lldpd_port *port;
@@ -372,6 +389,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                   "received on %s", hardware->h_ifname);
         goto malformed;
     }
+
     PEEK_DISCARD(ETH_ADDR_LEN); /* Skip source address */
     if (PEEK_UINT16 != ETHERTYPE_LLDP) {
         VLOG_INFO("non LLDP frame received on %s", hardware->h_ifname);
@@ -498,34 +516,57 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                 /* LLDP-MED */
                 hardware->h_rx_unrecognized_cnt++;
             } else if (memcmp(avaya_oid, orgid, sizeof orgid) == 0) {
-                u_int16_t aa_element_word;
-                u_int16_t aa_status_vlan_word;
+                u_int32_t aa_element_dword;
                 u_int16_t aa_system_id_word;
+                u_int16_t aa_status_vlan_word;
+                u_int8_t aa_element_state;
                 unsigned short num_mappings;
 
                 switch(tlv_subtype) {
                 case LLDP_TLV_AA_ELEMENT_SUBTYPE:
-                    aa_element_word = PEEK_UINT16;
+                    PEEK_BYTES(&msg_auth_digest, sizeof msg_auth_digest);
 
-                    /* Type is first 4 most-significant bits */
-                    port->p_element.type = aa_element_word >> 12;
+                    aa_element_dword = PEEK_UINT32;
 
-                    /* mgmt_vlan is last 12 bits */
-                    port->p_element.mgmt_vlan = aa_element_word & 0x0FFF;
-                    VLOG_INFO("Element type: %X, Mgmt vlan: %X",
+                    /* Type is first 6 most-significant bits of
+                     * aa_element_dword */
+                    port->p_element.type = aa_element_dword >> 26;
+
+                    /* State is 6 most significant bits of aa_element_dword */
+                    aa_element_state = (aa_element_dword >> 20) & 0x3F;
+
+                    /* vlan tagging requirement is the bit 1(left to right)
+                     * of the 6 bits state (1 based) */
+                    port->p_element.vlan_tagging =
+                        (aa_element_state >> 5) & 0x1;
+
+                    /* Automatic provision mode is the bit 2/3(left to right)
+                     * of the 6 bits state (1 based) */
+                    port->p_element.auto_prov_mode =
+                        (aa_element_state >> 3) & 0x3;
+
+                    /* mgmt_vlan is the 12 bits of aa_element_dword from
+                     * bit 12 */
+                    port->p_element.mgmt_vlan =
+                        (aa_element_dword >> 8) & 0xFFF;
+                    VLOG_INFO("Element type: %X, vlan tagging %X, "
+                              "auto prov mode %x, Mgmt vlan: %X",
                               port->p_element.type,
+                              port->p_element.vlan_tagging,
+                              port->p_element.auto_prov_mode,
                               port->p_element.mgmt_vlan);
+
                     PEEK_BYTES(&port->p_element.system_id.system_mac,
                                sizeof port->p_element.system_id.system_mac);
                     VLOG_INFO("System mac: "ETH_ADDR_FMT,
-                              ETH_ADDR_ARGS(port->p_element.system_id.system_mac));
+                        ETH_ADDR_ARGS(port->p_element.system_id.system_mac));
                     aa_system_id_word = PEEK_UINT16;
                     port->p_element.system_id.conn_type =
-                        aa_system_id_word >> 12;
-                    port->p_element.system_id.smlt_id =
-                        aa_system_id_word & 0x0FFF;
-                    PEEK_BYTES(&port->p_element.system_id.mlt_id,
-                               sizeof port->p_element.system_id.mlt_id);
+                        aa_system_id_word >> 13;
+                    port->p_element.system_id.rsvd = aa_system_id_word &
+                        0x03FF;
+                    PEEK_BYTES(&port->p_element.system_id.rsvd2,
+                               sizeof port->p_element.system_id.rsvd2);
                     break;
 
                 case LLDP_TLV_AA_ISID_VLAN_ASGNS_SUBTYPE:

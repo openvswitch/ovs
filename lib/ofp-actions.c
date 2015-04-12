@@ -4237,6 +4237,31 @@ format_EXIT(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
     ds_put_cstr(s, "exit");
 }
 
+/* Unroll xlate action. */
+
+static void
+encode_UNROLL_XLATE(const struct ofpact_unroll_xlate *unroll OVS_UNUSED,
+                    enum ofp_version ofp_version OVS_UNUSED,
+                    struct ofpbuf *out OVS_UNUSED)
+{
+    OVS_NOT_REACHED();
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_UNROLL_XLATE(char *arg OVS_UNUSED, struct ofpbuf *ofpacts OVS_UNUSED,
+                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    OVS_NOT_REACHED();
+    return NULL;
+}
+
+static void
+format_UNROLL_XLATE(const struct ofpact_unroll_xlate *a OVS_UNUSED,
+                    struct ds *s)
+{
+    ds_put_cstr(s, "unroll_xlate");
+}
+
 /* Action structure for NXAST_SAMPLE.
  *
  * Samples matching packets with the given probability and sends them
@@ -4726,6 +4751,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_DEC_TTL:
     case OFPACT_ENQUEUE:
     case OFPACT_EXIT:
+    case OFPACT_UNROLL_XLATE:
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_GOTO_TABLE:
     case OFPACT_GROUP:
@@ -4795,6 +4821,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_CONTROLLER:
     case OFPACT_ENQUEUE:
     case OFPACT_EXIT:
+    case OFPACT_UNROLL_XLATE:
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
@@ -4868,7 +4895,7 @@ ofpacts_copy_all(struct ofpbuf *out, const struct ofpbuf *in,
  * "Action Set" and "Action List" terms used in OpenFlow 1.1+.)
  *
  * In general this involves appending the last instance of each action that is
- * adimissible in the action set in the order described in the OpenFlow
+ * admissible in the action set in the order described in the OpenFlow
  * specification.
  *
  * Exceptions:
@@ -5017,6 +5044,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+    case OFPACT_UNROLL_XLATE:
     case OFPACT_SAMPLE:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
@@ -5607,6 +5635,11 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_GROUP:
         return 0;
 
+    case OFPACT_UNROLL_XLATE:
+        /* UNROLL is an internal action that should never be seen via
+         * OpenFlow. */
+        return OFPERR_OFPBAC_BAD_TYPE;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -5998,6 +6031,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+    case OFPACT_UNROLL_XLATE:
     case OFPACT_PUSH_MPLS:
     case OFPACT_POP_MPLS:
     case OFPACT_SAMPLE:

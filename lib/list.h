@@ -73,6 +73,9 @@ static inline bool list_is_short(const struct ovs_list *);
           ? INIT_CONTAINER(NEXT, (ITER)->MEMBER.next, MEMBER), 1   \
           : 0);                                                    \
          (ITER) = (NEXT))
+#define LIST_FOR_EACH_POP(ITER, MEMBER, LIST)                      \
+    while (!list_is_empty(LIST)                                    \
+           && (INIT_CONTAINER(ITER, list_pop_front(LIST), MEMBER), 1))
 
 /* Inline implementations. */
 

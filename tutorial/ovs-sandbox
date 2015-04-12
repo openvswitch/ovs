@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (c) 2013 Nicira, Inc.
+# Copyright (c) 2013, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ rungdb() {
     if $under_gdb && [ "$DISPLAY" ]; then
         args=`echo $@ |sed s/--detach//g | sed s/--vconsole:off//g`
         xterm_title=$1
-        run_xterm $xterm_title gdb --args $args
+        run_xterm $xterm_title gdb -ex run --args $args
     else
         run $@
     fi
@@ -278,6 +278,9 @@ if $ovn; then
 fi
 rungdb $gdb_ovsdb ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
+
+# Initialize database.
+run ovs-vsctl --no-wait -- init
 
 # Start ovs-vswitchd.
 rungdb $gdb_vswitchd ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \

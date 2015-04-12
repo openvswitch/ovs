@@ -95,6 +95,7 @@ error:
 	*sockp = NULL;
 	return err;
 }
+EXPORT_SYMBOL_GPL(udp_sock_create);
 
 void setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 			   struct udp_tunnel_sock_cfg *cfg)
@@ -114,6 +115,7 @@ void setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 
 	udp_tunnel_encap_enable(sock);
 }
+EXPORT_SYMBOL_GPL(setup_udp_tunnel_sock);
 
 void ovs_udp_gso(struct sk_buff *skb)
 {
@@ -123,6 +125,7 @@ void ovs_udp_gso(struct sk_buff *skb)
 	uh = udp_hdr(skb);
 	uh->len = htons(skb->len - udp_offset);
 }
+EXPORT_SYMBOL_GPL(ovs_udp_gso);
 
 void ovs_udp_csum_gso(struct sk_buff *skb)
 {
@@ -137,6 +140,7 @@ void ovs_udp_csum_gso(struct sk_buff *skb)
 	udp_set_csum(true, skb, iph->saddr, iph->daddr,
 		     skb->len - udp_offset);
 }
+EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
 
 int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
 			__be32 src, __be32 dst, __u8 tos, __u8 ttl,
@@ -158,6 +162,7 @@ int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
 	return iptunnel_xmit(skb->sk, rt, skb, src, dst, IPPROTO_UDP,
 			     tos, ttl, df, xnet);
 }
+EXPORT_SYMBOL_GPL(udp_tunnel_xmit_skb);
 
 void udp_tunnel_sock_release(struct socket *sock)
 {
@@ -165,5 +170,6 @@ void udp_tunnel_sock_release(struct socket *sock)
 	kernel_sock_shutdown(sock, SHUT_RDWR);
 	sk_release_kernel(sock->sk);
 }
+EXPORT_SYMBOL_GPL(udp_tunnel_sock_release);
 
 #endif /* Linux version < 3.20 */

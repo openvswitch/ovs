@@ -207,6 +207,7 @@ A: Support for tunnels was added to the upstream Linux kernel module
 |:--------:|:-------------:
 | GRE      |    3.11
 | VXLAN    |    3.12
+| Geneve   |    3.18
 | LISP     | <not upstream>
 
    If you are using a version of the kernel that is older than the one
@@ -215,6 +216,14 @@ A: Support for tunnels was added to the upstream Linux kernel module
    vSwitch distribution rather than the one on your machine. If problems
    persist after doing this, check to make sure that the module that is
    loaded is the one you expect.
+
+### Q: Why are UDP tunnel checksums not computed for VXLAN or Geneve?
+
+A: Generating outer UDP checksums requires kernel support that was not
+   part of the initial implementation of these protocols. If using the
+   upstream Linux Open vSwitch module, you must use kernel 4.0 or
+   newer. The out-of-tree modules from Open vSwitch release 2.4 and later
+   support UDP checksums.
 
 ### Q: What features are not available when using the userspace datapath?
 

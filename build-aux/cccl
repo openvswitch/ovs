@@ -90,7 +90,7 @@ EOF
         ;;
 
     -O0)
-        clopt="$clopt ${slash}Ot"
+        clopt="$clopt ${slash}Od ${slash}D_DEBUG"
         ;;
 
     -O2)

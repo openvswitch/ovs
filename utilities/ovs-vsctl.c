@@ -1185,7 +1185,6 @@ pre_get_info(struct vsctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_controller);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_fail_mode);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_ports);
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_auto_attach);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_name);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_port_col_fake_bridge);
@@ -1194,7 +1193,6 @@ pre_get_info(struct vsctl_context *ctx)
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_name);
 
-    ovsdb_idl_add_column(ctx->idl, &ovsrec_autoattach_col_mappings);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_ofport);
 }
 
@@ -1807,7 +1805,6 @@ cmd_add_br(struct vsctl_context *ctx)
 
     if (!parent_name) {
         struct ovsrec_port *port;
-        struct ovsrec_autoattach *aa;
         struct ovsrec_bridge *br;
 
         iface = ovsrec_interface_insert(ctx->txn);
@@ -1818,12 +1815,9 @@ cmd_add_br(struct vsctl_context *ctx)
         ovsrec_port_set_name(port, br_name);
         ovsrec_port_set_interfaces(port, &iface, 1);
 
-        aa = ovsrec_autoattach_insert(ctx->txn);
-
         br = ovsrec_bridge_insert(ctx->txn);
         ovsrec_bridge_set_name(br, br_name);
         ovsrec_bridge_set_ports(br, &port, 1);
-        ovsrec_bridge_set_auto_attach(br, aa);
 
         ovs_insert_bridge(ctx->ovs, br);
     } else {
@@ -2732,6 +2726,10 @@ cmd_add_aa_mapping(struct vsctl_context *ctx)
     }
 
     if (br && br->br_cfg) {
+        if (!br->br_cfg->auto_attach) {
+            struct ovsrec_autoattach *aa = ovsrec_autoattach_insert(ctx->txn);
+            ovsrec_bridge_set_auto_attach(br->br_cfg, aa);
+        }
         autoattach_insert_mapping(br->br_cfg->auto_attach, isid, vlan);
     }
 }
@@ -2806,6 +2804,7 @@ pre_aa_mapping(struct vsctl_context *ctx)
 {
     pre_get_info(ctx);
 
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_auto_attach);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_autoattach_col_mappings);
 }
 
@@ -4678,7 +4677,7 @@ static const struct vsctl_command_syntax all_commands[] = {
      cmd_set_ssl, NULL, "--bootstrap", RW},
 
     /* Auto Attach commands. */
-    {"add-aa-mapping", 3, 3, "BRIDGE ARG ARG", pre_get_info, cmd_add_aa_mapping,
+    {"add-aa-mapping", 3, 3, "BRIDGE ARG ARG", pre_aa_mapping, cmd_add_aa_mapping,
      NULL, "", RW},
     {"del-aa-mapping", 3, 3, "BRIDGE ARG ARG", pre_aa_mapping, cmd_del_aa_mapping,
      NULL, "", RW},

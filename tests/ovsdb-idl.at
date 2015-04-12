@@ -496,3 +496,78 @@ OVSDB_CHECK_IDL_PY([getattr idl, insert ops],
 002: i=2 k=2 ka=[] l2= uuid=<0>
 003: done
 ]])
+
+AT_SETUP([idl handling of missing tables and columns - C])
+AT_KEYWORDS([ovsdb server idl positive])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+
+# idltest2.ovsschema is the same as idltest.ovsschema, except that
+# table link2 and column l2 have been deleted.  But the IDL still
+# expects them to be there, so this test checks that it properly
+# tolerates them being missing.
+AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest2.ovsschema],
+    [0], [stdout], [ignore])
+AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket ['["idltest",
+      {"op": "insert",
+       "table": "link1",
+       "row": {"i": 0, "k": ["named-uuid", "self"]},
+       "uuid-name": "self"}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "link1",
+       "row": {"i": 1, "k": ["named-uuid", "row2"]},
+       "uuid-name": "row1"},
+      {"op": "insert",
+       "table": "link1",
+       "row": {"i": 2, "k": ["named-uuid", "row1"]},
+       "uuid-name": "row2"}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "link1",
+       "where": [["i", "==", 1]],
+       "row": {"k": ["uuid", "#1#"]}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "link1",
+       "where": [],
+       "row": {"k": ["uuid", "#0#"]}}]']],
+	 [0], [stdout], [stderr], [kill `cat pid`])
+AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl], [0],
+    [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
+002: i=0 k=0 ka=[] l2= uuid=<0>
+003: {"error":null,"result":[{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
+004: i=0 k=0 ka=[] l2= uuid=<0>
+004: i=1 k=2 ka=[] l2= uuid=<1>
+004: i=2 k=1 ka=[] l2= uuid=<2>
+005: {"error":null,"result":[{"count":1}]}
+006: i=0 k=0 ka=[] l2= uuid=<0>
+006: i=1 k=1 ka=[] l2= uuid=<1>
+006: i=2 k=1 ka=[] l2= uuid=<2>
+007: {"error":null,"result":[{"count":3}]}
+008: i=0 k=0 ka=[] l2= uuid=<0>
+008: i=1 k=0 ka=[] l2= uuid=<1>
+008: i=2 k=0 ka=[] l2= uuid=<2>
+009: done
+]], [], [kill `cat pid`])
+
+# Check that ovsdb-idl figured out that table link2 and column l2 are missing.
+AT_CHECK([grep ovsdb_idl stderr | sort], [0], [dnl
+test-ovsdb|ovsdb_idl|idltest database lacks link2 table (database needs upgrade?)
+test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
+])
+
+# Check that ovsdb-idl sent on "monitor" request and that it didn't
+# mention that table or column, and (for paranoia) that it did mention another
+# table and column.
+AT_CHECK([grep -c '"monitor"' stderr], [0], [1
+])
+AT_CHECK([grep '"monitor"' stderr | grep link2], [1])
+AT_CHECK([grep '"monitor"' stderr | grep l2], [1])
+AT_CHECK([grep '"monitor"' stderr | grep -c '"link1"'], [0], [1
+])
+AT_CHECK([grep '"monitor"' stderr | grep -c '"ua"'], [0], [1
+])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP

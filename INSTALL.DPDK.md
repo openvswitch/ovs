@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required DPDK 1.8.0
+Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
 
 1. Configure build & install DPDK:
   1. Set `$DPDK_DIR`
@@ -31,7 +31,12 @@ Required DPDK 1.8.0
 
      `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
 
-     Then run `make install` to build and isntall the library.
+     Update `config/common_linuxapp` so that DPDK is built with vhost
+     libraries:
+
+     `CONFIG_RTE_LIBRTE_VHOST=y`
+
+     Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
      `make install T=x86_64-native-linuxapp-gcc`
@@ -290,12 +295,256 @@ A general rule of thumb for better performance is that the client
 application should not be assigned the same dpdk core mask "-c" as
 the vswitchd.
 
+DPDK vhost:
+-----------
+
+vhost-cuse is only supported at present i.e. not using the standard QEMU
+vhost-user interface. It is intended that vhost-user support will be added
+in future releases when supported in DPDK and that vhost-cuse will eventually
+be deprecated. See [DPDK Docs] for more info on vhost.
+
+Prerequisites:
+1.  Insert the Cuse module:
+
+      `modprobe cuse`
+
+2.  Build and insert the `eventfd_link` module:
+
+     `cd $DPDK_DIR/lib/librte_vhost/eventfd_link/`
+     `make`
+     `insmod $DPDK_DIR/lib/librte_vhost/eventfd_link.ko`
+
+Following the steps above to create a bridge, you can now add DPDK vhost
+as a port to the vswitch.
+
+`ovs-vsctl add-port br0 dpdkvhost0 -- set Interface dpdkvhost0 type=dpdkvhost`
+
+Unlike DPDK ring ports, DPDK vhost ports can have arbitrary names:
+
+`ovs-vsctl add-port br0 port123ABC -- set Interface port123ABC type=dpdkvhost`
+
+However, please note that when attaching userspace devices to QEMU, the
+name provided during the add-port operation must match the ifname parameter
+on the QEMU command line.
+
+
+DPDK vhost VM configuration:
+----------------------------
+
+   vhost ports use a Linux* character device to communicate with QEMU.
+   By default it is set to `/dev/vhost-net`. It is possible to reuse this
+   standard device for DPDK vhost, which makes setup a little simpler but it
+   is better practice to specify an alternative character device in order to
+   avoid any conflicts if kernel vhost is to be used in parallel.
+
+1. This step is only needed if using an alternative character device.
+
+   The new character device filename must be specified on the vswitchd
+   commandline:
+
+        `./vswitchd/ovs-vswitchd --dpdk --cuse_dev_name my-vhost-net -c 0x1 ...`
+
+   Note that the `--cuse_dev_name` argument and associated string must be the first
+   arguments after `--dpdk` and come before the EAL arguments. In the example
+   above, the character device to be used will be `/dev/my-vhost-net`.
+
+2. This step is only needed if reusing the standard character device. It will
+   conflict with the kernel vhost character device so the user must first
+   remove it.
+
+       `rm -rf /dev/vhost-net`
+
+3a. Configure virtio-net adaptors:
+   The following parameters must be passed to the QEMU binary:
+
+     ```
+     -netdev tap,id=<id>,script=no,downscript=no,ifname=<name>,vhost=on
+     -device virtio-net-pci,netdev=net1,mac=<mac>
+     ```
+
+     Repeat the above parameters for multiple devices.
+
+     The DPDK vhost library will negiotiate its own features, so they
+     need not be passed in as command line params. Note that as offloads are
+     disabled this is the equivalent of setting:
+
+     `csum=off,gso=off,guest_tso4=off,guest_tso6=off,guest_ecn=off`
+
+3b. If using an alternative character device. It must be also explicitly
+    passed to QEMU using the `vhostfd` argument:
+
+     ```
+     -netdev tap,id=<id>,script=no,downscript=no,ifname=<name>,vhost=on,
+     vhostfd=<open_fd>
+     -device virtio-net-pci,netdev=net1,mac=<mac>
+     ```
+
+     The open file descriptor must be passed to QEMU running as a child
+     process. This could be done with a simple python script.
+
+       ```
+       #!/usr/bin/python
+       fd = os.open("/dev/usvhost", os.O_RDWR)
+       subprocess.call("qemu-system-x86_64 .... -netdev tap,id=vhostnet0,\
+                        vhost=on,vhostfd=" + fd +"...", shell=True)
+
+   Alternatively the the `qemu-wrap.py` script can be used to automate the
+   requirements specified above and can be used in conjunction with libvirt if
+   desired. See the "DPDK vhost VM configuration with QEMU wrapper" section
+   below.
+
+4. Configure huge pages:
+   QEMU must allocate the VM's memory on hugetlbfs. Vhost ports access a
+   virtio-net device's virtual rings and packet buffers mapping the VM's
+   physical memory on hugetlbfs. To enable vhost-ports to map the VM's
+   memory into their process address space, pass the following paramters
+   to QEMU:
+
+     `-object memory-backend-file,id=mem,size=4096M,mem-path=/dev/hugepages,
+      share=on -numa node,memdev=mem -mem-prealloc`
+
+
+DPDK vhost VM configuration with QEMU wrapper:
+----------------------------------------------
+
+The QEMU wrapper script automatically detects and calls QEMU with the
+necessary parameters. It performs the following actions:
+
+  * Automatically detects the location of the hugetlbfs and inserts this
+    into the command line parameters.
+  * Automatically open file descriptors for each virtio-net device and
+    inserts this into the command line parameters.
+  * Calls QEMU passing both the command line parameters passed to the
+    script itself and those it has auto-detected.
+
+Before use, you **must** edit the configuration parameters section of the
+script to point to the correct emulator location and set additional
+settings. Of these settings, `emul_path` and `us_vhost_path` **must** be
+set. All other settings are optional.
+
+To use directly from the command line simply pass the wrapper some of the
+QEMU parameters: it will configure the rest. For example:
+
+```
+qemu-wrap.py -cpu host -boot c -hda <disk image> -m 4096 -smp 4
+  --enable-kvm -nographic -vnc none -net none -netdev tap,id=net1,
+  script=no,downscript=no,ifname=if1,vhost=on -device virtio-net-pci,
+  netdev=net1,mac=00:00:00:00:00:01
+```
+
+DPDK vhost VM configuration with libvirt:
+-----------------------------------------
+
+If you are using libvirt, you must enable libvirt to access the character
+device by adding it to controllers cgroup for libvirtd using the following
+steps.
+
+     1. In `/etc/libvirt/qemu.conf` add/edit the following lines:
+
+        ```
+        1) clear_emulator_capabilities = 0
+        2) user = "root"
+        3) group = "root"
+        4) cgroup_device_acl = [
+               "/dev/null", "/dev/full", "/dev/zero",
+               "/dev/random", "/dev/urandom",
+               "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
+               "/dev/rtc", "/dev/hpet", "/dev/net/tun",
+               "/dev/<my-vhost-device>",
+               "/dev/hugepages"]
+        ```
+
+        <my-vhost-device> refers to "vhost-net" if using the `/dev/vhost-net`
+        device. If you have specificed a different name on the ovs-vswitchd
+        commandline using the "--cuse_dev_name" parameter, please specify that
+        filename instead.
+
+     2. Disable SELinux or set to permissive mode
+
+     3. Restart the libvirtd process
+        For example, on Fedora:
+
+          `systemctl restart libvirtd.service`
+
+After successfully editing the configuration, you may launch your
+vhost-enabled VM. The XML describing the VM can be configured like so
+within the <qemu:commandline> section:
+
+     1. Set up shared hugepages:
+
+     ```
+     <qemu:arg value='-object'/>
+     <qemu:arg value='memory-backend-file,id=mem,size=4096M,mem-path=/dev/hugepages,share=on'/>
+     <qemu:arg value='-numa'/>
+     <qemu:arg value='node,memdev=mem'/>
+     <qemu:arg value='-mem-prealloc'/>
+     ```
+
+     2. Set up your tap devices:
+
+     ```
+     <qemu:arg value='-netdev'/>
+     <qemu:arg value='type=tap,id=net1,script=no,downscript=no,ifname=vhost0,vhost=on'/>
+     <qemu:arg value='-device'/>
+     <qemu:arg value='virtio-net-pci,netdev=net1,mac=00:00:00:00:00:01'/>
+     ```
+
+     Repeat for as many devices as are desired, modifying the id, ifname
+     and mac as necessary.
+
+     Again, if you are using an alternative character device (other than
+     `/dev/vhost-net`), please specify the file descriptor like so:
+
+     `<qemu:arg value='type=tap,id=net3,script=no,downscript=no,ifname=vhost0,vhost=on,vhostfd=<open_fd>'/>`
+
+     Where <open_fd> refers to the open file descriptor of the character device.
+     Instructions of how to retrieve the file descriptor can be found in the
+     "DPDK vhost VM configuration" section.
+     Alternatively, the process is automated with the qemu-wrap.py script,
+     detailed in the next section.
+
+Now you may launch your VM using virt-manager, or like so:
+
+    `virsh create my_vhost_vm.xml`
+
+DPDK vhost VM configuration with libvirt and QEMU wrapper:
+----------------------------------------------------------
+
+To use the qemu-wrapper script in conjuntion with libvirt, follow the
+steps in the previous section before proceeding with the following steps:
+
+  1. Place `qemu-wrap.py` in libvirtd's binary search PATH ($PATH)
+     Ideally in the same directory that the QEMU binary is located.
+
+  2. Ensure that the script has the same owner/group and file permissions
+     as the QEMU binary.
+
+  3. Update the VM xml file using "virsh edit VM.xml"
+
+       1. Set the VM to use the launch script.
+          Set the emulator path contained in the `<emulator><emulator/>` tags.
+          For example, replace:
+
+            `<emulator>/usr/bin/qemu-kvm<emulator/>`
+
+            with:
+
+            `<emulator>/usr/bin/qemu-wrap.py<emulator/>`
+
+  4. Edit the Configuration Parameters section of the script to point to
+  the correct emulator location and set any additional options. If you are
+  using a alternative character device name, please set "us_vhost_path" to the
+  location of that device. The script will automatically detect and insert
+  the correct "vhostfd" value in the QEMU command line arguements.
+
+  5. Use virt-manager to launch the VM
+
 Restrictions:
 -------------
 
-  - This Support is for Physical NIC. I have tested with Intel NIC only.
   - Work with 1500 MTU, needs few changes in DPDK lib to fix this issue.
   - Currently DPDK port does not make use any offload functionality.
+  - DPDK-vHost support works with 1G huge pages.
 
   ivshmem:
   - The shared memory is currently restricted to the use of a 1GB
@@ -311,3 +560,4 @@ Please report problems to bugs@openvswitch.org.
 [INSTALL.userspace.md]:INSTALL.userspace.md
 [INSTALL.md]:INSTALL.md
 [DPDK Linux GSG]: http://www.dpdk.org/doc/guides/linux_gsg/build_dpdk.html#binding-and-unbinding-network-ports-to-from-the-igb-uioor-vfio-modules
+[DPDK Docs]: http://dpdk.org/doc

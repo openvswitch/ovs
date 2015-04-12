@@ -111,6 +111,7 @@ DEFINE_GUID(
 PDEVICE_OBJECT gDeviceObject;
 
 HANDLE gEngineHandle = NULL;
+HANDLE gBfeSubscriptionHandle = NULL;
 UINT32 gCalloutIdV4;
 
 
@@ -173,17 +174,20 @@ OvsTunnelAddSystemProvider(HANDLE handle)
         provider.displayData.name = OVS_TUNNEL_PROVIDER_NAME;
         provider.displayData.description = OVS_TUNNEL_PROVIDER_DESC;
         /*
-        * Since we always want the provider to be present, it's easiest to add
-        * it as persistent object during driver load.
-        */
+         * Since we always want the provider to be present, it's easiest to add
+         * it as persistent object during driver load.
+         */
         provider.flags = FWPM_PROVIDER_FLAG_PERSISTENT;
 
         status = FwpmProviderAdd(handle,
                                  &provider,
                                  NULL);
         if (!NT_SUCCESS(status)) {
-            OVS_LOG_ERROR("Fail to add WFP provider, status: %x.", status);
-            break;
+            if (STATUS_FWP_ALREADY_EXISTS != status) {
+                OVS_LOG_ERROR("Failed to add WFP provider, status: %x.",
+                              status);
+                break;
+            }
         }
 
         status = FwpmTransactionCommit(handle);
@@ -540,4 +544,89 @@ Exit:
     }
 
     return status;
+}
+
+VOID NTAPI
+OvsBfeStateChangeCallback(PVOID context,
+                          FWPM_SERVICE_STATE bfeState)
+{
+    HANDLE handle = NULL;
+
+    DBG_UNREFERENCED_PARAMETER(context);
+
+    if (FWPM_SERVICE_RUNNING == bfeState) {
+        OvsTunnelEngineOpen(&handle);
+        if (handle) {
+            OvsTunnelAddSystemProvider(handle);
+        }
+        OvsTunnelEngineClose(&handle);
+    }
+}
+
+NTSTATUS
+OvsSubscribeBfeStateChanges(PVOID deviceObject)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (!gBfeSubscriptionHandle) {
+        status = FwpmBfeStateSubscribeChanges(deviceObject,
+                                              OvsBfeStateChangeCallback,
+                                              NULL,
+                                              &gBfeSubscriptionHandle);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR(
+                "Failed to open subscribe BFE state change callback, status: %x.",
+                status);
+        }
+    }
+
+    return status;
+}
+
+VOID
+OvsUnsubscribeBfeStateChanges()
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (gBfeSubscriptionHandle) {
+        status = FwpmBfeStateUnsubscribeChanges(gBfeSubscriptionHandle);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR(
+                "Failed to open unsubscribe BFE state change callback, status: %x.",
+                status);
+        }
+        gBfeSubscriptionHandle = NULL;
+    }
+}
+
+VOID OvsRegisterSystemProvider(PVOID deviceObject)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    HANDLE handle = NULL;
+
+    status = OvsSubscribeBfeStateChanges(deviceObject);
+    if (NT_SUCCESS(status)) {
+        if (FWPM_SERVICE_RUNNING == FwpmBfeStateGet()) {
+            OvsTunnelEngineOpen(&handle);
+            if (handle) {
+                OvsTunnelAddSystemProvider(handle);
+            }
+            OvsTunnelEngineClose(&handle);
+
+            OvsUnsubscribeBfeStateChanges();
+        }
+    }
+}
+
+VOID OvsUnregisterSystemProvider()
+{
+    HANDLE handle = NULL;
+
+    OvsTunnelEngineOpen(&handle);
+    if (handle) {
+        OvsTunnelRemoveSystemProvider(handle);
+    }
+    OvsTunnelEngineClose(&handle);
+
+    OvsUnsubscribeBfeStateChanges();
 }

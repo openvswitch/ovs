@@ -1043,3 +1043,17 @@ compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
     dp_packet_set_frame(b, eth);
     dp_packet_set_l3(b, arp);
 }
+
+uint32_t
+packet_csum_pseudoheader(const struct ip_header *ip)
+{
+    uint32_t partial = 0;
+
+    partial = csum_add32(partial, get_16aligned_be32(&ip->ip_src));
+    partial = csum_add32(partial, get_16aligned_be32(&ip->ip_dst));
+    partial = csum_add16(partial, htons(ip->ip_proto));
+    partial = csum_add16(partial, htons(ntohs(ip->ip_tot_len) -
+                                        IP_IHL(ip->ip_ihl_ver) * 4));
+
+    return partial;
+}

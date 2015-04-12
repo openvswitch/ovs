@@ -1,5 +1,6 @@
 Post-v2.3.0
 ---------------------
+   - Added support for SFQ, FQ_CoDel and CoDel qdiscs. 
    - Add bash command-line completion support for ovs-vsctl Please check
      utilities/ovs-command-compgen.INSTALL.md for how to use.
    - The MAC learning feature now includes per-port fairness to mitigate
@@ -37,6 +38,9 @@ Post-v2.3.0
        is executed last, and only if the action set has no "output" or "group"
        action.
      * OpenFlow 1.4+ flow "importance" is now maintained in the flow table.
+     * A new Netronome extension to OpenFlow 1.5+ allows control over the
+       fields hashed for OpenFlow select groups.  See "selection_method" and
+       related options in ovs-ofctl(8) for details.
    - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
      MD5 is no longer secure and some operating systems have started to disable
      it in OpenSSL.
@@ -58,8 +62,8 @@ Post-v2.3.0
    - A simple wrapper script, 'ovs-docker', to integrate OVS with Docker
      containers. If and when there is a native integration of Open vSwitch
      with Docker, the wrapper script will be retired.
-   - Added support for DPDK Tunneling. VXLAN and GRE are supported protocols.
-     This is generic tunneling mechanism for userspace datapath.
+   - Added support for DPDK Tunneling. VXLAN, GRE, and Geneve are supported
+     protocols. This is generic tunneling mechanism for userspace datapath.
    - Support for multicast snooping (IGMPv1 and IGMPv2)
    - Support for Linux kernels up to 3.19.x
    - The documentation now use the term 'destination' to mean one of syslog,
@@ -71,6 +75,8 @@ Post-v2.3.0
      Auto-Attach.
    - The default OpenFlow and OVSDB ports are now the IANA-assigned
      numbers.  OpenFlow is 6653 and OVSDB is 6640.
+   - Support for DPDK vHost.
+   - Support for outer UDP checksums in Geneve and VXLAN.
 
 
 v2.3.0 - 14 Aug 2014

@@ -202,7 +202,6 @@ OvsAcquireDatapathWrite(OVS_DATAPATH *datapath,
                            dispatch ? NDIS_RWL_AT_DISPATCH_LEVEL : 0);
 }
 
-
 static __inline VOID
 OvsReleaseDatapath(OVS_DATAPATH *datapath,
                    LOCK_STATE_EX *lockState)
@@ -211,6 +210,11 @@ OvsReleaseDatapath(OVS_DATAPATH *datapath,
     NdisReleaseRWLock(datapath->lock, lockState);
 }
 
+BOOLEAN
+OvsAcquireSwitchContext(VOID);
+
+VOID
+OvsReleaseSwitchContext(POVS_SWITCH_CONTEXT switchContext);
 
 PVOID OvsGetExternalVport();
 

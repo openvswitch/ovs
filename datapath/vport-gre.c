@@ -31,6 +31,7 @@
 #include <linux/jhash.h>
 #include <linux/list.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/workqueue.h>
 #include <linux/rculist.h>
 #include <net/net_namespace.h>
@@ -46,6 +47,9 @@
 
 #include "datapath.h"
 #include "vport.h"
+
+static struct vport_ops ovs_gre_vport_ops;
+static struct vport_ops ovs_gre64_vport_ops;
 
 /* Returns the least-significant 32 bits of a __be64. */
 static __be32 be64_get_low32(__be64 x)
@@ -308,13 +312,14 @@ static int gre_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
 					  IPPROTO_GRE, skb->mark, 0, 0);
 }
 
-const struct vport_ops ovs_gre_vport_ops = {
+static struct vport_ops ovs_gre_vport_ops = {
 	.type			= OVS_VPORT_TYPE_GRE,
 	.create			= gre_create,
 	.destroy		= gre_tnl_destroy,
 	.get_name		= gre_get_name,
 	.send			= gre_send,
 	.get_egress_tun_info	= gre_get_egress_tun_info,
+	.owner			= THIS_MODULE,
 };
 
 /* GRE64 vport. */
@@ -387,12 +392,42 @@ static int gre64_send(struct vport *vport, struct sk_buff *skb)
 	return __send(vport, skb, hlen, seq, (TUNNEL_KEY|TUNNEL_SEQ));
 }
 
-const struct vport_ops ovs_gre64_vport_ops = {
+static struct vport_ops ovs_gre64_vport_ops = {
 	.type			= OVS_VPORT_TYPE_GRE64,
 	.create			= gre64_create,
 	.destroy		= gre64_tnl_destroy,
 	.get_name		= gre_get_name,
 	.send			= gre64_send,
 	.get_egress_tun_info	= gre_get_egress_tun_info,
+	.owner			= THIS_MODULE,
 };
+
+static int __init ovs_gre_tnl_init(void)
+{
+	int err;
+
+	err = ovs_vport_ops_register(&ovs_gre_vport_ops);
+	if (err < 0)
+		return err;
+
+	err = ovs_vport_ops_register(&ovs_gre64_vport_ops);
+	if (err < 0)
+		ovs_vport_ops_unregister(&ovs_gre_vport_ops);
+
+	return err;
+}
+
+static void __exit ovs_gre_tnl_exit(void)
+{
+	ovs_vport_ops_unregister(&ovs_gre64_vport_ops);
+	ovs_vport_ops_unregister(&ovs_gre_vport_ops);
+}
+
+module_init(ovs_gre_tnl_init);
+module_exit(ovs_gre_tnl_exit);
+
+MODULE_DESCRIPTION("OVS: GRE switching port");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("vport-type-3");
+MODULE_ALIAS("vport-type-104");
 #endif

@@ -257,20 +257,19 @@ struct netdev_class {
 
     /* Build Partial Tunnel header.  Ethernet and ip header is already built,
      * build_header() is suppose build protocol specific part of header. */
-    int (*build_header)(const struct netdev *, struct ovs_action_push_tnl *data);
+    int (*build_header)(const struct netdev *, struct ovs_action_push_tnl *data,
+                        const struct flow *tnl_flow);
 
     /* build_header() can not build entire header for all packets for given
      * flow.  Push header is called for packet to build header specific to
      * a packet on actual transmit.  It uses partial header build by
      * build_header() which is passed as data. */
-    int (*push_header)(const struct netdev *netdev,
-                       struct dp_packet **buffers, int cnt,
-                       const struct ovs_action_push_tnl *data);
+    void (*push_header)(struct dp_packet *packet,
+                        const struct ovs_action_push_tnl *data);
 
     /* Pop tunnel header from packet, build tunnel metadata and resize packet
      * for further processing. */
-    int  (*pop_header)(struct netdev *netdev,
-                       struct dp_packet **buffers, int cnt);
+    int (*pop_header)(struct dp_packet *packet);
 
     /* Returns the id of the numa node the 'netdev' is on.  If there is no
      * such info, returns NETDEV_NUMA_UNSPEC. */

@@ -1,3 +1,4 @@
+etc/bash_completion.d/ovs-appctl-bashcomp.bash
 usr/bin/ovs-appctl
 usr/bin/ovs-benchmark
 usr/bin/ovs-docker

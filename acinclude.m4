@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -170,7 +170,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
-    DPDK_LIB=-lintel_dpdk
+    DPDK_LIB="-lintel_dpdk"
+    DPDK_EXTRA_LIB="-lfuse"
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
@@ -187,7 +188,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     found=false
     save_LIBS=$LIBS
     for extras in "" "-ldl"; do
-        LIBS="$DPDK_LIB $extras $save_LIBS"
+        LIBS="$DPDK_LIB $extras $save_LIBS $DPDK_EXTRA_LIB"
         AC_LINK_IFELSE(
            [AC_LANG_PROGRAM([#include <rte_config.h>
                              #include <rte_eal.h>],
@@ -206,7 +207,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
     OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
 
-    # DPDK 1.7 pmd drivers are not linked unless --whole-archive is used.
+    # DPDK pmd drivers are not linked unless --whole-archive is used.
     #
     # This happens because the rest of the DPDK code doesn't use any symbol in
     # the pmd driver objects, and the drivers register themselves using an
@@ -253,6 +254,37 @@ AC_DEFUN([OVS_GREP_IFELSE], [
   fi
 ])
 
+dnl OVS_FIND_FIELD_IFELSE(FILE, STRUCTURE, REGEX, [IF-MATCH], [IF-NO-MATCH])
+dnl
+dnl Looks for STRUCTURE in FILE. If it is found, greps for REGEX within the
+dnl structure definition. If this is successful, runs IF-MATCH, otherwise
+dnl IF_NO_MATCH. If IF-MATCH is empty then it defines to
+dnl OVS_DEFINE(HAVE_<STRUCTURE>_WITH_<REGEX>), with <STRUCTURE> and <REGEX>
+dnl translated to uppercase.
+AC_DEFUN([OVS_FIND_FIELD_IFELSE], [
+  AC_MSG_CHECKING([whether $2 has member $3 in $1])
+  if test -f $1; then
+    awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3'
+    status=$?
+    case $status in
+      0)
+        AC_MSG_RESULT([yes])
+        m4_if([$4], [], [OVS_DEFINE([HAVE_]m4_toupper([$2])[_WITH_]m4_toupper([$3]))], [$4])
+        ;;
+      1)
+        AC_MSG_RESULT([no])
+        $5
+        ;;
+      *)
+        AC_MSG_ERROR([grep exited with status $status])
+        ;;
+    esac
+  else
+    AC_MSG_RESULT([file not found])
+    $5
+  fi
+])
+
 dnl OVS_DEFINE(NAME)
 dnl
 dnl Defines NAME to 1 in kcompat.h.
@@ -293,6 +325,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [ipv4_is_multicast])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [__ip_select_ident.*dst_entry],
                   [OVS_DEFINE([HAVE_IP_SELECT_IDENT_USING_DST_ENTRY])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [inet_get_local_port_range.*net],
+                  [OVS_DEFINE([HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
@@ -365,6 +399,12 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [netlink_has_listeners(net->genl_sock],
                   [OVS_DEFINE([HAVE_GENL_HAS_LISTENERS_TAKES_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genlmsg_parse])
+  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_notify.*family],
+                  [OVS_DEFINE([HAVE_GENL_NOTIFY_TAKES_FAMILY])])
+
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h],
+                        [genl_multicast_group], [id])
+
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_cisco_register])
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6.h], [IP6_FH_F_SKIP_RH])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])
@@ -389,9 +429,16 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [struct vxlan_metadata],
                   [OVS_DEFINE([HAVE_VXLAN_METADATA])])
   OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_flow_src_port],
-                  [OVS_DEFINE([HAVE_UDP_FLOW_SRC_PORT])])
+                  [OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [inet_get_local_port_range(net],
+                                   [OVS_DEFINE([HAVE_UDP_FLOW_SRC_PORT])])])
+  OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_v4_check])
+  OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_set_csum])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [ignore_df:1],
                   [OVS_DEFINE([HAVE_IGNORE_DF_RENAME])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [SKB_GSO_GRE_CSUM],
+                  [OVS_DEFINE([HAVE_SKB_GSO_GRE_CSUM])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [SKB_GSO_UDP_TUNNEL_CSUM],
+                  [OVS_DEFINE([HAVE_SKB_GSO_UDP_TUNNEL_CSUM])])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/netdevice.h], [NET_NAME_UNKNOWN],
                   [OVS_DEFINE([HAVE_NET_NAME_UNKNOWN])])
 
@@ -447,7 +494,13 @@ AC_DEFUN([OVS_CHECK_STRTOK_R],
         [AC_LANG_PROGRAM([#include <stdio.h>
                           #include <string.h>
                          ],
-                         [[char string[] = ":::";
+                         [[#if __GLIBC__ == 2 && __GLIBC_MINOR__ < 8
+                           /* Assume bug is present, because relatively minor
+                              changes in compiler settings (e.g. optimization
+                              level) can make it crop up. */
+                           return 1;
+                           #else
+                           char string[] = ":::";
                            char *save_ptr = (char *) 0xc0ffee;
                            char *token1, *token2;
                            token1 = strtok_r(string, ":", &save_ptr);
@@ -455,6 +508,7 @@ AC_DEFUN([OVS_CHECK_STRTOK_R],
                            freopen ("/dev/null", "w", stdout);
                            printf ("%s %s\n", token1, token2);
                            return 0;
+                           #endif
                           ]])],
         [ovs_cv_strtok_r_bug=no],
         [ovs_cv_strtok_r_bug=yes],

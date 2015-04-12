@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include "openvswitch/types.h"
 #include "packets.h"
+#include "flow.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -184,7 +185,8 @@ int netdev_send(struct netdev *, int qid, struct dp_packet **, int cnt,
                 bool may_steal);
 void netdev_send_wait(struct netdev *, int qid);
 
-int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data);
+int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data,
+                        const struct flow *tnl_flow);
 int netdev_push_header(const struct netdev *netdev,
                        struct dp_packet **buffers, int cnt,
                        const struct ovs_action_push_tnl *data);

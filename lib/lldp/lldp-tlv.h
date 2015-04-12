@@ -36,7 +36,7 @@
 #define LLDP_TLV_ORG_DOT1       {0x00, 0x80, 0xc2}
 #define LLDP_TLV_ORG_DOT3       {0x00, 0x12, 0x0f}
 #define LLDP_TLV_ORG_MED        {0x00, 0x12, 0xbb}
-#define LLDP_TLV_ORG_AVAYA      {0x00, 0x40, 0x0D}
+#define LLDP_TLV_ORG_AVAYA      {0x00, 0x04, 0x0D}
 #define LLDP_TLV_ORG_DCBX       {0x00, 0x1b, 0x21}
 
 #define LLDP_TLV_DOT1_PVID      1
@@ -61,16 +61,26 @@
 #define LLDP_TLV_MED_IV_MODEL   10
 #define LLDP_TLV_MED_IV_ASSET   11
 
-#define LLDP_TLV_AA_ELEMENT_SUBTYPE           0x08
-#define LLDP_TLV_AA_ISID_VLAN_ASGNS_SUBTYPE   0x09
+#define LLDP_TLV_AA_ELEMENT_SUBTYPE           0x0b
+#define LLDP_TLV_AA_ISID_VLAN_ASGNS_SUBTYPE   0x0c
 #define LLDP_TLV_AA_ISID_VLAN_DIGEST_LENGTH   32
-#define LLDP_TLV_AA_ELEM_TYPE_UNKNOWN         1
-#define LLDP_TLV_AA_ELEM_TYPE_SERVER          2
-#define LLDP_TLV_AA_ELEM_TYPE_PROXY           3
-#define LLDP_TLV_AA_ELEM_TYPE_UNTAG_CLIENT    4
-#define LLDP_TLV_AA_ELEM_TYPE_TAG_CLIENT      5
-#define LLDP_TLV_AA_ELEM_TYPE_SERV_NO_AUTH    6
-#define LLDP_TLV_AA_ELEM_TYPE_PROXY_NO_AUTH   7
+
+#define LLDP_TLV_AA_ELEM_TYPE_UNKNOWN                            1
+#define LLDP_TLV_AA_ELEM_TYPE_SERVER                             2
+#define LLDP_TLV_AA_ELEM_TYPE_PROXY                              3
+#define LLDP_TLV_AA_ELEM_TYPE_SERV_NO_AUTH                       4
+#define LLDP_TLV_AA_ELEM_TYPE_PROXY_NO_AUTH                      5
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_WIRELESS_ACCESS_POINT_TYPE1 6
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_WIRELESS_ACCESS_POINT_TYPE2 7
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_SWITCH                      8
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_ROUTER                      9
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_IP_PHONE                    10
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_IP_CAMERA                   11
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_IP_VIDEO                    12
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_SECURITY_DEVICE             13
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_VIRTUAL_SWITCH              14
+#define LLDP_TLV_AA_ELEM_TYPE_CLIENT_SERVER_ENDPOINT             15
+
 #define LLDP_TLV_AA_ELEM_CONN_TYPE_SINGLE     0
 #define LLDP_TLV_AA_ELEM_CONN_TYPE_MLT        1
 #define LLDP_TLV_AA_ELEM_CONN_TYPE_SLT        2

@@ -220,7 +220,8 @@ static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
                                                     odp_port_t);
 
 enum dp_stat_type {
-    DP_STAT_HIT,                /* Packets that matched in the flow table. */
+    DP_STAT_EXACT_HIT,          /* Packets that had an exact match (emc). */
+    DP_STAT_MASKED_HIT,         /* Packets that matched in the flow table. */
     DP_STAT_MISS,               /* Packets that did not match. */
     DP_STAT_LOST,               /* Packets not passed up to the client. */
     DP_N_STATS
@@ -239,10 +240,10 @@ struct dp_netdev_port {
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
 struct dp_netdev_flow_stats {
-    long long int used;             /* Last used time, in monotonic msecs. */
-    long long int packet_count;     /* Number of packets matched. */
-    long long int byte_count;       /* Number of bytes matched. */
-    uint16_t tcp_flags;             /* Bitwise-OR of seen tcp_flags values. */
+    atomic_llong used;             /* Last used time, in monotonic msecs. */
+    atomic_ullong packet_count;    /* Number of packets matched. */
+    atomic_ullong byte_count;      /* Number of bytes matched. */
+    atomic_uint16_t tcp_flags;     /* Bitwise-OR of seen tcp_flags values. */
 };
 
 /* A flow in 'dp_netdev_pmd_thread's 'flow_table'.
@@ -338,7 +339,7 @@ static void dp_netdev_actions_free(struct dp_netdev_actions *);
 /* Contained by struct dp_netdev_pmd_thread's 'stats' member.  */
 struct dp_netdev_pmd_stats {
     /* Indexed by DP_STAT_*. */
-    unsigned long long int n[DP_N_STATS];
+    atomic_ullong n[DP_N_STATS];
 };
 
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
@@ -746,6 +747,21 @@ dpif_netdev_destroy(struct dpif *dpif)
     return 0;
 }
 
+/* Add 'n' to the atomic variable 'var' non-atomically and using relaxed
+ * load/store semantics.  While the increment is not atomic, the load and
+ * store operations are, making it impossible to read inconsistent values.
+ *
+ * This is used to update thread local stats counters. */
+static void
+non_atomic_ullong_add(atomic_ullong *var, unsigned long long n)
+{
+    unsigned long long tmp;
+
+    atomic_read_relaxed(var, &tmp);
+    tmp += n;
+    atomic_store_relaxed(var, tmp);
+}
+
 static int
 dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
@@ -754,10 +770,17 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 
     stats->n_flows = stats->n_hit = stats->n_missed = stats->n_lost = 0;
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        unsigned long long n;
         stats->n_flows += cmap_count(&pmd->flow_table);
-        stats->n_hit += pmd->stats.n[DP_STAT_HIT];
-        stats->n_missed += pmd->stats.n[DP_STAT_MISS];
-        stats->n_lost += pmd->stats.n[DP_STAT_LOST];
+
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_MASKED_HIT], &n);
+        stats->n_hit += n;
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_EXACT_HIT], &n);
+        stats->n_hit += n;
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_MISS], &n);
+        stats->n_missed += n;
+        atomic_read_relaxed(&pmd->stats.n[DP_STAT_LOST], &n);
+        stats->n_lost += n;
     }
     stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
@@ -1545,13 +1568,24 @@ dp_netdev_pmd_find_flow(const struct dp_netdev_pmd_thread *pmd,
 }
 
 static void
-get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow,
+get_dpif_flow_stats(const struct dp_netdev_flow *netdev_flow_,
                     struct dpif_flow_stats *stats)
 {
-    stats->n_packets = netdev_flow->stats.packet_count;
-    stats->n_bytes = netdev_flow->stats.byte_count;
-    stats->used = netdev_flow->stats.used;
-    stats->tcp_flags = netdev_flow->stats.tcp_flags;
+    struct dp_netdev_flow *netdev_flow;
+    unsigned long long n;
+    long long used;
+    uint16_t flags;
+
+    netdev_flow = CONST_CAST(struct dp_netdev_flow *, netdev_flow_);
+
+    atomic_read_relaxed(&netdev_flow->stats.packet_count, &n);
+    stats->n_packets = n;
+    atomic_read_relaxed(&netdev_flow->stats.byte_count, &n);
+    stats->n_bytes = n;
+    atomic_read_relaxed(&netdev_flow->stats.used, &used);
+    stats->used = used;
+    atomic_read_relaxed(&netdev_flow->stats.tcp_flags, &flags);
+    stats->tcp_flags = flags;
 }
 
 /* Converts to the dpif_flow format, using 'key_buf' and 'mask_buf' for
@@ -1842,7 +1876,16 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
                 get_dpif_flow_stats(netdev_flow, put->stats);
             }
             if (put->flags & DPIF_FP_ZERO_STATS) {
-                memset(&netdev_flow->stats, 0, sizeof netdev_flow->stats);
+                /* XXX: The userspace datapath uses thread local statistics
+                 * (for flows), which should be updated only by the owning
+                 * thread.  Since we cannot write on stats memory here,
+                 * we choose not to support this flag.  Please note:
+                 * - This feature is currently used only by dpctl commands with
+                 *   option --clear.
+                 * - Should the need arise, this operation can be implemented
+                 *   by keeping a base value (to be update here) for each
+                 *   counter, and subtracting it before outputting the stats */
+                error = EOPNOTSUPP;
             }
 
             ovsrcu_postpone(dp_netdev_actions_free, old_actions);
@@ -2669,19 +2712,22 @@ static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow, int cnt, int size,
                     uint16_t tcp_flags)
 {
-    long long int now = time_msec();
+    long long now = time_msec();
+    uint16_t flags;
 
-    netdev_flow->stats.used = MAX(now, netdev_flow->stats.used);
-    netdev_flow->stats.packet_count += cnt;
-    netdev_flow->stats.byte_count += size;
-    netdev_flow->stats.tcp_flags |= tcp_flags;
+    atomic_store_relaxed(&netdev_flow->stats.used, now);
+    non_atomic_ullong_add(&netdev_flow->stats.packet_count, cnt);
+    non_atomic_ullong_add(&netdev_flow->stats.byte_count, size);
+    atomic_read_relaxed(&netdev_flow->stats.tcp_flags, &flags);
+    flags |= tcp_flags;
+    atomic_store_relaxed(&netdev_flow->stats.tcp_flags, flags);
 }
 
 static void
 dp_netdev_count_packet(struct dp_netdev_pmd_thread *pmd,
                        enum dp_stat_type type, int cnt)
 {
-    pmd->stats.n[type] += cnt;
+    non_atomic_ullong_add(&pmd->stats.n[type], cnt);
 }
 
 static int
@@ -2691,10 +2737,6 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
                  struct ofpbuf *actions, struct ofpbuf *put_actions)
 {
     struct dp_netdev *dp = pmd->dp;
-
-    if (type == DPIF_UC_MISS) {
-        dp_netdev_count_packet(pmd, DP_STAT_MISS, 1);
-    }
 
     if (OVS_UNLIKELY(!dp->upcall_cb)) {
         return ENODEV;
@@ -2771,7 +2813,8 @@ packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 
 static inline void
 packet_batch_execute(struct packet_batch *batch,
-                     struct dp_netdev_pmd_thread *pmd)
+                     struct dp_netdev_pmd_thread *pmd,
+                     enum dp_stat_type hit_type)
 {
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
@@ -2784,7 +2827,7 @@ packet_batch_execute(struct packet_batch *batch,
     dp_netdev_execute_actions(pmd, batch->packets, batch->packet_count, true,
                               actions->actions, actions->size);
 
-    dp_netdev_count_packet(pmd, DP_STAT_HIT, batch->packet_count);
+    dp_netdev_count_packet(pmd, hit_type, batch->packet_count);
 }
 
 static inline bool
@@ -2875,7 +2918,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd);
+        packet_batch_execute(&batches[i], pmd, DP_STAT_EXACT_HIT);
     }
 
     return notfound_cnt;
@@ -2907,6 +2950,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
         uint64_t actions_stub[512 / 8], slow_stub[512 / 8];
         struct ofpbuf actions, put_actions;
+        int miss_cnt = 0, lost_cnt = 0;
         ovs_u128 ufid;
 
         ofpbuf_use_stub(&actions, actions_stub, sizeof actions_stub);
@@ -2931,6 +2975,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
 
+            miss_cnt++;
+
             miniflow_expand(&keys[i].mf, &match.flow);
 
             ofpbuf_clear(&actions);
@@ -2941,6 +2987,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                                      &ufid, DPIF_UC_MISS, NULL, &actions,
                                      &put_actions);
             if (OVS_UNLIKELY(error && error != ENOSPC)) {
+                dp_packet_delete(packets[i]);
+                lost_cnt++;
                 continue;
             }
 
@@ -2974,6 +3022,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         ofpbuf_uninit(&actions);
         ofpbuf_uninit(&put_actions);
         fat_rwlock_unlock(&dp->upcall_rwlock);
+        dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
+        dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
     } else if (OVS_UNLIKELY(any_miss)) {
         int dropped_cnt = 0;
 
@@ -2984,6 +3034,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             }
         }
 
+        dp_netdev_count_packet(pmd, DP_STAT_MISS, dropped_cnt);
         dp_netdev_count_packet(pmd, DP_STAT_LOST, dropped_cnt);
     }
 
@@ -3004,7 +3055,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd);
+        packet_batch_execute(&batches[i], pmd, DP_STAT_MASKED_HIT);
     }
 }
 

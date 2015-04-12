@@ -78,8 +78,9 @@ static void ovsdb_jsonrpc_trigger_complete_done(
     struct ovsdb_jsonrpc_session *);
 
 /* Monitors. */
-static struct json *ovsdb_jsonrpc_monitor_create(
-    struct ovsdb_jsonrpc_session *, struct ovsdb *, struct json *params);
+static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_create(
+    struct ovsdb_jsonrpc_session *, struct ovsdb *, struct json *params,
+    const struct json *request_id);
 static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_cancel(
     struct ovsdb_jsonrpc_session *,
     struct json_array *params,
@@ -674,7 +675,7 @@ ovsdb_jsonrpc_lookup_db(const struct ovsdb_jsonrpc_session *s,
     return db;
 
 error:
-    *replyp = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    *replyp = jsonrpc_create_error(ovsdb_error_to_json(error), request->id);
     ovsdb_error_destroy(error);
     return NULL;
 }
@@ -752,7 +753,7 @@ ovsdb_jsonrpc_session_lock(struct ovsdb_jsonrpc_session *s,
     return jsonrpc_create_reply(result, request->id);
 
 error:
-    reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    reply = jsonrpc_create_error(ovsdb_error_to_json(error), request->id);
     ovsdb_error_destroy(error);
     return reply;
 }
@@ -812,7 +813,7 @@ ovsdb_jsonrpc_session_unlock(struct ovsdb_jsonrpc_session *s,
     return jsonrpc_create_reply(json_object_create(), request->id);
 
 error:
-    reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    reply = jsonrpc_create_error(ovsdb_error_to_json(error), request->id);
     ovsdb_error_destroy(error);
     return reply;
 }
@@ -842,9 +843,8 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
     } else if (!strcmp(request->method, "monitor")) {
         struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
-            reply = jsonrpc_create_reply(
-                ovsdb_jsonrpc_monitor_create(s, db, request->params),
-                request->id);
+            reply = ovsdb_jsonrpc_monitor_create(s, db, request->params,
+                                                 request->id);
         }
     } else if (!strcmp(request->method, "monitor_cancel")) {
         reply = ovsdb_jsonrpc_monitor_cancel(s, json_array(request->params),
@@ -1221,9 +1221,10 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_jsonrpc_monitor_table *mt,
     return NULL;
 }
 
-static struct json *
+static struct jsonrpc_msg *
 ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
-                             struct json *params)
+                             struct json *params,
+                             const struct json *request_id)
 {
     struct ovsdb_jsonrpc_monitor *m = NULL;
     struct json *monitor_id, *monitor_requests;
@@ -1310,7 +1311,8 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
         }
     }
 
-    return ovsdb_jsonrpc_monitor_get_initial(m);
+    return jsonrpc_create_reply(ovsdb_jsonrpc_monitor_get_initial(m),
+                                request_id);
 
 error:
     if (m) {
@@ -1319,7 +1321,7 @@ error:
 
     json = ovsdb_error_to_json(error);
     ovsdb_error_destroy(error);
-    return json;
+    return jsonrpc_create_error(json, request_id);
 }
 
 static struct jsonrpc_msg *

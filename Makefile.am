@@ -32,6 +32,10 @@ AM_CFLAGS = -Wstrict-prototypes
 AM_CFLAGS += $(WARNING_FLAGS)
 AM_CFLAGS += $(OVS_CFLAGS)
 
+if DPDK_NETDEV
+AM_CFLAGS += -D_FILE_OFFSET_BITS=64
+endif
+
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
@@ -133,6 +137,7 @@ OVSIDL_BUILT =
 pkgdata_DATA =
 sbin_SCRIPTS =
 scripts_SCRIPTS =
+completion_SCRIPTS =
 scripts_DATA =
 SUFFIXES =
 check_DATA =
@@ -140,6 +145,7 @@ check_SCRIPTS =
 pkgconfig_DATA =
 
 scriptsdir = $(pkgdatadir)/scripts
+completiondir = $(sysconfdir)/bash_completion.d
 pkgconfigdir = $(libdir)/pkgconfig
 
 # This ensures that files added to EXTRA_DIST are always distributed,
@@ -196,7 +202,7 @@ dist-hook-git: distfiles
 	    LC_ALL=C sort -u > all-gitfiles;				    \
 	  LC_ALL=C comm -1 -3 all-distfiles all-gitfiles > missing-distfiles; \
 	  if test -s missing-distfiles; then				    \
-	    echo "The distribution is missing the following files:";	    \
+	    echo "The following files are in git but not the distribution:"; \
 	    cat missing-distfiles;					    \
 	    exit 1;							    \
 	  fi;								    \
@@ -352,6 +358,7 @@ dist-docs:
 	VERSION=$(VERSION) $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
 .PHONY: dist-docs
 
+include Documentation/automake.mk
 include m4/automake.mk
 include lib/automake.mk
 include ofproto/automake.mk

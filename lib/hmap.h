@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
-#include "ovs-atomic.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -124,6 +123,16 @@ struct hmap_node *hmap_random_node(const struct hmap *);
  * iteration).
  *
  * HASH is only evaluated once.
+ *
+ *
+ * Warning
+ * -------
+ *
+ * When the loop terminates, &NODE->MEMBER will equal NULL.  Unless MEMBER is
+ * the first member in its struct, this means that NODE itself will not be
+ * NULL.
+ *
+ * (This is true for all of the HMAP_FOR_EACH_*() macros.)
  */
 #define HMAP_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, HMAP)               \
     for (INIT_CONTAINER(NODE, hmap_first_with_hash(HMAP, HASH), MEMBER); \

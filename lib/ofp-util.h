@@ -27,6 +27,7 @@
 #include "match.h"
 #include "meta-flow.h"
 #include "netdev.h"
+#include "openflow/netronome-ext.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 #include "type-props.h"
@@ -217,6 +218,8 @@ void ofputil_match_to_ofp10_match(const struct match *, struct ofp10_match *);
 /* Work with ofp11_match. */
 enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, struct match *,
                                      uint16_t *padded_match_len);
+enum ofperr ofputil_pull_ofp11_mask(struct ofpbuf *, struct match *,
+                                    struct mf_bitmap *bm);
 enum ofperr ofputil_match_from_ofp11_match(const struct ofp11_match *,
                                            struct match *);
 int ofputil_put_ofp11_match(struct ofpbuf *, const struct match *,
@@ -994,6 +997,14 @@ struct ofputil_bucket {
 };
 
 /* Protocol-independent group_mod. */
+struct ofputil_group_props {
+    /* NTR selection method */
+    char selection_method[NTR_MAX_SELECTION_METHOD_LEN];
+    uint64_t selection_method_param;
+    struct field_array fields;
+};
+
+/* Protocol-independent group_mod. */
 struct ofputil_group_mod {
     uint16_t command;             /* One of OFPGC15_*. */
     uint8_t type;                 /* One of OFPGT11_*. */
@@ -1003,6 +1014,7 @@ struct ofputil_group_mod {
                                    * OFPGC15_REMOVE_BUCKET commands
                                    * execution.*/
     struct ovs_list buckets;      /* Contains "struct ofputil_bucket"s. */
+    struct ofputil_group_props props; /* Group properties. */
 };
 
 /* Group stats reply, independent of protocol. */
@@ -1032,6 +1044,7 @@ struct ofputil_group_desc {
     uint8_t type;               /* One of OFPGT_*. */
     uint32_t group_id;          /* Group identifier. */
     struct ovs_list buckets;    /* Contains "struct ofputil_bucket"s. */
+    struct ofputil_group_props props; /* Group properties. */
 };
 
 void ofputil_bucket_list_destroy(struct ovs_list *buckets);
@@ -1062,6 +1075,7 @@ struct ofpbuf *ofputil_encode_group_features_reply(
     const struct ofputil_group_features *, const struct ofp_header *request);
 void ofputil_decode_group_features_reply(const struct ofp_header *,
                                          struct ofputil_group_features *);
+void ofputil_uninit_group_mod(struct ofputil_group_mod *gm);
 struct ofpbuf *ofputil_encode_group_mod(enum ofp_version ofp_version,
                                         const struct ofputil_group_mod *gm);
 
@@ -1071,6 +1085,7 @@ enum ofperr ofputil_decode_group_mod(const struct ofp_header *,
 int ofputil_decode_group_stats_reply(struct ofpbuf *,
                                      struct ofputil_group_stats *);
 
+void ofputil_uninit_group_desc(struct ofputil_group_desc *gd);
 uint32_t ofputil_decode_group_desc_request(const struct ofp_header *);
 struct ofpbuf *ofputil_encode_group_desc_request(enum ofp_version,
                                                  uint32_t group_id);

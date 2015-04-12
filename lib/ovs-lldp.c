@@ -421,12 +421,9 @@ aa_get_vlan_queued(struct ovs_list *list)
     ovs_mutex_lock(&mutex);
 
     HMAP_FOR_EACH (lldp, hmap_node, all_lldps) {
-        struct bridge_aa_vlan *node, *node_next;
+        struct bridge_aa_vlan *node;
 
-        LIST_FOR_EACH_SAFE (node,
-                            node_next,
-                            list_node,
-                            &lldp->active_mapping_queue) {
+        LIST_FOR_EACH_POP (node, list_node, &lldp->active_mapping_queue) {
             struct bridge_aa_vlan *copy;
 
             copy = xmalloc(sizeof *copy);
@@ -437,7 +434,6 @@ aa_get_vlan_queued(struct ovs_list *list)
             list_push_back(list, &copy->list_node);
 
             /* Cleanup */
-            list_remove(&node->list_node);
             free(node->port_name);
             free(node);
         }
@@ -483,12 +479,14 @@ aa_configure(const struct aa_settings *s)
         LIST_FOR_EACH (chassis, list, &lldp->lldpd->g_chassis) {
             /* System Description */
             free(chassis->c_descr);
-            chassis->c_descr = s->system_description[0] ?
+            chassis->c_descr = s && s->system_description[0] ?
                 xstrdup(s->system_description) : xstrdup(PACKAGE_STRING);
 
             /* System Name */
-            free(chassis->c_name);
-            chassis->c_name = xstrdup(s->system_name);
+            if (s) {
+                free(chassis->c_name);
+                chassis->c_name = xstrdup(s->system_name);
+            }
         }
     }
 
@@ -822,16 +820,15 @@ lldp_create(const struct netdev *netdev,
     hw->h_lport.p_id_len = strlen(netdev_get_name(netdev));
 
     /* Auto Attach element tlv */
-    hw->h_lport.p_element.type = LLDP_TLV_AA_ELEM_TYPE_TAG_CLIENT;
+    hw->h_lport.p_element.type = LLDP_TLV_AA_ELEM_TYPE_CLIENT_VIRTUAL_SWITCH;
     hw->h_lport.p_element.mgmt_vlan = 0;
     memcpy(&hw->h_lport.p_element.system_id.system_mac,
            lchassis->c_id, lchassis->c_id_len);
     hw->h_lport.p_element.system_id.conn_type =
         LLDP_TLV_AA_ELEM_CONN_TYPE_SINGLE;
-
-    hw->h_lport.p_element.system_id.smlt_id = 0;
-    hw->h_lport.p_element.system_id.mlt_id[0] = 0;
-    hw->h_lport.p_element.system_id.mlt_id[1] = 0;
+    hw->h_lport.p_element.system_id.rsvd = 0;
+    hw->h_lport.p_element.system_id.rsvd2[0] = 0;
+    hw->h_lport.p_element.system_id.rsvd2[1] = 0;
 
     list_init(&hw->h_lport.p_isid_vlan_maps);
     list_init(&lldp->lldpd->g_hardware);
@@ -908,15 +905,15 @@ lldp_create_dummy(void)
     hw->h_lport.p_id_len = strlen(hw->h_lport.p_id);
 
     /* Auto Attach element tlv */
-    hw->h_lport.p_element.type = LLDP_TLV_AA_ELEM_TYPE_TAG_CLIENT;
+    hw->h_lport.p_element.type = LLDP_TLV_AA_ELEM_TYPE_CLIENT_VIRTUAL_SWITCH;
     hw->h_lport.p_element.mgmt_vlan = 0;
     memcpy(&hw->h_lport.p_element.system_id.system_mac,
            lchassis->c_id, lchassis->c_id_len);
     hw->h_lport.p_element.system_id.conn_type =
         LLDP_TLV_AA_ELEM_CONN_TYPE_SINGLE;
-    hw->h_lport.p_element.system_id.smlt_id = 0;
-    hw->h_lport.p_element.system_id.mlt_id[0] = 0;
-    hw->h_lport.p_element.system_id.mlt_id[1] = 0;
+    hw->h_lport.p_element.system_id.rsvd = 0;
+    hw->h_lport.p_element.system_id.rsvd2[0] = 0;
+    hw->h_lport.p_element.system_id.rsvd2[1] = 0;
 
     list_init(&hw->h_lport.p_isid_vlan_maps);
     list_init(&lldp->lldpd->g_hardware);

@@ -85,7 +85,7 @@ OvsPurgePacketQueue(POVS_USER_PACKET_QUEUE queue,
     LIST_FORALL_SAFE(&tmp, link, next) {
         RemoveEntryList(link);
         elem = CONTAINING_RECORD(link, OVS_PACKET_QUEUE_ELEM, link);
-        OvsFreeMemory(elem);
+        OvsFreeMemoryWithTag(elem, OVS_USER_POOL_TAG);
     }
 }
 
@@ -132,13 +132,13 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
     LIST_FORALL_SAFE(&tmp, link, next) {
         RemoveEntryList(link);
         elem = CONTAINING_RECORD(link, OVS_PACKET_QUEUE_ELEM, link);
-        OvsFreeMemory(elem);
+        OvsFreeMemoryWithTag(elem, OVS_USER_POOL_TAG);
     }
     if (irp) {
         OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
     }
     if (queue) {
-        OvsFreeMemory(queue);
+        OvsFreeMemoryWithTag(queue, OVS_USER_POOL_TAG);
     }
 
     /* Verify if gOvsSwitchContext exists. */
@@ -170,7 +170,8 @@ OvsSubscribeDpIoctl(PVOID instanceP,
         OvsReleasePidHashLock();
 
     } else if (instance->packetQueue == NULL && join) {
-        queue = (POVS_USER_PACKET_QUEUE) OvsAllocateMemory(sizeof *queue);
+        queue = (POVS_USER_PACKET_QUEUE) OvsAllocateMemoryWithTag(
+            sizeof *queue, OVS_USER_POOL_TAG);
         if (queue == NULL) {
             return STATUS_NO_MEMORY;
         }
@@ -248,7 +249,7 @@ OvsReadDpIoctl(PFILE_OBJECT fileObject,
         }
 
         *replyLen = len;
-        OvsFreeMemory(elem);
+        OvsFreeMemoryWithTag(elem, OVS_USER_POOL_TAG);
     }
     return STATUS_SUCCESS;
 }
@@ -762,7 +763,7 @@ OvsQueuePackets(PLIST_ENTRY packetList,
     while (!IsListEmpty(&dropPackets)) {
         link = RemoveHeadList(&dropPackets);
         elem = CONTAINING_RECORD(link, OVS_PACKET_QUEUE_ELEM, link);
-        OvsFreeMemory(elem);
+        OvsFreeMemoryWithTag(elem, OVS_USER_POOL_TAG);
         num++;
     }
 
@@ -1060,7 +1061,8 @@ OvsCreateQueueNlPacket(PVOID userData,
                                     dataLen + extraLen);
 
     allocLen = sizeof (OVS_PACKET_QUEUE_ELEM) + nlMsgSize;
-    elem = (POVS_PACKET_QUEUE_ELEM)OvsAllocateMemory(allocLen);
+    elem = (POVS_PACKET_QUEUE_ELEM)OvsAllocateMemoryWithTag(allocLen,
+                                                            OVS_USER_POOL_TAG);
     if (elem == NULL) {
         ovsUserStats.dropDuetoResource++;
         return NULL;
@@ -1163,6 +1165,6 @@ OvsCreateQueueNlPacket(PVOID userData,
 
     return elem;
 fail:
-    OvsFreeMemory(elem);
+    OvsFreeMemoryWithTag(elem, OVS_USER_POOL_TAG);
     return NULL;
 }

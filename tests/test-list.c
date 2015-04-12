@@ -159,6 +159,31 @@ test_list_for_each_safe(void)
     }
 }
 
+/* Tests that LIST_FOR_EACH_POP removes the elements of a list.  */
+static void
+test_list_for_each_pop(void)
+{
+    enum { MAX_ELEMS = 10 };
+    size_t n;
+
+    for (n = 0; n <= MAX_ELEMS; n++) {
+        struct element elements[MAX_ELEMS];
+        int values[MAX_ELEMS];
+        struct ovs_list list;
+        struct element *e;
+        size_t n_remaining;
+
+        make_list(&list, elements, values, n);
+
+        n_remaining = n;
+        LIST_FOR_EACH_POP (e, node, &list) {
+            n_remaining--;
+            memmove(values, values + 1, sizeof *values * n_remaining);
+            check_list(&list, values, n_remaining);
+        }
+    }
+}
+
 static void
 run_test(void (*function)(void))
 {
@@ -171,6 +196,7 @@ test_list_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     run_test(test_list_construction);
     run_test(test_list_for_each_safe);
+    run_test(test_list_for_each_pop);
     printf("\n");
 }
 

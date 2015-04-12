@@ -10,6 +10,7 @@ on a specific platform, please see one of these files:
   - [INSTALL.RHEL.md]
   - [INSTALL.XenServer.md]
   - [INSTALL.NetBSD.md]
+  - [INSTALL.Windows.md]
   - [INSTALL.DPDK.md]
 
 Build Requirements
@@ -27,6 +28,9 @@ you will need the following software:
       * Clang.  Clang 3.4 and later provide useful static semantic
         analysis and thread-safety checks.  For Ubuntu, there are
         nightly built packages available on clang's website.
+
+      * MSVC 2013.  See [INSTALL.Windows] for additional Windows build
+        instructions.
 
     While OVS may be compatible with other compilers, optimal
     support for atomic operations may be missing, making OVS very
@@ -192,6 +196,20 @@ To use 'clang' compiler:
 
       `% ./configure CC=clang`
 
+To supply special flags to the C compiler, specify them as CFLAGS on
+the configure command line.  If you want the default CFLAGS, which
+include "-g" to build debug symbols and "-O2" to enable optimizations,
+you must include them yourself.  For example, to build with the
+default CFLAGS plus "-mssse3", you might run configure as follows:
+
+      `% ./configure CFLAGS="-g -O2 -mssse3"`
+
+Note that these CFLAGS are not applied when building the Linux
+kernel module.  Custom CFLAGS for the kernel module are supplied
+using the EXTRA_CFLAGS variable when running make.  So, for example:
+
+      `% make EXTRA_CFLAGS="-Wno-error=date-time"
+
 To build the Linux kernel module, so that you can run the
 kernel-based switch, pass the location of the kernel build
 directory on --with-linux.  For example, to build for a running
@@ -254,6 +272,10 @@ Building the Sources
 
    For improved warnings if you installed "sparse" (see "Prerequisites"),
    add C=1 to the command line.
+
+   Some versions of Clang and ccache are not completely compatible.
+   If you see unusual warnings when you use both together, consider
+   disabling ccache for use with Clang.
 
 2. Consider running the testsuite.  Refer to "Running the Testsuite"
    below, for instructions.
