@@ -162,7 +162,12 @@ Steps to install the module
 
 02> Run ./install.cmd to insert the new one.  For this to work you will have to
 turn on TESTSIGNING boot option or 'Disable Driver Signature Enforcement'
-during boot.
+during boot.  The following commands can be used:
+    % bcdedit /set LOADOPTIONS DISABLE_INTEGRITY_CHECKS
+    % bcdedit /set TESTSIGNING ON
+    % bcdedit /set nointegritychecks ON
+
+Note: you may have to restart the machine for the settings to take effect.
 
 03> In the Virtual Switch Manager configuration you can enable the Open vSwitch
 Extension on an existing switch or create a new switch.  If you are using an
