@@ -115,8 +115,8 @@ perf_counter_to_ds(struct ds *ds, struct perf_counter *pfc)
         ratio = 0.0;
     }
 
-    ds_put_format(ds, "%-40s%12lu%12lu%12.1f\n", pfc->name, pfc->n_events,
-                  pfc->total_count, ratio);
+    ds_put_format(ds, "%-40s%12"PRIu64"%12"PRIu64"%12.1f\n",
+                  pfc->name, pfc->n_events, pfc->total_count, ratio);
 }
 
 static void
