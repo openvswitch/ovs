@@ -131,6 +131,16 @@ char *perf_counters_to_string(void);
 
 #define PERF_FUNCTON_COUNT_BEGIN
 #define PERF_FUNCTON_COUNT_END
+
+static inline void perf_counters_init(void) {}
+static inline void perf_counters_destroy(void) {}
+static inline void perf_counters_clear(void) {}
+static inline char *
+perf_counters_to_string(void)
+{
+    return xstrdup("Not Supported on this platform. Only available on Linux.");
+}
+
 #endif
 
 #endif
