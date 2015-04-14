@@ -76,7 +76,7 @@ perf_event_setup(void)
 
     fd__ = perf_event_open(&pe, 0, -1, -1, 0);
     if (fd__ == -1) {
-        VLOG_ERR("Peformance counter is not available on this platform.\n");
+        VLOG_INFO("Peformance counter is not available on this platform.");
     } else {
         ioctl(fd__, PERF_EVENT_IOC_RESET, 0);
         ioctl(fd__, PERF_EVENT_IOC_ENABLE, 0);
