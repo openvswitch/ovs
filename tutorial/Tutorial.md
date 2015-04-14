@@ -118,6 +118,11 @@ This option can be handy for setting break points before ovs-vswitchd runs,
 or for catching early segfaults. Similarly, a '-d' option can be used to
 run ovsdb-server under GDB. Both options can be specified at the same time.
 
+In addition, a '-e' option also launches ovs-vswitchd under GDB. However,
+instead of displaying a 'gdb>' prompt and waiting for user input, ovs-vswitchd
+will start to execute immediately. '-r' option is the corresponding option
+for running ovsdb-server under gdb with immediate execution.
+
 To avoid GDB mangling with the sandbox sub shell terminal, 'ovs-sandbox'
 starts a new xterm to run each GDB session.  For systems that do not support
 X windows, GDB support is effectively disabled.
