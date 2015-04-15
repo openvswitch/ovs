@@ -914,7 +914,7 @@ get_src_port(struct dp_packet *packet)
 {
     uint32_t hash;
 
-    hash = dp_packet_get_dp_hash(packet);
+    hash = dp_packet_get_rss_hash(packet);
 
     return htons((((uint64_t) hash * (tnl_udp_port_max - tnl_udp_port_min)) >> 32) +
                  tnl_udp_port_min);

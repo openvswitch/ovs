@@ -834,7 +834,7 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
-    dp_packet_set_dp_hash(packet, 0);
+    dp_packet_set_rss_hash(packet, 0);
 
     arr[0] = packet;
     *c = 1;

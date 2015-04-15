@@ -3012,10 +3012,10 @@ dpif_netdev_packet_get_dp_hash(struct dp_packet *packet,
 {
     uint32_t hash;
 
-    hash = dp_packet_get_dp_hash(packet);
+    hash = dp_packet_get_rss_hash(packet);
     if (OVS_UNLIKELY(!hash)) {
         hash = miniflow_hash_5tuple(mf, 0);
-        dp_packet_set_dp_hash(packet, hash);
+        dp_packet_set_rss_hash(packet, hash);
     }
     return hash;
 }
@@ -3494,9 +3494,6 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
                                     : dp_packet_clone(packets[i]);
 
                 recirc_pkt->md.recirc_id = nl_attr_get_u32(a);
-
-                /* Hash is private to each packet */
-                recirc_pkt->md.dp_hash = dp_packet_get_dp_hash(packets[i]);
 
                 dp_netdev_input(pmd, &recirc_pkt, 1);
             }

@@ -63,7 +63,7 @@ struct dp_packet {
     void *base_;                /* First byte of allocated space. */
     uint16_t data_ofs;          /* First byte actually in use. */
     uint32_t size_;             /* Number of bytes in use. */
-    uint32_t dp_hash;           /* Packet hash. */
+    uint32_t rss_hash;          /* Packet hash. */
 #endif
     uint32_t allocated;         /* Number of bytes allocated. */
 
@@ -484,22 +484,22 @@ static inline void dp_packet_reset_packet(struct dp_packet *b, int off)
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
 }
 
-static inline uint32_t dp_packet_get_dp_hash(struct dp_packet *p)
+static inline uint32_t dp_packet_get_rss_hash(struct dp_packet *p)
 {
 #ifdef DPDK_NETDEV
     return p->mbuf.hash.rss;
 #else
-    return p->dp_hash;
+    return p->rss_hash;
 #endif
 }
 
-static inline void dp_packet_set_dp_hash(struct dp_packet *p,
+static inline void dp_packet_set_rss_hash(struct dp_packet *p,
                                            uint32_t hash)
 {
 #ifdef DPDK_NETDEV
     p->mbuf.hash.rss = hash;
 #else
-    p->dp_hash = hash;
+    p->rss_hash = hash;
 #endif
 }
 
