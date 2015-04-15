@@ -100,7 +100,7 @@ EOF
     logfile=$sandbox/`echo $app | sed 's,/,.,g'`.log
     logs="$logs
         $logfile"
-    ryu-manager "$app" --log-file="$logfile" & pid=$!
+    ryu-manager --ofp-tcp-listen-port=6653 "$app" --log-file="$logfile" & pid=$!
     echo $pid > "$sandbox/ryu.pid"
     i=0
     while sleep 1; do
