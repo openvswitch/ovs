@@ -2610,7 +2610,7 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
                 : rstp_process_packet(xport, packet);
         }
         return SLOW_STP;
-    } else if (xport->lldp && lldp_should_process_flow(flow)) {
+    } else if (xport->lldp && lldp_should_process_flow(xport->lldp, flow)) {
         if (packet) {
             lldp_process_packet(xport->lldp, packet);
         }

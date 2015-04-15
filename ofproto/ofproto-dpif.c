@@ -2020,16 +2020,15 @@ set_lldp(struct ofport *ofport_,
             ofport->lldp = lldp_create(ofport->up.netdev, ofport_->mtu, cfg);
         }
 
-        if (lldp_configure(ofport->lldp)) {
-            error = 0;
-            goto out;
+        if (!lldp_configure(ofport->lldp, cfg)) {
+            error = EINVAL;
         }
-
-        error = EINVAL;
     }
-    lldp_unref(ofport->lldp);
-    ofport->lldp = NULL;
-out:
+    if (error) {
+        lldp_unref(ofport->lldp);
+        ofport->lldp = NULL;
+    }
+
     ofproto_dpif_monitor_port_update(ofport,
                                      ofport->bfd,
                                      ofport->cfm,

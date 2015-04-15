@@ -660,9 +660,9 @@ lldp_init(void)
  * fields in 'wc' that were used to make the determination.
  */
 bool
-lldp_should_process_flow(const struct flow *flow)
+lldp_should_process_flow(struct lldp *lldp, const struct flow *flow)
 {
-    return (flow->dl_type == htons(ETH_TYPE_LLDP));
+    return (flow->dl_type == htons(ETH_TYPE_LLDP) && lldp->enabled);
 }
 
 
@@ -689,6 +689,9 @@ lldp_should_send_packet(struct lldp *cfg) OVS_EXCLUDED(mutex)
     ret = timer_expired(&cfg->tx_timer);
     ovs_mutex_unlock(&mutex);
 
+    /* LLDP must be enabled */
+    ret &= cfg->enabled;
+
     return ret;
 }
 
@@ -699,7 +702,7 @@ lldp_wake_time(const struct lldp *lldp) OVS_EXCLUDED(mutex)
 {
     long long int retval;
 
-    if (!lldp) {
+    if (!lldp || !lldp->enabled) {
         return LLONG_MAX;
     }
 
@@ -744,9 +747,15 @@ lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
 /* Configures the LLDP stack.
  */
 bool
-lldp_configure(struct lldp *lldp) OVS_EXCLUDED(mutex)
+lldp_configure(struct lldp *lldp, const struct smap *cfg) OVS_EXCLUDED(mutex)
 {
     if (lldp) {
+        if (cfg && smap_get_bool(cfg, "enable", false)) {
+            lldp->enabled = true;
+        } else {
+            lldp->enabled = false;
+        }
+
         ovs_mutex_lock(&mutex);
         timer_set_expired(&lldp->tx_timer);
         timer_set_duration(&lldp->tx_timer, LLDP_DEFAULT_TRANSMIT_INTERVAL_MS);
