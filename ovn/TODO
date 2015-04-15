@@ -4,31 +4,6 @@
   the same syntax and I imagine the same code ought to be useful in
   ovn-nbd for ACL match expressions.
 
-** Definition of data structures to represent a match expression as a
-   syntax tree.
-
-** Definition of data structures to represent variables (fields).
-
-   Fields need names and prerequisites.  Most fields are numeric and
-   thus need widths.  We need also need a way to represent nominal
-   fields (currently just logical port names).  It might be
-   appropriate to associate fields directly with OXM/NXM code points;
-   we have to decide whether we want OVN to use the OVS flow structure
-   or work with OXM more directly.
-
-   Probably should be defined so that the data structure is also
-   useful for references to fields in action parsing.
-
-** Parsing into syntax tree.
-
-** Semantic checking against variable definitions.
-
-** Applying prerequisites.
-
-** Simplification into conjunction-of-disjunctions (CoD) form.
-
-** Transformation from CoD form into OXM matches.
-
 * ovn-controller
 
 ** Flow table handling in ovn-controller.

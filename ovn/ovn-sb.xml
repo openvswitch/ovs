@@ -246,10 +246,276 @@
       </p>
 
       <p>
-        Matching expressions have two important kinds of primary expression:
-        <dfn>fields</dfn> and <dfn>constants</dfn>.  A field names a piece of
-        data or metadata.  The supported fields are:
+	The most important components of match expression are
+	<dfn>comparisons</dfn> between <dfn>symbols</dfn> and
+	<dfn>constants</dfn>, e.g. <code>ip4.dst == 192.168.0.1</code>,
+	<code>ip.proto == 6</code>, <code>arp.op == 1</code>, <code>eth.type ==
+	0x800</code>.  The logical AND operator <code>&amp;&amp;</code> and
+	logical OR operator <code>||</code> can combine comparisons into a
+	larger expression.
       </p>
+
+      <p>
+        Matching expressions also support parentheses for grouping, the logical
+        NOT prefix operator <code>!</code>, and literals <code>0</code> and
+        <code>1</code> to express ``false'' or ``true,'' respectively.  The
+        latter is useful by itself as a catch-all expression that matches every
+        packet.
+      </p>
+
+      <p><em>Symbols</em></p>
+
+      <p>
+	<em>Type</em>.  Symbols have <dfn>integer</dfn> or <dfn>string</dfn>
+	type.  Integer symbols have a <dfn>width</dfn> in bits.
+      </p>
+
+      <p>
+	<em>Kinds</em>.  There are three kinds of symbols:
+      </p>
+
+      <ul>
+	<li>
+	  <p>
+	    <dfn>Fields</dfn>.  A field symbol represents a packet header or
+	    metadata field.  For example, a field
+	    named <code>vlan.tci</code> might represent the VLAN TCI field in a
+	    packet.
+	  </p>
+
+	  <p>
+	    A field symbol can have integer or string type.  Integer fields can
+	    be nominal or ordinal (see <em>Level of Measurement</em>,
+	    below).
+	  </p>
+	</li>
+
+	<li>
+	  <p>
+	    <dfn>Subfields</dfn>.  A subfield represents a subset of bits from
+	    a larger field.  For example, a field <code>vlan.vid</code> might
+	    be defined as an alias for <code>vlan.tci[0..11]</code>.  Subfields
+	    are provided for syntactic convenience, because it is always
+	    possible to instead refer to a subset of bits from a field
+	    directly.
+	  </p>
+
+	  <p>
+	    Only ordinal fields (see <em>Level of Measurement</em>,
+	    below) may have subfields.  Subfields are always ordinal.
+	  </p>
+	</li>
+
+	<li>
+	  <p>
+	    <dfn>Predicates</dfn>.  A predicate is shorthand for a Boolean
+	    expression.  Predicates may be used much like 1-bit fields.  For
+	    example, <code>ip4</code> might expand to <code>eth.type ==
+	    0x800</code>.  Predicates are provided for syntactic convenience,
+	    because it is always possible to instead specify the underlying
+	    expression directly.
+	  </p>
+
+	  <p>
+	    A predicate whose expansion refers to any nominal field or
+	    predicate (see <em>Level of Measurement</em>, below) is nominal;
+	    other predicates have Boolean level of measurement.
+	  </p>
+	</li>
+      </ul>
+
+      <p>
+	<em>Level of Measurement</em>.  See
+	http://en.wikipedia.org/wiki/Level_of_measurement for the statistical
+	concept on which this classification is based.  There are three
+	levels:
+      </p>
+
+      <ul>
+	<li>
+	  <p>
+	    <dfn>Ordinal</dfn>.  In statistics, ordinal values can be ordered
+	    on a scale.  OVN considers a field (or subfield) to be ordinal if
+	    its bits can be examined individually.  This is true for the
+	    OpenFlow fields that OpenFlow or Open vSwitch makes ``maskable.''
+	  </p>
+
+	  <p>
+	    Any use of a nominal field may specify a single bit or a range of
+	    bits, e.g. <code>vlan.tci[13..15]</code> refers to the PCP field
+	    within the VLAN TCI, and <code>eth.dst[40]</code> refers to the
+	    multicast bit in the Ethernet destination address.
+	  </p>
+
+	  <p>
+	    OVN supports all the usual arithmetic relations (<code>==</code>,
+	    <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+	    <code>&gt;</code>, and <code>&gt;=</code>) on ordinal fields and
+	    their subfields, because OVN can implement these in OpenFlow and
+	    Open vSwitch as collections of bitwise tests.
+	  </p>
+	</li>
+
+	<li>
+	  <p>
+	    <dfn>Nominal</dfn>.  In statistics, nominal values cannot be
+	    usefully compared except for equality.  This is true of OpenFlow
+	    port numbers, Ethernet types, and IP protocols are examples: all of
+	    these are just identifiers assigned arbitrarily with no deeper
+	    meaning.  In OpenFlow and Open vSwitch, bits in these fields
+	    generally aren't individually addressable.
+	  </p>
+
+	  <p>
+	    OVN only supports arithmetic tests for equality on nominal fields,
+	    because OpenFlow and Open vSwitch provide no way for a flow to
+	    efficiently implement other comparisons on them.  (A test for
+	    inequality can be sort of built out of two flows with different
+	    priorities, but OVN matching expressions always generate flows with
+	    a single priority.)
+	  </p>
+
+	  <p>
+	    String fields are always nominal.
+	  </p>
+	</li>
+
+	<li>
+	  <p>
+	    <dfn>Boolean</dfn>.  A nominal field that has only two values, 0
+	    and 1, is somewhat exceptional, since it is easy to support both
+	    equality and inequality tests on such a field: either one can be
+	    implemented as a test for 0 or 1.
+	  </p>
+
+	  <p>
+	    Only predicates (see above) have a Boolean level of measurement.
+	  </p>
+
+	  <p>
+	    This isn't a standard level of measurement.
+	  </p>
+	</li>
+      </ul>
+
+      <p>
+	<em>Prerequisites</em>.  Any symbol can have prerequisites, which are
+	additional condition implied by the use of the symbol.  For example,
+	For example, <code>icmp4.type</code> symbol might have prerequisite
+	<code>icmp4</code>, which would cause an expression <code>icmp4.type ==
+	0</code> to be interpreted as <code>icmp4.type == 0 &amp;&amp;
+	icmp4</code>, which would in turn expand to <code>icmp4.type == 0
+	&amp;&amp; eth.type == 0x800 &amp;&amp; ip4.proto == 1</code> (assuming
+	<code>icmp4</code> is a predicate defined as suggested under
+	<em>Types</em> above).
+      </p>
+
+      <p><em>Relational operators</em></p>
+
+      <p>
+	All of the standard relational operators <code>==</code>,
+	<code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+	<code>&gt;</code>, and <code>&gt;=</code> are supported.  Nominal
+	fields support only <code>==</code> and <code>!=</code>, and only in a
+	positive sense when outer <code>!</code> are taken into account,
+	e.g. given string field <code>inport</code>, <code>inport ==
+	"eth0"</code> and <code>!(inport != "eth0")</code> are acceptable, but
+	not <code>inport != "eth0"</code>.
+      </p>
+
+      <p>
+	The implementation of <code>==</code> (or <code>!=</code> when it is
+	negated), is more efficient than that of the other relational
+	operators.
+      </p>
+
+      <p><em>Constants</em></p>
+
+      <p>
+        Integer constants may be expressed in decimal, hexadecimal prefixed by
+        <code>0x</code>, or as dotted-quad IPv4 addresses, IPv6 addresses in
+        their standard forms, or Ethernet addresses as colon-separated hex
+        digits.  A constant in any of these forms may be followed by a slash
+        and a second constant (the mask) in the same form, to form a masked
+        constant.  IPv4 and IPv6 masks may be given as integers, to express
+        CIDR prefixes.
+      </p>
+
+      <p>
+        String constants have the same syntax as quoted strings in JSON (thus,
+        they are Unicode strings).  String constants are used for naming
+        logical ports.  Thus, the useful values are <ref
+        column="logical_port"/> names from the <ref column="Bindings"/> and
+        <ref column="Gateway"/> table.
+      </p>
+
+      <p>
+        Some operators support sets of constants written inside curly braces
+        <code>{</code> ... <code>}</code>.  Commas between elements of a set,
+        and after the last elements, are optional.  With <code>==</code>,
+        ``<code><var>field</var> == { <var>constant1</var>,
+        <var>constant2</var>,</code> ... <code>}</code>'' is syntactic sugar
+        for ``<code><var>field</var> == <var>constant1</var> ||
+        <var>field</var> == <var>constant2</var> || </code>...<code></code>.
+        Similarly, ``<code><var>field</var> != { <var>constant1</var>,
+        <var>constant2</var>, </code>...<code> }</code>'' is equivalent to
+        ``<code><var>field</var> != <var>constant1</var> &amp;&amp;
+        <var>field</var> != <var>constant2</var> &amp;&amp;
+        </code>...<code></code>''.
+      </p>
+
+      <p><em>Miscellaneous</em></p>
+
+      <p>
+	Comparisons may name the symbol or the constant first,
+	e.g. <code>tcp.src == 80</code> and <code>80 == tcp.src</code> are both
+	acceptable.
+      </p>
+
+      <p>
+	Tests for a range may be expressed using a syntax like <code>1024 &lt;=
+	tcp.src &lt;= 49151</code>, which is equivalent to <code>1024 &lt;=
+	tcp.src &amp;&amp; tcp.src &lt;= 49151</code>.
+      </p>
+
+      <p>
+	For a one-bit field or predicate, a mention of its name is equivalent
+	to <code><var>symobl</var> == 1</code>, e.g. <code>vlan.present</code>
+	is equivalent to <code>vlan.present == 1</code>.  The same is true for
+	one-bit subfields, e.g. <code>vlan.tci[12]</code>.  There is no
+	technical limitation to implementing the same for ordinal fields of all
+	widths, but the implementation is expensive enough that the syntax
+	parser requires writing an explicit comparison against zero to make
+	mistakes less likely, e.g. in <code>tcp.src != 0</code> the comparison
+	against 0 is required.
+      </p>
+
+      <p>
+	<em>Operator precedence</em> is as shown below, from highest to lowest.
+	There are two exceptions where parentheses are required even though the
+	table would suggest that they are not: <code>&amp;&amp;</code> and
+	<code>||</code> require parentheses when used together, and
+	<code>!</code> requires parentheses when applied to a relational
+	expression.  Thus, in <code>(eth.type == 0x800 || eth.type == 0x86dd)
+	&amp;&amp; ip.proto == 6</code> or <code>!(arp.op == 1)</code>, the
+	parentheses are mandatory.
+      </p>
+
+      <ul>
+        <li><code>()</code></li>
+        <li><code>==   !=   &lt;   &lt;=   &gt;   &gt;=</code></li>
+        <li><code>!</code></li>
+        <li><code>&amp;&amp;   ||</code></li>
+      </ul>
+
+      <p>
+        <em>Comments</em> may be introduced by <code>//</code>, which extends
+        to the next new-line.  Comments within a line may be bracketed by
+        <code>/*</code> and <code>*/</code>.  Multiline comments are not
+        supported.
+      </p>
+
+      <p><em>Symbols</em></p>
 
       <ul>
         <li>
@@ -271,123 +537,6 @@
         <li><code>nd.target</code> <code>nd.sll</code> <code>nd.tll</code></li>
       </ul>
 
-      <p>
-        Subfields may be addressed using a <code>[]</code> suffix,
-        e.g. <code>tcp.src[0..7]</code> refers to the low 8 bits of the TCP
-        source port.  A subfield may be used in any context a field is allowed.
-      </p>
-
-      <p>
-        Some fields have prerequisites.  OVN implicitly adds clauses to satisfy
-        these.  For example, <code>arp.op == 1</code> is equivalent to
-        <code>eth.type == 0x0806 &amp;&amp; arp.op == 1</code>, and
-        <code>tcp.src == 80</code> is equivalent to <code>(eth.type == 0x0800
-        || eth.type == 0x86dd) &amp;&amp; ip.proto == 6 &amp;&amp; tcp.src ==
-        80</code>.
-      </p>
-
-      <p>
-        Most fields have integer values.  Integer constants may be expressed in
-        several forms: decimal integers, hexadecimal integers prefixed by
-        <code>0x</code>, dotted-quad IPv4 addresses, IPv6 addresses in their
-        standard forms, and as Ethernet addresses as colon-separated hex
-        digits.  A constant in any of these forms may be followed by a slash
-        and a second constant (the mask) in the same form, to form a masked
-        constant.  IPv4 and IPv6 masks may be given as integers, to express
-        CIDR prefixes.
-      </p>
-
-      <p>
-        The <code>inport</code> and <code>outport</code> fields have string
-        values.  The useful values are <ref column="logical_port"/> names from
-        the <ref column="Bindings"/> and <ref column="Gateway"/> table.
-      </p>
-
-      <p>
-        The available operators, from highest to lowest precedence, are:
-      </p>
-
-      <ul>
-        <li><code>()</code></li>
-        <li><code>==   !=   &lt;   &lt;=   &gt;   &gt;=   in   not in</code></li>
-        <li><code>!</code></li>
-        <li><code>&amp;&amp;</code></li>
-        <li><code>||</code></li>
-      </ul>
-
-      <p>
-        The <code>()</code> operator is used for grouping.
-      </p>
-
-      <p>
-        The equality operator <code>==</code> is the most important operator.
-        Its operands must be a field and an optionally masked constant, in
-        either order.  The <code>==</code> operator yields true when the
-        field's value equals the constant's value for all the bits included in
-        the mask.  The <code>==</code> operator translates simply and naturally
-        to OpenFlow.
-      </p>
-
-      <p>
-        The inequality operator <code>!=</code> yields the inverse of
-        <code>==</code> but its syntax and use are the same.  Implementation of
-        the inequality operator is expensive.
-      </p>
-
-      <p>
-        The relational operators are &lt;, &lt;=, &gt;, and &gt;=.  Their
-        operands must be a field and a constant, in either order; the constant
-        must not be masked.  These operators are most commonly useful for L4
-        ports, e.g. <code>tcp.src &lt; 1024</code>.  Implementation of the
-        relational operators is expensive.
-      </p>
-
-      <p>
-        The set membership operator <code>in</code>, with syntax
-        ``<code><var>field</var> in { <var>constant1</var>,
-        <var>constant2</var>,</code> ... <code>}</code>'', is syntactic sugar
-        for ``<code>(<var>field</var> == <var>constant1</var> ||
-        <var>field</var> == <var>constant2</var> || </code>...<code>)</code>.
-        Conversely, ``<code><var>field</var> not in { <var>constant1</var>,
-        <var>constant2</var>, </code>...<code> }</code>'' is syntactic sugar
-        for ``<code>(<var>field</var> != <var>constant1</var> &amp;&amp;
-        <var>field</var> != <var>constant2</var> &amp;&amp;
-        </code>...<code>)</code>''.
-      </p>
-
-      <p>
-        The unary prefix operator <code>!</code> yields its operand's inverse.
-      </p>
-
-      <p>
-        The logical AND operator <code>&amp;&amp;</code> yields true only if
-        both of its operands are true.
-      </p>
-
-      <p>
-        The logical OR operator <code>||</code> yields true if at least one of
-        its operands is true.
-      </p>
-
-      <p>
-        Finally, the keywords <code>true</code> and <code>false</code> may also
-        be used in matching expressions.  <code>true</code> is useful by itself
-        as a catch-all expression that matches every packet.
-      </p>
-
-      <p>
-        <em>Comments</em> may be introduced by <code>//</code>, which extends
-        to the next new-line.  Comments within a line may be bracketed by
-        <code>/*</code> and <code>*/</code>.  Multiline comments are not
-        supported.
-      </p>
-
-      <p>
-        (The above is pretty ambitious.  It probably makes sense to initially
-        implement only a subset of this specification.  The full specification
-        is written out mainly to get an idea of what a fully general matching
-        expression language could include.)
-      </p>
     </column>
 
     <column name="actions">
@@ -418,24 +567,24 @@
       </p>
 
       <dl>
-          <dt><code>learn</code></dt>
+        <dt><code>learn</code></dt>
 
-          <dt><code>conntrack</code></dt>
+        <dt><code>conntrack</code></dt>
 
-          <dt><code>with(<var>field</var>=<var>value</var>) { <var>action</var>, </code>...<code> }</code></dt>
-          <dd>execute <var>actions</var> with temporary changes to <var>fields</var></dd>
+        <dt><code>with(<var>field</var>=<var>value</var>) { <var>action</var>, </code>...<code> }</code></dt>
+        <dd>execute <var>actions</var> with temporary changes to <var>fields</var></dd>
 
-          <dt><code>dec_ttl { <var>action</var>, </code>...<code> } { <var>action</var>; </code>...<code>}</code></dt>
-          <dd>
-            decrement TTL; execute first set of actions if
-            successful, second set if TTL decrement fails
-          </dd>
+        <dt><code>dec_ttl { <var>action</var>, </code>...<code> } { <var>action</var>; </code>...<code>}</code></dt>
+        <dd>
+          decrement TTL; execute first set of actions if
+          successful, second set if TTL decrement fails
+        </dd>
 
-          <dt><code>icmp_reply { <var>action</var>, </code>...<code> }</code></dt>
-          <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
+        <dt><code>icmp_reply { <var>action</var>, </code>...<code> }</code></dt>
+        <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
 
-	  <dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
-	  <dd>generate ARP from packet, execute <var>action</var>s</dd>
+	<dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
+	<dd>generate ARP from packet, execute <var>action</var>s</dd>
       </dl>
 
       <p>
