@@ -1590,6 +1590,15 @@ union mf_subvalue {
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 
+bool mf_subvalue_intersect(const union mf_subvalue *a_value,
+                           const union mf_subvalue *a_mask,
+                           const union mf_subvalue *b_value,
+                           const union mf_subvalue *b_mask,
+                           union mf_subvalue *dst_value,
+                           union mf_subvalue *dst_mask);
+int mf_subvalue_width(const union mf_subvalue *);
+void mf_subvalue_shift(union mf_subvalue *, int n);
+
 /* An array of fields with values */
 struct field_array {
     struct mf_bitmap used;
@@ -1658,6 +1667,10 @@ void mf_write_subfield_flow(const struct mf_subfield *,
                             const union mf_subvalue *, struct flow *);
 void mf_write_subfield(const struct mf_subfield *, const union mf_subvalue *,
                        struct match *);
+void mf_mask_subfield(const struct mf_field *,
+                      const union mf_subvalue *value,
+                      const union mf_subvalue *mask,
+                      struct match *);
 
 void mf_read_subfield(const struct mf_subfield *, const struct flow *,
                       union mf_subvalue *);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,72 @@ nxm_init(void)
 {
     static pthread_once_t once = PTHREAD_ONCE_INIT;
     pthread_once(&once, nxm_do_init);
+}
+
+/* Consider the two value/mask pairs 'a_value/a_mask' and 'b_value/b_mask' as
+ * restrictions on a field's value.  Then, this function initializes
+ * 'dst_value/dst_mask' such that it combines the restrictions of both pairs.
+ * This is not always possible, i.e. if one pair insists on a value of 0 in
+ * some bit and the other pair insists on a value of 1 in that bit.  This
+ * function returns false in a case where the combined restriction is
+ * impossible (in which case 'dst_value/dst_mask' is not fully initialized),
+ * true otherwise.
+ *
+ * (As usually true for value/mask pairs in OVS, any 1-bit in a value must have
+ * a corresponding 1-bit in its mask.) */
+bool
+mf_subvalue_intersect(const union mf_subvalue *a_value,
+                      const union mf_subvalue *a_mask,
+                      const union mf_subvalue *b_value,
+                      const union mf_subvalue *b_mask,
+                      union mf_subvalue *dst_value,
+                      union mf_subvalue *dst_mask)
+{
+    for (int i = 0; i < ARRAY_SIZE(a_value->be64); i++) {
+        ovs_be64 av = a_value->be64[i];
+        ovs_be64 am = a_mask->be64[i];
+        ovs_be64 bv = b_value->be64[i];
+        ovs_be64 bm = b_mask->be64[i];
+        ovs_be64 *dv = &dst_value->be64[i];
+        ovs_be64 *dm = &dst_mask->be64[i];
+
+        if ((av ^ bv) & (am & bm)) {
+            return false;
+        }
+        *dv = av | bv;
+        *dm = am | bm;
+    }
+    return true;
+}
+
+/* Returns the "number of bits" in 'v', e.g. 1 if only the lowest-order bit is
+ * set, 2 if the second-lowest-order bit is set, and so on. */
+int
+mf_subvalue_width(const union mf_subvalue *v)
+{
+    return 1 + bitwise_rscan(v, sizeof *v, true, sizeof *v * 8 - 1, -1);
+}
+
+/* For positive 'n', shifts the bits in 'value' 'n' bits to the left, and for
+ * negative 'n', shifts the bits '-n' bits to the right. */
+void
+mf_subvalue_shift(union mf_subvalue *value, int n)
+{
+    if (n) {
+        union mf_subvalue tmp;
+        memset(&tmp, 0, sizeof tmp);
+
+        if (n > 0 && n < 8 * sizeof tmp) {
+            bitwise_copy(value, sizeof *value, 0,
+                         &tmp, sizeof tmp, n,
+                         8 * sizeof tmp - n);
+        } else if (n < 0 && n > -8 * sizeof tmp) {
+            bitwise_copy(value, sizeof *value, -n,
+                         &tmp, sizeof tmp, 0,
+                         8 * sizeof tmp + n);
+        }
+        *value = tmp;
+    }
 }
 
 /* Returns true if 'wc' wildcards all the bits in field 'mf', false if 'wc'
@@ -2266,6 +2332,22 @@ mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
     mf_get(field, match, &value, &mask);
     bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
     bitwise_one (                 &mask,  field->n_bytes, sf->ofs, sf->n_bits);
+    mf_set(field, &value, &mask, match);
+}
+
+/* 'v' and 'm' correspond to values of 'field'.  This function copies them into
+ * 'match' in the correspond positions. */
+void
+mf_mask_subfield(const struct mf_field *field,
+                 const union mf_subvalue *v,
+                 const union mf_subvalue *m,
+                 struct match *match)
+{
+    union mf_value value, mask;
+
+    mf_get(field, match, &value, &mask);
+    bitwise_copy(v, sizeof *v, 0, &value, field->n_bytes, 0, field->n_bits);
+    bitwise_copy(m, sizeof *m, 0, &mask,  field->n_bytes, 0, field->n_bits);
     mf_set(field, &value, &mask, match);
 }
 
