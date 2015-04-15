@@ -39,7 +39,7 @@ static int fd__ = 0;
 uint64_t
 perf_counter_read(uint64_t *counter)
 {
-    size_t size = sizeof *counter;
+    int size = sizeof *counter;
 
     if (fd__ <= 0 || read(fd__, counter, size) < size) {
         *counter = 0;
