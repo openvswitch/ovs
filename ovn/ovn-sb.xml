@@ -376,6 +376,13 @@
       </p>
 
       <p>
+        <em>Comments</em> may be introduced by <code>//</code>, which extends
+        to the next new-line.  Comments within a line may be bracketed by
+        <code>/*</code> and <code>*/</code>.  Multiline comments are not
+        supported.
+      </p>
+
+      <p>
         (The above is pretty ambitious.  It probably makes sense to initially
         implement only a subset of this specification.  The full specification
         is written out mainly to get an idea of what a fully general matching

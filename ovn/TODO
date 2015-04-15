@@ -19,11 +19,6 @@
    Probably should be defined so that the data structure is also
    useful for references to fields in action parsing.
 
-** Lexical analysis.
-
-   Probably should be defined so that the lexer can be reused for
-   parsing actions.
-
 ** Parsing into syntax tree.
 
 ** Semantic checking against variable definitions.

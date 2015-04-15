@@ -1,0 +1,95 @@
+AT_BANNER([OVN])
+
+AT_SETUP([ovn -- lexer])
+dnl For lines without =>, input and expected output are identical.
+dnl For lines with =>, input precedes => and expected output follows =>.
+AT_DATA([test-cases.txt], [dnl
+foo bar baz quuxquuxquux _abcd_ a.b.c.d a123_.456
+"abc\u0020def" => "abc def"
+" => error("Input ends inside quoted string.")dnl "
+
+a/*b*/c => a c
+a//b c => a
+a/**/b => a b
+a/*/b => a error("`/*' without matching `*/'.")
+a/*/**/b => a b
+a/b => a error("`/' is only valid as part of `//' or `/*'.") b
+
+0 1 12345 18446744073709551615
+18446744073709551616 => error("Decimal constants must be less than 2**64.")
+9999999999999999999999 => error("Decimal constants must be less than 2**64.")
+01 => error("Decimal constants must not have leading zeros.")
+
+0/0
+0/1
+1/0 => error("Value contains unmasked 1-bits.")
+1/1
+128/384
+1/3
+1/ => error("Integer constant expected.")
+
+1/0x123 => error("Value and mask have incompatible formats.")
+
+0x1234
+0x01234 => 0x1234
+0x0 => 0
+0x000 => 0
+0xfedcba9876543210
+0XFEDCBA9876543210 => 0xfedcba9876543210
+0xfedcba9876543210fedcba9876543210
+0xfedcba9876543210fedcba98765432100 => error("Hexadecimal constant requires more than 128 bits.")
+0x0000fedcba9876543210fedcba9876543210 => 0xfedcba9876543210fedcba9876543210
+0x => error("Hex digits expected following 0x.")
+0X => error("Hex digits expected following 0X.")
+0x0/0x0 => 0/0
+0x0/0x1 => 0/0x1
+0x1/0x0 => error("Value contains unmasked 1-bits.")
+0xffff/0x1ffff
+0x. => error("Invalid syntax in hexadecimal constant.")
+
+192.168.128.1 1.2.3.4 255.255.255.255 0.0.0.0
+256.1.2.3 => error("Invalid numeric constant.")
+192.168.0.0/16
+192.168.0.0/255.255.0.0 => 192.168.0.0/16
+192.168.0.0/255.255.255.0 => 192.168.0.0/24
+192.168.0.0/255.255.0.255
+192.168.0.0/255.0.0.0 => error("Value contains unmasked 1-bits.")
+192.168.0.0/32
+192.168.0.0/255.255.255.255 => 192.168.0.0/32
+
+::
+::1
+ff00::1234 => ff00::1234
+2001:db8:85a3::8a2e:370:7334
+2001:db8:85a3:0:0:8a2e:370:7334 => 2001:db8:85a3::8a2e:370:7334
+2001:0db8:85a3:0000:0000:8a2e:0370:7334 => 2001:db8:85a3::8a2e:370:7334
+::ffff:192.0.2.128
+::ffff:c000:0280 => ::ffff:192.0.2.128
+::1/::1
+::1/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff => ::1/128
+::1/128
+ff00::/8
+ff00::/ff00:: => ff00::/8
+
+01:23:45:67:ab:cd
+01:23:45:67:AB:CD => 01:23:45:67:ab:cd
+fe:dc:ba:98:76:54
+FE:DC:ba:98:76:54 => fe:dc:ba:98:76:54
+01:00:00:00:00:00/01:00:00:00:00:00
+ff:ff:ff:ff:ff:ff/ff:ff:ff:ff:ff:ff
+fe:ff:ff:ff:ff:ff/ff:ff:ff:ff:ff:ff
+ff:ff:ff:ff:ff:ff/fe:ff:ff:ff:ff:ff => error("Value contains unmasked 1-bits.")
+fe:x => error("Invalid numeric constant.")
+00:01:02:03:04:x => error("Invalid numeric constant.")
+
+(){}[[]]==!=<<=>>=!&&||..,;= => ( ) { } [[ ]] == != < <= > >= ! && || .. , ; =
+& => error("`&' is only valid as part of `&&'.")
+| => error("`|' is only valid as part of `||'.")
+
+^ => error("Invalid character `^' in input.")
+])
+AT_CAPTURE_FILE([input.txt])
+sed 's/ =>.*//' test-cases.txt > input.txt
+sed 's/.* => //' test-cases.txt > expout
+AT_CHECK([ovstest test-ovn lex < input.txt], [0], [expout])
+AT_CLEANUP
