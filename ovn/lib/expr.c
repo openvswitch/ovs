@@ -21,6 +21,7 @@
 #include "lex.h"
 #include "match.h"
 #include "shash.h"
+#include "simap.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(expr);
@@ -1155,9 +1156,14 @@ expr_symtab_add_subfield(struct shash *symtab, const char *name,
  * 'prereqs'. */
 struct expr_symbol *
 expr_symtab_add_string(struct shash *symtab, const char *name,
-                       const char *prereqs)
+                       enum mf_field_id id, const char *prereqs)
 {
-    return add_symbol(symtab, name, 0, prereqs, EXPR_L_NOMINAL, false);
+    const struct mf_field *field = mf_from_id(id);
+    struct expr_symbol *symbol;
+
+    symbol = add_symbol(symtab, name, 0, prereqs, EXPR_L_NOMINAL, false);
+    symbol->field = field;
+    return symbol;
 }
 
 static enum expr_level
@@ -2139,33 +2145,64 @@ expr_match_add(struct hmap *matches, struct expr_match *match)
     hmap_insert(matches, &match->hmap_node, hash);
 }
 
-static void
-constrain_match(const struct expr *expr, struct match *m)
+static bool
+constrain_match(const struct expr *expr, const struct simap *ports,
+                struct match *m)
 {
     ovs_assert(expr->type == EXPR_T_CMP);
-    ovs_assert(expr->cmp.symbol->width);
-    mf_mask_subfield(expr->cmp.symbol->field, &expr->cmp.value,
-                     &expr->cmp.mask, m);
+    if (expr->cmp.symbol->width) {
+        mf_mask_subfield(expr->cmp.symbol->field, &expr->cmp.value,
+                         &expr->cmp.mask, m);
+    } else {
+        const struct simap_node *node;
+        node = ports ? simap_find(ports, expr->cmp.string) : NULL;
+        if (!node) {
+            return false;
+        }
+
+        struct mf_subfield sf;
+        sf.field = expr->cmp.symbol->field;
+        sf.ofs = 0;
+        sf.n_bits = expr->cmp.symbol->field->n_bits;
+
+        union mf_subvalue x;
+        memset(&x, 0, sizeof x);
+        x.integer = htonll(node->data);
+
+        mf_write_subfield(&sf, &x, m);
+    }
+    return true;
 }
 
-static void
-add_disjunction(const struct expr *or, struct match *m, uint8_t clause,
-                uint8_t n_clauses, uint32_t conj_id, struct hmap *matches)
+static bool
+add_disjunction(const struct expr *or, const struct simap *ports,
+                struct match *m, uint8_t clause, uint8_t n_clauses,
+                uint32_t conj_id, struct hmap *matches)
 {
     struct expr *sub;
+    int n = 0;
 
     ovs_assert(or->type == EXPR_T_OR);
     LIST_FOR_EACH (sub, node, &or->andor) {
         struct expr_match *match = expr_match_new(m, clause, n_clauses,
                                                   conj_id);
-        constrain_match(sub, &match->match);
-        expr_match_add(matches, match);
+        if (constrain_match(sub, ports, &match->match)) {
+            expr_match_add(matches, match);
+            n++;
+        } else {
+            free(match->conjunctions);
+            free(match);
+        }
     }
+
+    /* If n == 1, then this didn't really need to be a disjunction.  Oh well,
+     * that shouldn't happen much. */
+    return n > 0;
 }
 
 static void
-add_conjunction(const struct expr *and, uint32_t *n_conjsp,
-                struct hmap *matches)
+add_conjunction(const struct expr *and, const struct simap *ports,
+                uint32_t *n_conjsp, struct hmap *matches)
 {
     struct match match;
     int n_clauses = 0;
@@ -2177,7 +2214,9 @@ add_conjunction(const struct expr *and, uint32_t *n_conjsp,
     LIST_FOR_EACH (sub, node, &and->andor) {
         switch (sub->type) {
         case EXPR_T_CMP:
-            constrain_match(sub, &match);
+            if (!constrain_match(sub, ports, &match)) {
+                return;
+            }
             break;
         case EXPR_T_OR:
             n_clauses++;
@@ -2193,7 +2232,7 @@ add_conjunction(const struct expr *and, uint32_t *n_conjsp,
     } else if (n_clauses == 1) {
         LIST_FOR_EACH (sub, node, &and->andor) {
             if (sub->type == EXPR_T_OR) {
-                add_disjunction(sub, &match, 0, 0, 0, matches);
+                add_disjunction(sub, ports, &match, 0, 0, 0, matches);
             }
         }
     } else {
@@ -2201,37 +2240,64 @@ add_conjunction(const struct expr *and, uint32_t *n_conjsp,
         (*n_conjsp)++;
         LIST_FOR_EACH (sub, node, &and->andor) {
             if (sub->type == EXPR_T_OR) {
-                add_disjunction(sub, &match, clause++, n_clauses, *n_conjsp,
-                                matches);
+                if (!add_disjunction(sub, ports, &match, clause++,
+                                     n_clauses, *n_conjsp, matches)) {
+                    /* This clause can't ever match, so we might as well skip
+                     * adding the other clauses--the overall disjunctive flow
+                     * can't ever match.  Ideally we would also back out all of
+                     * the clauses we already added, but that seems like a lot
+                     * of trouble for a case that might never occur in
+                     * practice. */
+                    return;
+                }
             }
         }
     }
 }
 
 static void
-add_cmp_flow(const struct expr *cmp, struct hmap *matches)
+add_cmp_flow(const struct expr *cmp, const struct simap *ports,
+             struct hmap *matches)
 {
     struct expr_match *m = expr_match_new(NULL, 0, 0, 0);
-    constrain_match(cmp, &m->match);
-    expr_match_add(matches, m);
+    if (constrain_match(cmp, ports, &m->match)) {
+        expr_match_add(matches, m);
+    } else {
+        free(m);
+    }
 }
 
 /* Converts 'expr', which must be in the form returned by expr_normalize(), to
  * a collection of Open vSwitch flows in 'matches', which this function
- * initializes to an hmap of "struct expr_match" structures. */
+ * initializes to an hmap of "struct expr_match" structures.  Returns the
+ * number of conjunctive match IDs consumed by 'matches', which uses
+ * conjunctive match IDs beginning with 0; the caller must offset or remap them
+ * into the desired range as necessary.
+ *
+ * 'ports' must be a map from strings (presumably names of ports) to integers.
+ * Any comparisons against string fields in 'expr' are translated into integers
+ * through this map.  A comparison against a string that is not in 'ports' acts
+ * like a Boolean "false"; that is, it will always fail to match.  For a simple
+ * expression, this means that the overall expression always fails to match,
+ * but an expression with a disjunction on the string field might still match
+ * on other port names.
+ *
+ * (This treatment of string fields might be too simplistic in general, but it
+ * seems reasonable for now when string fields are used only for ports.) */
 uint32_t
-expr_to_matches(const struct expr *expr, struct hmap *matches)
+expr_to_matches(const struct expr *expr, const struct simap *ports,
+                struct hmap *matches)
 {
     uint32_t n_conjs = 0;
 
     hmap_init(matches);
     switch (expr->type) {
     case EXPR_T_CMP:
-        add_cmp_flow(expr, matches);
+        add_cmp_flow(expr, ports, matches);
         break;
 
     case EXPR_T_AND:
-        add_conjunction(expr, &n_conjs, matches);
+        add_conjunction(expr, ports, &n_conjs, matches);
         break;
 
     case EXPR_T_OR:
@@ -2239,16 +2305,16 @@ expr_to_matches(const struct expr *expr, struct hmap *matches)
             struct expr *sub;
 
             LIST_FOR_EACH (sub, node, &expr->andor) {
-                add_cmp_flow(sub, matches);
+                add_cmp_flow(sub, ports, matches);
             }
         } else {
             struct expr *sub;
 
             LIST_FOR_EACH (sub, node, &expr->andor) {
                 if (sub->type == EXPR_T_AND) {
-                    add_conjunction(sub, &n_conjs, matches);
+                    add_conjunction(sub, ports, &n_conjs, matches);
                 } else {
-                    add_cmp_flow(sub, matches);
+                    add_cmp_flow(sub, ports, matches);
                 }
             }
         }
@@ -2264,6 +2330,48 @@ expr_to_matches(const struct expr *expr, struct hmap *matches)
         break;
     }
     return n_conjs;
+}
+
+/* Destroys all of the 'struct expr_match'es in 'matches', as well as the
+ * 'matches' hmap itself. */
+void
+expr_matches_destroy(struct hmap *matches)
+{
+    struct expr_match *m, *n;
+
+    HMAP_FOR_EACH_SAFE (m, n, hmap_node, matches) {
+        hmap_remove(matches, &m->hmap_node);
+        free(m->conjunctions);
+        free(m);
+    }
+    hmap_destroy(matches);
+}
+
+/* Prints a representation of the 'struct expr_match'es in 'matches' to
+ * 'stream'. */
+void
+expr_matches_print(const struct hmap *matches, FILE *stream)
+{
+    if (hmap_is_empty(matches)) {
+        fputs("(no flows)\n", stream);
+        return;
+    }
+
+    const struct expr_match *m;
+    HMAP_FOR_EACH (m, hmap_node, matches) {
+        char *s = match_to_string(&m->match, OFP_DEFAULT_PRIORITY);
+        fputs(s, stream);
+        free(s);
+
+        if (m->n) {
+            for (int i = 0; i < m->n; i++) {
+                const struct cls_conjunction *c = &m->conjunctions[i];
+                fprintf(stream, "%c conjunction(%"PRIu32", %d/%d)",
+                        i == 0 ? ':' : ',', c->id, c->clause, c->n_clauses);
+            }
+        }
+        putc('\n', stream);
+    }
 }
 
 /* Returns true if 'expr' honors the invariants for expressions (see the large

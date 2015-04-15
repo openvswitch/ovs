@@ -61,6 +61,7 @@
 
 struct ds;
 struct shash;
+struct simap;
 
 /* "Measurement level" of a field.  See "Level of Measurement" in the large
  * comment on struct expr_symbol below for more information. */
@@ -255,7 +256,7 @@ struct expr_symbol *expr_symtab_add_subfield(struct shash *symtab,
                                              const char *prereqs,
                                              const char *subfield);
 struct expr_symbol *expr_symtab_add_string(struct shash *symtab,
-                                           const char *name,
+                                           const char *name, enum mf_field_id,
                                            const char *prereqs);
 struct expr_symbol *expr_symtab_add_predicate(struct shash *symtab,
                                               const char *name,
@@ -362,6 +363,9 @@ struct expr_match {
     size_t n, allocated;
 };
 
-uint32_t expr_to_matches(const struct expr *, struct hmap *);
+uint32_t expr_to_matches(const struct expr *, const struct simap *ports,
+                         struct hmap *matches);
+void expr_matches_destroy(struct hmap *matches);
+void expr_matches_print(const struct hmap *matches, FILE *);
 
 #endif /* ovn/expr.h */

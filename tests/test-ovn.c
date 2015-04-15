@@ -27,6 +27,7 @@
 #include "ovs-thread.h"
 #include "ovstest.h"
 #include "shash.h"
+#include "simap.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
@@ -131,8 +132,8 @@ create_symtab(struct shash *symtab)
 {
     shash_init(symtab);
 
-    expr_symtab_add_string(symtab, "inport", NULL);
-    expr_symtab_add_string(symtab, "outport", NULL);
+    expr_symtab_add_string(symtab, "inport", MFF_IN_PORT, NULL);
+    expr_symtab_add_string(symtab, "outport", MFF_ACTSET_OUTPUT, NULL);
 
     expr_symtab_add_field(symtab, "xreg0", MFF_XREG0, NULL, false);
     expr_symtab_add_field(symtab, "xreg1", MFF_XREG1, NULL, false);
@@ -234,9 +235,16 @@ static void
 test_parse_expr__(int steps)
 {
     struct shash symtab;
+    struct simap ports;
     struct ds input;
 
     create_symtab(&symtab);
+
+    simap_init(&ports);
+    simap_put(&ports, "eth0", 5);
+    simap_put(&ports, "eth1", 6);
+    simap_put(&ports, "LOCAL", ofp_to_u16(OFPP_LOCAL));
+
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
         struct expr *expr;
@@ -256,10 +264,18 @@ test_parse_expr__(int steps)
             }
         }
         if (!error) {
-            struct ds output = DS_EMPTY_INITIALIZER;
-            expr_format(expr, &output);
-            puts(ds_cstr(&output));
-            ds_destroy(&output);
+            if (steps > 3) {
+                struct hmap matches;
+
+                expr_to_matches(expr, &ports, &matches);
+                expr_matches_print(&matches, stdout);
+                expr_matches_destroy(&matches);
+            } else {
+                struct ds output = DS_EMPTY_INITIALIZER;
+                expr_format(expr, &output);
+                puts(ds_cstr(&output));
+                ds_destroy(&output);
+            }
         } else {
             puts(error);
             free(error);
@@ -268,6 +284,7 @@ test_parse_expr__(int steps)
     }
     ds_destroy(&input);
 
+    simap_destroy(&ports);
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
 }
@@ -294,6 +311,12 @@ static void
 test_normalize_expr(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     test_parse_expr__(3);
+}
+
+static void
+test_expr_to_flows(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    test_parse_expr__(4);
 }
 
 /* Evaluate an expression. */
@@ -859,7 +882,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             struct test_rule *test_rule;
             uint32_t n_conjs;
 
-            n_conjs = expr_to_matches(modified, &matches);
+            n_conjs = expr_to_matches(modified, NULL, &matches);
 
             classifier_init(&cls, NULL);
             HMAP_FOR_EACH (m, hmap_node, &matches) {
@@ -931,25 +954,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
                     fputs(".\n", stderr);
 
                     fprintf(stderr, "Converted to classifier:\n");
-
-                    struct expr_match *m;
-                    HMAP_FOR_EACH (m, hmap_node, &matches) {
-                        char *s = match_to_string(&m->match,
-                                                  OFP_DEFAULT_PRIORITY);
-                        fputs(s, stderr);
-                        if (m->n) {
-                            for (int i = 0; i < m->n; i++) {
-                                const struct cls_conjunction *c
-                                    = &m->conjunctions[i];
-                                fprintf(stderr,
-                                        "%c conjunction(%"PRIu32", %d/%d)",
-                                        i == 0 ? ':' : ',',
-                                        c->id, c->clause, c->n_clauses);
-                            }
-                        }
-                        putc('\n', stderr);
-                    }
-
+                    expr_matches_print(&matches, stderr);
                     fprintf(stderr,
                             "However, %s flow was found in the classifier.\n",
                             found ? "a" : "no");
@@ -958,7 +963,6 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             }
         }
         if (operation >= OP_FLOW) {
-            struct expr_match *m, *n;
             struct test_rule *test_rule;
 
             CLS_FOR_EACH (test_rule, cr, &cls) {
@@ -968,12 +972,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             classifier_destroy(&cls);
             ovsrcu_quiesce();
 
-            HMAP_FOR_EACH_SAFE (m, n, hmap_node, &matches) {
-                hmap_remove(&matches, &m->hmap_node);
-                free(m->conjunctions);
-                free(m);
-            }
-            hmap_destroy(&matches);
+            expr_matches_destroy(&matches);
         }
         expr_destroy(modified);
     }
@@ -1160,6 +1159,7 @@ parse-expr\n\
 annotate-expr\n\
 simplify-expr\n\
 normalize-expr\n\
+expr-to-flows\n\
   Parses OVN expressions from stdin and print them back on stdout after\n\
   differing degrees of analysis.  Available fields are based on packet\n\
   headers.\n\
@@ -1281,6 +1281,7 @@ test_ovn_main(int argc, char *argv[])
         {"annotate-expr", NULL, 0, 0, test_annotate_expr},
         {"simplify-expr", NULL, 0, 0, test_simplify_expr},
         {"normalize-expr", NULL, 0, 0, test_normalize_expr},
+        {"expr-to-flows", NULL, 0, 0, test_expr_to_flows},
         {"evaluate-expr", NULL, 1, 1, test_evaluate_expr},
         {"composition", NULL, 1, 1, test_composition},
         {"tree-shape", NULL, 1, 1, test_tree_shape},

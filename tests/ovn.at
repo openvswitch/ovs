@@ -346,3 +346,36 @@ AT_CHECK([ovstest test-ovn exhaustive --operation=flow --vars=3 --bits=3 --relop
   [Tested converting to flows 38394 expressions of 3 terminals with 3 vars each of 3 bits in terms of operators ==.
 ])
 AT_CLEANUP
+
+AT_SETUP([ovn -- converting expressions to flows -- string fields])
+expr_to_flow () {
+    echo "$1" | ovstest test-ovn expr-to-flows | sort
+}
+AT_CHECK([expr_to_flow 'inport == "eth0"'], [0], [in_port=5
+])
+AT_CHECK([expr_to_flow 'inport == "eth1"'], [0], [in_port=6
+])
+AT_CHECK([expr_to_flow 'inport == "eth2"'], [0], [(no flows)
+])
+AT_CHECK([expr_to_flow 'inport == "eth0" && ip'], [0], [dnl
+ip,in_port=5
+ipv6,in_port=5
+])
+AT_CHECK([expr_to_flow 'inport == "eth1" && ip'], [0], [dnl
+ip,in_port=6
+ipv6,in_port=6
+])
+AT_CHECK([expr_to_flow 'inport == "eth2" && ip'], [0], [(no flows)
+])
+AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2", "LOCAL"}'], [0],
+[in_port=5
+in_port=6
+in_port=LOCAL
+])
+AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2"} && ip'], [0], [dnl
+ip,in_port=5
+ip,in_port=6
+ipv6,in_port=5
+ipv6,in_port=6
+])
+AT_CLEANUP
