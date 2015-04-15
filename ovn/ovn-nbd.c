@@ -209,35 +209,57 @@ ovnnb_db_changed(struct nbd_context *ctx)
 static void
 ovnsb_db_changed(struct nbd_context *ctx)
 {
-    const struct sbrec_bindings *bindings;
+    struct hmap lports_hmap;
+    const struct sbrec_bindings *binding;
+    const struct nbrec_logical_port *lport;
+
+    struct lport_hash_node {
+        struct hmap_node node;
+        const struct nbrec_logical_port *lport;
+    } *hash_node, *hash_node_next;
 
     VLOG_DBG("Recalculating port up states for ovn-nb db.");
 
-    SBREC_BINDINGS_FOR_EACH(bindings, ctx->ovnsb_idl) {
-        const struct nbrec_logical_port *lport;
-        struct uuid lport_uuid;
+    hmap_init(&lports_hmap);
 
-        if (!uuid_from_string(&lport_uuid, bindings->logical_port)) {
-            VLOG_WARN("Invalid logical port UUID '%s' in Bindings table.",
-                    bindings->logical_port);
-            continue;
+    NBREC_LOGICAL_PORT_FOR_EACH(lport, ctx->ovnnb_idl) {
+        hash_node = xzalloc(sizeof *hash_node);
+        hash_node->lport = lport;
+        hmap_insert(&lports_hmap, &hash_node->node,
+                hash_string(lport->name, 0));
+    }
+
+    SBREC_BINDINGS_FOR_EACH(binding, ctx->ovnsb_idl) {
+        lport = NULL;
+        HMAP_FOR_EACH_WITH_HASH(hash_node, node,
+                hash_string(binding->logical_port, 0), &lports_hmap) {
+            if (!strcmp(binding->logical_port, hash_node->lport->name)) {
+                lport = hash_node->lport;
+                break;
+            }
         }
 
-        lport = nbrec_logical_port_get_for_uuid(ctx->ovnnb_idl, &lport_uuid);
         if (!lport) {
-            VLOG_WARN("No logical port '%s' found in OVN-nb db.",
-                    bindings->logical_port);
+            /* The logical port doesn't exist for this binding.  This can happen
+             * under normal circumstances when ovn-nbd hasn't gotten around to
+             * pruning the Binding yet. */
             continue;
         }
 
-        if (*bindings->chassis && (!lport->up || !*lport->up)) {
+        if (*binding->chassis && (!lport->up || !*lport->up)) {
             bool up = true;
             nbrec_logical_port_set_up(lport, &up, 1);
-        } else if (!*bindings->chassis && (!lport->up || *lport->up)) {
+        } else if (!*binding->chassis && (!lport->up || *lport->up)) {
             bool up = false;
             nbrec_logical_port_set_up(lport, &up, 1);
         }
     }
+
+    HMAP_FOR_EACH_SAFE(hash_node, hash_node_next, node, &lports_hmap) {
+        hmap_remove(&lports_hmap, &hash_node->node);
+        free(hash_node);
+    }
+    hmap_destroy(&lports_hmap);
 }
 
 static const char *
