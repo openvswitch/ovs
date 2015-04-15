@@ -1035,7 +1035,10 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     int error;
     int i;
 
-    /* XXX reject devices already in some dp_netdev. */
+    /* Reject devices already in 'dp'. */
+    if (!get_port_by_name(dp, devname, &port)) {
+        return EEXIST;
+    }
 
     /* Open and validate network device. */
     open_type = dpif_netdev_port_open_type(dp->class, type);
