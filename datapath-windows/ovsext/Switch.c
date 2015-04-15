@@ -582,7 +582,6 @@ OvsExtNetPnPEvent(NDIS_HANDLE filterModuleContext,
             switchContext->isActivateFailed = TRUE;
         } else {
             ASSERT(switchContext->isActivated == FALSE);
-            ASSERT(switchActive == TRUE);
             if (switchContext->isActivated == FALSE && switchActive == TRUE) {
                 status = OvsActivateSwitch(switchContext);
                 OVS_LOG_TRACE("OvsExtNetPnPEvent: activated switch: %p "
