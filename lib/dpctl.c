@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,12 +382,14 @@ dpctl_set_if(int argc, const char *argv[], struct dpctl_params *dpctl_p)
                                 "%s: can't change type from %s to %s",
                                  name, type, value);
                     error = EINVAL;
+                    goto next_destroy_args;
                 }
             } else if (!strcmp(key, "port_no")) {
                 if (port_no != u32_to_odp(atoi(value))) {
                     dpctl_error(dpctl_p, 0, "%s: can't change port number from"
                               " %"PRIu32" to %d", name, port_no, atoi(value));
                     error = EINVAL;
+                    goto next_destroy_args;
                 }
             } else if (value[0] == '\0') {
                 smap_remove(&args, key);
@@ -397,7 +399,13 @@ dpctl_set_if(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         }
 
         /* Update configuration. */
-        error = netdev_set_config(netdev, &args, NULL);
+        char *err_s = NULL;
+        error = netdev_set_config(netdev, &args, &err_s);
+        if (err_s || error) {
+            dpctl_error(dpctl_p, error,
+                        err_s ? err_s : "Error updating configuration");
+            free(err_s);
+        }
         if (error) {
             goto next_destroy_args;
         }
@@ -1567,7 +1575,7 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct dpctl_params dpctl_p;
-    bool opt_parse_err = false;
+    bool error = false;
 
     dpctl_command_handler *handler = (dpctl_command_handler *) aux;
 
@@ -1579,7 +1587,7 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
     /* Parse options (like getopt). Unfortunately it does
      * not seem a good idea to call getopt_long() here, since it uses global
      * variables */
-    while (argc > 1 && !opt_parse_err) {
+    while (argc > 1 && !error) {
         const char *arg = argv[1];
         if (!strncmp(arg, "--", 2)) {
             /* Long option */
@@ -1593,13 +1601,13 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
                 dpctl_p.verbosity++;
             } else {
                 ds_put_format(&ds, "Unrecognized option %s", argv[1]);
-                opt_parse_err = true;
+                error = true;
             }
         } else if (arg[0] == '-' && arg[1] != '\0') {
             /* Short option[s] */
             const char *opt = &arg[1];
 
-            while (*opt && !opt_parse_err) {
+            while (*opt && !error) {
                 switch (*opt) {
                 case 'm':
                     dpctl_p.verbosity++;
@@ -1609,7 +1617,7 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
                     break;
                 default:
                     ds_put_format(&ds, "Unrecognized option -%c", *opt);
-                    opt_parse_err = true;
+                    error = true;
                     break;
                 }
                 opt++;
@@ -1619,22 +1627,26 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
             break;
         }
 
-        if (opt_parse_err) {
+        if (error) {
             break;
         }
         argv++;
         argc--;
     }
 
-    if (!opt_parse_err) {
+    if (!error) {
         dpctl_p.is_appctl = true;
         dpctl_p.output = dpctl_unixctl_print;
         dpctl_p.aux = &ds;
 
-        handler(argc, argv, &dpctl_p);
+        error = handler(argc, argv, &dpctl_p) != 0;
     }
 
-    unixctl_command_reply(conn, ds_cstr(&ds));
+    if (error) {
+        unixctl_command_reply_error(conn, ds_cstr(&ds));
+    } else {
+        unixctl_command_reply(conn, ds_cstr(&ds));
+    }
 
     ds_destroy(&ds);
 }
