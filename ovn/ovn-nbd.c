@@ -152,19 +152,20 @@ set_bindings(struct nbd_context *ctx)
     }
 
     NBREC_LOGICAL_PORT_FOR_EACH(lport, ctx->ovnnb_idl) {
+        binding = NULL;
         HMAP_FOR_EACH_WITH_HASH(hash_node, node,
                 hash_string(lport->name, 0), &bindings_hmap) {
             if (!strcmp(lport->name, hash_node->binding->logical_port)) {
+                binding = hash_node->binding;
                 break;
             }
         }
 
-        if (hash_node) {
+        if (binding) {
             /* We found an existing binding for this logical port.  Update its
              * contents.  Right now the only thing we expect that could change
              * is the list of MAC addresses. */
 
-            binding = hash_node->binding;
             hmap_remove(&bindings_hmap, &hash_node->node);
             free(hash_node);
             hash_node = NULL;
