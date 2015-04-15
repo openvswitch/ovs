@@ -42,7 +42,6 @@
 #include <sys/sysctl.h>
 #if defined(__NetBSD__)
 #include <net/route.h>
-#include <netinet/in.h>
 #include <netinet/if_inarp.h>
 #endif
 
