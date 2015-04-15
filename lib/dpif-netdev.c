@@ -2949,9 +2949,8 @@ dpif_netdev_get_datapath_version(void)
 
 static void
 dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow, int cnt, int size,
-                    uint16_t tcp_flags)
+                    uint16_t tcp_flags, long long now)
 {
-    long long now = time_msec();
     uint16_t flags;
 
     atomic_store_relaxed(&netdev_flow->stats.used, now);
@@ -3053,13 +3052,14 @@ packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 static inline void
 packet_batch_execute(struct packet_batch *batch,
                      struct dp_netdev_pmd_thread *pmd,
-                     enum dp_stat_type hit_type)
+                     enum dp_stat_type hit_type,
+                     long long now)
 {
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
 
     dp_netdev_flow_used(batch->flow, batch->packet_count, batch->byte_count,
-                        batch->tcp_flags);
+                        batch->tcp_flags, now);
 
     actions = dp_netdev_flow_get_actions(flow);
 
@@ -3122,7 +3122,7 @@ dp_packet_swap(struct dp_packet **a, struct dp_packet **b)
  */
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
-               size_t cnt, struct netdev_flow_key *keys)
+               size_t cnt, struct netdev_flow_key *keys, long long now)
 {
     struct netdev_flow_key key;
     struct packet_batch batches[4];
@@ -3157,7 +3157,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, DP_STAT_EXACT_HIT);
+        packet_batch_execute(&batches[i], pmd, DP_STAT_EXACT_HIT, now);
     }
 
     return notfound_cnt;
@@ -3166,7 +3166,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet **packets, size_t cnt,
-                     struct netdev_flow_key *keys)
+                     struct netdev_flow_key *keys, long long now)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
@@ -3294,7 +3294,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, DP_STAT_MASKED_HIT);
+        packet_batch_execute(&batches[i], pmd, DP_STAT_MASKED_HIT, now);
     }
 }
 
@@ -3309,11 +3309,12 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
 #endif
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    long long now = time_msec();
     size_t newcnt;
 
-    newcnt = emc_processing(pmd, packets, cnt, keys);
+    newcnt = emc_processing(pmd, packets, cnt, keys, now);
     if (OVS_UNLIKELY(newcnt)) {
-        fast_path_processing(pmd, packets, newcnt, keys);
+        fast_path_processing(pmd, packets, newcnt, keys, now);
     }
 }
 
