@@ -3363,13 +3363,13 @@ push_tnl_action(const struct dp_netdev *dp,
 }
 
 static void
-dp_netdev_clone_pkt_batch(struct dp_packet **tnl_pkt,
-                          struct dp_packet **packets, int cnt)
+dp_netdev_clone_pkt_batch(struct dp_packet **dst_pkts,
+                          struct dp_packet **src_pkts, int cnt)
 {
     int i;
 
     for (i = 0; i < cnt; i++) {
-        tnl_pkt[i] = dp_packet_clone(packets[i]);
+        dst_pkts[i] = dp_packet_clone(src_pkts[i]);
     }
 }
 
@@ -3380,8 +3380,8 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 {
     struct dp_netdev_execute_aux *aux = aux_;
     uint32_t *depth = recirc_depth_get();
-    struct dp_netdev_pmd_thread *pmd= aux->pmd;
-    struct dp_netdev *dp= pmd->dp;
+    struct dp_netdev_pmd_thread *pmd = aux->pmd;
+    struct dp_netdev *dp = pmd->dp;
     int type = nl_attr_type(a);
     struct dp_netdev_port *p;
     int i;
@@ -3485,18 +3485,19 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
+            struct dp_packet *recirc_pkts[NETDEV_MAX_RX_BATCH];
+
+            if (!may_steal) {
+               dp_netdev_clone_pkt_batch(recirc_pkts, packets, cnt);
+               packets = recirc_pkts;
+            }
+
+            for (i = 0; i < cnt; i++) {
+                packets[i]->md.recirc_id = nl_attr_get_u32(a);
+            }
 
             (*depth)++;
-            for (i = 0; i < cnt; i++) {
-                struct dp_packet *recirc_pkt;
-
-                recirc_pkt = (may_steal) ? packets[i]
-                                    : dp_packet_clone(packets[i]);
-
-                recirc_pkt->md.recirc_id = nl_attr_get_u32(a);
-
-                dp_netdev_input(pmd, &recirc_pkt, 1);
-            }
+            dp_netdev_input(pmd, packets, cnt);
             (*depth)--;
 
             return;
