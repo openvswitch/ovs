@@ -145,8 +145,7 @@ set_bindings(struct nbd_context *ctx)
     hmap_init(&bindings_hmap);
 
     SBREC_BINDINGS_FOR_EACH(binding, ctx->ovnsb_idl) {
-        struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
-
+        hash_node = xzalloc(sizeof *hash_node);
         hash_node->binding = binding;
         hmap_insert(&bindings_hmap, &hash_node->node,
                 hash_string(binding->logical_port, 0));
