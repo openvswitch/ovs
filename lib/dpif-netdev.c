@@ -332,8 +332,8 @@ static int dpif_netdev_flow_from_nlattrs(const struct nlattr *, uint32_t,
 struct dp_netdev_actions {
     /* These members are immutable: they do not change during the struct's
      * lifetime.  */
-    struct nlattr *actions;     /* Sequence of OVS_ACTION_ATTR_* attributes. */
     unsigned int size;          /* Size of 'actions', in bytes. */
+    struct nlattr actions[];    /* Sequence of OVS_ACTION_ATTR_* attributes. */
 };
 
 struct dp_netdev_actions *dp_netdev_actions_create(const struct nlattr *,
@@ -2435,16 +2435,15 @@ dpif_netdev_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
 }
 
 
-/* Creates and returns a new 'struct dp_netdev_actions', with a reference count
- * of 1, whose actions are a copy of from the 'ofpacts_len' bytes of
- * 'ofpacts'. */
+/* Creates and returns a new 'struct dp_netdev_actions', whose actions are
+ * a copy of the 'ofpacts_len' bytes of 'ofpacts'. */
 struct dp_netdev_actions *
 dp_netdev_actions_create(const struct nlattr *actions, size_t size)
 {
     struct dp_netdev_actions *netdev_actions;
 
-    netdev_actions = xmalloc(sizeof *netdev_actions);
-    netdev_actions->actions = xmemdup(actions, size);
+    netdev_actions = xmalloc(sizeof *netdev_actions + size);
+    memcpy(netdev_actions->actions, actions, size);
     netdev_actions->size = size;
 
     return netdev_actions;
@@ -2459,7 +2458,6 @@ dp_netdev_flow_get_actions(const struct dp_netdev_flow *flow)
 static void
 dp_netdev_actions_free(struct dp_netdev_actions *actions)
 {
-    free(actions->actions);
     free(actions);
 }
 
