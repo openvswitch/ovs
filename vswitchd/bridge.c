@@ -217,16 +217,6 @@ static long long int stats_timer = LLONG_MIN;
 #define AA_REFRESH_INTERVAL (1000) /* In milliseconds. */
 static long long int aa_refresh_timer = LLONG_MIN;
 
-/* In some datapaths, creating and destroying OpenFlow ports can be extremely
- * expensive.  This can cause bridge_reconfigure() to take a long time during
- * which no other work can be done.  To deal with this problem, we limit port
- * adds and deletions to a window of OFP_PORT_ACTION_WINDOW milliseconds per
- * call to bridge_reconfigure().  If there is more work to do after the limit
- * is reached, 'need_reconfigure', is flagged and it's done on the next loop.
- * This allows the rest of the code to catch up on important things like
- * forwarding packets. */
-#define OFP_PORT_ACTION_WINDOW 10
-
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
