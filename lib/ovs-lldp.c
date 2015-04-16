@@ -202,8 +202,10 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
         if (memcmp(&port->p_element.system_id,
                    &system_id_null,
                    sizeof port->p_element.system_id)) {
-            static char *none_str = "<None>";
-            char *id = none_str, *descr = none_str, *system = none_str;
+            const char *none_str = "<None>";
+            const char *descr = NULL;
+            char *id = NULL;
+            char *system;
 
             if (port->p_chassis) {
                 if (port->p_chassis->c_id_len > 0) {
@@ -211,16 +213,16 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
                                         port->p_chassis->c_id_len, &id);
                 }
 
-                descr = port->p_chassis->c_descr
-                    ? port->p_chassis->c_descr : none_str;
+                descr = port->p_chassis->c_descr;
             }
 
             chassisid_to_string((uint8_t *) &port->p_element.system_id,
                 sizeof port->p_element.system_id, &system);
 
-            ds_put_format(ds, "\tAuto Attach Primary Server Id: %s\n", id);
+            ds_put_format(ds, "\tAuto Attach Primary Server Id: %s\n",
+                          id ? id : none_str);
             ds_put_format(ds, "\tAuto Attach Primary Server Descr: %s\n",
-                          descr);
+                          descr ? descr : none_str);
             ds_put_format(ds, "\tAuto Attach Primary Server System Id: %s\n",
                           system);
 
