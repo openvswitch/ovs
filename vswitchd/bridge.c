@@ -3920,12 +3920,12 @@ static void
 bridge_aa_refresh_queued(struct bridge *br)
 {
     struct ovs_list *list = xmalloc(sizeof *list);
-    struct bridge_aa_vlan *node;
+    struct bridge_aa_vlan *node, *next;
 
     list_init(list);
     ofproto_aa_vlan_get_queued(br->ofproto, list);
 
-    LIST_FOR_EACH(node, list_node, list) {
+    LIST_FOR_EACH_SAFE (node, next, list_node, list) {
         struct port *port;
 
         VLOG_INFO("ifname=%s, vlan=%u, oper=%u", node->port_name, node->vlan,
