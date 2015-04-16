@@ -342,13 +342,15 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
 
     switch (conn->type) {
     case PASSIVE:
-        if (!strcmp(pstream_get_name(conn->u.pconn.pstream), pstream)) {
+        if (pstream &&
+            !strcmp(pstream_get_name(conn->u.pconn.pstream), pstream)) {
             return;
         }
         dummy_packet_conn_close(conn);
         break;
     case ACTIVE:
-        if (!strcmp(stream_get_name(conn->u.rconn.rstream->stream), stream)) {
+        if (stream &&
+            !strcmp(stream_get_name(conn->u.rconn.rstream->stream), stream)) {
             return;
         }
         dummy_packet_conn_close(conn);
