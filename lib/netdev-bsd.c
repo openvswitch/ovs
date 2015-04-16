@@ -818,7 +818,7 @@ netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
     }
     ovs_mutex_unlock(&netdev->mutex);
 
-    return 0;
+    return error;
 }
 
 static int
