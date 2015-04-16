@@ -1333,7 +1333,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             } else if (!strcmp(value, "last")) {
                 gm->command_bucket_id = OFPG15_BUCKET_LAST;
             } else {
-                char *error = str_to_u32(value, &gm->command_bucket_id);
+                error = str_to_u32(value, &gm->command_bucket_id);
                 if (error) {
                     goto out;
                 }
