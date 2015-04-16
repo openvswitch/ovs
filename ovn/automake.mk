@@ -123,10 +123,6 @@ bin_PROGRAMS += ovn/ovn-nbctl
 ovn_ovn_nbctl_SOURCES = ovn/ovn-nbctl.c
 ovn_ovn_nbctl_LDADD = ovn/libovn.la ovsdb/libovsdb.la lib/libopenvswitch.la
 
-# ovn-nbd
-bin_PROGRAMS += ovn/ovn-nbd
-ovn_ovn_nbd_SOURCES = ovn/ovn-nbd.c
-ovn_ovn_nbd_LDADD = ovn/libovn.la ovsdb/libovsdb.la lib/libopenvswitch.la
-
 include ovn/controller/automake.mk
 include ovn/lib/automake.mk
+include ovn/northd/automake.mk

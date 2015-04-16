@@ -196,7 +196,7 @@ set_bindings(struct nbd_context *ctx)
 static void
 ovnnb_db_changed(struct nbd_context *ctx)
 {
-    VLOG_DBG("ovn-nbd: ovn-nb db contents have changed.\n");
+    VLOG_DBG("ovn-northd: ovn-nb db contents have changed.\n");
 
     set_bindings(ctx);
 }
@@ -369,7 +369,7 @@ main(int argc, char *argv[])
     ctx.ovnnb_idl = ovnnb_idl = ovsdb_idl_create(ovnnb_db,
             &nbrec_idl_class, true, true);
 
-    /* There is only a small subset of changes to the ovn-sb db that ovn-nbd
+    /* There is only a small subset of changes to the ovn-sb db that ovn-northd
      * has to care about, so we'll enable monitoring those directly. */
     ctx.ovnsb_idl = ovnsb_idl = ovsdb_idl_create(ovnsb_db,
             &sbrec_idl_class, false, true);
@@ -386,7 +386,7 @@ main(int argc, char *argv[])
      * db must be recalculated.
      *
      * If the contents of the ovn-sb db change, it means the 'up' state of
-     * a port may have changed, as that's the only type of change ovn-nbd is
+     * a port may have changed, as that's the only type of change ovn-northd is
      * watching for.
      */
 
@@ -425,10 +425,10 @@ main(int argc, char *argv[])
         /*
          * If there are any pending changes, we delay recalculating the
          * necessary updates until after an existing transaction finishes.
-         * This avoids the possibility of rapid updates causing ovn-nbd to never
-         * be able to successfully make the corresponding updates to the other
-         * db.  Instead, pending changes are batched up until the next time we
-         * get a chance to calculate the new state and apply it.
+         * This avoids the possibility of rapid updates causing ovn-northd to
+         * never be able to successfully make the corresponding updates to the
+         * other db.  Instead, pending changes are batched up until the next
+         * time we get a chance to calculate the new state and apply it.
          */
 
         if (ovnnb_changes_pending && !ctx.ovnsb_txn) {
@@ -438,7 +438,7 @@ main(int argc, char *argv[])
              */
             ctx.ovnsb_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
             ovsdb_idl_txn_add_comment(ctx.ovnsb_txn,
-                                      "ovn-nbd: northbound db changed");
+                                      "ovn-northd: northbound db changed");
             ovnnb_db_changed(&ctx);
             ovnnb_changes_pending = false;
         }
@@ -450,7 +450,7 @@ main(int argc, char *argv[])
              */
             ctx.ovnnb_txn = ovsdb_idl_txn_create(ctx.ovnnb_idl);
             ovsdb_idl_txn_add_comment(ctx.ovnnb_txn,
-                                      "ovn-nbd: southbound db changed");
+                                      "ovn-northd: southbound db changed");
             ovnsb_db_changed(&ctx);
             ovn_changes_pending = false;
         }

@@ -11,7 +11,7 @@
     architecture.  It is the one component that speaks both southbound
     directly to all the hypervisors and gateways, via
     <code>ovn-controller</code>, and northbound to the Cloud Management
-    System, via <code>ovn-nbd</code>:
+    System, via <code>ovn-northd</code>:
   </p>
 
   <h2>Database Structure</h2>
@@ -64,7 +64,7 @@
     That CMS determines the entire OVN logical configuration and therefore the
     LN's content at any given time is a deterministic function of the CMS's
     configuration, although that happens indirectly via the OVN Northbound DB
-    and <code>ovn-nbd</code>.
+    and <code>ovn-northd</code>.
   </p>
 
   <p>
@@ -629,8 +629,8 @@
 
     <p>
       For every <code>Logical_Port</code> record in <code>OVN_Northbound</code>
-      database, <code>ovn-nbd</code> creates a record in this table.
-      <code>ovn-nbd</code> populates and maintains every column except
+      database, <code>ovn-northd</code> creates a record in this table.
+      <code>ovn-northd</code> populates and maintains every column except
       the <code>chassis</code> column, which it leaves empty in new records.
     </p>
 

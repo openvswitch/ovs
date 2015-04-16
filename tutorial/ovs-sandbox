@@ -44,7 +44,7 @@ rungdb() {
 
 gdb_vswitchd=false
 gdb_ovsdb=false
-gdb_ovn_nbd=false
+gdb_ovn_northd=false
 gdb_ovn_controller=false
 builddir=
 srcdir=
@@ -94,7 +94,7 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -i, --installed      use installed Open vSwitch
   -g, --gdb-vswitchd   run ovs-vswitchd under gdb
   -d, --gdb-ovsdb      run ovsdb-server under gdb
-  --gdb-ovn-nbd        run ovn-nbd under gdb
+  --gdb-ovn-northd     run ovn-northd under gdb
   --gdb-ovn-controller run ovn-controller under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
   -o, --ovn            enable OVN
@@ -138,8 +138,8 @@ EOF
         -d|--gdb-ovsdb)
             gdb_ovsdb=true
             ;;
-        --gdb-ovn-nbd)
-            gdb_ovn_nbd=true
+        --gdb-ovn-northd)
+            gdb_ovn_northd=true
             ;;
         --gdb-ovn-controller)
             gdb_ovn_controller=true
@@ -217,7 +217,7 @@ if $built; then
     fi
     PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
     if $ovn; then
-        PATH=$builddir/ovn:$builddir/ovn/controller:$PATH
+        PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/northd:$PATH
     fi
     export PATH
 else
@@ -293,7 +293,7 @@ if $ovn; then
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
     ovs-vsctl add-br br-int
 
-    rungdb $gdb_ovn_nbd ovn-nbd --detach --no-chdir --pidfile -vconsole:off --log-file
+    rungdb $gdb_ovn_northd ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
 fi
 

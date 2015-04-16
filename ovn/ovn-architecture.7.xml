@@ -103,13 +103,13 @@
 
       <p>
 	The OVN Northbound Database has only two clients: the OVN/CMS Plugin
-	above it and <code>ovn-nbd</code> below it.
+	above it and <code>ovn-northd</code> below it.
       </p>
     </li>
 
     <li>
-      <code>ovn-nbd</code>(8) connects to the OVN Northbound Database above it
-      and the OVN Southbound Database below it.  It translates the
+      <code>ovn-northd</code>(8) connects to the OVN Northbound Database
+      above it and the OVN Southbound Database below it.  It translates the
       logical network configuration in terms of conventional network
       concepts, taken from the OVN Northbound Database, into logical
       datapath flows in the OVN Southbound Database below it.
@@ -118,7 +118,7 @@
     <li>
       <p>
     The <dfn>OVN Southbound Database</dfn> is the center of the system.
-    Its clients are <code>ovn-nbd</code>(8) above it and
+    Its clients are <code>ovn-northd</code>(8) above it and
     <code>ovn-controller</code>(8) on every transport node below it.
       </p>
 
@@ -129,7 +129,7 @@
 	logical network in terms of ``logical datapath flows,'' and
 	<dfn>Binding</dfn> tables that link logical network components'
 	locations to the physical network.  The hypervisors populate the PN and
-	Binding tables, whereas <code>ovn-nbd</code>(8) populates the LN
+	Binding tables, whereas <code>ovn-northd</code>(8) populates the LN
 	tables.
       </p>
 
@@ -177,7 +177,7 @@
                        |   OVN Northbound DB   |
                        |           |           |
                        |           |           |
-                       |        ovn-nbd        |
+                       |       ovn-northd      |
                        |           |           |
                        +-----------|-----------+
                                    |
@@ -292,7 +292,7 @@
     </li>
 
     <li>
-      <code>ovn-nbd</code> receives the OVN Northbound database update.
+      <code>ovn-northd</code> receives the OVN Northbound database update.
       In turn, it makes the corresponding updates to the OVN Southbound
       database, by adding rows to the OVN Southbound database
       <code>Pipeline</code> table to reflect the new port, e.g. add a
@@ -306,8 +306,8 @@
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-nbd</code> made in the
-      previous step.  As long as the VM that owns the VIF is powered off,
+      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  As long as the VM that owns the VIF is powered off,
       <code>ovn-controller</code> cannot do much; it cannot, for example,
       arrange to send packets to or receive packets from the VIF, because the
       VIF does not actually exist anywhere.
@@ -337,12 +337,13 @@
 
     <li>
       Some CMS systems, including OpenStack, fully start a VM only when its
-      networking is ready.  To support this, <code>ovn-nbd</code> notices the
-      <code>chassis</code> column updated for the row in <code>Bindings</code>
-      table and pushes this upward by updating the <ref column="up"
-      table="Logical_Port" db="OVN_NB"/> column in the OVN Northbound
-      database's <ref table="Logical_Port" db="OVN_NB"/> table to indicate
-      that the VIF is now up.  The CMS, if it uses this feature, can then
+      networking is ready.  To support this, <code>ovn-northd</code> notices
+      the <code>chassis</code> column updated for the row in
+      <code>Bindings</code> table and pushes this upward by updating the
+      <ref column="up" table="Logical_Port" db="OVN_NB"/> column in the OVN
+      Northbound database's <ref table="Logical_Port" db="OVN_NB"/> table to
+      indicate that the VIF is now up.  The CMS, if it uses this feature, can
+      then
       react by allowing the VM's execution to proceed.
     </li>
 
@@ -389,7 +390,7 @@
     </li>
 
     <li>
-      <code>ovn-nbd</code> receives the OVN Northbound update and in turn
+      <code>ovn-northd</code> receives the OVN Northbound update and in turn
       updates the OVN Southbound database accordingly, by removing or
       updating the rows from the OVN Southbound database
       <code>Pipeline</code> table and <code>Bindings</code> table that
@@ -398,9 +399,9 @@
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-nbd</code> made in the
-      previous step.  <code>ovn-controller</code> updates OpenFlow tables to
-      reflect the update, although there may not be much to do, since the VIF
+      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  <code>ovn-controller</code> updates OpenFlow tables
+      to reflect the update, although there may not be much to do, since the VIF
       had already become unreachable when it was removed from the
       <code>Bindings</code> table in a previous step.
     </li>
@@ -486,8 +487,8 @@
     </li>
 
     <li>
-      <code>ovn-nbd</code> receives the OVN Northbound database update.  In
-      turn, it makes the corresponding updates to the OVN Southbound
+      <code>ovn-northd</code> receives the OVN Northbound database update.
+      In turn, it makes the corresponding updates to the OVN Southbound
       database, by adding rows to the OVN Southbound database's
       <code>Pipeline</code> table to reflect the new port and also by
       creating a new row in the <code>Bindings</code> table and
@@ -498,10 +499,11 @@
     <li>
       On every hypervisor, <code>ovn-controller</code> subscribes to the
       changes in the <code>Bindings</code> table.  When a new row is created
-      by <code>ovn-nbd</code> that includes a value in <code>parent_port</code>
-      column of <code>Bindings</code> table, the <code>ovn-controller</code>
-      in the hypervisor whose OVN integration bridge has that same value in
-      <var>vif-id</var> in <code>external-ids</code>:<code>iface-id</code>
+      by <code>ovn-northd</code> that includes a value in
+      <code>parent_port</code> column of <code>Bindings</code> table, the
+      <code>ovn-controller</code> in the hypervisor whose OVN integration bridge
+      has that same value in <var>vif-id</var> in
+      <code>external-ids</code>:<code>iface-id</code>
       updates the local hypervisor's OpenFlow tables so that packets to and
       from the VIF with the particular VLAN <code>tag</code> are properly
       handled.  Afterward it updates the <code>chassis</code> column of
@@ -510,7 +512,7 @@
 
     <li>
       One can only start the application inside the container after the
-      underlying network is ready.  To support this, <code>ovn-nbd</code>
+      underlying network is ready.  To support this, <code>ovn-northd</code>
       notices the updated <code>chassis</code> column in <code>Bindings</code>
       table and updates the <ref column="up" table="Logical_Port"
       db="OVN_NB"/> column in the OVN Northbound database's
@@ -526,7 +528,7 @@
     </li>
 
     <li>
-      <code>ovn-nbd</code> receives the OVN Northbound update and in turn
+      <code>ovn-northd</code> receives the OVN Northbound update and in turn
       updates the OVN Southbound database accordingly, by removing or
       updating the rows from the OVN Southbound database
       <code>Pipeline</code> table that were related to the now-destroyed
@@ -536,9 +538,9 @@
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-nbd</code> made in the
-      previous step.  <code>ovn-controller</code> updates OpenFlow tables to
-      reflect the update.
+      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  <code>ovn-controller</code> updates OpenFlow tables
+      to reflect the update.
     </li>
   </ol>
 </manpage>
