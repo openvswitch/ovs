@@ -299,9 +299,9 @@ as a special name to refer to that adapter.
             Port br-pif
                 Interface br-pif
                     type: internal
-        Bridge br-int
             Port "external.1"
                 Interface "external.1"
+        Bridge br-int
             Port br-int
                 Interface br-int
                     type: internal
