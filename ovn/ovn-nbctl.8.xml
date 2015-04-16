@@ -10,21 +10,119 @@
     <p>This utility can be used to manage the OVN northbound database.</p>
 
     <h1>Logical Switch Commands</h1>
-    <p><code>lswitch-add</code> [<var>name</var>]</p>
-    <p><code>lswitch-del</code> <var>lswitch</var></p>
-    <p><code>lswitch-list</code></p>
-    <p><code>lswitch-set-external-id</code> <var>lswitch</var> <var>key</var> [<var>value</var>]</p>
-    <p><code>lswitch-get-external-id</code> <var>lswitch</var> [<var>key</var>]</p>
+
+    <dl>
+      <dt><code>lswitch-add</code> [<var>lswitch</var>]</dt>
+      <dd>
+        Creates a new logical switch named <var>lswitch</var>.  If
+        <var>lswitch</var> is not provided, the switch will not have a
+        name so other commands must refer to this switch by its UUID.
+        Initially the switch will have no ports.
+      </dd>
+
+      <dt><code>lswitch-del</code> <var>lswitch</var></dt>
+      <dd>
+        Deletes <var>lswitch</var>.
+      </dd>
+
+      <dt><code>lswitch-list</code></dt>
+      <dd>
+        Lists all existing switches on standard output, one per line.
+      </dd>
+
+      <dt><code>lswitch-set-external-id</code> <var>lswitch</var> <var>key</var> [<var>value</var>]</dt>
+      <dd>
+        <p>Sets or clears an ``external ID'' value on <var>lswitch</var>.
+        These values are intended to identify entities external to OVN
+        with which <var>lswitch</var> is associated.  The OVN Northbound
+        database schema may specify well-known <var>key</var> values,
+        but <var>key</var> and <var>value</var> are otherwise arbitrary
+        strings.</p>
+
+        <p>If <var>value</var> is specified, then <var>key</var> is set to
+        <var>value</var> for <var>lswitch</var>, overwriting any
+        previous value.  If <var>value</var> is omitted, then
+        <var>key</var> is removed from <var>lswitch</var>'s set of
+        external IDs (if it was present.</p>
+       </dd>
+
+      <dt><code>lswitch-get-external-id</code> <var>lswitch</var> [<var>key</var>]</dt>
+      <dd>
+        Queries the external IDs on <var>lswitch</var>.  If
+        <var>key</var> is specified, the output is the value for that
+        <var>key</var> or the empty string if <var>key</var> is unset.
+        If <var>key</var> is omitted, the output is
+        <var>key</var><code>=</code><var>value</var>, one per line, for
+        each key-value pair.
+      </dd>
+    </dl>
 
     <h1>Logical Port Commands</h1>
-    <p><code>lport-add</code> <var>lswitch</var> <var>name</var></p>
-    <p><code>lport-del</code> <var>lport</var></p>
-    <p><code>lport-list</code> <var>lswitch</var></p>
-    <p><code>lport-set-external-id</code> <var>lport</var> <var>key</var> [<var>value</var>]</p>
-    <p><code>lport-get-external-id</code> <var>lport</var> [<var>key</var>]</p>
-    <p><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>] [<var>mac</var>] [...]</p>
-    <p><code>lport-get-macs</code> <var>lport</var></p>
-    <p><code>lport-get-up</code> <var>lport</var></p>
+    <dl>
+      <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
+      <dd>
+        Creates on <var>lswitch</var> a new logical port named
+        <var>lport</var>.
+      </dd>
+
+      <dt><code>lport-del</code> <var>lport</var></dt>
+      <dd>
+        Deletes <var>lport</var>.
+      </dd>
+
+      <dt><code>lport-list</code> <var>lswitch</var></dt>
+      <dd>
+        Lists all the logical ports within <var>lswitch</var> on
+        standard output, one per line.
+      </dd>
+
+      <dt><code>lport-set-external-id</code> <var>lport</var> <var>key</var> [<var>value</var>]</dt>
+      <dd>
+        <p>Sets or clears an ``external ID'' value on <var>lport</var>.
+        These values are intended to identify entities external to OVN
+        with which <var>lport</var> is associated.  The OVN Northbound
+        database schema may specify well-known <var>key</var> values,
+        but <var>key</var> and <var>value</var> are otherwise arbitrary
+        strings.</p>
+
+        <p>If <var>value</var> is specified, then <var>key</var> is set to
+        <var>value</var> for <var>lport</var>, overwriting any
+        previous value.  If <var>value</var> is omitted, then
+        <var>key</var> is removed from <var>lport</var>'s set of
+        external IDs (if it was present.</p>
+      </dd>
+
+      <dt><code>lport-get-external-id</code> <var>lport</var> [<var>key</var>]</dt>
+      <dd>
+        Queries the external IDs on <var>lport</var>.  If
+        <var>key</var> is specified, the output is the value for that
+        <var>key</var> or the empty string if <var>key</var> is unset.
+        If <var>key</var> is omitted, the output is
+        <var>key</var><code>=</code><var>value</var>, one per line, for
+        each key-value pair.
+      </dd>
+
+      <dt><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>] [<var>mac</var>] [...]</dt>
+      <dd>
+        Sets the MACs associated with <var>lport</var> to
+        <var>mac</var>.  Multiple MACs may be sets by using multiple
+        <var>mac</var> arguments.  If no <var>mac</var> argument is
+        given, <var>lport</var> will have no MACs associated with it.
+      </dd>
+
+      <dt><code>lport-get-macs</code> <var>lport</var></dt>
+      <dd>
+        Lists all the MACs associated with <var>lport</var> on standard
+        output, one per line.
+      </dd>
+
+      <dt><code>lport-get-up</code> <var>lport</var></dt>
+      <dd>
+        Prints the state of <var>lport</var>, either <code>up</code> or
+        <code>down</code>.
+      </dd>
+
+    </dl>
 
     <h1>Options</h1>
     <p><code>-d</code> <var>database</var> | <code>--db</code> <var>database</var></p>
