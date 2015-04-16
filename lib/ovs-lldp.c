@@ -619,7 +619,6 @@ aa_mapping_unregister(void *aux)
             }
 
             hmap_remove(&lldp->mappings_by_aux, &m->hmap_node_aux);
-            free(m);
 
             /* Remove from all the lldp instances */
             LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
@@ -629,6 +628,7 @@ aa_mapping_unregister(void *aux)
 
                 aa_mapping_unregister_mapping(lldp, hw, m);
             }
+            free(m);
 
             /* Remove from the all_mappings */
             HMAP_FOR_EACH (m, hmap_node_isid, all_mappings) {
