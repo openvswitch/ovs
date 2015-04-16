@@ -17,7 +17,7 @@
 /* This implementation only applies to the Linux platform.  */
 
 #include <config.h>
-#if defined(__linux__) && defined(HAVE_PERF_EVENT_H)
+#if defined(__linux__) && defined(HAVE_LINUX_PERF_EVENT_H)
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -76,9 +76,7 @@ perf_event_setup(void)
     pe.exclude_hv = 1;
 
     fd__ = perf_event_open(&pe, 0, -1, -1, 0);
-    if (fd__ == -1) {
-        VLOG_INFO("Peformance counter is not available on this platform.");
-    } else {
+    if (fd__ > 0) {
         ioctl(fd__, PERF_EVENT_IOC_RESET, 0);
         ioctl(fd__, PERF_EVENT_IOC_ENABLE, 0);
     }

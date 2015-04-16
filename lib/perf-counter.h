@@ -94,7 +94,7 @@
  * will work just fine.
  */
 
-#if defined(__linux__) && defined(HAVE_PERF_EVENT_H)
+#if defined(__linux__) && defined(HAVE_LINUX_PERF_EVENT_H)
 struct perf_counter {
     const char *name;
     bool once;
