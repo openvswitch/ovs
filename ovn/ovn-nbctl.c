@@ -57,7 +57,7 @@ Logical Switch Commands:\n\
                             List one or all external:ids set on a switch\n\
 \n\
 Logical Port Commands:\n\
-  lport-add <name> <lswitch> Create a logical port on a logical switch\n\
+  lport-add <lswitch> <lport> Create a logical port on a logical switch\n\
   lport-del <lport>         Delete a logical port (by name or UUID)\n\
   lport-list <lswitch>      List ports on a logical switch\n\
   lport-set-external-id <lport> <key> [value]\n\
@@ -254,13 +254,13 @@ do_lport_add(struct ovs_cmdl_context *ctx)
     struct nbrec_logical_port *lport;
     const struct nbrec_logical_switch *lswitch;
 
-    lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[2]);
+    lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
     if (!lswitch) {
         return;
     }
 
     lport = nbrec_logical_port_insert(nb_ctx->txn);
-    nbrec_logical_port_set_name(lport, ctx->argv[1]);
+    nbrec_logical_port_set_name(lport, ctx->argv[2]);
     nbrec_logical_port_set_lswitch(lport, lswitch);
 }
 
@@ -521,7 +521,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     },
     {
         .name = "lport-add",
-        .usage = "<name> <lswitch>",
+        .usage = "<lswitch> <name>",
         .min_args = 2,
         .max_args = 2,
         .handler = do_lport_add,

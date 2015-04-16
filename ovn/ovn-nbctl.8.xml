@@ -17,7 +17,7 @@
     <p><code>lswitch-get-external-id</code> <var>lswitch</var> [<var>key</var>]</p>
 
     <h1>Logical Port Commands</h1>
-    <p><code>lport-add</code> <var>name</var> <var>lswitch</var></p>
+    <p><code>lport-add</code> <var>lswitch</var> <var>name</var></p>
     <p><code>lport-del</code> <var>lport</var></p>
     <p><code>lport-list</code> <var>lswitch</var></p>
     <p><code>lport-set-external-id</code> <var>lport</var> <var>key</var> [<var>value</var>]</p>
