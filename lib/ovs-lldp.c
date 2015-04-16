@@ -728,7 +728,6 @@ lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
 {
     struct lldpd *mylldpd = lldp->lldpd;
     struct lldpd_hardware *hw = lldpd_first_hardware(mylldpd);
-    uint32_t lldp_size = 0;
     static const uint8_t eth_addr_lldp[6] =
         {0x01, 0x80, 0xC2, 0x00, 0x00, 0x0e};
 
@@ -736,10 +735,7 @@ lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
 
     eth_compose(packet, eth_addr_lldp, eth_src, ETH_TYPE_LLDP, 0);
 
-    lldp_size = lldpd_send(hw, packet);
-    if (lldp_size + ETH_HEADER_LEN < MINIMUM_ETH_PACKET_SIZE) {
-        lldp_size = MINIMUM_ETH_PACKET_SIZE;
-    }
+    lldpd_send(hw, packet);
 
     timer_set_duration(&lldp->tx_timer, lldp->lldpd->g_config.c_tx_interval);
     ovs_mutex_unlock(&mutex);
