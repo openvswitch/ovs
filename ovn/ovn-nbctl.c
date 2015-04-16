@@ -203,10 +203,8 @@ do_lswitch_get_external_id(struct ovs_cmdl_context *ctx)
         /* List one external ID */
 
         value = smap_get(&lswitch->external_ids, key);
-        if (value && *value) {
+        if (value) {
             printf("%s\n", value);
-        } else {
-            printf("external-id '%s' is not set.\n", key);
         }
     } else {
         struct smap_node *node;
@@ -361,10 +359,8 @@ do_lport_get_external_id(struct ovs_cmdl_context *ctx)
         /* List one external ID */
 
         value = smap_get(&lport->external_ids, key);
-        if (value && *value) {
+        if (value) {
             printf("%s\n", value);
-        } else {
-            printf("external-id '%s' is not set.\n", key);
         }
     } else {
         struct smap_node *node;
