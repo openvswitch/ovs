@@ -1356,7 +1356,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             if(!strcmp(value, "all")) {
                 gm->group_id = OFPG_ALL;
             } else {
-                char *error = str_to_u32(value, &gm->group_id);
+                error = str_to_u32(value, &gm->group_id);
                 if (error) {
                     goto out;
                 }
