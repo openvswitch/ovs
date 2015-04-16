@@ -243,6 +243,10 @@ AC_DEFUN([OVS_CHECK_BACKTRACE],
                   [AC_DEFINE([HAVE_BACKTRACE], [1],
                              [Define to 1 if you have backtrace(3).])])])
 
+dnl Defines HAVE_PERF_EVENT if linux/perf_event.h is found.
+AC_DEFUN([OVS_CHECK_PERF_EVENT],
+  [AC_CHECK_HEADERS([linux/perf_event.h])])
+
 dnl Checks for valgrind/valgrind.h.
 AC_DEFUN([OVS_CHECK_VALGRIND],
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])

@@ -15,7 +15,9 @@
  */
 
 /* This implementation only applies to the Linux platform.  */
-#ifdef __linux__
+
+#include <config.h>
+#if defined(__linux__) && defined(HAVE_PERF_EVENT_H)
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -24,7 +26,6 @@
 #include <sys/ioctl.h>
 #include <linux/perf_event.h>
 #include <asm/unistd.h>
-#include <config.h>
 #include "dynamic-string.h"
 #include "openvswitch/vlog.h"
 #include "perf-counter.h"

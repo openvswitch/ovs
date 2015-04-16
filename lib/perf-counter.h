@@ -94,7 +94,7 @@
  * will work just fine.
  */
 
-#ifdef __linux__
+#if defined(__linux__) && defined(HAVE_PERF_EVENT_H)
 struct perf_counter {
     const char *name;
     bool once;
@@ -129,8 +129,8 @@ char *perf_counters_to_string(void);
 
 #else
 
-#define PERF_FUNCTON_COUNT_BEGIN
-#define PERF_FUNCTON_COUNT_END
+#define PERF_FUNCTON_BEGIN
+#define PERF_FUNCTON_END
 
 static inline void perf_counters_init(void) {}
 static inline void perf_counters_destroy(void) {}
@@ -138,7 +138,7 @@ static inline void perf_counters_clear(void) {}
 static inline char *
 perf_counters_to_string(void)
 {
-    return xstrdup("Not Supported on this platform. Only available on Linux.");
+    return xstrdup("Not Supported on this platform. Only available on Linux (version >= 2.6.32)");
 }
 
 #endif
