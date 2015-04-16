@@ -106,4 +106,5 @@ struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
 	skb->protocol = skb_proto;
 	return skb_gso;
 }
+EXPORT_SYMBOL_GPL(rpl_skb_gso_segment);
 #endif	/* kernel version < 3.16.0 */
