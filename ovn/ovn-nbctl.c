@@ -47,28 +47,28 @@ usage(void)
 %s: OVN northbound DB management utility\n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
-Logical Switch Commands:\n\
-  lswitch-add [name]        Create a logical switch\n\
-  lswitch-del <lswitch>     Delete a logical switch\n\
-  lswitch-list              List configured logical switches\n\
-  lswitch-set-external-id <lswitch> <key> [value]\n\
-                            Set or delete an external:id on a logical switch\n\
-  lswitch-get-external-id <lswitch> [key]\n\
-                            List one or all external:ids set on a switch\n\
+Logical switch commands:\n\
+  lswitch-add [LSWITCH]     create a logical switch named LSWITCH\n\
+  lswitch-del LSWITCH       delete LSWITCH and all its ports\n\
+  lswitch-list              print the names of all logical switches\n\
+  lswitch-set-external-id LSWITCH KEY [VALUE]\n\
+                            set or delete an external-id on LSWITCH\n\
+  lswitch-get-external-id LSWITCH [KEY]\n\
+                            list one or all external-ids on LSWITCH\n\
 \n\
-Logical Port Commands:\n\
-  lport-add <lswitch> <lport> Create a logical port on a logical switch\n\
-  lport-del <lport>         Delete a logical port (by name or UUID)\n\
-  lport-list <lswitch>      List ports on a logical switch\n\
-  lport-set-external-id <lport> <key> [value]\n\
-                            Set or delete an external:id on a logical port\n\
-  lport-get-external-id <lport> [key]\n\
-                            List one or all external:ids set on a port\n\
-  lport-set-macs <lport> [MAC] [MAC] [...]\n\
-                            Set MAC addresses for the logical port. Specify\n\
-                            more than one using additional arguments.\n\
-  lport-get-macs <lport>    Get a list of MAC addresses on the port.\n\
-  lport-get-up <lport>      Get state of the port ('up' or 'down').\n\
+Logical port commands:\n\
+  lport-add LSWITCH LPORT   add logical port LPORT on LSWITCH\n\
+  lport-del LPORT           delete LPORT from its attached switch\n\
+  lport-list LSWITCH        print the names of all logical ports on LSWITCH\n\
+  lport-set-external-id LPORT KEY [VALUE]\n\
+                            set or delete an external-id on LPORT\n\
+  lport-get-external-id LPORT [KEY]\n\
+                            list one or all external-ids on LPORT\n\
+  lport-set-macs LPORT [MAC] [MAC] [...]\n\
+                            set MAC addresses for LPORT. Specify more\n\
+                            than one using additional arguments.\n\
+  lport-get-macs LPORT      get a list of MAC addresses on LPORT\n\
+  lport-get-up LPORT        get state of LPORT ('up' or 'down')\n\
 \n\
 Options:\n\
   --db=DATABASE             connect to DATABASE\n\
@@ -482,14 +482,14 @@ parse_options(int argc, char *argv[])
 static const struct ovs_cmdl_command all_commands[] = {
     {
         .name = "lswitch-add",
-        .usage = "[lswitch]",
+        .usage = "[LSWITCH]",
         .min_args = 0,
         .max_args = 1,
         .handler = do_lswitch_add,
     },
     {
         .name = "lswitch-del",
-        .usage = "<lswitch>",
+        .usage = "LSWITCH",
         .min_args = 1,
         .max_args = 1,
         .handler = do_lswitch_del,
@@ -503,56 +503,56 @@ static const struct ovs_cmdl_command all_commands[] = {
     },
     {
         .name = "lswitch-set-external-id",
-        .usage = "<lswitch> <key> [value]",
+        .usage = "LSWITCH KEY [VALUE]",
         .min_args = 2,
         .max_args = 3,
         .handler = do_lswitch_set_external_id,
     },
     {
         .name = "lswitch-get-external-id",
-        .usage = "<lswitch> [key]",
+        .usage = "LSWITCH [KEY]",
         .min_args = 1,
         .max_args = 2,
         .handler = do_lswitch_get_external_id,
     },
     {
         .name = "lport-add",
-        .usage = "<lswitch> <name>",
+        .usage = "LSWITCH LPORT",
         .min_args = 2,
         .max_args = 2,
         .handler = do_lport_add,
     },
     {
         .name = "lport-del",
-        .usage = "<lport>",
+        .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_del,
     },
     {
         .name = "lport-list",
-        .usage = "<lswitch>",
+        .usage = "LSWITCH",
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_list,
     },
     {
         .name = "lport-set-external-id",
-        .usage = "<lport> <key> [value]",
+        .usage = "LPORT KEY [VALUE]",
         .min_args = 2,
         .max_args = 3,
         .handler = do_lport_set_external_id,
     },
     {
         .name = "lport-get-external-id",
-        .usage = "<lport> [key]",
+        .usage = "LPORT [KEY]",
         .min_args = 1,
         .max_args = 2,
         .handler = do_lport_get_external_id,
     },
     {
         .name = "lport-set-macs",
-        .usage = "<lport> [MAC] [MAC] [...]",
+        .usage = "LPORT [MAC] [MAC] [...]",
         .min_args = 1,
         /* Accept however many arguments the system will allow. */
         .max_args = INT_MAX,
@@ -560,14 +560,14 @@ static const struct ovs_cmdl_command all_commands[] = {
     },
     {
         .name = "lport-get-macs",
-        .usage = "<lport>",
+        .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_get_macs,
     },
     {
         .name = "lport-get-up",
-        .usage = "<lport>",
+        .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_get_up,
