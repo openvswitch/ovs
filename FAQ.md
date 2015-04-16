@@ -173,14 +173,23 @@ A: The following table lists the Linux kernel versions against which the
 
    What should I do?
 
-A: If there is a newer version of Open vSwitch, consider building that
-   one, because it may support the kernel that you are building
-   against.  (To find out, consult the table in the previous answer.)
+A: You have the following options:
 
-   Otherwise, use the Linux kernel module supplied with the kernel
-   that you are using.  All versions of Open vSwitch userspace are
-   compatible with all versions of the Open vSwitch kernel module, so
-   this will also work.  See also the following question.
+   - Use the Linux kernel module supplied with the kernel that you are
+     using.  (See also the following FAQ.)
+
+   - If there is a newer released version of Open vSwitch, consider
+     building that one, because it may support the kernel that you are
+     building against.  (To find out, consult the table in the
+     previous FAQ.)
+
+   - The Open vSwitch "master" branch may support the kernel that you
+     are using, so consider building the kernel module from "master".
+
+  All versions of Open vSwitch userspace are compatible with all
+  versions of the Open vSwitch kernel module, so you do not have to
+  use the kernel module from one source along with the userspace
+  programs from the same source.
 
 ### Q: What features are not available in the Open vSwitch kernel datapath that ships as part of the upstream Linux kernel?
 
