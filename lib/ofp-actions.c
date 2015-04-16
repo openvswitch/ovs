@@ -5308,8 +5308,8 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
 
         ofpact_pad(ofpacts);
         start = ofpacts->size;
-        on = ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
-                        offsetof(struct ofpact_nest, actions));
+        ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
+                   offsetof(struct ofpact_nest, actions));
         get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
                                      &actions, &actions_len);
         error = ofpacts_decode_for_action_set(actions, actions_len,
