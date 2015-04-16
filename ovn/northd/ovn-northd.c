@@ -33,9 +33,9 @@
 #include "uuid.h"
 #include "openvswitch/vlog.h"
 
-VLOG_DEFINE_THIS_MODULE(ovn_nbd);
+VLOG_DEFINE_THIS_MODULE(ovn_northd);
 
-struct nbd_context {
+struct northd_context {
     struct ovsdb_idl *ovnnb_idl;
     struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnnb_txn;
@@ -121,7 +121,7 @@ macs_equal(char **binding_macs_, size_t b_n_macs,
  * OVN_Northbound database.
  */
 static void
-set_bindings(struct nbd_context *ctx)
+set_bindings(struct northd_context *ctx)
 {
     struct hmap bindings_hmap;
     const struct sbrec_bindings *binding;
@@ -194,7 +194,7 @@ set_bindings(struct nbd_context *ctx)
 }
 
 static void
-ovnnb_db_changed(struct nbd_context *ctx)
+ovnnb_db_changed(struct northd_context *ctx)
 {
     VLOG_DBG("ovn-nb db contents have changed.");
 
@@ -207,7 +207,7 @@ ovnnb_db_changed(struct nbd_context *ctx)
  * set the corresponding logical port as 'up' in the northbound DB.
  */
 static void
-ovnsb_db_changed(struct nbd_context *ctx)
+ovnsb_db_changed(struct northd_context *ctx)
 {
     struct hmap lports_hmap;
     const struct sbrec_bindings *binding;
@@ -240,9 +240,9 @@ ovnsb_db_changed(struct nbd_context *ctx)
         }
 
         if (!lport) {
-            /* The logical port doesn't exist for this binding.  This can happen
-             * under normal circumstances when ovn-nbd hasn't gotten around to
-             * pruning the Binding yet. */
+            /* The logical port doesn't exist for this binding.  This can
+             * happen under normal circumstances when ovn-northd hasn't gotten
+             * around to pruning the Binding yet. */
             continue;
         }
 
@@ -348,7 +348,7 @@ main(int argc, char *argv[])
     struct ovsdb_idl *ovnnb_idl, *ovnsb_idl;
     unsigned int ovnnb_seqno, ovn_seqno;
     int res = EXIT_SUCCESS;
-    struct nbd_context ctx = {
+    struct northd_context ctx = {
         .ovnsb_txn = NULL,
     };
     bool ovnnb_changes_pending = false;
