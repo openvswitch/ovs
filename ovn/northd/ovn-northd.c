@@ -196,7 +196,7 @@ set_bindings(struct nbd_context *ctx)
 static void
 ovnnb_db_changed(struct nbd_context *ctx)
 {
-    VLOG_DBG("ovn-northd: ovn-nb db contents have changed.\n");
+    VLOG_DBG("ovn-nb db contents have changed.");
 
     set_bindings(ctx);
 }
