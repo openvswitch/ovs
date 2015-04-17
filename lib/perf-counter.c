@@ -27,12 +27,9 @@
 #include <linux/perf_event.h>
 #include <asm/unistd.h>
 #include "dynamic-string.h"
-#include "openvswitch/vlog.h"
 #include "perf-counter.h"
 #include "shash.h"
 #include "util.h"
-
-VLOG_DEFINE_THIS_MODULE(perf_counter);
 
 static struct shash perf_counters;
 static int fd__ = 0;
