@@ -60,7 +60,7 @@ m4_pattern_forbid([LT_INIT]) dnl Make autoconf fail if libtool is missing.
 #    replacement, but programs using the new version may use APIs not
 #    present in the previous one. In other words, new symbols have been
 #    added and a program linking against the new version may fail with
-#    “unresolved symbols.” If linking against the old version at runtime:
+#    "unresolved symbols." If linking against the old version at runtime:
 #    set revision to 0, bump current and age.
 #
 # 3. Programs may need to be changed, recompiled, relinked in order to use
