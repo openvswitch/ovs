@@ -155,6 +155,7 @@ OVS_ENABLE_OPTION([-Wmissing-prototypes])
 OVS_ENABLE_OPTION([-Wmissing-field-initializers])
 OVS_ENABLE_OPTION([-Wthread-safety])
 OVS_ENABLE_OPTION([-fno-strict-aliasing])
+OVS_ENABLE_OPTION([-Qunused-arguments])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused-parameter], [HAVE_WNO_UNUSED_PARAMETER])
 OVS_ENABLE_WERROR

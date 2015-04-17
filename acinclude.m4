@@ -534,8 +534,16 @@ AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
      dnl clang's GCC-compatible compiler driver does not return a failure
      dnl exit status even though it complains about options it does not
      dnl understand.
+     dnl
+     dnl Also, check stderr as gcc exits with status 0 for options
+     dnl rejected at getopt level.
+     dnl    % touch /tmp/a.c
+     dnl    % gcc -g -c -Werror -Qunused-arguments /tmp/a.c; echo $?
+     dnl    gcc: unrecognized option '-Qunused-arguments'
+     dnl    0
+     dnl    %
      CFLAGS="$CFLAGS $WERROR $1"
-     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [ovs_cv_name[]=yes], [ovs_cv_name[]=no])
+     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [if test -s conftest.err && grep "unrecognized option" conftest.err; then ovs_cv_name[]=no; else ovs_cv_name[]=yes; fi], [ovs_cv_name[]=no])
      CFLAGS="$ovs_save_CFLAGS"])
   if test $ovs_cv_name = yes; then
     m4_if([$2], [], [:], [$2])
