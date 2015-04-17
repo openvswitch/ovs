@@ -20,3 +20,12 @@ distfiles: Makefile
 	  sed -e "s|^$$srcdirstrip/||;t" \
 	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t" | sort -u > $@
 CLEANFILES = distfiles
+
+# Print name of all modules.
+print-build-modules:
+	@if test -z "$(build_modules)"; \
+	then \
+	   echo "Could not find any kernel module."; \
+	   exit 1; \
+	fi
+	@echo "$(build_modules)" | tr '_' '-';

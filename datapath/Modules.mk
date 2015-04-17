@@ -10,6 +10,8 @@ both_modules = \
 	vport_gre \
 	vport_lisp \
 	vport_vxlan
+# When changing the name of 'build_modules', please also update the
+# print-build-modules in Makefile.am.
 build_modules = $(both_modules)	# Modules to build
 dist_modules = $(both_modules)	# Modules to distribute
 
