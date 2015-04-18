@@ -22,7 +22,27 @@
 #include "dynamic-string.h"
 #include "json.h"
 #include "util.h"
-
+
+/* Returns a string that represents 'format'. */
+const char *
+lex_format_to_string(enum lex_format format)
+{
+    switch (format) {
+    case LEX_F_DECIMAL:
+        return "decimal";
+    case LEX_F_HEXADECIMAL:
+        return "hexadecimal";
+    case LEX_F_IPV4:
+        return "IPv4";
+    case LEX_F_IPV6:
+        return "IPv6";
+    case LEX_F_ETHERNET:
+        return "Ethernet";
+    default:
+        abort();
+    }
+}
+
 /* Initializes 'token'. */
 void
 lex_token_init(struct lex_token *token)

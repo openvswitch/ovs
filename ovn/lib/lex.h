@@ -73,6 +73,7 @@ enum lex_format {
     LEX_F_IPV6,
     LEX_F_ETHERNET,
 };
+const char *lex_format_to_string(enum lex_format);
 
 /* A token.
  *
