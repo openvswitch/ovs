@@ -561,7 +561,8 @@
         <dd>syntactic sugar for no actions</dd>
 
         <dt><code>output(<var>value</var>);</code></dt>
-        <dd>output to port</dd>
+        <dd>output to port, except that output to the ingress port is
+        implicitly dropped</dd>
 
         <dt><code>broadcast;</code></dt>
         <dd>output to every logical port except ingress port</dd>
