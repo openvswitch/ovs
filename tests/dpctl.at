@@ -8,8 +8,9 @@ AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0], [2], [],
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
-AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0], [2], [],
-  [ovs-vswitchd: opening datapath (No such device)
+AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0], [2], [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0], [dnl
+ovs-vswitchd: opening datapath (...)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 OVS_VSWITCHD_STOP
@@ -33,7 +34,9 @@ dummy@br0:
 	port 5: vif1.0 (tap)
 ])
 AT_CHECK([ovs-appctl dpctl/add-if dummy@br0 vif1.0,type=tap], [2], [],
-  [ovs-vswitchd: adding vif1.0 to dummy@br0 failed (File exists)
+  [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [ovs-vswitchd: adding vif1.0 to dummy@br0 failed (...)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl dpctl/set-if dummy@br0 vif1.0,port_no=5])
@@ -66,15 +69,17 @@ AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 nonexistent], [2], [],
   [ovs-vswitchd: no port named nonexistent
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
-AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 br0], [2], [],
-  [ovs-vswitchd: deleting port br0 from dummy@br0 failed (Invalid argument)
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 br0], [2], [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [ovs-vswitchd: deleting port br0 from dummy@br0 failed (...)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
-AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 br0], [2], [],
-  [ovs-vswitchd: opening datapath (No such device)
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 br0], [2], [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [ovs-vswitchd: opening datapath (...)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
-OVS_VSWITCHD_STOP(["/dummy@br0: port_del failed (Invalid argument)/d
-/dummy@br0: failed to add vif1.0 as port: File exists/d"])
+OVS_VSWITCHD_STOP(["/dummy@br0: port_del failed/d
+/dummy@br0: failed to add vif1.0 as port/d"])
 AT_CLEANUP
