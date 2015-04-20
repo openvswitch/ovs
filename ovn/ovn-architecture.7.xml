@@ -48,18 +48,18 @@
 
     <li>
       <p>
-	Zero or more <dfn>gateways</dfn>.  A gateway extends a tunnel-based
-	logical network into a physical network by bidirectionally forwarding
-	packets between tunnels and a physical Ethernet port.  This allows
-	non-virtualized machines to participate in logical networks.  A gateway
-	may be a physical host, a virtual machine, or an ASIC-based hardware
-	switch that supports the <code>vtep</code>(5) schema.  (Support for the
-	latter will come later in OVN implementation.)
+        Zero or more <dfn>gateways</dfn>.  A gateway extends a tunnel-based
+        logical network into a physical network by bidirectionally forwarding
+        packets between tunnels and a physical Ethernet port.  This allows
+        non-virtualized machines to participate in logical networks.  A gateway
+        may be a physical host, a virtual machine, or an ASIC-based hardware
+        switch that supports the <code>vtep</code>(5) schema.  (Support for the
+        latter will come later in OVN implementation.)
       </p>
 
       <p>
-	Hypervisors and gateways are together called <dfn>transport node</dfn>
-	or <dfn>chassis</dfn>.
+        Hypervisors and gateways are together called <dfn>transport node</dfn>
+        or <dfn>chassis</dfn>.
       </p>
     </li>
   </ul>
@@ -76,34 +76,34 @@
 
     <li>
       <p>
-	The <dfn>OVN/CMS Plugin</dfn> is the component of the CMS that
-	interfaces to OVN.  In OpenStack, this is a Neutron plugin.
-	The plugin's main purpose is to translate the CMS's notion of logical
-	network configuration, stored in the CMS's configuration database in a
-	CMS-specific format, into an intermediate representation understood by
-	OVN.
+        The <dfn>OVN/CMS Plugin</dfn> is the component of the CMS that
+        interfaces to OVN.  In OpenStack, this is a Neutron plugin.
+        The plugin's main purpose is to translate the CMS's notion of logical
+        network configuration, stored in the CMS's configuration database in a
+        CMS-specific format, into an intermediate representation understood by
+        OVN.
       </p>
 
       <p>
-	This component is necessarily CMS-specific, so a new plugin needs to be
-	developed for each CMS that is integrated with OVN.  All of the
-	components below this one in the diagram are CMS-independent.
+        This component is necessarily CMS-specific, so a new plugin needs to be
+        developed for each CMS that is integrated with OVN.  All of the
+        components below this one in the diagram are CMS-independent.
       </p>
     </li>
 
     <li>
       <p>
-	The <dfn>OVN Northbound Database</dfn> receives the intermediate
-	representation of logical network configuration passed down by the
-	OVN/CMS Plugin.  The database schema is meant to be ``impedance
-	matched'' with the concepts used in a CMS, so that it directly supports
-	notions of logical switches, routers, ACLs, and so on.  See
-	<code>ovs-nb</code>(5) for details.
+        The <dfn>OVN Northbound Database</dfn> receives the intermediate
+        representation of logical network configuration passed down by the
+        OVN/CMS Plugin.  The database schema is meant to be ``impedance
+        matched'' with the concepts used in a CMS, so that it directly supports
+        notions of logical switches, routers, ACLs, and so on.  See
+        <code>ovs-nb</code>(5) for details.
       </p>
 
       <p>
-	The OVN Northbound Database has only two clients: the OVN/CMS Plugin
-	above it and <code>ovn-northd</code> below it.
+        The OVN Northbound Database has only two clients: the OVN/CMS Plugin
+        above it and <code>ovn-northd</code> below it.
       </p>
     </li>
 
@@ -123,14 +123,14 @@
       </p>
 
       <p>
-	The OVN Southbound Database contains three kinds of data: <dfn>Physical
-	Network</dfn> (PN) tables that specify how to reach hypervisor and
-	other nodes, <dfn>Logical Network</dfn> (LN) tables that describe the
-	logical network in terms of ``logical datapath flows,'' and
-	<dfn>Binding</dfn> tables that link logical network components'
-	locations to the physical network.  The hypervisors populate the PN and
-	Binding tables, whereas <code>ovn-northd</code>(8) populates the LN
-	tables.
+        The OVN Southbound Database contains three kinds of data: <dfn>Physical
+        Network</dfn> (PN) tables that specify how to reach hypervisor and
+        other nodes, <dfn>Logical Network</dfn> (LN) tables that describe the
+        logical network in terms of ``logical datapath flows,'' and
+        <dfn>Binding</dfn> tables that link logical network components'
+        locations to the physical network.  The hypervisors populate the PN and
+        Binding tables, whereas <code>ovn-northd</code>(8) populates the LN
+        tables.
       </p>
 
       <p>

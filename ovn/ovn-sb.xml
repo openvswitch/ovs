@@ -256,13 +256,13 @@
       </p>
 
       <p>
-	The most important components of match expression are
-	<dfn>comparisons</dfn> between <dfn>symbols</dfn> and
-	<dfn>constants</dfn>, e.g. <code>ip4.dst == 192.168.0.1</code>,
-	<code>ip.proto == 6</code>, <code>arp.op == 1</code>, <code>eth.type ==
-	0x800</code>.  The logical AND operator <code>&amp;&amp;</code> and
-	logical OR operator <code>||</code> can combine comparisons into a
-	larger expression.
+        The most important components of match expression are
+        <dfn>comparisons</dfn> between <dfn>symbols</dfn> and
+        <dfn>constants</dfn>, e.g. <code>ip4.dst == 192.168.0.1</code>,
+        <code>ip.proto == 6</code>, <code>arp.op == 1</code>, <code>eth.type ==
+        0x800</code>.  The logical AND operator <code>&amp;&amp;</code> and
+        logical OR operator <code>||</code> can combine comparisons into a
+        larger expression.
       </p>
 
       <p>
@@ -276,167 +276,167 @@
       <p><em>Symbols</em></p>
 
       <p>
-	<em>Type</em>.  Symbols have <dfn>integer</dfn> or <dfn>string</dfn>
-	type.  Integer symbols have a <dfn>width</dfn> in bits.
+        <em>Type</em>.  Symbols have <dfn>integer</dfn> or <dfn>string</dfn>
+        type.  Integer symbols have a <dfn>width</dfn> in bits.
       </p>
 
       <p>
-	<em>Kinds</em>.  There are three kinds of symbols:
-      </p>
-
-      <ul>
-	<li>
-	  <p>
-	    <dfn>Fields</dfn>.  A field symbol represents a packet header or
-	    metadata field.  For example, a field
-	    named <code>vlan.tci</code> might represent the VLAN TCI field in a
-	    packet.
-	  </p>
-
-	  <p>
-	    A field symbol can have integer or string type.  Integer fields can
-	    be nominal or ordinal (see <em>Level of Measurement</em>,
-	    below).
-	  </p>
-	</li>
-
-	<li>
-	  <p>
-	    <dfn>Subfields</dfn>.  A subfield represents a subset of bits from
-	    a larger field.  For example, a field <code>vlan.vid</code> might
-	    be defined as an alias for <code>vlan.tci[0..11]</code>.  Subfields
-	    are provided for syntactic convenience, because it is always
-	    possible to instead refer to a subset of bits from a field
-	    directly.
-	  </p>
-
-	  <p>
-	    Only ordinal fields (see <em>Level of Measurement</em>,
-	    below) may have subfields.  Subfields are always ordinal.
-	  </p>
-	</li>
-
-	<li>
-	  <p>
-	    <dfn>Predicates</dfn>.  A predicate is shorthand for a Boolean
-	    expression.  Predicates may be used much like 1-bit fields.  For
-	    example, <code>ip4</code> might expand to <code>eth.type ==
-	    0x800</code>.  Predicates are provided for syntactic convenience,
-	    because it is always possible to instead specify the underlying
-	    expression directly.
-	  </p>
-
-	  <p>
-	    A predicate whose expansion refers to any nominal field or
-	    predicate (see <em>Level of Measurement</em>, below) is nominal;
-	    other predicates have Boolean level of measurement.
-	  </p>
-	</li>
-      </ul>
-
-      <p>
-	<em>Level of Measurement</em>.  See
-	http://en.wikipedia.org/wiki/Level_of_measurement for the statistical
-	concept on which this classification is based.  There are three
-	levels:
+        <em>Kinds</em>.  There are three kinds of symbols:
       </p>
 
       <ul>
-	<li>
-	  <p>
-	    <dfn>Ordinal</dfn>.  In statistics, ordinal values can be ordered
-	    on a scale.  OVN considers a field (or subfield) to be ordinal if
-	    its bits can be examined individually.  This is true for the
-	    OpenFlow fields that OpenFlow or Open vSwitch makes ``maskable.''
-	  </p>
+        <li>
+          <p>
+            <dfn>Fields</dfn>.  A field symbol represents a packet header or
+            metadata field.  For example, a field
+            named <code>vlan.tci</code> might represent the VLAN TCI field in a
+            packet.
+          </p>
 
-	  <p>
-	    Any use of a nominal field may specify a single bit or a range of
-	    bits, e.g. <code>vlan.tci[13..15]</code> refers to the PCP field
-	    within the VLAN TCI, and <code>eth.dst[40]</code> refers to the
-	    multicast bit in the Ethernet destination address.
-	  </p>
+          <p>
+            A field symbol can have integer or string type.  Integer fields can
+            be nominal or ordinal (see <em>Level of Measurement</em>,
+            below).
+          </p>
+        </li>
 
-	  <p>
-	    OVN supports all the usual arithmetic relations (<code>==</code>,
-	    <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
-	    <code>&gt;</code>, and <code>&gt;=</code>) on ordinal fields and
-	    their subfields, because OVN can implement these in OpenFlow and
-	    Open vSwitch as collections of bitwise tests.
-	  </p>
-	</li>
+        <li>
+          <p>
+            <dfn>Subfields</dfn>.  A subfield represents a subset of bits from
+            a larger field.  For example, a field <code>vlan.vid</code> might
+            be defined as an alias for <code>vlan.tci[0..11]</code>.  Subfields
+            are provided for syntactic convenience, because it is always
+            possible to instead refer to a subset of bits from a field
+            directly.
+          </p>
 
-	<li>
-	  <p>
-	    <dfn>Nominal</dfn>.  In statistics, nominal values cannot be
-	    usefully compared except for equality.  This is true of OpenFlow
-	    port numbers, Ethernet types, and IP protocols are examples: all of
-	    these are just identifiers assigned arbitrarily with no deeper
-	    meaning.  In OpenFlow and Open vSwitch, bits in these fields
-	    generally aren't individually addressable.
-	  </p>
+          <p>
+            Only ordinal fields (see <em>Level of Measurement</em>,
+            below) may have subfields.  Subfields are always ordinal.
+          </p>
+        </li>
 
-	  <p>
-	    OVN only supports arithmetic tests for equality on nominal fields,
-	    because OpenFlow and Open vSwitch provide no way for a flow to
-	    efficiently implement other comparisons on them.  (A test for
-	    inequality can be sort of built out of two flows with different
-	    priorities, but OVN matching expressions always generate flows with
-	    a single priority.)
-	  </p>
+        <li>
+          <p>
+            <dfn>Predicates</dfn>.  A predicate is shorthand for a Boolean
+            expression.  Predicates may be used much like 1-bit fields.  For
+            example, <code>ip4</code> might expand to <code>eth.type ==
+            0x800</code>.  Predicates are provided for syntactic convenience,
+            because it is always possible to instead specify the underlying
+            expression directly.
+          </p>
 
-	  <p>
-	    String fields are always nominal.
-	  </p>
-	</li>
-
-	<li>
-	  <p>
-	    <dfn>Boolean</dfn>.  A nominal field that has only two values, 0
-	    and 1, is somewhat exceptional, since it is easy to support both
-	    equality and inequality tests on such a field: either one can be
-	    implemented as a test for 0 or 1.
-	  </p>
-
-	  <p>
-	    Only predicates (see above) have a Boolean level of measurement.
-	  </p>
-
-	  <p>
-	    This isn't a standard level of measurement.
-	  </p>
-	</li>
+          <p>
+            A predicate whose expansion refers to any nominal field or
+            predicate (see <em>Level of Measurement</em>, below) is nominal;
+            other predicates have Boolean level of measurement.
+          </p>
+        </li>
       </ul>
 
       <p>
-	<em>Prerequisites</em>.  Any symbol can have prerequisites, which are
-	additional condition implied by the use of the symbol.  For example,
-	For example, <code>icmp4.type</code> symbol might have prerequisite
-	<code>icmp4</code>, which would cause an expression <code>icmp4.type ==
-	0</code> to be interpreted as <code>icmp4.type == 0 &amp;&amp;
-	icmp4</code>, which would in turn expand to <code>icmp4.type == 0
-	&amp;&amp; eth.type == 0x800 &amp;&amp; ip4.proto == 1</code> (assuming
-	<code>icmp4</code> is a predicate defined as suggested under
-	<em>Types</em> above).
+        <em>Level of Measurement</em>.  See
+        http://en.wikipedia.org/wiki/Level_of_measurement for the statistical
+        concept on which this classification is based.  There are three
+        levels:
+      </p>
+
+      <ul>
+        <li>
+          <p>
+            <dfn>Ordinal</dfn>.  In statistics, ordinal values can be ordered
+            on a scale.  OVN considers a field (or subfield) to be ordinal if
+            its bits can be examined individually.  This is true for the
+            OpenFlow fields that OpenFlow or Open vSwitch makes ``maskable.''
+          </p>
+
+          <p>
+            Any use of a nominal field may specify a single bit or a range of
+            bits, e.g. <code>vlan.tci[13..15]</code> refers to the PCP field
+            within the VLAN TCI, and <code>eth.dst[40]</code> refers to the
+            multicast bit in the Ethernet destination address.
+          </p>
+
+          <p>
+            OVN supports all the usual arithmetic relations (<code>==</code>,
+            <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+            <code>&gt;</code>, and <code>&gt;=</code>) on ordinal fields and
+            their subfields, because OVN can implement these in OpenFlow and
+            Open vSwitch as collections of bitwise tests.
+          </p>
+        </li>
+
+        <li>
+          <p>
+            <dfn>Nominal</dfn>.  In statistics, nominal values cannot be
+            usefully compared except for equality.  This is true of OpenFlow
+            port numbers, Ethernet types, and IP protocols are examples: all of
+            these are just identifiers assigned arbitrarily with no deeper
+            meaning.  In OpenFlow and Open vSwitch, bits in these fields
+            generally aren't individually addressable.
+          </p>
+
+          <p>
+            OVN only supports arithmetic tests for equality on nominal fields,
+            because OpenFlow and Open vSwitch provide no way for a flow to
+            efficiently implement other comparisons on them.  (A test for
+            inequality can be sort of built out of two flows with different
+            priorities, but OVN matching expressions always generate flows with
+            a single priority.)
+          </p>
+
+          <p>
+            String fields are always nominal.
+          </p>
+        </li>
+
+        <li>
+          <p>
+            <dfn>Boolean</dfn>.  A nominal field that has only two values, 0
+            and 1, is somewhat exceptional, since it is easy to support both
+            equality and inequality tests on such a field: either one can be
+            implemented as a test for 0 or 1.
+          </p>
+
+          <p>
+            Only predicates (see above) have a Boolean level of measurement.
+          </p>
+
+          <p>
+            This isn't a standard level of measurement.
+          </p>
+        </li>
+      </ul>
+
+      <p>
+        <em>Prerequisites</em>.  Any symbol can have prerequisites, which are
+        additional condition implied by the use of the symbol.  For example,
+        For example, <code>icmp4.type</code> symbol might have prerequisite
+        <code>icmp4</code>, which would cause an expression <code>icmp4.type ==
+        0</code> to be interpreted as <code>icmp4.type == 0 &amp;&amp;
+        icmp4</code>, which would in turn expand to <code>icmp4.type == 0
+        &amp;&amp; eth.type == 0x800 &amp;&amp; ip4.proto == 1</code> (assuming
+        <code>icmp4</code> is a predicate defined as suggested under
+        <em>Types</em> above).
       </p>
 
       <p><em>Relational operators</em></p>
 
       <p>
-	All of the standard relational operators <code>==</code>,
-	<code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
-	<code>&gt;</code>, and <code>&gt;=</code> are supported.  Nominal
-	fields support only <code>==</code> and <code>!=</code>, and only in a
-	positive sense when outer <code>!</code> are taken into account,
-	e.g. given string field <code>inport</code>, <code>inport ==
-	"eth0"</code> and <code>!(inport != "eth0")</code> are acceptable, but
-	not <code>inport != "eth0"</code>.
+        All of the standard relational operators <code>==</code>,
+        <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+        <code>&gt;</code>, and <code>&gt;=</code> are supported.  Nominal
+        fields support only <code>==</code> and <code>!=</code>, and only in a
+        positive sense when outer <code>!</code> are taken into account,
+        e.g. given string field <code>inport</code>, <code>inport ==
+        "eth0"</code> and <code>!(inport != "eth0")</code> are acceptable, but
+        not <code>inport != "eth0"</code>.
       </p>
 
       <p>
-	The implementation of <code>==</code> (or <code>!=</code> when it is
-	negated), is more efficient than that of the other relational
-	operators.
+        The implementation of <code>==</code> (or <code>!=</code> when it is
+        negated), is more efficient than that of the other relational
+        operators.
       </p>
 
       <p><em>Constants</em></p>
@@ -478,38 +478,38 @@
       <p><em>Miscellaneous</em></p>
 
       <p>
-	Comparisons may name the symbol or the constant first,
-	e.g. <code>tcp.src == 80</code> and <code>80 == tcp.src</code> are both
-	acceptable.
+        Comparisons may name the symbol or the constant first,
+        e.g. <code>tcp.src == 80</code> and <code>80 == tcp.src</code> are both
+        acceptable.
       </p>
 
       <p>
-	Tests for a range may be expressed using a syntax like <code>1024 &lt;=
-	tcp.src &lt;= 49151</code>, which is equivalent to <code>1024 &lt;=
-	tcp.src &amp;&amp; tcp.src &lt;= 49151</code>.
+        Tests for a range may be expressed using a syntax like <code>1024 &lt;=
+        tcp.src &lt;= 49151</code>, which is equivalent to <code>1024 &lt;=
+        tcp.src &amp;&amp; tcp.src &lt;= 49151</code>.
       </p>
 
       <p>
-	For a one-bit field or predicate, a mention of its name is equivalent
-	to <code><var>symobl</var> == 1</code>, e.g. <code>vlan.present</code>
-	is equivalent to <code>vlan.present == 1</code>.  The same is true for
-	one-bit subfields, e.g. <code>vlan.tci[12]</code>.  There is no
-	technical limitation to implementing the same for ordinal fields of all
-	widths, but the implementation is expensive enough that the syntax
-	parser requires writing an explicit comparison against zero to make
-	mistakes less likely, e.g. in <code>tcp.src != 0</code> the comparison
-	against 0 is required.
+        For a one-bit field or predicate, a mention of its name is equivalent
+        to <code><var>symobl</var> == 1</code>, e.g. <code>vlan.present</code>
+        is equivalent to <code>vlan.present == 1</code>.  The same is true for
+        one-bit subfields, e.g. <code>vlan.tci[12]</code>.  There is no
+        technical limitation to implementing the same for ordinal fields of all
+        widths, but the implementation is expensive enough that the syntax
+        parser requires writing an explicit comparison against zero to make
+        mistakes less likely, e.g. in <code>tcp.src != 0</code> the comparison
+        against 0 is required.
       </p>
 
       <p>
-	<em>Operator precedence</em> is as shown below, from highest to lowest.
-	There are two exceptions where parentheses are required even though the
-	table would suggest that they are not: <code>&amp;&amp;</code> and
-	<code>||</code> require parentheses when used together, and
-	<code>!</code> requires parentheses when applied to a relational
-	expression.  Thus, in <code>(eth.type == 0x800 || eth.type == 0x86dd)
-	&amp;&amp; ip.proto == 6</code> or <code>!(arp.op == 1)</code>, the
-	parentheses are mandatory.
+        <em>Operator precedence</em> is as shown below, from highest to lowest.
+        There are two exceptions where parentheses are required even though the
+        table would suggest that they are not: <code>&amp;&amp;</code> and
+        <code>||</code> require parentheses when used together, and
+        <code>!</code> requires parentheses when applied to a relational
+        expression.  Thus, in <code>(eth.type == 0x800 || eth.type == 0x86dd)
+        &amp;&amp; ip.proto == 6</code> or <code>!(arp.op == 1)</code>, the
+        parentheses are mandatory.
       </p>
 
       <ul>
@@ -595,8 +595,8 @@
         <dt><code>icmp_reply { <var>action</var>, </code>...<code> }</code></dt>
         <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
 
-	<dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
-	<dd>generate ARP from packet, execute <var>action</var>s</dd>
+        <dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
+        <dd>generate ARP from packet, execute <var>action</var>s</dd>
       </dl>
 
       <p>
