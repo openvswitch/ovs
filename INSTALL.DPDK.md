@@ -16,13 +16,13 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
+Required DPDK 2.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
 
 1. Configure build & install DPDK:
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-1.8.0
+     export DPDK_DIR=/usr/src/dpdk-2.0
      cd $DPDK_DIR
      ```
 
@@ -32,9 +32,12 @@ Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
      `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
 
      Update `config/common_linuxapp` so that DPDK is built with vhost
-     libraries:
+     libraries; currently, OVS only supports vhost-cuse, so DPDK vhost-user
+     libraries should be explicitly turned off (they are enabled by default
+     in DPDK 2.0).
 
      `CONFIG_RTE_LIBRTE_VHOST=y`
+     `CONFIG_RTE_LIBRTE_VHOST_USER=n`
 
      Then run `make install` to build and install the library.
      For default install without IVSHMEM:
@@ -65,9 +68,11 @@ Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
    ```
    cd $(OVS_DIR)/openvswitch
    ./boot.sh
-   ./configure --with-dpdk=$DPDK_BUILD
+   ./configure --with-dpdk=$DPDK_BUILD [CFLAGS="-g -O2 -Wno-cast-align"]
    make
    ```
+
+   Note: 'clang' users may specify the '-Wno-cast-align' flag to suppress DPDK cast-align warnings.
 
 To have better performance one can enable aggressive compiler optimizations and
 use the special instructions(popcnt, crc32) that may not be available on all
