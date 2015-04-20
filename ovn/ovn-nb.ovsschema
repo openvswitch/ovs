@@ -40,7 +40,7 @@
                                              "refTable": "Logical_Switch",
                                              "refType": "strong"}}},
                 "priority": {"type": {"key": {"type": "integer",
-                                              "minInteger": 0,
+                                              "minInteger": 1,
                                               "maxInteger": 65535}}},
                 "match": {"type": "string"},
                 "action": {"type": {"key": {"type": "string",
