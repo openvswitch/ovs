@@ -254,6 +254,38 @@
     another name may be used.
   </p>
 
+  <h2>Logical Networks</h2>
+
+  <p>
+    A <dfn>logical network</dfn> implements the same concepts as physical
+    networks, but they are insulated from the physical network with tunnels or
+    other encapsulations.  This allows logical networks to have separate IP and
+    other address spaces that overlap, without conflicting, with those used for
+    physical networks.  Logical network topologies can be arranged without
+    regard for the topologies of the physical networks on which they run.
+  </p>
+
+  <p>
+    Logical network concepts in OVN include:
+  </p>
+
+  <ul>
+    <li>
+      <dfn>Logical switches</dfn>, the logical version of Ethernet switches.
+    </li>
+
+    <li>
+      <dfn>Logical routers</dfn>, the logical version of IP routers.  Logical
+      switches and routers can be connected into sophisticated topologies.
+    </li>
+
+    <li>
+      <dfn>Logical datapaths</dfn> are the logical version of an OpenFlow
+      switch.  Logical switches and routers are both implemented as logical
+      datapaths.
+    </li>
+  </ul>
+
   <h2>Life Cycle of a VIF</h2>
 
   <p>

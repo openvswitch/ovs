@@ -227,6 +227,16 @@
       The default action when no flow matches is to drop packets.
     </p>
 
+    <column name="logical_datapath">
+      The logical datapath to which the logical port belongs.  A logical
+      datapath implements a logical pipeline among the ports in the <ref
+      table="Bindings"/> table associated with it.  (No table represents a
+      logical datapath.)  In practice, the pipeline in a given logical datapath
+      implements either a logical switch or a logical router, and
+      <code>ovn-northd</code> reuses the UUIDs for those logical entities from
+      the <code>OVN_Northbound</code> for logical datapaths.
+    </column>
+
     <column name="table_id">
       The stage in the logical pipeline, analogous to an OpenFlow table number.
     </column>
@@ -446,7 +456,8 @@
         they are Unicode strings).  String constants are used for naming
         logical ports.  Thus, the useful values are <ref
         column="logical_port"/> names from the <ref column="Bindings"/> and
-        <ref column="Gateway"/> table.
+        <ref column="Gateway"/> table in a logical flow's <ref
+	column="logical_datapath"/>.
       </p>
 
       <p>
@@ -652,6 +663,12 @@
       again on a different one, <code>ovn-controller</code> must overwrite the
       <code>chassis</code> column with new information.
     </p>
+
+    <column name="logical_datapath">
+      The logical datapath to which the logical port belongs.  A logical
+      datapath implements a logical pipeline via logical flows in the <ref
+      table="Pipeline"/> table.  (No table represents a logical datapath.)
+    </column>
 
     <column name="logical_port">
       A logical port, taken from <ref table="Logical_Port" column="name"
