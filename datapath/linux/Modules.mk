@@ -77,3 +77,4 @@ openvswitch_headers += \
 	linux/compat/include/net/sock.h \
 	linux/compat/include/net/vxlan.h \
 	linux/compat/include/net/sctp/checksum.h
+EXTRA_DIST += linux/compat/build-aux/export-check-whitelist

@@ -29,3 +29,32 @@ print-build-modules:
 	   exit 1; \
 	fi
 	@echo "$(build_modules)" | tr '_' '-';
+
+COMPAT_GET_FUNCTIONS := find $(top_srcdir)/datapath/linux/compat -name "*.h" \
+	-exec sed -n '/^[a-z][a-z]* \*\?[A-Za-z0-9_][A-Za-z0-9_]*([a-z]/p; /^struct [a-z0-9_][a-z0-9_]* \*\?[A-Za-z0-9_][A-Za-z0-9_]*([a-z]/p' {} \; | tr -d '*' | cut -d '(' -f1 | rev | cut -d ' ' -f1 | rev
+COMPAT_GET_EXPORTS := find $(top_srcdir)/datapath/linux/compat -name "*.c" \
+	-exec sed -n 's/^EXPORT_SYMBOL[A-Z_]*(\([a-z_][a-z_]*\));$$/\1/p' {} \;
+COMPAT_FUNCTIONS := $(shell $(COMPAT_GET_FUNCTIONS))
+COMPAT_EXPORTS := $(shell $(COMPAT_GET_EXPORTS))
+
+# Checks that all public functions are 'rpl_' or 'ovs_' prefixed.
+# Checks that all EXPORT_SYMBOL_GPL() export 'rpl_' or 'ovs_' prefixed functions.
+check-export-symbol:
+	@for fun_ in $(COMPAT_FUNCTIONS); do \
+	   if ! grep -- $${fun_} $(top_srcdir)/datapath/linux/compat/build-aux/export-check-whitelist > /dev/null; then \
+	      if [[ ! $${fun_} =~ ^rpl_* ]] \
+	         && [[ ! $${fun_} =~ ^ovs_* ]]; then \
+	         echo "Should prefix $${fun_} with rpl_ or ovs_."; \
+	         exit 1; \
+	      fi; \
+	   fi; \
+	done
+	@for fun_ in $(COMPAT_EXPORTS); do \
+	   if [[ ! $${fun_} =~ ^rpl_* ]] \
+	      && [[ ! $${fun_} =~ ^ovs_* ]]; then \
+	      echo "Should prefix $${fun_} with rpl_ or ovs_."; \
+	      exit 1; \
+	   fi; \
+	done
+
+all-local: check-export-symbol

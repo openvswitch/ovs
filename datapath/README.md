@@ -246,3 +246,19 @@ The other rules for flow keys are much less subtle:
     composes it the same way.  This allows userspace to hash and
     compare entire flow keys that it may not be able to fully
     interpret.
+
+
+Coding rules
+============
+
+Compatibility
+-------------
+
+Please implement the headers and codes for compatibility with older kernel
+in linux/compat/ directory.  All public functions should be exported using
+EXPORT_SYMBOL macro.  Public function replacing the same-named kernel
+function should be prefixed with 'rpl_'.  Otherwise, the function should be
+prefixed with 'ovs_'.  For special case when it is not possible to follow
+this rule (e.g., the pskb_expand_head() function), the function name must
+be added to linux/compat/build-aux/export-check-whitelist, otherwise, the
+compilation check 'check-export-symbol' will fail.
