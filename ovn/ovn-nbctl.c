@@ -15,6 +15,7 @@
 #include <config.h>
 
 #include <getopt.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -58,8 +59,13 @@ Logical switch commands:\n\
 \n\
 Logical port commands:\n\
   lport-add LSWITCH LPORT   add logical port LPORT on LSWITCH\n\
+  lport-add LSWITCH LPORT PARENT TAG\n\
+                            add logical port LPORT on LSWITCH with PARENT\n\
+                            on TAG\n\
   lport-del LPORT           delete LPORT from its attached switch\n\
   lport-list LSWITCH        print the names of all logical ports on LSWITCH\n\
+  lport-get-parent LPORT    get the parent of LPORT if set\n\
+  lport-get-tag LPORT       get the LPORT's tag if set\n\
   lport-set-external-id LPORT KEY [VALUE]\n\
                             set or delete an external-id on LPORT\n\
   lport-get-external-id LPORT [KEY]\n\
@@ -251,15 +257,35 @@ do_lport_add(struct ovs_cmdl_context *ctx)
     struct nbctl_context *nb_ctx = ctx->pvt;
     struct nbrec_logical_port *lport;
     const struct nbrec_logical_switch *lswitch;
+    int64_t tag;
 
     lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
     if (!lswitch) {
         return;
     }
 
+    if (ctx->argc != 3 && ctx->argc != 5) {
+        /* If a parent_name is specififed, a tag must be specified as well. */
+        VLOG_WARN("Invalid arguments to lport-add.");
+        return;
+    }
+
+    if (ctx->argc == 5) {
+        /* Validate tag. */
+        if (!ovs_scan(ctx->argv[4], "%"SCNd64, &tag) || tag < 0 || tag > 4095) {
+            VLOG_WARN("Invalid tag '%s'", ctx->argv[4]);
+            return;
+        }
+    }
+
+    /* Finally, create the transaction. */
     lport = nbrec_logical_port_insert(nb_ctx->txn);
     nbrec_logical_port_set_name(lport, ctx->argv[2]);
     nbrec_logical_port_set_lswitch(lport, lswitch);
+    if (ctx->argc == 5) {
+        nbrec_logical_port_set_parent_name(lport, ctx->argv[3]);
+        nbrec_logical_port_set_tag(lport, &tag, 1);
+    }
 }
 
 static void
@@ -313,6 +339,38 @@ do_lport_list(struct ovs_cmdl_context *ctx)
         }
         printf(UUID_FMT " (%s)\n",
                UUID_ARGS(&lport->header_.uuid), lport->name);
+    }
+}
+
+static void
+do_lport_get_parent(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, ctx->argv[1]);
+    if (!lport) {
+        return;
+    }
+
+    if (lport->parent_name) {
+        printf("%s\n", lport->parent_name);
+    }
+}
+
+static void
+do_lport_get_tag(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, ctx->argv[1]);
+    if (!lport) {
+        return;
+    }
+
+    if (lport->n_tag > 0) {
+        printf("%"PRId64"\n", lport->tag[0]);
     }
 }
 
@@ -517,9 +575,9 @@ static const struct ovs_cmdl_command all_commands[] = {
     },
     {
         .name = "lport-add",
-        .usage = "LSWITCH LPORT",
+        .usage = "LSWITCH LPORT [PARENT] [TAG]",
         .min_args = 2,
-        .max_args = 2,
+        .max_args = 4,
         .handler = do_lport_add,
     },
     {
@@ -535,6 +593,20 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_list,
+    },
+    {
+        .name = "lport-get-parent",
+        .usage = "LPORT",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_parent,
+    },
+    {
+        .name = "lport-get-tag",
+        .usage = "LPORT",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_tag,
     },
     {
         .name = "lport-set-external-id",

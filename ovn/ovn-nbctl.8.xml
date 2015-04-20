@@ -65,6 +65,16 @@
         <var>lport</var>.
       </dd>
 
+      <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
+      <dd>
+        Creates on <var>lswitch</var> a logical port named <var>lport</var>
+        that is a child of <var>parent</var> that is identied with
+        <var>tag</var>.  This is useful in cases such as virtualized
+        container environments where Open vSwitch does not have a direct
+        connection to the container's port and it must be shared with
+        the virtual machine's port.
+      </dd>
+
       <dt><code>lport-del</code> <var>lport</var></dt>
       <dd>
         Deletes <var>lport</var>.
@@ -74,6 +84,18 @@
       <dd>
         Lists all the logical ports within <var>lswitch</var> on
         standard output, one per line.
+      </dd>
+
+      <dt><code>lport-get-parent</code> <var>lport</var></dt>
+      <dd>
+        If set, get the parent port of <var>lport</var>.  If not set, print
+        nothing.
+      </dd>
+
+      <dt><code>lport-get-tag</code> <var>lport</var></dt>
+      <dd>
+        If set, get the tag for <var>lport</var> traffic.  If not set, print
+        nothing.
       </dd>
 
       <dt><code>lport-set-external-id</code> <var>lport</var> <var>key</var> [<var>value</var>]</dt>
