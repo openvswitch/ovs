@@ -114,6 +114,35 @@ macs_equal(char **binding_macs_, size_t b_n_macs,
     return (i == b_n_macs) ? true : false;
 }
 
+static bool
+parents_equal(const struct sbrec_bindings *binding,
+              const struct nbrec_logical_port *lport)
+{
+    if (!!binding->parent_port != !!lport->parent_name) {
+        /* One is set and the other is not. */
+        return false;
+    }
+
+    if (binding->parent_port) {
+        /* Both are set. */
+        return strcmp(binding->parent_port, lport->parent_name) ? false : true;
+    }
+
+    /* Both are NULL. */
+    return true;
+}
+
+static bool
+tags_equal(const struct sbrec_bindings *binding,
+           const struct nbrec_logical_port *lport)
+{
+    if (binding->n_tag != lport->n_tag) {
+        return false;
+    }
+
+    return binding->n_tag ? (binding->tag[0] == lport->tag[0]) : true;
+}
+
 /*
  * When a change has occurred in the OVN_Northbound database, we go through and
  * make sure that the contents of the Bindings table in the OVN_Southbound
@@ -163,8 +192,7 @@ set_bindings(struct northd_context *ctx)
 
         if (binding) {
             /* We found an existing binding for this logical port.  Update its
-             * contents.  Right now the only thing we expect that could change
-             * is the list of MAC addresses. */
+             * contents. */
 
             hmap_remove(&bindings_hmap, &hash_node->node);
             free(hash_node);
@@ -175,6 +203,12 @@ set_bindings(struct northd_context *ctx)
                 sbrec_bindings_set_mac(binding,
                         (const char **) lport->macs, lport->n_macs);
             }
+            if (!parents_equal(binding, lport)) {
+                sbrec_bindings_set_parent_port(binding, lport->parent_name);
+            }
+            if (!tags_equal(binding, lport)) {
+                sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
+            }
         } else {
             /* There is no binding for this logical port, so create one. */
 
@@ -182,6 +216,10 @@ set_bindings(struct northd_context *ctx)
             sbrec_bindings_set_logical_port(binding, lport->name);
             sbrec_bindings_set_mac(binding,
                     (const char **) lport->macs, lport->n_macs);
+            if (lport->parent_name && lport->n_tag > 0) {
+                sbrec_bindings_set_parent_port(binding, lport->parent_name);
+                sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
+            }
         }
     }
 
@@ -377,6 +415,8 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_logical_port);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_chassis);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_mac);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tag);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_parent_port);
 
     /*
      * The loop here just runs the IDL in a loop waiting for the seqno to
