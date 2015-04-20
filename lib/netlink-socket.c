@@ -799,6 +799,8 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
                              &reply_len, NULL)) {
             /* XXX: Map to a more appropriate error. */
             error = EINVAL;
+            VLOG_DBG_RL(&rl, "fatal driver failure: %s",
+                ovs_lasterror_to_string());
             break;
         }
 
@@ -909,6 +911,11 @@ nl_sock_transact_multiple(struct nl_sock *sock,
         } else if (error) {
             VLOG_ERR_RL(&rl, "transaction error (%s)", ovs_strerror(error));
             nl_sock_record_errors__(transactions, n, error);
+            if (error != EAGAIN) {
+                /* A fatal error has occurred.  Abort the rest of
+                 * transactions. */
+                break;
+            }
         }
     }
 }
