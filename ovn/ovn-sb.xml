@@ -219,8 +219,8 @@
       of physical ports and physical datapaths.  Translation between logical
       and physical flows helps to ensure isolation between logical datapaths.
       (The logical flow abstraction also allows the CMS to do less work, since
-      it does not have to separately compute and push out physical physical
-      flows to each chassis.)
+      it does not have to separately compute and push out physical flows to each
+      chassis.)
     </p>
 
     <p>
