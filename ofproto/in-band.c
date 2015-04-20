@@ -119,8 +119,8 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     retval = netdev_get_next_hop(ib->local_netdev, &r->remote_addr.sin_addr,
                                  &next_hop_inaddr, &next_hop_dev);
     if (retval) {
-        VLOG_WARN("cannot find route for controller ("IP_FMT"): %s",
-                  IP_ARGS(r->remote_addr.sin_addr.s_addr),
+        VLOG_WARN("%s: cannot find route for controller ("IP_FMT"): %s",
+                  ib->ofproto->name, IP_ARGS(r->remote_addr.sin_addr.s_addr),
                   ovs_strerror(retval));
         return 1;
     }
@@ -136,9 +136,10 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
 
         retval = netdev_open(next_hop_dev, "system", &r->remote_netdev);
         if (retval) {
-            VLOG_WARN_RL(&rl, "cannot open netdev %s (next hop "
+            VLOG_WARN_RL(&rl, "%s: cannot open netdev %s (next hop "
                          "to controller "IP_FMT"): %s",
-                         next_hop_dev, IP_ARGS(r->remote_addr.sin_addr.s_addr),
+                         ib->ofproto->name, next_hop_dev,
+                         IP_ARGS(r->remote_addr.sin_addr.s_addr),
                          ovs_strerror(retval));
             free(next_hop_dev);
             return 1;
@@ -150,8 +151,9 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     retval = netdev_arp_lookup(r->remote_netdev, next_hop_inaddr.s_addr,
                                r->remote_mac);
     if (retval) {
-        VLOG_DBG_RL(&rl, "cannot look up remote MAC address ("IP_FMT"): %s",
-                    IP_ARGS(next_hop_inaddr.s_addr), ovs_strerror(retval));
+        VLOG_DBG_RL(&rl, "%s: cannot look up remote MAC address ("IP_FMT"): %s",
+                    ib->ofproto->name, IP_ARGS(next_hop_inaddr.s_addr),
+                    ovs_strerror(retval));
     }
 
     /* If we don't have a MAC address, then refresh quickly, since we probably
@@ -188,8 +190,9 @@ refresh_remotes(struct in_band *ib)
             any_changes = true;
             if (!eth_addr_is_zero(r->remote_mac)
                 && !eth_addr_equals(r->last_remote_mac, r->remote_mac)) {
-                VLOG_DBG("remote MAC address changed from "ETH_ADDR_FMT
+                VLOG_DBG("%s: remote MAC address changed from "ETH_ADDR_FMT
                          " to "ETH_ADDR_FMT,
+                         ib->ofproto->name,
                          ETH_ADDR_ARGS(r->last_remote_mac),
                          ETH_ADDR_ARGS(r->remote_mac));
                 memcpy(r->last_remote_mac, r->remote_mac, ETH_ADDR_LEN);
@@ -425,8 +428,8 @@ in_band_create(struct ofproto *ofproto, const char *local_name,
     *in_bandp = NULL;
     error = netdev_open(local_name, "internal", &local_netdev);
     if (error) {
-        VLOG_ERR("failed to initialize in-band control: cannot open "
-                 "datapath local port %s (%s)",
+        VLOG_ERR("%s: failed to initialize in-band control: cannot open "
+                 "datapath local port %s (%s)", ofproto->name,
                  local_name, ovs_strerror(error));
         return error;
     }
