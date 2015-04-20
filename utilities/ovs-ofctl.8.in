@@ -2374,9 +2374,11 @@ Drop packets exceeding the band's rate limit.
 .IP \fBrate=\fIvalue\fR
 The relative rate limit for this band, in kilobits per second or packets per
 second, depending on the meter flags defined above.
-.IP \fBburst_size=\fIport\fR
-The maximum burst allowed for the band.  If unspecified, the switch is free to
-select some reasonable value depending on it's configuration.
+.IP \fBburst_size=\fIsize\fR
+The maximum burst allowed for the band.  If \fBpktps\fR is specified,
+then \fIsize\fR is a packet count, otherwise it is in kilobits.  If
+unspecified, the switch is free to select some reasonable value
+depending on its configuration.
 .RE
 .
 .SH OPTIONS
