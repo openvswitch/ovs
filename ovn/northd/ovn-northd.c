@@ -314,16 +314,16 @@ build_pipeline(struct northd_context *ctx)
     const struct nbrec_logical_switch *lswitch;
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
         /* Logical VLANs not supported. */
-        pipeline_add(&pc, lswitch, 0, 100, "vlan.present", "drop");
+        pipeline_add(&pc, lswitch, 0, 100, "vlan.present", "drop;");
 
         /* Broadcast/multicast source address is invalid. */
-        pipeline_add(&pc, lswitch, 0, 100, "eth.src[40]", "drop");
+        pipeline_add(&pc, lswitch, 0, 100, "eth.src[40]", "drop;");
 
         /* Port security flows have priority 50 (see below) and will resubmit
          * if packet source is acceptable. */
 
         /* Otherwise drop the packet. */
-        pipeline_add(&pc, lswitch, 0, 0, "1", "drop");
+        pipeline_add(&pc, lswitch, 0, 0, "1", "drop;");
     }
 
     /* Table 0: Ingress port security. */
@@ -335,7 +335,7 @@ build_pipeline(struct northd_context *ctx)
         build_port_security("eth.src",
                             lport->port_security, lport->n_port_security,
                             &match);
-        pipeline_add(&pc, lport->lswitch, 0, 50, ds_cstr(&match), "resubmit");
+        pipeline_add(&pc, lport->lswitch, 0, 50, ds_cstr(&match), "resubmit;");
         ds_destroy(&match);
     }
 
@@ -405,11 +405,12 @@ build_pipeline(struct northd_context *ctx)
         const char *action;
 
         action = (!strcmp(acl->action, "allow") ||
-                  !strcmp(acl->action, "allow-related")) ? "resubmit" : "drop";
+                  !strcmp(acl->action, "allow-related"))
+                      ? "resubmit;" : "drop;";
         pipeline_add(&pc, acl->lswitch, 2, acl->priority, acl->match, action);
     }
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
-        pipeline_add(&pc, lswitch, 2, 0, "1", "resubmit");
+        pipeline_add(&pc, lswitch, 2, 0, "1", "resubmit;");
     }
 
     /* Table 3: Egress port security. */
@@ -426,7 +427,7 @@ build_pipeline(struct northd_context *ctx)
         ds_init(&actions);
         ds_put_cstr(&actions, "output(");
         json_string_escape(lport->name, &actions);
-        ds_put_char(&actions, ')');
+        ds_put_cstr(&actions, ");");
 
         pipeline_add(&pc, lport->lswitch, 3, 50,
                      ds_cstr(&match), ds_cstr(&actions));
