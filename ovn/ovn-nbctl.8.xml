@@ -124,7 +124,7 @@
         each key-value pair.
       </dd>
 
-      <dt><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>] [<var>mac</var>] [...]</dt>
+      <dt><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>]...</dt>
       <dd>
         Sets the MACs associated with <var>lport</var> to
         <var>mac</var>.  Multiple MACs may be sets by using multiple

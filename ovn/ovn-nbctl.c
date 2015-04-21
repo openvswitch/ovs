@@ -70,9 +70,8 @@ Logical port commands:\n\
                             set or delete an external-id on LPORT\n\
   lport-get-external-id LPORT [KEY]\n\
                             list one or all external-ids on LPORT\n\
-  lport-set-macs LPORT [MAC] [MAC] [...]\n\
-                            set MAC addresses for LPORT. Specify more\n\
-                            than one using additional arguments.\n\
+  lport-set-macs LPORT [MAC]...\n\
+                            set MAC addresses for LPORT.\n\
   lport-get-macs LPORT      get a list of MAC addresses on LPORT\n\
   lport-get-up LPORT        get state of LPORT ('up' or 'down')\n\
 \n\
@@ -624,7 +623,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     },
     {
         .name = "lport-set-macs",
-        .usage = "LPORT [MAC] [MAC] [...]",
+        .usage = "LPORT [MAC]...",
         .min_args = 1,
         /* Accept however many arguments the system will allow. */
         .max_args = INT_MAX,
