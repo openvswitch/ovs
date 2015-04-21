@@ -292,16 +292,6 @@ AC_DEFUN([OVS_DEFINE], [
   echo '#define $1 1' >> datapath/linux/kcompat.h.new
 ])
 
-AC_DEFUN([OVS_CHECK_LOG2_H], [
-  AC_MSG_CHECKING([for $KSRC/include/linux/log2.h])
-  if test -e $KSRC/include/linux/log2.h; then
-    AC_MSG_RESULT([yes])
-    OVS_DEFINE([HAVE_LOG2_H])
-  else
-    AC_MSG_RESULT([no])
-  fi
-])
-
 dnl OVS_CHECK_LINUX_COMPAT
 dnl
 dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
@@ -441,8 +431,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP_TUNNEL_CSUM])])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/netdevice.h], [NET_NAME_UNKNOWN],
                   [OVS_DEFINE([HAVE_NET_NAME_UNKNOWN])])
-
-  OVS_CHECK_LOG2_H
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

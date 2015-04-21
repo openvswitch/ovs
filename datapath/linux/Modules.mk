@@ -39,7 +39,6 @@ openvswitch_headers += \
 	linux/compat/include/linux/kconfig.h \
 	linux/compat/include/linux/kernel.h \
 	linux/compat/include/linux/list.h \
-	linux/compat/include/linux/log2.h \
 	linux/compat/include/linux/mpls.h \
 	linux/compat/include/linux/net.h \
 	linux/compat/include/linux/random.h \
