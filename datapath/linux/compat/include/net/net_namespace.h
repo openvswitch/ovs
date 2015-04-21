@@ -17,8 +17,10 @@ struct rpl_pernet_operations {
 #define register_pernet_device rpl_register_pernet_gen_device
 #define unregister_pernet_device rpl_unregister_pernet_gen_device
 
-int compat_init_net(struct net *net, struct rpl_pernet_operations *pnet);
-void compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet);
+#define compat_init_net ovs_compat_init_net
+int ovs_compat_init_net(struct net *net, struct rpl_pernet_operations *pnet);
+#define compat_exit_net ovs_compat_exit_net
+void ovs_compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet);
 
 #define DEFINE_COMPAT_PNET_REG_FUNC(TYPE)					\
 									\

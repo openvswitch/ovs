@@ -236,7 +236,7 @@ static const struct gre_protocol ipgre_protocol = {
 	.handler	=	gre_cisco_rcv,
 };
 
-int gre_cisco_register(struct gre_cisco_protocol *newp)
+int rpl_gre_cisco_register(struct gre_cisco_protocol *newp)
 {
 	int err;
 
@@ -250,9 +250,9 @@ int gre_cisco_register(struct gre_cisco_protocol *newp)
 	return (cmpxchg((struct gre_cisco_protocol **)&gre_cisco_proto, NULL, newp) == NULL) ?
 		0 : -EBUSY;
 }
-EXPORT_SYMBOL_GPL(gre_cisco_register);
+EXPORT_SYMBOL_GPL(rpl_gre_cisco_register);
 
-int gre_cisco_unregister(struct gre_cisco_protocol *proto)
+int rpl_gre_cisco_unregister(struct gre_cisco_protocol *proto)
 {
 	int ret;
 
@@ -266,7 +266,7 @@ int gre_cisco_unregister(struct gre_cisco_protocol *proto)
 	ret = gre_del_protocol(&ipgre_protocol, GREPROTO_CISCO);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(gre_cisco_unregister);
+EXPORT_SYMBOL_GPL(rpl_gre_cisco_unregister);
 
 #endif /* !HAVE_GRE_CISCO_REGISTER */
 
@@ -287,7 +287,7 @@ static void gre_csum_fix(struct sk_buff *skb)
 						     skb->len - gre_offset, 0));
 }
 
-struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
 	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
 	gso_fix_segment_t fix_segment;
@@ -299,14 +299,14 @@ struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 
 	return ovs_iptunnel_handle_offloads(skb, gre_csum, type, fix_segment);
 }
-EXPORT_SYMBOL_GPL(gre_handle_offloads);
+EXPORT_SYMBOL_GPL(rpl_gre_handle_offloads);
 
 static bool is_gre_gso(struct sk_buff *skb)
 {
 	return skb_is_gso(skb);
 }
 
-void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
+void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 		      int hdr_len)
 {
 	struct gre_base_hdr *greh;
@@ -337,7 +337,7 @@ void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 
 	ovs_skb_set_inner_protocol(skb, tpi->proto);
 }
-EXPORT_SYMBOL_GPL(gre_build_header);
+EXPORT_SYMBOL_GPL(rpl_gre_build_header);
 
 #endif /* CONFIG_NET_IPGRE_DEMUX */
 

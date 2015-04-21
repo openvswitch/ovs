@@ -66,22 +66,39 @@ struct flex_array {
 			FLEX_ARRAY_ELEMENTS_PER_PART(__element_size));	\
 	}
 
-struct flex_array *flex_array_alloc(int element_size, unsigned int total,
+#define flex_array_alloc rpl_flex_array_alloc
+struct flex_array *rpl_flex_array_alloc(int element_size, unsigned int total,
 		gfp_t flags);
-int flex_array_prealloc(struct flex_array *fa, unsigned int start,
-		unsigned int nr_elements, gfp_t flags);
-void flex_array_free(struct flex_array *fa);
-void flex_array_free_parts(struct flex_array *fa);
-int flex_array_put(struct flex_array *fa, unsigned int element_nr, void *src,
-		gfp_t flags);
-int flex_array_clear(struct flex_array *fa, unsigned int element_nr);
-void *flex_array_get(struct flex_array *fa, unsigned int element_nr);
-int flex_array_shrink(struct flex_array *fa);
 
-#define flex_array_put_ptr(fa, nr, src, gfp) \
+#define flex_array_prealloc rpl_flex_array_prealloc
+int rpl_flex_array_prealloc(struct flex_array *fa, unsigned int start,
+		unsigned int nr_elements, gfp_t flags);
+
+#define flex_array_free rpl_flex_array_free
+void rpl_flex_array_free(struct flex_array *fa);
+
+#define flex_array_free_parts rpl_flex_array_free_parts
+void rpl_flex_array_free_parts(struct flex_array *fa);
+
+#define flex_array_put rpl_flex_array_put
+int rpl_flex_array_put(struct flex_array *fa, unsigned int element_nr, void *src,
+		gfp_t flags);
+
+#define flex_array_clear rpl_flex_array_clear
+int rpl_flex_array_clear(struct flex_array *fa, unsigned int element_nr);
+
+#define flex_array_get rpl_flex_array_get
+void *rpl_flex_array_get(struct flex_array *fa, unsigned int element_nr);
+
+#define flex_array_shrink rpl_flex_array_shrink
+int rpl_flex_array_shrink(struct flex_array *fa);
+
+#define flex_array_put_ptr rpl_flex_array_put_ptr
+#define rpl_flex_array_put_ptr(fa, nr, src, gfp) \
 	flex_array_put(fa, nr, (void *)&(src), gfp)
 
-void *flex_array_get_ptr(struct flex_array *fa, unsigned int element_nr);
+#define flex_array_get_ptr rpl_flex_array_get_ptr
+void *rpl_flex_array_get_ptr(struct flex_array *fa, unsigned int element_nr);
 
 #endif /* Linux version < 3.0.0 */
 #endif /* __LINUX_FLEX_ARRAY_WRAPPER_H */

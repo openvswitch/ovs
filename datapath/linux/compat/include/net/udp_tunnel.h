@@ -50,8 +50,8 @@ struct udp_port_cfg {
 };
 
 #define udp_sock_create rpl_udp_sock_create
-int udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
-		    struct socket **sockp);
+int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
+		        struct socket **sockp);
 
 typedef int (*udp_tunnel_encap_rcv_t)(struct sock *sk, struct sk_buff *skb);
 typedef void (*udp_tunnel_encap_destroy_t)(struct sock *sk);
@@ -65,17 +65,20 @@ struct udp_tunnel_sock_cfg {
 };
 
 /* Setup the given (UDP) sock to receive UDP encapsulated packets */
-void setup_udp_tunnel_sock(struct net *net, struct socket *sock,
-			   struct udp_tunnel_sock_cfg *sock_cfg);
+#define setup_udp_tunnel_sock rpl_setup_udp_tunnel_sock
+void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
+			       struct udp_tunnel_sock_cfg *sock_cfg);
 
 /* Transmit the skb using UDP encapsulation. */
-int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
-			__be32 src, __be32 dst, __u8 tos, __u8 ttl,
-			__be16 df, __be16 src_port, __be16 dst_port,
-			bool xnet, bool nocheck);
+#define udp_tunnel_xmit_skb rpl_udp_tunnel_xmit_skb
+int rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
+			    __be32 src, __be32 dst, __u8 tos, __u8 ttl,
+			    __be16 df, __be16 src_port, __be16 dst_port,
+			    bool xnet, bool nocheck);
 
 
-void udp_tunnel_sock_release(struct socket *sock);
+#define udp_tunnel_sock_release rpl_udp_tunnel_sock_release
+void rpl_udp_tunnel_sock_release(struct socket *sock);
 
 void ovs_udp_gso(struct sk_buff *skb);
 void ovs_udp_csum_gso(struct sk_buff *skb);

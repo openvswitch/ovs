@@ -7,8 +7,8 @@
 /* Function to set UDP checksum for an IPv4 UDP packet. This is intended
  * for the simple case like when setting the checksum for a UDP tunnel.
  */
-void udp_set_csum(bool nocheck, struct sk_buff *skb,
-		  __be32 saddr, __be32 daddr, int len)
+void rpl_udp_set_csum(bool nocheck, struct sk_buff *skb,
+		      __be32 saddr, __be32 daddr, int len)
 {
 	struct udphdr *uh = udp_hdr(skb);
 
@@ -39,5 +39,6 @@ void udp_set_csum(bool nocheck, struct sk_buff *skb,
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 	}
 }
+EXPORT_SYMBOL_GPL(rpl_udp_set_csum);
 
 #endif /* Linux version < 3.16 */

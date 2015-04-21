@@ -127,7 +127,7 @@ static inline __be16 ovs_skb_get_inner_protocol(struct sk_buff *skb)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 #define ip_local_out rpl_ip_local_out
-int ip_local_out(struct sk_buff *skb);
+int rpl_ip_local_out(struct sk_buff *skb);
 
 static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 {

@@ -130,19 +130,19 @@ struct vxlan_sock {
 };
 
 #define vxlan_sock_add rpl_vxlan_sock_add
-struct vxlan_sock *vxlan_sock_add(struct net *net, __be16 port,
-				  vxlan_rcv_t *rcv, void *data,
-				  bool no_share, u32 flags);
+struct vxlan_sock *rpl_vxlan_sock_add(struct net *net, __be16 port,
+				      vxlan_rcv_t *rcv, void *data,
+				      bool no_share, u32 flags);
 
 #define vxlan_sock_release rpl_vxlan_sock_release
-void vxlan_sock_release(struct vxlan_sock *vs);
+void rpl_vxlan_sock_release(struct vxlan_sock *vs);
 
 #define vxlan_xmit_skb rpl_vxlan_xmit_skb
-int vxlan_xmit_skb(struct vxlan_sock *vs,
-		   struct rtable *rt, struct sk_buff *skb,
-		   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
-		   __be16 src_port, __be16 dst_port,
-		   struct vxlan_metadata *md, bool xnet, u32 vxflags);
+int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
+		       struct rtable *rt, struct sk_buff *skb,
+		       __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
+		       __be16 src_port, __be16 dst_port,
+		       struct vxlan_metadata *md, bool xnet, u32 vxflags);
 
 #endif /* !HAVE_VXLAN_METADATA */
 #endif

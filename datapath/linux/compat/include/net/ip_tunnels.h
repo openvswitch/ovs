@@ -24,12 +24,12 @@ struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 					     void (*fix_segment)(struct sk_buff *));
 
 #define iptunnel_xmit rpl_iptunnel_xmit
-int iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
-		  __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
-		  __be16 df, bool xnet);
+int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
+		      __be16 df, bool xnet);
 
 #define iptunnel_pull_header rpl_iptunnel_pull_header
-int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
+int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
 
 #else
 
@@ -80,6 +80,7 @@ struct tnl_ptk_info {
 #undef TUNNEL_OPTIONS_PRESENT
 #define TUNNEL_OPTIONS_PRESENT (TUNNEL_GENEVE_OPT | TUNNEL_VXLAN_OPT)
 
-bool skb_is_encapsulated(struct sk_buff *skb);
+#define skb_is_encapsulated ovs_skb_is_encapsulated
+bool ovs_skb_is_encapsulated(struct sk_buff *skb);
 
 #endif /* __NET_IP_TUNNELS_H */

@@ -37,7 +37,7 @@ static inline bool head_frag(const struct sk_buff *skb)
  *	into skb_zerocopy().
  */
 unsigned int
-skb_zerocopy_headlen(const struct sk_buff *from)
+rpl_skb_zerocopy_headlen(const struct sk_buff *from)
 {
 	unsigned int hlen = 0;
 
@@ -51,6 +51,7 @@ skb_zerocopy_headlen(const struct sk_buff *from)
 
 	return hlen;
 }
+EXPORT_SYMBOL_GPL(rpl_skb_zerocopy_headlen);
 
 #ifndef HAVE_SKB_ZEROCOPY
 /**
@@ -72,7 +73,7 @@ skb_zerocopy_headlen(const struct sk_buff *from)
  *	-EFAULT: skb_copy_bits() found some problem with skb geometry
  */
 int
-skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len, int hlen)
+rpl_skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len, int hlen)
 {
 	int i, j = 0;
 	int plen = 0; /* length of skb->head fragment */
@@ -125,11 +126,12 @@ skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len, int hlen)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_skb_zerocopy);
 #endif
 #endif
 
 #ifndef HAVE_SKB_ENSURE_WRITABLE
-int skb_ensure_writable(struct sk_buff *skb, int write_len)
+int rpl_skb_ensure_writable(struct sk_buff *skb, int write_len)
 {
 	if (!pskb_may_pull(skb, write_len))
 		return -ENOMEM;
@@ -139,6 +141,7 @@ int skb_ensure_writable(struct sk_buff *skb, int write_len)
 
 	return pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
 }
+EXPORT_SYMBOL_GPL(rpl_skb_ensure_writable);
 #endif
 
 #ifndef HAVE_SKB_VLAN_POP
@@ -175,7 +178,7 @@ pull:
 	return err;
 }
 
-int skb_vlan_pop(struct sk_buff *skb)
+int rpl_skb_vlan_pop(struct sk_buff *skb)
 {
 	u16 vlan_tci;
 	__be16 vlan_proto;
@@ -207,10 +210,11 @@ int skb_vlan_pop(struct sk_buff *skb)
 	__vlan_hwaccel_put_tag(skb, vlan_proto, vlan_tci);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_skb_vlan_pop);
 #endif
 
 #ifndef HAVE_SKB_VLAN_PUSH
-int skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci)
+int rpl_skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci)
 {
 	if (skb_vlan_tag_present(skb)) {
 		unsigned int offset = skb->data - skb_mac_header(skb);
@@ -235,6 +239,7 @@ int skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci)
 	__vlan_hwaccel_put_tag(skb, vlan_proto, vlan_tci);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_skb_vlan_push);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
@@ -260,4 +265,5 @@ int rpl_pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	return 0;
 }
 EXPORT_SYMBOL(rpl_pskb_expand_head);
+
 #endif

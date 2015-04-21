@@ -19,9 +19,9 @@
 #include <asm/uaccess.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
-void inet_proto_csum_replace16(__sum16 *sum, struct sk_buff *skb,
-			       const __be32 *from, const __be32 *to,
-			       int pseudohdr)
+void rpl_inet_proto_csum_replace16(__sum16 *sum, struct sk_buff *skb,
+			           const __be32 *from, const __be32 *to,
+			           int pseudohdr)
 {
 	__be32 diff[] = {
 		~from[0], ~from[1], ~from[2], ~from[3],
@@ -37,10 +37,12 @@ void inet_proto_csum_replace16(__sum16 *sum, struct sk_buff *skb,
 		*sum = ~csum_fold(csum_partial(diff, sizeof(diff),
 					csum_unfold(*sum)));
 }
+EXPORT_SYMBOL_GPL(rpl_inet_proto_csum_replace16);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
-bool __net_get_random_once(void *buf, int nbytes, bool *done,
+
+bool rpl___net_get_random_once(void *buf, int nbytes, bool *done,
 			   atomic_t *done_key)
 {
 	static DEFINE_SPINLOCK(lock);
@@ -60,4 +62,6 @@ bool __net_get_random_once(void *buf, int nbytes, bool *done,
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(rpl___net_get_random_once);
+
 #endif

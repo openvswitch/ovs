@@ -50,18 +50,21 @@ extern void dev_disable_lro(struct net_device *dev);
 typedef struct sk_buff *(openvswitch_handle_frame_hook_t)(struct sk_buff *skb);
 extern openvswitch_handle_frame_hook_t *openvswitch_handle_frame_hook;
 
-int netdev_rx_handler_register(struct net_device *dev,
-			       openvswitch_handle_frame_hook_t *hook,
-			       void *rx_handler_data);
+#define netdev_rx_handler_register rpl_netdev_rx_handler_register
+int rpl_netdev_rx_handler_register(struct net_device *dev,
+				   openvswitch_handle_frame_hook_t *hook,
+				   void *rx_handler_data);
 #else
 
-int netdev_rx_handler_register(struct net_device *dev,
-			       struct sk_buff *(*netdev_hook)(struct net_bridge_port *p,
-							     struct sk_buff *skb),
-			       void *rx_handler_data);
+#define netdev_rx_handler_register rpl_netdev_rx_handler_register
+int rpl_netdev_rx_handler_register(struct net_device *dev,
+				   struct sk_buff *(*netdev_hook)(struct net_bridge_port *p,
+							   struct sk_buff *skb),
+				   void *rx_handler_data);
 #endif
 
-void netdev_rx_handler_unregister(struct net_device *dev);
+#define netdev_rx_handler_unregister rpl_netdev_rx_handler_unregister
+void rpl_netdev_rx_handler_unregister(struct net_device *dev);
 #endif
 
 #ifndef HAVE_DEV_GET_BY_INDEX_RCU
@@ -138,7 +141,7 @@ static inline struct net_device *netdev_master_upper_dev_get(struct net_device *
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 #define dev_queue_xmit rpl_dev_queue_xmit
-int dev_queue_xmit(struct sk_buff *skb);
+int rpl_dev_queue_xmit(struct sk_buff *skb);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)

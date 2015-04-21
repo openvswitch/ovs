@@ -167,6 +167,7 @@ drop:
 	kfree_skb(skb);
 	return err;
 }
+EXPORT_SYMBOL_GPL(rpl_dev_queue_xmit);
 #endif /* 3.16 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
@@ -296,4 +297,6 @@ int rpl_ip_local_out(struct sk_buff *skb)
 	}
 	return ret;
 }
+EXPORT_SYMBOL_GPL(rpl_ip_local_out);
+
 #endif /* 3.18 */
