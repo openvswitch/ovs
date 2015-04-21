@@ -21,9 +21,12 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"
+#include "json.h"
+#include "ovn/lib/lex.h"
 #include "ovn/ovn-nb-idl.h"
 #include "ovn/ovn-sb-idl.h"
 #include "poll-loop.h"
@@ -113,7 +116,335 @@ macs_equal(char **binding_macs_, size_t b_n_macs,
 
     return (i == b_n_macs) ? true : false;
 }
+
+/* Pipeline generation.
+ *
+ * This code generates the Pipeline table in the southbound database, as a
+ * function of most of the northbound database.
+ */
 
+/* Enough context to add a Pipeline row, using pipeline_add(). */
+struct pipeline_ctx {
+    /* From northd_context. */
+    struct ovsdb_idl *ovnsb_idl;
+    struct ovsdb_idl_txn *ovnsb_txn;
+
+    /* Contains "struct pipeline_hash_node"s.  Used to figure out what existing
+     * Pipeline rows should be deleted: we index all of the Pipeline rows into
+     * this data structure, then as existing rows are generated we remove them.
+     * After generating all the rows, any remaining in 'pipeline_hmap' must be
+     * deleted from the database. */
+    struct hmap pipeline_hmap;
+};
+
+/* A row in the Pipeline table, indexed by its full contents, */
+struct pipeline_hash_node {
+    struct hmap_node node;
+    const struct sbrec_pipeline *pipeline;
+};
+
+static size_t
+pipeline_hash(const struct uuid *logical_datapath, uint8_t table_id,
+              uint16_t priority, const char *match, const char *actions)
+{
+    size_t hash = uuid_hash(logical_datapath);
+    hash = hash_2words((table_id << 16) | priority, hash);
+    hash = hash_string(match, hash);
+    return hash_string(actions, hash);
+}
+
+static size_t
+pipeline_hash_rec(const struct sbrec_pipeline *pipeline)
+{
+    return pipeline_hash(&pipeline->logical_datapath, pipeline->table_id,
+                         pipeline->priority, pipeline->match,
+                         pipeline->actions);
+}
+
+/* Adds a row with the specified contents to the Pipeline table. */
+static void
+pipeline_add(struct pipeline_ctx *ctx,
+             const struct nbrec_logical_switch *logical_datapath,
+             uint8_t table_id,
+             uint16_t priority,
+             const char *match,
+             const char *actions)
+{
+    struct pipeline_hash_node *hash_node;
+
+    /* Check whether such a row already exists in the Pipeline table.  If so,
+     * remove it from 'ctx->pipeline_hmap' and we're done. */
+    HMAP_FOR_EACH_WITH_HASH (hash_node, node,
+                             pipeline_hash(&logical_datapath->header_.uuid,
+                                           table_id, priority, match, actions),
+                             &ctx->pipeline_hmap) {
+        const struct sbrec_pipeline *pipeline = hash_node->pipeline;
+        if (uuid_equals(&pipeline->logical_datapath,
+                        &logical_datapath->header_.uuid)
+            && pipeline->table_id == table_id
+            && pipeline->priority == priority
+            && !strcmp(pipeline->match, match)
+            && !strcmp(pipeline->actions, actions)) {
+            hmap_remove(&ctx->pipeline_hmap, &hash_node->node);
+            free(hash_node);
+            return;
+        }
+    }
+
+    /* No such Pipeline row.  Add one. */
+    const struct sbrec_pipeline *pipeline;
+    pipeline = sbrec_pipeline_insert(ctx->ovnsb_txn);
+    sbrec_pipeline_set_logical_datapath(pipeline,
+                                        logical_datapath->header_.uuid);
+    sbrec_pipeline_set_table_id(pipeline, table_id);
+    sbrec_pipeline_set_priority(pipeline, priority);
+    sbrec_pipeline_set_match(pipeline, match);
+    sbrec_pipeline_set_actions(pipeline, actions);
+}
+
+/* A single port security constraint.  This is a parsed version of a single
+ * member of the port_security column in the OVN_NB Logical_Port table.
+ *
+ * Each token has type LEX_T_END if that field is missing, otherwise
+ * LEX_T_INTEGER or LEX_T_MASKED_INTEGER. */
+struct ps_constraint {
+    struct lex_token eth;
+    struct lex_token ip4;
+    struct lex_token ip6;
+};
+
+/* Parses a member of the port_security column 'ps' into 'c'.  Returns true if
+ * successful, false on syntax error. */
+static bool
+parse_port_security(const char *ps, struct ps_constraint *c)
+{
+    c->eth.type = LEX_T_END;
+    c->ip4.type = LEX_T_END;
+    c->ip6.type = LEX_T_END;
+
+    struct lexer lexer;
+    lexer_init(&lexer, ps);
+    do {
+        if (lexer.token.type == LEX_T_INTEGER ||
+            lexer.token.type == LEX_T_MASKED_INTEGER) {
+            struct lex_token *t;
+
+            t = (lexer.token.format == LEX_F_IPV4 ? &c->ip4
+                 : lexer.token.format == LEX_F_IPV6 ? &c->ip6
+                 : lexer.token.format == LEX_F_ETHERNET ? &c->eth
+                 : NULL);
+            if (t) {
+                if (t->type == LEX_T_END) {
+                    *t = lexer.token;
+                } else {
+                    VLOG_INFO("%s: port_security has duplicate %s address",
+                              ps, lex_format_to_string(lexer.token.format));
+                }
+                lexer_get(&lexer);
+                lexer_match(&lexer, LEX_T_COMMA);
+                continue;
+            }
+        }
+
+        VLOG_INFO("%s: syntax error in port_security", ps);
+        lexer_destroy(&lexer);
+        return false;
+    } while (lexer.token.type != LEX_T_END);
+    lexer_destroy(&lexer);
+
+    return true;
+}
+
+/* Appends port security constraints on L2 address field 'eth_addr_field'
+ * (e.g. "eth.src" or "eth.dst") to 'match'.  'port_security', with
+ * 'n_port_security' elements, is the collection of port_security constraints
+ * from an OVN_NB Logical_Port row.
+ *
+ * (This is naive; it's not yet possible to express complete L2 and L3 port
+ * security constraints as a single Boolean expression.) */
+static void
+build_port_security(const char *eth_addr_field,
+                    char **port_security, size_t n_port_security,
+                    struct ds *match)
+{
+    size_t base_len = match->length;
+    ds_put_format(match, " && %s == {", eth_addr_field);
+
+    size_t n = 0;
+    for (size_t i = 0; i < n_port_security; i++) {
+        struct ps_constraint c;
+        if (parse_port_security(port_security[i], &c)
+            && c.eth.type != LEX_T_END) {
+            lex_token_format(&c.eth, match);
+            ds_put_char(match, ' ');
+            n++;
+        }
+    }
+    ds_put_cstr(match, "}");
+
+    if (!n) {
+        match->length = base_len;
+    }
+}
+
+/* Updates the Pipeline table in the OVN_SB database, constructing its contents
+ * based on the OVN_NB database. */
+static void
+build_pipeline(struct northd_context *ctx)
+{
+    struct pipeline_ctx pc = {
+        .ovnsb_idl = ctx->ovnsb_idl,
+        .ovnsb_txn = ctx->ovnsb_txn,
+        .pipeline_hmap = HMAP_INITIALIZER(&pc.pipeline_hmap)
+    };
+
+    /* Add all the Pipeline entries currently in the southbound database to
+     * 'pc.pipeline_hmap'.  We remove entries that we generate from the hmap,
+     * thus by the time we're done only entries that need to be removed
+     * remain. */
+    const struct sbrec_pipeline *pipeline;
+    SBREC_PIPELINE_FOR_EACH (pipeline, ctx->ovnsb_idl) {
+        struct pipeline_hash_node *hash_node = xzalloc(sizeof *hash_node);
+        hash_node->pipeline = pipeline;
+        hmap_insert(&pc.pipeline_hmap, &hash_node->node,
+                    pipeline_hash_rec(pipeline));
+    }
+
+    /* Table 0: Admission control framework. */
+    const struct nbrec_logical_switch *lswitch;
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        /* Logical VLANs not supported. */
+        pipeline_add(&pc, lswitch, 0, 100, "vlan.present", "drop");
+
+        /* Broadcast/multicast source address is invalid. */
+        pipeline_add(&pc, lswitch, 0, 100, "eth.src[40]", "drop");
+
+        /* Port security flows have priority 50 (see below) and will resubmit
+         * if packet source is acceptable. */
+
+        /* Otherwise drop the packet. */
+        pipeline_add(&pc, lswitch, 0, 0, "1", "drop");
+    }
+
+    /* Table 0: Ingress port security. */
+    const struct nbrec_logical_port *lport;
+    NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
+        struct ds match = DS_EMPTY_INITIALIZER;
+        ds_put_cstr(&match, "inport == ");
+        json_string_escape(lport->name, &match);
+        build_port_security("eth.src",
+                            lport->port_security, lport->n_port_security,
+                            &match);
+        pipeline_add(&pc, lport->lswitch, 0, 50, ds_cstr(&match), "resubmit");
+        ds_destroy(&match);
+    }
+
+    /* Table 1: Destination lookup, broadcast and multicast handling (priority
+     * 100). */
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        struct ds actions;
+
+        ds_init(&actions);
+        NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
+            if (lport->lswitch == lswitch) {
+                ds_put_cstr(&actions, "outport = ");
+                json_string_escape(lport->name, &actions);
+                ds_put_cstr(&actions, "; resubmit; ");
+            }
+        }
+        ds_chomp(&actions, ' ');
+
+        pipeline_add(&pc, lswitch, 1, 100, "eth.dst[40]", ds_cstr(&actions));
+        ds_destroy(&actions);
+    }
+
+    /* Table 1: Destination lookup, unicast handling (priority 50),  */
+    struct ds unknown_actions = DS_EMPTY_INITIALIZER;
+    NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
+        for (size_t i = 0; i < lport->n_macs; i++) {
+            uint8_t mac[ETH_ADDR_LEN];
+
+            if (eth_addr_from_string(lport->macs[i], mac)) {
+                struct ds match, actions;
+
+                ds_init(&match);
+                ds_put_format(&match, "eth.dst == %s", lport->macs[i]);
+
+                ds_init(&actions);
+                ds_put_cstr(&actions, "outport = ");
+                json_string_escape(lport->name, &actions);
+                ds_put_cstr(&actions, "; resubmit;");
+                pipeline_add(&pc, lport->lswitch, 1, 50,
+                             ds_cstr(&match), ds_cstr(&actions));
+                ds_destroy(&actions);
+                ds_destroy(&match);
+            } else if (!strcmp(lport->macs[i], "unknown")) {
+                ds_put_cstr(&unknown_actions, "outport = ");
+                json_string_escape(lport->name, &unknown_actions);
+                ds_put_cstr(&unknown_actions, "; resubmit; ");
+            } else {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+                VLOG_INFO_RL(&rl, "%s: invalid syntax '%s' in macs column",
+                             lport->name, lport->macs[i]);
+            }
+        }
+    }
+
+    /* Table 1: Destination lookup for unknown MACs (priority 0). */
+    if (unknown_actions.length) {
+        ds_chomp(&unknown_actions, ' ');
+        pipeline_add(&pc, lport->lswitch, 1, 0, "1",
+                     ds_cstr(&unknown_actions));
+    }
+    ds_destroy(&unknown_actions);
+
+    /* Table 2: ACLs. */
+    const struct nbrec_acl *acl;
+    NBREC_ACL_FOR_EACH (acl, ctx->ovnnb_idl) {
+        const char *action;
+
+        action = (!strcmp(acl->action, "allow") ||
+                  !strcmp(acl->action, "allow-related")) ? "resubmit" : "drop";
+        pipeline_add(&pc, acl->lswitch, 2, acl->priority, acl->match, action);
+    }
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        pipeline_add(&pc, lswitch, 2, 0, "1", "resubmit");
+    }
+
+    /* Table 3: Egress port security. */
+    NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
+        struct ds match, actions;
+
+        ds_init(&match);
+        ds_put_cstr(&match, "outport == ");
+        json_string_escape(lport->name, &match);
+        build_port_security("eth.dst",
+                            lport->port_security, lport->n_port_security,
+                            &match);
+
+        ds_init(&actions);
+        ds_put_cstr(&actions, "output(");
+        json_string_escape(lport->name, &actions);
+        ds_put_char(&actions, ')');
+
+        pipeline_add(&pc, lport->lswitch, 3, 50,
+                     ds_cstr(&match), ds_cstr(&actions));
+
+        ds_destroy(&actions);
+        ds_destroy(&match);
+    }
+
+    /* Delete any existing Pipeline rows that were not re-generated.  */
+    struct pipeline_hash_node *hash_node, *next_hash_node;
+    HMAP_FOR_EACH_SAFE (hash_node, next_hash_node, node, &pc.pipeline_hmap) {
+        hmap_remove(&pc.pipeline_hmap, &hash_node->node);
+        sbrec_pipeline_delete(hash_node->pipeline);
+        free(hash_node);
+    }
+    hmap_destroy(&pc.pipeline_hmap);
+}
+
 static bool
 parents_equal(const struct sbrec_bindings *binding,
               const struct nbrec_logical_port *lport)
@@ -237,6 +568,7 @@ ovnnb_db_changed(struct northd_context *ctx)
     VLOG_DBG("ovn-nb db contents have changed.");
 
     set_bindings(ctx);
+    build_pipeline(ctx);
 }
 
 /*
@@ -417,6 +749,16 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_mac);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tag);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_parent_port);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_table_id);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_table_id);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_priority);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_priority);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_match);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_match);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_actions);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_actions);
 
     /*
      * The loop here just runs the IDL in a loop waiting for the seqno to

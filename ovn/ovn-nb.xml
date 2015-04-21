@@ -144,12 +144,14 @@
       </p>
 
       <p>
-        Exact syntax is TBD.  One could simply use comma- or
-        space-separated L2 and L3 addresses in each set member, or
-        replace this by a subset of the general-purpose expression
-        language used for the <ref column="match" table="Pipeline"
-        db="OVN_Southbound"/> column in the OVN Southbound database's
-        <ref table="Pipeline" db="OVN_Southbound"/> table.
+        Each member of the set is a comma- or space-separated list.  A single
+        set member may have an Ethernet address, an IPv4 address, and an IPv6
+        address, or any subset.  Order is not significant.
+      </p>
+
+      <p>
+        TBD: exact semantics.  For now only Ethernet port security is
+        implemented.
       </p>
     </column>
 
@@ -200,23 +202,23 @@
       <p>The action to take when the ACL rule matches:</p>
       
       <ul>
-	<li>
-	  <code>allow</code>: Forward the packet.
-	</li>
+        <li>
+          <code>allow</code>: Forward the packet.
+        </li>
 
-	<li>
-	  <code>allow-related</code>: Forward the packet and related traffic
-	  (e.g. inbound replies to an outbound connection).
-	</li>
+        <li>
+          <code>allow-related</code>: Forward the packet and related traffic
+          (e.g. inbound replies to an outbound connection).
+        </li>
 
-	<li>
-	  <code>drop</code>: Silently drop the packet.
-	</li>
+        <li>
+          <code>drop</code>: Silently drop the packet.
+        </li>
 
-	<li>
-	  <code>reject</code>: Drop the packet, replying with a RST for TCP or
-	  ICMP unreachable message for other IP-based protocols.
-	</li>
+        <li>
+          <code>reject</code>: Drop the packet, replying with a RST for TCP or
+          ICMP unreachable message for other IP-based protocols.
+        </li>
       </ul>
     </column>
 
