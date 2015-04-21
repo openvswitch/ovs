@@ -73,6 +73,9 @@ Logical port commands:\n\
   lport-set-macs LPORT [MAC]...\n\
                             set MAC addresses for LPORT.\n\
   lport-get-macs LPORT      get a list of MAC addresses on LPORT\n\
+  lport-set-port-security LPORT [ADDRS]...\n\
+                            set port security addresses for LPORT.\n\
+  lport-get-port-security LPORT    get LPORT's port security addresses\n\
   lport-get-up LPORT        get state of LPORT ('up' or 'down')\n\
 \n\
 Options:\n\
@@ -465,6 +468,40 @@ do_lport_get_macs(struct ovs_cmdl_context *ctx)
 }
 
 static void
+do_lport_set_port_security(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    nbrec_logical_port_set_port_security(lport,
+            (const char **) ctx->argv + 2, ctx->argc - 2);
+}
+
+static void
+do_lport_get_port_security(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+    size_t i;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    for (i = 0; i < lport->n_port_security; i++) {
+        printf("%s\n", lport->port_security[i]);
+    }
+}
+
+static void
 do_lport_get_up(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
@@ -635,6 +672,21 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_get_macs,
+    },
+    {
+        .name = "lport-set-port-security",
+        .usage = "LPORT [ADDRS]...",
+        .min_args = 0,
+        /* Accept however many arguments the system will allow. */
+        .max_args = INT_MAX,
+        .handler = do_lport_set_port_security,
+    },
+    {
+        .name = "lport-get-port-security",
+        .usage = "LPORT",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_port_security,
     },
     {
         .name = "lport-get-up",

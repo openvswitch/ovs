@@ -138,6 +138,30 @@
         output, one per line.
       </dd>
 
+      <dt><code>lport-set-port-security</code> <var>lport</var> [<var>addrs</var>]...</dt>
+      <dd>
+	<p>
+          Sets the port security addresses associated with <var>lport</var> to
+          <var>addrs</var>.  Multiple sets of addresses may be set by using
+          multiple <var>addrs</var> arguments.  If no <var>addrs</var> argument
+          is given, <var>lport</var> will not have port security enabled.
+	</p>
+
+	<p>
+	  Port security limits the addresses from which a logical port may send
+	  packets and to which it may receive packets.  See the
+	  <code>ovn-nb</code>(5) documentation for the <ref
+	  column="port_security" table="Logical_Port"/> column in the <ref
+	  table="Logical_Port"/> table for details.
+	</p>
+      </dd>
+
+      <dt><code>lport-get-port-security</code> <var>lport</var></dt>
+      <dd>
+        Lists all the port security addresses associated with <var>lport</var>
+        on standard output, one per line.
+      </dd>
+
       <dt><code>lport-get-up</code> <var>lport</var></dt>
       <dd>
         Prints the state of <var>lport</var>, either <code>up</code> or
