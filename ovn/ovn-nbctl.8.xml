@@ -9,6 +9,17 @@
     <h1>Description</h1>
     <p>This utility can be used to manage the OVN northbound database.</p>
 
+    <h1>General Commands</h1>
+
+    <dl>
+      <dt><code>show [<var>lswitch</var>]</code></dt>
+      <dd>
+        Prints a brief overview of the database contents.  If
+        <var>lswitch</var> is provided, only records related to that
+        logical switch are shown.
+      </dd>
+    </dl>
+
     <h1>Logical Switch Commands</h1>
 
     <dl>

@@ -48,6 +48,9 @@ usage(void)
 %s: OVN northbound DB management utility\n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
+General commands:\n\
+  show                      print overview of database contents\n\
+\n\
 Logical switch commands:\n\
   lswitch-add [LSWITCH]     create a logical switch named LSWITCH\n\
   lswitch-del LSWITCH       delete LSWITCH and all its ports\n\
@@ -127,6 +130,53 @@ lswitch_by_name_or_uuid(struct nbctl_context *nb_ctx, const char *id)
     }
 
     return lswitch;
+}
+
+static void
+print_lswitch(const struct nbctl_context *nb_ctx,
+              const struct nbrec_logical_switch *lswitch)
+{
+    const struct nbrec_logical_port *lport;
+
+    printf("    lswitch "UUID_FMT" (%s)\n",
+           UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
+
+    NBREC_LOGICAL_PORT_FOR_EACH(lport, nb_ctx->idl) {
+        int i;
+
+        if (lport->lswitch == lswitch) {
+            printf("        lport %s\n", lport->name);
+            if (lport->parent_name && lport->n_tag) {
+                printf("            parent: %s, tag:%"PRIu64"\n",
+                       lport->parent_name, lport->tag[0]);
+            }
+            if (lport->n_macs) {
+                printf("            macs:");
+                for (i=0; i < lport->n_macs; i++) {
+                    printf(" %s", lport->macs[i]);
+                }
+                printf("\n");
+            }
+        }
+    }
+}
+
+static void
+do_show(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const struct nbrec_logical_switch *lswitch;
+
+    if (ctx->argc == 2) {
+        lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
+        if (lswitch) {
+            print_lswitch(nb_ctx, lswitch);
+        }
+    } else {
+        NBREC_LOGICAL_SWITCH_FOR_EACH(lswitch, nb_ctx->idl) {
+            print_lswitch(nb_ctx, lswitch);
+        }
+    }
 }
 
 static void
@@ -574,6 +624,13 @@ parse_options(int argc, char *argv[])
 }
 
 static const struct ovs_cmdl_command all_commands[] = {
+    {
+        .name = "show",
+        .usage = "[LSWITCH]",
+        .min_args = 0,
+        .max_args = 1,
+        .handler = do_show,
+    },
     {
         .name = "lswitch-add",
         .usage = "[LSWITCH]",
