@@ -8170,7 +8170,8 @@ ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
 }
 
 static void
-bad_group_cmd(enum ofp15_group_mod_command cmd) {
+bad_group_cmd(enum ofp15_group_mod_command cmd)
+{
     const char *opt_version;
     const char *version;
     const char *cmd_str;
@@ -8187,6 +8188,7 @@ bad_group_cmd(enum ofp15_group_mod_command cmd) {
     case OFPGC15_REMOVE_BUCKET:
         version = "1.5";
         opt_version = "15";
+        break;
 
     default:
         OVS_NOT_REACHED();
@@ -8210,7 +8212,7 @@ bad_group_cmd(enum ofp15_group_mod_command cmd) {
         break;
 
     case OFPGC15_REMOVE_BUCKET:
-        cmd_str = "insert-bucket";
+        cmd_str = "remove-bucket";
         break;
 
     default:
