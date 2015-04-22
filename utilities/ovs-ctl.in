@@ -30,6 +30,19 @@ done
 ## start ##
 ## ----- ##
 
+# Keep track of removed vports so we can reload them if needed
+removed_vports=""
+
+insert_mods () {
+    # Try loading openvswitch again.
+    action "Inserting openvswitch module" modprobe openvswitch
+
+    for vport in $removed_vports; do
+        # Don't treat failures to load vports as fatal error
+        action "Inserting $vport module" modprobe $vport || true
+    done
+}
+
 insert_mod_if_required () {
     # If this kernel has no module support, expect we're done.
     if test ! -e /proc/modules
@@ -43,7 +56,7 @@ insert_mod_if_required () {
      return 0
 
     # Load openvswitch.  If that's successful then we're done.
-    action "Inserting openvswitch module" modprobe openvswitch && return 0
+    insert_mods && return 0
 
     # If the bridge module is loaded, then that might be blocking
     # openvswitch.  Try to unload it, if there are no bridges.
@@ -56,7 +69,7 @@ insert_mod_if_required () {
     action "removing bridge module" rmmod bridge || return 1
 
     # Try loading openvswitch again.
-    action "Inserting openvswitch module" modprobe openvswitch
+    insert_mods
 }
 
 ovs_vsctl () {
@@ -386,6 +399,13 @@ force_reload_kmod () {
 
     for dp in `ovs-dpctl dump-dps`; do
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
+    done
+
+    for vport in `awk '/^vport_/ { print $1 }' /proc/modules`; do
+        action "Removing $vport module" rmmod $vport
+        if ! grep -q $vport /proc/modules; then
+            removed_vports="$removed_vports $vport"
+        fi
     done
 
     # try both old and new names in case this is post upgrade
