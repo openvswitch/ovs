@@ -140,7 +140,8 @@
         A set of L2 (Ethernet) or L3 (IPv4 or IPv6) addresses or L2+L3 pairs
         from which the logical port is allowed to send packets and to which it
         is allowed to receive packets.  If this column is empty, all addresses
-        are permitted.
+        are permitted.  Logical ports are always allowed to receive packets
+        addressed to multicast and broadcast addresses.
       </p>
 
       <p>

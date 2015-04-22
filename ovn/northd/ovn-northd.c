@@ -442,6 +442,9 @@ build_pipeline(struct northd_context *ctx)
     }
 
     /* Table 3: Egress port security. */
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        pipeline_add(&pc, lswitch, 3, 100, "eth.dst[40]", "output;");
+    }
     NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
         struct ds match;
 
