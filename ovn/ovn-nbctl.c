@@ -50,6 +50,7 @@ usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
 General commands:\n\
   show                      print overview of database contents\n\
+  show LSWITCH              print overview of database contents for LSWITCH\n\
 \n\
 Logical switch commands:\n\
   lswitch-add [LSWITCH]     create a logical switch named LSWITCH\n\
