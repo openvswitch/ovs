@@ -22,7 +22,7 @@
 #include "command-line.h"
 #include "dirs.h"
 #include "fatal-signal.h"
-#include "ovn/ovn-nb-idl.h"
+#include "ovn/lib/ovn-nb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "stream.h"

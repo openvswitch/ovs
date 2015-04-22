@@ -20,7 +20,7 @@
 #include "lib/util.h"
 #include "lib/vswitch-idl.h"
 #include "openvswitch/vlog.h"
-#include "ovn/ovn-sb-idl.h"
+#include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
 
 VLOG_DEFINE_THIS_MODULE(bindings);

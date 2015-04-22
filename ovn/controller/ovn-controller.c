@@ -27,7 +27,7 @@
 #include "dirs.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
-#include "ovn/ovn-sb-idl.h"
+#include "ovn/lib/ovn-sb-idl.h"
 #include "poll-loop.h"
 #include "fatal-signal.h"
 #include "lib/vswitch-idl.h"

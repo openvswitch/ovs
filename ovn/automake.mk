@@ -78,50 +78,10 @@ EXTRA_DIST += \
 	ovn/TODO \
 	ovn/CONTAINERS.OpenStack.md
 
-# ovn-sb IDL
-OVSIDL_BUILT += \
-	$(srcdir)/ovn/ovn-sb-idl.c \
-	$(srcdir)/ovn/ovn-sb-idl.h \
-	$(srcdir)/ovn/ovn-sb.ovsidl
-EXTRA_DIST += $(srcdir)/ovn/ovn-sb-idl.ann
-OVN_SB_IDL_FILES = \
-	$(srcdir)/ovn/ovn-sb.ovsschema \
-	$(srcdir)/ovn/ovn-sb-idl.ann
-$(srcdir)/ovn/ovn-sb-idl.ovsidl: $(OVN_SB_IDL_FILES)
-	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_SB_IDL_FILES) > $@.tmp && \
-	mv $@.tmp $@
-CLEANFILES += ovn/ovn-sb-idl.c ovn/ovn-sb-idl.h
-
-# ovn-nb IDL
-OVSIDL_BUILT += \
-	$(srcdir)/ovn/ovn-nb-idl.c \
-	$(srcdir)/ovn/ovn-nb-idl.h \
-	$(srcdir)/ovn/ovn-nb.ovsidl
-EXTRA_DIST += $(srcdir)/ovn/ovn-nb-idl.ann
-OVN_NB_IDL_FILES = \
-	$(srcdir)/ovn/ovn-nb.ovsschema \
-	$(srcdir)/ovn/ovn-nb-idl.ann
-$(srcdir)/ovn/ovn-nb-idl.ovsidl: $(OVN_NB_IDL_FILES)
-	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(OVN_NB_IDL_FILES) > $@.tmp && \
-	mv $@.tmp $@
-CLEANFILES += ovn/ovn-nb-idl.c ovn/ovn-nb-idl.h
-
-# libovn
-lib_LTLIBRARIES += ovn/libovn.la
-ovn_libovn_la_LDFLAGS = \
-        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
-        -Wl,--version-script=$(top_builddir)/ovn/libovn.sym \
-        $(AM_LDFLAGS)
-ovn_libovn_la_SOURCES = \
-	ovn/ovn-sb-idl.c \
-	ovn/ovn-sb-idl.h \
-	ovn/ovn-nb-idl.c \
-	ovn/ovn-nb-idl.h
-
 # ovn-nbctl
 bin_PROGRAMS += ovn/ovn-nbctl
 ovn_ovn_nbctl_SOURCES = ovn/ovn-nbctl.c
-ovn_ovn_nbctl_LDADD = ovn/libovn.la ovsdb/libovsdb.la lib/libopenvswitch.la
+ovn_ovn_nbctl_LDADD = ovn/lib/libovn.la ovsdb/libovsdb.la lib/libopenvswitch.la
 
 include ovn/controller/automake.mk
 include ovn/lib/automake.mk

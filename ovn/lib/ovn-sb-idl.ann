@@ -6,4 +6,4 @@
 # it can generate more programmer-friendly data structures.
 
 s["idlPrefix"] = "sbrec_"
-s["idlHeader"] = "\"ovn/ovn-sb-idl.h\""
+s["idlHeader"] = "\"ovn/lib/ovn-sb-idl.h\""
