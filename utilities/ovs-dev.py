@@ -316,6 +316,11 @@ Basic Configuration:
     # Install the kernel module
     sudo insmod %(ovs)s/datapath/linux/openvswitch.ko
 
+    # If needed, manually load all required vport modules:
+    sudo insmod %(ovs)s/datapath/linux/vport-vxlan.ko
+    sudo insmod %(ovs)s/datapath/linux/vport-geneve.ko
+    [...]
+
     # Run the switch.
     %(v)s run
 
