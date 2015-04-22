@@ -219,12 +219,24 @@
           ICMP unreachable message for other IP-based protocols.
         </li>
       </ul>
+
+      <p>
+	Only <code>allow</code> and <code>drop</code> are implemented:
+	<code>allow-related</code> is currently treated as <code>allow</code>,
+	and <code>reject</code> as <code>drop</code>.
+      </p>
     </column>
 
     <column name="log">
-      If set to <code>true</code>, packets that match the ACL will trigger a
-      log message on the transport node or nodes that perform ACL processing.
-      Logging may be combined with any <ref column="action"/>.
+      <p>
+	If set to <code>true</code>, packets that match the ACL will trigger a
+	log message on the transport node or nodes that perform ACL processing.
+	Logging may be combined with any <ref column="action"/>.
+      </p>
+
+      <p>
+	Logging is not yet implemented.
+      </p>
     </column>
 
     <group title="Common Columns">
