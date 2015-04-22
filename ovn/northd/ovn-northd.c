@@ -202,66 +202,10 @@ pipeline_add(struct pipeline_ctx *ctx,
     sbrec_pipeline_set_actions(pipeline, actions);
 }
 
-/* A single port security constraint.  This is a parsed version of a single
- * member of the port_security column in the OVN_NB Logical_Port table.
- *
- * Each token has type LEX_T_END if that field is missing, otherwise
- * LEX_T_INTEGER or LEX_T_MASKED_INTEGER. */
-struct ps_constraint {
-    struct lex_token eth;
-    struct lex_token ip4;
-    struct lex_token ip6;
-};
-
-/* Parses a member of the port_security column 'ps' into 'c'.  Returns true if
- * successful, false on syntax error. */
-static bool
-parse_port_security(const char *ps, struct ps_constraint *c)
-{
-    c->eth.type = LEX_T_END;
-    c->ip4.type = LEX_T_END;
-    c->ip6.type = LEX_T_END;
-
-    struct lexer lexer;
-    lexer_init(&lexer, ps);
-    do {
-        if (lexer.token.type == LEX_T_INTEGER ||
-            lexer.token.type == LEX_T_MASKED_INTEGER) {
-            struct lex_token *t;
-
-            t = (lexer.token.format == LEX_F_IPV4 ? &c->ip4
-                 : lexer.token.format == LEX_F_IPV6 ? &c->ip6
-                 : lexer.token.format == LEX_F_ETHERNET ? &c->eth
-                 : NULL);
-            if (t) {
-                if (t->type == LEX_T_END) {
-                    *t = lexer.token;
-                } else {
-                    VLOG_INFO("%s: port_security has duplicate %s address",
-                              ps, lex_format_to_string(lexer.token.format));
-                }
-                lexer_get(&lexer);
-                lexer_match(&lexer, LEX_T_COMMA);
-                continue;
-            }
-        }
-
-        VLOG_INFO("%s: syntax error in port_security", ps);
-        lexer_destroy(&lexer);
-        return false;
-    } while (lexer.token.type != LEX_T_END);
-    lexer_destroy(&lexer);
-
-    return true;
-}
-
 /* Appends port security constraints on L2 address field 'eth_addr_field'
  * (e.g. "eth.src" or "eth.dst") to 'match'.  'port_security', with
  * 'n_port_security' elements, is the collection of port_security constraints
- * from an OVN_NB Logical_Port row.
- *
- * (This is naive; it's not yet possible to express complete L2 and L3 port
- * security constraints as a single Boolean expression.) */
+ * from an OVN_NB Logical_Port row. */
 static void
 build_port_security(const char *eth_addr_field,
                     char **port_security, size_t n_port_security,
@@ -272,14 +216,15 @@ build_port_security(const char *eth_addr_field,
 
     size_t n = 0;
     for (size_t i = 0; i < n_port_security; i++) {
-        struct ps_constraint c;
-        if (parse_port_security(port_security[i], &c)
-            && c.eth.type != LEX_T_END) {
-            lex_token_format(&c.eth, match);
+        uint8_t ea[ETH_ADDR_LEN];
+
+        if (eth_addr_from_string(port_security[i], ea)) {
+            ds_put_format(match, ETH_ADDR_FMT, ETH_ADDR_ARGS(ea));
             ds_put_char(match, ' ');
             n++;
         }
     }
+    ds_chomp(match, ' ');
     ds_put_cstr(match, "}");
 
     if (!n) {

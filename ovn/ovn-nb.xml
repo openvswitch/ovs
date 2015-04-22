@@ -137,7 +137,7 @@
 
     <column name="port_security">
       <p>
-        A set of L2 (Ethernet) or L3 (IPv4 or IPv6) addresses or L2+L3 pairs
+        A set of L2 (Ethernet) addresses
         from which the logical port is allowed to send packets and to which it
         is allowed to receive packets.  If this column is empty, all addresses
         are permitted.  Logical ports are always allowed to receive packets
@@ -145,14 +145,12 @@
       </p>
 
       <p>
-        Each member of the set is a comma- or space-separated list.  A single
-        set member may have an Ethernet address, an IPv4 address, and an IPv6
-        address, or any subset.  Order is not significant.
+        Each member of the set is an Ethernet address in the form
+        <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
       </p>
 
       <p>
-        TBD: exact semantics.  For now only Ethernet port security is
-        implemented.
+	This specification will be extended to support L3 port security.
       </p>
     </column>
 
