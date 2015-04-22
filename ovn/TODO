@@ -1,9 +1,3 @@
-* Flow match expression handling library.
-
-  ovn-controller is the primary user of flow match expressions, but
-  the same syntax and I imagine the same code ought to be useful in
-  ovn-northd for ACL match expressions.
-
 * ovn-controller
 
 ** Flow table handling in ovn-controller.
@@ -30,19 +24,6 @@
 
     It's also possible we could use struct flow without struct
     classifier.
-
-*** Assembling conjunctive flows from flow match expressions.
-
-    This transformation explodes logical datapath flows into multiple
-    OpenFlow flow table entries, since a flow match expression in CoD
-    form requires several OpenFlow flow table entries.  It also
-    requires merging together OpenFlow flow tables entries that contain
-    "conjunction" actions (really just concatenating their actions).
-
-*** Translating logical datapath port names into port numbers.
-
-    Logical ports are specified by name in logical datapath flows, but
-    OpenFlow only works in terms of numbers.
 
 *** Translating logical datapath actions into OpenFlow actions.
 
@@ -117,36 +98,6 @@
 *** SSL configuration.
 
     Can probably get this from Open_vSwitch database.
-
-* ovn-northd
-
-** Monitor OVN_Northbound database, trigger Pipeline recomputation on change.
-
-** Translate each OVN_Northbound entity into Pipeline logical datapath flows.
-
-   We have to first sit down and figure out what the general
-   translation of each entity is.  The original OVN architecture
-   description at
-   http://openvswitch.org/pipermail/dev/2015-January/050380.html had
-   some sketches of these, but they need to be completed and
-   elaborated.
-
-   Initially, the simplest way to do this is probably to write
-   straight C code to do a full translation of the entire
-   OVN_Northbound database into the format for the Pipeline table in
-   the OVN Southbound database.  As scale increases, this will probably
-   be too inefficient since a small change in OVN_Northbound requires a
-   full recomputation.  At that point, we probably want to adopt a more
-   systematic approach, such as something akin to the "nlog" system used
-   in NVP (see Koponen et al. "Network Virtualization in Multi-tenant
-   Datacenters", NSDI 2014).
-
-** Push logical datapath flows to Pipeline table.
-
-** Monitor OVN Southbound database Bindings table.
-
-   Sync rows in the OVN Bindings table to the "up" column in the
-   OVN_Northbound database.
 
 * ovsdb-server
 
@@ -225,14 +176,6 @@
    previous non-academic use of this technique.)
 
 * Miscellaneous:
-
-** Write ovn-nbctl utility.
-
-   The idea here is that we need a utility to act on the OVN_Northbound
-   database in a way similar to a CMS, so that we can do some testing
-   without an actual CMS in the picture.
-
-   No details yet.
 
 ** Init scripts for ovn-controller (on HVs), ovn-northd, OVN DB server.
 
