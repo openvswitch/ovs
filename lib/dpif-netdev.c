@@ -3015,14 +3015,22 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
 }
 
 static inline uint32_t
-dpif_netdev_packet_get_dp_hash(struct dp_packet *packet,
-                               const struct miniflow *mf)
+dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
+                                const struct miniflow *mf)
 {
-    uint32_t hash;
+    uint32_t hash, recirc_depth;
 
     hash = dp_packet_get_rss_hash(packet);
     if (OVS_UNLIKELY(!hash)) {
         hash = miniflow_hash_5tuple(mf, 0);
+        dp_packet_set_rss_hash(packet, hash);
+    }
+
+    /* The RSS hash must account for the recirculation depth to avoid
+     * collisions in the exact match cache */
+    recirc_depth = *recirc_depth_get_unsafe();
+    if (OVS_UNLIKELY(recirc_depth)) {
+        hash = hash_finish(hash, recirc_depth);
         dp_packet_set_rss_hash(packet, hash);
     }
     return hash;
@@ -3128,7 +3136,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 
         miniflow_extract(packets[i], &key.mf);
         key.len = 0; /* Not computed yet. */
-        key.hash = dpif_netdev_packet_get_dp_hash(packets[i], &key.mf);
+        key.hash = dpif_netdev_packet_get_rss_hash(packets[i], &key.mf);
 
         flow = emc_lookup(flow_cache, &key);
         if (OVS_LIKELY(flow)) {
