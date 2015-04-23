@@ -31,7 +31,6 @@
 #pragma warning( push )
 #pragma warning( disable:4127 )
 
-extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 extern UINT64 ovsTimeIncrementPerTick;
 
@@ -1995,25 +1994,23 @@ OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
     BOOLEAN findNextNonEmpty = FALSE;
 
     dpNo = dumpInput->dpNo;
-    NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
-        goto unlock;
+        goto exit;
     }
 
     rowIndex = dumpInput->position[0];
     if (rowIndex >= OVS_FLOW_TABLE_SIZE) {
         dumpOutput->n = 0;
         *replyLen = sizeof(*dumpOutput);
-        goto unlock;
+        goto exit;
     }
 
     columnIndex = dumpInput->position[1];
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
-    OvsAcquireDatapathRead(datapath, &dpLockState, TRUE);
+    OvsAcquireDatapathRead(datapath, &dpLockState, FALSE);
 
     head = &datapath->flowTable[rowIndex];
     node = head->Flink;
@@ -2062,8 +2059,7 @@ OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
 dp_unlock:
     OvsReleaseDatapath(datapath, &dpLockState);
 
-unlock:
-    NdisReleaseSpinLock(gOvsCtrlLock);
+exit:
     return status;
 }
 
@@ -2124,21 +2120,18 @@ OvsPutFlowIoctl(PVOID inputBuffer,
     }
 
     dpNo = put->dpNo;
-    NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
-        goto unlock;
+        goto exit;
     }
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
-    OvsAcquireDatapathWrite(datapath, &dpLockState, TRUE);
+    OvsAcquireDatapathWrite(datapath, &dpLockState, FALSE);
     status = HandleFlowPut(put, datapath, stats);
     OvsReleaseDatapath(datapath, &dpLockState);
 
-unlock:
-    NdisReleaseSpinLock(gOvsCtrlLock);
+exit:
     return status;
 }
 
@@ -2306,16 +2299,14 @@ OvsGetFlowIoctl(PVOID inputBuffer,
     }
 
     dpNo = getInput->dpNo;
-    NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
-        goto unlock;
+        goto exit;
     }
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
-    OvsAcquireDatapathRead(datapath, &dpLockState, TRUE);
+    OvsAcquireDatapathRead(datapath, &dpLockState, FALSE);
     flow = OvsLookupFlow(datapath, &getInput->key, &hash, FALSE);
     if (!flow) {
         status = STATUS_INVALID_PARAMETER;
@@ -2327,8 +2318,7 @@ OvsGetFlowIoctl(PVOID inputBuffer,
 
 dp_unlock:
     OvsReleaseDatapath(datapath, &dpLockState);
-unlock:
-    NdisReleaseSpinLock(gOvsCtrlLock);
+exit:
     return status;
 }
 
@@ -2339,21 +2329,18 @@ OvsFlushFlowIoctl(UINT32 dpNo)
     OVS_DATAPATH *datapath = NULL;
     LOCK_STATE_EX dpLockState;
 
-    NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext->dpNo != dpNo) {
         status = STATUS_INVALID_PARAMETER;
-        goto unlock;
+        goto exit;
     }
 
     datapath = &gOvsSwitchContext->datapath;
     ASSERT(datapath);
-    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
-    OvsAcquireDatapathWrite(datapath, &dpLockState, TRUE);
+    OvsAcquireDatapathWrite(datapath, &dpLockState, FALSE);
     DeleteAllFlows(datapath);
     OvsReleaseDatapath(datapath, &dpLockState);
 
-unlock:
-    NdisReleaseSpinLock(gOvsCtrlLock);
+exit:
     return status;
 }
 

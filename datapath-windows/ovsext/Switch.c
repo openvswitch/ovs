@@ -35,10 +35,9 @@
 #include "Debug.h"
 
 POVS_SWITCH_CONTEXT gOvsSwitchContext;
-BOOLEAN gOvsInAttach;
+LONG volatile gOvsInAttach;
 UINT64 ovsTimeIncrementPerTick;
 
-extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern NDIS_HANDLE gOvsExtDriverHandle;
 extern NDIS_HANDLE gOvsExtDriverObject;
 
@@ -89,22 +88,18 @@ OvsExtAttach(NDIS_HANDLE ndisFilterHandle,
         goto cleanup;
     }
 
-    NdisAcquireSpinLock(gOvsCtrlLock);
     if (gOvsSwitchContext) {
-        NdisReleaseSpinLock(gOvsCtrlLock);
         OVS_LOG_TRACE("Exit: Failed to create OVS Switch, only one datapath is"
                       "supported, %p.", gOvsSwitchContext);
         goto cleanup;
     }
-    if (gOvsInAttach) {
-        NdisReleaseSpinLock(gOvsCtrlLock);
+
+    if (InterlockedCompareExchange(&gOvsInAttach, 1, 0)) {
         /* Just fail the request. */
         OVS_LOG_TRACE("Exit: Failed to create OVS Switch, since another attach"
                       "instance is in attach process.");
         goto cleanup;
     }
-    gOvsInAttach = TRUE;
-    NdisReleaseSpinLock(gOvsCtrlLock);
 
     status = OvsInitIpHelper(ndisFilterHandle);
     if (status != STATUS_SUCCESS) {
@@ -121,7 +116,7 @@ OvsExtAttach(NDIS_HANDLE ndisFilterHandle,
 
     /*
      * Register the switch context with NDIS so NDIS can pass it back to the
-     * Filterxxx callback functions as the 'FilterModuleContext' parameter.
+     * FilterXXX callback functions as the 'FilterModuleContext' parameter.
      */
     RtlZeroMemory(&ovsExtAttributes, sizeof(NDIS_FILTER_ATTRIBUTES));
     ovsExtAttributes.Header.Revision = NDIS_FILTER_ATTRIBUTES_REVISION_1;

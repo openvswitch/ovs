@@ -142,14 +142,12 @@ OvsCleanupPacketQueue(POVS_OPEN_INSTANCE instance)
     }
 
     /* Verify if gOvsSwitchContext exists. */
-    OvsAcquireCtrlLock();
     if (gOvsSwitchContext) {
         /* Remove the instance from pidHashArray */
         OvsAcquirePidHashLock();
         OvsDelPidInstance(gOvsSwitchContext, instance->pid);
         OvsReleasePidHashLock();
     }
-    OvsReleaseCtrlLock();
 }
 
 NTSTATUS
@@ -447,11 +445,9 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     OVS_PACKET_HDR_INFO layers;
     POVS_VPORT_ENTRY vport;
 
-    NdisAcquireSpinLock(gOvsCtrlLock);
-
     if (execute->packetLen == 0) {
         status = STATUS_INVALID_PARAMETER;
-        goto unlock;
+        goto exit;
     }
 
     actions = execute->actions;
@@ -466,7 +462,7 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
                                        execute->packetLen);
     if (pNbl == NULL) {
         status = STATUS_NO_MEMORY;
-        goto unlock;
+        goto exit;
     }
 
     fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(pNbl);
@@ -481,11 +477,9 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     // XXX: Figure out if any of the other members of fwdDetail need to be set.
 
     ndisStatus = OvsExtractFlow(pNbl, fwdDetail->SourcePortId, &key, &layers,
-                              NULL);
+                                NULL);
     if (ndisStatus == NDIS_STATUS_SUCCESS) {
-        ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
-        NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState,
-                              NDIS_RWL_AT_DISPATCH_LEVEL);
+        NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
         ndisStatus = OvsActionsExecute(gOvsSwitchContext, NULL, pNbl,
                                        vport ? vport->portNo :
                                                OVS_DEFAULT_PORT_NO,
@@ -506,8 +500,7 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     if (pNbl) {
         OvsCompleteNBL(gOvsSwitchContext, pNbl, TRUE);
     }
-unlock:
-    NdisReleaseSpinLock(gOvsCtrlLock);
+exit:
     return status;
 }
 
@@ -630,7 +623,6 @@ OvsGetNextPacket(POVS_OPEN_INSTANCE instance)
 /*
  * ---------------------------------------------------------------------------
  * Given a pid, returns the corresponding USER_PACKET_QUEUE.
- * gOvsCtrlLock must be acquired before calling this API.
  * ---------------------------------------------------------------------------
  */
 POVS_USER_PACKET_QUEUE

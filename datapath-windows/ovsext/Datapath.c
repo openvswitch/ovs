@@ -958,14 +958,11 @@ ValidateNetlinkCmd(UINT32 devOp,
 
             /* Validate the DP for commands that require a DP. */
             if (nlFamilyOps->cmds[i].validateDpIndex == TRUE) {
-                OvsAcquireCtrlLock();
                 if (ovsMsg->ovsHdr.dp_ifindex !=
                                           (INT)gOvsSwitchContext->dpNo) {
                     status = STATUS_INVALID_PARAMETER;
-                    OvsReleaseCtrlLock();
                     goto done;
                 }
-                OvsReleaseCtrlLock();
             }
 
             /* Validate the PID. */
@@ -1045,7 +1042,6 @@ OvsGetPidHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
  * --------------------------------------------------------------------------
  * Utility function to fill up information about the datapath in a reply to
  * userspace.
- * Assumes that 'gOvsCtrlLock' lock is acquired.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
@@ -1245,9 +1241,7 @@ HandleGetDpDump(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
                   usrParamsCtx->outputLength);
 
-        OvsAcquireCtrlLock();
         status = OvsDpFillInfo(gOvsSwitchContext, msgIn, &nlBuf);
-        OvsReleaseCtrlLock();
 
         if (status != STATUS_SUCCESS) {
             *replyLen = 0;
@@ -1334,11 +1328,9 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
 
-    OvsAcquireCtrlLock();
     if (dpAttrs[OVS_DP_ATTR_NAME] != NULL) {
         if (!OvsCompareString(NlAttrGet(dpAttrs[OVS_DP_ATTR_NAME]),
                               OVS_SYSTEM_DP_NAME)) {
-            OvsReleaseCtrlLock();
 
             /* Creation of new datapaths is not supported. */
             if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_SET) {
@@ -1350,19 +1342,16 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             goto cleanup;
         }
     } else if ((UINT32)msgIn->ovsHdr.dp_ifindex != gOvsSwitchContext->dpNo) {
-        OvsReleaseCtrlLock();
         nlError = NL_ERROR_NODEV;
         goto cleanup;
     }
 
     if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_DP_CMD_NEW) {
-        OvsReleaseCtrlLock();
         nlError = NL_ERROR_EXIST;
         goto cleanup;
     }
 
     status = OvsDpFillInfo(gOvsSwitchContext, msgIn, &nlBuf);
-    OvsReleaseCtrlLock();
 
     *replyLen = NlBufSize(&nlBuf);
 
@@ -1444,7 +1433,6 @@ MapIrpOutputBuffer(PIRP irp,
  * --------------------------------------------------------------------------
  * Utility function to fill up information about the state of a port in a reply
  * to* userspace.
- * Assumes that 'gOvsCtrlLock' lock is acquired.
  * --------------------------------------------------------------------------
  */
 static NTSTATUS
@@ -1548,8 +1536,6 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
 
-    OvsAcquireCtrlLock();
-
     /* remove an event entry from the event queue */
     status = OvsRemoveEventEntry(usrParamsCtx->ovsInstance, &eventEntry);
     if (status != STATUS_SUCCESS) {
@@ -1565,7 +1551,6 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
 cleanup:
-    OvsReleaseCtrlLock();
     return status;
 }
 
