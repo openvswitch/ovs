@@ -704,12 +704,40 @@ lexer_get(struct lexer *lexer)
     return lexer->token.type;
 }
 
+/* Returns the type of the next token that will be fetched by lexer_get(),
+ * without advancing 'lexer->token' to that token. */
+enum lex_type
+lexer_lookahead(const struct lexer *lexer)
+{
+    struct lex_token next;
+    enum lex_type type;
+    const char *start;
+
+    lex_token_parse(&next, lexer->input, &start);
+    type = next.type;
+    lex_token_destroy(&next);
+    return type;
+}
+
 /* If 'lexer''s current token has the given 'type', advances 'lexer' to the
  * next token and returns true.  Otherwise returns false. */
 bool
 lexer_match(struct lexer *lexer, enum lex_type type)
 {
     if (lexer->token.type == type) {
+        lexer_get(lexer);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/* If 'lexer''s current token is the identifier given in 'id', advances 'lexer'
+ * to the next token and returns true.  Otherwise returns false.  */
+bool
+lexer_match_id(struct lexer *lexer, const char *id)
+{
+    if (lexer->token.type == LEX_T_ID && !strcmp(lexer->token.s, id)) {
         lexer_get(lexer);
         return true;
     } else {

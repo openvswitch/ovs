@@ -105,6 +105,8 @@ void lexer_init(struct lexer *, const char *input);
 void lexer_destroy(struct lexer *);
 
 enum lex_type lexer_get(struct lexer *);
+enum lex_type lexer_lookahead(const struct lexer *);
 bool lexer_match(struct lexer *, enum lex_type);
+bool lexer_match_id(struct lexer *, const char *id);
 
 #endif /* ovn/lex.h */
