@@ -211,7 +211,6 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
     status = OvsTunnelFilterInitialize(gOvsExtDriverObject);
     if (status != NDIS_STATUS_SUCCESS) {
         OvsUninitSwitchContext(switchContext);
-        OvsFreeMemoryWithTag(switchContext, OVS_SWITCH_POOL_TAG);
         goto create_switch_done;
     }
     *switchContextOut = switchContext;
@@ -270,7 +269,6 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
         OvsTunnelFilterUninitialize(gOvsExtDriverObject);
         OvsClearAllSwitchVports(switchContext);
         OvsUninitSwitchContext(switchContext);
-        OvsFreeMemoryWithTag(switchContext, OVS_SWITCH_POOL_TAG);
     }
     OVS_LOG_TRACE("Exit: deleted switch %p  dpNo: %d", switchContext, dpNo);
 }
@@ -441,7 +439,12 @@ OvsUninitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     OvsReleaseSwitchContext(switchContext);
 }
 
-VOID
+/*
+ * --------------------------------------------------------------------------
+ *  Frees up the contents of and also the switch context.
+ * --------------------------------------------------------------------------
+ */
+static VOID
 OvsDeleteSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 {
     OVS_LOG_TRACE("Enter: Delete switchContext:%p", switchContext);
@@ -467,6 +470,8 @@ OvsDeleteSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     switchContext->pidHashArray = NULL;
     OvsDeleteFlowTable(&switchContext->datapath);
     OvsCleanupBufferPool(switchContext);
+
+    OvsFreeMemoryWithTag(switchContext, OVS_SWITCH_POOL_TAG);
     OVS_LOG_TRACE("Exit: Delete switchContext: %p", switchContext);
 }
 
