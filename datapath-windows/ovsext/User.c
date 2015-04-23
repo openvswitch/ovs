@@ -161,12 +161,6 @@ OvsSubscribeDpIoctl(PVOID instanceP,
     if (instance->packetQueue && !join) {
         /* unsubscribe */
         OvsCleanupPacketQueue(instance);
-
-        OvsAcquirePidHashLock();
-        /* Remove the instance from pidHashArray */
-        OvsDelPidInstance(gOvsSwitchContext, pid);
-        OvsReleasePidHashLock();
-
     } else if (instance->packetQueue == NULL && join) {
         queue = (POVS_USER_PACKET_QUEUE) OvsAllocateMemoryWithTag(
             sizeof *queue, OVS_USER_POOL_TAG);
