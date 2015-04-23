@@ -491,6 +491,13 @@ set_bindings(struct northd_context *ctx)
             }
         }
 
+        struct uuid logical_datapath;
+        if (lport->lswitch) {
+            logical_datapath = lport->lswitch->header_.uuid;
+        } else {
+            uuid_zero(&logical_datapath);
+        }
+
         if (binding) {
             /* We found an existing binding for this logical port.  Update its
              * contents. */
@@ -510,6 +517,10 @@ set_bindings(struct northd_context *ctx)
             if (!tags_equal(binding, lport)) {
                 sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
             }
+            if (!uuid_equals(&binding->logical_datapath, &logical_datapath)) {
+                sbrec_bindings_set_logical_datapath(binding,
+                                                    logical_datapath);
+            }
         } else {
             /* There is no binding for this logical port, so create one. */
 
@@ -521,6 +532,8 @@ set_bindings(struct northd_context *ctx)
                 sbrec_bindings_set_parent_port(binding, lport->parent_name);
                 sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
             }
+
+            sbrec_bindings_set_logical_datapath(binding, logical_datapath);
         }
     }
 
@@ -719,6 +732,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_mac);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tag);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_parent_port);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_logical_datapath);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_table_id);
