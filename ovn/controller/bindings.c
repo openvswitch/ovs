@@ -25,8 +25,6 @@
 
 VLOG_DEFINE_THIS_MODULE(bindings);
 
-#define DEFAULT_BRIDGE_NAME "br-int"
-
 void
 bindings_init(struct controller_ctx *ctx)
 {
@@ -49,39 +47,14 @@ bindings_init(struct controller_ctx *ctx)
 static void
 get_local_iface_ids(struct controller_ctx *ctx, struct sset *lports)
 {
-    const struct ovsrec_open_vswitch *cfg;
-    const struct ovsrec_bridge *bridge_rec;
-    const char *bridge_name;
     int i;
 
-    cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
-    if (!cfg) {
-        VLOG_INFO("No Open_vSwitch row defined.");
-        return;
-    }
-
-    bridge_name = smap_get(&cfg->external_ids, "ovn-bridge");
-    if (!bridge_name) {
-        bridge_name = DEFAULT_BRIDGE_NAME;
-    }
-
-    OVSREC_BRIDGE_FOR_EACH(bridge_rec, ctx->ovs_idl) {
-        if (!strcmp(bridge_rec->name, bridge_name)) {
-            break;
-        }
-    }
-
-    if (!bridge_rec) {
-        VLOG_INFO("Could not find bridge '%s'", bridge_name);
-        return;
-    }
-
-    for (i = 0; i < bridge_rec->n_ports; i++) {
-        const struct ovsrec_port *port_rec = bridge_rec->ports[i];
+    for (i = 0; i < ctx->br_int->n_ports; i++) {
+        const struct ovsrec_port *port_rec = ctx->br_int->ports[i];
         const char *iface_id;
         int j;
 
-        if (!strcmp(port_rec->name, bridge_rec->name)) {
+        if (!strcmp(port_rec->name, ctx->br_int_name)) {
             continue;
         }
 

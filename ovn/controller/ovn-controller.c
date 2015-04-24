@@ -45,6 +45,8 @@ VLOG_DEFINE_THIS_MODULE(main);
 
 static unixctl_cb_func ovn_controller_exit;
 
+#define DEFAULT_BRIDGE_NAME "br-int"
+
 static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
@@ -65,8 +67,23 @@ get_initial_snapshot(struct ovsdb_idl *idl)
     }
 }
 
-/* Retrieve the OVN remote location from the "external-ids:ovn-remote"
- * key and the chassis name from the "external-ids:system-id" key in the
+static const struct ovsrec_bridge *
+get_bridge(struct controller_ctx *ctx, const char *name)
+{
+    const struct ovsrec_bridge *br;
+
+    OVSREC_BRIDGE_FOR_EACH(br, ctx->ovs_idl) {
+        if (!strcmp(br->name, name)) {
+            return br;
+        }
+    }
+
+    return NULL;
+}
+
+/* Retrieve the OVN integration bridge from the "external-ids:ovn-bridge"
+ * key, the remote location from the "external-ids:ovn-remote" key, and
+ * the chassis name from the "external-ids:system-id" key in the
  * Open_vSwitch table of the OVS database instance. */
 static void
 get_core_config(struct controller_ctx *ctx)
@@ -81,9 +98,22 @@ get_core_config(struct controller_ctx *ctx)
     }
 
     while (1) {
+        const struct ovsrec_bridge *br_int;
         const char *remote, *system_id;
 
         ovsdb_idl_run(ctx->ovs_idl);
+
+        ctx->br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
+        if (!ctx->br_int_name) {
+            ctx->br_int_name = DEFAULT_BRIDGE_NAME;
+        }
+
+        br_int = get_bridge(ctx, ctx->br_int_name);
+        if (!br_int) {
+            VLOG_INFO("Integration bridge '%s' does not exist.  Waiting...",
+                      ctx->br_int_name);
+            goto try_again;
+        }
 
         /* xxx This does not support changing OVN Southbound OVSDB mid-run. */
         remote = smap_get(&cfg->external_ids, "ovn-remote");
@@ -160,6 +190,16 @@ main(int argc, char *argv[])
     while (!exiting) {
         ovsdb_idl_run(ctx.ovs_idl);
         ovsdb_idl_run(ctx.ovnsb_idl);
+
+        /* xxx If run into any surprising changes, we exit.  We should
+         * xxx handle this more gracefully. */
+        ctx.br_int = get_bridge(&ctx, ctx.br_int_name);
+        if (!ctx.br_int) {
+            VLOG_ERR("Integration bridge '%s' disappeared",
+                     ctx.br_int_name);
+            retval = EXIT_FAILURE;
+            break;
+        }
 
         if (!ovsdb_idl_is_alive(ctx.ovnsb_idl)) {
             int retval = ovsdb_idl_get_last_error(ctx.ovnsb_idl);

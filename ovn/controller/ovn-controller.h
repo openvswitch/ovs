@@ -18,9 +18,12 @@
 #define OVN_CONTROLLER_H 1
 
 struct controller_ctx {
-    char *chassis_name;
+    char *chassis_name;             /* Name for this chassis. */
+    const char *br_int_name;        /* Name of local integration bridge. */
     struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl *ovs_idl;
+
+    const struct ovsrec_bridge *br_int;
 };
 
 #endif /* ovn/ovn-controller.h */
