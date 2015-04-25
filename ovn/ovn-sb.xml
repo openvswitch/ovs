@@ -166,8 +166,9 @@
 
     <column name="type">
       The encapsulation to use to transmit packets to this chassis.
-      Examples include <code>geneve</code>, <code>vxlan</code>, and
-      <code>stt</code>.
+      Hypervisors must use either <code>geneve</code> or
+      <code>stt</code>.  Gateways may use <code>vxlan</code>,
+      <code>geneve</code>, or <code>stt</code>.
     </column>
 
     <column name="options">

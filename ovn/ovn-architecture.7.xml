@@ -575,4 +575,58 @@
       to reflect the update.
     </li>
   </ol>
+
+  <h1>Design Decisions</h1>
+
+  <h2>Supported Tunnel Encapsulations</h2>
+  <p>
+    For connecting hypervisors to each other, the only supported tunnel
+    encapsulations are Geneve and STT. Hypervisors may use VXLAN to
+    connect to gateways. We have limited support to these encapsulations
+    for the following reasons:
+  </p>
+
+  <ul>
+    <li>
+      <p>
+        They support large amounts of metadata.  In addition to
+        specifying the logical switch, we will likely want to indicate
+        the logical source port and where we are in the logical
+        pipeline.  Geneve supports a 24-bit VNI field and TLV-based
+        extensions.  The header of STT includes a 64-bit context id.
+      </p>
+    </li>
+
+    <li>
+      <p>
+        They use randomized UDP or TCP source ports that allows
+        efficient distribution among multiple paths in environments that
+        use ECMP in their underlay.
+      </p>
+    </li>
+
+    <li>
+      <p>
+        NICs are available that accelerate encapsulation and decapsulation.
+      </p>
+    </li>
+  </ul>
+
+  <p>
+    Due to its flexibility, the preferred encapsulation between
+    hypervisors is Geneve.  Some environments may want to use STT for
+    performance reasons until the NICs they use support hardware offload
+    of Geneve.
+  </p>
+
+  <p>
+    For connecting to gateways, the only supported tunnel encapsulations
+    are VXLAN, Geneve, and STT.  While support for Geneve is becoming
+    available for TOR (top-of-rack) switches, VXLAN is far more common.
+    Currently, gateways have a feature set that matches the capabilities
+    as defined by the VTEP schema, so fewer bits of metadata are
+    necessary.  In the future, gateways that do not support
+    encapsulations with large amounts of metadata may continue to have a
+    reduced feature set.
+  </p>
 </manpage>

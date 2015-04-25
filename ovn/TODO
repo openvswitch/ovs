@@ -91,10 +91,6 @@
 
 ** ovn-controller parameters and configuration.
 
-*** Tunnel encapsulation to publish.
-
-    Default: VXLAN? Geneve?
-
 *** SSL configuration.
 
     Can probably get this from Open_vSwitch database.

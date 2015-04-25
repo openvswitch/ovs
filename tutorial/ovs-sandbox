@@ -289,7 +289,7 @@ rungdb $gdb_vswitchd ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --
 if $ovn; then
     ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
     ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/db.sock
-    ovs-vsctl set open . external-ids:ovn-encap-type=vxlan
+    ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
     ovs-vsctl add-br br-int
 

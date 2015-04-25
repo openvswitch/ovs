@@ -17,7 +17,9 @@
             "indexes": [["name"]]},
         "Encap": {
             "columns": {
-                "type": {"type": "string"},
+                "type": {"type": {"key": {
+                           "type": "string",
+                           "enum": ["set", ["geneve", "stt", "vxlan"]]}}},
                 "options": {"type": {"key": "string",
                                      "value": "string",
                                      "min": 0,
