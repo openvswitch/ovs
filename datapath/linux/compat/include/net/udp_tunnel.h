@@ -4,7 +4,7 @@
 #include <linux/version.h>
 #include <linux/kconfig.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,20,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
 #include_next <net/udp_tunnel.h>
 
 static inline struct sk_buff *
@@ -105,5 +105,5 @@ static inline struct sk_buff *udp_tunnel_handle_offloads(struct sk_buff *skb,
 
 #define udp_tunnel_encap_enable(sock) udp_encap_enable()
 
-#endif /* Linux version < 3.20 */
+#endif /* Linux version < 4.0 */
 #endif

@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,20,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
 
 #include <linux/module.h>
 #include <linux/errno.h>
@@ -172,4 +172,4 @@ void rpl_udp_tunnel_sock_release(struct socket *sock)
 }
 EXPORT_SYMBOL_GPL(rpl_udp_tunnel_sock_release);
 
-#endif /* Linux version < 3.20 */
+#endif /* Linux version < 4.0 */
