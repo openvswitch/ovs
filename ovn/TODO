@@ -78,15 +78,6 @@
     The split pipeline processing split will influence how tunnel keys
     are encoded.
 
-** Interaction with Open_vSwitch and OVN databases:
-
-*** Monitor Chassis table in OVN.
-
-    Populate Port records for tunnels to other chassis into
-    Open_vSwitch database.  As a scale optimization later on, one can
-    populate only records for tunnels to other chassis that have
-    logical networks in common with this one.
-
 *** Monitor Pipeline table in OVN, trigger flow table recomputation on change.
 
 ** ovn-controller parameters and configuration.
