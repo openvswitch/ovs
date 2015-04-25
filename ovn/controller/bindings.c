@@ -64,7 +64,6 @@ get_local_iface_ids(struct controller_ctx *ctx, struct sset *lports)
             iface_rec = port_rec->interfaces[j];
             iface_id = smap_get(&iface_rec->external_ids, "iface-id");
             if (!iface_id) {
-                VLOG_DBG("Could not find iface-id for '%s'", iface_rec->name);
                 continue;
             }
             sset_add(lports, iface_id);
