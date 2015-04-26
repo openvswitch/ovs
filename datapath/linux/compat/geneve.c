@@ -11,6 +11,9 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
+
 #include <linux/kernel.h>
 #include <linux/types.h>
 #include <linux/module.h>
@@ -242,3 +245,5 @@ void rpl_geneve_sock_release(struct geneve_sock *gs)
 	call_rcu(&gs->rcu, rcu_free_gs);
 }
 EXPORT_SYMBOL_GPL(rpl_geneve_sock_release);
+
+#endif /* kernel < 4.0 */

@@ -1,6 +1,12 @@
 #ifndef __NET_GENEVE_WRAPPER_H
 #define __NET_GENEVE_WRAPPER_H  1
 
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
+#include_next <net/geneve.h>
+#else
+
 #ifdef CONFIG_INET
 #include <net/udp_tunnel.h>
 #endif
@@ -92,5 +98,7 @@ int rpl_geneve_xmit_skb(struct geneve_sock *gs, struct rtable *rt,
 		        __be16 tun_flags, u8 vni[3], u8 opt_len, u8 *opt,
 		        bool csum, bool xnet);
 #endif /*ifdef CONFIG_INET */
+
+#endif /* kernel < 4.0 */
 
 #endif /*ifdef__NET_GENEVE_WRAPPER_H */
