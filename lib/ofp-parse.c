@@ -1409,6 +1409,9 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
                 goto out;
             }
             error = str_to_u64(value, &gm->props.selection_method_param);
+            if (error) {
+                goto out;
+            }
             *usable_protocols &= OFPUTIL_P_OF15_UP;
         } else if (!strcmp(name, "fields")) {
             if (!(fields & F_GROUP_TYPE)) {
