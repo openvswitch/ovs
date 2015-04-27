@@ -86,20 +86,20 @@ bindings_run(struct controller_ctx *ctx)
     txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
     ovsdb_idl_txn_add_comment(txn,
                               "ovn-controller: updating bindings for '%s'",
-                              ctx->chassis_name);
+                              ctx->chassis_id);
 
     SBREC_BINDINGS_FOR_EACH(bindings_rec, ctx->ovnsb_idl) {
         if (sset_find_and_delete(&lports, bindings_rec->logical_port)) {
-            if (!strcmp(bindings_rec->chassis, ctx->chassis_name)) {
+            if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
                 continue;
             }
             if (bindings_rec->chassis[0]) {
                 VLOG_INFO("Changing chassis for lport %s from %s to %s",
                           bindings_rec->logical_port, bindings_rec->chassis,
-                          ctx->chassis_name);
+                          ctx->chassis_id);
             }
-            sbrec_bindings_set_chassis(bindings_rec, ctx->chassis_name);
-        } else if (!strcmp(bindings_rec->chassis, ctx->chassis_name)) {
+            sbrec_bindings_set_chassis(bindings_rec, ctx->chassis_id);
+        } else if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
             sbrec_bindings_set_chassis(bindings_rec, "");
         }
     }
@@ -132,10 +132,10 @@ bindings_destroy(struct controller_ctx *ctx)
         txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
         ovsdb_idl_txn_add_comment(txn,
                               "ovn-controller: removing all bindings for '%s'",
-                              ctx->chassis_name);
+                              ctx->chassis_id);
 
         SBREC_BINDINGS_FOR_EACH(bindings_rec, ctx->ovnsb_idl) {
-            if (!strcmp(bindings_rec->chassis, ctx->chassis_name)) {
+            if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
                 sbrec_bindings_set_chassis(bindings_rec, "");
             }
         }

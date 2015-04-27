@@ -44,11 +44,11 @@ register_chassis(struct controller_ctx *ctx,
     txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
     ovsdb_idl_txn_add_comment(txn,
                               "ovn-controller: registering chassis '%s'",
-                              ctx->chassis_name);
+                              ctx->chassis_id);
 
     if (!chassis_rec) {
         chassis_rec = sbrec_chassis_insert(txn);
-        sbrec_chassis_set_name(chassis_rec, ctx->chassis_name);
+        sbrec_chassis_set_name(chassis_rec, ctx->chassis_id);
     }
 
     encap_rec = sbrec_encap_insert(txn);
@@ -76,7 +76,7 @@ chassis_run(struct controller_ctx *ctx)
     static bool inited = false;
 
     SBREC_CHASSIS_FOR_EACH(chassis_rec, ctx->ovnsb_idl) {
-        if (!strcmp(chassis_rec->name, ctx->chassis_name)) {
+        if (!strcmp(chassis_rec->name, ctx->chassis_id)) {
             break;
         }
     }
@@ -132,7 +132,7 @@ chassis_destroy(struct controller_ctx *ctx)
         struct ovsdb_idl_txn *txn;
 
         SBREC_CHASSIS_FOR_EACH(chassis_rec, ctx->ovnsb_idl) {
-            if (!strcmp(chassis_rec->name, ctx->chassis_name)) {
+            if (!strcmp(chassis_rec->name, ctx->chassis_id)) {
                 break;
             }
         }
@@ -144,7 +144,7 @@ chassis_destroy(struct controller_ctx *ctx)
         txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
         ovsdb_idl_txn_add_comment(txn,
                                   "ovn-controller: unregistering chassis '%s'",
-                                  ctx->chassis_name);
+                                  ctx->chassis_id);
         sbrec_chassis_delete(chassis_rec);
 
         retval = ovsdb_idl_txn_commit_block(txn);

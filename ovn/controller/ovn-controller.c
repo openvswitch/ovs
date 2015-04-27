@@ -131,7 +131,7 @@ get_core_config(struct controller_ctx *ctx)
         }
 
         ovnsb_remote = xstrdup(remote);
-        ctx->chassis_name = xstrdup(system_id);
+        ctx->chassis_id = xstrdup(system_id);
         return;
 
 try_again:
@@ -145,7 +145,7 @@ int
 main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
-    struct controller_ctx ctx = { .chassis_name = NULL };
+    struct controller_ctx ctx = { .chassis_id = NULL };
     bool exiting;
     int retval;
 
