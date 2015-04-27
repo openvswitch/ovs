@@ -359,8 +359,14 @@ build_pipeline(struct northd_context *ctx)
     }
 
     /* Table 1: Destination lookup, unicast handling (priority 50),  */
-    struct ds unknown_actions = DS_EMPTY_INITIALIZER;
+    struct unknown_actions {
+        struct hmap_node hmap_node;
+        const struct nbrec_logical_switch *ls;
+        struct ds actions;
+    };
+    struct hmap unknown_actions = HMAP_INITIALIZER(&unknown_actions);
     NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
+        lswitch = lport->lswitch;
         for (size_t i = 0; i < lport->n_macs; i++) {
             uint8_t mac[ETH_ADDR_LEN];
 
@@ -374,14 +380,34 @@ build_pipeline(struct northd_context *ctx)
                 ds_put_cstr(&actions, "outport = ");
                 json_string_escape(lport->name, &actions);
                 ds_put_cstr(&actions, "; resubmit;");
-                pipeline_add(&pc, lport->lswitch, 1, 50,
+                pipeline_add(&pc, lswitch, 1, 50,
                              ds_cstr(&match), ds_cstr(&actions));
                 ds_destroy(&actions);
                 ds_destroy(&match);
             } else if (!strcmp(lport->macs[i], "unknown")) {
-                ds_put_cstr(&unknown_actions, "outport = ");
-                json_string_escape(lport->name, &unknown_actions);
-                ds_put_cstr(&unknown_actions, "; resubmit; ");
+                const struct uuid *uuid = &lswitch->header_.uuid;
+                struct unknown_actions *ua = NULL;
+                struct unknown_actions *iter;
+                HMAP_FOR_EACH_WITH_HASH (iter, hmap_node, uuid_hash(uuid),
+                                         &unknown_actions) {
+                    if (uuid_equals(&iter->ls->header_.uuid, uuid)) {
+                        ua = iter;
+                        break;
+                    }
+                }
+                if (!ua) {
+                    ua = xmalloc(sizeof *ua);
+                    hmap_insert(&unknown_actions, &ua->hmap_node,
+                                uuid_hash(uuid));
+                    ua->ls = lswitch;
+                    ds_init(&ua->actions);
+                } else {
+                    ds_put_char(&ua->actions, ' ');
+                }
+
+                ds_put_cstr(&ua->actions, "outport = ");
+                json_string_escape(lport->name, &ua->actions);
+                ds_put_cstr(&ua->actions, "; resubmit;");
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
@@ -392,12 +418,14 @@ build_pipeline(struct northd_context *ctx)
     }
 
     /* Table 1: Destination lookup for unknown MACs (priority 0). */
-    if (unknown_actions.length) {
-        ds_chomp(&unknown_actions, ' ');
-        pipeline_add(&pc, lport->lswitch, 1, 0, "1",
-                     ds_cstr(&unknown_actions));
+    struct unknown_actions *ua, *next_ua;
+    HMAP_FOR_EACH_SAFE (ua, next_ua, hmap_node, &unknown_actions) {
+        pipeline_add(&pc, ua->ls, 1, 0, "1", ds_cstr(&ua->actions));
+        hmap_remove(&unknown_actions, &ua->hmap_node);
+        ds_destroy(&ua->actions);
+        free(ua);
     }
-    ds_destroy(&unknown_actions);
+    hmap_destroy(&unknown_actions);
 
     /* Table 2: ACLs. */
     const struct nbrec_acl *acl;
