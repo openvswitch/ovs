@@ -110,5 +110,11 @@
           </p>
         </li>
       </ul>
+      <p>
+        Currently, <code>ovn-controller</code> does not support changing
+        the chassis name, integration bridge, or OVN database mid-run.
+        If these values need to change, the daemon must be restarted.
+        This behavior should be changed.
+      </p>
     </p>
 </manpage>

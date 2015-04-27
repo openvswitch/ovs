@@ -84,7 +84,10 @@ get_bridge(struct controller_ctx *ctx, const char *name)
 /* Retrieve the OVN integration bridge from the "external-ids:ovn-bridge"
  * key, the remote location from the "external-ids:ovn-remote" key, and
  * the chassis name from the "external-ids:system-id" key in the
- * Open_vSwitch table of the OVS database instance. */
+ * Open_vSwitch table of the OVS database instance.
+ *
+ * xxx ovn-controller does not support changing any of these mid-run,
+ * xxx but that should be addressed later. */
 static void
 get_core_config(struct controller_ctx *ctx)
 {
@@ -115,7 +118,6 @@ get_core_config(struct controller_ctx *ctx)
             goto try_again;
         }
 
-        /* xxx This does not support changing OVN Southbound OVSDB mid-run. */
         remote = smap_get(&cfg->external_ids, "ovn-remote");
         if (!remote) {
             VLOG_INFO("OVN OVSDB remote not specified.  Waiting...");
