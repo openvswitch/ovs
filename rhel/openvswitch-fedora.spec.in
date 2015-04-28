@@ -258,6 +258,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc FAQ.md NEWS INSTALL.DPDK.md rhel/README.RHEL
 /var/lib/openvswitch
 /var/log/openvswitch
+%ghost %attr(755,root,root) %{_rundir}/openvswitch
 %exclude %{_bindir}/ovs-benchmark
 %exclude %{_bindir}/ovs-parse-backtrace
 %exclude %{_bindir}/ovs-pcap
