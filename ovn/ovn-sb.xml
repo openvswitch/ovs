@@ -552,84 +552,71 @@
 
     <column name="actions">
       <p>
-        Below, a <var>value</var> is either a <var>constant</var> or a
-        <var>field</var>.  The following actions seem most likely to be useful:
+	Logical datapath actions, to be executed when the logical flow
+	represented by this row is the highest-priority match.
+      </p>
+
+      <p>
+	Actions share lexical syntax with the <ref column="match"/> column.  An
+	empty set of actions (or one that contains just white space or
+	comments), or a set of actions that consists of just
+	<code>drop;</code>, causes the matched packets to be dropped.
+	Otherwise, the column should contain a sequence of actions, each
+	terminated by a semicolon.
+      </p>
+
+      <p>
+	The following actions will be initially supported:
       </p>
 
       <dl>
-        <dt><code>drop;</code></dt>
-        <dd>syntactic sugar for no actions</dd>
+        <dt><code>output;</code></dt>
+        <dd>
+	  Outputs the packet to the logical port current designated by
+	  <code>outport</code>.  Output to the ingress port is implicitly
+	  dropped, that is, <code>output</code> becomes a no-op if
+	  <code>outport</code> == <code>inport</code>.
+	</dd>
 
-        <dt><code>output(<var>value</var>);</code></dt>
-        <dd>output to port, except that output to the ingress port is
-        implicitly dropped</dd>
+        <dt><code>next;</code></dt>
+        <dd>
+	  Executes the next logical datapath table as a subroutine.
+	</dd>
 
-        <dt><code>broadcast;</code></dt>
-        <dd>output to every logical port except ingress port</dd>
-
-        <dt><code>resubmit;</code></dt>
-        <dd>execute next logical datapath table as subroutine</dd>
-
-        <dt><code>set(<var>field</var>=<var>value</var>);</code></dt>
-        <dd>set data or metadata field, or copy between fields</dd>
+        <dt><code><var>field</var> = <var>constant</var>;</code></dt>
+        <dd>
+	  Sets data or metadata field <var>field</var> to constant value
+	  <var>constant</var>.
+	</dd>
       </dl>
 
       <p>
-        Following are not well thought out:
+	The following actions will likely be useful later, but they have not
+	been thought out carefully.
       </p>
 
       <dl>
+        <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
+	<dd>
+	  Extends the assignment action to allow copying between fields.
+	</dd>
+
         <dt><code>learn</code></dt>
 
         <dt><code>conntrack</code></dt>
 
-        <dt><code>with(<var>field</var>=<var>value</var>) { <var>action</var>, </code>...<code> }</code></dt>
-        <dd>execute <var>actions</var> with temporary changes to <var>fields</var></dd>
-
-        <dt><code>dec_ttl { <var>action</var>, </code>...<code> } { <var>action</var>; </code>...<code>}</code></dt>
+        <dt><code>dec_ttl { <var>action</var>, </code>...<code> } { <var>action</var>; </code>...<code>};</code></dt>
         <dd>
           decrement TTL; execute first set of actions if
           successful, second set if TTL decrement fails
         </dd>
 
-        <dt><code>icmp_reply { <var>action</var>, </code>...<code> }</code></dt>
+        <dt><code>icmp_reply { <var>action</var>, </code>...<code> };</code></dt>
         <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
 
         <dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
         <dd>generate ARP from packet, execute <var>action</var>s</dd>
       </dl>
-
-      <p>
-        Other actions can be added as needed
-        (e.g. <code>push_vlan</code>, <code>pop_vlan</code>,
-        <code>push_mpls</code>, <code>pop_mpls</code>).
-      </p>
-
-      <p>
-        Some of the OVN actions do not map directly to OpenFlow actions, e.g.:
-      </p>
-
-      <ul>
-        <li>
-          <code>with</code>: Implemented as <code>stack_push;
-          set(</code>...<code>); <var>actions</var>; stack_pop</code>.
-        </li>
-
-        <li>
-          <code>dec_ttl</code>: Implemented as <code>dec_ttl</code> followed
-          by the successful actions.  The failure case has to be implemented by
-          ovn-controller interpreting packet-ins.  It might be difficult to
-          identify the particular place in the processing pipeline in
-          <code>ovn-controller</code>; maybe some restrictions will be
-          necessary.
-        </li>
-
-        <li>
-          <code>icmp_reply</code>: Implemented by sending the packet to
-          <code>ovn-controller</code>, which generates the ICMP reply and sends
-          the packet back to <code>ovs-vswitchd</code>.
-        </li>
-      </ul>
     </column>
   </table>
 
