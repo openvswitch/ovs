@@ -18,14 +18,12 @@
 #      -D "kernel_flavor xen"
 #      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
 #
-# For XenServer version >= 6.5, replace kernel_flavor with xen_version which
-# should be the `uname -r` output.
+# For XenServer version >= 6.5, use kernel_uname which should be
+# the `uname -r` output.
 # for example:
 #
 #    rpmbuild -D "openvswitch_version 2.3.0+build123"
-#      -D "kernel_name  NAME-xen"
-#      -D "kernel_version 3.10.41-323.380416"
-#      -D "xen_version 3.10.0+2"
+#      -D "kernel_uname  3.10.0+2"
 #      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
 #
 # If tests have to be skipped while building, specify the '--without check'
@@ -36,6 +34,11 @@
 %define openvswitch_version @VERSION@
 %endif
 
+%if %{?kernel_uname:1}%{!?kernel_uname:0}
+%define kernel_name kernel
+%define kernel_version %{kernel_uname}
+%endif
+
 %if %{?kernel_name:0}%{!?kernel_name:1}
 %define kernel %(rpm -qa 'kernel*xen-devel' | head -1)
 %define kernel_name %(rpm -q --queryformat "%%{Name}" %{kernel} | sed 's/-devel//' | sed 's/kernel-//')
@@ -44,7 +47,7 @@
 %endif
 
 %if %{?xen_version:0}%{!?xen_version:1}
-%define xen_version %{kernel_version}%{kernel_flavor}
+%define xen_version %{kernel_version}%{?kernel_flavor:%{kernel_flavor}}
 %endif
 
 # bump this when breaking compatibility with userspace
@@ -78,7 +81,12 @@ Summary: Open vSwitch kernel module
 Group: System Environment/Kernel
 License: GPLv2
 Provides: %{name}-modules%{?kernel_flavor:-%{kernel_flavor}} = %{kernel_version}, openvswitch.ko.%{module_abi_version}
+%if %{?kernel_uname:0}%{!?kernel_uname:1}
 Requires: kernel%{?kernel_flavor:-%{kernel_flavor}} = %{kernel_version}
+%endif
+%if %{?kernel_uname:1}%{!?kernel_uname:0}
+Requires: kernel-uname-r = %{kernel_version}
+%endif
 
 %description %{module_package}
 Open vSwitch Linux kernel module compiled against kernel version
