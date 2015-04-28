@@ -26,6 +26,9 @@ Source: openvswitch-%{version}.tar.gz
 #Source1: openvswitch-init
 Buildroot: /tmp/openvswitch-fedora-rpm
 
+# make check dependencies
+BuildRequires: procps-ng
+
 Requires(post):  systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
