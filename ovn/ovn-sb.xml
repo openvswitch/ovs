@@ -228,7 +228,7 @@
     </p>
 
     <column name="logical_datapath">
-      The logical datapath to which the logical port belongs.  A logical
+      The logical datapath to which the logical flow belongs.  A logical
       datapath implements a logical pipeline among the ports in the <ref
       table="Bindings"/> table associated with it.  (No table represents a
       logical datapath.)  In practice, the pipeline in a given logical datapath
