@@ -67,6 +67,7 @@ add_port () {
     CONTAINER="$3"
     ADDRESS="$4"
     GATEWAY="$5"
+    MTU="$6"
 
     if [ "$#" -lt 3 ]; then
         usage
@@ -115,6 +116,11 @@ add_port () {
     # Move "${PORTNAME}_c" inside the container and changes its name.
     ip link set "${PORTNAME}_c" netns "$PID"
     ip netns exec "$PID" ip link set dev "${PORTNAME}_c" name "$INTERFACE"
+    
+    # Change the MTU
+    if [ -n "$MTU" ]; then
+        ip netns exec "$PID" ip link set dev "$INTERFACE" mtu "$MTU"
+    fi
     ip netns exec "$PID" ip link set "$INTERFACE" up
 
     if [ -n "$ADDRESS" ]; then
