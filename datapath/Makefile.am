@@ -42,15 +42,15 @@ COMPAT_EXPORTS := $(shell $(COMPAT_GET_EXPORTS))
 check-export-symbol:
 	@for fun_ in $(COMPAT_FUNCTIONS); do \
 	   if ! grep -- $${fun_} $(top_srcdir)/datapath/linux/compat/build-aux/export-check-whitelist > /dev/null; then \
-	      if ! echo $${fun_} | grep -E '^(rpl|ovs)_'; then \
-	         echo "Should prefix $${fun_} with rpl_ or ovs_."; \
+	      if ! echo $${fun_} | grep -q -E '^(rpl|ovs)_'; then \
+	         echo "error: $${fun_}() needs to be prefixed with 'rpl_' or 'ovs_'."; \
 	         exit 1; \
 	      fi; \
 	   fi; \
 	done
 	@for fun_ in $(COMPAT_EXPORTS); do \
-	   if ! echo $${fun_} | grep -E '^(rpl|ovs)_'; then \
-	      echo "Should prefix $${fun_} with rpl_ or ovs_."; \
+	   if ! echo $${fun_} | grep -q -E '^(rpl|ovs)_'; then \
+	      echo "error: $${fun_}() needs to be prefixed with 'rpl_' or 'ovs_'."; \
 	      exit 1; \
 	   fi; \
 	done
