@@ -40,6 +40,7 @@ UINT64 ovsTimeIncrementPerTick;
 
 extern NDIS_HANDLE gOvsExtDriverHandle;
 extern NDIS_HANDLE gOvsExtDriverObject;
+extern PDEVICE_OBJECT gOvsDeviceObject;
 
 /*
  * Reference count used to prevent premature deallocation of the global switch
@@ -203,11 +204,12 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
-    status = OvsTunnelFilterInitialize(gOvsExtDriverObject);
+    status = OvsInitTunnelFilter(gOvsExtDriverObject, gOvsDeviceObject);
     if (status != NDIS_STATUS_SUCCESS) {
         OvsUninitSwitchContext(switchContext);
         goto create_switch_done;
     }
+
     *switchContextOut = switchContext;
 
 create_switch_done:
@@ -261,7 +263,7 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
     if (switchContext)
     {
         dpNo = switchContext->dpNo;
-        OvsTunnelFilterUninitialize(gOvsExtDriverObject);
+        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsClearAllSwitchVports(switchContext);
         OvsUninitSwitchContext(switchContext);
     }

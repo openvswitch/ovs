@@ -18,9 +18,9 @@
 #define __TUNNEL_INTF_H_ 1
 
 /* Tunnel callout driver load/unload functions */
-NTSTATUS OvsTunnelFilterInitialize(PDRIVER_OBJECT driverObject);
+NTSTATUS OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject);
 
-VOID OvsTunnelFilterUninitialize(PDRIVER_OBJECT driverObject);
+VOID OvsUninitTunnelFilter(PDRIVER_OBJECT driverObject);
 
 VOID OvsRegisterSystemProvider(PVOID deviceObject);
 
