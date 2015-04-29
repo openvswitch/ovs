@@ -240,7 +240,10 @@ def idl_set(idl, commands, step):
             old_notify = idl.notify
 
             def notify(event, row, updates=None):
-                upcol = updates._data.keys()[0] if updates else None
+                if updates:
+                    upcol = updates._data.keys()[0]
+                else:
+                    upcol = None
                 events.append("%s|%s|%s" % (event, row.i, upcol))
                 idl.notify = old_notify
 
