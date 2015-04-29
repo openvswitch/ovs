@@ -880,24 +880,14 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
         if (operation >= OP_FLOW) {
             struct expr_match *m;
             struct test_rule *test_rule;
-            uint32_t n_conjs;
 
-            n_conjs = expr_to_matches(modified, NULL, &matches);
+            expr_to_matches(modified, NULL, &matches);
 
             classifier_init(&cls, NULL);
             HMAP_FOR_EACH (m, hmap_node, &matches) {
                 test_rule = xmalloc(sizeof *test_rule);
                 cls_rule_init(&test_rule->cr, &m->match, 0);
                 classifier_insert(&cls, &test_rule->cr, m->conjunctions, m->n);
-            }
-            for (uint32_t conj_id = 1; conj_id <= n_conjs; conj_id++) {
-                struct match match;
-                match_init_catchall(&match);
-                match_set_conj_id(&match, conj_id);
-
-                test_rule = xmalloc(sizeof *test_rule);
-                cls_rule_init(&test_rule->cr, &match, 0);
-                classifier_insert(&cls, &test_rule->cr, NULL, 0);
             }
         }
         for (int subst = 0; subst < 1 << (n_bits * n_vars); subst++) {

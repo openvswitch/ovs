@@ -355,7 +355,11 @@ struct expr *expr_normalize(struct expr *);
 bool expr_honors_invariants(const struct expr *);
 bool expr_is_simplified(const struct expr *);
 bool expr_is_normalized(const struct expr *);
+
+/* Converting expressions to OpenFlow flows. */
 
+/* An OpenFlow match generated from a Boolean expression.  See
+ * expr_to_matches() for more information. */
 struct expr_match {
     struct hmap_node hmap_node;
     struct match match;

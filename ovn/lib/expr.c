@@ -2242,6 +2242,10 @@ add_conjunction(const struct expr *and, const struct simap *ports,
                 }
             }
         }
+
+        /* Add the flow that matches on conj_id. */
+        match_set_conj_id(&match, *n_conjsp);
+        expr_match_add(matches, expr_match_new(&match, 0, 0, 0));
     }
 }
 
@@ -2263,6 +2267,20 @@ add_cmp_flow(const struct expr *cmp, const struct simap *ports,
  * number of conjunctive match IDs consumed by 'matches', which uses
  * conjunctive match IDs beginning with 0; the caller must offset or remap them
  * into the desired range as necessary.
+ *
+ * The matches inserted into 'matches' will be of three distinct kinds:
+ *
+ *     - Ordinary flows.  The caller should add these OpenFlow flows with
+ *       its desired actions.
+ *
+ *     - Conjunctive flows, distinguished by 'n > 0' in the expr_match
+ *       structure.  The caller should add these OpenFlow flows with the
+ *       conjunction(id, k/n) actions as specified in the 'conjunctions' array,
+ *       remapping the ids.
+ *
+ *     - conj_id flows, distinguished by matching on the "conj_id" field.  The
+ *       caller should remap the conj_id and add the OpenFlow flow with its
+ *       desired actions.
  *
  * 'ports' must be a map from strings (presumably names of ports) to integers.
  * Any comparisons against string fields in 'expr' are translated into integers
