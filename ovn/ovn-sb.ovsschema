@@ -47,6 +47,10 @@
             "columns": {
                 "logical_datapath": {"type": "uuid"},
                 "logical_port": {"type": "string"},
+                "tunnel_key": {
+                     "type": {"key": {"type": "integer",
+                                      "minInteger": 1,
+                                      "maxInteger": 65535}}},
                 "parent_port": {"type": {"key": "string", "min": 0, "max": 1}},
                 "tag": {
                      "type": {"key": {"type": "integer",
@@ -57,6 +61,6 @@
                 "mac": {"type": {"key": "string",
                                  "min": 0,
                                  "max": "unlimited"}}},
-            "indexes": [["logical_port"]],
+            "indexes": [["logical_port"], ["tunnel_key"]],
             "isRoot": true}},
     "version": "1.0.0"}

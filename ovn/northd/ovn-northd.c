@@ -444,6 +444,45 @@ tags_equal(const struct sbrec_bindings *binding,
     return binding->n_tag ? (binding->tag[0] == lport->tag[0]) : true;
 }
 
+struct binding_hash_node {
+    struct hmap_node lp_node; /* In 'lp_map', by binding->logical_port. */
+    struct hmap_node tk_node; /* In 'tk_map', by binding->tunnel_key. */
+    const struct sbrec_bindings *binding;
+};
+
+static bool
+tunnel_key_in_use(const struct hmap *tk_hmap, uint16_t tunnel_key)
+{
+    const struct binding_hash_node *hash_node;
+
+    HMAP_FOR_EACH_IN_BUCKET (hash_node, tk_node, hash_int(tunnel_key, 0),
+                             tk_hmap) {
+        if (hash_node->binding->tunnel_key == tunnel_key) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Chooses and returns a positive tunnel key that is not already in use in
+ * 'tk_hmap'.  Returns 0 if all tunnel keys are in use. */
+static uint16_t
+choose_tunnel_key(const struct hmap *tk_hmap)
+{
+    static uint16_t prev;
+
+    for (uint16_t key = prev + 1; key != prev; key++) {
+        if (!tunnel_key_in_use(tk_hmap, key)) {
+            prev = key;
+            return key;
+        }
+    }
+
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    VLOG_WARN_RL(&rl, "all tunnel keys exhausted");
+    return 0;
+}
+
 /*
  * When a change has occurred in the OVN_Northbound database, we go through and
  * make sure that the contents of the Bindings table in the OVN_Southbound
@@ -453,14 +492,8 @@ tags_equal(const struct sbrec_bindings *binding,
 static void
 set_bindings(struct northd_context *ctx)
 {
-    struct hmap bindings_hmap;
     const struct sbrec_bindings *binding;
     const struct nbrec_logical_port *lport;
-
-    struct binding_hash_node {
-        struct hmap_node node;
-        const struct sbrec_bindings *binding;
-    } *hash_node, *hash_node_next;
 
     /*
      * We will need to look up a binding for every logical port.  We don't want
@@ -468,23 +501,32 @@ set_bindings(struct northd_context *ctx)
      * them on the logical port.
      *
      * As we go through every logical port, we will update the binding if it
-     * exists or create one otherwise.  When the update is done, we'll remove it
-     * from the hashmap.  At the end, any bindings left in the hashmap are for
-     * logical ports that have been deleted.
+     * exists or create one otherwise.  When the update is done, we'll remove
+     * it from the hashmap.  At the end, any bindings left in the hashmap are
+     * for logical ports that have been deleted.
+     *
+     * We index the logical_port column because that's the shared key between
+     * the OVN_NB and OVN_SB databases.  We index the tunnel_key column to
+     * allow us to choose a unique tunnel key for any Binding rows we have to
+     * add.
      */
-    hmap_init(&bindings_hmap);
+    struct hmap lp_hmap = HMAP_INITIALIZER(&lp_hmap);
+    struct hmap tk_hmap = HMAP_INITIALIZER(&tk_hmap);
 
     SBREC_BINDINGS_FOR_EACH(binding, ctx->ovnsb_idl) {
-        hash_node = xzalloc(sizeof *hash_node);
+        struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
         hash_node->binding = binding;
-        hmap_insert(&bindings_hmap, &hash_node->node,
-                hash_string(binding->logical_port, 0));
+        hmap_insert(&lp_hmap, &hash_node->lp_node,
+                    hash_string(binding->logical_port, 0));
+        hmap_insert(&tk_hmap, &hash_node->tk_node,
+                    hash_int(binding->tunnel_key, 0));
     }
 
     NBREC_LOGICAL_PORT_FOR_EACH(lport, ctx->ovnnb_idl) {
+        struct binding_hash_node *hash_node;
         binding = NULL;
-        HMAP_FOR_EACH_WITH_HASH(hash_node, node,
-                hash_string(lport->name, 0), &bindings_hmap) {
+        HMAP_FOR_EACH_WITH_HASH(hash_node, lp_node,
+                                hash_string(lport->name, 0), &lp_hmap) {
             if (!strcmp(lport->name, hash_node->binding->logical_port)) {
                 binding = hash_node->binding;
                 break;
@@ -502,9 +544,7 @@ set_bindings(struct northd_context *ctx)
             /* We found an existing binding for this logical port.  Update its
              * contents. */
 
-            hmap_remove(&bindings_hmap, &hash_node->node);
-            free(hash_node);
-            hash_node = NULL;
+            hmap_remove(&lp_hmap, &hash_node->lp_node);
 
             if (!macs_equal(binding->mac, binding->n_mac,
                         lport->macs, lport->n_macs)) {
@@ -524,6 +564,11 @@ set_bindings(struct northd_context *ctx)
         } else {
             /* There is no binding for this logical port, so create one. */
 
+            uint16_t tunnel_key = choose_tunnel_key(&tk_hmap);
+            if (!tunnel_key) {
+                continue;
+            }
+
             binding = sbrec_bindings_insert(ctx->ovnsb_txn);
             sbrec_bindings_set_logical_port(binding, lport->name);
             sbrec_bindings_set_mac(binding,
@@ -533,16 +578,32 @@ set_bindings(struct northd_context *ctx)
                 sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
             }
 
+            sbrec_bindings_set_tunnel_key(binding, tunnel_key);
             sbrec_bindings_set_logical_datapath(binding, logical_datapath);
+
+            /* Add the tunnel key to the tk_hmap so that we don't try to use it
+             * for another port.  (We don't want it in the lp_hmap because that
+             * would just get the Bindings record deleted later.) */
+            struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
+            hash_node->binding = binding;
+            hmap_insert(&tk_hmap, &hash_node->tk_node,
+                        hash_int(binding->tunnel_key, 0));
         }
     }
 
-    HMAP_FOR_EACH_SAFE(hash_node, hash_node_next, node, &bindings_hmap) {
-        hmap_remove(&bindings_hmap, &hash_node->node);
+    struct binding_hash_node *hash_node;
+    HMAP_FOR_EACH (hash_node, lp_node, &lp_hmap) {
+        hmap_remove(&lp_hmap, &hash_node->lp_node);
         sbrec_bindings_delete(hash_node->binding);
+    }
+    hmap_destroy(&lp_hmap);
+
+    struct binding_hash_node *hash_node_next;
+    HMAP_FOR_EACH_SAFE (hash_node, hash_node_next, tk_node, &tk_hmap) {
+        hmap_remove(&tk_hmap, &hash_node->tk_node);
         free(hash_node);
     }
-    hmap_destroy(&bindings_hmap);
+    hmap_destroy(&tk_hmap);
 }
 
 static void
@@ -733,6 +794,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tag);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_parent_port);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_logical_datapath);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tunnel_key);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_table_id);

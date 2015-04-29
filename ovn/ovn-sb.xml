@@ -665,6 +665,20 @@
       prescribe a particular format for the logical port ID.
     </column>
 
+    <column name="tunnel_key">
+      <p>
+        A number that represents the logical port in the key (e.g. VXLAN VNI or
+        STT key) field carried within tunnel protocol packets.  (This avoids
+        wasting space for a whole UUID in tunneled packets.  It also allows OVN
+        to support encapsulations that cannot fit an entire UUID in their
+        tunnel keys.)
+      </p>
+
+      <p>
+        Tunnel ID 0 is reserved for internal use within OVN.
+      </p>
+    </column>
+
     <column name="parent_port">
       For containers created inside a VM, this is taken from
       <ref table="Logical_Port" column="parent_name" db="OVN_Northbound"/>
