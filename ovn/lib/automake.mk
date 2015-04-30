@@ -4,6 +4,8 @@ ovn_lib_libovn_la_LDFLAGS = \
         -Wl,--version-script=$(top_builddir)/ovn/lib/libovn.sym \
         $(AM_LDFLAGS)
 ovn_lib_libovn_la_SOURCES = \
+	ovn/lib/actions.c \
+	ovn/lib/actions.h \
 	ovn/lib/expr.c \
 	ovn/lib/expr.h \
 	ovn/lib/lex.c \

@@ -200,8 +200,8 @@ ip6.src == ::1 => ip6.src == 0x1
 inport == "eth0"
 !(inport != "eth0") => inport == "eth0"
 
-ip4.src == "eth0" => Can't compare integer field ip4.src to string constant.
-inport == 1 => Can't compare string field inport to integer constant.
+ip4.src == "eth0" => Integer field ip4.src is not compatible with string constant.
+inport == 1 => String field inport is not compatible with integer constant.
 
 ip4.src > {1, 2, 3} => Only == and != operators may be used with value sets.
 eth.type > 0x800 => Only == and != operators may be used with nominal field eth.type.
@@ -253,7 +253,7 @@ eth.dst == {} => Syntax error at `}' expecting constant.
 
 eth.src > 00:00:00:00:11:11/00:00:00:00:ff:ff => Only == and != operators may be used with masked constants.  Consider using subfields instead (e.g. eth.src[0..15] > 0x1111 in place of eth.src > 00:00:00:00:11:11/00:00:00:00:ff:ff).
 
-ip4.src == ::1 => Cannot compare 128-bit constant against 32-bit field ip4.src.
+ip4.src == ::1 => 128-bit constant is not compatible with 32-bit field ip4.src.
 
 1 == eth.type == 2 => Range expressions must have the form `x < field < y' or `x > field > y', with each `<' optionally replaced by `<=' or `>' by `>=').
 ]])
@@ -351,31 +351,74 @@ AT_SETUP([ovn -- converting expressions to flows -- string fields])
 expr_to_flow () {
     echo "$1" | ovstest test-ovn expr-to-flows | sort
 }
-AT_CHECK([expr_to_flow 'inport == "eth0"'], [0], [in_port=5
+AT_CHECK([expr_to_flow 'inport == "eth0"'], [0], [reg6=0x5
 ])
-AT_CHECK([expr_to_flow 'inport == "eth1"'], [0], [in_port=6
+AT_CHECK([expr_to_flow 'inport == "eth1"'], [0], [reg6=0x6
 ])
 AT_CHECK([expr_to_flow 'inport == "eth2"'], [0], [(no flows)
 ])
 AT_CHECK([expr_to_flow 'inport == "eth0" && ip'], [0], [dnl
-ip,in_port=5
-ipv6,in_port=5
+ip,reg6=0x5
+ipv6,reg6=0x5
 ])
 AT_CHECK([expr_to_flow 'inport == "eth1" && ip'], [0], [dnl
-ip,in_port=6
-ipv6,in_port=6
+ip,reg6=0x6
+ipv6,reg6=0x6
 ])
 AT_CHECK([expr_to_flow 'inport == "eth2" && ip'], [0], [(no flows)
 ])
 AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2", "LOCAL"}'], [0],
-[in_port=5
-in_port=6
-in_port=LOCAL
+[reg6=0x5
+reg6=0x6
+reg6=0xfffe
 ])
 AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2"} && ip'], [0], [dnl
-ip,in_port=5
-ip,in_port=6
-ipv6,in_port=5
-ipv6,in_port=6
+ip,reg6=0x5
+ip,reg6=0x6
+ipv6,reg6=0x5
+ipv6,reg6=0x6
 ])
+AT_CLEANUP
+
+AT_SETUP([ovn -- action parsing])
+dnl Text before => is input, text after => is expected output.
+AT_DATA([test-cases.txt], [[
+# Positive tests.
+drop; => actions=drop, prereqs=1
+next; => actions=resubmit(,11), prereqs=1
+output; => actions=resubmit(,64), prereqs=1
+outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,11),set_field:0xfffe->reg7,resubmit(,11), prereqs=1
+tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
+vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
+vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
+
+## Negative tests.
+
+; => Syntax error at `;'.
+xyzzy; => Syntax error at `xyzzy' expecting action.
+next; 123; => Syntax error at `123'.
+next; xyzzy; => Syntax error at `xyzzy' expecting action.
+
+# "drop;" must be on its own:
+drop; next; => Syntax error at `next' expecting end of input.
+next; drop; => Syntax error at `drop' expecting action.
+
+# Missing ";":
+next => Syntax error at end of input expecting ';'.
+
+inport[1] = 1; => Cannot select subfield of string field inport.
+ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
+eth.dst[40] == 1; => Syntax error at `==' expecting `='.
+ip = 1; => Can't assign to predicate symbol ip.
+ip.proto = 6; => Field ip.proto is not modifiable.
+inport = {"a", "b"}; => Assignments require a single value.
+inport = {}; => Syntax error at `}' expecting constant.
+bad_prereq = 123; => Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
+self_recurse = 123; => Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
+vlan.present = 0; => Can't assign to predicate symbol vlan.present.
+]])
+sed 's/ =>.*//' test-cases.txt > input.txt
+sed 's/.* => //' test-cases.txt > expout
+AT_CHECK([ovstest test-ovn parse-actions < input.txt], [0], [expout])
 AT_CLEANUP

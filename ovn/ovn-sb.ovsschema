@@ -38,7 +38,7 @@
                 "logical_datapath": {"type": "uuid"},
                 "table_id": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
-                                              "maxInteger": 127}}},
+                                              "maxInteger": 31}}},
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
                                               "maxInteger": 65535}}},

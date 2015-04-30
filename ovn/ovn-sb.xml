@@ -587,7 +587,19 @@
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>
         <dd>
 	  Sets data or metadata field <var>field</var> to constant value
-	  <var>constant</var>.
+	  <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
+	  logical output port.  Assigning to a field with prerequisites
+	  implicitly adds those prerequisites to <ref column="match"/>; thus,
+	  for example, a flow that sets <code>tcp.dst</code> applies only to
+	  TCP flows, regardless of whether its <ref column="match"/> mentions
+	  any TCP field.  To set only a subset of bits in a field,
+	  <var>field</var> may be a subfield or <var>constant</var> may be
+	  masked, e.g. <code>vlan.pcp[2] = 1;</code> and <code>vlan.pcp =
+	  4/4;</code> both set the most sigificant bit of the VLAN PCP.  Not
+	  all fields are modifiable (e.g. <code>eth.type</code> and
+	  <code>ip.proto</code> are read-only), and not all modifiable fields
+	  may be partially modified (e.g. <code>ip.ttl</code> must assigned as
+	  a whole).
 	</dd>
       </dl>
 

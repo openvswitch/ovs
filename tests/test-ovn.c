@@ -22,6 +22,9 @@
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "match.h"
+#include "ofp-actions.h"
+#include "ofpbuf.h"
+#include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
 #include "ovn/lib/lex.h"
 #include "ovs-thread.h"
@@ -132,13 +135,15 @@ create_symtab(struct shash *symtab)
 {
     shash_init(symtab);
 
-    expr_symtab_add_string(symtab, "inport", MFF_IN_PORT, NULL);
-    expr_symtab_add_string(symtab, "outport", MFF_ACTSET_OUTPUT, NULL);
+    /* Reserve a pair of registers for the logical inport and outport.  A full
+     * 32-bit register each is bigger than we need, but the expression code
+     * doesn't yet support string fields that occupy less than a full OXM. */
+    expr_symtab_add_string(symtab, "inport", MFF_REG6, NULL);
+    expr_symtab_add_string(symtab, "outport", MFF_REG7, NULL);
 
     expr_symtab_add_field(symtab, "xreg0", MFF_XREG0, NULL, false);
     expr_symtab_add_field(symtab, "xreg1", MFF_XREG1, NULL, false);
     expr_symtab_add_field(symtab, "xreg2", MFF_XREG2, NULL, false);
-    expr_symtab_add_field(symtab, "xreg3", MFF_XREG3, NULL, false);
 
     expr_symtab_add_subfield(symtab, "reg0", NULL, "xreg0[32..63]");
     expr_symtab_add_subfield(symtab, "reg1", NULL, "xreg0[0..31]");
@@ -146,8 +151,6 @@ create_symtab(struct shash *symtab)
     expr_symtab_add_subfield(symtab, "reg3", NULL, "xreg1[0..31]");
     expr_symtab_add_subfield(symtab, "reg4", NULL, "xreg2[32..63]");
     expr_symtab_add_subfield(symtab, "reg5", NULL, "xreg2[0..31]");
-    expr_symtab_add_subfield(symtab, "reg6", NULL, "xreg3[32..63]");
-    expr_symtab_add_subfield(symtab, "reg7", NULL, "xreg3[0..31]");
 
     expr_symtab_add_field(symtab, "eth.src", MFF_ETH_SRC, NULL, false);
     expr_symtab_add_field(symtab, "eth.dst", MFF_ETH_DST, NULL, false);
@@ -1110,6 +1113,60 @@ test_exhaustive(struct ovs_cmdl_context *ctx OVS_UNUSED)
     shash_destroy(&symtab);
 }
 
+/* Actions. */
+
+static void
+test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    struct shash symtab;
+    struct simap ports;
+    struct ds input;
+
+    create_symtab(&symtab);
+
+    simap_init(&ports);
+    simap_put(&ports, "eth0", 5);
+    simap_put(&ports, "eth1", 6);
+    simap_put(&ports, "LOCAL", ofp_to_u16(OFPP_LOCAL));
+
+    ds_init(&input);
+    while (!ds_get_test_line(&input, stdin)) {
+        struct ofpbuf ofpacts;
+        struct expr *prereqs;
+        char *error;
+
+        ofpbuf_init(&ofpacts, 0);
+        error = actions_parse_string(ds_cstr(&input), &symtab, &ports, 11,
+                                     &ofpacts, &prereqs);
+        if (!error) {
+            struct ds output;
+
+            ds_init(&output);
+            ds_put_cstr(&output, "actions=");
+            ofpacts_format(ofpacts.data, ofpacts.size, &output);
+            ds_put_cstr(&output, ", prereqs=");
+            if (prereqs) {
+                expr_format(prereqs, &output);
+            } else {
+                ds_put_char(&output, '1');
+            }
+            puts(ds_cstr(&output));
+            ds_destroy(&output);
+        } else {
+            puts(error);
+            free(error);
+        }
+
+        expr_destroy(prereqs);
+        ofpbuf_uninit(&ofpacts);
+    }
+    ds_destroy(&input);
+
+    simap_destroy(&ports);
+    expr_symtab_destroy(&symtab);
+    shash_destroy(&symtab);
+}
+
 static unsigned int
 parse_relops(const char *s)
 {
@@ -1266,7 +1323,10 @@ test_ovn_main(int argc, char *argv[])
     }
 
     static const struct ovs_cmdl_command commands[] = {
+        /* Lexer. */
         {"lex", NULL, 0, 0, test_lex},
+
+        /* Expressions. */
         {"parse-expr", NULL, 0, 0, test_parse_expr},
         {"annotate-expr", NULL, 0, 0, test_annotate_expr},
         {"simplify-expr", NULL, 0, 0, test_simplify_expr},
@@ -1276,6 +1336,10 @@ test_ovn_main(int argc, char *argv[])
         {"composition", NULL, 1, 1, test_composition},
         {"tree-shape", NULL, 1, 1, test_tree_shape},
         {"exhaustive", NULL, 1, 1, test_exhaustive},
+
+        /* Actions. */
+        {"parse-actions", NULL, 0, 0, test_parse_actions},
+
         {NULL, NULL, 0, 0, NULL},
     };
     struct ovs_cmdl_context ctx;

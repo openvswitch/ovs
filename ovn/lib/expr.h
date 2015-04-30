@@ -60,6 +60,7 @@
 #include "meta-flow.h"
 
 struct ds;
+struct ofpbuf;
 struct shash;
 struct simap;
 
@@ -341,14 +342,16 @@ expr_from_node(const struct ovs_list *node)
 
 void expr_format(const struct expr *, struct ds *);
 void expr_print(const struct expr *);
-struct expr *expr_parse(struct lexer *, const struct shash *, char **errorp);
-struct expr *expr_parse_string(const char *, const struct shash *,
+struct expr *expr_parse(struct lexer *, const struct shash *symtab,
+                        char **errorp);
+struct expr *expr_parse_string(const char *, const struct shash *symtab,
                                char **errorp);
 
 struct expr *expr_clone(struct expr *);
 void expr_destroy(struct expr *);
 
-struct expr *expr_annotate(struct expr *, const struct shash *, char **errorp);
+struct expr *expr_annotate(struct expr *, const struct shash *symtab,
+                           char **errorp);
 struct expr *expr_simplify(struct expr *);
 struct expr *expr_normalize(struct expr *);
 
@@ -371,5 +374,11 @@ uint32_t expr_to_matches(const struct expr *, const struct simap *ports,
                          struct hmap *matches);
 void expr_matches_destroy(struct hmap *matches);
 void expr_matches_print(const struct hmap *matches, FILE *);
+
+/* Action parsing helper. */
+
+char *expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
+                            const struct simap *ports, struct ofpbuf *ofpacts,
+                            struct expr **prereqsp);
 
 #endif /* ovn/expr.h */
