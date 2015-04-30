@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,9 @@ struct match {
     struct flow flow;
     struct flow_wildcards wc;
 };
+
+/* Initializer for a "struct match" that matches every packet. */
+#define MATCH_CATCHALL_INITIALIZER { .flow.dl_type = 0 }
 
 void match_init(struct match *,
                 const struct flow *, const struct flow_wildcards *);
