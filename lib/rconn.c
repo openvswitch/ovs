@@ -1267,7 +1267,7 @@ static void
 state_transition(struct rconn *rc, enum state state)
     OVS_REQUIRES(rc->mutex)
 {
-    rc->seqno += (rc->state == S_ACTIVE) != (state == S_ACTIVE);
+    rc->seqno += is_connected_state(rc->state) != is_connected_state(state);
     if (is_connected_state(state) && !is_connected_state(rc->state)) {
         rc->probably_admitted = false;
     }
