@@ -291,7 +291,7 @@ if $ovn; then
     ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/db.sock
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
-    ovs-vsctl add-br br-int
+    ovs-vsctl add-br br-int -- set bridge br-int fail-mode=secure
 
     rungdb $gdb_ovn_northd ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
