@@ -242,6 +242,9 @@ main(int argc, char *argv[])
     ovsdb_idl_destroy(ctx.ovnsb_idl);
 
     free(ctx.br_int_name);
+    free(ctx.chassis_id);
+    free(ovnsb_remote);
+    free(ovs_remote);
 
     exit(retval);
 }
@@ -305,7 +308,7 @@ parse_options(int argc, char *argv[])
     if (argc == 0) {
         ovs_remote = xasprintf("unix:%s/db.sock", ovs_rundir());
     } else if (argc == 1) {
-        ovs_remote = argv[0];
+        ovs_remote = xstrdup(argv[0]);
     } else {
         VLOG_FATAL("exactly zero or one non-option argument required; "
                    "use --help for usage");
