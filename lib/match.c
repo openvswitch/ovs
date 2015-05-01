@@ -21,6 +21,7 @@
 #include "dynamic-string.h"
 #include "ofp-util.h"
 #include "packets.h"
+#include "tun-metadata.h"
 
 /* Converts the flow in 'flow' into a match in 'match', with the given
  * 'wildcards'. */
@@ -31,6 +32,7 @@ match_init(struct match *match,
     match->flow = *flow;
     match->wc = *wc;
     match_zero_wildcarded_fields(match);
+    memset(&match->tun_md, 0, sizeof match->tun_md);
 }
 
 /* Converts a flow into a match.  It sets the wildcard masks based on
@@ -44,6 +46,8 @@ match_wc_init(struct match *match, const struct flow *flow)
     flow_wildcards_init_for_packet(&match->wc, flow);
     WC_MASK_FIELD(&match->wc, regs);
     WC_MASK_FIELD(&match->wc, metadata);
+
+    memset(&match->tun_md, 0, sizeof match->tun_md);
 }
 
 /* Initializes 'match' as a "catch-all" match that matches every packet. */
@@ -52,6 +56,7 @@ match_init_catchall(struct match *match)
 {
     memset(&match->flow, 0, sizeof match->flow);
     flow_wildcards_init_catchall(&match->wc);
+    memset(&match->tun_md, 0, sizeof match->tun_md);
 }
 
 /* For each bit or field wildcarded in 'match', sets the corresponding bit or
@@ -897,6 +902,7 @@ format_flow_tunnel(struct ds *s, const struct match *match)
         format_flags(s, flow_tun_flag_to_string, tnl->flags, '|');
         ds_put_char(s, ',');
     }
+    tun_metadata_match_format(s, match);
 }
 
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
@@ -912,7 +918,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);
@@ -1226,6 +1232,7 @@ minimatch_expand(const struct minimatch *src, struct match *dst)
 {
     miniflow_expand(&src->flow, &dst->flow);
     minimask_expand(&src->mask, &dst->wc);
+    memset(&dst->tun_md, 0, sizeof dst->tun_md);
 }
 
 /* Returns true if 'a' and 'b' match the same packets, false otherwise.  */

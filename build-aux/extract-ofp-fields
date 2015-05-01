@@ -14,12 +14,13 @@ VERSION = {"1.0": 0x01,
            "1.4": 0x05,
            "1.5": 0x06}
 
-TYPES = {"u8":   (1, False),
-         "be16": (2, False),
-         "be32": (4, False),
-         "MAC":  (6, False),
-         "be64": (8, False),
-         "IPv6": (16, False)}
+TYPES = {"u8":       (1,   False),
+         "be16":     (2,   False),
+         "be32":     (4,   False),
+         "MAC":      (6,   False),
+         "be64":     (8,   False),
+         "IPv6":     (16,  False),
+         "tunnelMD": (124, True)}
 
 FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
               "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),

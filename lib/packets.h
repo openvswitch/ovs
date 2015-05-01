@@ -26,6 +26,7 @@
 #include "openvswitch/types.h"
 #include "random.h"
 #include "hash.h"
+#include "tun-metadata.h"
 #include "util.h"
 
 struct dp_packet;
@@ -44,6 +45,7 @@ struct flow_tnl {
     ovs_be16 gbp_id;
     uint8_t  gbp_flags;
     uint8_t  pad1[5];        /* Pad to 64 bits. */
+    struct tun_metadata metadata;
 };
 
 /* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port

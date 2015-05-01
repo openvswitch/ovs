@@ -19,6 +19,7 @@
 
 #include "flow.h"
 #include "packets.h"
+#include "tun-metadata.h"
 
 struct ds;
 
@@ -33,6 +34,7 @@ struct ds;
 struct match {
     struct flow flow;
     struct flow_wildcards wc;
+    struct tun_metadata_allocation tun_md;
 };
 
 /* Initializer for a "struct match" that matches every packet. */

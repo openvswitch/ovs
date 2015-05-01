@@ -418,6 +418,10 @@ commands. The format for \fIoptions\fR is given in \fBOption Syntax\fR below.
 Note that a given mapping should not be changed while it is in active use by
 a flow. The result of doing so is undefined.
 
+Currently, the Geneve mapping table is shared between all OpenFlow
+switches in a given instance of Open vSwitch. This restriction will
+be lifted in the future to allow for easier management.
+
 These commands are Nicira extensions to OpenFlow and require Open vSwitch
 2.5 or later.
 
@@ -1177,6 +1181,19 @@ set.
 .IP
 For more information, please see the corresponding IETF draft:
 https://tools.ietf.org/html/draft-smith-vxlan-group-policy
+.
+.IP "\fBtun_metadata\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
+Matches \fIvalue\fR either exactly or with optional \fImask\fR in
+tunnel metadata field number \fIidx\fR (numbered from 0 to 63).
+Tunnel metadata fields can be dynamically assigned onto the data
+contained in the options of Geneve packets using the commands
+described in the section \fBOpenFlow Switch Geneve Option Table
+Commands\fR. Once assigned, the length of the field is variable
+according to the size of the option. Before updating a mapping in
+the option table, flows with references to it should be removed,
+otherwise the result is non-deterministic.
+.IP
+These fields were introduced in Open vSwitch 2.5.
 .
 .IP "\fBreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
 Matches \fIvalue\fR either exactly or with optional \fImask\fR in

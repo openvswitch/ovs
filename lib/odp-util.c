@@ -35,6 +35,7 @@
 #include "packets.h"
 #include "simap.h"
 #include "timeval.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
 #include "uuid.h"
@@ -1317,45 +1318,10 @@ ovs_frag_type_to_string(enum ovs_frag_type type)
     }
 }
 
-#define GENEVE_OPT(class, type) ((OVS_FORCE uint32_t)(class) << 8 | (type))
-static int
-parse_geneve_opts(const struct nlattr *attr)
-{
-    int opts_len = nl_attr_get_size(attr);
-    const struct geneve_opt *opt = nl_attr_get(attr);
-
-    while (opts_len > 0) {
-        int len;
-
-        if (opts_len < sizeof(*opt)) {
-            return -EINVAL;
-        }
-
-        len = sizeof(*opt) + opt->length * 4;
-        if (len > opts_len) {
-            return -EINVAL;
-        }
-
-        switch (GENEVE_OPT(opt->opt_class, opt->type)) {
-        default:
-            if (opt->type & GENEVE_CRIT_OPT_TYPE) {
-                return -EINVAL;
-            }
-        };
-
-        opt = opt + len / sizeof(*opt);
-        opts_len -= len;
-    };
-
-    return 0;
-}
-
 static enum odp_key_fitness
 odp_tun_key_from_attr__(const struct nlattr *attr,
-                        const struct nlattr *flow_attrs OVS_UNUSED,
-                        size_t flow_attr_len OVS_UNUSED,
-                        const struct flow_tnl *src_tun OVS_UNUSED,
-                        struct flow_tnl *tun)
+                        const struct nlattr *flow_attrs, size_t flow_attr_len,
+                        const struct flow_tnl *src_tun, struct flow_tnl *tun)
 {
     unsigned int left;
     const struct nlattr *a;
@@ -1424,15 +1390,14 @@ odp_tun_key_from_attr__(const struct nlattr *attr,
 
             break;
         }
-        case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: {
-            if (parse_geneve_opts(a)) {
+        case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS:
+            if (tun_metadata_from_geneve_nlattr(a, flow_attrs, flow_attr_len,
+                                                &src_tun->metadata,
+                                                &tun->metadata)) {
                 return ODP_FIT_ERROR;
             }
-            /* It is necessary to reproduce options exactly (including order)
-             * so it's easiest to just echo them back. */
-            unknown = true;
             break;
-        }
+
         default:
             /* Allow this to show up as unexpected, if there are unknown
              * tunnel attribute, eventually resulting in ODP_FIT_TOO_MUCH. */
@@ -1458,8 +1423,8 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
 
 static void
 tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
-                const struct flow_tnl *tun_flow_key OVS_UNUSED,
-                const struct ofpbuf *key_buf OVS_UNUSED)
+                const struct flow_tnl *tun_flow_key,
+                const struct ofpbuf *key_buf)
 {
     size_t tun_key_ofs;
 
@@ -1501,6 +1466,13 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
         nl_msg_put_u32(a, OVS_VXLAN_EXT_GBP,
                        (tun_key->gbp_flags << 16) | ntohs(tun_key->gbp_id));
         nl_msg_end_nested(a, vxlan_opts_ofs);
+    }
+
+    if (tun_key == tun_flow_key) {
+        tun_metadata_to_geneve_nlattr_flow(&tun_key->metadata, a);
+    } else {
+        tun_metadata_to_geneve_nlattr_mask(key_buf, &tun_key->metadata,
+                                           &tun_flow_key->metadata, a);
     }
 
     nl_msg_end_nested(a, tun_key_ofs);

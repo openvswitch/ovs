@@ -33,6 +33,7 @@
 #include "random.h"
 #include "shash.h"
 #include "socket-util.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -189,6 +190,12 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.tunnel.gbp_id;
     case MFF_TUN_GBP_FLAGS:
         return !wc->masks.tunnel.gbp_flags;
+    CASE_MFF_TUN_METADATA: {
+        union mf_value value;
+
+        tun_metadata_read(&wc->masks.tunnel.metadata, mf, &value);
+        return is_all_zeros(&value.tun_metadata, mf->n_bytes);
+    }
     case MFF_METADATA:
         return !wc->masks.metadata;
     case MFF_IN_PORT:
@@ -480,6 +487,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_FLAGS:
     case MFF_TUN_GBP_ID:
     case MFF_TUN_GBP_FLAGS:
+    CASE_MFF_TUN_METADATA:
     case MFF_METADATA:
     case MFF_IN_PORT:
     case MFF_SKB_PRIORITY:
@@ -601,6 +609,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_TUN_TOS:
         value->u8 = flow->tunnel.ip_tos;
+        break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_read(&flow->tunnel.metadata, mf, value);
         break;
 
     case MFF_METADATA:
@@ -815,6 +826,9 @@ mf_set_value(const struct mf_field *mf,
         break;
     case MFF_TUN_TTL:
         match_set_tun_ttl(match, value->u8);
+        break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_set_match(mf, value, NULL, match);
         break;
 
     case MFF_METADATA:
@@ -1098,6 +1112,8 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_TUN_TTL:
         flow->tunnel.ip_ttl = value->u8;
         break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_write(&flow->tunnel.metadata, mf, value);
 
     case MFF_METADATA:
         flow->metadata = value->be64;
@@ -1362,6 +1378,9 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
     case MFF_TUN_TTL:
         match_set_tun_ttl_masked(match, 0, 0);
         break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_set_match(mf, NULL, NULL, match);
+        break;
 
     case MFF_METADATA:
         match_set_metadata_masked(match, htonll(0), htonll(0));
@@ -1615,6 +1634,9 @@ mf_set(const struct mf_field *mf,
         break;
     case MFF_TUN_TOS:
         match_set_tun_tos_masked(match, value->u8, mask->u8);
+        break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_set_match(mf, value, mask, match);
         break;
 
     case MFF_METADATA:

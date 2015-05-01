@@ -31,6 +31,7 @@
 #include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "shash.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -682,7 +683,7 @@ nxm_put_unmasked(struct ofpbuf *b, enum mf_field_id field,
     ofpbuf_put(b, value, n_bytes);
 }
 
-static void
+void
 nxm_put(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
         const void *value, const void *mask, size_t n_bytes)
 {
@@ -894,7 +895,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -1007,6 +1008,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->tunnel.gbp_id, match->wc.masks.tunnel.gbp_id);
     nxm_put_8m(b, MFF_TUN_GBP_FLAGS, oxm,
                flow->tunnel.gbp_flags, match->wc.masks.tunnel.gbp_flags);
+    tun_metadata_to_nx_match(b, oxm, match);
 
     /* Registers. */
     if (oxm < OFP15_VERSION) {

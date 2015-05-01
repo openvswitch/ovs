@@ -411,3 +411,68 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel - Geneve metadata])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
+                    options:remote_ip=1.1.1.1 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+
+AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=8}->tun_metadata1"])
+
+AT_DATA([flows.txt], [dnl
+in_port=2,actions=set_field:0xa->tun_metadata0,set_field:0x1234567890abcdef->tun_metadata1,1
+tun_metadata0=0xb/0xf,actions=2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Option generation
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(dst=1.1.1.1,ttl=64,geneve({class=0xffff,type=0,len=4,0xa}{class=0xffff,type=0x1,len=8,0x1234567890abcdef}),flags(df))),6081
+])
+
+dnl Option match
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=0,len=4,0xb}),flags(df,key)),in_port(6081),skb_mark(0),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_ttl=64,df|key,tun_metadata0=0xb/0xf,in_port=1,nw_frag=no
+Datapath actions: 2
+])
+
+dnl Skip unknown option
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=0,len=4,0xb}{class=0xffff,type=2,len=4,0xc}),flags(df,key)),in_port(6081),skb_mark(0),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_ttl=64,df|key,tun_metadata0=0xb/0xf,in_port=1,nw_frag=no
+Datapath actions: 2
+])
+
+dnl Check mapping table constraints
+AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2,{class=0xffff,type=3,len=124}->tun_metadata3"], [1], [ignore],
+[OFPT_ERROR (xid=0x4): NXGTMFC_TABLE_FULL
+NXT_GENEVE_TABLE_MOD (xid=0x4):
+ ADD mapping table:
+ class	type	length	match field
+ -----	----	------	-----------
+ 0xffff	0x2	124	tun_metadata2
+ 0xffff	0x3	124	tun_metadata3
+])
+
+dnl Allocation and match with fragmented address space
+AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2"])
+AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])
+AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=4,len=112}->tun_metadata4"])
+AT_CHECK([ovs-ofctl del-geneve-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])
+AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=3,len=8}->tun_metadata3"])
+
+AT_CHECK([ovs-ofctl add-flow br0 tun_metadata3=0x1234567890abcdef,actions=2])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=3,len=8,0x1234567890abcdef}),flags(df,key)),in_port(6081),skb_mark(0),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_ttl=64,df|key,tun_metadata0=0/0xf,tun_metadata3=0x1234567890abcdef,in_port=1,nw_frag=no
+Datapath actions: 2
+])
+
+AT_CHECK([ovs-ofctl del-geneve-map br0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

@@ -56,6 +56,7 @@
 #include "smap.h"
 #include "sset.h"
 #include "timeval.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
@@ -566,6 +567,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         ofproto->ogf.max_groups[i] = OFPG_MAX;
         ofproto->ogf.ofpacts[i] = (UINT64_C(1) << N_OFPACTS) - 1;
     }
+    tun_metadata_init();
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
@@ -6924,15 +6926,24 @@ handle_geneve_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
+    error = tun_metadata_table_mod(&gtm);
+
     ofputil_uninit_geneve_table(&gtm.mappings);
-    return OFPERR_OFPBRC_BAD_TYPE;
+    return error;
 }
 
 static enum ofperr
-handle_geneve_table_request(struct ofconn *ofconn OVS_UNUSED,
-                            const struct ofp_header *oh OVS_UNUSED)
+handle_geneve_table_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    return OFPERR_OFPBRC_BAD_TYPE;
+    struct ofputil_geneve_table_reply gtr;
+    struct ofpbuf *b;
+
+    tun_metadata_table_request(&gtr);
+    b = ofputil_encode_geneve_table_reply(oh, &gtr);
+    ofputil_uninit_geneve_table(&gtr.mappings);
+
+    ofconn_send_reply(ofconn, b);
+    return 0;
 }
 
 static enum ofperr
