@@ -102,14 +102,15 @@ get_core_config(struct controller_ctx *ctx)
 
     while (1) {
         const struct ovsrec_bridge *br_int;
-        const char *remote, *system_id;
+        const char *remote, *system_id, *br_int_name;
 
         ovsdb_idl_run(ctx->ovs_idl);
 
-        ctx->br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
-        if (!ctx->br_int_name) {
-            ctx->br_int_name = DEFAULT_BRIDGE_NAME;
+        br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
+        if (!br_int_name) {
+            br_int_name = DEFAULT_BRIDGE_NAME;
         }
+        ctx->br_int_name = xstrdup(br_int_name);
 
         br_int = get_bridge(ctx, ctx->br_int_name);
         if (!br_int) {
@@ -239,6 +240,8 @@ main(int argc, char *argv[])
 
     ovsdb_idl_destroy(ctx.ovs_idl);
     ovsdb_idl_destroy(ctx.ovnsb_idl);
+
+    free(ctx.br_int_name);
 
     exit(retval);
 }
