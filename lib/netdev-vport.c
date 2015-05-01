@@ -262,6 +262,8 @@ netdev_vport_construct(struct netdev *netdev_)
         dev->tnl_cfg.dst_port = htons(STT_DST_PORT);
     }
 
+    dev->tnl_cfg.dont_fragment = true;
+    dev->tnl_cfg.ttl = DEFAULT_TTL;
     return 0;
 }
 
