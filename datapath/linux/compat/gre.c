@@ -17,11 +17,7 @@
  */
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
-
 #include <linux/kconfig.h>
-#if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
-
 #include <linux/module.h>
 #include <linux/if.h>
 #include <linux/if_tunnel.h>
@@ -41,6 +37,10 @@
 #include <net/xfrm.h>
 
 #include "gso.h"
+
+#if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
 
 #ifndef HAVE_GRE_CISCO_REGISTER
 
@@ -287,20 +287,6 @@ static void gre_csum_fix(struct sk_buff *skb)
 						     skb->len - gre_offset, 0));
 }
 
-struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
-{
-	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
-	gso_fix_segment_t fix_segment;
-
-	if (gre_csum)
-		fix_segment = gre_csum_fix;
-	else
-		fix_segment = gre_nop_fix;
-
-	return ovs_iptunnel_handle_offloads(skb, gre_csum, type, fix_segment);
-}
-EXPORT_SYMBOL_GPL(rpl_gre_handle_offloads);
-
 static bool is_gre_gso(struct sk_buff *skb)
 {
 	return skb_is_gso(skb);
@@ -339,6 +325,30 @@ void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 }
 EXPORT_SYMBOL_GPL(rpl_gre_build_header);
 
-#endif /* CONFIG_NET_IPGRE_DEMUX */
+struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+{
+	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
+	gso_fix_segment_t fix_segment;
 
-#endif /* 3.12 */
+	if (gre_csum)
+		fix_segment = gre_csum_fix;
+	else
+		fix_segment = gre_nop_fix;
+
+	return ovs_iptunnel_handle_offloads(skb, gre_csum, type, fix_segment);
+}
+#else
+struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+{
+	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
+		kfree_skb(skb);
+		return ERR_PTR(-ENOSYS);
+	}
+	skb_clear_ovs_gso_cb(skb);
+#undef gre_handle_offloads
+	return gre_handle_offloads(skb, gre_csum);
+}
+#endif
+EXPORT_SYMBOL_GPL(rpl_gre_handle_offloads);
+
+#endif /* CONFIG_NET_IPGRE_DEMUX */
