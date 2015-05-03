@@ -1318,7 +1318,7 @@ static void clean_percpu(struct work_struct *work)
 	schedule_clean_percpu();
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0)
+#ifdef HAVE_NF_HOOKFN_ARG_OPS
 #define FIRST_PARAM const struct nf_hook_ops *ops,
 #else
 #define FIRST_PARAM unsigned int hooknum,
