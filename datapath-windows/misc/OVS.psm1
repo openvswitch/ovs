@@ -1,5 +1,5 @@
 <#
-Copyright 2014 Cloudbase Solutions Srl
+Copyright 2014, 2015 Cloudbase Solutions Srl
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ function Set-VMNetworkAdapterOVSPort
             $retVal = $vsms.ModifyResourceSettings(@($sd.GetText(1)))
             try
             {
-                Check-WMIReturnValue $retVal
+                CheckWMIReturnValue $retVal
             }
             catch
             {
@@ -142,7 +142,7 @@ function Get-VMNetworkAdapterWithOVSPort
     }
 }
 
-function Check-WMIReturnValue($retVal)
+function CheckWMIReturnValue($retVal)
 {
     if ($retVal.ReturnValue -ne 0)
     {
@@ -206,3 +206,5 @@ function Set-VMNetworkAdapterOVSPortDirect
         $vnic[0] | Set-VMNetworkAdapterOVSPort -OVSPortName $OVSPortName
     }
 }
+
+Export-ModuleMember -function Set-*, Get-*
