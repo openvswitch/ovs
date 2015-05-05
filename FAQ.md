@@ -360,6 +360,25 @@ A: Yes.  How you configure it depends on what you mean by "promiscuous
     SPAN, see "How do I configure a port as a SPAN port, that is,
     enable mirroring of all traffic to that port?"
 
+### Q: How do I configure a DPDK port as an access port?
+
+A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
+
+   If your version is DPDK-enabled it will support the --dpdk
+   argument on the command line and will display lines with
+   "EAL:..." during startup when --dpdk is supplied.
+
+   Secondly, when adding a DPDK port, unlike a system port, the
+   type for the interface must be specified. For example;
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
+
+   Finally, it is required that DPDK port names begin with 'dpdk'.
+
+   See [INSTALL.DPDK.md] for more information on enabling and using DPDK with
+   Open vSwitch.
+
 ### Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable mirroring of all traffic to that VLAN?
 
 A: The following commands configure br0 with eth0 as a trunk port and
@@ -648,6 +667,9 @@ A: More than likely, you've looped your network.  Probably, eth0 and
      Bonds have tons of configuration options.  Please read the
      documentation on the Port table in ovs-vswitchd.conf.db(5)
      for all the details.
+
+     Configuration for DPDK-enabled interfaces is slightly less
+     straightforward: see [INSTALL.DPDK.md].
 
    - Perhaps you don't actually need eth0 and eth1 to be on the
      same bridge.  For example, if you simply want to be able to
@@ -1897,3 +1919,4 @@ http://openvswitch.org/
 [WHY-OVS.md]:WHY-OVS.md
 [INSTALL.md]:INSTALL.md
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
+[INSTALL.DPDK.md]:INSTALL.DPDK.md

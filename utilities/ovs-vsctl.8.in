@@ -282,7 +282,9 @@ is an error.  With \fB\-\-may\-exist\fR, this command does nothing if
 .IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&... [\fIcolumn\fR[\fB:\fIkey\fR]\fR=\fIvalue\fR]\&...\fR"
 Creates on \fIbridge\fR a new port named \fIport\fR that bonds
 together the network devices given as each \fIiface\fR.  At least two
-interfaces must be named.
+interfaces must be named.  If the interfaces are DPDK enabled then
+the transaction will need to include operations to explicitly set the
+interface type to 'dpdk'.
 .IP
 Optional arguments set values of column in the Port record created by
 the command.  The syntax is the same as that for the \fBset\fR command

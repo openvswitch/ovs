@@ -187,6 +187,14 @@ Using the DPDK with ovs-vswitchd:
    polls dpdk device in continuous loop. Therefore CPU utilization
    for that thread is always 100%.
 
+   Note: creating bonds of DPDK interfaces is slightly different to creating
+   bonds of system interfaces.  For DPDK, the interface type must be explicitly
+   set, for example:
+
+   ```
+   ovs-vsctl add-bond br0 dpdkbond dpdk0 dpdk1 -- set Interface dpdk0 type=dpdk -- set Interface dpdk1 type=dpdk
+   ```
+
 7. Add test flows
 
    Test flow script across NICs (assuming ovs in /usr/src/ovs):
