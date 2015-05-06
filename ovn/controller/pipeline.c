@@ -169,6 +169,15 @@ ldp_lookup(const struct uuid *uuid)
     return NULL;
 }
 
+/* Finds and returns the integer value corresponding to the given 'uuid', or 0
+ * if no such logical datapath exists. */
+uint32_t
+ldp_to_integer(const struct uuid *logical_datapath)
+{
+    const struct logical_datapath *ldp = ldp_lookup(logical_datapath);
+    return ldp ? ldp->integer : 0;
+}
+
 /* Creates a new logical_datapath with the given 'uuid'. */
 static struct logical_datapath *
 ldp_create(const struct uuid *uuid)
@@ -251,8 +260,6 @@ pipeline_run(struct controller_ctx *ctx)
     uint32_t conj_id_ofs = 1;
 
     ldp_run(ctx);
-
-    ofctrl_clear_flows();
 
     const struct sbrec_pipeline *pipeline;
     SBREC_PIPELINE_FOR_EACH (pipeline, ctx->ovnsb_idl) {
