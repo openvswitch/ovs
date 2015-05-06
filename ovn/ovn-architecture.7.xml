@@ -243,11 +243,30 @@
   </p>
 
   <p>
-    The integration bridge must be configured with failure mode ``secure'' to
-    avoid switching packets between isolated logical networks before
-    <code>ovn-controller</code> starts up.  See <code>Controller Failure
-    Settings</code> in <code>ovs-vsctl</code>(8) for more information.
+    The integration bridge should be configured as described below.
+    The effect of each of these settings is documented in
+    <code>ovs-vswitchd.conf.db</code>(5):
   </p>
+
+  <dl>
+    <dt><code>fail-mode=secure</code></dt>
+    <dd>
+      Avoids switching packets between isolated logical networks before
+      <code>ovn-controller</code> starts up.  See <code>Controller Failure
+      Settings</code> in <code>ovs-vsctl</code>(8) for more information.
+    </dd>
+
+    <dt><code>other-config:disable-in-band=true</code></dt>
+    <dd>
+      Suppresses in-band control flows for the integration bridge.  It would be
+      unusual for such flows to show up anyway, because OVN uses a local
+      controller (over a Unix domain socket) instead of a remote controller.
+      It's possible, however, for some other bridge in the same system to have
+      an in-band remote controller, and in that case this suppresses the flows
+      that in-band control would ordinarily set up.  See <code>In-Band
+      Control</code> in <code>DESIGN.md</code> for more information.
+    </dd>
+  </dl>
 
   <p>
     The customary name for the integration bridge is <code>br-int</code>, but
