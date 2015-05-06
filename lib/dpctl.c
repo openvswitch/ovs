@@ -612,7 +612,45 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
             }
         }
     }
-    dpif_close(dpif);
+}
+
+typedef void (*dps_for_each_cb)(struct dpif *, struct dpctl_params *);
+
+static int
+dps_for_each(struct dpctl_params *dpctl_p, dps_for_each_cb cb)
+{
+    struct sset dpif_names = SSET_INITIALIZER(&dpif_names),
+                dpif_types = SSET_INITIALIZER(&dpif_types);
+    int error, lasterror = 0;
+    const char *type, *name;
+
+    dp_enumerate_types(&dpif_types);
+
+    SSET_FOR_EACH (type, &dpif_types) {
+        error = dp_enumerate_names(type, &dpif_names);
+        if (error) {
+            lasterror = error;
+        }
+
+        SSET_FOR_EACH (name, &dpif_names) {
+            struct dpif *dpif;
+
+            error = dpif_open(name, type, &dpif);
+            if (!error) {
+                cb(dpif, dpctl_p);
+                dpif_close(dpif);
+            } else {
+                lasterror = error;
+                dpctl_error(dpctl_p, error, "opening datapath %s failed",
+                            name);
+            }
+        }
+    }
+
+    sset_destroy(&dpif_names);
+    sset_destroy(&dpif_types);
+
+    return lasterror;
 }
 
 static int
@@ -628,6 +666,7 @@ dpctl_show(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             error = parsed_dpif_open(name, false, &dpif);
             if (!error) {
                 show_dpif(dpif, dpctl_p);
+                dpif_close(dpif);
             } else {
                 dpctl_error(dpctl_p, error, "opening datapath %s failed",
                             name);
@@ -635,73 +674,23 @@ dpctl_show(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
         }
     } else {
-        struct sset types;
-        const char *type;
-
-        sset_init(&types);
-        dp_enumerate_types(&types);
-        SSET_FOR_EACH (type, &types) {
-            struct sset names;
-            const char *name;
-
-            sset_init(&names);
-            error = dp_enumerate_names(type, &names);
-            if (error) {
-                lasterror = error;
-                goto next;
-            }
-            SSET_FOR_EACH (name, &names) {
-                struct dpif *dpif;
-
-                error = dpif_open(name, type, &dpif);
-                if (!error) {
-                    show_dpif(dpif, dpctl_p);
-                } else {
-                    dpctl_error(dpctl_p, error, "opening datapath %s failed",
-                                name);
-                    lasterror = error;
-                }
-            }
-next:
-            sset_destroy(&names);
-        }
-        sset_destroy(&types);
+        lasterror = dps_for_each(dpctl_p, show_dpif);
     }
+
     return lasterror;
+}
+
+static void
+dump_cb(struct dpif *dpif, struct dpctl_params *dpctl_p)
+{
+    dpctl_print(dpctl_p, "%s\n", dpif_name(dpif));
 }
 
 static int
 dpctl_dump_dps(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
                struct dpctl_params *dpctl_p)
 {
-    struct sset dpif_names, dpif_types;
-    const char *type;
-    int error, lasterror = 0;
-
-    sset_init(&dpif_names);
-    sset_init(&dpif_types);
-    dp_enumerate_types(&dpif_types);
-
-    SSET_FOR_EACH (type, &dpif_types) {
-        const char *name;
-
-        error = dp_enumerate_names(type, &dpif_names);
-        if (error) {
-            lasterror = error;
-        }
-
-        SSET_FOR_EACH (name, &dpif_names) {
-            struct dpif *dpif;
-            if (!dpif_open(name, type, &dpif)) {
-                dpctl_print(dpctl_p, "%s\n", dpif_name(dpif));
-                dpif_close(dpif);
-            }
-        }
-    }
-
-    sset_destroy(&dpif_names);
-    sset_destroy(&dpif_types);
-    return lasterror;
+    return dps_for_each(dpctl_p, dump_cb);
 }
 
 static void
