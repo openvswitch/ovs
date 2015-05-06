@@ -15,6 +15,8 @@
 
 #include <config.h>
 
+#include "ovn-controller.h"
+
 #include <errno.h>
 #include <getopt.h>
 #include <signal.h>
@@ -37,7 +39,7 @@
 #include "unixctl.h"
 #include "util.h"
 
-#include "ovn-controller.h"
+#include "ofctrl.h"
 #include "bindings.h"
 #include "chassis.h"
 #include "pipeline.h"
@@ -169,6 +171,8 @@ main(int argc, char *argv[])
     ovsrec_init();
     sbrec_init();
 
+    ofctrl_init();
+
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
     ctx.ovs_idl = ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true);
@@ -224,6 +228,7 @@ main(int argc, char *argv[])
         chassis_run(&ctx);
         bindings_run(&ctx);
         pipeline_run(&ctx);
+        ofctrl_run(&ctx);
         unixctl_server_run(unixctl);
 
         unixctl_server_wait(unixctl);
@@ -233,11 +238,13 @@ main(int argc, char *argv[])
 
         ovsdb_idl_wait(ctx.ovs_idl);
         ovsdb_idl_wait(ctx.ovnsb_idl);
+        ofctrl_wait();
         poll_block();
     }
 
     unixctl_server_destroy(unixctl);
     pipeline_destroy(&ctx);
+    ofctrl_destroy();
     bindings_destroy(&ctx);
     chassis_destroy(&ctx);
 

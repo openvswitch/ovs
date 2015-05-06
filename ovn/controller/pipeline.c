@@ -16,6 +16,7 @@
 #include <config.h>
 #include "pipeline.h"
 #include "dynamic-string.h"
+#include "ofctrl.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"
 #include "openvswitch/vlog.h"
@@ -239,20 +240,6 @@ pipeline_init(void)
     symtab_init();
 }
 
-static void
-add_ovn_flow(uint8_t table_id, uint16_t priority, const struct match *match,
-             const struct ofpbuf *ofpacts)
-{
-    struct ds s = DS_EMPTY_INITIALIZER;
-    ds_put_format(&s, "table_id=%"PRIu8", ", table_id);
-    ds_put_format(&s, "priority=%"PRIu16", ", priority);
-    match_format(match, &s, OFP_DEFAULT_PRIORITY);
-    ds_put_cstr(&s, ", actions=");
-    ofpacts_format(ofpacts->data, ofpacts->size, &s);
-    VLOG_INFO("%s", ds_cstr(&s));
-    ds_destroy(&s);
-}
-
 /* Translates logical flows in the Pipeline table in the OVN_SB database
  * into OpenFlow flows.
  *
@@ -265,7 +252,8 @@ pipeline_run(struct controller_ctx *ctx)
 
     ldp_run(ctx);
 
-    VLOG_INFO("starting run...");
+    ofctrl_clear_flows();
+
     const struct sbrec_pipeline *pipeline;
     SBREC_PIPELINE_FOR_EACH (pipeline, ctx->ovnsb_idl) {
         /* Find the "struct logical_datapath" asssociated with this Pipeline
@@ -336,8 +324,8 @@ pipeline_run(struct controller_ctx *ctx)
                 m->match.flow.conj_id += conj_id_ofs;
             }
             if (!m->n) {
-                add_ovn_flow(pipeline->table_id + 16, pipeline->priority,
-                             &m->match, &ofpacts);
+                ofctrl_add_flow(pipeline->table_id + 16, pipeline->priority,
+                                &m->match, &ofpacts);
             } else {
                 uint64_t conj_stubs[64 / 8];
                 struct ofpbuf conj;
@@ -352,8 +340,8 @@ pipeline_run(struct controller_ctx *ctx)
                     dst->clause = src->clause;
                     dst->n_clauses = src->n_clauses;
                 }
-                add_ovn_flow(pipeline->table_id + 16, pipeline->priority,
-                             &m->match, &conj);
+                ofctrl_add_flow(pipeline->table_id + 16, pipeline->priority,
+                                &m->match, &conj);
                 ofpbuf_uninit(&conj);
             }
         }
@@ -363,7 +351,6 @@ pipeline_run(struct controller_ctx *ctx)
         ofpbuf_uninit(&ofpacts);
         conj_id_ofs += n_conjs;
     }
-    VLOG_INFO("...done");
 }
 
 void
