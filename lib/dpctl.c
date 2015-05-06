@@ -60,6 +60,11 @@ struct dpctl_command {
     dpctl_command_handler *handler;
 };
 static const struct dpctl_command *get_all_dpctl_commands(void);
+static void dpctl_print(struct dpctl_params *dpctl_p, const char *fmt, ...)
+    OVS_PRINTF_FORMAT(2, 3);
+static void dpctl_error(struct dpctl_params* dpctl_p, int err_no,
+                        const char *fmt, ...)
+    OVS_PRINTF_FORMAT(3, 4);
 
 static void
 dpctl_puts(struct dpctl_params *dpctl_p, bool error, const char *string)
@@ -402,7 +407,7 @@ dpctl_set_if(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         char *err_s = NULL;
         error = netdev_set_config(netdev, &args, &err_s);
         if (err_s || error) {
-            dpctl_error(dpctl_p, error,
+            dpctl_error(dpctl_p, error, "%s",
                         err_s ? err_s : "Error updating configuration");
             free(err_s);
         }
@@ -1477,7 +1482,7 @@ dpctl_normalize_actions(int argc, const char *argv[],
 
         ds_clear(&s);
         format_odp_actions(&s, af->actions.data, af->actions.size);
-        dpctl_print(dpctl_p, ds_cstr(&s));
+        dpctl_puts(dpctl_p, false, ds_cstr(&s));
 
         ofpbuf_uninit(&af->actions);
         free(af);
