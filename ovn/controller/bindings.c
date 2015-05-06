@@ -76,12 +76,14 @@ bindings_run(struct controller_ctx *ctx)
 {
     const struct sbrec_bindings *bindings_rec;
     struct ovsdb_idl_txn *txn;
-    struct sset lports;
+    struct sset lports, all_lports;
     const char *name;
     int retval;
 
     sset_init(&lports);
+    sset_init(&all_lports);
     get_local_iface_ids(ctx, &lports);
+    sset_clone(&all_lports, &lports);
 
     txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
     ovsdb_idl_txn_add_comment(txn,
@@ -89,7 +91,9 @@ bindings_run(struct controller_ctx *ctx)
                               ctx->chassis_id);
 
     SBREC_BINDINGS_FOR_EACH(bindings_rec, ctx->ovnsb_idl) {
-        if (sset_find_and_delete(&lports, bindings_rec->logical_port)) {
+        if (sset_find_and_delete(&lports, bindings_rec->logical_port) ||
+                (bindings_rec->parent_port && bindings_rec->parent_port[0] &&
+                 sset_contains(&all_lports, bindings_rec->parent_port))) {
             if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
                 continue;
             }
@@ -116,6 +120,7 @@ bindings_run(struct controller_ctx *ctx)
         VLOG_DBG("No binding record for lport %s", name);
     }
     sset_destroy(&lports);
+    sset_destroy(&all_lports);
 }
 
 void
