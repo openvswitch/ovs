@@ -5,7 +5,9 @@ ovn_controller_ovn_controller_SOURCES = \
 	ovn/controller/chassis.c \
 	ovn/controller/chassis.h \
 	ovn/controller/ovn-controller.c \
-	ovn/controller/ovn-controller.h
+	ovn/controller/ovn-controller.h \
+	ovn/controller/pipeline.c \
+	ovn/controller/pipeline.h
 ovn_controller_ovn_controller_LDADD = ovn/lib/libovn.la lib/libopenvswitch.la
 man_MANS += ovn/controller/ovn-controller.8
 EXTRA_DIST += ovn/controller/ovn-controller.8.xml
