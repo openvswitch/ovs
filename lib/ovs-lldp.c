@@ -391,9 +391,7 @@ update_mapping_on_lldp(struct lldp *lldp, struct lldpd_hardware *hardware,
 {
     struct lldpd_aa_isid_vlan_maps_tlv *lm = xzalloc(sizeof *lm);
 
-    if (hardware->h_ifname) {
-        VLOG_INFO("\t\t hardware->h_ifname=%s", hardware->h_ifname);
-    }
+    VLOG_INFO("\t\t hardware->h_ifname=%s", hardware->h_ifname);
 
     lm->isid_vlan_data.isid = m->isid;
     lm->isid_vlan_data.vlan = m->vlan;
@@ -622,10 +620,7 @@ aa_mapping_unregister(void *aux)
 
             /* Remove from all the lldp instances */
             LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
-                if (hw->h_ifname) {
-                    VLOG_INFO("\t\t hardware->h_ifname=%s", hw->h_ifname);
-                }
-
+                VLOG_INFO("\t\t hardware->h_ifname=%s", hw->h_ifname);
                 aa_mapping_unregister_mapping(lldp, hw, m);
             }
             free(m);
