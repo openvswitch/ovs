@@ -36,7 +36,7 @@ struct match {
 };
 
 /* Initializer for a "struct match" that matches every packet. */
-#define MATCH_CATCHALL_INITIALIZER { .flow.dl_type = 0 }
+#define MATCH_CATCHALL_INITIALIZER { .flow = { .dl_type = 0 } }
 
 void match_init(struct match *,
                 const struct flow *, const struct flow_wildcards *);
