@@ -1013,6 +1013,48 @@ mf_mask_field(const struct mf_field *mf, struct flow *mask)
     }
 }
 
+static int
+field_len(const struct mf_field *mf, const union mf_value *value_)
+{
+    const uint8_t *value = &value_->u8;
+    int i;
+
+    if (!mf->variable_len) {
+        return mf->n_bytes;
+    }
+
+    if (!value) {
+        return 0;
+    }
+
+    for (i = 0; i < mf->n_bytes; i++) {
+        if (value[i] != 0) {
+            break;
+        }
+    }
+
+    return mf->n_bytes - i;
+}
+
+/* Returns the effective length of the field. For fixed length fields,
+ * this is just the defined length. For variable length fields, it is
+ * the minimum size encoding that retains the same meaning (i.e.
+ * discarding leading zeros). */
+int
+mf_field_len(const struct mf_field *mf, const union mf_value *value,
+             const union mf_value *mask)
+{
+    int len, mask_len;
+
+    len = field_len(mf, value);
+    if (mask && !is_all_ones(mask, mf->n_bytes)) {
+        mask_len = field_len(mf, mask);
+        len = MAX(len, mask_len);
+    }
+
+    return len;
+}
+
 /* Sets 'flow' member field described by 'mf' to 'value'.  The caller is
  * responsible for ensuring that 'flow' meets 'mf''s prerequisites.*/
 void

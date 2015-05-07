@@ -1168,8 +1168,10 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
 
     for (i = 0; i < MFF_N_IDS; i++) {
         if (bitmap_is_set(fa->used.bm, i)) {
-            nxm_put_unmasked(b, i, version, &fa->value[i],
-                             mf_from_id(i)->n_bytes);
+            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL);
+            nxm_put_unmasked(b, i, version,
+                             &fa->value[i].u8 + mf_from_id(i)->n_bytes - len,
+                             len);
         }
     }
 
@@ -1210,13 +1212,17 @@ nx_put_entry(struct ofpbuf *b,
              enum mf_field_id field, enum ofp_version version,
              const union mf_value *value, const union mf_value *mask)
 {
-    int n_bytes = mf_from_id(field)->n_bytes;
-    bool masked = mask && !is_all_ones(mask, n_bytes);
+    const struct mf_field *mf = mf_from_id(field);
+    bool masked = mask && !is_all_ones(mask, mf->n_bytes);
+    int len, offset;
 
-    nx_put_header(b, field, version, masked);
-    ofpbuf_put(b, value, n_bytes);
+    len = mf_field_len(mf, value, mask);
+    offset = mf->n_bytes - len;
+
+    nx_put_header_len(b, field, version, masked, len);
+    ofpbuf_put(b, &value->u8 + offset, len);
     if (masked) {
-        ofpbuf_put(b, mask, n_bytes);
+        ofpbuf_put(b, &mask->u8 + offset, len);
     }
 }
 
