@@ -148,6 +148,10 @@ EOF
         #ignore warnings
         ;;
 
+    -Q*)
+        #ignore link warnings
+        ;;
+
     -fno-strict-aliasing*)
         #ignore aliasing
         ;;

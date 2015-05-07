@@ -205,7 +205,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
     OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
-    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
+    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE -mssse3"
 
     # DPDK pmd drivers are not linked unless --whole-archive is used.
     #
@@ -292,16 +292,6 @@ AC_DEFUN([OVS_DEFINE], [
   echo '#define $1 1' >> datapath/linux/kcompat.h.new
 ])
 
-AC_DEFUN([OVS_CHECK_LOG2_H], [
-  AC_MSG_CHECKING([for $KSRC/include/linux/log2.h])
-  if test -e $KSRC/include/linux/log2.h; then
-    AC_MSG_RESULT([yes])
-    OVS_DEFINE([HAVE_LOG2_H])
-  else
-    AC_MSG_RESULT([no])
-  fi
-])
-
 dnl OVS_CHECK_LINUX_COMPAT
 dnl
 dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
@@ -335,6 +325,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
+                  [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
 
@@ -442,8 +434,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/netdevice.h], [NET_NAME_UNKNOWN],
                   [OVS_DEFINE([HAVE_NET_NAME_UNKNOWN])])
 
-  OVS_CHECK_LOG2_H
-
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
     rm datapath/linux/kcompat.h.new
@@ -534,8 +524,16 @@ AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
      dnl clang's GCC-compatible compiler driver does not return a failure
      dnl exit status even though it complains about options it does not
      dnl understand.
+     dnl
+     dnl Also, check stderr as gcc exits with status 0 for options
+     dnl rejected at getopt level.
+     dnl    % touch /tmp/a.c
+     dnl    % gcc -g -c -Werror -Qunused-arguments /tmp/a.c; echo $?
+     dnl    gcc: unrecognized option '-Qunused-arguments'
+     dnl    0
+     dnl    %
      CFLAGS="$CFLAGS $WERROR $1"
-     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [ovs_cv_name[]=yes], [ovs_cv_name[]=no])
+     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [if test -s conftest.err && grep "unrecognized option" conftest.err; then ovs_cv_name[]=no; else ovs_cv_name[]=yes; fi], [ovs_cv_name[]=no])
      CFLAGS="$ovs_save_CFLAGS"])
   if test $ovs_cv_name = yes; then
     m4_if([$2], [], [:], [$2])

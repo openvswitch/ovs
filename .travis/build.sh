@@ -38,9 +38,9 @@ function install_kernel()
 function install_dpdk()
 {
     if [ -n "$DPDK_GIT" ]; then
-	git clone $DPDK_GIT dpdk-$1
-	cd dpdk-$1
-	git checkout v$1
+        git clone $DPDK_GIT dpdk-$1
+        cd dpdk-$1
+        git checkout v$1
     else
         wget http://www.dpdk.org/browse/dpdk/snapshot/dpdk-$1.tar.gz
         tar xzvf dpdk-$1.tar.gz > /dev/null
@@ -49,6 +49,7 @@ function install_dpdk()
     find ./ -type f | xargs sed -i 's/max-inline-insns-single=100/max-inline-insns-single=400/'
     sed -ri 's,(CONFIG_RTE_BUILD_COMBINE_LIBS=).*,\1y,' config/common_linuxapp
     sed -ri 's,(CONFIG_RTE_LIBRTE_VHOST=).*,\1y,' config/common_linuxapp
+    sed -ri 's,(CONFIG_RTE_LIBRTE_VHOST_USER=).*,\1n,' config/common_linuxapp
     sed -ri '/CONFIG_RTE_LIBNAME/a CONFIG_RTE_BUILD_FPIC=y' config/common_linuxapp
     sed -ri '/EXECENV_CFLAGS  = -pthread -fPIC/{s/$/\nelse ifeq ($(CONFIG_RTE_BUILD_FPIC),y)/;s/$/\nEXECENV_CFLAGS  = -pthread -fPIC/}' mk/exec-env/linuxapp/rte.vars.mk
     make config CC=gcc T=x86_64-native-linuxapp-gcc
@@ -68,13 +69,15 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-	    DPDK_VER="1.8.0"
+        DPDK_VER="2.0.0"
     fi
     install_dpdk $DPDK_VER
-    # Disregard bad function casts until DPDK is fixed
-    CFLAGS="$CFLAGS -Wno-error=bad-function-cast -Wno-error=cast-align"
-    EXTRA_OPTS+="--with-dpdk=./dpdk-$DPDK_VER/build"
-elif [ $CC != "clang" ]; then
+    if [ "$CC" = "clang" ]; then
+        # Disregard cast alignment errors until DPDK is fixed
+        EXTRA_OPTS="$EXTRA_OPTS -Wno-cast-align"
+    fi
+    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-$DPDK_VER/build"
+elif [ "$CC" != "clang" ]; then
     # DPDK headers currently trigger sparse errors
     SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
@@ -82,11 +85,11 @@ fi
 configure_ovs $EXTRA_OPTS $*
 
 # Only build datapath if we are testing kernel w/o running testsuite
-if [ $KERNEL ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
+if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
     cd datapath
 fi
 
-if [ $CC = "clang" ]; then
+if [ "$CC" = "clang" ]; then
     make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 elif [[ $BUILD_ENV =~ "-m32" ]]; then
     # Disable sparse for 32bit builds on 64bit machine
@@ -95,7 +98,7 @@ else
     make CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
 fi
 
-if [ $TESTSUITE ] && [ $CC != "clang" ]; then
+if [ "$TESTSUITE" ] && [ "$CC" != "clang" ]; then
     if ! make distcheck; then
         # testsuite.log is necessary for debugging.
         cat */_build/tests/testsuite.log

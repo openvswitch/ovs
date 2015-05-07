@@ -5,6 +5,7 @@
 
 #ifndef HAVE_SKBUFF_HEADER_HELPERS
 #include <linux/skbuff.h>
+
 static inline struct iphdr *ip_hdr(const struct sk_buff *skb)
 {
 	return (struct iphdr *)skb_network_header(skb);

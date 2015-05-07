@@ -26,8 +26,12 @@ vlog = ovs.vlog.Vlog("idl")
 
 __pychecker__ = 'no-classattr no-objattrs'
 
+ROW_CREATE = "create"
+ROW_UPDATE = "update"
+ROW_DELETE = "delete"
 
-class Idl:
+
+class Idl(object):
     """Open vSwitch Database Interface Definition Language (OVSDB IDL).
 
     The OVSDB IDL maintains an in-memory replica of a database.  It issues RPC
@@ -264,6 +268,17 @@ class Idl:
             self.lock_name = lock_name
             self.__send_lock_request()
 
+    def notify(self, event, row, updates=None):
+        """Hook for implementing create/update/delete notifications
+
+        :param event:   The event that was triggered
+        :type event:    ROW_CREATE, ROW_UPDATE, or ROW_DELETE
+        :param row:     The row as it is after the operation has occured
+        :type row:      Row
+        :param updates: For updates, a Row object with just the changed columns
+        :type updates:  Row
+        """
+
     def __clear(self):
         changed = False
 
@@ -386,6 +401,7 @@ class Idl:
             if row:
                 del table.rows[uuid]
                 changed = True
+                self.notify(ROW_DELETE, row)
             else:
                 # XXX rate-limit
                 vlog.warn("cannot delete missing row %s from table %s"
@@ -401,15 +417,19 @@ class Idl:
                           % (uuid, table.name))
             if self.__row_update(table, row, new):
                 changed = True
+                self.notify(ROW_CREATE, row)
         else:
+            op = ROW_UPDATE
             if not row:
                 row = self.__create_row(table, uuid)
                 changed = True
+                op = ROW_CREATE
                 # XXX rate-limit
                 vlog.warn("cannot modify missing row %s in table %s"
                           % (uuid, table.name))
             if self.__row_update(table, row, new):
                 changed = True
+                self.notify(op, row, Row.from_json(self, table, uuid, old))
         return changed
 
     def __row_update(self, table, row, row_json):
@@ -569,6 +589,26 @@ class Row(object):
                      % (column_name, e))
             return
         self._idl.txn._write(self, column, datum)
+
+    @classmethod
+    def from_json(cls, idl, table, uuid, row_json):
+        data = {}
+        for column_name, datum_json in row_json.iteritems():
+            column = table.columns.get(column_name)
+            if not column:
+                # XXX rate-limit
+                vlog.warn("unknown column %s in table %s"
+                          % (column_name, table.name))
+                continue
+            try:
+                datum = ovs.db.data.Datum.from_json(column.type, datum_json)
+            except error.Error, e:
+                # XXX rate-limit
+                vlog.warn("error parsing column %s in table %s: %s"
+                          % (column_name, table.name, e))
+                continue
+            data[column_name] = datum
+        return cls(idl, table, uuid, data)
 
     def verify(self, column_name):
         """Causes the original contents of column 'column_name' in this row to

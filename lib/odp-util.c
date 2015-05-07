@@ -231,21 +231,22 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
         uint32_t flags = 0, mask = 0;
 
         /* Parse masked flags. */
-        while (s[n] != ')') {
+        while (s[0] != ')') {
             bool set;
             uint32_t bit;
             int name_len;
 
-            if (s[n] == '+') {
+            if (s[0] == '+') {
                 set = true;
-            } else if (s[n] == '-') {
+            } else if (s[0] == '-') {
                 set = false;
             } else {
                 return -EINVAL;
             }
+            s++;
             n++;
 
-            name_len = strcspn(s + n, "+-)");
+            name_len = strcspn(s, "+-)");
 
             for (bit = 1; bit; bit <<= 1) {
                 const char *fname = bit_to_string(bit);
@@ -259,7 +260,7 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
                 if (len != name_len) {
                     continue;
                 }
-                if (!strncmp(s + n, fname, len)) {
+                if (!strncmp(s, fname, len)) {
                     if (mask & bit) {
                         /* bit already set. */
                         return -EINVAL;
@@ -279,6 +280,7 @@ parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
                 return -EINVAL; /* Unknown flag name */
             }
             s += name_len;
+            n += name_len;
         }
 
         *res_flags = flags;

@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,20,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
 
 #include <linux/module.h>
 #include <linux/errno.h>
@@ -13,8 +13,8 @@
 #include <net/udp_tunnel.h>
 #include <net/net_namespace.h>
 
-int udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
-		    struct socket **sockp)
+int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
+		        struct socket **sockp)
 {
 	int err;
 	struct socket *sock = NULL;
@@ -95,10 +95,10 @@ error:
 	*sockp = NULL;
 	return err;
 }
-EXPORT_SYMBOL_GPL(udp_sock_create);
+EXPORT_SYMBOL_GPL(rpl_udp_sock_create);
 
-void setup_udp_tunnel_sock(struct net *net, struct socket *sock,
-			   struct udp_tunnel_sock_cfg *cfg)
+void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
+			       struct udp_tunnel_sock_cfg *cfg)
 {
 	struct sock *sk = sock->sk;
 
@@ -115,7 +115,7 @@ void setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 
 	udp_tunnel_encap_enable(sock);
 }
-EXPORT_SYMBOL_GPL(setup_udp_tunnel_sock);
+EXPORT_SYMBOL_GPL(rpl_setup_udp_tunnel_sock);
 
 void ovs_udp_gso(struct sk_buff *skb)
 {
@@ -142,10 +142,10 @@ void ovs_udp_csum_gso(struct sk_buff *skb)
 }
 EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
 
-int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
-			__be32 src, __be32 dst, __u8 tos, __u8 ttl,
-			__be16 df, __be16 src_port, __be16 dst_port,
-			bool xnet, bool nocheck)
+int rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
+			    __be32 src, __be32 dst, __u8 tos, __u8 ttl,
+			    __be16 df, __be16 src_port, __be16 dst_port,
+			    bool xnet, bool nocheck)
 {
 	struct udphdr *uh;
 
@@ -162,14 +162,14 @@ int udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
 	return iptunnel_xmit(skb->sk, rt, skb, src, dst, IPPROTO_UDP,
 			     tos, ttl, df, xnet);
 }
-EXPORT_SYMBOL_GPL(udp_tunnel_xmit_skb);
+EXPORT_SYMBOL_GPL(rpl_udp_tunnel_xmit_skb);
 
-void udp_tunnel_sock_release(struct socket *sock)
+void rpl_udp_tunnel_sock_release(struct socket *sock)
 {
 	rcu_assign_sk_user_data(sock->sk, NULL);
 	kernel_sock_shutdown(sock, SHUT_RDWR);
 	sk_release_kernel(sock->sk);
 }
-EXPORT_SYMBOL_GPL(udp_tunnel_sock_release);
+EXPORT_SYMBOL_GPL(rpl_udp_tunnel_sock_release);
 
-#endif /* Linux version < 3.20 */
+#endif /* Linux version < 4.0 */

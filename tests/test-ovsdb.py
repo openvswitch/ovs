@@ -228,10 +228,26 @@ def idltest_find_simple(idl, i):
 def idl_set(idl, commands, step):
     txn = ovs.db.idl.Transaction(idl)
     increment = False
+    events = []
     for command in commands.split(','):
         words = command.split()
         name = words[0]
         args = words[1:]
+
+        if name == "notifytest":
+            name = args[0]
+            args = args[1:]
+            old_notify = idl.notify
+
+            def notify(event, row, updates=None):
+                if updates:
+                    upcol = updates._data.keys()[0]
+                else:
+                    upcol = None
+                events.append("%s|%s|%s" % (event, row.i, upcol))
+                idl.notify = old_notify
+
+            idl.notify = notify
 
         if name == "set":
             if len(args) != 3:
@@ -338,6 +354,10 @@ def idl_set(idl, commands, step):
                      % (step, ovs.db.idl.Transaction.status_to_string(status)))
     if increment and status == ovs.db.idl.Transaction.SUCCESS:
         sys.stdout.write(", increment=%d" % txn.get_increment_new_value())
+    if events:
+        # Event notifications from operations in a single transaction are
+        # not in a gauranteed order due to update messages being dicts
+        sys.stdout.write(", events=" + ", ".join(sorted(events)))
     sys.stdout.write("\n")
     sys.stdout.flush()
 

@@ -72,6 +72,7 @@ netdev_features_t rpl_netif_skb_features(struct sk_buff *skb)
 		return harmonize_features(skb, protocol, features);
 	}
 }
+EXPORT_SYMBOL_GPL(rpl_netif_skb_features);
 #endif	/* kernel version < 2.6.38 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
@@ -106,4 +107,6 @@ struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
 	skb->protocol = skb_proto;
 	return skb_gso;
 }
+EXPORT_SYMBOL_GPL(rpl_skb_gso_segment);
+
 #endif	/* kernel version < 3.16.0 */

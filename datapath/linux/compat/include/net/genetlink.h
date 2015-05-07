@@ -45,9 +45,9 @@ struct rpl_genl_family {
 
 #define genl_family rpl_genl_family
 #define genl_notify rpl_genl_notify
-void genl_notify(struct genl_family *family,
-		 struct sk_buff *skb, struct net *net, u32 portid, u32 group,
-		 struct nlmsghdr *nlh, gfp_t flags);
+void rpl_genl_notify(struct genl_family *family,
+		     struct sk_buff *skb, struct net *net, u32 portid, u32 group,
+		     struct nlmsghdr *nlh, gfp_t flags);
 
 static inline void *rpl_genlmsg_put(struct sk_buff *skb, u32 portid, u32 seq,
 				    struct genl_family *family, int flags, u8 cmd)

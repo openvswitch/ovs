@@ -1858,7 +1858,6 @@ port_role_transition_sm(struct rstp_port *p)
                  p->port_role_transition_sm_state);
     }
     if (last_role != p->role) {
-        last_role = p->role;
         VLOG_DBG("%s, port %u, port role ["RSTP_PORT_ID_FMT"] = %s",
                  p->rstp->name, p->port_number, p->port_id,
                  rstp_port_role_name(p->role));

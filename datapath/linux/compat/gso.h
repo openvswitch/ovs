@@ -26,6 +26,15 @@ struct ovs_gso_cb {
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
+static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
+{
+	OVS_GSO_CB(skb)->fix_segment = NULL;
+}
+#else
+static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
+{
+
+}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
@@ -52,6 +61,15 @@ static inline int skb_inner_network_offset(const struct sk_buff *skb)
 	return skb_inner_network_header(skb) - skb->data;
 }
 
+/* We don't actually store the transport offset on backports because
+ * we don't use it anywhere. Slightly rename this version to avoid
+ * future users from picking it up accidentially.
+ */
+static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
+{
+	return 0;
+}
+
 static inline void skb_set_inner_network_header(const struct sk_buff *skb,
 						int offset)
 {
@@ -62,6 +80,14 @@ static inline void skb_set_inner_network_header(const struct sk_buff *skb,
 static inline void skb_set_inner_transport_header(const struct sk_buff *skb,
 						  int offset)
 { }
+
+#else
+
+static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
+{
+	return skb_inner_transport_header(skb) - skb->data;
+}
+
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
@@ -110,7 +136,7 @@ static inline __be16 ovs_skb_get_inner_protocol(struct sk_buff *skb)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 #define ip_local_out rpl_ip_local_out
-int ip_local_out(struct sk_buff *skb);
+int rpl_ip_local_out(struct sk_buff *skb);
 
 static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 {

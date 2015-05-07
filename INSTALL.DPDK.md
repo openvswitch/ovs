@@ -16,13 +16,13 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
+Required DPDK 2.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
 
 1. Configure build & install DPDK:
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-1.8.0
+     export DPDK_DIR=/usr/src/dpdk-2.0
      cd $DPDK_DIR
      ```
 
@@ -32,9 +32,12 @@ Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
      `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
 
      Update `config/common_linuxapp` so that DPDK is built with vhost
-     libraries:
+     libraries; currently, OVS only supports vhost-cuse, so DPDK vhost-user
+     libraries should be explicitly turned off (they are enabled by default
+     in DPDK 2.0).
 
      `CONFIG_RTE_LIBRTE_VHOST=y`
+     `CONFIG_RTE_LIBRTE_VHOST_USER=n`
 
      Then run `make install` to build and install the library.
      For default install without IVSHMEM:
@@ -65,9 +68,11 @@ Required DPDK 1.8.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
    ```
    cd $(OVS_DIR)/openvswitch
    ./boot.sh
-   ./configure --with-dpdk=$DPDK_BUILD
+   ./configure --with-dpdk=$DPDK_BUILD [CFLAGS="-g -O2 -Wno-cast-align"]
    make
    ```
+
+   Note: 'clang' users may specify the '-Wno-cast-align' flag to suppress DPDK cast-align warnings.
 
 To have better performance one can enable aggressive compiler optimizations and
 use the special instructions(popcnt, crc32) that may not be available on all
@@ -95,7 +100,7 @@ Using the DPDK with ovs-vswitchd:
      1. insert uio.ko: `modprobe uio`
      2. insert igb_uio.ko: `insmod $DPDK_BUILD/kmod/igb_uio.ko`
      3. Bind network device to igb_uio:
-	    `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1`
+         `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio eth1`
 
    * VFIO:
 
@@ -106,7 +111,7 @@ Using the DPDK with ovs-vswitchd:
      2. Set correct permissions on vfio device: `sudo /usr/bin/chmod a+x /dev/vfio`
         and: `sudo /usr/bin/chmod 0666 /dev/vfio/*`
      3. Bind network device to vfio-pci:
-	    `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1`
+        `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1`
 
 3. Mount the hugetable filsystem
 
@@ -182,6 +187,14 @@ Using the DPDK with ovs-vswitchd:
    polls dpdk device in continuous loop. Therefore CPU utilization
    for that thread is always 100%.
 
+   Note: creating bonds of DPDK interfaces is slightly different to creating
+   bonds of system interfaces.  For DPDK, the interface type must be explicitly
+   set, for example:
+
+   ```
+   ovs-vsctl add-bond br0 dpdkbond dpdk0 dpdk1 -- set Interface dpdk0 type=dpdk -- set Interface dpdk1 type=dpdk
+   ```
+
 7. Add test flows
 
    Test flow script across NICs (assuming ovs in /usr/src/ovs):
@@ -249,6 +262,14 @@ Using the DPDK with ovs-vswitchd:
 
    Note, core 0 is always reserved from non-pmd threads and should never be set
    in the cpu mask.
+
+   To understand where most of the time is spent and whether the caches are
+   effective, these commands can be used:
+
+   ```
+   ovs-appctl dpif-netdev/pmd-stats-clear #To reset statistics
+   ovs-appctl dpif-netdev/pmd-stats-show
+   ```
 
 DPDK Rings :
 ------------
@@ -547,10 +568,16 @@ Restrictions:
   - DPDK-vHost support works with 1G huge pages.
 
   ivshmem:
-  - The shared memory is currently restricted to the use of a 1GB
-    huge pages.
-  - All huge pages are shared amongst the host, clients, virtual
-    machines etc.
+  - If you run Open vSwitch with smaller page sizes (e.g. 2MB), you may be
+    unable to share any rings or mempools with a virtual machine.
+    This is because the current implementation of ivshmem works by sharing
+    a single 1GB huge page from the host operating system to any guest
+    operating system through the Qemu ivshmem device. When using smaller
+    page sizes, multiple pages may be required to hold the ring descriptors
+    and buffer pools. The Qemu ivshmem device does not allow you to share
+    multiple file descriptors to the guest operating system. However, if you
+    want to share dpdkr rings with other processes on the host, you can do
+    this with smaller page sizes.
 
 Bug Reporting:
 --------------

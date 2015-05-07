@@ -127,11 +127,3 @@ skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
-
-AT_SETUP([dpif-netdev - Datapath removal])
-OVS_VSWITCHD_START()
-AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0])
-AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
-
-OVS_VSWITCHD_STOP
-AT_CLEANUP

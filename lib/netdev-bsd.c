@@ -42,7 +42,6 @@
 #include <sys/sysctl.h>
 #if defined(__NetBSD__)
 #include <net/route.h>
-#include <netinet/in.h>
 #include <netinet/if_inarp.h>
 #endif
 
@@ -643,7 +642,7 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(packet);
     } else {
         dp_packet_pad(packet);
-        dp_packet_set_dp_hash(packet, 0);
+        dp_packet_set_rss_hash(packet, 0);
         packets[0] = packet;
         *c = 1;
     }
@@ -844,7 +843,7 @@ netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
     }
     ovs_mutex_unlock(&netdev->mutex);
 
-    return 0;
+    return error;
 }
 
 static int

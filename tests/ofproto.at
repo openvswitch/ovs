@@ -313,6 +313,11 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
 ])
+
+# Negative test.
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=0xfffffff0],
+  [1], [], [ovs-ofctl: invalid group id 4294967280
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -454,6 +459,14 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21
 ])
+
+# Negative tests.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=0xffffff01,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1], [1], [],
+  [ovs-ofctl: invalid command bucket id 4294967041
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1], [1], [],
+  [ovs-ofctl: insert-bucket needs OpenFlow 1.5 or later ('-O OpenFlow15')
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -506,6 +519,10 @@ AT_CHECK([cat stderr | ofctl_strip], [0], [dnl
 OFPT_ERROR (OF1.5): OFPGMFC_UNKNOWN_BUCKET
 OFPT_GROUP_MOD (OF1.5):
  REMOVE_BUCKET command_bucket_id:1,group_id=1234
+])
+# Negative test.
+AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last], [1], [],
+  [ovs-ofctl: remove-bucket needs OpenFlow 1.5 or later ('-O OpenFlow15')
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

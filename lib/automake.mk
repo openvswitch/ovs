@@ -185,6 +185,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/packets.h \
 	lib/pcap-file.c \
 	lib/pcap-file.h \
+	lib/perf-counter.h \
+	lib/perf-counter.c \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
 	lib/process.c \

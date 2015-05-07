@@ -45,6 +45,7 @@ int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
 	*nexthdrp = nexthdr;
 	return start;
 }
+EXPORT_SYMBOL_GPL(rpl_ipv6_skip_exthdr);
 #endif /* Kernel version < 3.3 */
 
 #ifndef HAVE_IP6_FH_F_SKIP_RH
@@ -169,5 +170,6 @@ int rpl_ipv6_find_hdr(const struct sk_buff *skb, unsigned int *offset,
 	*offset = start;
 	return nexthdr;
 }
+EXPORT_SYMBOL_GPL(rpl_ipv6_find_hdr);
 
 #endif

@@ -162,7 +162,12 @@ Steps to install the module
 
 02> Run ./install.cmd to insert the new one.  For this to work you will have to
 turn on TESTSIGNING boot option or 'Disable Driver Signature Enforcement'
-during boot.
+during boot.  The following commands can be used:
+    % bcdedit /set LOADOPTIONS DISABLE_INTEGRITY_CHECKS
+    % bcdedit /set TESTSIGNING ON
+    % bcdedit /set nointegritychecks ON
+
+Note: you may have to restart the machine for the settings to take effect.
 
 03> In the Virtual Switch Manager configuration you can enable the Open vSwitch
 Extension on an existing switch or create a new switch.  If you are using an
@@ -294,9 +299,9 @@ as a special name to refer to that adapter.
             Port br-pif
                 Interface br-pif
                     type: internal
-        Bridge br-int
             Port "external.1"
                 Interface "external.1"
+        Bridge br-int
             Port br-int
                 Interface br-int
                     type: internal
@@ -430,7 +435,7 @@ MSYS bash or Windows command prompt.
 
 * Create the ovsdb-server service and start it.
 
-  % sc create ovsdb-server binpath="C:/Shares/openvswitch/ovsdb/ovsdb-server.exe C:/openvswitch/etc/openvswitch/conf.db -vfile:info --log-file --pidfile --remote=punix:db.sock --service --service-monitor"
+  % sc create ovsdb-server binpath="C:/openvswitch/usr/sbin/ovsdb-server.exe C:/openvswitch/etc/openvswitch/conf.db -vfile:info --log-file --pidfile --remote=punix:db.sock --service --service-monitor"
 
   One of the common issues with creating a Windows service is with mungled
   paths. You can make sure that the correct path has been registered with
@@ -452,7 +457,7 @@ MSYS bash or Windows command prompt.
 
 * Create the ovs-vswitchd service and start it.
 
-  % sc create ovs-vswitchd binpath="C:/Shares/openvswitch/vswitchd/ovs-vswitchd.exe --pidfile -vfile:info --log-file  --service --service-monitor"
+  % sc create ovs-vswitchd binpath="C:/openvswitch/usr/sbin/ovs-vswitchd.exe --pidfile -vfile:info --log-file  --service --service-monitor"
 
   % sc start ovs-vswitchd
 

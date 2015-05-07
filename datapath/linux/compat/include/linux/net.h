@@ -30,7 +30,8 @@ do {								\
 #endif
 
 #ifndef net_get_random_once
-bool __net_get_random_once(void *buf, int nbytes, bool *done,
+#define __net_get_random_once rpl___net_get_random_once
+bool rpl___net_get_random_once(void *buf, int nbytes, bool *done,
 			   atomic_t *done_key);
 
 #define ___NET_RANDOM_STATIC_KEY_INIT	ATOMIC_INIT(0)

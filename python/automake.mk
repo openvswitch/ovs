@@ -41,6 +41,11 @@ EXTRA_DIST += \
 	python/build/__init__.py \
 	python/build/nroff.py
 
+# PyPI support.
+EXTRA_DIST += \
+	python/README.rst \
+	python/setup.py
+
 PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
 EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
@@ -62,6 +67,12 @@ ovs-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/python/ovs
 	$(INSTALL_DATA) python/ovs/dirs.py.tmp $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py
 	rm python/ovs/dirs.py.tmp
+
+python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
+	(cd python/ && $(PYTHON) setup.py sdist)
+
+pypi-upload: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
+	(cd python/ && $(PYTHON) setup.py sdist upload)
 else
 ovs-install-data-local:
 	@:

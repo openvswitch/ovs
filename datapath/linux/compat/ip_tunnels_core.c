@@ -135,7 +135,7 @@ error:
 }
 EXPORT_SYMBOL_GPL(ovs_iptunnel_handle_offloads);
 
-int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
+int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
 {
 	if (unlikely(!pskb_may_pull(skb, hdr_len)))
 		return -ENOMEM;
@@ -168,15 +168,15 @@ int iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
 	skb->pkt_type = PACKET_HOST;
 	return 0;
 }
-EXPORT_SYMBOL_GPL(iptunnel_pull_header);
+EXPORT_SYMBOL_GPL(rpl_iptunnel_pull_header);
 
 #endif
 
-bool skb_is_encapsulated(struct sk_buff *skb)
+bool ovs_skb_is_encapsulated(struct sk_buff *skb)
 {
 	/* checking for inner protocol should be sufficient on newer kernel, but
 	 * old kernel just set encapsulation bit.
 	 */
 	return ovs_skb_get_inner_protocol(skb) || skb_encapsulation(skb);
 }
-EXPORT_SYMBOL_GPL(skb_is_encapsulated);
+EXPORT_SYMBOL_GPL(ovs_skb_is_encapsulated);

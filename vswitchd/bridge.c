@@ -217,16 +217,6 @@ static long long int stats_timer = LLONG_MIN;
 #define AA_REFRESH_INTERVAL (1000) /* In milliseconds. */
 static long long int aa_refresh_timer = LLONG_MIN;
 
-/* In some datapaths, creating and destroying OpenFlow ports can be extremely
- * expensive.  This can cause bridge_reconfigure() to take a long time during
- * which no other work can be done.  To deal with this problem, we limit port
- * adds and deletions to a window of OFP_PORT_ACTION_WINDOW milliseconds per
- * call to bridge_reconfigure().  If there is more work to do after the limit
- * is reached, 'need_reconfigure', is flagged and it's done on the next loop.
- * This allows the rest of the code to catch up on important things like
- * forwarding packets. */
-#define OFP_PORT_ACTION_WINDOW 10
-
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
@@ -509,7 +499,8 @@ bridge_exit(void)
  * should not be and in fact is not directly involved in that.  But
  * ovs-vswitchd needs to make sure that ovsdb-server can reach the managers, so
  * it has to tell in-band control where the managers are to enable that.
- * (Thus, only managers connected in-band are collected.)
+ * (Thus, only managers connected in-band and with non-loopback addresses
+ * are collected.)
  */
 static void
 collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
@@ -545,9 +536,11 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
                 struct sockaddr_in in;
             } sa;
 
+            /* Ignore loopback. */
             if (stream_parse_target_with_default_port(target, OVSDB_PORT,
                                                       &sa.ss)
-                && sa.ss.ss_family == AF_INET) {
+                && sa.ss.ss_family == AF_INET
+                && sa.in.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) {
                 managers[n_managers++] = sa.in;
             }
         }
@@ -580,10 +573,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ofproto_set_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
         smap_get_int(&ovs_cfg->other_config, "n-revalidator-threads", 0));
-
-    if (ovs_cfg) {
-        discover_types(ovs_cfg);
-    }
 
     /* Destroy "struct bridge"s, "struct port"s, and "struct iface"s according
      * to 'ovs_cfg', with only very minimal configuration otherwise.
@@ -3920,12 +3909,12 @@ static void
 bridge_aa_refresh_queued(struct bridge *br)
 {
     struct ovs_list *list = xmalloc(sizeof *list);
-    struct bridge_aa_vlan *node;
+    struct bridge_aa_vlan *node, *next;
 
     list_init(list);
     ofproto_aa_vlan_get_queued(br->ofproto, list);
 
-    LIST_FOR_EACH(node, list_node, list) {
+    LIST_FOR_EACH_SAFE (node, next, list_node, list) {
         struct port *port;
 
         VLOG_INFO("ifname=%s, vlan=%u, oper=%u", node->port_name, node->vlan,

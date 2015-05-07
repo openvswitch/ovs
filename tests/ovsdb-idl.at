@@ -497,6 +497,23 @@ OVSDB_CHECK_IDL_PY([getattr idl, insert ops],
 003: done
 ]])
 
+OVSDB_CHECK_IDL_PY([row-from-json idl, whats this],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['notifytest insert 2, notifytest set 1 b 1, notifytest delete 0']],
+  [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+000: i=1 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+001: commit, status=success, events=create|2|None, delete|0|None, update|1|b
+002: i=1 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+002: i=2 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<3>
+003: done
+]])
+
 AT_SETUP([idl handling of missing tables and columns - C])
 AT_KEYWORDS([ovsdb server idl positive])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR

@@ -46,6 +46,7 @@ struct lldp {
     struct hmap         mappings_by_aux;  /* "struct" indexed by aux */
     struct ovs_list     active_mapping_queue;
     struct ovs_refcount ref_cnt;
+    bool                enabled;          /* LLDP enabled on port */
 };
 
 /* Configuration specific to Auto Attach.
@@ -83,8 +84,8 @@ long long int lldp_wait(struct lldp *lldp);
 long long int lldp_wake_time(const struct lldp *lldp);
 void lldp_run(struct lldpd *cfg);
 bool lldp_should_send_packet(struct lldp *cfg);
-bool lldp_should_process_flow(const struct flow *flow);
-bool lldp_configure(struct lldp *lldp);
+bool lldp_should_process_flow(struct lldp *lldp, const struct flow *flow);
+bool lldp_configure(struct lldp *lldp, const struct smap *cfg);
 void lldp_process_packet(struct lldp *cfg, const struct dp_packet *);
 void lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
                      uint8_t eth_src[ETH_ADDR_LEN]);

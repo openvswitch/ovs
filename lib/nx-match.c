@@ -319,7 +319,9 @@ bad_len:
                 b->size);
 error:
     *header = 0;
-    *field = NULL;
+    if (field) {
+        *field = NULL;
+    }
     return OFPERR_OFPBMC_BAD_LEN;
 }
 

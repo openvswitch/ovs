@@ -1,0 +1,85 @@
+AT_BANNER([dpctl])
+
+AT_SETUP([dpctl - add-dp del-dp])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0])
+AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0], [2], [],
+  [ovs-vswitchd: add_dp (File exists)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
+AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0], [2], [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0], [dnl
+ovs-vswitchd: opening datapath (...)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([dpctl - add-if set-if del-if])
+OVS_VSWITCHD_START([], [], [=override])
+AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0])
+AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
+dummy@br0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	port 0: br0 (internal)
+])
+AT_CHECK([ovs-appctl dpctl/add-if dummy@br0 vif1.0,type=dummy,port_no=5])
+AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
+dummy@br0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	port 0: br0 (internal)
+	port 5: vif1.0 (dummy)
+])
+AT_CHECK([ovs-appctl dpctl/add-if dummy@br0 vif1.0,type=dummy], [2], [],
+  [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [ovs-vswitchd: adding vif1.0 to dummy@br0 failed (...)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/set-if dummy@br0 vif1.0,port_no=5])
+AT_CHECK([ovs-appctl dpctl/set-if dummy@br0 vif1.0,type=system], [2], [],
+  [ovs-vswitchd: vif1.0: can't change type from dummy to system
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/set-if dummy@br0 br0,type=dummy], [2], [],
+  [ovs-vswitchd: br0: can't change type from internal to dummy
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 vif1.0])
+AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
+dummy@br0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	port 0: br0 (internal)
+])
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 vif1.0], [2], [],
+  [ovs-vswitchd: no port named vif1.0
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
+dummy@br0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	port 0: br0 (internal)
+])
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 nonexistent], [2], [],
+  [ovs-vswitchd: no port named nonexistent
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 br0], [2], [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [ovs-vswitchd: deleting port br0 from dummy@br0 failed (...)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+AT_CHECK([ovs-appctl dpctl/del-dp dummy@br0])
+AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 br0], [2], [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [ovs-vswitchd: opening datapath (...)
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+OVS_VSWITCHD_STOP(["/dummy@br0: port_del failed/d
+/dummy@br0: failed to add vif1.0 as port/d"])
+AT_CLEANUP

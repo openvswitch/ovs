@@ -32,8 +32,6 @@
 #define OVS_READ_DEV_OP          (1 << 0)
 #define OVS_WRITE_DEV_OP         (1 << 1)
 #define OVS_TRANSACTION_DEV_OP   (1 << 2)
-#define OVS_READ_EVENT_DEV_OP    (1 << 3)
-#define OVS_READ_PACKET_DEV_OP   (1 << 4)
 
 typedef struct _OVS_DEVICE_EXTENSION {
     INT numberOpenInstance;

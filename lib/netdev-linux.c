@@ -1058,7 +1058,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        dp_packet_set_dp_hash(buffer, 0);
+        dp_packet_set_rss_hash(buffer, 0);
         packets[0] = buffer;
         *c = 1;
     }

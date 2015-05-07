@@ -89,7 +89,7 @@ static inline int elements_fit_in_base(struct flex_array *fa)
  * capacity in the base structure.  Also note that no effort is made
  * to efficiently pack objects across page boundaries.
  */
-struct flex_array *flex_array_alloc(int element_size, unsigned int total,
+struct flex_array *rpl_flex_array_alloc(int element_size, unsigned int total,
 					gfp_t flags)
 {
 	struct flex_array *ret;
@@ -118,6 +118,7 @@ struct flex_array *flex_array_alloc(int element_size, unsigned int total,
 						FLEX_ARRAY_BASE_BYTES_LEFT);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_alloc);
 
 static int fa_element_to_part_nr(struct flex_array *fa,
 					unsigned int element_nr)
@@ -132,7 +133,7 @@ static int fa_element_to_part_nr(struct flex_array *fa,
  * This is to be used in cases where the base 'struct flex_array'
  * has been statically allocated and should not be free.
  */
-void flex_array_free_parts(struct flex_array *fa)
+void rpl_flex_array_free_parts(struct flex_array *fa)
 {
 	int part_nr;
 
@@ -141,12 +142,14 @@ void flex_array_free_parts(struct flex_array *fa)
 	for (part_nr = 0; part_nr < FLEX_ARRAY_NR_BASE_PTRS; part_nr++)
 		kfree(fa->parts[part_nr]);
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_free_parts);
 
-void flex_array_free(struct flex_array *fa)
+void rpl_flex_array_free(struct flex_array *fa)
 {
 	flex_array_free_parts(fa);
 	kfree(fa);
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_free);
 
 static unsigned int index_inside_part(struct flex_array *fa,
 					unsigned int element_nr,
@@ -191,7 +194,7 @@ __fa_get_part(struct flex_array *fa, int part_nr, gfp_t flags)
  *
  * Locking must be provided by the caller.
  */
-int flex_array_put(struct flex_array *fa, unsigned int element_nr, void *src,
+int rpl_flex_array_put(struct flex_array *fa, unsigned int element_nr, void *src,
 			gfp_t flags)
 {
 	int part_nr = 0;
@@ -214,6 +217,7 @@ int flex_array_put(struct flex_array *fa, unsigned int element_nr, void *src,
 	memcpy(dst, src, fa->element_size);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_put);
 
 /**
  * flex_array_clear - clear element in array at @element_nr
@@ -222,7 +226,7 @@ int flex_array_put(struct flex_array *fa, unsigned int element_nr, void *src,
  *
  * Locking must be provided by the caller.
  */
-int flex_array_clear(struct flex_array *fa, unsigned int element_nr)
+int rpl_flex_array_clear(struct flex_array *fa, unsigned int element_nr)
 {
 	int part_nr = 0;
 	struct flex_array_part *part;
@@ -244,6 +248,7 @@ int flex_array_clear(struct flex_array *fa, unsigned int element_nr)
 	memset(dst, FLEX_ARRAY_FREE, fa->element_size);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_clear);
 
 /**
  * flex_array_prealloc - guarantee that array space exists
@@ -260,7 +265,7 @@ int flex_array_clear(struct flex_array *fa, unsigned int element_nr)
  *
  * Locking must be provided by the caller.
  */
-int flex_array_prealloc(struct flex_array *fa, unsigned int start,
+int rpl_flex_array_prealloc(struct flex_array *fa, unsigned int start,
 			unsigned int nr_elements, gfp_t flags)
 {
 	int start_part;
@@ -293,6 +298,7 @@ int flex_array_prealloc(struct flex_array *fa, unsigned int start,
 	}
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_prealloc);
 
 /**
  * flex_array_get - pull data back out of the array
@@ -306,7 +312,7 @@ int flex_array_prealloc(struct flex_array *fa, unsigned int start,
  *
  * Locking must be provided by the caller.
  */
-void *flex_array_get(struct flex_array *fa, unsigned int element_nr)
+void *rpl_flex_array_get(struct flex_array *fa, unsigned int element_nr)
 {
 	int part_nr = 0;
 	struct flex_array_part *part;
@@ -325,6 +331,7 @@ void *flex_array_get(struct flex_array *fa, unsigned int element_nr)
 	}
 	return &part->elements[index_inside_part(fa, element_nr, part_nr)];
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_get);
 
 /**
  * flex_array_get_ptr - pull a ptr back out of the array
@@ -335,7 +342,7 @@ void *flex_array_get(struct flex_array *fa, unsigned int element_nr)
  * flex_array_put_ptr().  This function should not be called if the
  * element in question was not set using the _put_ptr() helper.
  */
-void *flex_array_get_ptr(struct flex_array *fa, unsigned int element_nr)
+void *rpl_flex_array_get_ptr(struct flex_array *fa, unsigned int element_nr)
 {
 	void **tmp;
 
@@ -345,6 +352,7 @@ void *flex_array_get_ptr(struct flex_array *fa, unsigned int element_nr)
 
 	return *tmp;
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_get_ptr);
 
 static int part_is_free(struct flex_array_part *part)
 {
@@ -365,7 +373,7 @@ static int part_is_free(struct flex_array_part *part)
  *
  * Locking must be provided by the caller.
  */
-int flex_array_shrink(struct flex_array *fa)
+int rpl_flex_array_shrink(struct flex_array *fa)
 {
 	struct flex_array_part *part;
 	int part_nr;
@@ -387,5 +395,6 @@ int flex_array_shrink(struct flex_array *fa)
 	}
 	return ret;
 }
+EXPORT_SYMBOL_GPL(rpl_flex_array_shrink);
 
 #endif /* Linux version < 3.0.0 */

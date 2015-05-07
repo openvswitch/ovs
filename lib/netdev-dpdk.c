@@ -117,8 +117,7 @@ static const struct rte_eth_conf port_conf = {
     .rx_adv_conf = {
         .rss_conf = {
             .rss_key = NULL,
-            .rss_hf = ETH_RSS_IPV4_TCP | ETH_RSS_IPV4 | ETH_RSS_IPV6
-                    | ETH_RSS_IPV4_UDP | ETH_RSS_IPV6_TCP | ETH_RSS_IPV6_UDP,
+            .rss_hf = ETH_RSS_IP | ETH_RSS_UDP | ETH_RSS_TCP,
         },
     },
     .txmode = {
@@ -558,11 +557,11 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     netdev_->n_rxq = NR_QUEUE;
 
     if (type == DPDK_DEV_ETH) {
-	    netdev_dpdk_alloc_txq(netdev, NR_QUEUE);
-	    err = dpdk_eth_dev_init(netdev);
-	    if (err) {
-		    goto unlock;
-	    }
+        netdev_dpdk_alloc_txq(netdev, NR_QUEUE);
+        err = dpdk_eth_dev_init(netdev);
+        if (err) {
+            goto unlock;
+        }
     }
 
     list_push_back(&dpdk_list, &netdev->list_node);
@@ -906,10 +905,10 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
     int tx_pkts, i;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
-	ovs_mutex_lock(&vhost_dev->mutex);
-	vhost_dev->stats.tx_dropped+= cnt;
-	ovs_mutex_unlock(&vhost_dev->mutex);
-	goto out;
+        ovs_mutex_lock(&vhost_dev->mutex);
+        vhost_dev->stats.tx_dropped+= cnt;
+        ovs_mutex_unlock(&vhost_dev->mutex);
+        goto out;
     }
 
     /* There is vHost TX single queue, So we need to lock it for TX. */
@@ -923,9 +922,9 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
 
 out:
     if (may_steal) {
-	for (i = 0; i < cnt; i++) {
-	    dp_packet_delete(pkts[i]);
-	}
+        for (i = 0; i < cnt; i++) {
+            dp_packet_delete(pkts[i]);
+        }
     }
 }
 
@@ -1064,6 +1063,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
         for (i = 0; i < cnt; i++) {
             int size = dp_packet_size(pkts[i]);
+
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
                     dpdk_queue_pkts(dev, qid,
@@ -1745,6 +1745,15 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid OVS_UNUSED,
                       struct dp_packet **pkts, int cnt, bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    unsigned i;
+
+    /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that the
+     * rss hash field is clear. This is because the same mbuf may be modified by
+     * the consumer of the ring and return into the datapath without recalculating
+     * the RSS hash. */
+    for (i = 0; i < cnt; i++) {
+        dp_packet_set_rss_hash(pkts[i], 0);
+    }
 
     /* DPDK Rings have a single TX queue, Therefore needs locking. */
     rte_spinlock_lock(&dev->txq_lock);

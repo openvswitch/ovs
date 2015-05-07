@@ -1333,7 +1333,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             } else if (!strcmp(value, "last")) {
                 gm->command_bucket_id = OFPG15_BUCKET_LAST;
             } else {
-                char *error = str_to_u32(value, &gm->command_bucket_id);
+                error = str_to_u32(value, &gm->command_bucket_id);
                 if (error) {
                     goto out;
                 }
@@ -1356,7 +1356,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             if(!strcmp(value, "all")) {
                 gm->group_id = OFPG_ALL;
             } else {
-                char *error = str_to_u32(value, &gm->group_id);
+                error = str_to_u32(value, &gm->group_id);
                 if (error) {
                     goto out;
                 }
@@ -1409,6 +1409,9 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
                 goto out;
             }
             error = str_to_u64(value, &gm->props.selection_method_param);
+            if (error) {
+                goto out;
+            }
             *usable_protocols &= OFPUTIL_P_OF15_UP;
         } else if (!strcmp(name, "fields")) {
             if (!(fields & F_GROUP_TYPE)) {

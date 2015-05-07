@@ -312,7 +312,6 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a);
-        dp_packet_set_dp_hash(packet, md->dp_hash);
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
@@ -405,8 +404,7 @@ odp_execute_masked_set_action(struct dp_packet *packet,
 
     case OVS_KEY_ATTR_DP_HASH:
         md->dp_hash = nl_attr_get_u32(a)
-            | (dp_packet_get_dp_hash(packet) & ~*get_mask(a, uint32_t));
-        dp_packet_set_dp_hash(packet, md->dp_hash);
+            | (md->dp_hash & ~*get_mask(a, uint32_t));
         break;
 
     case OVS_KEY_ATTR_RECIRC_ID:
@@ -516,8 +514,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                     flow_extract(packets[i], &flow);
                     hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
 
-                    /* We also store the hash value with each packet */
-                    dp_packet_set_dp_hash(packets[i], hash ? hash : 1);
+                    packets[i]->md.dp_hash = hash;
                 }
             } else {
                 /* Assert on unknown hash algorithm.  */

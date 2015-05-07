@@ -1,10 +1,22 @@
 #ifndef __LINUX_SKBUFF_WRAPPER_H
 #define __LINUX_SKBUFF_WRAPPER_H 1
 
+#include <linux/version.h>
+#include <linux/types.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+/* This should be before skbuff.h to make sure that we rewrite
+ * the calls there. */
+struct sk_buff;
+
+int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
+		     gfp_t gfp_mask);
+#define pskb_expand_head rpl_pskb_expand_head
+#endif
+
 #include_next <linux/skbuff.h>
 
 #include <linux/jhash.h>
-#include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
 #define SKB_GSO_GRE 0
@@ -303,13 +315,14 @@ static inline void skb_tx_error(struct sk_buff *skb)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0) */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
-unsigned int skb_zerocopy_headlen(const struct sk_buff *from);
+#define skb_zerocopy_headlen rpl_skb_zerocopy_headlen
+unsigned int rpl_skb_zerocopy_headlen(const struct sk_buff *from);
 #endif
 
 #ifndef HAVE_SKB_ZEROCOPY
 #define skb_zerocopy rpl_skb_zerocopy
-int skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len,
-		  int hlen);
+int rpl_skb_zerocopy(struct sk_buff *to, struct sk_buff *from, int len,
+		     int hlen);
 #endif
 
 #ifndef HAVE_SKB_CLEAR_HASH
@@ -342,17 +355,17 @@ static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 
 #ifndef HAVE_SKB_ENSURE_WRITABLE
 #define skb_ensure_writable rpl_skb_ensure_writable
-int skb_ensure_writable(struct sk_buff *skb, int write_len);
+int rpl_skb_ensure_writable(struct sk_buff *skb, int write_len);
 #endif
 
 #ifndef HAVE_SKB_VLAN_POP
 #define skb_vlan_pop rpl_skb_vlan_pop
-int skb_vlan_pop(struct sk_buff *skb);
+int rpl_skb_vlan_pop(struct sk_buff *skb);
 #endif
 
 #ifndef HAVE_SKB_VLAN_PUSH
 #define skb_vlan_push rpl_skb_vlan_push
-int skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci);
+int rpl_skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci);
 #endif
 
 #endif

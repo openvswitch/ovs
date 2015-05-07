@@ -53,6 +53,7 @@
 #include "trigger.h"
 #include "util.h"
 #include "unixctl.h"
+#include "perf-counter.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
@@ -76,6 +77,8 @@ static bool bootstrap_ca_cert;
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
+static unixctl_cb_func ovsdb_server_perf_counters_clear;
+static unixctl_cb_func ovsdb_server_perf_counters_show;
 
 struct server_config {
     struct sset *remotes;
@@ -292,6 +295,8 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
+    perf_counters_init();
+
     if (!run_command) {
         /* ovsdb-server is usually a long-running process, in which case it
          * makes plenty of sense to log the version, but --run makes
@@ -318,6 +323,10 @@ main(int argc, char *argv[])
                              ovsdb_server_remove_database, &server_config);
     unixctl_command_register("ovsdb-server/list-dbs", "", 0, 0,
                              ovsdb_server_list_databases, &all_dbs);
+    unixctl_command_register("ovsdb-server/perf-counters-show", "", 0, 0,
+                             ovsdb_server_perf_counters_show, NULL);
+    unixctl_command_register("ovsdb-server/perf-counters-clear", "", 0, 0,
+                             ovsdb_server_perf_counters_clear, NULL);
 
     main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
 
@@ -338,7 +347,7 @@ main(int argc, char *argv[])
                       run_command, process_status_msg(status));
         }
     }
-
+    perf_counters_destroy();
     service_stop();
     return 0;
 }
@@ -1018,6 +1027,26 @@ ovsdb_server_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     bool *exiting = exiting_;
     *exiting = true;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_perf_counters_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                                const char *argv[] OVS_UNUSED,
+                                void *arg_ OVS_UNUSED)
+{
+    char *s = perf_counters_to_string();
+
+    unixctl_command_reply(conn, s);
+    free(s);
+}
+
+static void
+ovsdb_server_perf_counters_clear(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                                 const char *argv[] OVS_UNUSED,
+                                 void *arg_ OVS_UNUSED)
+{
+    perf_counters_clear();
     unixctl_command_reply(conn, NULL);
 }
 

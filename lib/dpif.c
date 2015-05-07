@@ -135,6 +135,7 @@ static int
 dp_register_provider__(const struct dpif_class *new_class)
 {
     struct registered_dpif_class *registered_class;
+    int error;
 
     if (sset_contains(&dpif_blacklist, new_class->type)) {
         VLOG_DBG("attempted to register blacklisted provider: %s",
@@ -146,6 +147,13 @@ dp_register_provider__(const struct dpif_class *new_class)
         VLOG_WARN("attempted to register duplicate datapath provider: %s",
                   new_class->type);
         return EEXIST;
+    }
+
+    error = new_class->init ? new_class->init() : 0;
+    if (error) {
+        VLOG_WARN("failed to initialize %s datapath class: %s",
+                  new_class->type, ovs_strerror(error));
+        return error;
     }
 
     registered_class = xmalloc(sizeof *registered_class);

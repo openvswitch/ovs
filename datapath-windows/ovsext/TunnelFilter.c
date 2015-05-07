@@ -111,7 +111,8 @@ DEFINE_GUID(
 PDEVICE_OBJECT gDeviceObject;
 
 HANDLE gEngineHandle = NULL;
-HANDLE gBfeSubscriptionHandle = NULL;
+HANDLE gTunnelProviderBfeHandle = NULL;
+HANDLE gTunnelInitBfeHandle = NULL;
 UINT32 gCalloutIdV4;
 
 
@@ -448,11 +449,6 @@ OvsTunnelRegisterCallouts(VOID *deviceObject)
         L"Sub-Layer for use by Datagram-Data OVS callouts";
     OvsTunnelSubLayer.flags = 0;
     OvsTunnelSubLayer.weight = FWP_EMPTY; /* auto-weight */
-    /*
-     * Link all objects to the tunnel provider. When multiple providers are
-     * installed on a computer, this makes it easy to determine who added what.
-     */
-    OvsTunnelSubLayer.providerKey = (GUID*) &OVS_TUNNEL_PROVIDER_KEY;
 
     status = FwpmSubLayerAdd(gEngineHandle, &OvsTunnelSubLayer, NULL);
     if (!NT_SUCCESS(status)) {
@@ -547,8 +543,8 @@ Exit:
 }
 
 VOID NTAPI
-OvsBfeStateChangeCallback(PVOID context,
-                          FWPM_SERVICE_STATE bfeState)
+OvsTunnelProviderBfeCallback(PVOID context,
+                             FWPM_SERVICE_STATE bfeState)
 {
     HANDLE handle = NULL;
 
@@ -564,18 +560,18 @@ OvsBfeStateChangeCallback(PVOID context,
 }
 
 NTSTATUS
-OvsSubscribeBfeStateChanges(PVOID deviceObject)
+OvsSubscribeTunnelProviderBfeStateChanges(PVOID deviceObject)
 {
     NTSTATUS status = STATUS_SUCCESS;
 
-    if (!gBfeSubscriptionHandle) {
+    if (!gTunnelProviderBfeHandle) {
         status = FwpmBfeStateSubscribeChanges(deviceObject,
-                                              OvsBfeStateChangeCallback,
+                                              OvsTunnelProviderBfeCallback,
                                               NULL,
-                                              &gBfeSubscriptionHandle);
+                                              &gTunnelProviderBfeHandle);
         if (!NT_SUCCESS(status)) {
             OVS_LOG_ERROR(
-                "Failed to open subscribe BFE state change callback, status: %x.",
+                "Failed to subscribe BFE tunnel provider callback, status: %x.",
                 status);
         }
     }
@@ -584,27 +580,28 @@ OvsSubscribeBfeStateChanges(PVOID deviceObject)
 }
 
 VOID
-OvsUnsubscribeBfeStateChanges()
+OvsUnsubscribeTunnelProviderBfeStateChanges()
 {
     NTSTATUS status = STATUS_SUCCESS;
 
-    if (gBfeSubscriptionHandle) {
-        status = FwpmBfeStateUnsubscribeChanges(gBfeSubscriptionHandle);
+    if (gTunnelProviderBfeHandle) {
+        status = FwpmBfeStateUnsubscribeChanges(gTunnelProviderBfeHandle);
         if (!NT_SUCCESS(status)) {
             OVS_LOG_ERROR(
-                "Failed to open unsubscribe BFE state change callback, status: %x.",
+                "Failed to unsubscribe BFE tunnel provider callback, status: %x.",
                 status);
         }
-        gBfeSubscriptionHandle = NULL;
+        gTunnelProviderBfeHandle = NULL;
     }
 }
 
-VOID OvsRegisterSystemProvider(PVOID deviceObject)
+VOID
+OvsRegisterSystemProvider(PVOID deviceObject)
 {
     NTSTATUS status = STATUS_SUCCESS;
     HANDLE handle = NULL;
 
-    status = OvsSubscribeBfeStateChanges(deviceObject);
+    status = OvsSubscribeTunnelProviderBfeStateChanges(deviceObject);
     if (NT_SUCCESS(status)) {
         if (FWPM_SERVICE_RUNNING == FwpmBfeStateGet()) {
             OvsTunnelEngineOpen(&handle);
@@ -613,7 +610,7 @@ VOID OvsRegisterSystemProvider(PVOID deviceObject)
             }
             OvsTunnelEngineClose(&handle);
 
-            OvsUnsubscribeBfeStateChanges();
+            OvsUnsubscribeTunnelProviderBfeStateChanges();
         }
     }
 }
@@ -628,5 +625,89 @@ VOID OvsUnregisterSystemProvider()
     }
     OvsTunnelEngineClose(&handle);
 
-    OvsUnsubscribeBfeStateChanges();
+    OvsUnsubscribeTunnelProviderBfeStateChanges();
+}
+
+VOID NTAPI
+OvsTunnelInitBfeCallback(PVOID context,
+                         FWPM_SERVICE_STATE bfeState)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PDRIVER_OBJECT driverObject = (PDRIVER_OBJECT) context;
+
+    if (FWPM_SERVICE_RUNNING == bfeState) {
+        status = OvsTunnelFilterInitialize(driverObject);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR(
+                "Failed to initialize tunnel filter, status: %x.",
+                status);
+        }
+    }
+}
+
+NTSTATUS
+OvsSubscribeTunnelInitBfeStateChanges(PDRIVER_OBJECT driverObject,
+                                      PVOID deviceObject)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (!gTunnelInitBfeHandle) {
+        status = FwpmBfeStateSubscribeChanges(deviceObject,
+                                              OvsTunnelInitBfeCallback,
+                                              driverObject,
+                                              &gTunnelInitBfeHandle);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR(
+                "Failed to subscribe BFE tunnel init callback, status: %x.",
+                status);
+        }
+    }
+
+    return status;
+}
+
+VOID
+OvsUnsubscribeTunnelInitBfeStateChanges()
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (gTunnelInitBfeHandle) {
+        status = FwpmBfeStateUnsubscribeChanges(gTunnelInitBfeHandle);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR(
+                "Failed to unsubscribe BFE tunnel init callback, status: %x.",
+                status);
+        }
+        gTunnelInitBfeHandle = NULL;
+    }
+}
+
+NTSTATUS
+OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    status = OvsSubscribeTunnelInitBfeStateChanges(driverObject, deviceObject);
+    if (NT_SUCCESS(status)) {
+        if (FWPM_SERVICE_RUNNING == FwpmBfeStateGet()) {
+            status = OvsTunnelFilterInitialize(driverObject);
+            if (!NT_SUCCESS(status)) {
+                /* XXX: We need to decide what actions to take in case of
+                 * failure to initialize tunnel filter. */
+                ASSERT(status == NDIS_STATUS_SUCCESS);
+                OVS_LOG_ERROR(
+                    "Failed to initialize tunnel filter, status: %x.",
+                    status);
+            }
+            OvsUnsubscribeTunnelInitBfeStateChanges();
+        }
+    }
+
+    return status;
+}
+
+VOID OvsUninitTunnelFilter(PDRIVER_OBJECT driverObject)
+{
+    OvsTunnelFilterUninitialize(driverObject);
+    OvsUnsubscribeTunnelInitBfeStateChanges();
 }

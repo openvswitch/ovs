@@ -2270,8 +2270,7 @@ static int __init dp_init(void)
 
 	BUILD_BUG_ON(sizeof(struct ovs_skb_cb) > FIELD_SIZEOF(struct sk_buff, cb));
 
-	pr_info("Open vSwitch switching datapath %s, built "__DATE__" "__TIME__"\n",
-		VERSION);
+	pr_info("Open vSwitch switching datapath %s\n", VERSION);
 
 	err = action_fifos_init();
 	if (err)
