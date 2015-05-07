@@ -75,9 +75,10 @@ netdev_features_t rpl_netif_skb_features(struct sk_buff *skb)
 EXPORT_SYMBOL_GPL(rpl_netif_skb_features);
 #endif	/* kernel version < 2.6.38 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
-struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
-				    netdev_features_t features)
+#ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
+struct sk_buff *rpl__skb_gso_segment(struct sk_buff *skb,
+				    netdev_features_t features,
+				    bool tx_path)
 {
 	int vlan_depth = ETH_HLEN;
 	__be16 type = skb->protocol;
@@ -99,14 +100,20 @@ struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
 		type = ovs_skb_get_inner_protocol(skb);
 
 	/* this hack needed to get regular skb_gso_segment() */
-#undef skb_gso_segment
 	skb_proto = skb->protocol;
 	skb->protocol = type;
 
+#ifdef HAVE___SKB_GSO_SEGMENT
+#undef __skb_gso_segment
+	skb_gso = __skb_gso_segment(skb, features, tx_path);
+#else
+#undef skb_gso_segment
 	skb_gso = skb_gso_segment(skb, features);
+#endif
+
 	skb->protocol = skb_proto;
 	return skb_gso;
 }
-EXPORT_SYMBOL_GPL(rpl_skb_gso_segment);
+EXPORT_SYMBOL_GPL(rpl__skb_gso_segment);
 
-#endif	/* kernel version < 3.16.0 */
+#endif	/* OVS_USE_COMPAT_GSO_SEGMENTATION */

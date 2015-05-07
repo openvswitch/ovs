@@ -88,31 +88,42 @@ static inline struct net_device *dev_get_by_index_rcu(struct net *net, int ifind
 typedef u32 netdev_features_t;
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#define OVS_USE_COMPAT_GSO_SEGMENTATION
+#endif
+
+#ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
+/* define compat version to handle MPLS segmentation offload. */
+#define __skb_gso_segment rpl__skb_gso_segment
+struct sk_buff *rpl__skb_gso_segment(struct sk_buff *skb,
+				    netdev_features_t features,
+				    bool tx_path);
+
 #define skb_gso_segment rpl_skb_gso_segment
-struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb,
-                                    netdev_features_t features);
+static inline
+struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb, netdev_features_t features)
+{
+        return rpl__skb_gso_segment(skb, features, true);
+}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 #define netif_skb_features rpl_netif_skb_features
 netdev_features_t rpl_netif_skb_features(struct sk_buff *skb);
-
-#define netif_needs_gso rpl_netif_needs_gso
-static inline int rpl_netif_needs_gso(struct sk_buff *skb, int features)
-{
-	return skb_is_gso(skb) && (!skb_gso_ok(skb, features) ||
-		unlikely(skb->ip_summed != CHECKSUM_PARTIAL));
-}
 #endif
 
-#ifndef HAVE___SKB_GSO_SEGMENT
-static inline struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
-						netdev_features_t features,
-						bool tx_path)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+static inline int rpl_netif_needs_gso(struct net_device *dev,
+				      struct sk_buff *skb, int features)
 {
-	return skb_gso_segment(skb, features);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
+	return skb_is_gso(skb) && (!skb_gso_ok(skb, features) ||
+		unlikely(skb->ip_summed != CHECKSUM_PARTIAL));
+#else
+	return netif_needs_gso(skb, features);
+#endif
 }
+#define netif_needs_gso rpl_netif_needs_gso
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
