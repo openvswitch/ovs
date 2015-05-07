@@ -80,7 +80,7 @@
   <h3>Bindings data</h3>
 
   <p>
-    The Bindings tables contain the current placement of logical components
+    The Binding tables contain the current placement of logical components
     (such as VMs and VIFs) onto chassis and the bindings between logical ports
     and MACs.
   </p>
@@ -98,7 +98,7 @@
   </p>
 
   <p>
-    The <ref table="Bindings"/> table is currently the only Bindings table.
+    The <ref table="Binding"/> table is currently the only binding data.
   </p>
 
   <table name="Chassis" title="Physical Network Hypervisor and Gateway Information">
@@ -231,7 +231,7 @@
     <column name="logical_datapath">
       The logical datapath to which the logical flow belongs.  A logical
       datapath implements a logical pipeline among the ports in the <ref
-      table="Bindings"/> table associated with it.  (No table represents a
+      table="Binding"/> table associated with it.  (No table represents a
       logical datapath.)  In practice, the pipeline in a given logical datapath
       implements either a logical switch or a logical router, and
       <code>ovn-northd</code> reuses the UUIDs for those logical entities from
@@ -456,8 +456,8 @@
         String constants have the same syntax as quoted strings in JSON (thus,
         they are Unicode strings).  String constants are used for naming
         logical ports.  Thus, the useful values are <ref
-        column="logical_port"/> names from the <ref column="Bindings"/> and
-        <ref column="Gateway"/> table in a logical flow's <ref
+        column="logical_port"/> names from the <ref column="Binding"/> and
+        <ref column="Gateway"/> tables in a logical flow's <ref
 	column="logical_datapath"/>.
       </p>
 
@@ -633,7 +633,7 @@
     </column>
   </table>
 
-  <table name="Bindings" title="Physical-Logical Bindings">
+  <table name="Binding" title="Physical-Logical Bindings">
     <p>
       Each row in this table identifies the physical location of a logical
       port.

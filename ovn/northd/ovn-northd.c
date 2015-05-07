@@ -416,7 +416,7 @@ build_pipeline(struct northd_context *ctx)
 }
 
 static bool
-parents_equal(const struct sbrec_bindings *binding,
+parents_equal(const struct sbrec_binding *binding,
               const struct nbrec_logical_port *lport)
 {
     if (!!binding->parent_port != !!lport->parent_name) {
@@ -434,7 +434,7 @@ parents_equal(const struct sbrec_bindings *binding,
 }
 
 static bool
-tags_equal(const struct sbrec_bindings *binding,
+tags_equal(const struct sbrec_binding *binding,
            const struct nbrec_logical_port *lport)
 {
     if (binding->n_tag != lport->n_tag) {
@@ -447,7 +447,7 @@ tags_equal(const struct sbrec_bindings *binding,
 struct binding_hash_node {
     struct hmap_node lp_node; /* In 'lp_map', by binding->logical_port. */
     struct hmap_node tk_node; /* In 'tk_map', by binding->tunnel_key. */
-    const struct sbrec_bindings *binding;
+    const struct sbrec_binding *binding;
 };
 
 static bool
@@ -485,14 +485,14 @@ choose_tunnel_key(const struct hmap *tk_hmap)
 
 /*
  * When a change has occurred in the OVN_Northbound database, we go through and
- * make sure that the contents of the Bindings table in the OVN_Southbound
+ * make sure that the contents of the Binding table in the OVN_Southbound
  * database are up to date with the logical ports defined in the
  * OVN_Northbound database.
  */
 static void
 set_bindings(struct northd_context *ctx)
 {
-    const struct sbrec_bindings *binding;
+    const struct sbrec_binding *binding;
     const struct nbrec_logical_port *lport;
 
     /*
@@ -513,7 +513,7 @@ set_bindings(struct northd_context *ctx)
     struct hmap lp_hmap = HMAP_INITIALIZER(&lp_hmap);
     struct hmap tk_hmap = HMAP_INITIALIZER(&tk_hmap);
 
-    SBREC_BINDINGS_FOR_EACH(binding, ctx->ovnsb_idl) {
+    SBREC_BINDING_FOR_EACH(binding, ctx->ovnsb_idl) {
         struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
         hash_node->binding = binding;
         hmap_insert(&lp_hmap, &hash_node->lp_node,
@@ -548,17 +548,17 @@ set_bindings(struct northd_context *ctx)
 
             if (!macs_equal(binding->mac, binding->n_mac,
                         lport->macs, lport->n_macs)) {
-                sbrec_bindings_set_mac(binding,
+                sbrec_binding_set_mac(binding,
                         (const char **) lport->macs, lport->n_macs);
             }
             if (!parents_equal(binding, lport)) {
-                sbrec_bindings_set_parent_port(binding, lport->parent_name);
+                sbrec_binding_set_parent_port(binding, lport->parent_name);
             }
             if (!tags_equal(binding, lport)) {
-                sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
+                sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
             }
             if (!uuid_equals(&binding->logical_datapath, &logical_datapath)) {
-                sbrec_bindings_set_logical_datapath(binding,
+                sbrec_binding_set_logical_datapath(binding,
                                                     logical_datapath);
             }
         } else {
@@ -569,21 +569,21 @@ set_bindings(struct northd_context *ctx)
                 continue;
             }
 
-            binding = sbrec_bindings_insert(ctx->ovnsb_txn);
-            sbrec_bindings_set_logical_port(binding, lport->name);
-            sbrec_bindings_set_mac(binding,
+            binding = sbrec_binding_insert(ctx->ovnsb_txn);
+            sbrec_binding_set_logical_port(binding, lport->name);
+            sbrec_binding_set_mac(binding,
                     (const char **) lport->macs, lport->n_macs);
             if (lport->parent_name && lport->n_tag > 0) {
-                sbrec_bindings_set_parent_port(binding, lport->parent_name);
-                sbrec_bindings_set_tag(binding, lport->tag, lport->n_tag);
+                sbrec_binding_set_parent_port(binding, lport->parent_name);
+                sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
             }
 
-            sbrec_bindings_set_tunnel_key(binding, tunnel_key);
-            sbrec_bindings_set_logical_datapath(binding, logical_datapath);
+            sbrec_binding_set_tunnel_key(binding, tunnel_key);
+            sbrec_binding_set_logical_datapath(binding, logical_datapath);
 
             /* Add the tunnel key to the tk_hmap so that we don't try to use it
              * for another port.  (We don't want it in the lp_hmap because that
-             * would just get the Bindings record deleted later.) */
+             * would just get the Binding record deleted later.) */
             struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
             hash_node->binding = binding;
             hmap_insert(&tk_hmap, &hash_node->tk_node,
@@ -594,7 +594,7 @@ set_bindings(struct northd_context *ctx)
     struct binding_hash_node *hash_node;
     HMAP_FOR_EACH (hash_node, lp_node, &lp_hmap) {
         hmap_remove(&lp_hmap, &hash_node->lp_node);
-        sbrec_bindings_delete(hash_node->binding);
+        sbrec_binding_delete(hash_node->binding);
     }
     hmap_destroy(&lp_hmap);
 
@@ -617,14 +617,14 @@ ovnnb_db_changed(struct northd_context *ctx)
 
 /*
  * The only change we get notified about is if the 'chassis' column of the
- * 'Bindings' table changes.  When this column is not empty, it means we need to
+ * 'Binding' table changes.  When this column is not empty, it means we need to
  * set the corresponding logical port as 'up' in the northbound DB.
  */
 static void
 ovnsb_db_changed(struct northd_context *ctx)
 {
     struct hmap lports_hmap;
-    const struct sbrec_bindings *binding;
+    const struct sbrec_binding *binding;
     const struct nbrec_logical_port *lport;
 
     struct lport_hash_node {
@@ -643,7 +643,7 @@ ovnsb_db_changed(struct northd_context *ctx)
                 hash_string(lport->name, 0));
     }
 
-    SBREC_BINDINGS_FOR_EACH(binding, ctx->ovnsb_idl) {
+    SBREC_BINDING_FOR_EACH(binding, ctx->ovnsb_idl) {
         lport = NULL;
         HMAP_FOR_EACH_WITH_HASH(hash_node, node,
                 hash_string(binding->logical_port, 0), &lports_hmap) {
@@ -787,14 +787,14 @@ main(int argc, char *argv[])
      * has to care about, so we'll enable monitoring those directly. */
     ctx.ovnsb_idl = ovnsb_idl = ovsdb_idl_create(ovnsb_db,
             &sbrec_idl_class, false, true);
-    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_bindings);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_logical_port);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_chassis);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_mac);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tag);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_parent_port);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_logical_datapath);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_bindings_col_tunnel_key);
+    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_binding);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_logical_port);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_chassis);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_mac);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_tag);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_parent_port);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_logical_datapath);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_tunnel_key);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_table_id);

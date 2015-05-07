@@ -40,7 +40,7 @@
 #include "util.h"
 
 #include "ofctrl.h"
-#include "bindings.h"
+#include "binding.h"
 #include "chassis.h"
 #include "physical.h"
 #include "pipeline.h"
@@ -184,7 +184,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ctx.ovs_idl, &ovsrec_open_vswitch_col_external_ids);
 
     chassis_init(&ctx);
-    bindings_init(&ctx);
+    binding_init(&ctx);
     pipeline_init();
 
     get_initial_snapshot(ctx.ovs_idl);
@@ -229,7 +229,7 @@ main(int argc, char *argv[])
         ofctrl_clear_flows();
 
         chassis_run(&ctx);
-        bindings_run(&ctx);
+        binding_run(&ctx);
         pipeline_run(&ctx);
         physical_run(&ctx);
         ofctrl_run(&ctx);
@@ -249,7 +249,7 @@ main(int argc, char *argv[])
     unixctl_server_destroy(unixctl);
     pipeline_destroy(&ctx);
     ofctrl_destroy();
-    bindings_destroy(&ctx);
+    binding_destroy(&ctx);
     chassis_destroy(&ctx);
 
     ovsdb_idl_destroy(ctx.ovs_idl);

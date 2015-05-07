@@ -14,13 +14,13 @@
  */
 
 
-#ifndef OVN_BINDINGS_H
-#define OVN_BINDINGS_H 1
+#ifndef OVN_BINDING_H
+#define OVN_BINDING_H 1
 
 struct controller_ctx;
 
-void bindings_init(struct controller_ctx *);
-void bindings_run(struct controller_ctx *);
-void bindings_destroy(struct controller_ctx *);
+void binding_init(struct controller_ctx *);
+void binding_run(struct controller_ctx *);
+void binding_destroy(struct controller_ctx *);
 
-#endif /* ovn/bindings.h */
+#endif /* ovn/binding.h */

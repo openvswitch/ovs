@@ -45,7 +45,7 @@
                 "match": {"type": "string"},
                 "actions": {"type": "string"}},
             "isRoot": true},
-        "Bindings": {
+        "Binding": {
             "columns": {
                 "logical_datapath": {"type": "uuid"},
                 "logical_port": {"type": "string"},

@@ -14,7 +14,7 @@
  */
 
 #include <config.h>
-#include "bindings.h"
+#include "binding.h"
 
 #include "lib/sset.h"
 #include "lib/util.h"
@@ -23,10 +23,10 @@
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
 
-VLOG_DEFINE_THIS_MODULE(bindings);
+VLOG_DEFINE_THIS_MODULE(binding);
 
 void
-bindings_init(struct controller_ctx *ctx)
+binding_init(struct controller_ctx *ctx)
 {
     ovsdb_idl_add_table(ctx->ovs_idl, &ovsrec_table_open_vswitch);
     ovsdb_idl_add_column(ctx->ovs_idl, &ovsrec_open_vswitch_col_bridges);
@@ -72,9 +72,9 @@ get_local_iface_ids(struct controller_ctx *ctx, struct sset *lports)
 }
 
 void
-bindings_run(struct controller_ctx *ctx)
+binding_run(struct controller_ctx *ctx)
 {
-    const struct sbrec_bindings *bindings_rec;
+    const struct sbrec_binding *binding_rec;
     struct ovsdb_idl_txn *txn;
     struct sset lports, all_lports;
     const char *name;
@@ -90,27 +90,27 @@ bindings_run(struct controller_ctx *ctx)
                               "ovn-controller: updating bindings for '%s'",
                               ctx->chassis_id);
 
-    SBREC_BINDINGS_FOR_EACH(bindings_rec, ctx->ovnsb_idl) {
-        if (sset_find_and_delete(&lports, bindings_rec->logical_port) ||
-                (bindings_rec->parent_port && bindings_rec->parent_port[0] &&
-                 sset_contains(&all_lports, bindings_rec->parent_port))) {
-            if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
+    SBREC_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+        if (sset_find_and_delete(&lports, binding_rec->logical_port) ||
+                (binding_rec->parent_port && binding_rec->parent_port[0] &&
+                 sset_contains(&all_lports, binding_rec->parent_port))) {
+            if (!strcmp(binding_rec->chassis, ctx->chassis_id)) {
                 continue;
             }
-            if (bindings_rec->chassis[0]) {
+            if (binding_rec->chassis[0]) {
                 VLOG_INFO("Changing chassis for lport %s from %s to %s",
-                          bindings_rec->logical_port, bindings_rec->chassis,
+                          binding_rec->logical_port, binding_rec->chassis,
                           ctx->chassis_id);
             }
-            sbrec_bindings_set_chassis(bindings_rec, ctx->chassis_id);
-        } else if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
-            sbrec_bindings_set_chassis(bindings_rec, "");
+            sbrec_binding_set_chassis(binding_rec, ctx->chassis_id);
+        } else if (!strcmp(binding_rec->chassis, ctx->chassis_id)) {
+            sbrec_binding_set_chassis(binding_rec, "");
         }
     }
 
     retval = ovsdb_idl_txn_commit_block(txn);
     if (retval == TXN_ERROR) {
-        VLOG_INFO("Problem committing bindings information: %s",
+        VLOG_INFO("Problem committing binding information: %s",
                   ovsdb_idl_txn_status_to_string(retval));
     }
 
@@ -124,14 +124,14 @@ bindings_run(struct controller_ctx *ctx)
 }
 
 void
-bindings_destroy(struct controller_ctx *ctx)
+binding_destroy(struct controller_ctx *ctx)
 {
     int retval = TXN_TRY_AGAIN;
 
     ovs_assert(ctx->ovnsb_idl);
 
     while (retval != TXN_SUCCESS && retval != TXN_UNCHANGED) {
-        const struct sbrec_bindings *bindings_rec;
+        const struct sbrec_binding *binding_rec;
         struct ovsdb_idl_txn *txn;
 
         txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
@@ -139,9 +139,9 @@ bindings_destroy(struct controller_ctx *ctx)
                               "ovn-controller: removing all bindings for '%s'",
                               ctx->chassis_id);
 
-        SBREC_BINDINGS_FOR_EACH(bindings_rec, ctx->ovnsb_idl) {
-            if (!strcmp(bindings_rec->chassis, ctx->chassis_id)) {
-                sbrec_bindings_set_chassis(bindings_rec, "");
+        SBREC_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+            if (!strcmp(binding_rec->chassis, ctx->chassis_id)) {
+                sbrec_binding_set_chassis(binding_rec, "");
             }
         }
 

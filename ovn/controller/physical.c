@@ -90,8 +90,8 @@ physical_run(struct controller_ctx *ctx)
 
     /* Set up flows in table 0 for physical-to-logical translation and in table
      * 64 for logical-to-physical translation. */
-    const struct sbrec_bindings *binding;
-    SBREC_BINDINGS_FOR_EACH (binding, ctx->ovnsb_idl) {
+    const struct sbrec_binding *binding;
+    SBREC_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
         /* Find the Openflow port for the logical port, as 'ofport'.  If it's
          * on a remote chassis, this is the OpenFlow port for the tunnel to
          * that chassis (and set 'local' to false).  Otherwise, if it's on the

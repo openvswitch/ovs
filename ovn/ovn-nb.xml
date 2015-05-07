@@ -119,7 +119,7 @@
       This column is populated by <code>ovn-northd</code>, rather than by
       the CMS plugin as is most of this database.  When a logical port is bound
       to a physical location in the OVN Southbound database <ref
-      db="OVN_Southbound" table="Bindings"/> table, <code>ovn-northd</code>
+      db="OVN_Southbound" table="Binding"/> table, <code>ovn-northd</code>
       sets this column to <code>true</code>; otherwise, or if the port
       becomes unbound later, it sets it to <code>false</code>.  This
       allows the CMS to wait for a VM's (or container's) networking to
