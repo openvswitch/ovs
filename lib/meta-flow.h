@@ -1512,6 +1512,7 @@ struct mf_field {
      */
     unsigned int n_bytes;       /* Width of the field in bytes. */
     unsigned int n_bits;        /* Number of significant bits in field. */
+    bool variable_len;          /* Length is variable, if so width is max. */
 
     /* Properties. */
     enum mf_maskable maskable;
