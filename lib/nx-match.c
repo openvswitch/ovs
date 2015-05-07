@@ -194,6 +194,9 @@ static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id,
                                                   enum ofp_version);
 
 static void nx_put_header__(struct ofpbuf *, uint64_t header, bool masked);
+static void nx_put_header_len(struct ofpbuf *, enum mf_field_id field,
+                              enum ofp_version version, bool masked,
+                              size_t n_bytes);
 
 /* Rate limit for nx_match parse errors.  These always indicate a bug in the
  * peer and so there's not much point in showing a lot of them. */
@@ -675,7 +678,7 @@ static void
 nxm_put_unmasked(struct ofpbuf *b, enum mf_field_id field,
                  enum ofp_version version, const void *value, size_t n_bytes)
 {
-    nx_put_header(b, field, version, false);
+    nx_put_header_len(b, field, version, false, n_bytes);
     ofpbuf_put(b, value, n_bytes);
 }
 
@@ -685,7 +688,7 @@ nxm_put(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
 {
     if (!is_all_zeros(mask, n_bytes)) {
         bool masked = !is_all_ones(mask, n_bytes);
-        nx_put_header(b, field, version, masked);
+        nx_put_header_len(b, field, version, masked, n_bytes);
         ofpbuf_put(b, value, n_bytes);
         if (masked) {
             ofpbuf_put(b, mask, n_bytes);
@@ -1187,6 +1190,19 @@ nx_put_header(struct ofpbuf *b, enum mf_field_id field,
               enum ofp_version version, bool masked)
 {
     nx_put_header__(b, mf_oxm_header(field, version), masked);
+}
+
+static void
+nx_put_header_len(struct ofpbuf *b, enum mf_field_id field,
+                  enum ofp_version version, bool masked, size_t n_bytes)
+{
+    uint64_t header = mf_oxm_header(field, version);
+
+    header = NXM_HEADER(nxm_vendor(header), nxm_class(header),
+                        nxm_field(header), false,
+                        nxm_experimenter_len(header) + n_bytes);
+
+    nx_put_header__(b, header, masked);
 }
 
 void
