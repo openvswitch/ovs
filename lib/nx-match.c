@@ -326,17 +326,36 @@ error:
     return OFPERR_OFPBMC_BAD_LEN;
 }
 
+static void
+copy_entry_value(const struct mf_field *field, union mf_value *value,
+                 const uint8_t *payload, int width)
+{
+    int copy_len;
+    void *copy_dst;
+
+    copy_dst = value;
+    copy_len = MIN(width, field ? field->n_bytes : sizeof *value);
+
+    if (field && field->variable_len) {
+        memset(value, 0, field->n_bytes);
+        copy_dst = &value->u8 + field->n_bytes - copy_len;
+    }
+
+    memcpy(copy_dst, payload, copy_len);
+}
+
 static enum ofperr
 nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
-                const struct mf_field **field,
+                const struct mf_field **field_,
                 union mf_value *value, union mf_value *mask)
 {
+    const struct mf_field *field;
     enum ofperr header_error;
     unsigned int payload_len;
     const uint8_t *payload;
     int width;
 
-    header_error = nx_pull_header__(b, allow_cookie, header, field);
+    header_error = nx_pull_header__(b, allow_cookie, header, &field);
     if (header_error && header_error != OFPERR_OFPBMC_BAD_FIELD) {
         return header_error;
     }
@@ -356,12 +375,13 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
         return OFPERR_OFPBMC_BAD_WILDCARDS;
     }
 
-    memcpy(value, payload, MIN(width, sizeof *value));
+    copy_entry_value(field, value, payload, width);
+
     if (mask) {
         if (nxm_hasmask(*header)) {
-            memcpy(mask, payload + width, MIN(width, sizeof *mask));
+            copy_entry_value(field, mask, payload + width, width);
         } else {
-            memset(mask, 0xff, MIN(width, sizeof *mask));
+            memset(mask, 0xff, sizeof *mask);
         }
     } else if (nxm_hasmask(*header)) {
         VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" includes mask but "
@@ -370,7 +390,12 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
-    return header_error;
+    if (field_) {
+        *field_ = field;
+        return header_error;
+    }
+
+    return 0;
 }
 
 /* Attempts to pull an NXM or OXM header, value, and mask (if present) from the
