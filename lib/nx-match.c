@@ -97,6 +97,7 @@ static int nxm_class(uint64_t header) { return header >> 48; }
 static int nxm_field(uint64_t header) { return (header >> 41) & 0x7f; }
 static bool nxm_hasmask(uint64_t header) { return (header >> 40) & 1; }
 static int nxm_length(uint64_t header) { return (header >> 32) & 0xff; }
+static uint64_t nxm_no_len(uint64_t header) { return header & 0xffffff80ffffffffULL; }
 
 static bool
 is_experimenter_oxm(uint64_t header)
@@ -1893,7 +1894,7 @@ nxm_init(void)
         for (struct nxm_field_index *nfi = all_nxm_fields;
              nfi < &all_nxm_fields[ARRAY_SIZE(all_nxm_fields)]; nfi++) {
             hmap_insert(&nxm_header_map, &nfi->header_node,
-                        hash_uint64(nfi->nf.header));
+                        hash_uint64(nxm_no_len(nfi->nf.header)));
             hmap_insert(&nxm_name_map, &nfi->name_node,
                         hash_string(nfi->nf.name, 0));
             list_push_back(&nxm_mf_map[nfi->nf.id], &nfi->mf_node);
@@ -1906,16 +1907,24 @@ static const struct nxm_field *
 nxm_field_by_header(uint64_t header)
 {
     const struct nxm_field_index *nfi;
+    uint64_t header_no_len;
 
     nxm_init();
     if (nxm_hasmask(header)) {
         header = nxm_make_exact_header(header);
     }
 
-    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header),
+    header_no_len = nxm_no_len(header);
+
+    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header_no_len),
                              &nxm_header_map) {
-        if (header == nfi->nf.header) {
-            return &nfi->nf;
+        if (header_no_len == nxm_no_len(nfi->nf.header)) {
+            if (nxm_length(header) == nxm_length(nfi->nf.header) ||
+                mf_from_id(nfi->nf.id)->variable_len) {
+                return &nfi->nf;
+            } else {
+                return NULL;
+            }
         }
     }
     return NULL;
