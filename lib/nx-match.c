@@ -1415,6 +1415,8 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
     for (s += strspn(s, ", "); *s; s += strspn(s, ", ")) {
         const char *name;
         uint64_t header;
+        ovs_be64 nw_header;
+        ovs_be64 *header_ptr;
         int name_len;
         size_t n;
 
@@ -1431,11 +1433,31 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 
         s += name_len + 1;
 
-        nx_put_header__(b, header, false);
+        header_ptr = ofpbuf_put_uninit(b, nxm_header_len(header));
         s = ofpbuf_put_hex(b, s, &n);
         if (n != nxm_field_bytes(header)) {
-            ovs_fatal(0, "%.2s: hex digits expected", s);
+            const struct mf_field *field = mf_from_oxm_header(header);
+
+            if (field && field->variable_len) {
+                if (n <= field->n_bytes) {
+                    int len = (nxm_hasmask(header) ? n * 2 : n) +
+                              nxm_experimenter_len(header);
+
+                    header = NXM_HEADER(nxm_vendor(header), nxm_class(header),
+                                        nxm_field(header),
+                                        nxm_hasmask(header) ? 1 : 0, len);
+                } else {
+                    ovs_fatal(0, "expected to read at most %d bytes but got "
+                              "%"PRIuSIZE, field->n_bytes, n);
+                }
+            } else {
+                ovs_fatal(0, "expected to read %d bytes but got %"PRIuSIZE,
+                          nxm_field_bytes(header), n);
+            }
         }
+        nw_header = htonll(header);
+        memcpy(header_ptr, &nw_header, nxm_header_len(header));
+
         if (nxm_hasmask(header)) {
             s += strspn(s, " ");
             if (*s != '/') {
