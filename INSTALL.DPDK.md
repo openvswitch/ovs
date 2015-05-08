@@ -560,6 +560,24 @@ steps in the previous section before proceeding with the following steps:
 
   5. Use virt-manager to launch the VM
 
+Running ovs-vswitchd with DPDK backend inside a VM
+--------------------------------------------------
+
+Please note that additional configuration is required if you want to run
+ovs-vswitchd with DPDK backend inside a QEMU virtual machine. Ovs-vswitchd
+creates separate DPDK TX queues for each CPU core available. This operation
+fails inside QEMU virtual machine because, by default, VirtIO NIC provided
+to the guest is configured to support only single TX queue and single RX
+queue. To change this behavior, you need to turn on 'mq' (multiqueue)
+property of all virtio-net-pci devices emulated by QEMU and used by DPDK.
+You may do it manually (by changing QEMU command line) or, if you use Libvirt,
+by adding the following string:
+
+`<driver name='vhost' queues='N'/>`
+
+to <interface> sections of all network devices used by DPDK. Parameter 'N'
+determines how many queues can be used by the guest.
+
 Restrictions:
 -------------
 
