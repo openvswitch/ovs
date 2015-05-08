@@ -185,6 +185,7 @@ main(int argc, char *argv[])
 
     chassis_init(&ctx);
     binding_init(&ctx);
+    physical_init(&ctx);
     pipeline_init();
 
     get_initial_snapshot(ctx.ovs_idl);
