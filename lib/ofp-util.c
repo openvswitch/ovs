@@ -8375,7 +8375,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     switch (gm->type) {
     case OFPGT11_INDIRECT:
         if (!list_is_singleton(&gm->buckets)) {
-            return OFPERR_OFPGMFC_INVALID_GROUP;
+            return OFPERR_OFPGMFC_OUT_OF_BUCKETS;
         }
         break;
     case OFPGT11_ALL:
