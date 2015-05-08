@@ -366,7 +366,7 @@ queue_flow_mod(struct ofputil_flow_mod *fm)
 {
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_ANY;
-    fm->out_group = OFPG_ALL;
+    fm->out_group = OFPG_ANY;
     queue_msg(ofputil_encode_flow_mod(fm, OFPUTIL_P_OF13_OXM));
 }
 
