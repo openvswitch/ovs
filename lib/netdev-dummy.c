@@ -932,6 +932,23 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 
         dummy_packet_conn_send(&dev->conn, buffer, size);
 
+        /* Reply to ARP requests for 'dev''s assigned IP address. */
+        if (dev->address.s_addr) {
+            struct dp_packet packet;
+            struct flow flow;
+
+            dp_packet_use_const(&packet, buffer, size);
+            flow_extract(&packet, &flow);
+            if (flow.dl_type == htons(ETH_TYPE_ARP)
+                && flow.nw_proto == ARP_OP_REQUEST
+                && flow.nw_dst == dev->address.s_addr) {
+                struct dp_packet *reply = dp_packet_new(0);
+                compose_arp(reply, ARP_OP_REPLY, dev->hwaddr, flow.dl_src,
+                            false, flow.nw_dst, flow.nw_src);
+                netdev_dummy_queue_packet(dev, reply);
+            }
+        }
+
         if (dev->tx_pcap) {
             struct dp_packet packet;
 
