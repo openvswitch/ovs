@@ -131,11 +131,6 @@ ovs_be64 rule_dpif_get_flow_cookie(const struct rule_dpif *rule);
 void rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
                                uint16_t hard_timeout);
 
-void choose_miss_rule(enum ofputil_port_config,
-                      struct rule_dpif *miss_rule,
-                      struct rule_dpif *no_packet_in_rule,
-                      struct rule_dpif **rule, bool take_ref);
-
 void group_dpif_credit_stats(struct group_dpif *,
                              struct ofputil_bucket *,
                              const struct dpif_flow_stats *);
