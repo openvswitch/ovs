@@ -436,7 +436,8 @@ static bool may_receive(const struct xport *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *);
 static void xlate_normal(struct xlate_ctx *);
-static inline void xlate_report(struct xlate_ctx *, const char *);
+static inline void xlate_report(struct xlate_ctx *, const char *, ...)
+    OVS_PRINTF_FORMAT(2, 3);
 static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
                                uint8_t table_id, bool may_packet_in,
                                bool honor_table_miss);
@@ -505,10 +506,14 @@ static void xlate_xport_copy(struct xbridge *, struct xbundle *,
 static void xlate_xcfg_free(struct xlate_cfg *);
 
 static inline void
-xlate_report(struct xlate_ctx *ctx, const char *s)
+xlate_report(struct xlate_ctx *ctx, const char *format, ...)
 {
     if (OVS_UNLIKELY(ctx->xin->report_hook)) {
-        ctx->xin->report_hook(ctx->xin, s, ctx->recurse);
+        va_list args;
+
+        va_start(args, format);
+        ctx->xin->report_hook(ctx->xin, ctx->recurse, format, args);
+        va_end(args);
     }
 }
 

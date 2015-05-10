@@ -4548,7 +4548,12 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
     ds_put_char(result, '\n');
 }
 
-static void trace_report(struct xlate_in *xin, const char *s, int recurse);
+static void trace_report(struct xlate_in *, int recurse,
+                         const char *format, ...)
+    OVS_PRINTF_FORMAT(3, 4);
+static void trace_report_valist(struct xlate_in *, int recurse,
+                                const char *format, va_list args)
+    OVS_PRINTF_FORMAT(3, 0);
 
 static void
 trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
@@ -4558,15 +4563,15 @@ trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
 
     if (!recurse) {
         if (rule == xin->ofproto->miss_rule) {
-            trace_report(xin, "No match, flow generates \"packet in\"s.",
-                         recurse);
+            trace_report(xin, recurse,
+                         "No match, flow generates \"packet in\"s.");
         } else if (rule == xin->ofproto->no_packet_in_rule) {
-            trace_report(xin, "No match, packets dropped because "
-                         "OFPPC_NO_PACKET_IN is set on in_port.", recurse);
+            trace_report(xin, recurse, "No match, packets dropped because "
+                         "OFPPC_NO_PACKET_IN is set on in_port.");
         } else if (rule == xin->ofproto->drop_frags_rule) {
-            trace_report(xin, "Packets dropped because they are IP "
+            trace_report(xin, recurse, "Packets dropped because they are IP "
                          "fragments and the fragment handling mode is "
-                         "\"drop\".", recurse);
+                         "\"drop\".");
         }
     }
 
@@ -4581,14 +4586,25 @@ trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
 }
 
 static void
-trace_report(struct xlate_in *xin, const char *s, int recurse)
+trace_report_valist(struct xlate_in *xin, int recurse,
+                    const char *format, va_list args)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
     ds_put_char_multiple(result, '\t', recurse);
-    ds_put_cstr(result, s);
+    ds_put_format_valist(result, format, args);
     ds_put_char(result, '\n');
+}
+
+static void
+trace_report(struct xlate_in *xin, int recurse, const char *format, ...)
+{
+    va_list args;
+
+    va_start(args, format);
+    trace_report_valist(xin, recurse, format, args);
+    va_end(args);
 }
 
 /* Parses the 'argc' elements of 'argv', ignoring argv[0].  The following
@@ -4879,7 +4895,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace.xin.ofpacts = ofpacts;
     trace.xin.ofpacts_len = ofpacts_len;
     trace.xin.resubmit_hook = trace_resubmit;
-    trace.xin.report_hook = trace_report;
+    trace.xin.report_hook = trace_report_valist;
 
     xlate_actions(&trace.xin, &trace.xout);
 
