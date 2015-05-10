@@ -2672,7 +2672,7 @@ tnl_send_arp_request(const struct xport *out_dev, const uint8_t eth_src[ETH_ADDR
 }
 
 static int
-build_tunnel_send(const struct xlate_ctx *ctx, const struct xport *xport,
+build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                   const struct flow *flow, odp_port_t tunnel_odp_port)
 {
     struct ovs_action_push_tnl tnl_push_data;
@@ -2684,22 +2684,30 @@ build_tunnel_send(const struct xlate_ctx *ctx, const struct xport *xport,
 
     err = tnl_route_lookup_flow(flow, &d_ip, &out_dev);
     if (err) {
+        xlate_report(ctx, "native tunnel routing failed");
         return err;
     }
+    xlate_report(ctx, "tunneling to "IP_FMT" via %s",
+                 IP_ARGS(d_ip), netdev_get_name(out_dev->netdev));
 
     /* Use mac addr of bridge port of the peer. */
     err = netdev_get_etheraddr(out_dev->netdev, smac);
     if (err) {
+        xlate_report(ctx, "tunnel output device lacks Ethernet address");
         return err;
     }
 
     err = netdev_get_in4(out_dev->netdev, (struct in_addr *) &s_ip, NULL);
     if (err) {
+        xlate_report(ctx, "tunnel output device lacks IPv4 address");
         return err;
     }
 
     err = tnl_arp_lookup(out_dev->xbridge->name, d_ip, dmac);
     if (err) {
+        xlate_report(ctx, "ARP cache miss for "IP_FMT" on bridge %s, "
+                     "sending ARP request",
+                     IP_ARGS(d_ip), out_dev->xbridge->name);
         tnl_send_arp_request(out_dev, smac, s_ip, d_ip);
         return err;
     }
@@ -2711,6 +2719,11 @@ build_tunnel_send(const struct xlate_ctx *ctx, const struct xport *xport,
                     sizeof entry->u.tnl_arp_cache.br_name);
         entry->u.tnl_arp_cache.d_ip = d_ip;
     }
+
+    xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" "IP_FMT
+                 " to "ETH_ADDR_FMT" "IP_FMT,
+                 ETH_ADDR_ARGS(smac), IP_ARGS(s_ip),
+                 ETH_ADDR_ARGS(dmac), IP_ARGS(d_ip));
     err = tnl_port_build_header(xport->ofport, flow,
                                 dmac, smac, s_ip, &tnl_push_data);
     if (err) {
@@ -2920,8 +2933,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         }
         out_port = odp_port;
         if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+            xlate_report(ctx, "output to native tunnel");
             tnl_push_pop_send = true;
         } else {
+            xlate_report(ctx, "output to kernel tunnel");
             commit_odp_tunnel_action(flow, &ctx->base_flow,
                                      ctx->xout->odp_actions);
             flow->tunnel = flow_tnl; /* Restore tunnel metadata */
