@@ -725,7 +725,8 @@ netdev_dummy_get_in4(const struct netdev *netdev_,
     *address = netdev->address;
     *netmask = netdev->netmask;
     ovs_mutex_unlock(&netdev->mutex);
-    return 0;
+
+    return address->s_addr ? 0 : EADDRNOTAVAIL;
 }
 
 static int
