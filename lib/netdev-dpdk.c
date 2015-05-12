@@ -144,7 +144,6 @@ static const struct rte_eth_txconf tx_conf = {
     .txq_flags = ETH_TXQ_FLAGS_NOMULTSEGS|ETH_TXQ_FLAGS_NOOFFLOADS,
 };
 
-enum { MAX_RX_QUEUE_LEN = 192 };
 enum { MAX_TX_QUEUE_LEN = 384 };
 enum { DPDK_RING_SIZE = 256 };
 BUILD_ASSERT_DECL(IS_POW2(DPDK_RING_SIZE));
@@ -885,8 +884,8 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
 
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq_->queue_id,
                              (struct rte_mbuf **) packets,
-                             MIN((int)NETDEV_MAX_RX_BATCH,
-                                 (int)MAX_RX_QUEUE_LEN));
+                             MIN((int) NETDEV_MAX_RX_BATCH,
+                                 (int) MAX_PKT_BURST));
     if (!nb_rx) {
         return EAGAIN;
     }
