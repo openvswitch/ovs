@@ -104,6 +104,11 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 /* Character device cuse_dev_name. */
 char *cuse_dev_name = NULL;
 
+/*
+ * Maximum amount of time in micro seconds to try and enqueue to vhost.
+ */
+#define VHOST_ENQ_RETRY_USECS 100
+
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
         .mq_mode = ETH_MQ_RX_RSS,
@@ -901,7 +906,9 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
 {
     struct netdev_dpdk *vhost_dev = netdev_dpdk_cast(netdev);
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(vhost_dev);
-    int tx_pkts, i;
+    struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
+    unsigned int total_pkts = cnt;
+    uint64_t start = 0;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
         ovs_mutex_lock(&vhost_dev->mutex);
@@ -912,16 +919,51 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
 
     /* There is vHost TX single queue, So we need to lock it for TX. */
     rte_spinlock_lock(&vhost_dev->txq_lock);
-    tx_pkts = rte_vhost_enqueue_burst(virtio_dev, VIRTIO_RXQ,
-                                      (struct rte_mbuf **)pkts, cnt);
 
-    vhost_dev->stats.tx_packets += tx_pkts;
-    vhost_dev->stats.tx_dropped += (cnt - tx_pkts);
+    do {
+        unsigned int tx_pkts;
+
+        tx_pkts = rte_vhost_enqueue_burst(virtio_dev, VIRTIO_RXQ,
+                                          cur_pkts, cnt);
+        if (OVS_LIKELY(tx_pkts)) {
+            /* Packets have been sent.*/
+            cnt -= tx_pkts;
+            /* Prepare for possible next iteration.*/
+            cur_pkts = &cur_pkts[tx_pkts];
+        } else {
+            uint64_t timeout = VHOST_ENQ_RETRY_USECS * rte_get_timer_hz() / 1E6;
+            unsigned int expired = 0;
+
+            if (!start) {
+                start = rte_get_timer_cycles();
+            }
+
+            /*
+             * Unable to enqueue packets to vhost interface.
+             * Check available entries before retrying.
+             */
+            while (!rte_vring_available_entries(virtio_dev, VIRTIO_RXQ)) {
+                if (OVS_UNLIKELY((rte_get_timer_cycles() - start) > timeout)) {
+                    expired = 1;
+                    break;
+                }
+            }
+            if (expired) {
+                /* break out of main loop. */
+                break;
+            }
+        }
+    } while (cnt);
+
+    vhost_dev->stats.tx_packets += (total_pkts - cnt);
+    vhost_dev->stats.tx_dropped += cnt;
     rte_spinlock_unlock(&vhost_dev->txq_lock);
 
 out:
     if (may_steal) {
-        for (i = 0; i < cnt; i++) {
+        int i;
+
+        for (i = 0; i < total_pkts; i++) {
             dp_packet_delete(pkts[i]);
         }
     }
