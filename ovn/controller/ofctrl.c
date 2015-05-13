@@ -420,8 +420,8 @@ ofctrl_update_flows(void)
                     .match = i->match,
                     .priority = i->priority,
                     .table_id = i->table_id,
-                    .ofpacts = i->ofpacts,
-                    .ofpacts_len = i->ofpacts_len,
+                    .ofpacts = d->ofpacts,
+                    .ofpacts_len = d->ofpacts_len,
                     .command = OFPFC_MODIFY_STRICT,
                 };
                 queue_flow_mod(&fm);
