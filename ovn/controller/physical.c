@@ -96,9 +96,23 @@ physical_run(struct controller_ctx *ctx)
          * on a remote chassis, this is the OpenFlow port for the tunnel to
          * that chassis (and set 'local' to false).  Otherwise, if it's on the
          * chassis we're managing, this is the OpenFlow port for the vif itself
-         * (and set 'local' to true). */
-        ofp_port_t ofport = u16_to_ofp(simap_get(&lport_to_ofport,
-                                                 binding->logical_port));
+         * (and set 'local' to true). When 'parent_port' is set for a binding,
+         * it implies a container sitting inside a VM reachable via a 'tag'.
+         */
+
+        int tag = 0;
+        ofp_port_t ofport;
+        if (binding->parent_port) {
+            ofport = u16_to_ofp(simap_get(&lport_to_ofport,
+                                          binding->parent_port));
+            if (ofport && binding->tag) {
+                tag = *binding->tag;
+            }
+        } else {
+            ofport = u16_to_ofp(simap_get(&lport_to_ofport,
+                                          binding->logical_port));
+        }
+
         bool local = ofport != 0;
         if (!local) {
             ofport = u16_to_ofp(simap_get(&chassis_to_ofport,
@@ -117,15 +131,26 @@ physical_run(struct controller_ctx *ctx)
 
         struct match match;
         if (local) {
-            /* Table 0, Priority 100.
-             * ======================
+            /*
+             * Packets that arrive from a vif can belong to a VM or
+             * to a container located inside that VM. Packets that
+             * arrive from containers have a tag (vlan) associated with them.
              *
-             * For packets that arrive from a vif: set MFF_LOG_INPORT to the
+             * Table 0, Priority 150 and 100.
+             * ==============================
+             * Priority 150 is for traffic belonging to containers. For such
+             * traffic, match on the tags and then strip the tag.
+             * Priority 100 is for traffic belonging to VMs.
+             *
+             * For both types of traffic: set MFF_LOG_INPORT to the
              * logical input port, MFF_METADATA to the logical datapath, and
              * resubmit into the logical pipeline starting at table 16. */
             match_init_catchall(&match);
             ofpbuf_clear(&ofpacts);
             match_set_in_port(&match, ofport);
+            if (tag) {
+                match_set_dl_vlan(&match, htons(tag));
+            }
 
             /* Set MFF_METADATA. */
             struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
@@ -139,20 +164,32 @@ physical_run(struct controller_ctx *ctx)
             sf->value.be32 = htonl(binding->tunnel_key);
             sf->mask.be32 = OVS_BE32_MAX;
 
+            /* Strip vlans. */
+            if (tag) {
+                ofpact_put_STRIP_VLAN(&ofpacts);
+            }
+
             /* Resubmit to first logical pipeline table. */
             struct ofpact_resubmit *resubmit = ofpact_put_RESUBMIT(&ofpacts);
             resubmit->in_port = OFPP_IN_PORT;
             resubmit->table_id = 16;
-            ofctrl_add_flow(0, 100, &match, &ofpacts);
+            ofctrl_add_flow(0, tag ? 150 : 100, &match, &ofpacts);
 
             /* Table 0, Priority 50.
              * =====================
              *
              * For packets that arrive from a remote node destined to this
-             * local vif: deliver directly to the vif. */
+             * local vif: deliver directly to the vif. If the destination
+             * is a container sitting behind a vif, tag the packets. */
             match_init_catchall(&match);
             ofpbuf_clear(&ofpacts);
             match_set_tun_id(&match, htonll(binding->tunnel_key));
+            if (tag) {
+                struct ofpact_vlan_vid *vlan_vid;
+                vlan_vid = ofpact_put_SET_VLAN_VID(&ofpacts);
+                vlan_vid->vlan_vid = tag;
+                vlan_vid->push_vlan_if_needed = true;
+            }
             ofpact_put_OUTPUT(&ofpacts)->port = ofport;
             ofctrl_add_flow(0, 50, &match, &ofpacts);
         }
@@ -183,6 +220,21 @@ physical_run(struct controller_ctx *ctx)
             sf->field = mf_from_id(MFF_TUN_ID);
             sf->value.be64 = htonll(binding->tunnel_key);
             sf->mask.be64 = OVS_BE64_MAX;
+        }
+        if (tag) {
+            /* For containers sitting behind a local vif, tag the packets
+             * before delivering them. Since there is a possibility of
+             * packets needing to hair-pin back into the same vif from
+             * which it came, make the in_port as zero. */
+            struct ofpact_vlan_vid *vlan_vid;
+            vlan_vid = ofpact_put_SET_VLAN_VID(&ofpacts);
+            vlan_vid->vlan_vid = tag;
+            vlan_vid->push_vlan_if_needed = true;
+
+            struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
+            sf->field = mf_from_id(MFF_IN_PORT);
+            sf->value.be16 = 0;
+            sf->mask.be16 = OVS_BE16_MAX;
         }
         ofpact_put_OUTPUT(&ofpacts)->port = ofport;
         ofctrl_add_flow(64, 50, &match, &ofpacts);
