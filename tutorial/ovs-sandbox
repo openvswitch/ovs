@@ -56,7 +56,9 @@ gdb_ovsdb=false
 gdb_vswitchd_ex=false
 gdb_ovsdb_ex=false
 gdb_ovn_northd=false
+gdb_ovn_northd_ex=false
 gdb_ovn_controller=false
+gdb_ovn_controller_ex=false
 builddir=
 srcdir=
 schema=
@@ -107,6 +109,8 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -d, --gdb-ovsdb      run ovsdb-server under gdb
   --gdb-ovn-northd     run ovn-northd under gdb
   --gdb-ovn-controller run ovn-controller under gdb
+  -R, --gdb-run        automatically start running the daemon in gdb
+                       for any daemon set to run under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
   -o, --ovn            enable OVN
 
@@ -167,6 +171,12 @@ EOF
             ;;
         -o|--ovn)
             ovn=true
+            ;;
+        -R|--gdb-run)
+            gdb_vswitchd_ex=true
+            gdb_ovsdb_ex=true
+            gdb_ovn_northd_ex=true
+            gdb_ovn_controller_ex=true
             ;;
         -*)
             echo "unrecognized option $option (use --help for help)" >&2
@@ -327,8 +337,8 @@ if $ovn; then
     ovs-vsctl add-br br-int \
         -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
 
-    rungdb $gdb_ovn_northd ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
-    rungdb $gdb_ovn_controller ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
+    rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
+    rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
 fi
 
 cat <<EOF
