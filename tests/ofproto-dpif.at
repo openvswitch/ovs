@@ -4978,7 +4978,7 @@ CHECK_SFLOW_SAMPLING_PACKET([127.0.0.1], [IPv4])
 CHECK_SFLOW_SAMPLING_PACKET([[[::1]]], [IPv6])
 
 dnl Test sFlow LAG structures
-AT_SETUP([ofproto-dpif - sFlow LACP structures])
+AT_SETUP([ofproto-dpif - sFlow packet sampling - LACP structures])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([dnl
 		    add-bond br0 bond p1 p2 --				\
@@ -5034,6 +5034,268 @@ LACPCOUNTERS
 ])
 
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - sFlow packet sampling - tunnel set])
+AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+
+dnl set up sFlow logging
+dnl ON_EXIT([kill `cat test-sflow.pid`])
+AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([sflow.log])
+SFLOW_PORT=`parse_listening_port < test-sflow.log`
+ovs-appctl time/stop
+
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-vsctl add-port br0 gre0 -- set Interface gre0 type=gre \
+     		    options:remote_ip=1.1.1.1 options:key=456 ofport_request=3])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy ofport_request=4])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=3])
+
+dnl enable sflow
+ovs-vsctl \
+   set Bridge br0 sflow=@sf -- \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+     header=128 sampling=1 polling=0
+
+dnl introduce a packet that will be flooded to the tunnel
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'])
+
+dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for up to 1 second)
+for i in `seq 1 30`; do
+    ovs-appctl time/warp 100
+done
+
+ovs-appctl -t test-sflow exit
+
+AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
+	/g']], [0], [dnl
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=1
+	tunnel4_out_length=0
+	tunnel4_out_protocol=47
+	tunnel4_out_src=0.0.0.0
+	tunnel4_out_dst=1.1.1.1
+	tunnel4_out_src_port=0
+	tunnel4_out_dst_port=0
+	tunnel4_out_tcp_flags=0
+	tunnel4_out_tos=1
+	tunnel_out_vni=456
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=1
+	dropEvents=0
+	in_ifindex=0
+	in_format=0
+	out_ifindex=1
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-01-00-1C-00-00-00-00-80-01-12-CA-0A-0A-0A-02-0A-0A-0A-01-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - sFlow packet sampling - tunnel push])
+AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 options:ifindex=1010])
+
+dnl set up sFlow logging
+dnl ON_EXIT([kill `cat test-sflow.pid`])
+AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([sflow.log])
+SFLOW_PORT=`parse_listening_port < test-sflow.log`
+ovs-appctl time/stop
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy], [0])
+AT_CHECK([ovs-vsctl -- add-port int-br t1 -- set Interface t1 type=gre \
+                       options:remote_ip=1.1.2.92 options:key=456 ofport_request=4\
+		    -- add-port int-br vm1 -- set Interface vm1 type=dummy \
+		       options:ifindex=2011 ofport_request=5
+                       ], [0])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy)
+		p0 1/1: (dummy: ifindex=1010)
+	int-br:
+		int-br 65534/2: (dummy)
+		t1 4/4: (gre: key=456, remote_ip=1.1.2.92)
+		vm1 5/3: (dummy: ifindex=2011)
+])
+
+dnl set up route to 1.1.2.92 via br0 and action=normal
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.0.0/16 br0], [0], [OK
+])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl Prime ARP Cache for 1.1.2.92
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=1,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
+
+dnl configure sflow on int-br only
+ovs-vsctl \
+   set Bridge int-br sflow=@sf -- \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+     header=128 sampling=1 polling=0
+
+dnl add rule for int-br to force packet onto tunnel. There is no ifindex
+dnl for this port so the sFlow output will just report that it went to
+dnl 1 output (out_format=2, out_ifindex=1)
+AT_CHECK([ovs-ofctl add-flow int-br "actions=4"])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive vm1 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=192.168.1.1,dst=192.168.2.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'])
+
+dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for up to 1 second)
+for i in `seq 1 30`; do
+    ovs-appctl time/warp 100
+done
+
+ovs-appctl -t test-sflow exit
+
+AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
+	/g']], [0], [dnl
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=1
+	tunnel4_out_length=0
+	tunnel4_out_protocol=47
+	tunnel4_out_src=1.1.2.88
+	tunnel4_out_dst=1.1.2.92
+	tunnel4_out_src_port=0
+	tunnel4_out_dst_port=0
+	tunnel4_out_tcp_flags=0
+	tunnel4_out_tos=0
+	tunnel_out_vni=456
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=1
+	dropEvents=0
+	in_ifindex=2011
+	in_format=0
+	out_ifindex=1
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-80-01-B6-8D-C0-A8-01-01-C0-A8-02-02-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - sFlow packet sampling - MPLS])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 dl_src=50:54:00:00:00:09 actions=push_mpls:0x8847,set_mpls_label:789,set_mpls_tc:4,set_mpls_ttl:32,2
+table=0 dl_src=50:54:00:00:00:0b actions=pop_mpls:0x0800,2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl set up sFlow logging
+dnl ON_EXIT([kill `cat test-sflow.pid`])
+AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([sflow.log])
+SFLOW_PORT=`parse_listening_port < test-sflow.log`
+ovs-appctl time/stop
+
+dnl configure sflow
+ovs-vsctl \
+   set Bridge br0 sflow=@sf -- \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+     header=128 sampling=1 polling=0
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+
+dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for up to 1 second)
+for i in `seq 1 30`; do
+    ovs-appctl time/warp 100
+done
+
+ovs-appctl -t test-sflow exit
+
+AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
+	/g']], [0], [dnl
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=1
+	mpls_label_0=789
+	mpls_tc_0=4
+	mpls_ttl_0=32
+	mpls_bos_0=0
+	mpls_label_1=11
+	mpls_tc_1=3
+	mpls_ttl_1=64
+	mpls_bos_1=1
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=1
+	dropEvents=0
+	in_ifindex=0
+	in_format=0
+	out_ifindex=1
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-88-47-00-00-B7-40-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=2
+	mpls_label_0=789
+	mpls_tc_0=4
+	mpls_ttl_0=32
+	mpls_bos_0=1
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=2
+	dropEvents=0
+	in_ifindex=0
+	in_format=0
+	out_ifindex=1
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-00-00-14-00-00-00-00-00-00-BA-EB-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 
 # CHECK_NETFLOW_EXPIRATION(LOOPBACK_ADDR, IP_VERSION_TYPE)
 #

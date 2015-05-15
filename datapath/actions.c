@@ -548,7 +548,8 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 }
 
 static int output_userspace(struct datapath *dp, struct sk_buff *skb,
-			    struct sw_flow_key *key, const struct nlattr *attr)
+			    struct sw_flow_key *key, const struct nlattr *attr,
+			    const struct nlattr *actions, int actions_len)
 {
 	struct ovs_tunnel_info info;
 	struct dp_upcall_info upcall;
@@ -559,6 +560,8 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 	upcall.userdata = NULL;
 	upcall.portid = 0;
 	upcall.egress_tun_info = NULL;
+	upcall.actions = actions;
+	upcall.actions_len = actions_len;
 
 	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
 		 a = nla_next(a, &rem)) {
@@ -594,7 +597,8 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 }
 
 static int sample(struct datapath *dp, struct sk_buff *skb,
-		  struct sw_flow_key *key, const struct nlattr *attr)
+		  struct sw_flow_key *key, const struct nlattr *attr,
+		  const struct nlattr *actions, int actions_len)
 {
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
@@ -628,7 +632,7 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 	 */
 	if (likely(nla_type(a) == OVS_ACTION_ATTR_USERSPACE &&
 		   nla_is_last(a, rem)))
-		return output_userspace(dp, skb, key, a);
+		return output_userspace(dp, skb, key, a, actions, actions_len);
 
 	skb = skb_clone(skb, GFP_ATOMIC);
 	if (!skb)
@@ -787,7 +791,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_USERSPACE:
-			output_userspace(dp, skb, key, a);
+			output_userspace(dp, skb, key, a, attr, len);
 			break;
 
 		case OVS_ACTION_ATTR_HASH:
@@ -826,7 +830,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:
-			err = sample(dp, skb, key, a);
+			err = sample(dp, skb, key, a, attr, len);
 			break;
 		}
 

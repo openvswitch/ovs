@@ -63,6 +63,7 @@ static unixctl_cb_func test_sflow_exit;
 #define SFLOW_TAG_PKT_TUNNEL4_IN 1024
 #define SFLOW_TAG_PKT_TUNNEL_VNI_OUT 1029
 #define SFLOW_TAG_PKT_TUNNEL_VNI_IN 1030
+#define SFLOW_TAG_PKT_MPLS 1006
 
 /* string sizes */
 #define SFL_MAX_PORTNAME_LEN 255
@@ -113,6 +114,7 @@ struct sflow_xdr {
 	uint32_t TUNNEL4_IN;
 	uint32_t TUNNEL_VNI_OUT;
 	uint32_t TUNNEL_VNI_IN;
+	uint32_t MPLS;
         uint32_t IFCOUNTERS;
 	uint32_t LACPCOUNTERS;
 	uint32_t OPENFLOWPORT;
@@ -379,6 +381,32 @@ process_flow_sample(struct sflow_xdr *x)
 	    printf( " tunnel_out_vni=%"PRIu32, sflowxdr_next(x));
         }
 
+        if (x->offset.MPLS) {
+	    uint32_t addr_type, stack_depth, ii;
+	    ovs_be32 mpls_lse;
+            sflowxdr_setc(x, x->offset.MPLS);
+	    /* OVS only sets the out_stack. The rest will be blank. */
+	    /* skip next hop address */
+	    addr_type = sflowxdr_next(x);
+	    sflowxdr_skip(x, addr_type == SFLOW_ADDRTYPE_IP6 ? 4 : 1);
+	    /* skip in_stack */
+	    stack_depth = sflowxdr_next(x);
+	    sflowxdr_skip(x, stack_depth);
+	    /* print out_stack */
+	    stack_depth = sflowxdr_next(x);
+	    for(ii = 0; ii < stack_depth; ii++) {
+		mpls_lse=sflowxdr_next_n(x);
+		printf(" mpls_label_%"PRIu32"=%"PRIu32,
+		       ii, mpls_lse_to_label(mpls_lse));
+		printf(" mpls_tc_%"PRIu32"=%"PRIu32,
+		       ii, mpls_lse_to_tc(mpls_lse));
+		printf(" mpls_ttl_%"PRIu32"=%"PRIu32,
+		       ii, mpls_lse_to_ttl(mpls_lse));
+		printf(" mpls_bos_%"PRIu32"=%"PRIu32,
+		       ii, mpls_lse_to_bos(mpls_lse));
+	    }
+        }
+
         if (x->offset.SWITCH) {
             sflowxdr_setc(x, x->offset.SWITCH);
             printf(" in_vlan=%"PRIu32, sflowxdr_next(x));
@@ -576,6 +604,10 @@ process_datagram(struct sflow_xdr *x)
 
 		case SFLOW_TAG_PKT_TUNNEL_VNI_IN:
                     sflowxdr_mark_unique(x, &x->offset.TUNNEL_VNI_IN);
+                    break;
+
+		case SFLOW_TAG_PKT_MPLS:
+                    sflowxdr_mark_unique(x, &x->offset.MPLS);
                     break;
 
                     /* Add others here... */
