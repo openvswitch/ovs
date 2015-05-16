@@ -2508,7 +2508,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct dp_netdev_port *port,
                            struct netdev_rxq *rxq)
 {
-    struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
+    struct dp_packet *packets[NETDEV_MAX_BURST];
     int error, cnt;
 
     cycles_count_start(pmd);
@@ -3035,7 +3035,7 @@ struct packet_batch {
 
     struct dp_netdev_flow *flow;
 
-    struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
+    struct dp_packet *packets[NETDEV_MAX_BURST];
 };
 
 static inline void
@@ -3159,7 +3159,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
+    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct dpcls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
@@ -3285,7 +3285,7 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
+    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
     struct packet_batch batches[PKT_ARRAY_SIZE];
@@ -3382,7 +3382,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dp_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+            struct dp_packet *tnl_pkt[NETDEV_MAX_BURST];
             int err;
 
             if (!may_steal) {
@@ -3408,7 +3408,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
             p = dp_netdev_lookup_port(dp, portno);
             if (p) {
-                struct dp_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+                struct dp_packet *tnl_pkt[NETDEV_MAX_BURST];
                 int err;
 
                 if (!may_steal) {
@@ -3470,7 +3470,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dp_packet *recirc_pkts[NETDEV_MAX_RX_BATCH];
+            struct dp_packet *recirc_pkts[NETDEV_MAX_BURST];
 
             if (!may_steal) {
                dp_netdev_clone_pkt_batch(recirc_pkts, packets, cnt);
@@ -3829,7 +3829,7 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const int N_MAPS = DIV_ROUND_UP(cnt, MAP_BITS);
 #else
-    enum { N_MAPS = DIV_ROUND_UP(NETDEV_MAX_RX_BATCH, MAP_BITS) };
+    enum { N_MAPS = DIV_ROUND_UP(NETDEV_MAX_BURST, MAP_BITS) };
 #endif
     map_type maps[N_MAPS];
     struct dpcls_subtable *subtable;

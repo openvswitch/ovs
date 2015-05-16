@@ -338,7 +338,7 @@ typedef void netdev_dump_queue_stats_cb(unsigned int queue_id,
 int netdev_dump_queue_stats(const struct netdev *,
                             netdev_dump_queue_stats_cb *, void *aux);
 
-enum { NETDEV_MAX_RX_BATCH = 256 };     /* Maximum number packets in rx_recv() batch. */
+enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 extern struct seq *tnl_conf_seq;
 
 #ifdef  __cplusplus

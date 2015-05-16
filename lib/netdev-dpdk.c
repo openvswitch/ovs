@@ -99,8 +99,6 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define TX_HTHRESH 0  /* Default values of TX host threshold reg. */
 #define TX_WTHRESH 0  /* Default values of TX write-back threshold reg. */
 
-#define MAX_PKT_BURST 32           /* Max burst size for RX/TX */
-
 /* Character device cuse_dev_name. */
 static char *cuse_dev_name = NULL;
 
@@ -862,7 +860,7 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq_,
     nb_rx = rte_vhost_dequeue_burst(virtio_dev, qid,
                                     vhost_dev->dpdk_mp->mp,
                                     (struct rte_mbuf **)packets,
-                                    MAX_PKT_BURST);
+                                    NETDEV_MAX_BURST);
     if (!nb_rx) {
         return EAGAIN;
     }
@@ -889,8 +887,7 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
 
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq_->queue_id,
                              (struct rte_mbuf **) packets,
-                             MIN((int) NETDEV_MAX_RX_BATCH,
-                                 (int) MAX_PKT_BURST));
+                             NETDEV_MAX_BURST);
     if (!nb_rx) {
         return EAGAIN;
     }
@@ -1008,7 +1005,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
+    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf *mbufs[PKT_ARRAY_SIZE];
