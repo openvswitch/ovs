@@ -625,14 +625,14 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     /* Extract flow data from 'opi' into 'flow'. */
     dp_packet_use_const(&pkt, pi.packet, pi.packet_len);
     flow_extract(&pkt, &flow);
-    flow.in_port.ofp_port = pi.fmd.in_port;
-    flow.tunnel.tun_id = pi.fmd.tun_id;
+    flow.in_port.ofp_port = pi.flow_metadata.flow.in_port.ofp_port;
+    flow.tunnel.tun_id = pi.flow_metadata.flow.tunnel.tun_id;
 
     /* Choose output port. */
     out_port = lswitch_choose_destination(sw, &flow);
 
     /* Make actions. */
-    queue_id = get_queue_id(sw, pi.fmd.in_port);
+    queue_id = get_queue_id(sw, pi.flow_metadata.flow.in_port.ofp_port);
     ofpbuf_use_stack(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     if (out_port == OFPP_NONE) {
         /* No actions. */
@@ -655,7 +655,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         po.packet = NULL;
         po.packet_len = 0;
     }
-    po.in_port = pi.fmd.in_port;
+    po.in_port = pi.flow_metadata.flow.in_port.ofp_port;
     po.ofpacts = ofpacts.data;
     po.ofpacts_len = ofpacts.size;
 

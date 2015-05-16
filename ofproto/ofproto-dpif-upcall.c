@@ -994,7 +994,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         pin->up.reason = OFPR_NO_MATCH;
         pin->up.table_id = 0;
         pin->up.cookie = OVS_BE64_MAX;
-        flow_get_metadata(upcall->flow, &pin->up.fmd);
+        flow_get_metadata(upcall->flow, &pin->up.flow_metadata);
         pin->send_len = 0; /* Not used for flow table misses. */
         pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
         ofproto_dpif_send_packet_in(upcall->ofproto, pin);

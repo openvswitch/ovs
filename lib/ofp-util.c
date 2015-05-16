@@ -3303,24 +3303,6 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     return msg;
 }
 
-static void
-ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
-                                struct match *match, struct ofpbuf *b)
-{
-    pin->packet = b->data;
-    pin->packet_len = b->size;
-
-    pin->fmd.in_port = match->flow.in_port.ofp_port;
-    pin->fmd.tun_id = match->flow.tunnel.tun_id;
-    pin->fmd.tun_src = match->flow.tunnel.ip_src;
-    pin->fmd.tun_dst = match->flow.tunnel.ip_dst;
-    pin->fmd.gbp_id = match->flow.tunnel.gbp_id;
-    pin->fmd.gbp_flags = match->flow.tunnel.gbp_flags;
-    pin->fmd.metadata = match->flow.metadata;
-    memcpy(pin->fmd.regs, match->flow.regs, sizeof pin->fmd.regs);
-    pin->fmd.pkt_mark = match->flow.pkt_mark;
-}
-
 enum ofperr
 ofputil_decode_packet_in(struct ofputil_packet_in *pin,
                          const struct ofp_header *oh)
@@ -3335,7 +3317,6 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT13_PACKET_IN || raw == OFPRAW_OFPT12_PACKET_IN) {
         const struct ofp13_packet_in *opi;
-        struct match match;
         int error;
         size_t packet_in_size;
 
@@ -3346,7 +3327,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         }
 
         opi = ofpbuf_pull(&b, packet_in_size);
-        error = oxm_pull_match_loose(&b, &match);
+        error = oxm_pull_match_loose(&b, &pin->flow_metadata);
         if (error) {
             return error;
         }
@@ -3364,7 +3345,8 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
             pin->cookie = opi->cookie;
         }
 
-        ofputil_decode_packet_in_finish(pin, &match, &b);
+        pin->packet = b.data;
+        pin->packet_len = b.size;
     } else if (raw == OFPRAW_OFPT10_PACKET_IN) {
         const struct ofp10_packet_in *opi;
 
@@ -3373,12 +3355,14 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->packet = opi->data;
         pin->packet_len = b.size;
 
-        pin->fmd.in_port = u16_to_ofp(ntohs(opi->in_port));
+        match_init_catchall(&pin->flow_metadata);
+        match_set_in_port(&pin->flow_metadata, u16_to_ofp(ntohs(opi->in_port)));
         pin->reason = opi->reason;
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
     } else if (raw == OFPRAW_OFPT11_PACKET_IN) {
         const struct ofp11_packet_in *opi;
+        ofp_port_t in_port;
         enum ofperr error;
 
         opi = ofpbuf_pull(&b, sizeof *opi);
@@ -3387,21 +3371,22 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->packet_len = b.size;
 
         pin->buffer_id = ntohl(opi->buffer_id);
-        error = ofputil_port_from_ofp11(opi->in_port, &pin->fmd.in_port);
+        error = ofputil_port_from_ofp11(opi->in_port, &in_port);
         if (error) {
             return error;
         }
+        match_init_catchall(&pin->flow_metadata);
+        match_set_in_port(&pin->flow_metadata, in_port);
         pin->total_len = ntohs(opi->total_len);
         pin->reason = opi->reason;
         pin->table_id = opi->table_id;
     } else if (raw == OFPRAW_NXT_PACKET_IN) {
         const struct nx_packet_in *npi;
-        struct match match;
         int error;
 
         npi = ofpbuf_pull(&b, sizeof *npi);
-        error = nx_pull_match_loose(&b, ntohs(npi->match_len), &match, NULL,
-                                    NULL);
+        error = nx_pull_match_loose(&b, ntohs(npi->match_len),
+                                    &pin->flow_metadata, NULL, NULL);
         if (error) {
             return error;
         }
@@ -3417,51 +3402,13 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->buffer_id = ntohl(npi->buffer_id);
         pin->total_len = ntohs(npi->total_len);
 
-        ofputil_decode_packet_in_finish(pin, &match, &b);
+        pin->packet = b.data;
+        pin->packet_len = b.size;
     } else {
         OVS_NOT_REACHED();
     }
 
     return 0;
-}
-
-static void
-ofputil_packet_in_to_match(const struct ofputil_packet_in *pin,
-                           struct match *match)
-{
-    int i;
-
-    match_init_catchall(match);
-    if (pin->fmd.tun_id != htonll(0)) {
-        match_set_tun_id(match, pin->fmd.tun_id);
-    }
-    if (pin->fmd.tun_src != htonl(0)) {
-        match_set_tun_src(match, pin->fmd.tun_src);
-    }
-    if (pin->fmd.tun_dst != htonl(0)) {
-        match_set_tun_dst(match, pin->fmd.tun_dst);
-    }
-    if (pin->fmd.gbp_id != htons(0)) {
-        match_set_tun_gbp_id(match, pin->fmd.gbp_id);
-    }
-    if (pin->fmd.gbp_flags) {
-        match_set_tun_gbp_flags(match, pin->fmd.gbp_flags);
-    }
-    if (pin->fmd.metadata != htonll(0)) {
-        match_set_metadata(match, pin->fmd.metadata);
-    }
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if (pin->fmd.regs[i]) {
-            match_set_reg(match, i, pin->fmd.regs[i]);
-        }
-    }
-
-    if (pin->fmd.pkt_mark != 0) {
-        match_set_pkt_mark(match, pin->fmd.pkt_mark);
-    }
-
-    match_set_in_port(match, pin->fmd.in_port);
 }
 
 static struct ofpbuf *
@@ -3474,7 +3421,7 @@ ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin)
                               htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(packet, offsetof(struct ofp10_packet_in, data));
     opi->total_len = htons(pin->total_len);
-    opi->in_port = htons(ofp_to_u16(pin->fmd.in_port));
+    opi->in_port = htons(ofp_to_u16(pin->flow_metadata.flow.in_port.ofp_port));
     opi->reason = pin->reason;
     opi->buffer_id = htonl(pin->buffer_id);
 
@@ -3488,17 +3435,13 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin)
 {
     struct nx_packet_in *npi;
     struct ofpbuf *packet;
-    struct match match;
     size_t match_len;
-
-    ofputil_packet_in_to_match(pin, &match);
 
     /* The final argument is just an estimate of the space required. */
     packet = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
-                              htonl(0), (sizeof(struct flow_metadata) * 2
-                                         + 2 + pin->packet_len));
+                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
     ofpbuf_put_zeros(packet, sizeof *npi);
-    match_len = nx_put_match(packet, &match, 0, 0);
+    match_len = nx_put_match(packet, &pin->flow_metadata, 0, 0);
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
@@ -3523,7 +3466,7 @@ ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin)
                               htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(packet, sizeof *opi);
     opi->buffer_id = htonl(pin->buffer_id);
-    opi->in_port = ofputil_port_to_ofp11(pin->fmd.in_port);
+    opi->in_port = ofputil_port_to_ofp11(pin->flow_metadata.flow.in_port.ofp_port);
     opi->in_phy_port = opi->in_port;
     opi->total_len = htons(pin->total_len);
     opi->reason = pin->reason;
@@ -3539,7 +3482,6 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
                                enum ofputil_protocol protocol)
 {
     struct ofp13_packet_in *opi;
-    struct match match;
     enum ofpraw packet_in_raw;
     enum ofp_version packet_in_version;
     size_t packet_in_size;
@@ -3555,14 +3497,12 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
         packet_in_size = sizeof (struct ofp13_packet_in);
     }
 
-    ofputil_packet_in_to_match(pin, &match);
-
     /* The final argument is just an estimate of the space required. */
     packet = ofpraw_alloc_xid(packet_in_raw, packet_in_version,
-                              htonl(0), (sizeof(struct flow_metadata) * 2
-                                         + 2 + pin->packet_len));
+                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
     ofpbuf_put_zeros(packet, packet_in_size);
-    oxm_put_match(packet, &match, ofputil_protocol_to_ofp_version(protocol));
+    oxm_put_match(packet, &pin->flow_metadata,
+                  ofputil_protocol_to_ofp_version(protocol));
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 

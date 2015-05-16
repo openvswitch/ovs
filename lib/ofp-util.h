@@ -413,7 +413,7 @@ struct ofputil_packet_in {
     const void *packet;
     size_t packet_len;          /* Number of bytes in 'packet'. */
     size_t total_len;           /* Size of packet, pre-truncation. */
-    struct flow_metadata fmd;
+    struct match flow_metadata;
 
     /* Identifies a buffer in the switch that contains the full packet, to
      * allow the controller to reference it later without having to send the

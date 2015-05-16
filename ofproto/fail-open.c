@@ -130,7 +130,8 @@ send_bogus_packet_ins(struct fail_open *fo)
     pin.up.packet = dp_packet_data(&b);
     pin.up.packet_len = dp_packet_size(&b);
     pin.up.reason = OFPR_NO_MATCH;
-    pin.up.fmd.in_port = OFPP_LOCAL;
+    match_init_catchall(&pin.up.flow_metadata);
+    match_set_in_port(&pin.up.flow_metadata, OFPP_LOCAL);
     pin.send_len = dp_packet_size(&b);
     pin.miss_type = OFPROTO_PACKET_IN_NO_MISS;
     connmgr_send_packet_in(fo->connmgr, &pin);

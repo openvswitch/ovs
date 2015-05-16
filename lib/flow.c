@@ -758,23 +758,45 @@ flow_unwildcard_tp_ports(const struct flow *flow, struct flow_wildcards *wc)
     }
 }
 
-/* Initializes 'fmd' with the metadata found in 'flow'. */
+/* Initializes 'flow_metadata' with the metadata found in 'flow'. */
 void
-flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
+flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 {
+    int i;
+
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
 
-    fmd->dp_hash = flow->dp_hash;
-    fmd->recirc_id = flow->recirc_id;
-    fmd->tun_id = flow->tunnel.tun_id;
-    fmd->tun_src = flow->tunnel.ip_src;
-    fmd->tun_dst = flow->tunnel.ip_dst;
-    fmd->gbp_id = flow->tunnel.gbp_id;
-    fmd->gbp_flags = flow->tunnel.gbp_flags;
-    fmd->metadata = flow->metadata;
-    memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
-    fmd->pkt_mark = flow->pkt_mark;
-    fmd->in_port = flow->in_port.ofp_port;
+    match_init_catchall(flow_metadata);
+    if (flow->tunnel.tun_id != htonll(0)) {
+        match_set_tun_id(flow_metadata, flow->tunnel.tun_id);
+    }
+    if (flow->tunnel.ip_src != htonl(0)) {
+        match_set_tun_src(flow_metadata, flow->tunnel.ip_src);
+    }
+    if (flow->tunnel.ip_dst != htonl(0)) {
+        match_set_tun_dst(flow_metadata, flow->tunnel.ip_dst);
+    }
+    if (flow->tunnel.gbp_id != htons(0)) {
+        match_set_tun_gbp_id(flow_metadata, flow->tunnel.gbp_id);
+    }
+    if (flow->tunnel.gbp_flags) {
+        match_set_tun_gbp_flags(flow_metadata, flow->tunnel.gbp_flags);
+    }
+    if (flow->metadata != htonll(0)) {
+        match_set_metadata(flow_metadata, flow->metadata);
+    }
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if (flow->regs[i]) {
+            match_set_reg(flow_metadata, i, flow->regs[i]);
+        }
+    }
+
+    if (flow->pkt_mark != 0) {
+        match_set_pkt_mark(flow_metadata, flow->pkt_mark);
+    }
+
+    match_set_in_port(flow_metadata, flow->in_port.ofp_port);
 }
 
 char *

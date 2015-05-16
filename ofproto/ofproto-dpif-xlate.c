@@ -3425,7 +3425,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     pin->up.table_id = ctx->table_id;
     pin->up.cookie = ctx->rule_cookie;
 
-    flow_get_metadata(&ctx->xin->flow, &pin->up.fmd);
+    flow_get_metadata(&ctx->xin->flow, &pin->up.flow_metadata);
 
     pin->controller_id = controller_id;
     pin->send_len = len;
