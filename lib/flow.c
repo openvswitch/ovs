@@ -449,7 +449,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
     /* Initialize packet's layer pointer and offsets. */
     l2 = data;
-    dp_packet_set_frame(packet, data);
+    dp_packet_reset_offsets(packet);
 
     /* Must have full Ethernet header to proceed. */
     if (OVS_UNLIKELY(size < sizeof(struct eth_header))) {

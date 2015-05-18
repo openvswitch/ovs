@@ -170,7 +170,7 @@ compose_rarp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN])
     memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
     put_16aligned_be32(&arp->ar_tpa, htonl(0));
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 
@@ -579,7 +579,7 @@ eth_compose(struct dp_packet *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(eth_type);
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, data);
 
     return data;
@@ -1040,7 +1040,7 @@ compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
     put_16aligned_be32(&arp->ar_spa, ip_src);
     put_16aligned_be32(&arp->ar_tpa, ip_dst);
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 

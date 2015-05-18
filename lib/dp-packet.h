@@ -36,25 +36,8 @@ enum OVS_PACKED_ENUM dp_packet_source {
                                   ref to build_dp_packet() in netdev-dpdk. */
 };
 
-/* Buffer for holding arbitrary data.  An dp_packet is automatically reallocated
+/* Buffer for holding packet data.  A dp_packet is automatically reallocated
  * as necessary if it grows too large for the available memory.
- *
- * 'frame' and offset conventions:
- *
- * Network frames (aka "packets"): 'frame' MUST be set to the start of the
- *    packet, layer offsets MAY be set as appropriate for the packet.
- *    Additionally, we assume in many places that the 'frame' and 'data' are
- *    the same for packets.
- *
- * OpenFlow messages: 'frame' points to the start of the OpenFlow
- *    header, while 'l3_ofs' is the length of the OpenFlow header.
- *    When parsing, the 'data' will move past these, as data is being
- *    pulled from the OpenFlow message.
- *
- * Actions: When encoding OVS action lists, the 'frame' is used
- *    as a pointer to the beginning of the current action (see ofpact_put()).
- *
- * rconn: Reuses 'frame' as a private pointer while queuing.
  */
 struct dp_packet {
 #ifdef DPDK_NETDEV
@@ -67,16 +50,14 @@ struct dp_packet {
 #endif
     uint32_t allocated;         /* Number of bytes allocated. */
 
-    void *frame;                /* Packet frame start, or NULL. */
     enum dp_packet_source source;  /* Source of memory allocated as 'base'. */
-    uint8_t l2_pad_size;        /* Detected l2 padding size.
-                                 * Padding is non-pullable. */
-    uint16_t l2_5_ofs;          /* MPLS label stack offset from 'frame', or
-                                 * UINT16_MAX */
-    uint16_t l3_ofs;            /* Network-level header offset from 'frame',
-                                   or UINT16_MAX. */
-    uint16_t l4_ofs;            /* Transport-level header offset from 'frame',
-                                   or UINT16_MAX. */
+    uint8_t l2_pad_size;           /* Detected l2 padding size.
+                                    * Padding is non-pullable. */
+    uint16_t l2_5_ofs;             /* MPLS label stack offset, or UINT16_MAX */
+    uint16_t l3_ofs;               /* Network-level header offset,
+                                    * or UINT16_MAX. */
+    uint16_t l4_ofs;               /* Transport-level header offset,
+                                      or UINT16_MAX. */
     struct pkt_metadata md;
 };
 
@@ -91,7 +72,7 @@ static inline void dp_packet_set_size(struct dp_packet *, uint32_t);
 void * dp_packet_resize_l2(struct dp_packet *, int increment);
 void * dp_packet_resize_l2_5(struct dp_packet *, int increment);
 static inline void * dp_packet_l2(const struct dp_packet *);
-static inline void dp_packet_set_frame(struct dp_packet *, void *);
+static inline void dp_packet_reset_offsets(struct dp_packet *);
 static inline uint8_t dp_packet_l2_pad_size(const struct dp_packet *);
 static inline void dp_packet_set_l2_pad_size(struct dp_packet *, uint8_t);
 static inline void * dp_packet_l2_5(const struct dp_packet *);
@@ -265,18 +246,17 @@ static inline bool dp_packet_equal(const struct dp_packet *a, const struct dp_pa
            memcmp(dp_packet_data(a), dp_packet_data(b), dp_packet_size(a)) == 0;
 }
 
-/* Get the start if the Ethernet frame.  'l3_ofs' marks the end of the l2
+/* Get the start of the Ethernet frame.  'l3_ofs' marks the end of the l2
  * headers, so return NULL if it is not set. */
 static inline void * dp_packet_l2(const struct dp_packet *b)
 {
-    return (b->l3_ofs != UINT16_MAX) ? b->frame : NULL;
+    return (b->l3_ofs != UINT16_MAX) ? dp_packet_data(b) : NULL;
 }
 
-/* Sets the packet frame start pointer and resets all layer offsets.
- * l3 offset must be set before 'l2' can be retrieved. */
-static inline void dp_packet_set_frame(struct dp_packet *b, void *packet)
+/* Resets all layer offsets.  'l3' offset must be set before 'l2' can be
+ * retrieved. */
+static inline void dp_packet_reset_offsets(struct dp_packet *b)
 {
-    b->frame = packet;
     b->l2_pad_size = 0;
     b->l2_5_ofs = UINT16_MAX;
     b->l3_ofs = UINT16_MAX;
@@ -296,32 +276,40 @@ static inline void dp_packet_set_l2_pad_size(struct dp_packet *b, uint8_t pad_si
 
 static inline void * dp_packet_l2_5(const struct dp_packet *b)
 {
-    return b->l2_5_ofs != UINT16_MAX ? (char *)b->frame + b->l2_5_ofs : NULL;
+    return b->l2_5_ofs != UINT16_MAX
+           ? (char *) dp_packet_data(b) + b->l2_5_ofs
+           : NULL;
 }
 
 static inline void dp_packet_set_l2_5(struct dp_packet *b, void *l2_5)
 {
-    b->l2_5_ofs = l2_5 ? (char *)l2_5 - (char *)b->frame : UINT16_MAX;
+    b->l2_5_ofs = l2_5
+                  ? (char *) l2_5 - (char *) dp_packet_data(b)
+                  : UINT16_MAX;
 }
 
 static inline void * dp_packet_l3(const struct dp_packet *b)
 {
-    return b->l3_ofs != UINT16_MAX ? (char *)b->frame + b->l3_ofs : NULL;
+    return b->l3_ofs != UINT16_MAX
+           ? (char *) dp_packet_data(b) + b->l3_ofs
+           : NULL;
 }
 
 static inline void dp_packet_set_l3(struct dp_packet *b, void *l3)
 {
-    b->l3_ofs = l3 ? (char *)l3 - (char *)b->frame : UINT16_MAX;
+    b->l3_ofs = l3 ? (char *) l3 - (char *) dp_packet_data(b) : UINT16_MAX;
 }
 
 static inline void * dp_packet_l4(const struct dp_packet *b)
 {
-    return b->l4_ofs != UINT16_MAX ? (char *)b->frame + b->l4_ofs : NULL;
+    return b->l4_ofs != UINT16_MAX
+           ? (char *) dp_packet_data(b) + b->l4_ofs
+           : NULL;
 }
 
 static inline void dp_packet_set_l4(struct dp_packet *b, void *l4)
 {
-    b->l4_ofs = l4 ? (char *)l4 - (char *)b->frame : UINT16_MAX;
+    b->l4_ofs = l4 ? (char *) l4 - (char *) dp_packet_data(b) : UINT16_MAX;
 }
 
 static inline size_t dp_packet_l4_size(const struct dp_packet *b)
@@ -471,8 +459,7 @@ static inline void dp_packet_set_data(struct dp_packet *b, void *data)
 static inline void dp_packet_reset_packet(struct dp_packet *b, int off)
 {
     dp_packet_set_size(b, dp_packet_size(b) - off);
-    dp_packet_set_data(b, (void *) ((unsigned char *) b->frame + off));
-    b->frame = NULL;
+    dp_packet_set_data(b, ((unsigned char *) dp_packet_data(b) + off));
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
 }
 
