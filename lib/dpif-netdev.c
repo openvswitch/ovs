@@ -290,13 +290,11 @@ struct dp_netdev_flow_stats {
  * requires synchronization, as noted in more detail below.
  */
 struct dp_netdev_flow {
-    bool dead;
-
+    const struct flow flow;      /* Unmasked flow that created this entry. */
     /* Hash table index by unmasked flow. */
     const struct cmap_node node; /* In owning dp_netdev_pmd_thread's */
                                  /* 'flow_table'. */
     const ovs_u128 ufid;         /* Unique flow identifier. */
-    const struct flow flow;      /* Unmasked flow that created this entry. */
     const int pmd_id;            /* The 'core_id' of pmd thread owning this */
                                  /* flow. */
 
@@ -306,11 +304,19 @@ struct dp_netdev_flow {
      * reference. */
     struct ovs_refcount ref_cnt;
 
+    bool dead;
+
     /* Statistics. */
     struct dp_netdev_flow_stats stats;
 
     /* Actions. */
     OVSRCU_TYPE(struct dp_netdev_actions *) actions;
+
+    /* While processing a group of input packets, the datapath uses the next
+     * member to store a pointer to the output batch for the flow.  It is
+     * reset after the batch has been sent out (See dp_netdev_queue_batches(),
+     * packet_batch_init() and packet_batch_execute()). */
+    struct packet_batch *batch;
 
     /* Packet classification. */
     struct dpcls_rule cr;        /* In owning dp_netdev's 'cls'. */
@@ -1975,6 +1981,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     flow = xmalloc(sizeof *flow - sizeof flow->cr.flow.mf + mask.len);
     memset(&flow->stats, 0, sizeof flow->stats);
     flow->dead = false;
+    flow->batch = NULL;
     *CONST_CAST(int *, &flow->pmd_id) = pmd->core_id;
     *CONST_CAST(struct flow *, &flow->flow) = match->flow;
     *CONST_CAST(ovs_u128 *, &flow->ufid) = *ufid;
@@ -3043,8 +3050,9 @@ packet_batch_update(struct packet_batch *batch, struct dp_packet *packet,
 static inline void
 packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 {
-    batch->flow = flow;
+    flow->batch = batch;
 
+    batch->flow = flow;
     batch->packet_count = 0;
     batch->byte_count = 0;
     batch->tcp_flags = 0;
@@ -3059,7 +3067,8 @@ packet_batch_execute(struct packet_batch *batch,
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
 
-    dp_netdev_flow_used(batch->flow, batch->packet_count, batch->byte_count,
+    flow->batch = NULL;
+    dp_netdev_flow_used(flow, batch->packet_count, batch->byte_count,
                         batch->tcp_flags, now);
 
     actions = dp_netdev_flow_get_actions(flow);
@@ -3076,25 +3085,19 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct packet_batch *batches, size_t *n_batches,
                         size_t max_batches)
 {
-    struct packet_batch *batch = NULL;
-    int j;
+    struct packet_batch *batch;
 
     if (OVS_UNLIKELY(!flow)) {
         return false;
     }
-    /* XXX: This O(n^2) algortihm makes sense if we're operating under the
-     * assumption that the number of distinct flows (and therefore the
-     * number of distinct batches) is quite small.  If this turns out not
-     * to be the case, it may make sense to pre sort based on the
-     * netdev_flow pointer.  That done we can get the appropriate batching
-     * in O(n * log(n)) instead. */
-    for (j = *n_batches - 1; j >= 0; j--) {
-        if (batches[j].flow == flow) {
-            batch = &batches[j];
-            packet_batch_update(batch, pkt, mf);
-            return true;
-        }
+
+    batch = flow->batch;
+
+    if (OVS_LIKELY(batch)) {
+        packet_batch_update(batch, pkt, mf);
+        return true;
     }
+
     if (OVS_UNLIKELY(*n_batches >= max_batches)) {
         return false;
     }
