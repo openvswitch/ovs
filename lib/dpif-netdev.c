@@ -3061,7 +3061,6 @@ packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 static inline void
 packet_batch_execute(struct packet_batch *batch,
                      struct dp_netdev_pmd_thread *pmd,
-                     enum dp_stat_type hit_type,
                      long long now)
 {
     struct dp_netdev_actions *actions;
@@ -3075,37 +3074,23 @@ packet_batch_execute(struct packet_batch *batch,
 
     dp_netdev_execute_actions(pmd, batch->packets, batch->packet_count, true,
                               actions->actions, actions->size);
-
-    dp_netdev_count_packet(pmd, hit_type, batch->packet_count);
 }
 
-static inline bool
+static inline void
 dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct dp_netdev_flow *flow, const struct miniflow *mf,
-                        struct packet_batch *batches, size_t *n_batches,
-                        size_t max_batches)
+                        struct packet_batch *batches, size_t *n_batches)
 {
-    struct packet_batch *batch;
-
-    if (OVS_UNLIKELY(!flow)) {
-        return false;
-    }
-
-    batch = flow->batch;
+    struct packet_batch *batch = flow->batch;
 
     if (OVS_LIKELY(batch)) {
         packet_batch_update(batch, pkt, mf);
-        return true;
-    }
-
-    if (OVS_UNLIKELY(*n_batches >= max_batches)) {
-        return false;
+        return;
     }
 
     batch = &batches[(*n_batches)++];
     packet_batch_init(batch, flow);
     packet_batch_update(batch, pkt, mf);
-    return true;
 }
 
 static inline void
@@ -3117,24 +3102,22 @@ dp_packet_swap(struct dp_packet **a, struct dp_packet **b)
 }
 
 /* Try to process all ('cnt') the 'packets' using only the exact match cache
- * 'flow_cache'. If a flow is not found for a packet 'packets[i]', or if there
- * is no matching batch for a packet's flow, the miniflow is copied into 'keys'
- * and the packet pointer is moved at the beginning of the 'packets' array.
+ * 'flow_cache'. If a flow is not found for a packet 'packets[i]', the
+ * miniflow is copied into 'keys' and the packet pointer is moved at the
+ * beginning of the 'packets' array.
  *
  * The function returns the number of packets that needs to be processed in the
  * 'packets' array (they have been moved to the beginning of the vector).
  */
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
-               size_t cnt, struct netdev_flow_key *keys, long long now)
+               size_t cnt, struct netdev_flow_key *keys,
+               struct packet_batch batches[], size_t *n_batches)
 {
-    struct netdev_flow_key key;
-    struct packet_batch batches[4];
     struct emc_cache *flow_cache = &pmd->flow_cache;
-    size_t n_batches, i;
-    size_t notfound_cnt = 0;
+    struct netdev_flow_key key;
+    size_t i, notfound_cnt = 0;
 
-    n_batches = 0;
     miniflow_initialize(&key.mf, key.buf);
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
@@ -3149,9 +3132,10 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
         key.hash = dpif_netdev_packet_get_dp_hash(packets[i], &key.mf);
 
         flow = emc_lookup(flow_cache, &key);
-        if (OVS_UNLIKELY(!dp_netdev_queue_batches(packets[i], flow, &key.mf,
-                                                  batches, &n_batches,
-                                                  ARRAY_SIZE(batches)))) {
+        if (OVS_LIKELY(flow)) {
+            dp_netdev_queue_batches(packets[i], flow, &key.mf, batches,
+                                    n_batches);
+        } else {
             if (i != notfound_cnt) {
                 dp_packet_swap(&packets[i], &packets[notfound_cnt]);
             }
@@ -3160,9 +3144,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
         }
     }
 
-    for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, DP_STAT_EXACT_HIT, now);
-    }
+    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT, cnt - notfound_cnt);
 
     return notfound_cnt;
 }
@@ -3170,7 +3152,8 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet **packets, size_t cnt,
-                     struct netdev_flow_key *keys, long long now)
+                     struct netdev_flow_key *keys,
+                     struct packet_batch batches[], size_t *n_batches)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
@@ -3178,12 +3161,12 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
 #endif
-    struct packet_batch batches[PKT_ARRAY_SIZE];
     struct dpcls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
     struct emc_cache *flow_cache = &pmd->flow_cache;
-    size_t n_batches, i;
+    int miss_cnt = 0, lost_cnt = 0;
     bool any_miss;
+    size_t i;
 
     for (i = 0; i < cnt; i++) {
         /* Key length is needed in all the cases, hash computed on demand. */
@@ -3193,7 +3176,6 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
         uint64_t actions_stub[512 / 8], slow_stub[512 / 8];
         struct ofpbuf actions, put_actions;
-        int miss_cnt = 0, lost_cnt = 0;
         ovs_u128 ufid;
 
         ofpbuf_use_stub(&actions, actions_stub, sizeof actions_stub);
@@ -3265,23 +3247,17 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         ofpbuf_uninit(&actions);
         ofpbuf_uninit(&put_actions);
         fat_rwlock_unlock(&dp->upcall_rwlock);
-        dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
         dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
     } else if (OVS_UNLIKELY(any_miss)) {
-        int dropped_cnt = 0;
-
         for (i = 0; i < cnt; i++) {
             if (OVS_UNLIKELY(!rules[i])) {
                 dp_packet_delete(packets[i]);
-                dropped_cnt++;
+                lost_cnt++;
+                miss_cnt++;
             }
         }
-
-        dp_netdev_count_packet(pmd, DP_STAT_MISS, dropped_cnt);
-        dp_netdev_count_packet(pmd, DP_STAT_LOST, dropped_cnt);
     }
 
-    n_batches = 0;
     for (i = 0; i < cnt; i++) {
         struct dp_packet *packet = packets[i];
         struct dp_netdev_flow *flow;
@@ -3293,13 +3269,12 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         flow = dp_netdev_flow_cast(rules[i]);
 
         emc_insert(flow_cache, &keys[i], flow);
-        dp_netdev_queue_batches(packet, flow, &keys[i].mf, batches,
-                                &n_batches, ARRAY_SIZE(batches));
+        dp_netdev_queue_batches(packet, flow, &keys[i].mf, batches, n_batches);
     }
 
-    for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, DP_STAT_MASKED_HIT, now);
-    }
+    dp_netdev_count_packet(pmd, DP_STAT_MASKED_HIT, cnt - miss_cnt);
+    dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
+    dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
 }
 
 static void
@@ -3313,12 +3288,18 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
 #endif
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    struct packet_batch batches[PKT_ARRAY_SIZE];
     long long now = time_msec();
-    size_t newcnt;
+    size_t newcnt, n_batches, i;
 
-    newcnt = emc_processing(pmd, packets, cnt, keys, now);
+    n_batches = 0;
+    newcnt = emc_processing(pmd, packets, cnt, keys, batches, &n_batches);
     if (OVS_UNLIKELY(newcnt)) {
-        fast_path_processing(pmd, packets, newcnt, keys, now);
+        fast_path_processing(pmd, packets, newcnt, keys, batches, &n_batches);
+    }
+
+    for (i = 0; i < n_batches; i++) {
+        packet_batch_execute(&batches[i], pmd, now);
     }
 }
 
