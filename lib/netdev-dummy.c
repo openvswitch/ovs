@@ -84,6 +84,11 @@ struct dummy_packet_conn {
     } u;
 };
 
+struct pkt_list_node {
+    struct dp_packet *pkt;
+    struct ovs_list list_node;
+};
+
 /* Protects 'dummy_list'. */
 static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -130,6 +135,8 @@ static int netdev_dummy_construct(struct netdev *);
 static void netdev_dummy_queue_packet(struct netdev_dummy *, struct dp_packet *);
 
 static void dummy_packet_stream_close(struct dummy_packet_stream *);
+
+static void pkt_list_delete(struct ovs_list *);
 
 static bool
 is_dummy_class(const struct netdev_class *class)
@@ -186,10 +193,14 @@ dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size
 {
     if (list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
         struct dp_packet *b;
+        struct pkt_list_node *node;
 
         b = dp_packet_clone_data_with_headroom(buffer, size, 2);
         put_unaligned_be16(dp_packet_push_uninit(b, 2), htons(size));
-        list_push_back(&s->txq, &b->list_node);
+
+        node = xmalloc(sizeof *node);
+        node->pkt = b;
+        list_push_back(&s->txq, &node->list_node);
     }
 }
 
@@ -202,16 +213,19 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
     stream_run(s->stream);
 
     if (!list_is_empty(&s->txq)) {
+        struct pkt_list_node *txbuf_node;
         struct dp_packet *txbuf;
         int retval;
 
-        txbuf = dp_packet_from_list(list_front(&s->txq));
+        ASSIGN_CONTAINER(txbuf_node, list_front(&s->txq), list_node);
+        txbuf = txbuf_node->pkt;
         retval = stream_send(s->stream, dp_packet_data(txbuf), dp_packet_size(txbuf));
 
         if (retval > 0) {
             dp_packet_pull(txbuf, retval);
             if (!dp_packet_size(txbuf)) {
-                list_remove(&txbuf->list_node);
+                list_remove(&txbuf_node->list_node);
+                free(txbuf_node);
                 dp_packet_delete(txbuf);
             }
         } else if (retval != -EAGAIN) {
@@ -263,7 +277,7 @@ dummy_packet_stream_close(struct dummy_packet_stream *s)
 {
     stream_close(s->stream);
     dp_packet_uninit(&s->rxbuf);
-    dp_packet_list_delete(&s->txq);
+    pkt_list_delete(&s->txq);
 }
 
 static void
@@ -797,7 +811,7 @@ netdev_dummy_rxq_destruct(struct netdev_rxq *rxq_)
 
     ovs_mutex_lock(&netdev->mutex);
     list_remove(&rx->node);
-    dp_packet_list_delete(&rx->recv_queue);
+    pkt_list_delete(&rx->recv_queue);
     ovs_mutex_unlock(&netdev->mutex);
     seq_destroy(rx->seq);
 }
@@ -820,7 +834,11 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
 
     ovs_mutex_lock(&netdev->mutex);
     if (!list_is_empty(&rx->recv_queue)) {
-        packet = dp_packet_from_list(list_pop_front(&rx->recv_queue));
+        struct pkt_list_node *pkt_node;
+
+        ASSIGN_CONTAINER(pkt_node, list_pop_front(&rx->recv_queue), list_node);
+        packet = pkt_node->pkt;
+        free(pkt_node);
         rx->recv_queue_len--;
     } else {
         packet = NULL;
@@ -866,7 +884,7 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
 
     ovs_mutex_lock(&netdev->mutex);
-    dp_packet_list_delete(&rx->recv_queue);
+    pkt_list_delete(&rx->recv_queue);
     rx->recv_queue_len = 0;
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -1116,6 +1134,17 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_rxq_drain,
 };
 
+static void
+pkt_list_delete(struct ovs_list *l)
+{
+    struct pkt_list_node *pkt;
+
+    LIST_FOR_EACH_POP(pkt, list_node, l) {
+        dp_packet_delete(pkt->pkt);
+        free(pkt);
+    }
+}
+
 static struct dp_packet *
 eth_from_packet_or_flow(const char *s)
 {
@@ -1159,7 +1188,10 @@ eth_from_packet_or_flow(const char *s)
 static void
 netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packet)
 {
-    list_push_back(&rx->recv_queue, &packet->list_node);
+    struct pkt_list_node *pkt_node = xmalloc(sizeof *pkt_node);
+
+    pkt_node->pkt = packet;
+    list_push_back(&rx->recv_queue, &pkt_node->list_node);
     rx->recv_queue_len++;
     seq_change(rx->seq);
 }

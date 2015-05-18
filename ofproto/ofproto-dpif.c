@@ -2974,43 +2974,41 @@ static void
 bundle_send_learning_packets(struct ofbundle *bundle)
 {
     struct ofproto_dpif *ofproto = bundle->ofproto;
-    struct dp_packet *learning_packet;
     int error, n_packets, n_errors;
     struct mac_entry *e;
+    struct pkt_list {
+        struct ovs_list list_node;
+        struct ofport_dpif *port;
+        struct dp_packet *pkt;
+    } *pkt_node;
     struct ovs_list packets;
 
     list_init(&packets);
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         if (mac_entry_get_port(ofproto->ml, e) != bundle) {
-            void *port_void;
-
-            learning_packet = bond_compose_learning_packet(bundle->bond,
-                                                           e->mac, e->vlan,
-                                                           &port_void);
-            /* Temporarily use 'frame' as a private pointer (see below). */
-            ovs_assert(learning_packet->frame == dp_packet_data(learning_packet));
-            learning_packet->frame = port_void;
-            list_push_back(&packets, &learning_packet->list_node);
+            pkt_node = xmalloc(sizeof *pkt_node);
+            pkt_node->pkt = bond_compose_learning_packet(bundle->bond,
+                                                         e->mac, e->vlan,
+                                                         (void **)&pkt_node->port);
+            list_push_back(&packets, &pkt_node->list_node);
         }
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
 
     error = n_packets = n_errors = 0;
-    LIST_FOR_EACH (learning_packet, list_node, &packets) {
+    LIST_FOR_EACH_POP (pkt_node, list_node, &packets) {
         int ret;
-        void *port_void = learning_packet->frame;
 
-        /* Restore 'frame'. */
-        learning_packet->frame = dp_packet_data(learning_packet);
-        ret = ofproto_dpif_send_packet(port_void, learning_packet);
+        ret = ofproto_dpif_send_packet(pkt_node->port, pkt_node->pkt);
+        dp_packet_delete(pkt_node->pkt);
+        free(pkt_node);
         if (ret) {
             error = ret;
             n_errors++;
         }
         n_packets++;
     }
-    dp_packet_list_delete(&packets);
 
     if (n_errors) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);

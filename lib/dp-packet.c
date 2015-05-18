@@ -31,7 +31,6 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     b->l2_pad_size = 0;
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
     b->md = PKT_METADATA_INITIALIZER(0);
-    list_poison(&b->list_node);
 }
 
 static void
@@ -458,18 +457,6 @@ dp_packet_to_string(const struct dp_packet *b, size_t maxbytes)
                   dp_packet_headroom(b), dp_packet_tailroom(b));
     ds_put_hex_dump(&s, dp_packet_data(b), MIN(dp_packet_size(b), maxbytes), 0, false);
     return ds_cstr(&s);
-}
-
-/* Removes each of the "struct dp_packet"s on 'list' from the list and frees
- * them.  */
-void
-dp_packet_list_delete(struct ovs_list *list)
-{
-    struct dp_packet *b;
-
-    LIST_FOR_EACH_POP (b, list_node, list) {
-        dp_packet_delete(b);
-    }
 }
 
 static inline void

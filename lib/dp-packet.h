@@ -78,7 +78,6 @@ struct dp_packet {
     uint16_t l4_ofs;            /* Transport-level header offset from 'frame',
                                    or UINT16_MAX. */
     struct pkt_metadata md;
-    struct ovs_list list_node;  /* Private list element for use by owner. */
 };
 
 static inline void * dp_packet_data(const struct dp_packet *);
@@ -159,8 +158,6 @@ static inline void *dp_packet_try_pull(struct dp_packet *, size_t);
 void *dp_packet_steal_data(struct dp_packet *);
 
 char *dp_packet_to_string(const struct dp_packet *, size_t maxbytes);
-static inline struct dp_packet *dp_packet_from_list(const struct ovs_list *);
-void dp_packet_list_delete(struct ovs_list *);
 static inline bool dp_packet_equal(const struct dp_packet *, const struct dp_packet *);
 
 
@@ -260,11 +257,6 @@ static inline void *dp_packet_try_pull(struct dp_packet *b, size_t size)
 {
     return dp_packet_size(b) - dp_packet_l2_pad_size(b) >= size
         ? dp_packet_pull(b, size) : NULL;
-}
-
-static inline struct dp_packet *dp_packet_from_list(const struct ovs_list *list)
-{
-    return CONTAINER_OF(list, struct dp_packet, list_node);
 }
 
 static inline bool dp_packet_equal(const struct dp_packet *a, const struct dp_packet *b)
