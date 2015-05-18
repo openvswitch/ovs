@@ -44,12 +44,11 @@ struct dp_packet {
     struct rte_mbuf mbuf;       /* DPDK mbuf */
 #else
     void *base_;                /* First byte of allocated space. */
+    uint16_t allocated_;        /* Number of bytes allocated. */
     uint16_t data_ofs;          /* First byte actually in use. */
     uint32_t size_;             /* Number of bytes in use. */
     uint32_t rss_hash;          /* Packet hash. */
 #endif
-    uint32_t allocated;         /* Number of bytes allocated. */
-
     enum dp_packet_source source;  /* Source of memory allocated as 'base'. */
     uint8_t l2_pad_size;           /* Detected l2 padding size.
                                     * Padding is non-pullable. */
@@ -68,6 +67,9 @@ static inline void dp_packet_set_base(struct dp_packet *, void *);
 
 static inline uint32_t dp_packet_size(const struct dp_packet *);
 static inline void dp_packet_set_size(struct dp_packet *, uint32_t);
+
+static inline uint16_t dp_packet_get_allocated(const struct dp_packet *);
+static inline void dp_packet_set_allocated(struct dp_packet *, uint16_t);
 
 void * dp_packet_resize_l2(struct dp_packet *, int increment);
 void * dp_packet_resize_l2_5(struct dp_packet *, int increment);
@@ -194,7 +196,7 @@ static inline void *dp_packet_tail(const struct dp_packet *b)
  * not necessarily in use) in 'b'. */
 static inline void *dp_packet_end(const struct dp_packet *b)
 {
-    return (char *) dp_packet_base(b) + b->allocated;
+    return (char *) dp_packet_base(b) + dp_packet_get_allocated(b);
 }
 
 /* Returns the number of bytes of headroom in 'b', that is, the number of bytes
@@ -408,6 +410,15 @@ static inline void __packet_set_data(struct dp_packet *b, uint16_t v)
     b->mbuf.data_off = v;
 }
 
+static inline uint16_t dp_packet_get_allocated(const struct dp_packet *b)
+{
+    return b->mbuf.buf_len;
+}
+
+static inline void dp_packet_set_allocated(struct dp_packet *b, uint16_t s)
+{
+    b->mbuf.buf_len = s;
+}
 #else
 static inline void * dp_packet_base(const struct dp_packet *b)
 {
@@ -439,6 +450,15 @@ static inline void __packet_set_data(struct dp_packet *b, uint16_t v)
     b->data_ofs = v;
 }
 
+static inline uint16_t dp_packet_get_allocated(const struct dp_packet *b)
+{
+    return b->allocated_;
+}
+
+static inline void dp_packet_set_allocated(struct dp_packet *b, uint16_t s)
+{
+    b->allocated_ = s;
+}
 #endif
 
 static inline void * dp_packet_data(const struct dp_packet *b)

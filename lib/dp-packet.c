@@ -25,7 +25,7 @@
 static void
 dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source source)
 {
-    b->allocated = allocated;
+    dp_packet_set_allocated(b, allocated);
     b->source = source;
     b->l2_pad_size = 0;
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
@@ -243,7 +243,7 @@ dp_packet_resize__(struct dp_packet *b, size_t new_headroom, size_t new_tailroom
         OVS_NOT_REACHED();
     }
 
-    b->allocated = new_allocated;
+    dp_packet_set_allocated(b, new_allocated);
     dp_packet_set_base(b, new_base);
 
     new_data = (char *) new_base + new_headroom;
@@ -441,7 +441,7 @@ dp_packet_to_string(const struct dp_packet *b, size_t maxbytes)
 
     ds_init(&s);
     ds_put_format(&s, "size=%"PRIu32", allocated=%"PRIu32", head=%"PRIuSIZE", tail=%"PRIuSIZE"\n",
-                  dp_packet_size(b), b->allocated,
+                  dp_packet_size(b), dp_packet_get_allocated(b),
                   dp_packet_headroom(b), dp_packet_tailroom(b));
     ds_put_hex_dump(&s, dp_packet_data(b), MIN(dp_packet_size(b), maxbytes), 0, false);
     return ds_cstr(&s);
