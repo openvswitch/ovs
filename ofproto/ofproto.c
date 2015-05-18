@@ -4715,6 +4715,8 @@ delete_flows__(const struct rule_collection *rules,
 
             learned_cookies_dec(ofproto, rule_get_actions(rule),
                                 &dead_cookies);
+
+            ofproto_rule_unref(rule);
         }
         learned_cookies_flush(ofproto, &dead_cookies);
         ofmonitor_flush(ofproto->connmgr);
