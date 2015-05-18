@@ -102,7 +102,7 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define MAX_PKT_BURST 32           /* Max burst size for RX/TX */
 
 /* Character device cuse_dev_name. */
-char *cuse_dev_name = NULL;
+static char *cuse_dev_name = NULL;
 
 /*
  * Maximum amount of time in micro seconds to try and enqueue to vhost.
@@ -173,7 +173,7 @@ static struct ovs_list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
 /* This mutex must be used by non pmd threads when allocating or freeing
  * mbufs through mempools. Since dpdk_queue_pkts() and dpdk_queue_flush() may
  * use mempools, a non pmd thread should hold this mutex while calling them */
-struct ovs_mutex nonpmd_mempool_mutex = OVS_MUTEX_INITIALIZER;
+static struct ovs_mutex nonpmd_mempool_mutex = OVS_MUTEX_INITIALIZER;
 
 struct dpdk_mp {
     struct rte_mempool *mp;
@@ -589,7 +589,7 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
     }
 
     cport = dev_name + strlen(prefix);
-    *port_no = strtol(cport, 0, 0); /* string must be null terminated */
+    *port_no = strtol(cport, NULL, 0); /* string must be null terminated */
     return 0;
 }
 
@@ -1004,8 +1004,14 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
                 int cnt)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+#if !defined(__CHECKER__) && !defined(_WIN32)
+    const size_t PKT_ARRAY_SIZE = cnt;
+#else
+    /* Sparse or MSVC doesn't like variable length array. */
+    enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
+#endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct rte_mbuf *mbufs[cnt];
+    struct rte_mbuf *mbufs[PKT_ARRAY_SIZE];
     int dropped = 0;
     int newcnt = 0;
     int i;
@@ -1650,7 +1656,7 @@ netdev_dpdk_get_virtio(const struct netdev_dpdk *dev)
  * These callbacks allow virtio-net devices to be added to vhost ports when
  * configuration has been fully complete.
  */
-const struct virtio_net_device_ops virtio_net_device_ops =
+static const struct virtio_net_device_ops virtio_net_device_ops =
 {
     .new_device =  new_device,
     .destroy_device = destroy_device,
@@ -1957,7 +1963,7 @@ dpdk_init(int argc, char **argv)
     return result + 1 + base;
 }
 
-const struct netdev_class dpdk_class =
+static const struct netdev_class dpdk_class =
     NETDEV_DPDK_CLASS(
         "dpdk",
         NULL,
@@ -1971,7 +1977,7 @@ const struct netdev_class dpdk_class =
         netdev_dpdk_get_status,
         netdev_dpdk_rxq_recv);
 
-const struct netdev_class dpdk_ring_class =
+static const struct netdev_class dpdk_ring_class =
     NETDEV_DPDK_CLASS(
         "dpdkr",
         NULL,
@@ -1985,7 +1991,7 @@ const struct netdev_class dpdk_ring_class =
         netdev_dpdk_get_status,
         netdev_dpdk_rxq_recv);
 
-const struct netdev_class dpdk_vhost_class =
+static const struct netdev_class dpdk_vhost_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhost",
         dpdk_vhost_class_init,
