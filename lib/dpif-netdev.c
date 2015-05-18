@@ -235,9 +235,9 @@ enum pmd_cycles_counter_type {
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
-    struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
-    odp_port_t port_no;
+    struct pkt_metadata md;
     struct netdev *netdev;
+    struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
     struct netdev_rxq **rxq;
     struct ovs_refcount ref_cnt;
@@ -1071,7 +1071,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         }
     }
     port = xzalloc(sizeof *port);
-    port->port_no = port_no;
+    port->md = PKT_METADATA_INITIALIZER(port_no);
     port->netdev = netdev;
     port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
     port->type = xstrdup(type);
@@ -1176,7 +1176,7 @@ dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
     struct dp_netdev_port *port;
 
     CMAP_FOR_EACH_WITH_HASH (port, node, hash_port_no(port_no), &dp->ports) {
-        if (port->port_no == port_no) {
+        if (port->md.in_port.odp_port == port_no) {
             return port;
         }
     }
@@ -1286,7 +1286,8 @@ static void
 do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
     OVS_REQUIRES(dp->port_mutex)
 {
-    cmap_remove(&dp->ports, &port->node, hash_odp_port(port->port_no));
+    cmap_remove(&dp->ports, &port->node,
+                hash_odp_port(port->md.in_port.odp_port));
     seq_change(dp->port_seq);
     if (netdev_is_pmd(port->netdev)) {
         int numa_id = netdev_get_numa_id(port->netdev);
@@ -1308,7 +1309,7 @@ answer_port_query(const struct dp_netdev_port *port,
 {
     dpif_port->name = xstrdup(netdev_get_name(port->netdev));
     dpif_port->type = xstrdup(port->type);
-    dpif_port->port_no = port->port_no;
+    dpif_port->port_no = port->md.in_port.odp_port;
 }
 
 static int
@@ -1435,7 +1436,7 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
         state->name = xstrdup(netdev_get_name(port->netdev));
         dpif_port->name = state->name;
         dpif_port->type = port->type;
-        dpif_port->port_no = port->port_no;
+        dpif_port->port_no = port->md.in_port.odp_port;
 
         retval = 0;
     } else {
@@ -2513,7 +2514,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
 
         /* XXX: initialize md in netdev implementation. */
         for (i = 0; i < cnt; i++) {
-            packets[i]->md = PKT_METADATA_INITIALIZER(port->port_no);
+            packets[i]->md = port->md;
         }
         cycles_count_start(pmd);
         dp_netdev_input(pmd, packets, cnt);
@@ -3611,12 +3612,12 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 
     /* Remove old port. */
-    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->port_no));
+    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->md.in_port.odp_port));
     ovsrcu_postpone(free, old_port);
 
     /* Insert new port (cmap semantics mean we cannot re-insert 'old_port'). */
     new_port = xmemdup(old_port, sizeof *old_port);
-    new_port->port_no = port_no;
+    new_port->md.in_port.odp_port = port_no;
     cmap_insert(&dp->ports, &new_port->node, hash_port_no(port_no));
 
     seq_change(dp->port_seq);
@@ -3647,7 +3648,7 @@ dpif_dummy_delete_port(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ovs_mutex_lock(&dp->port_mutex);
     if (get_port_by_name(dp, argv[2], &port)) {
         unixctl_command_reply_error(conn, "unknown port");
-    } else if (port->port_no == ODPP_LOCAL) {
+    } else if (port->md.in_port.odp_port == ODPP_LOCAL) {
         unixctl_command_reply_error(conn, "can't delete local port");
     } else {
         do_del_port(dp, port);
