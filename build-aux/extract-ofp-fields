@@ -72,7 +72,7 @@ OXM_CLASSES = {"NXM_OF_":        (0,          0x0000),
 def oxm_name_to_class(name):
     prefix = ''
     class_ = None
-    for p, c in OXM_CLASSES.iteritems():
+    for p, c in OXM_CLASSES.items():
         if name.startswith(p) and len(p) > len(prefix):
             prefix = p
             class_ = c
@@ -114,14 +114,14 @@ def fatal(msg):
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
-    print '''\
+    print('''\
 %(argv0)s, for extracting OpenFlow field properties from meta-flow.h
 usage: %(argv0)s INPUT [--meta-flow | --nx-match]
   where INPUT points to lib/meta-flow.h in the source directory.
 Depending on the option given, the output written to stdout is intended to be
 saved either as lib/meta-flow.inc or lib/nx-match.inc for the respective C
 file to #include.\
-''' % {"argv0": argv0}
+''' % {"argv0": argv0})
     sys.exit(0)
 
 
@@ -210,7 +210,7 @@ def parse_field(mff, comment):
         elif d[key] is not None:
             fatal("%s: duplicate key" % key)
         d[key] = value
-    for key, value in d.iteritems():
+    for key, value in d.items():
         if not value and key not in ("OF1.0", "OF1.1",
                                      "Prefix lookup member", "Notes"):
             fatal("%s: missing %s" % (mff, key))
@@ -358,13 +358,13 @@ def make_meta_flow(fields):
 
 def make_nx_match(fields):
     output = []
-    print "static struct nxm_field_index all_nxm_fields[] = {"
+    print("static struct nxm_field_index all_nxm_fields[] = {")
     for f in fields:
         # Sort by OpenFlow version number (nx-match.c depends on this).
         for oxm in sorted(f['OXM'], key=lambda x: x[2]):
-            print """{ .nf = { %s, %d, "%s", %s } },""" % (
-                oxm[0], oxm[2], oxm[1], f['mff'])
-    print "};"
+            print("""{ .nf = { %s, %d, "%s", %s } },""" % (
+                oxm[0], oxm[2], oxm[1], f['mff']))
+    print("};")
     return output
 
 
@@ -473,9 +473,9 @@ def extract_ofp_fields(mode):
     if n_errors:
         sys.exit(1)
 
-    print """\
+    print("""\
 /* Generated automatically; do not modify!    "-*- buffer-read-only: t -*- */
-"""
+""")
 
     if mode == '--meta-flow':
         output = make_meta_flow(fields)
@@ -503,7 +503,7 @@ if __name__ == '__main__':
         line_number = 0
 
         for oline in extract_ofp_fields(sys.argv[2]):
-            print oline
+            print(oline)
     else:
         sys.stderr.write("invalid arguments; use --help for help\n")
         sys.exit(1)
