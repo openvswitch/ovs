@@ -21,16 +21,16 @@ TYPES = {"u8": 1,
          "be64": 8,
          "IPv6": 16}
 
-FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,  8),
-              "hexadecimal":        ("MFS_HEXADECIMAL",  1,  8),
-              "Ethernet":           ("MFS_ETHERNET",     6,  6),
-              "IPv4":               ("MFS_IPV4",         4,  4),
-              "IPv6":               ("MFS_IPV6",        16, 16),
-              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2,  2),
-              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,  4),
-              "frag":               ("MFS_FRAG",         1,  1),
-              "tunnel flags":       ("MFS_TNL_FLAGS",    2,  2),
-              "TCP flags":          ("MFS_TCP_FLAGS",    2,  2)}
+FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
+              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
+              "Ethernet":           ("MFS_ETHERNET",     6,   6),
+              "IPv4":               ("MFS_IPV4",         4,   4),
+              "IPv6":               ("MFS_IPV6",        16,  16),
+              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2,   2),
+              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,   4),
+              "frag":               ("MFS_FRAG",         1,   1),
+              "tunnel flags":       ("MFS_TNL_FLAGS",    2,   2),
+              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2)}
 
 PREREQS = {"none": "MFP_NONE",
            "ARP": "MFP_ARP",
