@@ -141,7 +141,12 @@ def parse_oxms(s, prefix, n_bytes):
     return tuple(parse_oxm(s2.strip(), prefix, n_bytes) for s2 in s.split(','))
 
 
+match_types = dict()
+
+
 def parse_oxm(s, prefix, n_bytes):
+    global match_types
+
     m = re.match('([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$', s)
     if not m:
         fatal("%s: syntax error parsing %s" % (s, prefix))
@@ -152,6 +157,14 @@ def parse_oxm(s, prefix, n_bytes):
     if class_ is None:
         fatal("unknown OXM class for %s" % name)
     oxm_vendor, oxm_class = class_
+
+    if class_ in match_types:
+        if oxm_type in match_types[class_]:
+            fatal("duplicate match type for %s (conflicts with %s)" %
+                  (name, match_types[class_][oxm_type]))
+    else:
+        match_types[class_] = dict()
+    match_types[class_][oxm_type] = name
 
     # Normally the oxm_length is the size of the field, but for experimenter
     # OXMs oxm_length also includes the 4-byte experimenter ID.
