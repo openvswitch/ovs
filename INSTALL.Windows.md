@@ -62,9 +62,10 @@ or from a distribution tar ball.
   the right compiler, linker, libraries, Open vSwitch component installation
   directories, etc. For example,
 
-    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-      --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-      --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread"
+    % ./configure CC=./build-aux/cccl LD="`which link`" \
+      LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+      --localstatedir="C:/openvswitch/var" --sysconfdir="C:/openvswitch/etc" \
+       --with-pthread="C:/pthread"
 
     By default, the above enables compiler optimization for fast code.
     For default compiler optimization, pass the "--with-debug" configure
@@ -114,10 +115,10 @@ Note down the directory where OpenSSL is installed (e.g.: C:/OpenSSL-Win32).
 * While configuring the package, specify the OpenSSL directory path.
 For example,
 
-    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" \
-    --enable-ssl --with-openssl="C:/OpenSSL-Win32"
+    % ./configure CC=./build-aux/cccl LD="`which link`"  \
+    LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+    --localstatedir="C:/openvswitch/var" --sysconfdir="C:/openvswitch/etc" \
+    --with-pthread="C:/pthread" --enable-ssl --with-openssl="C:/OpenSSL-Win32"
 
 * Run make for the ported executables.
 
@@ -131,11 +132,11 @@ level 'make' will invoke building the kernel datapath, if the
 '--with-vstudioddk' argument is specified while configuring the package.
 For example,
 
-    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" \
-    --enable-ssl --with-openssl="C:/OpenSSL-Win32" \
-    --with-vstudioddk="<WDK to use>"
+    % ./configure CC=./build-aux/cccl LD="`which link`" \
+    LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+    --localstatedir="C:/openvswitch/var" --sysconfdir="C:/openvswitch/etc" \
+    --with-pthread="C:/pthread" --enable-ssl \
+    --with-openssl="C:/OpenSSL-Win32" --with-vstudioddk="<WDK to use>"
 
     Possible values for "<WDK to use>" are:
     "Win8.1 Debug", "Win8.1 Release", "Win8 Debug" and "Win8 Release".
