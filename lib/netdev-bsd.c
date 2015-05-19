@@ -26,6 +26,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
+#include <net/bpf.h>
 #include <ifaddrs.h>
 #include <pcap/pcap.h>
 #include <net/if.h>
