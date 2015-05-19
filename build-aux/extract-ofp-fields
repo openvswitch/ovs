@@ -21,32 +21,32 @@ TYPES = {"u8": 1,
          "be64": 8,
          "IPv6": 16}
 
-FORMATTING = {"decimal":            ("MFS_DECIMAL",      1, 8),
-              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 8),
-              "Ethernet":           ("MFS_ETHERNET",     6, 6),
-              "IPv4":               ("MFS_IPV4",         4, 4),
-              "IPv6":               ("MFS_IPV6",        16,16),
-              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2, 2),
-              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4, 4),
-              "frag":               ("MFS_FRAG",         1, 1),
-              "tunnel flags":       ("MFS_TNL_FLAGS",    2, 2),
-              "TCP flags":          ("MFS_TCP_FLAGS",    2, 2)}
+FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,  8),
+              "hexadecimal":        ("MFS_HEXADECIMAL",  1,  8),
+              "Ethernet":           ("MFS_ETHERNET",     6,  6),
+              "IPv4":               ("MFS_IPV4",         4,  4),
+              "IPv6":               ("MFS_IPV6",        16, 16),
+              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2,  2),
+              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,  4),
+              "frag":               ("MFS_FRAG",         1,  1),
+              "tunnel flags":       ("MFS_TNL_FLAGS",    2,  2),
+              "TCP flags":          ("MFS_TCP_FLAGS",    2,  2)}
 
 PREREQS = {"none": "MFP_NONE",
-          "ARP": "MFP_ARP",
-          "VLAN VID": "MFP_VLAN_VID",
-          "IPv4": "MFP_IPV4",
-          "IPv6": "MFP_IPV6",
-          "IPv4/IPv6": "MFP_IP_ANY",
-          "MPLS": "MFP_MPLS",
-          "TCP": "MFP_TCP",
-          "UDP": "MFP_UDP",
-          "SCTP": "MFP_SCTP",
-          "ICMPv4": "MFP_ICMPV4",
-          "ICMPv6": "MFP_ICMPV6",
-          "ND": "MFP_ND",
-          "ND solicit": "MFP_ND_SOLICIT",
-          "ND advert": "MFP_ND_ADVERT"}
+           "ARP": "MFP_ARP",
+           "VLAN VID": "MFP_VLAN_VID",
+           "IPv4": "MFP_IPV4",
+           "IPv6": "MFP_IPV6",
+           "IPv4/IPv6": "MFP_IP_ANY",
+           "MPLS": "MFP_MPLS",
+           "TCP": "MFP_TCP",
+           "UDP": "MFP_UDP",
+           "SCTP": "MFP_SCTP",
+           "ICMPv4": "MFP_ICMPV4",
+           "ICMPv6": "MFP_ICMPV6",
+           "ND": "MFP_ND",
+           "ND solicit": "MFP_ND_SOLICIT",
+           "ND advert": "MFP_ND_ADVERT"}
 
 # Maps a name prefix into an (experimenter ID, class) pair, so:
 #
@@ -67,6 +67,8 @@ OXM_CLASSES = {"NXM_OF_":        (0,          0x0000),
                # used only to test support for experimenter OXM, since there
                # are barely any real uses of experimenter OXM in the wild.
                "NXOXM_ET_":      (0x00002320, 0xffff)}
+
+
 def oxm_name_to_class(name):
     prefix = ''
     class_ = None
@@ -75,6 +77,7 @@ def oxm_name_to_class(name):
             prefix = p
             class_ = c
     return class_
+
 
 def decode_version_range(range):
     if range in VERSION:
@@ -85,6 +88,7 @@ def decode_version_range(range):
         a, b = re.match(r'^([^-]+)-([^-]+)$', range).groups()
         return (VERSION[a], VERSION[b])
 
+
 def get_line():
     global line
     global line_number
@@ -93,15 +97,20 @@ def get_line():
     if line == "":
         fatal("unexpected end of input")
 
+
 n_errors = 0
+
+
 def error(msg):
     global n_errors
     sys.stderr.write("%s:%d: %s\n" % (file_name, line_number, msg))
     n_errors += 1
 
+
 def fatal(msg):
     error(msg)
     sys.exit(1)
+
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
@@ -115,6 +124,7 @@ file to #include.\
 ''' % {"argv0": argv0}
     sys.exit(0)
 
+
 def make_sizeof(s):
     m = re.match(r'(.*) up to (.*)', s)
     if m:
@@ -123,17 +133,19 @@ def make_sizeof(s):
     else:
         return "sizeof(%s)" % s
 
+
 def parse_oxms(s, prefix, n_bytes):
     if s == 'none':
         return ()
 
     return tuple(parse_oxm(s2.strip(), prefix, n_bytes) for s2 in s.split(','))
 
+
 def parse_oxm(s, prefix, n_bytes):
     m = re.match('([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$', s)
     if not m:
         fatal("%s: syntax error parsing %s" % (s, prefix))
-        
+
     name, oxm_type, of_version, ovs_version = m.groups()
 
     class_ = oxm_name_to_class(name)
@@ -160,6 +172,7 @@ def parse_oxm(s, prefix, n_bytes):
         of_version_nr = 0
 
     return (header, name, of_version_nr, ovs_version)
+
 
 def parse_field(mff, comment):
     f = {'mff': mff}
@@ -246,7 +259,7 @@ def parse_field(mff, comment):
     f['OF1.0'] = d['OF1.0']
     if not d['OF1.0'] in (None, 'exact match', 'CIDR mask'):
         fatal("%s: unknown OF1.0 match type %s" % (mff, d['OF1.0']))
-        
+
     f['OF1.1'] = d['OF1.1']
     if not d['OF1.1'] in (None, 'exact match', 'bitwise mask'):
         fatal("%s: unknown OF1.1 match type %s" % (mff, d['OF1.1']))
@@ -258,6 +271,7 @@ def parse_field(mff, comment):
 
     return f
 
+
 def protocols_to_c(protocols):
     if protocols == set(['of10', 'of11', 'oxm']):
         return 'OFPUTIL_P_ANY'
@@ -268,7 +282,8 @@ def protocols_to_c(protocols):
     elif protocols == set([]):
         return 'OFPUTIL_P_NONE'
     else:
-        assert False        
+        assert False
+
 
 def make_meta_flow(fields):
     output = []
@@ -331,7 +346,7 @@ def make_meta_flow(fields):
         output += ["    %s," % protocols_to_c(protocols)]
         output += ["    %s," % protocols_to_c(cidr_protocols)]
         output += ["    %s," % protocols_to_c(bitwise_protocols)]
-        
+
         if f['prefix']:
             output += ["    FLOW_U32OFS(%s)," % f['prefix']]
         else:
@@ -340,9 +355,10 @@ def make_meta_flow(fields):
         output += ["},"]
     return output
 
+
 def make_nx_match(fields):
     output = []
-    print "static struct nxm_field_index all_nxm_fields[] = {";
+    print "static struct nxm_field_index all_nxm_fields[] = {"
     for f in fields:
         # Sort by OpenFlow version number (nx-match.c depends on this).
         for oxm in sorted(f['OXM'], key=lambda x: x[2]):
@@ -350,6 +366,7 @@ def make_nx_match(fields):
                 oxm[0], oxm[2], oxm[1], f['mff'])
     print "};"
     return output
+
 
 def extract_ofp_fields(mode):
     global line
@@ -490,5 +507,3 @@ if __name__ == '__main__':
     else:
         sys.stderr.write("invalid arguments; use --help for help\n")
         sys.exit(1)
-
-        
