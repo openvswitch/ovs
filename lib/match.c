@@ -843,16 +843,30 @@ format_be32_masked(struct ds *s, const char *name,
 }
 
 static void
-format_uint32_masked(struct ds *s, const char *name,
-                   uint32_t value, uint32_t mask)
+format_uint32_masked__(struct ds *s, const char *name,
+                       uint32_t value, uint32_t mask, const char *format)
 {
     if (mask) {
-        ds_put_format(s, "%s=%#"PRIx32, name, value);
+        ds_put_format(s, format, name, value);
         if (mask != UINT32_MAX) {
             ds_put_format(s, "/%#"PRIx32, mask);
         }
         ds_put_char(s, ',');
     }
+
+}
+static void
+format_uint32_masked(struct ds *s, const char *name,
+                   uint32_t value, uint32_t mask)
+{
+    format_uint32_masked__(s, name, value, mask, "%s=%#"PRIx32);
+}
+
+static void
+format_decimal_uint32_masked(struct ds *s, const char *name,
+                             uint32_t value, uint32_t mask)
+{
+    format_uint32_masked__(s, name, value, mask, "%s=%"PRIu32);
 }
 
 static void
@@ -921,8 +935,8 @@ match_format(const struct match *match, struct ds *s, int priority)
     format_uint32_masked(s, "pkt_mark", f->pkt_mark, wc->masks.pkt_mark);
 
     if (wc->masks.recirc_id) {
-        format_uint32_masked(s, "recirc_id", f->recirc_id,
-                             wc->masks.recirc_id);
+        format_decimal_uint32_masked(s, "recirc_id", f->recirc_id,
+                                     wc->masks.recirc_id);
     }
 
     if (wc->masks.dp_hash) {
