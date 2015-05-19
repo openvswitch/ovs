@@ -663,10 +663,10 @@ ovnsb_db_changed(struct northd_context *ctx)
             continue;
         }
 
-        if (*binding->chassis && (!lport->up || !*lport->up)) {
+        if (binding->chassis && (!lport->up || !*lport->up)) {
             bool up = true;
             nbrec_logical_port_set_up(lport, &up, 1);
-        } else if (!*binding->chassis && (!lport->up || *lport->up)) {
+        } else if (!binding->chassis && (!lport->up || *lport->up)) {
             bool up = false;
             nbrec_logical_port_set_up(lport, &up, 1);
         }

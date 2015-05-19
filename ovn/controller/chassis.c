@@ -55,11 +55,7 @@ register_chassis(struct controller_ctx *ctx)
     int retval = TXN_TRY_AGAIN;
     struct ovsdb_idl_txn *txn;
 
-    SBREC_CHASSIS_FOR_EACH(chassis_rec, ctx->ovnsb_idl) {
-        if (!strcmp(chassis_rec->name, ctx->chassis_id)) {
-            break;
-        }
-    }
+    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
 
     /* xxx Need to support more than one encap.  Also need to support
      * xxx encap options. */
@@ -396,12 +392,7 @@ chassis_destroy(struct controller_ctx *ctx)
         const struct sbrec_chassis *chassis_rec;
         struct ovsdb_idl_txn *txn;
 
-        SBREC_CHASSIS_FOR_EACH(chassis_rec, ctx->ovnsb_idl) {
-            if (!strcmp(chassis_rec->name, ctx->chassis_id)) {
-                break;
-            }
-        }
-
+        chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
         if (!chassis_rec) {
             break;
         }

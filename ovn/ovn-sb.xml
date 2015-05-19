@@ -711,8 +711,7 @@
 
     <column name="chassis">
       The physical location of the logical port.  To successfully identify a
-      chassis, this column must match the <ref table="Chassis" column="name"/>
-      column in some row in the <ref table="Chassis"/> table.  This is
+      chassis, this column must be a <ref table="Chassis"/> record.  This is
       populated by <code>ovn-controller</code>.
     </column>
 

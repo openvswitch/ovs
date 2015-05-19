@@ -74,11 +74,17 @@ get_local_iface_ids(struct controller_ctx *ctx, struct sset *lports)
 void
 binding_run(struct controller_ctx *ctx)
 {
+    const struct sbrec_chassis *chassis_rec;
     const struct sbrec_binding *binding_rec;
     struct ovsdb_idl_txn *txn;
     struct sset lports, all_lports;
     const char *name;
     int retval;
+
+    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+    if (!chassis_rec) {
+        return;
+    }
 
     sset_init(&lports);
     sset_init(&all_lports);
@@ -94,17 +100,18 @@ binding_run(struct controller_ctx *ctx)
         if (sset_find_and_delete(&lports, binding_rec->logical_port) ||
                 (binding_rec->parent_port && binding_rec->parent_port[0] &&
                  sset_contains(&all_lports, binding_rec->parent_port))) {
-            if (!strcmp(binding_rec->chassis, ctx->chassis_id)) {
+            if (binding_rec->chassis == chassis_rec) {
                 continue;
             }
-            if (binding_rec->chassis[0]) {
+            if (binding_rec->chassis) {
                 VLOG_INFO("Changing chassis for lport %s from %s to %s",
-                          binding_rec->logical_port, binding_rec->chassis,
-                          ctx->chassis_id);
+                          binding_rec->logical_port,
+                          binding_rec->chassis->name,
+                          chassis_rec->name);
             }
-            sbrec_binding_set_chassis(binding_rec, ctx->chassis_id);
-        } else if (!strcmp(binding_rec->chassis, ctx->chassis_id)) {
-            sbrec_binding_set_chassis(binding_rec, "");
+            sbrec_binding_set_chassis(binding_rec, chassis_rec);
+        } else if (binding_rec->chassis == chassis_rec) {
+            sbrec_binding_set_chassis(binding_rec, NULL);
         }
     }
 
@@ -126,9 +133,15 @@ binding_run(struct controller_ctx *ctx)
 void
 binding_destroy(struct controller_ctx *ctx)
 {
+    const struct sbrec_chassis *chassis_rec;
     int retval = TXN_TRY_AGAIN;
 
     ovs_assert(ctx->ovnsb_idl);
+
+    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+    if (!chassis_rec) {
+        return;
+    }
 
     while (retval != TXN_SUCCESS && retval != TXN_UNCHANGED) {
         const struct sbrec_binding *binding_rec;
@@ -140,8 +153,8 @@ binding_destroy(struct controller_ctx *ctx)
                               ctx->chassis_id);
 
         SBREC_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
-            if (!strcmp(binding_rec->chassis, ctx->chassis_id)) {
-                sbrec_binding_set_chassis(binding_rec, "");
+            if (binding_rec->chassis == chassis_rec) {
+                sbrec_binding_set_chassis(binding_rec, NULL);
             }
         }
 
