@@ -495,7 +495,7 @@ format_mpls(struct ds *ds, const struct ovs_key_mpls *mpls_key,
 static void
 format_odp_recirc_action(struct ds *ds, uint32_t recirc_id)
 {
-    ds_put_format(ds, "recirc(%"PRIu32")", recirc_id);
+    ds_put_format(ds, "recirc(%#"PRIx32")", recirc_id);
 }
 
 static void
