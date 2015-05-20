@@ -53,6 +53,15 @@ static const char *delimiters = ", \t\r\n";
 
 static const char *hex_chars = "0123456789abcdefABCDEF";
 
+struct attr_len_tbl {
+    int len;
+    const struct attr_len_tbl *next;
+    int next_max;
+};
+#define ATTR_LEN_INVALID  -1
+#define ATTR_LEN_VARIABLE -2
+#define ATTR_LEN_NESTED   -3
+
 static int parse_odp_key_mask_attr(const char *, const struct simap *port_names,
                               struct ofpbuf *, struct ofpbuf *);
 static void format_odp_key_attr(const struct nlattr *a,
@@ -66,9 +75,9 @@ static void format_odp_key_attr(const struct nlattr *a,
  *   - For an action whose argument has a fixed length, returned that
  *     nonnegative length in bytes.
  *
- *   - For an action with a variable-length argument, returns -2.
+ *   - For an action with a variable-length argument, returns ATTR_LEN_VARIABLE.
  *
- *   - For an invalid 'type', returns -1. */
+ *   - For an invalid 'type', returns ATTR_LEN_INVALID. */
 static int
 odp_action_len(uint16_t type)
 {
@@ -78,25 +87,25 @@ odp_action_len(uint16_t type)
 
     switch ((enum ovs_action_attr) type) {
     case OVS_ACTION_ATTR_OUTPUT: return sizeof(uint32_t);
-    case OVS_ACTION_ATTR_TUNNEL_PUSH: return -2;
+    case OVS_ACTION_ATTR_TUNNEL_PUSH: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_TUNNEL_POP: return sizeof(uint32_t);
-    case OVS_ACTION_ATTR_USERSPACE: return -2;
+    case OVS_ACTION_ATTR_USERSPACE: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_PUSH_VLAN: return sizeof(struct ovs_action_push_vlan);
     case OVS_ACTION_ATTR_POP_VLAN: return 0;
     case OVS_ACTION_ATTR_PUSH_MPLS: return sizeof(struct ovs_action_push_mpls);
     case OVS_ACTION_ATTR_POP_MPLS: return sizeof(ovs_be16);
     case OVS_ACTION_ATTR_RECIRC: return sizeof(uint32_t);
     case OVS_ACTION_ATTR_HASH: return sizeof(struct ovs_action_hash);
-    case OVS_ACTION_ATTR_SET: return -2;
-    case OVS_ACTION_ATTR_SET_MASKED: return -2;
-    case OVS_ACTION_ATTR_SAMPLE: return -2;
+    case OVS_ACTION_ATTR_SET: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_SET_MASKED: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_SAMPLE: return ATTR_LEN_VARIABLE;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
-        return -1;
+        return ATTR_LEN_INVALID;
     }
 
-    return -1;
+    return ATTR_LEN_INVALID;
 }
 
 /* Returns a string form of 'attr'.  The return value is either a statically
@@ -621,7 +630,8 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     size_t size;
 
     expected_len = odp_action_len(nl_attr_type(a));
-    if (expected_len != -2 && nl_attr_get_size(a) != expected_len) {
+    if (expected_len != ATTR_LEN_VARIABLE &&
+        nl_attr_get_size(a) != expected_len) {
         ds_put_format(ds, "bad length %"PRIuSIZE", expected %d for: ",
                       nl_attr_get_size(a), expected_len);
         format_generic_odp_action(ds, a);
@@ -1210,45 +1220,65 @@ odp_actions_from_string(const char *s, const struct simap *port_names,
     return 0;
 }
 
+static const struct attr_len_tbl ovs_vxlan_ext_attr_lens[OVS_VXLAN_EXT_MAX + 1] = {
+    [OVS_VXLAN_EXT_GBP]                 = { .len = 4 },
+};
+
+static const struct attr_len_tbl ovs_tun_key_attr_lens[OVS_TUNNEL_KEY_ATTR_MAX + 1] = {
+    [OVS_TUNNEL_KEY_ATTR_ID]            = { .len = 8 },
+    [OVS_TUNNEL_KEY_ATTR_IPV4_SRC]      = { .len = 4 },
+    [OVS_TUNNEL_KEY_ATTR_IPV4_DST]      = { .len = 4 },
+    [OVS_TUNNEL_KEY_ATTR_TOS]           = { .len = 1 },
+    [OVS_TUNNEL_KEY_ATTR_TTL]           = { .len = 1 },
+    [OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT] = { .len = 0 },
+    [OVS_TUNNEL_KEY_ATTR_CSUM]          = { .len = 0 },
+    [OVS_TUNNEL_KEY_ATTR_TP_SRC]        = { .len = 2 },
+    [OVS_TUNNEL_KEY_ATTR_TP_DST]        = { .len = 2 },
+    [OVS_TUNNEL_KEY_ATTR_OAM]           = { .len = 0 },
+    [OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS]   = { .len = ATTR_LEN_VARIABLE },
+    [OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS]    = { .len = ATTR_LEN_NESTED,
+                                            .next = ovs_vxlan_ext_attr_lens ,
+                                            .next_max = OVS_VXLAN_EXT_MAX},
+};
+
+static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = {
+    [OVS_KEY_ATTR_ENCAP]     = { .len = ATTR_LEN_NESTED },
+    [OVS_KEY_ATTR_PRIORITY]  = { .len = 4 },
+    [OVS_KEY_ATTR_SKB_MARK]  = { .len = 4 },
+    [OVS_KEY_ATTR_DP_HASH]   = { .len = 4 },
+    [OVS_KEY_ATTR_RECIRC_ID] = { .len = 4 },
+    [OVS_KEY_ATTR_TUNNEL]    = { .len = ATTR_LEN_NESTED,
+                                 .next = ovs_tun_key_attr_lens,
+                                 .next_max = OVS_TUNNEL_KEY_ATTR_MAX },
+    [OVS_KEY_ATTR_IN_PORT]   = { .len = 4  },
+    [OVS_KEY_ATTR_ETHERNET]  = { .len = sizeof(struct ovs_key_ethernet) },
+    [OVS_KEY_ATTR_VLAN]      = { .len = 2 },
+    [OVS_KEY_ATTR_ETHERTYPE] = { .len = 2 },
+    [OVS_KEY_ATTR_MPLS]      = { .len = ATTR_LEN_VARIABLE },
+    [OVS_KEY_ATTR_IPV4]      = { .len = sizeof(struct ovs_key_ipv4) },
+    [OVS_KEY_ATTR_IPV6]      = { .len = sizeof(struct ovs_key_ipv6) },
+    [OVS_KEY_ATTR_TCP]       = { .len = sizeof(struct ovs_key_tcp) },
+    [OVS_KEY_ATTR_TCP_FLAGS] = { .len = 2 },
+    [OVS_KEY_ATTR_UDP]       = { .len = sizeof(struct ovs_key_udp) },
+    [OVS_KEY_ATTR_SCTP]      = { .len = sizeof(struct ovs_key_sctp) },
+    [OVS_KEY_ATTR_ICMP]      = { .len = sizeof(struct ovs_key_icmp) },
+    [OVS_KEY_ATTR_ICMPV6]    = { .len = sizeof(struct ovs_key_icmpv6) },
+    [OVS_KEY_ATTR_ARP]       = { .len = sizeof(struct ovs_key_arp) },
+    [OVS_KEY_ATTR_ND]        = { .len = sizeof(struct ovs_key_nd) },
+};
+
 /* Returns the correct length of the payload for a flow key attribute of the
- * specified 'type', -1 if 'type' is unknown, or -2 if the attribute's payload
- * is variable length. */
+ * specified 'type', ATTR_LEN_INVALID if 'type' is unknown, ATTR_LEN_VARIABLE
+ * if the attribute's payload is variable length, or ATTR_LEN_NESTED if the
+ * payload is a nested type. */
 static int
-odp_flow_key_attr_len(uint16_t type)
+odp_key_attr_len(const struct attr_len_tbl tbl[], int max_len, uint16_t type)
 {
-    if (type > OVS_KEY_ATTR_MAX) {
-        return -1;
+    if (type > max_len) {
+        return ATTR_LEN_INVALID;
     }
 
-    switch ((enum ovs_key_attr) type) {
-    case OVS_KEY_ATTR_ENCAP: return -2;
-    case OVS_KEY_ATTR_PRIORITY: return 4;
-    case OVS_KEY_ATTR_SKB_MARK: return 4;
-    case OVS_KEY_ATTR_DP_HASH: return 4;
-    case OVS_KEY_ATTR_RECIRC_ID: return 4;
-    case OVS_KEY_ATTR_TUNNEL: return -2;
-    case OVS_KEY_ATTR_IN_PORT: return 4;
-    case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
-    case OVS_KEY_ATTR_VLAN: return sizeof(ovs_be16);
-    case OVS_KEY_ATTR_ETHERTYPE: return 2;
-    case OVS_KEY_ATTR_MPLS: return -2;
-    case OVS_KEY_ATTR_IPV4: return sizeof(struct ovs_key_ipv4);
-    case OVS_KEY_ATTR_IPV6: return sizeof(struct ovs_key_ipv6);
-    case OVS_KEY_ATTR_TCP: return sizeof(struct ovs_key_tcp);
-    case OVS_KEY_ATTR_TCP_FLAGS: return 2;
-    case OVS_KEY_ATTR_UDP: return sizeof(struct ovs_key_udp);
-    case OVS_KEY_ATTR_SCTP: return sizeof(struct ovs_key_sctp);
-    case OVS_KEY_ATTR_ICMP: return sizeof(struct ovs_key_icmp);
-    case OVS_KEY_ATTR_ICMPV6: return sizeof(struct ovs_key_icmpv6);
-    case OVS_KEY_ATTR_ARP: return sizeof(struct ovs_key_arp);
-    case OVS_KEY_ATTR_ND: return sizeof(struct ovs_key_nd);
-
-    case OVS_KEY_ATTR_UNSPEC:
-    case __OVS_KEY_ATTR_MAX:
-        return -1;
-    }
-
-    return -1;
+    return tbl[type].len;
 }
 
 static void
@@ -1283,28 +1313,6 @@ ovs_frag_type_to_string(enum ovs_frag_type type)
     default:
         return "<error>";
     }
-}
-
-static int
-tunnel_key_attr_len(int type)
-{
-    switch (type) {
-    case OVS_TUNNEL_KEY_ATTR_ID: return 8;
-    case OVS_TUNNEL_KEY_ATTR_IPV4_SRC: return 4;
-    case OVS_TUNNEL_KEY_ATTR_IPV4_DST: return 4;
-    case OVS_TUNNEL_KEY_ATTR_TOS: return 1;
-    case OVS_TUNNEL_KEY_ATTR_TTL: return 1;
-    case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT: return 0;
-    case OVS_TUNNEL_KEY_ATTR_CSUM: return 0;
-    case OVS_TUNNEL_KEY_ATTR_TP_SRC: return 2;
-    case OVS_TUNNEL_KEY_ATTR_TP_DST: return 2;
-    case OVS_TUNNEL_KEY_ATTR_OAM: return 0;
-    case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: return -2;
-    case OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS: return -2;
-    case __OVS_TUNNEL_KEY_ATTR_MAX:
-        return -1;
-    }
-    return -1;
 }
 
 #define GENEVE_OPT(class, type) ((OVS_FORCE uint32_t)(class) << 8 | (type))
@@ -1351,7 +1359,8 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
     NL_NESTED_FOR_EACH(a, left, attr) {
         uint16_t type = nl_attr_type(a);
         size_t len = nl_attr_get_size(a);
-        int expected_len = tunnel_key_attr_len(type);
+        int expected_len = odp_key_attr_len(ovs_tun_key_attr_lens,
+                                            OVS_TUNNEL_ATTR_MAX, type);
 
         if (len != expected_len && expected_len >= 0) {
             return ODP_FIT_ERROR;
@@ -1797,8 +1806,10 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     ds_put_cstr(ds, ovs_key_attr_to_string(attr, namebuf, sizeof namebuf));
 
     {
-        expected_len = odp_flow_key_attr_len(nl_attr_type(a));
-        if (expected_len != -2) {
+        expected_len = odp_key_attr_len(ovs_flow_key_attr_lens,
+                                        OVS_KEY_ATTR_MAX, nl_attr_type(a));
+        if (expected_len != ATTR_LEN_VARIABLE &&
+            expected_len != ATTR_LEN_NESTED) {
             bool bad_key_len = nl_attr_get_size(a) != expected_len;
             bool bad_mask_len = ma && nl_attr_get_size(ma) != expected_len;
 
@@ -2045,21 +2056,27 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 }
 
 static struct nlattr *
-generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
+generate_all_wildcard_mask(const struct attr_len_tbl tbl[], int max,
+                           struct ofpbuf *ofp, const struct nlattr *key)
 {
     const struct nlattr *a;
     unsigned int left;
     int type = nl_attr_type(key);
     int size = nl_attr_get_size(key);
 
-    if (odp_flow_key_attr_len(type) >=0) {
+    if (odp_key_attr_len(tbl, max, type) != ATTR_LEN_NESTED) {
         nl_msg_put_unspec_zero(ofp, type, size);
     } else {
         size_t nested_mask;
 
+        if (tbl[type].next) {
+            tbl = tbl[type].next;
+            max = tbl[type].next_max;
+        }
+
         nested_mask = nl_msg_start_nested(ofp, type);
         NL_ATTR_FOR_EACH(a, left, key, nl_attr_get_size(key)) {
-            generate_all_wildcard_mask(ofp, nl_attr_get(a));
+            generate_all_wildcard_mask(tbl, max, ofp, nl_attr_get(a));
         }
         nl_msg_end_nested(ofp, nested_mask);
     }
@@ -2132,7 +2149,9 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
                 has_ethtype_key = true;
             }
 
-            is_nested_attr = (odp_flow_key_attr_len(attr_type) == -2);
+            is_nested_attr = odp_key_attr_len(ovs_flow_key_attr_lens,
+                                              OVS_KEY_ATTR_MAX, attr_type) ==
+                             ATTR_LEN_NESTED;
 
             if (mask && mask_len) {
                 ma = nl_attr_find__(mask, mask_len, nl_attr_type(a));
@@ -2141,7 +2160,9 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
 
             if (verbose || !is_wildcard  || is_nested_attr) {
                 if (is_wildcard && !ma) {
-                    ma = generate_all_wildcard_mask(&ofp, a);
+                    ma = generate_all_wildcard_mask(ovs_flow_key_attr_lens,
+                                                    OVS_KEY_ATTR_MAX,
+                                                    &ofp, a);
                 }
                 if (!first_field) {
                     ds_put_char(ds, ',');
@@ -3185,7 +3206,8 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
         uint16_t type = nl_attr_type(nla);
         size_t len = nl_attr_get_size(nla);
-        int expected_len = odp_flow_key_attr_len(type);
+        int expected_len = odp_key_attr_len(ovs_flow_key_attr_lens,
+                                            OVS_KEY_ATTR_MAX, type);
 
         if (len != expected_len && expected_len >= 0) {
             continue;
@@ -3308,7 +3330,8 @@ parse_flow_nlattrs(const struct nlattr *key, size_t key_len,
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
         uint16_t type = nl_attr_type(nla);
         size_t len = nl_attr_get_size(nla);
-        int expected_len = odp_flow_key_attr_len(type);
+        int expected_len = odp_key_attr_len(ovs_flow_key_attr_lens,
+                                            OVS_KEY_ATTR_MAX, type);
 
         if (len != expected_len && expected_len >= 0) {
             char namebuf[OVS_KEY_ATTR_BUFSIZE];
