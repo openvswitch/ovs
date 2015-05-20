@@ -4402,6 +4402,54 @@ ovs-appctl: ovs-vswitchd: server returned an error
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# The third test checks that the output of "ovs-dpctl -m" is valid to trace.
+AT_SETUP([ofproto-dpif - ofproto/trace from dpctl output])
+OVS_VSWITCHD_START([dnl
+    set Open_vSwitch . other_config:max-idle=10000 \
+    -- add-port br0 p1 -- set Interface p1 type=dummy])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+ovs-appctl revalidator/wait
+AT_CHECK([ovs-appctl dpif/dump-flows -m br0 | sed 's/, packets.*$//' > dp_flows1.txt])
+
+odp_flow=`cat dp_flows1.txt`
+AT_CHECK([ovs-appctl ofproto/trace "$odp_flow" | sed 's/\([[Ff]]low:\).*/\1 <cleared>/'], [0], [dnl
+Bridge: br0
+Flow: <cleared>
+No match, packets dropped because OFPPC_NO_PACKET_IN is set on in_port.
+
+Rule: table=254 cookie=0 priority=0,reg0=0x2
+OpenFlow actions=drop
+
+Final flow: <cleared>
+Megaflow: <cleared>
+Datapath actions: drop
+])
+
+dnl Now, try again without megaflows:
+ovs-appctl upcall/disable-megaflows
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+ovs-appctl revalidator/wait
+AT_CHECK([ovs-appctl dpif/dump-flows -m br0 | sed 's/, packets.*$//' > dp_flows2.txt])
+
+odp_flow=`cat dp_flows2.txt`
+AT_CHECK([ovs-appctl ofproto/trace "$odp_flow" | sed 's/\([[Ff]]low:\).*/\1 <cleared>/'], [0], [dnl
+Bridge: br0
+Flow: <cleared>
+No match, packets dropped because OFPPC_NO_PACKET_IN is set on in_port.
+
+Rule: table=254 cookie=0 priority=0,reg0=0x2
+OpenFlow actions=drop
+
+Final flow: <cleared>
+Megaflow: <cleared>
+Datapath actions: drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - ofproto/trace-packet-out])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], 1, 2, 3)
