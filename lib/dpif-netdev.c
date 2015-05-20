@@ -3066,7 +3066,6 @@ packet_batch_execute(struct packet_batch *batch,
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
 
-    flow->batch = NULL;
     dp_netdev_flow_used(flow, batch->packet_count, batch->byte_count,
                         batch->tcp_flags, now);
 
@@ -3296,6 +3295,10 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
     newcnt = emc_processing(pmd, packets, cnt, keys, batches, &n_batches);
     if (OVS_UNLIKELY(newcnt)) {
         fast_path_processing(pmd, packets, newcnt, keys, batches, &n_batches);
+    }
+
+    for (i = 0; i < n_batches; i++) {
+        batches[i].flow->batch = NULL;
     }
 
     for (i = 0; i < n_batches; i++) {
