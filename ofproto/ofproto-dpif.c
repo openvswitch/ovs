@@ -4634,7 +4634,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
 
         if (odp_flow_key_to_flow(odp_key.data, odp_key.size, flow) == ODP_FIT_ERROR) {
-            error = "Failed to parse flow key";
+            error = "Failed to parse datapath flow key";
             goto exit;
         }
 
@@ -4651,7 +4651,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         char *err = parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL);
 
         if (err) {
-            m_err = xasprintf("Bad flow syntax: %s", err);
+            m_err = xasprintf("Bad openflow flow syntax: %s", err);
             free(err);
             goto exit;
         } else {
