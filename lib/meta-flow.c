@@ -2300,18 +2300,7 @@ mf_get_subfield(const struct mf_subfield *sf, const struct flow *flow)
 void
 mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s)
 {
-    int i;
-
-    for (i = 0; i < ARRAY_SIZE(subvalue->u8); i++) {
-        if (subvalue->u8[i]) {
-            ds_put_format(s, "0x%"PRIx8, subvalue->u8[i]);
-            for (i++; i < ARRAY_SIZE(subvalue->u8); i++) {
-                ds_put_format(s, "%02"PRIx8, subvalue->u8[i]);
-            }
-            return;
-        }
-    }
-    ds_put_char(s, '0');
+    ds_put_hex(s, subvalue->u8, sizeof subvalue->u8);
 }
 
 void

@@ -314,6 +314,9 @@ bool str_to_double(const char *, double *);
 int hexit_value(int c);
 uintmax_t hexits_value(const char *s, size_t n, bool *ok);
 
+int parse_int_string(const char *s, uint8_t *valuep, int field_width,
+                     char **tail);
+
 const char *english_list_delimiter(size_t index, size_t total);
 
 char *get_cwd(void);

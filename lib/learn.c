@@ -190,29 +190,14 @@ static char * OVS_WARN_UNUSED_RESULT
 learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
 {
     const char *full_s = s;
-    const char *arrow = strstr(s, "->");
     struct mf_subfield dst;
     union mf_subvalue imm;
     char *error;
+    int err;
 
-    memset(&imm, 0, sizeof imm);
-    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X') && arrow) {
-        const char *in = arrow - 1;
-        uint8_t *out = imm.u8 + sizeof imm.u8 - 1;
-        int n = arrow - (s + 2);
-        int i;
-
-        for (i = 0; i < n; i++) {
-            int hexit = hexit_value(in[-i]);
-            if (hexit < 0) {
-                return xasprintf("%s: bad hex digit in value", full_s);
-            }
-            out[-(i / 2)] |= i % 2 ? hexit << 4 : hexit;
-        }
-        s = arrow;
-    } else {
-        ovs_be64 *last_be64 = &imm.be64[ARRAY_SIZE(imm.be64) - 1];
-        *last_be64 = htonll(strtoull(s, (char **) &s, 0));
+    err = parse_int_string(s, imm.u8, sizeof imm.u8, (char **) &s);
+    if (err) {
+        return xasprintf("%s: bad hex digit in value", full_s);
     }
 
     if (strncmp(s, "->", 2)) {
