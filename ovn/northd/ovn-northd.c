@@ -32,11 +32,14 @@
 #include "poll-loop.h"
 #include "stream.h"
 #include "stream-ssl.h"
+#include "unixctl.h"
 #include "util.h"
 #include "uuid.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovn_northd);
+
+static unixctl_cb_func ovn_northd_exit;
 
 struct northd_context {
     struct ovsdb_idl *ovnnb_idl;
@@ -767,6 +770,9 @@ main(int argc, char *argv[])
     };
     bool ovnnb_changes_pending = false;
     bool ovn_changes_pending = false;
+    struct unixctl_server *unixctl;
+    int retval;
+    bool exiting;
 
     fatal_ignore_sigpipe();
     set_program_name(argv[0]);
@@ -774,7 +780,15 @@ main(int argc, char *argv[])
     vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
     parse_options(argc, argv);
 
-    daemonize();
+    daemonize_start();
+
+    retval = unixctl_server_create(NULL, &unixctl);
+    if (retval) {
+        exit(EXIT_FAILURE);
+    }
+    unixctl_command_register("exit", "", 0, 0, ovn_northd_exit, &exiting);
+
+    daemonize_complete();
 
     nbrec_init();
     sbrec_init();
@@ -820,9 +834,11 @@ main(int argc, char *argv[])
 
     ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
     ovn_seqno = ovsdb_idl_get_seqno(ovnsb_idl);
-    for (;;) {
+    exiting = false;
+    while (!exiting) {
         ovsdb_idl_run(ovnnb_idl);
         ovsdb_idl_run(ovnsb_idl);
+        unixctl_server_run(unixctl);
 
         if (!ovsdb_idl_is_alive(ovnnb_idl)) {
             int retval = ovsdb_idl_get_last_error(ovnnb_idl);
@@ -935,12 +951,27 @@ main(int argc, char *argv[])
             if (ctx.ovnsb_txn) {
                 ovsdb_idl_txn_wait(ctx.ovnsb_txn);
             }
+            unixctl_server_wait(unixctl);
+            if (exiting) {
+                poll_immediate_wake();
+            }
             poll_block();
         }
     }
 
+    unixctl_server_destroy(unixctl);
     ovsdb_idl_destroy(ovnsb_idl);
     ovsdb_idl_destroy(ovnnb_idl);
 
     exit(res);
+}
+
+static void
+ovn_northd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                const char *argv[] OVS_UNUSED, void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+
+    unixctl_command_reply(conn, NULL);
 }
