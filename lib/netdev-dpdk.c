@@ -90,15 +90,6 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
-/* XXX: Needs per NIC value for these constants. */
-#define RX_PTHRESH 32 /* Default values of RX prefetch threshold reg. */
-#define RX_HTHRESH 32 /* Default values of RX host threshold reg. */
-#define RX_WTHRESH 16 /* Default values of RX write-back threshold reg. */
-
-#define TX_PTHRESH 36 /* Default values of TX prefetch threshold reg. */
-#define TX_HTHRESH 0  /* Default values of TX host threshold reg. */
-#define TX_WTHRESH 0  /* Default values of TX write-back threshold reg. */
-
 /* Character device cuse_dev_name. */
 static char *cuse_dev_name = NULL;
 
@@ -126,25 +117,6 @@ static const struct rte_eth_conf port_conf = {
     .txmode = {
         .mq_mode = ETH_MQ_TX_NONE,
     },
-};
-
-static const struct rte_eth_rxconf rx_conf = {
-    .rx_thresh = {
-        .pthresh = RX_PTHRESH,
-        .hthresh = RX_HTHRESH,
-        .wthresh = RX_WTHRESH,
-    },
-};
-
-static const struct rte_eth_txconf tx_conf = {
-    .tx_thresh = {
-        .pthresh = TX_PTHRESH,
-        .hthresh = TX_HTHRESH,
-        .wthresh = TX_WTHRESH,
-    },
-    .tx_free_thresh = 0,
-    .tx_rs_thresh = 0,
-    .txq_flags = ETH_TXQ_FLAGS_NOMULTSEGS|ETH_TXQ_FLAGS_NOOFFLOADS,
 };
 
 enum { MAX_TX_QUEUE_LEN = 384 };
@@ -449,7 +421,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
 
     for (i = 0; i < dev->up.n_txq; i++) {
         diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
-                                      dev->socket_id, &tx_conf);
+                                      dev->socket_id, NULL);
         if (diag) {
             VLOG_ERR("eth dev tx queue setup error %d",diag);
             return -diag;
@@ -459,7 +431,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     for (i = 0; i < dev->up.n_rxq; i++) {
         diag = rte_eth_rx_queue_setup(dev->port_id, i, NIC_PORT_RX_Q_SIZE,
                                       dev->socket_id,
-                                      &rx_conf, dev->dpdk_mp->mp);
+                                      NULL, dev->dpdk_mp->mp);
         if (diag) {
             VLOG_ERR("eth dev rx queue setup error %d",diag);
             return -diag;
