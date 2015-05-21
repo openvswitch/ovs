@@ -51,6 +51,8 @@ VLOG_DEFINE_THIS_MODULE(odp_util);
  * from another. */
 static const char *delimiters = ", \t\r\n";
 
+static const char *hex_chars = "0123456789abcdefABCDEF";
+
 static int parse_odp_key_mask_attr(const char *, const struct simap *port_names,
                               struct ofpbuf *, struct ofpbuf *);
 static void format_odp_key_attr(const struct nlattr *a,
@@ -2078,7 +2080,7 @@ odp_ufid_from_string(const char *s_, ovs_u128 *ufid)
             s += 2;
         }
 
-        n = strspn(s, "0123456789abcdefABCDEF");
+        n = strspn(s, hex_chars);
         if (n != 32) {
             return -EINVAL;
         }
@@ -2714,6 +2716,17 @@ static int
 parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
+    if (!strncmp(s, "ufid:", 5)) {
+        const char *start = s;
+
+        /* Skip UFID. */
+        s += 5;
+        s += strspn(s, hex_chars);
+        s += strspn(s, delimiters);
+
+        return s - start;
+    }
+
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
     SCAN_SINGLE("skb_mark(", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);
     SCAN_SINGLE_FULLY_MASKED("recirc_id(", uint32_t, u32,
