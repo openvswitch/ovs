@@ -194,6 +194,8 @@ struct netdev_dpdk {
     int socket_id;
     int buf_size;
     struct netdev_stats stats;
+    /* Protects stats */
+    rte_spinlock_t stats_lock;
 
     uint8_t hwaddr[ETH_ADDR_LEN];
     enum netdev_flags flags;
@@ -504,6 +506,8 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
 
+    rte_spinlock_init(&netdev->stats_lock);
+
     /* If the 'sid' is negative, it means that the kernel fails
      * to obtain the pci numa info.  In that situation, always
      * use 'SOCKET0'. */
@@ -785,9 +789,9 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
         for (i = nb_tx; i < txq->count; i++) {
             rte_pktmbuf_free_seg(txq->burst_pkts[i]);
         }
-        ovs_mutex_lock(&dev->mutex);
+        rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped += txq->count-nb_tx;
-        ovs_mutex_unlock(&dev->mutex);
+        rte_spinlock_unlock(&dev->stats_lock);
     }
 
     txq->count = 0;
@@ -837,7 +841,10 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq_,
         return EAGAIN;
     }
 
+    rte_spinlock_lock(&vhost_dev->stats_lock);
     vhost_dev->stats.rx_packets += (uint64_t)nb_rx;
+    rte_spinlock_unlock(&vhost_dev->stats_lock);
+
     *c = (int) nb_rx;
     return 0;
 }
@@ -880,9 +887,9 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
     uint64_t start = 0;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
-        ovs_mutex_lock(&vhost_dev->mutex);
+        rte_spinlock_lock(&vhost_dev->stats_lock);
         vhost_dev->stats.tx_dropped+= cnt;
-        ovs_mutex_unlock(&vhost_dev->mutex);
+        rte_spinlock_unlock(&vhost_dev->stats_lock);
         goto out;
     }
 
@@ -924,8 +931,10 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
         }
     } while (cnt);
 
+    rte_spinlock_lock(&vhost_dev->stats_lock);
     vhost_dev->stats.tx_packets += (total_pkts - cnt);
     vhost_dev->stats.tx_dropped += cnt;
+    rte_spinlock_unlock(&vhost_dev->stats_lock);
     rte_spinlock_unlock(&vhost_dev->txq_lock);
 
 out:
@@ -1020,9 +1029,9 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
     }
 
     if (OVS_UNLIKELY(dropped)) {
-        ovs_mutex_lock(&dev->mutex);
+        rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped += dropped;
-        ovs_mutex_unlock(&dev->mutex);
+        rte_spinlock_unlock(&dev->stats_lock);
     }
 
     if (dev->type == DPDK_DEV_VHOST) {
@@ -1102,9 +1111,9 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         }
 
         if (OVS_UNLIKELY(dropped)) {
-            ovs_mutex_lock(&dev->mutex);
+            rte_spinlock_lock(&dev->stats_lock);
             dev->stats.tx_dropped += dropped;
-            ovs_mutex_unlock(&dev->mutex);
+            rte_spinlock_unlock(&dev->stats_lock);
         }
     }
 }
@@ -1239,10 +1248,12 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
     stats->rx_dropped += UINT64_MAX;
     stats->tx_bytes += UINT64_MAX;
 
+    rte_spinlock_lock(&dev->stats_lock);
     /* Supported Stats */
     stats->rx_packets += dev->stats.rx_packets;
     stats->tx_packets += dev->stats.tx_packets;
     stats->tx_dropped += dev->stats.tx_dropped;
+    rte_spinlock_unlock(&dev->stats_lock);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1269,7 +1280,9 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     stats->tx_errors = rte_stats.oerrors;
     stats->multicast = rte_stats.imcasts;
 
+    rte_spinlock_lock(&dev->stats_lock);
     stats->tx_dropped = dev->stats.tx_dropped;
+    rte_spinlock_unlock(&dev->stats_lock);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
