@@ -159,6 +159,10 @@ struct dpdk_tx_queue {
     bool flush_tx;                 /* Set to true to flush queue everytime */
                                    /* pkts are queued. */
     int count;
+    rte_spinlock_t tx_lock;        /* Protects the members and the NIC queue
+                                    * from concurrent access.  It is used only
+                                    * if the queue is shared among different
+                                    * pmd threads (see 'txq_needs_locking'). */
     uint64_t tsc;
     struct rte_mbuf *burst_pkts[MAX_TX_QUEUE_LEN];
 };
@@ -203,12 +207,22 @@ struct netdev_dpdk {
     struct rte_eth_link link;
     int link_reset_cnt;
 
+    /* The user might request more txqs than the NIC has.  We remap those
+     * ('up.n_txq') on these ('real_n_txq').
+     * If the numbers match, 'txq_needs_locking' is false, otherwise it is
+     * true and we will take a spinlock on transmission */
+    int real_n_txq;
+    bool txq_needs_locking;
+
+    /* Spinlock for vhost transmission.  Other DPDK devices use spinlocks in
+     * dpdk_tx_queue */
+    rte_spinlock_t vhost_tx_lock;
+
     /* virtio-net structure for vhost device */
     OVSRCU_TYPE(struct virtio_net *) virtio_dev;
 
     /* In dpdk_list. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
-    rte_spinlock_t txq_lock;
 };
 
 struct netdev_rxq_dpdk {
@@ -406,6 +420,7 @@ static int
 dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
 {
     struct rte_pktmbuf_pool_private *mbp_priv;
+    struct rte_eth_dev_info info;
     struct ether_addr eth_addr;
     int diag;
     int i;
@@ -414,14 +429,19 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
         return ENODEV;
     }
 
-    diag = rte_eth_dev_configure(dev->port_id, dev->up.n_rxq, dev->up.n_txq,
+    rte_eth_dev_info_get(dev->port_id, &info);
+    dev->up.n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
+    dev->real_n_txq = MIN(info.max_tx_queues, dev->up.n_txq);
+
+    diag = rte_eth_dev_configure(dev->port_id, dev->up.n_rxq, dev->real_n_txq,
                                  &port_conf);
     if (diag) {
-        VLOG_ERR("eth dev config error %d",diag);
+        VLOG_ERR("eth dev config error %d. rxq:%d txq:%d", diag, dev->up.n_rxq,
+                 dev->real_n_txq);
         return -diag;
     }
 
-    for (i = 0; i < dev->up.n_txq; i++) {
+    for (i = 0; i < dev->real_n_txq; i++) {
         diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
                                       dev->socket_id, NULL);
         if (diag) {
@@ -483,14 +503,20 @@ netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
     unsigned i;
 
     netdev->tx_q = dpdk_rte_mzalloc(n_txqs * sizeof *netdev->tx_q);
-    /* Each index is considered as a cpu core id, since there should
-     * be one tx queue for each cpu core. */
     for (i = 0; i < n_txqs; i++) {
         int numa_id = ovs_numa_get_numa_id(i);
 
-        /* If the corresponding core is not on the same numa node
-         * as 'netdev', flags the 'flush_tx'. */
-        netdev->tx_q[i].flush_tx = netdev->socket_id == numa_id;
+        if (!netdev->txq_needs_locking) {
+            /* Each index is considered as a cpu core id, since there should
+             * be one tx queue for each cpu core.  If the corresponding core
+             * is not on the same numa node as 'netdev', flags the
+             * 'flush_tx'. */
+            netdev->tx_q[i].flush_tx = netdev->socket_id == numa_id;
+        } else {
+            /* Queues are shared among CPUs. Always flush */
+            netdev->tx_q[i].flush_tx = true;
+        }
+        rte_spinlock_init(&netdev->tx_q[i].tx_lock);
     }
 }
 
@@ -523,7 +549,6 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     netdev->flags = 0;
     netdev->mtu = ETHER_MTU;
     netdev->max_packet_len = MTU_TO_MAX_LEN(netdev->mtu);
-    rte_spinlock_init(&netdev->txq_lock);
 
     netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, netdev->mtu);
     if (!netdev->dpdk_mp) {
@@ -533,6 +558,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
 
     netdev_->n_txq = NR_QUEUE;
     netdev_->n_rxq = NR_QUEUE;
+    netdev->real_n_txq = NR_QUEUE;
 
     if (type == DPDK_DEV_ETH) {
         netdev_dpdk_alloc_txq(netdev, NR_QUEUE);
@@ -570,6 +596,7 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
 static int
 netdev_dpdk_vhost_construct(struct netdev *netdev_)
 {
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
     int err;
 
     if (rte_eal_init_ret) {
@@ -579,6 +606,8 @@ netdev_dpdk_vhost_construct(struct netdev *netdev_)
     ovs_mutex_lock(&dpdk_mutex);
     err = netdev_dpdk_init(netdev_, -1, DPDK_DEV_VHOST);
     ovs_mutex_unlock(&dpdk_mutex);
+
+    rte_spinlock_init(&netdev->vhost_tx_lock);
 
     return err;
 }
@@ -654,7 +683,8 @@ netdev_dpdk_get_config(const struct netdev *netdev_, struct smap *args)
     ovs_mutex_lock(&dev->mutex);
 
     smap_add_format(args, "configured_rx_queues", "%d", netdev_->n_rxq);
-    smap_add_format(args, "configured_tx_queues", "%d", netdev_->n_txq);
+    smap_add_format(args, "requested_tx_queues", "%d", netdev_->n_txq);
+    smap_add_format(args, "configured_tx_queues", "%d", dev->real_n_txq);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -691,8 +721,10 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
     netdev->up.n_rxq = n_rxq;
 
     rte_free(netdev->tx_q);
-    netdev_dpdk_alloc_txq(netdev, n_txq);
     err = dpdk_eth_dev_init(netdev);
+    netdev_dpdk_alloc_txq(netdev, netdev->real_n_txq);
+
+    netdev->txq_needs_locking = netdev->real_n_txq != netdev->up.n_txq;
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -702,7 +734,7 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
 
 static int
 netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
-                       unsigned int n_rxq)
+                             unsigned int n_rxq)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
     int err = 0;
@@ -715,7 +747,8 @@ netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
     ovs_mutex_lock(&netdev->mutex);
 
     netdev->up.n_txq = n_txq;
-    netdev->up.n_rxq = n_rxq;
+    netdev->real_n_txq = 1;
+    netdev->up.n_rxq = 1;
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -894,7 +927,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
     }
 
     /* There is vHost TX single queue, So we need to lock it for TX. */
-    rte_spinlock_lock(&vhost_dev->txq_lock);
+    rte_spinlock_lock(&vhost_dev->vhost_tx_lock);
 
     do {
         unsigned int tx_pkts;
@@ -930,12 +963,12 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
             }
         }
     } while (cnt);
+    rte_spinlock_unlock(&vhost_dev->vhost_tx_lock);
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
     vhost_dev->stats.tx_packets += (total_pkts - cnt);
     vhost_dev->stats.tx_dropped += cnt;
     rte_spinlock_unlock(&vhost_dev->stats_lock);
-    rte_spinlock_unlock(&vhost_dev->txq_lock);
 
 out:
     if (may_steal) {
@@ -1071,6 +1104,11 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 {
     int i;
 
+    if (OVS_UNLIKELY(dev->txq_needs_locking)) {
+        qid = qid % dev->real_n_txq;
+        rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
+    }
+
     if (OVS_UNLIKELY(!may_steal ||
                      pkts[0]->source != DPBUF_DPDK)) {
         struct netdev *netdev = &dev->up;
@@ -1115,6 +1153,10 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
             dev->stats.tx_dropped += dropped;
             rte_spinlock_unlock(&dev->stats_lock);
         }
+    }
+
+    if (OVS_UNLIKELY(dev->txq_needs_locking)) {
+        rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
     }
 }
 
@@ -1770,10 +1812,10 @@ dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id) OVS_REQUIRES(dp
 }
 
 static int
-netdev_dpdk_ring_send(struct netdev *netdev, int qid OVS_UNUSED,
+netdev_dpdk_ring_send(struct netdev *netdev_, int qid,
                       struct dp_packet **pkts, int cnt, bool may_steal)
 {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
     unsigned i;
 
     /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that the
@@ -1784,10 +1826,7 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid OVS_UNUSED,
         dp_packet_set_rss_hash(pkts[i], 0);
     }
 
-    /* DPDK Rings have a single TX queue, Therefore needs locking. */
-    rte_spinlock_lock(&dev->txq_lock);
-    netdev_dpdk_send__(dev, 0, pkts, cnt, may_steal);
-    rte_spinlock_unlock(&dev->txq_lock);
+    netdev_dpdk_send__(netdev, qid, pkts, cnt, may_steal);
     return 0;
 }
 
@@ -1965,7 +2004,7 @@ static const struct netdev_class dpdk_ring_class =
         NULL,
         netdev_dpdk_ring_construct,
         netdev_dpdk_destruct,
-        NULL,
+        netdev_dpdk_set_multiq,
         netdev_dpdk_ring_send,
         netdev_dpdk_get_carrier,
         netdev_dpdk_get_stats,

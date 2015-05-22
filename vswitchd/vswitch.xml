@@ -155,7 +155,7 @@
       <column name="other_config" key="n-dpdk-rxqs"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
-          Specifies the number of rx queues to be created for each dpdk
+          Specifies the maximum number of rx queues to be created for each dpdk
           interface.  If not specified or specified to 0, one rx queue will
           be created for each dpdk interface by default.
         </p>

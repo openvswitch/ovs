@@ -278,6 +278,17 @@ struct netdev_class {
     /* Configures the number of tx queues and rx queues of 'netdev'.
      * Return 0 if successful, otherwise a positive errno value.
      *
+     * 'n_rxq' specifies the maximum number of receive queues to create.
+     * The netdev provider might choose to create less (e.g. if the hardware
+     * supports only a smaller number).  The actual number of queues created
+     * is stored in the 'netdev->n_rxq' field.
+     *
+     * 'n_txq' specifies the exact number of transmission queues to create.
+     * The caller will call netdev_send() concurrently from 'n_txq' different
+     * threads (with different qid).  The netdev provider is responsible for
+     * making sure that these concurrent calls do not create a race condition
+     * by using multiple hw queues or locking.
+     *
      * On error, the tx queue and rx queue configuration is indeterminant.
      * Caller should make decision on whether to restore the previous or
      * the default configuration.  Also, caller must make sure there is no
