@@ -709,13 +709,9 @@ static void
 format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
                  struct dpctl_params *dpctl_p)
 {
-    if (dpctl_p->verbosity) {
-        if (f->ufid_present) {
-            odp_format_ufid(&f->ufid, ds);
-            ds_put_cstr(ds, ", ");
-        } else {
-            ds_put_cstr(ds, "ufid:<empty>, ");
-        }
+    if (dpctl_p->verbosity && f->ufid_present) {
+        odp_format_ufid(&f->ufid, ds);
+        ds_put_cstr(ds, ", ");
     }
     odp_flow_format(f->key, f->key_len, f->mask, f->mask_len, ports, ds,
                     dpctl_p->verbosity);
