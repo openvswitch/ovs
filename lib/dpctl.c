@@ -783,6 +783,12 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         }
     }
 
+    /* Make sure that these values are different. PMD_ID_NULL means that the
+     * pmd is unspecified (e.g. because the datapath doesn't have different
+     * pmd threads), while NON_PMD_CORE_ID refers to every non pmd threads
+     * in the userspace datapath */
+    BUILD_ASSERT(PMD_ID_NULL != NON_PMD_CORE_ID);
+
     ds_init(&ds);
     flow_dump = dpif_flow_dump_create(dpif, false);
     flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);

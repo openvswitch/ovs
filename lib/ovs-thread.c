@@ -334,8 +334,6 @@ ovsthread_wrapper(void *aux_)
     set_subprogram_name("%s%u", aux.name, id);
     ovsrcu_quiesce_end();
 
-    thread_set_nonpmd();
-
     return aux.start(aux.arg);
 }
 

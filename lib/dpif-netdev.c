@@ -580,7 +580,7 @@ pmd_info_show_stats(struct ds *reply,
     if (pmd->numa_id != OVS_NUMA_UNSPEC) {
         ds_put_format(reply, " numa_id %d", pmd->numa_id);
     }
-    if (pmd->core_id != OVS_CORE_UNSPEC) {
+    if (pmd->core_id != OVS_CORE_UNSPEC && pmd->core_id != NON_PMD_CORE_ID) {
         ds_put_format(reply, " core_id %u", pmd->core_id);
     }
     ds_put_cstr(reply, ":\n");
@@ -829,8 +829,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     ovs_mutex_init_recursive(&dp->non_pmd_mutex);
     ovsthread_key_create(&dp->per_pmd_key, NULL);
 
-    /* Reserves the core NON_PMD_CORE_ID for all non-pmd threads. */
-    ovs_numa_try_pin_core_specific(NON_PMD_CORE_ID);
     dp_netdev_set_nonpmd(dp);
     dp->n_dpdk_rxqs = NR_QUEUE;
 

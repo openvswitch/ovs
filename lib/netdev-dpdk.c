@@ -1927,7 +1927,7 @@ dpdk_init(int argc, char **argv)
     }
 
     /* We are called from the main thread here */
-    thread_set_nonpmd();
+    RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 
     return result + 1 + base;
 }
@@ -2010,14 +2010,6 @@ pmd_thread_setaffinity_cpu(unsigned cpu)
     RTE_PER_LCORE(_lcore_id) = cpu;
 
     return 0;
-}
-
-void
-thread_set_nonpmd(void)
-{
-    /* We have to use NON_PMD_CORE_ID to allow non-pmd threads to perform
-     * certain DPDK operations, like rte_eth_dev_configure(). */
-    RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 }
 
 static bool

@@ -260,9 +260,6 @@ Using the DPDK with ovs-vswitchd:
    Note, the pmd threads on a numa node are only created if there is at least
    one DPDK interface from the numa node that has been added to OVS.
 
-   Note, core 0 is always reserved from non-pmd threads and should never be set
-   in the cpu mask.
-
    To understand where most of the time is spent and whether the caches are
    effective, these commands can be used:
 
