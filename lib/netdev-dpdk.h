@@ -28,7 +28,7 @@ struct dp_packet;
 int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
-int pmd_thread_setaffinity_cpu(int cpu);
+int pmd_thread_setaffinity_cpu(unsigned cpu);
 void thread_set_nonpmd(void);
 
 #else
@@ -57,7 +57,7 @@ free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
 }
 
 static inline int
-pmd_thread_setaffinity_cpu(int cpu OVS_UNUSED)
+pmd_thread_setaffinity_cpu(unsigned cpu OVS_UNUSED)
 {
     return 0;
 }

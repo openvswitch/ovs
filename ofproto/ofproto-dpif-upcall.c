@@ -160,7 +160,7 @@ struct upcall {
      * may be used with other datapaths. */
     const struct flow *flow;       /* Parsed representation of the packet. */
     const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
-    int pmd_id;                    /* Datapath poll mode driver id. */
+    unsigned pmd_id;               /* Datapath poll mode driver id. */
     const struct dp_packet *packet;   /* Packet associated with this upcall. */
     ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
 
@@ -214,7 +214,7 @@ struct udpif_key {
     ovs_u128 ufid;                 /* Unique flow identifier. */
     bool ufid_present;             /* True if 'ufid' is in datapath. */
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
-    int pmd_id;                    /* Datapath poll mode driver id. */
+    unsigned pmd_id;               /* Datapath poll mode driver id. */
 
     struct ovs_mutex mutex;                   /* Guards the following. */
     struct dpif_flow_stats stats OVS_GUARDED; /* Last known stats.*/
@@ -296,7 +296,7 @@ static enum upcall_type classify_upcall(enum dpif_upcall_type type,
 static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const struct dp_packet *packet, enum dpif_upcall_type,
                           const struct nlattr *userdata, const struct flow *,
-                          const ovs_u128 *ufid, const int pmd_id);
+                          const ovs_u128 *ufid, const unsigned pmd_id);
 static void upcall_uninit(struct upcall *);
 
 static upcall_callback upcall_cb;
@@ -901,7 +901,7 @@ static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct dp_packet *packet, enum dpif_upcall_type type,
                const struct nlattr *userdata, const struct flow *flow,
-               const ovs_u128 *ufid, const int pmd_id)
+               const ovs_u128 *ufid, const unsigned pmd_id)
 {
     int error;
 
@@ -1040,7 +1040,7 @@ upcall_uninit(struct upcall *upcall)
 
 static int
 upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufid,
-          int pmd_id, enum dpif_upcall_type type,
+          unsigned pmd_id, enum dpif_upcall_type type,
           const struct nlattr *userdata, struct ofpbuf *actions,
           struct flow_wildcards *wc, struct ofpbuf *put_actions, void *aux)
 {
@@ -1313,7 +1313,7 @@ static struct udpif_key *
 ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
               bool ufid_present, const ovs_u128 *ufid,
-              const int pmd_id, const struct ofpbuf *actions,
+              const unsigned pmd_id, const struct ofpbuf *actions,
               uint64_t dump_seq, uint64_t reval_seq, long long int used,
               const struct recirc_id_node *key_recirc, struct xlate_out *xout)
     OVS_NO_THREAD_SAFETY_ANALYSIS

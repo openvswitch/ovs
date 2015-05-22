@@ -478,7 +478,7 @@ netdev_dpdk_alloc(void)
 static void
 netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
 {
-    int i;
+    unsigned i;
 
     netdev->tx_q = dpdk_rte_mzalloc(n_txqs * sizeof *netdev->tx_q);
     /* Each index is considered as a cpu core id, since there should
@@ -1993,7 +1993,7 @@ netdev_dpdk_register(void)
 }
 
 int
-pmd_thread_setaffinity_cpu(int cpu)
+pmd_thread_setaffinity_cpu(unsigned cpu)
 {
     cpu_set_t cpuset;
     int err;

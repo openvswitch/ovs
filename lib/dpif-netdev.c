@@ -295,7 +295,7 @@ struct dp_netdev_flow {
     const struct cmap_node node; /* In owning dp_netdev_pmd_thread's */
                                  /* 'flow_table'. */
     const ovs_u128 ufid;         /* Unique flow identifier. */
-    const int pmd_id;            /* The 'core_id' of pmd thread owning this */
+    const unsigned pmd_id;       /* The 'core_id' of pmd thread owning this */
                                  /* flow. */
 
     /* Number of references.
@@ -413,7 +413,7 @@ struct dp_netdev_pmd_thread {
     pthread_t thread;
     int index;                      /* Idx of this pmd thread among pmd*/
                                     /* threads on same numa node. */
-    int core_id;                    /* CPU core id of this pmd thread. */
+    unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
 
     /* Only a pmd thread can write on its own 'cycles' and 'stats'.
@@ -458,11 +458,11 @@ static void dp_netdev_disable_upcall(struct dp_netdev *);
 void dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
                                     struct dp_netdev *dp, int index,
-                                    int core_id, int numa_id);
+                                    unsigned core_id, int numa_id);
 static void dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_set_nonpmd(struct dp_netdev *dp);
 static struct dp_netdev_pmd_thread *dp_netdev_get_pmd(struct dp_netdev *dp,
-                                                      int core_id);
+                                                      unsigned core_id);
 static struct dp_netdev_pmd_thread *
 dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos);
 static void dp_netdev_destroy_all_pmds(struct dp_netdev *dp);
@@ -581,7 +581,7 @@ pmd_info_show_stats(struct ds *reply,
         ds_put_format(reply, " numa_id %d", pmd->numa_id);
     }
     if (pmd->core_id != OVS_CORE_UNSPEC) {
-        ds_put_format(reply, " core_id %d", pmd->core_id);
+        ds_put_format(reply, " core_id %u", pmd->core_id);
     }
     ds_put_cstr(reply, ":\n");
 
@@ -1942,7 +1942,8 @@ dpif_netdev_flow_get(const struct dpif *dpif, const struct dpif_flow_get *get)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
     struct dp_netdev_pmd_thread *pmd;
-    int pmd_id = get->pmd_id == PMD_ID_NULL ? NON_PMD_CORE_ID : get->pmd_id;
+    unsigned pmd_id = get->pmd_id == PMD_ID_NULL
+                      ? NON_PMD_CORE_ID : get->pmd_id;
     int error = 0;
 
     pmd = dp_netdev_get_pmd(dp, pmd_id);
@@ -1982,7 +1983,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     memset(&flow->stats, 0, sizeof flow->stats);
     flow->dead = false;
     flow->batch = NULL;
-    *CONST_CAST(int *, &flow->pmd_id) = pmd->core_id;
+    *CONST_CAST(unsigned *, &flow->pmd_id) = pmd->core_id;
     *CONST_CAST(struct flow *, &flow->flow) = match->flow;
     *CONST_CAST(ovs_u128 *, &flow->ufid) = *ufid;
     ovs_refcount_init(&flow->ref_cnt);
@@ -2025,7 +2026,8 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     struct dp_netdev_pmd_thread *pmd;
     struct match match;
     ovs_u128 ufid;
-    int pmd_id = put->pmd_id == PMD_ID_NULL ? NON_PMD_CORE_ID : put->pmd_id;
+    unsigned pmd_id = put->pmd_id == PMD_ID_NULL
+                      ? NON_PMD_CORE_ID : put->pmd_id;
     int error;
 
     error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow);
@@ -2120,7 +2122,8 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
     struct dp_netdev_pmd_thread *pmd;
-    int pmd_id = del->pmd_id == PMD_ID_NULL ? NON_PMD_CORE_ID : del->pmd_id;
+    unsigned pmd_id = del->pmd_id == PMD_ID_NULL
+                      ? NON_PMD_CORE_ID : del->pmd_id;
     int error = 0;
 
     pmd = dp_netdev_get_pmd(dp, pmd_id);
@@ -2745,7 +2748,7 @@ dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
  *
  * Caller must unrefs the returned reference.  */
 static struct dp_netdev_pmd_thread *
-dp_netdev_get_pmd(struct dp_netdev *dp, int core_id)
+dp_netdev_get_pmd(struct dp_netdev *dp, unsigned core_id)
 {
     struct dp_netdev_pmd_thread *pmd;
     const struct cmap_node *pnode;
@@ -2808,7 +2811,7 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos)
 /* Configures the 'pmd' based on the input argument. */
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
-                        int index, int core_id, int numa_id)
+                        int index, unsigned core_id, int numa_id)
 {
     pmd->dp = dp;
     pmd->index = index;
@@ -2921,7 +2924,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         can_have = dp->pmd_cmask ? n_unpinned : MIN(n_unpinned, NR_PMD_THREADS);
         for (i = 0; i < can_have; i++) {
             struct dp_netdev_pmd_thread *pmd = xzalloc(sizeof *pmd);
-            int core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
+            unsigned core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
 
             dp_netdev_configure_pmd(pmd, dp, i, core_id, numa_id);
             /* Each thread will distribute all devices rx-queues among

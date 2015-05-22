@@ -525,15 +525,15 @@ int dpif_flow_put(struct dpif *, enum dpif_flow_put_flags,
                   const struct nlattr *key, size_t key_len,
                   const struct nlattr *mask, size_t mask_len,
                   const struct nlattr *actions, size_t actions_len,
-                  const ovs_u128 *ufid, const int pmd_id,
+                  const ovs_u128 *ufid, const unsigned pmd_id,
                   struct dpif_flow_stats *);
 int dpif_flow_del(struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  const ovs_u128 *ufid, const int pmd_id,
+                  const ovs_u128 *ufid, const unsigned pmd_id,
                   struct dpif_flow_stats *);
 int dpif_flow_get(struct dpif *,
                   const struct nlattr *key, size_t key_len,
-                  const ovs_u128 *ufid, const int pmd_id,
+                  const ovs_u128 *ufid, const unsigned pmd_id,
                   struct ofpbuf *, struct dpif_flow *);
 
 /* Flow dumping interface
@@ -583,7 +583,7 @@ struct dpif_flow {
     size_t actions_len;           /* 'actions' length in bytes. */
     ovs_u128 ufid;                /* Unique flow identifier. */
     bool ufid_present;            /* True if 'ufid' was provided by datapath.*/
-    int pmd_id;                   /* Datapath poll mode dirver id. */
+    unsigned pmd_id;              /* Datapath poll mode driver id. */
     struct dpif_flow_stats stats; /* Flow statistics. */
 };
 int dpif_flow_dump_next(struct dpif_flow_dump_thread *,
@@ -640,7 +640,7 @@ struct dpif_flow_put {
     const struct nlattr *actions;   /* Actions to perform on flow. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
     const ovs_u128 *ufid;           /* Optional unique flow identifier. */
-    int pmd_id;                     /* Datapath poll mode driver id. */
+    unsigned pmd_id;                /* Datapath poll mode driver id. */
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
@@ -671,7 +671,7 @@ struct dpif_flow_del {
     const ovs_u128 *ufid;           /* Unique identifier of flow to delete. */
     bool terse;                     /* OK to skip sending/receiving full flow
                                      * info? */
-    int pmd_id;                     /* Datapath poll mode driver id. */
+    unsigned pmd_id;                /* Datapath poll mode driver id. */
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
@@ -732,7 +732,7 @@ struct dpif_flow_get {
     const struct nlattr *key;       /* Flow to get. */
     size_t key_len;                 /* Length of 'key' in bytes. */
     const ovs_u128 *ufid;           /* Unique identifier of flow to get. */
-    int pmd_id;                     /* Datapath poll mode driver id. */
+    unsigned pmd_id;                /* Datapath poll mode driver id. */
     struct ofpbuf *buffer;          /* Storage for output parameters. */
 
     /* Output. */
@@ -807,7 +807,7 @@ struct dpif_upcall {
 typedef int upcall_callback(const struct dp_packet *packet,
                             const struct flow *flow,
                             ovs_u128 *ufid,
-                            int pmd_id,
+                            unsigned pmd_id,
                             enum dpif_upcall_type type,
                             const struct nlattr *userdata,
                             struct ofpbuf *actions,
