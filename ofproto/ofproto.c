@@ -5315,7 +5315,8 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     if (request.role != OFPCR12_ROLE_NOCHANGE) {
-        if (request.have_generation_id
+        if (request.role != OFPCR12_ROLE_EQUAL
+            && request.have_generation_id
             && !ofconn_set_master_election_id(ofconn, request.generation_id)) {
                 return OFPERR_OFPRRFC_STALE;
         }
