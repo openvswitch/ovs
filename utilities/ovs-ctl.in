@@ -378,6 +378,11 @@ force_reload_kmod () {
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
 
+    # For downgrading from branches > 2.3 back to 2.3
+    for vport in `awk '/^vport_/ { print $1 }' /proc/modules`; do
+        action "Removing $vport module" rmmod $vport
+    done
+
     # try both old and new names in case this is post upgrade
     if test -e /sys/module/openvswitch_mod; then
         action "Removing openvswitch module" rmmod openvswitch_mod
