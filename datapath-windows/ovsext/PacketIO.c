@@ -216,8 +216,10 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     LIST_ENTRY missedPackets;
     UINT32 num = 0;
     OvsCompletionList completionList;
+#if (NDIS_SUPPORT_NDIS640)
     PNET_BUFFER_LIST nativeForwardedNbls = NULL;
     PNET_BUFFER_LIST *nextNativeForwardedNbl = &nativeForwardedNbls;
+#endif
 
     dispatch = NDIS_TEST_SEND_AT_DISPATCH_LEVEL(SendFlags)?
                                             NDIS_RWL_AT_DISPATCH_LEVEL : 0;
@@ -254,7 +256,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                 sourcePort == switchContext->virtualExternalPortId);
             continue;
         }
-#endif
+#endif /* NDIS_SUPPORT_NDIS640 */
 
         /* Ethernet Header is a guaranteed safe access. */
         curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
@@ -353,11 +355,13 @@ dropit:
         }
     }
 
+#if (NDIS_SUPPORT_NDIS640)
     if (nativeForwardedNbls) {
         /* This is NVGRE encapsulated traffic and is forwarded to NDIS
          * in order to be handled by the HNV module. */
         OvsSendNBLIngress(switchContext, nativeForwardedNbls, SendFlags);
     }
+#endif /* NDIS_SUPPORT_NDIS640 */
 
     /* Queue the missed packets. */
     OvsQueuePackets(&missedPackets, num);
