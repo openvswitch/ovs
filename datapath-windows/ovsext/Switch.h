@@ -132,8 +132,6 @@ typedef struct _OVS_SWITCH_CONTEXT
     POVS_VPORT_ENTRY        virtualExternalVport;   // the virtual adapter vport
     POVS_VPORT_ENTRY        internalVport;
 
-    POVS_VPORT_ENTRY        vxlanVport;
-
     /*
      * 'portIdHashArray' ONLY contains ports that exist on the Hyper-V switch,
      * namely: VIF (vNIC) ports, external port and Hyper-V internal port.
@@ -148,11 +146,15 @@ typedef struct _OVS_SWITCH_CONTEXT
      * exist on the Hyper-V switch, and 'numNonHvVports' counts such ports in
      * 'portNoHashArray'.
      *
+     * 'tunnelVportsArray' contains tunnel ports that are added from OVS
+     * userspace. Currently only VXLAN tunnels are added in this list.
+     *
      * 'ovsPortNameHashArray' contains the same entries as 'portNoHashArray' but
      * hashed on a different key.
      */
     PLIST_ENTRY             portIdHashArray;        // based on Hyper-V portId
     PLIST_ENTRY             portNoHashArray;        // based on ovs port number
+    PLIST_ENTRY             tunnelVportsArray;      // based on ovs dst port number
     PLIST_ENTRY             ovsPortNameHashArray;   // based on ovsName
     PLIST_ENTRY             pidHashArray;           // based on packet pids
     NDIS_SPIN_LOCK          pidHashLock;            // Lock for pidHash table

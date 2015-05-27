@@ -285,7 +285,8 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
 
         SendFlags |= NDIS_SEND_FLAGS_DISPATCH_LEVEL;
 
-        vport = gOvsSwitchContext->vxlanVport;
+        vport = OvsFindTunnelVportByDstPort(gOvsSwitchContext,
+                                            htons(tunnelKey.dst_port));
 
         if (vport == NULL){
             status = STATUS_UNSUCCESSFUL;

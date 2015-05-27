@@ -184,6 +184,9 @@ OvsInitForwardingCtx(OvsForwardingContext *ovsFwdCtx,
 }
 
 /*
+ * XXX: When we search for the tunnelVport we also need to specify the
+ * tunnelling protocol or the L4 protocol as key as well, because there are
+ * different protocols that can use the same destination port.
  * --------------------------------------------------------------------------
  * OvsDetectTunnelRxPkt --
  *     Utility function for an RX packet to detect its tunnel type.
@@ -203,16 +206,17 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
      * packets only if they are at least VXLAN header size.
      */
     if (!flowKey->ipKey.nwFrag &&
-        flowKey->ipKey.nwProto == IPPROTO_UDP &&
-        flowKey->ipKey.l4.tpDst == VXLAN_UDP_PORT_NBO) {
-        tunnelVport = ovsFwdCtx->switchContext->vxlanVport;
-        ovsActionStats.rxVxlan++;
+        flowKey->ipKey.nwProto == IPPROTO_UDP) {
+        UINT16 dstPort = htons(flowKey->ipKey.l4.tpDst);
+        tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
+                                                  dstPort);
     }
 
     // We might get tunnel packets even before the tunnel gets initialized.
     if (tunnelVport) {
         ASSERT(ovsFwdCtx->tunnelRxNic == NULL);
         ovsFwdCtx->tunnelRxNic = tunnelVport;
+        ovsActionStats.rxVxlan++;
         return TRUE;
     }
 
@@ -1318,6 +1322,7 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
 		status = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
         ASSERT(status == NDIS_STATUS_SUCCESS);
         tunKey.flow_hash = (uint16)(hash ? *hash : OvsHashFlow(key));
+        tunKey.dst_port = key->ipKey.l4.tpDst;
         RtlCopyMemory(&ovsFwdCtx->tunKey, &tunKey, sizeof ovsFwdCtx->tunKey);
 
         break;

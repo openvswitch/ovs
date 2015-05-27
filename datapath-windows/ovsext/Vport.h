@@ -84,6 +84,7 @@ typedef struct _OVS_VPORT_ENTRY {
     LIST_ENTRY             ovsNameLink;
     LIST_ENTRY             portIdLink;
     LIST_ENTRY             portNoLink;
+    LIST_ENTRY             tunnelVportLink;
 
     OVS_VPORT_STATE        ovsState;
     OVS_VPORT_TYPE         ovsType;
@@ -135,10 +136,8 @@ typedef struct _OVS_VPORT_ENTRY {
 
 struct _OVS_SWITCH_CONTEXT;
 
-POVS_VPORT_ENTRY
-OvsFindVportByPortNo(struct _OVS_SWITCH_CONTEXT *switchContext,
-                     UINT32 portNo);
-
+POVS_VPORT_ENTRY OvsFindVportByPortNo(POVS_SWITCH_CONTEXT switchContext,
+                                      UINT32 portNo);
 /* "name" is null-terminated */
 POVS_VPORT_ENTRY OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
                                        PSTR name);
@@ -147,6 +146,8 @@ POVS_VPORT_ENTRY OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
 POVS_VPORT_ENTRY OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                                  NDIS_SWITCH_PORT_ID portId,
                                                  NDIS_SWITCH_NIC_INDEX index);
+POVS_VPORT_ENTRY OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
+                                             UINT16 dstPort);
 
 NDIS_STATUS OvsAddConfiguredSwitchPorts(struct _OVS_SWITCH_CONTEXT *switchContext);
 NDIS_STATUS OvsInitConfiguredSwitchNics(struct _OVS_SWITCH_CONTEXT *switchContext);
@@ -178,18 +179,6 @@ OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
     return ovsType == OVS_VPORT_TYPE_VXLAN ||
            ovsType == OVS_VPORT_TYPE_GRE ||
            ovsType == OVS_VPORT_TYPE_GRE64;
-}
-
-static __inline POVS_VPORT_ENTRY
-OvsGetTunnelVport(POVS_SWITCH_CONTEXT switchContext,
-                  OVS_VPORT_TYPE ovsType)
-{
-    switch(ovsType) {
-    case OVS_VPORT_TYPE_VXLAN:
-        return switchContext->vxlanVport;
-    default:
-        return NULL;
-    }
 }
 
 static __inline BOOLEAN

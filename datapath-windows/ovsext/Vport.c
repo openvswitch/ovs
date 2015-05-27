@@ -601,6 +601,25 @@ OvsFindVportByPortNo(POVS_SWITCH_CONTEXT switchContext,
 
 
 POVS_VPORT_ENTRY
+OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
+                            UINT16 dstPort)
+{
+    POVS_VPORT_ENTRY vport;
+    PLIST_ENTRY head, link;
+    UINT32 hash = OvsJhashBytes((const VOID *)&dstPort, sizeof(dstPort),
+                                OVS_HASH_BASIS);
+    head = &(switchContext->tunnelVportsArray[hash & OVS_VPORT_MASK]);
+    LIST_FORALL(head, link) {
+        vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, tunnelVportLink);
+        if (((POVS_VXLAN_VPORT)vport->priv)->dstPort == dstPort) {
+            return vport;
+        }
+    }
+    return NULL;
+}
+
+
+POVS_VPORT_ENTRY
 OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
                       PSTR name)
 {
@@ -1048,8 +1067,8 @@ InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
  * --------------------------------------------------------------------------
  * Functionality common to any port added from OVS userspace.
  *
- * Inserts the port into 'portIdHashArray', 'ovsPortNameHashArray' and caches
- * the pointer in the 'switchContext' if needed.
+ * Inserts the port into 'portNoHashArray', 'ovsPortNameHashArray' and in
+ * 'tunnelVportsArray' if appropriate.
  * --------------------------------------------------------------------------
  */
 NDIS_STATUS
@@ -1060,9 +1079,17 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
 
     switch(vport->ovsType) {
     case OVS_VPORT_TYPE_VXLAN:
-        switchContext->vxlanVport = vport;
+    {
+        POVS_VXLAN_VPORT vxlanVport = (POVS_VXLAN_VPORT)vport->priv;
+        hash = OvsJhashBytes(&vxlanVport->dstPort,
+                             sizeof(vxlanVport->dstPort),
+                             OVS_HASH_BASIS);
+        InsertHeadList(
+            &gOvsSwitchContext->tunnelVportsArray[hash & OVS_VPORT_MASK],
+            &vport->tunnelVportLink);
         switchContext->numNonHvVports++;
         break;
+    }
     case OVS_VPORT_TYPE_INTERNAL:
         if (vport->isBridgeInternal) {
             switchContext->numNonHvVports++;
@@ -1131,6 +1158,11 @@ OvsCleanupVportCommon(POVS_SWITCH_CONTEXT switchContext,
         InitializeListHead(&vport->ovsNameLink);
         RemoveEntryList(&vport->portNoLink);
         InitializeListHead(&vport->portNoLink);
+        if (OVS_VPORT_TYPE_VXLAN == vport->ovsType) {
+            RemoveEntryList(&vport->tunnelVportLink);
+            InitializeListHead(&vport->tunnelVportLink);
+        }
+
         deletedOnOvs = TRUE;
     }
 
@@ -1224,8 +1256,6 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
                                        vport,
                                        OvsTunnelVportPendingUninit,
                                        tunnelContext);
-
-        switchContext->vxlanVport = NULL;
         break;
     }
     case OVS_VPORT_TYPE_GRE:
@@ -1386,6 +1416,7 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
             OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, TRUE);
         }
     }
+
     /*
      * Remove 'virtualExternalVport' as well. This port is not part of the
      * 'portIdHashArray'.
@@ -1395,9 +1426,9 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
             (POVS_VPORT_ENTRY)switchContext->virtualExternalVport, TRUE, TRUE);
     }
 
+
     for (UINT hash = 0; hash < OVS_MAX_VPORT_ARRAY_SIZE; hash++) {
         PLIST_ENTRY head, link, next;
-
         head = &(switchContext->portNoHashArray[hash & OVS_VPORT_MASK]);
         LIST_FORALL_SAFE(head, link, next) {
             POVS_VPORT_ENTRY vport;
@@ -1411,7 +1442,6 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
 
     ASSERT(switchContext->virtualExternalVport == NULL);
     ASSERT(switchContext->internalVport == NULL);
-    ASSERT(switchContext->vxlanVport == NULL);
 }
 
 

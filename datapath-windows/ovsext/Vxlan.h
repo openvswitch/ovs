@@ -19,7 +19,7 @@
 
 #include "NetProto.h"
 typedef struct _OVS_VXLAN_VPORT {
-    UINT32 dstPort;
+    UINT16 dstPort;
     UINT64 inPkts;
     UINT64 outPkts;
     UINT64 slowInPkts;
