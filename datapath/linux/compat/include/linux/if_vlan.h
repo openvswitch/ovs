@@ -52,7 +52,7 @@ static inline struct sk_buff *rpl_vlan_insert_tag_set_proto(struct sk_buff *skb,
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,13)
 /*
  * __vlan_hwaccel_push_inside - pushes vlan tag to the payload
  * @skb: skbuff to tag
