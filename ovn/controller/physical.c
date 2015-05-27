@@ -115,6 +115,9 @@ physical_run(struct controller_ctx *ctx)
 
         bool local = ofport != 0;
         if (!local) {
+            if (!binding->chassis) {
+                continue;
+            }
             ofport = u16_to_ofp(simap_get(&chassis_to_ofport,
                                           binding->chassis->name));
             if (!ofport) {
