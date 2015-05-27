@@ -726,12 +726,6 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         goto exit;
     }
 
-    /* Concurrent netlink operations are not supported. */
-    if (InterlockedCompareExchange((LONG volatile *)&instance->inUse, 1, 0)) {
-        status = STATUS_RESOURCE_IN_USE;
-        goto done;
-    }
-
     /*
      * Validate the input/output buffer arguments depending on the type of the
      * operation.
@@ -921,9 +915,6 @@ done:
     OvsReleaseSwitchContext(gOvsSwitchContext);
 
 exit:
-    KeMemoryBarrier();
-    instance->inUse = 0;
-
     /* Should not complete a pending IRP unless proceesing is completed. */
     if (status == STATUS_PENDING) {
         /* STATUS_PENDING is returned by the NL handler when the request is
