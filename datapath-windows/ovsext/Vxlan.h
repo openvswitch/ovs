@@ -24,6 +24,7 @@ typedef struct _OVS_VXLAN_VPORT {
     UINT64 outPkts;
     UINT64 slowInPkts;
     UINT64 slowOutPkts;
+    UINT64 filterID;
     /*
      * To be filled
      */
@@ -47,10 +48,16 @@ typedef struct VXLANHdr {
     UINT32   reserved2:8;
 } VXLANHdr;
 
-NTSTATUS OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
-                            UINT16 udpDestPort);
+NTSTATUS OvsInitVxlanTunnel(PIRP irp,
+                            POVS_VPORT_ENTRY vport,
+                            UINT16 udpDestPort,
+                            PFNTunnelVportPendingOp callback,
+                            PVOID tunnelContext);
 
-VOID OvsCleanupVxlanTunnel(POVS_VPORT_ENTRY vport);
+NTSTATUS OvsCleanupVxlanTunnel(PIRP irp,
+                               POVS_VPORT_ENTRY vport,
+                               PFNTunnelVportPendingOp callback,
+                               PVOID tunnelContext);
 
 NDIS_STATUS OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
                                   OvsIPv4TunnelKey *tunnelKey);

@@ -263,8 +263,8 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
     if (switchContext)
     {
         dpNo = switchContext->dpNo;
-        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsClearAllSwitchVports(switchContext);
+        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsUninitSwitchContext(switchContext);
     }
     OVS_LOG_TRACE("Exit: deleted switch %p  dpNo: %d", switchContext, dpNo);

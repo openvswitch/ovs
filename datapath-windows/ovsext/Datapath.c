@@ -670,7 +670,6 @@ OvsCleanupDevice(PDEVICE_OBJECT deviceObject,
     return OvsCompleteIrpRequest(irp, (ULONG_PTR)0, status);
 }
 
-
 /*
  * --------------------------------------------------------------------------
  * IOCTL function handler for the device.
@@ -925,9 +924,12 @@ exit:
     KeMemoryBarrier();
     instance->inUse = 0;
 
-    /* Should not complete a pending IRP unless proceesing is completed */
+    /* Should not complete a pending IRP unless proceesing is completed. */
     if (status == STATUS_PENDING) {
-        return status;
+        /* STATUS_PENDING is returned by the NL handler when the request is
+         * to be processed later, so we mark the IRP as pending and complete
+         * it in another thread when the request is processed. */
+        IoMarkIrpPending(irp);
     }
     return OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
 }
