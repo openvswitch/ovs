@@ -66,7 +66,7 @@
  * Callout and sublayer GUIDs
  */
 
-// b16b0a6e-2b2a-41a3-8b39-bd3ffc855ff8
+/* b16b0a6e-2b2a-41a3-8b39-bd3ffc855ff8 */
 DEFINE_GUID(
     OVS_TUNNEL_CALLOUT_V4,
     0xb16b0a6e,
@@ -173,12 +173,24 @@ static VOID     OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx
  * Callout driver global variables
  */
 
+/* Pointer to the device object that must be create before we can register our
+ * callout to the base filtering engine. */
 static PDEVICE_OBJECT            gDeviceObject = NULL;
+/* Handle to an open session to the filter engine that is used for adding
+ * tunnel's callout. */
 static HANDLE                    gEngineHandle = NULL;
+/* A pointer to the received handle that is associated with the registration of
+ * the OvsTunnelProviderBfeCallback callback. */
 static HANDLE                    gTunnelProviderBfeHandle = NULL;
+/* A pointer to the received handle that is associated with the registration of
+ * the OvsTunnelInitBfeCallback callback. */
 static HANDLE                    gTunnelInitBfeHandle = NULL;
-static HANDLE                    gBfeSubscriptionHandle = NULL;
+/* Runtime identifier for tunnel's callout which is retrieved at tunnel
+ * initialization phase when the callout is registered. This ID is then used
+ * for removing the callout object from the system at tunnel
+ * uninitialization phase. */
 static UINT32                    gCalloutIdV4 = 0;
+/* Array used for storing tunnel thread's private data. */
 static OVS_TUNFLT_THREAD_CONTEXT gTunnelThreadCtx[OVS_TUNFLT_MAX_THREADS] = { 0 };
 
 /*
@@ -548,6 +560,12 @@ Exit:
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function adds OVS system provider to the system if the BFE (Base
+ * Filtering Engine) is running.
+ * --------------------------------------------------------------------------
+ */
 VOID NTAPI
 OvsTunnelProviderBfeCallback(PVOID context,
                              FWPM_SERVICE_STATE bfeState)
@@ -565,6 +583,12 @@ OvsTunnelProviderBfeCallback(PVOID context,
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function registers the OvsTunnelProviderBfeCallback callback that is
+ * called whenever there is a change to the state of base filtering engine.
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsSubscribeTunnelProviderBfeStateChanges(PVOID deviceObject)
 {
@@ -585,6 +609,13 @@ OvsSubscribeTunnelProviderBfeStateChanges(PVOID deviceObject)
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function unregisters the OvsTunnelProviderBfeCallback callback that
+ * was previously registered by OvsSubscribeTunnelProviderBfeStateChanges
+ * function.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsUnsubscribeTunnelProviderBfeStateChanges()
 {
@@ -601,6 +632,32 @@ OvsUnsubscribeTunnelProviderBfeStateChanges()
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function registers the OVS system provider if the BFE (Base Filtering
+ * Engine) is running.
+ * Otherwise, it will register the OvsTunnelProviderBfeCallback callback.
+
+ * Note: Before calling FwpmBfeStateGet, the callout driver must call the
+ * FwpmBfeStateSubscribeChanges function to register the callback function
+ * to be called whenever the state of the filter engine changes.
+ *
+ * Register WFP system provider call hierarchy:
+ * <DriverEntry>
+ *     <OvsCreateDeviceObject>
+ *         <OvsRegisterSystemProvider>
+ *             <OvsSubscribeTunnelProviderBfeStateChanges>
+ *                 --> registers OvsTunnelProviderBfeCallback callback
+ *                     <OvsTunnelProviderBfeCallback>
+ *                         --> if BFE is running:
+ *                             <OvsTunnelAddSystemProvider>
+ *             --> if BFE is running:
+ *                 <OvsTunnelAddSystemProvider>
+ *                 <OvsUnsubscribeTunnelProviderBfeStateChanges>
+ *                     --> unregisters OvsTunnelProviderBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsRegisterSystemProvider(PVOID deviceObject)
 {
@@ -621,7 +678,23 @@ OvsRegisterSystemProvider(PVOID deviceObject)
     }
 }
 
-VOID OvsUnregisterSystemProvider()
+/*
+ * --------------------------------------------------------------------------
+ * This function removes the OVS system provider and unregisters the
+ * OvsTunnelProviderBfeCallback callback from BFE (Base Filtering Engine).
+ *
+ * Unregister WFP system provider call hierarchy:
+ * <OvsExtUnload>
+ *     <OvsDeleteDeviceObject>
+ *         <OvsUnregisterSystemProvider>
+ *             <OvsTunnelRemoveSystemProvider>
+ *             <OvsUnsubscribeTunnelProviderBfeStateChanges>
+ *                 --> unregisters OvsTunnelProviderBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsUnregisterSystemProvider()
 {
     HANDLE engineSession = NULL;
 
@@ -634,6 +707,11 @@ VOID OvsUnregisterSystemProvider()
     OvsUnsubscribeTunnelProviderBfeStateChanges();
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function initializes the tunnel filter if the BFE is running.
+ * --------------------------------------------------------------------------
+ */
 VOID NTAPI
 OvsTunnelInitBfeCallback(PVOID context,
                          FWPM_SERVICE_STATE bfeState)
@@ -651,6 +729,12 @@ OvsTunnelInitBfeCallback(PVOID context,
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function registers the OvsTunnelInitBfeCallback callback that is
+ * called whenever there is a change to the state of base filtering engine.
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsSubscribeTunnelInitBfeStateChanges(PDRIVER_OBJECT driverObject,
                                       PVOID deviceObject)
@@ -672,6 +756,13 @@ OvsSubscribeTunnelInitBfeStateChanges(PDRIVER_OBJECT driverObject,
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function unregisters the OvsTunnelInitBfeCallback callback that
+ * was previously registered by OvsSubscribeTunnelInitBfeStateChanges
+ * function.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsUnsubscribeTunnelInitBfeStateChanges()
 {
@@ -688,6 +779,38 @@ OvsUnsubscribeTunnelInitBfeStateChanges()
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function initializes the OVS tunnel filter if the BFE (Base Filtering
+ * Engine) is running.
+ * Otherwise, it will register the OvsTunnelInitBfeCallback callback.
+
+ * Note: Before calling FwpmBfeStateGet, the callout driver must call the
+ * FwpmBfeStateSubscribeChanges function to register the callback function
+ * to be called whenever the state of the filter engine changes.
+ *
+ * Initialize OVS tunnel filter call hierarchy:
+ * <OvsExtAttach>
+ *     <OvsCreateSwitch>
+ *         <OvsInitTunnelFilter>
+ *             <OvsSubscribeTunnelInitBfeStateChanges>
+ *                 --> registers OvsTunnelInitBfeCallback callback
+ *                     <OvsTunnelInitBfeCallback>
+ *                         --> if BFE is running:
+ *                             <OvsTunnelFilterInitialize>
+ *                                 <IoCreateDevice>
+ *                                 <OvsTunnelFilterStartThreads>
+ *                                 <OvsTunnelRegisterCallouts>
+ *             --> if BFE is running:
+ *                 <OvsTunnelFilterInitialize>
+ *                     <IoCreateDevice>
+ *                     <OvsTunnelFilterStartThreads>
+ *                     <OvsTunnelRegisterCallouts>
+ *                 <OvsUnsubscribeTunnelInitBfeStateChanges>
+ *                     --> unregisters OvsTunnelInitBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject)
 {
@@ -712,6 +835,24 @@ OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject)
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function uninitializes the OVS tunnel filter and unregisters the
+ * OvsTunnelInitBfeCallback callback from BFE.
+ *
+ * Uninitialize OVS tunnel filter call hierarchy:
+ * <OvsExtDetach>
+ *     <OvsDeleteSwitch>
+ *         <OvsUninitTunnelFilter>
+ *             <OvsTunnelFilterUninitialize>
+ *                 <OvsTunnelFilterStopThreads>
+ *                 <OvsTunnelUnregisterCallouts>
+ *                 <IoDeleteDevice>
+ *             <OvsUnsubscribeTunnelInitBfeStateChanges>
+ *                 --> unregisters OvsTunnelInitBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
 VOID OvsUninitTunnelFilter(PDRIVER_OBJECT driverObject)
 {
     OvsTunnelFilterUninitialize(driverObject);
@@ -799,6 +940,13 @@ OvsTunnelFilterExecuteAction(HANDLE engineSession,
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function pops the whole request entries from the queue and returns the
+ * number of entries through the 'count' parameter. The operation is
+ * synchronized using request list spinlock.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsTunnelFilterRequestPopList(POVS_TUNFLT_REQUEST_LIST listRequests,
                               PLIST_ENTRY head,
@@ -828,6 +976,12 @@ OvsTunnelFilterRequestPopList(POVS_TUNFLT_REQUEST_LIST listRequests,
     NdisReleaseSpinLock(&listRequests->spinlock);
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function pushes the received request to the list while holding the
+ * request list spinlock.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
                            POVS_TUNFLT_REQUEST request)
@@ -840,6 +994,16 @@ OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
     NdisReleaseSpinLock(&listRequests->spinlock);
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function pushes the received request to the corresponding thread
+ * request queue. The arrival of the new request is signaled to the thread,
+ * in order to start processing it.
+ *
+ * For a uniform distribution of requests to thread queues, a thread index is
+ * calculated based on the received destination port.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsTunnelFilterThreadPush(POVS_TUNFLT_REQUEST request)
 {
@@ -966,7 +1130,14 @@ OvsTunnelFilterRequestListProcess(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
 
 /*
  *----------------------------------------------------------------------------
- *  System thread routine that handles tunnel filter create/delete requests.
+ * System thread routine that processes thread's requests queue. The thread
+ * routine initializes thread's necessary data and waits on two events,
+ * requestEvent and stopEvent. Whenever a request is pushed to the thread's
+ * queue, the requestEvent is signaled and the thread routine starts processing
+ * the arrived requests. When stopEvent is signaled, all subsequent requests
+ * are completed with STATUS_CANCELED, without being added to the thread's
+ * queue, and the routine finishes processing all existing requests from the
+ * queue before uninitializing the thread and exiting.
  *----------------------------------------------------------------------------
  */
 _Use_decl_annotations_
@@ -1117,6 +1288,13 @@ OvsTunnelFilterThreadStop(POVS_TUNFLT_THREAD_CONTEXT threadCtx,
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function initializes thread's necessary data. Each thread has its own
+ * session object to the BFE that is used for processing the requests from
+ * the thread's queue.
+ * --------------------------------------------------------------------------
+ */
 static NTSTATUS
 OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
 {
@@ -1148,6 +1326,12 @@ OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function uninitializes thread's private data. Thread's engine session
+ * handle is closed and set to NULL.
+ * --------------------------------------------------------------------------
+ */
 static VOID
 OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
 {
@@ -1159,6 +1343,13 @@ OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function creates a new tunnel filter request and push it to a thread
+ * queue. If the thread stop event is signaled, the request is completed with
+ * STATUS_CANCELLED without pushing it to any queue.
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsTunnelFilterQueueRequest(PIRP irp,
                             UINT16 remotePort,
@@ -1239,6 +1430,19 @@ OvsTunnelFilterQueueRequest(PIRP irp,
  *  PASSIVE_LEVEL. Because the function is called at IRQL = DISPATCH_LEVEL,
  *  we register an OVS_TUN_FILTER_CREATE request that will be processed by
  *  the tunnel filter thread routine at IRQL = PASSIVE_LEVEL.
+ *
+ * OVS VXLAN port add call hierarchy:
+ * <OvsNewVportCmdHandler>
+ *     <OvsInitTunnelVport>
+ *         <OvsInitVxlanTunnel>
+ *             <OvsTunelFilterCreate>
+ *                 <OvsTunnelFilterQueueRequest>
+ *                     --> if thread STOP event is signalled:
+ *                         --> Complete request with STATUS_CANCELLED
+ *                         --> EXIT
+ *                     <OvsTunnelFilterThreadPush>
+ *                         --> add the request to one of tunnel thread queues
+ *
  * --------------------------------------------------------------------------
  */
 NTSTATUS
@@ -1265,6 +1469,19 @@ OvsTunelFilterCreate(PIRP irp,
  *  PASSIVE_LEVEL. Because the function is called at IRQL = DISPATCH_LEVEL,
  *  we register an OVS_TUN_FILTER_DELETE request that will be processed by
  *  the tunnel filter thread routine at IRQL = PASSIVE_LEVEL.
+ *
+ * OVS VXLAN port delete call hierarchy:
+ * <OvsDeleteVportCmdHandler>
+ *     <OvsRemoveAndDeleteVport>
+ *         <OvsCleanupVxlanTunnel>
+ *             <OvsTunelFilterCreate>
+ *                 <OvsTunnelFilterQueueRequest>
+ *                     --> if thread STOP event is signalled:
+ *                         --> Complete request with STATUS_CANCELLED
+ *                         --> EXIT
+ *                     <OvsTunnelFilterThreadPush>
+ *                         --> add the request to one of tunnel thread queues
+ *
  * --------------------------------------------------------------------------
  */
 NTSTATUS
