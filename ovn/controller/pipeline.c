@@ -270,10 +270,6 @@ pipeline_run(struct controller_ctx *ctx)
         const struct logical_datapath *ldp;
         ldp = ldp_lookup(&pipeline->logical_datapath);
         if (!ldp) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_INFO_RL(&rl,
-                         "logical flow for unknown logical datapath "UUID_FMT,
-                         UUID_ARGS(&pipeline->logical_datapath));
             continue;
         }
 
