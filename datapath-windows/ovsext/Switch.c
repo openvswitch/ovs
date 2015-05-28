@@ -201,6 +201,7 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
     status = OvsInitSwitchContext(switchContext);
     if (status != NDIS_STATUS_SUCCESS) {
         OvsFreeMemoryWithTag(switchContext, OVS_SWITCH_POOL_TAG);
+        switchContext = NULL;
         goto create_switch_done;
     }
 
@@ -240,7 +241,6 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     }
     OvsDeleteSwitch(switchContext);
     OvsCleanupIpHelper();
-    gOvsSwitchContext = NULL;
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
@@ -495,6 +495,7 @@ OvsReleaseSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
     if (ref == 1) {
         OvsDeleteSwitchContext(switchContext);
+        gOvsSwitchContext = NULL;
     }
 }
 
