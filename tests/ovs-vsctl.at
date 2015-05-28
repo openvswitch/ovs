@@ -1113,7 +1113,7 @@ AT_CHECK(
   [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
      -- create Bridge name=br0 | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
-], [vsctl|WARN|applying "create" command to table Bridge without --id option will have no effect
+], [db_ctl_base|WARN|applying "create" command to table Bridge without --id option will have no effect
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
   [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \

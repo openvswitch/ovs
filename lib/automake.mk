@@ -53,6 +53,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/daemon.c \
 	lib/daemon.h \
 	lib/daemon-private.h \
+	lib/db-ctl-base.c \
+	lib/db-ctl-base.h \
 	lib/dhcp.h \
 	lib/dummy.c \
 	lib/dummy.h \
