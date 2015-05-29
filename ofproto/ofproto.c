@@ -249,7 +249,7 @@ static void ofproto_rule_remove__(struct ofproto *, struct rule *)
  * meaningful and thus supplied as NULL. */
 struct flow_mod_requester {
     struct ofconn *ofconn;      /* Connection on which flow_mod arrived. */
-    ovs_be32 xid;               /* OpenFlow xid of flow_mod request. */
+    const struct ofp_header *request;
 };
 
 /* OpenFlow. */
@@ -269,8 +269,8 @@ static void delete_flows__(const struct rule_collection *,
                            const struct flow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
 
-static enum ofperr send_buffered_packet(struct ofconn *, uint32_t buffer_id,
-                                        struct rule *)
+static void send_buffered_packet(const struct flow_mod_requester *,
+                                 uint32_t buffer_id, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 
 static bool ofproto_group_exists__(const struct ofproto *ofproto,
@@ -4335,20 +4335,9 @@ set_conjunctions(struct rule *rule, const struct cls_conjunction *conjs,
     cls_rule_set_conjunctions(cr, conjs, n_conjs);
 }
 
-/* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
- * in which no matching flow already exists in the flow table.
- *
- * Adds the flow specified by 'ofm', which is followed by 'n_actions'
- * ofp_actions, to the ofproto's flow table.  Returns 0 on success, or an
- * OpenFlow error code on failure.
- *
- * The caller retains ownership of 'fm->ofpacts'.
- *
- * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
- * if any. */
 static enum ofperr
-add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-         const struct flow_mod_requester *req)
+add_flow_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+               struct rule **rulep, bool *modify)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct oftable *table;
@@ -4387,93 +4376,139 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         return OFPERR_OFPBRC_EPERM;
     }
 
-    if (!(fm->flags & OFPUTIL_FF_HIDDEN_FIELDS)) {
-        if (!match_has_default_hidden_fields(&fm->match)) {
-            VLOG_WARN_RL(&rl, "%s: (add_flow) only internal flows can set "
-                         "non-default values to hidden fields", ofproto->name);
-            return OFPERR_OFPBRC_EPERM;
-        }
+    if (!(fm->flags & OFPUTIL_FF_HIDDEN_FIELDS)
+        && !match_has_default_hidden_fields(&fm->match)) {
+        VLOG_WARN_RL(&rl, "%s: (add_flow) only internal flows can set "
+                     "non-default values to hidden fields", ofproto->name);
+        return OFPERR_OFPBRC_EPERM;
     }
 
     cls_rule_init(&cr, &fm->match, fm->priority);
 
-    /* Transform "add" into "modify" if there's an existing identical flow. */
+    /* Check for the existence of an identical rule. */
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
     if (rule) {
+        /* Transform "add" into "modify" of an existing identical flow. */
         cls_rule_destroy(&cr);
 
         fm->modify_cookie = true;
         error = modify_flow_check__(ofproto, fm, rule);
-        if (!error) {
-            struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
-
-            modify_flow__(ofproto, fm, rule, req, &dead_cookies);
-            learned_cookies_flush(ofproto, &dead_cookies);
-
-            goto send_packet;
+        if (error) {
+            return error;
         }
-        return error;
-    }
 
-    /* Check for overlap, if requested. */
-    if (fm->flags & OFPUTIL_FF_CHECK_OVERLAP) {
-        if (classifier_rule_overlaps(&table->cls, &cr)) {
+        *modify = true;
+    } else {   /* New rule. */
+        struct cls_conjunction *conjs;
+        size_t n_conjs;
+
+        /* Check for overlap, if requested. */
+        if (fm->flags & OFPUTIL_FF_CHECK_OVERLAP
+            && classifier_rule_overlaps(&table->cls, &cr)) {
             cls_rule_destroy(&cr);
             return OFPERR_OFPFMFC_OVERLAP;
         }
+
+        /* If necessary, evict an existing rule to clear out space. */
+        error = evict_rules_from_table(table, 1);
+        if (error) {
+            cls_rule_destroy(&cr);
+            return error;
+        }
+
+        /* Allocate new rule. */
+        error = ofproto_rule_create(ofproto, fm, &cr, table - ofproto->tables,
+                                    &rule);
+        if (error) {
+            return error;
+        }
+
+        /* Insert flow to the classifier, so that later flow_mods may relate
+         * to it.  This is reversible, in case later errors require this to
+         * be reverted. */
+        ofproto_rule_insert__(ofproto, rule);
+        /* Make the new rule invisible for classifier lookups. */
+        classifier_defer(&table->cls);
+        get_conjunctions(fm, &conjs, &n_conjs);
+        classifier_insert(&table->cls, &rule->cr, conjs, n_conjs);
+        free(conjs);
+
+        error = ofproto->ofproto_class->rule_insert(rule);
+        if (error) {
+            oftable_remove_rule(rule);
+            ofproto_rule_unref(rule);
+            return error;
+        }
+
+        *modify = false;
     }
 
-    /* If necessary, evict an existing rule to clear out space. */
-    error = evict_rules_from_table(table, 1);
-    if (error) {
-        cls_rule_destroy(&cr);
-        return error;
-    }
+    *rulep = rule;
+    return 0;
+}
 
-    /* Allocate new rule. */
-    error = ofproto_rule_create(ofproto, fm, &cr, table - ofproto->tables,
-                                &rule);
-    if (error) {
-        return error;
-    }
+static void
+add_flow_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                const struct flow_mod_requester *req,
+                struct rule *rule, bool modify)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    if (modify) {
+        struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
-    ofproto_rule_insert__(ofproto, rule);
+        modify_flow__(ofproto, fm, rule, req, &dead_cookies);
+        learned_cookies_flush(ofproto, &dead_cookies);
+    } else {
+        struct oftable *table = &ofproto->tables[rule->table_id];
 
-    classifier_defer(&table->cls);
+        cls_rule_make_visible(&rule->cr);
+        classifier_publish(&table->cls);
 
-    struct cls_conjunction *conjs;
-    size_t n_conjs;
-    get_conjunctions(fm, &conjs, &n_conjs);
-    classifier_insert(&table->cls, &rule->cr, conjs, n_conjs);
-    free(conjs);
+        learned_cookies_inc(ofproto, rule_get_actions(rule));
 
-    error = ofproto->ofproto_class->rule_insert(rule);
-    if (error) {
-        oftable_remove_rule(rule);
-        ofproto_rule_unref(rule);
-        return error;
-    }
-    cls_rule_make_visible(&rule->cr);
-    classifier_publish(&table->cls);
+        if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
+            if (ofproto->vlan_bitmap) {
+                uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
 
-    learned_cookies_inc(ofproto, rule_get_actions(rule));
-
-    if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
-        if (ofproto->vlan_bitmap) {
-            uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
-            if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
-                bitmap_set1(ofproto->vlan_bitmap, vid);
+                if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
+                    bitmap_set1(ofproto->vlan_bitmap, vid);
+                    ofproto->vlans_changed = true;
+                }
+            } else {
                 ofproto->vlans_changed = true;
             }
-        } else {
-            ofproto->vlans_changed = true;
         }
+
+        ofmonitor_report(ofproto->connmgr, rule, NXFME_ADDED, 0,
+                         req ? req->ofconn : NULL,
+                         req ? req->request->xid : 0, NULL);
     }
 
-    ofmonitor_report(ofproto->connmgr, rule, NXFME_ADDED, 0,
-                     req ? req->ofconn : NULL, req ? req->xid : 0, NULL);
-send_packet:
-    return req ? send_buffered_packet(req->ofconn, fm->buffer_id, rule) : 0;
+    send_buffered_packet(req, fm->buffer_id, rule);
+}
+
+/* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
+ * in which no matching flow already exists in the flow table.
+ *
+ * Adds the flow specified by 'fm', to the ofproto's flow table.  Returns 0 on
+ * success, or an OpenFlow error code on failure.
+ *
+ * The caller retains ownership of 'fm->ofpacts'. */
+static enum ofperr
+add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+         const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule;
+    bool modify;
+    enum ofperr error;
+
+    error = add_flow_begin(ofproto, fm, &rule, &modify);
+    if (!error) {
+        add_flow_finish(ofproto, fm, req, rule, modify);
+    }
+
+    return error;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
@@ -4618,7 +4653,7 @@ modify_flow__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     if (event != NXFME_MODIFIED || change_actions || change_cookie) {
         ofmonitor_report(ofproto->connmgr, rule, event, 0,
-                         req ? req->ofconn : NULL, req ? req->xid : 0,
+                         req ? req->ofconn : NULL, req ? req->request->xid : 0,
                          change_actions ? actions : NULL);
     }
 
@@ -4672,11 +4707,7 @@ modify_flows(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         error = modify_flows_check__(ofproto, fm, rules);
         if (!error) {
             modify_flows__(ofproto, fm, rules, req);
-
-            if (fm->buffer_id != UINT32_MAX && req) {
-                error = send_buffered_packet(req->ofconn, fm->buffer_id,
-                                             rules->rules[0]);
-            }
+            send_buffered_packet(req, fm->buffer_id, rules->rules[0]);
         }
     } else {
         error = modify_flows_add__(ofproto, fm, req);
@@ -4765,8 +4796,8 @@ delete_flows__(const struct rule_collection *rules,
             ofproto_rule_send_removed(rule, reason);
 
             ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
-                             req ? req->ofconn : NULL, req ? req->xid : 0,
-                             NULL);
+                             req ? req->ofconn : NULL,
+                             req ? req->request->xid : 0, NULL);
 
             if (next_table == rule->table_id) {
                 classifier_defer(cls);
@@ -4952,7 +4983,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         struct flow_mod_requester req;
 
         req.ofconn = ofconn;
-        req.xid = oh->xid;
+        req.request = oh;
         error = handle_flow_mod__(ofproto, &fm, &req);
     }
     if (error) {
@@ -6668,18 +6699,19 @@ handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 
 /* Asynchronous operations. */
 
-static enum ofperr
-send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
+static void
+send_buffered_packet(const struct flow_mod_requester *req, uint32_t buffer_id,
                      struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    enum ofperr error = 0;
-    if (ofconn && buffer_id != UINT32_MAX) {
-        struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    if (req && req->ofconn && buffer_id != UINT32_MAX) {
+        struct ofproto *ofproto = ofconn_get_ofproto(req->ofconn);
         struct dp_packet *packet;
         ofp_port_t in_port;
+        enum ofperr error;
 
-        error = ofconn_pktbuf_retrieve(ofconn, buffer_id, &packet, &in_port);
+        error = ofconn_pktbuf_retrieve(req->ofconn, buffer_id, &packet,
+                                       &in_port);
         if (packet) {
             struct rule_execute *re;
 
@@ -6696,9 +6728,10 @@ send_buffered_packet(struct ofconn *ofconn, uint32_t buffer_id,
                 dp_packet_delete(re->packet);
                 free(re);
             }
+        } else {
+            ofconn_send_error(req->ofconn, req->request, error);
         }
     }
-    return error;
 }
 
 static uint64_t
