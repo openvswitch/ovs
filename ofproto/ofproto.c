@@ -4372,8 +4372,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule = ofproto->ofproto_class->rule_alloc();
     if (!rule) {
         cls_rule_destroy(&cr);
-        VLOG_WARN_RL(&rl, "%s: failed to create rule (%s)",
-                     ofproto->name, ovs_strerror(error));
+        VLOG_WARN_RL(&rl, "%s: failed to allocate a rule.", ofproto->name);
         return ENOMEM;
     }
 
