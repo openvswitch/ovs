@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -197,7 +197,7 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
 
     err = parse_int_string(s, imm.u8, sizeof imm.u8, (char **) &s);
     if (err) {
-        return xasprintf("%s: bad hex digit in value", full_s);
+        return xasprintf("%s: too many bits in immediate value", full_s);
     }
 
     if (strncmp(s, "->", 2)) {
