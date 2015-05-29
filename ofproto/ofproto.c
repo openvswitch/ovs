@@ -236,6 +236,8 @@ struct ofport_usage {
 /* rule. */
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 static bool rule_is_readonly(const struct rule *);
+static void ofproto_rule_insert__(struct ofproto *, struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
 static void ofproto_rule_remove__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 
@@ -4408,14 +4410,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         return error;
     }
 
-    if (fm->hard_timeout || fm->idle_timeout) {
-        list_insert(&ofproto->expirable, &rule->expirable);
-    }
-    cookies_insert(ofproto, rule);
-    eviction_group_add_rule(rule);
-    if (actions->has_meter) {
-        meter_insert_rule(rule);
-    }
+    ofproto_rule_insert__(ofproto, rule);
 
     classifier_defer(&table->cls);
 
@@ -7011,6 +7006,24 @@ oftable_enable_eviction(struct oftable *table,
 
     CLS_FOR_EACH (rule, cr, &table->cls) {
         eviction_group_add_rule(rule);
+    }
+}
+
+/* Inserts 'rule' from the ofproto data structures BEFORE caller has inserted
+ * it to the classifier. */
+static void
+ofproto_rule_insert__(struct ofproto *ofproto, struct rule *rule)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    const struct rule_actions *actions = rule_get_actions(rule);
+
+    if (rule->hard_timeout || rule->idle_timeout) {
+        list_insert(&ofproto->expirable, &rule->expirable);
+    }
+    cookies_insert(ofproto, rule);
+    eviction_group_add_rule(rule);
+    if (actions->has_meter) {
+        meter_insert_rule(rule);
     }
 }
 
