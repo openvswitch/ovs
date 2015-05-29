@@ -2925,7 +2925,7 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
 }
 
 struct geneve_scan {
-    uint8_t d[252];
+    struct geneve_opt d[63];
     int len;
 };
 
@@ -2933,8 +2933,8 @@ static int
 scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)
 {
     const char *s_base = s;
-    struct geneve_opt *opt = (struct geneve_opt *)key->d;
-    struct geneve_opt *opt_mask = (struct geneve_opt *)(mask ? mask->d : NULL);
+    struct geneve_opt *opt = key->d;
+    struct geneve_opt *opt_mask = mask ? mask->d : NULL;
     int len_remain = sizeof key->d;
 
     while (s[0] == '{' && len_remain >= sizeof *opt) {
