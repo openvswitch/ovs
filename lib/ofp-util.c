@@ -8900,7 +8900,9 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     struct ofpbuf *request;
     struct ofp14_bundle_ctrl_msg *m;
 
-    request = ofpraw_alloc(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version, 0);
+    /* Must use the same xid as the embedded message. */
+    request = ofpraw_alloc_xid(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
+                               msg->msg->xid, 0);
     m = ofpbuf_put_zeros(request, sizeof *m);
 
     m->bundle_id = htonl(msg->bundle_id);
