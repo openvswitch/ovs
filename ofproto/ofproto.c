@@ -256,9 +256,14 @@ struct flow_mod_requester {
 static enum ofperr add_flow(struct ofproto *, struct ofputil_flow_mod *,
                             const struct flow_mod_requester *);
 
-static enum ofperr modify_flows__(struct ofproto *, struct ofputil_flow_mod *,
-                                  const struct rule_collection *,
-                                  const struct flow_mod_requester *);
+static enum ofperr modify_flow_check__(struct ofproto *,
+                                       struct ofputil_flow_mod *,
+                                       const struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
+static void modify_flow__(struct ofproto *, struct ofputil_flow_mod *,
+                          struct rule *, const struct flow_mod_requester *,
+                          struct ovs_list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex);
 static void delete_flows__(const struct rule_collection *,
                            enum ofp_flow_removed_reason,
                            const struct flow_mod_requester *)
@@ -4395,16 +4400,18 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     /* Transform "add" into "modify" if there's an existing identical flow. */
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
     if (rule) {
-        struct rule_collection rules;
-
         cls_rule_destroy(&cr);
 
-        rule_collection_init(&rules);
-        rule_collection_add(&rules, rule);
         fm->modify_cookie = true;
-        error = modify_flows__(ofproto, fm, &rules, req);
-        rule_collection_destroy(&rules);
+        error = modify_flow_check__(ofproto, fm, rule);
+        if (!error) {
+            struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
+            modify_flow__(ofproto, fm, rule, req, &dead_cookies);
+            learned_cookies_flush(ofproto, &dead_cookies);
+
+            goto send_packet;
+        }
         return error;
     }
 
@@ -4465,166 +4472,217 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     ofmonitor_report(ofproto->connmgr, rule, NXFME_ADDED, 0,
                      req ? req->ofconn : NULL, req ? req->xid : 0, NULL);
-
+send_packet:
     return req ? send_buffered_packet(req->ofconn, fm->buffer_id, rule) : 0;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
 
-/* Modifies the rules listed in 'rules', changing their actions to match those
- * in 'fm'.
- *
- * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
- * if any.
+/* Checks if the 'rule' can be modified to match 'fm'.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
-modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-               const struct rule_collection *rules,
-               const struct flow_mod_requester *req)
+modify_flow_check__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                    const struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
-    enum nx_flow_update_event event;
+    if (ofproto->ofproto_class->rule_premodify_actions) {
+        return ofproto->ofproto_class->rule_premodify_actions(
+            rule, fm->ofpacts, fm->ofpacts_len);
+    }
+    return 0;
+}
+
+/* Checks if the rules listed in 'rules' can have their actions changed to
+ * match those in 'fm'.
+ *
+ * Returns 0 on success, otherwise an OpenFlow error code. */
+static enum ofperr
+modify_flows_check__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                     const struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    enum ofperr error;
     size_t i;
 
     if (ofproto->ofproto_class->rule_premodify_actions) {
         for (i = 0; i < rules->n; i++) {
-            struct rule *rule = rules->rules[i];
-            enum ofperr error;
-
-            error = ofproto->ofproto_class->rule_premodify_actions(
-                rule, fm->ofpacts, fm->ofpacts_len);
+            error = modify_flow_check__(ofproto, fm, rules->rules[i]);
             if (error) {
                 return error;
             }
         }
     }
 
-    event = fm->command == OFPFC_ADD ? NXFME_ADDED : NXFME_MODIFIED;
-    for (i = 0; i < rules->n; i++) {
-        struct rule *rule = rules->rules[i];
-
-        /*  'fm' says that  */
-        bool change_cookie = (fm->modify_cookie
-                              && fm->new_cookie != OVS_BE64_MAX
-                              && fm->new_cookie != rule->flow_cookie);
-
-        const struct rule_actions *actions = rule_get_actions(rule);
-        bool change_actions = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
-                                             actions->ofpacts,
-                                             actions->ofpacts_len);
-
-        bool reset_counters = (fm->flags & OFPUTIL_FF_RESET_COUNTS) != 0;
-
-        long long int now = time_msec();
-
-        if (change_cookie) {
-            cookies_remove(ofproto, rule);
-        }
-
-        ovs_mutex_lock(&rule->mutex);
-        if (fm->command == OFPFC_ADD) {
-            rule->idle_timeout = fm->idle_timeout;
-            rule->hard_timeout = fm->hard_timeout;
-            rule->importance = fm->importance;
-            rule->flags = fm->flags & OFPUTIL_FF_STATE;
-            rule->created = now;
-        }
-        if (change_cookie) {
-            rule->flow_cookie = fm->new_cookie;
-        }
-        rule->modified = now;
-        ovs_mutex_unlock(&rule->mutex);
-
-        if (change_cookie) {
-            cookies_insert(ofproto, rule);
-        }
-        if (fm->command == OFPFC_ADD) {
-            if (fm->idle_timeout || fm->hard_timeout || fm->importance) {
-                if (!rule->eviction_group) {
-                    eviction_group_add_rule(rule);
-                }
-            } else {
-                eviction_group_remove_rule(rule);
-            }
-        }
-
-        if (change_actions) {
-           /* We have to change the actions.  The rule's conjunctive match set
-            * is a function of its actions, so we need to update that too.  The
-            * conjunctive match set is used in the lookup process to figure
-            * which (if any) collection of conjunctive sets the packet matches
-            * with.  However, a rule with conjunction actions is never to be
-            * returned as a classifier lookup result.  To make sure a rule with
-            * conjunction actions is not returned as a lookup result, we update
-            * them in a carefully chosen order:
-            *
-            * - If we're adding a conjunctive match set where there wasn't one
-            *   before, we have to make the conjunctive match set available to
-            *   lookups before the rule's actions are changed, as otherwise
-            *   rule with a conjunction action could be returned as a lookup
-            *   result.
-            *
-            * - To clear some nonempty conjunctive set, we set the rule's
-            *   actions first, so that a lookup can't return a rule with
-            *   conjunction actions.
-            *
-            * - Otherwise, order doesn't matter for changing one nonempty
-            *   conjunctive match set to some other nonempty set, since the
-            *   rule's actions are not seen by the classifier, and hence don't
-            *   matter either before or after the change. */
-            struct cls_conjunction *conjs;
-            size_t n_conjs;
-            get_conjunctions(fm, &conjs, &n_conjs);
-
-            if (n_conjs) {
-                set_conjunctions(rule, conjs, n_conjs);
-            }
-            ovsrcu_set(&rule->actions, rule_actions_create(fm->ofpacts,
-                                                           fm->ofpacts_len));
-            if (!conjs) {
-                set_conjunctions(rule, conjs, n_conjs);
-            }
-
-            free(conjs);
-        }
-
-        if (change_actions || reset_counters) {
-            ofproto->ofproto_class->rule_modify_actions(rule, reset_counters);
-        }
-
-        if (event != NXFME_MODIFIED || change_actions || change_cookie) {
-            ofmonitor_report(ofproto->connmgr, rule, event, 0,
-                             req ? req->ofconn : NULL, req ? req->xid : 0,
-                             change_actions ? actions : NULL);
-        }
-
-        if (change_actions) {
-            learned_cookies_inc(ofproto, rule_get_actions(rule));
-            learned_cookies_dec(ofproto, actions, &dead_cookies);
-            rule_actions_destroy(actions);
-        }
-    }
-    learned_cookies_flush(ofproto, &dead_cookies);
-
-    if (fm->buffer_id != UINT32_MAX && req) {
-        return send_buffered_packet(req->ofconn, fm->buffer_id,
-                                    rules->rules[0]);
-    }
-
     return 0;
 }
 
+/* Modifies the 'rule', changing them to match 'fm'. */
+static void
+modify_flow__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+              struct rule *rule, const struct flow_mod_requester *req,
+              struct ovs_list *dead_cookies)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    enum nx_flow_update_event event = fm->command == OFPFC_ADD
+        ? NXFME_ADDED : NXFME_MODIFIED;
+
+    /*  'fm' says that  */
+    bool change_cookie = (fm->modify_cookie
+                          && fm->new_cookie != OVS_BE64_MAX
+                          && fm->new_cookie != rule->flow_cookie);
+
+    const struct rule_actions *actions = rule_get_actions(rule);
+    bool change_actions = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
+                                         actions->ofpacts,
+                                         actions->ofpacts_len);
+
+    bool reset_counters = (fm->flags & OFPUTIL_FF_RESET_COUNTS) != 0;
+
+    long long int now = time_msec();
+
+    if (change_cookie) {
+        cookies_remove(ofproto, rule);
+    }
+
+    ovs_mutex_lock(&rule->mutex);
+    if (fm->command == OFPFC_ADD) {
+        rule->idle_timeout = fm->idle_timeout;
+        rule->hard_timeout = fm->hard_timeout;
+        rule->importance = fm->importance;
+        rule->flags = fm->flags & OFPUTIL_FF_STATE;
+        rule->created = now;
+    }
+    if (change_cookie) {
+        rule->flow_cookie = fm->new_cookie;
+    }
+    rule->modified = now;
+    ovs_mutex_unlock(&rule->mutex);
+
+    if (change_cookie) {
+        cookies_insert(ofproto, rule);
+    }
+    if (fm->command == OFPFC_ADD) {
+        if (fm->idle_timeout || fm->hard_timeout || fm->importance) {
+            if (!rule->eviction_group) {
+                eviction_group_add_rule(rule);
+            }
+        } else {
+            eviction_group_remove_rule(rule);
+        }
+    }
+
+    if (change_actions) {
+        /* We have to change the actions.  The rule's conjunctive match set
+         * is a function of its actions, so we need to update that too.  The
+         * conjunctive match set is used in the lookup process to figure
+         * which (if any) collection of conjunctive sets the packet matches
+         * with.  However, a rule with conjunction actions is never to be
+         * returned as a classifier lookup result.  To make sure a rule with
+         * conjunction actions is not returned as a lookup result, we update
+         * them in a carefully chosen order:
+         *
+         * - If we're adding a conjunctive match set where there wasn't one
+         *   before, we have to make the conjunctive match set available to
+         *   lookups before the rule's actions are changed, as otherwise
+         *   rule with a conjunction action could be returned as a lookup
+         *   result.
+         *
+         * - To clear some nonempty conjunctive set, we set the rule's
+         *   actions first, so that a lookup can't return a rule with
+         *   conjunction actions.
+         *
+         * - Otherwise, order doesn't matter for changing one nonempty
+         *   conjunctive match set to some other nonempty set, since the
+         *   rule's actions are not seen by the classifier, and hence don't
+         *   matter either before or after the change. */
+        struct cls_conjunction *conjs;
+        size_t n_conjs;
+        get_conjunctions(fm, &conjs, &n_conjs);
+
+        if (n_conjs) {
+            set_conjunctions(rule, conjs, n_conjs);
+        }
+        ovsrcu_set(&rule->actions, rule_actions_create(fm->ofpacts,
+                                                           fm->ofpacts_len));
+        if (!conjs) {
+            set_conjunctions(rule, conjs, n_conjs);
+        }
+
+        free(conjs);
+    }
+
+    if (change_actions || reset_counters) {
+        ofproto->ofproto_class->rule_modify_actions(rule, reset_counters);
+    }
+
+    if (event != NXFME_MODIFIED || change_actions || change_cookie) {
+        ofmonitor_report(ofproto->connmgr, rule, event, 0,
+                         req ? req->ofconn : NULL, req ? req->xid : 0,
+                         change_actions ? actions : NULL);
+    }
+
+    if (change_actions) {
+        learned_cookies_inc(ofproto, rule_get_actions(rule));
+        learned_cookies_dec(ofproto, actions, dead_cookies);
+        rule_actions_destroy(actions);
+    }
+}
+
+/* Modifies the rules listed in 'rules', changing their actions to match those
+ * in 'fm'.
+ *
+ * 'req' is used to retrieve the packet buffer specified in fm->buffer_id,
+ * if any. */
+static void
+modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+               const struct rule_collection *rules,
+               const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
+    size_t i;
+
+    for (i = 0; i < rules->n; i++) {
+        modify_flow__(ofproto, fm, rules->rules[i], req, &dead_cookies);
+    }
+    learned_cookies_flush(ofproto, &dead_cookies);
+}
+
 static enum ofperr
-modify_flows_add(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                 const struct flow_mod_requester *req)
+modify_flows_add__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (fm->cookie_mask != htonll(0) || fm->new_cookie == OVS_BE64_MAX) {
         return 0;
     }
     return add_flow(ofproto, fm, req);
+}
+
+static enum ofperr
+modify_flows(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+             const struct rule_collection *rules,
+             const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    enum ofperr error;
+
+    if (rules->n > 0) {
+        error = modify_flows_check__(ofproto, fm, rules);
+        if (!error) {
+            modify_flows__(ofproto, fm, rules, req);
+
+            if (fm->buffer_id != UINT32_MAX && req) {
+                error = send_buffered_packet(req->ofconn, fm->buffer_id,
+                                             rules->rules[0]);
+            }
+        }
+    } else {
+        error = modify_flows_add__(ofproto, fm, req);
+    }
+
+    return error;
 }
 
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
@@ -4649,11 +4707,8 @@ modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule_criteria_destroy(&criteria);
 
     if (!error) {
-        error = (rules.n > 0
-                 ? modify_flows__(ofproto, fm, &rules, req)
-                 : modify_flows_add(ofproto, fm, req));
+        error = modify_flows(ofproto, fm, &rules, req);
     }
-
     rule_collection_destroy(&rules);
 
     return error;
@@ -4678,13 +4733,9 @@ modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule_criteria_destroy(&criteria);
 
     if (!error) {
-        if (rules.n == 0) {
-            error = modify_flows_add(ofproto, fm, req);
-        } else if (rules.n == 1) {
-            error = modify_flows__(ofproto, fm, &rules, req);
-        }
+        /* collect_rules_strict() can return max 1 rule. */
+        error = modify_flows(ofproto, fm, &rules, req);
     }
-
     rule_collection_destroy(&rules);
 
     return error;
