@@ -1168,13 +1168,56 @@ ofconn_report_flow_mod(struct ofconn *ofconn,
     }
     ofconn->last_op = now;
 }
+
+/* OpenFlow 1.4 bundles. */
 
-struct hmap *
-ofconn_get_bundles(struct ofconn *ofconn)
+static inline uint32_t
+bundle_hash(uint32_t id)
 {
-    return &ofconn->bundles;
+    return hash_int(id, 0);
 }
 
+struct ofp_bundle *
+ofconn_get_bundle(struct ofconn *ofconn, uint32_t id)
+{
+    struct ofp_bundle *bundle;
+
+    HMAP_FOR_EACH_IN_BUCKET(bundle, node, bundle_hash(id), &ofconn->bundles) {
+        if (bundle->id == id) {
+            return bundle;
+        }
+    }
+
+    return NULL;
+}
+
+enum ofperr
+ofconn_insert_bundle(struct ofconn *ofconn, struct ofp_bundle *bundle)
+{
+    /* XXX: Check the limit of open bundles */
+
+    hmap_insert(&ofconn->bundles, &bundle->node, bundle_hash(bundle->id));
+
+    return 0;
+}
+
+enum ofperr
+ofconn_remove_bundle(struct ofconn *ofconn, struct ofp_bundle *bundle)
+{
+    hmap_remove(&ofconn->bundles, &bundle->node);
+
+    return 0;
+}
+
+static void
+bundle_remove_all(struct ofconn *ofconn)
+{
+    struct ofp_bundle *b, *next;
+
+    HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
+        ofp_bundle_remove__(ofconn, b);
+    }
+}
 
 /* Private ofconn functions. */
 
@@ -1300,7 +1343,7 @@ ofconn_destroy(struct ofconn *ofconn)
         hmap_remove(&ofconn->connmgr->controllers, &ofconn->hmap_node);
     }
 
-    ofp_bundle_remove_all(ofconn);
+    bundle_remove_all(ofconn);
     hmap_destroy(&ofconn->bundles);
 
     hmap_destroy(&ofconn->monitors);

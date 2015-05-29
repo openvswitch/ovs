@@ -22,7 +22,6 @@
 #include <sys/types.h>
 
 #include "connmgr.h"
-#include "list.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
 
@@ -40,6 +39,21 @@ struct ofp_bundle_entry {
     };
 };
 
+enum bundle_state {
+    BS_OPEN,
+    BS_CLOSED
+};
+
+struct ofp_bundle {
+    struct hmap_node  node;      /* In struct ofconn's "bundles" hmap. */
+    uint32_t          id;
+    uint16_t          flags;
+    enum bundle_state state;
+
+    /* List of 'struct bundle_message's */
+    struct ovs_list   msg_list;
+};
+
 static inline struct ofp_bundle_entry *ofp_bundle_entry_alloc(
     enum ofptype type, ovs_be32 xid);
 static inline void ofp_bundle_entry_free(struct ofp_bundle_entry *);
@@ -50,7 +64,8 @@ enum ofperr ofp_bundle_commit(struct ofconn *, uint32_t id, uint16_t flags);
 enum ofperr ofp_bundle_discard(struct ofconn *, uint32_t id);
 enum ofperr ofp_bundle_add_message(struct ofconn *, uint32_t id,
                                    uint16_t flags, struct ofp_bundle_entry *);
-void ofp_bundle_remove_all(struct ofconn *);
+
+void ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle);
 
 static inline struct ofp_bundle_entry *
 ofp_bundle_entry_alloc(enum ofptype type, ovs_be32 xid)
