@@ -3778,6 +3778,8 @@ rule_collection_destroy(struct rule_collection *rules)
  * function verifies most of the criteria in 'c' itself, but the caller must
  * check 'c->cr' itself.
  *
+ * Rules that have already been marked as 'to_be_removed' are not collected.
+ *
  * Increments '*n_readonly' if 'rule' wasn't added because it's read-only (and
  * 'c' only includes modifiable rules). */
 static void
@@ -3789,7 +3791,8 @@ collect_rule(struct rule *rule, const struct rule_criteria *c,
         && ofproto_rule_has_out_port(rule, c->out_port)
         && ofproto_rule_has_out_group(rule, c->out_group)
         && !((rule->flow_cookie ^ c->cookie) & c->cookie_mask)
-        && (!rule_is_hidden(rule) || c->include_hidden)) {
+        && (!rule_is_hidden(rule) || c->include_hidden)
+        && !rule->cr.to_be_removed) {
         /* Rule matches all the criteria... */
         if (!rule_is_readonly(rule) || c->include_readonly) {
             /* ...add it. */
@@ -4864,13 +4867,12 @@ delete_flows__(const struct rule_collection *rules,
 
 /* Implements OFPFC_DELETE. */
 static enum ofperr
-delete_flows_loose(struct ofproto *ofproto,
-                   const struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
+delete_flows_begin_loose(struct ofproto *ofproto,
+                         const struct ofputil_flow_mod *fm,
+                         struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
-    struct rule_collection rules;
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
@@ -4878,25 +4880,55 @@ delete_flows_loose(struct ofproto *ofproto,
                        fm->out_port, fm->out_group);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_loose(ofproto, &criteria, &rules);
+    error = collect_rules_loose(ofproto, &criteria, rules);
     rule_criteria_destroy(&criteria);
 
     if (!error) {
-        delete_flows__(&rules, fm->delete_reason, req);
+        for (size_t i = 0; i < rules->n; i++) {
+            struct rule *rule = rules->rules[i];
+
+            CONST_CAST(struct cls_rule *, &rule->cr)->to_be_removed = true;
+        }
     }
-    rule_collection_destroy(&rules);
+
+    return error;
+}
+
+static void
+delete_flows_finish(const struct ofputil_flow_mod *fm,
+                    const struct flow_mod_requester *req,
+                    struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    delete_flows__(rules, fm->delete_reason, req);
+    rule_collection_destroy(rules);
+}
+
+static enum ofperr
+delete_flows_loose(struct ofproto *ofproto,
+                   const struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule_collection rules;
+    enum ofperr error;
+
+    error = delete_flows_begin_loose(ofproto, fm, &rules);
+    if (!error) {
+        delete_flows_finish(fm, req, &rules);
+    }
 
     return error;
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
 static enum ofperr
-delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
+delete_flow_begin_strict(struct ofproto *ofproto,
+                         const struct ofputil_flow_mod *fm,
+                         struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
-    struct rule_collection rules;
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
@@ -4904,13 +4936,32 @@ delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
                        fm->out_port, fm->out_group);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_strict(ofproto, &criteria, &rules);
+    error = collect_rules_strict(ofproto, &criteria, rules);
     rule_criteria_destroy(&criteria);
 
     if (!error) {
-        delete_flows__(&rules, fm->delete_reason, req);
+        for (size_t i = 0; i < rules->n; i++) {
+            struct rule *rule = rules->rules[i];
+
+            CONST_CAST(struct cls_rule *, &rule->cr)->to_be_removed = true;
+        }
     }
-    rule_collection_destroy(&rules);
+
+    return error;
+}
+
+static enum ofperr
+delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule_collection rules;
+    enum ofperr error;
+
+    error = delete_flow_begin_strict(ofproto, fm, &rules);
+    if (!error) {
+        delete_flows_finish(fm, req, &rules);
+    }
 
     return error;
 }
