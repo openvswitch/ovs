@@ -285,6 +285,7 @@ void cls_rule_format(const struct cls_rule *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
+void cls_rule_make_visible(const struct cls_rule *rule);
 
 /* Constructor/destructor.  Must run single-threaded. */
 void classifier_init(struct classifier *, const uint8_t *flow_segments);
@@ -358,7 +359,6 @@ void cls_cursor_advance(struct cls_cursor *);
 #ifdef __cplusplus
 }
 #endif
-
 
 static inline void
 classifier_defer(struct classifier *cls)

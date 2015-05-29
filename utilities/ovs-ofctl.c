@@ -2403,6 +2403,7 @@ fte_insert(struct classifier *cls, const struct match *match,
 
         ovsrcu_postpone(fte_free, old);
     }
+    cls_rule_make_visible(&fte->rule);
 }
 
 /* Reads the flows in 'filename' as flow table entries in 'cls' for the version

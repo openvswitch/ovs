@@ -99,6 +99,7 @@ cls_match_alloc(const struct cls_rule *rule,
     rculist_init(&cls_match->list);
     *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
     *CONST_CAST(int *, &cls_match->priority) = rule->priority;
+    cls_match->visible = false;
     miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
                           &rule->match.flow, count);
     ovsrcu_set_hidden(&cls_match->conj_set,
@@ -134,6 +135,19 @@ next_rule_in_list(const struct cls_match *rule)
 {
     const struct cls_match *next = next_rule_in_list__(rule);
     return next->priority < rule->priority ? next : NULL;
+}
+
+/* Return the next lower-priority rule in the list that is visible.  */
+static inline const struct cls_match *
+next_visible_rule_in_list(const struct cls_match *rule)
+{
+    const struct cls_match *next = rule;
+
+    do {
+        next = next_rule_in_list(next);
+    } while (next && !next->visible);
+
+    return next;
 }
 
 static inline struct cls_match *
@@ -301,6 +315,16 @@ cls_rule_is_catchall(const struct cls_rule *rule)
 {
     return minimask_is_catchall(&rule->match.mask);
 }
+
+/* Rules inserted during classifier_defer() need to be made visible before
+ * calling classifier_publish().
+ *
+ * 'rule' must be in a classifier. */
+void cls_rule_make_visible(const struct cls_rule *rule)
+{
+    rule->cls_match->visible = true;
+}
+
 
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
@@ -623,8 +647,6 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
             new->partition = create_partition(cls, subtable, metadata);
         }
 
-        /* Make rule visible to lookups. */
-
         /* Add new node to segment indices.
          *
          * Readers may find the rule in the indices before the rule is visible
@@ -680,7 +702,10 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
                 /* No change in subtable's max priority or max count. */
 
-                /* Make rule visible to iterators. */
+                /* Make rule visible to lookups? */
+                new->visible = cls->publish;
+
+                /* Make rule visible to iterators (immediately). */
                 rculist_replace(CONST_CAST(struct rculist *, &rule->node),
                                 &old->node);
 
@@ -693,7 +718,10 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
         }
     }
 
-    /* Make rule visible to iterators. */
+    /* Make rule visible to lookups? */
+    new->visible = cls->publish;
+
+    /* Make rule visible to iterators (immediately). */
     rculist_push_back(&subtable->rules_list,
                       CONST_CAST(struct rculist *, &rule->node));
 
@@ -1200,7 +1228,7 @@ classifier_lookup__(const struct classifier *cls, struct flow *flow,
             }
 
             /* Find next-lower-priority flow with identical flow match. */
-            match = next_rule_in_list(soft[i]->match);
+            match = next_visible_rule_in_list(soft[i]->match);
             if (match) {
                 soft[i] = ovsrcu_get(struct cls_conjunction_set *,
                                      &match->conj_set);
@@ -1664,12 +1692,18 @@ static inline const struct cls_match *
 find_match(const struct cls_subtable *subtable, const struct flow *flow,
            uint32_t hash)
 {
-    const struct cls_match *rule;
+    const struct cls_match *head, *rule;
 
-    CMAP_FOR_EACH_WITH_HASH (rule, cmap_node, hash, &subtable->rules) {
-        if (miniflow_and_mask_matches_flow(&rule->flow, &subtable->mask,
-                                           flow)) {
-            return rule;
+    CMAP_FOR_EACH_WITH_HASH (head, cmap_node, hash, &subtable->rules) {
+        if (OVS_LIKELY(miniflow_and_mask_matches_flow(&head->flow,
+                                                      &subtable->mask,
+                                                      flow))) {
+            /* Return highest priority rule that is visible. */
+            FOR_EACH_RULE_IN_LIST(rule, head) {
+                if (OVS_LIKELY(rule->visible)) {
+                    return rule;
+                }
+            }
         }
     }
 
@@ -1768,10 +1802,17 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
          * (Rare) hash collisions may cause us to miss the opportunity for this
          * optimization. */
         if (!cmap_node_next(inode)) {
-            ASSIGN_CONTAINER(rule, inode - i, index_nodes);
-            if (miniflow_and_mask_matches_flow_wc(&rule->flow, &subtable->mask,
+            const struct cls_match *head;
+
+            ASSIGN_CONTAINER(head, inode - i, index_nodes);
+            if (miniflow_and_mask_matches_flow_wc(&head->flow, &subtable->mask,
                                                   flow, wc)) {
-                return rule;
+                /* Return highest priority rule that is visible. */
+                FOR_EACH_RULE_IN_LIST(rule, head) {
+                    if (OVS_LIKELY(rule->visible)) {
+                        return rule;
+                    }
+                }
             }
             return NULL;
         }

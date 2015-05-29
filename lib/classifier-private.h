@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ struct cls_match {
                                                     * 'indices'. */
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
+    bool visible;
     const struct cls_rule *cls_rule;
     OVSRCU_TYPE(struct cls_conjunction_set *) conj_set;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */

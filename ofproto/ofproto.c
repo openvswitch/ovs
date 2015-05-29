@@ -4431,6 +4431,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         ofproto_rule_unref(rule);
         return error;
     }
+    cls_rule_make_visible(&rule->cr);
     classifier_publish(&table->cls);
 
     learned_cookies_inc(ofproto, actions);
