@@ -2702,6 +2702,62 @@ ofproto_rule_destroy__(struct rule *rule)
     rule->ofproto->ofproto_class->rule_dealloc(rule);
 }
 
+/* Create a new rule based on attributes in 'fm', match in 'cr', and
+ * 'table_id'.  Note that the rule is NOT inserted into a any data structures
+ * yet.  Takes ownership of 'cr'. */
+static enum ofperr
+ofproto_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                    struct cls_rule *cr, uint8_t table_id,
+                    struct rule **rulep)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule;
+    enum ofperr error;
+
+    /* Allocate new rule. */
+    rule = ofproto->ofproto_class->rule_alloc();
+    if (!rule) {
+        cls_rule_destroy(cr);
+        VLOG_WARN_RL(&rl, "%s: failed to allocate a rule.", ofproto->name);
+        return ENOMEM;
+    }
+
+    /* Initialize base state. */
+    *CONST_CAST(struct ofproto **, &rule->ofproto) = ofproto;
+    cls_rule_move(CONST_CAST(struct cls_rule *, &rule->cr), cr);
+    ovs_refcount_init(&rule->ref_count);
+    rule->flow_cookie = fm->new_cookie;
+    rule->created = rule->modified = time_msec();
+
+    ovs_mutex_init(&rule->mutex);
+    ovs_mutex_lock(&rule->mutex);
+    rule->idle_timeout = fm->idle_timeout;
+    rule->hard_timeout = fm->hard_timeout;
+    rule->importance = fm->importance;
+    ovs_mutex_unlock(&rule->mutex);
+
+    *CONST_CAST(uint8_t *, &rule->table_id) = table_id;
+    rule->flags = fm->flags & OFPUTIL_FF_STATE;
+    ovsrcu_set_hidden(&rule->actions,
+                      rule_actions_create(fm->ofpacts, fm->ofpacts_len));
+    list_init(&rule->meter_list_node);
+    rule->eviction_group = NULL;
+    list_init(&rule->expirable);
+    rule->monitor_flags = 0;
+    rule->add_seqno = 0;
+    rule->modify_seqno = 0;
+
+    /* Construct rule, initializing derived state. */
+    error = ofproto->ofproto_class->rule_construct(rule);
+    if (error) {
+        ofproto_rule_destroy__(rule);
+        return error;
+    }
+
+    *rulep = rule;
+    return 0;
+}
+
 static void
 rule_destroy_cb(struct rule *rule)
 {
@@ -4292,7 +4348,6 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
          const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    const struct rule_actions *actions;
     struct oftable *table;
     struct cls_rule cr;
     struct rule *rule;
@@ -4371,42 +4426,9 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
 
     /* Allocate new rule. */
-    rule = ofproto->ofproto_class->rule_alloc();
-    if (!rule) {
-        cls_rule_destroy(&cr);
-        VLOG_WARN_RL(&rl, "%s: failed to allocate a rule.", ofproto->name);
-        return ENOMEM;
-    }
-
-    /* Initialize base state. */
-    *CONST_CAST(struct ofproto **, &rule->ofproto) = ofproto;
-    cls_rule_move(CONST_CAST(struct cls_rule *, &rule->cr), &cr);
-    ovs_refcount_init(&rule->ref_count);
-    rule->flow_cookie = fm->new_cookie;
-    rule->created = rule->modified = time_msec();
-
-    ovs_mutex_init(&rule->mutex);
-    ovs_mutex_lock(&rule->mutex);
-    rule->idle_timeout = fm->idle_timeout;
-    rule->hard_timeout = fm->hard_timeout;
-    rule->importance = fm->importance;
-    ovs_mutex_unlock(&rule->mutex);
-
-    *CONST_CAST(uint8_t *, &rule->table_id) = table - ofproto->tables;
-    rule->flags = fm->flags & OFPUTIL_FF_STATE;
-    actions = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
-    ovsrcu_set(&rule->actions, actions);
-    list_init(&rule->meter_list_node);
-    rule->eviction_group = NULL;
-    list_init(&rule->expirable);
-    rule->monitor_flags = 0;
-    rule->add_seqno = 0;
-    rule->modify_seqno = 0;
-
-    /* Construct rule, initializing derived state. */
-    error = ofproto->ofproto_class->rule_construct(rule);
+    error = ofproto_rule_create(ofproto, fm, &cr, table - ofproto->tables,
+                                &rule);
     if (error) {
-        ofproto_rule_destroy__(rule);
         return error;
     }
 
@@ -4429,7 +4451,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     cls_rule_make_visible(&rule->cr);
     classifier_publish(&table->cls);
 
-    learned_cookies_inc(ofproto, actions);
+    learned_cookies_inc(ofproto, rule_get_actions(rule));
 
     if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
         if (ofproto->vlan_bitmap) {
