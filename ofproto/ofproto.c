@@ -261,7 +261,7 @@ static enum ofperr modify_flow_check__(struct ofproto *,
                                        const struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 static void modify_flow__(struct ofproto *, struct ofputil_flow_mod *,
-                          struct rule *, const struct flow_mod_requester *,
+                          const struct flow_mod_requester *, struct rule *,
                           struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex);
 static void delete_flows__(const struct rule_collection *,
@@ -4456,7 +4456,7 @@ add_flow_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     if (modify) {
         struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
-        modify_flow__(ofproto, fm, rule, req, &dead_cookies);
+        modify_flow__(ofproto, fm, req, rule, &dead_cookies);
         learned_cookies_flush(ofproto, &dead_cookies);
     } else {
         struct oftable *table = &ofproto->tables[rule->table_id];
@@ -4555,7 +4555,7 @@ modify_flows_check__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 /* Modifies the 'rule', changing them to match 'fm'. */
 static void
 modify_flow__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-              struct rule *rule, const struct flow_mod_requester *req,
+              const struct flow_mod_requester *req, struct rule *rule,
               struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4671,48 +4671,40 @@ modify_flow__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
  * if any. */
 static void
 modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-               const struct rule_collection *rules,
-               const struct flow_mod_requester *req)
+               const struct flow_mod_requester *req,
+               const struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
     size_t i;
 
     for (i = 0; i < rules->n; i++) {
-        modify_flow__(ofproto, fm, rules->rules[i], req, &dead_cookies);
+        modify_flow__(ofproto, fm, req, rules->rules[i], &dead_cookies);
     }
     learned_cookies_flush(ofproto, &dead_cookies);
 }
 
 static enum ofperr
-modify_flows_add__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    if (fm->cookie_mask != htonll(0) || fm->new_cookie == OVS_BE64_MAX) {
-        return 0;
-    }
-    return add_flow(ofproto, fm, req);
-}
-
-static enum ofperr
-modify_flows(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-             const struct rule_collection *rules,
-             const struct flow_mod_requester *req)
+modify_flows_begin__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                     struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     enum ofperr error;
 
     if (rules->n > 0) {
         error = modify_flows_check__(ofproto, fm, rules);
+    } else if (!(fm->cookie_mask != htonll(0)
+                 || fm->new_cookie == OVS_BE64_MAX)) {
+        bool modify;
+
+        error = add_flow_begin(ofproto, fm, &rules->rules[0], &modify);
         if (!error) {
-            modify_flows__(ofproto, fm, rules, req);
-            send_buffered_packet(req, fm->buffer_id, rules->rules[0]);
+            ovs_assert(!modify);
         }
     } else {
-        error = modify_flows_add__(ofproto, fm, req);
+        rules->rules[0] = NULL;
+        error = 0;
     }
-
     return error;
 }
 
@@ -4722,25 +4714,57 @@ modify_flows(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static enum ofperr
-modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
+modify_flows_begin_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                         struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
-    struct rule_collection rules;
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_loose(ofproto, &criteria, &rules);
+    error = collect_rules_loose(ofproto, &criteria, rules);
     rule_criteria_destroy(&criteria);
 
     if (!error) {
-        error = modify_flows(ofproto, fm, &rules, req);
+        error = modify_flows_begin__(ofproto, fm, rules);
     }
-    rule_collection_destroy(&rules);
+
+    if (error) {
+        rule_collection_destroy(rules);
+    }
+    return error;
+}
+
+static void
+modify_flows_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                    const struct flow_mod_requester *req,
+                    struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    if (rules->n > 0) {
+        modify_flows__(ofproto, fm, req, rules);
+        send_buffered_packet(req, fm->buffer_id, rules->rules[0]);
+    } else if (rules->rules[0] != NULL) {
+        add_flow_finish(ofproto, fm, req, rules->rules[0], false);
+    }
+    rule_collection_destroy(rules);
+}
+
+static enum ofperr
+modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule_collection rules;
+    enum ofperr error;
+
+    error = modify_flows_begin_loose(ofproto, fm, &rules);
+    if (!error) {
+        modify_flows_finish(ofproto, fm, req, &rules);
+    }
 
     return error;
 }
@@ -4748,29 +4772,47 @@ modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
  * code on failure. */
 static enum ofperr
-modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
+modify_flow_begin_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                         struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_criteria criteria;
-    struct rule_collection rules;
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_strict(ofproto, &criteria, &rules);
+    error = collect_rules_strict(ofproto, &criteria, rules);
     rule_criteria_destroy(&criteria);
 
     if (!error) {
         /* collect_rules_strict() can return max 1 rule. */
-        error = modify_flows(ofproto, fm, &rules, req);
+        error = modify_flows_begin__(ofproto, fm, rules);
     }
-    rule_collection_destroy(&rules);
+
+    if (error) {
+        rule_collection_destroy(rules);
+    }
+    return error;
+}
+
+static enum ofperr
+modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                   const struct flow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule_collection rules;
+    enum ofperr error;
+
+    error = modify_flow_begin_strict(ofproto, fm, &rules);
+    if (!error) {
+        modify_flows_finish(ofproto, fm, req, &rules);
+    }
 
     return error;
 }
+
 
 /* OFPFC_DELETE implementation. */
 
