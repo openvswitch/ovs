@@ -1302,7 +1302,7 @@ ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid)
     struct cmap *cmap = &udpif->ukeys[idx].cmap;
 
     CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node, get_ufid_hash(ufid), cmap) {
-        if (ovs_u128_equal(&ukey->ufid, ufid)) {
+        if (ovs_u128_equals(&ukey->ufid, ufid)) {
             return ukey;
         }
     }

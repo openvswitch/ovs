@@ -1770,7 +1770,7 @@ dp_netdev_pmd_find_flow(const struct dp_netdev_pmd_thread *pmd,
     if (ufidp) {
         CMAP_FOR_EACH_WITH_HASH (netdev_flow, node, dp_netdev_flow_hash(ufidp),
                                  &pmd->flow_table) {
-            if (ovs_u128_equal(&netdev_flow->ufid, ufidp)) {
+            if (ovs_u128_equals(&netdev_flow->ufid, ufidp)) {
                 return netdev_flow;
             }
         }

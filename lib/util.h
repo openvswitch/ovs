@@ -551,6 +551,13 @@ void bitwise_put(uint64_t value,
 uint64_t bitwise_get(const void *src, unsigned int src_len,
                      unsigned int src_ofs, unsigned int n_bits);
 
+/* Returns non-zero if the parameters have equal value. */
+static inline int
+ovs_u128_equals(const ovs_u128 *a, const ovs_u128 *b)
+{
+    return (a->u64.hi == b->u64.hi) && (a->u64.lo == b->u64.lo);
+}
+
 void xsleep(unsigned int seconds);
 
 #ifdef _WIN32
