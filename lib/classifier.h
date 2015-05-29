@@ -126,9 +126,12 @@
  * cls_subtable", with the other almost-identical rules chained off a linked
  * list inside that highest-priority rule.
  *
+ * The following sub-sections describe various optimizations over this simple
+ * approach.
+ *
  *
  * Staged Lookup (Wildcard Optimization)
- * =====================================
+ * -------------------------------------
  *
  * Subtable lookup is performed in ranges defined for struct flow, starting
  * from metadata (registers, in_port, etc.), then L2 header, L3, and finally
@@ -141,7 +144,7 @@
  *
  *
  * Prefix Tracking (Wildcard Optimization)
- * =======================================
+ * ---------------------------------------
  *
  * Classifier uses prefix trees ("tries") for tracking the used
  * address space, enabling skipping classifier tables containing
@@ -171,7 +174,7 @@
  *
  *
  * Partitioning (Lookup Time and Wildcard Optimization)
- * ====================================================
+ * ----------------------------------------------------
  *
  * Suppose that a given classifier is being used to handle multiple stages in a
  * pipeline using "resubmit", with metadata (that is, the OpenFlow 1.1+ field
@@ -205,6 +208,41 @@
  *
  * Partitioning saves lookup time by reducing the number of subtable lookups.
  * Each eliminated subtable lookup also reduces the amount of un-wildcarding.
+ *
+ *
+ * Tentative Modifications
+ * =======================
+ *
+ * When a new rule is added to a classifier, it can optionally be "invisible".
+ * That means that lookups won't find the rule, although iterations through
+ * the classifier will see it.
+ *
+ * Similarly, deletions from a classifier can be "tentative", by setting
+ * 'to_be_removed' to true within the rule.  A rule that is tentatively deleted
+ * will not appear in iterations, although it will still be found by lookups.
+ *
+ * Classifiers can hold duplicate rules (rules with the same match criteria and
+ * priority) when tentative modifications are involved: one (or more) identical
+ * tentatively deleted rules can coexist in a classifier with at most one
+ * identical invisible rule.
+ *
+ * The classifier supports tentative modifications for two reasons:
+ *
+ *     1. Performance: Adding (or deleting) a rule can, in pathological cases,
+ *        have a cost proportional to the number of rules already in the
+ *        classifier.  When multiple rules are being added (or deleted) in one
+ *        go, though, this cost can be paid just once, not once per addition
+ *        (or deletion), as long as it is OK for any new rules to be invisible
+ *        until the batch change is complete.
+ *
+ *     2. Staging additions and deletions: Invisibility allows a rule to be
+ *        added tentatively, to possibly be modified or removed before it
+ *        becomes visible.  Tentatively deletion allows a rule to be scheduled
+ *        for deletion before it is certain that the deletion is desirable.
+ *
+ * To use deferred publication, first call classifier_defer().  Then, modify
+ * the classifier via additions and deletions.  Call cls_rule_make_visible() on
+ * each new rule at an appropriate time.  Finally, call classifier_publish().
  *
  *
  * Thread-safety
@@ -265,6 +303,13 @@ struct cls_conjunction {
 struct cls_rule {
     struct rculist node;         /* In struct cls_subtable 'rules_list'. */
     int priority;                /* Larger numbers are higher priorities. */
+    bool to_be_removed;          /* Rule will be deleted.
+                                  * This is the only field that may be
+                                  * modified after the rule has been added to
+                                  * a classifier.  Modifications are to be
+                                  * done only under same locking as all other
+                                  * classifier modifications.  This field may
+                                  * not be examined by lookups. */
     struct cls_match *cls_match; /* NULL if not in a classifier. */
     struct minimatch match;      /* Matching rule. */
 };
