@@ -505,7 +505,6 @@ OvsCreateNewNBLsFromMultipleNBs(POVS_SWITCH_CONTEXT switchContext,
     PNET_BUFFER_LIST newNbls = NULL;
     PNET_BUFFER_LIST lastNbl = NULL;
     PNET_BUFFER_LIST nbl = NULL;
-    POVS_BUFFER_CONTEXT bufContext = NULL;
     BOOLEAN error = TRUE;
 
     do {
