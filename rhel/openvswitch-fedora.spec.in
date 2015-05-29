@@ -26,6 +26,10 @@ Source: openvswitch-%{version}.tar.gz
 #Source1: openvswitch-init
 Buildroot: /tmp/openvswitch-fedora-rpm
 
+BuildRequires: autoconf
+BuildRequires: systemd-units openssl openssl-devel
+BuildRequires: python python-twisted-core python-zope-interface PyQt4
+BuildRequires: groff graphviz
 # make check dependencies
 BuildRequires: procps-ng
 
