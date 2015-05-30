@@ -5460,7 +5460,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 ovs-appctl revalidator/wait
 AT_CHECK([ovs-appctl dpif/dump-flows -m br0], [0], [stdout])
 
-UFID=`sed -n 's/\(ufid:[[0-9a-fA-F]]*\).*/\1/p' stdout`
+UFID=`sed -n 's/\(ufid:[[-0-9a-fA-F]]*\).*/\1/p' stdout`
 AT_CHECK([ovs-appctl dpctl/get-flow $UFID], [0], [dnl
 recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
 ])

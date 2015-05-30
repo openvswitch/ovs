@@ -37,6 +37,7 @@
 #include "timeval.h"
 #include "unaligned.h"
 #include "util.h"
+#include "uuid.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_util);
@@ -50,8 +51,6 @@ VLOG_DEFINE_THIS_MODULE(odp_util);
 /* The set of characters that may separate one action or one key attribute
  * from another. */
 static const char *delimiters = ", \t\r\n";
-
-static const char *hex_chars = "0123456789abcdefABCDEF";
 
 struct attr_len_tbl {
     int len;
@@ -2354,24 +2353,12 @@ odp_ufid_from_string(const char *s_, ovs_u128 *ufid)
     const char *s = s_;
 
     if (ovs_scan(s, "ufid:")) {
-        size_t n;
-
         s += 5;
-        if (ovs_scan(s, "0x")) {
-            s += 2;
-        }
 
-        n = strspn(s, hex_chars);
-        if (n != 32) {
+        if (!uuid_from_string_prefix((struct uuid *)ufid, s)) {
             return -EINVAL;
         }
-
-        if (!ovs_scan(s, "%16"SCNx64"%16"SCNx64, &ufid->u64.hi,
-                      &ufid->u64.lo)) {
-            return -EINVAL;
-        }
-        s += n;
-        s += strspn(s, delimiters);
+        s += UUID_LEN;
 
         return s - s_;
     }
@@ -2382,8 +2369,7 @@ odp_ufid_from_string(const char *s_, ovs_u128 *ufid)
 void
 odp_format_ufid(const ovs_u128 *ufid, struct ds *ds)
 {
-    ds_put_format(ds, "ufid:%016"PRIx64"%016"PRIx64, ufid->u64.hi,
-                  ufid->u64.lo);
+    ds_put_format(ds, "ufid:"UUID_FMT, UUID_ARGS((struct uuid *)ufid));
 }
 
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
@@ -3214,15 +3200,13 @@ static int
 parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
-    if (!strncmp(s, "ufid:", 5)) {
-        const char *start = s;
+    ovs_u128 ufid;
+    int len;
 
-        /* Skip UFID. */
-        s += 5;
-        s += strspn(s, hex_chars);
-        s += strspn(s, delimiters);
-
-        return s - start;
+    /* Skip UFID. */
+    len = odp_ufid_from_string(s, &ufid);
+    if (len) {
+        return len;
     }
 
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
