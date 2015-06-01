@@ -2050,13 +2050,12 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
     }
 }
 
-/* Executes the flow modification specified in 'fm'.  Returns 0 on success, an
- * OFPERR_* OpenFlow error code on failure, or OFPROTO_POSTPONE if the
- * operation cannot be initiated now but may be retried later.
+/* Executes the flow modification specified in 'fm'.  Returns 0 on success, or
+ * an OFPERR_* OpenFlow error code on failure.
  *
  * This is a helper function for in-band control and fail-open and the "learn"
  * action. */
-int
+enum ofperr
 ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
     OVS_EXCLUDED(ofproto_mutex)
 {
@@ -2719,7 +2718,7 @@ ofproto_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     if (!rule) {
         cls_rule_destroy(cr);
         VLOG_WARN_RL(&rl, "%s: failed to allocate a rule.", ofproto->name);
-        return ENOMEM;
+        return OFPERR_OFPFMFC_UNKNOWN;
     }
 
     /* Initialize base state. */
@@ -3866,7 +3865,7 @@ collect_rules_strict(struct ofproto *ofproto,
 {
     struct oftable *table;
     size_t n_readonly = 0;
-    int error = 0;
+    enum ofperr error = 0;
 
     rule_collection_init(rules);
 
@@ -4335,9 +4334,8 @@ set_conjunctions(struct rule *rule, const struct cls_conjunction *conjs,
  * in which no matching flow already exists in the flow table.
  *
  * Adds the flow specified by 'ofm', which is followed by 'n_actions'
- * ofp_actions, to the ofproto's flow table.  Returns 0 on success, an OpenFlow
- * error code on failure, or OFPROTO_POSTPONE if the operation cannot be
- * initiated now but may be retried later.
+ * ofp_actions, to the ofproto's flow table.  Returns 0 on success, or an
+ * OpenFlow error code on failure.
  *
  * The caller retains ownership of 'fm->ofpacts'.
  *
@@ -4352,7 +4350,7 @@ add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     struct cls_rule cr;
     struct rule *rule;
     uint8_t table_id;
-    int error = 0;
+    enum ofperr error = 0;
 
     if (!check_table_id(ofproto, fm->table_id)) {
         error = OFPERR_OFPBRC_BAD_TABLE_ID;
@@ -4641,7 +4639,7 @@ modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 {
     struct rule_criteria criteria;
     struct rule_collection rules;
-    int error;
+    enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
@@ -4670,7 +4668,7 @@ modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 {
     struct rule_criteria criteria;
     struct rule_collection rules;
-    int error;
+    enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
@@ -6370,7 +6368,6 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
     return error;
 }
 
-
 static enum ofperr
 handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 {
@@ -6610,7 +6607,8 @@ static void
 handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    int error = handle_openflow__(ofconn, ofp_msg);
+    enum ofperr error = handle_openflow__(ofconn, ofp_msg);
+
     if (error) {
         ofconn_send_error(ofconn, ofp_msg->data, error);
     }
