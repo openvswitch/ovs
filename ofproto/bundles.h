@@ -24,6 +24,8 @@
 #include "connmgr.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
+#include "ofproto-provider.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -31,12 +33,19 @@ extern "C" {
 
 struct ofp_bundle_entry {
     struct ovs_list   node;
-    ovs_be32          xid;   /* For error returns. */
     enum ofptype      type;  /* OFPTYPE_FLOW_MOD or OFPTYPE_PORT_MOD. */
     union {
         struct ofputil_flow_mod fm;   /* 'fm.ofpacts' must be malloced. */
         struct ofputil_port_mod pm;
     };
+
+    /* Used during commit. */
+    struct rule_collection rules;   /* Affected rules. */
+    struct rule *rule;
+    bool modify;
+
+    /* OpenFlow header and some of the message contents for error reporting. */
+    struct ofp_header ofp_msg[DIV_ROUND_UP(64, sizeof(struct ofp_header))];
 };
 
 enum bundle_state {
@@ -55,30 +64,32 @@ struct ofp_bundle {
 };
 
 static inline struct ofp_bundle_entry *ofp_bundle_entry_alloc(
-    enum ofptype type, ovs_be32 xid);
+    enum ofptype type, const struct ofp_header *oh);
 static inline void ofp_bundle_entry_free(struct ofp_bundle_entry *);
 
 enum ofperr ofp_bundle_open(struct ofconn *, uint32_t id, uint16_t flags);
 enum ofperr ofp_bundle_close(struct ofconn *, uint32_t id, uint16_t flags);
-enum ofperr ofp_bundle_commit(struct ofconn *, uint32_t id, uint16_t flags);
 enum ofperr ofp_bundle_discard(struct ofconn *, uint32_t id);
 enum ofperr ofp_bundle_add_message(struct ofconn *, uint32_t id,
                                    uint16_t flags, struct ofp_bundle_entry *);
 
-void ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle);
+void ofp_bundle_remove__(struct ofconn *, struct ofp_bundle *, bool success);
 
 static inline struct ofp_bundle_entry *
-ofp_bundle_entry_alloc(enum ofptype type, ovs_be32 xid)
+ofp_bundle_entry_alloc(enum ofptype type, const struct ofp_header *oh)
 {
     struct ofp_bundle_entry *entry = xmalloc(sizeof *entry);
 
-    entry->xid = xid;
     entry->type = type;
+
+    /* Max 64 bytes for error reporting. */
+    memcpy(entry->ofp_msg, oh, MIN(ntohs(oh->length), sizeof entry->ofp_msg));
 
     return entry;
 }
 
-static inline void ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
+static inline void
+ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
 {
     if (entry) {
         if (entry->type == OFPTYPE_FLOW_MOD) {

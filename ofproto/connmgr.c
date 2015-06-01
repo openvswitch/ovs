@@ -1215,7 +1215,7 @@ bundle_remove_all(struct ofconn *ofconn)
     struct ofp_bundle *b, *next;
 
     HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
-        ofp_bundle_remove__(ofconn, b);
+        ofp_bundle_remove__(ofconn, b, false);
     }
 }
 

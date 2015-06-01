@@ -253,9 +253,6 @@ struct flow_mod_requester {
 };
 
 /* OpenFlow. */
-static enum ofperr add_flow(struct ofproto *, struct ofputil_flow_mod *,
-                            const struct flow_mod_requester *);
-
 static enum ofperr modify_flow_check__(struct ofproto *,
                                        struct ofputil_flow_mod *,
                                        const struct rule *)
@@ -281,6 +278,15 @@ static bool ofproto_group_exists(const struct ofproto *ofproto,
     OVS_EXCLUDED(ofproto->groups_rwlock);
 static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
+static enum ofperr do_bundle_flow_mod_begin(struct ofproto *,
+                                            struct ofputil_flow_mod *,
+                                            struct ofp_bundle_entry *)
+    OVS_REQUIRES(ofproto_mutex);
+static void do_bundle_flow_mod_finish(struct ofproto *,
+                                      struct ofputil_flow_mod *,
+                                      const struct flow_mod_requester *,
+                                      struct ofp_bundle_entry *)
+    OVS_REQUIRES(ofproto_mutex);
 static enum ofperr handle_flow_mod__(struct ofproto *,
                                      struct ofputil_flow_mod *,
                                      const struct flow_mod_requester *)
@@ -4338,6 +4344,17 @@ set_conjunctions(struct rule *rule, const struct cls_conjunction *conjs,
     cls_rule_set_conjunctions(cr, conjs, n_conjs);
 }
 
+/* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
+ * in which no matching flow already exists in the flow table.
+ *
+ * Adds the flow specified by 'fm', to the ofproto's flow table.  Returns 0 on
+ * success, or an OpenFlow error code on failure.
+ *
+ * On successful return the caller must complete the operation either by
+ * calling add_flow_finish(), or add_flow_revert() if the operation needs to
+ * be reverted.
+ *
+ * The caller retains ownership of 'fm->ofpacts'. */
 static enum ofperr
 add_flow_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                struct rule **rulep, bool *modify)
@@ -4388,7 +4405,8 @@ add_flow_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     cls_rule_init(&cr, &fm->match, fm->priority);
 
-    /* Check for the existence of an identical rule. */
+    /* Check for the existence of an identical rule.
+     * This will not return rules earlier marked as 'to_be_removed'. */
     rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
     if (rule) {
         /* Transform "add" into "modify" of an existing identical flow. */
@@ -4450,6 +4468,29 @@ add_flow_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     return 0;
 }
 
+/* Revert the effects of add_flow_begin().
+ * 'new_rule' must be passed in as NULL, if no new rule was allocated and
+ * inserted to the classifier.
+ * Note: evictions cannot be reverted. */
+static void
+add_flow_revert(struct ofproto *ofproto, struct rule *new_rule)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    /* Old rule was not changed yet, only need to revert a new rule. */
+    if (new_rule) {
+        struct oftable *table = &ofproto->tables[new_rule->table_id];
+
+        if (!classifier_remove(&table->cls, &new_rule->cr)) {
+            OVS_NOT_REACHED();
+        }
+        classifier_publish(&table->cls);
+
+        ofproto_rule_remove__(ofproto, new_rule);
+        ofproto->ofproto_class->rule_delete(new_rule);
+        ofproto_rule_unref(new_rule);
+    }
+}
+
 static void
 add_flow_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                 const struct flow_mod_requester *req,
@@ -4488,30 +4529,6 @@ add_flow_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
 
     send_buffered_packet(req, fm->buffer_id, rule);
-}
-
-/* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
- * in which no matching flow already exists in the flow table.
- *
- * Adds the flow specified by 'fm', to the ofproto's flow table.  Returns 0 on
- * success, or an OpenFlow error code on failure.
- *
- * The caller retains ownership of 'fm->ofpacts'. */
-static enum ofperr
-add_flow(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-         const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule *rule;
-    bool modify;
-    enum ofperr error;
-
-    error = add_flow_begin(ofproto, fm, &rule, &modify);
-    if (!error) {
-        add_flow_finish(ofproto, fm, req, rule, modify);
-    }
-
-    return error;
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
@@ -4742,6 +4759,17 @@ modify_flows_begin_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 }
 
 static void
+modify_flows_revert(struct ofproto *ofproto, struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    /* Old rules were not changed yet, only need to revert a new rule. */
+    if (rules->n == 0 && rules->rules[0] != NULL) {
+        add_flow_revert(ofproto, rules->rules[0]);
+    }
+    rule_collection_destroy(rules);
+}
+
+static void
 modify_flows_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                     const struct flow_mod_requester *req,
                     struct rule_collection *rules)
@@ -4754,22 +4782,6 @@ modify_flows_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         add_flow_finish(ofproto, fm, req, rules->rules[0], false);
     }
     rule_collection_destroy(rules);
-}
-
-static enum ofperr
-modify_flows_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_collection rules;
-    enum ofperr error;
-
-    error = modify_flows_begin_loose(ofproto, fm, &rules);
-    if (!error) {
-        modify_flows_finish(ofproto, fm, req, &rules);
-    }
-
-    return error;
 }
 
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
@@ -4799,23 +4811,6 @@ modify_flow_begin_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     }
     return error;
 }
-
-static enum ofperr
-modify_flow_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_collection rules;
-    enum ofperr error;
-
-    error = modify_flow_begin_strict(ofproto, fm, &rules);
-    if (!error) {
-        modify_flows_finish(ofproto, fm, req, &rules);
-    }
-
-    return error;
-}
-
 
 /* OFPFC_DELETE implementation. */
 
@@ -4895,6 +4890,18 @@ delete_flows_begin_loose(struct ofproto *ofproto,
 }
 
 static void
+delete_flows_revert(struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    for (size_t i = 0; i < rules->n; i++) {
+        struct rule *rule = rules->rules[i];
+
+        CONST_CAST(struct cls_rule *, &rule->cr)->to_be_removed = false;
+    }
+    rule_collection_destroy(rules);
+}
+
+static void
 delete_flows_finish(const struct ofputil_flow_mod *fm,
                     const struct flow_mod_requester *req,
                     struct rule_collection *rules)
@@ -4902,23 +4909,6 @@ delete_flows_finish(const struct ofputil_flow_mod *fm,
 {
     delete_flows__(rules, fm->delete_reason, req);
     rule_collection_destroy(rules);
-}
-
-static enum ofperr
-delete_flows_loose(struct ofproto *ofproto,
-                   const struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_collection rules;
-    enum ofperr error;
-
-    error = delete_flows_begin_loose(ofproto, fm, &rules);
-    if (!error) {
-        delete_flows_finish(fm, req, &rules);
-    }
-
-    return error;
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
@@ -4945,22 +4935,6 @@ delete_flow_begin_strict(struct ofproto *ofproto,
 
             CONST_CAST(struct cls_rule *, &rule->cr)->to_be_removed = true;
         }
-    }
-
-    return error;
-}
-
-static enum ofperr
-delete_flow_strict(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
-                   const struct flow_mod_requester *req)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_collection rules;
-    enum ofperr error;
-
-    error = delete_flow_begin_strict(ofproto, fm, &rules);
-    if (!error) {
-        delete_flows_finish(fm, req, &rules);
     }
 
     return error;
@@ -5096,38 +5070,13 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                   const struct flow_mod_requester *req)
     OVS_EXCLUDED(ofproto_mutex)
 {
+    struct ofp_bundle_entry be;
     enum ofperr error;
 
     ovs_mutex_lock(&ofproto_mutex);
-    switch (fm->command) {
-    case OFPFC_ADD:
-        error = add_flow(ofproto, fm, req);
-        break;
-
-    case OFPFC_MODIFY:
-        error = modify_flows_loose(ofproto, fm, req);
-        break;
-
-    case OFPFC_MODIFY_STRICT:
-        error = modify_flow_strict(ofproto, fm, req);
-        break;
-
-    case OFPFC_DELETE:
-        error = delete_flows_loose(ofproto, fm, req);
-        break;
-
-    case OFPFC_DELETE_STRICT:
-        error = delete_flow_strict(ofproto, fm, req);
-        break;
-
-    default:
-        if (fm->command > 0xff) {
-            VLOG_WARN_RL(&rl, "%s: flow_mod has explicit table_id but "
-                         "flow_mod_table_id extension is not enabled",
-                         ofproto->name);
-        }
-        error = OFPERR_OFPFMFC_BAD_COMMAND;
-        break;
+    error = do_bundle_flow_mod_begin(ofproto, fm, &be);
+    if (!error) {
+        do_bundle_flow_mod_finish(ofproto, fm, req, &be);
     }
     ofmonitor_flush(ofproto->connmgr);
     ovs_mutex_unlock(&ofproto_mutex);
@@ -6491,12 +6440,173 @@ handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+do_bundle_flow_mod_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                         struct ofp_bundle_entry *be)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    switch (fm->command) {
+    case OFPFC_ADD:
+        return add_flow_begin(ofproto, fm, &be->rule, &be->modify);
+
+    case OFPFC_MODIFY:
+        return modify_flows_begin_loose(ofproto, fm, &be->rules);
+
+    case OFPFC_MODIFY_STRICT:
+        return modify_flow_begin_strict(ofproto, fm, &be->rules);
+
+    case OFPFC_DELETE:
+        return delete_flows_begin_loose(ofproto, fm, &be->rules);
+
+    case OFPFC_DELETE_STRICT:
+        return delete_flow_begin_strict(ofproto, fm, &be->rules);
+    }
+
+    return OFPERR_OFPFMFC_BAD_COMMAND;
+}
+
+static void
+do_bundle_flow_mod_revert(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                          struct ofp_bundle_entry *be)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    switch (fm->command) {
+    case OFPFC_ADD:
+        add_flow_revert(ofproto, be->modify ? NULL : be->rule);
+        break;
+
+    case OFPFC_MODIFY:
+    case OFPFC_MODIFY_STRICT:
+        modify_flows_revert(ofproto, &be->rules);
+        break;
+
+    case OFPFC_DELETE:
+    case OFPFC_DELETE_STRICT:
+        delete_flows_revert(&be->rules);
+        break;
+
+    default:
+        break;
+    }
+}
+
+static void
+do_bundle_flow_mod_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+                          const struct flow_mod_requester *req,
+                          struct ofp_bundle_entry *be)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    switch (fm->command) {
+    case OFPFC_ADD:
+        add_flow_finish(ofproto, fm, req, be->rule, be->modify);
+        break;
+
+    case OFPFC_MODIFY:
+    case OFPFC_MODIFY_STRICT:
+        modify_flows_finish(ofproto, fm, req, &be->rules);
+        break;
+
+    case OFPFC_DELETE:
+    case OFPFC_DELETE_STRICT:
+        delete_flows_finish(fm, req, &be->rules);
+        break;
+
+    default:
+        break;
+    }
+}
+
+/* Commit phases (all while locking ofproto_mutex):
+ *
+ * 1. Gather resources - do not send any events or notifications.
+ *
+ * add: Check conflicts, check for a displaced flow. If no displaced flow
+ *      exists, add the new flow, but mark it as "invisible".
+ * mod: Collect affected flows, Do not modify yet.
+ * del: Collect affected flows, Do not delete yet.
+ *
+ * 2a. Fail if any errors are found.  After this point no errors are possible.
+ * No visible changes were made, so rollback is minimal (remove added invisible
+ * flows, revert 'to_be_removed' status of flows).
+ *
+ * 2b. Commit the changes
+ *
+ * add: if have displaced flow, modify it, otherwise mark the new flow as
+ *      "visible".
+ * mod: Modify the collected flows.
+ * del: Delete the collected flows.
+ */
+static enum ofperr
+do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ofp_bundle *bundle;
+    struct ofp_bundle_entry *be;
+    enum ofperr error;
+
+    bundle = ofconn_get_bundle(ofconn, id);
+
+    if (!bundle) {
+        return OFPERR_OFPBFC_BAD_ID;
+    }
+    if (bundle->flags != flags) {
+        error = OFPERR_OFPBFC_BAD_FLAGS;
+    } else {
+        error = 0;
+        ovs_mutex_lock(&ofproto_mutex);
+        LIST_FOR_EACH (be, node, &bundle->msg_list) {
+            if (be->type == OFPTYPE_PORT_MOD) {
+                /* Not supported yet. */
+                error = OFPERR_OFPBFC_MSG_FAILED;
+            } else if (be->type == OFPTYPE_FLOW_MOD) {
+                error = do_bundle_flow_mod_begin(ofproto, &be->fm, be);
+            } else {
+                OVS_NOT_REACHED();
+            }
+            if (error) {
+                break;
+            }
+        }
+        if (error) {
+            /* Send error referring to the original message. */
+            if (error) {
+                ofconn_send_error(ofconn, be->ofp_msg, error);
+                error = OFPERR_OFPBFC_MSG_FAILED;
+            }
+
+            /* Revert all previous entires. */
+            LIST_FOR_EACH_REVERSE_CONTINUE(be, node, &bundle->msg_list) {
+                if (be->type == OFPTYPE_FLOW_MOD) {
+                    do_bundle_flow_mod_revert(ofproto, &be->fm, be);
+                }
+            }
+        } else {
+            /* Finish the changes. */
+            LIST_FOR_EACH (be, node, &bundle->msg_list) {
+                if (be->type == OFPTYPE_FLOW_MOD) {
+                    struct flow_mod_requester req = { ofconn, be->ofp_msg };
+
+                    do_bundle_flow_mod_finish(ofproto, &be->fm, &req, be);
+                }
+            }
+        }
+        ofmonitor_flush(ofproto->connmgr);
+        ovs_mutex_unlock(&ofproto_mutex);
+
+        run_rule_executes(ofproto);
+    }
+
+    /* The bundle is discarded regardless the outcome. */
+    ofp_bundle_remove__(ofconn, bundle, !error);
+    return error;
+}
+
+static enum ofperr
 handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    enum ofperr error;
     struct ofputil_bundle_ctrl_msg bctrl;
-    struct ofpbuf *buf;
     struct ofputil_bundle_ctrl_msg reply;
+    struct ofpbuf *buf;
+    enum ofperr error;
 
     error = reject_slave_controller(ofconn);
     if (error) {
@@ -6506,6 +6616,10 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
     error = ofputil_decode_bundle_ctrl(oh, &bctrl);
     if (error) {
         return error;
+    }
+    /* Atomic updates not supported yet. */
+    if (bctrl.flags & OFPBF_ATOMIC) {
+        return OFPERR_OFPBFC_BAD_FLAGS;
     }
     reply.flags = 0;
     reply.bundle_id = bctrl.bundle_id;
@@ -6520,7 +6634,7 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
         reply.type = OFPBCT_CLOSE_REPLY;;
         break;
     case OFPBCT_COMMIT_REQUEST:
-        error = ofp_bundle_commit(ofconn, bctrl.bundle_id, bctrl.flags);
+        error = do_bundle_commit(ofconn, bctrl.bundle_id, bctrl.flags);
         reply.type = OFPBCT_COMMIT_REPLY;
         break;
     case OFPBCT_DISCARD_REQUEST:
@@ -6562,7 +6676,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    bmsg = ofp_bundle_entry_alloc(type, badd.msg->xid);
+    bmsg = ofp_bundle_entry_alloc(type, badd.msg);
 
     if (type == OFPTYPE_PORT_MOD) {
         error = ofputil_decode_port_mod(badd.msg, &bmsg->pm, false);

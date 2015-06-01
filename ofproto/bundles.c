@@ -59,11 +59,16 @@ ofp_bundle_create(uint32_t id, uint16_t flags)
 }
 
 void
-ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle)
+ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle,
+                    bool success)
 {
     struct ofp_bundle_entry *msg;
 
     LIST_FOR_EACH_POP (msg, node, &bundle->msg_list) {
+        if (success && msg->type == OFPTYPE_FLOW_MOD) {
+            /* Tell connmgr about successful flow mods. */
+            ofconn_report_flow_mod(ofconn, msg->fm.command);
+        }
         ofp_bundle_entry_free(msg);
     }
 
@@ -81,7 +86,7 @@ ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags)
 
     if (bundle) {
         VLOG_INFO("Bundle %x already exists.", id);
-        ofp_bundle_remove__(ofconn, bundle);
+        ofp_bundle_remove__(ofconn, bundle, false);
 
         return OFPERR_OFPBFC_BAD_ID;
     }
@@ -107,42 +112,17 @@ ofp_bundle_close(struct ofconn *ofconn, uint32_t id, uint16_t flags)
     }
 
     if (bundle->state == BS_CLOSED) {
-        ofp_bundle_remove__(ofconn, bundle);
+        ofp_bundle_remove__(ofconn, bundle, false);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
     }
 
     if (bundle->flags != flags) {
-        ofp_bundle_remove__(ofconn, bundle);
+        ofp_bundle_remove__(ofconn, bundle, false);
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
     bundle->state = BS_CLOSED;
     return 0;
-}
-
-enum ofperr
-ofp_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
-{
-    struct ofp_bundle *bundle;
-    enum ofperr error = 0;
-    struct ofp_bundle_entry *msg;
-
-    bundle = ofconn_get_bundle(ofconn, id);
-
-    if (!bundle) {
-        return OFPERR_OFPBFC_BAD_ID;
-    }
-    if (bundle->flags != flags) {
-        error = OFPERR_OFPBFC_BAD_FLAGS;
-    } else {
-        LIST_FOR_EACH (msg, node, &bundle->msg_list) {
-            /* XXX: actual commit */
-            error = OFPERR_OFPBFC_MSG_FAILED;
-        }
-    }
-
-    ofp_bundle_remove__(ofconn, bundle);
-    return error;
 }
 
 enum ofperr
@@ -156,7 +136,7 @@ ofp_bundle_discard(struct ofconn *ofconn, uint32_t id)
         return OFPERR_OFPBFC_BAD_ID;
     }
 
-    ofp_bundle_remove__(ofconn, bundle);
+    ofp_bundle_remove__(ofconn, bundle, false);
 
     return 0;
 }
@@ -179,10 +159,10 @@ ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
             return error;
         }
     } else if (bundle->state == BS_CLOSED) {
-        ofp_bundle_remove__(ofconn, bundle);
+        ofp_bundle_remove__(ofconn, bundle, false);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
     } else if (flags != bundle->flags) {
-        ofp_bundle_remove__(ofconn, bundle);
+        ofp_bundle_remove__(ofconn, bundle, false);
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 

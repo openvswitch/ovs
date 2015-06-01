@@ -1795,9 +1795,17 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->command = command & 0xff;
             fm->table_id = command >> 8;
         } else {
+            if (command > 0xff) {
+                VLOG_WARN_RL(&bad_ofmsg_rl, "flow_mod has explicit table_id "
+                             "but flow_mod_table_id extension is not enabled");
+            }
             fm->command = command;
             fm->table_id = 0xff;
         }
+    }
+
+    if (fm->command > OFPFC_DELETE_STRICT) {
+        return OFPERR_OFPFMFC_BAD_COMMAND;
     }
 
     error = ofpacts_pull_openflow_instructions(&b, b.size,
