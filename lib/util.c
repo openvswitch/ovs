@@ -651,11 +651,11 @@ str_to_uint(const char *s, int base, unsigned int *u)
     long long ll;
     bool ok = str_to_llong(s, base, &ll);
     if (!ok || ll < 0 || ll > UINT_MAX) {
-	*u = 0;
-	return false;
+        *u = 0;
+        return false;
     } else {
-	*u = ll;
-	return true;
+        *u = ll;
+        return true;
     }
 }
 
@@ -799,7 +799,7 @@ parse_int_string(const char *s, uint8_t *valuep, int field_width, char **tail)
 
 free:
         free(hexit_str);
-	return err;
+        return err;
     }
 
     errno = 0;
