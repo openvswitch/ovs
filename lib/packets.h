@@ -255,6 +255,13 @@ static inline bool eth_type_mpls(ovs_be16 eth_type)
         eth_type == htons(ETH_TYPE_MPLS_MCAST);
 }
 
+static inline bool eth_type_vlan(ovs_be16 eth_type)
+{
+    return eth_type == htons(ETH_TYPE_VLAN_8021Q) ||
+        eth_type == htons(ETH_TYPE_VLAN_8021AD);
+}
+
+
 /* Minimum value for an Ethernet type.  Values below this are IEEE 802.2 frame
  * lengths. */
 #define ETH_TYPE_MIN           0x600

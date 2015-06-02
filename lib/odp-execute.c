@@ -555,7 +555,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
 
             for (i = 0; i < cnt; i++) {
-                eth_push_vlan(packets[i], htons(ETH_TYPE_VLAN), vlan->vlan_tci);
+                eth_push_vlan(packets[i], vlan->vlan_tpid, vlan->vlan_tci);
             }
             break;
         }

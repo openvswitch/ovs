@@ -192,15 +192,15 @@ eth_push_vlan(struct dp_packet *packet, ovs_be16 tpid, ovs_be16 tci)
 
 /* Removes outermost VLAN header (if any is present) from 'packet'.
  *
- * 'packet->l2_5' should initially point to 'packet''s outer-most MPLS header
- * or may be NULL if there are no MPLS headers. */
+ * 'packet->l2_5' should initially point to 'packet''s outer-most VLAN header
+ * or may be NULL if there are no VLAN headers. */
 void
 eth_pop_vlan(struct dp_packet *packet)
 {
     struct vlan_eth_header *veh = dp_packet_l2(packet);
 
     if (veh && dp_packet_size(packet) >= sizeof *veh
-        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
+        && eth_type_vlan(veh->veth_type)) {
 
         memmove((char *)veh + VLAN_HEADER_LEN, veh, 2 * ETH_ADDR_LEN);
         dp_packet_resize_l2(packet, -VLAN_HEADER_LEN);
@@ -217,7 +217,7 @@ set_ethertype(struct dp_packet *packet, ovs_be16 eth_type)
         return;
     }
 
-    if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
+    if (eth_type_vlan(eh->eth_type)) {
         ovs_be16 *p;
         char *l2_5 = dp_packet_l2_5(packet);
 
