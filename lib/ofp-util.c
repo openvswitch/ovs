@@ -41,6 +41,7 @@
 #include "openflow/netronome-ext.h"
 #include "packets.h"
 #include "random.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "type-props.h"
 #include "openvswitch/vlog.h"
@@ -8759,6 +8760,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_PACKET_OUT:
+    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
 
         /* Not to be bundlable. */
     case OFPTYPE_ECHO_REQUEST:
@@ -8822,6 +8824,8 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_ROLE_STATUS:
+    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
+    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
         break;
     }
 
@@ -8892,4 +8896,140 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     ofpbuf_put(request, msg->msg, ntohs(msg->msg->length));
 
     return request;
+}
+
+static void
+encode_geneve_table_mappings(struct ofpbuf *b, struct ovs_list *mappings)
+{
+    struct ofputil_geneve_map *map;
+
+    LIST_FOR_EACH (map, list_node, mappings) {
+        struct nx_geneve_map *nx_map;
+
+        nx_map = ofpbuf_put_zeros(b, sizeof *nx_map);
+        nx_map->option_class = htons(map->option_class);
+        nx_map->option_type = map->option_type;
+        nx_map->option_len = map->option_len;
+        nx_map->index = htons(map->index);
+    }
+}
+
+struct ofpbuf *
+ofputil_encode_geneve_table_mod(enum ofp_version ofp_version,
+                                struct ofputil_geneve_table_mod *gtm)
+{
+    struct ofpbuf *b;
+    struct nx_geneve_table_mod *nx_gtm;
+
+    b = ofpraw_alloc(OFPRAW_NXT_GENEVE_TABLE_MOD, ofp_version, 0);
+    nx_gtm = ofpbuf_put_zeros(b, sizeof *nx_gtm);
+    nx_gtm->command = htons(gtm->command);
+    encode_geneve_table_mappings(b, &gtm->mappings);
+
+    return b;
+}
+
+static enum ofperr
+decode_geneve_table_mappings(struct ofpbuf *msg, struct ovs_list *mappings)
+{
+    list_init(mappings);
+
+    while (msg->size) {
+        struct nx_geneve_map *nx_map;
+        struct ofputil_geneve_map *map;
+
+        nx_map = ofpbuf_pull(msg, sizeof *nx_map);
+        map = xmalloc(sizeof *map);
+        list_push_back(mappings, &map->list_node);
+
+        map->option_class = ntohs(nx_map->option_class);
+        map->option_type = nx_map->option_type;
+
+        map->option_len = nx_map->option_len;
+        if (map->option_len == 0 || map->option_len % 4 ||
+            map->option_len > GENEVE_MAX_OPT_SIZE) {
+            VLOG_WARN_RL(&bad_ofmsg_rl,
+                         "geneve table option length (%u) is not a valid option size",
+                         map->option_len);
+            ofputil_uninit_geneve_table(mappings);
+            return OFPERR_NXGTMFC_BAD_OPT_LEN;
+        }
+
+        map->index = ntohs(nx_map->index);
+        if (map->index >= TUN_METADATA_NUM_OPTS) {
+            VLOG_WARN_RL(&bad_ofmsg_rl,
+                         "geneve table field index (%u) is too large (max %u)",
+                         map->index, TUN_METADATA_NUM_OPTS - 1);
+            ofputil_uninit_geneve_table(mappings);
+            return OFPERR_NXGTMFC_BAD_FIELD_IDX;
+        }
+    }
+
+    return 0;
+}
+
+enum ofperr
+ofputil_decode_geneve_table_mod(const struct ofp_header *oh,
+                                struct ofputil_geneve_table_mod *gtm)
+{
+    struct ofpbuf msg;
+    struct nx_geneve_table_mod *nx_gtm;
+
+    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&msg);
+
+    nx_gtm = ofpbuf_pull(&msg, sizeof *nx_gtm);
+    gtm->command = ntohs(nx_gtm->command);
+    if (gtm->command > NXGTMC_CLEAR) {
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "geneve table mod command (%u) is out of range",
+                     gtm->command);
+        return OFPERR_NXGTMFC_BAD_COMMAND;
+    }
+
+    return decode_geneve_table_mappings(&msg, &gtm->mappings);
+}
+
+struct ofpbuf *
+ofputil_encode_geneve_table_reply(const struct ofp_header *oh,
+                                  struct ofputil_geneve_table_reply *gtr)
+{
+    struct ofpbuf *b;
+    struct nx_geneve_table_reply *nx_gtr;
+
+    b = ofpraw_alloc_reply(OFPRAW_NXT_GENEVE_TABLE_REPLY, oh, 0);
+    nx_gtr = ofpbuf_put_zeros(b, sizeof *nx_gtr);
+    nx_gtr->max_option_space = htonl(gtr->max_option_space);
+    nx_gtr->max_fields = htons(gtr->max_fields);
+
+    encode_geneve_table_mappings(b, &gtr->mappings);
+
+    return b;
+}
+
+enum ofperr
+ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
+                                  struct ofputil_geneve_table_reply *gtr)
+{
+    struct ofpbuf msg;
+    struct nx_geneve_table_reply *nx_gtr;
+
+    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&msg);
+
+    nx_gtr = ofpbuf_pull(&msg, sizeof *nx_gtr);
+    gtr->max_option_space = ntohl(nx_gtr->max_option_space);
+    gtr->max_fields = ntohs(nx_gtr->max_fields);
+
+    return decode_geneve_table_mappings(&msg, &gtr->mappings);
+}
+
+void
+ofputil_uninit_geneve_table(struct ovs_list *mappings)
+{
+    struct ofputil_geneve_map *map;
+
+    LIST_FOR_EACH_POP (map, list_node, mappings) {
+        free(map);
+    }
 }

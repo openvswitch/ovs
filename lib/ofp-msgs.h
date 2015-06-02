@@ -419,6 +419,15 @@ enum ofpraw {
 
     /* NXT 1.0+ (23): void. */
     OFPRAW_NXT_FLOW_MONITOR_RESUMED,
+
+    /* NXT 1.0+ (24): struct nx_geneve_table_mod, struct nx_geneve_map[]. */
+    OFPRAW_NXT_GENEVE_TABLE_MOD,
+
+    /* NXT 1.0+ (25): void. */
+    OFPRAW_NXT_GENEVE_TABLE_REQUEST,
+
+    /* NXT 1.0+ (26): struct nx_geneve_table_reply, struct nx_geneve_map[]. */
+    OFPRAW_NXT_GENEVE_TABLE_REPLY,
 };
 
 /* Decoding messages into OFPRAW_* values. */
@@ -620,6 +629,9 @@ enum ofptype {
     OFPTYPE_SET_PACKET_IN_FORMAT, /* OFPRAW_NXT_SET_PACKET_IN_FORMAT. */
     OFPTYPE_FLOW_AGE,             /* OFPRAW_NXT_FLOW_AGE. */
     OFPTYPE_SET_CONTROLLER_ID,    /* OFPRAW_NXT_SET_CONTROLLER_ID. */
+    OFPTYPE_NXT_GENEVE_TABLE_MOD, /* OFPRAW_NXT_GENEVE_TABLE_MOD. */
+    OFPTYPE_NXT_GENEVE_TABLE_REQUEST, /* OFPRAW_NXT_GENEVE_TABLE_REQUEST. */
+    OFPTYPE_NXT_GENEVE_TABLE_REPLY, /* OFPRAW_NXT_GENEVE_TABLE_REPLY. */
 
     /* Flow monitor extension. */
     OFPTYPE_FLOW_MONITOR_CANCEL,        /* OFPRAW_NXT_FLOW_MONITOR_CANCEL. */

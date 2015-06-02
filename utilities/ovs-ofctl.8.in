@@ -407,6 +407,43 @@ Remove buckets to an existing group present in the \fIswitch\fR's group table.
 If no \fIcommand_bucket_id\fR is present in the group specification then all
 buckets of the group are removed.
 .
+.SS "OpenFlow Switch Geneve Option Table Commands"
+.
+In order to work with Geneve options, it is necessary to maintain a mapping
+table between an option (defined by <class, type, length>) and an NXM field
+that can be operated on for the purposes of matches, actions, etc. This
+mapping must be explicitly specified by the user through the following
+commands. The format for \fIoptions\fR is given in \fBOption Syntax\fR below.
+
+Note that a given mapping should not be changed while it is in active use by
+a flow. The result of doing so is undefined.
+
+These commands are Nicira extensions to OpenFlow and require Open vSwitch
+2.5 or later.
+
+.IP "\fBadd\-geneve\-map \fIswitch options\fR"
+Add each option entry to \fIswitch\fR's tables. Duplicate fields are
+rejected.
+.
+.IP "\fBdel\-geneve\-map \fIswitch \fR[\fIoptions\fR]"
+Delete each option entry in \fIswitch\fR's tables based on its field index.
+Fields that aren't already mapped will be ignored. If no options are
+specified then the entire table will be cleared.
+.
+.IP "\fBdump\-geneve\-map \fIswitch\fR"
+Show the currently mapped fields in the switch's option table as well
+as switch capabilities.
+.
+.IP "\fBOption Syntax\fR"
+\fB{class=\fIclass\fB,type=\fItype\fB,len=\fIlength\fB}->tun_metadata\fIn\fR
+
+An option can be specified in this form (repeating as necessary and
+separated by commas). For example, the follow is used to map a new option:
+
+.RS
+add-geneve-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0"
+.RE
+.
 .SS "OpenFlow Switch Monitoring Commands"
 .
 .IP "\fBsnoop \fIswitch\fR"

@@ -6909,6 +6909,33 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+handle_geneve_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    struct ofputil_geneve_table_mod gtm;
+    enum ofperr error;
+
+    error = reject_slave_controller(ofconn);
+    if (error) {
+        return error;
+    }
+
+    error = ofputil_decode_geneve_table_mod(oh, &gtm);
+    if (error) {
+        return error;
+    }
+
+    ofputil_uninit_geneve_table(&gtm.mappings);
+    return OFPERR_OFPBRC_BAD_TYPE;
+}
+
+static enum ofperr
+handle_geneve_table_request(struct ofconn *ofconn OVS_UNUSED,
+                            const struct ofp_header *oh OVS_UNUSED)
+{
+    return OFPERR_OFPBRC_BAD_TYPE;
+}
+
+static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     OVS_EXCLUDED(ofproto_mutex)
 {
@@ -7049,6 +7076,12 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_BUNDLE_ADD_MESSAGE:
         return handle_bundle_add(ofconn, oh);
 
+    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
+        return handle_geneve_table_mod(ofconn, oh);
+
+    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
+        return handle_geneve_table_request(ofconn, oh);
+
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
     case OFPTYPE_FEATURES_REPLY:
@@ -7078,6 +7111,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_ROLE_STATUS:
+    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {
             return OFPERR_OFPBRC_BAD_STAT;

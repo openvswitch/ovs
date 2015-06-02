@@ -34,6 +34,7 @@ struct ofputil_flow_stats_request;
 struct ofputil_group_mod;
 struct ofputil_meter_mod;
 struct ofputil_table_mod;
+struct ofputil_geneve_table_mod;
 struct simap;
 enum ofputil_protocol;
 
@@ -82,6 +83,11 @@ char *parse_ofp_group_mod_file(const char *file_name, uint16_t command,
 char *parse_ofp_group_mod_str(struct ofputil_group_mod *, uint16_t command,
                               const char *string,
                               enum ofputil_protocol *usable_protocols)
+    OVS_WARN_UNUSED_RESULT;
+
+char *parse_ofp_geneve_table_mod_str(struct ofputil_geneve_table_mod *,
+                                     uint16_t command, const char *string,
+                                     enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
 char *str_to_u8(const char *str, const char *name, uint8_t *valuep)

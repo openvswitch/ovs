@@ -1584,3 +1584,36 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
     }
     return NULL;
 }
+
+char * OVS_WARN_UNUSED_RESULT
+parse_ofp_geneve_table_mod_str(struct ofputil_geneve_table_mod *gtm,
+                               uint16_t command, const char *s,
+                               enum ofputil_protocol *usable_protocols)
+{
+    *usable_protocols = OFPUTIL_P_NXM_OXM_ANY;
+
+    gtm->command = command;
+    list_init(&gtm->mappings);
+
+    while (*s) {
+        struct ofputil_geneve_map *map = xmalloc(sizeof *map);
+        int n;
+
+        if (*s == ',') {
+            s++;
+        }
+
+        list_push_back(&gtm->mappings, &map->list_node);
+
+        if (!ovs_scan(s, "{class=%"SCNi16",type=%"SCNi8",len=%"SCNi8"}->tun_metadata%"SCNi16"%n",
+                      &map->option_class, &map->option_type, &map->option_len,
+                      &map->index, &n)) {
+            ofputil_uninit_geneve_table(&gtm->mappings);
+            return xstrdup("invalid geneve mapping");
+        }
+
+        s += n;
+    }
+
+    return NULL;
+}
