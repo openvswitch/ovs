@@ -6357,20 +6357,57 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     enum ofperr error;
     struct ofputil_bundle_add_msg badd;
+    struct ofp_bundle_entry *bmsg;
+    enum ofptype type;
 
     error = reject_slave_controller(ofconn);
     if (error) {
         return error;
     }
 
-    error = ofputil_decode_bundle_add(oh, &badd);
+    error = ofputil_decode_bundle_add(oh, &badd, &type);
     if (error) {
         return error;
     }
 
-    return ofp_bundle_add_message(ofconn, &badd);
+    bmsg = ofp_bundle_entry_alloc(type, badd.msg->xid);
+
+    if (type == OFPTYPE_PORT_MOD) {
+        error = ofputil_decode_port_mod(badd.msg, &bmsg->pm, false);
+    } else if (type == OFPTYPE_FLOW_MOD) {
+        struct ofpbuf ofpacts;
+        uint64_t ofpacts_stub[1024 / 8];
+
+        ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+        error = ofputil_decode_flow_mod(&bmsg->fm, badd.msg,
+                                        ofconn_get_protocol(ofconn),
+                                        &ofpacts,
+                                        u16_to_ofp(ofproto->max_ports),
+                                        ofproto->n_tables);
+        /* Move actions to heap. */
+        bmsg->fm.ofpacts = ofpbuf_steal_data(&ofpacts);
+
+        if (!error && bmsg->fm.ofpacts_len) {
+            error = ofproto_check_ofpacts(ofproto, bmsg->fm.ofpacts,
+                                          bmsg->fm.ofpacts_len);
+        }
+    } else {
+        OVS_NOT_REACHED();
+    }
+
+    if (!error) {
+        error = ofp_bundle_add_message(ofconn, badd.bundle_id, badd.flags,
+                                       bmsg);
+    }
+
+    if (error) {
+        ofp_bundle_entry_free(bmsg);
+    }
+
+    return error;
 }
 
 static enum ofperr

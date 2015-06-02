@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2013, 2014 Alexandru Copot <alex.mihai.c@gmail.com>, with support from IXIA.
  * Copyright (c) 2013, 2014 Daniel Baluta <dbaluta@ixiacom.com>
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,27 +21,57 @@
 
 #include <sys/types.h>
 
-#include "ofp-msgs.h"
 #include "connmgr.h"
+#include "list.h"
+#include "ofp-msgs.h"
 #include "ofp-util.h"
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
+struct ofp_bundle_entry {
+    struct ovs_list   node;
+    ovs_be32          xid;   /* For error returns. */
+    enum ofptype      type;  /* OFPTYPE_FLOW_MOD or OFPTYPE_PORT_MOD. */
+    union {
+        struct ofputil_flow_mod fm;   /* 'fm.ofpacts' must be malloced. */
+        struct ofputil_port_mod pm;
+    };
+};
 
-enum ofperr ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags);
+static inline struct ofp_bundle_entry *ofp_bundle_entry_alloc(
+    enum ofptype type, ovs_be32 xid);
+static inline void ofp_bundle_entry_free(struct ofp_bundle_entry *);
 
-enum ofperr ofp_bundle_close(struct ofconn *ofconn, uint32_t id, uint16_t flags);
+enum ofperr ofp_bundle_open(struct ofconn *, uint32_t id, uint16_t flags);
+enum ofperr ofp_bundle_close(struct ofconn *, uint32_t id, uint16_t flags);
+enum ofperr ofp_bundle_commit(struct ofconn *, uint32_t id, uint16_t flags);
+enum ofperr ofp_bundle_discard(struct ofconn *, uint32_t id);
+enum ofperr ofp_bundle_add_message(struct ofconn *, uint32_t id,
+                                   uint16_t flags, struct ofp_bundle_entry *);
+void ofp_bundle_remove_all(struct ofconn *);
+
+static inline struct ofp_bundle_entry *
+ofp_bundle_entry_alloc(enum ofptype type, ovs_be32 xid)
+{
+    struct ofp_bundle_entry *entry = xmalloc(sizeof *entry);
 
-enum ofperr ofp_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags);
+    entry->xid = xid;
+    entry->type = type;
 
-enum ofperr ofp_bundle_discard(struct ofconn *ofconn, uint32_t id);
+    return entry;
+}
 
-enum ofperr ofp_bundle_add_message(struct ofconn *ofconn,
-                                   struct ofputil_bundle_add_msg *badd);
-
-void ofp_bundle_remove_all(struct ofconn *ofconn);
+static inline void ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
+{
+    if (entry) {
+        if (entry->type == OFPTYPE_FLOW_MOD) {
+            free(entry->fm.ofpacts);
+        }
+        free(entry);
+    }
+}
 
 #ifdef  __cplusplus
 }

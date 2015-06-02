@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2657,7 +2657,7 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
     struct ofputil_bundle_add_msg badd;
     char *msg;
 
-    error = ofputil_decode_bundle_add(oh, &badd);
+    error = ofputil_decode_bundle_add(oh, &badd, NULL);
     if (error) {
         ofp_print_error(s, error);
         return;

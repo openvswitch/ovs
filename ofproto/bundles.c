@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013, 2014 Alexandru Copot <alex.mihai.c@gmail.com>, with support from IXIA.
  * Copyright (c) 2013, 2014 Daniel Baluta <dbaluta@ixiacom.com>
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,11 +57,6 @@ struct ofp_bundle {
     struct ovs_list    msg_list;
 };
 
-struct bundle_message {
-    struct ofp_header *msg;
-    struct ovs_list   node;  /* Element in 'struct ofp_bundles's msg_list */
-};
-
 static uint32_t
 bundle_hash(uint32_t id)
 {
@@ -98,20 +93,19 @@ ofp_bundle_create(uint32_t id, uint16_t flags)
 }
 
 static void
-ofp_bundle_remove(struct ofconn *ofconn, struct ofp_bundle *item)
+ofp_bundle_remove(struct ofconn *ofconn, struct ofp_bundle *bundle)
 {
-    struct bundle_message *msg;
+    struct ofp_bundle_entry *msg;
     struct hmap *bundles;
 
-    LIST_FOR_EACH_POP (msg, node, &item->msg_list) {
-        free(msg->msg);
-        free(msg);
+    LIST_FOR_EACH_POP (msg, node, &bundle->msg_list) {
+        ofp_bundle_entry_free(msg);
     }
 
     bundles = ofconn_get_bundles(ofconn);
-    hmap_remove(bundles, &item->node);
+    hmap_remove(bundles, &bundle->node);
 
-    free(item);
+    free(bundle);
 }
 
 void
@@ -187,7 +181,7 @@ ofp_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
     struct hmap *bundles;
     struct ofp_bundle *bundle;
     enum ofperr error = 0;
-    struct bundle_message *msg;
+    struct ofp_bundle_entry *msg;
 
     bundles = ofconn_get_bundles(ofconn);
     bundle = ofp_bundle_find(bundles, id);
@@ -227,31 +221,29 @@ ofp_bundle_discard(struct ofconn *ofconn, uint32_t id)
 }
 
 enum ofperr
-ofp_bundle_add_message(struct ofconn *ofconn, struct ofputil_bundle_add_msg *badd)
+ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
+                       struct ofp_bundle_entry *bmsg)
 {
     struct hmap *bundles;
     struct ofp_bundle *bundle;
-    struct bundle_message *bmsg;
 
     bundles = ofconn_get_bundles(ofconn);
-    bundle = ofp_bundle_find(bundles, badd->bundle_id);
+    bundle = ofp_bundle_find(bundles, id);
 
     if (!bundle) {
-        bundle = ofp_bundle_create(badd->bundle_id, badd->flags);
+        bundle = ofp_bundle_create(id, flags);
         bundle->state = BS_OPEN;
 
         bundles = ofconn_get_bundles(ofconn);
-        hmap_insert(bundles, &bundle->node, bundle_hash(badd->bundle_id));
+        hmap_insert(bundles, &bundle->node, bundle_hash(id));
     } else if (bundle->state == BS_CLOSED) {
         ofp_bundle_remove(ofconn, bundle);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
-    } else if (badd->flags != bundle->flags) {
+    } else if (flags != bundle->flags) {
         ofp_bundle_remove(ofconn, bundle);
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
-    bmsg = xmalloc(sizeof *bmsg);
-    bmsg->msg = xmemdup(badd->msg, ntohs(badd->msg->length));
     list_push_back(&bundle->msg_list, &bmsg->node);
     return 0;
 }

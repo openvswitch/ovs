@@ -8852,7 +8852,8 @@ ofputil_is_bundlable(enum ofptype type)
 
 enum ofperr
 ofputil_decode_bundle_add(const struct ofp_header *oh,
-                          struct ofputil_bundle_add_msg *msg)
+                          struct ofputil_bundle_add_msg *msg,
+                          enum ofptype *type_ptr)
 {
     const struct ofp14_bundle_ctrl_msg *m;
     struct ofpbuf b;
@@ -8879,14 +8880,17 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     }
 
     /* Reject unbundlable messages. */
-    error = ofptype_decode(&type, msg->msg);
+    if (!type_ptr) {
+        type_ptr = &type;
+    }
+    error = ofptype_decode(type_ptr, msg->msg);
     if (error) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPT14_BUNDLE_ADD_MESSAGE contained "
                      "message is unparsable (%s)", ofperr_get_name(error));
         return OFPERR_OFPBFC_MSG_UNSUP; /* 'error' would be confusing. */
     }
 
-    if (!ofputil_is_bundlable(type)) {
+    if (!ofputil_is_bundlable(*type_ptr)) {
         return OFPERR_OFPBFC_MSG_UNSUP;
     }
 

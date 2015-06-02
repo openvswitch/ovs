@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1109,6 +1109,8 @@ struct ofputil_bundle_add_msg {
     const struct ofp_header   *msg;
 };
 
+enum ofptype;
+
 enum ofperr ofputil_decode_bundle_ctrl(const struct ofp_header *,
                                        struct ofputil_bundle_ctrl_msg *);
 
@@ -1119,5 +1121,6 @@ struct ofpbuf *ofputil_encode_bundle_add(enum ofp_version ofp_version,
                                          struct ofputil_bundle_add_msg *msg);
 
 enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
-                                      struct ofputil_bundle_add_msg *);
+                                      struct ofputil_bundle_add_msg *,
+                                      enum ofptype *type);
 #endif /* ofp-util.h */
