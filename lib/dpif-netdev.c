@@ -415,6 +415,8 @@ struct dp_netdev_pmd_thread {
                                     /* threads on same numa node. */
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
+    int tx_qid;                     /* Queue id used by this pmd thread to
+                                     * send packets on all netdevs */
 
     /* Only a pmd thread can write on its own 'cycles' and 'stats'.
      * The main thread keeps 'stats_zero' and 'cycles_zero' as base
@@ -1067,8 +1069,9 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             return ENOENT;
         }
         /* There can only be ovs_numa_get_n_cores() pmd threads,
-         * so creates a txq for each. */
-        error = netdev_set_multiq(netdev, n_cores, dp->n_dpdk_rxqs);
+         * so creates a txq for each, and one extra for the non
+         * pmd threads. */
+        error = netdev_set_multiq(netdev, n_cores + 1, dp->n_dpdk_rxqs);
         if (error && (error != EOPNOTSUPP)) {
             VLOG_ERR("%s, cannot set multiq", devname);
             return errno;
@@ -2402,7 +2405,8 @@ dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
                 }
 
                 /* Sets the new rx queue config.  */
-                err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores(),
+                err = netdev_set_multiq(port->netdev,
+                                        ovs_numa_get_n_cores() + 1,
                                         n_rxqs);
                 if (err && (err != EOPNOTSUPP)) {
                     VLOG_ERR("Failed to set dpdk interface %s rx_queue to:"
@@ -2806,6 +2810,16 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos)
     return next;
 }
 
+static int
+core_id_to_qid(unsigned core_id)
+{
+    if (core_id != NON_PMD_CORE_ID) {
+        return core_id;
+    } else {
+        return ovs_numa_get_n_cores();
+    }
+}
+
 /* Configures the 'pmd' based on the input argument. */
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
@@ -2814,6 +2828,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->dp = dp;
     pmd->index = index;
     pmd->core_id = core_id;
+    pmd->tx_qid = core_id_to_qid(core_id);
     pmd->numa_id = numa_id;
 
     ovs_refcount_init(&pmd->ref_cnt);
@@ -3329,7 +3344,7 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
 }
 
 static void
-dp_netdev_drop_packets(struct dp_packet ** packets, int cnt, bool may_steal)
+dp_netdev_drop_packets(struct dp_packet **packets, int cnt, bool may_steal)
 {
     if (may_steal) {
         int i;
@@ -3387,7 +3402,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(dp, u32_to_odp(nl_attr_get_u32(a)));
         if (OVS_LIKELY(p)) {
-            netdev_send(p->netdev, pmd->core_id, packets, cnt, may_steal);
+            netdev_send(p->netdev, pmd->tx_qid, packets, cnt, may_steal);
             return;
         }
         break;
