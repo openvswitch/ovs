@@ -45,6 +45,14 @@ IP               MAC                 Bridge
 1.1.2.93         f8:bc:12:44:34:b7   br0
 ])
 
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
+genev_sys_6081 (6081) : eth_type(0x0800),ipv4(src=1.1.2.92,proto=17,frag=no),udp(dst=6081)
+gre_sys (3) : eth_type(0x0800),ipv4(src=1.1.2.92,proto=47,frag=no)
+vxlan_sys_4789 (4789) : eth_type(0x0800),ipv4(src=1.1.2.92,proto=17,frag=no),udp(dst=4789)
+vxlan_sys_4789 (4789) : eth_type(0x0800),ipv4(src=1.1.2.93,proto=17,frag=no),udp(dst=4789)
+])
+
 dnl Check VXLAN tunnel pop
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=17,tos=0,ttl=64,frag=no),udp(src=51283,dst=4789)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],

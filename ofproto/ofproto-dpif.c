@@ -1626,6 +1626,7 @@ port_construct(struct ofport *port_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
     const struct netdev *netdev = port->up.netdev;
     char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *dp_port_name;
     struct dpif_port dpif_port;
     int error;
 
@@ -1659,9 +1660,8 @@ port_construct(struct ofport *port_)
         return 0;
     }
 
-    error = dpif_port_query_by_name(ofproto->backer->dpif,
-                                    netdev_vport_get_dpif_port(netdev, namebuf,
-                                                               sizeof namebuf),
+    dp_port_name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+    error = dpif_port_query_by_name(ofproto->backer->dpif, dp_port_name,
                                     &dpif_port);
     if (error) {
         return error;
@@ -1672,7 +1672,7 @@ port_construct(struct ofport *port_)
     if (netdev_get_tunnel_config(netdev)) {
         atomic_count_inc(&ofproto->backer->tnl_count);
         error = tnl_port_add(port, port->up.netdev, port->odp_port,
-                             ovs_native_tunneling_is_on(ofproto), namebuf);
+                             ovs_native_tunneling_is_on(ofproto), dp_port_name);
         if (error) {
             atomic_count_dec(&ofproto->backer->tnl_count);
             dpif_port_destroy(&dpif_port);
@@ -1775,6 +1775,7 @@ port_modified(struct ofport *port_)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *dp_port_name;
     struct netdev *netdev = port->up.netdev;
 
     if (port->bundle && port->bundle->bond) {
@@ -1792,13 +1793,14 @@ port_modified(struct ofport *port_)
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
                                      port->lldp, port->up.pp.hw_addr);
 
-    netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+    dp_port_name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
 
     if (port->is_tunnel) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
         if (tnl_port_reconfigure(port, netdev, port->odp_port,
-                                 ovs_native_tunneling_is_on(ofproto), namebuf)) {
+                                 ovs_native_tunneling_is_on(ofproto),
+                                 dp_port_name)) {
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
         }
     }
