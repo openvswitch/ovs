@@ -72,6 +72,10 @@ main(int argc, char *argv[])
 
     set_program_name(argv[0]);
     retval = dpdk_init(argc,argv);
+    if (retval < 0) {
+        return retval;
+    }
+
     argc -= retval;
     argv += retval;
 
@@ -252,9 +256,18 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nDPDK options:\n"
-           "  --dpdk options            Initialize DPDK datapath.\n"
-           "  --cuse_dev_name BASENAME  override default character device name\n"
-           "                            for use with userspace vHost.\n");
+           "  --dpdk [VHOST] [DPDK]     Initialize DPDK datapath.\n"
+           "  where DPDK are options for initializing DPDK lib and VHOST is\n"
+#ifdef VHOST_CUSE
+           "  option to override default character device name used for\n"
+           "  for use with userspace vHost\n"
+           "    -cuse_dev_name NAME\n"
+#else
+           "  option to override default directory where vhost-user\n"
+           "  sockets are created.\n"
+           "    -vhost_sock_dir DIR\n"
+#endif
+           );
     printf("\nOther options:\n"
            "  --unixctl=SOCKET          override default control socket name\n"
            "  -h, --help                display this help message\n"

@@ -16,7 +16,6 @@
 
 #include <config.h>
 
-#include <stdio.h>
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -26,8 +25,12 @@
 #include <sched.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
+#include "dirs.h"
 #include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "list.h"
@@ -90,8 +93,8 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
-/* Character device cuse_dev_name. */
-static char *cuse_dev_name = NULL;
+char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
+char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
 /*
  * Maximum amount of time in micro seconds to try and enqueue to vhost.
@@ -126,7 +129,7 @@ enum { DRAIN_TSC = 200000ULL };
 
 enum dpdk_dev_type {
     DPDK_DEV_ETH = 0,
-    DPDK_DEV_VHOST = 1
+    DPDK_DEV_VHOST = 1,
 };
 
 static int rte_eal_init_ret = ENODEV;
@@ -220,6 +223,9 @@ struct netdev_dpdk {
 
     /* virtio-net structure for vhost device */
     OVSRCU_TYPE(struct virtio_net *) virtio_dev;
+
+    /* Identifier used to distinguish vhost devices from each other */
+    char vhost_id[PATH_MAX];
 
     /* In dpdk_list. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
@@ -594,21 +600,51 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
 }
 
 static int
-netdev_dpdk_vhost_construct(struct netdev *netdev_)
+vhost_construct_helper(struct netdev *netdev_)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
-    int err;
 
     if (rte_eal_init_ret) {
         return rte_eal_init_ret;
     }
 
-    ovs_mutex_lock(&dpdk_mutex);
-    err = netdev_dpdk_init(netdev_, -1, DPDK_DEV_VHOST);
-    ovs_mutex_unlock(&dpdk_mutex);
-
     rte_spinlock_init(&netdev->vhost_tx_lock);
+    return netdev_dpdk_init(netdev_, -1, DPDK_DEV_VHOST);
+}
 
+static int
+netdev_dpdk_vhost_cuse_construct(struct netdev *netdev_)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    int err;
+
+    ovs_mutex_lock(&dpdk_mutex);
+    strncpy(netdev->vhost_id, netdev->up.name, sizeof(netdev->vhost_id));
+    err = vhost_construct_helper(netdev_);
+    ovs_mutex_unlock(&dpdk_mutex);
+    return err;
+}
+
+static int
+netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    int err;
+
+    ovs_mutex_lock(&dpdk_mutex);
+    /* Take the name of the vhost-user port and append it to the location where
+     * the socket is to be created, then register the socket.
+     */
+    snprintf(netdev->vhost_id, sizeof(netdev->vhost_id), "%s/%s",
+            vhost_sock_dir, netdev_->name);
+    err = rte_vhost_driver_register(netdev->vhost_id);
+    if (err) {
+        VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
+                 netdev->vhost_id);
+    }
+    VLOG_INFO("Socket %s created for vhost-user port %s\n", netdev->vhost_id, netdev_->name);
+    err = vhost_construct_helper(netdev_);
+    ovs_mutex_unlock(&dpdk_mutex);
     return err;
 }
 
@@ -1607,7 +1643,7 @@ new_device(struct virtio_net *dev)
     ovs_mutex_lock(&dpdk_mutex);
     /* Add device to the vhost port with the same name as that passed down. */
     LIST_FOR_EACH(netdev, list_node, &dpdk_list) {
-        if (strncmp(dev->ifname, netdev->up.name, IFNAMSIZ) == 0) {
+        if (strncmp(dev->ifname, netdev->vhost_id, IF_NAME_SZ) == 0) {
             ovs_mutex_lock(&netdev->mutex);
             ovsrcu_set(&netdev->virtio_dev, dev);
             ovs_mutex_unlock(&netdev->mutex);
@@ -1687,7 +1723,7 @@ static const struct virtio_net_device_ops virtio_net_device_ops =
 };
 
 static void *
-start_cuse_session_loop(void *dummy OVS_UNUSED)
+start_vhost_loop(void *dummy OVS_UNUSED)
 {
      pthread_detach(pthread_self());
      /* Put the cuse thread into quiescent state. */
@@ -1699,9 +1735,16 @@ start_cuse_session_loop(void *dummy OVS_UNUSED)
 static int
 dpdk_vhost_class_init(void)
 {
+    rte_vhost_driver_callback_register(&virtio_net_device_ops);
+    ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
+    return 0;
+}
+
+static int
+dpdk_vhost_cuse_class_init(void)
+{
     int err = -1;
 
-    rte_vhost_driver_callback_register(&virtio_net_device_ops);
 
     /* Register CUSE device to handle IOCTLs.
      * Unless otherwise specified on the vswitchd command line, cuse_dev_name
@@ -1714,7 +1757,14 @@ dpdk_vhost_class_init(void)
         return -1;
     }
 
-    ovs_thread_create("cuse_thread", start_cuse_session_loop, NULL);
+    dpdk_vhost_class_init();
+    return 0;
+}
+
+static int
+dpdk_vhost_user_class_init(void)
+{
+    dpdk_vhost_class_init();
     return 0;
 }
 
@@ -1923,6 +1973,33 @@ unlock_dpdk:
     NULL,                       /* rxq_drain */               \
 }
 
+static int
+process_vhost_flags(char *flag, char *default_val, int size,
+                    char **argv, char **new_val)
+{
+    int changed = 0;
+
+    /* Depending on which version of vhost is in use, process the vhost-specific
+     * flag if it is provided on the vswitchd command line, otherwise resort to
+     * a default value.
+     *
+     * For vhost-user: Process "-cuse_dev_name" to set the custom location of
+     * the vhost-user socket(s).
+     * For vhost-cuse: Process "-vhost_sock_dir" to set the custom name of the
+     * vhost-cuse character device.
+     */
+    if (!strcmp(argv[1], flag) && (strlen(argv[2]) <= size)) {
+        changed = 1;
+        *new_val = strdup(argv[2]);
+        VLOG_INFO("User-provided %s in use: %s", flag, *new_val);
+    } else {
+        VLOG_INFO("No %s provided - defaulting to %s", flag, default_val);
+        *new_val = default_val;
+    }
+
+    return changed;
+}
+
 int
 dpdk_init(int argc, char **argv)
 {
@@ -1937,27 +2014,29 @@ dpdk_init(int argc, char **argv)
     argc--;
     argv++;
 
-    /* If the cuse_dev_name parameter has been provided, set 'cuse_dev_name' to
-     * this string if it meets the correct criteria. Otherwise, set it to the
-     * default (vhost-net).
-     */
-    if (!strcmp(argv[1], "--cuse_dev_name") &&
-        (strlen(argv[2]) <= NAME_MAX)) {
+#ifdef VHOST_CUSE
+    if (process_vhost_flags("-cuse_dev_name", strdup("vhost-net"),
+                            PATH_MAX, argv, &cuse_dev_name)) {
+#else
+    if (process_vhost_flags("-vhost_sock_dir", strdup(ovs_rundir()),
+                            NAME_MAX, argv, &vhost_sock_dir)) {
+        struct stat s;
+        int err;
 
-        cuse_dev_name = strdup(argv[2]);
-
-        /* Remove the cuse_dev_name configuration parameters from the argument
+        err = stat(vhost_sock_dir, &s);
+        if (err) {
+            VLOG_ERR("vHostUser socket DIR '%s' does not exist.",
+                     vhost_sock_dir);
+            return err;
+        }
+#endif
+        /* Remove the vhost flag configuration parameters from the argument
          * list, so that the correct elements are passed to the DPDK
          * initialization function
          */
         argc -= 2;
-        argv += 2;    /* Increment by two to bypass the cuse_dev_name arguments */
+        argv += 2;    /* Increment by two to bypass the vhost flag arguments */
         base = 2;
-
-        VLOG_ERR("User-provided cuse_dev_name in use: /dev/%s", cuse_dev_name);
-    } else {
-        cuse_dev_name = "vhost-net";
-        VLOG_INFO("No cuse_dev_name provided - defaulting to /dev/vhost-net");
     }
 
     /* Keep the program name argument as this is needed for call to
@@ -2012,11 +2091,25 @@ static const struct netdev_class dpdk_ring_class =
         netdev_dpdk_get_status,
         netdev_dpdk_rxq_recv);
 
-static const struct netdev_class dpdk_vhost_class =
+static const struct netdev_class dpdk_vhost_cuse_class =
     NETDEV_DPDK_CLASS(
-        "dpdkvhost",
-        dpdk_vhost_class_init,
-        netdev_dpdk_vhost_construct,
+        "dpdkvhostcuse",
+        dpdk_vhost_cuse_class_init,
+        netdev_dpdk_vhost_cuse_construct,
+        netdev_dpdk_vhost_destruct,
+        netdev_dpdk_vhost_set_multiq,
+        netdev_dpdk_vhost_send,
+        netdev_dpdk_vhost_get_carrier,
+        netdev_dpdk_vhost_get_stats,
+        NULL,
+        NULL,
+        netdev_dpdk_vhost_rxq_recv);
+
+const struct netdev_class dpdk_vhost_user_class =
+    NETDEV_DPDK_CLASS(
+        "dpdkvhostuser",
+        dpdk_vhost_user_class_init,
+        netdev_dpdk_vhost_user_construct,
         netdev_dpdk_vhost_destruct,
         netdev_dpdk_vhost_set_multiq,
         netdev_dpdk_vhost_send,
@@ -2039,7 +2132,11 @@ netdev_dpdk_register(void)
         dpdk_common_init();
         netdev_register_provider(&dpdk_class);
         netdev_register_provider(&dpdk_ring_class);
-        netdev_register_provider(&dpdk_vhost_class);
+#ifdef VHOST_CUSE
+        netdev_register_provider(&dpdk_vhost_cuse_class);
+#else
+        netdev_register_provider(&dpdk_vhost_user_class);
+#endif
         ovsthread_once_done(&once);
     }
 }

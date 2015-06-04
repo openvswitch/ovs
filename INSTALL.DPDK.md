@@ -16,7 +16,9 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required DPDK 2.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
+Required: DPDK 2.0
+Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
+on Debian/Ubuntu)
 
 1. Configure build & install DPDK:
   1. Set `$DPDK_DIR`
@@ -32,12 +34,9 @@ Required DPDK 2.0, `fuse`, `fuse-devel` (`libfuse-dev` on Debian/Ubuntu)
      `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
 
      Update `config/common_linuxapp` so that DPDK is built with vhost
-     libraries; currently, OVS only supports vhost-cuse, so DPDK vhost-user
-     libraries should be explicitly turned off (they are enabled by default
-     in DPDK 2.0).
+     libraries.
 
      `CONFIG_RTE_LIBRTE_VHOST=y`
-     `CONFIG_RTE_LIBRTE_VHOST_USER=n`
 
      Then run `make install` to build and install the library.
      For default install without IVSHMEM:
@@ -316,40 +315,164 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-vhost-cuse is only supported at present i.e. not using the standard QEMU
-vhost-user interface. It is intended that vhost-user support will be added
-in future releases when supported in DPDK and that vhost-cuse will eventually
-be deprecated. See [DPDK Docs] for more info on vhost.
+DPDK 2.0 supports two types of vhost:
 
-Prerequisites:
-1.  Insert the Cuse module:
+1. vhost-user
+2. vhost-cuse
 
-      `modprobe cuse`
+Whatever type of vhost is enabled in the DPDK build specified, is the type
+that will be enabled in OVS. By default, vhost-user is enabled in DPDK.
+Therefore, unless vhost-cuse has been enabled in DPDK, vhost-user ports
+will be enabled in OVS.
+Please note that support for vhost-cuse is intended to be deprecated in OVS
+in a future release.
 
-2.  Build and insert the `eventfd_link` module:
+DPDK vhost-user:
+----------------
 
-     `cd $DPDK_DIR/lib/librte_vhost/eventfd_link/`
-     `make`
-     `insmod $DPDK_DIR/lib/librte_vhost/eventfd_link.ko`
+The following sections describe the use of vhost-user 'dpdkvhostuser' ports
+with OVS.
 
-Following the steps above to create a bridge, you can now add DPDK vhost
-as a port to the vswitch.
+DPDK vhost-user Prerequisites:
+-------------------------
 
-`ovs-vsctl add-port br0 dpdkvhost0 -- set Interface dpdkvhost0 type=dpdkvhost`
+1. DPDK 2.0 with vhost support enabled as documented in the "Building and
+   Installing section"
 
-Unlike DPDK ring ports, DPDK vhost ports can have arbitrary names:
+2. QEMU version v2.1.0+
 
-`ovs-vsctl add-port br0 port123ABC -- set Interface port123ABC type=dpdkvhost`
+   QEMU v2.1.0 will suffice, but it is recommended to use v2.2.0 if providing
+   your VM with memory greater than 1GB due to potential issues with memory
+   mapping larger areas.
 
-However, please note that when attaching userspace devices to QEMU, the
-name provided during the add-port operation must match the ifname parameter
-on the QEMU command line.
+Adding DPDK vhost-user ports to the Switch:
+--------------------------------------
 
+Following the steps above to create a bridge, you can now add DPDK vhost-user
+as a port to the vswitch. Unlike DPDK ring ports, DPDK vhost-user ports can
+have arbitrary names.
 
-DPDK vhost VM configuration:
-----------------------------
+  -  For vhost-user, the name of the port type is `dpdkvhostuser`
 
-   vhost ports use a Linux* character device to communicate with QEMU.
+     ```
+     ovs-ofctl add-port br0 vhost-user-1 -- set Interface vhost-user-1
+     type=dpdkvhostuser
+     ```
+
+     This action creates a socket located at
+     `/usr/local/var/run/openvswitch/vhost-user-1`, which you must provide
+     to your VM on the QEMU command line. More instructions on this can be
+     found in the next section "DPDK vhost-user VM configuration"
+     Note: If you wish for the vhost-user sockets to be created in a
+     directory other than `/usr/local/var/run/openvswitch`, you may specify
+     another location on the ovs-vswitchd command line like so:
+
+      `./vswitchd/ovs-vswitchd --dpdk -vhost_sock_dir /my-dir -c 0x1 ...`
+
+DPDK vhost-user VM configuration:
+---------------------------------
+Follow the steps below to attach vhost-user port(s) to a VM.
+
+1. Configure sockets.
+   Pass the following parameters to QEMU to attach a vhost-user device:
+
+   ```
+   -chardev socket,id=char1,path=/usr/local/var/run/openvswitch/vhost-user-1
+   -netdev type=vhost-user,id=mynet1,chardev=char1,vhostforce
+   -device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1
+   ```
+
+   ...where vhost-user-1 is the name of the vhost-user port added
+   to the switch.
+   Repeat the above parameters for multiple devices, changing the
+   chardev path and id as necessary. Note that a separate and different
+   chardev path needs to be specified for each vhost-user device. For
+   example you have a second vhost-user port named 'vhost-user-2', you
+   append your QEMU command line with an additional set of parameters:
+
+   ```
+   -chardev socket,id=char2,path=/usr/local/var/run/openvswitch/vhost-user-2
+   -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce
+   -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2
+   ```
+
+2. Configure huge pages.
+   QEMU must allocate the VM's memory on hugetlbfs. vhost-user ports access
+   a virtio-net device's virtual rings and packet buffers mapping the VM's
+   physical memory on hugetlbfs. To enable vhost-user ports to map the VM's
+   memory into their process address space, pass the following paramters
+   to QEMU:
+
+   ```
+   -object memory-backend-file,id=mem,size=4096M,mem-path=/dev/hugepages,
+   share=on
+   -numa node,memdev=mem -mem-prealloc
+   ```
+
+DPDK vhost-cuse:
+----------------
+
+The following sections describe the use of vhost-cuse 'dpdkvhostcuse' ports
+with OVS.
+
+DPDK vhost-cuse Prerequisites:
+-------------------------
+
+1. DPDK 2.0 with vhost support enabled as documented in the "Building and
+   Installing section"
+   As an additional step, you must enable vhost-cuse in DPDK by setting the
+   following additional flag in `config/common_linuxapp`:
+
+   `CONFIG_RTE_LIBRTE_VHOST_USER=n`
+
+   Following this, rebuild DPDK as per the instructions in the "Building and
+   Installing" section. Finally, rebuild OVS as per step 3 in the "Building
+   and Installing" section - OVS will detect that DPDK has vhost-cuse libraries
+   compiled and in turn will enable support for it in the switch and disable
+   vhost-user support.
+
+2. Insert the Cuse module:
+
+     `modprobe cuse`
+
+3. Build and insert the `eventfd_link` module:
+
+     ```
+     cd $DPDK_DIR/lib/librte_vhost/eventfd_link/
+     make
+     insmod $DPDK_DIR/lib/librte_vhost/eventfd_link.ko
+     ```
+
+4. QEMU version v2.1.0+
+
+   vhost-cuse will work with QEMU v2.1.0 and above, however it is recommended to
+   use v2.2.0 if providing your VM with memory greater than 1GB due to potential
+   issues with memory mapping larger areas.
+   Note: QEMU v1.6.2 will also work, with slightly different command line parameters,
+   which are specified later in this document.
+
+Adding DPDK vhost-cuse ports to the Switch:
+--------------------------------------
+
+Following the steps above to create a bridge, you can now add DPDK vhost-cuse
+as a port to the vswitch. Unlike DPDK ring ports, DPDK vhost-cuse ports can have
+arbitrary names.
+
+  -  For vhost-cuse, the name of the port type is `dpdkvhostcuse`
+
+     ```
+     ovs-ofctl add-port br0 vhost-cuse-1 -- set Interface vhost-cuse-1
+     type=dpdkvhostcuse
+     ```
+
+     When attaching vhost-cuse ports to QEMU, the name provided during the
+     add-port operation must match the ifname parameter on the QEMU command
+     line. More instructions on this can be found in the next section.
+
+DPDK vhost-cuse VM configuration:
+---------------------------------
+
+   vhost-cuse ports use a Linux* character device to communicate with QEMU.
    By default it is set to `/dev/vhost-net`. It is possible to reuse this
    standard device for DPDK vhost, which makes setup a little simpler but it
    is better practice to specify an alternative character device in order to
@@ -415,16 +538,19 @@ DPDK vhost VM configuration:
    QEMU must allocate the VM's memory on hugetlbfs. Vhost ports access a
    virtio-net device's virtual rings and packet buffers mapping the VM's
    physical memory on hugetlbfs. To enable vhost-ports to map the VM's
-   memory into their process address space, pass the following paramters
+   memory into their process address space, pass the following parameters
    to QEMU:
 
      `-object memory-backend-file,id=mem,size=4096M,mem-path=/dev/hugepages,
       share=on -numa node,memdev=mem -mem-prealloc`
 
+   Note: For use with an earlier QEMU version such as v1.6.2, use the
+   following to configure hugepages instead:
 
-DPDK vhost VM configuration with QEMU wrapper:
-----------------------------------------------
+     `-mem-path /dev/hugepages -mem-prealloc`
 
+DPDK vhost-cuse VM configuration with QEMU wrapper:
+---------------------------------------------------
 The QEMU wrapper script automatically detects and calls QEMU with the
 necessary parameters. It performs the following actions:
 
@@ -450,8 +576,8 @@ qemu-wrap.py -cpu host -boot c -hda <disk image> -m 4096 -smp 4
   netdev=net1,mac=00:00:00:00:00:01
 ```
 
-DPDK vhost VM configuration with libvirt:
------------------------------------------
+DPDK vhost-cuse VM configuration with libvirt:
+----------------------------------------------
 
 If you are using libvirt, you must enable libvirt to access the character
 device by adding it to controllers cgroup for libvirtd using the following
@@ -525,7 +651,7 @@ Now you may launch your VM using virt-manager, or like so:
 
     `virsh create my_vhost_vm.xml`
 
-DPDK vhost VM configuration with libvirt and QEMU wrapper:
+DPDK vhost-cuse VM configuration with libvirt and QEMU wrapper:
 ----------------------------------------------------------
 
 To use the qemu-wrapper script in conjuntion with libvirt, follow the
@@ -553,7 +679,7 @@ steps in the previous section before proceeding with the following steps:
   the correct emulator location and set any additional options. If you are
   using a alternative character device name, please set "us_vhost_path" to the
   location of that device. The script will automatically detect and insert
-  the correct "vhostfd" value in the QEMU command line arguements.
+  the correct "vhostfd" value in the QEMU command line arguments.
 
   5. Use virt-manager to launch the VM
 
