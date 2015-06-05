@@ -278,7 +278,7 @@ static bool ofproto_group_exists(const struct ofproto *ofproto,
     OVS_EXCLUDED(ofproto->groups_rwlock);
 static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
-static enum ofperr do_bundle_flow_mod_begin(struct ofproto *,
+static enum ofperr do_bundle_flow_mod_start(struct ofproto *,
                                             struct ofputil_flow_mod *,
                                             struct ofp_bundle_entry *)
     OVS_REQUIRES(ofproto_mutex);
@@ -4357,7 +4357,7 @@ set_conjunctions(struct rule *rule, const struct cls_conjunction *conjs,
  *
  * The caller retains ownership of 'fm->ofpacts'. */
 static enum ofperr
-add_flow_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+add_flow_start(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                struct rule **rulep, bool *modify)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4469,7 +4469,7 @@ add_flow_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     return 0;
 }
 
-/* Revert the effects of add_flow_begin().
+/* Revert the effects of add_flow_start().
  * 'new_rule' must be passed in as NULL, if no new rule was allocated and
  * inserted to the classifier.
  * Note: evictions cannot be reverted. */
@@ -4706,7 +4706,7 @@ modify_flows__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 }
 
 static enum ofperr
-modify_flows_begin__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+modify_flows_start__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                      struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4718,7 +4718,7 @@ modify_flows_begin__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                  || fm->new_cookie == OVS_BE64_MAX)) {
         bool modify;
 
-        error = add_flow_begin(ofproto, fm, &rules->rules[0], &modify);
+        error = add_flow_start(ofproto, fm, &rules->rules[0], &modify);
         if (!error) {
             ovs_assert(!modify);
         }
@@ -4735,7 +4735,7 @@ modify_flows_begin__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
 static enum ofperr
-modify_flows_begin_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+modify_flows_start_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                          struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4750,7 +4750,7 @@ modify_flows_begin_loose(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule_criteria_destroy(&criteria);
 
     if (!error) {
-        error = modify_flows_begin__(ofproto, fm, rules);
+        error = modify_flows_start__(ofproto, fm, rules);
     }
 
     if (error) {
@@ -4788,7 +4788,7 @@ modify_flows_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
  * code on failure. */
 static enum ofperr
-modify_flow_begin_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+modify_flow_start_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                          struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4804,7 +4804,7 @@ modify_flow_begin_strict(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     if (!error) {
         /* collect_rules_strict() can return max 1 rule. */
-        error = modify_flows_begin__(ofproto, fm, rules);
+        error = modify_flows_start__(ofproto, fm, rules);
     }
 
     if (error) {
@@ -4865,7 +4865,7 @@ delete_flows__(const struct rule_collection *rules,
 
 /* Implements OFPFC_DELETE. */
 static enum ofperr
-delete_flows_begin_loose(struct ofproto *ofproto,
+delete_flows_start_loose(struct ofproto *ofproto,
                          const struct ofputil_flow_mod *fm,
                          struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
@@ -4916,7 +4916,7 @@ delete_flows_finish(const struct ofputil_flow_mod *fm,
 
 /* Implements OFPFC_DELETE_STRICT. */
 static enum ofperr
-delete_flow_begin_strict(struct ofproto *ofproto,
+delete_flow_start_strict(struct ofproto *ofproto,
                          const struct ofputil_flow_mod *fm,
                          struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
@@ -5077,7 +5077,7 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     enum ofperr error;
 
     ovs_mutex_lock(&ofproto_mutex);
-    error = do_bundle_flow_mod_begin(ofproto, fm, &be);
+    error = do_bundle_flow_mod_start(ofproto, fm, &be);
     if (!error) {
         do_bundle_flow_mod_finish(ofproto, fm, req, &be);
     }
@@ -6443,25 +6443,25 @@ handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
-do_bundle_flow_mod_begin(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+do_bundle_flow_mod_start(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                          struct ofp_bundle_entry *be)
     OVS_REQUIRES(ofproto_mutex)
 {
     switch (fm->command) {
     case OFPFC_ADD:
-        return add_flow_begin(ofproto, fm, &be->rule, &be->modify);
+        return add_flow_start(ofproto, fm, &be->rule, &be->modify);
 
     case OFPFC_MODIFY:
-        return modify_flows_begin_loose(ofproto, fm, &be->rules);
+        return modify_flows_start_loose(ofproto, fm, &be->rules);
 
     case OFPFC_MODIFY_STRICT:
-        return modify_flow_begin_strict(ofproto, fm, &be->rules);
+        return modify_flow_start_strict(ofproto, fm, &be->rules);
 
     case OFPFC_DELETE:
-        return delete_flows_begin_loose(ofproto, fm, &be->rules);
+        return delete_flows_start_loose(ofproto, fm, &be->rules);
 
     case OFPFC_DELETE_STRICT:
-        return delete_flow_begin_strict(ofproto, fm, &be->rules);
+        return delete_flow_start_strict(ofproto, fm, &be->rules);
     }
 
     return OFPERR_OFPFMFC_BAD_COMMAND;
@@ -6561,7 +6561,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                 /* Not supported yet. */
                 error = OFPERR_OFPBFC_MSG_FAILED;
             } else if (be->type == OFPTYPE_FLOW_MOD) {
-                error = do_bundle_flow_mod_begin(ofproto, &be->fm, be);
+                error = do_bundle_flow_mod_start(ofproto, &be->fm, be);
             } else {
                 OVS_NOT_REACHED();
             }
