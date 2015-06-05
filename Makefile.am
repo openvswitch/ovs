@@ -335,11 +335,13 @@ CLEANFILES += manpage-dep-check
 if VSTUDIO_DDK
 ALL_LOCAL += ovsext_make
 ovsext_make: datapath-windows/ovsext.sln
-	MSBuild.exe datapath-windows/ovsext.sln /target:Build /property:Configuration="$(VSTUDIO_CONFIG)"
+	MSBuild.exe datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8$(VSTUDIO_CONFIG)"
+	MSBuild.exe datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 
 CLEAN_LOCAL += ovsext_clean
 ovsext_clean: datapath-windows/ovsext.sln
-	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="$(VSTUDIO_CONFIG)"
+	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
+	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 endif
 
 dist-hook: $(DIST_HOOKS)
@@ -377,3 +379,4 @@ include tutorial/automake.mk
 include vtep/automake.mk
 include datapath-windows/automake.mk
 include datapath-windows/include/automake.mk
+include windows/automake.mk
