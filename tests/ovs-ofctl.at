@@ -2813,3 +2813,110 @@ AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLO
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ovs-ofctl replace-flows with --bundle])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-appctl vlog/set vconn:dbg])
+
+dnl Add flows to br0 with importance via OF1.4+, using an OF1.4+ bundle. For more details refer "ovs-ofctl rule with importance" test case.
+for i in 1 2 3 4 5 6 7 8; do echo "dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
+AT_CHECK([ovs-ofctl --bundle add-flows br0 add-flows.txt])
+
+dnl Replace some flows in the bridge.
+for i in 1 3 5 7; do echo "dl_vlan=$i,importance=`expr $i + 10`,actions=drop"; done > replace-flows.txt
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 replace-flows.txt])
+
+dnl Dump them and compare the dump flows output against the expected output.
+for i in 1 2 3 4 5 6 7 8; do if [[ `expr $i % 2` -eq 1 ]]; then importance=`expr $i + 10`; else importance=$i; fi; echo " importance=$importance, dl_vlan=$i actions=drop"; done | sort > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort],
+  [0], [expout])
+
+dnl Check logs for OpenFlow trace
+# Prevent race.
+OVS_WAIT_UNTIL([test `grep -- "|vconn|DBG|unix: sent (Success): OFPST_FLOW reply" ovs-vswitchd.log | wc -l` -ge 2])
+# AT_CHECK([sed -n "s/^.*\(|vconn|DBG|.*xid=.*:\).*$/\1/p" ovs-vswitchd.log], [0], [dnl
+AT_CHECK([print_vconn_debug | ofctl_strip], [0], [dnl
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
+ version bitmap: 0x01, 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=OPEN_REQUEST flags=ordered
+vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=OPEN_REPLY flags=0
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=1 importance:1 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=2 importance:2 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=3 importance:3 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=4 importance:4 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=5 importance:5 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=6 importance:6 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=7 importance:7 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=8 importance:8 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REQUEST flags=ordered
+vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REPLY flags=0
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
+ version bitmap: 0x01, 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
+vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
+vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=OPEN_REQUEST flags=ordered
+vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=OPEN_REPLY flags=0
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=1 importance:11 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=3 importance:13 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=5 importance:15 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=ordered
+OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=7 importance:17 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REQUEST flags=ordered
+vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REPLY flags=0
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
+vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
+vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
+ importance=11, dl_vlan=1 actions=drop
+ importance=2, dl_vlan=2 actions=drop
+ importance=13, dl_vlan=3 actions=drop
+ importance=4, dl_vlan=4 actions=drop
+ importance=15, dl_vlan=5 actions=drop
+ importance=6, dl_vlan=6 actions=drop
+ importance=17, dl_vlan=7 actions=drop
+ importance=8, dl_vlan=8 actions=drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

@@ -15,6 +15,16 @@ s/ hard_age=[0-9]*,//
 '
 }
 
+# Filter (multiline) vconn debug messages from ovs-vswitchd.log.
+# Use with ofctl_strip()
+print_vconn_debug () { awk -F\| < ovs-vswitchd.log '
+BEGIN { prt=0 }
+/\|vconn\|DBG\|/ { sub(/[ \t]*$/, ""); print $3 "|" $4 "|" $5; prt=1; next }
+$4 != "" { prt=0; next }
+prt==1 { sub(/[ \t]*$/, ""); print $0 }
+'
+}
+
 # parse_listening_port [SERVER]
 #
 # Parses the TCP or SSL port on which a server is listening from the

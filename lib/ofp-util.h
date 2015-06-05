@@ -1114,6 +1114,8 @@ enum ofptype;
 enum ofperr ofputil_decode_bundle_ctrl(const struct ofp_header *,
                                        struct ofputil_bundle_ctrl_msg *);
 
+struct ofpbuf *ofputil_encode_bundle_ctrl_request(enum ofp_version,
+                                                  struct ofputil_bundle_ctrl_msg *);
 struct ofpbuf *ofputil_encode_bundle_ctrl_reply(const struct ofp_header *,
                                                 struct ofputil_bundle_ctrl_msg *);
 

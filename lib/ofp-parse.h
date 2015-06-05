@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
-                             uint16_t command,
+                             int command,
                              enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
@@ -51,7 +51,7 @@ char *parse_ofp_table_mod(struct ofputil_table_mod *,
                           enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
-char *parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
+char *parse_ofp_flow_mod_file(const char *file_name, int command,
                               struct ofputil_flow_mod **fms, size_t *n_fms,
                               enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
