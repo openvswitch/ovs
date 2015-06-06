@@ -812,7 +812,7 @@ static int add_internal_flows(struct ofproto_dpif *);
 static struct ofproto *
 alloc(void)
 {
-    struct ofproto_dpif *ofproto = xmalloc(sizeof *ofproto);
+    struct ofproto_dpif *ofproto = xzalloc(sizeof *ofproto);
     return &ofproto->up;
 }
 
@@ -1608,7 +1608,7 @@ query_tables(struct ofproto *ofproto,
 static struct ofport *
 port_alloc(void)
 {
-    struct ofport_dpif *port = xmalloc(sizeof *port);
+    struct ofport_dpif *port = xzalloc(sizeof *port);
     return &port->up;
 }
 
@@ -3882,7 +3882,7 @@ static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
 static struct rule *
 rule_alloc(void)
 {
-    struct rule_dpif *rule = xmalloc(sizeof *rule);
+    struct rule_dpif *rule = xzalloc(sizeof *rule);
     return &rule->up;
 }
 
