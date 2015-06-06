@@ -590,7 +590,7 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
     Types:  0xf
-    Capabilities:  0x7
+    Capabilities:  0x3
     all group:
        max_groups=0xffffff00
        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
