@@ -398,7 +398,7 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
     Types:  0xf
-    Capabilities:  0x7
+    Capabilities:  0x3
     All group :
         max_groups = 0xffffff00 actions=0x03ff9801
     Select group :

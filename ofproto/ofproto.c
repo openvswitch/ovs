@@ -537,8 +537,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     hmap_init(&ofproto->groups);
     ovs_mutex_unlock(&ofproto_mutex);
     ofproto->ogf.types = 0xf;
-    ofproto->ogf.capabilities = OFPGFC_CHAINING | OFPGFC_SELECT_LIVENESS |
-                                OFPGFC_SELECT_WEIGHT;
+    ofproto->ogf.capabilities = OFPGFC_SELECT_LIVENESS | OFPGFC_SELECT_WEIGHT;
     ofproto->ogf.max_groups[OFPGT11_ALL] = OFPG_MAX;
     ofproto->ogf.max_groups[OFPGT11_SELECT] = OFPG_MAX;
     ofproto->ogf.max_groups[OFPGT11_INDIRECT] = OFPG_MAX;
