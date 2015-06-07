@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -497,7 +497,6 @@ test_ovs_scan(struct ovs_cmdl_context *ctx OVS_UNUSED)
     long l, l2;
     int i, i2;
 
-    ovs_assert(ovs_scan("", ""));
     ovs_assert(ovs_scan("", " "));
     ovs_assert(ovs_scan(" ", " "));
     ovs_assert(ovs_scan("  ", " "));

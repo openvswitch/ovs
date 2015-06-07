@@ -500,24 +500,13 @@ get_subprogram_name(void)
     return name ? name : "";
 }
 
-/* Sets the formatted value of 'format' as the name of the currently running
- * thread or process.  (This appears in log messages and may also be visible in
- * system process listings and debuggers.) */
+/* Sets 'subprogram_name' as the name of the currently running thread or
+ * process.  (This appears in log messages and may also be visible in system
+ * process listings and debuggers.) */
 void
-set_subprogram_name(const char *format, ...)
+set_subprogram_name(const char *subprogram_name)
 {
-    char *pname;
-
-    if (format) {
-        va_list args;
-
-        va_start(args, format);
-        pname = xvasprintf(format, args);
-        va_end(args);
-    } else {
-        pname = xstrdup(program_name);
-    }
-
+    char *pname = xstrdup(subprogram_name ? subprogram_name : program_name);
     free(subprogram_name_set(pname));
 
 #if HAVE_GLIBC_PTHREAD_SETNAME_NP

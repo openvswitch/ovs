@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -263,7 +263,7 @@ extern "C" {
         ovs_set_program_name(name, OVS_PACKAGE_VERSION)
 
 const char *get_subprogram_name(void);
-void set_subprogram_name(const char *format, ...) OVS_PRINTF_FORMAT(1, 2);
+    void set_subprogram_name(const char *);
 
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 

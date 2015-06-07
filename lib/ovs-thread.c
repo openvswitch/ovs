@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -332,7 +332,9 @@ ovsthread_wrapper(void *aux_)
 
     /* The order of the following calls is important, because
      * ovsrcu_quiesce_end() saves a copy of the thread name. */
-    set_subprogram_name("%s%u", aux.name, id);
+    char *subprogram_name = xasprintf("%s%u", aux.name, id);
+    set_subprogram_name(subprogram_name);
+    free(subprogram_name);
     ovsrcu_quiesce_end();
 
     return aux.start(aux.arg);
