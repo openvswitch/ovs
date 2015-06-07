@@ -3574,6 +3574,7 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
 
+
     /* Clear the metadata and register wildcard masks, because we won't
      * use non-header fields as part of the cache. */
     flow_wildcards_clear_non_packet_fields(wc);
@@ -3591,6 +3592,10 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
     if (is_icmp) {
         wc->masks.tp_src &= htons(UINT8_MAX);
         wc->masks.tp_dst &= htons(UINT8_MAX);
+    }
+    /* VLAN_TCI CFI bit must be matched if any of the TCI is matched. */
+    if (wc->masks.vlan_tci) {
+        wc->masks.vlan_tci |= htons(VLAN_CFI);
     }
 }
 
