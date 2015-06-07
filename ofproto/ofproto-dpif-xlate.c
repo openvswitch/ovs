@@ -3275,6 +3275,10 @@ xlate_actions__(struct xlate_in *xin, struct xlate_out *xout)
         wc->masks.tp_src &= htons(UINT8_MAX);
         wc->masks.tp_dst &= htons(UINT8_MAX);
     }
+    /* VLAN_TCI CFI bit must be matched if any of the TCI is matched. */
+    if (wc->masks.vlan_tci) {
+        wc->masks.vlan_tci |= htons(VLAN_CFI);
+    }
 
 out:
     rule_actions_unref(actions);
