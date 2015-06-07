@@ -6088,8 +6088,8 @@ done
 sleep 1
 dnl The original flow is missing due to a revalidation.
 AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
+recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
+recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
