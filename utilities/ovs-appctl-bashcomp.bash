@@ -598,9 +598,6 @@ _ovs_command_complete() {
   return 0
 }
 
-# Needed for the sorting of completions in display.
-export LC_ALL=C
-
 # Debug mode.
 if [ "$1" = "debug" ]; then
     shift
