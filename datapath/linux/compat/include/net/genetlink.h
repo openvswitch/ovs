@@ -17,7 +17,7 @@
 #define portid pid
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#ifndef HAVE_GENL_NOTIFY_TAKES_FAMILY
 struct rpl_genl_family {
 	struct genl_family	compat_family;
 	unsigned int            id;

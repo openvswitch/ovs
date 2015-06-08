@@ -1,7 +1,7 @@
 #include <net/genetlink.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
+#ifndef HAVE_GENL_NOTIFY_TAKES_FAMILY
 
 #undef genl_notify
 

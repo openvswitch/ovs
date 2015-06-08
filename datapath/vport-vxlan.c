@@ -146,8 +146,6 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 	__be16 src_port;
 	__be32 saddr;
 	__be16 df;
-	int port_min;
-	int port_max;
 	int err;
 
 	if (unlikely(!OVS_CB(skb)->tun_key)) {
@@ -173,8 +171,7 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 
 	skb->local_df = 1;
 
-	inet_get_local_port_range(net, &port_min, &port_max);
-	src_port = vxlan_src_port(port_min, port_max, skb);
+	src_port = udp_flow_src_port(net, skb, 0, 0, true);
 
 	err = vxlan_xmit_skb(vxlan_port->vs, rt, skb,
 			     saddr, OVS_CB(skb)->tun_key->ipv4_dst,

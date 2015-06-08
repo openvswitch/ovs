@@ -212,6 +212,37 @@ AC_DEFUN([OVS_GREP_IFELSE], [
   fi
 ])
 
+dnl OVS_FIND_FIELD_IFELSE(FILE, STRUCTURE, REGEX, [IF-MATCH], [IF-NO-MATCH])
+dnl
+dnl Looks for STRUCTURE in FILE. If it is found, greps for REGEX within the
+dnl structure definition. If this is successful, runs IF-MATCH, otherwise
+dnl IF_NO_MATCH. If IF-MATCH is empty then it defines to
+dnl OVS_DEFINE(HAVE_<STRUCTURE>_WITH_<REGEX>), with <STRUCTURE> and <REGEX>
+dnl translated to uppercase.
+AC_DEFUN([OVS_FIND_FIELD_IFELSE], [
+  AC_MSG_CHECKING([whether $2 has member $3 in $1])
+  if test -f $1; then
+    awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3'
+    status=$?
+    case $status in
+      0)
+        AC_MSG_RESULT([yes])
+        m4_if([$4], [], [OVS_DEFINE([HAVE_]m4_toupper([$2])[_WITH_]m4_toupper([$3]))], [$4])
+        ;;
+      1)
+        AC_MSG_RESULT([no])
+        $5
+        ;;
+      *)
+        AC_MSG_ERROR([grep exited with status $status])
+        ;;
+    esac
+  else
+    AC_MSG_RESULT([file not found])
+    $5
+  fi
+])
+
 dnl OVS_DEFINE(NAME)
 dnl
 dnl Defines NAME to 1 in kcompat.h.
@@ -316,10 +347,19 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [parallel_ops])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genlmsg_new_unicast])
+  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_notify.*genl_family],
+                  [OVS_DEFINE([HAVE_GENL_NOTIFY_TAKES_FAMILY])])
+
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h],
+                        [genl_multicast_group], [id])
+
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_cisco_register])
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_handle_offloads])
   OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h], [iptunnel_xmit.*net],
                   [OVS_DEFINE([HAVE_IPTUNNEL_XMIT_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h], [iptunnel_xmit.*sock],
+                  [OVS_DEFINE([HAVE_IPTUNNEL_XMIT_SOCK])])
+
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6.h], [IP6_FH_F_SKIP_RH])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be16])
@@ -327,6 +367,12 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be64])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_find_nested])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [vxlan_xmit_skb])
+  OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [vxlan_xmit_skb.*net],
+                  [OVS_DEFINE([HAVE_VXLAN_XMIT_SKB_NET])])
+
+  OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_flow_src_port],
+                  [OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [inet_get_local_port_range(net],
+                                   [OVS_DEFINE([HAVE_UDP_FLOW_SRC_PORT])])])
 
   OVS_GREP_IFELSE([$KSRC/include/net/sctp/checksum.h], [sctp_compute_cksum])
 

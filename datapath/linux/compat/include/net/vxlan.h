@@ -19,11 +19,11 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
 		kfree_skb(skb);
 		return -ENOSYS;
 	}
-#ifndef HAVE_IPTUNNEL_XMIT_NET
-	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
+#ifdef HAVE_VXLAN_XMIT_SKB_NET
+	return vxlan_xmit_skb(NULL, vs, rt, skb, src, dst, tos, ttl, df,
 			      src_port, dst_port, vni);
 #else
-	return vxlan_xmit_skb(NULL, vs, rt, skb, src, dst, tos, ttl, df,
+	return vxlan_xmit_skb(vs, rt, skb, src, dst, tos, ttl, df,
 			      src_port, dst_port, vni);
 #endif
 }

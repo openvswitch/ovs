@@ -21,7 +21,11 @@ static inline int rpl_iptunnel_xmit(struct rtable *rt,
 #ifdef HAVE_IPTUNNEL_XMIT_NET
 	return iptunnel_xmit(NULL, rt, skb, src, dst, proto, tos, ttl, df);
 #else
+#ifdef HAVE_IPTUNNEL_XMIT_SOCK
+	return iptunnel_xmit(NULL, rt, skb, src, dst, proto, tos, ttl, df);
+#else
 	return iptunnel_xmit(rt, skb, src, dst, proto, tos, ttl, df, xnet);
+#endif
 #endif
 }
 #define iptunnel_xmit rpl_iptunnel_xmit
