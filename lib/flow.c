@@ -89,9 +89,9 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
  * must contain at least 'size' bytes of data.  Returns the first byte of data
  * removed. */
 static inline const void *
-data_pull(void **datap, size_t *sizep, size_t size)
+data_pull(const void **datap, size_t *sizep, size_t size)
 {
-    char *data = (char *)*datap;
+    const char *data = *datap;
     *datap = data + size;
     *sizep -= size;
     return data;
@@ -101,7 +101,7 @@ data_pull(void **datap, size_t *sizep, size_t size)
  * the head end of '*datap' and returns the first byte removed.  Otherwise,
  * returns a null pointer without modifying '*datap'. */
 static inline const void *
-data_try_pull(void **datap, size_t *sizep, size_t size)
+data_try_pull(const void **datap, size_t *sizep, size_t size)
 {
     return OVS_LIKELY(*sizep >= size) ? data_pull(datap, sizep, size) : NULL;
 }
@@ -261,7 +261,7 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 /* Pulls the MPLS headers at '*datap' and returns the count of them. */
 static inline int
-parse_mpls(void **datap, size_t *sizep)
+parse_mpls(const void **datap, size_t *sizep)
 {
     const struct mpls_hdr *mh;
     int count = 0;
@@ -276,7 +276,7 @@ parse_mpls(void **datap, size_t *sizep)
 }
 
 static inline ovs_be16
-parse_vlan(void **datap, size_t *sizep)
+parse_vlan(const void **datap, size_t *sizep)
 {
     const struct eth_header *eth = *datap;
 
@@ -298,7 +298,7 @@ parse_vlan(void **datap, size_t *sizep)
 }
 
 static inline ovs_be16
-parse_ethertype(void **datap, size_t *sizep)
+parse_ethertype(const void **datap, size_t *sizep)
 {
     const struct llc_snap_header *llc;
     ovs_be16 proto;
@@ -331,7 +331,7 @@ parse_ethertype(void **datap, size_t *sizep)
 }
 
 static inline bool
-parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
+parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
              const struct in6_addr **nd_target,
              uint8_t arp_buf[2][ETH_ADDR_LEN])
 {
@@ -423,11 +423,11 @@ void
 miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 {
     const struct pkt_metadata *md = &packet->md;
-    void *data = dp_packet_data(packet);
+    const void *data = dp_packet_data(packet);
     size_t size = dp_packet_size(packet);
     uint64_t *values = miniflow_values(dst);
     struct mf_ctx mf = { 0, values, values + FLOW_U64S };
-    char *l2;
+    const char *l2;
     ovs_be16 dl_type;
     uint8_t nw_frag, nw_tos, nw_ttl, nw_proto;
 
