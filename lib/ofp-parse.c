@@ -353,7 +353,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                 if (fm->table_id != 0xff) {
                     *usable_protocols &= OFPUTIL_P_TID;
                 }
-            } else if (!strcmp(name, "out_port")) {
+            } else if (fields & F_OUT_PORT && !strcmp(name, "out_port")) {
                 if (!ofputil_port_from_string(value, &fm->out_port)) {
                     error = xasprintf("%s is not a valid OpenFlow port",
                                       value);
