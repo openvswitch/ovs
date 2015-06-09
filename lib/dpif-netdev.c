@@ -2678,6 +2678,11 @@ reload:
     emc_cache_init(&pmd->flow_cache);
     poll_cnt = pmd_load_queues(pmd, &poll_list, poll_cnt);
 
+    /* List port/core affinity */
+    for (i = 0; i < poll_cnt; i++) {
+       VLOG_INFO("Core %d processing port \'%s\'\n", pmd->core_id, netdev_get_name(poll_list[i].port->netdev));
+    }
+
     /* Signal here to make sure the pmd finishes
      * reloading the updated configuration. */
     dp_netdev_pmd_reload_done(pmd);
