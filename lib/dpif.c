@@ -46,6 +46,7 @@
 #include "tnl-arp-cache.h"
 #include "tnl-ports.h"
 #include "util.h"
+#include "uuid.h"
 #include "valgrind.h"
 #include "openvswitch/vlog.h"
 
@@ -852,6 +853,7 @@ dpif_flow_hash(const struct dpif *dpif OVS_UNUSED,
         ovsthread_once_done(&once);
     }
     hash_bytes128(key, key_len, secret, hash);
+    uuid_set_bits_v4((struct uuid *)hash);
 }
 
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a

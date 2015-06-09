@@ -78,5 +78,6 @@ bool uuid_is_zero(const struct uuid *);
 int uuid_compare_3way(const struct uuid *, const struct uuid *);
 bool uuid_from_string(struct uuid *, const char *);
 bool uuid_from_string_prefix(struct uuid *, const char *);
+void uuid_set_bits_v4(struct uuid *);
 
 #endif /* uuid.h */

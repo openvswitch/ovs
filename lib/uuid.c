@@ -98,6 +98,12 @@ uuid_generate(struct uuid *uuid)
     /* AES output is exactly 16 bytes, so we encrypt directly into 'uuid'. */
     aes128_encrypt(&key, copy, uuid);
 
+    uuid_set_bits_v4(uuid);
+}
+
+void
+uuid_set_bits_v4(struct uuid *uuid)
+{
     /* Set bits to indicate a random UUID.  See RFC 4122 section 4.4. */
     uuid->parts[2] &= ~0xc0000000;
     uuid->parts[2] |=  0x80000000;
