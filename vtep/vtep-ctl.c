@@ -798,7 +798,7 @@ del_cached_port(struct vtep_ctl_context *ctx, struct vtep_ctl_port *port)
     char *cache_name = xasprintf("%s+%s", port->ps->name, port->port_cfg->name);
 
     list_remove(&port->ports_node);
-    shash_find_and_delete(&ctx->ports, port->port_cfg->name);
+    shash_find_and_delete(&ctx->ports, cache_name);
     vteprec_physical_port_delete(port->port_cfg);
     free(cache_name);
     free(port);
