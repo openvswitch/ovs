@@ -1520,18 +1520,7 @@ odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
             && ipv6_mask_is_exact((const struct in6_addr *)ipv6_mask->ipv6_dst);
     }
     if (attr == OVS_KEY_ATTR_TUNNEL) {
-        const struct flow_tnl *tun_mask = mask;
-
-        return tun_mask->flags == FLOW_TNL_F_MASK
-            && tun_mask->tun_id == OVS_BE64_MAX
-            && tun_mask->ip_src == OVS_BE32_MAX
-            && tun_mask->ip_dst == OVS_BE32_MAX
-            && tun_mask->ip_tos == UINT8_MAX
-            && tun_mask->ip_ttl == UINT8_MAX
-            && tun_mask->tp_src == OVS_BE16_MAX
-            && tun_mask->tp_dst == OVS_BE16_MAX
-            && tun_mask->gbp_id == OVS_BE16_MAX
-            && tun_mask->gbp_flags == UINT8_MAX;
+        return false;
     }
 
     if (attr == OVS_KEY_ATTR_ARP) {
@@ -1548,16 +1537,12 @@ odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
 static bool
 odp_mask_attr_is_exact(const struct nlattr *ma)
 {
-    struct flow_tnl tun_mask;
     enum ovs_key_attr attr = nl_attr_type(ma);
     const void *mask;
     size_t size;
 
     if (attr == OVS_KEY_ATTR_TUNNEL) {
-        memset(&tun_mask, 0, sizeof tun_mask);
-        odp_tun_key_from_attr(ma, &tun_mask);
-        mask = &tun_mask;
-        size = sizeof tun_mask;
+        return false;
     } else {
         mask = nl_attr_get(ma);
         size = nl_attr_get_size(ma);
