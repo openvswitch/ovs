@@ -2890,14 +2890,12 @@ static int
 scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
 {
     const char *s_base = s;
-    ovs_be16 id, id_mask;
-    uint8_t flags, flags_mask;
+    ovs_be16 id = 0, id_mask = 0;
+    uint8_t flags = 0, flags_mask = 0;
 
     if (!strncmp(s, "id=", 3)) {
         s += 3;
         s += scan_be16(s, &id, mask ? &id_mask : NULL);
-    } else if (mask) {
-        memset(&id_mask, 0, sizeof id_mask);
     }
 
     if (s[0] == ',') {
@@ -2906,8 +2904,6 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
     if (!strncmp(s, "flags=", 6)) {
         s += 6;
         s += scan_u8(s, &flags, mask ? &flags_mask : NULL);
-    } else if (mask) {
-        memset(&flags_mask, 0, sizeof flags_mask);
     }
 
     if (!strncmp(s, "))", 2)) {
