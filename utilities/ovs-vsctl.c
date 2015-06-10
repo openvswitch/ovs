@@ -2544,9 +2544,8 @@ cmd_get_manager(struct vsctl_context *ctx)
 }
 
 static void
-delete_managers(const struct vsctl_context *ctx)
+delete_managers(const struct ovsrec_open_vswitch *ovs)
 {
-    const struct ovsrec_open_vswitch *ovs = ctx->ovs;
     size_t i;
 
     /* Delete Manager rows pointed to by 'manager_options' column. */
@@ -2564,7 +2563,7 @@ cmd_del_manager(struct vsctl_context *ctx)
     const struct ovsrec_open_vswitch *ovs = ctx->ovs;
 
     verify_managers(ovs);
-    delete_managers(ctx);
+    delete_managers(ovs);
 }
 
 static void
@@ -2594,7 +2593,7 @@ cmd_set_manager(struct vsctl_context *ctx)
     const size_t n = ctx->argc - 1;
 
     verify_managers(ctx->ovs);
-    delete_managers(ctx);
+    delete_managers(ctx->ovs);
     insert_managers(ctx, &ctx->argv[1], n);
 }
 
