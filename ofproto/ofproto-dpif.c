@@ -3725,7 +3725,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
     struct rule_dpif *rule;
 
     do {
-        cls_rule = classifier_lookup(cls, flow, wc);
+        cls_rule = classifier_lookup(cls, CLS_MAX_VERSION, flow, wc);
 
         rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
 

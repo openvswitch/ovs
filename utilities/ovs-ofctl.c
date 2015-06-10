@@ -2457,7 +2457,7 @@ fte_insert(struct classifier *cls, const struct match *match,
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
-    cls_rule_init(&fte->rule, match, priority);
+    cls_rule_init(&fte->rule, match, priority, CLS_MIN_VERSION);
     fte->versions[index] = version;
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule, NULL, 0));
@@ -2467,7 +2467,6 @@ fte_insert(struct classifier *cls, const struct match *match,
 
         ovsrcu_postpone(fte_free, old);
     }
-    cls_rule_make_visible(&fte->rule);
 }
 
 /* Reads the flows in 'filename' as flow table entries in 'cls' for the version

@@ -433,7 +433,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         /* This assertion is here to suppress a GCC 4.9 array-bounds warning */
         ovs_assert(cls->n_tries <= CLS_MAX_TRIES);
 
-        cr0 = classifier_lookup(cls, &flow, &wc);
+        cr0 = classifier_lookup(cls, CLS_MAX_VERSION, &flow, &wc);
         cr1 = tcls_lookup(tcls, &flow);
         assert((cr0 == NULL) == (cr1 == NULL));
         if (cr0 != NULL) {
@@ -443,7 +443,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
             assert(cls_rule_equal(cr0, cr1));
             assert(tr0->aux == tr1->aux);
         }
-        cr2 = classifier_lookup(cls, &flow, NULL);
+        cr2 = classifier_lookup(cls, CLS_MAX_VERSION, &flow, NULL);
         assert(cr2 == cr0);
     }
 }
@@ -635,7 +635,7 @@ make_rule(int wc_fields, int priority, int value_pat)
     rule = xzalloc(sizeof *rule);
     cls_rule_init(&rule->cls_rule, &match, wc_fields
                   ? (priority == INT_MIN ? priority + 1 : priority)
-                  : INT_MAX);
+                  : INT_MAX, CLS_MIN_VERSION);
     return rule;
 }
 

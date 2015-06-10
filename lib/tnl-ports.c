@@ -84,7 +84,7 @@ tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
 
     ovs_mutex_lock(&mutex);
     do {
-        cr = classifier_lookup(&cls, &match.flow, NULL);
+        cr = classifier_lookup(&cls, CLS_MAX_VERSION, &match.flow, NULL);
         p = tnl_port_cast(cr);
         /* Try again if the rule was released before we get the reference. */
     } while (p && !ovs_refcount_try_ref_rcu(&p->ref_cnt));
@@ -99,7 +99,7 @@ tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
         match.wc.masks.tp_dst = OVS_BE16_MAX;
         match.wc.masks.nw_src = OVS_BE32_MAX;
 
-        cls_rule_init(&p->cr, &match, 0);   /* Priority == 0. */
+        cls_rule_init(&p->cr, &match, 0, CLS_MIN_VERSION); /* Priority == 0. */
         ovs_refcount_init(&p->ref_cnt);
         ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
 
@@ -130,7 +130,7 @@ tnl_port_map_delete(ovs_be32 ip_dst, ovs_be16 udp_port)
 
     tnl_port_init_flow(&flow, ip_dst, udp_port);
 
-    cr = classifier_lookup(&cls, &flow, NULL);
+    cr = classifier_lookup(&cls, CLS_MAX_VERSION, &flow, NULL);
     tnl_port_unref(cr);
 }
 
@@ -139,7 +139,8 @@ tnl_port_map_delete(ovs_be32 ip_dst, ovs_be16 udp_port)
 odp_port_t
 tnl_port_map_lookup(struct flow *flow, struct flow_wildcards *wc)
 {
-    const struct cls_rule *cr = classifier_lookup(&cls, flow, wc);
+    const struct cls_rule *cr = classifier_lookup(&cls, CLS_MAX_VERSION, flow,
+                                                  wc);
 
     return (cr) ? tnl_port_cast(cr)->portno : ODPP_NONE;
 }

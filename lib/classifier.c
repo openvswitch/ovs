@@ -99,7 +99,7 @@ cls_match_alloc(const struct cls_rule *rule,
     rculist_init(&cls_match->list);
     *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
     *CONST_CAST(int *, &cls_match->priority) = rule->priority;
-    cls_match->visible = false;
+    atomic_init(&cls_match->visibility, 0);   /* Initially invisible. */
     miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
                           &rule->match.flow, count);
     ovsrcu_set_hidden(&cls_match->conj_set,
@@ -115,6 +115,7 @@ static struct cls_subtable *insert_subtable(struct classifier *cls,
 static void destroy_subtable(struct classifier *cls, struct cls_subtable *);
 
 static const struct cls_match *find_match_wc(const struct cls_subtable *,
+                                             long long version,
                                              const struct flow *,
                                              struct trie_ctx *,
                                              unsigned int n_tries,
@@ -139,12 +140,12 @@ next_rule_in_list(const struct cls_match *rule, const struct cls_match *head)
 
 /* Return the next lower-priority rule in the list that is visible.  Multiple
  * identical rules with the same priority may exist transitionally.  In that
- * case the first rule of a given priority has been marked as 'to_be_removed',
- * and the later rules are marked as '!visible'.  This gets a bit complex if
- * there are two rules of the same priority in the list, as in that case the
- * head and tail of the list will have the same priority. */
+ * case the first rule of a given priority has been marked as visible in one
+ * version and the later rules are marked as visible on the other version.
+ * This makes it possible to for the head and tail of the list have the same
+ * priority. */
 static inline const struct cls_match *
-next_visible_rule_in_list(const struct cls_match *rule)
+next_visible_rule_in_list(const struct cls_match *rule, long long version)
 {
     const struct cls_match *next = rule;
 
@@ -154,7 +155,7 @@ next_visible_rule_in_list(const struct cls_match *rule)
             /* We have reached the head of the list, stop. */
             return NULL;
         }
-    } while (!next->visible);
+    } while (!cls_match_visible_in_version(next, version));
 
     return next;
 }
@@ -206,11 +207,14 @@ static bool mask_prefix_bits_set(const struct flow_wildcards *,
 /* cls_rule. */
 
 static inline void
-cls_rule_init__(struct cls_rule *rule, unsigned int priority)
+cls_rule_init__(struct cls_rule *rule, unsigned int priority,
+                long long version)
 {
+    ovs_assert(version > 0);
+
     rculist_init(&rule->node);
-    rule->priority = priority;
-    rule->to_be_removed = false;
+    *CONST_CAST(int *, &rule->priority) = priority;
+    *CONST_CAST(long long *, &rule->version) = version;
     rule->cls_match = NULL;
 }
 
@@ -223,19 +227,21 @@ cls_rule_init__(struct cls_rule *rule, unsigned int priority)
  * Clients should not use priority INT_MIN.  (OpenFlow uses priorities between
  * 0 and UINT16_MAX, inclusive.) */
 void
-cls_rule_init(struct cls_rule *rule, const struct match *match, int priority)
+cls_rule_init(struct cls_rule *rule, const struct match *match, int priority,
+              long long version)
 {
-    cls_rule_init__(rule, priority);
-    minimatch_init(&rule->match, match);
+    cls_rule_init__(rule, priority, version);
+    minimatch_init(CONST_CAST(struct minimatch *, &rule->match), match);
 }
 
 /* Same as cls_rule_init() for initialization from a "struct minimatch". */
 void
 cls_rule_init_from_minimatch(struct cls_rule *rule,
-                             const struct minimatch *match, int priority)
+                             const struct minimatch *match, int priority,
+                             long long version)
 {
-    cls_rule_init__(rule, priority);
-    minimatch_clone(&rule->match, match);
+    cls_rule_init__(rule, priority, version);
+    minimatch_clone(CONST_CAST(struct minimatch *, &rule->match), match);
 }
 
 /* Initializes 'dst' as a copy of 'src'.
@@ -244,20 +250,21 @@ cls_rule_init_from_minimatch(struct cls_rule *rule,
 void
 cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 {
-    cls_rule_init__(dst, src->priority);
-    minimatch_clone(&dst->match, &src->match);
+    cls_rule_init__(dst, src->priority, src->version);
+    minimatch_clone(CONST_CAST(struct minimatch *, &dst->match), &src->match);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.
+ *
  * 'src' must be a cls_rule NOT in a classifier.
  *
  * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
 void
 cls_rule_move(struct cls_rule *dst, struct cls_rule *src)
 {
-    ovs_assert(!src->cls_match);   /* Must not be in a classifier. */
-    cls_rule_init__(dst, src->priority);
-    minimatch_move(&dst->match, &src->match);
+    cls_rule_init__(dst, src->priority, src->version);
+    minimatch_move(CONST_CAST(struct minimatch *, &dst->match),
+                   CONST_CAST(struct minimatch *, &src->match));
 }
 
 /* Frees memory referenced by 'rule'.  Doesn't free 'rule' itself (it's
@@ -275,7 +282,7 @@ cls_rule_destroy(struct cls_rule *rule)
     ovs_assert(rculist_next_protected(&rule->node) == RCULIST_POISON
                || rculist_is_empty(&rule->node));
 
-    minimatch_destroy(&rule->match);
+    minimatch_destroy(CONST_CAST(struct minimatch *, &rule->match));
 }
 
 void
@@ -327,15 +334,53 @@ cls_rule_is_catchall(const struct cls_rule *rule)
     return minimask_is_catchall(&rule->match.mask);
 }
 
-/* Rules inserted during classifier_defer() need to be made visible before
- * calling classifier_publish().
+/* Makes rule invisible after 'version'.  Once that version is made invisible
+ * (by changing the version parameter used in lookups), the rule should be
+ * actually removed via ovsrcu_postpone().
  *
- * 'rule' must be in a classifier. */
-void cls_rule_make_visible(const struct cls_rule *rule)
+ * 'rule_' must be in a classifier. */
+void
+cls_rule_make_invisible_in_version(const struct cls_rule *rule_,
+                                   long long version, long long lookup_version)
 {
-    rule->cls_match->visible = true;
+    struct cls_match *rule = rule_->cls_match;
+
+    /* XXX: Adjust when versioning is actually used. */
+    ovs_assert(version >= rule_->version && version >= lookup_version);
+
+    /* Normally, we call this when deleting a rule that is already visible to
+     * lookups.  However, sometimes a bundle transaction will add a rule and
+     * then delete it before the rule has ever become visible.  If we set such
+     * a rule to become invisible in a future 'version', it would become
+     * visible to all prior versions.  So, in this case we must set the rule
+     * visibility to 0 (== never visible). */
+    if (cls_match_visible_in_version(rule, lookup_version)) {
+        /* Make invisible starting at 'version'. */
+        atomic_store_relaxed(&rule->visibility, -version);
+    } else {
+        /* Rule has not yet been visible to lookups, make invisible in all
+         * version. */
+        atomic_store_relaxed(&rule->visibility, 0);
+    }
 }
 
+/* This undoes the change made by cls_rule_make_invisible_after_version().
+ *
+ * 'rule' must be in a classifier. */
+void
+cls_rule_restore_visibility(const struct cls_rule *rule)
+{
+    atomic_store_relaxed(&rule->cls_match->visibility, rule->version);
+}
+
+/* Return true if 'rule' is visible in 'version'.
+ *
+ * 'rule' must be in a classifier. */
+bool
+cls_rule_visible_in_version(const struct cls_rule *rule, long long version)
+{
+    return cls_match_visible_in_version(rule->cls_match, version);
+}
 
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
@@ -597,7 +642,7 @@ const struct cls_rule *
 classifier_replace(struct classifier *cls, const struct cls_rule *rule,
                    const struct cls_conjunction *conjs, size_t n_conjs)
 {
-    struct cls_match *new = cls_match_alloc(rule, conjs, n_conjs);
+    struct cls_match *new;
     struct cls_subtable *subtable;
     uint32_t ihash[CLS_MAX_INDICES];
     uint8_t prev_be64ofs = 0;
@@ -606,6 +651,11 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     uint32_t basis;
     uint32_t hash;
     int i;
+
+    ovs_assert(rule->version > 0);
+
+    /* 'new' is initially invisible to lookups. */
+    new = cls_match_alloc(rule, conjs, n_conjs);
 
     CONST_CAST(struct cls_rule *, rule)->cls_match = new;
 
@@ -673,12 +723,12 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
         struct cls_match *iter;
 
         /* Scan the list for the insertion point that will keep the list in
-         * order of decreasing priority.
-         * Insert after 'to_be_removed' rules of the same priority. */
+         * order of decreasing priority.  Insert after rules marked invisible
+         * in any version of the same priority. */
         FOR_EACH_RULE_IN_LIST_PROTECTED (iter, head) {
             if (rule->priority > iter->priority
                 || (rule->priority == iter->priority
-                    && !iter->cls_rule->to_be_removed)) {
+                    && !cls_match_is_eventually_invisible(iter))) {
                 break;
             }
         }
@@ -716,8 +766,8 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
                 /* No change in subtable's max priority or max count. */
 
-                /* Make rule visible to lookups? */
-                new->visible = cls->publish;
+                /* Make 'new' visible to lookups in the appropriate version. */
+                cls_match_set_visibility(new, rule->version);
 
                 /* Make rule visible to iterators (immediately). */
                 rculist_replace(CONST_CAST(struct rculist *, &rule->node),
@@ -732,8 +782,8 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
         }
     }
 
-    /* Make rule visible to lookups? */
-    new->visible = cls->publish;
+    /* Make 'new' visible to lookups in the appropriate version. */
+    cls_match_set_visibility(new, rule->version);
 
     /* Make rule visible to iterators (immediately). */
     rculist_push_back(&subtable->rules_list,
@@ -1026,8 +1076,9 @@ free_conjunctive_matches(struct hmap *matches,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static const struct cls_rule *
-classifier_lookup__(const struct classifier *cls, struct flow *flow,
-                    struct flow_wildcards *wc, bool allow_conjunctive_matches)
+classifier_lookup__(const struct classifier *cls, long long version,
+                    struct flow *flow, struct flow_wildcards *wc,
+                    bool allow_conjunctive_matches)
 {
     const struct cls_partition *partition;
     struct trie_ctx trie_ctx[CLS_MAX_TRIES];
@@ -1094,7 +1145,8 @@ classifier_lookup__(const struct classifier *cls, struct flow *flow,
 
         /* Skip subtables with no match, or where the match is lower-priority
          * than some certain match we've already found. */
-        match = find_match_wc(subtable, flow, trie_ctx, cls->n_tries, wc);
+        match = find_match_wc(subtable, version, flow, trie_ctx, cls->n_tries,
+                              wc);
         if (!match || match->priority <= hard_pri) {
             continue;
         }
@@ -1218,7 +1270,7 @@ classifier_lookup__(const struct classifier *cls, struct flow *flow,
                 const struct cls_rule *rule;
 
                 flow->conj_id = id;
-                rule = classifier_lookup__(cls, flow, wc, false);
+                rule = classifier_lookup__(cls, version, flow, wc, false);
                 flow->conj_id = saved_conj_id;
 
                 if (rule) {
@@ -1246,7 +1298,7 @@ classifier_lookup__(const struct classifier *cls, struct flow *flow,
             }
 
             /* Find next-lower-priority flow with identical flow match. */
-            match = next_visible_rule_in_list(soft[i]->match);
+            match = next_visible_rule_in_list(soft[i]->match, version);
             if (match) {
                 soft[i] = ovsrcu_get(struct cls_conjunction_set *,
                                      &match->conj_set);
@@ -1271,9 +1323,10 @@ classifier_lookup__(const struct classifier *cls, struct flow *flow,
     return hard ? hard->cls_rule : NULL;
 }
 
-/* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
- * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
- * of equal priority match 'flow', returns one arbitrarily.
+/* Finds and returns the highest-priority rule in 'cls' that matches 'flow' and
+ * that is visible in 'version'.  Returns a null pointer if no rules in 'cls'
+ * match 'flow'.  If multiple rules of equal priority match 'flow', returns one
+ * arbitrarily.
  *
  * If a rule is found and 'wc' is non-null, bitwise-OR's 'wc' with the
  * set of bits that were significant in the lookup.  At some point
@@ -1283,18 +1336,16 @@ classifier_lookup__(const struct classifier *cls, struct flow *flow,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 const struct cls_rule *
-classifier_lookup(const struct classifier *cls, struct flow *flow,
-                  struct flow_wildcards *wc)
+classifier_lookup(const struct classifier *cls, long long version,
+                  struct flow *flow, struct flow_wildcards *wc)
 {
-    return classifier_lookup__(cls, flow, wc, true);
+    return classifier_lookup__(cls, version, flow, wc, true);
 }
 
 /* Finds and returns a rule in 'cls' with exactly the same priority and
- * matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
- * contain an exact match.
- *
- * Returns the first matching rule that is not 'to_be_removed'.  Only one such
- * rule may exist. */
+ * matching criteria as 'target', and that is visible in 'target->version.
+ * Only one such rule may ever exist.  Returns a null pointer if 'cls' doesn't
+ * contain an exact match. */
 const struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target)
@@ -1318,7 +1369,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
             break; /* Not found. */
         }
         if (rule->priority == target->priority
-            && !rule->cls_rule->to_be_removed) {
+            && cls_match_visible_in_version(rule, target->version)) {
             return rule->cls_rule;
         }
     }
@@ -1326,16 +1377,18 @@ classifier_find_rule_exactly(const struct classifier *cls,
 }
 
 /* Finds and returns a rule in 'cls' with priority 'priority' and exactly the
- * same matching criteria as 'target'.  Returns a null pointer if 'cls' doesn't
- * contain an exact match. */
+ * same matching criteria as 'target', and that is visible in 'version'.
+ * Returns a null pointer if 'cls' doesn't contain an exact match visible in
+ * 'version'. */
 const struct cls_rule *
 classifier_find_match_exactly(const struct classifier *cls,
-                              const struct match *target, int priority)
+                              const struct match *target, int priority,
+                              long long version)
 {
     const struct cls_rule *retval;
     struct cls_rule cr;
 
-    cls_rule_init(&cr, target, priority);
+    cls_rule_init(&cr, target, priority, version);
     retval = classifier_find_rule_exactly(cls, &cr);
     cls_rule_destroy(&cr);
 
@@ -1344,16 +1397,12 @@ classifier_find_match_exactly(const struct classifier *cls,
 
 /* Checks if 'target' would overlap any other rule in 'cls'.  Two rules are
  * considered to overlap if both rules have the same priority and a packet
- * could match both.
+ * could match both, and if both rules are visible in the same version.
  *
  * A trivial example of overlapping rules is two rules matching disjoint sets
  * of fields. E.g., if one rule matches only on port number, while another only
  * on dl_type, any packet from that specific port and with that specific
- * dl_type could match both, if the rules also have the same priority.
- *
- * 'target' is not considered to overlap with a rule that has been marked
- * as 'to_be_removed'.
- */
+ * dl_type could match both, if the rules also have the same priority. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
                          const struct cls_rule *target)
@@ -1371,9 +1420,10 @@ classifier_rule_overlaps(const struct classifier *cls,
 
         RCULIST_FOR_EACH (rule, node, &subtable->rules_list) {
             if (rule->priority == target->priority
-                && !rule->to_be_removed
                 && miniflow_equal_in_minimask(&target->match.flow,
-                                              &rule->match.flow, &mask)) {
+                                              &rule->match.flow, &mask)
+                && cls_match_visible_in_version(rule->cls_match,
+                                                target->version)) {
                 return true;
             }
         }
@@ -1425,16 +1475,17 @@ cls_rule_is_loose_match(const struct cls_rule *rule,
 
 /* Iteration. */
 
+/* Rule may only match a target if it is visible in target's version.  For NULL
+ * target we only return rules that are not invisible in any version. */
 static bool
 rule_matches(const struct cls_rule *rule, const struct cls_rule *target)
 {
-    /* Iterators never see rules that have been marked for removal.
-     * This allows them to be oblivious of duplicate rules. */
-    return (!rule->to_be_removed &&
-            (!target
-             || miniflow_equal_in_minimask(&rule->match.flow,
-                                           &target->match.flow,
-                                           &target->match.mask)));
+    /* Iterators never see duplicate rules with the same priority. */
+    return target
+        ? (miniflow_equal_in_minimask(&rule->match.flow, &target->match.flow,
+                                      &target->match.mask)
+           && cls_match_visible_in_version(rule->cls_match, target->version))
+        : !cls_match_is_eventually_invisible(rule->cls_match);
 }
 
 static const struct cls_rule *
@@ -1457,10 +1508,13 @@ search_subtable(const struct cls_subtable *subtable,
 /* Initializes 'cursor' for iterating through rules in 'cls', and returns the
  * first matching cls_rule via '*pnode', or NULL if there are no matches.
  *
- *     - If 'target' is null, the cursor will visit every rule in 'cls'.
+ *     - If 'target' is null, or if the 'target' is a catchall target and the
+ *       target's version is CLS_NO_VERSION, the cursor will visit every rule
+ *       in 'cls' that is not invisible in any version.
  *
  *     - If 'target' is nonnull, the cursor will visit each 'rule' in 'cls'
- *       such that cls_rule_is_loose_match(rule, target) returns true.
+ *       such that cls_rule_is_loose_match(rule, target) returns true and that
+ *       the rule is visible in 'target->version'.
  *
  * Ignores target->priority. */
 struct cls_cursor
@@ -1470,7 +1524,9 @@ cls_cursor_start(const struct classifier *cls, const struct cls_rule *target)
     struct cls_subtable *subtable;
 
     cursor.cls = cls;
-    cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
+    cursor.target = target && (!cls_rule_is_catchall(target)
+                               || target->version != CLS_MAX_VERSION)
+        ? target : NULL;
     cursor.rule = NULL;
 
     /* Find first rule. */
@@ -1722,8 +1778,8 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
 }
 
 static inline const struct cls_match *
-find_match(const struct cls_subtable *subtable, const struct flow *flow,
-           uint32_t hash)
+find_match(const struct cls_subtable *subtable, long long version,
+           const struct flow *flow, uint32_t hash)
 {
     const struct cls_match *head, *rule;
 
@@ -1733,7 +1789,7 @@ find_match(const struct cls_subtable *subtable, const struct flow *flow,
                                                       flow))) {
             /* Return highest priority rule that is visible. */
             FOR_EACH_RULE_IN_LIST(rule, head) {
-                if (OVS_LIKELY(rule->visible)) {
+                if (OVS_LIKELY(cls_match_visible_in_version(rule, version))) {
                     return rule;
                 }
             }
@@ -1791,9 +1847,9 @@ fill_range_wc(const struct cls_subtable *subtable, struct flow_wildcards *wc,
 }
 
 static const struct cls_match *
-find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
-              struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
-              struct flow_wildcards *wc)
+find_match_wc(const struct cls_subtable *subtable, long long version,
+              const struct flow *flow, struct trie_ctx trie_ctx[CLS_MAX_TRIES],
+              unsigned int n_tries, struct flow_wildcards *wc)
 {
     uint32_t basis = 0, hash;
     const struct cls_match *rule = NULL;
@@ -1801,7 +1857,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
     struct range ofs;
 
     if (OVS_UNLIKELY(!wc)) {
-        return find_match(subtable, flow,
+        return find_match(subtable, version, flow,
                           flow_hash_in_minimask(flow, &subtable->mask, 0));
     }
 
@@ -1842,7 +1898,8 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
                                                   flow, wc)) {
                 /* Return highest priority rule that is visible. */
                 FOR_EACH_RULE_IN_LIST(rule, head) {
-                    if (OVS_LIKELY(rule->visible)) {
+                    if (OVS_LIKELY(cls_match_visible_in_version(rule,
+                                                                version))) {
                         return rule;
                     }
                 }
@@ -1859,7 +1916,7 @@ find_match_wc(const struct cls_subtable *subtable, const struct flow *flow,
     }
     hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
                                        ofs.end, &basis);
-    rule = find_match(subtable, flow, hash);
+    rule = find_match(subtable, version, flow, hash);
     if (!rule && subtable->ports_mask_len) {
         /* Ports are always part of the final range, if any.
          * No match was found for the ports.  Use the ports trie to figure out

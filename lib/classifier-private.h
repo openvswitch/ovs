@@ -79,12 +79,62 @@ struct cls_match {
                                                     * 'indices'. */
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
-    bool visible;
+
+    /* Controls rule's visibility to lookups.
+     *
+     * When 'visibility' is:
+     *
+     * > 0  - rule is visible starting from version 'visibility'
+     * <= 0 - rule is invisible starting from version '-(visibility)'
+     *
+     * The minimum version number used in lookups is 1 (== CLS_NO_VERSION),
+     * which implies that when 'visibility' is:
+     *
+     * 1    - rule is visible in all lookup versions
+     * 0    - rule is invisible in all lookup versions. */
+    atomic_llong visibility;
+
     const struct cls_rule *cls_rule;
     OVSRCU_TYPE(struct cls_conjunction_set *) conj_set;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
     /* 'flow' must be the last field. */
 };
+
+static inline void
+cls_match_set_visibility(struct cls_match *rule, long long version)
+{
+    atomic_store_relaxed(&rule->visibility, version);
+}
+
+static inline bool
+cls_match_visible_in_version(const struct cls_match *rule, long long version)
+{
+    long long visibility;
+
+    /* C11 does not want to access an atomic via a const object pointer. */
+    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->visibility,
+                        &visibility);
+
+    if (OVS_LIKELY(visibility > 0)) {
+        /* Rule is visible starting from version 'visibility'. */
+        return version >= visibility;
+    } else {
+        /* Rule is invisible starting from version '-visibility'. */
+        return version < -visibility;
+    }
+}
+
+static inline bool
+cls_match_is_eventually_invisible(const struct cls_match *rule)
+{
+    long long visibility;
+
+    /* C11 does not want to access an atomic via a const object pointer. */
+    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->visibility,
+                        &visibility);
+
+    return visibility <= 0;
+}
 
 /* A longest-prefix match tree. */
 struct trie_node {
