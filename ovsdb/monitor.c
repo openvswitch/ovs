@@ -458,6 +458,15 @@ ovsdb_monitor_changes_destroy(struct ovsdb_monitor_changes *changes)
     free(changes);
 }
 
+static enum ovsdb_monitor_selection
+ovsdb_monitor_row_update_type(bool initial, const bool old, const bool new)
+{
+    return initial ? OJMS_INITIAL
+            : !old ? OJMS_INSERT
+            : !new ? OJMS_DELETE
+            : OJMS_MODIFY;
+}
+
 /* Returns JSON for a <row-update> (as described in RFC 7047) for 'row' within
  * 'mt', or NULL if no row update should be sent.
  *
@@ -478,10 +487,7 @@ ovsdb_monitor_compose_row_update(
     struct json *row_json;
     size_t i;
 
-    type = (initial ? OJMS_INITIAL
-            : !row->old ? OJMS_INSERT
-            : !row->new ? OJMS_DELETE
-            : OJMS_MODIFY);
+    type = ovsdb_monitor_row_update_type(initial, row->old, row->new);
     if (!(mt->select & type)) {
         return NULL;
     }
