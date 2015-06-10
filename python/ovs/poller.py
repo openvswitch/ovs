@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira, Inc.
+# Copyright (c) 2010, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -75,10 +75,6 @@ class _SelectSelect(object):
 
         rlist, wlist, xlist = select.select(self.rlist, self.wlist, self.xlist,
                                             timeout)
-        # collections.defaultdict is introduced by python 2.5 and
-        # XenServer uses python 2.4. We don't use it for XenServer.
-        # events_dict = collections.defaultdict(int)
-        # events_dict[fd] |= event
         events_dict = {}
         for fd in rlist:
             events_dict[fd] = events_dict.get(fd, 0) | POLLIN

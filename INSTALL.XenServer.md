@@ -5,7 +5,10 @@ This document describes how to build and install Open vSwitch on a
 Citrix XenServer host.  If you want to install Open vSwitch on a
 generic Linux or BSD host, see [INSTALL.md] instead.
 
-These instructions have been tested with XenServer 5.6 FP1.
+Open vSwitch should work with XenServer 5.6.100 and later.  However,
+Open vSwitch requires Python 2.7 or later, so using Open vSwitch with
+XenServer 6.5 or earlier requires installing Python 2.7.
+
 
 Building Open vSwitch for XenServer
 -----------------------------------

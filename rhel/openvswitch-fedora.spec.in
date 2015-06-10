@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010, 2013, 2014 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2013, 2014, 2015 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -25,7 +25,6 @@ Version: @VERSION@
 # Nearly all of openvswitch is ASL 2.0.  The bugtool is LGPLv2+, and the
 # lib/sflow*.[ch] files are SISSL
 # datapath/ is GPLv2 (although not built into any of the binary packages)
-# python/compat is Python (although not built into any of the binary packages)
 License: ASL 2.0 and LGPLv2+ and SISSL
 Release: 1%{?dist}
 Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz

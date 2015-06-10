@@ -51,13 +51,9 @@ endif
 # vSwitch, but it causes trouble if you switch from a version with
 # foo/__init__.py into an (older) version with plain foo.py, since
 # foo/__init__.pyc will cause Python to ignore foo.py.
-if INCLUDE_PYTHON_COMPAT
-run_python = PYTHONPATH=$(top_srcdir)/python$(psep)$(top_srcdir)/python/compat$(psep)$$PYTHONPATH
-else
-run_python = PYTHONPATH=$(top_srcdir)/python$(psep)$$PYTHONPATH
-endif
-run_python += PYTHONDONTWRITEBYTECODE=yes $(PYTHON)
-
+run_python = \
+	PYTHONPATH=$(top_srcdir)/python$(psep)$$PYTHONPATH \
+	PYTHONDONTWRITEBYTECODE=yes $(PYTHON)
 
 ALL_LOCAL =
 BUILT_SOURCES =
@@ -375,7 +371,6 @@ include ovsdb/automake.mk
 include rhel/automake.mk
 include xenserver/automake.mk
 include python/automake.mk
-include python/compat/automake.mk
 include tutorial/automake.mk
 include vtep/automake.mk
 include datapath-windows/automake.mk
