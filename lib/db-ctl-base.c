@@ -1495,6 +1495,129 @@ parse_command(int argc, char *argv[], struct shash *local_options,
     command->argv = &argv[i];
 }
 
+static void
+pre_cmd_show(struct ctl_context *ctx)
+{
+    struct cmd_show_table *show;
+
+    for (show = cmd_show_tables; show->table; show++) {
+        size_t i;
+
+        ovsdb_idl_add_table(ctx->idl, show->table);
+        if (show->name_column) {
+            ovsdb_idl_add_column(ctx->idl, show->name_column);
+        }
+        for (i = 0; i < ARRAY_SIZE(show->columns); i++) {
+            const struct ovsdb_idl_column *column = show->columns[i];
+            if (column) {
+                ovsdb_idl_add_column(ctx->idl, column);
+            }
+        }
+    }
+}
+
+static struct cmd_show_table *
+cmd_show_find_table_by_row(const struct ovsdb_idl_row *row)
+{
+    struct cmd_show_table *show;
+
+    for (show = cmd_show_tables; show->table; show++) {
+        if (show->table == row->table->class) {
+            return show;
+        }
+    }
+    return NULL;
+}
+
+static struct cmd_show_table *
+cmd_show_find_table_by_name(const char *name)
+{
+    struct cmd_show_table *show;
+
+    for (show = cmd_show_tables; show->table; show++) {
+        if (!strcmp(show->table->name, name)) {
+            return show;
+        }
+    }
+    return NULL;
+}
+
+static void
+cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
+             int level)
+{
+    struct cmd_show_table *show = cmd_show_find_table_by_row(row);
+    size_t i;
+
+    ds_put_char_multiple(&ctx->output, ' ', level * 4);
+    if (show && show->name_column) {
+        const struct ovsdb_datum *datum;
+
+        ds_put_format(&ctx->output, "%s ", show->table->name);
+        datum = ovsdb_idl_read(row, show->name_column);
+        ovsdb_datum_to_string(datum, &show->name_column->type, &ctx->output);
+    } else {
+        ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
+    }
+    ds_put_char(&ctx->output, '\n');
+
+    if (!show || show->recurse) {
+        return;
+    }
+
+    show->recurse = true;
+    for (i = 0; i < ARRAY_SIZE(show->columns); i++) {
+        const struct ovsdb_idl_column *column = show->columns[i];
+        const struct ovsdb_datum *datum;
+
+        if (!column) {
+            break;
+        }
+
+        datum = ovsdb_idl_read(row, column);
+        if (column->type.key.type == OVSDB_TYPE_UUID &&
+            column->type.key.u.uuid.refTableName) {
+            struct cmd_show_table *ref_show;
+            size_t j;
+
+            ref_show = cmd_show_find_table_by_name(
+                column->type.key.u.uuid.refTableName);
+            if (ref_show) {
+                for (j = 0; j < datum->n; j++) {
+                    const struct ovsdb_idl_row *ref_row;
+
+                    ref_row = ovsdb_idl_get_row_for_uuid(ctx->idl,
+                                                         ref_show->table,
+                                                         &datum->keys[j].uuid);
+                    if (ref_row) {
+                        cmd_show_row(ctx, ref_row, level + 1);
+                    }
+                }
+                continue;
+            }
+        }
+
+        if (!ovsdb_datum_is_default(datum, &column->type)) {
+            ds_put_char_multiple(&ctx->output, ' ', (level + 1) * 4);
+            ds_put_format(&ctx->output, "%s: ", column->name);
+            ovsdb_datum_to_string(datum, &column->type, &ctx->output);
+            ds_put_char(&ctx->output, '\n');
+        }
+    }
+    show->recurse = false;
+}
+
+static void
+cmd_show(struct ctl_context *ctx)
+{
+    const struct ovsdb_idl_row *row;
+
+    for (row = ovsdb_idl_first_row(ctx->idl, cmd_show_tables[0].table);
+         row; row = ovsdb_idl_next_row(row)) {
+        cmd_show_row(ctx, row, 0);
+    }
+}
+
 
 /* Given pointer to dynamic array 'options_p',  array's current size
  * 'allocated_options_p' and number of added options 'n_options_p',
@@ -1695,6 +1818,12 @@ ctl_exit(int status)
     exit(status);
 }
 
+/* Command for showing overview of database contents. */
+static const struct ctl_command_syntax db_ctl_show_command[] = {
+    {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO},
+    {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
+};
+
 /* Comman database commands to be registered. */
 static const struct ctl_command_syntax db_ctl_commands[] = {
     {"comment", 0, INT_MAX, "[ARG]...", NULL, NULL, NULL, "", RO},
@@ -1739,6 +1868,7 @@ void
 ctl_init(void)
 {
     ctl_register_commands(db_ctl_commands);
+    ctl_register_commands(db_ctl_show_command);
 }
 
 /* Returns 'all_commands'. */

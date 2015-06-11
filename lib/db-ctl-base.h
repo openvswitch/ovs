@@ -35,6 +35,8 @@ struct table;
  *
  * - the 'the_idl' and 'the_idl_txn'.
  *
+ * - the 'cmd_show_tables'.  (See 'struct cmd_show_table' for more info).
+ *
  * - the command syntaxes for each command.  (See 'struct ctl_command_syntax'
  *   for more info)  and regiters them using ctl_register_commands().
  *
@@ -155,6 +157,38 @@ const struct shash *ctl_get_all_commands(void);
 struct ctl_command *ctl_parse_commands(int argc, char *argv[],
                                        struct shash *local_options,
                                        size_t *n_commandsp);
+
+/* This struct is for organizing the 'show' command output where:
+ *
+ * - 'table' is the table to show.
+ *
+ * - if 'name_column' is not null, it is used as the name for each row
+ *   in 'table'.
+ *
+ * - 'columns[]' allows user to specify the print of additional columns
+ *   in 'table'.
+ *
+ * - 'recurse' is used to avoid duplicate print.
+ *
+ * */
+struct cmd_show_table {
+    const struct ovsdb_idl_table_class *table;
+    const struct ovsdb_idl_column *name_column;
+    const struct ovsdb_idl_column *columns[3]; /* Seems like a good number. */
+    bool recurse;
+};
+
+/* This array defines the 'show' command output format.  User can check the
+ * definition in utilities/ovs-vsctl.c as reference.
+ *
+ * Particularly, if an element in 'columns[]' represents a reference to
+ * another table, the referred table must also be defined as an entry in
+ * in 'cmd_show_tables[]'.
+ *
+ * The definition must end with an all-NULL entry.
+ * */
+extern struct cmd_show_table cmd_show_tables[];
+
 
 /* The base context struct for conducting the common database
  * operations (commands listed in 'db_ctl_commands').  User should
