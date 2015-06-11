@@ -1698,12 +1698,11 @@ ofproto_run(struct ofproto *p)
                 continue;
             }
 
-            if (classifier_count(&table->cls) > 100000) {
+            if (table->n_flows > 100000) {
                 static struct vlog_rate_limit count_rl =
                     VLOG_RATE_LIMIT_INIT(1, 1);
                 VLOG_WARN_RL(&count_rl, "Table %"PRIuSIZE" has an excessive"
-                             " number of rules: %d", i,
-                             classifier_count(&table->cls));
+                             " number of rules: %d", i, table->n_flows);
             }
 
             ovs_mutex_lock(&ofproto_mutex);
@@ -1797,7 +1796,7 @@ ofproto_get_memory_usage(const struct ofproto *ofproto, struct simap *usage)
 
     n_rules = 0;
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        n_rules += classifier_count(&table->cls);
+        n_rules += table->n_flows;
     }
     simap_increase(usage, "rules", n_rules);
 
@@ -3158,10 +3157,9 @@ query_tables(struct ofproto *ofproto,
         stats = *statsp = xcalloc(ofproto->n_tables, sizeof *stats);
         for (i = 0; i < ofproto->n_tables; i++) {
             struct ofputil_table_stats *s = &stats[i];
-            struct classifier *cls = &ofproto->tables[i].cls;
 
             s->table_id = i;
-            s->active_count = classifier_count(cls);
+            s->active_count = ofproto->tables[i].n_flows;
             if (i == 0) {
                 s->active_count -= connmgr_count_hidden_rules(
                     ofproto->connmgr);
@@ -4361,7 +4359,7 @@ evict_rules_from_table(struct oftable *table, unsigned int extra_space)
 {
     enum ofperr error = 0;
     struct rule_collection rules;
-    unsigned int count = classifier_count(&table->cls) + extra_space;
+    unsigned int count = table->n_flows + extra_space;
     unsigned int max_flows = table->max_flows;
 
     rule_collection_init(&rules);
@@ -4657,6 +4655,8 @@ replace_rule_start(struct ofproto *ofproto,
         cls_rule_make_invisible_in_version(&old_rule->cr,
                                            ofproto->tables_version + 1,
                                            ofproto->tables_version);
+    } else {
+        table->n_flows++;
     }
     /* Insert flow to the classifier, so that later flow_mods may relate
      * to it.  This is reversible, in case later errors require this to
@@ -4672,9 +4672,12 @@ static void replace_rule_revert(struct ofproto *ofproto,
 {
     struct oftable *table = &ofproto->tables[new_rule->table_id];
 
-    /* Restore the original visibility of the old rule. */
     if (old_rule) {
+        /* Restore the original visibility of the old rule. */
         cls_rule_restore_visibility(&old_rule->cr);
+    } else {
+        /* Restore table's rule count. */
+        table->n_flows--;
     }
 
     /* Remove the new rule immediately.  It was never visible to lookups. */
@@ -4905,7 +4908,11 @@ delete_flows_start__(struct ofproto *ofproto,
     OVS_REQUIRES(ofproto_mutex)
 {
     for (size_t i = 0; i < rules->n; i++) {
-        cls_rule_make_invisible_in_version(&rules->rules[i]->cr,
+        struct rule *rule = rules->rules[i];
+        struct oftable *table = &ofproto->tables[rule->table_id];
+
+        table->n_flows--;
+        cls_rule_make_invisible_in_version(&rule->cr,
                                            ofproto->tables_version + 1,
                                            ofproto->tables_version);
     }
@@ -4983,12 +4990,16 @@ delete_flows_start_loose(struct ofproto *ofproto,
 }
 
 static void
-delete_flows_revert(struct ofproto *ofproto OVS_UNUSED,
+delete_flows_revert(struct ofproto *ofproto,
                     struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     for (size_t i = 0; i < rules->n; i++) {
         struct rule *rule = rules->rules[i];
+        struct oftable *table = &ofproto->tables[rule->table_id];
+
+        /* Restore table's rule count. */
+        table->n_flows++;
 
         /* Restore the original visibility of the rule. */
         cls_rule_restore_visibility(&rule->cr);
@@ -7315,6 +7326,7 @@ oftable_init(struct oftable *table)
     memset(table, 0, sizeof *table);
     classifier_init(&table->cls, flow_segment_u64s);
     table->max_flows = UINT_MAX;
+    table->n_flows = 0;
     atomic_init(&table->miss_config, OFPUTIL_TABLE_MISS_DEFAULT);
 
     classifier_set_prefix_fields(&table->cls, default_prefix_fields,

@@ -220,6 +220,9 @@ struct oftable {
     /* Maximum number of flows or UINT_MAX if there is no limit besides any
      * limit imposed by resource limitations. */
     unsigned int max_flows;
+    /* Current number of flows, not counting temporary duplicates nor deferred
+     * deletions. */
+    unsigned int n_flows;
 
     /* These members determine the handling of an attempt to add a flow that
      * would cause the table to have more than 'max_flows' flows.
@@ -818,7 +821,7 @@ struct ofproto_class {
      *
      *   - 'table_id' to the array index.
      *
-     *   - 'active_count' to the classifier_count() for the table.
+     *   - 'active_count' to the 'n_flows' of struct ofproto for the table.
      *
      *   - 'lookup_count' and 'matched_count' to 0.
      *

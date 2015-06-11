@@ -2027,7 +2027,7 @@ connmgr_flushed(struct connmgr *mgr)
 
 /* Returns the number of hidden rules created by the in-band and fail-open
  * implementations in table 0.  (Subtracting this count from the number of
- * rules in the table 0 classifier, as returned by classifier_count(), yields
+ * rules in the table 0 classifier, as maintained in struct oftable, yields
  * the number of flows that OVS should report via OpenFlow for table 0.) */
 int
 connmgr_count_hidden_rules(const struct connmgr *mgr)
