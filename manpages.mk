@@ -279,6 +279,7 @@ ovsdb/remote-passive.man:
 vtep/vtep-ctl.8: \
 	vtep/vtep-ctl.8.in \
 	lib/common.man \
+	lib/db-ctl-base.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
@@ -290,6 +291,7 @@ vtep/vtep-ctl.8: \
 	ovsdb/remote-passive.man
 vtep/vtep-ctl.8.in:
 lib/common.man:
+lib/db-ctl-base.man:
 lib/ssl-bootstrap.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:
