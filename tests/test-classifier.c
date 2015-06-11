@@ -560,7 +560,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             }
 
             found_rules++;
-            RCULIST_FOR_EACH (rule, list, &head->list) {
+            CLS_MATCH_FOR_EACH_AFTER_HEAD (rule, head) {
                 assert(rule->priority < prev_priority);
                 assert(rule->priority <= table->max_priority);
 

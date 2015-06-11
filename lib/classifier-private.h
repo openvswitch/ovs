@@ -65,10 +65,17 @@ struct cls_partition {
     struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
 };
 
-/* Internal representation of a rule in a "struct cls_subtable". */
+/* Internal representation of a rule in a "struct cls_subtable".
+ *
+ * The 'next' member is an element in a singly linked, null-terminated list.
+ * This list links together identical "cls_match"es in order of decreasing
+ * priority.  The classifier code maintains the invariant that at most one rule
+ * of a given priority is visible for any given lookup version.
+ */
 struct cls_match {
     /* Accessed by everybody. */
-    struct rculist list; /* Identical, lower-priority "cls_match"es. */
+    OVSRCU_TYPE(struct cls_match *) next; /* Equal, lower-priority matches. */
+    OVSRCU_TYPE(struct cls_conjunction_set *) conj_set;
 
     /* Accessed only by writers. */
     struct cls_partition *partition;
@@ -95,10 +102,12 @@ struct cls_match {
     atomic_llong visibility;
 
     const struct cls_rule *cls_rule;
-    OVSRCU_TYPE(struct cls_conjunction_set *) conj_set;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
     /* 'flow' must be the last field. */
 };
+
+/* Must be RCU postponed. */
+void cls_match_free_cb(struct cls_match *);
 
 static inline void
 cls_match_set_visibility(struct cls_match *rule, long long version)
@@ -136,6 +145,82 @@ cls_match_is_eventually_invisible(const struct cls_match *rule)
     return visibility <= 0;
 }
 
+
+/* cls_match 'next' */
+
+static inline const struct cls_match *
+cls_match_next(const struct cls_match *rule)
+{
+    return ovsrcu_get(struct cls_match *, &rule->next);
+}
+
+static inline struct cls_match *
+cls_match_next_protected(const struct cls_match *rule)
+{
+    return ovsrcu_get_protected(struct cls_match *, &rule->next);
+}
+
+/* Puts 'rule' in the position between 'prev' and 'next'.  If 'prev' == NULL,
+ * then the 'rule' is the new list head, and if 'next' == NULL, the rule is the
+ * new list tail.
+ * If there are any nodes between 'prev' and 'next', they are dropped from the
+ * list. */
+static inline void
+cls_match_insert(struct cls_match *prev, struct cls_match *next,
+                 struct cls_match *rule)
+{
+    ovsrcu_set_hidden(&rule->next, next);
+
+    if (prev) {
+        ovsrcu_set(&prev->next, rule);
+    }
+}
+
+/* Puts 'new_rule' in the position of 'old_rule', which is the next node after
+ * 'prev'. If 'prev' == NULL, then the 'new_rule' is the new list head.
+ *
+ * The replaced cls_match still links to the later rules, and may still be
+ * referenced by other threads until all other threads quiesce.  The replaced
+ * rule may not be re-inserted, re-initialized, or deleted until after all
+ * other threads have quiesced (use ovsrcu_postpone). */
+static inline void
+cls_match_replace(struct cls_match *prev,
+                  struct cls_match *old_rule, struct cls_match *new_rule)
+{
+    cls_match_insert(prev, cls_match_next_protected(old_rule), new_rule);
+}
+
+/* Removes 'rule' following 'prev' from the list. If 'prev' is NULL, then the
+ * 'rule' is a list head, and the caller is responsible for maintaining its
+ * list head pointer (if any).
+ *
+ * Afterward, the removed rule is not linked to any more, but still links to
+ * the following rules, and may still be referenced by other threads until all
+ * other threads quiesce.  The removed rule may not be re-inserted,
+ * re-initialized, or deleted until after all other threads have quiesced (use
+ * ovsrcu_postpone).
+ */
+static inline void
+cls_match_remove(struct cls_match *prev, struct cls_match *rule)
+{
+    if (prev) {
+        ovsrcu_set(&prev->next, cls_match_next_protected(rule));
+    }
+}
+
+#define CLS_MATCH_FOR_EACH(ITER, HEAD)                              \
+    for ((ITER) = (HEAD); (ITER); (ITER) = cls_match_next(ITER))
+
+#define CLS_MATCH_FOR_EACH_AFTER_HEAD(ITER, HEAD)   \
+    CLS_MATCH_FOR_EACH(ITER, cls_match_next(HEAD))
+
+/* Iterate cls_matches keeping the previous pointer for modifications. */
+#define FOR_EACH_RULE_IN_LIST_PROTECTED(ITER, PREV, HEAD)           \
+    for ((PREV) = NULL, (ITER) = (HEAD);                            \
+         (ITER);                                                    \
+         (PREV) = (ITER), (ITER) = cls_match_next_protected(ITER))
+
+
 /* A longest-prefix match tree. */
 struct trie_node {
     uint32_t prefix;           /* Prefix bits for this node, MSB first. */
