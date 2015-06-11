@@ -696,6 +696,7 @@ enum ovsdb_monitor_changes_efficacy {
 struct ovsdb_monitor_aux {
     const struct ovsdb_monitor *monitor;
     struct ovsdb_monitor_table *mt;
+    enum ovsdb_monitor_changes_efficacy efficacy;
 };
 
 static void
@@ -704,6 +705,7 @@ ovsdb_monitor_init_aux(struct ovsdb_monitor_aux *aux,
 {
     aux->monitor = m;
     aux->mt = NULL;
+    aux->efficacy = OVSDB_CHANGES_NO_EFFECT;
 }
 
 static void
@@ -804,6 +806,10 @@ ovsdb_monitor_change_cb(const struct ovsdb_row *old,
         efficacy = ovsdb_monitor_changes_classify(type, mt, changed);
         if (efficacy > OVSDB_CHANGES_NO_EFFECT) {
             ovsdb_monitor_changes_update(old, new, mt, changes);
+        }
+
+        if (aux->efficacy < efficacy) {
+            aux->efficacy = efficacy;
         }
     }
 
@@ -999,10 +1005,13 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
     struct ovsdb_monitor *m = ovsdb_monitor_cast(replica);
     struct ovsdb_monitor_aux aux;
 
-    ovsdb_monitor_json_cache_flush(m);
     ovsdb_monitor_init_aux(&aux, m);
     ovsdb_txn_for_each_change(txn, ovsdb_monitor_change_cb, &aux);
-    m->n_transactions++;
+
+    if (aux.efficacy == OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE) {
+        ovsdb_monitor_json_cache_flush(m);
+        m->n_transactions++;
+    }
 
     return NULL;
 }
