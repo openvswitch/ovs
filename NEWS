@@ -1,5 +1,10 @@
 Post-v2.3.0
 ---------------------
+   - Flow table modifications are now atomic, meaning that each packet
+     now sees a coherent version of the OpenFlow pipeline.  For
+     example, if a controller removes all flows with a single OpenFlow
+     "flow_mod", no packet sees an intermediate version of the OpenFlow
+     pipeline where only some of the flows have been deleted.
    - Added support for SFQ, FQ_CoDel and CoDel qdiscs.
    - Add bash command-line completion support for ovs-vsctl Please check
      utilities/ovs-command-compgen.INSTALL.md for how to use.
@@ -28,10 +33,10 @@ Post-v2.3.0
      release.  See ovs-vswitchd(8) for details.
    - OpenFlow:
      * OpenFlow 1.4 bundles are now supported, but for flow mod
-       messages only. 'atomic' bundles are not yet supported, and
-       'ordered' bundles are trivially supported, as all bundled
-       messages are executed in the order they were added to the
-       bundle regardless of the presence of the 'ordered' flag.
+       messages only.  Both 'atomic' and 'ordered' bundle flags are
+       trivially supported, as all bundled messages are executed in
+       the order they were added and all flow table modifications are
+       now atomic to the datapath.
      * IPv6 flow label and neighbor discovery fields are now modifiable.
      * OpenFlow 1.5 extended registers are now supported.
      * The OpenFlow 1.5 actset_output field is now supported.
@@ -49,15 +54,15 @@ Post-v2.3.0
    - ovs-ofctl has a new '--bundle' option that makes the flow mod commands
      ('add-flow', 'add-flows', 'mod-flows', 'del-flows', and 'replace-flows')
      use an OpenFlow 1.4 bundle to operate the modifications as a single
-     transaction.  If any of the flow mods in a transaction fail, none of
-     them are executed.
+     atomic transaction.  If any of the flow mods in a transaction fail, none
+     of them are executed.  All flow mods in a bundle appear to datapath
+     lookups simultaneously.
    - ovs-ofctl 'add-flow' and 'add-flows' commands now accept arbitrary flow
      mods as an input by allowing the flow specification to start with an
      explicit 'add', 'modify', 'modify_strict', 'delete', or 'delete_strict'
      keyword.  A missing keyword is treated as 'add', so this is fully
      backwards compatible.  With the new '--bundle' option all the flow mods
-     are executed as a single transaction using the new OpenFlow 1.4 bundles
-     support.
+     are executed as a single atomic transaction using an OpenFlow 1.4 bundle.
    - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
      MD5 is no longer secure and some operating systems have started to disable
      it in OpenSSL.

@@ -202,14 +202,24 @@ cls_rule_init_from_minimatch(struct cls_rule *rule,
     minimatch_clone(CONST_CAST(struct minimatch *, &rule->match), match);
 }
 
+/* Initializes 'dst' as a copy of 'src', but with 'version'.
+ *
+ * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
+void
+cls_rule_clone_in_version(struct cls_rule *dst, const struct cls_rule *src,
+                          long long version)
+{
+    cls_rule_init__(dst, src->priority, version);
+    minimatch_clone(CONST_CAST(struct minimatch *, &dst->match), &src->match);
+}
+
 /* Initializes 'dst' as a copy of 'src'.
  *
  * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
 void
 cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 {
-    cls_rule_init__(dst, src->priority, src->version);
-    minimatch_clone(CONST_CAST(struct minimatch *, &dst->match), &src->match);
+    cls_rule_clone_in_version(dst, src, src->version);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.

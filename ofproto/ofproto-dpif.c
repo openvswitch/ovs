@@ -89,6 +89,15 @@ struct rule_dpif {
     struct ovs_mutex stats_mutex;
     struct dpif_flow_stats stats OVS_GUARDED;
 
+   /* In non-NULL, will point to a new rule (for which a reference is held) to
+    * which all the stats updates should be forwarded. This exists only
+    * transitionally when flows are replaced.
+    *
+    * Protected by stats_mutex.  If both 'rule->stats_mutex' and
+    * 'rule->new_rule->stats_mutex' must be held together, acquire them in that
+    * order, */
+    struct rule_dpif *new_rule OVS_GUARDED;
+
     /* If non-zero then the recirculation id that has
      * been allocated for use with this rule.
      * The recirculation id and associated internal flow should
@@ -3668,9 +3677,13 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
                        const struct dpif_flow_stats *stats)
 {
     ovs_mutex_lock(&rule->stats_mutex);
-    rule->stats.n_packets += stats->n_packets;
-    rule->stats.n_bytes += stats->n_bytes;
-    rule->stats.used = MAX(rule->stats.used, stats->used);
+    if (OVS_UNLIKELY(rule->new_rule)) {
+        rule_dpif_credit_stats(rule->new_rule, stats);
+    } else {
+        rule->stats.n_packets += stats->n_packets;
+        rule->stats.n_bytes += stats->n_bytes;
+        rule->stats.used = MAX(rule->stats.used, stats->used);
+    }
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
@@ -3722,11 +3735,12 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
 }
 
 long long
-ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto)
+ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
 {
     long long version;
 
     atomic_read_relaxed(&ofproto->tables_version, &version);
+
     return version;
 }
 
@@ -3756,12 +3770,12 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, long long version,
     return rule;
 }
 
-/* Look up 'flow' in 'ofproto''s classifier starting from table '*table_id'.
- * Returns the rule that was found, which may be one of the special rules
- * according to packet miss hadling.  If 'may_packet_in' is false, returning of
- * the miss_rule (which issues packet ins for the controller) is avoided.
- * Updates 'wc', if nonnull, to reflect the fields that were used during the
- * lookup.
+/* Look up 'flow' in 'ofproto''s classifier version 'version', starting from
+ * table '*table_id'.  Returns the rule that was found, which may be one of the
+ * special rules according to packet miss hadling.  If 'may_packet_in' is
+ * false, returning of the miss_rule (which issues packet ins for the
+ * controller) is avoided.  Updates 'wc', if nonnull, to reflect the fields
+ * that were used during the lookup.
  *
  * If 'honor_table_miss' is true, the first lookup occurs in '*table_id', but
  * if none is found then the table miss configuration for that table is
@@ -3927,17 +3941,35 @@ rule_construct(struct rule *rule_)
     rule->stats.n_bytes = 0;
     rule->stats.used = rule->up.modified;
     rule->recirc_id = 0;
+    rule->new_rule = NULL;
 
     return 0;
 }
 
-static enum ofperr
-rule_insert(struct rule *rule_)
+static void
+rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_stats)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
+
+    if (old_rule_ && forward_stats) {
+        struct rule_dpif *old_rule = rule_dpif_cast(old_rule_);
+
+        ovs_assert(!old_rule->new_rule);
+
+        /* Take a reference to the new rule, and refer all stats updates from
+         * the old rule to the new rule. */
+        rule_dpif_ref(rule);
+
+        ovs_mutex_lock(&old_rule->stats_mutex);
+        ovs_mutex_lock(&rule->stats_mutex);
+        old_rule->new_rule = rule;       /* Forward future stats. */
+        rule->stats = old_rule->stats;   /* Transfer stats to the new rule. */
+        ovs_mutex_unlock(&rule->stats_mutex);
+        ovs_mutex_unlock(&old_rule->stats_mutex);
+    }
+
     complete_operation(rule);
-    return 0;
 }
 
 static void
@@ -3950,10 +3982,15 @@ rule_delete(struct rule *rule_)
 
 static void
 rule_destruct(struct rule *rule_)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
     ovs_mutex_destroy(&rule->stats_mutex);
+    /* Release reference to the new rule, if any. */
+    if (rule->new_rule) {
+        rule_dpif_unref(rule->new_rule);
+    }
     if (rule->recirc_id) {
         recirc_free_id(rule->recirc_id);
     }
@@ -3966,9 +4003,13 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
     ovs_mutex_lock(&rule->stats_mutex);
-    *packets = rule->stats.n_packets;
-    *bytes = rule->stats.n_bytes;
-    *used = rule->stats.used;
+    if (OVS_UNLIKELY(rule->new_rule)) {
+        rule_get_stats(&rule->new_rule->up, packets, bytes, used);
+    } else {
+        *packets = rule->stats.n_packets;
+        *bytes = rule->stats.n_bytes;
+        *used = rule->stats.used;
+    }
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
@@ -3988,22 +4029,6 @@ rule_execute(struct rule *rule, const struct flow *flow,
     rule_dpif_execute(rule_dpif_cast(rule), flow, packet);
     dp_packet_delete(packet);
     return 0;
-}
-
-static void
-rule_modify_actions(struct rule *rule_, bool reset_counters)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_dpif *rule = rule_dpif_cast(rule_);
-
-    if (reset_counters) {
-        ovs_mutex_lock(&rule->stats_mutex);
-        rule->stats.n_packets = 0;
-        rule->stats.n_bytes = 0;
-        ovs_mutex_unlock(&rule->stats_mutex);
-    }
-
-    complete_operation(rule);
 }
 
 static struct group_dpif *group_dpif_cast(const struct ofgroup *group)
@@ -5550,8 +5575,6 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_dealloc,
     rule_get_stats,
     rule_execute,
-    NULL,                       /* rule_premodify_actions */
-    rule_modify_actions,
     set_frag_handling,
     packet_out,
     set_netflow,

@@ -40,9 +40,8 @@ struct ofp_bundle_entry {
     };
 
     /* Used during commit. */
-    struct rule_collection rules;   /* Affected rules. */
-    struct rule *rule;
-    bool modify;
+    struct rule_collection old_rules;   /* Affected rules. */
+    struct rule_collection new_rules;   /* Affected rules. */
 
     /* OpenFlow header and some of the message contents for error reporting. */
     struct ofp_header ofp_msg[DIV_ROUND_UP(64, sizeof(struct ofp_header))];

@@ -367,6 +367,8 @@ void cls_rule_init(struct cls_rule *, const struct match *, int priority,
 void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
                                   int priority, long long version);
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
+void cls_rule_clone_in_version(struct cls_rule *, const struct cls_rule *,
+        long long version);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
 

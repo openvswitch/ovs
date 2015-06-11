@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -323,6 +323,8 @@ struct rule {
     struct ofproto *const ofproto; /* The ofproto that contains this rule. */
     const struct cls_rule cr;      /* In owning ofproto's classifier. */
     const uint8_t table_id;        /* Index in ofproto's 'tables' array. */
+    bool removed;                  /* Rule has been removed from the ofproto
+                                    * data structures. */
 
     /* Protects members marked OVS_GUARDED.
      * Readers only need to hold this mutex.
@@ -361,7 +363,7 @@ struct rule {
 
     /* OpenFlow actions.  See struct rule_actions for more thread-safety
      * notes. */
-    OVSRCU_TYPE(const struct rule_actions *) actions;
+    const struct rule_actions * const actions;
 
     /* In owning meter's 'rules' list.  An empty list if there is no meter. */
     struct ovs_list meter_list_node OVS_GUARDED_BY(ofproto_mutex);
@@ -405,7 +407,7 @@ static inline bool rule_is_hidden(const struct rule *);
  * code that holds 'rule->mutex' (where 'rule' is the rule for which
  * 'rule->actions == actions') or during the RCU active period.
  *
- * All members are immutable: they do not change during the struct's
+ * All members are immutable: they do not change during the rule's
  * lifetime. */
 struct rule_actions {
     /* Flags.
@@ -1124,7 +1126,7 @@ struct ofproto_class {
      * OpenFlow error code), the ofproto base code will uninitialize and
      * deallocate 'rule'.  See "Rule Life Cycle" above for more details.
      *
-     * ->rule_construct() may also:
+     * ->rule_construct() must also:
      *
      *   - Validate that the datapath supports the matching rule in 'rule->cr'
      *     datapath.  For example, if the rule's table does not support
@@ -1133,8 +1135,9 @@ struct ofproto_class {
      *
      *   - Validate that the datapath can correctly implement 'rule->ofpacts'.
      *
-     * Some implementations might need to defer these tasks to ->rule_insert(),
-     * which is also acceptable.
+     * After a successful construction the rest of the rule life cycle calls
+     * may not fail, so ->rule_construct() must also make sure that the rule
+     * can be inserted in to the datapath.
      *
      *
      * Insertion
@@ -1143,11 +1146,10 @@ struct ofproto_class {
      * Following successful construction, the ofproto base case inserts 'rule'
      * into its flow table, then it calls ->rule_insert().  ->rule_insert()
      * must add the new rule to the datapath flow table and return only after
-     * this is complete (whether it succeeds or fails).
-     *
-     * If ->rule_insert() fails, the ofproto base code will remove 'rule' from
-     * the flow table, destruct, uninitialize, and deallocate 'rule'.  See
-     * "Rule Life Cycle" above for more details.
+     * this is complete.  The 'new_rule' may be a duplicate of an 'old_rule'.
+     * In this case the 'old_rule' is non-null, and the implementation should
+     * forward rule statistics from the 'old_rule' to the 'new_rule' if
+     * 'forward_stats' is 'true'.  This may not fail.
      *
      *
      * Deletion
@@ -1169,7 +1171,8 @@ struct ofproto_class {
     struct rule *(*rule_alloc)(void);
     enum ofperr (*rule_construct)(struct rule *rule)
         /* OVS_REQUIRES(ofproto_mutex) */;
-    enum ofperr (*rule_insert)(struct rule *rule)
+    void (*rule_insert)(struct rule *rule, struct rule *old_rule,
+                        bool forward_stats)
         /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
@@ -1201,36 +1204,6 @@ struct ofproto_class {
      * Returns 0 if successful, otherwise an OpenFlow error code. */
     enum ofperr (*rule_execute)(struct rule *rule, const struct flow *flow,
                                 struct dp_packet *packet);
-
-    /* If the datapath can properly implement changing 'rule''s actions to the
-     * 'ofpacts_len' bytes in 'ofpacts', returns 0.  Otherwise, returns an enum
-     * ofperr indicating why the new actions wouldn't work.
-     *
-     * May be a null pointer if any set of actions is acceptable. */
-    enum ofperr (*rule_premodify_actions)(const struct rule *rule,
-                                          const struct ofpact *ofpacts,
-                                          size_t ofpacts_len)
-        /* OVS_REQUIRES(ofproto_mutex) */;
-
-    /* When ->rule_modify_actions() is called, the caller has already replaced
-     * the OpenFlow actions in 'rule' by a new set.  (If
-     * ->rule_premodify_actions is nonnull, then it was previously called to
-     * verify that the new set of actions is acceptable.)
-     *
-     * ->rule_modify_actions() must:
-     *
-     *   - Update the datapath flow table with the new actions.
-     *
-     *   - Only if 'reset_counters' is true, reset any packet or byte counters
-     *     associated with the rule to zero, so that rule_get_stats() will not
-     *     longer count those packets or bytes.
-     *
-     * Rule modification must not fail.
-     *
-     * ->rule_modify_actions() should not modify any base members of struct
-     * rule. */
-    void (*rule_modify_actions)(struct rule *rule, bool reset_counters)
-        /* OVS_REQUIRES(ofproto_mutex) */;
 
     /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
      * which takes one of the following values, with the corresponding
@@ -1785,7 +1758,7 @@ void ofproto_flush_flows(struct ofproto *);
 static inline const struct rule_actions *
 rule_get_actions(const struct rule *rule)
 {
-    return ovsrcu_get(const struct rule_actions *, &rule->actions);
+    return rule->actions;
 }
 
 /* Returns true if 'rule' is an OpenFlow 1.3 "table-miss" rule, false

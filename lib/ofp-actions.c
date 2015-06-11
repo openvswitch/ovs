@@ -3660,7 +3660,24 @@ format_RESUBMIT(const struct ofpact_resubmit *a, struct ds *s)
  * address.  This is not usually the intent in MAC learning; instead, we want
  * the MAC learn entry to expire when no traffic has been sent *from* the
  * learned address.  Use a hard timeout for that.
- */
+ *
+ *
+ * Visibility of Changes
+ * ---------------------
+ *
+ * Prior to Open vSwitch 2.4, any changes made by a "learn" action in a given
+ * flow translation are visible to flow table lookups made later in the flow
+ * translation.  This means that, in the example above, a MAC learned by the
+ * learn action in table 0 would be found in table 1 (if the packet being
+ * processed had the same source and destination MAC address).
+ *
+ * In Open vSwitch 2.4 and later, changes to a flow table (whether to add or
+ * modify a flow) by a "learn" action are visible only for later flow
+ * translations, not for later lookups within the same flow translation.  In
+ * the MAC learning example, a MAC learned by the learn action in table 0 would
+ * not be found in table 1 if the flow translation would resubmit to table 1
+ * after the processing of the learn action, meaning that if this MAC had not
+ * been learned before then the packet would be flooded. */
 struct nx_action_learn {
     ovs_be16 type;              /* OFPAT_VENDOR. */
     ovs_be16 len;               /* At least 24. */
