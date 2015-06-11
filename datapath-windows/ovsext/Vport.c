@@ -21,6 +21,7 @@
 #include "Event.h"
 #include "User.h"
 #include "Vxlan.h"
+#include "Stt.h"
 #include "IpHelper.h"
 #include "Oid.h"
 #include "Datapath.h"
@@ -602,7 +603,8 @@ OvsFindVportByPortNo(POVS_SWITCH_CONTEXT switchContext,
 
 POVS_VPORT_ENTRY
 OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
-                            UINT16 dstPort)
+                            UINT16 dstPort,
+                            OVS_VPORT_TYPE ovsPortType)
 {
     POVS_VPORT_ENTRY vport;
     PLIST_ENTRY head, link;
@@ -611,7 +613,8 @@ OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
     head = &(switchContext->tunnelVportsArray[hash & OVS_VPORT_MASK]);
     LIST_FORALL(head, link) {
         vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, tunnelVportLink);
-        if (((POVS_VXLAN_VPORT)vport->priv)->dstPort == dstPort) {
+        if (GetPortFromPriv(vport) == dstPort &&
+            vport->ovsType == ovsPortType) {
             return vport;
         }
     }
@@ -934,6 +937,9 @@ OvsInitTunnelVport(PVOID userContext,
                                     (PVOID)tunnelContext);
         break;
     }
+    case OVS_VPORT_TYPE_STT:
+        status = OvsInitSttTunnel(vport, dstPort);
+        break;
     default:
         ASSERT(0);
     }
@@ -1079,10 +1085,11 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
 
     switch(vport->ovsType) {
     case OVS_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_STT:
     {
-        POVS_VXLAN_VPORT vxlanVport = (POVS_VXLAN_VPORT)vport->priv;
-        hash = OvsJhashBytes(&vxlanVport->dstPort,
-                             sizeof(vxlanVport->dstPort),
+        UINT16 dstPort = GetPortFromPriv(vport);
+        hash = OvsJhashBytes(&dstPort,
+                             sizeof(dstPort),
                              OVS_HASH_BASIS);
         InsertHeadList(
             &gOvsSwitchContext->tunnelVportsArray[hash & OVS_VPORT_MASK],
@@ -1158,7 +1165,8 @@ OvsCleanupVportCommon(POVS_SWITCH_CONTEXT switchContext,
         InitializeListHead(&vport->ovsNameLink);
         RemoveEntryList(&vport->portNoLink);
         InitializeListHead(&vport->portNoLink);
-        if (OVS_VPORT_TYPE_VXLAN == vport->ovsType) {
+        if (OVS_VPORT_TYPE_VXLAN == vport->ovsType ||
+            OVS_VPORT_TYPE_STT == vport->ovsType) {
             RemoveEntryList(&vport->tunnelVportLink);
             InitializeListHead(&vport->tunnelVportLink);
         }
@@ -1258,6 +1266,9 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
                                        tunnelContext);
         break;
     }
+    case OVS_VPORT_TYPE_STT:
+        OvsCleanupSttTunnel(vport);
+        break;
     case OVS_VPORT_TYPE_GRE:
     case OVS_VPORT_TYPE_GRE64:
         break;
@@ -2147,17 +2158,29 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         vportAllocated = TRUE;
 
         if (OvsIsTunnelVportType(portType)) {
-            UINT16 udpPortDest = VXLAN_UDP_PORT;
+            UINT16 transportPortDest = 0;
+
+            switch (vport->ovsType) {
+            case OVS_VPORT_TYPE_VXLAN:
+                transportPortDest = VXLAN_UDP_PORT;
+                break;
+            case OVS_VPORT_TYPE_STT:
+                transportPortDest = STT_TCP_PORT;
+                break;
+            default:
+                break;
+            }
+
             PNL_ATTR attr = NlAttrFindNested(vportAttrs[OVS_VPORT_ATTR_OPTIONS],
                                              OVS_TUNNEL_ATTR_DST_PORT);
             if (attr) {
-                udpPortDest = NlAttrGetU16(attr);
+                transportPortDest = NlAttrGetU16(attr);
             }
 
             status = OvsInitTunnelVport(usrParamsCtx,
                                         vport,
                                         portType,
-                                        udpPortDest);
+                                        transportPortDest);
 
             nlError = NlMapStatusToNlErr(status);
         } else {
@@ -2243,7 +2266,16 @@ Cleanup:
         if (vport && vportAllocated == TRUE) {
             if (vportInitialized == TRUE) {
                 if (OvsIsTunnelVportType(portType)) {
-                    OvsCleanupVxlanTunnel(NULL, vport, NULL, NULL);
+                    switch (vport->ovsType) {
+                    case OVS_VPORT_TYPE_VXLAN:
+                        OvsCleanupVxlanTunnel(NULL, vport, NULL, NULL);
+                        break;
+                    case OVS_VPORT_TYPE_STT:
+                        OvsCleanupSttTunnel(vport);;
+                        break;
+                    default:
+                        ASSERT(!"Invalid tunnel port type");
+                    }
                 }
             }
             OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);

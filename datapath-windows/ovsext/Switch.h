@@ -218,6 +218,4 @@ OvsAcquireSwitchContext(VOID);
 VOID
 OvsReleaseSwitchContext(POVS_SWITCH_CONTEXT switchContext);
 
-PVOID OvsGetExternalVport();
-
 #endif /* __SWITCH_H_ */

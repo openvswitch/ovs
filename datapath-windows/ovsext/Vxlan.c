@@ -244,10 +244,10 @@ OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
 
         /* L2 header */
         ethHdr = (EthHdr *)bufferStart;
-        NdisMoveMemory(ethHdr->Destination, fwdInfo->dstMacAddr,
-                       sizeof ethHdr->Destination + sizeof ethHdr->Source);
         ASSERT(((PCHAR)&fwdInfo->dstMacAddr + sizeof fwdInfo->dstMacAddr) ==
                (PCHAR)&fwdInfo->srcMacAddr);
+        NdisMoveMemory(ethHdr->Destination, fwdInfo->dstMacAddr,
+                       sizeof ethHdr->Destination + sizeof ethHdr->Source);
         ethHdr->Type = htons(ETH_TYPE_IPV4);
 
         // XXX: question: there are fields in the OvsIPv4TunnelKey for ttl and such,
@@ -311,13 +311,11 @@ NDIS_STATUS
 OvsEncapVxlan(PNET_BUFFER_LIST curNbl,
               OvsIPv4TunnelKey *tunKey,
               POVS_SWITCH_CONTEXT switchContext,
-              VOID *completionList,
               POVS_PACKET_HDR_INFO layers,
               PNET_BUFFER_LIST *newNbl)
 {
     NTSTATUS status;
     OVS_FWD_INFO fwdInfo;
-    UNREFERENCED_PARAMETER(completionList);
 
     status = OvsLookupIPFwdInfo(tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
@@ -420,15 +418,15 @@ OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
 
 /*
  *----------------------------------------------------------------------------
- * OvsDoDecapVxlan
+ * OvsDecapVxlan
  *     Decapsulates to tunnel header in 'curNbl' and puts into 'tunKey'.
  *----------------------------------------------------------------------------
  */
 NDIS_STATUS
-OvsDoDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
-                PNET_BUFFER_LIST curNbl,
-                OvsIPv4TunnelKey *tunKey,
-                PNET_BUFFER_LIST *newNbl)
+OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
+              PNET_BUFFER_LIST curNbl,
+              OvsIPv4TunnelKey *tunKey,
+              PNET_BUFFER_LIST *newNbl)
 {
     PNET_BUFFER curNb;
     PMDL curMdl;

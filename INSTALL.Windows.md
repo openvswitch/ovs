@@ -386,29 +386,31 @@ Hyper-Vs.  The following examples demonstrate how it can be done:
     % ovs-vsctl add-port br-int ovs-port-a tag=900
     % ovs-vsctl add-port br-int ovs-port-b tag=900
 
-Steps to add VXLAN tunnels
+Steps to add tunnels
 --------------------------
-The Windows Open vSwitch implementation support VXLAN tunnels.  To add VXLAN
+The Windows Open vSwitch implementation support VXLAN and STT tunnels. To add
 tunnels, the following steps serve as examples.
 
 Note that, any patch ports created between br-int and br-pif MUST be beleted
-prior to adding VXLAN tunnels.
+prior to adding tunnels.
 
-01> Add the vxlan port between 172.168.201.101 <-> 172.168.201.102
-    % ovs-vsctl add-port br-int vxlan-1
-    % ovs-vsctl set Interface vxlan-1 type=vxlan
-    % ovs-vsctl set Interface vxlan-1 options:local_ip=172.168.201.101
-    % ovs-vsctl set Interface vxlan-1 options:remote_ip=172.168.201.102
-    % ovs-vsctl set Interface vxlan-1 options:in_key=flow
-    % ovs-vsctl set Interface vxlan-1 options:out_key=flow
+01> Add the tunnel port between 172.168.201.101 <-> 172.168.201.102
+    % ovs-vsctl add-port br-int tun-1
+    % ovs-vsctl set Interface tun-1 type=port-type
+    % ovs-vsctl set Interface tun-1 options:local_ip=172.168.201.101
+    % ovs-vsctl set Interface tun-1 options:remote_ip=172.168.201.102
+    % ovs-vsctl set Interface tun-1 options:in_key=flow
+    % ovs-vsctl set Interface tun-1 options:out_key=flow
 
-02> Add the vxlan port between 172.168.201.101 <-> 172.168.201.105
-    % ovs-vsctl add-port br-int vxlan-2
-    % ovs-vsctl set Interface vxlan-2 type=vxlan
-    % ovs-vsctl set Interface vxlan-2 options:local_ip=172.168.201.102
-    % ovs-vsctl set Interface vxlan-2 options:remote_ip=172.168.201.105
-    % ovs-vsctl set Interface vxlan-2 options:in_key=flow
-    % ovs-vsctl set Interface vxlan-2 options:out_key=flow
+02> Add the tunnel port between 172.168.201.101 <-> 172.168.201.105
+    % ovs-vsctl add-port br-int tun-2
+    % ovs-vsctl set Interface tun-2 type=port-type
+    % ovs-vsctl set Interface tun-2 options:local_ip=172.168.201.102
+    % ovs-vsctl set Interface tun-2 options:remote_ip=172.168.201.105
+    % ovs-vsctl set Interface tun-2 options:in_key=flow
+    % ovs-vsctl set Interface tun-2 options:out_key=flow
+
+	Where port-type is the string stt or vxlan
 
 
 Requirements
