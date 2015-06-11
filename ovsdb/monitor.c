@@ -667,6 +667,32 @@ ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
     mt->select |= select;
 }
 
+ /*
+ * If a row's change type (insert, delete or modify) matches that of
+ * the monitor, they should be sent to the monitor's clients as updates.
+ * Of cause, the monitor should also internally update with this change.
+ *
+ * When a change type does not require client side update, the monitor
+ * may still need to keep track of certain changes in order to generate
+ * correct future updates.  For example, the monitor internal state should
+ * be updated whenever a new row is inserted, in order to generate the
+ * correct initial state, regardless if a insert change type is being
+ * monitored.
+ *
+ * On the other hand, if a transaction only contains changes to columns
+ * that are not monitored, this transaction can be safely ignored by the
+ * monitor.
+ *
+ * Thus, the order of the declaration is important:
+ * 'OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE' always implies
+ * 'OVSDB_CHANGES_REQUIRE_INTERNAL_UPDATE', but not vice versa.  */
+enum ovsdb_monitor_changes_efficacy {
+    OVSDB_CHANGES_NO_EFFECT,                /* Monitor does not care about this
+                                               change.  */
+    OVSDB_CHANGES_REQUIRE_INTERNAL_UPDATE,  /* Monitor internal updates. */
+    OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE,  /* Client needs to be updated.  */
+};
+
 struct ovsdb_monitor_aux {
     const struct ovsdb_monitor *monitor;
     struct ovsdb_monitor_table *mt;
@@ -713,6 +739,42 @@ ovsdb_monitor_changes_update(const struct ovsdb_row *old,
 }
 
 static bool
+ovsdb_monitor_columns_changed(const struct ovsdb_monitor_table *mt,
+                              const unsigned long int *changed)
+{
+    size_t i;
+
+    for (i = 0; i < mt->n_columns; i++) {
+        size_t column_index = mt->columns[i].column->index;
+
+        if (bitmap_is_set(changed, column_index)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Return the efficacy of a row's change to a monitor table.
+ *
+ * Please see the block comment above 'ovsdb_monitor_changes_efficacy'
+ * definition form more information.  */
+static enum ovsdb_monitor_changes_efficacy
+ovsdb_monitor_changes_classify(enum ovsdb_monitor_selection type,
+                               const struct ovsdb_monitor_table *mt,
+                               const unsigned long int *changed)
+{
+    if (type == OJMS_MODIFY &&
+        !ovsdb_monitor_columns_changed(mt, changed)) {
+        return OVSDB_CHANGES_NO_EFFECT;
+    }
+
+    return (mt->select & type)
+                ?  OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE
+                :  OVSDB_CHANGES_REQUIRE_INTERNAL_UPDATE;
+}
+
+static bool
 ovsdb_monitor_change_cb(const struct ovsdb_row *old,
                         const struct ovsdb_row *new,
                         const unsigned long int *changed OVS_UNUSED,
@@ -735,8 +797,16 @@ ovsdb_monitor_change_cb(const struct ovsdb_row *old,
     mt = aux->mt;
 
     HMAP_FOR_EACH(changes, hmap_node, &mt->changes) {
-        ovsdb_monitor_changes_update(old, new, mt, changes);
+        enum ovsdb_monitor_changes_efficacy efficacy;
+        enum ovsdb_monitor_selection type;
+
+        type = ovsdb_monitor_row_update_type(false, old, new);
+        efficacy = ovsdb_monitor_changes_classify(type, mt, changed);
+        if (efficacy > OVSDB_CHANGES_NO_EFFECT) {
+            ovsdb_monitor_changes_update(old, new, mt, changes);
+        }
     }
+
     return true;
 }
 
