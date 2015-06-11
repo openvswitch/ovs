@@ -524,10 +524,11 @@ OvsCreateNewNBLsFromMultipleNBs(POVS_SWITCH_CONTEXT switchContext,
         }
         lastNbl->Next = *nextNbl;
         *nextNbl = newNbls->Next;
-        *curNbl = newNbls;
-        (*curNbl)->Next = NULL;
 
         OvsCompleteNBL(switchContext, *curNbl, TRUE);
+
+        *curNbl = newNbls;
+        (*curNbl)->Next = NULL;
 
         error = FALSE;
     } while (error);
