@@ -55,6 +55,7 @@ extern struct ovsdb_idl *the_idl;
 extern struct ovsdb_idl_txn *the_idl_txn;
 
 void ctl_init(void);
+char *ctl_default_db(void);
 OVS_NO_RETURN void ctl_exit(int status);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 
@@ -145,6 +146,10 @@ struct ctl_command {
 
 bool ctl_might_write_to_db(char **argv);
 const char *ctl_get_db_cmd_usage(void);
+void ctl_print_commands(void);
+void ctl_print_options(const struct option *);
+void ctl_add_cmd_options(struct option **, size_t *n_options_p,
+                         size_t *allocated_options_p, int opt_val);
 void ctl_register_commands(const struct ctl_command_syntax *);
 const struct shash *ctl_get_all_commands(void);
 struct ctl_command *ctl_parse_commands(int argc, char *argv[],

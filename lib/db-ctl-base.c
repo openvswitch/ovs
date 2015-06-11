@@ -49,6 +49,114 @@ struct ovsdb_idl_txn *the_idl_txn;
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
 
 
+static struct option *
+find_option(const char *name, struct option *options, size_t n_options)
+{
+    size_t i;
+
+    for (i = 0; i < n_options; i++) {
+        if (!strcmp(options[i].name, name)) {
+            return &options[i];
+        }
+    }
+    return NULL;
+}
+
+static struct option *
+add_option(struct option **optionsp, size_t *n_optionsp,
+           size_t *allocated_optionsp)
+{
+    if (*n_optionsp >= *allocated_optionsp) {
+        *optionsp = x2nrealloc(*optionsp, allocated_optionsp,
+                               sizeof **optionsp);
+    }
+    return &(*optionsp)[(*n_optionsp)++];
+}
+
+/* Converts the command arguments into format that can be parsed by
+ * bash completion script.
+ *
+ * Therein, arguments will be attached with following prefixes:
+ *
+ *    !argument :: The argument is required
+ *    ?argument :: The argument is optional
+ *    *argument :: The argument may appear any number (0 or more) times
+ *    +argument :: The argument may appear one or more times
+ *
+ */
+static void
+print_command_arguments(const struct ctl_command_syntax *command)
+{
+    /*
+     * The argument string is parsed in reverse.  We use a stack 'oew_stack' to
+     * keep track of nested optionals.  Whenever a ']' is encountered, we push
+     * a bit to 'oew_stack'.  The bit is set to 1 if the ']' is not nested.
+     * Subsequently, we pop an entry everytime '[' is met.
+     *
+     * We use 'whole_word_is_optional' value to decide whether or not a ! or +
+     * should be added on encountering a space: if the optional surrounds the
+     * whole word then it shouldn't be, but if it is only a part of the word
+     * (i.e. [key=]value), it should be.
+     */
+    uint32_t oew_stack = 0;
+
+    const char *arguments = command->arguments;
+    int length = strlen(arguments);
+    if (!length) {
+        return;
+    }
+
+    /* Output buffer, written backward from end. */
+    char *output = xmalloc(2 * length);
+    char *outp = output + 2 * length;
+    *--outp = '\0';
+
+    bool in_repeated = false;
+    bool whole_word_is_optional = false;
+
+    for (const char *inp = arguments + length; inp > arguments; ) {
+        switch (*--inp) {
+        case ']':
+            oew_stack <<= 1;
+            if (inp[1] == '\0' || inp[1] == ' ' || inp[1] == '.') {
+                oew_stack |= 1;
+            }
+            break;
+        case '[':
+            /* Checks if the whole word is optional, and sets the
+             * 'whole_word_is_optional' accordingly. */
+            if ((inp == arguments || inp[-1] == ' ') && oew_stack & 1) {
+                *--outp = in_repeated ? '*' : '?';
+                whole_word_is_optional = true;
+            } else {
+                *--outp = '?';
+                whole_word_is_optional = false;
+            }
+            oew_stack >>= 1;
+            break;
+        case ' ':
+            if (!whole_word_is_optional) {
+                *--outp = in_repeated ? '+' : '!';
+            }
+            *--outp = ' ';
+            in_repeated = false;
+            whole_word_is_optional = false;
+            break;
+        case '.':
+            in_repeated = true;
+            break;
+        default:
+            *--outp = *inp;
+            break;
+        }
+    }
+    if (arguments[0] != '[' && outp != output + 2 * length - 1) {
+        *--outp = in_repeated ? '+' : '!';
+    }
+    printf("%s", outp);
+    free(output);
+}
+
 static void
 die_if_error(char *error)
 {
@@ -1388,6 +1496,63 @@ parse_command(int argc, char *argv[], struct shash *local_options,
 }
 
 
+/* Given pointer to dynamic array 'options_p',  array's current size
+ * 'allocated_options_p' and number of added options 'n_options_p',
+ * adds all command options to the array.  Enlarges the array if
+ * necessary. */
+void
+ctl_add_cmd_options(struct option **options_p, size_t *n_options_p,
+                    size_t *allocated_options_p, int opt_val)
+{
+    struct option *o;
+    const struct shash_node *node;
+    size_t n_existing_options = *n_options_p;
+
+    SHASH_FOR_EACH (node, ctl_get_all_commands()) {
+        const struct ctl_command_syntax *p = node->data;
+
+        if (p->options[0]) {
+            char *save_ptr = NULL;
+            char *name;
+            char *s;
+
+            s = xstrdup(p->options);
+            for (name = strtok_r(s, ",", &save_ptr); name != NULL;
+                 name = strtok_r(NULL, ",", &save_ptr)) {
+                char *equals;
+                int has_arg;
+
+                ovs_assert(name[0] == '-' && name[1] == '-' && name[2]);
+                name += 2;
+
+                equals = strchr(name, '=');
+                if (equals) {
+                    has_arg = required_argument;
+                    *equals = '\0';
+                } else {
+                    has_arg = no_argument;
+                }
+
+                o = find_option(name, *options_p, *n_options_p);
+                if (o) {
+                    ovs_assert(o - *options_p >= n_existing_options);
+                    ovs_assert(o->has_arg == has_arg);
+                } else {
+                    o = add_option(options_p, n_options_p, allocated_options_p);
+                    o->name = xstrdup(name);
+                    o->has_arg = has_arg;
+                    o->flag = NULL;
+                    o->val = opt_val;
+                }
+            }
+
+            free(s);
+        }
+    }
+    o = add_option(options_p, n_options_p, allocated_options_p);
+    memset(o, 0, sizeof *o);
+}
+
 /* Parses command-line input for commands. */
 struct ctl_command *
 ctl_parse_commands(int argc, char *argv[], struct shash *local_options,
@@ -1425,6 +1590,61 @@ ctl_parse_commands(int argc, char *argv[], struct shash *local_options,
     }
     *n_commandsp = n_commands;
     return commands;
+}
+
+/* Prints all registered commands. */
+void
+ctl_print_commands(void)
+{
+    const struct shash_node *node;
+
+    SHASH_FOR_EACH (node, ctl_get_all_commands()) {
+        const struct ctl_command_syntax *p = node->data;
+        char *options = xstrdup(p->options);
+        char *options_begin = options;
+        char *item;
+
+        for (item = strsep(&options, ","); item != NULL;
+             item = strsep(&options, ",")) {
+            if (item[0] != '\0') {
+                printf("[%s] ", item);
+            }
+        }
+        printf(",%s,", p->name);
+        print_command_arguments(p);
+        printf("\n");
+
+        free(options_begin);
+    }
+
+    exit(EXIT_SUCCESS);
+}
+
+/* Given array of options 'options', prints them. */
+void
+ctl_print_options(const struct option *options)
+{
+    for (; options->name; options++) {
+        const struct option *o = options;
+
+        printf("--%s%s\n", o->name, o->has_arg ? "=ARG" : "");
+        if (o->flag == NULL && o->val > 0 && o->val <= UCHAR_MAX) {
+            printf("-%c%s\n", o->val, o->has_arg ? " ARG" : "");
+        }
+    }
+
+    exit(EXIT_SUCCESS);
+}
+
+/* Returns the default local database path. */
+char *
+ctl_default_db(void)
+{
+    static char *def;
+    if (!def) {
+        def = xasprintf("unix:%s/db.sock", ovs_rundir());
+    }
+    return def;
 }
 
 /* Returns true if it looks like this set of arguments might modify the
