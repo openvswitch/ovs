@@ -287,6 +287,8 @@ struct ofproto_dpif {
     struct ofproto up;
     struct dpif_backer *backer;
 
+    atomic_llong tables_version;  /* Version # to use in classifier lookups. */
+
     uint64_t dump_seq; /* Last read of udpif_dump_seq(). */
 
     /* Special OpenFlow rules. */
@@ -1227,6 +1229,7 @@ construct(struct ofproto *ofproto_)
         return error;
     }
 
+    atomic_init(&ofproto->tables_version, CLS_MIN_VERSION);
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
     ofproto->ipfix = NULL;
@@ -1604,6 +1607,15 @@ query_tables(struct ofproto *ofproto,
         }
     }
 }
+
+static void
+set_tables_version(struct ofproto *ofproto_, long long version)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    atomic_store_relaxed(&ofproto->tables_version, version);
+}
+
 
 static struct ofport *
 port_alloc(void)
@@ -3709,6 +3721,15 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
     ovs_mutex_unlock(&rule->up.mutex);
 }
 
+long long
+ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto)
+{
+    long long version;
+
+    atomic_read_relaxed(&ofproto->tables_version, &version);
+    return version;
+}
+
 /* The returned rule (if any) is valid at least until the next RCU quiescent
  * period.  If the rule needs to stay around longer, a non-zero 'take_ref'
  * must be passed in to cause a reference to be taken on it.
@@ -3716,16 +3737,16 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static struct rule_dpif *
-rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
-                          struct flow *flow, struct flow_wildcards *wc,
-                          bool take_ref)
+rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, long long version,
+                          uint8_t table_id, struct flow *flow,
+                          struct flow_wildcards *wc, bool take_ref)
 {
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
     const struct cls_rule *cls_rule;
     struct rule_dpif *rule;
 
     do {
-        cls_rule = classifier_lookup(cls, CLS_MAX_VERSION, flow, wc);
+        cls_rule = classifier_lookup(cls, version, flow, wc);
 
         rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
 
@@ -3762,9 +3783,9 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, uint8_t table_id,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 struct rule_dpif *
-rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
-                            struct flow_wildcards *wc, bool take_ref,
-                            const struct dpif_flow_stats *stats,
+rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, long long version,
+                            struct flow *flow, struct flow_wildcards *wc,
+                            bool take_ref, const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
                             bool may_packet_in, bool honor_table_miss)
 {
@@ -3815,7 +3836,8 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, struct flow *flow,
          next_id++, next_id += (next_id == TBL_INTERNAL))
     {
         *table_id = next_id;
-        rule = rule_dpif_lookup_in_table(ofproto, next_id, flow, wc, take_ref);
+        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc,
+                                         take_ref);
         if (stats) {
             struct oftable *tbl = &ofproto->up.tables[next_id];
             unsigned long orig;
@@ -5444,7 +5466,9 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
         return error;
     }
 
-    rule = rule_dpif_lookup_in_table(ofproto, TBL_INTERNAL, &fm.match.flow,
+    rule = rule_dpif_lookup_in_table(ofproto,
+                                     ofproto_dpif_get_tables_version(ofproto),
+                                     TBL_INTERNAL, &fm.match.flow,
                                      &fm.match.wc, false);
     if (rule) {
         *rulep = &rule->up;
@@ -5499,6 +5523,7 @@ const struct ofproto_class ofproto_dpif_class = {
     type_get_memory_usage,
     flush,
     query_tables,
+    set_tables_version,
     port_alloc,
     port_construct,
     port_destruct,

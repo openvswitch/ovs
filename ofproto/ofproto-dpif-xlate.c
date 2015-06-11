@@ -159,6 +159,9 @@ struct xlate_ctx {
 
     const struct xbridge *xbridge;
 
+    /* Flow tables version at the beginning of the translation. */
+    long long tables_version;
+
     /* Flow at the last commit. */
     struct flow base_flow;
 
@@ -2774,6 +2777,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
         bool old_was_mpls = ctx->was_mpls;
+        long long old_version = ctx->tables_version;
         enum slow_path_reason special;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
@@ -2788,6 +2792,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
         memset(flow->regs, 0, sizeof flow->regs);
         flow->actset_output = OFPP_UNSET;
+
+        /* The bridge is now known so obtain its table version. */
+        ctx->tables_version
+            = ofproto_dpif_get_tables_version(ctx->xbridge->ofproto);
 
         special = process_special(ctx, &ctx->xin->flow, peer,
                                   ctx->xin->packet);
@@ -2834,6 +2842,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->action_set = old_action_set;
         ofpbuf_uninit(&ctx->stack);
         ctx->stack = old_stack;
+
+        /* Restore calling bridge's lookup version. */
+        ctx->tables_version = old_version;
 
         /* The peer bridge popping MPLS should have no effect on the original
          * bridge. */
@@ -3056,6 +3067,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         wc = (ctx->xin->skip_wildcards) ? NULL : &ctx->xout->wc;
 
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
+                                           ctx->tables_version,
                                            &ctx->xin->flow, wc,
                                            ctx->xin->xcache != NULL,
                                            ctx->xin->resubmit_stats,
@@ -4826,9 +4838,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                      flow->recirc_id);
         return;
     }
+    /* The bridge is now known so obtain its table version. */
+    ctx.tables_version = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
 
     if (!xin->ofpacts && !ctx.rule) {
-        rule = rule_dpif_lookup_from_table(ctx.xbridge->ofproto, flow, wc,
+        rule = rule_dpif_lookup_from_table(ctx.xbridge->ofproto,
+                                           ctx.tables_version, flow, wc,
                                            ctx.xin->xcache != NULL,
                                            ctx.xin->resubmit_stats,
                                            &ctx.table_id,

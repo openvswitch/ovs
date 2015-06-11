@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,10 @@ size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_ufid(struct dpif_backer *backer);
 
+long long ofproto_dpif_get_tables_version(struct ofproto_dpif *);
+
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
+                                              long long version,
                                               struct flow *,
                                               struct flow_wildcards *,
                                               bool take_ref,

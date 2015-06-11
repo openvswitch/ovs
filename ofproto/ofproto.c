@@ -527,6 +527,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->eviction_group_timer = LLONG_MIN;
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
+    ofproto->tables_version = CLS_MIN_VERSION;
     hindex_init(&ofproto->cookies);
     hmap_init(&ofproto->learned_cookies);
     list_init(&ofproto->expirable);
@@ -576,6 +577,10 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     }
     ofproto->meters = xzalloc((ofproto->meter_features.max_meters + 1)
                               * sizeof(struct meter *));
+
+    /* Set the initial tables version. */
+    ofproto->ofproto_class->set_tables_version(ofproto,
+                                               ofproto->tables_version);
 
     *ofprotop = ofproto;
     return 0;
