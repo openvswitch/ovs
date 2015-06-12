@@ -413,6 +413,7 @@ MAN_FRAGMENTS += \
 	lib/coverage-unixctl.man \
 	lib/daemon.man \
 	lib/daemon-syn.man \
+	lib/db-ctl-base.man \
 	lib/dpctl.man \
 	lib/memory-unixctl.man \
 	lib/ofp-version.man \
