@@ -241,14 +241,14 @@ cls_rule_move(struct cls_rule *dst, struct cls_rule *src)
  * ('rule' must not currently be in a classifier.) */
 void
 cls_rule_destroy(struct cls_rule *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     ovs_assert(!rule->cls_match);   /* Must not be in a classifier. */
 
-    /* Check that the rule has been properly removed from the classifier and
-     * that the destruction only happens after the RCU grace period, or that
-     * the rule was never inserted to the classifier in the first place. */
-    ovs_assert(rculist_next_protected(&rule->node) == RCULIST_POISON
+    /* Check that the rule has been properly removed from the classifier. */
+    ovs_assert(rule->node.prev == RCULIST_POISON
                || rculist_is_empty(&rule->node));
+    rculist_poison__(&rule->node);   /* Poisons also the next pointer. */
 
     minimatch_destroy(CONST_CAST(struct minimatch *, &rule->match));
 }

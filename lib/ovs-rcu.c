@@ -212,6 +212,19 @@ ovsrcu_synchronize(void)
 /* Registers 'function' to be called, passing 'aux' as argument, after the
  * next grace period.
  *
+ * The call is guaranteed to happen after the next time all participating
+ * threads have quiesced at least once, but there is no quarantee that all
+ * registered functions are called as early as possible, or that the functions
+ * registered by different threads would be called in the order the
+ * registrations took place.  In particular, even if two threads provably
+ * register a function each in a specific order, the functions may still be
+ * called in the opposite order, depending on the timing of when the threads
+ * call ovsrcu_quiesce(), how many functions they postpone, and when the
+ * ovs-rcu thread happens to grab the functions to be called.
+ *
+ * All functions registered by a single thread are guaranteed to execute in the
+ * registering order, however.
+ *
  * This function is more conveniently called through the ovsrcu_postpone()
  * macro, which provides a type-safe way to allow 'function''s parameter to be
  * any pointer type. */
