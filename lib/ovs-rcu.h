@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,8 +80,8 @@
  * All functions postponed by a single thread are guaranteed to execute in the
  * order they were postponed, however.
  *
- * Use
- * ---
+ * Usage
+ * -----
  *
  * Use OVSRCU_TYPE(TYPE) to declare a pointer to RCU-protected data, e.g. the
  * following declares an RCU-protected "struct flow *" named flowp:
@@ -204,7 +204,7 @@ static inline void ovsrcu_set__(struct ovsrcu_pointer *pointer,
 #define ovsrcu_init(VAR, VALUE) atomic_init(&(VAR)->p, VALUE)
 
 /* Calls FUNCTION passing ARG as its pointer-type argument following the next
- * grace period.  See "Usage" above for example.  */
+ * grace period.  See "Usage" above for an example. */
 void ovsrcu_postpone__(void (*function)(void *aux), void *aux);
 #define ovsrcu_postpone(FUNCTION, ARG)                          \
     ((void) sizeof((FUNCTION)(ARG), 1),                         \
