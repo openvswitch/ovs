@@ -3676,13 +3676,14 @@ add table=254 actions=drop
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt 2>&1 | sed '/|WARN|/d
-s/unix:.*br0\.mgmt/unix:br0.mgmt/'], [0], [dnl
+s/unix:.*br0\.mgmt/unix:br0.mgmt/' | sed 's/(.* error)/(error)/'],
+[0], [dnl
 OFPT_ERROR (OF1.4) (xid=0xb): OFPBRC_EPERM
 OFPT_FLOW_MOD (OF1.4) (xid=0xb): ADD table:254 actions=drop
 OFPT_ERROR (OF1.4) (xid=0xd): OFPBFC_MSG_FAILED
 OFPT_BUNDLE_CONTROL (OF1.4) (xid=0xd):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
-ovs-ofctl: talking to unix:br0.mgmt (Protocol error)
+ovs-ofctl: talking to unix:br0.mgmt (error)
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
