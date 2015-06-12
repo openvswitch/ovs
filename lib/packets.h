@@ -63,10 +63,10 @@ struct pkt_metadata {
                                    received from the wire. */
     uint32_t dp_hash;           /* hash value computed by the recirculation
                                    action. */
-    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
     union flow_in_port in_port; /* Input port. */
+    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
 };
 
 #define PKT_METADATA_INITIALIZER(PORT) \

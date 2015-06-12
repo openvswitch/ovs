@@ -438,7 +438,12 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     /* Metadata. */
     if (md->tunnel.ip_dst) {
         miniflow_push_words(mf, tunnel, &md->tunnel,
-                            sizeof md->tunnel / sizeof(uint64_t));
+                            offsetof(struct flow_tnl, metadata) /
+                            sizeof(uint64_t));
+        if (md->tunnel.metadata.opt_map) {
+            miniflow_push_words(mf, tunnel.metadata, &md->tunnel.metadata,
+                                 sizeof md->tunnel.metadata / sizeof(uint64_t));
+        }
     }
     if (md->skb_priority || md->pkt_mark) {
         miniflow_push_uint32(mf, skb_priority, md->skb_priority);
