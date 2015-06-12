@@ -301,6 +301,8 @@ enum ofp_flow_removed_reason {
     OFPRR_GROUP_DELETE,         /* Group was removed. */
     OFPRR_METER_DELETE,         /* Meter was removed. */
     OFPRR_EVICTION,             /* Switch eviction to free resources. */
+
+    OVS_OFPRR_NONE              /* OVS internal_use only, keep last!. */
 };
 
 /* What changed about the physical port */

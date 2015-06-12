@@ -232,7 +232,8 @@ struct ofport_usage {
 };
 
 /* rule. */
-static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
+static void ofproto_rule_send_removed(struct rule *)
+        OVS_EXCLUDED(ofproto_mutex);
 static bool rule_is_readonly(const struct rule *);
 static void ofproto_rule_insert__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
@@ -2758,7 +2759,14 @@ ofproto_rule_destroy__(struct rule *rule)
 
 static void
 rule_destroy_cb(struct rule *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    /* Send rule removed if needed. */
+    if (rule->flags & OFPUTIL_FF_SEND_FLOW_REM
+        && rule->removed_reason != OVS_OFPRR_NONE
+        && !rule_is_hidden(rule)) {
+        ofproto_rule_send_removed(rule);
+    }
     rule->ofproto->ofproto_class->rule_destruct(rule);
     ofproto_rule_destroy__(rule);
 }
@@ -4607,6 +4615,7 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
     rule->importance = fm->importance;
+    rule->removed_reason = OVS_OFPRR_NONE;
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table_id;
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
@@ -4753,9 +4762,7 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         } else {
             /* XXX: This is slight duplication with delete_flows_finish__() */
 
-            /* XXX: This call should done when rule's refcount reaches
-             * zero to get accurate stats in the flow removed message. */
-            ofproto_rule_send_removed(old_rule, OFPRR_EVICTION);
+            old_rule->removed_reason = OFPRR_EVICTION;
 
             ofmonitor_report(ofproto->connmgr, old_rule, NXFME_DELETED,
                              OFPRR_EVICTION,
@@ -4960,7 +4967,10 @@ delete_flows_finish__(struct ofproto *ofproto,
         for (size_t i = 0; i < rules->n; i++) {
             struct rule *rule = rules->rules[i];
 
-            ofproto_rule_send_removed(rule, reason);
+            /* This value will be used to send the flow removed message right
+             * before the rule is actually destroyed. */
+            rule->removed_reason = reason;
+
             ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
                              req ? req->ofconn : NULL,
                              req ? req->request->xid : 0, NULL);
@@ -5071,23 +5081,20 @@ delete_flow_start_strict(struct ofproto *ofproto,
     return error;
 }
 
-/* XXX: This should be sent right when the rule refcount gets to zero! */
+/* This may only be called by rule_destroy_cb()! */
 static void
-ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
-    OVS_REQUIRES(ofproto_mutex)
+ofproto_rule_send_removed(struct rule *rule)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofputil_flow_removed fr;
     long long int used;
 
-    if (rule_is_hidden(rule) ||
-        !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
-        return;
-    }
-
     minimatch_expand(&rule->cr.match, &fr.match);
     fr.priority = rule->cr.priority;
+
+    ovs_mutex_lock(&ofproto_mutex);
     fr.cookie = rule->flow_cookie;
-    fr.reason = reason;
+    fr.reason = rule->removed_reason;
     fr.table_id = rule->table_id;
     calc_duration(rule->created, time_msec(),
                   &fr.duration_sec, &fr.duration_nsec);
@@ -5097,8 +5104,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     ovs_mutex_unlock(&rule->mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
                                                  &fr.byte_count, &used);
-
     connmgr_send_flow_removed(rule->ofproto->connmgr, &fr);
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 /* Sends an OpenFlow "flow removed" message with the given 'reason' (either

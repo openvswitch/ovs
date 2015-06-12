@@ -356,6 +356,11 @@ struct rule {
     /* Eviction precedence. */
     uint16_t importance OVS_GUARDED;
 
+    /* Removal reason for sending flow removed message.
+     * Used only if 'flags' has OFPUTIL_FF_SEND_FLOW_REM set and if the
+     * value is not OVS_OFPRR_NONE. */
+    uint8_t removed_reason;
+
     /* Eviction groups (see comment on struct eviction_group for explanation) .
      *
      * 'eviction_group' is this rule's eviction group, or NULL if it is not in
