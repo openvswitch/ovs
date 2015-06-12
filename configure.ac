@@ -186,6 +186,7 @@ AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
 AC_CONFIG_COMMANDS([ovn/dummy], [:])
+AC_CONFIG_COMMANDS([ovn/utilities/dummy], [:])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 
