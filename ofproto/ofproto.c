@@ -150,7 +150,7 @@ struct rule_criteria {
 
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
                                const struct match *match, int priority,
-                               long long version,
+                               cls_version_t version,
                                ovs_be64 cookie, ovs_be64 cookie_mask,
                                ofp_port_t out_port, uint32_t out_group);
 static void rule_criteria_require_rw(struct rule_criteria *,
@@ -3725,9 +3725,10 @@ next_matching_table(const struct ofproto *ofproto,
  * supplied as 0. */
 static void
 rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
-                   const struct match *match, int priority, long long version,
-                   ovs_be64 cookie, ovs_be64 cookie_mask,
-                   ofp_port_t out_port, uint32_t out_group)
+                   const struct match *match, int priority,
+                   cls_version_t version, ovs_be64 cookie,
+                   ovs_be64 cookie_mask, ofp_port_t out_port,
+                   uint32_t out_group)
 {
     criteria->table_id = table_id;
     cls_rule_init(&criteria->cr, match, priority, version);
@@ -4664,8 +4665,7 @@ replace_rule_start(struct ofproto *ofproto,
     if (old_rule) {
         /* Mark the old rule for removal in the next version. */
         cls_rule_make_invisible_in_version(&old_rule->cr,
-                                           ofproto->tables_version + 1,
-                                           ofproto->tables_version);
+                                           ofproto->tables_version + 1);
     } else {
         table->n_flows++;
     }
@@ -4943,8 +4943,7 @@ delete_flows_start__(struct ofproto *ofproto,
 
         table->n_flows--;
         cls_rule_make_invisible_in_version(&rule->cr,
-                                           ofproto->tables_version + 1,
-                                           ofproto->tables_version);
+                                           ofproto->tables_version + 1);
     }
 }
 

@@ -160,7 +160,7 @@ struct xlate_ctx {
     const struct xbridge *xbridge;
 
     /* Flow tables version at the beginning of the translation. */
-    long long tables_version;
+    cls_version_t tables_version;
 
     /* Flow at the last commit. */
     struct flow base_flow;
@@ -2777,7 +2777,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
         bool old_was_mpls = ctx->was_mpls;
-        long long old_version = ctx->tables_version;
+        cls_version_t old_version = ctx->tables_version;
         enum slow_path_reason special;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];

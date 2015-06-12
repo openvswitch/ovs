@@ -296,7 +296,7 @@ struct ofproto_dpif {
     struct ofproto up;
     struct dpif_backer *backer;
 
-    atomic_llong tables_version;  /* Version # to use in classifier lookups. */
+    ATOMIC(cls_version_t) tables_version;  /* For classifier lookups. */
 
     uint64_t dump_seq; /* Last read of udpif_dump_seq(). */
 
@@ -1618,7 +1618,7 @@ query_tables(struct ofproto *ofproto,
 }
 
 static void
-set_tables_version(struct ofproto *ofproto_, long long version)
+set_tables_version(struct ofproto *ofproto_, cls_version_t version)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
@@ -3734,10 +3734,10 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
     ovs_mutex_unlock(&rule->up.mutex);
 }
 
-long long
+cls_version_t
 ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
 {
-    long long version;
+    cls_version_t version;
 
     atomic_read_relaxed(&ofproto->tables_version, &version);
 
@@ -3751,7 +3751,7 @@ ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static struct rule_dpif *
-rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, long long version,
+rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
                           uint8_t table_id, struct flow *flow,
                           struct flow_wildcards *wc, bool take_ref)
 {
@@ -3797,9 +3797,10 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, long long version,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 struct rule_dpif *
-rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, long long version,
-                            struct flow *flow, struct flow_wildcards *wc,
-                            bool take_ref, const struct dpif_flow_stats *stats,
+rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
+                            cls_version_t version, struct flow *flow,
+                            struct flow_wildcards *wc, bool take_ref,
+                            const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
                             bool may_packet_in, bool honor_table_miss)
 {

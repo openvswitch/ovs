@@ -102,11 +102,10 @@ size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_ufid(struct dpif_backer *backer);
 
-long long ofproto_dpif_get_tables_version(struct ofproto_dpif *);
+cls_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
-                                              long long version,
-                                              struct flow *,
+                                              cls_version_t, struct flow *,
                                               struct flow_wildcards *,
                                               bool take_ref,
                                               const struct dpif_flow_stats *,

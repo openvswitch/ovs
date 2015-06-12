@@ -975,7 +975,8 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
                     tcls_rules[j] = tcls_insert(&tcls, rules[j]);
                     if (versioned) {
                         /* Insert the new rule in the next version. */
-                        *CONST_CAST(long long *, &rules[j]->cls_rule.version)
+                        *CONST_CAST(cls_version_t *,
+                                    &rules[j]->cls_rule.version)
                             = ++version;
 
                         displaced_rule = test_rule_from_cls_rule(
@@ -985,8 +986,7 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
                             /* Mark the old rule for removal after the current
                              * version. */
                             cls_rule_make_invisible_in_version(
-                                &displaced_rule->cls_rule, version,
-                                version - 1);
+                                &displaced_rule->cls_rule, version);
                             n_invisible_rules++;
                             removable_rule = &displaced_rule->cls_rule;
                         }
@@ -1011,7 +1011,7 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
                         /* Mark the rule for removal after the current
                          * version. */
                         cls_rule_make_invisible_in_version(
-                            &rules[j]->cls_rule, version + 1, version);
+                            &rules[j]->cls_rule, version + 1);
                         ++version;
                         n_invisible_rules++;
                         removable_rule = &rules[j]->cls_rule;
@@ -1131,7 +1131,7 @@ test_many_rules_in_one_table(struct ovs_cmdl_context *ctx OVS_UNUSED)
             if (versioned) {
                 /* Mark the rule for removal after the current version. */
                 cls_rule_make_invisible_in_version(&rules[i]->cls_rule,
-                                                   version + 1, version);
+                                                   version + 1);
                 ++version;
                 n_invisible_rules++;
             } else {
@@ -1219,7 +1219,7 @@ test_many_rules_in_n_tables(int n_tables)
                 if (versioned) {
                     /* Mark the rule for removal after the current version. */
                     cls_rule_make_invisible_in_version(&rule->cls_rule,
-                                                       version + 1, version);
+                                                       version + 1);
                     n_removable_rules++;
                     compare_classifiers(&cls, n_invisible_rules, version,
                                         &tcls);

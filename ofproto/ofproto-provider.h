@@ -93,8 +93,8 @@ struct ofproto {
     long long int eviction_group_timer; /* For rate limited reheapification. */
     struct oftable *tables;
     int n_tables;
-    long long tables_version;   /* Controls which rules are visible to
-                                 * table lookups. */
+    cls_version_t tables_version;   /* Controls which rules are visible to
+                                     * table lookups. */
 
     /* Rules indexed on their cookie values, in all flow tables. */
     struct hindex cookies OVS_GUARDED_BY(ofproto_mutex);
@@ -843,8 +843,7 @@ struct ofproto_class {
 
     /* Sets the current tables version the provider should use for classifier
      * lookups. */
-    void (*set_tables_version)(struct ofproto *ofproto,
-                               long long version);
+    void (*set_tables_version)(struct ofproto *ofproto, cls_version_t version);
 /* ## ---------------- ## */
 /* ## ofport Functions ## */
 /* ## ---------------- ## */
