@@ -897,14 +897,16 @@ AT_CHECK([RUN_VTEP_CTL(
   [add-port a a1],
   [add-ls ls1],
   [bind-ls a a1 100 ls1],
-  [set Physical_Switch a tunnel_ips=[[1.2.3.4]]])], [0], [ignore], [], [VTEP_CTL_CLEANUP])
+  [set Physical_Switch a management_ips=[[4.3.2.1]] tunnel_ips=[[1.2.3.4]]])], [0], [ignore], [], [VTEP_CTL_CLEANUP])
 
 AT_CHECK([vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket show | tail -n+2 | sed 's/=[[a-f0-9-]][[a-f0-9-]]*\}/=<ls>\}/' ], [0], [dnl
     Manager "tcp:4.5.6.7"
     Physical_Switch a
+        management_ips: [["4.3.2.1"]]
         tunnel_ips: [["1.2.3.4"]]
         Physical_Port "a1"
-            vlan_bindings: {100=<ls>}
+            vlan_bindings:
+                100="ls1"
 ], [], [VTEP_CTL_CLEANUP])
 
 VTEP_CTL_CLEANUP

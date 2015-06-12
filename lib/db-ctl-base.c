@@ -1595,6 +1595,45 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
                 }
                 continue;
             }
+        } else if (ovsdb_type_is_map(&column->type) &&
+                   column->type.value.type == OVSDB_TYPE_UUID &&
+                   column->type.value.u.uuid.refTableName) {
+            struct cmd_show_table *ref_show;
+            size_t j;
+
+            /* Prints the key to ref'ed table name map if the ref'ed table
+             * is also defined in 'cmd_show_tables'.  */
+            ref_show = cmd_show_find_table_by_name(
+                column->type.value.u.uuid.refTableName);
+            if (ref_show && ref_show->name_column) {
+                ds_put_char_multiple(&ctx->output, ' ', (level + 1) * 4);
+                ds_put_format(&ctx->output, "%s:\n", column->name);
+                for (j = 0; j < datum->n; j++) {
+                    const struct ovsdb_idl_row *ref_row;
+
+                    ref_row = ovsdb_idl_get_row_for_uuid(ctx->idl,
+                                                         ref_show->table,
+                                                         &datum->values[j].uuid);
+
+                    ds_put_char_multiple(&ctx->output, ' ', (level + 2) * 4);
+                    ovsdb_atom_to_string(&datum->keys[j], column->type.key.type,
+                                         &ctx->output);
+                    ds_put_char(&ctx->output, '=');
+                    if (ref_row) {
+                        const struct ovsdb_datum *ref_datum;
+
+                        ref_datum = ovsdb_idl_read(ref_row,
+                                                   ref_show->name_column);
+                        ovsdb_datum_to_string(ref_datum,
+                                              &ref_show->name_column->type,
+                                              &ctx->output);
+                    } else {
+                        ds_put_cstr(&ctx->output, "\"<null>\"");
+                    }
+                    ds_put_char(&ctx->output, '\n');
+                }
+                continue;
+            }
         }
 
         if (!ovsdb_datum_is_default(datum, &column->type)) {
