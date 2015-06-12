@@ -34,14 +34,17 @@ extern "C" {
 struct ofp_bundle_entry {
     struct ovs_list   node;
     enum ofptype      type;  /* OFPTYPE_FLOW_MOD or OFPTYPE_PORT_MOD. */
+    long long         version;          /* Version in which the changes take
+                                         * effect. */
     union {
         struct ofputil_flow_mod fm;   /* 'fm.ofpacts' must be malloced. */
         struct ofputil_port_mod pm;
     };
 
     /* Used during commit. */
+    struct ofport *port;                /* Affected port. */
     struct rule_collection old_rules;   /* Affected rules. */
-    struct rule_collection new_rules;   /* Affected rules. */
+    struct rule_collection new_rules;   /* Replacement rules. */
 
     /* OpenFlow header and some of the message contents for error reporting. */
     struct ofp_header ofp_msg[DIV_ROUND_UP(64, sizeof(struct ofp_header))];
@@ -80,6 +83,7 @@ ofp_bundle_entry_alloc(enum ofptype type, const struct ofp_header *oh)
     struct ofp_bundle_entry *entry = xmalloc(sizeof *entry);
 
     entry->type = type;
+    entry->version = 0;
 
     /* Max 64 bytes for error reporting. */
     memcpy(entry->ofp_msg, oh, MIN(ntohs(oh->length), sizeof entry->ofp_msg));

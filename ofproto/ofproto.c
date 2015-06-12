@@ -3433,9 +3433,34 @@ update_port_config(struct ofconn *ofconn, struct ofport *port,
 }
 
 static enum ofperr
-handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+port_mod_start(struct ofconn *ofconn, struct ofputil_port_mod *pm,
+               struct ofport **port)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
+
+    *port = ofproto_get_port(p, pm->port_no);
+    if (!*port) {
+        return OFPERR_OFPPMFC_BAD_PORT;
+    }
+    if (!eth_addr_equals((*port)->pp.hw_addr, pm->hw_addr)) {
+        return OFPERR_OFPPMFC_BAD_HW_ADDR;
+    }
+    return 0;
+}
+
+static void
+port_mod_finish(struct ofconn *ofconn, struct ofputil_port_mod *pm,
+                struct ofport *port)
+{
+    update_port_config(ofconn, port, pm->config, pm->mask);
+    if (pm->advertise) {
+        netdev_set_advertisements(port->netdev, pm->advertise);
+    }
+}
+
+static enum ofperr
+handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+{
     struct ofputil_port_mod pm;
     struct ofport *port;
     enum ofperr error;
@@ -3450,18 +3475,11 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    port = ofproto_get_port(p, pm.port_no);
-    if (!port) {
-        return OFPERR_OFPPMFC_BAD_PORT;
-    } else if (!eth_addr_equals(port->pp.hw_addr, pm.hw_addr)) {
-        return OFPERR_OFPPMFC_BAD_HW_ADDR;
-    } else {
-        update_port_config(ofconn, port, pm.config, pm.mask);
-        if (pm.advertise) {
-            netdev_set_advertisements(port->netdev, pm.advertise);
-        }
+    error = port_mod_start(ofconn, &pm, &port);
+    if (!error) {
+        port_mod_finish(ofconn, &pm, port);
     }
-    return 0;
+    return error;
 }
 
 static enum ofperr
@@ -6668,17 +6686,16 @@ do_bundle_flow_mod_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
  * possible.  No visible changes were made, so rollback is minimal (remove
  * added invisible rules, restore visibility of rules marked for removal).
  *
- * 3. Bump the version visible to lookups.
- *
- * 4. Finish: Insert replacement rules to the ofproto provider. Remove replaced
- * and deleted rules from ofproto data structures, and Schedule postponed
- * removal of deleted rules from the classifier.  Send notifications, buffered
- * packets, etc.
+ * 3. Finish: Make the changes visible for lookups. Insert replacement rules to
+ * the ofproto provider. Remove replaced and deleted rules from ofproto data
+ * structures, and Schedule postponed removal of deleted rules from the
+ * classifier.  Send notifications, buffered packets, etc.
  */
 static enum ofperr
 do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    cls_version_t visible_version = ofproto->tables_version;
     struct ofp_bundle *bundle;
     struct ofp_bundle_entry *be;
     enum ofperr error;
@@ -6691,23 +6708,42 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
     if (bundle->flags != flags) {
         error = OFPERR_OFPBFC_BAD_FLAGS;
     } else {
+        bool prev_is_port_mod = false;
+
         error = 0;
         ovs_mutex_lock(&ofproto_mutex);
 
         /* 1. Begin. */
         LIST_FOR_EACH (be, node, &bundle->msg_list) {
             if (be->type == OFPTYPE_PORT_MOD) {
-                /* Not supported yet. */
-                error = OFPERR_OFPBFC_MSG_FAILED;
+                /* Our port mods are not atomic. */
+                if (flags & OFPBF_ATOMIC) {
+                    error = OFPERR_OFPBFC_MSG_FAILED;
+                } else {
+                    prev_is_port_mod = true;
+                    error = port_mod_start(ofconn, &be->pm, &be->port);
+                }
             } else if (be->type == OFPTYPE_FLOW_MOD) {
+                /* Flow mods between port mods are applied as a single
+                 * version, but the versions are published only after
+                 * we know the commit is successful. */
+                if (prev_is_port_mod) {
+                    ++ofproto->tables_version;
+                }
+                prev_is_port_mod = false;
                 error = do_bundle_flow_mod_start(ofproto, &be->fm, be);
             } else {
                 OVS_NOT_REACHED();
             }
             if (error) {
                 break;
+            } else {
+                /* Store the version in which the changes should take
+                 * effect. */
+                be->version = ofproto->tables_version + 1;
             }
         }
+
         if (error) {
             /* Send error referring to the original message. */
             if (error) {
@@ -6720,24 +6756,38 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                 if (be->type == OFPTYPE_FLOW_MOD) {
                     do_bundle_flow_mod_revert(ofproto, &be->fm, be);
                 }
+                /* Nothing needs to be reverted for a port mod. */
             }
         } else {
-            /* 3. Bump the version.  This makes all the changes in the bundle
-             * visible to the lookups at once.  For this to work an upcall must
-             * read the tables_version once at the beginning and keep using the
-             * same version number for the whole duration of the upcall
-             * processing. */
-            ofproto_bump_tables_version(ofproto);
-
             /* 4. Finish. */
             LIST_FOR_EACH (be, node, &bundle->msg_list) {
+                /* Bump the lookup version to the one of the current message.
+                 * This makes all the changes in the bundle at this version
+                 * visible to lookups at once. */
+                if (visible_version < be->version) {
+                    visible_version = be->version;
+                    ofproto->ofproto_class->set_tables_version(
+                        ofproto, visible_version);
+                }
                 if (be->type == OFPTYPE_FLOW_MOD) {
                     struct flow_mod_requester req = { ofconn, be->ofp_msg };
 
                     do_bundle_flow_mod_finish(ofproto, &be->fm, &req, be);
+                } else if (be->type == OFPTYPE_PORT_MOD) {
+                    /* Perform the actual port mod. This is not atomic, i.e.,
+                     * the effects will be immediately seen by upcall
+                     * processing regardless of the lookup version.  It should
+                     * be noted that port configuration changes can originate
+                     * also from OVSDB changes asynchronously to all upcall
+                     * processing. */
+                    port_mod_finish(ofconn, &be->pm, be->port);
                 }
             }
         }
+
+        /* Reset the tables_version. */
+        ofproto->tables_version = visible_version;
+
         ofmonitor_flush(ofproto->connmgr);
         ovs_mutex_unlock(&ofproto_mutex);
 
