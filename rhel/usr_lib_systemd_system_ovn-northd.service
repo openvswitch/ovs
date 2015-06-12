@@ -1,0 +1,15 @@
+[Unit]
+Description=OVN northd management daemon
+After=syslog.target
+Requires=openvswitch.service
+After=openvswitch.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+RuntimeDirectory=ovn-northd
+RuntimeDirectoryMode=0755
+PIDFile=%t/ovn-northd/ovn-northd.pid
+Environment=OVN_RUNDIR=%t/ovn-northd OVS_RUNDIR=%t/openvswitch OVS_DBDIR=/var/lib/openvswitch
+ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_northd
+ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_northd
