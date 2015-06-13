@@ -257,6 +257,8 @@ netdev_unregister_provider(const char *type)
     struct netdev_registered_class *rc;
     int error;
 
+    netdev_initialize();
+
     ovs_mutex_lock(&netdev_class_mutex);
     rc = netdev_lookup_class(type);
     if (!rc) {
