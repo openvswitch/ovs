@@ -106,6 +106,8 @@ v2.4.0 - xx xxx xxxx
    - Support for STT tunneling.
    - Support to configure method (--syslog-method argument) that determines
      how daemons will talk with syslog.
+   - Support for "ovs-appctl vlog/list-pattern" command that lets to query
+     logging message format for each destination.
 
 
 v2.3.0 - 14 Aug 2014

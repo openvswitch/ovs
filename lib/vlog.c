@@ -615,6 +615,17 @@ vlog_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+vlog_unixctl_list_pattern(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    char *msg;
+
+    msg = vlog_get_patterns();
+    unixctl_command_reply(conn, msg);
+    free(msg);
+}
+
+static void
 vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
@@ -721,6 +732,8 @@ vlog_init(void)
             1, INT_MAX, vlog_unixctl_set, NULL);
         unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list,
                                  NULL);
+        unixctl_command_register("vlog/list-pattern", "", 0, 0,
+                                 vlog_unixctl_list_pattern, NULL);
         unixctl_command_register("vlog/enable-rate-limit", "[module]...",
                                  0, INT_MAX, vlog_enable_rate_limit, NULL);
         unixctl_command_register("vlog/disable-rate-limit", "[module]...",
@@ -783,6 +796,32 @@ vlog_get_levels(void)
     svec_destroy(&lines);
 
     return ds_cstr(&s);
+}
+
+/* Returns as a string current logging patterns for each destination.
+ * This string must be released by caller. */
+char *
+vlog_get_patterns(void)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    enum vlog_destination destination;
+
+    ovs_rwlock_rdlock(&pattern_rwlock);
+    ds_put_format(&ds, "         prefix                            format\n");
+    ds_put_format(&ds, "         ------                            ------\n");
+
+    for (destination = 0; destination < VLF_N_DESTINATIONS; destination++) {
+        struct destination *f = &destinations[destination];;
+        const char *prefix = "none";
+
+        if (destination == VLF_SYSLOG && syslogger) {
+            prefix = syslog_get_prefix(syslogger);
+        }
+        ds_put_format(&ds, "%-7s  %-32s  %s\n", f->name, prefix, f->pattern);
+    }
+    ovs_rwlock_unlock(&pattern_rwlock);
+
+    return ds_cstr(&ds);
 }
 
 /* Returns true if a log message emitted for the given 'module' and 'level'
