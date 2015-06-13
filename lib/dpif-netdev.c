@@ -519,10 +519,17 @@ emc_cache_slow_sweep(struct emc_cache *flow_cache)
     flow_cache->sweep_idx = (flow_cache->sweep_idx + 1) & EM_FLOW_HASH_MASK;
 }
 
+/* Returns true if 'dpif' is a netdev or dummy dpif, false otherwise. */
+bool
+dpif_is_netdev(const struct dpif *dpif)
+{
+    return dpif->dpif_class->open == dpif_netdev_open;
+}
+
 static struct dpif_netdev *
 dpif_netdev_cast(const struct dpif *dpif)
 {
-    ovs_assert(dpif->dpif_class->open == dpif_netdev_open);
+    ovs_assert(dpif_is_netdev(dpif));
     return CONTAINER_OF(dpif, struct dpif_netdev, dpif);
 }
 

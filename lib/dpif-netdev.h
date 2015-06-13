@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@ static inline void dp_packet_pad(struct dp_packet *p)
         dp_packet_put_zeros(p, ETH_TOTAL_MIN - dp_packet_size(p));
     }
 }
+
+bool dpif_is_netdev(const struct dpif *);
 
 #define NR_QUEUE   1
 #define NR_PMD_THREADS 1
