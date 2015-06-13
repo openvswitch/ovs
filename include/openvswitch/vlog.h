@@ -133,6 +133,7 @@ void vlog_set_levels(struct vlog_module *,
 char *vlog_set_levels_from_string(const char *) OVS_WARN_UNUSED_RESULT;
 void vlog_set_levels_from_string_assert(const char *);
 char *vlog_get_levels(void);
+char *vlog_get_patterns(void);
 bool vlog_is_enabled(const struct vlog_module *, enum vlog_level);
 bool vlog_should_drop(const struct vlog_module *, enum vlog_level,
                       struct vlog_rate_limit *);
