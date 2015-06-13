@@ -3688,21 +3688,29 @@ dpif_dummy_register__(const char *type)
     dp_register_provider(class);
 }
 
-void
-dpif_dummy_register(bool override)
+static void
+dpif_dummy_override(const char *type)
 {
-    if (override) {
+    if (!dp_unregister_provider(type)) {
+        dpif_dummy_register__(type);
+    }
+}
+
+void
+dpif_dummy_register(enum dummy_level level)
+{
+    if (level == DUMMY_OVERRIDE_ALL) {
         struct sset types;
         const char *type;
 
         sset_init(&types);
         dp_enumerate_types(&types);
         SSET_FOR_EACH (type, &types) {
-            if (!dp_unregister_provider(type)) {
-                dpif_dummy_register__(type);
-            }
+            dpif_dummy_override(type);
         }
         sset_destroy(&types);
+    } else if (level == DUMMY_OVERRIDE_SYSTEM) {
+        dpif_dummy_override("system");
     }
 
     dpif_dummy_register__("dummy");

@@ -1426,8 +1426,27 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
 }
 
+static void
+netdev_dummy_override(const char *type)
+{
+    if (!netdev_unregister_provider(type)) {
+        struct netdev_class *class;
+        int error;
+
+        class = xmemdup(&dummy_class, sizeof dummy_class);
+        class->type = xstrdup(type);
+        error = netdev_register_provider(class);
+        if (error) {
+            VLOG_ERR("%s: failed to register netdev provider (%s)",
+                     type, ovs_strerror(error));
+            free(CONST_CAST(char *, class->type));
+            free(class);
+        }
+    }
+}
+
 void
-netdev_dummy_register(bool override)
+netdev_dummy_register(enum dummy_level level)
 {
     unixctl_command_register("netdev-dummy/receive", "name packet|flow...",
                              2, INT_MAX, netdev_dummy_receive, NULL);
@@ -1441,33 +1460,20 @@ netdev_dummy_register(bool override)
                              "[netdev] ipaddr/mask-prefix-len", 2, 2,
                              netdev_dummy_ip4addr, NULL);
 
-
-    if (override) {
+    if (level == DUMMY_OVERRIDE_ALL) {
         struct sset types;
         const char *type;
 
         sset_init(&types);
         netdev_enumerate_types(&types);
         SSET_FOR_EACH (type, &types) {
-            if (!strcmp(type, "patch")) {
-                continue;
-            }
-            if (!netdev_unregister_provider(type)) {
-                struct netdev_class *class;
-                int error;
-
-                class = xmemdup(&dummy_class, sizeof dummy_class);
-                class->type = xstrdup(type);
-                error = netdev_register_provider(class);
-                if (error) {
-                    VLOG_ERR("%s: failed to register netdev provider (%s)",
-                             type, ovs_strerror(error));
-                    free(CONST_CAST(char *, class->type));
-                    free(class);
-                }
+            if (strcmp(type, "patch")) {
+                netdev_dummy_override(type);
             }
         }
         sset_destroy(&types);
+    } else if (level == DUMMY_OVERRIDE_SYSTEM) {
+        netdev_dummy_override("system");
     }
     netdev_register_provider(&dummy_class);
 
