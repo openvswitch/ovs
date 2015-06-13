@@ -175,8 +175,6 @@
    This is being developed on OpenStack's development infrastructure
    to be along side most of the other Neutron plugins.
 
-   http://git.openstack.org/cgit/stackforge/networking-ovn
-
-   http://git.openstack.org/cgit/stackforge/networking-ovn/tree/doc/source/todo.rst
+   http://git.openstack.org/cgit/openstack/networking-ovn
 
 ** Gateways.
