@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <config.h>
 #include <errno.h>
+#include <iphlpapi.h>
 
 #include <net/if.h>
 
@@ -373,6 +374,117 @@ netdev_windows_update_flags(struct netdev *netdev_,
     return 0;
 }
 
+/* Looks up in the ARP table entry for a given 'ip'. If it is found, the
+ * corresponding MAC address will be copied in 'mac' and return 0. If no
+ * matching entry is found or an error occurs it will log it and return ENXIO.
+ */
+static int
+netdev_windows_arp_lookup(const struct netdev *netdev,
+                          ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
+{
+    PMIB_IPNETTABLE arp_table = NULL;
+    /* The buffer length of all ARP entries */
+    uint32_t buffer_length = 0;
+    uint32_t ret_val = 0;
+    uint32_t counter = 0;
+
+    ret_val = GetIpNetTable(arp_table, &buffer_length, false);
+
+    if (ret_val != ERROR_INSUFFICIENT_BUFFER ) {
+        VLOG_ERR("Call to GetIpNetTable failed with error: %s",
+                 ovs_format_message(ret_val));
+        return ENXIO;
+    }
+
+    arp_table = (MIB_IPNETTABLE *) malloc(buffer_length);
+
+    if (arp_table == NULL) {
+        VLOG_ERR("Could not allocate memory for all the interfaces");
+        return ENXIO;
+    }
+
+    ret_val = GetIpNetTable(arp_table, &buffer_length, false);
+
+    if (ret_val == NO_ERROR) {
+        for (counter = 0; counter < arp_table->dwNumEntries; counter++) {
+            if (arp_table->table[counter].dwAddr == ip) {
+                memcpy(mac, arp_table->table[counter].bPhysAddr, ETH_ADDR_LEN);
+
+                free(arp_table);
+                return 0;
+            }
+        }
+    } else {
+        VLOG_ERR("Call to GetIpNetTable failed with error: %s",
+                 ovs_format_message(ret_val));
+    }
+
+    free(arp_table);
+    return ENXIO;
+}
+
+static int
+netdev_windows_get_next_hop(const struct in_addr *host,
+                            struct in_addr *next_hop,
+                            char **netdev_name)
+{
+    uint32_t ret_val = 0;
+    /* The buffer length of all addresses */
+    uint32_t buffer_length = 1000;
+    PIP_ADAPTER_ADDRESSES all_addr = NULL;
+    PIP_ADAPTER_ADDRESSES cur_addr = NULL;
+
+    ret_val = GetAdaptersAddresses(AF_INET,
+                                   GAA_FLAG_INCLUDE_PREFIX |
+                                   GAA_FLAG_INCLUDE_GATEWAYS,
+                                   NULL, all_addr, &buffer_length);
+
+    if (ret_val != ERROR_INSUFFICIENT_BUFFER ) {
+        VLOG_ERR("Call to GetAdaptersAddresses failed with error: %s",
+                 ovs_format_message(ret_val));
+        return ENXIO;
+    }
+
+    all_addr = (IP_ADAPTER_ADDRESSES *) malloc(buffer_length);
+
+    if (all_addr == NULL) {
+        VLOG_ERR("Could not allocate memory for all the interfaces");
+        return ENXIO;
+    }
+
+    ret_val = GetAdaptersAddresses(AF_INET,
+                                   GAA_FLAG_INCLUDE_PREFIX |
+                                   GAA_FLAG_INCLUDE_GATEWAYS,
+                                   NULL, all_addr, &buffer_length);
+
+    if (ret_val == NO_ERROR) {
+        cur_addr = all_addr;
+        while (cur_addr) {
+            if(cur_addr->FirstGatewayAddress &&
+               cur_addr->FirstGatewayAddress->Address.lpSockaddr) {
+                struct sockaddr_in *ipv4 = (struct sockaddr_in *)
+                                           cur_addr->FirstGatewayAddress->Address.lpSockaddr;
+                next_hop->s_addr = ipv4->sin_addr.S_un.S_addr;
+                *netdev_name = xstrdup((char *)cur_addr->FriendlyName);
+
+                free(all_addr);
+
+                return 0;
+            }
+
+            cur_addr = cur_addr->Next;
+        }
+    } else {
+        VLOG_ERR("Call to GetAdaptersAddresses failed with error: %s",
+                 ovs_format_message(ret_val));
+    }
+
+    if (all_addr) {
+        free(all_addr);
+    }
+    return ENXIO;
+}
+
 static int
 netdev_windows_internal_construct(struct netdev *netdev_)
 {
@@ -390,6 +502,8 @@ netdev_windows_internal_construct(struct netdev *netdev_)
     .get_etheraddr      = netdev_windows_get_etheraddr,                 \
     .set_etheraddr      = netdev_windows_set_etheraddr,                 \
     .update_flags       = netdev_windows_update_flags,                  \
+    .get_next_hop       = netdev_windows_get_next_hop,                  \
+    .arp_lookup         = netdev_windows_arp_lookup,                    \
 }
 
 const struct netdev_class netdev_windows_class =

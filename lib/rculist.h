@@ -38,10 +38,7 @@
  * - rculist_front() returns a const pointer to accommodate for an RCU reader.
  * - rculist_splice_hidden(): Spliced elements may not have been visible to
  *   RCU readers before the operation.
- * - rculist_poison(): Immediately poisons the 'prev' pointer, and schedules
- *   ovsrcu_postpone() to poison the 'next' pointer.  This issues a memory
- *   write operation to the list element, hopefully crashing the program if
- *   the list node was freed or re-used too early.
+ * - rculist_poison(): Only poisons the 'prev' pointer.
  *
  * The following functions are variations of the struct ovs_list functions with
  * similar names, but are now restricted to the writer use:
@@ -134,8 +131,6 @@ rculist_init(struct rculist *list)
 
 #define RCULIST_POISON (struct rculist *)(UINTPTR_MAX / 0xf * 0xc)
 
-void rculist_poison__(struct rculist *list);
-
 /* Initializes 'list' with pointers that will (probably) cause segfaults if
  * dereferenced and, better yet, show up clearly in a debugger. */
 static inline void
@@ -143,7 +138,19 @@ rculist_poison(struct rculist *list)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     list->prev = RCULIST_POISON;
-    ovsrcu_postpone(rculist_poison__, list);
+}
+
+/* Initializes 'list' with pointers that will (probably) cause segfaults if
+ * dereferenced and, better yet, show up clearly in a debugger.
+ *
+ * This variant poisons also the next pointer, so this may not be called if
+ * this list element is still visible to RCU readers. */
+static inline void
+rculist_poison__(struct rculist *list)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    rculist_poison(list);
+    ovsrcu_set_hidden(&list->next, RCULIST_POISON);
 }
 
 /* rculist insertion. */
@@ -217,10 +224,7 @@ rculist_replace(struct rculist *element, struct rculist *position)
     position_next->prev = element;
     element->prev = position->prev;
     ovsrcu_set(&element->prev->next, element);
-
-#ifndef NDEBUG
-    rculist_poison(position); /* XXX: Some overhead due to ovsrcu_postpone() */
-#endif
+    rculist_poison(position);
 }
 
 /* Initializes 'dst' with the contents of 'src', compensating for moving it
@@ -244,10 +248,7 @@ rculist_move(struct rculist *dst, struct rculist *src)
     } else {
         rculist_init(dst);
     }
-
-#ifndef NDEBUG
-    rculist_poison(src); /* XXX: Some overhead due to ovsrcu_postpone() */
-#endif
+    rculist_poison(src);
 }
 
 /* Removes 'elem' from its list and returns the element that followed it.
@@ -268,10 +269,7 @@ rculist_remove(struct rculist *elem)
 
     elem_next->prev = elem->prev;
     ovsrcu_set(&elem->prev->next, elem_next);
-
-#ifndef NDEBUG
-    rculist_poison(elem); /* XXX: Some overhead due to ovsrcu_postpone() */
-#endif
+    rculist_poison(elem);
     return elem_next;
 }
 

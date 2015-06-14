@@ -170,7 +170,7 @@ compose_rarp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN])
     memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
     put_16aligned_be32(&arp->ar_tpa, htonl(0));
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 
@@ -192,15 +192,15 @@ eth_push_vlan(struct dp_packet *packet, ovs_be16 tpid, ovs_be16 tci)
 
 /* Removes outermost VLAN header (if any is present) from 'packet'.
  *
- * 'packet->l2_5' should initially point to 'packet''s outer-most MPLS header
- * or may be NULL if there are no MPLS headers. */
+ * 'packet->l2_5' should initially point to 'packet''s outer-most VLAN header
+ * or may be NULL if there are no VLAN headers. */
 void
 eth_pop_vlan(struct dp_packet *packet)
 {
     struct vlan_eth_header *veh = dp_packet_l2(packet);
 
     if (veh && dp_packet_size(packet) >= sizeof *veh
-        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
+        && eth_type_vlan(veh->veth_type)) {
 
         memmove((char *)veh + VLAN_HEADER_LEN, veh, 2 * ETH_ADDR_LEN);
         dp_packet_resize_l2(packet, -VLAN_HEADER_LEN);
@@ -217,7 +217,7 @@ set_ethertype(struct dp_packet *packet, ovs_be16 eth_type)
         return;
     }
 
-    if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
+    if (eth_type_vlan(eh->eth_type)) {
         ovs_be16 *p;
         char *l2_5 = dp_packet_l2_5(packet);
 
@@ -579,7 +579,7 @@ eth_compose(struct dp_packet *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(eth_type);
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, data);
 
     return data;
@@ -1040,7 +1040,7 @@ compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
     put_16aligned_be32(&arp->ar_spa, ip_src);
     put_16aligned_be32(&arp->ar_tpa, ip_dst);
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 

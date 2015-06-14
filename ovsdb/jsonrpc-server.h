@@ -69,4 +69,7 @@ void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
                                            struct simap *usage);
 
+struct ovsdb_jsonrpc_monitor;
+void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
+
 #endif /* ovsdb/jsonrpc-server.h */

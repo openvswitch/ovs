@@ -16,6 +16,7 @@
 
 #include <config.h>
 #undef NDEBUG
+#include "fatal-signal.h"
 #include "ovs-atomic.h"
 #include "ovstest.h"
 #include "ovs-thread.h"
@@ -413,6 +414,7 @@ test_atomic_seq_cst(void)
 static void
 test_atomic_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
+    fatal_signal_init();
     test_atomic_plain();
     test_atomic_relaxed();
     test_atomic_consume();

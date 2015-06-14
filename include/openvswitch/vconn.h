@@ -55,6 +55,9 @@ int vconn_transact(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_noreply(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_multiple_noreply(struct vconn *, struct ovs_list *requests,
                                     struct ofpbuf **replyp);
+int vconn_bundle_transact(struct vconn *, struct ovs_list *requests,
+                          uint16_t bundle_flags,
+                          void (*error_reporter)(const struct ofp_header *));
 
 void vconn_run(struct vconn *);
 void vconn_run_wait(struct vconn *);

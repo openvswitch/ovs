@@ -5,11 +5,6 @@
 
 struct dp_packet;
 
-/* Reserves cpu core 0 for all non-pmd threads.  Changing the value of this
- * macro will allow pmd thread to be pinned on cpu core 0.  This may not be
- * ideal since the core may be non-isolated. */
-#define NON_PMD_CORE_ID 0
-
 #ifdef DPDK_NETDEV
 
 #include <rte_config.h>
@@ -25,13 +20,16 @@ struct dp_packet;
 #include <rte_launch.h>
 #include <rte_malloc.h>
 
+#define NON_PMD_CORE_ID LCORE_ID_ANY
+
 int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
-int pmd_thread_setaffinity_cpu(int cpu);
-void thread_set_nonpmd(void);
+int pmd_thread_setaffinity_cpu(unsigned cpu);
 
 #else
+
+#define NON_PMD_CORE_ID UINT32_MAX
 
 #include "util.h"
 
@@ -57,15 +55,9 @@ free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
 }
 
 static inline int
-pmd_thread_setaffinity_cpu(int cpu OVS_UNUSED)
+pmd_thread_setaffinity_cpu(unsigned cpu OVS_UNUSED)
 {
     return 0;
-}
-
-static inline void
-thread_set_nonpmd(void)
-{
-    /* Nothing */
 }
 
 #endif /* DPDK_NETDEV */

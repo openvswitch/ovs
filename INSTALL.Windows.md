@@ -62,9 +62,10 @@ or from a distribution tar ball.
   the right compiler, linker, libraries, Open vSwitch component installation
   directories, etc. For example,
 
-    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-      --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-      --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread"
+    % ./configure CC=./build-aux/cccl LD="`which link`" \
+      LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+      --localstatedir="C:/openvswitch/var" --sysconfdir="C:/openvswitch/etc" \
+       --with-pthread="C:/pthread"
 
     By default, the above enables compiler optimization for fast code.
     For default compiler optimization, pass the "--with-debug" configure
@@ -114,10 +115,10 @@ Note down the directory where OpenSSL is installed (e.g.: C:/OpenSSL-Win32).
 * While configuring the package, specify the OpenSSL directory path.
 For example,
 
-    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" \
-    --enable-ssl --with-openssl="C:/OpenSSL-Win32"
+    % ./configure CC=./build-aux/cccl LD="`which link`"  \
+    LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+    --localstatedir="C:/openvswitch/var" --sysconfdir="C:/openvswitch/etc" \
+    --with-pthread="C:/pthread" --enable-ssl --with-openssl="C:/OpenSSL-Win32"
 
 * Run make for the ported executables.
 
@@ -128,17 +129,17 @@ You can open the extensions.sln file in the IDE and build the solution.
 
 * The kernel datapath can be compiled from command line as well.  The top
 level 'make' will invoke building the kernel datapath, if the
-'--with-vstudioddk' argument is specified while configuring the package.
+'--with-vstudiotarget' argument is specified while configuring the package.
 For example,
 
-    % ./configure CC=./build-aux/cccl LD="`which link`" LIBS="-lws2_32" \
-    --prefix="C:/openvswitch/usr" --localstatedir="C:/openvswitch/var" \
-    --sysconfdir="C:/openvswitch/etc" --with-pthread="C:/pthread" \
-    --enable-ssl --with-openssl="C:/OpenSSL-Win32" \
-    --with-vstudioddk="<WDK to use>"
+    % ./configure CC=./build-aux/cccl LD="`which link`" \
+    LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+    --localstatedir="C:/openvswitch/var" --sysconfdir="C:/openvswitch/etc" \
+    --with-pthread="C:/pthread" --enable-ssl \
+    --with-openssl="C:/OpenSSL-Win32" --with-vstudiotarget="<target type>"
 
-    Possible values for "<WDK to use>" are:
-    "Win8.1 Debug", "Win8.1 Release", "Win8 Debug" and "Win8 Release".
+    Possible values for "<target type>" are:
+    "Debug" and "Release"
 
 Installing the Kernel module
 ----------------------------
@@ -385,29 +386,31 @@ Hyper-Vs.  The following examples demonstrate how it can be done:
     % ovs-vsctl add-port br-int ovs-port-a tag=900
     % ovs-vsctl add-port br-int ovs-port-b tag=900
 
-Steps to add VXLAN tunnels
+Steps to add tunnels
 --------------------------
-The Windows Open vSwitch implementation support VXLAN tunnels.  To add VXLAN
+The Windows Open vSwitch implementation support VXLAN and STT tunnels. To add
 tunnels, the following steps serve as examples.
 
 Note that, any patch ports created between br-int and br-pif MUST be beleted
-prior to adding VXLAN tunnels.
+prior to adding tunnels.
 
-01> Add the vxlan port between 172.168.201.101 <-> 172.168.201.102
-    % ovs-vsctl add-port br-int vxlan-1
-    % ovs-vsctl set Interface vxlan-1 type=vxlan
-    % ovs-vsctl set Interface vxlan-1 options:local_ip=172.168.201.101
-    % ovs-vsctl set Interface vxlan-1 options:remote_ip=172.168.201.102
-    % ovs-vsctl set Interface vxlan-1 options:in_key=flow
-    % ovs-vsctl set Interface vxlan-1 options:out_key=flow
+01> Add the tunnel port between 172.168.201.101 <-> 172.168.201.102
+    % ovs-vsctl add-port br-int tun-1
+    % ovs-vsctl set Interface tun-1 type=port-type
+    % ovs-vsctl set Interface tun-1 options:local_ip=172.168.201.101
+    % ovs-vsctl set Interface tun-1 options:remote_ip=172.168.201.102
+    % ovs-vsctl set Interface tun-1 options:in_key=flow
+    % ovs-vsctl set Interface tun-1 options:out_key=flow
 
-02> Add the vxlan port between 172.168.201.101 <-> 172.168.201.105
-    % ovs-vsctl add-port br-int vxlan-2
-    % ovs-vsctl set Interface vxlan-2 type=vxlan
-    % ovs-vsctl set Interface vxlan-2 options:local_ip=172.168.201.102
-    % ovs-vsctl set Interface vxlan-2 options:remote_ip=172.168.201.105
-    % ovs-vsctl set Interface vxlan-2 options:in_key=flow
-    % ovs-vsctl set Interface vxlan-2 options:out_key=flow
+02> Add the tunnel port between 172.168.201.101 <-> 172.168.201.105
+    % ovs-vsctl add-port br-int tun-2
+    % ovs-vsctl set Interface tun-2 type=port-type
+    % ovs-vsctl set Interface tun-2 options:local_ip=172.168.201.102
+    % ovs-vsctl set Interface tun-2 options:remote_ip=172.168.201.105
+    % ovs-vsctl set Interface tun-2 options:in_key=flow
+    % ovs-vsctl set Interface tun-2 options:out_key=flow
+
+	Where port-type is the string stt or vxlan
 
 
 Requirements

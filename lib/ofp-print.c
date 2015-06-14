@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,6 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
     struct ofputil_packet_in pin;
     int error;
-    int i;
 
     error = ofputil_decode_packet_in(&pin, oh);
     if (error) {
@@ -120,43 +119,9 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
     }
 
-    ds_put_format(string, " total_len=%"PRIuSIZE" in_port=", pin.total_len);
-    ofputil_format_port(pin.fmd.in_port, string);
+    ds_put_format(string, " total_len=%"PRIuSIZE" ", pin.total_len);
 
-    if (pin.fmd.tun_id != htonll(0)) {
-        ds_put_format(string, " tun_id=0x%"PRIx64, ntohll(pin.fmd.tun_id));
-    }
-
-    if (pin.fmd.tun_src != htonl(0)) {
-        ds_put_format(string, " tun_src="IP_FMT, IP_ARGS(pin.fmd.tun_src));
-    }
-
-    if (pin.fmd.tun_dst != htonl(0)) {
-        ds_put_format(string, " tun_dst="IP_FMT, IP_ARGS(pin.fmd.tun_dst));
-    }
-
-    if (pin.fmd.gbp_id != htons(0)) {
-        ds_put_format(string, " gbp_id=%"PRIu16,
-                      ntohs(pin.fmd.gbp_id));
-    }
-
-    if (pin.fmd.gbp_flags) {
-        ds_put_format(string, " gbp_flags=0x%02"PRIx8, pin.fmd.gbp_flags);
-    }
-
-    if (pin.fmd.metadata != htonll(0)) {
-        ds_put_format(string, " metadata=0x%"PRIx64, ntohll(pin.fmd.metadata));
-    }
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if (pin.fmd.regs[i]) {
-            ds_put_format(string, " reg%d=0x%"PRIx32, i, pin.fmd.regs[i]);
-        }
-    }
-
-    if (pin.fmd.pkt_mark != 0) {
-        ds_put_format(string, " pkt_mark=0x%"PRIx32, pin.fmd.pkt_mark);
-    }
+    match_format(&pin.flow_metadata, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_format(string, " (via %s)",
                   ofputil_packet_in_reason_to_string(pin.reason, reasonbuf,
@@ -2657,7 +2622,7 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
     struct ofputil_bundle_add_msg badd;
     char *msg;
 
-    error = ofputil_decode_bundle_add(oh, &badd);
+    error = ofputil_decode_bundle_add(oh, &badd, NULL);
     if (error) {
         ofp_print_error(s, error);
         return;

@@ -296,29 +296,39 @@ Print meter features.
 .
 These commands manage the flow table in an OpenFlow switch.  In each
 case, \fIflow\fR specifies a flow entry in the format described in
-\fBFlow Syntax\fR, below, and \fIfile\fR is a text file that contains
-zero or more flows in the same syntax, one per line.
+\fBFlow Syntax\fR, below, \fIfile\fR is a text file that contains zero
+or more flows in the same syntax, one per line, and the optional
+\fB\-\-bundle\fR option operates the command as a single atomic
+transation, see option \fB\-\-bundle\fR, below.
 .
-.IP "\fBadd\-flow \fIswitch flow\fR"
-.IQ "\fBadd\-flow \fIswitch \fB\- < \fIfile\fR"
-.IQ "\fBadd\-flows \fIswitch file\fR"
+.IP "[\fB\-\-bundle\fR] \fBadd\-flow \fIswitch flow\fR"
+.IQ "[\fB\-\-bundle\fR] \fBadd\-flow \fIswitch \fB\- < \fIfile\fR"
+.IQ "[\fB\-\-bundle\fR] \fBadd\-flows \fIswitch file\fR"
 Add each flow entry to \fIswitch\fR's tables.
 .
-.IP "[\fB\-\-strict\fR] \fBmod\-flows \fIswitch flow\fR"
-.IQ "[\fB\-\-strict\fR] \fBmod\-flows \fIswitch \fB\- < \fIfile\fR"
+Each flow specification (e.g., each line in \fIfile\fR) may start with
+\fBadd\fR, \fBmodify\fR, \fBdelete\fR, \fBmodify_strict\fR, or
+\fBdelete_strict\fR keyword to specify whether a flow is to be added,
+modified, or deleted, and whether the modify or delete is strict or
+not.  For backwards compatibility a flow specification without one of
+these keywords is treated as a flow add.  All flow mods are executed
+in the order specified.
+.
+.IP "[\fB\-\-bundle\fR] [\fB\-\-strict\fR] \fBmod\-flows \fIswitch flow\fR"
+.IQ "[\fB\-\-bundle\fR] [\fB\-\-strict\fR] \fBmod\-flows \fIswitch \fB\- < \fIfile\fR"
 Modify the actions in entries from \fIswitch\fR's tables that match
 the specified flows.  With \fB\-\-strict\fR, wildcards are not treated
 as active for matching purposes.
 .
-.IP "\fBdel\-flows \fIswitch\fR"
-.IQ "[\fB\-\-strict\fR] \fBdel\-flows \fIswitch \fR[\fIflow\fR]"
-.IQ "[\fB\-\-strict\fR] \fBdel\-flows \fIswitch \fB\- < \fIfile\fR"
+.IP "[\fB\-\-bundle\fR] \fBdel\-flows \fIswitch\fR"
+.IQ "[\fB\-\-bundle\fR] [\fB\-\-strict\fR] \fBdel\-flows \fIswitch \fR[\fIflow\fR]"
+.IQ "[\fB\-\-bundle\fR] [\fB\-\-strict\fR] \fBdel\-flows \fIswitch \fB\- < \fIfile\fR"
 Deletes entries from \fIswitch\fR's flow table.  With only a
 \fIswitch\fR argument, deletes all flows.  Otherwise, deletes flow
 entries that match the specified flows.  With \fB\-\-strict\fR,
 wildcards are not treated as active for matching purposes.
 .
-.IP "[\fB\-\-readd\fR] \fBreplace\-flows \fIswitch file\fR"
+.IP "[\fB\-\-bundle\fR] [\fB\-\-readd\fR] \fBreplace\-flows \fIswitch file\fR"
 Reads flow entries from \fIfile\fR (or \fBstdin\fR if \fIfile\fR is
 \fB\-\fR) and queries the flow table from \fIswitch\fR.  Then it fixes
 up any differences, adding flows from \fIflow\fR that are missing on
@@ -2385,6 +2395,31 @@ depending on its configuration.
 .TP
 \fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
+.
+.IP "\fB\-\-bundle\fR"
+Execute flow mods as an OpenFlow 1.4 atomic bundle transaction.
+.RS
+.IP \(bu
+Within a bundle, all flow mods are processed in the order they appear
+and as a single atomic transaction, meaning that if one of them fails,
+the whole transaction fails and none of the changes are made to the
+\fIswitch\fR's flow table, and that each given datapath packet
+traversing the OpenFlow tables sees the flow tables either as before
+the transaction, or after all the flow mods in the bundle have been
+successfully applied.
+.IP \(bu
+The beginning and the end of the flow table modification commands in a
+bundle are delimited with OpenFlow 1.4 bundle control messages, which
+makes it possible to stream the included commands without explicit
+OpenFlow barriers, which are otherwise used after each flow table
+modification command.  This may make large modifications execute
+faster as a bundle.
+.IP \(bu
+Bundles require OpenFlow 1.4 or higher.  An explicit \fB-O
+OpenFlow14\fR option is not needed, but you may need to enable
+OpenFlow 1.4 support for OVS by setting the OVSDB \fIprotocols\fR
+column in the \fIbridge\fR table.
+.RE
 .
 .so lib/ofp-version.man
 .

@@ -48,28 +48,25 @@
 /* Infinite timeout */
 #define INFINITE                        0xFFFFFFFF
 
-/*
- * The provider name should always match the provider string from the install
- * file.
- */
+/* The provider name should always match the provider string from the install
+ * file. */
 #define OVS_TUNNEL_PROVIDER_NAME        L"Open vSwitch"
 
-/*
- * The provider description should always contain the OVS service description
- * string from the install file.
- */
+/* The provider description should always contain the OVS service description
+ * string from the install file. */
 #define OVS_TUNNEL_PROVIDER_DESC        L"Open vSwitch Extension tunnel provider"
 
 /* The session name isn't required but it's useful for diagnostics. */
 #define OVS_TUNNEL_SESSION_NAME         L"OVS tunnel session"
 
-/* Configurable parameters (addresses and ports are in host order) */
-UINT16   configNewDestPort = VXLAN_UDP_PORT;
+/* Maximum number of tunnel threads to be created. */
+#define OVS_TUNFLT_MAX_THREADS          8
 
 /*
  * Callout and sublayer GUIDs
  */
-// b16b0a6e-2b2a-41a3-8b39-bd3ffc855ff8
+
+/* b16b0a6e-2b2a-41a3-8b39-bd3ffc855ff8 */
 DEFINE_GUID(
     OVS_TUNNEL_CALLOUT_V4,
     0xb16b0a6e,
@@ -106,41 +103,120 @@ DEFINE_GUID(
     );
 
 /*
+ * Callout driver type definitions
+ */
+typedef enum _OVS_TUNFLT_OPERATION {
+    OVS_TUN_FILTER_CREATE = 0,
+    OVS_TUN_FILTER_DELETE
+} OVS_TUNFLT_OPERATION;
+
+typedef struct _OVS_TUNFLT_REQUEST {
+    LIST_ENTRY              entry;
+    /* Tunnel filter destination port. */
+    UINT16                  port;
+    /* XXX: We also need to specify the tunnel L4 protocol, because there are
+     * different protocols that can use the same destination port.*/
+    union {
+        /* Tunnel filter identification used for filter deletion. */
+        UINT64                  delID;
+        /* Pointer used to return filter ID to the caller on filter creation. */
+        PUINT64                 addID;
+    }filterID;
+    /* Requested operation to be performed. */
+    OVS_TUNFLT_OPERATION    operation;
+    /* Current I/O request to be completed when requested
+     * operation is finished. */
+    PIRP                    irp;
+    /* Callback function called before completing the IRP. */
+    PFNTunnelVportPendingOp callback;
+    /* Context passed to the callback function. */
+    PVOID                   context;
+} OVS_TUNFLT_REQUEST, *POVS_TUNFLT_REQUEST;
+
+typedef struct _OVS_TUNFLT_REQUEST_LIST {
+    /* SpinLock for syncronizing access to the requests list. */
+    NDIS_SPIN_LOCK spinlock;
+    /* Head of the requests list. */
+    LIST_ENTRY     head;
+    /* Number of requests in the list. This variable is used by
+     * InterlockedCompareExchange function and needs to be aligned
+     * at 32-bit boundaries. */
+    UINT32         numEntries;
+} OVS_TUNFLT_REQUEST_LIST, *POVS_TUNFLT_REQUEST_LIST;
+
+typedef struct _OVS_TUNFLT_THREAD_CONTEXT {
+    /* Thread identification. */
+    UINT                    threadID;
+    /* Thread's engine session handle. */
+    HANDLE                  engineSession;
+    /* Reference of the thread object. */
+    PVOID                   threadObject;
+    /* Requests queue list. */
+    OVS_TUNFLT_REQUEST_LIST listRequests;
+    /* Event signaling that there are requests to process. */
+    KEVENT                  requestEvent;
+    /* Event for stopping thread execution. */
+    KEVENT                  stopEvent;
+} OVS_TUNFLT_THREAD_CONTEXT, *POVS_TUNFLT_THREAD_CONTEXT;
+
+KSTART_ROUTINE  OvsTunnelFilterThreadProc;
+
+static NTSTATUS OvsTunnelFilterStartThreads();
+static NTSTATUS OvsTunnelFilterThreadStart(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
+static VOID     OvsTunnelFilterStopThreads();
+static VOID     OvsTunnelFilterThreadStop(POVS_TUNFLT_THREAD_CONTEXT threadCtx,
+                                          BOOLEAN signalEvent);
+static NTSTATUS OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
+static VOID     OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
+
+/*
  * Callout driver global variables
  */
-PDEVICE_OBJECT gDeviceObject;
 
-HANDLE gEngineHandle = NULL;
-HANDLE gTunnelProviderBfeHandle = NULL;
-HANDLE gTunnelInitBfeHandle = NULL;
-UINT32 gCalloutIdV4;
+/* Pointer to the device object that must be create before we can register our
+ * callout to the base filtering engine. */
+static PDEVICE_OBJECT            gDeviceObject = NULL;
+/* Handle to an open session to the filter engine that is used for adding
+ * tunnel's callout. */
+static HANDLE                    gEngineHandle = NULL;
+/* A pointer to the received handle that is associated with the registration of
+ * the OvsTunnelProviderBfeCallback callback. */
+static HANDLE                    gTunnelProviderBfeHandle = NULL;
+/* A pointer to the received handle that is associated with the registration of
+ * the OvsTunnelInitBfeCallback callback. */
+static HANDLE                    gTunnelInitBfeHandle = NULL;
+/* Runtime identifier for tunnel's callout which is retrieved at tunnel
+ * initialization phase when the callout is registered. This ID is then used
+ * for removing the callout object from the system at tunnel
+ * uninitialization phase. */
+static UINT32                    gCalloutIdV4 = 0;
+/* Array used for storing tunnel thread's private data. */
+static OVS_TUNFLT_THREAD_CONTEXT gTunnelThreadCtx[OVS_TUNFLT_MAX_THREADS] = { 0 };
 
-
-/* Callout driver implementation */
+/*
+ * Callout driver implementation.
+ */
 
 NTSTATUS
-OvsTunnelEngineOpen(HANDLE *handle)
+OvsTunnelEngineOpen(HANDLE *engineSession)
 {
     NTSTATUS status = STATUS_SUCCESS;
     FWPM_SESSION session = { 0 };
 
-    /* The session name isn't required but may be useful for diagnostics. */
-    session.displayData.name = OVS_TUNNEL_SESSION_NAME;
     /*
     * Set an infinite wait timeout, so we don't have to handle FWP_E_TIMEOUT
     * errors while waiting to acquire the transaction lock.
     */
     session.txnWaitTimeoutInMSec = INFINITE;
-    session.flags = FWPM_SESSION_FLAG_DYNAMIC;
 
     /* The authentication service should always be RPC_C_AUTHN_DEFAULT. */
     status = FwpmEngineOpen(NULL,
                             RPC_C_AUTHN_DEFAULT,
                             NULL,
                             &session,
-                            handle);
+                            engineSession);
     if (!NT_SUCCESS(status)) {
-        OVS_LOG_ERROR("Fail to open filtering engine session, status: %x.",
+        OVS_LOG_ERROR("Failed to open filtering engine session, status: %x.",
                       status);
     }
 
@@ -148,23 +224,23 @@ OvsTunnelEngineOpen(HANDLE *handle)
 }
 
 VOID
-OvsTunnelEngineClose(HANDLE *handle)
+OvsTunnelEngineClose(HANDLE *engineSession)
 {
-    if (*handle) {
-        FwpmEngineClose(*handle);
-        *handle = NULL;
+    if (*engineSession) {
+        FwpmEngineClose(*engineSession);
+        *engineSession = NULL;
     }
 }
 
 VOID
-OvsTunnelAddSystemProvider(HANDLE handle)
+OvsTunnelAddSystemProvider(HANDLE engineSession)
 {
     NTSTATUS status = STATUS_SUCCESS;
     BOOLEAN inTransaction = FALSE;
     FWPM_PROVIDER provider = { 0 };
 
     do {
-        status = FwpmTransactionBegin(handle, 0);
+        status = FwpmTransactionBegin(engineSession, 0);
         if (!NT_SUCCESS(status)) {
             break;
         }
@@ -180,7 +256,7 @@ OvsTunnelAddSystemProvider(HANDLE handle)
          */
         provider.flags = FWPM_PROVIDER_FLAG_PERSISTENT;
 
-        status = FwpmProviderAdd(handle,
+        status = FwpmProviderAdd(engineSession,
                                  &provider,
                                  NULL);
         if (!NT_SUCCESS(status)) {
@@ -191,7 +267,7 @@ OvsTunnelAddSystemProvider(HANDLE handle)
             }
         }
 
-        status = FwpmTransactionCommit(handle);
+        status = FwpmTransactionCommit(engineSession);
         if (!NT_SUCCESS(status)) {
             break;
         }
@@ -200,30 +276,30 @@ OvsTunnelAddSystemProvider(HANDLE handle)
     } while (inTransaction);
 
     if (inTransaction){
-        FwpmTransactionAbort(handle);
+        FwpmTransactionAbort(engineSession);
     }
 }
 
 VOID
-OvsTunnelRemoveSystemProvider(HANDLE handle)
+OvsTunnelRemoveSystemProvider(HANDLE engineSession)
 {
     NTSTATUS status = STATUS_SUCCESS;
     BOOLEAN inTransaction = FALSE;
 
     do {
-        status = FwpmTransactionBegin(handle, 0);
+        status = FwpmTransactionBegin(engineSession, 0);
         if (!NT_SUCCESS(status)) {
             break;
         }
         inTransaction = TRUE;
 
-        status = FwpmProviderDeleteByKey(handle,
+        status = FwpmProviderDeleteByKey(engineSession,
                                          &OVS_TUNNEL_PROVIDER_KEY);
         if (!NT_SUCCESS(status)) {
             break;
         }
 
-        status = FwpmTransactionCommit(handle);
+        status = FwpmTransactionCommit(engineSession);
         if (!NT_SUCCESS(status)) {
             break;
         }
@@ -232,29 +308,30 @@ OvsTunnelRemoveSystemProvider(HANDLE handle)
     } while (inTransaction);
 
     if (inTransaction){
-        FwpmTransactionAbort(handle);
+        FwpmTransactionAbort(engineSession);
     }
 }
 
 NTSTATUS
-OvsTunnelAddFilter(PWSTR filterName,
+OvsTunnelAddFilter(HANDLE engineSession,
+                   PWSTR filterName,
                    const PWSTR filterDesc,
                    USHORT remotePort,
                    FWP_DIRECTION direction,
                    UINT64 context,
                    const GUID *filterKey,
                    const GUID *layerKey,
-                   const GUID *calloutKey)
+                   const GUID *calloutKey,
+                   UINT64 *filterID)
 {
     NTSTATUS status = STATUS_SUCCESS;
     FWPM_FILTER filter = {0};
     FWPM_FILTER_CONDITION filterConditions[3] = {0};
     UINT conditionIndex;
 
-    UNREFERENCED_PARAMETER(remotePort);
-    UNREFERENCED_PARAMETER(direction);
-
-    filter.filterKey = *filterKey;
+    if (filterKey) {
+        filter.filterKey = *filterKey;
+    }
     filter.layerKey = *layerKey;
     filter.displayData.name = (wchar_t*)filterName;
     filter.displayData.description = (wchar_t*)filterDesc;
@@ -284,64 +361,18 @@ OvsTunnelAddFilter(PWSTR filterName,
 
     filter.numFilterConditions = conditionIndex;
 
-    status = FwpmFilterAdd(gEngineHandle,
+    status = FwpmFilterAdd(engineSession,
                            &filter,
                            NULL,
-                           NULL);
+                           filterID);
 
-    return status;
-}
-
-NTSTATUS
-OvsTunnelRemoveFilter(const GUID *filterKey,
-                      const GUID *sublayerKey)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    BOOLEAN inTransaction = FALSE;
-
-    do {
-        status = FwpmTransactionBegin(gEngineHandle, 0);
-        if (!NT_SUCCESS(status)) {
-            break;
-        }
-
-        inTransaction = TRUE;
-
-        /*
-         * We have to delete the filter first since it references the
-         * sublayer. If we tried to delete the sublayer first, it would fail
-         * with FWP_ERR_IN_USE.
-         */
-        status = FwpmFilterDeleteByKey(gEngineHandle,
-                                       filterKey);
-        if (!NT_SUCCESS(status)) {
-            break;
-        }
-
-        status = FwpmSubLayerDeleteByKey(gEngineHandle,
-                                         sublayerKey);
-        if (!NT_SUCCESS(status)) {
-            break;
-        }
-
-        status = FwpmTransactionCommit(gEngineHandle);
-        if (!NT_SUCCESS(status)){
-            break;
-        }
-
-        inTransaction = FALSE;
-    } while (inTransaction);
-
-    if (inTransaction) {
-        FwpmTransactionAbort(gEngineHandle);
-    }
     return status;
 }
 
 /*
  * --------------------------------------------------------------------------
- * This function registers callouts and filters that intercept UDP traffic at
- * WFP FWPM_LAYER_DATAGRAM_DATA_V4
+ * This function registers callouts for intercepting UDP traffic at WFP
+ * FWPM_LAYER_DATAGRAM_DATA_V4 layer.
  * --------------------------------------------------------------------------
  */
 NTSTATUS
@@ -368,10 +399,7 @@ OvsTunnelRegisterDatagramDataCallouts(const GUID *layerKey,
     sCallout.flags = FWP_CALLOUT_FLAG_CONDITIONAL_ON_FLOW;
 #endif
 
-    status = FwpsCalloutRegister(deviceObject,
-                                 &sCallout,
-                                 calloutId);
-
+    status = FwpsCalloutRegister(deviceObject, &sCallout, calloutId);
     if (!NT_SUCCESS(status)) {
         goto Exit;
     }
@@ -384,23 +412,10 @@ OvsTunnelRegisterDatagramDataCallouts(const GUID *layerKey,
     mCallout.displayData = displayData;
     mCallout.applicableLayer = *layerKey;
 
-    status = FwpmCalloutAdd(gEngineHandle,
-                            &mCallout,
-                            NULL,
-                            NULL);
-
+    status = FwpmCalloutAdd(gEngineHandle, &mCallout, NULL, NULL);
     if (!NT_SUCCESS(status)) {
         goto Exit;
     }
-
-    status = OvsTunnelAddFilter(L"Datagram-Data OVS Filter (Inbound)",
-                                L"address/port for UDP",
-                                configNewDestPort,
-                                FWP_DIRECTION_INBOUND,
-                                0,
-                                &OVS_TUNNEL_FILTER_KEY,
-                                layerKey,
-                                calloutKey);
 
 Exit:
 
@@ -416,24 +431,16 @@ Exit:
 
 /*
  * --------------------------------------------------------------------------
- * This function registers dynamic callouts and filters that intercept UDP
- * Callouts and filters will be removed during De-Initialize.
+ * This function registers non-dynamic callouts for intercepting UDP traffic.
+ * Callouts will be removed during un-initializing phase.
  * --------------------------------------------------------------------------
  */
 NTSTATUS
 OvsTunnelRegisterCallouts(VOID *deviceObject)
 {
-    NTSTATUS status = STATUS_SUCCESS;
-    FWPM_SUBLAYER OvsTunnelSubLayer;
-
-    BOOLEAN engineOpened = FALSE;
-    BOOLEAN inTransaction = FALSE;
-
-    status = OvsTunnelEngineOpen(&gEngineHandle);
-    if (!NT_SUCCESS(status)) {
-        goto Exit;
-    }
-    engineOpened = TRUE;
+    NTSTATUS        status = STATUS_SUCCESS;
+    BOOLEAN         inTransaction = FALSE;
+    FWPM_SUBLAYER   OvsTunnelSubLayer;
 
     status = FwpmTransactionBegin(gEngineHandle, 0);
     if (!NT_SUCCESS(status)) {
@@ -476,22 +483,17 @@ Exit:
         if (inTransaction) {
             FwpmTransactionAbort(gEngineHandle);
         }
-        if (engineOpened) {
-            OvsTunnelEngineClose(&gEngineHandle);
-        }
     }
 
     return status;
 }
 
 VOID
-OvsTunnelUnregisterCallouts(VOID)
+OvsTunnelUnregisterCallouts()
 {
-    OvsTunnelRemoveFilter(&OVS_TUNNEL_FILTER_KEY,
-                          &OVS_TUNNEL_SUBLAYER);
     FwpsCalloutUnregisterById(gCalloutIdV4);
+    FwpmSubLayerDeleteByKey(gEngineHandle, &OVS_TUNNEL_SUBLAYER);
     FwpmCalloutDeleteById(gEngineHandle, gCalloutIdV4);
-    OvsTunnelEngineClose(&gEngineHandle);
 }
 
 VOID
@@ -499,16 +501,22 @@ OvsTunnelFilterUninitialize(PDRIVER_OBJECT driverObject)
 {
     UNREFERENCED_PARAMETER(driverObject);
 
+    OvsTunnelFilterStopThreads();
+
     OvsTunnelUnregisterCallouts();
-    IoDeleteDevice(gDeviceObject);
+    OvsTunnelEngineClose(&gEngineHandle);
+
+    if (gDeviceObject) {
+        IoDeleteDevice(gDeviceObject);
+    }
 }
 
 
 NTSTATUS
 OvsTunnelFilterInitialize(PDRIVER_OBJECT driverObject)
 {
-    NTSTATUS status = STATUS_SUCCESS;
-    UNICODE_STRING deviceName;
+    NTSTATUS        status = STATUS_SUCCESS;
+    UNICODE_STRING  deviceName;
 
     RtlInitUnicodeString(&deviceName,
                          L"\\Device\\OvsTunnelFilter");
@@ -522,43 +530,65 @@ OvsTunnelFilterInitialize(PDRIVER_OBJECT driverObject)
                             &gDeviceObject);
 
     if (!NT_SUCCESS(status)){
+        OVS_LOG_ERROR("Failed to create tunnel filter device, status: %x.",
+                      status);
+        goto Exit;
+    }
+
+    status = OvsTunnelFilterStartThreads();
+    if (!NT_SUCCESS(status)){
+        goto Exit;
+    }
+
+    status = OvsTunnelEngineOpen(&gEngineHandle);
+    if (!NT_SUCCESS(status)){
         goto Exit;
     }
 
     status = OvsTunnelRegisterCallouts(gDeviceObject);
+    if (!NT_SUCCESS(status)) {
+        OVS_LOG_ERROR("Failed to register callout, status: %x.",
+                      status);
+    }
 
 Exit:
 
     if (!NT_SUCCESS(status)){
-        if (gEngineHandle != NULL) {
-            OvsTunnelUnregisterCallouts();
-        }
-
-        if (gDeviceObject) {
-            IoDeleteDevice(gDeviceObject);
-        }
+        OvsTunnelFilterUninitialize(driverObject);
     }
 
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function adds OVS system provider to the system if the BFE (Base
+ * Filtering Engine) is running.
+ * --------------------------------------------------------------------------
+ */
 VOID NTAPI
 OvsTunnelProviderBfeCallback(PVOID context,
                              FWPM_SERVICE_STATE bfeState)
 {
-    HANDLE handle = NULL;
+    HANDLE engineSession = NULL;
 
     DBG_UNREFERENCED_PARAMETER(context);
 
     if (FWPM_SERVICE_RUNNING == bfeState) {
-        OvsTunnelEngineOpen(&handle);
-        if (handle) {
-            OvsTunnelAddSystemProvider(handle);
+        OvsTunnelEngineOpen(&engineSession);
+        if (engineSession) {
+            OvsTunnelAddSystemProvider(engineSession);
         }
-        OvsTunnelEngineClose(&handle);
+        OvsTunnelEngineClose(&engineSession);
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function registers the OvsTunnelProviderBfeCallback callback that is
+ * called whenever there is a change to the state of base filtering engine.
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsSubscribeTunnelProviderBfeStateChanges(PVOID deviceObject)
 {
@@ -579,6 +609,13 @@ OvsSubscribeTunnelProviderBfeStateChanges(PVOID deviceObject)
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function unregisters the OvsTunnelProviderBfeCallback callback that
+ * was previously registered by OvsSubscribeTunnelProviderBfeStateChanges
+ * function.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsUnsubscribeTunnelProviderBfeStateChanges()
 {
@@ -595,39 +632,86 @@ OvsUnsubscribeTunnelProviderBfeStateChanges()
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function registers the OVS system provider if the BFE (Base Filtering
+ * Engine) is running.
+ * Otherwise, it will register the OvsTunnelProviderBfeCallback callback.
+
+ * Note: Before calling FwpmBfeStateGet, the callout driver must call the
+ * FwpmBfeStateSubscribeChanges function to register the callback function
+ * to be called whenever the state of the filter engine changes.
+ *
+ * Register WFP system provider call hierarchy:
+ * <DriverEntry>
+ *     <OvsCreateDeviceObject>
+ *         <OvsRegisterSystemProvider>
+ *             <OvsSubscribeTunnelProviderBfeStateChanges>
+ *                 --> registers OvsTunnelProviderBfeCallback callback
+ *                     <OvsTunnelProviderBfeCallback>
+ *                         --> if BFE is running:
+ *                             <OvsTunnelAddSystemProvider>
+ *             --> if BFE is running:
+ *                 <OvsTunnelAddSystemProvider>
+ *                 <OvsUnsubscribeTunnelProviderBfeStateChanges>
+ *                     --> unregisters OvsTunnelProviderBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsRegisterSystemProvider(PVOID deviceObject)
 {
     NTSTATUS status = STATUS_SUCCESS;
-    HANDLE handle = NULL;
+    HANDLE engineSession = NULL;
 
     status = OvsSubscribeTunnelProviderBfeStateChanges(deviceObject);
     if (NT_SUCCESS(status)) {
         if (FWPM_SERVICE_RUNNING == FwpmBfeStateGet()) {
-            OvsTunnelEngineOpen(&handle);
-            if (handle) {
-                OvsTunnelAddSystemProvider(handle);
+            OvsTunnelEngineOpen(&engineSession);
+            if (engineSession) {
+                OvsTunnelAddSystemProvider(engineSession);
             }
-            OvsTunnelEngineClose(&handle);
+            OvsTunnelEngineClose(&engineSession);
 
             OvsUnsubscribeTunnelProviderBfeStateChanges();
         }
     }
 }
 
-VOID OvsUnregisterSystemProvider()
+/*
+ * --------------------------------------------------------------------------
+ * This function removes the OVS system provider and unregisters the
+ * OvsTunnelProviderBfeCallback callback from BFE (Base Filtering Engine).
+ *
+ * Unregister WFP system provider call hierarchy:
+ * <OvsExtUnload>
+ *     <OvsDeleteDeviceObject>
+ *         <OvsUnregisterSystemProvider>
+ *             <OvsTunnelRemoveSystemProvider>
+ *             <OvsUnsubscribeTunnelProviderBfeStateChanges>
+ *                 --> unregisters OvsTunnelProviderBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsUnregisterSystemProvider()
 {
-    HANDLE handle = NULL;
+    HANDLE engineSession = NULL;
 
-    OvsTunnelEngineOpen(&handle);
-    if (handle) {
-        OvsTunnelRemoveSystemProvider(handle);
+    OvsTunnelEngineOpen(&engineSession);
+    if (engineSession) {
+        OvsTunnelRemoveSystemProvider(engineSession);
     }
-    OvsTunnelEngineClose(&handle);
+    OvsTunnelEngineClose(&engineSession);
 
     OvsUnsubscribeTunnelProviderBfeStateChanges();
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function initializes the tunnel filter if the BFE is running.
+ * --------------------------------------------------------------------------
+ */
 VOID NTAPI
 OvsTunnelInitBfeCallback(PVOID context,
                          FWPM_SERVICE_STATE bfeState)
@@ -645,6 +729,12 @@ OvsTunnelInitBfeCallback(PVOID context,
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function registers the OvsTunnelInitBfeCallback callback that is
+ * called whenever there is a change to the state of base filtering engine.
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsSubscribeTunnelInitBfeStateChanges(PDRIVER_OBJECT driverObject,
                                       PVOID deviceObject)
@@ -666,6 +756,13 @@ OvsSubscribeTunnelInitBfeStateChanges(PDRIVER_OBJECT driverObject,
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function unregisters the OvsTunnelInitBfeCallback callback that
+ * was previously registered by OvsSubscribeTunnelInitBfeStateChanges
+ * function.
+ * --------------------------------------------------------------------------
+ */
 VOID
 OvsUnsubscribeTunnelInitBfeStateChanges()
 {
@@ -682,6 +779,38 @@ OvsUnsubscribeTunnelInitBfeStateChanges()
     }
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function initializes the OVS tunnel filter if the BFE (Base Filtering
+ * Engine) is running.
+ * Otherwise, it will register the OvsTunnelInitBfeCallback callback.
+
+ * Note: Before calling FwpmBfeStateGet, the callout driver must call the
+ * FwpmBfeStateSubscribeChanges function to register the callback function
+ * to be called whenever the state of the filter engine changes.
+ *
+ * Initialize OVS tunnel filter call hierarchy:
+ * <OvsExtAttach>
+ *     <OvsCreateSwitch>
+ *         <OvsInitTunnelFilter>
+ *             <OvsSubscribeTunnelInitBfeStateChanges>
+ *                 --> registers OvsTunnelInitBfeCallback callback
+ *                     <OvsTunnelInitBfeCallback>
+ *                         --> if BFE is running:
+ *                             <OvsTunnelFilterInitialize>
+ *                                 <IoCreateDevice>
+ *                                 <OvsTunnelFilterStartThreads>
+ *                                 <OvsTunnelRegisterCallouts>
+ *             --> if BFE is running:
+ *                 <OvsTunnelFilterInitialize>
+ *                     <IoCreateDevice>
+ *                     <OvsTunnelFilterStartThreads>
+ *                     <OvsTunnelRegisterCallouts>
+ *                 <OvsUnsubscribeTunnelInitBfeStateChanges>
+ *                     --> unregisters OvsTunnelInitBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
 NTSTATUS
 OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject)
 {
@@ -706,8 +835,665 @@ OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject)
     return status;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * This function uninitializes the OVS tunnel filter and unregisters the
+ * OvsTunnelInitBfeCallback callback from BFE.
+ *
+ * Uninitialize OVS tunnel filter call hierarchy:
+ * <OvsExtDetach>
+ *     <OvsDeleteSwitch>
+ *         <OvsUninitTunnelFilter>
+ *             <OvsTunnelFilterUninitialize>
+ *                 <OvsTunnelFilterStopThreads>
+ *                 <OvsTunnelUnregisterCallouts>
+ *                 <IoDeleteDevice>
+ *             <OvsUnsubscribeTunnelInitBfeStateChanges>
+ *                 --> unregisters OvsTunnelInitBfeCallback callback
+ *
+ * --------------------------------------------------------------------------
+ */
 VOID OvsUninitTunnelFilter(PDRIVER_OBJECT driverObject)
 {
     OvsTunnelFilterUninitialize(driverObject);
     OvsUnsubscribeTunnelInitBfeStateChanges();
+}
+
+NTSTATUS
+OvsTunnelAddFilterEx(HANDLE engineSession,
+                     UINT32 filterPort,
+                     UINT64 *filterID)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    status = OvsTunnelAddFilter(engineSession,
+                                L"Datagram-Data OVS Filter (Inbound)",
+                                L"address/port for UDP",
+                                (USHORT)filterPort,
+                                FWP_DIRECTION_INBOUND,
+                                0,
+                                NULL,
+                                &FWPM_LAYER_DATAGRAM_DATA_V4,
+                                &OVS_TUNNEL_CALLOUT_V4,
+                                filterID);
+    if (!NT_SUCCESS(status)) {
+        OVS_LOG_ERROR("Failed to add tunnel filter for port: %d, status: %x.",
+                      filterPort, status);
+    } else {
+        OVS_LOG_INFO("Filter added, filter port: %d, filter ID: %d.",
+                     filterPort, *filterID);
+    }
+
+    return status;
+}
+
+NTSTATUS
+OvsTunnelRemoveFilterEx(HANDLE engineSession,
+                        UINT64 filterID)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN  error = TRUE;
+
+    do {
+        if (filterID == 0) {
+            OVS_LOG_INFO("No tunnel filter to remove.");
+            break;
+        }
+
+        status = FwpmFilterDeleteById(engineSession, filterID);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR("Failed to remove tunnel with filter ID: %d,\
+                           status: %x.", filterID, status);
+            break;
+        }
+        OVS_LOG_INFO("Filter removed, filter ID: %d.",
+                     filterID);
+
+        error = FALSE;
+    } while (error);
+
+    return status;
+}
+
+NTSTATUS
+OvsTunnelFilterExecuteAction(HANDLE engineSession,
+                             POVS_TUNFLT_REQUEST request)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    switch (request->operation)
+    {
+    case OVS_TUN_FILTER_CREATE:
+        status = OvsTunnelAddFilterEx(engineSession,
+                                      request->port,
+                                      request->filterID.addID);
+        break;
+    case OVS_TUN_FILTER_DELETE:
+        status = OvsTunnelRemoveFilterEx(engineSession,
+                                         request->filterID.delID);
+        break;
+    default:
+        status = STATUS_NOT_SUPPORTED;
+        break;
+    }
+
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function pops the whole request entries from the queue and returns the
+ * number of entries through the 'count' parameter. The operation is
+ * synchronized using request list spinlock.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsTunnelFilterRequestPopList(POVS_TUNFLT_REQUEST_LIST listRequests,
+                              PLIST_ENTRY head,
+                              UINT32 *count)
+{
+    NdisAcquireSpinLock(&listRequests->spinlock);
+
+    if (!IsListEmpty(&listRequests->head)) {
+        PLIST_ENTRY PrevEntry;
+        PLIST_ENTRY NextEntry;
+
+        NextEntry = listRequests->head.Flink;
+        PrevEntry = listRequests->head.Blink;
+
+        head->Flink = NextEntry;
+        NextEntry->Blink = head;
+
+        head->Blink = PrevEntry;
+        PrevEntry->Flink = head;
+
+        *count = listRequests->numEntries;
+
+        InitializeListHead(&listRequests->head);
+        listRequests->numEntries = 0;
+    }
+
+    NdisReleaseSpinLock(&listRequests->spinlock);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function pushes the received request to the list while holding the
+ * request list spinlock.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
+                           POVS_TUNFLT_REQUEST request)
+{
+    NdisAcquireSpinLock(&listRequests->spinlock);
+
+    InsertTailList(&listRequests->head, &(request->entry));
+    listRequests->numEntries++;
+
+    NdisReleaseSpinLock(&listRequests->spinlock);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function pushes the received request to the corresponding thread
+ * request queue. The arrival of the new request is signaled to the thread,
+ * in order to start processing it.
+ *
+ * For a uniform distribution of requests to thread queues, a thread index is
+ * calculated based on the received destination port.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsTunnelFilterThreadPush(POVS_TUNFLT_REQUEST request)
+{
+    UINT32 threadIndex;
+
+    threadIndex = request->port % OVS_TUNFLT_MAX_THREADS;
+
+    OvsTunnelFilterRequestPush(
+        &gTunnelThreadCtx[threadIndex].listRequests,
+        request);
+
+    KeSetEvent(&gTunnelThreadCtx[threadIndex].requestEvent,
+               IO_NO_INCREMENT,
+               FALSE);
+}
+
+VOID
+OvsTunnelFilterCompleteRequest(PIRP irp,
+                               PFNTunnelVportPendingOp callback,
+                               PVOID context,
+                               NTSTATUS status)
+{
+    UINT32 replyLen = 0;
+
+    if (callback) {
+        callback(context, status, &replyLen);
+        /* Release the context passed to the callback function. */
+        OvsFreeMemory(context);
+    }
+
+    if (irp) {
+        OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
+    }
+}
+
+VOID
+OvsTunnelFilterRequestListProcess(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
+{
+    POVS_TUNFLT_REQUEST request = NULL;
+    PLIST_ENTRY         link = NULL;
+    PLIST_ENTRY         next = NULL;
+    LIST_ENTRY          head;
+    NTSTATUS            status = STATUS_SUCCESS;
+    UINT32              count = 0;
+    BOOLEAN             inTransaction = FALSE;
+    BOOLEAN             error = TRUE;
+
+    do
+    {
+        if (!InterlockedCompareExchange(
+            (LONG volatile *)&threadCtx->listRequests.numEntries, 0, 0)) {
+            OVS_LOG_INFO("Nothing to do... request list is empty.");
+            break;
+        }
+
+        status = FwpmTransactionBegin(threadCtx->engineSession, 0);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR("Failed to start transaction, status: %x.",
+                          status);
+            break;
+        }
+        inTransaction = TRUE;
+
+        InitializeListHead(&head);
+        OvsTunnelFilterRequestPopList(&threadCtx->listRequests, &head, &count);
+
+        LIST_FORALL_SAFE(&head, link, next) {
+            request = CONTAINING_RECORD(link, OVS_TUNFLT_REQUEST, entry);
+
+            status = OvsTunnelFilterExecuteAction(threadCtx->engineSession,
+                                                  request);
+            if (!NT_SUCCESS(status)) {
+                RemoveEntryList(&request->entry);
+                count--;
+
+                /* Complete the IRP with the failure status. */
+                OvsTunnelFilterCompleteRequest(request->irp,
+                                               request->callback,
+                                               request->context,
+                                               status);
+                OvsFreeMemory(request);
+                request = NULL;
+            } else {
+                error = FALSE;
+            }
+        }
+
+        if (error) {
+            /* No successful requests were made, so there is no point to commit
+             * the transaction. */
+            break;
+        }
+
+        status = FwpmTransactionCommit(threadCtx->engineSession);
+        if (!NT_SUCCESS(status)){
+            OVS_LOG_ERROR("Failed to commit transaction, status: %x.",
+                          status);
+            break;
+        }
+
+        inTransaction = FALSE;
+    } while (inTransaction);
+
+    if (inTransaction) {
+        FwpmTransactionAbort(threadCtx->engineSession);
+        OVS_LOG_ERROR("Failed to execute request, status: %x.\
+                       Transaction aborted.", status);
+    }
+
+    /* Complete the requests successfully executed with the transaction commit
+     * status. */
+    while (count) {
+        request = (POVS_TUNFLT_REQUEST)RemoveHeadList(&head);
+        count--;
+
+        OvsTunnelFilterCompleteRequest(request->irp,
+                                       request->callback,
+                                       request->context,
+                                       status);
+        OvsFreeMemory(request);
+        request = NULL;
+    }
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * System thread routine that processes thread's requests queue. The thread
+ * routine initializes thread's necessary data and waits on two events,
+ * requestEvent and stopEvent. Whenever a request is pushed to the thread's
+ * queue, the requestEvent is signaled and the thread routine starts processing
+ * the arrived requests. When stopEvent is signaled, all subsequent requests
+ * are completed with STATUS_CANCELED, without being added to the thread's
+ * queue, and the routine finishes processing all existing requests from the
+ * queue before uninitializing the thread and exiting.
+ *----------------------------------------------------------------------------
+ */
+_Use_decl_annotations_
+VOID
+OvsTunnelFilterThreadProc(PVOID context)
+{
+    NTSTATUS                   status = STATUS_SUCCESS;
+    POVS_TUNFLT_THREAD_CONTEXT threadCtx = (POVS_TUNFLT_THREAD_CONTEXT)context;
+    PKEVENT                    eventArray[2] = { 0 };
+    ULONG                      count = 0;
+    BOOLEAN                    exit = FALSE;
+    BOOLEAN                    error = TRUE;
+
+    OVS_LOG_INFO("Starting OVS Tunnel system thread %d.",
+                 threadCtx->threadID);
+
+    eventArray[0] = &threadCtx->stopEvent;
+    eventArray[1] = &threadCtx->requestEvent;
+    count = ARRAY_SIZE(eventArray);
+
+    do {
+        status = OvsTunnelFilterThreadInit(threadCtx);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR("Failed to initialize tunnel filter thread %d.",
+                threadCtx->threadID);
+            break;
+        }
+
+        do {
+            status = KeWaitForMultipleObjects(count,
+                                              (PVOID)eventArray,
+                                              WaitAny,
+                                              Executive,
+                                              KernelMode,
+                                              FALSE,
+                                              NULL,
+                                              NULL);
+            switch (status) {
+                case STATUS_WAIT_1:
+                    /* Start processing requests. */
+                    OvsTunnelFilterRequestListProcess(threadCtx);
+                    break;
+                default:
+                    /* Finish processing the received requests and exit. */
+                    OvsTunnelFilterRequestListProcess(threadCtx);
+                    exit = TRUE;
+                    break;
+            }
+        } while (!exit);
+
+        OvsTunnelFilterThreadUninit(threadCtx);
+
+        error = FALSE;
+    } while (error);
+
+    OVS_LOG_INFO("Terminating OVS Tunnel system thread %d.",
+                 threadCtx->threadID);
+
+    PsTerminateSystemThread(STATUS_SUCCESS);
+};
+
+static NTSTATUS
+OvsTunnelFilterStartThreads()
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    for (UINT index = 0; index < OVS_TUNFLT_MAX_THREADS; index++) {
+        gTunnelThreadCtx[index].threadID = index;
+
+        status = OvsTunnelFilterThreadStart(&gTunnelThreadCtx[index]);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR("Failed to start tunnel filter thread %d.", index);
+            break;
+        }
+    }
+
+    return status;
+}
+
+static NTSTATUS
+OvsTunnelFilterThreadStart(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
+{
+    NTSTATUS    status = STATUS_SUCCESS;
+    HANDLE      threadHandle = NULL;
+    BOOLEAN     error = TRUE;
+
+    do {
+        status = PsCreateSystemThread(&threadHandle,
+                                      SYNCHRONIZE,
+                                      NULL,
+                                      NULL,
+                                      NULL,
+                                      OvsTunnelFilterThreadProc,
+                                      threadCtx);
+        if (!NT_SUCCESS(status)) {
+            OVS_LOG_ERROR("Failed to create tunnel thread, status: %x.",
+                          status);
+            break;
+        }
+
+        ObReferenceObjectByHandle(threadHandle,
+                                  SYNCHRONIZE,
+                                  NULL,
+                                  KernelMode,
+                                  &threadCtx->threadObject,
+                                  NULL);
+        ZwClose(threadHandle);
+        threadHandle = NULL;
+
+        error = FALSE;
+    } while (error);
+
+    return status;
+}
+
+static VOID
+OvsTunnelFilterStopThreads()
+{
+    /* Signal all threads to stop and ignore all subsequent requests. */
+    for (UINT index = 0; index < OVS_TUNFLT_MAX_THREADS; index++) {
+        OvsTunnelFilterThreadStop(&gTunnelThreadCtx[index], TRUE);
+    }
+
+    /* Wait for all threads to finish processing the requests. */
+    for (UINT index = 0; index < OVS_TUNFLT_MAX_THREADS; index++) {
+        OvsTunnelFilterThreadStop(&gTunnelThreadCtx[index], FALSE);
+    }
+}
+
+static VOID
+OvsTunnelFilterThreadStop(POVS_TUNFLT_THREAD_CONTEXT threadCtx,
+                          BOOLEAN signalEvent)
+{
+    if (signalEvent) {
+        /* Signal stop thread event. */
+        OVS_LOG_INFO("Received stop event for OVS Tunnel system thread %d.",
+                     threadCtx->threadID);
+        KeSetEvent(&threadCtx->stopEvent, IO_NO_INCREMENT, FALSE);
+    } else {
+        /* Wait for the tunnel thread to finish. */
+        KeWaitForSingleObject(threadCtx->threadObject,
+                              Executive,
+                              KernelMode,
+                              FALSE,
+                              NULL);
+
+        ObDereferenceObject(threadCtx->threadObject);
+    }
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function initializes thread's necessary data. Each thread has its own
+ * session object to the BFE that is used for processing the requests from
+ * the thread's queue.
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN error = TRUE;
+
+    do {
+        /* Create thread's engine session object. */
+        status = OvsTunnelEngineOpen(&threadCtx->engineSession);
+        if (!NT_SUCCESS(status)) {
+            break;
+        }
+
+        NdisAllocateSpinLock(&threadCtx->listRequests.spinlock);
+
+        InitializeListHead(&threadCtx->listRequests.head);
+
+        KeInitializeEvent(&threadCtx->stopEvent,
+            NotificationEvent,
+            FALSE);
+
+        KeInitializeEvent(&threadCtx->requestEvent,
+            SynchronizationEvent,
+            FALSE);
+
+        error = FALSE;
+    } while (error);
+
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function uninitializes thread's private data. Thread's engine session
+ * handle is closed and set to NULL.
+ * --------------------------------------------------------------------------
+ */
+static VOID
+OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
+{
+    if (threadCtx->engineSession) {
+        /* Close thread's FWPM session. */
+        OvsTunnelEngineClose(&threadCtx->engineSession);
+
+        NdisFreeSpinLock(&threadCtx->listRequests.spinlock);
+    }
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function creates a new tunnel filter request and push it to a thread
+ * queue. If the thread stop event is signaled, the request is completed with
+ * STATUS_CANCELLED without pushing it to any queue.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsTunnelFilterQueueRequest(PIRP irp,
+                            UINT16 remotePort,
+                            UINT64 *filterID,
+                            OVS_TUNFLT_OPERATION operation,
+                            PFNTunnelVportPendingOp callback,
+                            PVOID tunnelContext)
+{
+    POVS_TUNFLT_REQUEST request = NULL;
+    NTSTATUS            status = STATUS_PENDING;
+    BOOLEAN             error = TRUE;
+    UINT64              timeout = 0;
+
+    do {
+        /* Verify if the stop event was signaled. */
+        if (STATUS_SUCCESS == KeWaitForSingleObject(
+                                  &gTunnelThreadCtx[0].stopEvent,
+                                  Executive,
+                                  KernelMode,
+                                  FALSE,
+                                  (LARGE_INTEGER *)&timeout)) {
+            /* The stop event is signaled. Completed the IRP with
+             * STATUS_CANCELLED. */
+            status = STATUS_CANCELLED;
+            break;
+        }
+
+        if (NULL == filterID) {
+            OVS_LOG_ERROR("Invalid request.");
+            status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        request = (POVS_TUNFLT_REQUEST) OvsAllocateMemory(sizeof(*request));
+        if (NULL == request) {
+            OVS_LOG_ERROR("Failed to allocate list item.");
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            break;
+        }
+
+        request->port = remotePort;
+        request->operation = operation;
+        switch (operation) {
+            case OVS_TUN_FILTER_CREATE:
+                request->filterID.addID = filterID;
+                break;
+            case OVS_TUN_FILTER_DELETE:
+                request->filterID.delID = *filterID;
+                break;
+        }
+        request->irp = irp;
+        request->callback = callback;
+        request->context = tunnelContext;
+
+        OvsTunnelFilterThreadPush(request);
+
+        error = FALSE;
+    } while (error);
+
+    if (error) {
+        OvsTunnelFilterCompleteRequest(irp, callback, tunnelContext, status);
+        if (request) {
+            OvsFreeMemory(request);
+            request = NULL;
+        }
+    }
+
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  This function adds a new WFP filter for the received port and returns the
+ *  ID of the created WFP filter.
+ *
+ *  Note:
+ *  All necessary calls to the WFP filtering engine must be running at IRQL =
+ *  PASSIVE_LEVEL. Because the function is called at IRQL = DISPATCH_LEVEL,
+ *  we register an OVS_TUN_FILTER_CREATE request that will be processed by
+ *  the tunnel filter thread routine at IRQL = PASSIVE_LEVEL.
+ *
+ * OVS VXLAN port add call hierarchy:
+ * <OvsNewVportCmdHandler>
+ *     <OvsInitTunnelVport>
+ *         <OvsInitVxlanTunnel>
+ *             <OvsTunelFilterCreate>
+ *                 <OvsTunnelFilterQueueRequest>
+ *                     --> if thread STOP event is signalled:
+ *                         --> Complete request with STATUS_CANCELLED
+ *                         --> EXIT
+ *                     <OvsTunnelFilterThreadPush>
+ *                         --> add the request to one of tunnel thread queues
+ *
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsTunelFilterCreate(PIRP irp,
+                     UINT16 filterPort,
+                     UINT64 *filterID,
+                     PFNTunnelVportPendingOp callback,
+                     PVOID tunnelContext)
+{
+    return OvsTunnelFilterQueueRequest(irp,
+                                       filterPort,
+                                       filterID,
+                                       OVS_TUN_FILTER_CREATE,
+                                       callback,
+                                       tunnelContext);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  This function removes a WFP filter using the received filter ID.
+ *
+ *  Note:
+ *  All necessary calls to the WFP filtering engine must be running at IRQL =
+ *  PASSIVE_LEVEL. Because the function is called at IRQL = DISPATCH_LEVEL,
+ *  we register an OVS_TUN_FILTER_DELETE request that will be processed by
+ *  the tunnel filter thread routine at IRQL = PASSIVE_LEVEL.
+ *
+ * OVS VXLAN port delete call hierarchy:
+ * <OvsDeleteVportCmdHandler>
+ *     <OvsRemoveAndDeleteVport>
+ *         <OvsCleanupVxlanTunnel>
+ *             <OvsTunelFilterCreate>
+ *                 <OvsTunnelFilterQueueRequest>
+ *                     --> if thread STOP event is signalled:
+ *                         --> Complete request with STATUS_CANCELLED
+ *                         --> EXIT
+ *                     <OvsTunnelFilterThreadPush>
+ *                         --> add the request to one of tunnel thread queues
+ *
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsTunelFilterDelete(PIRP irp,
+                     UINT64 filterID,
+                     PFNTunnelVportPendingOp callback,
+                     PVOID tunnelContext)
+{
+    return OvsTunnelFilterQueueRequest(irp,
+                                       0,
+                                       &filterID,
+                                       OVS_TUN_FILTER_DELETE,
+                                       callback,
+                                       tunnelContext);
 }

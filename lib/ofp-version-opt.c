@@ -27,6 +27,13 @@ mask_allowed_ofp_versions(uint32_t bitmap)
 }
 
 void
+add_allowed_ofp_versions(uint32_t bitmap)
+{
+    assert_single_threaded();
+    allowed_versions |= bitmap;
+}
+
+void
 ofp_version_usage(void)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;

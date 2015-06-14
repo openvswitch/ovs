@@ -831,6 +831,7 @@ json_string_unescape(const char *in, size_t in_len, char **outp)
              * lexer will never pass in a string that ends in a single
              * backslash, but json_string_unescape() has other callers that
              * are not as careful.*/
+            ds_clear(&out);
             ds_put_cstr(&out, "quoted string may not end with backslash");
             goto exit;
         }

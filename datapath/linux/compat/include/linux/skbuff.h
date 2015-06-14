@@ -368,4 +368,8 @@ int rpl_skb_vlan_pop(struct sk_buff *skb);
 int rpl_skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci);
 #endif
 
+#ifndef HAVE_KFREE_SKB_LIST
+void rpl_kfree_skb_list(struct sk_buff *segs);
+#define kfree_skb_list rpl_kfree_skb_list
+#endif
 #endif

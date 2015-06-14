@@ -1,5 +1,4 @@
-/*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +12,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <config.h>
-#include "rculist.h"
 
-/* Initializes 'list' with pointers that will (probably) cause segfaults if
- * dereferenced and, better yet, show up clearly in a debugger. */
-void
-rculist_poison__(struct rculist *list)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    list->prev = RCULIST_POISON;
-    ovsrcu_set_hidden(&list->next, RCULIST_POISON);
-}
+#ifndef __CHECKER__
+#error "Use this header only with sparse.  It is not a correct implementation."
+#endif
+
+/* GCC 4.8 *intrin.h headers do not work if these are not defined */
+#define __SSE2__
+#define __SSE__
+#define __MMX__
+#include_next <emmintrin.h>
+#undef __MMX__
+#undef __SSE__
+#undef __SSE2__

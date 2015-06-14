@@ -22,25 +22,11 @@ PARALLEL =
 endif
 MAKEFLAGS += $(PARALLEL)
 
-CFLAGS += -g
-ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
-CFLAGS += -O0
-else
-CFLAGS += -O2
-endif
-
 # Old versions of dpkg-buildflags do not understand --export=configure.
 # When dpkg-buildflags does not understand an option, it prints its full
 # --help output on stdout, so we have to avoid that here.
 buildflags := $(shell if dpkg-buildflags --export=configure >/dev/null 2>&1; \
 	              then dpkg-buildflags --export=configure; fi)
-
-# dpkg-buildflags tends to turn on -Wformat, which is admirable, but
-# the -Wformat-zero-length subset of that option triggers a couple of
-# false positives in Open vSwitch so turn it right back off again.
-# (We do this in configure.ac also, but the Debian buildflags override
-# those.)
-buildflags := $(patsubst -Wformat,-Wformat -Wno-format-zero-length,$(buildflags))
 
 configure: configure-stamp
 configure-stamp:
@@ -52,7 +38,7 @@ configure-stamp:
 	cd _debian && ( \
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-			--sysconfdir=/etc --host=$(DEB_HOST_GNU_TYPE) CFLAGS="$(CFLAGS)" \
+			--sysconfdir=/etc --host=$(DEB_HOST_GNU_TYPE) \
 			$(buildflags) $(DATAPATH_CONFIGURE_OPTS))
 	touch configure-stamp
 

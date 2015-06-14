@@ -263,8 +263,8 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
     if (switchContext)
     {
         dpNo = switchContext->dpNo;
-        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsClearAllSwitchVports(switchContext);
+        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsUninitSwitchContext(switchContext);
     }
     OVS_LOG_TRACE("Exit: deleted switch %p  dpNo: %d", switchContext, dpNo);
@@ -367,6 +367,8 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
         sizeof(LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE, OVS_SWITCH_POOL_TAG);
     switchContext->pidHashArray = (PLIST_ENTRY)OvsAllocateMemoryWithTag(
         sizeof(LIST_ENTRY) * OVS_MAX_PID_ARRAY_SIZE, OVS_SWITCH_POOL_TAG);
+    switchContext->tunnelVportsArray = (PLIST_ENTRY)OvsAllocateMemoryWithTag(
+        sizeof(LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE, OVS_SWITCH_POOL_TAG);
     status = OvsAllocateFlowTable(&switchContext->datapath, switchContext);
 
     if (status == NDIS_STATUS_SUCCESS) {
@@ -377,7 +379,8 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
         switchContext->portNoHashArray == NULL ||
         switchContext->ovsPortNameHashArray == NULL ||
         switchContext->portIdHashArray== NULL ||
-        switchContext->pidHashArray == NULL) {
+        switchContext->pidHashArray == NULL ||
+        switchContext->tunnelVportsArray == NULL) {
         if (switchContext->dispatchLock) {
             NdisFreeRWLock(switchContext->dispatchLock);
         }
@@ -398,6 +401,10 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
                                  OVS_SWITCH_POOL_TAG);
         }
 
+        if (switchContext->tunnelVportsArray) {
+            OvsFreeMemory(switchContext->tunnelVportsArray);
+        }
+
         OvsDeleteFlowTable(&switchContext->datapath);
         OvsCleanupBufferPool(switchContext);
 
@@ -407,12 +414,9 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
     for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->ovsPortNameHashArray[i]);
-    }
-    for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->portIdHashArray[i]);
-    }
-    for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->portNoHashArray[i]);
+        InitializeListHead(&switchContext->tunnelVportsArray[i]);
     }
 
     for (i = 0; i < OVS_MAX_PID_ARRAY_SIZE; i++) {
@@ -465,6 +469,8 @@ OvsDeleteSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     OvsFreeMemoryWithTag(switchContext->pidHashArray,
                          OVS_SWITCH_POOL_TAG);
     switchContext->pidHashArray = NULL;
+    OvsFreeMemory(switchContext->tunnelVportsArray);
+    switchContext->tunnelVportsArray = NULL;
     OvsDeleteFlowTable(&switchContext->datapath);
     OvsCleanupBufferPool(switchContext);
 

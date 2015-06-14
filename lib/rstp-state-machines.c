@@ -696,7 +696,7 @@ rstp_send_bpdu(struct rstp_port *p, const void *bpdu, size_t bpdu_size)
     pkt = dp_packet_new(ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
     eth = dp_packet_put_zeros(pkt, sizeof *eth);
     llc = dp_packet_put_zeros(pkt, sizeof *llc);
-    dp_packet_set_frame(pkt, eth);
+    dp_packet_reset_offsets(pkt);
     dp_packet_set_l3(pkt, dp_packet_put(pkt, bpdu, bpdu_size));
 
     /* 802.2 header. */

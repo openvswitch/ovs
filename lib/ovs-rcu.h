@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,15 +60,28 @@
  *
  * When a quiescient state has occurred in every thread, we say that a "grace
  * period" has occurred.  Following a grace period, all of the callbacks
- * postponed before the start of the grace period may be invoked.  OVS takes
+ * postponed before the start of the grace period MAY be invoked.  OVS takes
  * care of this automatically through the RCU mechanism: while a process still
  * has only a single thread, it invokes the postponed callbacks directly from
  * ovsrcu_quiesce() and ovsrcu_quiesce_start(); after additional threads have
  * been created, it creates an extra helper thread to invoke callbacks.
  *
+ * Please note that while a postponed function call is guaranteed to happen
+ * after the next time all participating threads have quiesced at least once,
+ * there is no quarantee that all postponed functions are called as early as
+ * possible, or that the functions postponed by different threads would be
+ * called in the order the registrations took place.  In particular, even if
+ * two threads provably postpone a function each in a specific order, the
+ * postponed functions may still be called in the opposite order, depending on
+ * the timing of when the threads call ovsrcu_quiesce(), how many functions
+ * they postpone, and when the ovs-rcu thread happens to grab the functions to
+ * be called.
  *
- * Use
- * ---
+ * All functions postponed by a single thread are guaranteed to execute in the
+ * order they were postponed, however.
+ *
+ * Usage
+ * -----
  *
  * Use OVSRCU_TYPE(TYPE) to declare a pointer to RCU-protected data, e.g. the
  * following declares an RCU-protected "struct flow *" named flowp:
@@ -191,7 +204,7 @@ static inline void ovsrcu_set__(struct ovsrcu_pointer *pointer,
 #define ovsrcu_init(VAR, VALUE) atomic_init(&(VAR)->p, VALUE)
 
 /* Calls FUNCTION passing ARG as its pointer-type argument following the next
- * grace period.  See "Usage" above for example.  */
+ * grace period.  See "Usage" above for an example. */
 void ovsrcu_postpone__(void (*function)(void *aux), void *aux);
 #define ovsrcu_postpone(FUNCTION, ARG)                          \
     ((void) sizeof((FUNCTION)(ARG), 1),                         \

@@ -19,11 +19,12 @@
 
 #include "NetProto.h"
 typedef struct _OVS_VXLAN_VPORT {
-    UINT32 dstPort;
+    UINT16 dstPort;
     UINT64 inPkts;
     UINT64 outPkts;
     UINT64 slowInPkts;
     UINT64 slowOutPkts;
+    UINT64 filterID;
     /*
      * To be filled
      */
@@ -47,10 +48,16 @@ typedef struct VXLANHdr {
     UINT32   reserved2:8;
 } VXLANHdr;
 
-NTSTATUS OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
-                            UINT16 udpDestPort);
+NTSTATUS OvsInitVxlanTunnel(PIRP irp,
+                            POVS_VPORT_ENTRY vport,
+                            UINT16 udpDestPort,
+                            PFNTunnelVportPendingOp callback,
+                            PVOID tunnelContext);
 
-VOID OvsCleanupVxlanTunnel(POVS_VPORT_ENTRY vport);
+NTSTATUS OvsCleanupVxlanTunnel(PIRP irp,
+                               POVS_VPORT_ENTRY vport,
+                               PFNTunnelVportPendingOp callback,
+                               PVOID tunnelContext);
 
 NDIS_STATUS OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
                                   OvsIPv4TunnelKey *tunnelKey);
@@ -58,14 +65,13 @@ NDIS_STATUS OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
 NDIS_STATUS OvsEncapVxlan(PNET_BUFFER_LIST curNbl,
                           OvsIPv4TunnelKey *tunKey,
                           POVS_SWITCH_CONTEXT switchContext,
-                          VOID *completionList,
                           POVS_PACKET_HDR_INFO layers,
                           PNET_BUFFER_LIST *newNbl);
 
-NDIS_STATUS OvsDoDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
-                            PNET_BUFFER_LIST curNbl,
-                            OvsIPv4TunnelKey *tunKey,
-                            PNET_BUFFER_LIST *newNbl);
+NDIS_STATUS OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
+                          PNET_BUFFER_LIST curNbl,
+                          OvsIPv4TunnelKey *tunKey,
+                          PNET_BUFFER_LIST *newNbl);
 
 static __inline UINT32
 OvsGetVxlanTunHdrSize(VOID)

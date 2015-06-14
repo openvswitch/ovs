@@ -25,13 +25,11 @@
 static void
 dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source source)
 {
-    b->allocated = allocated;
+    dp_packet_set_allocated(b, allocated);
     b->source = source;
-    b->frame = NULL;
     b->l2_pad_size = 0;
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
     b->md = PKT_METADATA_INITIALIZER(0);
-    list_poison(&b->list_node);
 }
 
 static void
@@ -165,12 +163,6 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
     new_buffer = dp_packet_clone_data_with_headroom(dp_packet_data(buffer),
                                                  dp_packet_size(buffer),
                                                  headroom);
-    if (buffer->frame) {
-        uintptr_t data_delta
-            = (char *)dp_packet_data(new_buffer) - (char *)dp_packet_data(buffer);
-
-        new_buffer->frame = (char *) buffer->frame + data_delta;
-    }
     new_buffer->l2_pad_size = buffer->l2_pad_size;
     new_buffer->l2_5_ofs = buffer->l2_5_ofs;
     new_buffer->l3_ofs = buffer->l3_ofs;
@@ -251,16 +243,11 @@ dp_packet_resize__(struct dp_packet *b, size_t new_headroom, size_t new_tailroom
         OVS_NOT_REACHED();
     }
 
-    b->allocated = new_allocated;
+    dp_packet_set_allocated(b, new_allocated);
     dp_packet_set_base(b, new_base);
 
     new_data = (char *) new_base + new_headroom;
     if (dp_packet_data(b) != new_data) {
-        if (b->frame) {
-            uintptr_t data_delta = (char *) new_data - (char *) dp_packet_data(b);
-
-            b->frame = (char *) b->frame + data_delta;
-        }
         dp_packet_set_data(b, new_data);
     }
 }
@@ -454,22 +441,10 @@ dp_packet_to_string(const struct dp_packet *b, size_t maxbytes)
 
     ds_init(&s);
     ds_put_format(&s, "size=%"PRIu32", allocated=%"PRIu32", head=%"PRIuSIZE", tail=%"PRIuSIZE"\n",
-                  dp_packet_size(b), b->allocated,
+                  dp_packet_size(b), dp_packet_get_allocated(b),
                   dp_packet_headroom(b), dp_packet_tailroom(b));
     ds_put_hex_dump(&s, dp_packet_data(b), MIN(dp_packet_size(b), maxbytes), 0, false);
     return ds_cstr(&s);
-}
-
-/* Removes each of the "struct dp_packet"s on 'list' from the list and frees
- * them.  */
-void
-dp_packet_list_delete(struct ovs_list *list)
-{
-    struct dp_packet *b;
-
-    LIST_FOR_EACH_POP (b, list_node, list) {
-        dp_packet_delete(b);
-    }
 }
 
 static inline void
@@ -492,12 +467,11 @@ dp_packet_resize_l2_5(struct dp_packet *b, int increment)
         dp_packet_pull(b, -increment);
     }
 
-    b->frame = dp_packet_data(b);
     /* Adjust layer offsets after l2_5. */
     dp_packet_adjust_layer_offset(&b->l3_ofs, increment);
     dp_packet_adjust_layer_offset(&b->l4_ofs, increment);
 
-    return b->frame;
+    return dp_packet_data(b);
 }
 
 /* Adjust the size of the l2 portion of the dp_packet, updating the l2
@@ -508,5 +482,5 @@ dp_packet_resize_l2(struct dp_packet *b, int increment)
 {
     dp_packet_resize_l2_5(b, increment);
     dp_packet_adjust_layer_offset(&b->l2_5_ofs, increment);
-    return b->frame;
+    return dp_packet_data(b);
 }

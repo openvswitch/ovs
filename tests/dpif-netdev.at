@@ -3,7 +3,7 @@ AT_BANNER([dpif-netdev])
 # Strips out uninteresting parts of flow output, as well as parts
 # that vary from one run to another (e.g., timing and bond actions).
 m4_define([STRIP_XOUT], [[sed '
-    s/ufid:[0-9a-f]* //
+    s/ufid:[-0-9a-f]* //
     s/used:[0-9]*\.[0-9]*/used:0.0/
     s/actions:.*/actions: <del>/
     s/packets:[0-9]*/packets:0/

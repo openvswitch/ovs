@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,10 @@
  * requests to an OVSDB database server and parses the responses, converting
  * raw JSON into data structures that are easier for clients to digest.  Most
  * notably, references to rows via UUID become C pointers.
+ *
+ * The IDL always presents a consistent snapshot of the database to its client,
+ * that is, it won't present the effects of some part of a transaction applied
+ * at the database server without presenting all of its effects.
  *
  * The IDL also assists with issuing database transactions.  The client creates
  * a transaction, manipulates the IDL data structures, and commits or aborts

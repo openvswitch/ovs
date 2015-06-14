@@ -286,6 +286,14 @@ OVSDB_CHECK_NEGATIVE([quotes must be balanced],
   [parse-atom-strings '[["string"]]' '"asdf'],
   ["asdf: missing quote at end of quoted string])
 
+OVSDB_CHECK_NEGATIVE([quoted string must not contain unescaped quote],
+  [parse-atom-strings '[["string"]]' '"as"df"'],
+  ["as"df": quoted string may not include unescaped "])
+
+OVSDB_CHECK_NEGATIVE([quoted string must not end with backslash],
+  [parse-atom-strings '[["string"]]' '"asdf\"'],
+  ["asdf\": quoted string may not end with backslash])
+
 OVSDB_CHECK_NEGATIVE([uuids must be valid],
   [parse-atom-strings '[["uuid"]]' '1234-5678'],
   ["1234-5678" is not a valid UUID])

@@ -709,13 +709,9 @@ static void
 format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
                  struct dpctl_params *dpctl_p)
 {
-    if (dpctl_p->verbosity) {
-        if (f->ufid_present) {
-            odp_format_ufid(&f->ufid, ds);
-            ds_put_cstr(ds, ", ");
-        } else {
-            ds_put_cstr(ds, "ufid:<empty>, ");
-        }
+    if (dpctl_p->verbosity && f->ufid_present) {
+        odp_format_ufid(&f->ufid, ds);
+        ds_put_cstr(ds, ", ");
     }
     odp_flow_format(f->key, f->key_len, f->mask, f->mask_len, ports, ds,
                     dpctl_p->verbosity);
@@ -782,6 +778,12 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             goto out_dpifclose;
         }
     }
+
+    /* Make sure that these values are different. PMD_ID_NULL means that the
+     * pmd is unspecified (e.g. because the datapath doesn't have different
+     * pmd threads), while NON_PMD_CORE_ID refers to every non pmd threads
+     * in the userspace datapath */
+    BUILD_ASSERT(PMD_ID_NULL != NON_PMD_CORE_ID);
 
     ds_init(&ds);
     flow_dump = dpif_flow_dump_create(dpif, false);

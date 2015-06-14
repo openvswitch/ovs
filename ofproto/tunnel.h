@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Nicira, Inc.
+/* Copyright (c) 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ void ofproto_tunnel_init(void);
 bool tnl_port_reconfigure(const struct ofport_dpif *, const struct netdev *,
                           odp_port_t, bool native_tnl, const char name[]);
 
-void tnl_port_add(const struct ofport_dpif *, const struct netdev *,
-                  odp_port_t odp_port, bool native_tnl, const char name[]);
+int tnl_port_add(const struct ofport_dpif *, const struct netdev *,
+                 odp_port_t odp_port, bool native_tnl, const char name[]);
 void tnl_port_del(const struct ofport_dpif *);
 
 const struct ofport_dpif *tnl_port_receive(const struct flow *);

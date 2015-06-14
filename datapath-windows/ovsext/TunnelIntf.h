@@ -17,6 +17,10 @@
 #ifndef __TUNNEL_INTF_H_
 #define __TUNNEL_INTF_H_ 1
 
+typedef VOID(*PFNTunnelVportPendingOp)(PVOID context,
+                                       NTSTATUS status,
+                                       UINT32 *replyLen);
+
 /* Tunnel callout driver load/unload functions */
 NTSTATUS OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject);
 
@@ -25,5 +29,16 @@ VOID OvsUninitTunnelFilter(PDRIVER_OBJECT driverObject);
 VOID OvsRegisterSystemProvider(PVOID deviceObject);
 
 VOID OvsUnregisterSystemProvider();
+
+NTSTATUS OvsTunelFilterCreate(PIRP irp,
+                              UINT16 filterPort,
+                              UINT64 *filterID,
+                              PFNTunnelVportPendingOp callback,
+                              PVOID context);
+
+NTSTATUS OvsTunelFilterDelete(PIRP irp,
+                              UINT64 filterID,
+                              PFNTunnelVportPendingOp callback,
+                              PVOID context);
 
 #endif /* __TUNNEL_INTF_H_ */

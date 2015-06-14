@@ -120,16 +120,14 @@ dnl OVS_CHECK_WINDOWS
 dnl
 dnl Configure Visual Studio solution build
 AC_DEFUN([OVS_CHECK_VISUAL_STUDIO_DDK], [
-AC_ARG_WITH([vstudioddk],
-         [AS_HELP_STRING([--with-vstudioddk=version_type],
-            [Visual Studio DDK version type e.g. Win8.1 Release])],
+AC_ARG_WITH([vstudiotarget],
+         [AS_HELP_STRING([--with-vstudiotarget=target_type],
+            [Target type: Debug/Release])],
          [
             case "$withval" in
-            "Win8.1 Release") ;;
-            "Win8.1 Debug") ;;
-            "Win8 Release") ;;
-            "Win8 Debug") ;;
-            *) AC_MSG_ERROR([No good Visual Studio configuration found]) ;;
+            "Release") ;;
+            "Debug") ;;
+            *) AC_MSG_ERROR([No valid Visual Studio configuration found]) ;;
             esac
 
             VSTUDIO_CONFIG=$withval
@@ -139,7 +137,7 @@ AC_ARG_WITH([vstudioddk],
       )
 
   AC_SUBST([VSTUDIO_CONFIG])
-  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio DDK version module.])
+  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio build target.])
   AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
 ])
 

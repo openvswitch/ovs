@@ -67,6 +67,12 @@
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
+/* --bundle: Use OpenFlow 1.4 bundle for making the flow table change atomic.
+ * NOTE: Also the flow mod will use OpenFlow 1.4, so the semantics may be
+ * different (see the comment in parse_options() for details).
+ */
+static bool bundle = false;
+
 /* --strict: Use strict matching for flow mod commands?  Additionally governs
  * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
  */
@@ -159,6 +165,7 @@ parse_options(int argc, char *argv[])
         OPT_SORT,
         OPT_RSORT,
         OPT_UNIXCTL,
+        OPT_BUNDLE,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -176,6 +183,7 @@ parse_options(int argc, char *argv[])
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
+        {"bundle", no_argument, NULL, OPT_BUNDLE},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -249,6 +257,10 @@ parse_options(int argc, char *argv[])
             ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
+        case OPT_BUNDLE:
+            bundle = true;
+            break;
+
         case OPT_STRICT:
             strict = true;
             break;
@@ -293,6 +305,12 @@ parse_options(int argc, char *argv[])
 
     free(short_options);
 
+    /* Implicit OpenFlow 1.4 with the '--bundle' option. */
+    if (bundle) {
+        /* Add implicit allowance for OpenFlow 1.4. */
+        add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF14_OXM));
+    }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
     if (!(allowed_protocols & version_protocols)) {
@@ -496,7 +514,6 @@ open_vconn(const char *name, struct vconn **vconnp)
 static void
 send_openflow_buffer(struct vconn *vconn, struct ofpbuf *buffer)
 {
-    ofpmsg_update_length(buffer);
     run(vconn_send_block(vconn, buffer), "failed to send packet to switch");
 }
 
@@ -505,7 +522,6 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
 {
     struct ofpbuf *reply;
 
-    ofpmsg_update_length(request);
     run(vconn_transact(vconn, request, &reply), "talking to %s",
         vconn_get_name(vconn));
     ofp_print(stdout, reply->data, reply->size, verbosity + 1);
@@ -587,11 +603,7 @@ dump_trivial_stats_transaction(const char *vconn_name, enum ofpraw raw)
 static void
 transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
 {
-    struct ofpbuf *request, *reply;
-
-    LIST_FOR_EACH (request, list_node, requests) {
-        ofpmsg_update_length(request);
-    }
+    struct ofpbuf *reply;
 
     run(vconn_transact_multiple_noreply(vconn, requests, &reply),
         "talking to %s", vconn_get_name(vconn));
@@ -600,6 +612,20 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
         exit(1);
     }
     ofpbuf_delete(reply);
+}
+
+static void
+bundle_error_reporter(const struct ofp_header *oh)
+{
+    ofp_print(stderr, oh, ntohs(oh->length), verbosity + 1);
+    fflush(stderr);
+}
+
+static void
+bundle_transact(struct vconn *vconn, struct ovs_list *requests, uint16_t flags)
+{
+    run(vconn_bundle_transact(vconn, requests, flags, bundle_error_reporter),
+        "talking to %s", vconn_get_name(vconn));
 }
 
 /* Sends 'request', which should be a request that only has a reply if an error
@@ -1175,12 +1201,44 @@ open_vconn_for_flow_mod(const char *remote, struct vconn **vconnp,
 }
 
 static void
+bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
+                  size_t n_fms, enum ofputil_protocol usable_protocols)
+{
+    enum ofputil_protocol protocol;
+    struct vconn *vconn;
+    struct ovs_list requests;
+    size_t i;
+
+    list_init(&requests);
+
+    /* Bundles need OpenFlow 1.4+. */
+    usable_protocols &= OFPUTIL_P_OF14_UP;
+    protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
+
+    for (i = 0; i < n_fms; i++) {
+        struct ofputil_flow_mod *fm = &fms[i];
+        struct ofpbuf *request = ofputil_encode_flow_mod(fm, protocol);
+
+        list_push_back(&requests, &request->list_node);
+        free(CONST_CAST(struct ofpact *, fm->ofpacts));
+    }
+
+    bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    vconn_close(vconn);
+}
+
+static void
 ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
                  size_t n_fms, enum ofputil_protocol usable_protocols)
 {
     enum ofputil_protocol protocol;
     struct vconn *vconn;
     size_t i;
+
+    if (bundle) {
+        bundle_flow_mod__(remote, fms, n_fms, usable_protocols);
+        return;
+    }
 
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
 
@@ -1194,13 +1252,19 @@ ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 }
 
 static void
-ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
+ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], int command)
 {
     enum ofputil_protocol usable_protocols;
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
     char *error;
 
+    if (command == OFPFC_ADD) {
+        /* Allow the file to specify a mix of commands.  If none specified at
+         * the beginning of any given line, then the default is OFPFC_ADD, so
+         * this is backwards compatible. */
+        command = -2;
+    }
     error = parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms,
                                     &usable_protocols);
     if (error) {
@@ -2393,7 +2457,7 @@ fte_insert(struct classifier *cls, const struct match *match,
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
-    cls_rule_init(&fte->rule, match, priority);
+    cls_rule_init(&fte->rule, match, priority, CLS_MIN_VERSION);
     fte->versions[index] = version;
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule, NULL, 0));
@@ -2635,7 +2699,11 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
             fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, protocol, &requests);
         }
     }
-    transact_multiple_noreply(vconn, &requests);
+    if (bundle) {
+        bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    } else {
+        transact_multiple_noreply(vconn, &requests);
+    }
     vconn_close(vconn);
 
     fte_free_all(&cls);

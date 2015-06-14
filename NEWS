@@ -1,6 +1,11 @@
 Post-v2.3.0
 ---------------------
-   - Added support for SFQ, FQ_CoDel and CoDel qdiscs. 
+   - Flow table modifications are now atomic, meaning that each packet
+     now sees a coherent version of the OpenFlow pipeline.  For
+     example, if a controller removes all flows with a single OpenFlow
+     "flow_mod", no packet sees an intermediate version of the OpenFlow
+     pipeline where only some of the flows have been deleted.
+   - Added support for SFQ, FQ_CoDel and CoDel qdiscs.
    - Add bash command-line completion support for ovs-vsctl Please check
      utilities/ovs-command-compgen.INSTALL.md for how to use.
    - The MAC learning feature now includes per-port fairness to mitigate
@@ -27,6 +32,11 @@ Post-v2.3.0
      commands are now redundant and will be removed in a future
      release.  See ovs-vswitchd(8) for details.
    - OpenFlow:
+     * OpenFlow 1.4 bundles are now supported, but for flow mod
+       messages only.  Both 'atomic' and 'ordered' bundle flags are
+       trivially supported, as all bundled messages are executed in
+       the order they were added and all flow table modifications are
+       now atomic to the datapath.
      * IPv6 flow label and neighbor discovery fields are now modifiable.
      * OpenFlow 1.5 extended registers are now supported.
      * The OpenFlow 1.5 actset_output field is now supported.
@@ -41,6 +51,18 @@ Post-v2.3.0
      * A new Netronome extension to OpenFlow 1.5+ allows control over the
        fields hashed for OpenFlow select groups.  See "selection_method" and
        related options in ovs-ofctl(8) for details.
+   - ovs-ofctl has a new '--bundle' option that makes the flow mod commands
+     ('add-flow', 'add-flows', 'mod-flows', 'del-flows', and 'replace-flows')
+     use an OpenFlow 1.4 bundle to operate the modifications as a single
+     atomic transaction.  If any of the flow mods in a transaction fail, none
+     of them are executed.  All flow mods in a bundle appear to datapath
+     lookups simultaneously.
+   - ovs-ofctl 'add-flow' and 'add-flows' commands now accept arbitrary flow
+     mods as an input by allowing the flow specification to start with an
+     explicit 'add', 'modify', 'modify_strict', 'delete', or 'delete_strict'
+     keyword.  A missing keyword is treated as 'add', so this is fully
+     backwards compatible.  With the new '--bundle' option all the flow mods
+     are executed as a single atomic transaction using an OpenFlow 1.4 bundle.
    - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
      MD5 is no longer secure and some operating systems have started to disable
      it in OpenSSL.
@@ -65,7 +87,7 @@ Post-v2.3.0
    - Added support for DPDK Tunneling. VXLAN, GRE, and Geneve are supported
      protocols. This is generic tunneling mechanism for userspace datapath.
    - Support for multicast snooping (IGMPv1 and IGMPv2)
-   - Support for Linux kernels up to 3.19.x
+   - Support for Linux kernels up to 4.0.x
    - The documentation now use the term 'destination' to mean one of syslog,
      console or file for vlog logging instead of the previously used term
      'facility'.

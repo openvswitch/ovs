@@ -52,7 +52,7 @@ MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
 #define vlan_tso true
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
+#ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
 static bool dev_supports_vlan_tx(struct net_device *dev)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
@@ -66,16 +66,16 @@ static bool dev_supports_vlan_tx(struct net_device *dev)
 }
 
 /* Strictly this is not needed and will be optimised out
- * as this code is guarded by if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0).
+ * as this code is guarded by if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0).
  * It is here to make things explicit should the compatibility
  * code be extended in some way prior extending its life-span
- * beyond v3.16.
+ * beyond v3.19.
  */
 static bool supports_mpls_gso(void)
 {
 /* MPLS GSO was introduced in v3.11, however it was not correctly
- * activated using mpls_features until v3.16. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,16,0)
+ * activated using mpls_features until v3.19. */
+#ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
 	return true;
 #else
 	return false;
@@ -120,17 +120,17 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 		/* As of v3.11 the kernel provides an mpls_features field in
 		 * struct net_device which allows devices to advertise which
 		 * features its supports for MPLS. This value defaults to
-		 * NETIF_F_SG and as of v3.16.
+		 * NETIF_F_SG and as of v3.19.
 		 *
 		 * This compatibility code is intended for kernels older
-		 * than v3.16 that do not support MPLS GSO and do not
+		 * than v3.19 that do not support MPLS GSO and do not
 		 * use mpls_features. Thus this code uses NETIF_F_SG
 		 * directly in place of mpls_features.
 		 */
 		if (mpls)
 			features &= NETIF_F_SG;
 
-		if (netif_needs_gso(skb, features)) {
+		if (netif_needs_gso(skb->dev, skb, features)) {
 			struct sk_buff *nskb;
 
 			nskb = skb_gso_segment(skb, features);
@@ -168,7 +168,7 @@ drop:
 	return err;
 }
 EXPORT_SYMBOL_GPL(rpl_dev_queue_xmit);
-#endif /* 3.16 */
+#endif /* OVS_USE_COMPAT_GSO_SEGMENTATION */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 static __be16 __skb_network_protocol(struct sk_buff *skb)
@@ -219,7 +219,17 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	 * make copy of it to restore it back. */
 	memcpy(cb, skb->cb, sizeof(cb));
 
+	/* We are handling offloads by segmenting l3 packet, so
+	 * no need to call OVS compat segmentation function. */
+
+#ifdef HAVE___SKB_GSO_SEGMENT
+#undef __skb_gso_segment
 	segs = __skb_gso_segment(skb, 0, tx_path);
+#else
+#undef skb_gso_segment
+	segs = skb_gso_segment(skb, 0);
+#endif
+
 	if (!segs || IS_ERR(segs))
 		goto free;
 

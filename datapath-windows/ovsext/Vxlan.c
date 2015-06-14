@@ -50,14 +50,57 @@
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 
 /*
+ *----------------------------------------------------------------------------
+ * This function verifies if the VXLAN tunnel already exists, in order to
+ * avoid sending a duplicate request to the WFP base filtering engine.
+ *----------------------------------------------------------------------------
+ */
+static BOOLEAN
+OvsIsTunnelFilterCreated(POVS_SWITCH_CONTEXT switchContext,
+                         UINT16 udpPortDest)
+{
+    for (UINT hash = 0; hash < OVS_MAX_VPORT_ARRAY_SIZE; hash++) {
+        PLIST_ENTRY head, link, next;
+
+        head = &(switchContext->portNoHashArray[hash & OVS_VPORT_MASK]);
+        LIST_FORALL_SAFE(head, link, next) {
+            POVS_VPORT_ENTRY vport = NULL;
+            POVS_VXLAN_VPORT vxlanPort = NULL;
+            vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
+            vxlanPort = (POVS_VXLAN_VPORT)vport->priv;
+            if (vxlanPort) {
+                if ((udpPortDest == vxlanPort->dstPort)) {
+                    /* The VXLAN tunnel was already created. */
+                    return TRUE;
+                }
+            }
+        }
+    }
+
+    return FALSE;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * This function allocates and initializes the OVS_VXLAN_VPORT. The function
+ * also creates a WFP tunnel filter for the necessary destination port. The
+ * tunnel filter create request is passed to the tunnel filter threads that
+ * will complete the request at a later time when IRQL is lowered to
+ * PASSIVE_LEVEL.
+ *
  * udpDestPort: the vxlan is set as payload to a udp frame. If the destination
  * port of an udp frame is udpDestPort, we understand it to be vxlan.
+ *----------------------------------------------------------------------------
  */
 NTSTATUS
-OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
-                   UINT16 udpDestPort)
+OvsInitVxlanTunnel(PIRP irp,
+                   POVS_VPORT_ENTRY vport,
+                   UINT16 udpDestPort,
+                   PFNTunnelVportPendingOp callback,
+                   PVOID tunnelContext)
 {
-    POVS_VXLAN_VPORT vxlanPort;
+    NTSTATUS status = STATUS_SUCCESS;
+    POVS_VXLAN_VPORT vxlanPort = NULL;
 
     vxlanPort = OvsAllocateMemoryWithTag(sizeof (*vxlanPort),
                                          OVS_VXLAN_POOL_TAG);
@@ -67,28 +110,56 @@ OvsInitVxlanTunnel(POVS_VPORT_ENTRY vport,
 
     RtlZeroMemory(vxlanPort, sizeof(*vxlanPort));
     vxlanPort->dstPort = udpDestPort;
-    /*
-     * since we are installing the WFP filter before the port is created
-     * We need to check if it is the same number
-     * XXX should be removed later
-     */
-    ASSERT(vxlanPort->dstPort == VXLAN_UDP_PORT);
     vport->priv = (PVOID)vxlanPort;
 
-    return STATUS_SUCCESS;
+    if (!OvsIsTunnelFilterCreated(gOvsSwitchContext, udpDestPort)) {
+        status = OvsTunelFilterCreate(irp,
+                                      udpDestPort,
+                                      &vxlanPort->filterID,
+                                      callback,
+                                      tunnelContext);
+    } else {
+        status = STATUS_OBJECT_NAME_EXISTS;
+    }
+
+    return status;
 }
 
-
-VOID
-OvsCleanupVxlanTunnel(POVS_VPORT_ENTRY vport)
+/*
+ *----------------------------------------------------------------------------
+ * This function releases the OVS_VXLAN_VPORT. The function also deletes the
+ * WFP tunnel filter previously created. The tunnel filter delete request is
+ * passed to the tunnel filter threads that will complete the request at a
+ * later time when IRQL is lowered to PASSIVE_LEVEL.
+ *----------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsCleanupVxlanTunnel(PIRP irp,
+                      POVS_VPORT_ENTRY vport,
+                      PFNTunnelVportPendingOp callback,
+                      PVOID tunnelContext)
 {
+    NTSTATUS status = STATUS_SUCCESS;
+    POVS_VXLAN_VPORT vxlanPort = NULL;
+
     if (vport->ovsType != OVS_VPORT_TYPE_VXLAN ||
         vport->priv == NULL) {
-        return;
+        return STATUS_SUCCESS;
+    }
+
+    vxlanPort = (POVS_VXLAN_VPORT)vport->priv;
+
+    if (vxlanPort->filterID != 0) {
+        status = OvsTunelFilterDelete(irp,
+                                      vxlanPort->filterID,
+                                      callback,
+                                      tunnelContext);
     }
 
     OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
     vport->priv = NULL;
+
+    return status;
 }
 
 
@@ -173,10 +244,10 @@ OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
 
         /* L2 header */
         ethHdr = (EthHdr *)bufferStart;
-        NdisMoveMemory(ethHdr->Destination, fwdInfo->dstMacAddr,
-                       sizeof ethHdr->Destination + sizeof ethHdr->Source);
         ASSERT(((PCHAR)&fwdInfo->dstMacAddr + sizeof fwdInfo->dstMacAddr) ==
                (PCHAR)&fwdInfo->srcMacAddr);
+        NdisMoveMemory(ethHdr->Destination, fwdInfo->dstMacAddr,
+                       sizeof ethHdr->Destination + sizeof ethHdr->Source);
         ethHdr->Type = htons(ETH_TYPE_IPV4);
 
         // XXX: question: there are fields in the OvsIPv4TunnelKey for ttl and such,
@@ -203,7 +274,7 @@ OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
         /* UDP header */
         udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
         udpHdr->source = htons(tunKey->flow_hash | 32768);
-        udpHdr->dest = VXLAN_UDP_PORT_NBO;
+        udpHdr->dest = htons(tunKey->dst_port);
         udpHdr->len = htons(NET_BUFFER_DATA_LENGTH(curNb) - headRoom +
                             sizeof *udpHdr + sizeof *vxlanHdr);
         udpHdr->check = 0;
@@ -240,13 +311,11 @@ NDIS_STATUS
 OvsEncapVxlan(PNET_BUFFER_LIST curNbl,
               OvsIPv4TunnelKey *tunKey,
               POVS_SWITCH_CONTEXT switchContext,
-              VOID *completionList,
               POVS_PACKET_HDR_INFO layers,
               PNET_BUFFER_LIST *newNbl)
 {
     NTSTATUS status;
     OVS_FWD_INFO fwdInfo;
-    UNREFERENCED_PARAMETER(completionList);
 
     status = OvsLookupIPFwdInfo(tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
@@ -349,15 +418,15 @@ OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
 
 /*
  *----------------------------------------------------------------------------
- * OvsDoDecapVxlan
+ * OvsDecapVxlan
  *     Decapsulates to tunnel header in 'curNbl' and puts into 'tunKey'.
  *----------------------------------------------------------------------------
  */
 NDIS_STATUS
-OvsDoDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
-                PNET_BUFFER_LIST curNbl,
-                OvsIPv4TunnelKey *tunKey,
-                PNET_BUFFER_LIST *newNbl)
+OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
+              PNET_BUFFER_LIST curNbl,
+              OvsIPv4TunnelKey *tunKey,
+              PNET_BUFFER_LIST *newNbl)
 {
     PNET_BUFFER curNb;
     PMDL curMdl;
@@ -474,9 +543,6 @@ OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
         } else {
             break;
         }
-
-        /* XXX Should be tested against the dynamic port # in the VXLAN vport */
-        ASSERT(udp->dest == RtlUshortByteSwap(VXLAN_UDP_PORT));
 
         VxlanHeader = (VXLANHdr *)OvsGetPacketBytes(packet,
                                                     sizeof(*VxlanHeader),

@@ -65,13 +65,37 @@ add_port () {
     BRIDGE="$1"
     INTERFACE="$2"
     CONTAINER="$3"
-    ADDRESS="$4"
-    GATEWAY="$5"
 
-    if [ "$#" -lt 3 ]; then
-        usage
+    if [ -z "$BRIDGE" ] || [ -z "$INTERFACE" ] || [ -z "$CONTAINER" ]; then
+        echo >&2 "$UTIL add-port: not enough arguments (use --help for help)"
         exit 1
     fi
+
+    shift 3
+    while [ $# -ne 0 ]; do
+        case $1 in
+            --ipaddress=*)
+                ADDRESS=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                shift
+                ;;
+            --macaddress=*)
+                MACADDRESS=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                shift
+                ;;
+            --gateway=*)
+                GATEWAY=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                shift
+                ;;
+            --mtu=*)
+                MTU=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                shift
+                ;;
+            *)
+                echo >&2 "$UTIL add-port: unknown option \"$1\""
+                exit 1
+                ;;
+        esac
+    done
 
     # Check if a port is already attached for the given container and interface
     PORT=`get_port_for_container_interface "$CONTAINER" "$INTERFACE" \
@@ -117,8 +141,16 @@ add_port () {
     ip netns exec "$PID" ip link set dev "${PORTNAME}_c" name "$INTERFACE"
     ip netns exec "$PID" ip link set "$INTERFACE" up
 
+    if [ -n "$MTU" ]; then
+        ip netns exec "$PID" ip link set dev "$INTERFACE" mtu "$MTU"
+    fi
+
     if [ -n "$ADDRESS" ]; then
         ip netns exec "$PID" ip addr add "$ADDRESS" dev "$INTERFACE"
+    fi
+
+    if [ -n "$MACADDRESS" ]; then
+        ip netns exec "$PID" ip link set dev "$INTERFACE" address "$MACADDRESS"
     fi
 
     if [ -n "$GATEWAY" ]; then
@@ -190,14 +222,17 @@ ${UTIL}: Performs integration of Open vSwitch with Docker.
 usage: ${UTIL} COMMAND
 
 Commands:
-  add-port BRIDGE INTERFACE CONTAINER [ADDRESS [GATEWAY]]
+  add-port BRIDGE INTERFACE CONTAINER [--ipaddress="ADDRESS"]
+                    [--gateway=GATEWAY] [--macaddress="MACADDRESS"]
+                    [--mtu=MTU]
                     Adds INTERFACE inside CONTAINER and connects it as a port
                     in Open vSwitch BRIDGE. Optionally, sets ADDRESS on
                     INTERFACE. ADDRESS can include a '/' to represent network
-                    prefix length. Along with ADDRESS, optionally set the
-                    default gateway for the container. e.g.:
-                    ${UTIL} add-port br-int eth1 c474a0e2830e 192.168.1.2/24 \
-                        192.168.1.1
+                    prefix length. Optionally, sets a GATEWAY, MACADDRESS
+                    and MTU.  e.g.:
+                    ${UTIL} add-port br-int eth1 c474a0e2830e
+                    --ipaddress=192.168.1.2/24 --gateway=192.168.1.1
+                    --macaddress="a2:c3:0d:49:7f:f8" --mtu=1450
   del-port BRIDGE INTERFACE CONTAINER
                     Deletes INTERFACE inside CONTAINER and removes its
                     connection to Open vSwitch BRIDGE. e.g.:

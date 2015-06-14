@@ -35,6 +35,8 @@ BuildRequires: systemd-units openssl openssl-devel
 BuildRequires: python python-twisted-core python-zope-interface PyQt4
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
+# make check dependencies
+BuildRequires: procps-ng
 
 Requires: openssl iproute module-init-tools
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
@@ -258,6 +260,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc FAQ.md NEWS INSTALL.DPDK.md rhel/README.RHEL
 /var/lib/openvswitch
 /var/log/openvswitch
+%ghost %attr(755,root,root) %{_rundir}/openvswitch
 %exclude %{_bindir}/ovs-benchmark
 %exclude %{_bindir}/ovs-parse-backtrace
 %exclude %{_bindir}/ovs-pcap

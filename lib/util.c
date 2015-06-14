@@ -500,24 +500,13 @@ get_subprogram_name(void)
     return name ? name : "";
 }
 
-/* Sets the formatted value of 'format' as the name of the currently running
- * thread or process.  (This appears in log messages and may also be visible in
- * system process listings and debuggers.) */
+/* Sets 'subprogram_name' as the name of the currently running thread or
+ * process.  (This appears in log messages and may also be visible in system
+ * process listings and debuggers.) */
 void
-set_subprogram_name(const char *format, ...)
+set_subprogram_name(const char *subprogram_name)
 {
-    char *pname;
-
-    if (format) {
-        va_list args;
-
-        va_start(args, format);
-        pname = xvasprintf(format, args);
-        va_end(args);
-    } else {
-        pname = xstrdup(program_name);
-    }
-
+    char *pname = xstrdup(subprogram_name ? subprogram_name : program_name);
     free(subprogram_name_set(pname));
 
 #if HAVE_GLIBC_PTHREAD_SETNAME_NP
@@ -651,11 +640,11 @@ str_to_uint(const char *s, int base, unsigned int *u)
     long long ll;
     bool ok = str_to_llong(s, base, &ll);
     if (!ok || ll < 0 || ll > UINT_MAX) {
-	*u = 0;
-	return false;
+        *u = 0;
+        return false;
     } else {
-	*u = ll;
-	return true;
+        *u = ll;
+        return true;
     }
 }
 
@@ -736,6 +725,87 @@ hexits_value(const char *s, size_t n, bool *ok)
     }
     *ok = true;
     return value;
+}
+
+/* Parses the string in 's' as an integer in either hex or decimal format and
+ * puts the result right justified in the array 'valuep' that is 'field_width'
+ * big. If the string is in hex format, the value may be arbitrarily large;
+ * integers are limited to 64-bit values. (The rationale is that decimal is
+ * likely to represent a number and 64 bits is a reasonable maximum whereas
+ * hex could either be a number or a byte string.)
+ *
+ * On return 'tail' points to the first character in the string that was
+ * not parsed as part of the value. ERANGE is returned if the value is too
+ * large to fit in the given field. */
+int
+parse_int_string(const char *s, uint8_t *valuep, int field_width, char **tail)
+{
+    unsigned long long int integer;
+    int i;
+
+    if (!strncmp(s, "0x", 2) || !strncmp(s, "0X", 2)) {
+        uint8_t *hexit_str;
+        int len = 0;
+        int val_idx;
+        int err = 0;
+
+        s += 2;
+        hexit_str = xmalloc(field_width * 2);
+
+        for (;;) {
+            uint8_t hexit;
+            bool ok;
+
+            s += strspn(s, " \t\r\n");
+            hexit = hexits_value(s, 1, &ok);
+            if (!ok) {
+                *tail = CONST_CAST(char *, s);
+                break;
+            }
+
+            if (hexit != 0 || len) {
+                if (DIV_ROUND_UP(len + 1, 2) > field_width) {
+                    err = ERANGE;
+                    goto free;
+                }
+
+                hexit_str[len] = hexit;
+                len++;
+            }
+            s++;
+        }
+
+        val_idx = field_width;
+        for (i = len - 1; i >= 0; i -= 2) {
+            val_idx--;
+            valuep[val_idx] = hexit_str[i];
+            if (i > 0) {
+                valuep[val_idx] += hexit_str[i - 1] << 4;
+            }
+        }
+
+        memset(valuep, 0, val_idx);
+
+free:
+        free(hexit_str);
+        return err;
+    }
+
+    errno = 0;
+    integer = strtoull(s, tail, 0);
+    if (errno) {
+        return errno;
+    }
+
+    for (i = field_width - 1; i >= 0; i--) {
+        valuep[i] = integer;
+        integer >>= 8;
+    }
+    if (integer) {
+        return ERANGE;
+    }
+
+    return 0;
 }
 
 /* Returns the current working directory as a malloc()'d string, or a null

@@ -131,7 +131,7 @@ parse_app_args(int argc, char *argv[])
     char **argvopt = argv;
     const char *progname = NULL;
     static struct option lgopts[] = {
-        {NULL, 0, 0, 0 }
+        {NULL, 0, NULL, 0 }
     };
     progname = argv[0];
 

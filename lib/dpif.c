@@ -46,6 +46,7 @@
 #include "tnl-arp-cache.h"
 #include "tnl-ports.h"
 #include "util.h"
+#include "uuid.h"
 #include "valgrind.h"
 #include "openvswitch/vlog.h"
 
@@ -852,6 +853,7 @@ dpif_flow_hash(const struct dpif *dpif OVS_UNUSED,
         ovsthread_once_done(&once);
     }
     hash_bytes128(key, key_len, secret, hash);
+    uuid_set_bits_v4((struct uuid *)hash);
 }
 
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a
@@ -899,7 +901,8 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
     error = dpif_flow_get(dpif, key->data, key->size, ufid,
                           PMD_ID_NULL, &reply, &flow);
     if (!error
-        && (!ufid || (flow.ufid_present && ovs_u128_equal(ufid, &flow.ufid)))) {
+        && (!ufid || (flow.ufid_present
+                      && ovs_u128_equals(ufid, &flow.ufid)))) {
         enable_feature = true;
     }
 
@@ -917,7 +920,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
 int
 dpif_flow_get(struct dpif *dpif,
               const struct nlattr *key, size_t key_len, const ovs_u128 *ufid,
-              const int pmd_id, struct ofpbuf *buf, struct dpif_flow *flow)
+              const unsigned pmd_id, struct ofpbuf *buf, struct dpif_flow *flow)
 {
     struct dpif_op *opp;
     struct dpif_op op;
@@ -946,7 +949,7 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
               const struct nlattr *actions, size_t actions_len,
-              const ovs_u128 *ufid, const int pmd_id,
+              const ovs_u128 *ufid, const unsigned pmd_id,
               struct dpif_flow_stats *stats)
 {
     struct dpif_op *opp;
@@ -974,7 +977,7 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
 int
 dpif_flow_del(struct dpif *dpif,
               const struct nlattr *key, size_t key_len, const ovs_u128 *ufid,
-              const int pmd_id, struct dpif_flow_stats *stats)
+              const unsigned pmd_id, struct dpif_flow_stats *stats)
 {
     struct dpif_op *opp;
     struct dpif_op op;

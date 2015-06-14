@@ -361,6 +361,29 @@ ds_swap(struct ds *a, struct ds *b)
     *b = temp;
 }
 
+void
+ds_put_hex(struct ds *ds, const void *buf_, size_t size)
+{
+    const uint8_t *buf = buf_;
+    bool printed = false;
+    int i;
+
+    for (i = 0; i < size; i++) {
+        uint8_t val = buf[i];
+        if (val || printed) {
+            if (!printed) {
+                ds_put_format(ds, "0x%"PRIx8, val);
+            } else {
+                ds_put_format(ds, "%02"PRIx8, val);
+            }
+            printed = true;
+        }
+    }
+    if (!printed) {
+        ds_put_char(ds, '0');
+    }
+}
+
 /* Writes the 'size' bytes in 'buf' to 'string' as hex bytes arranged 16 per
  * line.  Numeric offsets are also included, starting at 'ofs' for the first
  * byte in 'buf'.  If 'ascii' is true then the corresponding ASCII characters

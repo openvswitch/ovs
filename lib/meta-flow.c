@@ -1750,39 +1750,35 @@ static char *
 mf_from_integer_string(const struct mf_field *mf, const char *s,
                        uint8_t *valuep, uint8_t *maskp)
 {
-    unsigned long long int integer, mask;
     char *tail;
-    int i;
+    const char *err_str = "";
+    int err;
 
-    errno = 0;
-    integer = strtoull(s, &tail, 0);
-    if (errno || (*tail != '\0' && *tail != '/')) {
+    err = parse_int_string(s, valuep, mf->n_bytes, &tail);
+    if (err || (*tail != '\0' && *tail != '/')) {
+        err_str = "value";
         goto syntax_error;
     }
 
     if (*tail == '/') {
-        mask = strtoull(tail + 1, &tail, 0);
-        if (errno || *tail != '\0') {
+        err = parse_int_string(tail + 1, maskp, mf->n_bytes, &tail);
+        if (err || *tail != '\0') {
+            err_str = "mask";
             goto syntax_error;
         }
     } else {
-        mask = ULLONG_MAX;
+        memset(maskp, 0xff, mf->n_bytes);
     }
 
-    for (i = mf->n_bytes - 1; i >= 0; i--) {
-        valuep[i] = integer;
-        maskp[i] = mask;
-        integer >>= 8;
-        mask >>= 8;
-    }
-    if (integer) {
-        return xasprintf("%s: value too large for %u-byte field %s",
-                         s, mf->n_bytes, mf->name);
-    }
     return NULL;
 
 syntax_error:
-    return xasprintf("%s: bad syntax for %s", s, mf->name);
+    if (err == ERANGE) {
+        return xasprintf("%s: %s too large for %u-byte field %s",
+                         s, err_str, mf->n_bytes, mf->name);
+    } else {
+        return xasprintf("%s: bad syntax for %s %s", s, mf->name, err_str);
+    }
 }
 
 static char *
@@ -2177,33 +2173,25 @@ static void
 mf_format_integer_string(const struct mf_field *mf, const uint8_t *valuep,
                          const uint8_t *maskp, struct ds *s)
 {
-    unsigned long long int integer;
-    int i;
-
-    ovs_assert(mf->n_bytes <= 8);
-
-    integer = 0;
-    for (i = 0; i < mf->n_bytes; i++) {
-        integer = (integer << 8) | valuep[i];
-    }
     if (mf->string == MFS_HEXADECIMAL) {
-        ds_put_format(s, "%#llx", integer);
+        ds_put_hex(s, valuep, mf->n_bytes);
     } else {
+        unsigned long long int integer = 0;
+        int i;
+
+        ovs_assert(mf->n_bytes <= 8);
+        for (i = 0; i < mf->n_bytes; i++) {
+            integer = (integer << 8) | valuep[i];
+        }
         ds_put_format(s, "%lld", integer);
     }
 
     if (maskp) {
-        unsigned long long int mask;
-
-        mask = 0;
-        for (i = 0; i < mf->n_bytes; i++) {
-            mask = (mask << 8) | maskp[i];
-        }
-
         /* I guess we could write the mask in decimal for MFS_DECIMAL but I'm
          * not sure that that a bit-mask written in decimal is ever easier to
          * understand than the same bit-mask written in hexadecimal. */
-        ds_put_format(s, "/%#llx", mask);
+        ds_put_char(s, '/');
+        ds_put_hex(s, maskp, mf->n_bytes);
     }
 }
 
@@ -2382,18 +2370,7 @@ mf_get_subfield(const struct mf_subfield *sf, const struct flow *flow)
 void
 mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s)
 {
-    int i;
-
-    for (i = 0; i < ARRAY_SIZE(subvalue->u8); i++) {
-        if (subvalue->u8[i]) {
-            ds_put_format(s, "0x%"PRIx8, subvalue->u8[i]);
-            for (i++; i < ARRAY_SIZE(subvalue->u8); i++) {
-                ds_put_format(s, "%02"PRIx8, subvalue->u8[i]);
-            }
-            return;
-        }
-    }
-    ds_put_char(s, '0');
+    ds_put_hex(s, subvalue->u8, sizeof subvalue->u8);
 }
 
 void

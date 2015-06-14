@@ -117,7 +117,7 @@ struct netdev_flow_key {
  * If dp_netdev_input is not called from a pmd thread, a mutex is used.
  */
 
-#define EM_FLOW_HASH_SHIFT 10
+#define EM_FLOW_HASH_SHIFT 13
 #define EM_FLOW_HASH_ENTRIES (1u << EM_FLOW_HASH_SHIFT)
 #define EM_FLOW_HASH_MASK (EM_FLOW_HASH_ENTRIES - 1)
 #define EM_FLOW_HASH_SEGS 2
@@ -235,9 +235,9 @@ enum pmd_cycles_counter_type {
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
-    struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
-    odp_port_t port_no;
+    struct pkt_metadata md;
     struct netdev *netdev;
+    struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
     struct netdev_rxq **rxq;
     struct ovs_refcount ref_cnt;
@@ -290,14 +290,12 @@ struct dp_netdev_flow_stats {
  * requires synchronization, as noted in more detail below.
  */
 struct dp_netdev_flow {
-    bool dead;
-
+    const struct flow flow;      /* Unmasked flow that created this entry. */
     /* Hash table index by unmasked flow. */
     const struct cmap_node node; /* In owning dp_netdev_pmd_thread's */
                                  /* 'flow_table'. */
     const ovs_u128 ufid;         /* Unique flow identifier. */
-    const struct flow flow;      /* Unmasked flow that created this entry. */
-    const int pmd_id;            /* The 'core_id' of pmd thread owning this */
+    const unsigned pmd_id;       /* The 'core_id' of pmd thread owning this */
                                  /* flow. */
 
     /* Number of references.
@@ -306,11 +304,19 @@ struct dp_netdev_flow {
      * reference. */
     struct ovs_refcount ref_cnt;
 
+    bool dead;
+
     /* Statistics. */
     struct dp_netdev_flow_stats stats;
 
     /* Actions. */
     OVSRCU_TYPE(struct dp_netdev_actions *) actions;
+
+    /* While processing a group of input packets, the datapath uses the next
+     * member to store a pointer to the output batch for the flow.  It is
+     * reset after the batch has been sent out (See dp_netdev_queue_batches(),
+     * packet_batch_init() and packet_batch_execute()). */
+    struct packet_batch *batch;
 
     /* Packet classification. */
     struct dpcls_rule cr;        /* In owning dp_netdev's 'cls'. */
@@ -407,8 +413,10 @@ struct dp_netdev_pmd_thread {
     pthread_t thread;
     int index;                      /* Idx of this pmd thread among pmd*/
                                     /* threads on same numa node. */
-    int core_id;                    /* CPU core id of this pmd thread. */
+    unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
+    int tx_qid;                     /* Queue id used by this pmd thread to
+                                     * send packets on all netdevs */
 
     /* Only a pmd thread can write on its own 'cycles' and 'stats'.
      * The main thread keeps 'stats_zero' and 'cycles_zero' as base
@@ -452,11 +460,11 @@ static void dp_netdev_disable_upcall(struct dp_netdev *);
 void dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
                                     struct dp_netdev *dp, int index,
-                                    int core_id, int numa_id);
+                                    unsigned core_id, int numa_id);
 static void dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_set_nonpmd(struct dp_netdev *dp);
 static struct dp_netdev_pmd_thread *dp_netdev_get_pmd(struct dp_netdev *dp,
-                                                      int core_id);
+                                                      unsigned core_id);
 static struct dp_netdev_pmd_thread *
 dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos);
 static void dp_netdev_destroy_all_pmds(struct dp_netdev *dp);
@@ -574,8 +582,8 @@ pmd_info_show_stats(struct ds *reply,
     if (pmd->numa_id != OVS_NUMA_UNSPEC) {
         ds_put_format(reply, " numa_id %d", pmd->numa_id);
     }
-    if (pmd->core_id != OVS_CORE_UNSPEC) {
-        ds_put_format(reply, " core_id %d", pmd->core_id);
+    if (pmd->core_id != OVS_CORE_UNSPEC && pmd->core_id != NON_PMD_CORE_ID) {
+        ds_put_format(reply, " core_id %u", pmd->core_id);
     }
     ds_put_cstr(reply, ":\n");
 
@@ -823,8 +831,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     ovs_mutex_init_recursive(&dp->non_pmd_mutex);
     ovsthread_key_create(&dp->per_pmd_key, NULL);
 
-    /* Reserves the core NON_PMD_CORE_ID for all non-pmd threads. */
-    ovs_numa_try_pin_core_specific(NON_PMD_CORE_ID);
     dp_netdev_set_nonpmd(dp);
     dp->n_dpdk_rxqs = NR_QUEUE;
 
@@ -1063,15 +1069,16 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             return ENOENT;
         }
         /* There can only be ovs_numa_get_n_cores() pmd threads,
-         * so creates a txq for each. */
-        error = netdev_set_multiq(netdev, n_cores, dp->n_dpdk_rxqs);
+         * so creates a txq for each, and one extra for the non
+         * pmd threads. */
+        error = netdev_set_multiq(netdev, n_cores + 1, dp->n_dpdk_rxqs);
         if (error && (error != EOPNOTSUPP)) {
             VLOG_ERR("%s, cannot set multiq", devname);
             return errno;
         }
     }
     port = xzalloc(sizeof *port);
-    port->port_no = port_no;
+    port->md = PKT_METADATA_INITIALIZER(port_no);
     port->netdev = netdev;
     port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
     port->type = xstrdup(type);
@@ -1176,7 +1183,7 @@ dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
     struct dp_netdev_port *port;
 
     CMAP_FOR_EACH_WITH_HASH (port, node, hash_port_no(port_no), &dp->ports) {
-        if (port->port_no == port_no) {
+        if (port->md.in_port.odp_port == port_no) {
             return port;
         }
     }
@@ -1286,7 +1293,8 @@ static void
 do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
     OVS_REQUIRES(dp->port_mutex)
 {
-    cmap_remove(&dp->ports, &port->node, hash_odp_port(port->port_no));
+    cmap_remove(&dp->ports, &port->node,
+                hash_odp_port(port->md.in_port.odp_port));
     seq_change(dp->port_seq);
     if (netdev_is_pmd(port->netdev)) {
         int numa_id = netdev_get_numa_id(port->netdev);
@@ -1308,7 +1316,7 @@ answer_port_query(const struct dp_netdev_port *port,
 {
     dpif_port->name = xstrdup(netdev_get_name(port->netdev));
     dpif_port->type = xstrdup(port->type);
-    dpif_port->port_no = port->port_no;
+    dpif_port->port_no = port->md.in_port.odp_port;
 }
 
 static int
@@ -1435,7 +1443,7 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
         state->name = xstrdup(netdev_get_name(port->netdev));
         dpif_port->name = state->name;
         dpif_port->type = port->type;
-        dpif_port->port_no = port->port_no;
+        dpif_port->port_no = port->md.in_port.odp_port;
 
         retval = 0;
     } else {
@@ -1762,7 +1770,7 @@ dp_netdev_pmd_find_flow(const struct dp_netdev_pmd_thread *pmd,
     if (ufidp) {
         CMAP_FOR_EACH_WITH_HASH (netdev_flow, node, dp_netdev_flow_hash(ufidp),
                                  &pmd->flow_table) {
-            if (ovs_u128_equal(&netdev_flow->ufid, ufidp)) {
+            if (ovs_u128_equals(&netdev_flow->ufid, ufidp)) {
                 return netdev_flow;
             }
         }
@@ -1935,7 +1943,8 @@ dpif_netdev_flow_get(const struct dpif *dpif, const struct dpif_flow_get *get)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
     struct dp_netdev_pmd_thread *pmd;
-    int pmd_id = get->pmd_id == PMD_ID_NULL ? NON_PMD_CORE_ID : get->pmd_id;
+    unsigned pmd_id = get->pmd_id == PMD_ID_NULL
+                      ? NON_PMD_CORE_ID : get->pmd_id;
     int error = 0;
 
     pmd = dp_netdev_get_pmd(dp, pmd_id);
@@ -1974,7 +1983,8 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     flow = xmalloc(sizeof *flow - sizeof flow->cr.flow.mf + mask.len);
     memset(&flow->stats, 0, sizeof flow->stats);
     flow->dead = false;
-    *CONST_CAST(int *, &flow->pmd_id) = pmd->core_id;
+    flow->batch = NULL;
+    *CONST_CAST(unsigned *, &flow->pmd_id) = pmd->core_id;
     *CONST_CAST(struct flow *, &flow->flow) = match->flow;
     *CONST_CAST(ovs_u128 *, &flow->ufid) = *ufid;
     ovs_refcount_init(&flow->ref_cnt);
@@ -2017,7 +2027,8 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     struct dp_netdev_pmd_thread *pmd;
     struct match match;
     ovs_u128 ufid;
-    int pmd_id = put->pmd_id == PMD_ID_NULL ? NON_PMD_CORE_ID : put->pmd_id;
+    unsigned pmd_id = put->pmd_id == PMD_ID_NULL
+                      ? NON_PMD_CORE_ID : put->pmd_id;
     int error;
 
     error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow);
@@ -2112,7 +2123,8 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
     struct dp_netdev_pmd_thread *pmd;
-    int pmd_id = del->pmd_id == PMD_ID_NULL ? NON_PMD_CORE_ID : del->pmd_id;
+    unsigned pmd_id = del->pmd_id == PMD_ID_NULL
+                      ? NON_PMD_CORE_ID : del->pmd_id;
     int error = 0;
 
     pmd = dp_netdev_get_pmd(dp, pmd_id);
@@ -2393,7 +2405,8 @@ dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
                 }
 
                 /* Sets the new rx queue config.  */
-                err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores(),
+                err = netdev_set_multiq(port->netdev,
+                                        ovs_numa_get_n_cores() + 1,
                                         n_rxqs);
                 if (err && (err != EOPNOTSUPP)) {
                     VLOG_ERR("Failed to set dpdk interface %s rx_queue to:"
@@ -2500,7 +2513,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct dp_netdev_port *port,
                            struct netdev_rxq *rxq)
 {
-    struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
+    struct dp_packet *packets[NETDEV_MAX_BURST];
     int error, cnt;
 
     cycles_count_start(pmd);
@@ -2513,7 +2526,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
 
         /* XXX: initialize md in netdev implementation. */
         for (i = 0; i < cnt; i++) {
-            packets[i]->md = PKT_METADATA_INITIALIZER(port->port_no);
+            packets[i]->md = port->md;
         }
         cycles_count_start(pmd);
         dp_netdev_input(pmd, packets, cnt);
@@ -2737,7 +2750,7 @@ dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
  *
  * Caller must unrefs the returned reference.  */
 static struct dp_netdev_pmd_thread *
-dp_netdev_get_pmd(struct dp_netdev *dp, int core_id)
+dp_netdev_get_pmd(struct dp_netdev *dp, unsigned core_id)
 {
     struct dp_netdev_pmd_thread *pmd;
     const struct cmap_node *pnode;
@@ -2797,14 +2810,25 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos)
     return next;
 }
 
+static int
+core_id_to_qid(unsigned core_id)
+{
+    if (core_id != NON_PMD_CORE_ID) {
+        return core_id;
+    } else {
+        return ovs_numa_get_n_cores();
+    }
+}
+
 /* Configures the 'pmd' based on the input argument. */
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
-                        int index, int core_id, int numa_id)
+                        int index, unsigned core_id, int numa_id)
 {
     pmd->dp = dp;
     pmd->index = index;
     pmd->core_id = core_id;
+    pmd->tx_qid = core_id_to_qid(core_id);
     pmd->numa_id = numa_id;
 
     ovs_refcount_init(&pmd->ref_cnt);
@@ -2913,7 +2937,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         can_have = dp->pmd_cmask ? n_unpinned : MIN(n_unpinned, NR_PMD_THREADS);
         for (i = 0; i < can_have; i++) {
             struct dp_netdev_pmd_thread *pmd = xzalloc(sizeof *pmd);
-            int core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
+            unsigned core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
 
             dp_netdev_configure_pmd(pmd, dp, i, core_id, numa_id);
             /* Each thread will distribute all devices rx-queues among
@@ -3007,14 +3031,22 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
 }
 
 static inline uint32_t
-dpif_netdev_packet_get_dp_hash(struct dp_packet *packet,
-                               const struct miniflow *mf)
+dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
+                                const struct miniflow *mf)
 {
-    uint32_t hash;
+    uint32_t hash, recirc_depth;
 
     hash = dp_packet_get_rss_hash(packet);
     if (OVS_UNLIKELY(!hash)) {
         hash = miniflow_hash_5tuple(mf, 0);
+        dp_packet_set_rss_hash(packet, hash);
+    }
+
+    /* The RSS hash must account for the recirculation depth to avoid
+     * collisions in the exact match cache */
+    recirc_depth = *recirc_depth_get_unsafe();
+    if (OVS_UNLIKELY(recirc_depth)) {
+        hash = hash_finish(hash, recirc_depth);
         dp_packet_set_rss_hash(packet, hash);
     }
     return hash;
@@ -3027,7 +3059,7 @@ struct packet_batch {
 
     struct dp_netdev_flow *flow;
 
-    struct dp_packet *packets[NETDEV_MAX_RX_BATCH];
+    struct dp_packet *packets[NETDEV_MAX_BURST];
 };
 
 static inline void
@@ -3042,8 +3074,9 @@ packet_batch_update(struct packet_batch *batch, struct dp_packet *packet,
 static inline void
 packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 {
-    batch->flow = flow;
+    flow->batch = batch;
 
+    batch->flow = flow;
     batch->packet_count = 0;
     batch->byte_count = 0;
     batch->tcp_flags = 0;
@@ -3052,56 +3085,35 @@ packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 static inline void
 packet_batch_execute(struct packet_batch *batch,
                      struct dp_netdev_pmd_thread *pmd,
-                     enum dp_stat_type hit_type,
                      long long now)
 {
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
 
-    dp_netdev_flow_used(batch->flow, batch->packet_count, batch->byte_count,
+    dp_netdev_flow_used(flow, batch->packet_count, batch->byte_count,
                         batch->tcp_flags, now);
 
     actions = dp_netdev_flow_get_actions(flow);
 
     dp_netdev_execute_actions(pmd, batch->packets, batch->packet_count, true,
                               actions->actions, actions->size);
-
-    dp_netdev_count_packet(pmd, hit_type, batch->packet_count);
 }
 
-static inline bool
+static inline void
 dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct dp_netdev_flow *flow, const struct miniflow *mf,
-                        struct packet_batch *batches, size_t *n_batches,
-                        size_t max_batches)
+                        struct packet_batch *batches, size_t *n_batches)
 {
-    struct packet_batch *batch = NULL;
-    int j;
+    struct packet_batch *batch = flow->batch;
 
-    if (OVS_UNLIKELY(!flow)) {
-        return false;
-    }
-    /* XXX: This O(n^2) algortihm makes sense if we're operating under the
-     * assumption that the number of distinct flows (and therefore the
-     * number of distinct batches) is quite small.  If this turns out not
-     * to be the case, it may make sense to pre sort based on the
-     * netdev_flow pointer.  That done we can get the appropriate batching
-     * in O(n * log(n)) instead. */
-    for (j = *n_batches - 1; j >= 0; j--) {
-        if (batches[j].flow == flow) {
-            batch = &batches[j];
-            packet_batch_update(batch, pkt, mf);
-            return true;
-        }
-    }
-    if (OVS_UNLIKELY(*n_batches >= max_batches)) {
-        return false;
+    if (OVS_LIKELY(batch)) {
+        packet_batch_update(batch, pkt, mf);
+        return;
     }
 
     batch = &batches[(*n_batches)++];
     packet_batch_init(batch, flow);
     packet_batch_update(batch, pkt, mf);
-    return true;
 }
 
 static inline void
@@ -3113,24 +3125,22 @@ dp_packet_swap(struct dp_packet **a, struct dp_packet **b)
 }
 
 /* Try to process all ('cnt') the 'packets' using only the exact match cache
- * 'flow_cache'. If a flow is not found for a packet 'packets[i]', or if there
- * is no matching batch for a packet's flow, the miniflow is copied into 'keys'
- * and the packet pointer is moved at the beginning of the 'packets' array.
+ * 'flow_cache'. If a flow is not found for a packet 'packets[i]', the
+ * miniflow is copied into 'keys' and the packet pointer is moved at the
+ * beginning of the 'packets' array.
  *
  * The function returns the number of packets that needs to be processed in the
  * 'packets' array (they have been moved to the beginning of the vector).
  */
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
-               size_t cnt, struct netdev_flow_key *keys, long long now)
+               size_t cnt, struct netdev_flow_key *keys,
+               struct packet_batch batches[], size_t *n_batches)
 {
-    struct netdev_flow_key key;
-    struct packet_batch batches[4];
     struct emc_cache *flow_cache = &pmd->flow_cache;
-    size_t n_batches, i;
-    size_t notfound_cnt = 0;
+    struct netdev_flow_key key;
+    size_t i, notfound_cnt = 0;
 
-    n_batches = 0;
     miniflow_initialize(&key.mf, key.buf);
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
@@ -3142,12 +3152,13 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 
         miniflow_extract(packets[i], &key.mf);
         key.len = 0; /* Not computed yet. */
-        key.hash = dpif_netdev_packet_get_dp_hash(packets[i], &key.mf);
+        key.hash = dpif_netdev_packet_get_rss_hash(packets[i], &key.mf);
 
         flow = emc_lookup(flow_cache, &key);
-        if (OVS_UNLIKELY(!dp_netdev_queue_batches(packets[i], flow, &key.mf,
-                                                  batches, &n_batches,
-                                                  ARRAY_SIZE(batches)))) {
+        if (OVS_LIKELY(flow)) {
+            dp_netdev_queue_batches(packets[i], flow, &key.mf, batches,
+                                    n_batches);
+        } else {
             if (i != notfound_cnt) {
                 dp_packet_swap(&packets[i], &packets[notfound_cnt]);
             }
@@ -3156,9 +3167,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
         }
     }
 
-    for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, DP_STAT_EXACT_HIT, now);
-    }
+    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT, cnt - notfound_cnt);
 
     return notfound_cnt;
 }
@@ -3166,20 +3175,21 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet **packets, size_t cnt,
-                     struct netdev_flow_key *keys, long long now)
+                     struct netdev_flow_key *keys,
+                     struct packet_batch batches[], size_t *n_batches)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
+    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
-    struct packet_batch batches[PKT_ARRAY_SIZE];
     struct dpcls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
     struct emc_cache *flow_cache = &pmd->flow_cache;
-    size_t n_batches, i;
+    int miss_cnt = 0, lost_cnt = 0;
     bool any_miss;
+    size_t i;
 
     for (i = 0; i < cnt; i++) {
         /* Key length is needed in all the cases, hash computed on demand. */
@@ -3189,7 +3199,6 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
         uint64_t actions_stub[512 / 8], slow_stub[512 / 8];
         struct ofpbuf actions, put_actions;
-        int miss_cnt = 0, lost_cnt = 0;
         ovs_u128 ufid;
 
         ofpbuf_use_stub(&actions, actions_stub, sizeof actions_stub);
@@ -3261,23 +3270,17 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         ofpbuf_uninit(&actions);
         ofpbuf_uninit(&put_actions);
         fat_rwlock_unlock(&dp->upcall_rwlock);
-        dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
         dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
     } else if (OVS_UNLIKELY(any_miss)) {
-        int dropped_cnt = 0;
-
         for (i = 0; i < cnt; i++) {
             if (OVS_UNLIKELY(!rules[i])) {
                 dp_packet_delete(packets[i]);
-                dropped_cnt++;
+                lost_cnt++;
+                miss_cnt++;
             }
         }
-
-        dp_netdev_count_packet(pmd, DP_STAT_MISS, dropped_cnt);
-        dp_netdev_count_packet(pmd, DP_STAT_LOST, dropped_cnt);
     }
 
-    n_batches = 0;
     for (i = 0; i < cnt; i++) {
         struct dp_packet *packet = packets[i];
         struct dp_netdev_flow *flow;
@@ -3289,13 +3292,12 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         flow = dp_netdev_flow_cast(rules[i]);
 
         emc_insert(flow_cache, &keys[i], flow);
-        dp_netdev_queue_batches(packet, flow, &keys[i].mf, batches,
-                                &n_batches, ARRAY_SIZE(batches));
+        dp_netdev_queue_batches(packet, flow, &keys[i].mf, batches, n_batches);
     }
 
-    for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, DP_STAT_MASKED_HIT, now);
-    }
+    dp_netdev_count_packet(pmd, DP_STAT_MASKED_HIT, cnt - miss_cnt);
+    dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
+    dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
 }
 
 static void
@@ -3306,15 +3308,25 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
-    enum { PKT_ARRAY_SIZE = NETDEV_MAX_RX_BATCH };
+    enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    struct packet_batch batches[PKT_ARRAY_SIZE];
     long long now = time_msec();
-    size_t newcnt;
+    size_t newcnt, n_batches, i;
 
-    newcnt = emc_processing(pmd, packets, cnt, keys, now);
+    n_batches = 0;
+    newcnt = emc_processing(pmd, packets, cnt, keys, batches, &n_batches);
     if (OVS_UNLIKELY(newcnt)) {
-        fast_path_processing(pmd, packets, newcnt, keys, now);
+        fast_path_processing(pmd, packets, newcnt, keys, batches, &n_batches);
+    }
+
+    for (i = 0; i < n_batches; i++) {
+        batches[i].flow->batch = NULL;
+    }
+
+    for (i = 0; i < n_batches; i++) {
+        packet_batch_execute(&batches[i], pmd, now);
     }
 }
 
@@ -3332,7 +3344,7 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
 }
 
 static void
-dp_netdev_drop_packets(struct dp_packet ** packets, int cnt, bool may_steal)
+dp_netdev_drop_packets(struct dp_packet **packets, int cnt, bool may_steal)
 {
     if (may_steal) {
         int i;
@@ -3390,14 +3402,14 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(dp, u32_to_odp(nl_attr_get_u32(a)));
         if (OVS_LIKELY(p)) {
-            netdev_send(p->netdev, pmd->core_id, packets, cnt, may_steal);
+            netdev_send(p->netdev, pmd->tx_qid, packets, cnt, may_steal);
             return;
         }
         break;
 
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dp_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+            struct dp_packet *tnl_pkt[NETDEV_MAX_BURST];
             int err;
 
             if (!may_steal) {
@@ -3423,7 +3435,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
             p = dp_netdev_lookup_port(dp, portno);
             if (p) {
-                struct dp_packet *tnl_pkt[NETDEV_MAX_RX_BATCH];
+                struct dp_packet *tnl_pkt[NETDEV_MAX_BURST];
                 int err;
 
                 if (!may_steal) {
@@ -3485,7 +3497,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dp_packet *recirc_pkts[NETDEV_MAX_RX_BATCH];
+            struct dp_packet *recirc_pkts[NETDEV_MAX_BURST];
 
             if (!may_steal) {
                dp_netdev_clone_pkt_batch(recirc_pkts, packets, cnt);
@@ -3611,12 +3623,12 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 
     /* Remove old port. */
-    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->port_no));
+    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->md.in_port.odp_port));
     ovsrcu_postpone(free, old_port);
 
     /* Insert new port (cmap semantics mean we cannot re-insert 'old_port'). */
     new_port = xmemdup(old_port, sizeof *old_port);
-    new_port->port_no = port_no;
+    new_port->md.in_port.odp_port = port_no;
     cmap_insert(&dp->ports, &new_port->node, hash_port_no(port_no));
 
     seq_change(dp->port_seq);
@@ -3647,7 +3659,7 @@ dpif_dummy_delete_port(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ovs_mutex_lock(&dp->port_mutex);
     if (get_port_by_name(dp, argv[2], &port)) {
         unixctl_command_reply_error(conn, "unknown port");
-    } else if (port->port_no == ODPP_LOCAL) {
+    } else if (port->md.in_port.odp_port == ODPP_LOCAL) {
         unixctl_command_reply_error(conn, "can't delete local port");
     } else {
         do_del_port(dp, port);
@@ -3844,7 +3856,7 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const int N_MAPS = DIV_ROUND_UP(cnt, MAP_BITS);
 #else
-    enum { N_MAPS = DIV_ROUND_UP(NETDEV_MAX_RX_BATCH, MAP_BITS) };
+    enum { N_MAPS = DIV_ROUND_UP(NETDEV_MAX_BURST, MAP_BITS) };
 #endif
     map_type maps[N_MAPS];
     struct dpcls_subtable *subtable;

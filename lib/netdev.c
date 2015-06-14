@@ -675,6 +675,16 @@ netdev_rxq_drain(struct netdev_rxq *rx)
 /* Configures the number of tx queues and rx queues of 'netdev'.
  * Return 0 if successful, otherwise a positive errno value.
  *
+ * 'n_rxq' specifies the maximum number of receive queues to create.
+ * The netdev provider might choose to create less (e.g. if the hardware
+ * supports only a smaller number).  The caller can check how many have been
+ * actually created by calling 'netdev_n_rxq()'
+ *
+ * 'n_txq' specifies the exact number of transmission queues to create.
+ * If this function returns successfully, the caller can make 'n_txq'
+ * concurrent calls to netdev_send() (each one with a different 'qid' in the
+ * range [0..'n_txq'-1]).
+ *
  * On error, the tx queue and rx queue configuration is indeterminant.
  * Caller should make decision on whether to restore the previous or
  * the default configuration.  Also, caller must make sure there is no

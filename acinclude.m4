@@ -133,12 +133,14 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     fi
     AC_MSG_RESULT([$kversion])
 
-    if test "$version" -ge 3; then
-       if test "$version" = 3 && test "$patchlevel" -le 19; then
-          : # Linux 3.x
+    if test "$version" -ge 4; then
+       if test "$version" = 4 && test "$patchlevel" -le 0; then
+          : # Linux 4.x
        else
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 3.19.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.0.x is not supported (please refer to the FAQ for advice)])
        fi
+    elif test "$version" = 3; then
+       : # Linux 3.x
     else
        if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then
          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 2.6.32 or later is required])
@@ -342,6 +344,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   # quoting rules.
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [[[^@]]proto_data_valid],
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [kfree_skb_list])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [rxhash])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [u16.*rxhash],
                   [OVS_DEFINE([HAVE_U16_RXHASH])])

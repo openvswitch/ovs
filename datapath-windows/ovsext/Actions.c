@@ -23,6 +23,7 @@
 #include "NetProto.h"
 #include "Flow.h"
 #include "Vxlan.h"
+#include "Stt.h"
 #include "Checksum.h"
 #include "PacketIO.h"
 
@@ -35,6 +36,8 @@
 typedef struct _OVS_ACTION_STATS {
     UINT64 rxVxlan;
     UINT64 txVxlan;
+    UINT64 rxStt;
+    UINT64 txStt;
     UINT64 flowMiss;
     UINT64 flowUserspace;
     UINT64 txTcp;
@@ -203,11 +206,25 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
      * packets only if they are at least VXLAN header size.
      */
     if (!flowKey->ipKey.nwFrag &&
-        flowKey->ipKey.nwProto == IPPROTO_UDP &&
-        flowKey->ipKey.l4.tpDst == VXLAN_UDP_PORT_NBO) {
-        tunnelVport = ovsFwdCtx->switchContext->vxlanVport;
-        ovsActionStats.rxVxlan++;
+        flowKey->ipKey.nwProto == IPPROTO_UDP) {
+        UINT16 dstPort = htons(flowKey->ipKey.l4.tpDst);
+        tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
+                                                  dstPort,
+                                                  OVS_VPORT_TYPE_VXLAN);
+        if (tunnelVport) {
+            ovsActionStats.rxVxlan++;
+        }
+    } else if (!flowKey->ipKey.nwFrag &&
+                flowKey->ipKey.nwProto == IPPROTO_TCP) {
+        UINT16 dstPort = htons(flowKey->ipKey.l4.tpDst);
+        tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
+                                                  dstPort,
+                                                  OVS_VPORT_TYPE_STT);
+        if (tunnelVport) {
+            ovsActionStats.rxStt++;
+        }
     }
+
 
     // We might get tunnel packets even before the tunnel gets initialized.
     if (tunnelVport) {
@@ -288,6 +305,14 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
 
         /* Tunnel the packet only if tunnel context is set. */
         if (ovsFwdCtx->tunKey.dst != 0) {
+            switch(dstVport->ovsType) {
+            case OVS_VPORT_TYPE_VXLAN:
+                ovsActionStats.txVxlan++;
+                break;
+            case OVS_VPORT_TYPE_STT:
+                ovsActionStats.txStt++;
+                break;
+            }
             ovsActionStats.txVxlan++;
             ovsFwdCtx->tunnelTxNic = dstVport;
         }
@@ -612,10 +637,11 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
      * Setup the source port to be the internal port to as to facilitate the
      * second OvsLookupFlow.
      */
-    if (ovsFwdCtx->switchContext->internalVport == NULL) {
+    if (ovsFwdCtx->switchContext->internalVport == NULL ||
+        ovsFwdCtx->switchContext->virtualExternalVport == NULL) {
         OvsClearTunTxCtx(ovsFwdCtx);
         OvsCompleteNBLForwardingCtx(ovsFwdCtx,
-            L"OVS-Dropped since internal port is absent");
+            L"OVS-Dropped since either internal or external port is absent");
         return NDIS_STATUS_FAILURE;
     }
     ovsFwdCtx->srcVportNo =
@@ -630,8 +656,13 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
     case OVS_VPORT_TYPE_VXLAN:
         status = OvsEncapVxlan(ovsFwdCtx->curNbl, &ovsFwdCtx->tunKey,
                                ovsFwdCtx->switchContext,
-                               (VOID *)ovsFwdCtx->completionList,
                                &ovsFwdCtx->layers, &newNbl);
+        break;
+    case OVS_VPORT_TYPE_STT:
+        status = OvsEncapStt(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
+                             &ovsFwdCtx->tunKey,
+                             ovsFwdCtx->switchContext,
+                             &ovsFwdCtx->layers, &newNbl);
         break;
     default:
         ASSERT(! "Tx: Unhandled tunnel type");
@@ -688,14 +719,19 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
         goto dropNbl;
     }
 
+    /*
+     * Decap port functions should return a new NBL if it was copied, and
+     * this new NBL should be setup as the ovsFwdCtx->curNbl.
+     */
+
     switch(tunnelRxVport->ovsType) {
     case OVS_VPORT_TYPE_VXLAN:
-        /*
-         * OvsDoDecapVxlan should return a new NBL if it was copied, and
-         * this new NBL should be setup as the ovsFwdCtx->curNbl.
-         */
-        status = OvsDoDecapVxlan(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
-                                                &ovsFwdCtx->tunKey, &newNbl);
+        status = OvsDecapVxlan(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                               &ovsFwdCtx->tunKey, &newNbl);
+        break;
+    case OVS_VPORT_TYPE_STT:
+        status = OvsDecapStt(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                             &ovsFwdCtx->tunKey, &newNbl);
         break;
     default:
         OVS_LOG_ERROR("Rx: Unhandled tunnel type: %d\n",
@@ -1314,12 +1350,11 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
     case OVS_KEY_ATTR_TUNNEL:
     {
         OvsIPv4TunnelKey tunKey;
-
-		status = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
+        status = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
         ASSERT(status == NDIS_STATUS_SUCCESS);
         tunKey.flow_hash = (uint16)(hash ? *hash : OvsHashFlow(key));
+        tunKey.dst_port = key->ipKey.l4.tpDst;
         RtlCopyMemory(&ovsFwdCtx->tunKey, &tunKey, sizeof ovsFwdCtx->tunKey);
-
         break;
     }
     case OVS_KEY_ATTR_SKB_MARK:
