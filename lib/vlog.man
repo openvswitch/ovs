@@ -75,3 +75,30 @@ used if \fIfile\fR is omitted is \fB@LOGDIR@/\*(PN.log\fR.
 Send syslog messages to UDP \fIport\fR on \fIhost\fR, in addition to
 the system syslog.  The \fIhost\fR must be a numerical IP address, not
 a hostname.
+.
+.IP "\fB\-\-syslog\-method=\fImethod\fR"
+Specify \fImethod\fR how syslog messages should be sent to syslog daemon.
+Following forms are supported:
+.RS
+.IP \(bu
+\fBlibc\fR, use libc \fBsyslog()\fR function.  This is the default behavior.
+Downside of using this options is that libc adds fixed prefix to every
+message before it is actually sent to the syslog daemon over \fB/dev/log\fR
+UNIX domain socket.
+.IP \(bu
+\fBunix:\fIfile\fR\fR, use UNIX domain socket directly.  It is possible to
+specify arbitrary message format with this option.  However,
+\fBrsyslogd 8.9\fR and older versions use hard coded parser function anyway
+that limits UNIX domain socket use.  If you want to use arbitrary message
+format with older \fBrsyslogd\fR versions, then use UDP socket to localhost
+IP address instead.
+.IP \(bu
+\fBudp:\fIip\fR:\fIport\fR\fR, use UDP socket.  With this method it is
+possible to use arbitrary message format also with older \fBrsyslogd\fR.
+When sending syslog messages over UDP socket extra precaution needs to
+be taken into account, for example, syslog daemon needs to be configured
+to listen on the specified UDP port, accidental iptables rules could be
+interfering with local syslog traffic and there are some security
+considerations that apply to UDP sockets, but do not apply to UNIX domain
+sockets.
+.RE

@@ -117,6 +117,8 @@ v2.4.0 - xx xxx xxxx
    - Support for STT tunneling.
    - ovs-sim: New developer tool for simulating multiple OVS instances.
      See ovs-sim(1) for more information.
+   - Support to configure method (--syslog-method argument) that determines
+     how daemons will talk with syslog.
 
 
 v2.3.0 - 14 Aug 2014

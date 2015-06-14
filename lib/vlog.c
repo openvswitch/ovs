@@ -37,6 +37,9 @@
 #include "sat-math.h"
 #include "socket-util.h"
 #include "svec.h"
+#include "syslog-direct.h"
+#include "syslog-libc.h"
+#include "syslog-provider.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -106,6 +109,7 @@ static char *log_file_name OVS_GUARDED_BY(log_file_mutex);
 static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 static bool log_async OVS_GUARDED_BY(log_file_mutex);
+static struct syslogger *syslogger = NULL;
 
 /* Syslog export configuration. */
 static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
@@ -534,6 +538,24 @@ vlog_set_verbosity(const char *arg)
     }
 }
 
+void
+vlog_set_syslog_method(const char *method)
+{
+    if (syslogger) {
+        /* Set syslogger only, if one is not already set.  This effectively
+         * means that only the first --syslog-method argument is honored. */
+        return;
+    }
+
+    if (!strcmp(method, "libc")) {
+        syslogger = syslog_libc_create();
+    } else if (!strncmp(method, "udp:", 4) || !strncmp(method, "unix:", 5)) {
+        syslogger = syslog_direct_create(method);
+    } else {
+        ovs_fatal(0, "unsupported syslog method '%s'", method);
+    }
+}
+
 /* Set the vlog udp syslog target. */
 void
 vlog_set_syslog_target(const char *target)
@@ -671,23 +693,17 @@ vlog_init(void)
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
     if (ovsthread_once_start(&once)) {
-        static char *program_name_copy;
         long long int now;
         int facility;
 
         /* Do initialization work that needs to be done before any logging
          * occurs.  We want to keep this really minimal because any attempt to
          * log anything before calling ovsthread_once_done() will deadlock. */
-
-        /* openlog() is allowed to keep the pointer passed in, without making a
-         * copy.  The daemonize code sometimes frees and replaces
-         * 'program_name', so make a private copy just for openlog().  (We keep
-         * a pointer to the private copy to suppress memory leak warnings in
-         * case openlog() does make its own copy.) */
-        program_name_copy = program_name ? xstrdup(program_name) : NULL;
         atomic_read_explicit(&log_facility, &facility, memory_order_relaxed);
-        openlog(program_name_copy, LOG_NDELAY,
-                facility ? facility : LOG_DAEMON);
+        if (!syslogger) {
+            syslogger = syslog_libc_create();
+        }
+        syslogger->class->openlog(syslogger, facility ? facility : LOG_DAEMON);
         ovsthread_once_done(&once);
 
         /* Now do anything that we want to happen only once but doesn't have to
@@ -971,7 +987,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
                  line = strtok_r(NULL, "\n", &save_ptr)) {
                 atomic_read_explicit(&log_facility, &facility,
                                      memory_order_relaxed);
-                syslog(syslog_level|facility, "%s", line);
+                syslogger->class->syslog(syslogger, syslog_level|facility, line);
             }
 
             if (syslog_fd >= 0) {
@@ -1154,6 +1170,8 @@ Logging options:\n\
   -v, --verbose            set maximum verbosity level\n\
   --log-file[=FILE]        enable logging to specified FILE\n\
                            (default: %s/%s.log)\n\
+  --syslog-method=(libc|unix:file|udp:ip:port)\n\
+                           specify how to send messages to syslog daemon\n\
   --syslog-target=HOST:PORT  also send syslog msgs to HOST:PORT via UDP\n",
            ovs_logdir(), program_name);
 }

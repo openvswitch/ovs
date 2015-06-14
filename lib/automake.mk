@@ -237,6 +237,11 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/string.c \
 	lib/svec.c \
 	lib/svec.h \
+	lib/syslog-direct.c \
+	lib/syslog-direct.h \
+	lib/syslog-libc.c \
+	lib/syslog-libc.h \
+	lib/syslog-provider.h \
 	lib/table.c \
 	lib/table.h \
 	lib/tag.c \
