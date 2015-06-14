@@ -2659,7 +2659,8 @@ tnl_send_arp_request(const struct xport *out_dev, const uint8_t eth_src[ETH_ADDR
     struct dp_packet packet;
 
     dp_packet_init(&packet, 0);
-    compose_arp(&packet, eth_src, ip_src, ip_dst);
+    compose_arp(&packet, ARP_OP_REQUEST,
+                eth_src, eth_addr_zero, true, ip_src, ip_dst);
 
     xlate_flood_packet(xbridge, &packet);
     dp_packet_uninit(&packet);

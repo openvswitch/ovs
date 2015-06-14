@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,9 @@ bool dpid_from_string(const char *s, uint64_t *dpidp);
 
 static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] OVS_UNUSED
     = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+static const uint8_t eth_addr_zero[ETH_ADDR_LEN] OVS_UNUSED
+    = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 static const uint8_t eth_addr_stp[ETH_ADDR_LEN] OVS_UNUSED
     = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x00 };
@@ -811,8 +814,10 @@ void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
 
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
-void compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
-                 ovs_be32 ip_src, ovs_be32 ip_dst);
+void compose_arp(struct dp_packet *, uint16_t arp_op,
+                 const uint8_t arp_sha[ETH_ADDR_LEN],
+                 const uint8_t arp_tha[ETH_ADDR_LEN], bool broadcast,
+                 ovs_be32 arp_spa, ovs_be32 arp_tpa);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 
 #endif /* packets.h */
