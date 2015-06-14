@@ -143,6 +143,9 @@ void vlog_set_pattern(enum vlog_destination, const char *pattern);
 int vlog_set_log_file(const char *file_name);
 int vlog_reopen_log_file(void);
 
+/* Configure method how vlog should send messages to syslog server. */
+void vlog_set_syslog_method(const char *method);
+
 /* Configure syslog target. */
 void vlog_set_syslog_target(const char *target);
 
@@ -229,11 +232,13 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 /* Command line processing. */
 #define VLOG_OPTION_ENUMS                       \
         OPT_LOG_FILE,                           \
+        OPT_SYSLOG_IMPL,                        \
         OPT_SYSLOG_TARGET
 
 #define VLOG_LONG_OPTIONS                                               \
         {"verbose",       optional_argument, NULL, 'v'},                \
         {"log-file",      optional_argument, NULL, OPT_LOG_FILE},       \
+        {"syslog-method", optional_argument, NULL, OPT_SYSLOG_IMPL},    \
         {"syslog-target", required_argument, NULL, OPT_SYSLOG_TARGET}
 
 #define VLOG_OPTION_HANDLERS                    \
@@ -242,6 +247,9 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
             break;                              \
         case OPT_LOG_FILE:                      \
             vlog_set_log_file(optarg);          \
+            break;                              \
+        case OPT_SYSLOG_IMPL:                   \
+            vlog_set_syslog_method(optarg);     \
             break;                              \
         case OPT_SYSLOG_TARGET:                 \
             vlog_set_syslog_target(optarg);     \

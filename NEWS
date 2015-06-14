@@ -104,6 +104,8 @@ v2.4.0 - xx xxx xxxx
      openvswitch.ko but built and loaded automatically as individual kernel
      modules (vport-*.ko).
    - Support for STT tunneling.
+   - Support to configure method (--syslog-method argument) that determines
+     how daemons will talk with syslog.
 
 
 v2.3.0 - 14 Aug 2014
