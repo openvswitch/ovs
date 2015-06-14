@@ -262,6 +262,7 @@ tunnel_add(struct tunnel_ctx *tc, const char *new_chassis_id,
         ports[i] = tc->br_int->ports[i];
     }
     ports[tc->br_int->n_ports] = port;
+    ovsrec_bridge_verify_ports(tc->br_int);
     ovsrec_bridge_set_ports(tc->br_int, ports, tc->br_int->n_ports + 1);
 
     sset_add(&tc->port_names, port_name);
@@ -282,6 +283,7 @@ bridge_delete_port(const struct ovsrec_bridge *br,
             ports[n++] = br->ports[i];
         }
     }
+    ovsrec_bridge_verify_ports(br);
     ovsrec_bridge_set_ports(br, ports, n);
     free(ports);
 }
@@ -430,6 +432,7 @@ chassis_destroy(struct controller_ctx *ctx)
                 ports[n++] = ctx->br_int->ports[i];
             }
         }
+        ovsrec_bridge_verify_ports(ctx->br_int);
         ovsrec_bridge_set_ports(ctx->br_int, ports, n);
         free(ports);
 
