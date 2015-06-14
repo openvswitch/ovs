@@ -65,7 +65,7 @@ def inlineXmlToNroff(node, font, to_upper=False):
         else:
             return textToNroff(node.data, font)
     elif node.nodeType == node.ELEMENT_NODE:
-        if node.tagName in ['code', 'em', 'option']:
+        if node.tagName in ['code', 'em', 'option', 'env']:
             s = r'\fB'
             for child in node.childNodes:
                 s += inlineXmlToNroff(child, r'\fB')

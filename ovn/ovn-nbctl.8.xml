@@ -182,20 +182,36 @@
     </dl>
 
     <h1>Options</h1>
-    <p><code>-d</code> <var>database</var> | <code>--db</code> <var>database</var></p>
-    <p><code>-h</code> | <code>--help</code></p>
-    <p><code>-o</code> | <code>--options</code></p>
-    <p><code>-V</code> | <code>--version</code></p>
+
+    <dl>
+    <dt><code>-d</code> <var>database</var></dt>
+    <dt><code>--db</code> <var>database</var></dt>
+    <dd>
+      The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>
+      environment variable is set, its value is used as the default.
+      Otherwise, the default is <code>unix:@RUNDIR@/db.sock</code>, but this
+      default is unlikely to be useful outside of single-machine OVN test
+      environments.
+    </dd>
+
+    <dt><code>-h</code> | <code>--help</code></dt>
+    <dt><code>-o</code> | <code>--options</code></dt>
+    <dt><code>-V</code> | <code>--version</code></dt>
+    </dl>
 
     <h1>Logging options</h1>
-    <p><code>-v</code><var>spec</var>, <code>--verbose=</code><var>spec</var></p>
-    <p><code>-v</code>, <code>--verbose</code></p>
-    <p><code>--log-file</code>[<code>=</code><var>file</var>]</p>
-    <p><code>--syslog-target=</code><var>host</var><code>:</code><var>port</var></p>
+    <dl>
+    <dt><code>-v</code><var>spec</var>, <code>--verbose=</code><var>spec</var></dt>
+    <dt><code>-v</code>, <code>--verbose</code></dt>
+    <dt><code>--log-file</code>[<code>=</code><var>file</var>]</dt>
+    <dt><code>--syslog-target=</code><var>host</var><code>:</code><var>port</var></dt>
+    </dl>
 
     <h1>PKI configuration (required to use SSL)</h1>
-    <p><code>-p</code>, <code>--private-key=</code><var>file</var>  file with private key</p>
-    <p><code>-c</code>, <code>--certificate=</code><var>file</var>  file with certificate for private key</p>
-    <p><code>-C</code>, <code>--ca-cert=</code><var>file</var>      file with peer CA certificate</p>
+    <dl>
+    <dt><code>-p</code>, <code>--private-key=</code><var>file</var>  file with private key</dt>
+    <dt><code>-c</code>, <code>--certificate=</code><var>file</var>  file with certificate for private key</dt>
+    <dt><code>-C</code>, <code>--ca-cert=</code><var>file</var>      file with peer CA certificate</dt>
+    </dl>
 
 </manpage>
