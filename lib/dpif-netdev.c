@@ -3150,6 +3150,11 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
             continue;
         }
 
+        if (i != cnt - 1) {
+            /* Prefetch next packet data */
+            OVS_PREFETCH(dp_packet_data(packets[i+1]));
+        }
+
         miniflow_extract(packets[i], &key.mf);
         key.len = 0; /* Not computed yet. */
         key.hash = dpif_netdev_packet_get_rss_hash(packets[i], &key.mf);
