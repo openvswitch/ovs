@@ -26,8 +26,7 @@
                                      "max": "unlimited"}},
                 "ip": {"type": "string"}}},
         "Gateway": {
-            "columns": {"attached_port": {"type": "string"},
-                        "vlan_map": {"type": {"key": {"type": "integer",
+            "columns": {"vlan_map": {"type": {"key": {"type": "integer",
                                                       "minInteger": 0,
                                                       "maxInteger": 4095},
                                               "value": {"type": "string"},

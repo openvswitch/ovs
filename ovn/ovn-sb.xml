@@ -146,8 +146,8 @@
       </p>
 
       <column name="gateway_ports">
-        Maps from the name of a gateway port, which is typically a physical
-        port (e.g. <code>eth1</code>) or an Open vSwitch patch port, to a <ref
+        Maps from the name of a port attached to the OVN integration bridge
+        (typically a physical port or an Open vSwitch patch port) to a <ref
         table="Gateway"/> record that describes the details of the gatewaying
         function.
       </column>
@@ -195,11 +195,6 @@
     <column name="vlan_map">
       Maps from a VLAN ID to a logical port name.  Thus, each named logical
       port corresponds to one VLAN on the gateway port.
-    </column>
-
-    <column name="attached_port">
-      The name of the gateway port in the chassis's Open vSwitch integration
-      bridge.
     </column>
   </table>
 
