@@ -2001,7 +2001,7 @@ netdev_dpdk_ring_send(struct netdev *netdev_, int qid,
      * the consumer of the ring and return into the datapath without recalculating
      * the RSS hash. */
     for (i = 0; i < cnt; i++) {
-        dp_packet_set_rss_hash(pkts[i], 0);
+        dp_packet_rss_invalidate(pkts[i]);
     }
 
     netdev_dpdk_send__(netdev, qid, pkts, cnt, may_steal);
