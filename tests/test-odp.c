@@ -54,6 +54,11 @@ parse_keys(bool wc_keys)
         }
 
         if (!wc_keys) {
+            struct odp_flow_key_parms odp_parms = {
+                .flow = &flow,
+                .recirc = true,
+            };
+
             /* Convert odp_key to flow. */
             fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
             switch (fitness) {
@@ -75,8 +80,8 @@ parse_keys(bool wc_keys)
             /* Convert cls_rule back to odp_key. */
             ofpbuf_uninit(&odp_key);
             ofpbuf_init(&odp_key, 0);
-            odp_flow_key_from_flow(&odp_key, &flow, NULL,
-                                   flow.in_port.odp_port, true);
+            odp_parms.odp_in_port = flow.in_port.odp_port;
+            odp_flow_key_from_flow(&odp_parms, &odp_key);
 
             if (odp_key.size > ODPUTIL_FLOW_KEY_BYTES) {
                 printf ("too long: %"PRIu32" > %d\n",

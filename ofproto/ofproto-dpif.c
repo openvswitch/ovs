@@ -1003,13 +1003,17 @@ check_recirc(struct dpif_backer *backer)
     struct odputil_keybuf keybuf;
     struct ofpbuf key;
     bool enable_recirc;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .recirc = true,
+    };
 
     memset(&flow, 0, sizeof flow);
     flow.recirc_id = 1;
     flow.dp_hash = 1;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    odp_flow_key_from_flow(&odp_parms, &key);
     enable_recirc = dpif_probe_feature(backer->dpif, "recirculation", &key,
                                        NULL);
 
@@ -1037,12 +1041,15 @@ check_ufid(struct dpif_backer *backer)
     struct ofpbuf key;
     ovs_u128 ufid;
     bool enable_ufid;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+    };
 
     memset(&flow, 0, sizeof flow);
     flow.dl_type = htons(0x1234);
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    odp_flow_key_from_flow(&odp_parms, &key);
     dpif_flow_hash(backer->dpif, key.data, key.size, &ufid);
 
     enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, &ufid);
@@ -1144,13 +1151,16 @@ check_max_mpls_depth(struct dpif_backer *backer)
     for (n = 0; n < FLOW_MAX_MPLS_LABELS; n++) {
         struct odputil_keybuf keybuf;
         struct ofpbuf key;
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &flow,
+        };
 
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_MPLS);
         flow_set_mpls_bos(&flow, n, 1);
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-        odp_flow_key_from_flow(&key, &flow, NULL, 0, false);
+        odp_flow_key_from_flow(&odp_parms, &key);
         if (!dpif_probe_feature(backer->dpif, "MPLS", &key, NULL)) {
             break;
         }

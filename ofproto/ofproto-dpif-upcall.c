@@ -1363,6 +1363,10 @@ ukey_create_from_upcall(struct upcall *upcall)
     struct odputil_keybuf keystub, maskstub;
     struct ofpbuf keybuf, maskbuf;
     bool recirc, megaflow;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = upcall->flow,
+        .mask = &upcall->xout.wc.masks,
+    };
 
     if (upcall->key_len) {
         ofpbuf_use_const(&keybuf, upcall->key, upcall->key_len);
@@ -1370,19 +1374,20 @@ ukey_create_from_upcall(struct upcall *upcall)
         /* dpif-netdev doesn't provide a netlink-formatted flow key in the
          * upcall, so convert the upcall's flow here. */
         ofpbuf_use_stack(&keybuf, &keystub, sizeof keystub);
-        odp_flow_key_from_flow(&keybuf, upcall->flow, &upcall->xout.wc.masks,
-                               upcall->flow->in_port.odp_port, true);
+        odp_parms.odp_in_port = upcall->flow->in_port.odp_port;
+        odp_parms.recirc = true;
+        odp_flow_key_from_flow(&odp_parms, &keybuf);
     }
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
     recirc = ofproto_dpif_get_enable_recirc(upcall->ofproto);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
     if (megaflow) {
-        size_t max_mpls;
+        odp_parms.odp_in_port = ODPP_NONE;
+        odp_parms.max_mpls_depth = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
+        odp_parms.recirc = recirc;
 
-        max_mpls = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
-        odp_flow_key_from_mask(&maskbuf, &upcall->xout.wc.masks, upcall->flow,
-                               UINT32_MAX, max_mpls, recirc);
+        odp_flow_key_from_mask(&odp_parms, &maskbuf);
     }
 
     return ukey_create__(keybuf.data, keybuf.size, maskbuf.data, maskbuf.size,

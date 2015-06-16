@@ -161,22 +161,28 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         size_t key_len, mask_len;
         struct flow_wildcards wc;
         struct ofpbuf buf;
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &flow,
+            .mask = &wc.masks,
+        };
 
         ds_put_format(&ds, "%s (%"PRIu32") : ", p->dev_name, p->portno);
         minimask_expand(&p->cr.match.mask, &wc);
         miniflow_expand(&p->cr.match.flow, &flow);
 
         /* Key. */
+        odp_parms.odp_in_port = flow.in_port.odp_port;
+        odp_parms.recirc = true;
         ofpbuf_use_stack(&buf, &keybuf, sizeof keybuf);
-        odp_flow_key_from_flow(&buf, &flow, &wc.masks,
-                               flow.in_port.odp_port, true);
+        odp_flow_key_from_flow(&odp_parms, &buf);
         key = buf.data;
         key_len = buf.size;
+
         /* mask*/
+        odp_parms.odp_in_port = wc.masks.in_port.odp_port;
+        odp_parms.recirc = false;
         ofpbuf_use_stack(&buf, &maskbuf, sizeof maskbuf);
-        odp_flow_key_from_mask(&buf, &wc.masks, &flow,
-                               odp_to_u32(wc.masks.in_port.odp_port),
-                               SIZE_MAX, false);
+        odp_flow_key_from_mask(&odp_parms, &buf);
         mask = buf.data;
         mask_len = buf.size;
 

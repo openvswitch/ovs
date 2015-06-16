@@ -158,12 +158,31 @@ int odp_flow_from_string(const char *s,
                          const struct simap *port_names,
                          struct ofpbuf *, struct ofpbuf *);
 
-void odp_flow_key_from_flow(struct ofpbuf *, const struct flow * flow,
-                            const struct flow *mask, odp_port_t odp_in_port,
-                            bool recirc);
-void odp_flow_key_from_mask(struct ofpbuf *, const struct flow *mask,
-                            const struct flow *flow, uint32_t odp_in_port,
-                            size_t max_mpls_depth, bool recirc);
+struct odp_flow_key_parms {
+    /* The flow and mask to be serialized. In the case of masks, 'flow'
+     * is used as a template to determine how to interpret 'mask'.  For
+     * example, the 'dl_type' of 'mask' describes the mask, but it doesn't
+     * indicate whether the other fields should be interpreted as ARP, IPv4,
+     * IPv6, etc. */
+    const struct flow *flow;
+    const struct flow *mask;
+
+   /* 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
+    * number rather than a datapath port number).  Instead, if 'odp_in_port'
+    * is anything other than ODPP_NONE, it is included in 'buf' as the input
+    * port. */
+    odp_port_t odp_in_port;
+
+    /* Indicates support for recirculation fields. If this is true, then
+     * these fields will always be serialised. */
+    bool recirc;
+
+    /* Only used for mask translation: */
+    size_t max_mpls_depth;
+};
+
+void odp_flow_key_from_flow(const struct odp_flow_key_parms *, struct ofpbuf *);
+void odp_flow_key_from_mask(const struct odp_flow_key_parms *, struct ofpbuf *);
 
 uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
 
