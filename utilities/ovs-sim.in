@@ -1,0 +1,355 @@
+#! /usr/bin/env bash
+#
+# Copyright (c) 2013, 2015 Nicira, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+sim_builddir='@abs_builddir@'; export sim_builddir
+sim_srcdir='@abs_top_srcdir@'; export sim_srcdir
+interactive=false
+scripts=
+
+for option; do
+    case $option in
+        -h|--help)
+            cat <<EOF
+$0, for starting sandboxed dummy Open vSwitch environments
+usage: $0 [OPTION...] [SCRIPT...]
+
+Options:
+  -i, --interactive    Prompt for interactive input (default if no SCRIPTs)
+  -h, --help           Print this usage message.
+EOF
+            exit 0
+            ;;
+
+        -i|--i*)
+            interactive=:
+            ;;
+
+        -*)
+            echo "unrecognized option $option (use --help for help)" >&2
+            exit 1
+            ;;
+        *)
+	    case $option in
+		/*) ;;
+		*) option=`pwd`/$option ;;
+	    esac
+            scripts="$scripts $option"
+            ;;
+    esac
+    shift
+done
+
+if test -z "$scripts"; then
+    interactive=:
+fi
+
+# Check that we've got proper builddir and srcdir.
+if test ! -e "$sim_builddir"/vswitchd/ovs-vswitchd; then
+    echo "$sim_builddir/vswitchd/ovs-vswitchd does not exist (need to run \"make\"?)" >&2
+    exit 1
+fi
+if test ! -e "$sim_srcdir"/WHY-OVS.md; then
+    echo "$sim_srcdir/WHY-OVS.md does not exist" >&2
+    exit 1
+fi
+
+# Put built tools early in $PATH.
+PATH=$sim_builddir/ovsdb:$sim_builddir/vswitchd:$sim_builddir/utilities:$PATH
+PATH=$sim_builddir/ovn:$sim_srcdir/ovn:$sim_builddir/ovn/controller:$sim_builddir/ovn/northd:$PATH
+export PATH
+
+rm -rf sandbox
+mkdir sandbox
+cd sandbox
+sim_base=`pwd`; export sim_base
+
+trap_signals() {
+    for signal in 0 1 2 3 13 14 15; do
+	trap "
+	    set +e
+	    cd '$sim_base' && (kill \`cat */*.pid\`) >/dev/null 2>&1
+	    trap - $signal
+	    kill -$signal $$" $signal
+    done
+}
+export -f trap_signals
+trap_signals
+
+sim_setvars() {
+    sandbox=$1
+    OVS_RUNDIR=$sim_base/$1; export OVS_RUNDIR
+    OVS_LOGDIR=$sim_base/$1; export OVS_LOGDIR
+    OVS_DBDIR=$sim_base/$1; export OVS_DBDIR
+    OVS_SYSCONFDIR=$sim_base/$1; export OVS_SYSCONFDIR
+    PS1="|$1: $sim_PS1"
+}
+export -f sim_setvars
+
+as() {
+    case $# in
+	0)
+            echo >&2 "$FUNCNAME: missing arguments (use --help for help)"
+            return 1
+	    ;;
+	1) 
+	    if test "$1" != --help; then
+		sim_setvars $1
+	    else
+		cat <<EOF
+$FUNCNAME: set the default sandbox for Open vSwitch commands
+usage: $FUNCNAME SANDBOX [COMMAND ARG...]
+where SANDBOX is the name of the desired sandbox.
+
+With COMMAND arguments, this command sets the default target for that
+single command, which it runs directly.  Otherwise, it sets the default
+target for all following commands.
+EOF
+	    fi
+	    ;;
+	*)
+	    (sim_setvars $1; shift; $@)
+	    ;;
+    esac
+}
+export -f as
+
+sim_add() {
+    if test "$1" == --help; then
+        cat <<EOF
+$FUNCNAME: create a new sandboxed Open vSwitch instance
+usage: $FUNCNAME SANDBOX
+
+where SANDBOX is the name of the new sandbox, which will be created in
+a directory named $sim_base/SANDBOX.
+Afterward, use "as SANDBOX" to execute OVS commands in the sandbox's
+context.
+EOF
+	return 0
+    fi
+    if test $# != 1; then
+        echo >&2 "$FUNCNAME: missing argument (use --help for help)"
+        return 1
+    fi
+
+    set X $1; shift
+    if test $# != 1; then
+        echo >&2 "$FUNCNAME: sandbox name must be a single word"
+        return 1
+    fi
+
+    if test -e "$sim_base/$1"; then
+	echo >&2 "$1 already exists"
+	return 1
+    fi
+
+    # Create sandbox.
+    mkdir "$sim_base"/$1 || return 1
+
+    daemon_opts="--detach --no-chdir --pidfile -vconsole:off --log-file"
+
+    # Create database and start ovsdb-server.
+    touch $sim_base/$1/.conf.db.~lock~
+    as $1 ovsdb-tool create $sim_base/$1/conf.db "$sim_srcdir/vswitchd/vswitch.ovsschema"
+    as $1 ovsdb-server $daemon_opts --remote=punix:"$sim_base"/$1/db.sock
+
+    # Initialize database.
+    as $1 ovs-vsctl --no-wait -- init
+
+    # Start ovs-vswitchd.
+    as $1 ovs-vswitchd $daemon_opts --enable-dummy=system -vvconn -vnetdev_dummy
+}
+export -f sim_add
+
+net_add() {
+    if test "$1" == --help; then
+        cat <<EOF
+$FUNCNAME: create a new interconnection network
+usage: $FUNCNAME NETWORK
+
+where NETWORK is the name of the new network.  Interconnection networks
+are used with net_attach and ovn_attach.
+EOF
+	return 0
+    fi
+    if test $# != 1; then
+        echo >&2 "$FUNCNAME: missing argument (use --help for help)"
+        return 1
+    fi
+
+    as main ovs-vsctl add-br "$1"
+}
+export -f net_add
+
+net_attach() {
+    if test "$1" == --help; then
+        cat <<EOF
+$FUNCNAME: attach the default sandbox to an interconnection network
+usage: $FUNCNAME NETWORK BRIDGE
+
+Adds a port to BRIDGE within the default sandbox that connects BRIDGE
+to the interconnection network NETWORK.  (Use "as" to set the default
+sandbox.)
+EOF
+	return 0
+    fi
+    if test $# != 2; then
+        echo >&2 "$FUNCNAME: wrong number of arguments (use --help for help)"
+        return 1
+    fi
+    if test $sandbox = main; then
+	echo >&2 "$FUNCNAME: can only attach interconnection networks to sandboxes other than main"
+	return 1
+    fi
+
+    local net=$1 bridge=$2
+
+    port=${sandbox}_$bridge
+    as main ovs-vsctl \
+	-- add-port $net "$port" \
+	-- set Interface "$port" options:pstream="punix:$sim_base/main/$port.sock" options:rxq_pcap="$sim_base/main/$port-rx.pcap" options:tx_pcap="$sim_base/main/$port-tx.pcap" options:header=extended
+
+    ovs-vsctl \
+	-- set Interface $bridge options:tx_pcap="$sim_base/$sandbox/$bridge-tx.pcap" options:rxq_pcap="$sim_base/$sandbox/$bridge-rx.pcap" \
+	-- add-port $bridge ${bridge}_$net \
+	-- set Interface ${bridge}_$net options:stream="unix:$sim_base/main/$port.sock" options:rxq_pcap="$sim_base/$sandbox/${bridge}_$net-rx.pcap" options:tx_pcap="$sim_base/$sandbox/${bridge}_$net-tx.pcap" options:header=extended
+}
+export -f net_attach
+
+ovn_start() {
+    if test "$1" == --help; then
+        cat <<EOF
+$FUNCNAME: start OVN central databases and daemons
+usage: $FUNCNAME
+
+This creates and initializes the central OVN databases (northbound and
+southbound), starts their ovsdb-server daemons, and starts the ovn-northd
+daemon.
+EOF
+	return 0
+    fi
+    if test $# != 0; then
+        echo >&2 "$FUNCNAME: no arguments accepted (use --help for help)"
+        return 1
+    fi
+
+    if test -d ovn-sb || test -d ovn-nb; then
+	echo >&2 "OVN already started"
+	exit 1
+    fi
+
+    daemon_opts="--detach --no-chdir --pidfile -vconsole:off --log-file"
+    for db in ovn-sb ovn-nb; do
+	mkdir "$sim_base"/$db
+	touch "$sim_base"/$db/.$db.db.~lock~
+	as $db ovsdb-tool create "$sim_base"/$db/$db.db "$sim_srcdir"/ovn/$db.ovsschema
+	as $db ovsdb-server $daemon_opts --remote=punix:"$sim_base"/$db/$db.sock "$sim_base"/$db/$db.db
+    done
+
+    OVN_NB_DB=unix:$sim_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
+
+    mkdir "$sim_base"/northd
+    as northd ovn-northd $daemon_opts \
+	       --ovnnb-db=unix:"$sim_base"/ovn-nb/ovn-nb.sock \
+	       --ovnsb-db=unix:"$sim_base"/ovn-sb/ovn-sb.sock
+}
+export -f ovn_start
+
+ovn_attach() {
+    if test "$1" == --help; then
+        cat <<EOF
+$FUNCNAME: attach default sandbox to an interconnection network for OVN
+usage: $FUNCNAME NETWORK BRIDGE IP [MASKLEN]
+
+This starts by doing everything that net_attach does.  Then it configures the
+specified IP and MASKLEN (e.g. 192.168.0.1 and 24) on BRIDGE and starts
+and configures ovn-controller.
+
+MASKLEN defaults to 24 if it is not specified.
+EOF
+	return 0
+    fi
+    if test $# != 3 && test $# != 4; then
+        echo >&2 "$FUNCNAME: wrong number of arguments (use --help for help)"
+        return 1
+    fi
+
+    local net=$1 bridge=$2 ip=$3 masklen=${4-24}
+    net_attach $net $bridge || return $?
+
+    ovs-appctl netdev-dummy/ip4addr $bridge $ip/$masklen >/dev/null
+    ovs-appctl ovs/route/add $ip/$masklen $bridge > /dev/null
+    ovs-vsctl \
+	-- set Open_vSwitch . external-ids:system-id=$sandbox \
+        -- set Open_vSwitch . external-ids:ovn-remote=unix:$sim_base/ovn-sb/ovn-sb.sock \
+	-- set Open_vSwitch . external-ids:ovn-encap-type=geneve \
+	-- set Open_vSwitch . external-ids:ovn-encap-ip=$ip\
+	-- add-br br-int \
+	-- set bridge br-int fail-mode=secure other-config:disable-in-band=true
+    ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
+}
+export -f ovn_attach
+
+# Easy access to OVS manpages.
+mkdir $sim_base/man
+mandir=`cd $sim_base/man && pwd`
+(cd "$sim_builddir" && ${MAKE-make} install-man mandir=$mandir >/dev/null)
+MANPATH=$mandir:; export MANPATH
+
+export scripts
+export interactive
+rc='
+    if [ -f /etc/bashrc ]; then
+	. /etc/bashrc
+    fi
+    if [ -f ~/.bashrc ]; then
+	. ~/.bashrc
+    fi
+
+    trap_signals
+    sim_PS1=$PS1
+    sim_add main
+    as main
+
+    for script in $scripts; do
+        . $script || exit $?
+    done
+
+    $interactive || exit 0
+
+    cat <<EOF
+ ______________________________________________________________________
+|
+| You are running in a nested shell environment meant for Open vSwitch
+| and OVN testing in simulation.   The OVS manpages are available via
+| "man".  Please see ovs-sim(1) for more information.
+|
+| Exit the shell to kill the running daemons and leave the simulation
+| environment.
+EOF
+'
+
+status=0; bash --rcfile <(echo "$rc") || status=$?
+
+if $interactive; then
+    cat <<EOF
+|______________________________________________________________________
+
+EOF
+fi
+
+exit $status

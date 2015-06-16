@@ -103,6 +103,8 @@ Post-v2.3.0
      openvswitch.ko but built and loaded automatically as individual kernel
      modules (vport-*.ko).
    - Support for STT tunneling.
+   - ovs-sim: New developer tool for simulating multiple OVS instances.
+     See ovs-sim(1) for more information.
 
 
 v2.3.0 - 14 Aug 2014

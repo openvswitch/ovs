@@ -30,6 +30,10 @@ check_SCRIPTS += \
 	utilities/ovs-appctl-bashcomp.bash \
 	utilities/ovs-vsctl-bashcomp.bash
 
+EXTRA_DIST += utilities/ovs-sim.in utilities/ovs-sim.1.xml
+man_MANS += utilities/ovs-sim.1
+noinst_SCRIPTS += utilities/ovs-sim
+
 utilities/ovs-lib: $(top_builddir)/config.status
 
 docs += utilities/ovs-command-bashcomp.INSTALL.md

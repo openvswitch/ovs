@@ -173,6 +173,7 @@ SUFFIXES += .in
                 -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
                 -e 's,[@]bindir[@],$(bindir),g' \
                 -e 's,[@]sbindir[@],$(sbindir),g' \
+                -e 's,[@]abs_builddir[@],$(abs_builddir),g' \
                 -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
             > $@.tmp
 	@if head -n 1 $@.tmp | grep '#!' > /dev/null; then \
