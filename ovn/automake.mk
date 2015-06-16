@@ -71,8 +71,21 @@ EXTRA_DIST += ovn/ovn-architecture.7.xml ovn/ovn-nbctl.8.xml
 
 SUFFIXES += .xml
 %: %.xml
-	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/xml2nroff \
-		--version=$(VERSION) $< > $@.tmp && mv $@.tmp $@
+	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/xml2nroff $< > $@.tmp \
+		--version=$(VERSION) \
+		PKIDIR='$(PKIDIR)' \
+		LOGDIR='$(LOGDIR)' \
+		DBDIR='$(DBDIR)' \
+		PERL='$(PERL)' \
+		PYTHON='$(PYTHON)' \
+		RUNDIR='$(RUNDIR)' \
+		VERSION='$(VERSION)' \
+		localstatedir='$(localstatedir)' \
+		pkgdatadir='$(pkgdatadir)' \
+		sysconfdir='$(sysconfdir)' \
+		bindir='$(bindir)' \
+		sbindir='$(sbindir)'
+	$(AM_v_at)mv $@.tmp $@
 
 EXTRA_DIST += \
 	ovn/TODO \

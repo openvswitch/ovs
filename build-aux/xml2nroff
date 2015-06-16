@@ -28,8 +28,11 @@ def usage():
     print """\
 %(argv0)s: XML to nroff converter
 Converts the XML format supplied as input into an nroff-formatted manpage.
-usage: %(argv0)s [OPTIONS] INPUT.XML
+usage: %(argv0)s [OPTIONS] INPUT.XML [VAR=VALUE]...
 where INPUT.XML is a manpage in an OVS-specific XML format.
+
+Each VAR, when enclosed by "@"s in the input, is replaced by its
+corresponding VALUE, with characters &<>"' in VALUE escaped.
 
 The following options are also available:
   --version=VERSION           use VERSION to display on document footer
@@ -37,8 +40,14 @@ The following options are also available:
 """ % {'argv0': argv0}
     sys.exit(0)
 
-def manpage_to_nroff(xml_file, version=None):
-    doc = xml.dom.minidom.parse(xml_file).documentElement
+def manpage_to_nroff(xml_file, subst, version=None):
+    f = open(xml_file)
+    input = []
+    for line in f:
+        for k, v in subst.iteritems():
+            line = line.replace(k, v)
+        input += [line]
+    doc = xml.dom.minidom.parseString(''.join(input)).documentElement
     d = date.fromtimestamp(os.stat(xml_file).st_mtime)
 
     if version == None:
@@ -102,13 +111,23 @@ if __name__ == "__main__":
         else:
             sys.exit(0)
 
-    if len(args) != 1:
+    if len(args) < 1:
         sys.stderr.write("%s: exactly 1 non-option arguments required "
                          "(use --help for help)\n" % argv0)
         sys.exit(1)
 
+    subst = {}
+    for s in args[1:]:
+        var, value = s.split('=', 1)
+        value = value.replace('&', '&amp;')
+        value = value.replace('<', '&lt;')
+        value = value.replace('>', '&gt;')
+        value = value.replace('"', '&quot;')
+        value = value.replace("'", '&apos;')
+        subst['@%s@' % var] = value
+
     try:
-        s = manpage_to_nroff(args[0], version)
+        s = manpage_to_nroff(args[0], subst, version)
     except error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
