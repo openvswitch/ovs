@@ -1,64 +1,5 @@
 * ovn-controller
 
-** Flow table handling in ovn-controller.
-
-   ovn-controller has to transform logical datapath flows from the
-   database into OpenFlow flows.
-
-*** Definition (or choice) of data structure for flows and flow table.
-
-    It would be natural enough to use "struct flow" and "struct
-    classifier" for this.  Maybe that is what we should do.  However,
-    "struct classifier" is optimized for searches based on packet
-    headers, whereas all we care about here can be implemented with a
-    hash table.  Also, we may want to make it easy to add and remove
-    support for fields without recompiling, which is not possible with
-    "struct flow" or "struct classifier".
-
-    On the other hand, we may find that it is difficult to decide that
-    two OXM flow matches are identical (to normalize them) without a
-    lot of domain-specific knowledge that is already embedded in struct
-    flow.  It's also going to be a pain to come up with a way to make
-    anything other than "struct flow" work with the ofputil_*()
-    functions for encoding and decoding OpenFlow.
-
-    It's also possible we could use struct flow without struct
-    classifier.
-
-*** Translating logical datapath actions into OpenFlow actions.
-
-    Some of the logical datapath actions do not have natural
-    representations as OpenFlow actions: they require
-    packet-in/packet-out round trips through ovn-controller.  The
-    trickiest part of that is going to be making sure that the
-    packet-out resumes the control flow that was broken off by the
-    packet-in.  That's tricky; we'll probably have to restrict control
-    flow or add OVS features to make resuming in general possible.  Not
-    sure which is better at this point.
-
-*** OpenFlow flow table synchronization.
-
-    The internal representation of the OpenFlow flow table has to be
-    synced across the controller connection to OVS.  This probably
-    boils down to the "flow monitoring" feature of OF1.4 which was then
-    made available as a "standard extension" to OF1.3.  (OVS hasn't
-    implemented this for OF1.4 yet, but the feature is based on a OVS
-    extension to OF1.0, so it should be straightforward to add it.)
-
-    We probably need some way to catch cases where OVS and OVN don't
-    see eye-to-eye on what exactly constitutes a flow, so that OVN
-    doesn't waste a lot of CPU time hammering at OVS trying to install
-    something that it's not going to do.
-
-*** Logical/physical translation.
-
-    When a packet comes into the integration bridge, the first stage of
-    processing needs to translate it from a physical to a logical
-    context.  When a packet leaves the integration bridge, the final
-    stage of processing needs to translate it back into a physical
-    context.  ovn-controller needs to populate the OpenFlow flows
-    tables to do these translations.
-
 *** Determine how to split logical pipeline across physical nodes.
 
     From the original OVN architecture document:
@@ -78,8 +19,6 @@
     The split pipeline processing split will influence how tunnel keys
     are encoded.
 
-*** Monitor Pipeline table in OVN, trigger flow table recomputation on change.
-
 ** ovn-controller parameters and configuration.
 
 *** SSL configuration.
@@ -93,13 +32,6 @@
   grow.  Here are some thoughts.
 
   Andy Zhou is looking at these issues.
-
-** Scaling number of connections.
-
-   In typical use today a given ovsdb-server has only a single-digit
-   number of simultaneous connections.  The OVN Southbound database will
-   have a connection from every hypervisor.  This use case needs testing
-   and probably coding work.  Here are some possible improvements.
 
 *** Reducing amount of data sent to clients.
 
@@ -161,20 +93,3 @@
    Epstein et al., "What's the Difference? Efficient Set
    Reconciliation Without Prior Context".  (I'm not yet aware of
    previous non-academic use of this technique.)
-
-* Miscellaneous:
-
-** Init scripts for ovn-controller (on HVs), ovn-northd, OVN DB server.
-
-** Distribution packaging.
-
-* Not yet scoped:
-
-** Neutron plugin.
-
-   This is being developed on OpenStack's development infrastructure
-   to be along side most of the other Neutron plugins.
-
-   http://git.openstack.org/cgit/openstack/networking-ovn
-
-** Gateways.
