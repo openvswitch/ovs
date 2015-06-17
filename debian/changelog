@@ -1,9 +1,10 @@
 openvswitch (2.3.2-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - The MAC learning feature now includes per-port fairness to mitigate
+     MAC flooding attacks.
 
- -- Open vSwitch team <dev@openvswitch.org>  Wed, 03 Dec 2014 21:25:42 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 17 Jun 2015 16:00:42 -0700
 
 openvswitch (2.3.1-1) unstable; urgency=low
    [ Open vSwitch team ]
