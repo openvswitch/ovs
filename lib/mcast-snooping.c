@@ -69,6 +69,7 @@ mcast_snooping_is_membership(ovs_be16 igmp_type)
     switch (ntohs(igmp_type)) {
     case IGMP_HOST_MEMBERSHIP_REPORT:
     case IGMPV2_HOST_MEMBERSHIP_REPORT:
+    case IGMPV3_HOST_MEMBERSHIP_REPORT:
     case IGMP_HOST_LEAVE_MESSAGE:
         return true;
     }
@@ -414,6 +415,57 @@ mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
     /* Mark 'grp' as recently used. */
     list_push_back(&ms->group_lru, &grp->group_node);
     return learned;
+}
+
+int
+mcast_snooping_add_report(struct mcast_snooping *ms,
+                          const struct dp_packet *p,
+                          uint16_t vlan, void *port)
+{
+    ovs_be32 ip4;
+    size_t offset;
+    const struct igmpv3_header *igmpv3;
+    const struct igmpv3_record *record;
+    int count = 0;
+    int ngrp;
+
+    offset = (char *) dp_packet_l4(p) - (char *) dp_packet_data(p);
+    igmpv3 = dp_packet_at(p, offset, IGMPV3_HEADER_LEN);
+    if (!igmpv3) {
+        return 0;
+    }
+    ngrp = ntohs(igmpv3->ngrp);
+    offset += IGMPV3_HEADER_LEN;
+    while (ngrp--) {
+        bool ret;
+        record = dp_packet_at(p, offset, sizeof(struct igmpv3_record));
+        if (!record) {
+            break;
+        }
+        /* Only consider known record types. */
+        if (record->type < IGMPV3_MODE_IS_INCLUDE
+            || record->type > IGMPV3_BLOCK_OLD_SOURCES) {
+            continue;
+        }
+        ip4 = get_16aligned_be32(&record->maddr);
+        /*
+         * If record is INCLUDE MODE and there are no sources, it's equivalent
+         * to a LEAVE.
+         */
+        if (ntohs(record->nsrcs) == 0
+            && (record->type == IGMPV3_MODE_IS_INCLUDE
+                || record->type == IGMPV3_CHANGE_TO_INCLUDE_MODE)) {
+            ret = mcast_snooping_leave_group(ms, ip4, vlan, port);
+        } else {
+            ret = mcast_snooping_add_group(ms, ip4, vlan, port);
+        }
+        if (ret) {
+            count++;
+        }
+        offset += sizeof(*record)
+                  + ntohs(record->nsrcs) * sizeof(ovs_be32) + record->aux_len;
+    }
+    return count;
 }
 
 bool

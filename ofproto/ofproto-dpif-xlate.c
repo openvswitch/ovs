@@ -1997,10 +1997,12 @@ update_mcast_snooping_table__(const struct xbridge *xbridge,
                               const struct flow *flow,
                               struct mcast_snooping *ms,
                               ovs_be32 ip4, int vlan,
-                              struct xbundle *in_xbundle)
+                              struct xbundle *in_xbundle,
+                              const struct dp_packet *packet)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 30);
+    int count;
 
     switch (ntohs(flow->tp_src)) {
     case IGMP_HOST_MEMBERSHIP_REPORT:
@@ -2027,6 +2029,14 @@ update_mcast_snooping_table__(const struct xbridge *xbridge,
                         in_xbundle->name, vlan);
         }
         break;
+    case IGMPV3_HOST_MEMBERSHIP_REPORT:
+        if ((count = mcast_snooping_add_report(ms, packet, vlan,
+                                               in_xbundle->ofbundle))) {
+            VLOG_DBG_RL(&rl, "bridge %s: multicast snooping processed %d "
+                        "addresses on port %s in VLAN %d",
+                        xbridge->name, count, in_xbundle->name, vlan);
+        }
+        break;
     }
 }
 
@@ -2035,7 +2045,8 @@ update_mcast_snooping_table__(const struct xbridge *xbridge,
 static void
 update_mcast_snooping_table(const struct xbridge *xbridge,
                             const struct flow *flow, int vlan,
-                            struct xbundle *in_xbundle)
+                            struct xbundle *in_xbundle,
+                            const struct dp_packet *packet)
 {
     struct mcast_snooping *ms = xbridge->ms;
     struct xlate_cfg *xcfg;
@@ -2060,7 +2071,7 @@ update_mcast_snooping_table(const struct xbridge *xbridge,
 
     if (!mcast_xbundle || mcast_xbundle != in_xbundle) {
         update_mcast_snooping_table__(xbridge, flow, ms, flow->igmp_group_ip4,
-                                      vlan, in_xbundle);
+                                      vlan, in_xbundle, packet);
     }
     ovs_rwlock_unlock(&ms->rwlock);
 }
@@ -2273,7 +2284,7 @@ xlate_normal(struct xlate_ctx *ctx)
                 mcast_snooping_is_query(flow->tp_src)) {
                 if (ctx->xin->may_learn) {
                     update_mcast_snooping_table(ctx->xbridge, flow, vlan,
-                                                in_xbundle);
+                                                in_xbundle, ctx->xin->packet);
                 }
                 /*
                  * IGMP packets need to take the slow path, in order to be

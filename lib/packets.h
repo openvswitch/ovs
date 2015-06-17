@@ -540,11 +540,37 @@ struct igmp_header {
 };
 BUILD_ASSERT_DECL(IGMP_HEADER_LEN == sizeof(struct igmp_header));
 
+#define IGMPV3_HEADER_LEN 8
+struct igmpv3_header {
+    uint8_t type;
+    uint8_t rsvr1;
+    ovs_be16 csum;
+    ovs_be16 rsvr2;
+    ovs_be16 ngrp;
+};
+BUILD_ASSERT_DECL(IGMPV3_HEADER_LEN == sizeof(struct igmpv3_header));
+
+#define IGMPV3_RECORD_LEN 8
+struct igmpv3_record {
+    uint8_t type;
+    uint8_t aux_len;
+    ovs_be16 nsrcs;
+    ovs_16aligned_be32 maddr;
+};
+BUILD_ASSERT_DECL(IGMPV3_RECORD_LEN == sizeof(struct igmpv3_record));
+
 #define IGMP_HOST_MEMBERSHIP_QUERY    0x11 /* From RFC1112 */
 #define IGMP_HOST_MEMBERSHIP_REPORT   0x12 /* Ditto */
 #define IGMPV2_HOST_MEMBERSHIP_REPORT 0x16 /* V2 version of 0x12 */
 #define IGMP_HOST_LEAVE_MESSAGE       0x17
 #define IGMPV3_HOST_MEMBERSHIP_REPORT 0x22 /* V3 version of 0x12 */
+
+#define IGMPV3_MODE_IS_INCLUDE 1
+#define IGMPV3_MODE_IS_EXCLUDE 2
+#define IGMPV3_CHANGE_TO_INCLUDE_MODE 3
+#define IGMPV3_CHANGE_TO_EXCLUDE_MODE 4
+#define IGMPV3_ALLOW_NEW_SOURCES 5
+#define IGMPV3_BLOCK_OLD_SOURCES 6
 
 #define SCTP_HEADER_LEN 12
 struct sctp_header {

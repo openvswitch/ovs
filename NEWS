@@ -87,7 +87,7 @@ Post-v2.3.0
      with Docker, the wrapper script will be retired.
    - Added support for DPDK Tunneling. VXLAN, GRE, and Geneve are supported
      protocols. This is generic tunneling mechanism for userspace datapath.
-   - Support for multicast snooping (IGMPv1 and IGMPv2)
+   - Support for multicast snooping (IGMPv1, IGMPv2 and IGMPv3)
    - Support for Linux kernels up to 4.0.x
    - The documentation now use the term 'destination' to mean one of syslog,
      console or file for vlog logging instead of the previously used term
