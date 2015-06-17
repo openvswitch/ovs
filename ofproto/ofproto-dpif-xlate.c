@@ -2269,12 +2269,18 @@ xlate_normal(struct xlate_ctx *ctx)
         struct mcast_group *grp;
 
         if (flow->nw_proto == IPPROTO_IGMP) {
-            if (ctx->xin->may_learn) {
-                if (mcast_snooping_is_membership(flow->tp_src) ||
-                    mcast_snooping_is_query(flow->tp_src)) {
+            if (mcast_snooping_is_membership(flow->tp_src) ||
+                mcast_snooping_is_query(flow->tp_src)) {
+                if (ctx->xin->may_learn) {
                     update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                                 in_xbundle);
-                    }
+                }
+                /*
+                 * IGMP packets need to take the slow path, in order to be
+                 * processed for mdb updates. That will prevent expires
+                 * firing off even after hosts have sent reports.
+                 */
+                ctx->xout->slow |= SLOW_ACTION;
             }
 
             if (mcast_snooping_is_membership(flow->tp_src)) {
