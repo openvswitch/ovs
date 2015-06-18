@@ -414,7 +414,12 @@ OvsTunnelRegisterDatagramDataCallouts(const GUID *layerKey,
 
     status = FwpmCalloutAdd(gEngineHandle, &mCallout, NULL, NULL);
     if (!NT_SUCCESS(status)) {
-        goto Exit;
+        if (STATUS_FWP_ALREADY_EXISTS != status) {
+            OVS_LOG_ERROR("Failed to add WFP callout, status: %x.",
+                          status);
+            goto Exit;
+        }
+        status = STATUS_SUCCESS;
     }
 
 Exit:
@@ -459,7 +464,11 @@ OvsTunnelRegisterCallouts(VOID *deviceObject)
 
     status = FwpmSubLayerAdd(gEngineHandle, &OvsTunnelSubLayer, NULL);
     if (!NT_SUCCESS(status)) {
-        goto Exit;
+        if (STATUS_FWP_ALREADY_EXISTS != status) {
+            OVS_LOG_ERROR("Failed to add WFP sublayer, status: %x.",
+                          status);
+            goto Exit;
+        }
     }
 
     /* In order to use this callout a socket must be opened. */
