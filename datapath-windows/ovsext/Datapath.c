@@ -921,6 +921,7 @@ exit:
          * to be processed later, so we mark the IRP as pending and complete
          * it in another thread when the request is processed. */
         IoMarkIrpPending(irp);
+        return status;
     }
     return OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
 }
