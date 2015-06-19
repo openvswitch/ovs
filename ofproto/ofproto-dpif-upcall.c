@@ -1386,6 +1386,7 @@ ukey_create_from_upcall(struct upcall *upcall)
         odp_parms.odp_in_port = ODPP_NONE;
         odp_parms.max_mpls_depth = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
         odp_parms.recirc = recirc;
+        odp_parms.key_buf = &keybuf;
 
         odp_flow_key_from_mask(&odp_parms, &maskbuf);
     }
@@ -1736,8 +1737,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &flow)
-        == ODP_FIT_ERROR) {
+    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, ukey->key,
+                             ukey->key_len, &dp_mask, &flow) == ODP_FIT_ERROR) {
         goto exit;
     }
 

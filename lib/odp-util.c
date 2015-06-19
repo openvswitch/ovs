@@ -1350,8 +1350,12 @@ parse_geneve_opts(const struct nlattr *attr)
     return 0;
 }
 
-enum odp_key_fitness
-odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
+static enum odp_key_fitness
+odp_tun_key_from_attr__(const struct nlattr *attr,
+                        const struct nlattr *flow_attrs OVS_UNUSED,
+                        size_t flow_attr_len OVS_UNUSED,
+                        const struct flow_tnl *src_tun OVS_UNUSED,
+                        struct flow_tnl *tun)
 {
     unsigned int left;
     const struct nlattr *a;
@@ -1446,8 +1450,16 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
     return ODP_FIT_PERFECT;
 }
 
+enum odp_key_fitness
+odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
+{
+    return odp_tun_key_from_attr__(attr, NULL, 0, NULL, tun);
+}
+
 static void
-tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key)
+tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
+                const struct flow_tnl *tun_flow_key OVS_UNUSED,
+                const struct ofpbuf *key_buf OVS_UNUSED)
 {
     size_t tun_key_ofs;
 
@@ -3428,7 +3440,8 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
     if (flow->tunnel.ip_dst || export_mask) {
-        tun_key_to_attr(buf, &data->tunnel);
+        tun_key_to_attr(buf, &data->tunnel, &parms->flow->tunnel,
+                        parms->key_buf);
     }
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
@@ -3610,7 +3623,7 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, md->skb_priority);
 
     if (md->tunnel.ip_dst) {
-        tun_key_to_attr(buf, &md->tunnel);
+        tun_key_to_attr(buf, &md->tunnel, &md->tunnel, NULL);
     }
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, md->pkt_mark);
@@ -4174,6 +4187,7 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
 
 static enum odp_key_fitness
 odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
+                       const struct nlattr *src_key, size_t src_key_len,
                        struct flow *flow, const struct flow *src_flow)
 {
     const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1];
@@ -4217,7 +4231,9 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {
         enum odp_key_fitness res;
 
-        res = odp_tun_key_from_attr(attrs[OVS_KEY_ATTR_TUNNEL], &flow->tunnel);
+        res = odp_tun_key_from_attr__(attrs[OVS_KEY_ATTR_TUNNEL], src_key,
+                                      src_key_len, &src_flow->tunnel,
+                                      &flow->tunnel);
         if (res == ODP_FIT_ERROR) {
             return ODP_FIT_ERROR;
         } else if (res == ODP_FIT_PERFECT) {
@@ -4289,18 +4305,21 @@ enum odp_key_fitness
 odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
                      struct flow *flow)
 {
-   return odp_flow_key_to_flow__(key, key_len, flow, flow);
+   return odp_flow_key_to_flow__(key, key_len, NULL, 0, flow, flow);
 }
 
-/* Converts the 'key_len' bytes of OVS_KEY_ATTR_* attributes in 'key' to a mask
- * structure in 'mask'.  'flow' must be a previously translated flow
- * corresponding to 'mask'.  Returns an ODP_FIT_* value that indicates how well
- * 'key' fits our expectations for what a flow key should contain. */
+/* Converts the 'mask_key_len' bytes of OVS_KEY_ATTR_* attributes in 'mask_key'
+ * to a mask structure in 'mask'.  'flow' must be a previously translated flow
+ * corresponding to 'mask' and similarly flow_key/flow_key_len must be the
+ * attributes from that flow.  Returns an ODP_FIT_* value that indicates how
+ * well 'key' fits our expectations for what a flow key should contain. */
 enum odp_key_fitness
-odp_flow_key_to_mask(const struct nlattr *key, size_t key_len,
+odp_flow_key_to_mask(const struct nlattr *mask_key, size_t mask_key_len,
+                     const struct nlattr *flow_key, size_t flow_key_len,
                      struct flow *mask, const struct flow *flow)
 {
-   return odp_flow_key_to_flow__(key, key_len, mask, flow);
+   return odp_flow_key_to_flow__(mask_key, mask_key_len, flow_key, flow_key_len,
+                                 mask, flow);
 }
 
 /* Returns 'fitness' as a string, for use in debug messages. */
@@ -4370,7 +4389,7 @@ odp_put_tunnel_action(const struct flow_tnl *tunnel,
                       struct ofpbuf *odp_actions)
 {
     size_t offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
-    tun_key_to_attr(odp_actions, tunnel);
+    tun_key_to_attr(odp_actions, tunnel, tunnel, NULL);
     nl_msg_end_nested(odp_actions, offset);
 }
 

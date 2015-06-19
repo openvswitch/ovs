@@ -178,7 +178,13 @@ struct odp_flow_key_parms {
     bool recirc;
 
     /* Only used for mask translation: */
+
     size_t max_mpls_depth;
+
+    /* The netlink formatted version of the flow. It is used in cases where
+     * the mask cannot be constructed from the OVS internal representation
+     * and needs to see the original form. */
+    const struct ofpbuf *key_buf;
 };
 
 void odp_flow_key_from_flow(const struct odp_flow_key_parms *, struct ofpbuf *);
@@ -207,7 +213,10 @@ enum odp_key_fitness {
 };
 enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
                                           struct flow *);
-enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *key, size_t len,
+enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
+                                          size_t mask_key_len,
+                                          const struct nlattr *flow_key,
+                                          size_t flow_key_len,
                                           struct flow *mask,
                                           const struct flow *flow);
 const char *odp_key_fitness_to_string(enum odp_key_fitness);

@@ -1842,6 +1842,7 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         offset = mask_buf->size;
         flow->mask = ofpbuf_tail(mask_buf);
         odp_parms.odp_in_port = wc.masks.in_port.odp_port;
+        odp_parms.key_buf = key_buf;
         odp_flow_key_from_mask(&odp_parms, mask_buf);
         flow->mask_len = mask_buf->size - offset;
 
@@ -1866,7 +1867,8 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
     if (mask_key_len) {
         enum odp_key_fitness fitness;
 
-        fitness = odp_flow_key_to_mask(mask_key, mask_key_len, mask, flow);
+        fitness = odp_flow_key_to_mask(mask_key, mask_key_len, key, key_len,
+                                       mask, flow);
         if (fitness) {
             /* This should not happen: it indicates that
              * odp_flow_key_from_mask() and odp_flow_key_to_mask()
