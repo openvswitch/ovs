@@ -36,3 +36,5 @@
 /ovs-vlan-test.8
 /ovs-vsctl
 /ovs-vsctl.8
+/ovs-sim
+/ovs-sim.1
