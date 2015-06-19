@@ -1542,6 +1542,7 @@ struct mf_field {
 
 /* The representation of a field's value. */
 union mf_value {
+    uint8_t tun_metadata[128];
     struct in6_addr ipv6;
     uint8_t mac[ETH_ADDR_LEN];
     ovs_be64 be64;
@@ -1549,11 +1550,7 @@ union mf_value {
     ovs_be16 be16;
     uint8_t u8;
 };
-BUILD_ASSERT_DECL(sizeof(union mf_value) == 16);
-
-/* An all-1-bits mf_value.  Needs to be updated if struct mf_value grows.*/
-#define MF_EXACT_MASK_INITIALIZER { IN6ADDR_EXACT_INIT }
-BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof(struct in6_addr));
+BUILD_ASSERT_DECL(sizeof(union mf_value) == 128);
 
 /* Part of a field. */
 struct mf_subfield {
@@ -1569,25 +1566,28 @@ struct mf_subfield {
  * corresponding data in value.be16[7] as the bits in the mask htons(0xfff). */
 union mf_subvalue {
     /* Access to full data. */
-    uint8_t u8[16];
-    ovs_be16 be16[8];
-    ovs_be32 be32[4];
-    ovs_be64 be64[2];
+    uint8_t u8[128];
+    ovs_be16 be16[64];
+    ovs_be32 be32[32];
+    ovs_be64 be64[16];
 
     /* Convenient access to just least-significant bits in various forms. */
     struct {
-        ovs_be64 dummy_integer;
+        ovs_be64 dummy_integer[15];
         ovs_be64 integer;
     };
     struct {
-        uint8_t dummy_mac[10];
+        uint8_t dummy_mac[122];
         uint8_t mac[6];
     };
     struct {
-        ovs_be32 dummy_ipv4[3];
+        ovs_be32 dummy_ipv4[31];
         ovs_be32 ipv4;
     };
-    struct in6_addr ipv6;
+    struct {
+        struct in6_addr dummy_ipv6[7];
+        struct in6_addr ipv6;
+    };
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 

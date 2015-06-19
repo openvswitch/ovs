@@ -384,8 +384,9 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
 {
-    static const union mf_value exact_match_mask = MF_EXACT_MASK_INITIALIZER;
+    static union mf_value exact_match_mask;
 
+    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
     mf_set_flow_value(mf, &exact_match_mask, mask);
 
     switch (mf->prereqs) {
@@ -1000,7 +1001,9 @@ mf_set_value(const struct mf_field *mf,
 void
 mf_mask_field(const struct mf_field *mf, struct flow *mask)
 {
-    static const union mf_value exact_match_mask = MF_EXACT_MASK_INITIALIZER;
+    union mf_value exact_match_mask;
+
+    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
 
     /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan()
      * as that will be considered as OFP10_VLAN_NONE. So consider it as a

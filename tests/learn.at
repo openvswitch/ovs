@@ -94,7 +94,7 @@ AT_CLEANUP
 AT_SETUP([learning action - too-long immediate value])
 dnl 129 bits is too long.
 AT_CHECK([[ovs-ofctl parse-flow 'actions=learn(load:0x1fedbca9876543210fedbca9876543210->NXM_NX_IPV6_DST[])']],
-  [1], [], [[ovs-ofctl: 0x1fedbca9876543210fedbca9876543210->NXM_NX_IPV6_DST[]: too many bits in immediate value
+  [1], [], [[ovs-ofctl: 0x1fedbca9876543210fedbca9876543210->NXM_NX_IPV6_DST[]: value does not fit into 128 bits
 ]])
 
 dnl 128 bits is merely a bad prerequisite.

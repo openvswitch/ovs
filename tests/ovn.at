@@ -37,7 +37,6 @@ a/b => a error("`/' is only valid as part of `//' or `/*'.") b
 0xfedcba9876543210
 0XFEDCBA9876543210 => 0xfedcba9876543210
 0xfedcba9876543210fedcba9876543210
-0xfedcba9876543210fedcba98765432100 => error("Hexadecimal constant requires more than 128 bits.")
 0x0000fedcba9876543210fedcba9876543210 => 0xfedcba9876543210fedcba9876543210
 0x => error("Hex digits expected following 0x.")
 0X => error("Hex digits expected following 0X.")
