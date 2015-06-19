@@ -62,7 +62,8 @@ NTSTATUS OvsCleanupVxlanTunnel(PIRP irp,
 NDIS_STATUS OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
                                   OvsIPv4TunnelKey *tunnelKey);
 
-NDIS_STATUS OvsEncapVxlan(PNET_BUFFER_LIST curNbl,
+NDIS_STATUS OvsEncapVxlan(POVS_VPORT_ENTRY vport,
+                          PNET_BUFFER_LIST curNbl,
                           OvsIPv4TunnelKey *tunKey,
                           POVS_SWITCH_CONTEXT switchContext,
                           POVS_PACKET_HDR_INFO layers,

@@ -170,7 +170,8 @@ OvsCleanupVxlanTunnel(PIRP irp,
  *----------------------------------------------------------------------------
  */
 static __inline NDIS_STATUS
-OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
+OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
+                PNET_BUFFER_LIST curNbl,
                 OvsIPv4TunnelKey *tunKey,
                 POVS_FWD_INFO fwdInfo,
                 POVS_PACKET_HDR_INFO layers,
@@ -185,6 +186,7 @@ OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
     IPHdr *ipHdr;
     UDPHdr *udpHdr;
     VXLANHdr *vxlanHdr;
+    POVS_VXLAN_VPORT vportVxlan;
     UINT32 headRoom = OvsGetVxlanTunHdrSize();
     UINT32 packetLength;
 
@@ -211,6 +213,10 @@ OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
             }
         }
     }
+
+    vportVxlan = (POVS_VXLAN_VPORT) GetOvsVportPriv(vport);
+    ASSERT(vportVxlan);
+
     /* If we didn't split the packet above, make a copy now */
     if (*newNbl == NULL) {
         *newNbl = OvsPartialCopyNBL(switchContext, curNbl, 0, headRoom,
@@ -274,7 +280,7 @@ OvsDoEncapVxlan(PNET_BUFFER_LIST curNbl,
         /* UDP header */
         udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
         udpHdr->source = htons(tunKey->flow_hash | 32768);
-        udpHdr->dest = htons(tunKey->dst_port);
+        udpHdr->dest = htons(vportVxlan->dstPort);
         udpHdr->len = htons(NET_BUFFER_DATA_LENGTH(curNb) - headRoom +
                             sizeof *udpHdr + sizeof *vxlanHdr);
         udpHdr->check = 0;
@@ -308,7 +314,8 @@ ret_error:
  *----------------------------------------------------------------------------
  */
 NDIS_STATUS
-OvsEncapVxlan(PNET_BUFFER_LIST curNbl,
+OvsEncapVxlan(POVS_VPORT_ENTRY vport,
+              PNET_BUFFER_LIST curNbl,
               OvsIPv4TunnelKey *tunKey,
               POVS_SWITCH_CONTEXT switchContext,
               POVS_PACKET_HDR_INFO layers,
@@ -331,46 +338,8 @@ OvsEncapVxlan(PNET_BUFFER_LIST curNbl,
         return NDIS_STATUS_FAILURE;
     }
 
-    return OvsDoEncapVxlan(curNbl, tunKey, &fwdInfo, layers,
+    return OvsDoEncapVxlan(vport, curNbl, tunKey, &fwdInfo, layers,
                            switchContext, newNbl);
-}
-
-
-/*
- *----------------------------------------------------------------------------
- * OvsIpHlprCbVxlan --
- *     Callback function for IP helper.
- *     XXX: not used currently
- *----------------------------------------------------------------------------
- */
-static VOID
-OvsIpHlprCbVxlan(PNET_BUFFER_LIST curNbl,
-                 UINT32 inPort,
-                 OvsIPv4TunnelKey *tunKey,
-                 PVOID cbData1,
-                 PVOID cbData2,
-                 NTSTATUS result,
-                 POVS_FWD_INFO fwdInfo)
-{
-    OVS_PACKET_HDR_INFO layers;
-    OvsFlowKey key;
-    NDIS_STATUS status;
-    UNREFERENCED_PARAMETER(inPort);
-
-    status = OvsExtractFlow(curNbl, inPort, &key, &layers, NULL);
-    if (result == STATUS_SUCCESS) {
-        status = OvsDoEncapVxlan(curNbl, tunKey, fwdInfo, &layers,
-                (POVS_SWITCH_CONTEXT)cbData1, NULL);
-    } else {
-        status = NDIS_STATUS_FAILURE;
-    }
-
-    if (status != NDIS_STATUS_SUCCESS) {
-        // XXX: Free up the NBL;
-        return;
-    }
-
-    OvsLookupFlowOutput((POVS_SWITCH_CONTEXT)cbData1, cbData2, curNbl);
 }
 
 /*
