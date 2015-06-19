@@ -150,7 +150,7 @@ struct rule_criteria {
 
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
                                const struct match *match, int priority,
-                               long long version,
+                               cls_version_t version,
                                ovs_be64 cookie, ovs_be64 cookie_mask,
                                ofp_port_t out_port, uint32_t out_group);
 static void rule_criteria_require_rw(struct rule_criteria *,
@@ -232,7 +232,8 @@ struct ofport_usage {
 };
 
 /* rule. */
-static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
+static void ofproto_rule_send_removed(struct rule *)
+        OVS_EXCLUDED(ofproto_mutex);
 static bool rule_is_readonly(const struct rule *);
 static void ofproto_rule_insert__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
@@ -2758,7 +2759,14 @@ ofproto_rule_destroy__(struct rule *rule)
 
 static void
 rule_destroy_cb(struct rule *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    /* Send rule removed if needed. */
+    if (rule->flags & OFPUTIL_FF_SEND_FLOW_REM
+        && rule->removed_reason != OVS_OFPRR_NONE
+        && !rule_is_hidden(rule)) {
+        ofproto_rule_send_removed(rule);
+    }
     rule->ofproto->ofproto_class->rule_destruct(rule);
     ofproto_rule_destroy__(rule);
 }
@@ -3425,9 +3433,34 @@ update_port_config(struct ofconn *ofconn, struct ofport *port,
 }
 
 static enum ofperr
-handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+port_mod_start(struct ofconn *ofconn, struct ofputil_port_mod *pm,
+               struct ofport **port)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
+
+    *port = ofproto_get_port(p, pm->port_no);
+    if (!*port) {
+        return OFPERR_OFPPMFC_BAD_PORT;
+    }
+    if (!eth_addr_equals((*port)->pp.hw_addr, pm->hw_addr)) {
+        return OFPERR_OFPPMFC_BAD_HW_ADDR;
+    }
+    return 0;
+}
+
+static void
+port_mod_finish(struct ofconn *ofconn, struct ofputil_port_mod *pm,
+                struct ofport *port)
+{
+    update_port_config(ofconn, port, pm->config, pm->mask);
+    if (pm->advertise) {
+        netdev_set_advertisements(port->netdev, pm->advertise);
+    }
+}
+
+static enum ofperr
+handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+{
     struct ofputil_port_mod pm;
     struct ofport *port;
     enum ofperr error;
@@ -3442,18 +3475,11 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    port = ofproto_get_port(p, pm.port_no);
-    if (!port) {
-        return OFPERR_OFPPMFC_BAD_PORT;
-    } else if (!eth_addr_equals(port->pp.hw_addr, pm.hw_addr)) {
-        return OFPERR_OFPPMFC_BAD_HW_ADDR;
-    } else {
-        update_port_config(ofconn, port, pm.config, pm.mask);
-        if (pm.advertise) {
-            netdev_set_advertisements(port->netdev, pm.advertise);
-        }
+    error = port_mod_start(ofconn, &pm, &port);
+    if (!error) {
+        port_mod_finish(ofconn, &pm, port);
     }
-    return 0;
+    return error;
 }
 
 static enum ofperr
@@ -3725,9 +3751,10 @@ next_matching_table(const struct ofproto *ofproto,
  * supplied as 0. */
 static void
 rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
-                   const struct match *match, int priority, long long version,
-                   ovs_be64 cookie, ovs_be64 cookie_mask,
-                   ofp_port_t out_port, uint32_t out_group)
+                   const struct match *match, int priority,
+                   cls_version_t version, ovs_be64 cookie,
+                   ovs_be64 cookie_mask, ofp_port_t out_port,
+                   uint32_t out_group)
 {
     criteria->table_id = table_id;
     cls_rule_init(&criteria->cr, match, priority, version);
@@ -4606,6 +4633,7 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
     rule->importance = fm->importance;
+    rule->removed_reason = OVS_OFPRR_NONE;
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table_id;
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
@@ -4664,8 +4692,7 @@ replace_rule_start(struct ofproto *ofproto,
     if (old_rule) {
         /* Mark the old rule for removal in the next version. */
         cls_rule_make_invisible_in_version(&old_rule->cr,
-                                           ofproto->tables_version + 1,
-                                           ofproto->tables_version);
+                                           ofproto->tables_version + 1);
     } else {
         table->n_flows++;
     }
@@ -4753,9 +4780,7 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         } else {
             /* XXX: This is slight duplication with delete_flows_finish__() */
 
-            /* XXX: This call should done when rule's refcount reaches
-             * zero to get accurate stats in the flow removed message. */
-            ofproto_rule_send_removed(old_rule, OFPRR_EVICTION);
+            old_rule->removed_reason = OFPRR_EVICTION;
 
             ofmonitor_report(ofproto->connmgr, old_rule, NXFME_DELETED,
                              OFPRR_EVICTION,
@@ -4943,8 +4968,7 @@ delete_flows_start__(struct ofproto *ofproto,
 
         table->n_flows--;
         cls_rule_make_invisible_in_version(&rule->cr,
-                                           ofproto->tables_version + 1,
-                                           ofproto->tables_version);
+                                           ofproto->tables_version + 1);
     }
 }
 
@@ -4961,7 +4985,10 @@ delete_flows_finish__(struct ofproto *ofproto,
         for (size_t i = 0; i < rules->n; i++) {
             struct rule *rule = rules->rules[i];
 
-            ofproto_rule_send_removed(rule, reason);
+            /* This value will be used to send the flow removed message right
+             * before the rule is actually destroyed. */
+            rule->removed_reason = reason;
+
             ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
                              req ? req->ofconn : NULL,
                              req ? req->request->xid : 0, NULL);
@@ -5072,23 +5099,20 @@ delete_flow_start_strict(struct ofproto *ofproto,
     return error;
 }
 
-/* XXX: This should be sent right when the rule refcount gets to zero! */
+/* This may only be called by rule_destroy_cb()! */
 static void
-ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
-    OVS_REQUIRES(ofproto_mutex)
+ofproto_rule_send_removed(struct rule *rule)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofputil_flow_removed fr;
     long long int used;
 
-    if (rule_is_hidden(rule) ||
-        !(rule->flags & OFPUTIL_FF_SEND_FLOW_REM)) {
-        return;
-    }
-
     minimatch_expand(&rule->cr.match, &fr.match);
     fr.priority = rule->cr.priority;
+
+    ovs_mutex_lock(&ofproto_mutex);
     fr.cookie = rule->flow_cookie;
-    fr.reason = reason;
+    fr.reason = rule->removed_reason;
     fr.table_id = rule->table_id;
     calc_duration(rule->created, time_msec(),
                   &fr.duration_sec, &fr.duration_nsec);
@@ -5098,8 +5122,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     ovs_mutex_unlock(&rule->mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
                                                  &fr.byte_count, &used);
-
     connmgr_send_flow_removed(rule->ofproto->connmgr, &fr);
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 /* Sends an OpenFlow "flow removed" message with the given 'reason' (either
@@ -6662,17 +6686,16 @@ do_bundle_flow_mod_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
  * possible.  No visible changes were made, so rollback is minimal (remove
  * added invisible rules, restore visibility of rules marked for removal).
  *
- * 3. Bump the version visible to lookups.
- *
- * 4. Finish: Insert replacement rules to the ofproto provider. Remove replaced
- * and deleted rules from ofproto data structures, and Schedule postponed
- * removal of deleted rules from the classifier.  Send notifications, buffered
- * packets, etc.
+ * 3. Finish: Make the changes visible for lookups. Insert replacement rules to
+ * the ofproto provider. Remove replaced and deleted rules from ofproto data
+ * structures, and Schedule postponed removal of deleted rules from the
+ * classifier.  Send notifications, buffered packets, etc.
  */
 static enum ofperr
 do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    cls_version_t visible_version = ofproto->tables_version;
     struct ofp_bundle *bundle;
     struct ofp_bundle_entry *be;
     enum ofperr error;
@@ -6685,23 +6708,42 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
     if (bundle->flags != flags) {
         error = OFPERR_OFPBFC_BAD_FLAGS;
     } else {
+        bool prev_is_port_mod = false;
+
         error = 0;
         ovs_mutex_lock(&ofproto_mutex);
 
         /* 1. Begin. */
         LIST_FOR_EACH (be, node, &bundle->msg_list) {
             if (be->type == OFPTYPE_PORT_MOD) {
-                /* Not supported yet. */
-                error = OFPERR_OFPBFC_MSG_FAILED;
+                /* Our port mods are not atomic. */
+                if (flags & OFPBF_ATOMIC) {
+                    error = OFPERR_OFPBFC_MSG_FAILED;
+                } else {
+                    prev_is_port_mod = true;
+                    error = port_mod_start(ofconn, &be->pm, &be->port);
+                }
             } else if (be->type == OFPTYPE_FLOW_MOD) {
+                /* Flow mods between port mods are applied as a single
+                 * version, but the versions are published only after
+                 * we know the commit is successful. */
+                if (prev_is_port_mod) {
+                    ++ofproto->tables_version;
+                }
+                prev_is_port_mod = false;
                 error = do_bundle_flow_mod_start(ofproto, &be->fm, be);
             } else {
                 OVS_NOT_REACHED();
             }
             if (error) {
                 break;
+            } else {
+                /* Store the version in which the changes should take
+                 * effect. */
+                be->version = ofproto->tables_version + 1;
             }
         }
+
         if (error) {
             /* Send error referring to the original message. */
             if (error) {
@@ -6714,24 +6756,38 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                 if (be->type == OFPTYPE_FLOW_MOD) {
                     do_bundle_flow_mod_revert(ofproto, &be->fm, be);
                 }
+                /* Nothing needs to be reverted for a port mod. */
             }
         } else {
-            /* 3. Bump the version.  This makes all the changes in the bundle
-             * visible to the lookups at once.  For this to work an upcall must
-             * read the tables_version once at the beginning and keep using the
-             * same version number for the whole duration of the upcall
-             * processing. */
-            ofproto_bump_tables_version(ofproto);
-
             /* 4. Finish. */
             LIST_FOR_EACH (be, node, &bundle->msg_list) {
+                /* Bump the lookup version to the one of the current message.
+                 * This makes all the changes in the bundle at this version
+                 * visible to lookups at once. */
+                if (visible_version < be->version) {
+                    visible_version = be->version;
+                    ofproto->ofproto_class->set_tables_version(
+                        ofproto, visible_version);
+                }
                 if (be->type == OFPTYPE_FLOW_MOD) {
                     struct flow_mod_requester req = { ofconn, be->ofp_msg };
 
                     do_bundle_flow_mod_finish(ofproto, &be->fm, &req, be);
+                } else if (be->type == OFPTYPE_PORT_MOD) {
+                    /* Perform the actual port mod. This is not atomic, i.e.,
+                     * the effects will be immediately seen by upcall
+                     * processing regardless of the lookup version.  It should
+                     * be noted that port configuration changes can originate
+                     * also from OVSDB changes asynchronously to all upcall
+                     * processing. */
+                    port_mod_finish(ofconn, &be->pm, be->port);
                 }
             }
         }
+
+        /* Reset the tables_version. */
+        ofproto->tables_version = visible_version;
+
         ofmonitor_flush(ofproto->connmgr);
         ovs_mutex_unlock(&ofproto_mutex);
 

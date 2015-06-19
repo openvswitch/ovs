@@ -1,4 +1,11 @@
-openvswitch (2.3.90-1) unstable; urgency=low
+openvswitch (2.4.90-1) unstable; urgency=low
+   [ Open vSwitch team ]
+   * New upstream version
+    - Nothing yet!  Try NEWS...
+
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 17 Jun 2015 16:09:32 -0700
+
+openvswitch (2.4.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * The openvswitch-testcontroller package is new.  It reintroduces the
      simple OpenFlow controller that was packaged with Open vSwitch prior to
@@ -8,7 +15,7 @@ openvswitch (2.3.90-1) unstable; urgency=low
    * New upstream version
     - Nothing yet!  Try NEWS...
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 15 May 2014 17:08:39 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 17 Jun 2015 16:09:32 -0700
 
 openvswitch (2.3.0-1) unstable; urgency=low
    [ Open vSwitch team ]

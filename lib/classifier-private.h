@@ -87,19 +87,13 @@ struct cls_match {
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
 
-    /* Controls rule's visibility to lookups.
+    /* Rule versioning.
      *
-     * When 'visibility' is:
-     *
-     * > 0  - rule is visible starting from version 'visibility'
-     * <= 0 - rule is invisible starting from version '-(visibility)'
-     *
-     * The minimum version number used in lookups is 1 (== CLS_NO_VERSION),
-     * which implies that when 'visibility' is:
-     *
-     * 1    - rule is visible in all lookup versions
-     * 0    - rule is invisible in all lookup versions. */
-    atomic_llong visibility;
+     * CLS_NOT_REMOVED_VERSION has a special meaning for 'remove_version',
+     * meaningthat the rule has been added but not yet removed.
+     */
+    const cls_version_t add_version;        /* Version rule was added in. */
+    ATOMIC(cls_version_t) remove_version;   /* Version rule is removed in. */
 
     const struct cls_rule *cls_rule;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
@@ -110,39 +104,34 @@ struct cls_match {
 void cls_match_free_cb(struct cls_match *);
 
 static inline void
-cls_match_set_visibility(struct cls_match *rule, long long version)
+cls_match_set_remove_version(struct cls_match *rule, cls_version_t version)
 {
-    atomic_store_relaxed(&rule->visibility, version);
+    atomic_store_relaxed(&rule->remove_version, version);
 }
 
 static inline bool
-cls_match_visible_in_version(const struct cls_match *rule, long long version)
+cls_match_visible_in_version(const struct cls_match *rule,
+                             cls_version_t version)
 {
-    long long visibility;
+    cls_version_t remove_version;
 
     /* C11 does not want to access an atomic via a const object pointer. */
-    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->visibility,
-                        &visibility);
+    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->remove_version,
+                        &remove_version);
 
-    if (OVS_LIKELY(visibility > 0)) {
-        /* Rule is visible starting from version 'visibility'. */
-        return version >= visibility;
-    } else {
-        /* Rule is invisible starting from version '-visibility'. */
-        return version < -visibility;
-    }
+    return rule->add_version <= version && version < remove_version;
 }
 
 static inline bool
 cls_match_is_eventually_invisible(const struct cls_match *rule)
 {
-    long long visibility;
+    cls_version_t remove_version;
 
     /* C11 does not want to access an atomic via a const object pointer. */
-    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->visibility,
-                        &visibility);
+    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->remove_version,
+                        &remove_version);
 
-    return visibility <= 0;
+    return remove_version <= CLS_MAX_VERSION;
 }
 
 

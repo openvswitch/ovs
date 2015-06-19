@@ -296,7 +296,7 @@ struct ofproto_dpif {
     struct ofproto up;
     struct dpif_backer *backer;
 
-    atomic_llong tables_version;  /* Version # to use in classifier lookups. */
+    ATOMIC(cls_version_t) tables_version;  /* For classifier lookups. */
 
     uint64_t dump_seq; /* Last read of udpif_dump_seq(). */
 
@@ -1003,13 +1003,17 @@ check_recirc(struct dpif_backer *backer)
     struct odputil_keybuf keybuf;
     struct ofpbuf key;
     bool enable_recirc;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .recirc = true,
+    };
 
     memset(&flow, 0, sizeof flow);
     flow.recirc_id = 1;
     flow.dp_hash = 1;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    odp_flow_key_from_flow(&odp_parms, &key);
     enable_recirc = dpif_probe_feature(backer->dpif, "recirculation", &key,
                                        NULL);
 
@@ -1037,12 +1041,15 @@ check_ufid(struct dpif_backer *backer)
     struct ofpbuf key;
     ovs_u128 ufid;
     bool enable_ufid;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+    };
 
     memset(&flow, 0, sizeof flow);
     flow.dl_type = htons(0x1234);
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
+    odp_flow_key_from_flow(&odp_parms, &key);
     dpif_flow_hash(backer->dpif, key.data, key.size, &ufid);
 
     enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, &ufid);
@@ -1144,13 +1151,16 @@ check_max_mpls_depth(struct dpif_backer *backer)
     for (n = 0; n < FLOW_MAX_MPLS_LABELS; n++) {
         struct odputil_keybuf keybuf;
         struct ofpbuf key;
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &flow,
+        };
 
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_MPLS);
         flow_set_mpls_bos(&flow, n, 1);
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-        odp_flow_key_from_flow(&key, &flow, NULL, 0, false);
+        odp_flow_key_from_flow(&odp_parms, &key);
         if (!dpif_probe_feature(backer->dpif, "MPLS", &key, NULL)) {
             break;
         }
@@ -1618,7 +1628,7 @@ query_tables(struct ofproto *ofproto,
 }
 
 static void
-set_tables_version(struct ofproto *ofproto_, long long version)
+set_tables_version(struct ofproto *ofproto_, cls_version_t version)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
@@ -3734,10 +3744,10 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
     ovs_mutex_unlock(&rule->up.mutex);
 }
 
-long long
+cls_version_t
 ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
 {
-    long long version;
+    cls_version_t version;
 
     atomic_read_relaxed(&ofproto->tables_version, &version);
 
@@ -3751,7 +3761,7 @@ ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static struct rule_dpif *
-rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, long long version,
+rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
                           uint8_t table_id, struct flow *flow,
                           struct flow_wildcards *wc, bool take_ref)
 {
@@ -3797,9 +3807,10 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, long long version,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 struct rule_dpif *
-rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto, long long version,
-                            struct flow *flow, struct flow_wildcards *wc,
-                            bool take_ref, const struct dpif_flow_stats *stats,
+rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
+                            cls_version_t version, struct flow *flow,
+                            struct flow_wildcards *wc, bool take_ref,
+                            const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
                             bool may_packet_in, bool honor_table_miss)
 {

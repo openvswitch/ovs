@@ -1822,22 +1822,27 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         struct flow_wildcards wc;
         struct dp_netdev_actions *actions;
         size_t offset;
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &netdev_flow->flow,
+            .mask = &wc.masks,
+            .recirc = true,
+            .max_mpls_depth = SIZE_MAX,
+        };
 
         miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
 
         /* Key */
         offset = key_buf->size;
         flow->key = ofpbuf_tail(key_buf);
-        odp_flow_key_from_flow(key_buf, &netdev_flow->flow, &wc.masks,
-                               netdev_flow->flow.in_port.odp_port, true);
+        odp_parms.odp_in_port = netdev_flow->flow.in_port.odp_port;
+        odp_flow_key_from_flow(&odp_parms, key_buf);
         flow->key_len = key_buf->size - offset;
 
         /* Mask */
         offset = mask_buf->size;
         flow->mask = ofpbuf_tail(mask_buf);
-        odp_flow_key_from_mask(mask_buf, &wc.masks, &netdev_flow->flow,
-                               odp_to_u32(wc.masks.in_port.odp_port),
-                               SIZE_MAX, true);
+        odp_parms.odp_in_port = wc.masks.in_port.odp_port;
+        odp_flow_key_from_mask(&odp_parms, mask_buf);
         flow->mask_len = mask_buf->size - offset;
 
         /* Actions */
@@ -3015,10 +3020,15 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet_str;
         struct ofpbuf key;
+        struct odp_flow_key_parms odp_parms = {
+            .flow = flow,
+            .mask = &wc->masks,
+            .odp_in_port = flow->in_port.odp_port,
+            .recirc = true,
+        };
 
         ofpbuf_init(&key, 0);
-        odp_flow_key_from_flow(&key, flow, &wc->masks, flow->in_port.odp_port,
-                               true);
+        odp_flow_key_from_flow(&odp_parms, &key);
         packet_str = ofp_packet_to_string(dp_packet_data(packet_),
                                           dp_packet_size(packet_));
 
@@ -3155,6 +3165,11 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
         if (OVS_UNLIKELY(dp_packet_size(packets[i]) < ETH_HEADER_LEN)) {
             dp_packet_delete(packets[i]);
             continue;
+        }
+
+        if (i != cnt - 1) {
+            /* Prefetch next packet data */
+            OVS_PREFETCH(dp_packet_data(packets[i+1]));
         }
 
         miniflow_extract(packets[i], &key.mf);

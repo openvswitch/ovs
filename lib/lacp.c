@@ -62,7 +62,6 @@ struct lacp_info {
 BUILD_ASSERT_DECL(LACP_INFO_LEN == sizeof(struct lacp_info));
 
 #define LACP_PDU_LEN 110
-OVS_PACKED(
 struct lacp_pdu {
     uint8_t subtype;          /* Always 1. */
     uint8_t version;          /* Always 1. */
@@ -81,7 +80,7 @@ struct lacp_pdu {
     uint8_t collector_len;    /* Always 16. */
     ovs_be16 collector_delay; /* Maximum collector delay. Set to UINT16_MAX. */
     uint8_t z3[64];           /* Combination of several fields.  Always 0. */
-});
+};
 BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
 
 /* Implementation. */

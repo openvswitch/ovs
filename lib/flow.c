@@ -50,25 +50,32 @@ const uint8_t flow_segment_u64s[4] = {
     FLOW_U64S
 };
 
+/* Asserts that field 'f1' follows immediately after 'f0' in struct flow,
+ * without any intervening padding. */
+#define ASSERT_SEQUENTIAL(f0, f1)                       \
+    BUILD_ASSERT_DECL(offsetof(struct flow, f0)         \
+                      + MEMBER_SIZEOF(struct flow, f0)  \
+                      == offsetof(struct flow, f1))
+
+/* Asserts that fields 'f0' and 'f1' are in the same 32-bit aligned word within
+ * struct flow. */
+#define ASSERT_SAME_WORD(f0, f1)                        \
+    BUILD_ASSERT_DECL(offsetof(struct flow, f0) / 4     \
+                      == offsetof(struct flow, f1) / 4)
+
+/* Asserts that 'f0' and 'f1' are both sequential and within the same 32-bit
+ * aligned word in struct flow. */
+#define ASSERT_SEQUENTIAL_SAME_WORD(f0, f1)     \
+    ASSERT_SEQUENTIAL(f0, f1);                  \
+    ASSERT_SAME_WORD(f0, f1)
+
 /* miniflow_extract() assumes the following to be true to optimize the
  * extraction process. */
-BUILD_ASSERT_DECL(offsetof(struct flow, dl_type) + 2
-                  == offsetof(struct flow, vlan_tci) &&
-                  offsetof(struct flow, dl_type) / 4
-                  == offsetof(struct flow, vlan_tci) / 4 );
+ASSERT_SEQUENTIAL_SAME_WORD(dl_type, vlan_tci);
 
-BUILD_ASSERT_DECL(offsetof(struct flow, nw_frag) + 3
-                  == offsetof(struct flow, nw_proto) &&
-                  offsetof(struct flow, nw_tos) + 2
-                  == offsetof(struct flow, nw_proto) &&
-                  offsetof(struct flow, nw_ttl) + 1
-                  == offsetof(struct flow, nw_proto) &&
-                  offsetof(struct flow, nw_frag) / 4
-                  == offsetof(struct flow, nw_tos) / 4 &&
-                  offsetof(struct flow, nw_ttl) / 4
-                  == offsetof(struct flow, nw_tos) / 4 &&
-                  offsetof(struct flow, nw_proto) / 4
-                  == offsetof(struct flow, nw_tos) / 4);
+ASSERT_SEQUENTIAL_SAME_WORD(nw_frag, nw_tos);
+ASSERT_SEQUENTIAL_SAME_WORD(nw_tos, nw_ttl);
+ASSERT_SEQUENTIAL_SAME_WORD(nw_ttl, nw_proto);
 
 /* TCP flags in the middle of a BE64, zeroes in the other half. */
 BUILD_ASSERT_DECL(offsetof(struct flow, tcp_flags) % 8 == 4);
@@ -80,10 +87,7 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tcp_flags) % 8 == 4);
 #define TCP_FLAGS_BE32(tcp_ctl) ((OVS_FORCE ovs_be32)TCP_FLAGS_BE16(tcp_ctl))
 #endif
 
-BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
-                  == offsetof(struct flow, tp_dst) &&
-                  offsetof(struct flow, tp_src) / 4
-                  == offsetof(struct flow, tp_dst) / 4);
+ASSERT_SEQUENTIAL_SAME_WORD(tp_src, tp_dst);
 
 /* Removes 'size' bytes from the head end of '*datap', of size '*sizep', which
  * must contain at least 'size' bytes of data.  Returns the first byte of data
@@ -458,8 +462,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         ovs_be16 vlan_tci;
 
         /* Link layer. */
-        BUILD_ASSERT(offsetof(struct flow, dl_dst) + 6
-                     == offsetof(struct flow, dl_src));
+        ASSERT_SEQUENTIAL(dl_dst, dl_src);
         miniflow_push_macs(mf, dl_dst, data);
         /* dl_type, vlan_tci. */
         vlan_tci = parse_vlan(&data, &size);
@@ -645,8 +648,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 }
 
                 /* Must be adjacent. */
-                BUILD_ASSERT(offsetof(struct flow, arp_sha) + 6
-                             == offsetof(struct flow, arp_tha));
+                ASSERT_SEQUENTIAL(arp_sha, arp_tha);
 
                 memcpy(arp_buf[0], arp->ar_sha, ETH_ADDR_LEN);
                 memcpy(arp_buf[1], arp->ar_tha, ETH_ADDR_LEN);
@@ -1252,12 +1254,8 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
     return hash;
 }
 
-BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
-                  == offsetof(struct flow, tp_dst) &&
-                  offsetof(struct flow, tp_src) / 4
-                  == offsetof(struct flow, tp_dst) / 4);
-BUILD_ASSERT_DECL(offsetof(struct flow, ipv6_src) + 16
-                  == offsetof(struct flow, ipv6_dst));
+ASSERT_SEQUENTIAL_SAME_WORD(tp_src, tp_dst);
+ASSERT_SEQUENTIAL(ipv6_src, ipv6_dst);
 
 /* Calculates the 5-tuple hash from the given flow. */
 uint32_t

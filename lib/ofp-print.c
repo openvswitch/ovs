@@ -865,6 +865,7 @@ ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason,
         return "eviction";
     case OFPRR_METER_DELETE:
         return "meter_delete";
+    case OVS_OFPRR_NONE:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;

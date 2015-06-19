@@ -3417,13 +3417,13 @@ static void get_tp_key(const struct flow *, union ovs_key_tp *);
 static void put_tp_key(const union ovs_key_tp *, struct flow *);
 
 static void
-odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
-                         const struct flow *mask, odp_port_t odp_in_port,
-                         size_t max_mpls_depth, bool recirc, bool export_mask)
+odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
+                         bool export_mask, struct ofpbuf *buf)
 {
     struct ovs_key_ethernet *eth_key;
     size_t encap;
-    const struct flow *data = export_mask ? mask : flow;
+    const struct flow *flow = parms->flow;
+    const struct flow *data = export_mask ? parms->mask : parms->flow;
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
@@ -3433,15 +3433,15 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
-    if (recirc) {
+    if (parms->recirc) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
 
     /* Add an ingress port attribute if this is a mask or 'odp_in_port'
      * is not the magical value "ODPP_NONE". */
-    if (export_mask || odp_in_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
+    if (export_mask || parms->odp_in_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, parms->odp_in_port);
     }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
@@ -3507,7 +3507,9 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *flow,
         int i, n;
 
         n = flow_count_mpls_labels(flow, NULL);
-        n = MIN(n, max_mpls_depth);
+        if (export_mask) {
+            n = MIN(n, parms->max_mpls_depth);
+        }
         mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
                                             n * sizeof *mpls_key);
         for (i = 0; i < n; i++) {
@@ -3579,43 +3581,26 @@ unencap:
 }
 
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
- * 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
- * number rather than a datapath port number).  Instead, if 'odp_in_port'
- * is anything other than ODPP_NONE, it is included in 'buf' as the input
- * port.
  *
  * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
- * capable of being expanded to allow for that much space.
- *
- * 'recirc' indicates support for recirculation fields. If this is true, then
- * these fields will always be serialised. */
+ * capable of being expanded to allow for that much space. */
 void
-odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
-                       const struct flow *mask, odp_port_t odp_in_port,
-                       bool recirc)
+odp_flow_key_from_flow(const struct odp_flow_key_parms *parms,
+                       struct ofpbuf *buf)
 {
-    odp_flow_key_from_flow__(buf, flow, mask, odp_in_port, SIZE_MAX, recirc,
-                             false);
+    odp_flow_key_from_flow__(parms, false, buf);
 }
 
 /* Appends a representation of 'mask' as OVS_KEY_ATTR_* attributes to
- * 'buf'.  'flow' is used as a template to determine how to interpret
- * 'mask'.  For example, the 'dl_type' of 'mask' describes the mask, but
- * it doesn't indicate whether the other fields should be interpreted as
- * ARP, IPv4, IPv6, etc.
+ * 'buf'.
  *
  * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
- * capable of being expanded to allow for that much space.
- *
- * 'recirc' indicates support for recirculation fields. If this is true, then
- * these fields will always be serialised. */
+ * capable of being expanded to allow for that much space. */
 void
-odp_flow_key_from_mask(struct ofpbuf *buf, const struct flow *mask,
-                       const struct flow *flow, uint32_t odp_in_port_mask,
-                       size_t max_mpls_depth, bool recirc)
+odp_flow_key_from_mask(const struct odp_flow_key_parms *parms,
+                       struct ofpbuf *buf)
 {
-    odp_flow_key_from_flow__(buf, flow, mask, u32_to_odp(odp_in_port_mask),
-                             max_mpls_depth, recirc, true);
+    odp_flow_key_from_flow__(parms, true, buf);
 }
 
 /* Generate ODP flow key from the given packet metadata */

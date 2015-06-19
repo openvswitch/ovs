@@ -940,7 +940,7 @@
       Protocol (IGMP) traffic between hosts and multicast routers.  The
       switch uses what IGMP snooping learns to forward multicast traffic
       only to interfaces that are connected to interested receivers.
-      Currently it supports IGMPv1 and IGMPv2 protocols.
+      Currently it supports IGMPv1, IGMPv2 and IGMPv3 protocols.
 
       <column name="mcast_snooping_enable">
         Enable multicast snooping on the bridge. For now, the default

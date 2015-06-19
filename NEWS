@@ -1,4 +1,8 @@
-Post-v2.3.0
+Post-v2.4.0
+---------------------
+
+
+v2.4.0 - xx xxx xxxx
 ---------------------
    - Flow table modifications are now atomic, meaning that each packet
      now sees a coherent version of the OpenFlow pipeline.  For
@@ -32,11 +36,12 @@ Post-v2.3.0
      commands are now redundant and will be removed in a future
      release.  See ovs-vswitchd(8) for details.
    - OpenFlow:
-     * OpenFlow 1.4 bundles are now supported, but for flow mod
-       messages only.  Both 'atomic' and 'ordered' bundle flags are
-       trivially supported, as all bundled messages are executed in
-       the order they were added and all flow table modifications are
-       now atomic to the datapath.
+     * OpenFlow 1.4 bundles are now supported for flow mods and port
+       mods.  For flow mods, both 'atomic' and 'ordered' bundle flags
+       are trivially supported, as all bundled messages are executed
+       in the order they were added and all flow table modifications
+       are now atomic to the datapath.  Port mods may not appear in
+       atomic bundles, as port status modifications are not atomic.
      * IPv6 flow label and neighbor discovery fields are now modifiable.
      * OpenFlow 1.5 extended registers are now supported.
      * The OpenFlow 1.5 actset_output field is now supported.
@@ -86,7 +91,7 @@ Post-v2.3.0
      with Docker, the wrapper script will be retired.
    - Added support for DPDK Tunneling. VXLAN, GRE, and Geneve are supported
      protocols. This is generic tunneling mechanism for userspace datapath.
-   - Support for multicast snooping (IGMPv1 and IGMPv2)
+   - Support for multicast snooping (IGMPv1, IGMPv2 and IGMPv3)
    - Support for Linux kernels up to 4.0.x
    - The documentation now use the term 'destination' to mean one of syslog,
      console or file for vlog logging instead of the previously used term

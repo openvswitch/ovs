@@ -222,21 +222,16 @@
  * invisible to lookups.  This means that lookups won't find the rule, but the
  * rule is immediately available to classifier iterations.
  *
- * Similarly, a rule can be marked as to be deleted in a future version, or
- * more precisely, to be visible upto a given version number.  To delete a rule
- * in a way to not remove the rule before all ongoing lookups are finished, the
- * rule should be marked as "to be deleted" by setting the rule's visibility to
- * the negation of the last version number in which it should be visible.
+ * Similarly, a rule can be marked as to be deleted in a future version.  To
+ * delete a rule in a way to not remove the rule before all ongoing lookups are
+ * finished, the rule should be made invisible in a specific version number.
  * Then, when all the lookups use a later version number, the rule can be
- * actually deleted from the classifier.  A rule that is marked for deletion
- * after a future version will not appear in iterations, although it will still
- * be found by lookups using a lookup version number up to that future version
- * number.
+ * actually removed from the classifier.
  *
  * Classifiers can hold duplicate rules (rules with the same match criteria and
- * priority) when at most one of the duplicates with the same priority is
- * visible in any given lookup version.  The caller responsible for classifier
- * modifications must maintain this invariant.
+ * priority) when at most one of these duplicates is visible in any given
+ * lookup version.  The caller responsible for classifier modifications must
+ * maintain this invariant.
  *
  * The classifier supports versioning for two reasons:
  *
@@ -308,6 +303,7 @@
 #include "meta-flow.h"
 #include "pvector.h"
 #include "rculist.h"
+#include "type-props.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -326,9 +322,13 @@ struct cls_trie {
     rcu_trie_ptr root;            /* NULL if none. */
 };
 
+typedef uint64_t cls_version_t;
+
+#define CLS_MIN_VERSION 0                  /* Default version number to use. */
+#define CLS_MAX_VERSION (TYPE_MAXIMUM(cls_version_t) - 1)
+#define CLS_NOT_REMOVED_VERSION TYPE_MAXIMUM(cls_version_t)
+
 enum {
-    CLS_MIN_VERSION = 1,   /* Default version number to use. */
-    CLS_MAX_VERSION = LLONG_MAX, /* Last possible version number. */
     CLS_MAX_INDICES = 3,   /* Maximum number of lookup indices per subtable. */
     CLS_MAX_TRIES = 3      /* Maximum number of prefix trees per classifier. */
 };
@@ -357,18 +357,18 @@ struct cls_conjunction {
 struct cls_rule {
     struct rculist node;          /* In struct cls_subtable 'rules_list'. */
     const int priority;           /* Larger numbers are higher priorities. */
-    const long long version;      /* Version in which the rule was added. */
+    const cls_version_t version;  /* Version in which the rule was added. */
     struct cls_match *cls_match;  /* NULL if not in a classifier. */
     const struct minimatch match; /* Matching rule. */
 };
 
 void cls_rule_init(struct cls_rule *, const struct match *, int priority,
-                   long long version);
+                   cls_version_t);
 void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
-                                  int priority, long long version);
+                                  int priority, cls_version_t);
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
 void cls_rule_clone_in_version(struct cls_rule *, const struct cls_rule *,
-        long long version);
+        cls_version_t);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
 
@@ -381,10 +381,9 @@ void cls_rule_format(const struct cls_rule *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
-bool cls_rule_visible_in_version(const struct cls_rule *, long long version);
+bool cls_rule_visible_in_version(const struct cls_rule *, cls_version_t);
 void cls_rule_make_invisible_in_version(const struct cls_rule *,
-                                        long long version,
-                                        long long lookup_version);
+                                        cls_version_t);
 void cls_rule_restore_visibility(const struct cls_rule *);
 
 /* Constructor/destructor.  Must run single-threaded. */
@@ -409,7 +408,7 @@ static inline void classifier_publish(struct classifier *);
 /* Lookups.  These are RCU protected and may run concurrently with modifiers
  * and each other. */
 const struct cls_rule *classifier_lookup(const struct classifier *,
-                                         long long version, struct flow *,
+                                         cls_version_t, struct flow *,
                                          struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
@@ -418,7 +417,7 @@ const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
 const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      const struct match *,
                                                      int priority,
-                                                     long long version);
+                                                     cls_version_t);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 

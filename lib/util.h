@@ -199,6 +199,9 @@ ovs_prefetch_range(const void *start, size_t size)
     ((char *) &(OBJECT)->MEMBER - (char *) (OBJECT))
 #endif
 
+/* Yields the size of MEMBER within STRUCT. */
+#define MEMBER_SIZEOF(STRUCT, MEMBER) (sizeof(((STRUCT *) NULL)->MEMBER))
+
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \

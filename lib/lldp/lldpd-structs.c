@@ -93,17 +93,41 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
     }
 }
 
+/* Cleanup the auto-attach mappings attached to port.
+ */
+static void
+lldpd_aa_maps_cleanup(struct lldpd_port *port)
+{
+    struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map = NULL;
+    struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map_next = NULL;
+
+    if (!list_is_empty(&port->p_isid_vlan_maps)) {
+
+        LIST_FOR_EACH_SAFE (isid_vlan_map, isid_vlan_map_next, m_entries,
+                            &port->p_isid_vlan_maps) {
+
+            list_remove(&isid_vlan_map->m_entries);
+            free(isid_vlan_map);
+        }
+
+        list_init(&port->p_isid_vlan_maps);
+    }
+}
+
 /* If `all' is true, clear all information, including information that
    are not refreshed periodically. Port should be freed manually. */
 void
 lldpd_port_cleanup(struct lldpd_port *port, bool all)
 {
     /* We set these to NULL so we don't free wrong memory */
-
     free(port->p_id);
     port->p_id = NULL;
     free(port->p_descr);
     port->p_descr = NULL;
+
+    /* Cleanup auto-attach mappings */
+    lldpd_aa_maps_cleanup(port);
+
     if (all) {
         free(port->p_lastframe);
         /* Chassis may not have been attributed, yet.*/
