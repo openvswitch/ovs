@@ -114,8 +114,8 @@ OvsEncapStt(POVS_VPORT_ENTRY vport,
         return NDIS_STATUS_FAILURE;
     }
 
-    status = OvsDoEncapStt(vport, curNbl, tunKey, &fwdInfo, layers, switchContext,
-                           newNbl);
+    status = OvsDoEncapStt(vport, curNbl, tunKey, &fwdInfo, layers,
+                           switchContext, newNbl);
     return status;
 }
 

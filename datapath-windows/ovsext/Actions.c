@@ -207,7 +207,7 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
      */
     if (!flowKey->ipKey.nwFrag &&
         flowKey->ipKey.nwProto == IPPROTO_UDP) {
-        UINT16 dstPort = htons(flowKey->ipKey.l4.tpDst);
+        UINT16 dstPort = ntohs(flowKey->ipKey.l4.tpDst);
         tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
                                                   dstPort,
                                                   OVS_VPORT_TYPE_VXLAN);
@@ -654,14 +654,13 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
     /* Do the encap. Encap function does not consume the NBL. */
     switch(ovsFwdCtx->tunnelTxNic->ovsType) {
     case OVS_VPORT_TYPE_VXLAN:
-        status = OvsEncapVxlan(ovsFwdCtx->curNbl, &ovsFwdCtx->tunKey,
-                               ovsFwdCtx->switchContext,
+        status = OvsEncapVxlan(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
+                               &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
                                &ovsFwdCtx->layers, &newNbl);
         break;
     case OVS_VPORT_TYPE_STT:
         status = OvsEncapStt(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
-                             &ovsFwdCtx->tunKey,
-                             ovsFwdCtx->switchContext,
+                             &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
                              &ovsFwdCtx->layers, &newNbl);
         break;
     default:
