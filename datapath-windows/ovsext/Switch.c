@@ -46,7 +46,7 @@ extern PDEVICE_OBJECT gOvsDeviceObject;
  * Reference count used to prevent premature deallocation of the global switch
  * context structure, gOvsSwitchContext.
  */
-volatile LONG      gOvsSwitchContextRefCount = 1;
+volatile LONG      gOvsSwitchContextRefCount = 0;
 
 static NDIS_STATUS OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
                                    POVS_SWITCH_CONTEXT *switchContextOut);
@@ -137,6 +137,7 @@ OvsExtAttach(NDIS_HANDLE ndisFilterHandle,
     switchContext->controlFlowState = OvsSwitchAttached;
     switchContext->dataFlowState = OvsSwitchPaused;
 
+    gOvsSwitchContextRefCount = 1;
     gOvsSwitchContext = switchContext;
     KeMemoryBarrier();
 
