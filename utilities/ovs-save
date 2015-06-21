@@ -84,9 +84,9 @@ save_interfaces () {
             echo ip link set dev $dev $linkcmd
         fi
 
-        save_ip_address $dev
+        move_ip_address $dev $dev
 
-        save_ip_routes $dev
+        move_ip_routes $dev $dev
 
         echo
     done

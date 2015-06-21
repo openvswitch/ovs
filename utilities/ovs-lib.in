@@ -251,9 +251,14 @@ daemon_is_running () {
     test -e "$pidfile" && pid=`cat "$pidfile"` && pid_exists "$pid" && pid_comm_check $1 $pid
 } >/dev/null 2>&1
 
-# Prints commands needed to restore the ip address of an interface.
-save_ip_address () {
+# Prints commands needed to move the ip address from interface $1 to interface
+# $2
+move_ip_address () {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        return
+    fi
     dev="$1"
+    dst="$2"
 
     # IP addresses (including IPv6).
     echo "ip addr flush dev $dev 2>/dev/null" # Suppresses "Nothing to flush".
@@ -286,7 +291,8 @@ save_ip_address () {
                     ;;
                 "$dev"|"$dev:"*)
                     # Address label string
-                    addrcmd="$addrcmd label $1"
+                    label=`echo $1 | sed "s/$dev/$dst/"`
+                    addrcmd="$addrcmd label $label"
                     shift
                     continue
                     ;;
@@ -298,13 +304,17 @@ save_ip_address () {
             addrcmd="$addrcmd $1"
         fi
 
-        echo ip -f $family addr add $addrcmd dev $dev
+        echo ip -f $family addr add $addrcmd dev $dst
     done
 }
 
-# Prints commands needed to restore the ip route of an interface.
-save_ip_routes () {
+# Prints commands needed to move the ip route of interface $1 to interface $2
+move_ip_routes () {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        return
+    fi
     dev="$1"
+    dst="$2"
     echo "ip route flush dev $dev proto boot 2>/dev/null" # Suppresses "Nothing to flush".
     ip route show dev $dev | while read route; do
         # "proto kernel" routes are installed by the kernel automatically.
@@ -312,6 +322,6 @@ save_ip_routes () {
             *" proto kernel "*) continue ;;
         esac
 
-        echo "ip route add $route dev $dev"
+        echo "ip route add $route dev $dst"
     done
 }
