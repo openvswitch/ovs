@@ -578,54 +578,14 @@ tun_metadata_del_entry(struct tun_table *map, uint8_t idx)
     memset(&entry->loc, 0, sizeof entry->loc);
 }
 
-int
-tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
-                                const struct nlattr *flow_attrs,
-                                size_t flow_attr_len,
-                                const struct tun_metadata *flow_metadata,
-                                struct tun_metadata *metadata)
+static int
+tun_metadata_from_geneve__(struct tun_table *map, const struct geneve_opt *opt,
+                           const struct geneve_opt *flow_opt, int opts_len,
+                           struct tun_metadata *metadata)
 {
-    bool is_mask = !!flow_attrs;
-    struct tun_table *map;
-    const struct nlattr *flow;
-    int opts_len;
-    const struct geneve_opt *flow_opt;
-    const struct geneve_opt *opt = nl_attr_get(attr);
-
-    if (!is_mask) {
-        map = ovsrcu_get(struct tun_table *, &metadata_tab);
-        metadata->tab = map;
-    } else {
-        map = flow_metadata->tab;
-    }
-
     if (!map) {
         return 0;
     }
-
-    if (is_mask) {
-        const struct nlattr *tnl_key;
-        int mask_len = nl_attr_get_size(attr);
-
-        tnl_key = nl_attr_find__(flow_attrs, flow_attr_len, OVS_KEY_ATTR_TUNNEL);
-        if (!tnl_key) {
-            return mask_len ? EINVAL : 0;
-        }
-
-        flow = nl_attr_find_nested(tnl_key, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
-        if (!flow) {
-            return mask_len ? EINVAL : 0;
-        }
-
-        if (mask_len != nl_attr_get_size(flow)) {
-            return EINVAL;
-        }
-    } else {
-        flow = attr;
-    }
-
-    opts_len = nl_attr_get_size(flow);
-    flow_opt = nl_attr_get(flow);
 
     while (opts_len > 0) {
         int len;
@@ -662,27 +622,74 @@ tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
     return 0;
 }
 
-void
-tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
-                                   struct ofpbuf *b)
+int
+tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
+                                const struct nlattr *flow_attrs,
+                                size_t flow_attr_len,
+                                const struct tun_metadata *flow_metadata,
+                                struct tun_metadata *metadata)
 {
     struct tun_table *map;
-    size_t nlattr_offset;
-    int i;
+    bool is_mask = !!flow_attrs;
+    const struct nlattr *flow;
 
-    if (!flow->opt_map) {
-        return;
+    if (is_mask) {
+        const struct nlattr *tnl_key;
+        int mask_len = nl_attr_get_size(attr);
+
+        tnl_key = nl_attr_find__(flow_attrs, flow_attr_len, OVS_KEY_ATTR_TUNNEL);
+        if (!tnl_key) {
+            return mask_len ? EINVAL : 0;
+        }
+
+        flow = nl_attr_find_nested(tnl_key, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
+        if (!flow) {
+            return mask_len ? EINVAL : 0;
+        }
+
+        if (mask_len != nl_attr_get_size(flow)) {
+            return EINVAL;
+        }
+    } else {
+        flow = attr;
     }
+
+    if (!is_mask) {
+        map = ovsrcu_get(struct tun_table *, &metadata_tab);
+        metadata->tab = map;
+    } else {
+        map = flow_metadata->tab;
+    }
+
+    return tun_metadata_from_geneve__(map, nl_attr_get(attr), nl_attr_get(flow),
+                                      nl_attr_get_size(flow), metadata);
+}
+
+int
+tun_metadata_from_geneve_header(const struct geneve_opt *opts, int opt_len,
+                                struct tun_metadata *metadata)
+{
+    struct tun_table *map;
+
+    map = ovsrcu_get(struct tun_table *, &metadata_tab);
+    metadata->tab = map;
+
+    return tun_metadata_from_geneve__(map, opts, opts, opt_len, metadata);
+}
+
+static void
+tun_metadata_to_geneve__(const struct tun_metadata *flow, struct ofpbuf *b,
+                         bool *crit_opt)
+{
+    struct tun_table *map;
+    int i;
 
     map = flow->tab;
     if (!map) {
         map = ovsrcu_get(struct tun_table *, &metadata_tab);
     }
 
-    /* For all intents and purposes, the Geneve options are nested
-     * attributes even if this doesn't show up directly to netlink. It's
-     * similar enough that we can use the same mechanism. */
-    nlattr_offset = nl_msg_start_nested(b, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
+    *crit_opt = false;
 
     ULLONG_FOR_EACH_1 (i, flow->opt_map) {
         struct tun_meta_entry *entry = &map->entries[i];
@@ -698,9 +705,41 @@ tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
         opt->r3 = 0;
 
         memcpy_from_metadata(opt + 1, flow, &entry->loc);
+        *crit_opt |= !!(opt->type & GENEVE_CRIT_OPT_TYPE);
+    }
+}
+
+void
+tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
+                                   struct ofpbuf *b)
+{
+    size_t nlattr_offset;
+    bool crit_opt;
+
+    if (!flow->opt_map) {
+        return;
     }
 
+    /* For all intents and purposes, the Geneve options are nested
+     * attributes even if this doesn't show up directly to netlink. It's
+     * similar enough that we can use the same mechanism. */
+    nlattr_offset = nl_msg_start_nested(b, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
+
+    tun_metadata_to_geneve__(flow, b, &crit_opt);
+
     nl_msg_end_nested(b, nlattr_offset);
+}
+
+int
+tun_metadata_to_geneve_header(const struct tun_metadata *flow,
+                              struct geneve_opt *opts, bool *crit_opt)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_stack(&b, opts, GENEVE_TOT_OPT_SIZE);
+    tun_metadata_to_geneve__(flow, &b, crit_opt);
+
+    return b.size;
 }
 
 void

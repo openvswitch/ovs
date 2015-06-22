@@ -30,6 +30,7 @@ union mf_value;
 struct ofputil_geneve_table_mod;
 struct ofputil_geneve_table_reply;
 struct tun_table;
+struct geneve_opt;
 
 #define TUN_METADATA_NUM_OPTS 64
 #define TUN_METADATA_TOT_OPT_SIZE 256
@@ -95,12 +96,18 @@ int tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
                                     size_t flow_attr_len,
                                     const struct tun_metadata *flow_metadata,
                                     struct tun_metadata *metadata);
+int tun_metadata_from_geneve_header(const struct geneve_opt *, int opt_len,
+                                    struct tun_metadata *metadata);
+
 void tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
                                         struct ofpbuf *);
 void tun_metadata_to_geneve_nlattr_mask(const struct ofpbuf *key,
                                         const struct tun_metadata *mask,
                                         const struct tun_metadata *flow,
                                         struct ofpbuf *);
+int tun_metadata_to_geneve_header(const struct tun_metadata *flow,
+                                  struct geneve_opt *, bool *crit_opt);
+
 void tun_metadata_to_nx_match(struct ofpbuf *b, enum ofp_version oxm,
                               const struct match *);
 void tun_metadata_match_format(struct ds *, const struct match *);

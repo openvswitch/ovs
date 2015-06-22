@@ -618,7 +618,7 @@ struct ovs_action_hash {
 };
 
 #ifndef __KERNEL__
-#define TNL_PUSH_HEADER_SIZE 128
+#define TNL_PUSH_HEADER_SIZE 512
 
 /*
  * struct ovs_action_push_tnl - %OVS_ACTION_ATTR_TUNNEL_PUSH

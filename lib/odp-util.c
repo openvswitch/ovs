@@ -69,6 +69,17 @@ static void format_odp_key_attr(const struct nlattr *a,
                                 const struct hmap *portno_names, struct ds *ds,
                                 bool verbose);
 
+struct geneve_scan {
+    struct geneve_opt d[63];
+    int len;
+};
+
+static int scan_geneve(const char *s, struct geneve_scan *key,
+                       struct geneve_scan *mask);
+static void format_geneve_opts(const struct geneve_opt *opt,
+                               const struct geneve_opt *mask, int opts_len,
+                               struct ds *, bool verbose);
+
 static struct nlattr *generate_all_wildcard_mask(const struct attr_len_tbl tbl[],
                                                  int max, struct ofpbuf *,
                                                  const struct nlattr *key);
@@ -581,9 +592,19 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 
         gnh = format_udp_tnl_push_header(ds, ip);
 
-        ds_put_format(ds, "geneve(%svni=0x%"PRIx32")",
+        ds_put_format(ds, "geneve(%s%svni=0x%"PRIx32,
                       gnh->oam ? "oam," : "",
+                      gnh->critical ? "crit," : "",
                       ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
+ 
+        if (gnh->opt_len) {
+            ds_put_cstr(ds, ",options(");
+            format_geneve_opts(gnh->options, NULL, gnh->opt_len * 4,
+                               ds, false);
+            ds_put_char(ds, ')');
+        }
+
+        ds_put_char(ds, ')');
     } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
         const struct gre_base_hdr *greh;
         ovs_16aligned_be32 *options;
@@ -939,17 +960,41 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
             struct genevehdr *gnh = (struct genevehdr *) (udp + 1);
 
             memset(gnh, 0, sizeof *gnh);
+            header_len = sizeof *eth + sizeof *ip +
+                         sizeof *udp + sizeof *gnh;
+
             if (ovs_scan_len(s, &n, "oam,")) {
                 gnh->oam = 1;
             }
-            if (!ovs_scan_len(s, &n, "vni=0x%"SCNx32"))", &vni)) {
+            if (ovs_scan_len(s, &n, "crit,")) {
+                gnh->critical = 1;
+            }
+            if (!ovs_scan_len(s, &n, "vni=%"SCNi32, &vni)) {
                 return -EINVAL;
             }
+            if (ovs_scan_len(s, &n, ",options(")) {
+                struct geneve_scan options;
+                int len;
+
+                memset(&options, 0, sizeof options);
+                len = scan_geneve(s + n, &options, NULL);
+                if (!len) {
+                    return -EINVAL;
+                }
+
+                memcpy(gnh->options, options.d, options.len);
+                gnh->opt_len = options.len / 4;
+                header_len += options.len;
+
+                n += len;
+            }
+            if (!ovs_scan_len(s, &n, "))")) {
+                return -EINVAL;
+            }
+
             gnh->proto_type = htons(ETH_TYPE_TEB);
             put_16aligned_be32(&gnh->vni, htonl(vni << 8));
             tnl_type = OVS_VPORT_TYPE_GENEVE;
-            header_len = sizeof *eth + sizeof *ip +
-                         sizeof *udp + sizeof *gnh;
         } else {
             return -EINVAL;
         }
@@ -1873,21 +1918,10 @@ format_odp_tun_vxlan_opt(const struct nlattr *attr,
 #define MASK(PTR, FIELD) PTR ? &PTR->FIELD : NULL
 
 static void
-format_odp_tun_geneve(const struct nlattr *attr,
-                      const struct nlattr *mask_attr, struct ds *ds,
-                      bool verbose)
+format_geneve_opts(const struct geneve_opt *opt,
+                   const struct geneve_opt *mask, int opts_len,
+                   struct ds *ds, bool verbose)
 {
-    int opts_len = nl_attr_get_size(attr);
-    const struct geneve_opt *opt = nl_attr_get(attr);
-    const struct geneve_opt *mask = mask_attr ?
-                                    nl_attr_get(mask_attr) : NULL;
-
-    if (mask && nl_attr_get_size(attr) != nl_attr_get_size(mask_attr)) {
-        ds_put_format(ds, "value len %"PRIuSIZE" different from mask len %"PRIuSIZE,
-                      nl_attr_get_size(attr), nl_attr_get_size(mask_attr));
-        return;
-    }
-
     while (opts_len > 0) {
         unsigned int len;
         uint8_t data_len, data_len_mask;
@@ -1935,6 +1969,25 @@ format_odp_tun_geneve(const struct nlattr *attr,
         }
         opts_len -= len;
     };
+}
+
+static void
+format_odp_tun_geneve(const struct nlattr *attr,
+                      const struct nlattr *mask_attr, struct ds *ds,
+                      bool verbose)
+{
+    int opts_len = nl_attr_get_size(attr);
+    const struct geneve_opt *opt = nl_attr_get(attr);
+    const struct geneve_opt *mask = mask_attr ?
+                                    nl_attr_get(mask_attr) : NULL;
+
+    if (mask && nl_attr_get_size(attr) != nl_attr_get_size(mask_attr)) {
+        ds_put_format(ds, "value len %"PRIuSIZE" different from mask len %"PRIuSIZE,
+                      nl_attr_get_size(attr), nl_attr_get_size(mask_attr));
+        return;
+    }
+
+    format_geneve_opts(opt, mask, opts_len, ds, verbose);
 }
 
 static void
@@ -2874,11 +2927,6 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
 
     return 0;
 }
-
-struct geneve_scan {
-    struct geneve_opt d[63];
-    int len;
-};
 
 static int
 scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)

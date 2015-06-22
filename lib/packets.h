@@ -754,6 +754,7 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 
 /* Tunnel header */
 #define GENEVE_MAX_OPT_SIZE 124
+#define GENEVE_TOT_OPT_SIZE 252
 
 #define GENEVE_CRIT_OPT_TYPE (1 << 7)
 
