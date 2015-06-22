@@ -3330,6 +3330,7 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 static void
 xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
 {
+    bool was_in_group = ctx->in_group;
     ctx->in_group = true;
 
     switch (group_dpif_get_type(group)) {
@@ -3348,37 +3349,13 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
     }
     group_dpif_unref(group);
 
-    ctx->in_group = false;
-}
-
-static bool
-xlate_group_resource_check(struct xlate_ctx *ctx)
-{
-    if (!xlate_resubmit_resource_check(ctx)) {
-        return false;
-    } else if (ctx->in_group) {
-        /* Prevent nested translation of OpenFlow groups.
-         *
-         * OpenFlow allows this restriction.  We enforce this restriction only
-         * because, with the current architecture, we would otherwise have to
-         * take a possibly recursive read lock on the ofgroup rwlock, which is
-         * unsafe given that POSIX allows taking a read lock to block if there
-         * is a thread blocked on taking the write lock.  Other solutions
-         * without this restriction are also possible, but seem unwarranted
-         * given the current limited use of groups. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
-        VLOG_ERR_RL(&rl, "cannot recursively translate OpenFlow group");
-        return false;
-    } else {
-        return true;
-    }
+    ctx->in_group = was_in_group;
 }
 
 static bool
 xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
 {
-    if (xlate_group_resource_check(ctx)) {
+    if (xlate_resubmit_resource_check(ctx)) {
         struct group_dpif *group;
         bool got_group;
 

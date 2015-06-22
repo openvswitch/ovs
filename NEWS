@@ -1,5 +1,8 @@
 Post-v2.4.0
 ---------------------
+   - OpenFlow:
+     * Group chaining (where one OpenFlow group triggers another) is
+       now supported.
 
 
 v2.4.0 - xx xxx xxxx
