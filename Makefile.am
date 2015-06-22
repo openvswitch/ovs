@@ -177,6 +177,24 @@ SUFFIXES += .in
 	fi
 	$(AM_V_at) mv $@.tmp $@
 
+SUFFIXES += .xml
+%: %.xml
+	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/xml2nroff $< > $@.tmp \
+		--version=$(VERSION) \
+		PKIDIR='$(PKIDIR)' \
+		LOGDIR='$(LOGDIR)' \
+		DBDIR='$(DBDIR)' \
+		PERL='$(PERL)' \
+		PYTHON='$(PYTHON)' \
+		RUNDIR='$(RUNDIR)' \
+		VERSION='$(VERSION)' \
+		localstatedir='$(localstatedir)' \
+		pkgdatadir='$(pkgdatadir)' \
+		sysconfdir='$(sysconfdir)' \
+		bindir='$(bindir)' \
+		sbindir='$(sbindir)'
+	$(AM_v_at)mv $@.tmp $@
+
 .PHONY: clean-pycov
 clean-pycov:
 	cd $(srcdir) && rm -f $(PYCOV_CLEAN_FILES)
