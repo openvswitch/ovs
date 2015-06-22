@@ -442,6 +442,7 @@ done
 BFD_CHECK([p0], [false], [false], [none], [down], [No Diagnostic], [none], [down], [No Diagnostic])
 
 AT_CHECK([ovs-vsctl del-br br1], [0], [ignore])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
@@ -509,6 +510,7 @@ BFD_CHECK_TX([p0], [500ms], [500ms], [300ms])
 BFD_CHECK_RX([p0], [500ms], [500ms], [300ms])
 
 AT_CHECK([ovs-vsctl del-br br1], [0], [ignore])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 # forwarding_if_rx Test3
@@ -596,6 +598,7 @@ BFD_CHECK_TX([p0], [300ms], [300ms], [300ms])
 BFD_CHECK_RX([p0], [1000ms], [1000ms], [300ms])
 
 AT_CHECK([ovs-vsctl del-br br1], [0], [ignore])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 # forwarding_if_rx Test4
@@ -664,6 +667,7 @@ done
 BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
 
 AT_CHECK([ovs-vsctl del-br br1], [0], [ignore])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 # test bfd:flap_count.
