@@ -1403,6 +1403,7 @@ destruct(struct ofproto *ofproto_)
             ofproto_rule_delete(&ofproto->up, &rule->up);
         }
     }
+    ofproto_group_delete_all(&ofproto->up);
 
     guarded_list_pop_all(&ofproto->pins, &pins);
     LIST_FOR_EACH_POP (pin, list_node, &pins) {

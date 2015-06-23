@@ -521,6 +521,8 @@ bool ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
 void ofproto_group_ref(struct ofgroup *);
 void ofproto_group_unref(struct ofgroup *);
 
+void ofproto_group_delete_all(struct ofproto *);
+
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
  *
@@ -742,7 +744,8 @@ struct ofproto_class {
      * ===========
      *
      * ->destruct() must also destroy all remaining rules in the ofproto's
-     * tables, by passing each remaining rule to ofproto_rule_delete().
+     * tables, by passing each remaining rule to ofproto_rule_delete(), then
+     * destroy all remaining groups by calling ofproto_group_delete_all().
      *
      * The client will destroy the flow tables themselves after ->destruct()
      * returns.
