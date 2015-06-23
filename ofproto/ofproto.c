@@ -1529,7 +1529,6 @@ ofproto_destroy__(struct ofproto *ofproto)
     struct oftable *table;
 
     destroy_rule_executes(ofproto);
-    delete_group(ofproto, OFPG_ALL);
 
     guarded_list_destroy(&ofproto->rule_executes);
     ovs_rwlock_destroy(&ofproto->groups_rwlock);
@@ -6501,6 +6500,16 @@ delete_group(struct ofproto *ofproto, uint32_t group_id)
         }
     }
     ovs_rwlock_unlock(&ofproto->groups_rwlock);
+}
+
+/* Delete all groups from 'ofproto'.
+ *
+ * This is intended for use within an ofproto provider's 'destruct'
+ * function. */
+void
+ofproto_group_delete_all(struct ofproto *ofproto)
+{
+    delete_group(ofproto, OFPG_ALL);
 }
 
 static enum ofperr

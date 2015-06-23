@@ -679,6 +679,19 @@ OFPST_GROUP reply (OF1.5):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This found a use-after-free error in bridge destruction in the
+dnl presence of groups.
+AT_SETUP([ofproto - group add then bridge delete (OpenFlow 1.3)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-vsctl del-br br0])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - mod-port (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 for command_config_state in \
