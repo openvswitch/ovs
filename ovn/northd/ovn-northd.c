@@ -235,6 +235,12 @@ build_port_security(const char *eth_addr_field,
     }
 }
 
+static bool
+lport_is_enabled(const struct nbrec_logical_port *lport)
+{
+    return !lport->enabled || *lport->enabled;
+}
+
 /* Updates the Pipeline table in the OVN_SB database, constructing its contents
  * based on the OVN_NB database. */
 static void
@@ -283,7 +289,8 @@ build_pipeline(struct northd_context *ctx)
         build_port_security("eth.src",
                             lport->port_security, lport->n_port_security,
                             &match);
-        pipeline_add(&pc, lport->lswitch, 0, 50, ds_cstr(&match), "next;");
+        pipeline_add(&pc, lport->lswitch, 0, 50, ds_cstr(&match),
+                     lport_is_enabled(lport) ? "next;" : "drop;");
         ds_destroy(&match);
     }
 
@@ -294,7 +301,7 @@ build_pipeline(struct northd_context *ctx)
 
         ds_init(&actions);
         NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
-            if (lport->lswitch == lswitch) {
+            if (lport->lswitch == lswitch && lport_is_enabled(lport)) {
                 ds_put_cstr(&actions, "outport = ");
                 json_string_escape(lport->name, &actions);
                 ds_put_cstr(&actions, "; next; ");
@@ -403,7 +410,8 @@ build_pipeline(struct northd_context *ctx)
                             lport->port_security, lport->n_port_security,
                             &match);
 
-        pipeline_add(&pc, lport->lswitch, 3, 50, ds_cstr(&match), "output;");
+        pipeline_add(&pc, lport->lswitch, 3, 50, ds_cstr(&match),
+                     lport_is_enabled(lport) ? "output;" : "drop;");
 
         ds_destroy(&match);
     }

@@ -30,6 +30,7 @@
                                            "min": 0,
                                            "max": "unlimited"}},
                 "up": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
