@@ -354,7 +354,7 @@ struct rule {
     uint16_t idle_timeout OVS_GUARDED; /* In seconds from ->used. */
 
     /* Eviction precedence. */
-    uint16_t importance OVS_GUARDED;
+    const uint16_t importance;
 
     /* Removal reason for sending flow removed message.
      * Used only if 'flags' has OFPUTIL_FF_SEND_FLOW_REM set and if the

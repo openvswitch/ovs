@@ -4633,7 +4633,7 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     ovs_mutex_lock(&rule->mutex);
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
-    rule->importance = fm->importance;
+    *CONST_CAST(uint16_t *, &rule->importance) = fm->importance;
     rule->removed_reason = OVS_OFPRR_NONE;
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table_id;
@@ -4649,7 +4649,6 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     /* Copy values from old rule for modify semantics. */
     if (old_rule && fm->delete_reason != OFPRR_EVICTION) {
-        /*  'fm' says that  */
         bool change_cookie = (fm->modify_cookie
                               && fm->new_cookie != OVS_BE64_MAX
                               && fm->new_cookie != old_rule->flow_cookie);
@@ -4658,7 +4657,7 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
         if (fm->command != OFPFC_ADD) {
             rule->idle_timeout = old_rule->idle_timeout;
             rule->hard_timeout = old_rule->hard_timeout;
-            rule->importance = old_rule->importance;
+            *CONST_CAST(uint16_t *, &rule->importance) = old_rule->importance;
             rule->flags = old_rule->flags;
             rule->created = old_rule->created;
         }
