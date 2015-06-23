@@ -81,6 +81,11 @@ Logical port commands:\n\
                             set port security addresses for LPORT.\n\
   lport-get-port-security LPORT    get LPORT's port security addresses\n\
   lport-get-up LPORT        get state of LPORT ('up' or 'down')\n\
+  lport-set-enabled LPORT STATE\n\
+                            set administrative state LPORT\n\
+                            ('enabled' or 'disabled')\n\
+  lport-get-enabled LPORT   get administrative state LPORT\n\
+                            ('enabled' or 'disabled')\n\
 \n\
 Options:\n\
   --db=DATABASE             connect to DATABASE\n\
@@ -566,6 +571,46 @@ do_lport_get_up(struct ovs_cmdl_context *ctx)
 
     printf("%s\n", (lport->up && *lport->up) ? "up" : "down");
 }
+
+static void
+do_lport_set_enabled(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const char *state = ctx->argv[2];
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    if (!strcasecmp(state, "enabled")) {
+        bool enabled = true;
+        nbrec_logical_port_set_enabled(lport, &enabled, 1);
+    } else if (!strcasecmp(state, "disabled")) {
+        bool enabled = false;
+        nbrec_logical_port_set_enabled(lport, &enabled, 1);
+    } else {
+        VLOG_ERR("Invalid state '%s' provided to lport-set-enabled", state);
+    }
+}
+
+static void
+do_lport_get_enabled(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    printf("%s\n",
+           (!lport->enabled || *lport->enabled) ? "enabled" : "disabled");
+}
 
 static void
 parse_options(int argc, char *argv[])
@@ -752,6 +797,20 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_get_up,
+    },
+    {
+        .name = "lport-set-enabled",
+        .usage = "LPORT STATE",
+        .min_args = 2,
+        .max_args = 2,
+        .handler = do_lport_set_enabled,
+    },
+    {
+        .name = "lport-get-enabled",
+        .usage = "LPORT",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_enabled,
     },
 
     {

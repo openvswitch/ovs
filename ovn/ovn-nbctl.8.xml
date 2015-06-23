@@ -179,6 +179,19 @@
         <code>down</code>.
       </dd>
 
+      <dt><code>lport-set-enabled</code> <var>lport</var> <var>state</var></dt>
+      <dd>
+        Set the administrative state of <var>lport</var>, either <code>enabled</code>
+        or <code>disabled</code>.  When a port is disabled, no traffic is allowed into
+        or out of the port.
+      </dd>
+
+      <dt><code>lport-get-enabled</code> <var>lport</var></dt>
+      <dd>
+        Prints the administrative state of <var>lport</var>, either <code>enabled</code>
+        or <code>disabled</code>.
+      </dd>
+
     </dl>
 
     <h1>Options</h1>
