@@ -47,7 +47,7 @@ def textToNroff(s, font=r'\fR'):
         elif c == ".":
             # groff(7) says that . can be escaped by \. but in practice groff
             # still gives an error with \. at the beginning of a line.
-            return font + "."
+            return r'\[char46]'
         else:
             raise error.Error("bad escape")
 
