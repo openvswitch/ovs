@@ -4442,7 +4442,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
         bundle = mrouter->port;
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
                                name, sizeof name);
-            ds_put_format(&ds, "%5s  %4d  querier             %3d\n",
+        ds_put_format(&ds, "%5s  %4d  querier             %3d\n",
                       name, mrouter->vlan,
                       mcast_mrouter_age(ofproto->ms, mrouter));
     }
