@@ -7,3 +7,6 @@ man_MANS += \
 EXTRA_DIST += \
     ovn/utilities/ovn-ctl \
     ovn/utilities/ovn-ctl.8.xml
+
+DISTCLEANFILES += \
+    ovn/utilities/ovn-ctl.8

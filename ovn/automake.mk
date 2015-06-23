@@ -68,6 +68,7 @@ ovn/ovn-nb.5: \
 
 man_MANS += ovn/ovn-architecture.7 ovn/ovn-nbctl.8
 EXTRA_DIST += ovn/ovn-architecture.7.xml ovn/ovn-nbctl.8.xml
+DISTCLEANFILES += ovn/ovn-nbctl.8 ovn/ovn-architecture.7
 
 SUFFIXES += .xml
 %: %.xml

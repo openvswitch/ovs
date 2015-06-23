@@ -93,6 +93,8 @@ DISTCLEANFILES += \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki \
 	utilities/ovs-pki.8 \
+	utilities/ovs-sim \
+	utilities/ovs-sim.1 \
 	utilities/ovs-tcpundump \
 	utilities/ovs-tcpundump.1 \
 	utilities/ovs-test \
