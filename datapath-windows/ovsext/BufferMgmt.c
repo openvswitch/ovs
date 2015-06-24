@@ -881,7 +881,7 @@ cleanup:
     newNbl = firstNbl;
     while (newNbl) {
         firstNbl = NET_BUFFER_LIST_NEXT_NBL(newNbl);
-        NET_BUFFER_LIST_NEXT_NBL(firstNbl) = NULL;
+        NET_BUFFER_LIST_NEXT_NBL(newNbl) = NULL;
         OvsCompleteNBL(context, newNbl, TRUE);
         newNbl = firstNbl;
     }
