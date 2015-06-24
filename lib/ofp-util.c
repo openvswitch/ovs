@@ -1318,7 +1318,7 @@ ofputil_decode_hello_bitmap(const struct ofp_hello_elem_header *oheh,
 
     /* Only use the first 32-bit element of the bitmap as that is all the
      * current implementation supports.  Subsequent elements are ignored which
-     * should have no effect on session negotiation until Open vSwtich supports
+     * should have no effect on session negotiation until Open vSwitch supports
      * wire-protocol versions greater than 31.
      */
     allowed_versions = ntohl(bitmap[0]);
