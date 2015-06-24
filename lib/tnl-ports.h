@@ -26,10 +26,10 @@
 
 odp_port_t tnl_port_map_lookup(struct flow *flow, struct flow_wildcards *wc);
 
-void tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
+void tnl_port_map_insert(odp_port_t port, ovs_be16 udp_port,
                          const char dev_name[]);
 
-void tnl_port_map_delete(ovs_be32 ip_dst,  ovs_be16 udp_port);
+void tnl_port_map_delete(ovs_be16 udp_port);
 
 void tnl_port_map_init(void);
 

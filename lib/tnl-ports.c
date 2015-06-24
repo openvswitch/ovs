@@ -56,7 +56,7 @@ tnl_port_free(struct tnl_port_in *p)
 }
 
 static void
-tnl_port_init_flow(struct flow *flow, ovs_be32 ip_dst, ovs_be16 udp_port)
+tnl_port_init_flow(struct flow *flow, ovs_be16 udp_port)
 {
     memset(flow, 0, sizeof *flow);
     flow->dl_type = htons(ETH_TYPE_IP);
@@ -66,21 +66,17 @@ tnl_port_init_flow(struct flow *flow, ovs_be32 ip_dst, ovs_be16 udp_port)
         flow->nw_proto = IPPROTO_GRE;
     }
     flow->tp_dst = udp_port;
-    /* When matching on incoming flow from remove tnl end point,
-     * our dst ip address is source ip for them. */
-    flow->nw_src = ip_dst;
 }
 
 void
-tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
-                    const char dev_name[])
+tnl_port_map_insert(odp_port_t port, ovs_be16 udp_port, const char dev_name[])
 {
     const struct cls_rule *cr;
     struct tnl_port_in *p;
     struct match match;
 
     memset(&match, 0, sizeof match);
-    tnl_port_init_flow(&match.flow, ip_dst, udp_port);
+    tnl_port_init_flow(&match.flow, udp_port);
 
     ovs_mutex_lock(&mutex);
     do {
@@ -97,7 +93,6 @@ tnl_port_map_insert(odp_port_t port, ovs_be32 ip_dst, ovs_be16 udp_port,
         match.wc.masks.nw_proto = 0xff;
         match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
         match.wc.masks.tp_dst = OVS_BE16_MAX;
-        match.wc.masks.nw_src = OVS_BE32_MAX;
 
         cls_rule_init(&p->cr, &match, 0, CLS_MIN_VERSION); /* Priority == 0. */
         ovs_refcount_init(&p->ref_cnt);
@@ -123,12 +118,12 @@ tnl_port_unref(const struct cls_rule *cr)
 }
 
 void
-tnl_port_map_delete(ovs_be32 ip_dst, ovs_be16 udp_port)
+tnl_port_map_delete(ovs_be16 udp_port)
 {
     const struct cls_rule *cr;
     struct flow flow;
 
-    tnl_port_init_flow(&flow, ip_dst, udp_port);
+    tnl_port_init_flow(&flow, udp_port);
 
     cr = classifier_lookup(&cls, CLS_MAX_VERSION, &flow, NULL);
     tnl_port_unref(cr);
