@@ -11,7 +11,7 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                     -- add-port int-br t3 -- set Interface t3 type=vxlan \
                        options:remote_ip=1.1.2.93 options:out_key=flow options:csum=true ofport_request=4\
                     -- add-port int-br t4 -- set Interface t4 type=geneve \
-                       options:remote_ip=1.1.2.92 options:key=123 ofport_request=5\
+                       options:remote_ip=flow options:key=123 ofport_request=5\
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
@@ -24,7 +24,7 @@ dummy@ovs-dummy: hit:0 missed:0
 		t1 3/3: (gre: key=456, remote_ip=1.1.2.92)
 		t2 2/4789: (vxlan: key=123, remote_ip=1.1.2.92)
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=1.1.2.93)
-		t4 5/6081: (geneve: key=123, remote_ip=1.1.2.92)
+		t4 5/6081: (geneve: key=123, remote_ip=flow)
 ])
 
 AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
@@ -47,10 +47,9 @@ IP               MAC                 Bridge
 
 AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
-genev_sys_6081 (6081) : eth_type(0x0800),ipv4(src=1.1.2.92,proto=17,frag=no),udp(dst=6081)
-gre_sys (3) : eth_type(0x0800),ipv4(src=1.1.2.92,proto=47,frag=no)
-vxlan_sys_4789 (4789) : eth_type(0x0800),ipv4(src=1.1.2.92,proto=17,frag=no),udp(dst=4789)
-vxlan_sys_4789 (4789) : eth_type(0x0800),ipv4(src=1.1.2.93,proto=17,frag=no),udp(dst=4789)
+genev_sys_6081 (6081) : eth_type(0x0800),ipv4(proto=17,frag=no),udp(dst=6081)
+gre_sys (3) : eth_type(0x0800),ipv4(proto=47,frag=no)
+vxlan_sys_4789 (4789) : eth_type(0x0800),ipv4(proto=17,frag=no),udp(dst=4789)
 ])
 
 dnl Check VXLAN tunnel pop
@@ -93,7 +92,7 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 
 dnl Check Geneve tunnel push
-AT_CHECK([ovs-ofctl add-flow int-br action=5])
+AT_CHECK([ovs-ofctl add-flow int-br "actions=set_field:1.1.2.92->tun_dst,5"])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_push(tnl_port(6081),header(size=50,type=5,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=6081,csum=0x0),geneve(vni=0x7b)),out_port(100))
