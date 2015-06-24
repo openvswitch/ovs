@@ -93,8 +93,8 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
-char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
-char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
+static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
+static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
 /*
  * Maximum amount of time in micro seconds to try and enqueue to vhost.
@@ -600,7 +600,7 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
 }
 
 static int
-vhost_construct_helper(struct netdev *netdev_)
+vhost_construct_helper(struct netdev *netdev_) OVS_REQUIRES(dpdk_mutex)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
 
@@ -2094,7 +2094,7 @@ static const struct netdev_class dpdk_ring_class =
         netdev_dpdk_get_status,
         netdev_dpdk_rxq_recv);
 
-static const struct netdev_class dpdk_vhost_cuse_class =
+static const struct netdev_class OVS_UNUSED dpdk_vhost_cuse_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostcuse",
         dpdk_vhost_cuse_class_init,
@@ -2108,7 +2108,7 @@ static const struct netdev_class dpdk_vhost_cuse_class =
         NULL,
         netdev_dpdk_vhost_rxq_recv);
 
-const struct netdev_class dpdk_vhost_user_class =
+static const struct netdev_class OVS_UNUSED dpdk_vhost_user_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuser",
         dpdk_vhost_user_class_init,
