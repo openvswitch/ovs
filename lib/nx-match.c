@@ -1125,7 +1125,7 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
     int i;
 
     /* Field arrays are only used with the group selection method
-     * property and group properties are only available in OpenFlow * 1.5+.
+     * property and group properties are only available in OpenFlow 1.5+.
      * So the following assertion should never fail.
      *
      * If support for older OpenFlow versions is desired then some care
