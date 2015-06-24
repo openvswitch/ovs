@@ -1893,7 +1893,7 @@ nxm_init(void)
         for (struct nxm_field_index *nfi = all_nxm_fields;
              nfi < &all_nxm_fields[ARRAY_SIZE(all_nxm_fields)]; nfi++) {
             hmap_insert(&nxm_header_map, &nfi->header_node,
-                        hash_int(nfi->nf.header, 0));
+                        hash_uint64(nfi->nf.header));
             hmap_insert(&nxm_name_map, &nfi->name_node,
                         hash_string(nfi->nf.name, 0));
             list_push_back(&nxm_mf_map[nfi->nf.id], &nfi->mf_node);
@@ -1912,7 +1912,7 @@ nxm_field_by_header(uint64_t header)
         header = nxm_make_exact_header(header);
     }
 
-    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_int(header, 0),
+    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header),
                              &nxm_header_map) {
         if (header == nfi->nf.header) {
             return &nfi->nf;
