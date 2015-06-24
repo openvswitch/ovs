@@ -897,6 +897,7 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq_,
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(vhost_dev);
     int qid = 1;
     uint16_t nb_rx = 0;
+    uint16_t i;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
         return EAGAIN;
@@ -908,6 +909,14 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq_,
                                     NETDEV_MAX_BURST);
     if (!nb_rx) {
         return EAGAIN;
+    }
+
+    /* Vhost doesn't provide a valid RSS hash.  We tell the datapath to
+     * compute the hash in software by setting the field to 0.  This is
+     * a temporary workaround until we can rely on mbuf ol_flags
+     * PKT_RX_RSS_HASH. */
+    for (i = 0; i < nb_rx; i++) {
+        dp_packet_set_rss_hash(packets[i], 0);
     }
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
