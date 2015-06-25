@@ -3916,14 +3916,14 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
             }
 
             /* Compute hashes for the remaining keys. */
-            ULONG_FOR_EACH_1(i, map) {
+            ULLONG_FOR_EACH_1(i, map) {
                 hashes[i] = netdev_flow_key_hash_in_mask(&mkeys[i],
                                                          &subtable->mask);
             }
             /* Lookup. */
             map = cmap_find_batch(&subtable->rules, map, hashes, nodes);
             /* Check results. */
-            ULONG_FOR_EACH_1(i, map) {
+            ULLONG_FOR_EACH_1(i, map) {
                 struct dpcls_rule *rule;
 
                 CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
@@ -3932,7 +3932,7 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
                         goto next;
                     }
                 }
-                ULONG_SET0(map, i);   /* Did not match. */
+                ULLONG_SET0(map, i);  /* Did not match. */
             next:
                 ;                     /* Keep Sparse happy. */
             }

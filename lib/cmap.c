@@ -390,13 +390,13 @@ cmap_find_batch(const struct cmap *cmap, unsigned long map,
     uint32_t c1s[sizeof map * CHAR_BIT];
 
     /* Compute hashes and prefetch 1st buckets. */
-    ULONG_FOR_EACH_1(i, map) {
+    ULLONG_FOR_EACH_1(i, map) {
         h1s[i] = rehash(impl, hashes[i]);
         b1s[i] = &impl->buckets[h1s[i] & impl->mask];
         OVS_PREFETCH(b1s[i]);
     }
     /* Lookups, Round 1. Only look up at the first bucket. */
-    ULONG_FOR_EACH_1(i, map) {
+    ULLONG_FOR_EACH_1(i, map) {
         uint32_t c1;
         const struct cmap_bucket *b1 = b1s[i];
         const struct cmap_node *node;
@@ -414,12 +414,12 @@ cmap_find_batch(const struct cmap *cmap, unsigned long map,
             continue;
         }
         /* Found. */
-        ULONG_SET0(map, i); /* Ignore this on round 2. */
+        ULLONG_SET0(map, i); /* Ignore this on round 2. */
         OVS_PREFETCH(node);
         nodes[i] = node;
     }
     /* Round 2. Look into the 2nd bucket, if needed. */
-    ULONG_FOR_EACH_1(i, map) {
+    ULLONG_FOR_EACH_1(i, map) {
         uint32_t c2;
         const struct cmap_bucket *b2 = b2s[i];
         const struct cmap_node *node;
@@ -445,7 +445,7 @@ cmap_find_batch(const struct cmap *cmap, unsigned long map,
                 }
             }
             /* Not found. */
-            ULONG_SET0(result, i); /* Fix the result. */
+            ULLONG_SET0(result, i); /* Fix the result. */
             continue;
         }
 found:
