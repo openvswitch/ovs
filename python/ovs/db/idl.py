@@ -875,7 +875,7 @@ class Transaction(object):
             return self._status
 
         # If we need a lock but don't have it, give up quickly.
-        if self.idl.lock_name and not self.idl.has_lock():
+        if self.idl.lock_name and not self.idl.has_lock:
             self._status = Transaction.NOT_LOCKED
             self.__disassemble()
             return self._status
