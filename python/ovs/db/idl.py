@@ -875,7 +875,7 @@ class Transaction(object):
             return self._status
 
         # If we need a lock but don't have it, give up quickly.
-        if self.idl.lock_name and not self.idl.has_lock():
+        if self.idl.lock_name and not self.idl.has_lock:
             self._status = Transaction.NOT_LOCKED
             self.__disassemble()
             return self._status
@@ -1074,7 +1074,7 @@ class Transaction(object):
         # transaction only does writes of existing values, without making any
         # real changes, we will drop the whole transaction later in
         # ovsdb_idl_txn_commit().)
-        if not column.alert and row._data.get(column.name) == datum:
+        if not column.alert and row._data and row._data.get(column.name) == datum:
             new_value = row._changes.get(column.name)
             if new_value is None or new_value == datum:
                 return
