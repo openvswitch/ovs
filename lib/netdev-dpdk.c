@@ -928,8 +928,11 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
     int nb_rx;
 
     /* There is only one tx queue for this core.  Do not flush other
-     * queueus. */
-    if (rxq_->queue_id == rte_lcore_id()) {
+     * queues.
+     * Do not flush tx queue which is shared among CPUs
+     * since it is always flushed */
+    if (rxq_->queue_id == rte_lcore_id() &&
+        OVS_LIKELY(!dev->txq_needs_locking)) {
         dpdk_queue_flush(dev, rxq_->queue_id);
     }
 
