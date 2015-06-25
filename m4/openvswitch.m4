@@ -86,9 +86,12 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([Invalid --with-pthread value])
               ;;
             *)
-            PTHREAD_INCLUDES="-I$withval/include"
-            PTHREAD_LDFLAGS="-L$withval/lib/x86"
+            PTHREAD_WIN32_DIR=$withval/lib/x86
+            PTHREAD_WIN32_DIR_DLL=/${withval/:/}/dll/x86
+            PTHREAD_INCLUDES=-I$withval/include
+            PTHREAD_LDFLAGS=-L$PTHREAD_WIN32_DIR
             PTHREAD_LIBS="-lpthreadVC2"
+            AC_SUBST([PTHREAD_WIN32_DIR_DLL])
             AC_SUBST([PTHREAD_INCLUDES])
             AC_SUBST([PTHREAD_LDFLAGS])
             AC_SUBST([PTHREAD_LIBS])
