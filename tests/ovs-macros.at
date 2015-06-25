@@ -37,37 +37,31 @@ if test "$IS_WIN32" = "yes"; then
         command diff --strip-trailing-cr "$@"
     }
 
+    # tskill is more effective than taskkill but it isn't always installed.
+    if (tskill //?) >/dev/null 2>&1; then :; else
+        tskill () { taskkill //F //PID $1 >/dev/null; }
+    fi
+
     kill () {
-        case "$1" in
-            -0)
-                shift
-                for i in $*; do
-                    # tasklist will always have return code 0.
-                    # If pid does exist, there will be a line with the pid.
-                    if tasklist //fi "PID eq $i" | grep $i >/dev/null; then
-                        :
-                    else
-                        return 1
-                    fi
-                done
-                return 0
-                ;;
-            -[1-9]*)
-                shift
-                for i in $*; do
-                    if tasklist //fi "PID eq $i" | grep $i >/dev/null; then
-                        tskill $i
-                    fi
-                done
-                ;;
+        signal=
+        retval=0
+        for arg; do
+            case $arg in
+            -*) signal=$arg ;;
             [1-9][0-9]*)
-                for i in $*; do
-                    if tasklist //fi "PID eq $i" | grep $i >/dev/null; then
-                        tskill $i
+                # tasklist always returns 0.
+                # If pid does exist, there will be a line with the pid.
+                if tasklist //fi "PID eq $arg" | grep $arg >/dev/null; then
+                    if test "X$signal" != "X-0"; then
+                        tskill $arg
                     fi
-                done
+                else
+                    retval=1
+                fi
                 ;;
-        esac
+            esac
+        done
+        return $retval
     }
 fi
 ]
