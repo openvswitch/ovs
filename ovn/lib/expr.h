@@ -293,7 +293,7 @@ bool expr_relop_from_token(enum lex_type type, enum expr_relop *relop);
  *       have grandchildren of its own type.
  *
  *       As a consequence, every nonterminal node at the same distance from the
- *       root of the root has the same type.
+ *       root has the same type.
  *
  *     - EXPR_T_AND and EXPR_T_OR nodes must have at least two children.
  *
