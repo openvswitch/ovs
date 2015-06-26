@@ -2015,8 +2015,9 @@ example, then the flow that matches \fBip_src=\fIb\fR would have two
 of \fBconjunction\fR actions within a list of actions is not
 significant.
 .IP \(bu
-A flow with \fBconjunction\fR actions may not have any other actions.
-(It would not be useful.)
+A flow with \fBconjunction\fR actions may also include \fBnote\fR
+actions for annotations, but not any other kind of actions.  (They
+would not be useful because they would never be executed.)
 .IP \(bu
 All of the flows that constitute a conjunctive flow with a given
 \fIid\fR must have the same priority.  (Flows with the same \fIid\fR
