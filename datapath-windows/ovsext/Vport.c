@@ -129,7 +129,7 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
     vport = OvsFindVportByHvNameW(gOvsSwitchContext,
                                   portParam->PortFriendlyName.String,
                                   portParam->PortFriendlyName.Length);
-    if (vport && vport->isPresentOnHv == FALSE) {
+    if (vport && vport->isAbsentOnHv == FALSE) {
         OVS_LOG_ERROR("Port add failed since a port already exists on "
                       "the specified port Id: %u, ovsName: %s",
                       portParam->PortId, vport->ovsName);
@@ -138,7 +138,7 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
     }
 
     if (vport != NULL) {
-        ASSERT(vport->isPresentOnHv);
+        ASSERT(vport->isAbsentOnHv);
         ASSERT(vport->portNo != OVS_DPPORT_NUMBER_INVALID);
 
         /*
@@ -153,7 +153,7 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
             status = STATUS_DATA_NOT_ACCEPTED;
             goto create_port_done;
         }
-        vport->isPresentOnHv = FALSE;
+        vport->isAbsentOnHv = FALSE;
     } else {
         vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
         if (vport == NULL) {
@@ -759,7 +759,7 @@ OvsAllocateVport(VOID)
     }
     RtlZeroMemory(vport, sizeof (OVS_VPORT_ENTRY));
     vport->ovsState = OVS_STATE_UNKNOWN;
-    vport->isPresentOnHv = FALSE;
+    vport->isAbsentOnHv = FALSE;
     vport->portNo = OVS_DPPORT_NUMBER_INVALID;
 
     InitializeListHead(&vport->ovsNameLink);
@@ -1152,7 +1152,7 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
     switch (vport->ovsType) {
     case OVS_VPORT_TYPE_INTERNAL:
         if (!vport->isBridgeInternal) {
-            if (hvDelete && vport->isPresentOnHv == FALSE) {
+            if (hvDelete && vport->isAbsentOnHv == FALSE) {
                 switchContext->internalPortId = 0;
                 switchContext->internalVport = NULL;
                 OvsInternalAdapterDown();
@@ -1200,7 +1200,7 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
      *
      * Both 'hvDelete' and 'ovsDelete' can be set to TRUE by the caller.
      */
-    if (vport->isPresentOnHv == TRUE) {
+    if (vport->isAbsentOnHv == TRUE) {
         deletedOnHv = TRUE;
     }
     if (vport->portNo == OVS_DPPORT_NUMBER_INVALID) {
@@ -1208,7 +1208,7 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
     }
 
     if (hvDelete && !deletedOnHv) {
-        vport->isPresentOnHv = TRUE;
+        vport->isAbsentOnHv = TRUE;
 
         if (vport->isExternal) {
             ASSERT(vport->nicIndex != 0);
@@ -1447,7 +1447,7 @@ OvsClearAllSwitchVports(POVS_SWITCH_CONTEXT switchContext)
             vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, portNoLink);
             ASSERT(OvsIsTunnelVportType(vport->ovsType) ||
                    (vport->ovsType == OVS_VPORT_TYPE_INTERNAL &&
-                    vport->isBridgeInternal) || vport->isPresentOnHv == TRUE);
+                    vport->isBridgeInternal) || vport->isAbsentOnHv == TRUE);
             OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, TRUE);
         }
     }
@@ -2198,7 +2198,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
              * Allow the vport to be deleted, because there is no
              * corresponding hyper-v switch part.
              */
-            vport->isPresentOnHv = TRUE;
+            vport->isAbsentOnHv = TRUE;
         } else {
             goto Cleanup;
         }
@@ -2523,7 +2523,7 @@ OvsTunnelVportPendingRemove(PVOID context,
         }
     }
 
-    ASSERT(vport->isPresentOnHv == TRUE);
+    ASSERT(vport->isAbsentOnHv == TRUE);
     ASSERT(vport->portNo != OVS_DPPORT_NUMBER_INVALID);
 
     /* Remove the port from the relevant lists. */
@@ -2600,7 +2600,7 @@ OvsTunnelVportPendingInit(PVOID context,
          * Allow the vport to be deleted, because there is no
          * corresponding hyper-v switch part.
          */
-        vport->isPresentOnHv = TRUE;
+        vport->isAbsentOnHv = TRUE;
 
         if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
             /*
