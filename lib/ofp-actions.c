@@ -5737,9 +5737,10 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
 
         if (a->type == OFPACT_CONJUNCTION) {
             OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-                if (a->type != OFPACT_CONJUNCTION) {
-                    VLOG_WARN("when conjunction action is present, it must be "
-                              "the only kind of action used (saw '%s' action)",
+                if (a->type != OFPACT_CONJUNCTION && a->type != OFPACT_NOTE) {
+                    VLOG_WARN("\"conjunction\" actions may be used along with "
+                              "\"note\" but not any other kind of action "
+                              "(such as the \"%s\" action used here)",
                               ofpact_name(a->type));
                     return OFPERR_NXBAC_BAD_CONJUNCTION;
                 }
