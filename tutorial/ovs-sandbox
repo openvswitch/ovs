@@ -55,11 +55,18 @@ gdb_vswitchd=false
 gdb_ovsdb=false
 gdb_vswitchd_ex=false
 gdb_ovsdb_ex=false
+gdb_ovn_northd=false
+gdb_ovn_northd_ex=false
+gdb_ovn_controller=false
+gdb_ovn_controller_ex=false
 builddir=
 srcdir=
 schema=
 installed=false
 built=false
+ovn=false
+ovnsb_schema=
+ovnnb_schema=
 
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
@@ -100,7 +107,12 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -i, --installed      use installed Open vSwitch
   -g, --gdb-vswitchd   run ovs-vswitchd under gdb
   -d, --gdb-ovsdb      run ovsdb-server under gdb
+  --gdb-ovn-northd     run ovn-northd under gdb
+  --gdb-ovn-controller run ovn-controller under gdb
+  -R, --gdb-run        automatically start running the daemon in gdb
+                       for any daemon set to run under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
+  -o, --ovn            enable OVN
 
 Other options:
   -h, --help           Print this usage message.
@@ -143,13 +155,28 @@ EOF
             gdb_vswitchd=true
             gdb_vswitchd_ex=true
             ;;
-        -d|--gdb-o*)
+        -d|--gdb-ovsdb)
             gdb_ovsdb=true
             gdb_ovsdb_ex=false
             ;;
         -r|--gdb-ex-o*)
             gdb_ovsdb=true
             gdb_ovsdb_ex=true
+            ;;
+        --gdb-ovn-northd)
+            gdb_ovn_northd=true
+            ;;
+        --gdb-ovn-controller)
+            gdb_ovn_controller=true
+            ;;
+        -o|--ovn)
+            ovn=true
+            ;;
+        -R|--gdb-run)
+            gdb_vswitchd_ex=true
+            gdb_ovsdb_ex=true
+            gdb_ovn_northd_ex=true
+            gdb_ovn_controller_ex=true
             ;;
         -*)
             echo "unrecognized option $option (use --help for help)" >&2
@@ -201,6 +228,18 @@ if $built; then
         echo >&2 'source directory not found, please use --srcdir'
         exit 1
     fi
+    if $ovn; then
+        ovnsb_schema=$srcdir/ovn/ovn-sb.ovsschema
+        if test ! -e "$ovnsb_schema"; then
+            echo >&2 'source directory not found, please use --srcdir'
+            exit 1
+        fi
+        ovnnb_schema=$srcdir/ovn/ovn-nb.ovsschema
+        if test ! -e "$ovnnb_schema"; then
+            echo >&2 'source directory not found, please use --srcdir'
+            exit 1
+        fi
+    fi
 
     # Put built tools early in $PATH.
     if test ! -e $builddir/vswitchd/ovs-vswitchd; then
@@ -208,6 +247,9 @@ if $built; then
         exit 1
     fi
     PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
+    if $ovn; then
+        PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/northd:$PATH
+    fi
     export PATH
 else
     case $schema in
@@ -226,6 +268,10 @@ else
     esac
     if test ! -r "$schema"; then
         echo "can't find vswitch.ovsschema, please specify --schema" >&2
+        exit 1
+    fi
+    if $ovn; then
+        echo "running with ovn is only supported from the build dir." >&2
         exit 1
     fi
 fi
@@ -253,8 +299,16 @@ trap 'kill `cat "$sandbox"/*.pid`' 0 1 2 3 13 14 15
 # Create database and start ovsdb-server.
 touch "$sandbox"/.conf.db.~lock~
 run ovsdb-tool create conf.db "$schema"
+ovsdb_server_args=
+if $ovn; then
+    touch "$sandbox"/.ovnsb.db.~lock~
+    touch "$sandbox"/.ovnnb.db.~lock~
+    run ovsdb-tool create ovnsb.db "$ovnsb_schema"
+    run ovsdb-tool create ovnnb.db "$ovnnb_schema"
+    ovsdb_server_args="ovnsb.db ovnnb.db conf.db"
+fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
-    --remote=punix:"$sandbox"/db.sock
+    --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
 
 #Add a small delay to allow ovsdb-server to launch.
 sleep 0.1
@@ -274,6 +328,18 @@ run ovs-vsctl --no-wait -- init
 # Start ovs-vswitchd.
 rungdb $gdb_vswitchd $gdb_vswitchd_ex ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
     --enable-dummy=override -vvconn -vnetdev_dummy
+
+if $ovn; then
+    ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
+    ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/db.sock
+    ovs-vsctl set open . external-ids:ovn-encap-type=geneve
+    ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
+    ovs-vsctl add-br br-int \
+        -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
+
+    rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
+    rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
+fi
 
 cat <<EOF
 

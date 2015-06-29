@@ -50,25 +50,32 @@ const uint8_t flow_segment_u64s[4] = {
     FLOW_U64S
 };
 
+/* Asserts that field 'f1' follows immediately after 'f0' in struct flow,
+ * without any intervening padding. */
+#define ASSERT_SEQUENTIAL(f0, f1)                       \
+    BUILD_ASSERT_DECL(offsetof(struct flow, f0)         \
+                      + MEMBER_SIZEOF(struct flow, f0)  \
+                      == offsetof(struct flow, f1))
+
+/* Asserts that fields 'f0' and 'f1' are in the same 32-bit aligned word within
+ * struct flow. */
+#define ASSERT_SAME_WORD(f0, f1)                        \
+    BUILD_ASSERT_DECL(offsetof(struct flow, f0) / 4     \
+                      == offsetof(struct flow, f1) / 4)
+
+/* Asserts that 'f0' and 'f1' are both sequential and within the same 32-bit
+ * aligned word in struct flow. */
+#define ASSERT_SEQUENTIAL_SAME_WORD(f0, f1)     \
+    ASSERT_SEQUENTIAL(f0, f1);                  \
+    ASSERT_SAME_WORD(f0, f1)
+
 /* miniflow_extract() assumes the following to be true to optimize the
  * extraction process. */
-BUILD_ASSERT_DECL(offsetof(struct flow, dl_type) + 2
-                  == offsetof(struct flow, vlan_tci) &&
-                  offsetof(struct flow, dl_type) / 4
-                  == offsetof(struct flow, vlan_tci) / 4 );
+ASSERT_SEQUENTIAL_SAME_WORD(dl_type, vlan_tci);
 
-BUILD_ASSERT_DECL(offsetof(struct flow, nw_frag) + 3
-                  == offsetof(struct flow, nw_proto) &&
-                  offsetof(struct flow, nw_tos) + 2
-                  == offsetof(struct flow, nw_proto) &&
-                  offsetof(struct flow, nw_ttl) + 1
-                  == offsetof(struct flow, nw_proto) &&
-                  offsetof(struct flow, nw_frag) / 4
-                  == offsetof(struct flow, nw_tos) / 4 &&
-                  offsetof(struct flow, nw_ttl) / 4
-                  == offsetof(struct flow, nw_tos) / 4 &&
-                  offsetof(struct flow, nw_proto) / 4
-                  == offsetof(struct flow, nw_tos) / 4);
+ASSERT_SEQUENTIAL_SAME_WORD(nw_frag, nw_tos);
+ASSERT_SEQUENTIAL_SAME_WORD(nw_tos, nw_ttl);
+ASSERT_SEQUENTIAL_SAME_WORD(nw_ttl, nw_proto);
 
 /* TCP flags in the middle of a BE64, zeroes in the other half. */
 BUILD_ASSERT_DECL(offsetof(struct flow, tcp_flags) % 8 == 4);
@@ -80,18 +87,15 @@ BUILD_ASSERT_DECL(offsetof(struct flow, tcp_flags) % 8 == 4);
 #define TCP_FLAGS_BE32(tcp_ctl) ((OVS_FORCE ovs_be32)TCP_FLAGS_BE16(tcp_ctl))
 #endif
 
-BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
-                  == offsetof(struct flow, tp_dst) &&
-                  offsetof(struct flow, tp_src) / 4
-                  == offsetof(struct flow, tp_dst) / 4);
+ASSERT_SEQUENTIAL_SAME_WORD(tp_src, tp_dst);
 
 /* Removes 'size' bytes from the head end of '*datap', of size '*sizep', which
  * must contain at least 'size' bytes of data.  Returns the first byte of data
  * removed. */
 static inline const void *
-data_pull(void **datap, size_t *sizep, size_t size)
+data_pull(const void **datap, size_t *sizep, size_t size)
 {
-    char *data = (char *)*datap;
+    const char *data = *datap;
     *datap = data + size;
     *sizep -= size;
     return data;
@@ -101,7 +105,7 @@ data_pull(void **datap, size_t *sizep, size_t size)
  * the head end of '*datap' and returns the first byte removed.  Otherwise,
  * returns a null pointer without modifying '*datap'. */
 static inline const void *
-data_try_pull(void **datap, size_t *sizep, size_t size)
+data_try_pull(const void **datap, size_t *sizep, size_t size)
 {
     return OVS_LIKELY(*sizep >= size) ? data_pull(datap, sizep, size) : NULL;
 }
@@ -119,7 +123,7 @@ struct mf_ctx {
  * away.  Some GCC versions gave warnings on ALWAYS_INLINE, so these are
  * defined as macros. */
 
-#if (FLOW_WC_SEQ != 31)
+#if (FLOW_WC_SEQ != 32)
 #define MINIFLOW_ASSERT(X) ovs_assert(X)
 BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
                "assertions enabled. Consider updating FLOW_WC_SEQ after "
@@ -261,7 +265,7 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 /* Pulls the MPLS headers at '*datap' and returns the count of them. */
 static inline int
-parse_mpls(void **datap, size_t *sizep)
+parse_mpls(const void **datap, size_t *sizep)
 {
     const struct mpls_hdr *mh;
     int count = 0;
@@ -276,7 +280,7 @@ parse_mpls(void **datap, size_t *sizep)
 }
 
 static inline ovs_be16
-parse_vlan(void **datap, size_t *sizep)
+parse_vlan(const void **datap, size_t *sizep)
 {
     const struct eth_header *eth = *datap;
 
@@ -298,7 +302,7 @@ parse_vlan(void **datap, size_t *sizep)
 }
 
 static inline ovs_be16
-parse_ethertype(void **datap, size_t *sizep)
+parse_ethertype(const void **datap, size_t *sizep)
 {
     const struct llc_snap_header *llc;
     ovs_be16 proto;
@@ -331,7 +335,7 @@ parse_ethertype(void **datap, size_t *sizep)
 }
 
 static inline bool
-parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
+parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
              const struct in6_addr **nd_target,
              uint8_t arp_buf[2][ETH_ADDR_LEN])
 {
@@ -423,18 +427,23 @@ void
 miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 {
     const struct pkt_metadata *md = &packet->md;
-    void *data = dp_packet_data(packet);
+    const void *data = dp_packet_data(packet);
     size_t size = dp_packet_size(packet);
     uint64_t *values = miniflow_values(dst);
     struct mf_ctx mf = { 0, values, values + FLOW_U64S };
-    char *l2;
+    const char *l2;
     ovs_be16 dl_type;
     uint8_t nw_frag, nw_tos, nw_ttl, nw_proto;
 
     /* Metadata. */
     if (md->tunnel.ip_dst) {
         miniflow_push_words(mf, tunnel, &md->tunnel,
-                            sizeof md->tunnel / sizeof(uint64_t));
+                            offsetof(struct flow_tnl, metadata) /
+                            sizeof(uint64_t));
+        if (md->tunnel.metadata.opt_map) {
+            miniflow_push_words(mf, tunnel.metadata, &md->tunnel.metadata,
+                                 sizeof md->tunnel.metadata / sizeof(uint64_t));
+        }
     }
     if (md->skb_priority || md->pkt_mark) {
         miniflow_push_uint32(mf, skb_priority, md->skb_priority);
@@ -449,7 +458,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
     /* Initialize packet's layer pointer and offsets. */
     l2 = data;
-    dp_packet_set_frame(packet, data);
+    dp_packet_reset_offsets(packet);
 
     /* Must have full Ethernet header to proceed. */
     if (OVS_UNLIKELY(size < sizeof(struct eth_header))) {
@@ -458,8 +467,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         ovs_be16 vlan_tci;
 
         /* Link layer. */
-        BUILD_ASSERT(offsetof(struct flow, dl_dst) + 6
-                     == offsetof(struct flow, dl_src));
+        ASSERT_SEQUENTIAL(dl_dst, dl_src);
         miniflow_push_macs(mf, dl_dst, data);
         /* dl_type, vlan_tci. */
         vlan_tci = parse_vlan(&data, &size);
@@ -645,8 +653,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 }
 
                 /* Must be adjacent. */
-                BUILD_ASSERT(offsetof(struct flow, arp_sha) + 6
-                             == offsetof(struct flow, arp_tha));
+                ASSERT_SEQUENTIAL(arp_sha, arp_tha);
 
                 memcpy(arp_buf[0], arp->ar_sha, ETH_ADDR_LEN);
                 memcpy(arp_buf[1], arp->ar_tha, ETH_ADDR_LEN);
@@ -758,23 +765,46 @@ flow_unwildcard_tp_ports(const struct flow *flow, struct flow_wildcards *wc)
     }
 }
 
-/* Initializes 'fmd' with the metadata found in 'flow'. */
+/* Initializes 'flow_metadata' with the metadata found in 'flow'. */
 void
-flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
+flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    int i;
 
-    fmd->dp_hash = flow->dp_hash;
-    fmd->recirc_id = flow->recirc_id;
-    fmd->tun_id = flow->tunnel.tun_id;
-    fmd->tun_src = flow->tunnel.ip_src;
-    fmd->tun_dst = flow->tunnel.ip_dst;
-    fmd->gbp_id = flow->tunnel.gbp_id;
-    fmd->gbp_flags = flow->tunnel.gbp_flags;
-    fmd->metadata = flow->metadata;
-    memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
-    fmd->pkt_mark = flow->pkt_mark;
-    fmd->in_port = flow->in_port.ofp_port;
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
+
+    match_init_catchall(flow_metadata);
+    if (flow->tunnel.tun_id != htonll(0)) {
+        match_set_tun_id(flow_metadata, flow->tunnel.tun_id);
+    }
+    if (flow->tunnel.ip_src != htonl(0)) {
+        match_set_tun_src(flow_metadata, flow->tunnel.ip_src);
+    }
+    if (flow->tunnel.ip_dst != htonl(0)) {
+        match_set_tun_dst(flow_metadata, flow->tunnel.ip_dst);
+    }
+    if (flow->tunnel.gbp_id != htons(0)) {
+        match_set_tun_gbp_id(flow_metadata, flow->tunnel.gbp_id);
+    }
+    if (flow->tunnel.gbp_flags) {
+        match_set_tun_gbp_flags(flow_metadata, flow->tunnel.gbp_flags);
+    }
+    tun_metadata_get_fmd(&flow->tunnel.metadata, flow_metadata);
+    if (flow->metadata != htonll(0)) {
+        match_set_metadata(flow_metadata, flow->metadata);
+    }
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if (flow->regs[i]) {
+            match_set_reg(flow_metadata, i, flow->regs[i]);
+        }
+    }
+
+    if (flow->pkt_mark != 0) {
+        match_set_pkt_mark(flow_metadata, flow->pkt_mark);
+    }
+
+    match_set_in_port(flow_metadata, flow->in_port.ofp_port);
 }
 
 char *
@@ -918,7 +948,7 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     memset(&wc->masks, 0x0, sizeof wc->masks);
 
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     if (flow->tunnel.ip_dst) {
         if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
@@ -933,6 +963,11 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
         WC_MASK_FIELD(wc, tunnel.tp_dst);
         WC_MASK_FIELD(wc, tunnel.gbp_id);
         WC_MASK_FIELD(wc, tunnel.gbp_flags);
+
+        if (flow->tunnel.metadata.opt_map) {
+            wc->masks.tunnel.metadata.opt_map = flow->tunnel.metadata.opt_map;
+            WC_MASK_FIELD(wc, tunnel.metadata.opts);
+        }
     } else if (flow->tunnel.tun_id) {
         WC_MASK_FIELD(wc, tunnel.tun_id);
     }
@@ -1017,7 +1052,7 @@ uint64_t
 flow_wc_map(const struct flow *flow)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     uint64_t map = (flow->tunnel.ip_dst) ? MINIFLOW_MAP(tunnel) : 0;
 
@@ -1069,7 +1104,7 @@ void
 flow_wildcards_clear_non_packet_fields(struct flow_wildcards *wc)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
@@ -1230,12 +1265,8 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
     return hash;
 }
 
-BUILD_ASSERT_DECL(offsetof(struct flow, tp_src) + 2
-                  == offsetof(struct flow, tp_dst) &&
-                  offsetof(struct flow, tp_src) / 4
-                  == offsetof(struct flow, tp_dst) / 4);
-BUILD_ASSERT_DECL(offsetof(struct flow, ipv6_src) + 16
-                  == offsetof(struct flow, ipv6_dst));
+ASSERT_SEQUENTIAL_SAME_WORD(tp_src, tp_dst);
+ASSERT_SEQUENTIAL(ipv6_src, ipv6_dst);
 
 /* Calculates the 5-tuple hash from the given flow. */
 uint32_t
@@ -1628,7 +1659,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
 
         /* Clear all L3 and L4 fields and dp_hash. */
-        BUILD_ASSERT(FLOW_WC_SEQ == 31);
+        BUILD_ASSERT(FLOW_WC_SEQ == 32);
         memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
                sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
         flow->dp_hash = 0;

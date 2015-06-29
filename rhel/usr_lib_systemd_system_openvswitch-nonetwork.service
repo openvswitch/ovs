@@ -11,3 +11,5 @@ EnvironmentFile=-/etc/sysconfig/openvswitch
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl start \
           --system-id=random $OPTIONS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl stop
+RuntimeDirectory=openvswitch
+RuntimeDirectoryMode=0755

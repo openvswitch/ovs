@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manpage program="ovn-controller" section="8" title="ovn-controller">
+    <h1>Name</h1>
+    <p>ovn-controller -- Open Virtual Network local controller</p>
+
+    <h1>Synopsis</h1>
+    <p><code>ovn-controller</code> [<var>options</var>] [<var>ovs-database</var>]</p>
+
+    <h1>Description</h1>
+    <p>
+      <code>ovn-controller</code> is the local controller daemon for
+      OVN, the Open Virtual Network.  It connects up to the OVN
+      Southbound database (see <code>ovn-sb</code>(5)) over the OVSDB
+      protocol, and down to the Open vSwitch database (see
+      <code>ovs-vswitchd.conf.db</code>(5)) over the OVSDB protocol and
+      to <code>ovs-vswitchd</code>(8) via OpenFlow.  Each hypervisor and
+      software gateway in an OVN deployment runs its own independent
+      copy of <code>ovn-controller</code>; thus,
+      <code>ovn-controller</code>'s downward connections are
+      machine-local and do not run over a physical network.
+    </p>
+
+    <h1>Configuration</h1>
+    <p>
+      <code>ovn-controller</code> retrieves most of its configuration
+      information from the local Open vSwitch's ovsdb-server instance.
+      The default is the <code>db.sock</code> in local Open vSwitch's
+      "run" directory.  <var>ovs-database</var> must take one of the
+      following forms:
+    </p>
+    <ul>
+      <li>
+        <p>
+          <code>ssl:<var>ip</var>:<var>port</var></code>
+        </p>
+        <p>
+          The specified SSL <var>port</var> on the host at the given
+          <var>ip</var>, which must be expressed as an IP address (not a DNS
+          name) in IPv4 or IPv6 address format.  If <var>ip</var> is an IPv6
+          address, then wrap <var>ip</var> with square brackets, e.g.:
+          <code>ssl:[::1]:6640</code>.  The <code>--private-key</code>,
+          <code>--certificate</code>, and <code>--ca-cert</code> options are
+          mandatory when this form is used.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>tcp:<var>ip</var>:<var>port</var></code>
+        </p>
+        <p>
+          Connect to the given TCP <var>port</var> on <var>ip</var>, where
+          <var>ip</var> can be IPv4 or IPv6 address. If <var>ip</var> is an
+          IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
+          <code>tcp:[::1]:6640</code>.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>unix:<var>file</var></code>
+        </p>
+        <p>
+          On POSIX, connect to the Unix domain server socket named
+          <var>file</var>.
+        </p>
+        <p>
+          On Windows, connect to a localhost TCP port whose value is written
+          in <var>file</var>.
+        </p>
+      </li>
+    </ul>
+    <p>
+      <code>ovn-controller</code> assumes it gets configuration
+      information from the following keys in the <code>Open_vSwitch</code>
+      table of the local OVS instance:
+      <ul>
+        <li>
+          <p>
+            <code>external_ids:system-id</code> specifies the chassis
+            name to use in the Chassis table.
+          </p>
+        </li>
+        <li>
+          <p>
+            <code>external_ids:ovn-bridge</code> specifies the
+            integration bridge to which logical ports are attached.
+            The default is <code>br-int</code>.
+          </p>
+        </li>
+        <li>
+          <p>
+            <code>external_ids:ovn-remote</code> specifies the OVN
+            database that this system should connect to for its
+            configuration.
+          </p>
+        </li>
+        <li>
+          <p>
+            <code>external_ids:ovn-encap-type</code> specifies the
+            encapsulation type that a chassis should use to connect to
+            this node.  Supported tunnel types for connecting
+            hypervisors are <code>geneve</code> and <code>stt</code>.
+            Gateways may use <code>geneve</code>, <code>vxlan</code>,
+            or <code>stt</code>.
+          </p>
+        </li>
+        <li>
+          <p>
+            <code>external_ids:ovn-encap-ip</code> specifies the IP
+            address that a chassis should use to connect to this node
+            using encapsulation type specified by
+            <code>external_ids:ovn-encap-ip</code>.
+          </p>
+        </li>
+      </ul>
+      <p>
+        Currently, <code>ovn-controller</code> does not support changing
+        the chassis name, integration bridge, or OVN database mid-run.
+        If these values need to change, the daemon must be restarted.
+        This behavior should be changed.
+      </p>
+    </p>
+</manpage>

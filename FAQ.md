@@ -156,7 +156,7 @@ A: The following table lists the Linux kernel versions against which the
 |    2.0.x     | 2.6.32 to 3.10
 |    2.1.x     | 2.6.32 to 3.11
 |    2.3.x     | 2.6.32 to 3.14
-|    2.4.x     | 2.6.32 to 3.19
+|    2.4.x     | 2.6.32 to 4.0
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
@@ -359,6 +359,25 @@ A: Yes.  How you configure it depends on what you mean by "promiscuous
     mirroring" or "SPAN".  For information on how to configure
     SPAN, see "How do I configure a port as a SPAN port, that is,
     enable mirroring of all traffic to that port?"
+
+### Q: How do I configure a DPDK port as an access port?
+
+A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
+
+   If your version is DPDK-enabled it will support the --dpdk
+   argument on the command line and will display lines with
+   "EAL:..." during startup when --dpdk is supplied.
+
+   Secondly, when adding a DPDK port, unlike a system port, the
+   type for the interface must be specified. For example;
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
+
+   Finally, it is required that DPDK port names begin with 'dpdk'.
+
+   See [INSTALL.DPDK.md] for more information on enabling and using DPDK with
+   Open vSwitch.
 
 ### Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable mirroring of all traffic to that VLAN?
 
@@ -649,6 +668,9 @@ A: More than likely, you've looped your network.  Probably, eth0 and
      documentation on the Port table in ovs-vswitchd.conf.db(5)
      for all the details.
 
+     Configuration for DPDK-enabled interfaces is slightly less
+     straightforward: see [INSTALL.DPDK.md].
+
    - Perhaps you don't actually need eth0 and eth1 to be on the
      same bridge.  For example, if you simply want to be able to
      connect each of them to virtual machines, then you can put
@@ -832,6 +854,92 @@ A: Open vSwitch wasn't able to create the port.  Check the
    You may want to upgrade to Open vSwitch 2.3 (or later), in which
    ovs-vsctl will immediately report when there is an issue creating a
    port.
+
+### Q: I created a tap device tap0, configured an IP address on it, and
+    added it to a bridge, like this:
+
+        tunctl -t tap0
+	ifconfig tap0 192.168.0.123
+	ovs-vsctl add-br br0
+	ovs-vsctl add-port br0 tap0
+
+    I expected that I could then use this IP address to contact other
+    hosts on the network, but it doesn't work.  Why not?
+
+A: The short answer is that this is a misuse of a "tap" device.  Use
+   an "internal" device implemented by Open vSwitch, which works
+   differently and is designed for this use.  To solve this problem
+   with an internal device, instead run:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 int0 -- set Interface int0 type=internal
+       ifconfig int0 192.168.0.123
+
+   Even more simply, you can take advantage of the internal port that
+   every bridge has under the name of the bridge:
+
+       ovs-vsctl add-br br0
+       ifconfig br0 192.168.0.123
+
+   In more detail, a "tap" device is an interface between the Linux
+   (or *BSD) network stack and a user program that opens it as a
+   socket.  When the "tap" device transmits a packet, it appears in
+   the socket opened by the userspace program.  Conversely, when the
+   userspace program writes to the "tap" socket, the kernel TCP/IP
+   stack processes the packet as if it had been received by the "tap"
+   device.
+
+   Consider the configuration above.  Given this configuration, if you
+   "ping" an IP address in the 192.168.0.x subnet, the Linux kernel
+   routing stack will transmit an ARP on the tap0 device.  Open
+   vSwitch userspace treats "tap" devices just like any other network
+   device; that is, it doesn't open them as "tap" sockets.  That means
+   that the ARP packet will simply get dropped.
+
+   You might wonder why the Open vSwitch kernel module doesn't
+   intercept the ARP packet and bridge it.  After all, Open vSwitch
+   intercepts packets on other devices.  The answer is that Open
+   vSwitch only intercepts *received* packets, but this is a packet
+   being transmitted.  The same thing happens for all other types of
+   network devices, except for Open vSwitch "internal" ports.  If you,
+   for example, add a physical Ethernet port to an OVS bridge,
+   configure an IP address on a physical Ethernet port, and then issue
+   a "ping" to an address in that subnet, the same thing happens: an
+   ARP gets transmitted on the physical Ethernet port and Open vSwitch
+   never sees it.  (You should not do that, as documented at the
+   beginning of this section.)
+
+   It can make sense to add a "tap" device to an Open vSwitch bridge,
+   if some userspace program (other than Open vSwitch) has opened the
+   tap socket.  This is the case, for example, if the "tap" device was
+   created by KVM (or QEMU) to simulate a virtual NIC.  In such a
+   case, when OVS bridges a packet to the "tap" device, the kernel
+   forwards that packet to KVM in userspace, which passes it along to
+   the VM, and in the other direction, when the VM sends a packet, KVM
+   writes it to the "tap" socket, which causes OVS to receive it and
+   bridge it to the other OVS ports.  Please note that in such a case
+   no IP address is configured on the "tap" device (there is normally
+   an IP address configured in the virtual NIC inside the VM, but this
+   is not visible to the host Linux kernel or to Open vSwitch).
+
+   There is one special case in which Open vSwitch does directly read
+   and write "tap" sockets.  This is an implementation detail of the
+   Open vSwitch userspace switch, which implements its "internal"
+   ports as Linux (or *BSD) "tap" sockets.  In such a userspace
+   switch, OVS receives packets sent on the "tap" device used to
+   implement an "internal" port by reading the associated "tap"
+   socket, and bridges them to the rest of the switch.  In the other
+   direction, OVS transmits packets bridged to the "internal" port by
+   writing them to the "tap" socket, causing them to be processed by
+   the kernel TCP/IP stack as if they had been received on the "tap"
+   device.  Users should not need to be concerned with this
+   implementation detail.
+
+   Open vSwitch has a network device type called "tap".  This is
+   intended only for implementing "internal" ports in the OVS
+   userspace switch and should not be used otherwise.  In particular,
+   users should not configure KVM "tap" devices as type "tap" (use
+   type "system", the default, instead).
 
 
 Quality of Service (QoS)
@@ -1811,3 +1919,4 @@ http://openvswitch.org/
 [WHY-OVS.md]:WHY-OVS.md
 [INSTALL.md]:INSTALL.md
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
+[INSTALL.DPDK.md]:INSTALL.DPDK.md

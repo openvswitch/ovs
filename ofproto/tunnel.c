@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,22 +195,27 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port_mod_log(tnl_port, "adding");
 
     if (native_tnl) {
-        tnl_port_map_insert(odp_port, tnl_port->match.ip_dst,
-                            cfg->dst_port, name);
+        tnl_port_map_insert(odp_port, cfg->dst_port, name);
     }
     return true;
 }
 
 /* Adds 'ofport' to the module with datapath port number 'odp_port'. 'ofport's
  * must be added before they can be used by the module. 'ofport' must be a
- * tunnel. */
-void
+ * tunnel.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
 tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
              odp_port_t odp_port, bool native_tnl, const char name[]) OVS_EXCLUDED(rwlock)
 {
+    bool ok;
+
     fat_rwlock_wrlock(&rwlock);
-    tnl_port_add__(ofport, netdev, odp_port, true, native_tnl, name);
+    ok = tnl_port_add__(ofport, netdev, odp_port, true, native_tnl, name);
     fat_rwlock_unlock(&rwlock);
+
+    return ok ? 0 : EEXIST;
 }
 
 /* Checks if the tunnel represented by 'ofport' reconfiguration due to changes
@@ -257,7 +262,7 @@ tnl_port_del__(const struct ofport_dpif *ofport) OVS_REQ_WRLOCK(rwlock)
             netdev_get_tunnel_config(tnl_port->netdev);
         struct hmap **map;
 
-        tnl_port_map_delete(tnl_port->match.ip_dst, cfg->dst_port);
+        tnl_port_map_delete(cfg->dst_port);
         tnl_port_mod_log(tnl_port, "removing");
         map = tnl_match_map(&tnl_port->match);
         hmap_remove(*map, &tnl_port->match_node);

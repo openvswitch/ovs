@@ -44,6 +44,10 @@ extern NDIS_STRING ovsExtFriendlyNameUC;
 static VOID OvsFinalizeCompletionList(OvsCompletionList *completionList);
 static VOID OvsCompleteNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                     PNET_BUFFER_LIST netBufferLists, ULONG sendCompleteFlags);
+static NTSTATUS OvsCreateNewNBLsFromMultipleNBs(
+                    POVS_SWITCH_CONTEXT switchContext,
+                    PNET_BUFFER_LIST *curNbl,
+                    PNET_BUFFER_LIST *nextNbl);
 
 __inline VOID
 OvsInitCompletionList(OvsCompletionList *completionList,
@@ -177,6 +181,29 @@ OvsStartNBLIngressError(POVS_SWITCH_CONTEXT switchContext,
 }
 
 static VOID
+OvsAppendNativeForwardedPacket(POVS_SWITCH_CONTEXT switchContext,
+                               PNET_BUFFER_LIST curNbl,
+                               PNET_BUFFER_LIST *nativeNbls,
+                               ULONG flags,
+                               BOOLEAN isRecv)
+{
+    POVS_BUFFER_CONTEXT ctx = { 0 };
+    NDIS_STRING filterReason;
+
+    *nativeNbls = curNbl;
+    nativeNbls = &(curNbl->Next);
+
+    ctx = OvsInitExternalNBLContext(switchContext, curNbl, isRecv);
+    if (ctx == NULL) {
+        RtlInitUnicodeString(&filterReason,
+                             L"Cannot allocate native NBL context.");
+
+        OvsStartNBLIngressError(switchContext, curNbl, flags, &filterReason,
+                                NDIS_STATUS_RESOURCES);
+    }
+}
+
+static VOID
 OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                    PNET_BUFFER_LIST netBufferLists,
                    ULONG SendFlags)
@@ -193,10 +220,10 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     LIST_ENTRY missedPackets;
     UINT32 num = 0;
     OvsCompletionList completionList;
-    PNET_BUFFER_LIST ovsForwardedNbls = NULL;
+#if (NDIS_SUPPORT_NDIS640)
     PNET_BUFFER_LIST nativeForwardedNbls = NULL;
-    PNET_BUFFER_LIST *nextOvsForwardNbl = &ovsForwardedNbls;
     PNET_BUFFER_LIST *nextNativeForwardedNbl = &nativeForwardedNbls;
+#endif
 
     dispatch = NDIS_TEST_SEND_AT_DISPATCH_LEVEL(SendFlags)?
                                             NDIS_RWL_AT_DISPATCH_LEVEL : 0;
@@ -206,48 +233,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     InitializeListHead(&missedPackets);
     OvsInitCompletionList(&completionList, switchContext, sendCompleteFlags);
 
-#if (NDIS_SUPPORT_NDIS640)
-    /*
-     * Split NBL list into NBLs to be forwarded by us, and those that require
-     * native forwarding.
-     */
     for (curNbl = netBufferLists; curNbl != NULL; curNbl = nextNbl) {
-        nextNbl = curNbl->Next;
-        curNbl->Next = NULL;
-        fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl);
-
-        if (fwdDetail->NativeForwardingRequired) {
-            POVS_BUFFER_CONTEXT ctx;
-
-            *nextNativeForwardedNbl = curNbl;
-            nextNativeForwardedNbl = &(curNbl->Next);
-
-            ctx = OvsInitExternalNBLContext(switchContext, curNbl,
-                sourcePort == switchContext->virtualExternalPortId);
-            if (ctx == NULL) {
-                RtlInitUnicodeString(&filterReason,
-                    L"Cannot allocate native NBL context.");
-
-                OvsStartNBLIngressError(switchContext, curNbl,
-                    sendCompleteFlags, &filterReason,
-                    NDIS_STATUS_RESOURCES);
-
-                continue;
-            }
-        } else {
-            *nextOvsForwardNbl = curNbl;
-            nextOvsForwardNbl = &(curNbl->Next);
-        }
-    }
-#else
-    UNREFERENCED_PARAMETER(nativeForwardedNbls);
-    UNREFERENCED_PARAMETER(nextNativeForwardedNbl);
-    UNREFERENCED_PARAMETER(nextOvsForwardNbl);
-
-    ovsForwardedNbls = netBufferLists;
-#endif
-
-    for (curNbl = ovsForwardedNbls; curNbl != NULL; curNbl = nextNbl) {
         POVS_VPORT_ENTRY vport;
         UINT32 portNo;
         OVS_DATAPATH *datapath = &switchContext->datapath;
@@ -255,27 +241,59 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
         OvsFlowKey key;
         UINT64 hash;
         PNET_BUFFER curNb;
+        POVS_BUFFER_CONTEXT ctx;
 
         nextNbl = curNbl->Next;
         curNbl->Next = NULL;
 
-        /* Ethernet Header is a guaranteed safe access. */
-        curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
-        if (curNb->Next != NULL) {
-            /* XXX: This case is not handled yet. */
+        fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl);
+        sourcePort = fwdDetail->SourcePortId;
+        sourceIndex = (NDIS_SWITCH_NIC_INDEX)fwdDetail->SourceNicIndex;
+
+#if (NDIS_SUPPORT_NDIS640)
+        if (fwdDetail->NativeForwardingRequired) {
+            /* Add current NBL to those that require native forwarding. */
+            OvsAppendNativeForwardedPacket(
+                switchContext,
+                curNbl,
+                nextNativeForwardedNbl,
+                sendCompleteFlags,
+                sourcePort == switchContext->virtualExternalPortId);
+            continue;
+        }
+#endif /* NDIS_SUPPORT_NDIS640 */
+
+        ctx = OvsInitExternalNBLContext(switchContext, curNbl,
+                  sourcePort == switchContext->virtualExternalPortId);
+        if (ctx == NULL) {
             RtlInitUnicodeString(&filterReason,
-                L"Dropping NBLs with multiple NBs");
+                L"Cannot allocate external NBL context.");
+
             OvsStartNBLIngressError(switchContext, curNbl,
                                     sendCompleteFlags, &filterReason,
                                     NDIS_STATUS_RESOURCES);
             continue;
-        } else {
-            POVS_BUFFER_CONTEXT ctx;
-            OvsFlow *flow;
+        }
 
-            fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl);
-            sourcePort = fwdDetail->SourcePortId;
-            sourceIndex = (NDIS_SWITCH_NIC_INDEX)fwdDetail->SourceNicIndex;
+        /* Ethernet Header is a guaranteed safe access. */
+        curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
+        if (curNb->Next != NULL) {
+            /* Create a NET_BUFFER_LIST for each NET_BUFFER. */
+            status = OvsCreateNewNBLsFromMultipleNBs(switchContext,
+                                                     &curNbl,
+                                                     &nextNbl);
+            if (!NT_SUCCESS(status)) {
+                RtlInitUnicodeString(&filterReason,
+                                     L"Cannot allocate NBLs with single NB.");
+
+                OvsStartNBLIngressError(switchContext, curNbl,
+                                        sendCompleteFlags, &filterReason,
+                                        NDIS_STATUS_RESOURCES);
+                continue;
+            }
+        }
+        {
+            OvsFlow *flow;
 
             /* Take the DispatchLock so none of the VPORTs disconnect while
              * we are setting destination ports.
@@ -284,19 +302,6 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
              * rather than for each packet. */
             NdisAcquireRWLockRead(switchContext->dispatchLock, &lockState,
                                   dispatch);
-
-            ctx = OvsInitExternalNBLContext(switchContext, curNbl,
-                      sourcePort == switchContext->virtualExternalPortId);
-            if (ctx == NULL) {
-                RtlInitUnicodeString(&filterReason,
-                                     L"Cannot allocate external NBL context.");
-
-                OvsStartNBLIngressError(switchContext, curNbl,
-                                        sendCompleteFlags, &filterReason,
-                                        NDIS_STATUS_RESOURCES);
-                NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-                continue;
-            }
 
             vport = OvsFindVportByPortIdAndNicIndex(switchContext, sourcePort,
                                                     sourceIndex);
@@ -360,11 +365,13 @@ dropit:
         }
     }
 
+#if (NDIS_SUPPORT_NDIS640)
     if (nativeForwardedNbls) {
         /* This is NVGRE encapsulated traffic and is forwarded to NDIS
          * in order to be handled by the HNV module. */
         OvsSendNBLIngress(switchContext, nativeForwardedNbls, SendFlags);
     }
+#endif /* NDIS_SUPPORT_NDIS640 */
 
     /* Queue the missed packets. */
     OvsQueuePackets(&missedPackets, num);
@@ -487,4 +494,44 @@ OvsExtCancelSendNBL(NDIS_HANDLE filterModuleContext,
 
     /* All send requests get completed synchronously, so there is no need to
      * implement this callback. */
+}
+
+static NTSTATUS
+OvsCreateNewNBLsFromMultipleNBs(POVS_SWITCH_CONTEXT switchContext,
+                                PNET_BUFFER_LIST *curNbl,
+                                PNET_BUFFER_LIST *nextNbl)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PNET_BUFFER_LIST newNbls = NULL;
+    PNET_BUFFER_LIST lastNbl = NULL;
+    PNET_BUFFER_LIST nbl = NULL;
+    BOOLEAN error = TRUE;
+
+    do {
+        /* Create new NBLs from curNbl with multiple net buffers. */
+        newNbls = OvsPartialCopyToMultipleNBLs(switchContext,
+                                               *curNbl, 0, 0, TRUE);
+        if (NULL == newNbls) {
+            OVS_LOG_ERROR("Failed to allocate NBLs with single NB.");
+            status = NDIS_STATUS_RESOURCES;
+            break;
+        }
+
+        nbl = newNbls;
+        while (nbl) {
+            lastNbl = nbl;
+            nbl = NET_BUFFER_LIST_NEXT_NBL(nbl);
+        }
+        lastNbl->Next = *nextNbl;
+        *nextNbl = newNbls->Next;
+
+        OvsCompleteNBL(switchContext, *curNbl, TRUE);
+
+        *curNbl = newNbls;
+        (*curNbl)->Next = NULL;
+
+        error = FALSE;
+    } while (error);
+
+    return status;
 }

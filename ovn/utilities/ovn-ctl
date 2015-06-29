@@ -1,0 +1,255 @@
+#!/bin/sh
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+case $0 in
+    */*) dir0=`echo "$0" | sed 's,/[^/]*$,,'` ;;
+    *) dir0=./ ;;
+esac
+. "$dir0/ovs-lib" || exit 1
+
+for dir in "$sbindir" "$bindir" /sbin /bin /usr/sbin /usr/bin; do
+    case :$PATH: in
+        *:$dir:*) ;;
+        *) PATH=$PATH:$dir ;;
+    esac
+done
+
+
+## ----- ##
+## start ##
+## ----- ##
+
+create_db () {
+    DB_FILE=$1
+    DB_SCHEMA=$2
+    action "Creating empty database $DB_FILE" ovsdb-tool create "$DB_FILE" "$DB_SCHEMA"
+}
+
+check_ovn_dbs () {
+    if test ! -e "$DB_NB_FILE"; then
+        create_db "$DB_NB_FILE" "$DB_NB_SCHEMA"
+    fi
+
+    if test ! -e "$DB_SB_FILE"; then
+        create_db "$DB_SB_FILE" "$DB_SB_SCHEMA"
+    fi
+
+    running_ovn_dbs=$(ovs-appctl -t ovsdb-server ovsdb-server/list-dbs | grep OVN | wc -l)
+    if [ "$running_ovn_dbs" != "2" ] ; then
+        ovs-appctl -t ovsdb-server ovsdb-server/add-db $DB_NB_FILE
+        ovs-appctl -t ovsdb-server ovsdb-server/add-db $DB_SB_FILE
+        running_ovn_dbs=$(ovs-appctl -t ovsdb-server ovsdb-server/list-dbs | grep OVN | wc -l)
+        if [ "$running_ovn_dbs" != "2" ] ; then
+            echo >&2 "$0: Failed to add OVN dbs to ovsdb-server"
+            exit 1
+        fi
+    fi
+}
+
+start_northd () {
+    # We expect ovn-northd to be co-located with ovsdb-server handling both the
+    # OVN_Northbound and OVN_Southbound dbs.
+    check_ovn_dbs
+
+    set ovn-northd
+    set "$@" -vconsole:emer -vsyslog:err -vfile:info
+    OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_NORTHD_PRIORITY" "$OVN_NORTHD_WRAPPER" "$@"
+}
+
+start_controller () {
+    set ovn-controller "unix:$DB_SOCK"
+    set "$@" -vconsole:emer -vsyslog:err -vfile:info
+    OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
+}
+
+## ---- ##
+## stop ##
+## ---- ##
+
+stop_northd () {
+    OVS_RUNDIR=${OVN_RUNDIR} stop_daemon ovn-northd
+}
+
+stop_controller () {
+    OVS_RUNDIR=${OVN_RUNDIR} stop_daemon ovn-controller
+}
+
+## ------- ##
+## restart ##
+## ------- ##
+
+restart_northd () {
+    stop_northd
+    start_northd
+}
+
+restart_controller () {
+    stop_controller
+    start_controller
+}
+
+## ---- ##
+## main ##
+## ---- ##
+
+set_defaults () {
+    DB_SOCK=$rundir/db.sock
+    DB_NB_FILE=$dbdir/ovnnb.db
+    DB_SB_FILE=$dbdir/ovnsb.db
+    DB_NB_SCHEMA=$datadir/ovn-nb.ovsschema
+    DB_SB_SCHEMA=$datadir/ovn-sb.ovsschema
+
+    OVN_NORTHD_PRIORITY=-10
+    OVN_NORTHD_WRAPPER=
+    OVN_CONTROLLER_PRIORITY=-10
+    OVN_CONTROLLER_WRAPPER=
+
+    OVS_RUNDIR=${OVS_RUNDIR:-${rundir}}
+    OVN_RUNDIR=${OVN_RUNDIR:-${OVS_RUNDIR}}
+}
+
+set_option () {
+    var=`echo "$option" | tr abcdefghijklmnopqrstuvwxyz- ABCDEFGHIJKLMNOPQRSTUVWXYZ_`
+    eval set=\${$var+yes}
+    eval old_value=\$$var
+    if test X$set = X || \
+        (test $type = bool && \
+        test X"$old_value" != Xno && test X"$old_value" != Xyes); then
+        echo >&2 "$0: unknown option \"$arg\" (use --help for help)"
+        return
+    fi
+    eval $var=\$value
+}
+
+usage () {
+    set_defaults
+    cat << EOF
+$0: controls Open Virtual Network daemons
+usage: $0 [OPTIONS] COMMAND
+
+This program is intended to be invoked internally by Open Virtual Network
+startup scripts.  System administrators should not normally invoke it directly.
+
+Commands:
+  start_northd           start ovn-northd
+  start_controller       start ovn-controller
+  stop_northd            stop ovn-northd
+  stop_controller        stop ovn-controller
+  restart_northd         restart ovn-northd
+  restart_controller     restart ovn-controller
+
+Options:
+  --ovn-northd-priority=NICE     set ovn-northd's niceness (default: $OVN_NORTHD_PRIORITY)
+  --ovn-northd-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
+  --ovn-controller-priority=NICE     set ovn-northd's niceness (default: $OVN_CONTROLLER_PRIORITY)
+  --ovn-controller-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
+  -h, --help                     display this help message
+
+File location options:
+  --db-sock=SOCKET     JSON-RPC socket name (default: $DB_SOCK)
+  --db-nb-file=FILE    OVN_Northbound db file (default: $DB_NB_FILE)
+  --db-sb-file=FILE    OVN_Southbound db file (default: $DB_SB_FILE)
+  --db-nb-schema=FILE  OVN_Northbound db file (default: $DB_NB_SCHEMA)
+  --db-sb-schema=FILE  OVN_Southbound db file (default: $DB_SB_SCHEMA)
+
+Default directories with "configure" option and environment variable override:
+  logs: /usr/local/var/log/openvswitch (--with-logdir, OVS_LOGDIR)
+  pidfiles and sockets: /usr/local/var/run/openvswitch (--with-rundir, OVS_RUNDIR)
+  ovn-nb.db: /usr/local/etc/openvswitch (--with-dbdir, OVS_DBDIR)
+  ovn-sb.db: /usr/local/etc/openvswitch (--with-dbdir, OVS_DBDIR)
+  system configuration: /usr/local/etc (--sysconfdir, OVS_SYSCONFDIR)
+  data files: /usr/local/share/openvswitch (--pkgdatadir, OVS_PKGDATADIR)
+  user binaries: /usr/local/bin (--bindir, OVS_BINDIR)
+  system binaries: /usr/local/sbin (--sbindir, OVS_SBINDIR)
+EOF
+}
+
+set_defaults
+command=
+for arg
+do
+    case $arg in
+        -h | --help)
+            usage
+            ;;
+        --[a-z]*=*)
+            option=`expr X"$arg" : 'X--\([^=]*\)'`
+            value=`expr X"$arg" : 'X[^=]*=\(.*\)'`
+            type=string
+            set_option
+            ;;
+        --no-[a-z]*)
+            option=`expr X"$arg" : 'X--no-\(.*\)'`
+            value=no
+            type=bool
+            set_option
+            ;;
+        --[a-z]*)
+            option=`expr X"$arg" : 'X--\(.*\)'`
+            value=yes
+            type=bool
+            set_option
+            ;;
+        -*)
+            echo >&2 "$0: unknown option \"$arg\" (use --help for help)"
+            exit 1
+            ;;
+        *)
+            if test X"$command" = X; then
+                command=$arg
+            else
+                echo >&2 "$0: exactly one non-option argument required (use --help for help)"
+                exit 1
+            fi
+            ;;
+    esac
+done
+case $command in
+    start_northd)
+        start_northd
+        ;;
+    start_controller)
+        start_controller
+        ;;
+    stop_northd)
+        stop_northd
+        ;;
+    stop_controller)
+        stop_controller
+        ;;
+    restart_northd)
+        restart_northda
+        ;;
+    restart_controller)
+        restart_controller
+        ;;
+    create_ovn_dbs)
+        create_ovn_dbs
+        ;;
+    help)
+        usage
+        ;;
+    preheat)
+        echo >&2 "$0: preheating ovn to 350 degrees F."
+        exit 1
+        ;;
+    '')
+        echo >&2 "$0: missing command name (use --help for help)"
+        exit 1
+        ;;
+    *)
+        echo >&2 "$0: unknown command \"$command\" (use --help for help)"
+        exit 1
+        ;;
+esac

@@ -863,7 +863,7 @@ OvsPartialCopyToMultipleNBLs(PVOID ovsContext,
         if (prevNbl == NULL) {
             firstNbl = newNbl;
         } else {
-            NET_BUFFER_LIST_NEXT_NBL(prevNbl) = nbl;
+            NET_BUFFER_LIST_NEXT_NBL(prevNbl) = newNbl;
             NET_BUFFER_NEXT_NB(prevNb) = nb;
         }
         prevNbl = newNbl;
@@ -881,7 +881,7 @@ cleanup:
     newNbl = firstNbl;
     while (newNbl) {
         firstNbl = NET_BUFFER_LIST_NEXT_NBL(newNbl);
-        NET_BUFFER_LIST_NEXT_NBL(firstNbl) = NULL;
+        NET_BUFFER_LIST_NEXT_NBL(newNbl) = NULL;
         OvsCompleteNBL(context, newNbl, TRUE);
         newNbl = firstNbl;
     }

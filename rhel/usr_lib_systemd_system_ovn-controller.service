@@ -1,0 +1,16 @@
+[Unit]
+Description=OVN controller daemon
+After=syslog.target
+Requires=openvswitch.service
+After=openvswitch.service
+
+[Service]
+Type=simple
+RuntimeDirectory=ovn-controller
+RuntimeDirectoryMode=0755
+PIDFile=%t/ovn-controller/ovn-controller.pid
+Environment=OVS_RUNDIR=%t/ovn-controller
+ExecStart=/usr/bin/ovn-controller -vconsole:emer -vsyslog:err -vfile:info \
+          --log-file=/var/log/openvswitch/ovn-controller.log \
+          --no-chdir --pidfile=%t/ovn-controller/ovn-controller.pid \
+          unix:/var/run/openvswitch/db.sock

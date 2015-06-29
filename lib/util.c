@@ -500,24 +500,13 @@ get_subprogram_name(void)
     return name ? name : "";
 }
 
-/* Sets the formatted value of 'format' as the name of the currently running
- * thread or process.  (This appears in log messages and may also be visible in
- * system process listings and debuggers.) */
+/* Sets 'subprogram_name' as the name of the currently running thread or
+ * process.  (This appears in log messages and may also be visible in system
+ * process listings and debuggers.) */
 void
-set_subprogram_name(const char *format, ...)
+set_subprogram_name(const char *subprogram_name)
 {
-    char *pname;
-
-    if (format) {
-        va_list args;
-
-        va_start(args, format);
-        pname = xvasprintf(format, args);
-        va_end(args);
-    } else {
-        pname = xstrdup(program_name);
-    }
-
+    char *pname = xstrdup(subprogram_name ? subprogram_name : program_name);
     free(subprogram_name_set(pname));
 
 #if HAVE_GLIBC_PTHREAD_SETNAME_NP
@@ -651,11 +640,11 @@ str_to_uint(const char *s, int base, unsigned int *u)
     long long ll;
     bool ok = str_to_llong(s, base, &ll);
     if (!ok || ll < 0 || ll > UINT_MAX) {
-	*u = 0;
-	return false;
+        *u = 0;
+        return false;
     } else {
-	*u = ll;
-	return true;
+        *u = ll;
+        return true;
     }
 }
 
@@ -736,6 +725,87 @@ hexits_value(const char *s, size_t n, bool *ok)
     }
     *ok = true;
     return value;
+}
+
+/* Parses the string in 's' as an integer in either hex or decimal format and
+ * puts the result right justified in the array 'valuep' that is 'field_width'
+ * big. If the string is in hex format, the value may be arbitrarily large;
+ * integers are limited to 64-bit values. (The rationale is that decimal is
+ * likely to represent a number and 64 bits is a reasonable maximum whereas
+ * hex could either be a number or a byte string.)
+ *
+ * On return 'tail' points to the first character in the string that was
+ * not parsed as part of the value. ERANGE is returned if the value is too
+ * large to fit in the given field. */
+int
+parse_int_string(const char *s, uint8_t *valuep, int field_width, char **tail)
+{
+    unsigned long long int integer;
+    int i;
+
+    if (!strncmp(s, "0x", 2) || !strncmp(s, "0X", 2)) {
+        uint8_t *hexit_str;
+        int len = 0;
+        int val_idx;
+        int err = 0;
+
+        s += 2;
+        hexit_str = xmalloc(field_width * 2);
+
+        for (;;) {
+            uint8_t hexit;
+            bool ok;
+
+            s += strspn(s, " \t\r\n");
+            hexit = hexits_value(s, 1, &ok);
+            if (!ok) {
+                *tail = CONST_CAST(char *, s);
+                break;
+            }
+
+            if (hexit != 0 || len) {
+                if (DIV_ROUND_UP(len + 1, 2) > field_width) {
+                    err = ERANGE;
+                    goto free;
+                }
+
+                hexit_str[len] = hexit;
+                len++;
+            }
+            s++;
+        }
+
+        val_idx = field_width;
+        for (i = len - 1; i >= 0; i -= 2) {
+            val_idx--;
+            valuep[val_idx] = hexit_str[i];
+            if (i > 0) {
+                valuep[val_idx] += hexit_str[i - 1] << 4;
+            }
+        }
+
+        memset(valuep, 0, val_idx);
+
+free:
+        free(hexit_str);
+        return err;
+    }
+
+    errno = 0;
+    integer = strtoull(s, tail, 0);
+    if (errno) {
+        return errno;
+    }
+
+    for (i = field_width - 1; i >= 0; i--) {
+        valuep[i] = integer;
+        integer >>= 8;
+    }
+    if (integer) {
+        return ERANGE;
+    }
+
+    return 0;
 }
 
 /* Returns the current working directory as a malloc()'d string, or a null
@@ -1284,9 +1354,9 @@ bitwise_is_all_zeros(const void *p_, unsigned int len, unsigned int ofs,
     return true;
 }
 
-/* Scans the bits in 'p' that have bit offsets 'start' through 'end'
- * (inclusive) for the first bit with value 'target'.  If one is found, returns
- * its offset, otherwise 'end'.  'p' is 'len' bytes long.
+/* Scans the bits in 'p' that have bit offsets 'start' (inclusive) through
+ * 'end' (exclusive) for the first bit with value 'target'.  If one is found,
+ * returns its offset, otherwise 'end'.  'p' is 'len' bytes long.
  *
  * If you consider all of 'p' to be a single unsigned integer in network byte
  * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
@@ -1297,21 +1367,48 @@ bitwise_is_all_zeros(const void *p_, unsigned int len, unsigned int ofs,
  *   start <= end
  */
 unsigned int
-bitwise_scan(const void *p_, unsigned int len, bool target, unsigned int start,
+bitwise_scan(const void *p, unsigned int len, bool target, unsigned int start,
              unsigned int end)
 {
-    const uint8_t *p = p_;
     unsigned int ofs;
 
     for (ofs = start; ofs < end; ofs++) {
-        bool bit = (p[len - (ofs / 8 + 1)] & (1u << (ofs % 8))) != 0;
-        if (bit == target) {
+        if (bitwise_get_bit(p, len, ofs) == target) {
             break;
         }
     }
     return ofs;
 }
 
+/* Scans the bits in 'p' that have bit offsets 'start' (inclusive) through
+ * 'end' (exclusive) for the first bit with value 'target', in reverse order.
+ * If one is found, returns its offset, otherwise 'end'.  'p' is 'len' bytes
+ * long.
+ *
+ * If you consider all of 'p' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in p[len - 1], bit 1 is the bit with value 2, bit 2 is the bit
+ * with value 4, ..., bit 8 is the bit with value 1 in p[len - 2], and so on.
+ *
+ * To scan an entire bit array in reverse order, specify start == len * 8 - 1
+ * and end == -1, in which case the return value is nonnegative if successful
+ * and -1 if no 'target' match is found.
+ *
+ * Required invariant:
+ *   start >= end
+ */
+int
+bitwise_rscan(const void *p, unsigned int len, bool target, int start, int end)
+{
+    int ofs;
+
+    for (ofs = start; ofs > end; ofs--) {
+        if (bitwise_get_bit(p, len, ofs) == target) {
+            break;
+        }
+    }
+    return ofs;
+}
 
 /* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
  * starting at bit 'dst_ofs' in 'dst', which is 'dst_len' bytes long.
@@ -1360,6 +1457,104 @@ bitwise_get(const void *src, unsigned int src_len,
                  &value, sizeof value, 0,
                  n_bits);
     return ntohll(value);
+}
+
+/* Returns the value of the bit with offset 'ofs' in 'src', which is 'len'
+ * bytes long.
+ *
+ * If you consider all of 'src' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in src[len - 1], bit 1 is the bit with value 2, bit 2 is the
+ * bit with value 4, ..., bit 8 is the bit with value 1 in src[len - 2], and so
+ * on.
+ *
+ * Required invariants:
+ *   ofs < len * 8
+ */
+bool
+bitwise_get_bit(const void *src_, unsigned int len, unsigned int ofs)
+{
+    const uint8_t *src = src_;
+
+    return (src[len - (ofs / 8 + 1)] & (1u << (ofs % 8))) != 0;
+}
+
+/* Sets the bit with offset 'ofs' in 'dst', which is 'len' bytes long, to 0.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[len - 1], bit 1 is the bit with value 2, bit 2 is the
+ * bit with value 4, ..., bit 8 is the bit with value 1 in dst[len - 2], and so
+ * on.
+ *
+ * Required invariants:
+ *   ofs < len * 8
+ */
+void
+bitwise_put0(void *dst_, unsigned int len, unsigned int ofs)
+{
+    uint8_t *dst = dst_;
+
+    dst[len - (ofs / 8 + 1)] &= ~(1u << (ofs % 8));
+}
+
+/* Sets the bit with offset 'ofs' in 'dst', which is 'len' bytes long, to 1.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[len - 1], bit 1 is the bit with value 2, bit 2 is the
+ * bit with value 4, ..., bit 8 is the bit with value 1 in dst[len - 2], and so
+ * on.
+ *
+ * Required invariants:
+ *   ofs < len * 8
+ */
+void
+bitwise_put1(void *dst_, unsigned int len, unsigned int ofs)
+{
+    uint8_t *dst = dst_;
+
+    dst[len - (ofs / 8 + 1)] |= 1u << (ofs % 8);
+}
+
+/* Sets the bit with offset 'ofs' in 'dst', which is 'len' bytes long, to 'b'.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[len - 1], bit 1 is the bit with value 2, bit 2 is the
+ * bit with value 4, ..., bit 8 is the bit with value 1 in dst[len - 2], and so
+ * on.
+ *
+ * Required invariants:
+ *   ofs < len * 8
+ */
+void
+bitwise_put_bit(void *dst, unsigned int len, unsigned int ofs, bool b)
+{
+    if (b) {
+        bitwise_put1(dst, len, ofs);
+    } else {
+        bitwise_put0(dst, len, ofs);
+    }
+}
+
+/* Flips the bit with offset 'ofs' in 'dst', which is 'len' bytes long.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[len - 1], bit 1 is the bit with value 2, bit 2 is the
+ * bit with value 4, ..., bit 8 is the bit with value 1 in dst[len - 2], and so
+ * on.
+ *
+ * Required invariants:
+ *   ofs < len * 8
+ */
+void
+bitwise_toggle_bit(void *dst_, unsigned int len, unsigned int ofs)
+{
+    uint8_t *dst = dst_;
+
+    dst[len - (ofs / 8 + 1)] ^= 1u << (ofs % 8);
 }
 
 /* ovs_scan */

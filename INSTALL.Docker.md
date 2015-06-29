@@ -55,9 +55,13 @@ and then attaches it to the Open vSwitch bridge 'br-int'.  This is done by
 creating a veth pair.  One end of the interface becomes 'eth1' inside the
 container and the other end attaches to 'br-int'.
 
-The script also lets one to add an IP address to the interface.  e.g.:
+The script also lets one to add IP address, MAC address, Gateway address and
+MTU for the interface.  e.g.:
 
-`% ovs-docker add-port br-int eth1 $CONTAINER_ID 192.168.1.1/24`
+```
+% ovs-docker add-port br-int eth1 $CONTAINER_ID --ipaddress=192.168.1.2/24 \
+--macaddress=a2:c3:0d:49:7f:f8 --gateway=192.168.1.1 --mtu=1450
+```
 
 * A previously added network interface can be deleted.  e.g.:
 

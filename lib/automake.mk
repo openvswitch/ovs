@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -53,6 +53,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/daemon.c \
 	lib/daemon.h \
 	lib/daemon-private.h \
+	lib/db-ctl-base.c \
+	lib/db-ctl-base.h \
 	lib/dhcp.h \
 	lib/dummy.c \
 	lib/dummy.h \
@@ -197,7 +199,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/random.h \
 	lib/rconn.c \
 	lib/rconn.h \
-	lib/rculist.c \
 	lib/rculist.h \
 	lib/reconnect.c \
 	lib/reconnect.h \
@@ -236,6 +237,11 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/string.c \
 	lib/svec.c \
 	lib/svec.h \
+	lib/syslog-direct.c \
+	lib/syslog-direct.h \
+	lib/syslog-libc.c \
+	lib/syslog-libc.h \
+	lib/syslog-provider.h \
 	lib/table.c \
 	lib/table.h \
 	lib/tag.c \
@@ -249,6 +255,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/tnl-ports.c \
 	lib/tnl-ports.h \
 	lib/token-bucket.c \
+	lib/tun-metadata.c \
+	lib/tun-metadata.h \
 	lib/type-props.h \
 	lib/unaligned.h \
 	lib/unicode.c \
@@ -412,6 +420,7 @@ MAN_FRAGMENTS += \
 	lib/coverage-unixctl.man \
 	lib/daemon.man \
 	lib/daemon-syn.man \
+	lib/db-ctl-base.man \
 	lib/dpctl.man \
 	lib/memory-unixctl.man \
 	lib/ofp-version.man \
@@ -433,18 +442,11 @@ MAN_FRAGMENTS += \
 	lib/vlog.man
 
 # vswitch IDL
-OVSIDL_BUILT += \
-	$(srcdir)/lib/vswitch-idl.c \
-	$(srcdir)/lib/vswitch-idl.h \
-	$(srcdir)/lib/vswitch-idl.ovsidl
+OVSIDL_BUILT += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 
-EXTRA_DIST += $(srcdir)/lib/vswitch-idl.ann
-VSWITCH_IDL_FILES = \
-	$(srcdir)/vswitchd/vswitch.ovsschema \
-	$(srcdir)/lib/vswitch-idl.ann
-$(srcdir)/lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
-	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(VSWITCH_IDL_FILES) > $@.tmp && \
-	mv $@.tmp $@
+EXTRA_DIST += lib/vswitch-idl.ann
+$(srcdir)/lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(srcdir)/vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann > $@.tmp && mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile
 	$(AM_V_GEN)($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \
@@ -475,22 +477,20 @@ lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
 EXTRA_DIST += build-aux/extract-ofp-actions
 
-$(srcdir)/lib/ofp-errors.inc: \
-	lib/ofp-errors.h include/openflow/openflow-common.h \
+lib/ofp-errors.inc: lib/ofp-errors.h include/openflow/openflow-common.h \
 	$(srcdir)/build-aux/extract-ofp-errors
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-errors \
 		$(srcdir)/lib/ofp-errors.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
-$(srcdir)/lib/ofp-errors.c: $(srcdir)/lib/ofp-errors.inc
-EXTRA_DIST += build-aux/extract-ofp-errors lib/ofp-errors.inc
+lib/ofp-errors.c: lib/ofp-errors.inc
+EXTRA_DIST += build-aux/extract-ofp-errors
 
-$(srcdir)/lib/ofp-msgs.inc: \
-	lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
+lib/ofp-msgs.inc: lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
-$(srcdir)/lib/ofp-msgs.c: $(srcdir)/lib/ofp-msgs.inc
-EXTRA_DIST += build-aux/extract-ofp-msgs lib/ofp-msgs.inc
+lib/ofp-msgs.c: lib/ofp-msgs.inc
+EXTRA_DIST += build-aux/extract-ofp-msgs
 
 INSTALL_DATA_LOCAL += lib-install-data-local
 lib-install-data-local:

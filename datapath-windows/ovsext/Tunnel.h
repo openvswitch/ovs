@@ -32,12 +32,6 @@ typedef struct OVS_TUNNEL_PENDED_PACKET_
    FWPS_CLASSIFY_OUT *classifyOut;
 } OVS_TUNNEL_PENDED_PACKET;
 
-/* Shared global data. */
-
-extern UINT16 configNewDestPort;
-
-extern UINT32 gCalloutIdV4;
-
 //
 // Shared function prototypes
 //

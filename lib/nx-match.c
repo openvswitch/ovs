@@ -31,6 +31,7 @@
 #include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "shash.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -97,6 +98,7 @@ static int nxm_class(uint64_t header) { return header >> 48; }
 static int nxm_field(uint64_t header) { return (header >> 41) & 0x7f; }
 static bool nxm_hasmask(uint64_t header) { return (header >> 40) & 1; }
 static int nxm_length(uint64_t header) { return (header >> 32) & 0xff; }
+static uint64_t nxm_no_len(uint64_t header) { return header & 0xffffff80ffffffffULL; }
 
 static bool
 is_experimenter_oxm(uint64_t header)
@@ -193,6 +195,9 @@ static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id,
                                                   enum ofp_version);
 
 static void nx_put_header__(struct ofpbuf *, uint64_t header, bool masked);
+static void nx_put_header_len(struct ofpbuf *, enum mf_field_id field,
+                              enum ofp_version version, bool masked,
+                              size_t n_bytes);
 
 /* Rate limit for nx_match parse errors.  These always indicate a bug in the
  * peer and so there's not much point in showing a lot of them. */
@@ -325,17 +330,36 @@ error:
     return OFPERR_OFPBMC_BAD_LEN;
 }
 
+static void
+copy_entry_value(const struct mf_field *field, union mf_value *value,
+                 const uint8_t *payload, int width)
+{
+    int copy_len;
+    void *copy_dst;
+
+    copy_dst = value;
+    copy_len = MIN(width, field ? field->n_bytes : sizeof *value);
+
+    if (field && field->variable_len) {
+        memset(value, 0, field->n_bytes);
+        copy_dst = &value->u8 + field->n_bytes - copy_len;
+    }
+
+    memcpy(copy_dst, payload, copy_len);
+}
+
 static enum ofperr
 nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
-                const struct mf_field **field,
+                const struct mf_field **field_,
                 union mf_value *value, union mf_value *mask)
 {
+    const struct mf_field *field;
     enum ofperr header_error;
     unsigned int payload_len;
     const uint8_t *payload;
     int width;
 
-    header_error = nx_pull_header__(b, allow_cookie, header, field);
+    header_error = nx_pull_header__(b, allow_cookie, header, &field);
     if (header_error && header_error != OFPERR_OFPBMC_BAD_FIELD) {
         return header_error;
     }
@@ -355,12 +379,13 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
         return OFPERR_OFPBMC_BAD_WILDCARDS;
     }
 
-    memcpy(value, payload, MIN(width, sizeof *value));
+    copy_entry_value(field, value, payload, width);
+
     if (mask) {
         if (nxm_hasmask(*header)) {
-            memcpy(mask, payload + width, MIN(width, sizeof *mask));
+            copy_entry_value(field, mask, payload + width, width);
         } else {
-            memset(mask, 0xff, MIN(width, sizeof *mask));
+            memset(mask, 0xff, sizeof *mask);
         }
     } else if (nxm_hasmask(*header)) {
         VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" includes mask but "
@@ -369,7 +394,12 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
-    return header_error;
+    if (field_) {
+        *field_ = field;
+        return header_error;
+    }
+
+    return 0;
 }
 
 /* Attempts to pull an NXM or OXM header, value, and mask (if present) from the
@@ -649,17 +679,17 @@ static void
 nxm_put_unmasked(struct ofpbuf *b, enum mf_field_id field,
                  enum ofp_version version, const void *value, size_t n_bytes)
 {
-    nx_put_header(b, field, version, false);
+    nx_put_header_len(b, field, version, false, n_bytes);
     ofpbuf_put(b, value, n_bytes);
 }
 
-static void
+void
 nxm_put(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
         const void *value, const void *mask, size_t n_bytes)
 {
     if (!is_all_zeros(mask, n_bytes)) {
         bool masked = !is_all_ones(mask, n_bytes);
-        nx_put_header(b, field, version, masked);
+        nx_put_header_len(b, field, version, masked, n_bytes);
         ofpbuf_put(b, value, n_bytes);
         if (masked) {
             ofpbuf_put(b, mask, n_bytes);
@@ -865,7 +895,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -978,6 +1008,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->tunnel.gbp_id, match->wc.masks.tunnel.gbp_id);
     nxm_put_8m(b, MFF_TUN_GBP_FLAGS, oxm,
                flow->tunnel.gbp_flags, match->wc.masks.tunnel.gbp_flags);
+    tun_metadata_to_nx_match(b, oxm, match);
 
     /* Registers. */
     if (oxm < OFP15_VERSION) {
@@ -1125,7 +1156,7 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
     int i;
 
     /* Field arrays are only used with the group selection method
-     * property and group properties are only available in OpenFlow * 1.5+.
+     * property and group properties are only available in OpenFlow 1.5+.
      * So the following assertion should never fail.
      *
      * If support for older OpenFlow versions is desired then some care
@@ -1139,8 +1170,10 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
 
     for (i = 0; i < MFF_N_IDS; i++) {
         if (bitmap_is_set(fa->used.bm, i)) {
-            nxm_put_unmasked(b, i, version, &fa->value[i],
-                             mf_from_id(i)->n_bytes);
+            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL);
+            nxm_put_unmasked(b, i, version,
+                             &fa->value[i].u8 + mf_from_id(i)->n_bytes - len,
+                             len);
         }
     }
 
@@ -1163,18 +1196,35 @@ nx_put_header(struct ofpbuf *b, enum mf_field_id field,
     nx_put_header__(b, mf_oxm_header(field, version), masked);
 }
 
+static void
+nx_put_header_len(struct ofpbuf *b, enum mf_field_id field,
+                  enum ofp_version version, bool masked, size_t n_bytes)
+{
+    uint64_t header = mf_oxm_header(field, version);
+
+    header = NXM_HEADER(nxm_vendor(header), nxm_class(header),
+                        nxm_field(header), false,
+                        nxm_experimenter_len(header) + n_bytes);
+
+    nx_put_header__(b, header, masked);
+}
+
 void
 nx_put_entry(struct ofpbuf *b,
              enum mf_field_id field, enum ofp_version version,
              const union mf_value *value, const union mf_value *mask)
 {
-    int n_bytes = mf_from_id(field)->n_bytes;
-    bool masked = mask && !is_all_ones(mask, n_bytes);
+    const struct mf_field *mf = mf_from_id(field);
+    bool masked = mask && !is_all_ones(mask, mf->n_bytes);
+    int len, offset;
 
-    nx_put_header(b, field, version, masked);
-    ofpbuf_put(b, value, n_bytes);
+    len = mf_field_len(mf, value, mask);
+    offset = mf->n_bytes - len;
+
+    nx_put_header_len(b, field, version, masked, len);
+    ofpbuf_put(b, &value->u8 + offset, len);
     if (masked) {
-        ofpbuf_put(b, mask, n_bytes);
+        ofpbuf_put(b, &mask->u8 + offset, len);
     }
 }
 
@@ -1367,6 +1417,8 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
     for (s += strspn(s, ", "); *s; s += strspn(s, ", ")) {
         const char *name;
         uint64_t header;
+        ovs_be64 nw_header;
+        ovs_be64 *header_ptr;
         int name_len;
         size_t n;
 
@@ -1383,11 +1435,31 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 
         s += name_len + 1;
 
-        nx_put_header__(b, header, false);
+        header_ptr = ofpbuf_put_uninit(b, nxm_header_len(header));
         s = ofpbuf_put_hex(b, s, &n);
         if (n != nxm_field_bytes(header)) {
-            ovs_fatal(0, "%.2s: hex digits expected", s);
+            const struct mf_field *field = mf_from_oxm_header(header);
+
+            if (field && field->variable_len) {
+                if (n <= field->n_bytes) {
+                    int len = (nxm_hasmask(header) ? n * 2 : n) +
+                              nxm_experimenter_len(header);
+
+                    header = NXM_HEADER(nxm_vendor(header), nxm_class(header),
+                                        nxm_field(header),
+                                        nxm_hasmask(header) ? 1 : 0, len);
+                } else {
+                    ovs_fatal(0, "expected to read at most %d bytes but got "
+                              "%"PRIuSIZE, field->n_bytes, n);
+                }
+            } else {
+                ovs_fatal(0, "expected to read %d bytes but got %"PRIuSIZE,
+                          nxm_field_bytes(header), n);
+            }
         }
+        nw_header = htonll(header);
+        memcpy(header_ptr, &nw_header, nxm_header_len(header));
+
         if (nxm_hasmask(header)) {
             s += strspn(s, " ");
             if (*s != '/') {
@@ -1893,7 +1965,7 @@ nxm_init(void)
         for (struct nxm_field_index *nfi = all_nxm_fields;
              nfi < &all_nxm_fields[ARRAY_SIZE(all_nxm_fields)]; nfi++) {
             hmap_insert(&nxm_header_map, &nfi->header_node,
-                        hash_int(nfi->nf.header, 0));
+                        hash_uint64(nxm_no_len(nfi->nf.header)));
             hmap_insert(&nxm_name_map, &nfi->name_node,
                         hash_string(nfi->nf.name, 0));
             list_push_back(&nxm_mf_map[nfi->nf.id], &nfi->mf_node);
@@ -1906,16 +1978,24 @@ static const struct nxm_field *
 nxm_field_by_header(uint64_t header)
 {
     const struct nxm_field_index *nfi;
+    uint64_t header_no_len;
 
     nxm_init();
     if (nxm_hasmask(header)) {
         header = nxm_make_exact_header(header);
     }
 
-    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_int(header, 0),
+    header_no_len = nxm_no_len(header);
+
+    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header_no_len),
                              &nxm_header_map) {
-        if (header == nfi->nf.header) {
-            return &nfi->nf;
+        if (header_no_len == nxm_no_len(nfi->nf.header)) {
+            if (nxm_length(header) == nxm_length(nfi->nf.header) ||
+                mf_from_id(nfi->nf.id)->variable_len) {
+                return &nfi->nf;
+            } else {
+                return NULL;
+            }
         }
     }
     return NULL;

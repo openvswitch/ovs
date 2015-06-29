@@ -43,7 +43,7 @@ you will need the following software:
     libssl is installed, then Open vSwitch will automatically build
     with support for it.
 
-  - Python 2.x, for x >= 4.
+  - Python 2.7.
 
 On Linux, you may choose to compile the kernel module that comes with
 the Open vSwitch distribution or to use the kernel module built into
@@ -113,8 +113,6 @@ formats other than plain text, only if you have the following:
 
   - Perl.  Version 5.10.1 is known to work.  Earlier versions should
     also work.
-
-  - Python 2.x, for x >= 4.
 
 If you are going to extensively modify Open vSwitch, please consider
 installing the following to obtain better warnings:

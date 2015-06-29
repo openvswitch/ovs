@@ -213,6 +213,7 @@ utilities/ovs-vlan-bugs.man:
 utilities/ovs-vsctl.8: \
 	utilities/ovs-vsctl.8.in \
 	lib/common.man \
+	lib/db-ctl-base.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
@@ -226,6 +227,7 @@ utilities/ovs-vsctl.8: \
 	ovsdb/remote-passive.man
 utilities/ovs-vsctl.8.in:
 lib/common.man:
+lib/db-ctl-base.man:
 lib/ssl-bootstrap.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:
@@ -277,6 +279,7 @@ ovsdb/remote-passive.man:
 vtep/vtep-ctl.8: \
 	vtep/vtep-ctl.8.in \
 	lib/common.man \
+	lib/db-ctl-base.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
@@ -288,6 +291,7 @@ vtep/vtep-ctl.8: \
 	ovsdb/remote-passive.man
 vtep/vtep-ctl.8.in:
 lib/common.man:
+lib/db-ctl-base.man:
 lib/ssl-bootstrap.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:

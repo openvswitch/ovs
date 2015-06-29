@@ -34,11 +34,12 @@ struct flow_wildcards;
 struct minimask;
 struct dp_packet;
 struct pkt_metadata;
+struct match;
 
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 31
+#define FLOW_WC_SEQ 32
 
 /* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 8
@@ -156,7 +157,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % sizeof(uint64_t) == 0);
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
                   == sizeof(struct flow_tnl) + 192
-                  && FLOW_WC_SEQ == 31);
+                  && FLOW_WC_SEQ == 32);
 
 /* Incremental points at which flow classification may be performed in
  * segments.
@@ -179,26 +180,11 @@ BUILD_ASSERT_DECL(FLOW_SEGMENT_3_ENDS_AT < sizeof(struct flow));
 
 extern const uint8_t flow_segment_u64s[];
 
-/* Represents the metadata fields of struct flow. */
-struct flow_metadata {
-    uint32_t dp_hash;                /* Datapath computed hash field. */
-    uint32_t recirc_id;              /* Recirculation ID. */
-    ovs_be64 tun_id;                 /* Encapsulating tunnel ID. */
-    ovs_be32 tun_src;                /* Tunnel outer IPv4 src addr */
-    ovs_be32 tun_dst;                /* Tunnel outer IPv4 dst addr */
-    ovs_be16 gbp_id;                 /* Group policy ID */
-    uint8_t  gbp_flags;              /* Group policy flags */
-    ovs_be64 metadata;               /* OpenFlow 1.1+ metadata field. */
-    uint32_t regs[FLOW_N_REGS];      /* Registers. */
-    uint32_t pkt_mark;               /* Packet mark. */
-    ofp_port_t in_port;              /* OpenFlow port or zero. */
-};
-
 void flow_extract(struct dp_packet *, struct flow *);
 
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_unwildcard_tp_ports(const struct flow *, struct flow_wildcards *);
-void flow_get_metadata(const struct flow *, struct flow_metadata *);
+void flow_get_metadata(const struct flow *, struct match *flow_metadata);
 
 char *flow_to_string(const struct flow *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),

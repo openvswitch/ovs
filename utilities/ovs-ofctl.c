@@ -67,6 +67,12 @@
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
+/* --bundle: Use OpenFlow 1.4 bundle for making the flow table change atomic.
+ * NOTE: Also the flow mod will use OpenFlow 1.4, so the semantics may be
+ * different (see the comment in parse_options() for details).
+ */
+static bool bundle = false;
+
 /* --strict: Use strict matching for flow mod commands?  Additionally governs
  * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
  */
@@ -159,6 +165,7 @@ parse_options(int argc, char *argv[])
         OPT_SORT,
         OPT_RSORT,
         OPT_UNIXCTL,
+        OPT_BUNDLE,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -176,6 +183,7 @@ parse_options(int argc, char *argv[])
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
+        {"bundle", no_argument, NULL, OPT_BUNDLE},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -249,6 +257,10 @@ parse_options(int argc, char *argv[])
             ovs_cmdl_print_options(long_options);
             exit(EXIT_SUCCESS);
 
+        case OPT_BUNDLE:
+            bundle = true;
+            break;
+
         case OPT_STRICT:
             strict = true;
             break;
@@ -293,6 +305,12 @@ parse_options(int argc, char *argv[])
 
     free(short_options);
 
+    /* Implicit OpenFlow 1.4 with the '--bundle' option. */
+    if (bundle) {
+        /* Add implicit allowance for OpenFlow 1.4. */
+        add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF14_OXM));
+    }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
     if (!(allowed_protocols & version_protocols)) {
@@ -360,6 +378,9 @@ usage(void)
            "  dump-meters SWITCH          print all meter configuration\n"
            "  meter-stats SWITCH [METER]  print meter statistics\n"
            "  meter-features SWITCH       print meter features\n"
+           "  add-geneve-map SWITCH MAP   add Geneve option MAPpings\n"
+           "  del-geneve-map SWITCH [MAP] delete Geneve option MAPpings\n"
+           "  dump-geneve-map SWITCH      print Geneve option mappings\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -496,7 +517,6 @@ open_vconn(const char *name, struct vconn **vconnp)
 static void
 send_openflow_buffer(struct vconn *vconn, struct ofpbuf *buffer)
 {
-    ofpmsg_update_length(buffer);
     run(vconn_send_block(vconn, buffer), "failed to send packet to switch");
 }
 
@@ -505,7 +525,6 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
 {
     struct ofpbuf *reply;
 
-    ofpmsg_update_length(request);
     run(vconn_transact(vconn, request, &reply), "talking to %s",
         vconn_get_name(vconn));
     ofp_print(stdout, reply->data, reply->size, verbosity + 1);
@@ -587,11 +606,7 @@ dump_trivial_stats_transaction(const char *vconn_name, enum ofpraw raw)
 static void
 transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
 {
-    struct ofpbuf *request, *reply;
-
-    LIST_FOR_EACH (request, list_node, requests) {
-        ofpmsg_update_length(request);
-    }
+    struct ofpbuf *reply;
 
     run(vconn_transact_multiple_noreply(vconn, requests, &reply),
         "talking to %s", vconn_get_name(vconn));
@@ -600,6 +615,20 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
         exit(1);
     }
     ofpbuf_delete(reply);
+}
+
+static void
+bundle_error_reporter(const struct ofp_header *oh)
+{
+    ofp_print(stderr, oh, ntohs(oh->length), verbosity + 1);
+    fflush(stderr);
+}
+
+static void
+bundle_transact(struct vconn *vconn, struct ovs_list *requests, uint16_t flags)
+{
+    run(vconn_bundle_transact(vconn, requests, flags, bundle_error_reporter),
+        "talking to %s", vconn_get_name(vconn));
 }
 
 /* Sends 'request', which should be a request that only has a reply if an error
@@ -1175,12 +1204,44 @@ open_vconn_for_flow_mod(const char *remote, struct vconn **vconnp,
 }
 
 static void
+bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
+                  size_t n_fms, enum ofputil_protocol usable_protocols)
+{
+    enum ofputil_protocol protocol;
+    struct vconn *vconn;
+    struct ovs_list requests;
+    size_t i;
+
+    list_init(&requests);
+
+    /* Bundles need OpenFlow 1.4+. */
+    usable_protocols &= OFPUTIL_P_OF14_UP;
+    protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
+
+    for (i = 0; i < n_fms; i++) {
+        struct ofputil_flow_mod *fm = &fms[i];
+        struct ofpbuf *request = ofputil_encode_flow_mod(fm, protocol);
+
+        list_push_back(&requests, &request->list_node);
+        free(CONST_CAST(struct ofpact *, fm->ofpacts));
+    }
+
+    bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    vconn_close(vconn);
+}
+
+static void
 ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
                  size_t n_fms, enum ofputil_protocol usable_protocols)
 {
     enum ofputil_protocol protocol;
     struct vconn *vconn;
     size_t i;
+
+    if (bundle) {
+        bundle_flow_mod__(remote, fms, n_fms, usable_protocols);
+        return;
+    }
 
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
 
@@ -1194,13 +1255,19 @@ ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 }
 
 static void
-ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
+ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], int command)
 {
     enum ofputil_protocol usable_protocols;
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
     char *error;
 
+    if (command == OFPFC_ADD) {
+        /* Allow the file to specify a mix of commands.  If none specified at
+         * the beginning of any given line, then the default is OFPFC_ADD, so
+         * this is backwards compatible. */
+        command = -2;
+    }
     error = parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms,
                                     &usable_protocols);
     if (error) {
@@ -2262,6 +2329,54 @@ ofctl_dump_group_features(struct ovs_cmdl_context *ctx)
 }
 
 static void
+ofctl_geneve_mod(struct ovs_cmdl_context *ctx, uint16_t command)
+{
+    enum ofputil_protocol usable_protocols;
+    enum ofputil_protocol protocol;
+    struct ofputil_geneve_table_mod gtm;
+    char *error;
+    enum ofp_version version;
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    error = parse_ofp_geneve_table_mod_str(&gtm, command, ctx->argc > 2 ?
+                                           ctx->argv[2] : "",
+                                           &usable_protocols);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn, usable_protocols);
+    version = ofputil_protocol_to_ofp_version(protocol);
+
+    request = ofputil_encode_geneve_table_mod(version, &gtm);
+    if (request) {
+        transact_noreply(vconn, request);
+    }
+
+    vconn_close(vconn);
+    ofputil_uninit_geneve_table(&gtm.mappings);
+}
+
+static void
+ofctl_add_geneve_map(struct ovs_cmdl_context *ctx)
+{
+    ofctl_geneve_mod(ctx, NXGTMC_ADD);
+}
+
+static void
+ofctl_del_geneve_map(struct ovs_cmdl_context *ctx)
+{
+    ofctl_geneve_mod(ctx, ctx->argc > 2 ? NXGTMC_DELETE : NXGTMC_CLEAR);
+}
+
+static void
+ofctl_dump_geneve_map(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXT_GENEVE_TABLE_REQUEST);
+}
+
+static void
 ofctl_help(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     usage();
@@ -2393,7 +2508,7 @@ fte_insert(struct classifier *cls, const struct match *match,
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
-    cls_rule_init(&fte->rule, match, priority);
+    cls_rule_init(&fte->rule, match, priority, CLS_MIN_VERSION);
     fte->versions[index] = version;
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule, NULL, 0));
@@ -2635,7 +2750,11 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
             fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, protocol, &requests);
         }
     }
-    transact_multiple_noreply(vconn, &requests);
+    if (bundle) {
+        bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    } else {
+        transact_multiple_noreply(vconn, &requests);
+    }
     vconn_close(vconn);
 
     fte_free_all(&cls);
@@ -3577,6 +3696,12 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_dump_group_stats },
     { "dump-group-features", "switch",
       1, 1, ofctl_dump_group_features },
+    { "add-geneve-map", "switch map",
+      2, 2, ofctl_add_geneve_map },
+    { "del-geneve-map", "switch [map]",
+      1, 2, ofctl_del_geneve_map },
+    { "dump-geneve-map", "switch",
+      1, 1, ofctl_dump_geneve_map },
     { "help", NULL, 0, INT_MAX, ofctl_help },
     { "list-commands", NULL, 0, INT_MAX, ofctl_list_commands },
 

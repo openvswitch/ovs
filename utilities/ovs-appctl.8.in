@@ -112,6 +112,9 @@ and adjusting log levels.
 .IP "\fBvlog/list\fR"
 Lists the known logging modules and their current levels.
 .
+.IP "\fBvlog/list-pattern\fR"
+Lists logging pattern used for each destination.
+.
 .IP "\fBvlog/set\fR [\fIspec\fR]"
 Sets logging levels.  Without any \fIspec\fR, sets the log level for
 every module and destination to \fBdbg\fR.  Otherwise, \fIspec\fR is a

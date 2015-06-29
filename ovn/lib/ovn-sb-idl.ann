@@ -1,0 +1,9 @@
+# -*- python -*-
+
+# This code, when invoked by "ovsdb-idlc annotate" (by the build
+# process), annotates vswitch.ovsschema with additional data that give
+# the ovsdb-idl engine information about the types involved, so that
+# it can generate more programmer-friendly data structures.
+
+s["idlPrefix"] = "sbrec_"
+s["idlHeader"] = "\"ovn/lib/ovn-sb-idl.h\""

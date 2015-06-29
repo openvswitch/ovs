@@ -126,9 +126,12 @@
  * cls_subtable", with the other almost-identical rules chained off a linked
  * list inside that highest-priority rule.
  *
+ * The following sub-sections describe various optimizations over this simple
+ * approach.
+ *
  *
  * Staged Lookup (Wildcard Optimization)
- * =====================================
+ * -------------------------------------
  *
  * Subtable lookup is performed in ranges defined for struct flow, starting
  * from metadata (registers, in_port, etc.), then L2 header, L3, and finally
@@ -141,7 +144,7 @@
  *
  *
  * Prefix Tracking (Wildcard Optimization)
- * =======================================
+ * ---------------------------------------
  *
  * Classifier uses prefix trees ("tries") for tracking the used
  * address space, enabling skipping classifier tables containing
@@ -171,7 +174,7 @@
  *
  *
  * Partitioning (Lookup Time and Wildcard Optimization)
- * ====================================================
+ * ----------------------------------------------------
  *
  * Suppose that a given classifier is being used to handle multiple stages in a
  * pipeline using "resubmit", with metadata (that is, the OpenFlow 1.1+ field
@@ -207,17 +210,100 @@
  * Each eliminated subtable lookup also reduces the amount of un-wildcarding.
  *
  *
+ * Classifier Versioning
+ * =====================
+ *
+ * Classifier lookups are always done in a specific classifier version, where
+ * a version is defined to be a natural number.
+ *
+ * When a new rule is added to a classifier, it is set to become visible in a
+ * specific version.  If the version number used at insert time is larger than
+ * any version number currently used in lookups, the new rule is said to be
+ * invisible to lookups.  This means that lookups won't find the rule, but the
+ * rule is immediately available to classifier iterations.
+ *
+ * Similarly, a rule can be marked as to be deleted in a future version.  To
+ * delete a rule in a way to not remove the rule before all ongoing lookups are
+ * finished, the rule should be made invisible in a specific version number.
+ * Then, when all the lookups use a later version number, the rule can be
+ * actually removed from the classifier.
+ *
+ * Classifiers can hold duplicate rules (rules with the same match criteria and
+ * priority) when at most one of these duplicates is visible in any given
+ * lookup version.  The caller responsible for classifier modifications must
+ * maintain this invariant.
+ *
+ * The classifier supports versioning for two reasons:
+ *
+ *     1. Support for versioned modifications makes it possible to perform an
+ *        arbitraty series of classifier changes as one atomic transaction,
+ *        where intermediate versions of the classifier are not visible to any
+ *        lookups.  Also, when a rule is added for a future version, or marked
+ *        for removal after the current version, such modifications can be
+ *        reverted without any visible effects to any of the current lookups.
+ *
+ *     2. Performance: Adding (or deleting) a large set of rules can, in
+ *        pathological cases, have a cost proportional to the number of rules
+ *        already in the classifier.  When multiple rules are being added (or
+ *        deleted) in one go, though, this pathological case cost can be
+ *        typically avoided, as long as it is OK for any new rules to be
+ *        invisible until the batch change is complete.
+ *
+ * Note that the classifier_replace() function replaces a rule immediately, and
+ * is therefore not safe to use with versioning.  It is still available for the
+ * users that do not use versioning.
+ *
+ *
+ * Deferred Publication
+ * ====================
+ *
+ * Removing large number of rules from classifier can be costly, as the
+ * supporting data structures are teared down, in many cases just to be
+ * re-instantiated right after.  In the worst case, as when each rule has a
+ * different match pattern (mask), the maintenance of the match patterns can
+ * have cost O(N^2), where N is the number of different match patterns.  To
+ * alleviate this, the classifier supports a "deferred mode", in which changes
+ * in internal data structures needed for future version lookups may not be
+ * fully computed yet.  The computation is finalized when the deferred mode is
+ * turned off.
+ *
+ * This feature can be used with versioning such that all changes to future
+ * versions are made in the deferred mode.  Then, right before making the new
+ * version visible to lookups, the deferred mode is turned off so that all the
+ * data structures are ready for lookups with the new version number.
+ *
+ * To use deferred publication, first call classifier_defer().  Then, modify
+ * the classifier via additions (classifier_insert() with a specific, future
+ * version number) and deletions (use cls_rule_make_removable_after_version()).
+ * Then call classifier_publish(), and after that, announce the new version
+ * number to be used in lookups.
+ *
+ *
  * Thread-safety
  * =============
  *
- * The classifier may safely be accessed by many reader threads concurrently or
- * by a single writer. */
+ * The classifier may safely be accessed by many reader threads concurrently
+ * and by a single writer, or by multiple writers when they guarantee mutually
+ * exlucive access to classifier modifications.
+ *
+ * Since the classifier rules are RCU protected, the rule destruction after
+ * removal from the classifier must be RCU postponed.  Also, when versioning is
+ * used, the rule removal itself needs to be typically RCU postponed.  In this
+ * case the rule destruction is doubly RCU postponed, i.e., the second
+ * ovsrcu_postpone() call to destruct the rule is called from the first RCU
+ * callback that removes the rule.
+ *
+ * Rules that have never been visible to lookups are an exeption to the above
+ * rule.  Such rules can be removed immediately, but their destruction must
+ * still be RCU postponed, as the rule's visibility attribute may be examined
+ * parallel to the rule's removal. */
 
 #include "cmap.h"
 #include "match.h"
 #include "meta-flow.h"
 #include "pvector.h"
 #include "rculist.h"
+#include "type-props.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -235,6 +321,12 @@ struct cls_trie {
     const struct mf_field *field; /* Trie field, or NULL. */
     rcu_trie_ptr root;            /* NULL if none. */
 };
+
+typedef uint64_t cls_version_t;
+
+#define CLS_MIN_VERSION 0                  /* Default version number to use. */
+#define CLS_MAX_VERSION (TYPE_MAXIMUM(cls_version_t) - 1)
+#define CLS_NOT_REMOVED_VERSION TYPE_MAXIMUM(cls_version_t)
 
 enum {
     CLS_MAX_INDICES = 3,   /* Maximum number of lookup indices per subtable. */
@@ -263,16 +355,20 @@ struct cls_conjunction {
 
 /* A rule to be inserted to the classifier. */
 struct cls_rule {
-    struct rculist node;         /* In struct cls_subtable 'rules_list'. */
-    int priority;                /* Larger numbers are higher priorities. */
-    struct cls_match *cls_match; /* NULL if not in a classifier. */
-    struct minimatch match;      /* Matching rule. */
+    struct rculist node;          /* In struct cls_subtable 'rules_list'. */
+    const int priority;           /* Larger numbers are higher priorities. */
+    const cls_version_t version;  /* Version in which the rule was added. */
+    struct cls_match *cls_match;  /* NULL if not in a classifier. */
+    const struct minimatch match; /* Matching rule. */
 };
 
-void cls_rule_init(struct cls_rule *, const struct match *, int priority);
+void cls_rule_init(struct cls_rule *, const struct match *, int priority,
+                   cls_version_t);
 void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
-                                  int priority);
+                                  int priority, cls_version_t);
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
+void cls_rule_clone_in_version(struct cls_rule *, const struct cls_rule *,
+        cls_version_t);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
 
@@ -285,6 +381,10 @@ void cls_rule_format(const struct cls_rule *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
+bool cls_rule_visible_in_version(const struct cls_rule *, cls_version_t);
+void cls_rule_make_invisible_in_version(const struct cls_rule *,
+                                        cls_version_t);
+void cls_rule_restore_visibility(const struct cls_rule *);
 
 /* Constructor/destructor.  Must run single-threaded. */
 void classifier_init(struct classifier *, const uint8_t *flow_segments);
@@ -308,7 +408,7 @@ static inline void classifier_publish(struct classifier *);
 /* Lookups.  These are RCU protected and may run concurrently with modifiers
  * and each other. */
 const struct cls_rule *classifier_lookup(const struct classifier *,
-                                         struct flow *,
+                                         cls_version_t, struct flow *,
                                          struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
@@ -316,7 +416,8 @@ const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                                     const struct cls_rule *);
 const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      const struct match *,
-                                                     int priority);
+                                                     int priority,
+                                                     cls_version_t);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 
@@ -358,7 +459,6 @@ void cls_cursor_advance(struct cls_cursor *);
 #ifdef __cplusplus
 }
 #endif
-
 
 static inline void
 classifier_defer(struct classifier *cls)

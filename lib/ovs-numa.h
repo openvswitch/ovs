@@ -35,25 +35,25 @@ struct ovs_numa_dump {
 struct ovs_numa_info {
     struct ovs_list list_node;
     int numa_id;
-    int core_id;
+    unsigned core_id;
 };
 
 #ifdef __linux__
 
 void ovs_numa_init(void);
 bool ovs_numa_numa_id_is_valid(int numa_id);
-bool ovs_numa_core_id_is_valid(int core_id);
-bool ovs_numa_core_is_pinned(int core_id);
+bool ovs_numa_core_id_is_valid(unsigned core_id);
+bool ovs_numa_core_is_pinned(unsigned core_id);
 int ovs_numa_get_n_numas(void);
 void ovs_numa_set_cpu_mask(const char *cmask);
 int ovs_numa_get_n_cores(void);
-int ovs_numa_get_numa_id(int core_id);
+int ovs_numa_get_numa_id(unsigned core_id);
 int ovs_numa_get_n_cores_on_numa(int numa_id);
 int ovs_numa_get_n_unpinned_cores_on_numa(int numa_id);
-bool ovs_numa_try_pin_core_specific(int core_id);
-int ovs_numa_get_unpinned_core_any(void);
-int ovs_numa_get_unpinned_core_on_numa(int numa_id);
-void ovs_numa_unpin_core(int core_id);
+bool ovs_numa_try_pin_core_specific(unsigned core_id);
+unsigned ovs_numa_get_unpinned_core_any(void);
+unsigned ovs_numa_get_unpinned_core_on_numa(int numa_id);
+void ovs_numa_unpin_core(unsigned core_id);
 struct ovs_numa_dump *ovs_numa_dump_cores_on_numa(int numa_id);
 void ovs_numa_dump_destroy(struct ovs_numa_dump *);
 
@@ -75,13 +75,13 @@ ovs_numa_numa_id_is_valid(int numa_id OVS_UNUSED)
 }
 
 static inline bool
-ovs_numa_core_id_is_valid(int core_id OVS_UNUSED)
+ovs_numa_core_id_is_valid(unsigned core_id OVS_UNUSED)
 {
     return false;
 }
 
 static inline bool
-ovs_numa_core_is_pinned(int core_id OVS_UNUSED)
+ovs_numa_core_is_pinned(unsigned core_id OVS_UNUSED)
 {
     return false;
 }
@@ -105,7 +105,7 @@ ovs_numa_get_n_cores(void)
 }
 
 static inline int
-ovs_numa_get_numa_id(int core_id OVS_UNUSED)
+ovs_numa_get_numa_id(unsigned core_id OVS_UNUSED)
 {
     return OVS_NUMA_UNSPEC;
 }
@@ -123,25 +123,25 @@ ovs_numa_get_n_unpinned_cores_on_numa(int numa_id OVS_UNUSED)
 }
 
 static inline bool
-ovs_numa_try_pin_core_specific(int core_id OVS_UNUSED)
+ovs_numa_try_pin_core_specific(unsigned core_id OVS_UNUSED)
 {
     return false;
 }
 
-static inline int
+static inline unsigned
 ovs_numa_get_unpinned_core_any(void)
 {
     return OVS_CORE_UNSPEC;
 }
 
-static inline int
+static inline unsigned
 ovs_numa_get_unpinned_core_on_numa(int numa_id OVS_UNUSED)
 {
     return OVS_CORE_UNSPEC;
 }
 
 static inline void
-ovs_numa_unpin_core(int core_id OVS_UNUSED)
+ovs_numa_unpin_core(unsigned core_id OVS_UNUSED)
 {
     /* Nothing */
 }

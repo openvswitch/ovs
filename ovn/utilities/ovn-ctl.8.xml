@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manpage program="ovn-ctl" section="8" title="ovn-ctl">
+    <h1>Name</h1>
+    <p>ovn-ctl -- Open Virtual Network northbound daemon lifecycle utility</p>
+
+    <h1>Synopsys</h1>
+    <p><code>ovn-ctl</code> [<var>options</var>] <var>command</var></p>
+
+    <h1>Description</h1>
+    <p>This program is intended to be invoked internally by Open Virtual Network
+    startup scripts.  System administrators should not normally invoke it directly.</p>
+
+    <h1>Commands</h1>
+
+    <dl>
+      <dt><code>start_northd</code></dt>
+      <dt><code>start_controller</code></dt>
+      <dt><code>stop_northd</code></dt>
+      <dt><code>stop_controller</code></dt>
+      <dt><code>restart_northd</code></dt>
+      <dt><code>restart_controller</code></dt>
+    </dl>
+
+    <h1>Options</h1>
+    <p><code>--ovn-northd-priority=<var>NICE</var></code></p>
+    <p><code>--ovn-northd-wrapper=<var>WRAPPER</var></code></p>
+    <p><code>--ovn-controller-priority=<var>NICE</var></code></p>
+    <p><code>--ovn-controller-wrapper=<var>WRAPPER</var></code></p>
+    <p><code>-h</code> | <code>--help</code></p>
+
+    <h1>File location options</h1>
+    <p><code>--db-sock==<var>SOCKET</var></code></p>
+    <p><code>--db-nb-file==<var>FILE</var></code></p>
+    <p><code>--db-sb-file==<var>FILE</var></code></p>
+    <p><code>--db-nb-schema==<var>FILE</var></code></p>
+    <p><code>--db-sb-schema==<var>FILE</var></code></p>
+
+    <h1>Example Usage</h1>
+    <h2>Run ovn-controller on a host already running OVS</h2>
+    <p><code># ovn-ctl start_controller</code></p>
+
+    <h2>Run ovn-northd on a host already running OVS</h2>
+    <p><code># ovn-ctl start_northd</code></p>
+
+    <h2>All-in-one OVS+OVN for testing</h2>
+    <p><code># ovs-ctl start --system-id="random"</code></p>
+    <p><code># ovn-ctl start_northd</code></p>
+    <p><code># ovn-ctl start_controller</code></p>
+
+</manpage>

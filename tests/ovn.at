@@ -1,0 +1,423 @@
+AT_BANNER([OVN])
+
+AT_SETUP([ovn -- lexer])
+dnl For lines without =>, input and expected output are identical.
+dnl For lines with =>, input precedes => and expected output follows =>.
+AT_DATA([test-cases.txt], [dnl
+foo bar baz quuxquuxquux _abcd_ a.b.c.d a123_.456
+"abc\u0020def" => "abc def"
+" => error("Input ends inside quoted string.")dnl "
+
+a/*b*/c => a c
+a//b c => a
+a/**/b => a b
+a/*/b => a error("`/*' without matching `*/'.")
+a/*/**/b => a b
+a/b => a error("`/' is only valid as part of `//' or `/*'.") b
+
+0 1 12345 18446744073709551615
+18446744073709551616 => error("Decimal constants must be less than 2**64.")
+9999999999999999999999 => error("Decimal constants must be less than 2**64.")
+01 => error("Decimal constants must not have leading zeros.")
+
+0/0
+0/1
+1/0 => error("Value contains unmasked 1-bits.")
+1/1
+128/384
+1/3
+1/ => error("Integer constant expected.")
+
+1/0x123 => error("Value and mask have incompatible formats.")
+
+0x1234
+0x01234 => 0x1234
+0x0 => 0
+0x000 => 0
+0xfedcba9876543210
+0XFEDCBA9876543210 => 0xfedcba9876543210
+0xfedcba9876543210fedcba9876543210
+0x0000fedcba9876543210fedcba9876543210 => 0xfedcba9876543210fedcba9876543210
+0x => error("Hex digits expected following 0x.")
+0X => error("Hex digits expected following 0X.")
+0x0/0x0 => 0/0
+0x0/0x1 => 0/0x1
+0x1/0x0 => error("Value contains unmasked 1-bits.")
+0xffff/0x1ffff
+0x. => error("Invalid syntax in hexadecimal constant.")
+
+192.168.128.1 1.2.3.4 255.255.255.255 0.0.0.0
+256.1.2.3 => error("Invalid numeric constant.")
+192.168.0.0/16
+192.168.0.0/255.255.0.0 => 192.168.0.0/16
+192.168.0.0/255.255.255.0 => 192.168.0.0/24
+192.168.0.0/255.255.0.255
+192.168.0.0/255.0.0.0 => error("Value contains unmasked 1-bits.")
+192.168.0.0/32
+192.168.0.0/255.255.255.255 => 192.168.0.0/32
+
+::
+::1
+ff00::1234 => ff00::1234
+2001:db8:85a3::8a2e:370:7334
+2001:db8:85a3:0:0:8a2e:370:7334 => 2001:db8:85a3::8a2e:370:7334
+2001:0db8:85a3:0000:0000:8a2e:0370:7334 => 2001:db8:85a3::8a2e:370:7334
+::ffff:192.0.2.128
+::ffff:c000:0280 => ::ffff:192.0.2.128
+::1/::1
+::1/ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff => ::1/128
+::1/128
+ff00::/8
+ff00::/ff00:: => ff00::/8
+
+01:23:45:67:ab:cd
+01:23:45:67:AB:CD => 01:23:45:67:ab:cd
+fe:dc:ba:98:76:54
+FE:DC:ba:98:76:54 => fe:dc:ba:98:76:54
+01:00:00:00:00:00/01:00:00:00:00:00
+ff:ff:ff:ff:ff:ff/ff:ff:ff:ff:ff:ff
+fe:ff:ff:ff:ff:ff/ff:ff:ff:ff:ff:ff
+ff:ff:ff:ff:ff:ff/fe:ff:ff:ff:ff:ff => error("Value contains unmasked 1-bits.")
+fe:x => error("Invalid numeric constant.")
+00:01:02:03:04:x => error("Invalid numeric constant.")
+
+(){}[[]]==!=<<=>>=!&&||..,;= => ( ) { } [[ ]] == != < <= > >= ! && || .. , ; =
+& => error("`&' is only valid as part of `&&'.")
+| => error("`|' is only valid as part of `||'.")
+
+^ => error("Invalid character `^' in input.")
+])
+AT_CAPTURE_FILE([input.txt])
+sed 's/ =>.*//' test-cases.txt > input.txt
+sed 's/.* => //' test-cases.txt > expout
+AT_CHECK([ovstest test-ovn lex < input.txt], [0], [expout])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression parser])
+dnl For lines without =>, input and expected output are identical.
+dnl For lines with =>, input precedes => and expected output follows =>.
+AT_DATA([test-cases.txt], [[
+eth.type == 0x800
+eth.type==0x800 => eth.type == 0x800
+eth.type[0..15] == 0x800 => eth.type == 0x800
+
+vlan.present
+vlan.present == 1 => vlan.present
+!(vlan.present == 0) => vlan.present
+!(vlan.present != 1) => vlan.present
+!vlan.present
+vlan.present == 0 => !vlan.present
+vlan.present != 1 => !vlan.present
+!(vlan.present == 1) => !vlan.present
+!(vlan.present != 0) => !vlan.present
+
+eth.dst[0]
+eth.dst[0] == 1 => eth.dst[0]
+eth.dst[0] != 0 => eth.dst[0]
+!(eth.dst[0] == 0) => eth.dst[0]
+!(eth.dst[0] != 1) => eth.dst[0]
+
+!eth.dst[0]
+eth.dst[0] == 0 => !eth.dst[0]
+eth.dst[0] != 1 => !eth.dst[0]
+!(eth.dst[0] == 1) => !eth.dst[0]
+!(eth.dst[0] != 0) => !eth.dst[0]
+
+vlan.tci[12..15] == 0x3
+vlan.tci == 0x3000/0xf000 => vlan.tci[12..15] == 0x3
+vlan.tci[12..15] != 0x3
+vlan.tci != 0x3000/0xf000 => vlan.tci[12..15] != 0x3
+
+!vlan.pcp => vlan.pcp == 0
+!(vlan.pcp) => vlan.pcp == 0
+vlan.pcp == 0x4
+vlan.pcp != 0x4
+vlan.pcp > 0x4
+vlan.pcp >= 0x4
+vlan.pcp < 0x4
+vlan.pcp <= 0x4
+!(vlan.pcp != 0x4) => vlan.pcp == 0x4
+!(vlan.pcp == 0x4) => vlan.pcp != 0x4
+!(vlan.pcp <= 0x4) => vlan.pcp > 0x4
+!(vlan.pcp < 0x4) => vlan.pcp >= 0x4
+!(vlan.pcp >= 0x4) => vlan.pcp < 0x4
+!(vlan.pcp > 0x4) => vlan.pcp <= 0x4
+0x4 == vlan.pcp => vlan.pcp == 0x4
+0x4 != vlan.pcp => vlan.pcp != 0x4
+0x4 < vlan.pcp => vlan.pcp > 0x4
+0x4 <= vlan.pcp => vlan.pcp >= 0x4
+0x4 > vlan.pcp => vlan.pcp < 0x4
+0x4 >= vlan.pcp => vlan.pcp <= 0x4
+!(0x4 != vlan.pcp) => vlan.pcp == 0x4
+!(0x4 == vlan.pcp) => vlan.pcp != 0x4
+!(0x4 >= vlan.pcp) => vlan.pcp > 0x4
+!(0x4 > vlan.pcp) => vlan.pcp >= 0x4
+!(0x4 <= vlan.pcp) => vlan.pcp < 0x4
+!(0x4 < vlan.pcp) => vlan.pcp <= 0x4
+
+1 < vlan.pcp < 4 => vlan.pcp > 0x1 && vlan.pcp < 0x4
+1 <= vlan.pcp <= 4 => vlan.pcp >= 0x1 && vlan.pcp <= 0x4
+1 < vlan.pcp <= 4 => vlan.pcp > 0x1 && vlan.pcp <= 0x4
+1 <= vlan.pcp < 4 => vlan.pcp >= 0x1 && vlan.pcp < 0x4
+1 <= vlan.pcp <= 4 => vlan.pcp >= 0x1 && vlan.pcp <= 0x4
+4 > vlan.pcp > 1 => vlan.pcp < 0x4 && vlan.pcp > 0x1
+4 >= vlan.pcp > 1 => vlan.pcp <= 0x4 && vlan.pcp > 0x1
+4 > vlan.pcp >= 1 => vlan.pcp < 0x4 && vlan.pcp >= 0x1
+4 >= vlan.pcp >= 1 => vlan.pcp <= 0x4 && vlan.pcp >= 0x1
+!(1 < vlan.pcp < 4) => vlan.pcp <= 0x1 || vlan.pcp >= 0x4
+!(1 <= vlan.pcp <= 4) => vlan.pcp < 0x1 || vlan.pcp > 0x4
+!(1 < vlan.pcp <= 4) => vlan.pcp <= 0x1 || vlan.pcp > 0x4
+!(1 <= vlan.pcp < 4) => vlan.pcp < 0x1 || vlan.pcp >= 0x4
+!(1 <= vlan.pcp <= 4) => vlan.pcp < 0x1 || vlan.pcp > 0x4
+!(4 > vlan.pcp > 1) => vlan.pcp >= 0x4 || vlan.pcp <= 0x1
+!(4 >= vlan.pcp > 1) => vlan.pcp > 0x4 || vlan.pcp <= 0x1
+!(4 > vlan.pcp >= 1) => vlan.pcp >= 0x4 || vlan.pcp < 0x1
+!(4 >= vlan.pcp >= 1) => vlan.pcp > 0x4 || vlan.pcp < 0x1
+
+vlan.pcp == {1, 2, 3, 4} => vlan.pcp == 0x1 || vlan.pcp == 0x2 || vlan.pcp == 0x3 || vlan.pcp == 0x4
+vlan.pcp == 1 || ((vlan.pcp == 2 || vlan.pcp == 3) || vlan.pcp == 4) => vlan.pcp == 0x1 || vlan.pcp == 0x2 || vlan.pcp == 0x3 || vlan.pcp == 0x4
+
+vlan.pcp != {1, 2, 3, 4} => vlan.pcp != 0x1 && vlan.pcp != 0x2 && vlan.pcp != 0x3 && vlan.pcp != 0x4
+vlan.pcp == 1 && ((vlan.pcp == 2 && vlan.pcp == 3) && vlan.pcp == 4) => vlan.pcp == 0x1 && vlan.pcp == 0x2 && vlan.pcp == 0x3 && vlan.pcp == 0x4
+
+vlan.pcp == 1 && !((vlan.pcp == 2 && vlan.pcp == 3) && vlan.pcp == 4) => vlan.pcp == 0x1 && (vlan.pcp != 0x2 || vlan.pcp != 0x3 || vlan.pcp != 0x4)
+vlan.pcp == 1 && (!(vlan.pcp == 2 && vlan.pcp == 3) && vlan.pcp == 4) => vlan.pcp == 0x1 && (vlan.pcp != 0x2 || vlan.pcp != 0x3) && vlan.pcp == 0x4
+vlan.pcp == 1 && !(!(vlan.pcp == 2 && vlan.pcp == 3) && vlan.pcp == 4) => vlan.pcp == 0x1 && ((vlan.pcp == 0x2 && vlan.pcp == 0x3) || vlan.pcp != 0x4)
+
+ip4.src == {10.0.0.0/8, 192.168.0.0/16, 172.16.20.0/24, 8.8.8.8} => ip4.src[24..31] == 0xa || ip4.src[16..31] == 0xc0a8 || ip4.src[8..31] == 0xac1014 || ip4.src == 0x8080808
+ip6.src == ::1 => ip6.src == 0x1
+
+ip4.src == 1.2.3.4 => ip4.src == 0x1020304
+ip4.src == ::1.2.3.4/::ffff:ffff => ip4.src == 0x1020304
+ip6.src == ::1 => ip6.src == 0x1
+
+1
+0
+!1 => 0
+!0 => 1
+
+inport == "eth0"
+!(inport != "eth0") => inport == "eth0"
+
+ip4.src == "eth0" => Integer field ip4.src is not compatible with string constant.
+inport == 1 => String field inport is not compatible with integer constant.
+
+ip4.src > {1, 2, 3} => Only == and != operators may be used with value sets.
+eth.type > 0x800 => Only == and != operators may be used with nominal field eth.type.
+vlan.present > 0 => Only == and != operators may be used with Boolean field vlan.present.
+
+inport != "eth0" => Nominal field inport may only be tested for equality (taking enclosing `!' operators into account).
+!(inport == "eth0") => Nominal field inport may only be tested for equality (taking enclosing `!' operators into account).
+eth.type != 0x800 => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
+!(eth.type == 0x800) => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
+
+123 == 123 => Syntax error at `123' expecting field name.
+
+123 == xyzzy => Syntax error at `xyzzy' expecting field name.
+xyzzy == 1 => Syntax error at `xyzzy' expecting field name.
+
+inport[1] == 1 => Cannot select subfield of string field inport.
+
+eth.type[] == 1 => Syntax error at `@:>@' expecting small integer.
+eth.type[::1] == 1 => Syntax error at `::1' expecting small integer.
+eth.type[18446744073709551615] == 1 => Syntax error at `18446744073709551615' expecting small integer.
+
+eth.type[5!] => Syntax error at `!' expecting `@:>@'.
+
+eth.type[5..1] => Invalid bit range 5 to 1.
+
+eth.type[12..16] => Cannot select bits 12 to 16 of 16-bit field eth.type.
+
+eth.type[10] == 1 => Cannot select subfield of nominal field eth.type.
+
+eth.type => Explicit `!= 0' is required for inequality test of multibit field against 0.
+
+!(!(vlan.pcp)) => Explicit `!= 0' is required for inequality test of multibit field against 0.
+
+123 => Syntax error at end of input expecting relational operator.
+
+123 x => Syntax error at `x' expecting relational operator.
+
+{1, "eth0"} => Syntax error at `"eth0"' expecting integer.
+
+eth.type == xyzzy => Syntax error at `xyzzy' expecting constant.
+
+(1 x) => Syntax error at `x' expecting `)'.
+
+!0x800 != eth.type => Missing parentheses around operand of !.
+
+eth.type == 0x800 || eth.type == 0x86dd && ip.proto == 17 => && and || must be parenthesized when used together.
+
+eth.dst == {} => Syntax error at `}' expecting constant.
+
+eth.src > 00:00:00:00:11:11/00:00:00:00:ff:ff => Only == and != operators may be used with masked constants.  Consider using subfields instead (e.g. eth.src[0..15] > 0x1111 in place of eth.src > 00:00:00:00:11:11/00:00:00:00:ff:ff).
+
+ip4.src == ::1 => 128-bit constant is not compatible with 32-bit field ip4.src.
+
+1 == eth.type == 2 => Range expressions must have the form `x < field < y' or `x > field > y', with each `<' optionally replaced by `<=' or `>' by `>=').
+]])
+sed 's/ =>.*//' test-cases.txt > input.txt
+sed 's/.* => //' test-cases.txt > expout
+AT_CHECK([ovstest test-ovn parse-expr < input.txt], [0], [expout])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression annotation])
+dnl Input precedes =>, expected output follows =>.
+AT_DATA([test-cases.txt], [[
+ip4.src == 1.2.3.4 => ip4.src == 0x1020304 && eth.type == 0x800
+ip4.src != 1.2.3.4 => ip4.src != 0x1020304 && eth.type == 0x800
+ip.proto == 123 => ip.proto == 0x7b && (eth.type == 0x800 || eth.type == 0x86dd)
+ip.proto == {123, 234} => (ip.proto == 0x7b && (eth.type == 0x800 || eth.type == 0x86dd)) || (ip.proto == 0xea && (eth.type == 0x800 || eth.type == 0x86dd))
+ip4.src == 1.2.3.4 && ip4.dst == 5.6.7.8 => ip4.src == 0x1020304 && eth.type == 0x800 && ip4.dst == 0x5060708 && eth.type == 0x800
+
+ip => eth.type == 0x800 || eth.type == 0x86dd
+ip == 1 => eth.type == 0x800 || eth.type == 0x86dd
+ip[0] == 1 => eth.type == 0x800 || eth.type == 0x86dd
+ip > 0 => Only == and != operators may be used with nominal field ip.
+!ip => Nominal predicate ip may only be tested positively, e.g. `ip' or `ip == 1' but not `!ip' or `ip == 0'.
+ip == 0 => Nominal predicate ip may only be tested positively, e.g. `ip' or `ip == 1' but not `!ip' or `ip == 0'.
+
+vlan.present => vlan.tci[12]
+!vlan.present => !vlan.tci[12]
+
+!vlan.pcp => vlan.tci[13..15] == 0 && vlan.tci[12]
+vlan.pcp == 1 && vlan.vid == 2 => vlan.tci[13..15] == 0x1 && vlan.tci[12] && vlan.tci[0..11] == 0x2 && vlan.tci[12]
+!reg0 && !reg1 && !reg2 && !reg3 => xreg0[32..63] == 0 && xreg0[0..31] == 0 && xreg1[32..63] == 0 && xreg1[0..31] == 0
+
+ip.first_frag => ip.frag[0] && (eth.type == 0x800 || eth.type == 0x86dd) && (!ip.frag[1] || (eth.type != 0x800 && eth.type != 0x86dd))
+!ip.first_frag => !ip.frag[0] || (eth.type != 0x800 && eth.type != 0x86dd) || (ip.frag[1] && (eth.type == 0x800 || eth.type == 0x86dd))
+ip.later_frag => ip.frag[1] && (eth.type == 0x800 || eth.type == 0x86dd)
+
+bad_prereq != 0 => Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
+self_recurse != 0 => Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
+mutual_recurse_1 != 0 => Error parsing expression `mutual_recurse_2 != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `mutual_recurse_1 != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `mutual_recurse_1'.
+mutual_recurse_2 != 0 => Error parsing expression `mutual_recurse_1 != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `mutual_recurse_2 != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `mutual_recurse_2'.
+]])
+sed 's/ =>.*//' test-cases.txt > input.txt
+sed 's/.* => //' test-cases.txt > expout
+AT_CHECK([ovstest test-ovn annotate-expr < input.txt], [0], [expout])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression conversion (1)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=convert 1], [0],
+  [Tested converting all 1-terminal expressions with 2 vars each of 3 bits in terms of operators == != < <= > >=.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression conversion (2)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=convert 2], [0],
+  [Tested converting 562 expressions of 2 terminals with 2 vars each of 3 bits in terms of operators == != < <= > >=.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression conversion (3)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=convert --bits=2 3], [0],
+  [Tested converting 57618 expressions of 3 terminals with 2 vars each of 2 bits in terms of operators == != < <= > >=.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression simplification])
+AT_CHECK([ovstest test-ovn exhaustive --operation=simplify --vars=2 3], [0],
+  [Tested simplifying 477138 expressions of 3 terminals with 2 vars each of 3 bits in terms of operators == != < <= > >=.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression normalization (1)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --vars=3 --bits=1 4], [0],
+  [Tested normalizing 1207162 expressions of 4 terminals with 3 vars each of 1 bits in terms of operators == != < <= > >=.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- expression normalization (1)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --vars=3 --bits=1 --relops='==' 5], [0],
+  [Tested normalizing 368550 expressions of 5 terminals with 3 vars each of 1 bits in terms of operators ==.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- converting expressions to flows (1)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=flow --vars=2 --bits=2 --relops='==' 4], [0],
+  [Tested converting to flows 128282 expressions of 4 terminals with 2 vars each of 2 bits in terms of operators ==.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- converting expressions to flows (2)])
+AT_CHECK([ovstest test-ovn exhaustive --operation=flow --vars=3 --bits=3 --relops='==' 3], [0],
+  [Tested converting to flows 38394 expressions of 3 terminals with 3 vars each of 3 bits in terms of operators ==.
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- converting expressions to flows -- string fields])
+expr_to_flow () {
+    echo "$1" | ovstest test-ovn expr-to-flows | sort
+}
+AT_CHECK([expr_to_flow 'inport == "eth0"'], [0], [reg6=0x5
+])
+AT_CHECK([expr_to_flow 'inport == "eth1"'], [0], [reg6=0x6
+])
+AT_CHECK([expr_to_flow 'inport == "eth2"'], [0], [(no flows)
+])
+AT_CHECK([expr_to_flow 'inport == "eth0" && ip'], [0], [dnl
+ip,reg6=0x5
+ipv6,reg6=0x5
+])
+AT_CHECK([expr_to_flow 'inport == "eth1" && ip'], [0], [dnl
+ip,reg6=0x6
+ipv6,reg6=0x6
+])
+AT_CHECK([expr_to_flow 'inport == "eth2" && ip'], [0], [(no flows)
+])
+AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2", "LOCAL"}'], [0],
+[reg6=0x5
+reg6=0x6
+reg6=0xfffe
+])
+AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2"} && ip'], [0], [dnl
+ip,reg6=0x5
+ip,reg6=0x6
+ipv6,reg6=0x5
+ipv6,reg6=0x6
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- action parsing])
+dnl Text before => is input, text after => is expected output.
+AT_DATA([test-cases.txt], [[
+# Positive tests.
+drop; => actions=drop, prereqs=1
+next; => actions=resubmit(,11), prereqs=1
+output; => actions=resubmit(,64), prereqs=1
+outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,11),set_field:0xfffe->reg7,resubmit(,11), prereqs=1
+tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
+vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
+vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
+
+## Negative tests.
+
+; => Syntax error at `;'.
+xyzzy; => Syntax error at `xyzzy' expecting action.
+next; 123; => Syntax error at `123'.
+next; xyzzy; => Syntax error at `xyzzy' expecting action.
+
+# "drop;" must be on its own:
+drop; next; => Syntax error at `next' expecting end of input.
+next; drop; => Syntax error at `drop' expecting action.
+
+# Missing ";":
+next => Syntax error at end of input expecting ';'.
+
+inport[1] = 1; => Cannot select subfield of string field inport.
+ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
+eth.dst[40] == 1; => Syntax error at `==' expecting `='.
+ip = 1; => Can't assign to predicate symbol ip.
+ip.proto = 6; => Field ip.proto is not modifiable.
+inport = {"a", "b"}; => Assignments require a single value.
+inport = {}; => Syntax error at `}' expecting constant.
+bad_prereq = 123; => Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
+self_recurse = 123; => Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
+vlan.present = 0; => Can't assign to predicate symbol vlan.present.
+]])
+sed 's/ =>.*//' test-cases.txt > input.txt
+sed 's/.* => //' test-cases.txt > expout
+AT_CHECK([ovstest test-ovn parse-actions < input.txt], [0], [expout])
+AT_CLEANUP

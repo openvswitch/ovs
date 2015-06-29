@@ -267,3 +267,16 @@ int rpl_pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 EXPORT_SYMBOL(rpl_pskb_expand_head);
 
 #endif
+
+#ifndef HAVE_KFREE_SKB_LIST
+void rpl_kfree_skb_list(struct sk_buff *segs)
+{
+	while (segs) {
+		struct sk_buff *next = segs->next;
+
+		kfree_skb(segs);
+		segs = next;
+	}
+}
+EXPORT_SYMBOL(rpl_kfree_skb_list);
+#endif

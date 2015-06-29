@@ -148,6 +148,12 @@ parallel in OVS.
     Transactional modification.  OpenFlow 1.4 requires to support
     flow_mods and port_mods in a bundle if bundle is supported.
     (Not related to OVS's 'ofbundle' stuff.)
+    Implemented as an OpenFlow 1.4 feature.  Only flow_mods and
+    port_mods are supported in a bundle.  If the bundle includes port
+    mods, it may not specify the OFPBF_ATOMIC flag.  Nevertheless,
+    port mods and flow mods in a bundle are always applied in order
+    and consecutive flow mods between port mods are made available to
+    lookups atomically.
     [EXT-230]
     [optional for OF1.4+]
 

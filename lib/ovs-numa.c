@@ -70,7 +70,7 @@ struct cpu_core {
     struct hmap_node hmap_node;/* In the 'all_cpu_cores'. */
     struct ovs_list list_node; /* In 'numa_node->cores' list. */
     struct numa_node *numa;    /* numa node containing the core. */
-    int core_id;               /* Core id. */
+    unsigned core_id;          /* Core id. */
     bool available;            /* If the core can be pinned. */
     bool pinned;               /* If a thread has been pinned to the core. */
 };
@@ -118,7 +118,7 @@ discover_numa_and_core(void)
                 if (!strncmp(subdir->d_name, "cpu", 3)
                     && contain_all_digits(subdir->d_name + 3)){
                     struct cpu_core *c = xzalloc(sizeof *c);
-                    uint32_t core_id;
+                    unsigned core_id;
 
                     core_id = strtoul(subdir->d_name + 3, NULL, 10);
                     hmap_insert(&all_cpu_cores, &c->hmap_node,
@@ -153,7 +153,7 @@ discover_numa_and_core(void)
 
 /* Gets 'struct cpu_core' by 'core_id'. */
 static struct cpu_core*
-get_core_by_core_id(int core_id)
+get_core_by_core_id(unsigned core_id)
 {
     struct cpu_core *core = NULL;
 
@@ -201,13 +201,13 @@ ovs_numa_numa_id_is_valid(int numa_id)
 }
 
 bool
-ovs_numa_core_id_is_valid(int core_id)
+ovs_numa_core_id_is_valid(unsigned core_id)
 {
     return found_numa_and_core && core_id < ovs_numa_get_n_cores();
 }
 
 bool
-ovs_numa_core_is_pinned(int core_id)
+ovs_numa_core_is_pinned(unsigned core_id)
 {
     struct cpu_core *core = get_core_by_core_id(core_id);
 
@@ -237,7 +237,7 @@ ovs_numa_get_n_cores(void)
 /* Given 'core_id', returns the corresponding numa node id.  Returns
  * OVS_NUMA_UNSPEC if 'core_id' is invalid. */
 int
-ovs_numa_get_numa_id(int core_id)
+ovs_numa_get_numa_id(unsigned core_id)
 {
     struct cpu_core *core = get_core_by_core_id(core_id);
 
@@ -288,7 +288,7 @@ ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
  * False, if the core has already been pinned, or if it is invalid or
  * not available. */
 bool
-ovs_numa_try_pin_core_specific(int core_id)
+ovs_numa_try_pin_core_specific(unsigned core_id)
 {
     struct cpu_core *core = get_core_by_core_id(core_id);
 
@@ -305,7 +305,7 @@ ovs_numa_try_pin_core_specific(int core_id)
 /* Searches through all cores for an unpinned and available core.  Returns
  * the 'core_id' if found and sets the 'core->pinned' to true.  Otherwise,
  * returns OVS_CORE_UNSPEC. */
-int
+unsigned
 ovs_numa_get_unpinned_core_any(void)
 {
     struct cpu_core *core;
@@ -323,7 +323,7 @@ ovs_numa_get_unpinned_core_any(void)
 /* Searches through all cores on numa node with 'numa_id' for an
  * unpinned and available core.  Returns the core_id if found and
  * sets the 'core->pinned' to true.  Otherwise, returns OVS_CORE_UNSPEC. */
-int
+unsigned
 ovs_numa_get_unpinned_core_on_numa(int numa_id)
 {
     struct numa_node *numa = get_numa_by_numa_id(numa_id);
@@ -344,7 +344,7 @@ ovs_numa_get_unpinned_core_on_numa(int numa_id)
 
 /* Unpins the core with 'core_id'. */
 void
-ovs_numa_unpin_core(int core_id)
+ovs_numa_unpin_core(unsigned core_id)
 {
     struct cpu_core *core = get_core_by_core_id(core_id);
 

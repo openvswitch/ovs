@@ -33,6 +33,7 @@
 #define OVS_SWITCH_POOL_TAG             'SSVO'
 #define OVS_USER_POOL_TAG               'USVO'
 #define OVS_VPORT_POOL_TAG              'PSVO'
+#define OVS_STT_POOL_TAG                'TSVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);

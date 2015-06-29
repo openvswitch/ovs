@@ -2702,7 +2702,7 @@ ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
 00 55 00 56 00 00 00 00 00 00 00 00 50 02 00 00 \
 31 6d 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,metadata=0x5a5a5a5a5a5a5a5a,in_port=1 (via action) data_len=64 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86,tcp_flags=syn tcp_csum:316d
 ])
 AT_CLEANUP
@@ -2723,7 +2723,7 @@ ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
 00 55 00 56 00 00 00 00 00 00 00 00 50 01 00 00 \
 31 6d 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,metadata=0x5a5a5a5a5a5a5a5a,in_port=1 (via action) data_len=64 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86,tcp_flags=fin tcp_csum:316d
 00000000  82 82 82 82 82 82 80 81-81 81 81 81 81 00 00 50
 00000010  08 00 45 00 00 28 00 00-00 00 00 06 32 05 53 53

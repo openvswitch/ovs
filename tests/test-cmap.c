@@ -127,7 +127,7 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
         }
         map = cmap_find_batch(cmap, map, hashes, nodes);
 
-        ULONG_FOR_EACH_1(k, map) {
+        ULLONG_FOR_EACH_1(k, map) {
             struct element *e;
 
             CMAP_NODE_FOR_EACH (e, node, nodes[k]) {
@@ -435,7 +435,7 @@ find_batch(const struct cmap *cmap, const int value)
     map >>= BITMAP_ULONG_BITS - i; /* Clear excess bits. */
     map = cmap_find_batch(cmap, map, hashes, nodes);
 
-    ULONG_FOR_EACH_1(i, map) {
+    ULLONG_FOR_EACH_1(i, map) {
         struct element *e;
 
         CMAP_NODE_FOR_EACH (e, node, nodes[i]) {

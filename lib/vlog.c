@@ -37,6 +37,9 @@
 #include "sat-math.h"
 #include "socket-util.h"
 #include "svec.h"
+#include "syslog-direct.h"
+#include "syslog-libc.h"
+#include "syslog-provider.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -106,6 +109,7 @@ static char *log_file_name OVS_GUARDED_BY(log_file_mutex);
 static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 static bool log_async OVS_GUARDED_BY(log_file_mutex);
+static struct syslogger *syslogger = NULL;
 
 /* Syslog export configuration. */
 static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
@@ -534,6 +538,24 @@ vlog_set_verbosity(const char *arg)
     }
 }
 
+void
+vlog_set_syslog_method(const char *method)
+{
+    if (syslogger) {
+        /* Set syslogger only, if one is not already set.  This effectively
+         * means that only the first --syslog-method argument is honored. */
+        return;
+    }
+
+    if (!strcmp(method, "libc")) {
+        syslogger = syslog_libc_create();
+    } else if (!strncmp(method, "udp:", 4) || !strncmp(method, "unix:", 5)) {
+        syslogger = syslog_direct_create(method);
+    } else {
+        ovs_fatal(0, "unsupported syslog method '%s'", method);
+    }
+}
+
 /* Set the vlog udp syslog target. */
 void
 vlog_set_syslog_target(const char *target)
@@ -588,6 +610,17 @@ vlog_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
                   const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     char *msg = vlog_get_levels();
+    unixctl_command_reply(conn, msg);
+    free(msg);
+}
+
+static void
+vlog_unixctl_list_pattern(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    char *msg;
+
+    msg = vlog_get_patterns();
     unixctl_command_reply(conn, msg);
     free(msg);
 }
@@ -671,23 +704,17 @@ vlog_init(void)
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
     if (ovsthread_once_start(&once)) {
-        static char *program_name_copy;
         long long int now;
         int facility;
 
         /* Do initialization work that needs to be done before any logging
          * occurs.  We want to keep this really minimal because any attempt to
          * log anything before calling ovsthread_once_done() will deadlock. */
-
-        /* openlog() is allowed to keep the pointer passed in, without making a
-         * copy.  The daemonize code sometimes frees and replaces
-         * 'program_name', so make a private copy just for openlog().  (We keep
-         * a pointer to the private copy to suppress memory leak warnings in
-         * case openlog() does make its own copy.) */
-        program_name_copy = program_name ? xstrdup(program_name) : NULL;
         atomic_read_explicit(&log_facility, &facility, memory_order_relaxed);
-        openlog(program_name_copy, LOG_NDELAY,
-                facility ? facility : LOG_DAEMON);
+        if (!syslogger) {
+            syslogger = syslog_libc_create();
+        }
+        syslogger->class->openlog(syslogger, facility ? facility : LOG_DAEMON);
         ovsthread_once_done(&once);
 
         /* Now do anything that we want to happen only once but doesn't have to
@@ -705,6 +732,8 @@ vlog_init(void)
             1, INT_MAX, vlog_unixctl_set, NULL);
         unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list,
                                  NULL);
+        unixctl_command_register("vlog/list-pattern", "", 0, 0,
+                                 vlog_unixctl_list_pattern, NULL);
         unixctl_command_register("vlog/enable-rate-limit", "[module]...",
                                  0, INT_MAX, vlog_enable_rate_limit, NULL);
         unixctl_command_register("vlog/disable-rate-limit", "[module]...",
@@ -767,6 +796,32 @@ vlog_get_levels(void)
     svec_destroy(&lines);
 
     return ds_cstr(&s);
+}
+
+/* Returns as a string current logging patterns for each destination.
+ * This string must be released by caller. */
+char *
+vlog_get_patterns(void)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    enum vlog_destination destination;
+
+    ovs_rwlock_rdlock(&pattern_rwlock);
+    ds_put_format(&ds, "         prefix                            format\n");
+    ds_put_format(&ds, "         ------                            ------\n");
+
+    for (destination = 0; destination < VLF_N_DESTINATIONS; destination++) {
+        struct destination *f = &destinations[destination];;
+        const char *prefix = "none";
+
+        if (destination == VLF_SYSLOG && syslogger) {
+            prefix = syslog_get_prefix(syslogger);
+        }
+        ds_put_format(&ds, "%-7s  %-32s  %s\n", f->name, prefix, f->pattern);
+    }
+    ovs_rwlock_unlock(&pattern_rwlock);
+
+    return ds_cstr(&ds);
 }
 
 /* Returns true if a log message emitted for the given 'module' and 'level'
@@ -971,7 +1026,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
                  line = strtok_r(NULL, "\n", &save_ptr)) {
                 atomic_read_explicit(&log_facility, &facility,
                                      memory_order_relaxed);
-                syslog(syslog_level|facility, "%s", line);
+                syslogger->class->syslog(syslogger, syslog_level|facility, line);
             }
 
             if (syslog_fd >= 0) {
@@ -1154,6 +1209,8 @@ Logging options:\n\
   -v, --verbose            set maximum verbosity level\n\
   --log-file[=FILE]        enable logging to specified FILE\n\
                            (default: %s/%s.log)\n\
+  --syslog-method=(libc|unix:file|udp:ip:port)\n\
+                           specify how to send messages to syslog daemon\n\
   --syslog-target=HOST:PORT  also send syslog msgs to HOST:PORT via UDP\n",
            ovs_logdir(), program_name);
 }

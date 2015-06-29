@@ -160,7 +160,7 @@ struct upcall {
      * may be used with other datapaths. */
     const struct flow *flow;       /* Parsed representation of the packet. */
     const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
-    int pmd_id;                    /* Datapath poll mode driver id. */
+    unsigned pmd_id;               /* Datapath poll mode driver id. */
     const struct dp_packet *packet;   /* Packet associated with this upcall. */
     ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
 
@@ -214,7 +214,7 @@ struct udpif_key {
     ovs_u128 ufid;                 /* Unique flow identifier. */
     bool ufid_present;             /* True if 'ufid' is in datapath. */
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
-    int pmd_id;                    /* Datapath poll mode driver id. */
+    unsigned pmd_id;               /* Datapath poll mode driver id. */
 
     struct ovs_mutex mutex;                   /* Guards the following. */
     struct dpif_flow_stats stats OVS_GUARDED; /* Last known stats.*/
@@ -296,7 +296,7 @@ static enum upcall_type classify_upcall(enum dpif_upcall_type type,
 static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const struct dp_packet *packet, enum dpif_upcall_type,
                           const struct nlattr *userdata, const struct flow *,
-                          const ovs_u128 *ufid, const int pmd_id);
+                          const ovs_u128 *ufid, const unsigned pmd_id);
 static void upcall_uninit(struct upcall *);
 
 static upcall_callback upcall_cb;
@@ -901,7 +901,7 @@ static int
 upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
                const struct dp_packet *packet, enum dpif_upcall_type type,
                const struct nlattr *userdata, const struct flow *flow,
-               const ovs_u128 *ufid, const int pmd_id)
+               const ovs_u128 *ufid, const unsigned pmd_id)
 {
     int error;
 
@@ -994,7 +994,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         pin->up.reason = OFPR_NO_MATCH;
         pin->up.table_id = 0;
         pin->up.cookie = OVS_BE64_MAX;
-        flow_get_metadata(upcall->flow, &pin->up.fmd);
+        flow_get_metadata(upcall->flow, &pin->up.flow_metadata);
         pin->send_len = 0; /* Not used for flow table misses. */
         pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
         ofproto_dpif_send_packet_in(upcall->ofproto, pin);
@@ -1040,7 +1040,7 @@ upcall_uninit(struct upcall *upcall)
 
 static int
 upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufid,
-          int pmd_id, enum dpif_upcall_type type,
+          unsigned pmd_id, enum dpif_upcall_type type,
           const struct nlattr *userdata, struct ofpbuf *actions,
           struct flow_wildcards *wc, struct ofpbuf *put_actions, void *aux)
 {
@@ -1302,7 +1302,7 @@ ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid)
     struct cmap *cmap = &udpif->ukeys[idx].cmap;
 
     CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node, get_ufid_hash(ufid), cmap) {
-        if (ovs_u128_equal(&ukey->ufid, ufid)) {
+        if (ovs_u128_equals(&ukey->ufid, ufid)) {
             return ukey;
         }
     }
@@ -1313,7 +1313,7 @@ static struct udpif_key *
 ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
               bool ufid_present, const ovs_u128 *ufid,
-              const int pmd_id, const struct ofpbuf *actions,
+              const unsigned pmd_id, const struct ofpbuf *actions,
               uint64_t dump_seq, uint64_t reval_seq, long long int used,
               const struct recirc_id_node *key_recirc, struct xlate_out *xout)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -1363,6 +1363,10 @@ ukey_create_from_upcall(struct upcall *upcall)
     struct odputil_keybuf keystub, maskstub;
     struct ofpbuf keybuf, maskbuf;
     bool recirc, megaflow;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = upcall->flow,
+        .mask = &upcall->xout.wc.masks,
+    };
 
     if (upcall->key_len) {
         ofpbuf_use_const(&keybuf, upcall->key, upcall->key_len);
@@ -1370,19 +1374,21 @@ ukey_create_from_upcall(struct upcall *upcall)
         /* dpif-netdev doesn't provide a netlink-formatted flow key in the
          * upcall, so convert the upcall's flow here. */
         ofpbuf_use_stack(&keybuf, &keystub, sizeof keystub);
-        odp_flow_key_from_flow(&keybuf, upcall->flow, &upcall->xout.wc.masks,
-                               upcall->flow->in_port.odp_port, true);
+        odp_parms.odp_in_port = upcall->flow->in_port.odp_port;
+        odp_parms.recirc = true;
+        odp_flow_key_from_flow(&odp_parms, &keybuf);
     }
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
     recirc = ofproto_dpif_get_enable_recirc(upcall->ofproto);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
     if (megaflow) {
-        size_t max_mpls;
+        odp_parms.odp_in_port = ODPP_NONE;
+        odp_parms.max_mpls_depth = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
+        odp_parms.recirc = recirc;
+        odp_parms.key_buf = &keybuf;
 
-        max_mpls = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
-        odp_flow_key_from_mask(&maskbuf, &upcall->xout.wc.masks, upcall->flow,
-                               UINT32_MAX, max_mpls, recirc);
+        odp_flow_key_from_mask(&odp_parms, &maskbuf);
     }
 
     return ukey_create__(keybuf.data, keybuf.size, maskbuf.data, maskbuf.size,
@@ -1731,8 +1737,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &flow)
-        == ODP_FIT_ERROR) {
+    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, ukey->key,
+                             ukey->key_len, &dp_mask, &flow) == ODP_FIT_ERROR) {
         goto exit;
     }
 

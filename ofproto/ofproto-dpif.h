@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,12 +73,39 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
  *   Ofproto-dpif-xlate is responsible for translating OpenFlow actions into
  *   datapath actions. */
 
+/* Stores the various features which the corresponding backer supports. */
+struct dpif_backer_support {
+    /* True if the datapath supports variable-length
+     * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.
+     * False if the datapath supports only 8-byte (or shorter) userdata. */
+    bool variable_length_userdata;
+
+    /* Maximum number of MPLS label stack entries that the datapath supports
+     * in a match */
+    size_t max_mpls_depth;
+
+    /* True if the datapath supports masked data in OVS_ACTION_ATTR_SET
+     * actions. */
+    bool masked_set_action;
+
+    /* True if the datapath supports recirculation. */
+    bool recirc;
+
+    /* True if the datapath supports tnl_push and pop actions. */
+    bool tnl_push_pop;
+
+    /* True if the datapath supports OVS_FLOW_ATTR_UFID. */
+    bool ufid;
+};
+
 size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
 bool ofproto_dpif_get_enable_ufid(struct dpif_backer *backer);
 
+cls_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
+
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
-                                              struct flow *,
+                                              cls_version_t, struct flow *,
                                               struct flow_wildcards *,
                                               bool take_ref,
                                               const struct dpif_flow_stats *,

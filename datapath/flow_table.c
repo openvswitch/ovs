@@ -533,8 +533,8 @@ static bool flow_cmp_masked_key(const struct sw_flow *flow,
 	return cmp_key(&flow->key, key, range->start, range->end);
 }
 
-bool ovs_flow_cmp_unmasked_key(const struct sw_flow *flow,
-			       const struct sw_flow_match *match)
+static bool ovs_flow_cmp_unmasked_key(const struct sw_flow *flow,
+				      const struct sw_flow_match *match)
 {
 	struct sw_flow_key *key = match->key;
 	int key_start = flow_key_start(key);

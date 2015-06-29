@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,6 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
     struct ofputil_packet_in pin;
     int error;
-    int i;
 
     error = ofputil_decode_packet_in(&pin, oh);
     if (error) {
@@ -120,43 +119,9 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
     }
 
-    ds_put_format(string, " total_len=%"PRIuSIZE" in_port=", pin.total_len);
-    ofputil_format_port(pin.fmd.in_port, string);
+    ds_put_format(string, " total_len=%"PRIuSIZE" ", pin.total_len);
 
-    if (pin.fmd.tun_id != htonll(0)) {
-        ds_put_format(string, " tun_id=0x%"PRIx64, ntohll(pin.fmd.tun_id));
-    }
-
-    if (pin.fmd.tun_src != htonl(0)) {
-        ds_put_format(string, " tun_src="IP_FMT, IP_ARGS(pin.fmd.tun_src));
-    }
-
-    if (pin.fmd.tun_dst != htonl(0)) {
-        ds_put_format(string, " tun_dst="IP_FMT, IP_ARGS(pin.fmd.tun_dst));
-    }
-
-    if (pin.fmd.gbp_id != htons(0)) {
-        ds_put_format(string, " gbp_id=%"PRIu16,
-                      ntohs(pin.fmd.gbp_id));
-    }
-
-    if (pin.fmd.gbp_flags) {
-        ds_put_format(string, " gbp_flags=0x%02"PRIx8, pin.fmd.gbp_flags);
-    }
-
-    if (pin.fmd.metadata != htonll(0)) {
-        ds_put_format(string, " metadata=0x%"PRIx64, ntohll(pin.fmd.metadata));
-    }
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if (pin.fmd.regs[i]) {
-            ds_put_format(string, " reg%d=0x%"PRIx32, i, pin.fmd.regs[i]);
-        }
-    }
-
-    if (pin.fmd.pkt_mark != 0) {
-        ds_put_format(string, " pkt_mark=0x%"PRIx32, pin.fmd.pkt_mark);
-    }
+    match_format(&pin.flow_metadata, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_format(string, " (via %s)",
                   ofputil_packet_in_reason_to_string(pin.reason, reasonbuf,
@@ -900,6 +865,7 @@ ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason,
         return "eviction";
     case OFPRR_METER_DELETE:
         return "meter_delete";
+    case OVS_OFPRR_NONE:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
@@ -2657,7 +2623,7 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
     struct ofputil_bundle_add_msg badd;
     char *msg;
 
-    error = ofputil_decode_bundle_add(oh, &badd);
+    error = ofputil_decode_bundle_add(oh, &badd, NULL);
     if (error) {
         ofp_print_error(s, error);
         return;
@@ -2673,6 +2639,85 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
     if (msg) {
         ds_put_cstr(s, msg);
     }
+}
+
+static void
+print_geneve_table(struct ds *s, struct ovs_list *mappings)
+{
+    struct ofputil_geneve_map *map;
+
+    ds_put_cstr(s, " mapping table:\n");
+    ds_put_cstr(s, " class\ttype\tlength\tmatch field\n");
+    ds_put_cstr(s, " -----\t----\t------\t-----------");
+
+    LIST_FOR_EACH (map, list_node, mappings) {
+        ds_put_char(s, '\n');
+        ds_put_format(s, " 0x%"PRIx16"\t0x%"PRIx8"\t%"PRIu8"\ttun_metadata%"PRIu16,
+                      map->option_class, map->option_type, map->option_len,
+                      map->index);
+    }
+}
+
+static void
+ofp_print_geneve_table_mod(struct ds *s, const struct ofp_header *oh)
+{
+    int error;
+    struct ofputil_geneve_table_mod gtm;
+
+    error = ofputil_decode_geneve_table_mod(oh, &gtm);
+    if (error) {
+        ofp_print_error(s, error);
+        return;
+    }
+
+    ds_put_cstr(s, "\n ");
+
+    switch (gtm.command) {
+    case NXGTMC_ADD:
+        ds_put_cstr(s, "ADD");
+        break;
+    case NXGTMC_DELETE:
+        ds_put_cstr(s, "DEL");
+        break;
+    case NXGTMC_CLEAR:
+        ds_put_cstr(s, "CLEAR");
+        break;
+    }
+
+    if (gtm.command != NXGTMC_CLEAR) {
+        print_geneve_table(s, &gtm.mappings);
+    }
+
+    ofputil_uninit_geneve_table(&gtm.mappings);
+}
+
+static void
+ofp_print_geneve_table_reply(struct ds *s, const struct ofp_header *oh)
+{
+    int error;
+    struct ofputil_geneve_table_reply gtr;
+    struct ofputil_geneve_map *map;
+    int allocated_space = 0;
+
+    error = ofputil_decode_geneve_table_reply(oh, &gtr);
+    if (error) {
+        ofp_print_error(s, error);
+        return;
+    }
+
+    ds_put_char(s, '\n');
+
+    LIST_FOR_EACH (map, list_node, &gtr.mappings) {
+        allocated_space += map->option_len;
+    }
+
+    ds_put_format(s, " max option space=%"PRIu32" max fields=%"PRIu16"\n",
+                  gtr.max_option_space, gtr.max_fields);
+    ds_put_format(s, " allocated option space=%d\n", allocated_space);
+    ds_put_char(s, '\n');
+    print_geneve_table(s, &gtr.mappings);
+
+    ofputil_uninit_geneve_table(&gtr.mappings);
 }
 
 static void
@@ -2933,6 +2978,18 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_BUNDLE_ADD_MESSAGE:
         ofp_print_bundle_add(string, msg, verbosity);
         break;
+
+    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
+        ofp_print_geneve_table_mod(string, msg);
+        break;
+
+    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
+        break;
+
+    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
+        ofp_print_geneve_table_reply(string, msg);
+        break;
+
     }
 }
 

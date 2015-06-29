@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include "openvswitch/types.h"
 #include "random.h"
 #include "hash.h"
+#include "tun-metadata.h"
 #include "util.h"
 
 struct dp_packet;
@@ -44,6 +45,7 @@ struct flow_tnl {
     ovs_be16 gbp_id;
     uint8_t  gbp_flags;
     uint8_t  pad1[5];        /* Pad to 64 bits. */
+    struct tun_metadata metadata;
 };
 
 /* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
@@ -61,10 +63,10 @@ struct pkt_metadata {
                                    received from the wire. */
     uint32_t dp_hash;           /* hash value computed by the recirculation
                                    action. */
-    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
     union flow_in_port in_port; /* Input port. */
+    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
 };
 
 #define PKT_METADATA_INITIALIZER(PORT) \
@@ -76,6 +78,9 @@ bool dpid_from_string(const char *s, uint64_t *dpidp);
 
 static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] OVS_UNUSED
     = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
+static const uint8_t eth_addr_zero[ETH_ADDR_LEN] OVS_UNUSED
+    = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 static const uint8_t eth_addr_stp[ETH_ADDR_LEN] OVS_UNUSED
     = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x00 };
@@ -254,6 +259,13 @@ static inline bool eth_type_mpls(ovs_be16 eth_type)
     return eth_type == htons(ETH_TYPE_MPLS) ||
         eth_type == htons(ETH_TYPE_MPLS_MCAST);
 }
+
+static inline bool eth_type_vlan(ovs_be16 eth_type)
+{
+    return eth_type == htons(ETH_TYPE_VLAN_8021Q) ||
+        eth_type == htons(ETH_TYPE_VLAN_8021AD);
+}
+
 
 /* Minimum value for an Ethernet type.  Values below this are IEEE 802.2 frame
  * lengths. */
@@ -533,11 +545,37 @@ struct igmp_header {
 };
 BUILD_ASSERT_DECL(IGMP_HEADER_LEN == sizeof(struct igmp_header));
 
+#define IGMPV3_HEADER_LEN 8
+struct igmpv3_header {
+    uint8_t type;
+    uint8_t rsvr1;
+    ovs_be16 csum;
+    ovs_be16 rsvr2;
+    ovs_be16 ngrp;
+};
+BUILD_ASSERT_DECL(IGMPV3_HEADER_LEN == sizeof(struct igmpv3_header));
+
+#define IGMPV3_RECORD_LEN 8
+struct igmpv3_record {
+    uint8_t type;
+    uint8_t aux_len;
+    ovs_be16 nsrcs;
+    ovs_16aligned_be32 maddr;
+};
+BUILD_ASSERT_DECL(IGMPV3_RECORD_LEN == sizeof(struct igmpv3_record));
+
 #define IGMP_HOST_MEMBERSHIP_QUERY    0x11 /* From RFC1112 */
 #define IGMP_HOST_MEMBERSHIP_REPORT   0x12 /* Ditto */
 #define IGMPV2_HOST_MEMBERSHIP_REPORT 0x16 /* V2 version of 0x12 */
 #define IGMP_HOST_LEAVE_MESSAGE       0x17
 #define IGMPV3_HOST_MEMBERSHIP_REPORT 0x22 /* V3 version of 0x12 */
+
+#define IGMPV3_MODE_IS_INCLUDE 1
+#define IGMPV3_MODE_IS_EXCLUDE 2
+#define IGMPV3_CHANGE_TO_INCLUDE_MODE 3
+#define IGMPV3_CHANGE_TO_EXCLUDE_MODE 4
+#define IGMPV3_ALLOW_NEW_SOURCES 5
+#define IGMPV3_BLOCK_OLD_SOURCES 6
 
 #define SCTP_HEADER_LEN 12
 struct sctp_header {
@@ -715,7 +753,11 @@ static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 }
 
 /* Tunnel header */
+#define GENEVE_MAX_OPT_SIZE 124
+#define GENEVE_TOT_OPT_SIZE 252
+
 #define GENEVE_CRIT_OPT_TYPE (1 << 7)
+
 struct geneve_opt {
     ovs_be16  opt_class;
     uint8_t   type;
@@ -804,8 +846,10 @@ void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
 
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
-void compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
-                 ovs_be32 ip_src, ovs_be32 ip_dst);
+void compose_arp(struct dp_packet *, uint16_t arp_op,
+                 const uint8_t arp_sha[ETH_ADDR_LEN],
+                 const uint8_t arp_tha[ETH_ADDR_LEN], bool broadcast,
+                 ovs_be32 arp_spa, ovs_be32 arp_tpa);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 
 #endif /* packets.h */

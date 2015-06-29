@@ -717,7 +717,7 @@ do
 done
 case $command in
     start)
-        start_ovsdb
+        start_ovsdb || exit 1
         start_forwarding
         add_managers
         ;;

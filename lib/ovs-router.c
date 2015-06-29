@@ -68,7 +68,7 @@ ovs_router_lookup(ovs_be32 ip_dst, char output_bridge[], ovs_be32 *gw)
     const struct cls_rule *cr;
     struct flow flow = {.nw_dst = ip_dst};
 
-    cr = classifier_lookup(&cls, &flow, NULL);
+    cr = classifier_lookup(&cls, CLS_MAX_VERSION, &flow, NULL);
     if (cr) {
         struct ovs_router_entry *p = ovs_router_entry_cast(cr);
 
@@ -115,7 +115,8 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
     p->nw_addr = match.flow.nw_dst;
     p->plen = plen;
     p->priority = priority;
-    cls_rule_init(&p->cr, &match, priority); /* Longest prefix matches first. */
+    /* Longest prefix matches first. */
+    cls_rule_init(&p->cr, &match, priority, CLS_MIN_VERSION);
 
     ovs_mutex_lock(&mutex);
     cr = classifier_replace(&cls, &p->cr, NULL, 0);
@@ -144,7 +145,7 @@ rt_entry_delete(uint8_t priority, ovs_be32 ip_dst, uint8_t plen)
 
     rt_init_match(&match, ip_dst, plen);
 
-    cls_rule_init(&rule, &match, priority);
+    cls_rule_init(&rule, &match, priority, CLS_MIN_VERSION);
 
     /* Find the exact rule. */
     cr = classifier_find_rule_exactly(&cls, &rule);

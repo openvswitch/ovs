@@ -618,7 +618,7 @@ struct ovs_action_hash {
 };
 
 #ifndef __KERNEL__
-#define TNL_PUSH_HEADER_SIZE 128
+#define TNL_PUSH_HEADER_SIZE 512
 
 /*
  * struct ovs_action_push_tnl - %OVS_ACTION_ATTR_TUNNEL_PUSH
@@ -675,6 +675,9 @@ struct ovs_action_push_tnl {
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
  * type may not be changed.
  *
+ *
+ * @OVS_ACTION_ATTR_SET_TO_MASKED: Kernel internal masked set action translated
+ * from the @OVS_ACTION_ATTR_SET.
  * @OVS_ACTION_ATTR_TUNNEL_PUSH: Push tunnel header described by struct
  * ovs_action_push_tnl.
  * @OVS_ACTION_ATTR_TUNNEL_POP: Lookup tunnel port by port-no passed and pop
@@ -702,7 +705,14 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_TUNNEL_PUSH,   /* struct ovs_action_push_tnl*/
 	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
 #endif
-	__OVS_ACTION_ATTR_MAX
+	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
+				       * from userspace. */
+
+#ifdef __KERNEL__
+	OVS_ACTION_ATTR_SET_TO_MASKED, /* Kernel module internal masked
+					* set action converted from
+					* OVS_ACTION_ATTR_SET. */
+#endif
 };
 
 #define OVS_ACTION_ATTR_MAX (__OVS_ACTION_ATTR_MAX - 1)

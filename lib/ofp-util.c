@@ -41,6 +41,7 @@
 #include "openflow/netronome-ext.h"
 #include "packets.h"
 #include "random.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "type-props.h"
 #include "openvswitch/vlog.h"
@@ -195,7 +196,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 31);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -1795,9 +1796,17 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->command = command & 0xff;
             fm->table_id = command >> 8;
         } else {
+            if (command > 0xff) {
+                VLOG_WARN_RL(&bad_ofmsg_rl, "flow_mod has explicit table_id "
+                             "but flow_mod_table_id extension is not enabled");
+            }
             fm->command = command;
             fm->table_id = 0xff;
         }
+    }
+
+    if (fm->command > OFPFC_DELETE_STRICT) {
+        return OFPERR_OFPFMFC_BAD_COMMAND;
     }
 
     error = ofpacts_pull_openflow_instructions(&b, b.size,
@@ -3295,24 +3304,6 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     return msg;
 }
 
-static void
-ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
-                                struct match *match, struct ofpbuf *b)
-{
-    pin->packet = b->data;
-    pin->packet_len = b->size;
-
-    pin->fmd.in_port = match->flow.in_port.ofp_port;
-    pin->fmd.tun_id = match->flow.tunnel.tun_id;
-    pin->fmd.tun_src = match->flow.tunnel.ip_src;
-    pin->fmd.tun_dst = match->flow.tunnel.ip_dst;
-    pin->fmd.gbp_id = match->flow.tunnel.gbp_id;
-    pin->fmd.gbp_flags = match->flow.tunnel.gbp_flags;
-    pin->fmd.metadata = match->flow.metadata;
-    memcpy(pin->fmd.regs, match->flow.regs, sizeof pin->fmd.regs);
-    pin->fmd.pkt_mark = match->flow.pkt_mark;
-}
-
 enum ofperr
 ofputil_decode_packet_in(struct ofputil_packet_in *pin,
                          const struct ofp_header *oh)
@@ -3327,7 +3318,6 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT13_PACKET_IN || raw == OFPRAW_OFPT12_PACKET_IN) {
         const struct ofp13_packet_in *opi;
-        struct match match;
         int error;
         size_t packet_in_size;
 
@@ -3338,7 +3328,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         }
 
         opi = ofpbuf_pull(&b, packet_in_size);
-        error = oxm_pull_match_loose(&b, &match);
+        error = oxm_pull_match_loose(&b, &pin->flow_metadata);
         if (error) {
             return error;
         }
@@ -3356,7 +3346,8 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
             pin->cookie = opi->cookie;
         }
 
-        ofputil_decode_packet_in_finish(pin, &match, &b);
+        pin->packet = b.data;
+        pin->packet_len = b.size;
     } else if (raw == OFPRAW_OFPT10_PACKET_IN) {
         const struct ofp10_packet_in *opi;
 
@@ -3365,12 +3356,14 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->packet = opi->data;
         pin->packet_len = b.size;
 
-        pin->fmd.in_port = u16_to_ofp(ntohs(opi->in_port));
+        match_init_catchall(&pin->flow_metadata);
+        match_set_in_port(&pin->flow_metadata, u16_to_ofp(ntohs(opi->in_port)));
         pin->reason = opi->reason;
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
     } else if (raw == OFPRAW_OFPT11_PACKET_IN) {
         const struct ofp11_packet_in *opi;
+        ofp_port_t in_port;
         enum ofperr error;
 
         opi = ofpbuf_pull(&b, sizeof *opi);
@@ -3379,21 +3372,22 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->packet_len = b.size;
 
         pin->buffer_id = ntohl(opi->buffer_id);
-        error = ofputil_port_from_ofp11(opi->in_port, &pin->fmd.in_port);
+        error = ofputil_port_from_ofp11(opi->in_port, &in_port);
         if (error) {
             return error;
         }
+        match_init_catchall(&pin->flow_metadata);
+        match_set_in_port(&pin->flow_metadata, in_port);
         pin->total_len = ntohs(opi->total_len);
         pin->reason = opi->reason;
         pin->table_id = opi->table_id;
     } else if (raw == OFPRAW_NXT_PACKET_IN) {
         const struct nx_packet_in *npi;
-        struct match match;
         int error;
 
         npi = ofpbuf_pull(&b, sizeof *npi);
-        error = nx_pull_match_loose(&b, ntohs(npi->match_len), &match, NULL,
-                                    NULL);
+        error = nx_pull_match_loose(&b, ntohs(npi->match_len),
+                                    &pin->flow_metadata, NULL, NULL);
         if (error) {
             return error;
         }
@@ -3409,51 +3403,13 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->buffer_id = ntohl(npi->buffer_id);
         pin->total_len = ntohs(npi->total_len);
 
-        ofputil_decode_packet_in_finish(pin, &match, &b);
+        pin->packet = b.data;
+        pin->packet_len = b.size;
     } else {
         OVS_NOT_REACHED();
     }
 
     return 0;
-}
-
-static void
-ofputil_packet_in_to_match(const struct ofputil_packet_in *pin,
-                           struct match *match)
-{
-    int i;
-
-    match_init_catchall(match);
-    if (pin->fmd.tun_id != htonll(0)) {
-        match_set_tun_id(match, pin->fmd.tun_id);
-    }
-    if (pin->fmd.tun_src != htonl(0)) {
-        match_set_tun_src(match, pin->fmd.tun_src);
-    }
-    if (pin->fmd.tun_dst != htonl(0)) {
-        match_set_tun_dst(match, pin->fmd.tun_dst);
-    }
-    if (pin->fmd.gbp_id != htons(0)) {
-        match_set_tun_gbp_id(match, pin->fmd.gbp_id);
-    }
-    if (pin->fmd.gbp_flags) {
-        match_set_tun_gbp_flags(match, pin->fmd.gbp_flags);
-    }
-    if (pin->fmd.metadata != htonll(0)) {
-        match_set_metadata(match, pin->fmd.metadata);
-    }
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if (pin->fmd.regs[i]) {
-            match_set_reg(match, i, pin->fmd.regs[i]);
-        }
-    }
-
-    if (pin->fmd.pkt_mark != 0) {
-        match_set_pkt_mark(match, pin->fmd.pkt_mark);
-    }
-
-    match_set_in_port(match, pin->fmd.in_port);
 }
 
 static struct ofpbuf *
@@ -3466,7 +3422,7 @@ ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin)
                               htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(packet, offsetof(struct ofp10_packet_in, data));
     opi->total_len = htons(pin->total_len);
-    opi->in_port = htons(ofp_to_u16(pin->fmd.in_port));
+    opi->in_port = htons(ofp_to_u16(pin->flow_metadata.flow.in_port.ofp_port));
     opi->reason = pin->reason;
     opi->buffer_id = htonl(pin->buffer_id);
 
@@ -3480,17 +3436,13 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin)
 {
     struct nx_packet_in *npi;
     struct ofpbuf *packet;
-    struct match match;
     size_t match_len;
-
-    ofputil_packet_in_to_match(pin, &match);
 
     /* The final argument is just an estimate of the space required. */
     packet = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
-                              htonl(0), (sizeof(struct flow_metadata) * 2
-                                         + 2 + pin->packet_len));
+                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
     ofpbuf_put_zeros(packet, sizeof *npi);
-    match_len = nx_put_match(packet, &match, 0, 0);
+    match_len = nx_put_match(packet, &pin->flow_metadata, 0, 0);
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
@@ -3515,7 +3467,7 @@ ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin)
                               htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(packet, sizeof *opi);
     opi->buffer_id = htonl(pin->buffer_id);
-    opi->in_port = ofputil_port_to_ofp11(pin->fmd.in_port);
+    opi->in_port = ofputil_port_to_ofp11(pin->flow_metadata.flow.in_port.ofp_port);
     opi->in_phy_port = opi->in_port;
     opi->total_len = htons(pin->total_len);
     opi->reason = pin->reason;
@@ -3531,7 +3483,6 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
                                enum ofputil_protocol protocol)
 {
     struct ofp13_packet_in *opi;
-    struct match match;
     enum ofpraw packet_in_raw;
     enum ofp_version packet_in_version;
     size_t packet_in_size;
@@ -3547,14 +3498,12 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
         packet_in_size = sizeof (struct ofp13_packet_in);
     }
 
-    ofputil_packet_in_to_match(pin, &match);
-
     /* The final argument is just an estimate of the space required. */
     packet = ofpraw_alloc_xid(packet_in_raw, packet_in_version,
-                              htonl(0), (sizeof(struct flow_metadata) * 2
-                                         + 2 + pin->packet_len));
+                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
     ofpbuf_put_zeros(packet, packet_in_size);
-    oxm_put_match(packet, &match, ofputil_protocol_to_ofp_version(protocol));
+    oxm_put_match(packet, &pin->flow_metadata,
+                  ofputil_protocol_to_ofp_version(protocol));
     ofpbuf_put_zeros(packet, 2);
     ofpbuf_put(packet, pin->packet, pin->packet_len);
 
@@ -8375,7 +8324,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     switch (gm->type) {
     case OFPGT11_INDIRECT:
         if (!list_is_singleton(&gm->buckets)) {
-            return OFPERR_OFPGMFC_INVALID_GROUP;
+            return OFPERR_OFPGMFC_OUT_OF_BUCKETS;
         }
         break;
     case OFPGT11_ALL:
@@ -8748,6 +8697,36 @@ ofputil_decode_bundle_ctrl(const struct ofp_header *oh,
 }
 
 struct ofpbuf *
+ofputil_encode_bundle_ctrl_request(enum ofp_version ofp_version,
+                                   struct ofputil_bundle_ctrl_msg *bc)
+{
+    struct ofpbuf *request;
+    struct ofp14_bundle_ctrl_msg *m;
+
+    switch (ofp_version) {
+    case OFP10_VERSION:
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    case OFP13_VERSION:
+        ovs_fatal(0, "bundles need OpenFlow 1.4 or later "
+                     "(\'-O OpenFlow14\')");
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        request = ofpraw_alloc(OFPRAW_OFPT14_BUNDLE_CONTROL, ofp_version, 0);
+        m = ofpbuf_put_zeros(request, sizeof *m);
+
+        m->bundle_id = htonl(bc->bundle_id);
+        m->type = htons(bc->type);
+        m->flags = htons(bc->flags);
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    return request;
+}
+
+struct ofpbuf *
 ofputil_encode_bundle_ctrl_reply(const struct ofp_header *oh,
                                  struct ofputil_bundle_ctrl_msg *msg)
 {
@@ -8781,6 +8760,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_PACKET_OUT:
+    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
 
         /* Not to be bundlable. */
     case OFPTYPE_ECHO_REQUEST:
@@ -8844,6 +8824,8 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_ROLE_STATUS:
+    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
+    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
         break;
     }
 
@@ -8852,7 +8834,8 @@ ofputil_is_bundlable(enum ofptype type)
 
 enum ofperr
 ofputil_decode_bundle_add(const struct ofp_header *oh,
-                          struct ofputil_bundle_add_msg *msg)
+                          struct ofputil_bundle_add_msg *msg,
+                          enum ofptype *type_ptr)
 {
     const struct ofp14_bundle_ctrl_msg *m;
     struct ofpbuf b;
@@ -8879,14 +8862,17 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     }
 
     /* Reject unbundlable messages. */
-    error = ofptype_decode(&type, msg->msg);
+    if (!type_ptr) {
+        type_ptr = &type;
+    }
+    error = ofptype_decode(type_ptr, msg->msg);
     if (error) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPT14_BUNDLE_ADD_MESSAGE contained "
                      "message is unparsable (%s)", ofperr_get_name(error));
         return OFPERR_OFPBFC_MSG_UNSUP; /* 'error' would be confusing. */
     }
 
-    if (!ofputil_is_bundlable(type)) {
+    if (!ofputil_is_bundlable(*type_ptr)) {
         return OFPERR_OFPBFC_MSG_UNSUP;
     }
 
@@ -8900,7 +8886,9 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     struct ofpbuf *request;
     struct ofp14_bundle_ctrl_msg *m;
 
-    request = ofpraw_alloc(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version, 0);
+    /* Must use the same xid as the embedded message. */
+    request = ofpraw_alloc_xid(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
+                               msg->msg->xid, 0);
     m = ofpbuf_put_zeros(request, sizeof *m);
 
     m->bundle_id = htonl(msg->bundle_id);
@@ -8908,4 +8896,140 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     ofpbuf_put(request, msg->msg, ntohs(msg->msg->length));
 
     return request;
+}
+
+static void
+encode_geneve_table_mappings(struct ofpbuf *b, struct ovs_list *mappings)
+{
+    struct ofputil_geneve_map *map;
+
+    LIST_FOR_EACH (map, list_node, mappings) {
+        struct nx_geneve_map *nx_map;
+
+        nx_map = ofpbuf_put_zeros(b, sizeof *nx_map);
+        nx_map->option_class = htons(map->option_class);
+        nx_map->option_type = map->option_type;
+        nx_map->option_len = map->option_len;
+        nx_map->index = htons(map->index);
+    }
+}
+
+struct ofpbuf *
+ofputil_encode_geneve_table_mod(enum ofp_version ofp_version,
+                                struct ofputil_geneve_table_mod *gtm)
+{
+    struct ofpbuf *b;
+    struct nx_geneve_table_mod *nx_gtm;
+
+    b = ofpraw_alloc(OFPRAW_NXT_GENEVE_TABLE_MOD, ofp_version, 0);
+    nx_gtm = ofpbuf_put_zeros(b, sizeof *nx_gtm);
+    nx_gtm->command = htons(gtm->command);
+    encode_geneve_table_mappings(b, &gtm->mappings);
+
+    return b;
+}
+
+static enum ofperr
+decode_geneve_table_mappings(struct ofpbuf *msg, struct ovs_list *mappings)
+{
+    list_init(mappings);
+
+    while (msg->size) {
+        struct nx_geneve_map *nx_map;
+        struct ofputil_geneve_map *map;
+
+        nx_map = ofpbuf_pull(msg, sizeof *nx_map);
+        map = xmalloc(sizeof *map);
+        list_push_back(mappings, &map->list_node);
+
+        map->option_class = ntohs(nx_map->option_class);
+        map->option_type = nx_map->option_type;
+
+        map->option_len = nx_map->option_len;
+        if (map->option_len == 0 || map->option_len % 4 ||
+            map->option_len > GENEVE_MAX_OPT_SIZE) {
+            VLOG_WARN_RL(&bad_ofmsg_rl,
+                         "geneve table option length (%u) is not a valid option size",
+                         map->option_len);
+            ofputil_uninit_geneve_table(mappings);
+            return OFPERR_NXGTMFC_BAD_OPT_LEN;
+        }
+
+        map->index = ntohs(nx_map->index);
+        if (map->index >= TUN_METADATA_NUM_OPTS) {
+            VLOG_WARN_RL(&bad_ofmsg_rl,
+                         "geneve table field index (%u) is too large (max %u)",
+                         map->index, TUN_METADATA_NUM_OPTS - 1);
+            ofputil_uninit_geneve_table(mappings);
+            return OFPERR_NXGTMFC_BAD_FIELD_IDX;
+        }
+    }
+
+    return 0;
+}
+
+enum ofperr
+ofputil_decode_geneve_table_mod(const struct ofp_header *oh,
+                                struct ofputil_geneve_table_mod *gtm)
+{
+    struct ofpbuf msg;
+    struct nx_geneve_table_mod *nx_gtm;
+
+    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&msg);
+
+    nx_gtm = ofpbuf_pull(&msg, sizeof *nx_gtm);
+    gtm->command = ntohs(nx_gtm->command);
+    if (gtm->command > NXGTMC_CLEAR) {
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "geneve table mod command (%u) is out of range",
+                     gtm->command);
+        return OFPERR_NXGTMFC_BAD_COMMAND;
+    }
+
+    return decode_geneve_table_mappings(&msg, &gtm->mappings);
+}
+
+struct ofpbuf *
+ofputil_encode_geneve_table_reply(const struct ofp_header *oh,
+                                  struct ofputil_geneve_table_reply *gtr)
+{
+    struct ofpbuf *b;
+    struct nx_geneve_table_reply *nx_gtr;
+
+    b = ofpraw_alloc_reply(OFPRAW_NXT_GENEVE_TABLE_REPLY, oh, 0);
+    nx_gtr = ofpbuf_put_zeros(b, sizeof *nx_gtr);
+    nx_gtr->max_option_space = htonl(gtr->max_option_space);
+    nx_gtr->max_fields = htons(gtr->max_fields);
+
+    encode_geneve_table_mappings(b, &gtr->mappings);
+
+    return b;
+}
+
+enum ofperr
+ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
+                                  struct ofputil_geneve_table_reply *gtr)
+{
+    struct ofpbuf msg;
+    struct nx_geneve_table_reply *nx_gtr;
+
+    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&msg);
+
+    nx_gtr = ofpbuf_pull(&msg, sizeof *nx_gtr);
+    gtr->max_option_space = ntohl(nx_gtr->max_option_space);
+    gtr->max_fields = ntohs(nx_gtr->max_fields);
+
+    return decode_geneve_table_mappings(&msg, &gtr->mappings);
+}
+
+void
+ofputil_uninit_geneve_table(struct ovs_list *mappings)
+{
+    struct ofputil_geneve_map *map;
+
+    LIST_FOR_EACH_POP (map, list_node, mappings) {
+        free(map);
+    }
 }

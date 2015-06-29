@@ -280,10 +280,59 @@ OpenFlow 1.4
 ------------
 
 OpenFlow 1.4 adds the "importance" field to flow_mods, but it does not
-explicitly specify which kinds of flow_mods set the importance.For
+explicitly specify which kinds of flow_mods set the importance.  For
 consistency, Open vSwitch uses the same rule for importance as for
 idle_timeout and hard_timeout, that is, only an "ADD" flow_mod sets
 the importance.  (This issue has been filed with the ONF as EXT-496.)
+
+
+OpenFlow 1.4 Bundles
+====================
+
+Open vSwitch makes all flow table modifications atomically, i.e., any
+datapath packet only sees flow table configurations either before or
+after any change made by any flow_mod.  For example, if a controller
+removes all flows with a single OpenFlow "flow_mod", no packet sees an
+intermediate version of the OpenFlow pipeline where only some of the
+flows have been deleted.
+
+It should be noted that Open vSwitch caches datapath flows, and that
+the cached flows are NOT flushed immediately when a flow table
+changes.  Instead, the datapath flows are revalidated against the new
+flow table as soon as possible, and usually within one second of the
+modification.  This design amortizes the cost of datapath cache
+flushing across multiple flow table changes, and has a significant
+performance effect during simultaneous heavy flow table churn and high
+traffic load.  This means that different cached datapath flows may
+have been computed based on a different flow table configurations, but
+each of the datapath flows is guaranteed to have been computed over a
+coherent view of the flow tables, as described above.
+
+With OpenFlow 1.4 bundles this atomicity can be extended across an
+arbitrary set of flow_mods.  Bundles are supported for flow_mod and
+port_mod messages only.  For flow_mods, both 'atomic' and 'ordered'
+bundle flags are trivially supported, as all bundled messages are
+executed in the order they were added and all flow table modifications
+are now atomic to the datapath.  Port mods may not appear in atomic
+bundles, as port status modifications are not atomic.
+
+To support bundles, ovs-ofctl has a '--bundle' option that makes the
+flow mod commands ('add-flow', 'add-flows', 'mod-flows', 'del-flows',
+and 'replace-flows') use an OpenFlow 1.4 bundle to operate the
+modifications as a single atomic transaction.  If any of the flow mods
+in a transaction fail, none of them are executed.  All flow mods in a
+bundle appear to datapath lookups simultaneously.
+
+Furthermore, ovs-ofctl 'add-flow' and 'add-flows' commands now accept
+arbitrary flow mods as an input by allowing the flow specification to
+start with an explicit 'add', 'modify', 'modify_strict', 'delete', or
+'delete_strict' keyword.  A missing keyword is treated as 'add', so
+this is fully backwards compatible.  With the new '--bundle' option
+all the flow mods are executed as a single atomic transaction using an
+OpenFlow 1.4 bundle.  Without the '--bundle' option the flow mods are
+executed in order up to the first failing flow_mod, and in case of an
+error the earlier successful flow_mods are not rolled back.
+
 
 OFPT_PACKET_IN
 ==============
@@ -844,7 +893,7 @@ not know the MAC address of the local port that is sending the traffic
 or the MAC address of the remote in the guest VM.
 
 With a few notable exceptions below, in-band should work in most
-network setups.  The following are considered "supported' in the
+network setups.  The following are considered "supported" in the
 current implementation:
 
  - Locally Connected.  The switch and remote are on the same

@@ -20,6 +20,7 @@
 #define MCAST_SNOOPING_H 1
 
 #include <time.h>
+#include "dp-packet.h"
 #include "hmap.h"
 #include "list.h"
 #include "ovs-atomic.h"
@@ -179,6 +180,10 @@ mcast_snooping_lookup(const struct mcast_snooping *ms, ovs_be32 dip,
 
 /* Learning. */
 bool mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
+                              uint16_t vlan, void *port)
+    OVS_REQ_WRLOCK(ms->rwlock);
+int mcast_snooping_add_report(struct mcast_snooping *ms,
+                              const struct dp_packet *p,
                               uint16_t vlan, void *port)
     OVS_REQ_WRLOCK(ms->rwlock);
 bool mcast_snooping_leave_group(struct mcast_snooping *ms, ovs_be32 ip4,

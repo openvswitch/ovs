@@ -86,9 +86,12 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([Invalid --with-pthread value])
               ;;
             *)
-            PTHREAD_INCLUDES="-I$withval/include"
-            PTHREAD_LDFLAGS="-L$withval/lib/x86"
+            PTHREAD_WIN32_DIR=$withval/lib/x86
+            PTHREAD_WIN32_DIR_DLL=/${withval/:/}/dll/x86
+            PTHREAD_INCLUDES=-I$withval/include
+            PTHREAD_LDFLAGS=-L$PTHREAD_WIN32_DIR
             PTHREAD_LIBS="-lpthreadVC2"
+            AC_SUBST([PTHREAD_WIN32_DIR_DLL])
             AC_SUBST([PTHREAD_INCLUDES])
             AC_SUBST([PTHREAD_LDFLAGS])
             AC_SUBST([PTHREAD_LIBS])
@@ -120,16 +123,14 @@ dnl OVS_CHECK_WINDOWS
 dnl
 dnl Configure Visual Studio solution build
 AC_DEFUN([OVS_CHECK_VISUAL_STUDIO_DDK], [
-AC_ARG_WITH([vstudioddk],
-         [AS_HELP_STRING([--with-vstudioddk=version_type],
-            [Visual Studio DDK version type e.g. Win8.1 Release])],
+AC_ARG_WITH([vstudiotarget],
+         [AS_HELP_STRING([--with-vstudiotarget=target_type],
+            [Target type: Debug/Release])],
          [
             case "$withval" in
-            "Win8.1 Release") ;;
-            "Win8.1 Debug") ;;
-            "Win8 Release") ;;
-            "Win8 Debug") ;;
-            *) AC_MSG_ERROR([No good Visual Studio configuration found]) ;;
+            "Release") ;;
+            "Debug") ;;
+            *) AC_MSG_ERROR([No valid Visual Studio configuration found]) ;;
             esac
 
             VSTUDIO_CONFIG=$withval
@@ -139,7 +140,7 @@ AC_ARG_WITH([vstudioddk],
       )
 
   AC_SUBST([VSTUDIO_CONFIG])
-  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio DDK version module.])
+  AC_DEFINE([VSTUDIO_DDK], [1], [System uses the Visual Studio build target.])
   AM_CONDITIONAL([VSTUDIO_DDK], [test -n "$VSTUDIO_CONFIG"])
 ])
 
@@ -251,22 +252,22 @@ dnl Checks for valgrind/valgrind.h.
 AC_DEFUN([OVS_CHECK_VALGRIND],
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])
 
-dnl Checks for Python 2.x, x >= 4.
+dnl Checks for Python 2.x, x >= 7.
 AC_DEFUN([OVS_CHECK_PYTHON],
   [AC_CACHE_CHECK(
-     [for Python 2.x for x >= 4],
+     [for Python 2.x for x >= 7],
      [ovs_cv_python],
      [if test -n "$PYTHON"; then
         ovs_cv_python=$PYTHON
       else
         ovs_cv_python=no
-        for binary in python python2.4 python2.5 python2.7; do
+        for binary in python python2.7; do
           ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
           for dir in $PATH; do
             IFS=$ovs_save_IFS
             test -z "$dir" && dir=.
             if test -x "$dir"/"$binary" && "$dir"/"$binary" -c 'import sys
-if sys.hexversion >= 0x02040000 and sys.hexversion < 0x03000000:
+if sys.hexversion >= 0x02070000 and sys.hexversion < 0x03000000:
     sys.exit(0)
 else:
     sys.exit(1)'; then
@@ -298,36 +299,6 @@ AC_DEFUN([OVS_CHECK_DOT],
        ovs_cv_dot=no
      fi])
    AM_CONDITIONAL([HAVE_DOT], [test "$ovs_cv_dot" = yes])])
-
-dnl Checks whether $PYTHON supports the module given as $1
-AC_DEFUN([OVS_CHECK_PYTHON_MODULE],
-  [AC_REQUIRE([OVS_CHECK_PYTHON])
-   AC_CACHE_CHECK(
-     [for $1 Python module],
-     [ovs_cv_py_[]AS_TR_SH([$1])],
-     [ovs_cv_py_[]AS_TR_SH([$1])=no
-      if test $HAVE_PYTHON = yes; then
-        AS_ECHO(["running $PYTHON -c 'import $1
-import sys
-sys.exit(0)'..."]) >&AS_MESSAGE_LOG_FD 2>&1
-        if $PYTHON -c 'import $1
-import sys
-sys.exit(0)' >&AS_MESSAGE_LOG_FD 2>&1; then
-          ovs_cv_py_[]AS_TR_SH([$1])=yes
-        fi
-      fi])])
-
-dnl Checks for missing python modules at build time
-AC_DEFUN([OVS_CHECK_PYTHON_COMPAT],
-  [OVS_CHECK_PYTHON_MODULE([uuid])
-   if test $ovs_cv_py_uuid = yes; then
-     INCLUDE_PYTHON_COMPAT=no
-   else
-     INCLUDE_PYTHON_COMPAT=yes
-   fi
-   AC_MSG_CHECKING([whether to add python/compat to PYTHONPATH])
-   AC_MSG_RESULT([$INCLUDE_PYTHON_COMPAT])
-   AM_CONDITIONAL([INCLUDE_PYTHON_COMPAT], [test $INCLUDE_PYTHON_COMPAT = yes])])
 
 dnl Checks for groff.
 AC_DEFUN([OVS_CHECK_GROFF],

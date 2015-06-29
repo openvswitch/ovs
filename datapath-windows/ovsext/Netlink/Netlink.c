@@ -112,6 +112,8 @@ NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError, UINT errorCode)
 {
     NL_BUFFER nlBuffer;
 
+    ASSERT(errorCode != NL_ERROR_PENDING);
+
     NlBufInit(&nlBuffer, (PCHAR)msgError, sizeof *msgError);
     NlFillNlHdr(&nlBuffer, NLMSG_ERROR, 0,
                 msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid);

@@ -1,0 +1,95 @@
+* ovn-controller
+
+*** Determine how to split logical pipeline across physical nodes.
+
+    From the original OVN architecture document:
+
+    The pipeline processing is split between the ingress and egress
+    transport nodes.  In particular, the logical egress processing may
+    occur at either hypervisor.  Processing the logical egress on the
+    ingress hypervisor requires more state about the egress vif's
+    policies, but reduces traffic on the wire that would eventually be
+    dropped.  Whereas, processing on the egress hypervisor can reduce
+    broadcast traffic on the wire by doing local replication.  We
+    initially plan to process logical egress on the egress hypervisor
+    so that less state needs to be replicated.  However, we may change
+    this behavior once we gain some experience writing the logical
+    flows.
+
+    The split pipeline processing split will influence how tunnel keys
+    are encoded.
+
+** ovn-controller parameters and configuration.
+
+*** SSL configuration.
+
+    Can probably get this from Open_vSwitch database.
+
+* ovsdb-server
+
+  ovsdb-server should have adequate features for OVN but it probably
+  needs work for scale and possibly for availability as deployments
+  grow.  Here are some thoughts.
+
+  Andy Zhou is looking at these issues.
+
+*** Reducing amount of data sent to clients.
+
+    Currently, whenever a row monitored by a client changes,
+    ovsdb-server sends the client every monitored column in the row,
+    even if only one column changes.  It might be valuable to reduce
+    this only to the columns that changes.
+
+    Also, whenever a column changes, ovsdb-server sends the entire
+    contents of the column.  It might be valuable, for columns that
+    are sets or maps, to send only added or removed values or
+    key-values pairs.
+
+    Currently, clients monitor the entire contents of a table.  It
+    might make sense to allow clients to monitor only rows that
+    satisfy specific criteria, e.g. to allow an ovn-controller to
+    receive only Pipeline rows for logical networks on its hypervisor.
+
+*** Reducing redundant data and code within ovsdb-server.
+
+    Currently, ovsdb-server separately composes database update
+    information to send to each of its clients.  This is fine for a
+    small number of clients, but it wastes time and memory when
+    hundreds of clients all want the same updates (as will be in the
+    case in OVN).
+
+    (This is somewhat opposed to the idea of letting a client monitor
+    only some rows in a table, since that would increase the diversity
+    among clients.)
+
+*** Multithreading.
+
+    If it turns out that other changes don't let ovsdb-server scale
+    adequately, we can multithread ovsdb-server.  Initially one might
+    only break protocol handling into separate threads, leaving the
+    actual database work serialized through a lock.
+
+** Increasing availability.
+
+   Database availability might become an issue.  The OVN system
+   shouldn't grind to a halt if the database becomes unavailable, but
+   it would become impossible to bring VIFs up or down, etc.
+
+   My current thought on how to increase availability is to add
+   clustering to ovsdb-server, probably via the Raft consensus
+   algorithm.  As an experiment, I wrote an implementation of Raft
+   for Open vSwitch that you can clone from:
+
+       https://github.com/blp/ovs-reviews.git raft
+
+** Reducing startup time.
+
+   As-is, if ovsdb-server restarts, every client will fetch a fresh
+   copy of the part of the database that it cares about.  With
+   hundreds of clients, this could cause heavy CPU load on
+   ovsdb-server and use excessive network bandwidth.  It would be
+   better to allow incremental updates even across connection loss.
+   One way might be to use "Difference Digests" as described in
+   Epstein et al., "What's the Difference? Efficient Set
+   Reconciliation Without Prior Context".  (I'm not yet aware of
+   previous non-academic use of this technique.)

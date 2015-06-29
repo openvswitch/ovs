@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,6 +199,9 @@ ovs_prefetch_range(const void *start, size_t size)
     ((char *) &(OBJECT)->MEMBER - (char *) (OBJECT))
 #endif
 
+/* Yields the size of MEMBER within STRUCT. */
+#define MEMBER_SIZEOF(STRUCT, MEMBER) (sizeof(((STRUCT *) NULL)->MEMBER))
+
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
@@ -263,7 +266,7 @@ extern "C" {
         ovs_set_program_name(name, OVS_PACKAGE_VERSION)
 
 const char *get_subprogram_name(void);
-void set_subprogram_name(const char *format, ...) OVS_PRINTF_FORMAT(1, 2);
+    void set_subprogram_name(const char *);
 
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
@@ -313,6 +316,9 @@ bool str_to_double(const char *, double *);
 
 int hexit_value(int c);
 uintmax_t hexits_value(const char *s, size_t n, bool *ok);
+
+int parse_int_string(const char *s, uint8_t *valuep, int field_width,
+                     char **tail);
 
 const char *english_list_delimiter(size_t index, size_t total);
 
@@ -542,11 +548,25 @@ bool bitwise_is_all_zeros(const void *, unsigned int len, unsigned int ofs,
                           unsigned int n_bits);
 unsigned int bitwise_scan(const void *, unsigned int len,
                           bool target, unsigned int start, unsigned int end);
+int bitwise_rscan(const void *, unsigned int len, bool target,
+                  int start, int end);
 void bitwise_put(uint64_t value,
                  void *dst, unsigned int dst_len, unsigned int dst_ofs,
                  unsigned int n_bits);
 uint64_t bitwise_get(const void *src, unsigned int src_len,
                      unsigned int src_ofs, unsigned int n_bits);
+bool bitwise_get_bit(const void *src, unsigned int len, unsigned int ofs);
+void bitwise_put0(void *dst, unsigned int len, unsigned int ofs);
+void bitwise_put1(void *dst, unsigned int len, unsigned int ofs);
+void bitwise_put_bit(void *dst, unsigned int len, unsigned int ofs, bool);
+void bitwise_toggle_bit(void *dst, unsigned int len, unsigned int ofs);
+
+/* Returns non-zero if the parameters have equal value. */
+static inline int
+ovs_u128_equals(const ovs_u128 *a, const ovs_u128 *b)
+{
+    return (a->u64.hi == b->u64.hi) && (a->u64.lo == b->u64.lo);
+}
 
 void xsleep(unsigned int seconds);
 

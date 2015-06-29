@@ -172,7 +172,7 @@ AT_CHECK([sc create ovsdb-server binpath="$abs_path/ovsdb-server `pwd`/db --log-
 [0], [[[SC]] CreateService SUCCESS
 ])
 
-AT_CHECK([sc start ovsdb-server], [0], [ignore])
+AT_CHECK([sc start ovsdb-server], [0], [ignore], [ignore], [sc delete ovsdb-server])
 OVS_WAIT_UNTIL([test -s pid])
 OVS_WAIT_UNTIL([sc query ovsdb-server | grep STATE | grep RUNNING > /dev/null 2>&1])
 AT_CHECK([kill -0 `cat pid`], [0], [ignore])

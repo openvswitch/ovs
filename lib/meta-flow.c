@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include "random.h"
 #include "shash.h"
 #include "socket-util.h"
+#include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -95,6 +96,72 @@ nxm_init(void)
     pthread_once(&once, nxm_do_init);
 }
 
+/* Consider the two value/mask pairs 'a_value/a_mask' and 'b_value/b_mask' as
+ * restrictions on a field's value.  Then, this function initializes
+ * 'dst_value/dst_mask' such that it combines the restrictions of both pairs.
+ * This is not always possible, i.e. if one pair insists on a value of 0 in
+ * some bit and the other pair insists on a value of 1 in that bit.  This
+ * function returns false in a case where the combined restriction is
+ * impossible (in which case 'dst_value/dst_mask' is not fully initialized),
+ * true otherwise.
+ *
+ * (As usually true for value/mask pairs in OVS, any 1-bit in a value must have
+ * a corresponding 1-bit in its mask.) */
+bool
+mf_subvalue_intersect(const union mf_subvalue *a_value,
+                      const union mf_subvalue *a_mask,
+                      const union mf_subvalue *b_value,
+                      const union mf_subvalue *b_mask,
+                      union mf_subvalue *dst_value,
+                      union mf_subvalue *dst_mask)
+{
+    for (int i = 0; i < ARRAY_SIZE(a_value->be64); i++) {
+        ovs_be64 av = a_value->be64[i];
+        ovs_be64 am = a_mask->be64[i];
+        ovs_be64 bv = b_value->be64[i];
+        ovs_be64 bm = b_mask->be64[i];
+        ovs_be64 *dv = &dst_value->be64[i];
+        ovs_be64 *dm = &dst_mask->be64[i];
+
+        if ((av ^ bv) & (am & bm)) {
+            return false;
+        }
+        *dv = av | bv;
+        *dm = am | bm;
+    }
+    return true;
+}
+
+/* Returns the "number of bits" in 'v', e.g. 1 if only the lowest-order bit is
+ * set, 2 if the second-lowest-order bit is set, and so on. */
+int
+mf_subvalue_width(const union mf_subvalue *v)
+{
+    return 1 + bitwise_rscan(v, sizeof *v, true, sizeof *v * 8 - 1, -1);
+}
+
+/* For positive 'n', shifts the bits in 'value' 'n' bits to the left, and for
+ * negative 'n', shifts the bits '-n' bits to the right. */
+void
+mf_subvalue_shift(union mf_subvalue *value, int n)
+{
+    if (n) {
+        union mf_subvalue tmp;
+        memset(&tmp, 0, sizeof tmp);
+
+        if (n > 0 && n < 8 * sizeof tmp) {
+            bitwise_copy(value, sizeof *value, 0,
+                         &tmp, sizeof tmp, n,
+                         8 * sizeof tmp - n);
+        } else if (n < 0 && n > -8 * sizeof tmp) {
+            bitwise_copy(value, sizeof *value, -n,
+                         &tmp, sizeof tmp, 0,
+                         8 * sizeof tmp + n);
+        }
+        *value = tmp;
+    }
+}
+
 /* Returns true if 'wc' wildcards all the bits in field 'mf', false if 'wc'
  * specifies at least one bit in the field.
  *
@@ -123,6 +190,12 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.tunnel.gbp_id;
     case MFF_TUN_GBP_FLAGS:
         return !wc->masks.tunnel.gbp_flags;
+    CASE_MFF_TUN_METADATA: {
+        union mf_value value;
+
+        tun_metadata_read(&wc->masks.tunnel.metadata, mf, &value);
+        return is_all_zeros(&value.tun_metadata, mf->n_bytes);
+    }
     case MFF_METADATA:
         return !wc->masks.metadata;
     case MFF_IN_PORT:
@@ -318,8 +391,9 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
 {
-    static const union mf_value exact_match_mask = MF_EXACT_MASK_INITIALIZER;
+    static union mf_value exact_match_mask;
 
+    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
     mf_set_flow_value(mf, &exact_match_mask, mask);
 
     switch (mf->prereqs) {
@@ -413,6 +487,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_FLAGS:
     case MFF_TUN_GBP_ID:
     case MFF_TUN_GBP_FLAGS:
+    CASE_MFF_TUN_METADATA:
     case MFF_METADATA:
     case MFF_IN_PORT:
     case MFF_SKB_PRIORITY:
@@ -534,6 +609,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_TUN_TOS:
         value->u8 = flow->tunnel.ip_tos;
+        break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_read(&flow->tunnel.metadata, mf, value);
         break;
 
     case MFF_METADATA:
@@ -749,6 +827,9 @@ mf_set_value(const struct mf_field *mf,
     case MFF_TUN_TTL:
         match_set_tun_ttl(match, value->u8);
         break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_set_match(mf, value, NULL, match);
+        break;
 
     case MFF_METADATA:
         match_set_metadata(match, value->be64);
@@ -934,7 +1015,9 @@ mf_set_value(const struct mf_field *mf,
 void
 mf_mask_field(const struct mf_field *mf, struct flow *mask)
 {
-    static const union mf_value exact_match_mask = MF_EXACT_MASK_INITIALIZER;
+    union mf_value exact_match_mask;
+
+    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
 
     /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan()
      * as that will be considered as OFP10_VLAN_NONE. So consider it as a
@@ -945,6 +1028,48 @@ mf_mask_field(const struct mf_field *mf, struct flow *mask)
     } else {
         mf_set_flow_value(mf, &exact_match_mask, mask);
     }
+}
+
+static int
+field_len(const struct mf_field *mf, const union mf_value *value_)
+{
+    const uint8_t *value = &value_->u8;
+    int i;
+
+    if (!mf->variable_len) {
+        return mf->n_bytes;
+    }
+
+    if (!value) {
+        return 0;
+    }
+
+    for (i = 0; i < mf->n_bytes; i++) {
+        if (value[i] != 0) {
+            break;
+        }
+    }
+
+    return mf->n_bytes - i;
+}
+
+/* Returns the effective length of the field. For fixed length fields,
+ * this is just the defined length. For variable length fields, it is
+ * the minimum size encoding that retains the same meaning (i.e.
+ * discarding leading zeros). */
+int
+mf_field_len(const struct mf_field *mf, const union mf_value *value,
+             const union mf_value *mask)
+{
+    int len, mask_len;
+
+    len = field_len(mf, value);
+    if (mask && !is_all_ones(mask, mf->n_bytes)) {
+        mask_len = field_len(mf, mask);
+        len = MAX(len, mask_len);
+    }
+
+    return len;
 }
 
 /* Sets 'flow' member field described by 'mf' to 'value'.  The caller is
@@ -987,6 +1112,8 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_TUN_TTL:
         flow->tunnel.ip_ttl = value->u8;
         break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_write(&flow->tunnel.metadata, mf, value);
 
     case MFF_METADATA:
         flow->metadata = value->be64;
@@ -1251,6 +1378,9 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
     case MFF_TUN_TTL:
         match_set_tun_ttl_masked(match, 0, 0);
         break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_set_match(mf, NULL, NULL, match);
+        break;
 
     case MFF_METADATA:
         match_set_metadata_masked(match, htonll(0), htonll(0));
@@ -1505,6 +1635,9 @@ mf_set(const struct mf_field *mf,
     case MFF_TUN_TOS:
         match_set_tun_tos_masked(match, value->u8, mask->u8);
         break;
+    CASE_MFF_TUN_METADATA:
+        tun_metadata_set_match(mf, value, mask, match);
+        break;
 
     case MFF_METADATA:
         match_set_metadata_masked(match, value->be64, mask->be64);
@@ -1684,39 +1817,35 @@ static char *
 mf_from_integer_string(const struct mf_field *mf, const char *s,
                        uint8_t *valuep, uint8_t *maskp)
 {
-    unsigned long long int integer, mask;
     char *tail;
-    int i;
+    const char *err_str = "";
+    int err;
 
-    errno = 0;
-    integer = strtoull(s, &tail, 0);
-    if (errno || (*tail != '\0' && *tail != '/')) {
+    err = parse_int_string(s, valuep, mf->n_bytes, &tail);
+    if (err || (*tail != '\0' && *tail != '/')) {
+        err_str = "value";
         goto syntax_error;
     }
 
     if (*tail == '/') {
-        mask = strtoull(tail + 1, &tail, 0);
-        if (errno || *tail != '\0') {
+        err = parse_int_string(tail + 1, maskp, mf->n_bytes, &tail);
+        if (err || *tail != '\0') {
+            err_str = "mask";
             goto syntax_error;
         }
     } else {
-        mask = ULLONG_MAX;
+        memset(maskp, 0xff, mf->n_bytes);
     }
 
-    for (i = mf->n_bytes - 1; i >= 0; i--) {
-        valuep[i] = integer;
-        maskp[i] = mask;
-        integer >>= 8;
-        mask >>= 8;
-    }
-    if (integer) {
-        return xasprintf("%s: value too large for %u-byte field %s",
-                         s, mf->n_bytes, mf->name);
-    }
     return NULL;
 
 syntax_error:
-    return xasprintf("%s: bad syntax for %s", s, mf->name);
+    if (err == ERANGE) {
+        return xasprintf("%s: %s too large for %u-byte field %s",
+                         s, err_str, mf->n_bytes, mf->name);
+    } else {
+        return xasprintf("%s: bad syntax for %s %s", s, mf->name, err_str);
+    }
 }
 
 static char *
@@ -2111,33 +2240,25 @@ static void
 mf_format_integer_string(const struct mf_field *mf, const uint8_t *valuep,
                          const uint8_t *maskp, struct ds *s)
 {
-    unsigned long long int integer;
-    int i;
-
-    ovs_assert(mf->n_bytes <= 8);
-
-    integer = 0;
-    for (i = 0; i < mf->n_bytes; i++) {
-        integer = (integer << 8) | valuep[i];
-    }
     if (mf->string == MFS_HEXADECIMAL) {
-        ds_put_format(s, "%#llx", integer);
+        ds_put_hex(s, valuep, mf->n_bytes);
     } else {
+        unsigned long long int integer = 0;
+        int i;
+
+        ovs_assert(mf->n_bytes <= 8);
+        for (i = 0; i < mf->n_bytes; i++) {
+            integer = (integer << 8) | valuep[i];
+        }
         ds_put_format(s, "%lld", integer);
     }
 
     if (maskp) {
-        unsigned long long int mask;
-
-        mask = 0;
-        for (i = 0; i < mf->n_bytes; i++) {
-            mask = (mask << 8) | maskp[i];
-        }
-
         /* I guess we could write the mask in decimal for MFS_DECIMAL but I'm
          * not sure that that a bit-mask written in decimal is ever easier to
          * understand than the same bit-mask written in hexadecimal. */
-        ds_put_format(s, "/%#llx", mask);
+        ds_put_char(s, '/');
+        ds_put_hex(s, maskp, mf->n_bytes);
     }
 }
 
@@ -2269,6 +2390,22 @@ mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
     mf_set(field, &value, &mask, match);
 }
 
+/* 'v' and 'm' correspond to values of 'field'.  This function copies them into
+ * 'match' in the correspond positions. */
+void
+mf_mask_subfield(const struct mf_field *field,
+                 const union mf_subvalue *v,
+                 const union mf_subvalue *m,
+                 struct match *match)
+{
+    union mf_value value, mask;
+
+    mf_get(field, match, &value, &mask);
+    bitwise_copy(v, sizeof *v, 0, &value, field->n_bytes, 0, field->n_bits);
+    bitwise_copy(m, sizeof *m, 0, &mask,  field->n_bytes, 0, field->n_bits);
+    mf_set(field, &value, &mask, match);
+}
+
 /* Initializes 'x' to the value of 'sf' within 'flow'.  'sf' must be valid for
  * reading 'flow', e.g. as checked by mf_check_src(). */
 void
@@ -2300,18 +2437,7 @@ mf_get_subfield(const struct mf_subfield *sf, const struct flow *flow)
 void
 mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s)
 {
-    int i;
-
-    for (i = 0; i < ARRAY_SIZE(subvalue->u8); i++) {
-        if (subvalue->u8[i]) {
-            ds_put_format(s, "0x%"PRIx8, subvalue->u8[i]);
-            for (i++; i < ARRAY_SIZE(subvalue->u8); i++) {
-                ds_put_format(s, "%02"PRIx8, subvalue->u8[i]);
-            }
-            return;
-        }
-    }
-    ds_put_char(s, '0');
+    ds_put_hex(s, subvalue->u8, sizeof subvalue->u8);
 }
 
 void

@@ -133,12 +133,14 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     fi
     AC_MSG_RESULT([$kversion])
 
-    if test "$version" -ge 3; then
-       if test "$version" = 3 && test "$patchlevel" -le 19; then
-          : # Linux 3.x
+    if test "$version" -ge 4; then
+       if test "$version" = 4 && test "$patchlevel" -le 0; then
+          : # Linux 4.x
        else
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 3.19.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.0.x is not supported (please refer to the FAQ for advice)])
        fi
+    elif test "$version" = 3; then
+       : # Linux 3.x
     else
        if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then
          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 2.6.32 or later is required])
@@ -218,6 +220,9 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
+
+    OVS_GREP_IFELSE([$RTE_SDK/include/rte_config.h], [define RTE_LIBRTE_VHOST_USER 1],
+                    [], [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])])
   else
     RTE_SDK=
   fi
@@ -342,6 +347,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   # quoting rules.
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [[[^@]]proto_data_valid],
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [kfree_skb_list])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [rxhash])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [u16.*rxhash],
                   [OVS_DEFINE([HAVE_U16_RXHASH])])

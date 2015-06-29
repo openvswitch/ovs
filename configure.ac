@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # limitations under the License.
 
 AC_PREREQ(2.63)
-AC_INIT(openvswitch, 2.3.90, bugs@openvswitch.org)
+AC_INIT(openvswitch, 2.4.90, bugs@openvswitch.org)
 AC_CONFIG_SRCDIR([datapath/datapath.c])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -93,7 +93,6 @@ OVS_CHECK_NETLINK
 OVS_CHECK_OPENSSL
 OVS_CHECK_LOGDIR
 OVS_CHECK_PYTHON
-OVS_CHECK_PYTHON_COMPAT
 OVS_CHECK_DOT
 OVS_CHECK_IF_PACKET
 OVS_CHECK_IF_DL
@@ -137,6 +136,7 @@ AC_CONFIG_FILES([
     ofproto/libofproto.sym
     lib/libsflow.sym
     lib/libopenvswitch.sym
+    ovn/lib/libovn.sym
     vtep/libvtep.sym])
 
 OVS_ENABLE_OPTION([-Wall])
@@ -144,7 +144,6 @@ OVS_ENABLE_OPTION([-Wextra])
 OVS_ENABLE_OPTION([-Wno-sign-compare])
 OVS_ENABLE_OPTION([-Wpointer-arith])
 OVS_ENABLE_OPTION([-Wformat-security])
-OVS_ENABLE_OPTION([-Wno-format-zero-length])
 OVS_ENABLE_OPTION([-Wswitch-enum])
 OVS_ENABLE_OPTION([-Wunused-parameter])
 OVS_ENABLE_OPTION([-Wbad-function-cast])
@@ -185,6 +184,8 @@ dnl This makes sure that include/openflow gets created in the build directory.
 AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
+AC_CONFIG_COMMANDS([ovn/dummy], [:])
+AC_CONFIG_COMMANDS([ovn/utilities/dummy], [:])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 

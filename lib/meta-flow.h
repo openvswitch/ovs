@@ -137,6 +137,8 @@ struct match;
  *
  *         MAC: A six-byte field whose value is an Ethernet address.
  *         IPv6: A 16-byte field whose value is an IPv6 address.
+ *         tunnelMD: A variable length field, up to 124 bytes, that carries
+ *                   tunnel metadata.
  *
  *   Maskable:
  *
@@ -442,6 +444,154 @@ enum OVS_PACKED_ENUM mf_field_id {
      * OXM: none.
      */
     MFF_TUN_GBP_FLAGS,
+
+#if TUN_METADATA_NUM_OPTS == 64
+    /* "tun_metadata<N>".
+     *
+     * Encapsulation metadata for tunnels.
+     *
+     * Each NXM can be dynamically mapped onto a particular tunnel field using
+     * OpenFlow commands. The individual NXMs can each carry up to 124 bytes
+     * of data and a combined total of 256 across all allocated fields.
+     *
+     * Type: tunnelMD.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_METADATA0(40) since v2.5.        <0>
+     * NXM: NXM_NX_TUN_METADATA1(41) since v2.5.        <1>
+     * NXM: NXM_NX_TUN_METADATA2(42) since v2.5.        <2>
+     * NXM: NXM_NX_TUN_METADATA3(43) since v2.5.        <3>
+     * NXM: NXM_NX_TUN_METADATA4(44) since v2.5.        <4>
+     * NXM: NXM_NX_TUN_METADATA5(45) since v2.5.        <5>
+     * NXM: NXM_NX_TUN_METADATA6(46) since v2.5.        <6>
+     * NXM: NXM_NX_TUN_METADATA7(47) since v2.5.        <7>
+     * NXM: NXM_NX_TUN_METADATA8(48) since v2.5.        <8>
+     * NXM: NXM_NX_TUN_METADATA9(49) since v2.5.        <9>
+     * NXM: NXM_NX_TUN_METADATA10(50) since v2.5.       <10>
+     * NXM: NXM_NX_TUN_METADATA11(51) since v2.5.       <11>
+     * NXM: NXM_NX_TUN_METADATA12(52) since v2.5.       <12>
+     * NXM: NXM_NX_TUN_METADATA13(53) since v2.5.       <13>
+     * NXM: NXM_NX_TUN_METADATA14(54) since v2.5.       <14>
+     * NXM: NXM_NX_TUN_METADATA15(55) since v2.5.       <15>
+     * NXM: NXM_NX_TUN_METADATA16(56) since v2.5.       <16>
+     * NXM: NXM_NX_TUN_METADATA17(57) since v2.5.       <17>
+     * NXM: NXM_NX_TUN_METADATA18(58) since v2.5.       <18>
+     * NXM: NXM_NX_TUN_METADATA19(59) since v2.5.       <19>
+     * NXM: NXM_NX_TUN_METADATA20(60) since v2.5.       <20>
+     * NXM: NXM_NX_TUN_METADATA21(61) since v2.5.       <21>
+     * NXM: NXM_NX_TUN_METADATA22(62) since v2.5.       <22>
+     * NXM: NXM_NX_TUN_METADATA23(63) since v2.5.       <23>
+     * NXM: NXM_NX_TUN_METADATA24(64) since v2.5.       <24>
+     * NXM: NXM_NX_TUN_METADATA25(65) since v2.5.       <25>
+     * NXM: NXM_NX_TUN_METADATA26(66) since v2.5.       <26>
+     * NXM: NXM_NX_TUN_METADATA27(67) since v2.5.       <27>
+     * NXM: NXM_NX_TUN_METADATA28(68) since v2.5.       <28>
+     * NXM: NXM_NX_TUN_METADATA29(69) since v2.5.       <29>
+     * NXM: NXM_NX_TUN_METADATA30(70) since v2.5.       <30>
+     * NXM: NXM_NX_TUN_METADATA31(71) since v2.5.       <31>
+     * NXM: NXM_NX_TUN_METADATA32(72) since v2.5.       <32>
+     * NXM: NXM_NX_TUN_METADATA33(73) since v2.5.       <33>
+     * NXM: NXM_NX_TUN_METADATA34(74) since v2.5.       <34>
+     * NXM: NXM_NX_TUN_METADATA35(75) since v2.5.       <35>
+     * NXM: NXM_NX_TUN_METADATA36(76) since v2.5.       <36>
+     * NXM: NXM_NX_TUN_METADATA37(77) since v2.5.       <37>
+     * NXM: NXM_NX_TUN_METADATA38(78) since v2.5.       <38>
+     * NXM: NXM_NX_TUN_METADATA39(79) since v2.5.       <39>
+     * NXM: NXM_NX_TUN_METADATA40(80) since v2.5.       <40>
+     * NXM: NXM_NX_TUN_METADATA41(81) since v2.5.       <41>
+     * NXM: NXM_NX_TUN_METADATA42(82) since v2.5.       <42>
+     * NXM: NXM_NX_TUN_METADATA43(83) since v2.5.       <43>
+     * NXM: NXM_NX_TUN_METADATA44(84) since v2.5.       <44>
+     * NXM: NXM_NX_TUN_METADATA45(85) since v2.5.       <45>
+     * NXM: NXM_NX_TUN_METADATA46(86) since v2.5.       <46>
+     * NXM: NXM_NX_TUN_METADATA47(87) since v2.5.       <47>
+     * NXM: NXM_NX_TUN_METADATA48(88) since v2.5.       <48>
+     * NXM: NXM_NX_TUN_METADATA49(89) since v2.5.       <49>
+     * NXM: NXM_NX_TUN_METADATA50(90) since v2.5.       <50>
+     * NXM: NXM_NX_TUN_METADATA51(91) since v2.5.       <51>
+     * NXM: NXM_NX_TUN_METADATA52(92) since v2.5.       <52>
+     * NXM: NXM_NX_TUN_METADATA53(93) since v2.5.       <53>
+     * NXM: NXM_NX_TUN_METADATA54(94) since v2.5.       <54>
+     * NXM: NXM_NX_TUN_METADATA55(95) since v2.5.       <55>
+     * NXM: NXM_NX_TUN_METADATA56(96) since v2.5.       <56>
+     * NXM: NXM_NX_TUN_METADATA57(97) since v2.5.       <57>
+     * NXM: NXM_NX_TUN_METADATA58(98) since v2.5.       <58>
+     * NXM: NXM_NX_TUN_METADATA59(99) since v2.5.       <59>
+     * NXM: NXM_NX_TUN_METADATA60(100) since v2.5.      <60>
+     * NXM: NXM_NX_TUN_METADATA61(101) since v2.5.      <61>
+     * NXM: NXM_NX_TUN_METADATA62(102) since v2.5.      <62>
+     * NXM: NXM_NX_TUN_METADATA63(103) since v2.5.      <63>
+     * OXM: none.
+     */
+    MFF_TUN_METADATA0,
+    MFF_TUN_METADATA1,
+    MFF_TUN_METADATA2,
+    MFF_TUN_METADATA3,
+    MFF_TUN_METADATA4,
+    MFF_TUN_METADATA5,
+    MFF_TUN_METADATA6,
+    MFF_TUN_METADATA7,
+    MFF_TUN_METADATA8,
+    MFF_TUN_METADATA9,
+    MFF_TUN_METADATA10,
+    MFF_TUN_METADATA11,
+    MFF_TUN_METADATA12,
+    MFF_TUN_METADATA13,
+    MFF_TUN_METADATA14,
+    MFF_TUN_METADATA15,
+    MFF_TUN_METADATA16,
+    MFF_TUN_METADATA17,
+    MFF_TUN_METADATA18,
+    MFF_TUN_METADATA19,
+    MFF_TUN_METADATA20,
+    MFF_TUN_METADATA21,
+    MFF_TUN_METADATA22,
+    MFF_TUN_METADATA23,
+    MFF_TUN_METADATA24,
+    MFF_TUN_METADATA25,
+    MFF_TUN_METADATA26,
+    MFF_TUN_METADATA27,
+    MFF_TUN_METADATA28,
+    MFF_TUN_METADATA29,
+    MFF_TUN_METADATA30,
+    MFF_TUN_METADATA31,
+    MFF_TUN_METADATA32,
+    MFF_TUN_METADATA33,
+    MFF_TUN_METADATA34,
+    MFF_TUN_METADATA35,
+    MFF_TUN_METADATA36,
+    MFF_TUN_METADATA37,
+    MFF_TUN_METADATA38,
+    MFF_TUN_METADATA39,
+    MFF_TUN_METADATA40,
+    MFF_TUN_METADATA41,
+    MFF_TUN_METADATA42,
+    MFF_TUN_METADATA43,
+    MFF_TUN_METADATA44,
+    MFF_TUN_METADATA45,
+    MFF_TUN_METADATA46,
+    MFF_TUN_METADATA47,
+    MFF_TUN_METADATA48,
+    MFF_TUN_METADATA49,
+    MFF_TUN_METADATA50,
+    MFF_TUN_METADATA51,
+    MFF_TUN_METADATA52,
+    MFF_TUN_METADATA53,
+    MFF_TUN_METADATA54,
+    MFF_TUN_METADATA55,
+    MFF_TUN_METADATA56,
+    MFF_TUN_METADATA57,
+    MFF_TUN_METADATA58,
+    MFF_TUN_METADATA59,
+    MFF_TUN_METADATA60,
+    MFF_TUN_METADATA61,
+    MFF_TUN_METADATA62,
+    MFF_TUN_METADATA63,
+#else
+#error "Need to update MFF_TUN_METADATA* to match TUN_METADATA_NUM_OPTS"
+#endif
 
     /* "metadata".
      *
@@ -1433,6 +1583,42 @@ struct mf_bitmap {
 #error "Need to update CASE_MFF_XREGS to match FLOW_N_XREGS"
 #endif
 
+/* Use this macro as CASE_MFF_TUN_METADATA: in a switch statement to choose
+ * all of the MFF_TUN_METADATAn cases. */
+#define CASE_MFF_TUN_METADATA                         \
+    case MFF_TUN_METADATA0: case MFF_TUN_METADATA1:   \
+    case MFF_TUN_METADATA2: case MFF_TUN_METADATA3:   \
+    case MFF_TUN_METADATA4: case MFF_TUN_METADATA5:   \
+    case MFF_TUN_METADATA6: case MFF_TUN_METADATA7:   \
+    case MFF_TUN_METADATA8: case MFF_TUN_METADATA9:   \
+    case MFF_TUN_METADATA10: case MFF_TUN_METADATA11: \
+    case MFF_TUN_METADATA12: case MFF_TUN_METADATA13: \
+    case MFF_TUN_METADATA14: case MFF_TUN_METADATA15: \
+    case MFF_TUN_METADATA16: case MFF_TUN_METADATA17: \
+    case MFF_TUN_METADATA18: case MFF_TUN_METADATA19: \
+    case MFF_TUN_METADATA20: case MFF_TUN_METADATA21: \
+    case MFF_TUN_METADATA22: case MFF_TUN_METADATA23: \
+    case MFF_TUN_METADATA24: case MFF_TUN_METADATA25: \
+    case MFF_TUN_METADATA26: case MFF_TUN_METADATA27: \
+    case MFF_TUN_METADATA28: case MFF_TUN_METADATA29: \
+    case MFF_TUN_METADATA30: case MFF_TUN_METADATA31: \
+    case MFF_TUN_METADATA32: case MFF_TUN_METADATA33: \
+    case MFF_TUN_METADATA34: case MFF_TUN_METADATA35: \
+    case MFF_TUN_METADATA36: case MFF_TUN_METADATA37: \
+    case MFF_TUN_METADATA38: case MFF_TUN_METADATA39: \
+    case MFF_TUN_METADATA40: case MFF_TUN_METADATA41: \
+    case MFF_TUN_METADATA42: case MFF_TUN_METADATA43: \
+    case MFF_TUN_METADATA44: case MFF_TUN_METADATA45: \
+    case MFF_TUN_METADATA46: case MFF_TUN_METADATA47: \
+    case MFF_TUN_METADATA48: case MFF_TUN_METADATA49: \
+    case MFF_TUN_METADATA50: case MFF_TUN_METADATA51: \
+    case MFF_TUN_METADATA52: case MFF_TUN_METADATA53: \
+    case MFF_TUN_METADATA54: case MFF_TUN_METADATA55: \
+    case MFF_TUN_METADATA56: case MFF_TUN_METADATA57: \
+    case MFF_TUN_METADATA58: case MFF_TUN_METADATA59: \
+    case MFF_TUN_METADATA60: case MFF_TUN_METADATA61: \
+    case MFF_TUN_METADATA62: case MFF_TUN_METADATA63
+
 /* Prerequisites for matching a field.
  *
  * A field may only be matched if the correct lower-level protocols are also
@@ -1512,6 +1698,7 @@ struct mf_field {
      */
     unsigned int n_bytes;       /* Width of the field in bytes. */
     unsigned int n_bits;        /* Number of significant bits in field. */
+    bool variable_len;          /* Length is variable, if so width is max. */
 
     /* Properties. */
     enum mf_maskable maskable;
@@ -1541,6 +1728,7 @@ struct mf_field {
 
 /* The representation of a field's value. */
 union mf_value {
+    uint8_t tun_metadata[128];
     struct in6_addr ipv6;
     uint8_t mac[ETH_ADDR_LEN];
     ovs_be64 be64;
@@ -1548,11 +1736,8 @@ union mf_value {
     ovs_be16 be16;
     uint8_t u8;
 };
-BUILD_ASSERT_DECL(sizeof(union mf_value) == 16);
-
-/* An all-1-bits mf_value.  Needs to be updated if struct mf_value grows.*/
-#define MF_EXACT_MASK_INITIALIZER { IN6ADDR_EXACT_INIT }
-BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof(struct in6_addr));
+BUILD_ASSERT_DECL(sizeof(union mf_value) == 128);
+BUILD_ASSERT_DECL(sizeof(union mf_value) >= GENEVE_MAX_OPT_SIZE);
 
 /* Part of a field. */
 struct mf_subfield {
@@ -1567,12 +1752,40 @@ struct mf_subfield {
  * value" contains NXM_OF_VLAN_TCI[0..11], then one could access the
  * corresponding data in value.be16[7] as the bits in the mask htons(0xfff). */
 union mf_subvalue {
-    uint8_t u8[16];
-    ovs_be16 be16[8];
-    ovs_be32 be32[4];
-    ovs_be64 be64[2];
+    /* Access to full data. */
+    uint8_t u8[128];
+    ovs_be16 be16[64];
+    ovs_be32 be32[32];
+    ovs_be64 be64[16];
+
+    /* Convenient access to just least-significant bits in various forms. */
+    struct {
+        ovs_be64 dummy_integer[15];
+        ovs_be64 integer;
+    };
+    struct {
+        uint8_t dummy_mac[122];
+        uint8_t mac[6];
+    };
+    struct {
+        ovs_be32 dummy_ipv4[31];
+        ovs_be32 ipv4;
+    };
+    struct {
+        struct in6_addr dummy_ipv6[7];
+        struct in6_addr ipv6;
+    };
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
+
+bool mf_subvalue_intersect(const union mf_subvalue *a_value,
+                           const union mf_subvalue *a_mask,
+                           const union mf_subvalue *b_value,
+                           const union mf_subvalue *b_mask,
+                           union mf_subvalue *dst_value,
+                           union mf_subvalue *dst_mask);
+int mf_subvalue_width(const union mf_subvalue *);
+void mf_subvalue_shift(union mf_subvalue *, int n);
 
 /* An array of fields with values */
 struct field_array {
@@ -1625,6 +1838,8 @@ void mf_set_flow_value_masked(const struct mf_field *,
                               struct flow *);
 bool mf_is_zero(const struct mf_field *, const struct flow *);
 void mf_mask_field(const struct mf_field *, struct flow *);
+int mf_field_len(const struct mf_field *, const union mf_value *value,
+                 const union mf_value *mask);
 
 void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);
@@ -1642,6 +1857,10 @@ void mf_write_subfield_flow(const struct mf_subfield *,
                             const union mf_subvalue *, struct flow *);
 void mf_write_subfield(const struct mf_subfield *, const union mf_subvalue *,
                        struct match *);
+void mf_mask_subfield(const struct mf_field *,
+                      const union mf_subvalue *value,
+                      const union mf_subvalue *mask,
+                      struct match *);
 
 void mf_read_subfield(const struct mf_subfield *, const struct flow *,
                       union mf_subvalue *);

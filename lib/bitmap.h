@@ -269,13 +269,13 @@ bitmap_is_all_zeros(const unsigned long *bitmap, size_t n)
 #define BITMAP_FOR_EACH_1(IDX, SIZE, BITMAP)        \
     BITMAP_FOR_EACH_1_RANGE(IDX, 0, SIZE, BITMAP)
 
-/* More efficient access to a map of single ulong. */
-#define ULONG_FOR_EACH_1(IDX, MAP)                  \
-    for (unsigned long map__ = (MAP);               \
+/* More efficient access to a map of single ullong. */
+#define ULLONG_FOR_EACH_1(IDX, MAP)                 \
+    for (uint64_t map__ = (MAP);                    \
          map__ && (((IDX) = raw_ctz(map__)), true); \
          map__ = zero_rightmost_1bit(map__))
 
-#define ULONG_SET0(MAP, OFFSET) ((MAP) &= ~(1UL << (OFFSET)))
-#define ULONG_SET1(MAP, OFFSET) ((MAP) |= 1UL << (OFFSET))
+#define ULLONG_SET0(MAP, OFFSET) ((MAP) &= ~(1ULL << (OFFSET)))
+#define ULLONG_SET1(MAP, OFFSET) ((MAP) |= 1ULL << (OFFSET))
 
 #endif /* bitmap.h */

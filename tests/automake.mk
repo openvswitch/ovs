@@ -82,7 +82,8 @@ TESTSUITE_AT = \
 	tests/interface-reconfigure.at \
 	tests/vlog.at \
 	tests/vtep-ctl.at \
-	tests/auto-attach.at
+	tests/auto-attach.at \
+	tests/ovn.at
 
 KMOD_TESTSUITE_AT = \
 	tests/kmod-testsuite.at \
@@ -94,7 +95,7 @@ TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 KMOD_TESTSUITE = $(srcdir)/tests/kmod-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
-AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL)
 
 check-local: tests/atconfig tests/atlocal $(TESTSUITE)
 	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS)
@@ -280,6 +281,7 @@ tests_ovstest_SOURCES = \
 	tests/test-multipath.c \
 	tests/test-netflow.c \
 	tests/test-odp.c \
+	tests/test-ovn.c \
 	tests/test-packets.c \
 	tests/test-random.c \
 	tests/test-reconnect.c \
@@ -298,7 +300,7 @@ tests_ovstest_SOURCES += \
 	tests/test-unix-socket.c
 endif
 
-tests_ovstest_LDADD = lib/libopenvswitch.la
+tests_ovstest_LDADD = lib/libopenvswitch.la ovn/lib/libovn.la
 dist_check_SCRIPTS = tests/flowgen.pl
 
 noinst_PROGRAMS += tests/test-strtok_r

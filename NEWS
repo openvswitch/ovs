@@ -1,6 +1,22 @@
-Post-v2.3.0
+Post-v2.4.0
 ---------------------
-   - Added support for SFQ, FQ_CoDel and CoDel qdiscs. 
+   - Dropped support for Python older than version 2.7.  As a consequence,
+     using Open vSwitch 2.5 or later on XenServer 6.5 or earlier (which
+     have Python 2.4) requires first installing Python 2.7.
+   - OpenFlow:
+     * Group chaining (where one OpenFlow group triggers another) is
+       now supported.
+   - Support for matching and generating options with Geneve tunnels.
+
+
+v2.4.0 - xx xxx xxxx
+---------------------
+   - Flow table modifications are now atomic, meaning that each packet
+     now sees a coherent version of the OpenFlow pipeline.  For
+     example, if a controller removes all flows with a single OpenFlow
+     "flow_mod", no packet sees an intermediate version of the OpenFlow
+     pipeline where only some of the flows have been deleted.
+   - Added support for SFQ, FQ_CoDel and CoDel qdiscs.
    - Add bash command-line completion support for ovs-vsctl Please check
      utilities/ovs-command-compgen.INSTALL.md for how to use.
    - The MAC learning feature now includes per-port fairness to mitigate
@@ -27,6 +43,12 @@ Post-v2.3.0
      commands are now redundant and will be removed in a future
      release.  See ovs-vswitchd(8) for details.
    - OpenFlow:
+     * OpenFlow 1.4 bundles are now supported for flow mods and port
+       mods.  For flow mods, both 'atomic' and 'ordered' bundle flags
+       are trivially supported, as all bundled messages are executed
+       in the order they were added and all flow table modifications
+       are now atomic to the datapath.  Port mods may not appear in
+       atomic bundles, as port status modifications are not atomic.
      * IPv6 flow label and neighbor discovery fields are now modifiable.
      * OpenFlow 1.5 extended registers are now supported.
      * The OpenFlow 1.5 actset_output field is now supported.
@@ -41,6 +63,18 @@ Post-v2.3.0
      * A new Netronome extension to OpenFlow 1.5+ allows control over the
        fields hashed for OpenFlow select groups.  See "selection_method" and
        related options in ovs-ofctl(8) for details.
+   - ovs-ofctl has a new '--bundle' option that makes the flow mod commands
+     ('add-flow', 'add-flows', 'mod-flows', 'del-flows', and 'replace-flows')
+     use an OpenFlow 1.4 bundle to operate the modifications as a single
+     atomic transaction.  If any of the flow mods in a transaction fail, none
+     of them are executed.  All flow mods in a bundle appear to datapath
+     lookups simultaneously.
+   - ovs-ofctl 'add-flow' and 'add-flows' commands now accept arbitrary flow
+     mods as an input by allowing the flow specification to start with an
+     explicit 'add', 'modify', 'modify_strict', 'delete', or 'delete_strict'
+     keyword.  A missing keyword is treated as 'add', so this is fully
+     backwards compatible.  With the new '--bundle' option all the flow mods
+     are executed as a single atomic transaction using an OpenFlow 1.4 bundle.
    - ovs-pki: Changed message digest algorithm from MD5 to SHA-1 because
      MD5 is no longer secure and some operating systems have started to disable
      it in OpenSSL.
@@ -64,8 +98,8 @@ Post-v2.3.0
      with Docker, the wrapper script will be retired.
    - Added support for DPDK Tunneling. VXLAN, GRE, and Geneve are supported
      protocols. This is generic tunneling mechanism for userspace datapath.
-   - Support for multicast snooping (IGMPv1 and IGMPv2)
-   - Support for Linux kernels up to 3.19.x
+   - Support for multicast snooping (IGMPv1, IGMPv2 and IGMPv3)
+   - Support for Linux kernels up to 4.0.x
    - The documentation now use the term 'destination' to mean one of syslog,
      console or file for vlog logging instead of the previously used term
      'facility'.
@@ -81,6 +115,12 @@ Post-v2.3.0
      openvswitch.ko but built and loaded automatically as individual kernel
      modules (vport-*.ko).
    - Support for STT tunneling.
+   - ovs-sim: New developer tool for simulating multiple OVS instances.
+     See ovs-sim(1) for more information.
+   - Support to configure method (--syslog-method argument) that determines
+     how daemons will talk with syslog.
+   - Support for "ovs-appctl vlog/list-pattern" command that lets to query
+     logging message format for each destination.
 
 
 v2.3.0 - 14 Aug 2014

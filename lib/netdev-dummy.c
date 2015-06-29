@@ -84,6 +84,11 @@ struct dummy_packet_conn {
     } u;
 };
 
+struct pkt_list_node {
+    struct dp_packet *pkt;
+    struct ovs_list list_node;
+};
+
 /* Protects 'dummy_list'. */
 static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -130,6 +135,8 @@ static int netdev_dummy_construct(struct netdev *);
 static void netdev_dummy_queue_packet(struct netdev_dummy *, struct dp_packet *);
 
 static void dummy_packet_stream_close(struct dummy_packet_stream *);
+
+static void pkt_list_delete(struct ovs_list *);
 
 static bool
 is_dummy_class(const struct netdev_class *class)
@@ -186,10 +193,14 @@ dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size
 {
     if (list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
         struct dp_packet *b;
+        struct pkt_list_node *node;
 
         b = dp_packet_clone_data_with_headroom(buffer, size, 2);
         put_unaligned_be16(dp_packet_push_uninit(b, 2), htons(size));
-        list_push_back(&s->txq, &b->list_node);
+
+        node = xmalloc(sizeof *node);
+        node->pkt = b;
+        list_push_back(&s->txq, &node->list_node);
     }
 }
 
@@ -202,16 +213,19 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
     stream_run(s->stream);
 
     if (!list_is_empty(&s->txq)) {
+        struct pkt_list_node *txbuf_node;
         struct dp_packet *txbuf;
         int retval;
 
-        txbuf = dp_packet_from_list(list_front(&s->txq));
+        ASSIGN_CONTAINER(txbuf_node, list_front(&s->txq), list_node);
+        txbuf = txbuf_node->pkt;
         retval = stream_send(s->stream, dp_packet_data(txbuf), dp_packet_size(txbuf));
 
         if (retval > 0) {
             dp_packet_pull(txbuf, retval);
             if (!dp_packet_size(txbuf)) {
-                list_remove(&txbuf->list_node);
+                list_remove(&txbuf_node->list_node);
+                free(txbuf_node);
                 dp_packet_delete(txbuf);
             }
         } else if (retval != -EAGAIN) {
@@ -263,7 +277,7 @@ dummy_packet_stream_close(struct dummy_packet_stream *s)
 {
     stream_close(s->stream);
     dp_packet_uninit(&s->rxbuf);
-    dp_packet_list_delete(&s->txq);
+    pkt_list_delete(&s->txq);
 }
 
 static void
@@ -711,7 +725,8 @@ netdev_dummy_get_in4(const struct netdev *netdev_,
     *address = netdev->address;
     *netmask = netdev->netmask;
     ovs_mutex_unlock(&netdev->mutex);
-    return 0;
+
+    return address->s_addr ? 0 : EADDRNOTAVAIL;
 }
 
 static int
@@ -797,7 +812,7 @@ netdev_dummy_rxq_destruct(struct netdev_rxq *rxq_)
 
     ovs_mutex_lock(&netdev->mutex);
     list_remove(&rx->node);
-    dp_packet_list_delete(&rx->recv_queue);
+    pkt_list_delete(&rx->recv_queue);
     ovs_mutex_unlock(&netdev->mutex);
     seq_destroy(rx->seq);
 }
@@ -820,7 +835,11 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
 
     ovs_mutex_lock(&netdev->mutex);
     if (!list_is_empty(&rx->recv_queue)) {
-        packet = dp_packet_from_list(list_pop_front(&rx->recv_queue));
+        struct pkt_list_node *pkt_node;
+
+        ASSIGN_CONTAINER(pkt_node, list_pop_front(&rx->recv_queue), list_node);
+        packet = pkt_node->pkt;
+        free(pkt_node);
         rx->recv_queue_len--;
     } else {
         packet = NULL;
@@ -866,7 +885,7 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
 
     ovs_mutex_lock(&netdev->mutex);
-    dp_packet_list_delete(&rx->recv_queue);
+    pkt_list_delete(&rx->recv_queue);
     rx->recv_queue_len = 0;
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -912,6 +931,23 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         dev->stats.tx_bytes += size;
 
         dummy_packet_conn_send(&dev->conn, buffer, size);
+
+        /* Reply to ARP requests for 'dev''s assigned IP address. */
+        if (dev->address.s_addr) {
+            struct dp_packet packet;
+            struct flow flow;
+
+            dp_packet_use_const(&packet, buffer, size);
+            flow_extract(&packet, &flow);
+            if (flow.dl_type == htons(ETH_TYPE_ARP)
+                && flow.nw_proto == ARP_OP_REQUEST
+                && flow.nw_dst == dev->address.s_addr) {
+                struct dp_packet *reply = dp_packet_new(0);
+                compose_arp(reply, ARP_OP_REPLY, dev->hwaddr, flow.dl_src,
+                            false, flow.nw_dst, flow.nw_src);
+                netdev_dummy_queue_packet(dev, reply);
+            }
+        }
 
         if (dev->tx_pcap) {
             struct dp_packet packet;
@@ -1116,6 +1152,17 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_rxq_drain,
 };
 
+static void
+pkt_list_delete(struct ovs_list *l)
+{
+    struct pkt_list_node *pkt;
+
+    LIST_FOR_EACH_POP(pkt, list_node, l) {
+        dp_packet_delete(pkt->pkt);
+        free(pkt);
+    }
+}
+
 static struct dp_packet *
 eth_from_packet_or_flow(const char *s)
 {
@@ -1159,7 +1206,10 @@ eth_from_packet_or_flow(const char *s)
 static void
 netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packet)
 {
-    list_push_back(&rx->recv_queue, &packet->list_node);
+    struct pkt_list_node *pkt_node = xmalloc(sizeof *pkt_node);
+
+    pkt_node->pkt = packet;
+    list_push_back(&rx->recv_queue, &pkt_node->list_node);
     rx->recv_queue_len++;
     seq_change(rx->seq);
 }
@@ -1376,8 +1426,27 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
 }
 
+static void
+netdev_dummy_override(const char *type)
+{
+    if (!netdev_unregister_provider(type)) {
+        struct netdev_class *class;
+        int error;
+
+        class = xmemdup(&dummy_class, sizeof dummy_class);
+        class->type = xstrdup(type);
+        error = netdev_register_provider(class);
+        if (error) {
+            VLOG_ERR("%s: failed to register netdev provider (%s)",
+                     type, ovs_strerror(error));
+            free(CONST_CAST(char *, class->type));
+            free(class);
+        }
+    }
+}
+
 void
-netdev_dummy_register(bool override)
+netdev_dummy_register(enum dummy_level level)
 {
     unixctl_command_register("netdev-dummy/receive", "name packet|flow...",
                              2, INT_MAX, netdev_dummy_receive, NULL);
@@ -1391,33 +1460,20 @@ netdev_dummy_register(bool override)
                              "[netdev] ipaddr/mask-prefix-len", 2, 2,
                              netdev_dummy_ip4addr, NULL);
 
-
-    if (override) {
+    if (level == DUMMY_OVERRIDE_ALL) {
         struct sset types;
         const char *type;
 
         sset_init(&types);
         netdev_enumerate_types(&types);
         SSET_FOR_EACH (type, &types) {
-            if (!strcmp(type, "patch")) {
-                continue;
-            }
-            if (!netdev_unregister_provider(type)) {
-                struct netdev_class *class;
-                int error;
-
-                class = xmemdup(&dummy_class, sizeof dummy_class);
-                class->type = xstrdup(type);
-                error = netdev_register_provider(class);
-                if (error) {
-                    VLOG_ERR("%s: failed to register netdev provider (%s)",
-                             type, ovs_strerror(error));
-                    free(CONST_CAST(char *, class->type));
-                    free(class);
-                }
+            if (strcmp(type, "patch")) {
+                netdev_dummy_override(type);
             }
         }
         sset_destroy(&types);
+    } else if (level == DUMMY_OVERRIDE_SYSTEM) {
+        netdev_dummy_override("system");
     }
     netdev_register_provider(&dummy_class);
 

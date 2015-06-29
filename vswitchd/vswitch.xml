@@ -155,7 +155,7 @@
       <column name="other_config" key="n-dpdk-rxqs"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
-          Specifies the number of rx queues to be created for each dpdk
+          Specifies the maximum number of rx queues to be created for each dpdk
           interface.  If not specified or specified to 0, one rx queue will
           be created for each dpdk interface by default.
         </p>
@@ -940,7 +940,7 @@
       Protocol (IGMP) traffic between hosts and multicast routers.  The
       switch uses what IGMP snooping learns to forward multicast traffic
       only to interfaces that are connected to interested receivers.
-      Currently it supports IGMPv1 and IGMPv2 protocols.
+      Currently it supports IGMPv1, IGMPv2 and IGMPv3 protocols.
 
       <column name="mcast_snooping_enable">
         Enable multicast snooping on the bridge. For now, the default
@@ -1828,12 +1828,11 @@
 
           <dt><code>geneve</code></dt>
           <dd>
-            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-gross-geneve-00</code>)
+            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve-00</code>)
             IPv4 tunnel.
 
-            Geneve supports options as a means to transport additional metadata,
-            however, currently only the 24-bit VNI is supported. This is planned
-            to be extended in the future.
+            A description of how to match and set Geneve options can be found
+            in the <code>ovs-ofctl</code> manual page.
           </dd>
 
           <dt><code>gre</code></dt>

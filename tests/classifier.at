@@ -6,11 +6,15 @@ m4_foreach(
    [single-rule],
    [rule-replacement],
    [many-rules-in-one-list],
+   [versioned many-rules-in-one-list],
    [many-rules-in-one-table],
+   [versioned many-rules-in-one-table],
    [many-rules-in-two-tables],
-   [many-rules-in-five-tables]],
+   [versioned many-rules-in-two-tables],
+   [many-rules-in-five-tables],
+   [versioned many-rules-in-five-tables]],
   [AT_SETUP([flow classifier - m4_bpatsubst(testname, [-], [ ])])
-   AT_CHECK([ovstest test-classifier testname], [0], [], [])
+   AT_CHECK([ovstest test-classifier m4_bpatsubst(testname, [versioned], [--versioned])], [0], [], [])
    AT_CLEANUP])])
 
 AT_BANNER([miniflow unit tests])
@@ -283,5 +287,22 @@ for src in 0 1 2 3; do
 ])
     done
 done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conjunctive match and other actions])
+OVS_VSWITCHD_START
+# It's OK to use "conjunction" actions with "note" actions.
+AT_CHECK([ovs-ofctl add-flow br0 'actions=conjunction(3,1/2),note:41.42.43.44.45.46'])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=note:41.42.43.44.45.46,conjunction(3,1/2)'])
+# It's not OK to use "conjunction" actions with other types of actions.
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' add-flow br0 'actions=output:1,conjunction(3,1/2)'], [1], [], [dnl
+ofp_actions|WARN|"conjunction" actions may be used along with "note" but not any other kind of action (such as the "output" action used here)
+ovs-ofctl: Incorrect instruction ordering
+])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' add-flow br0 'actions=conjunction(3,1/2),output:1'], [1], [], [dnl
+ofp_actions|WARN|"conjunction" actions may be used along with "note" but not any other kind of action (such as the "output" action used here)
+ovs-ofctl: Incorrect instruction ordering
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

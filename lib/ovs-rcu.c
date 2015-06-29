@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "ovs-rcu.h"
+#include "fatal-signal.h"
 #include "guarded-list.h"
 #include "list.h"
 #include "ovs-thread.h"
@@ -211,6 +212,19 @@ ovsrcu_synchronize(void)
 /* Registers 'function' to be called, passing 'aux' as argument, after the
  * next grace period.
  *
+ * The call is guaranteed to happen after the next time all participating
+ * threads have quiesced at least once, but there is no quarantee that all
+ * registered functions are called as early as possible, or that the functions
+ * registered by different threads would be called in the order the
+ * registrations took place.  In particular, even if two threads provably
+ * register a function each in a specific order, the functions may still be
+ * called in the opposite order, depending on the timing of when the threads
+ * call ovsrcu_quiesce(), how many functions they postpone, and when the
+ * ovs-rcu thread happens to grab the functions to be called.
+ *
+ * All functions registered by a single thread are guaranteed to execute in the
+ * registering order, however.
+ *
  * This function is more conveniently called through the ovsrcu_postpone()
  * macro, which provides a type-safe way to allow 'function''s parameter to be
  * any pointer type. */
@@ -313,6 +327,18 @@ ovsrcu_thread_exit_cb(void *perthread)
     ovsrcu_unregister__(perthread);
 }
 
+/* Cancels the callback to ovsrcu_thread_exit_cb().
+ *
+ * Cancelling the call to the destructor during the main thread exit
+ * is needed while using pthreads-win32 library in Windows. It has been
+ * observed that in pthreads-win32, a call to the destructor during
+ * main thread exit causes undefined behavior. */
+static void
+ovsrcu_cancel_thread_exit_cb(void *aux OVS_UNUSED)
+{
+    pthread_setspecific(perthread_key, NULL);
+}
+
 static void
 ovsrcu_init_module(void)
 {
@@ -320,6 +346,7 @@ ovsrcu_init_module(void)
     if (ovsthread_once_start(&once)) {
         global_seqno = seq_create();
         xpthread_key_create(&perthread_key, ovsrcu_thread_exit_cb);
+        fatal_signal_add_hook(ovsrcu_cancel_thread_exit_cb, NULL, NULL, true);
         list_init(&ovsrcu_threads);
         ovs_mutex_init(&ovsrcu_threads_mutex);
 

@@ -1,0 +1,746 @@
+/*
+ * Copyright (c) 2015 Nicira, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <config.h>
+#include "lex.h"
+#include <ctype.h>
+#include <errno.h>
+#include <stdarg.h>
+#include "dynamic-string.h"
+#include "json.h"
+#include "util.h"
+
+/* Returns a string that represents 'format'. */
+const char *
+lex_format_to_string(enum lex_format format)
+{
+    switch (format) {
+    case LEX_F_DECIMAL:
+        return "decimal";
+    case LEX_F_HEXADECIMAL:
+        return "hexadecimal";
+    case LEX_F_IPV4:
+        return "IPv4";
+    case LEX_F_IPV6:
+        return "IPv6";
+    case LEX_F_ETHERNET:
+        return "Ethernet";
+    default:
+        abort();
+    }
+}
+
+/* Initializes 'token'. */
+void
+lex_token_init(struct lex_token *token)
+{
+    token->type = LEX_T_END;
+    token->s = NULL;
+}
+
+/* Frees memory owned by 'token'. */
+void
+lex_token_destroy(struct lex_token *token)
+{
+    free(token->s);
+}
+
+/* Exchanges 'a' and 'b'. */
+void
+lex_token_swap(struct lex_token *a, struct lex_token *b)
+{
+    struct lex_token tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+/* lex_token_format(). */
+
+static size_t
+lex_token_n_zeros(enum lex_format format)
+{
+    switch (format) {
+    case LEX_F_DECIMAL:     return offsetof(union mf_subvalue, integer);
+    case LEX_F_HEXADECIMAL: return 0;
+    case LEX_F_IPV4:        return offsetof(union mf_subvalue, ipv4);
+    case LEX_F_IPV6:        return offsetof(union mf_subvalue, ipv6);
+    case LEX_F_ETHERNET:    return offsetof(union mf_subvalue, mac);
+    default: OVS_NOT_REACHED();
+    }
+}
+
+/* Returns the effective format for 'token', that is, the format in which it
+ * should actually be printed.  This is ordinarily the same as 'token->format',
+ * but it's always possible that someone sets up a token with a format that
+ * won't work for a value, e.g. 'token->value' is wider than 32 bits but the
+ * format is LEX_F_IPV4.  (The lexer itself won't do that; this is an attempt
+ * to avoid confusion in the future.) */
+static enum lex_format
+lex_token_get_format(const struct lex_token *token)
+{
+    size_t n_zeros = lex_token_n_zeros(token->format);
+    return (is_all_zeros(&token->value, n_zeros)
+            && (token->type != LEX_T_MASKED_INTEGER
+                || is_all_zeros(&token->mask, n_zeros))
+            ? token->format
+            : LEX_F_HEXADECIMAL);
+}
+
+static void
+lex_token_format_value(const union mf_subvalue *value,
+                       enum lex_format format, struct ds *s)
+{
+    switch (format) {
+    case LEX_F_DECIMAL:
+        ds_put_format(s, "%"PRIu64, ntohll(value->integer));
+        break;
+
+    case LEX_F_HEXADECIMAL:
+        mf_format_subvalue(value, s);
+        break;
+
+    case LEX_F_IPV4:
+        ds_put_format(s, IP_FMT, IP_ARGS(value->ipv4));
+        break;
+
+    case LEX_F_IPV6:
+        print_ipv6_addr(s, &value->ipv6);
+        break;
+
+    case LEX_F_ETHERNET:
+        ds_put_format(s, ETH_ADDR_FMT, ETH_ADDR_ARGS(value->mac));
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+}
+
+static void
+lex_token_format_masked_integer(const struct lex_token *token, struct ds *s)
+{
+    enum lex_format format = lex_token_get_format(token);
+
+    lex_token_format_value(&token->value, format, s);
+    ds_put_char(s, '/');
+
+    const union mf_subvalue *mask = &token->mask;
+    if (format == LEX_F_IPV4 && ip_is_cidr(mask->ipv4)) {
+        ds_put_format(s, "%d", ip_count_cidr_bits(mask->ipv4));
+    } else if (token->format == LEX_F_IPV6 && ipv6_is_cidr(&mask->ipv6)) {
+        ds_put_format(s, "%d", ipv6_count_cidr_bits(&mask->ipv6));
+    } else {
+        lex_token_format_value(&token->mask, format, s);
+    }
+}
+
+/* Appends a string representation of 'token' to 's', in a format that can be
+ * losslessly parsed back by the lexer.  (LEX_T_END and LEX_T_ERROR can't be
+ * parsed back.) */
+void
+lex_token_format(const struct lex_token *token, struct ds *s)
+{
+    switch (token->type) {
+    case LEX_T_END:
+        ds_put_cstr(s, "$");
+        break;
+
+    case LEX_T_ID:
+        ds_put_cstr(s, token->s);
+        break;
+
+    case LEX_T_ERROR:
+        ds_put_cstr(s, "error(");
+        json_string_escape(token->s, s);
+        ds_put_char(s, ')');
+        break;
+
+    case LEX_T_STRING:
+        json_string_escape(token->s, s);
+        break;
+
+    case LEX_T_INTEGER:
+        lex_token_format_value(&token->value, lex_token_get_format(token), s);
+        break;
+
+    case LEX_T_MASKED_INTEGER:
+        lex_token_format_masked_integer(token, s);
+        break;
+
+    case LEX_T_LPAREN:
+        ds_put_cstr(s, "(");
+        break;
+    case LEX_T_RPAREN:
+        ds_put_cstr(s, ")");
+        break;
+    case LEX_T_LCURLY:
+        ds_put_cstr(s, "{");
+        break;
+    case LEX_T_RCURLY:
+        ds_put_cstr(s, "}");
+        break;
+    case LEX_T_LSQUARE:
+        ds_put_cstr(s, "[");
+        break;
+    case LEX_T_RSQUARE:
+        ds_put_cstr(s, "]");
+        break;
+    case LEX_T_EQ:
+        ds_put_cstr(s, "==");
+        break;
+    case LEX_T_NE:
+        ds_put_cstr(s, "!=");
+        break;
+    case LEX_T_LT:
+        ds_put_cstr(s, "<");
+        break;
+    case LEX_T_LE:
+        ds_put_cstr(s, "<=");
+        break;
+    case LEX_T_GT:
+        ds_put_cstr(s, ">");
+        break;
+    case LEX_T_GE:
+        ds_put_cstr(s, ">=");
+        break;
+    case LEX_T_LOG_NOT:
+        ds_put_cstr(s, "!");
+        break;
+    case LEX_T_LOG_AND:
+        ds_put_cstr(s, "&&");
+        break;
+    case LEX_T_LOG_OR:
+        ds_put_cstr(s, "||");
+        break;
+    case LEX_T_ELLIPSIS:
+        ds_put_cstr(s, "..");
+        break;
+    case LEX_T_COMMA:
+        ds_put_cstr(s, ",");
+        break;
+    case LEX_T_SEMICOLON:
+        ds_put_cstr(s, ";");
+        break;
+    case LEX_T_EQUALS:
+        ds_put_cstr(s, "=");
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+
+}
+
+/* lex_token_parse(). */
+
+static void OVS_PRINTF_FORMAT(2, 3)
+lex_error(struct lex_token *token, const char *message, ...)
+{
+    ovs_assert(!token->s);
+    token->type = LEX_T_ERROR;
+
+    va_list args;
+    va_start(args, message);
+    token->s = xvasprintf(message, args);
+    va_end(args);
+}
+
+static void
+lex_parse_hex_integer(const char *start, size_t len, struct lex_token *token)
+{
+    const char *in = start + (len - 1);
+    uint8_t *out = token->value.u8 + (sizeof token->value.u8 - 1);
+
+    for (int i = 0; i < len; i++) {
+        int hexit = hexit_value(in[-i]);
+        if (hexit < 0) {
+            lex_error(token, "Invalid syntax in hexadecimal constant.");
+            return;
+        }
+        if (hexit && i / 2 >= sizeof token->value.u8) {
+            lex_error(token, "Hexadecimal constant requires more than "
+                      "%"PRIuSIZE" bits.", 8 * sizeof token->value.u8);
+            return;
+        }
+        out[-(i / 2)] |= i % 2 ? hexit << 4 : hexit;
+    }
+    token->format = LEX_F_HEXADECIMAL;
+}
+
+static const char *
+lex_parse_integer__(const char *p, struct lex_token *token)
+{
+    lex_token_init(token);
+    token->type = LEX_T_INTEGER;
+    memset(&token->value, 0, sizeof token->value);
+    const char *start = p;
+    const char *end = start;
+    while (isalnum((unsigned char) *end) || *end == ':'
+           || (*end == '.' && end[1] != '.')) {
+        end++;
+    }
+    size_t len = end - start;
+
+    int n;
+    uint8_t mac[ETH_ADDR_LEN];
+
+    if (!len) {
+        lex_error(token, "Integer constant expected.");
+    } else if (len == 17
+               && ovs_scan(start, ETH_ADDR_SCAN_FMT"%n",
+                           ETH_ADDR_SCAN_ARGS(mac), &n)
+               && n == len) {
+        memcpy(token->value.mac, mac, sizeof token->value.mac);
+        token->format = LEX_F_ETHERNET;
+    } else if (start + strspn(start, "0123456789") == end) {
+        if (p[0] == '0' && len > 1) {
+            lex_error(token, "Decimal constants must not have leading zeros.");
+        } else {
+            unsigned long long int integer;
+            char *tail;
+
+            errno = 0;
+            integer = strtoull(p, &tail, 10);
+            if (tail != end || errno == ERANGE) {
+                lex_error(token, "Decimal constants must be less than 2**64.");
+            } else {
+                token->value.integer = htonll(integer);
+                token->format = LEX_F_DECIMAL;
+            }
+        }
+    } else if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+        if (len > 2) {
+            lex_parse_hex_integer(start + 2, len - 2, token);
+        } else {
+            lex_error(token, "Hex digits expected following 0%c.", p[1]);
+        }
+    } else if (len < INET6_ADDRSTRLEN) {
+        char copy[INET6_ADDRSTRLEN];
+        memcpy(copy, p, len);
+        copy[len] = '\0';
+
+        struct in_addr ipv4;
+        struct in6_addr ipv6;
+        if (inet_pton(AF_INET, copy, &ipv4) == 1) {
+            token->value.ipv4 = ipv4.s_addr;
+            token->format = LEX_F_IPV4;
+        } else if (inet_pton(AF_INET6, copy, &ipv6) == 1) {
+            token->value.ipv6 = ipv6;
+            token->format = LEX_F_IPV6;
+        } else {
+            lex_error(token, "Invalid numeric constant.");
+        }
+    } else {
+        lex_error(token, "Invalid numeric constant.");
+    }
+
+    ovs_assert(token->type == LEX_T_INTEGER || token->type == LEX_T_ERROR);
+    return end;
+}
+
+static const char *
+lex_parse_mask(const char *p, struct lex_token *token)
+{
+    struct lex_token mask;
+
+    /* Parse just past the '/' as a second integer.  Handle errors. */
+    p = lex_parse_integer__(p + 1, &mask);
+    if (mask.type == LEX_T_ERROR) {
+        lex_token_swap(&mask, token);
+        lex_token_destroy(&mask);
+        return p;
+    }
+    ovs_assert(mask.type == LEX_T_INTEGER);
+
+    /* Now convert the value and mask into a masked integer token.
+     * We have a few special cases. */
+    token->type = LEX_T_MASKED_INTEGER;
+    memset(&token->mask, 0, sizeof token->mask);
+    uint32_t prefix_bits = ntohll(mask.value.integer);
+    if (token->format == mask.format) {
+        /* Same format value and mask is always OK. */
+        token->mask = mask.value;
+    } else if (token->format == LEX_F_IPV4
+               && mask.format == LEX_F_DECIMAL
+               && prefix_bits <= 32) {
+        /* IPv4 address with decimal mask is a CIDR prefix. */
+        token->mask.integer = htonll(ntohl(be32_prefix_mask(prefix_bits)));
+    } else if (token->format == LEX_F_IPV6
+               && mask.format == LEX_F_DECIMAL
+               && prefix_bits <= 128) {
+        /* IPv6 address with decimal mask is a CIDR prefix. */
+        token->mask.ipv6 = ipv6_create_mask(prefix_bits);
+    } else if (token->format == LEX_F_DECIMAL
+               && mask.format == LEX_F_HEXADECIMAL
+               && token->value.integer == 0) {
+        /* Special case for e.g. 0/0x1234. */
+        token->format = LEX_F_HEXADECIMAL;
+        token->mask = mask.value;
+    } else {
+        lex_error(token, "Value and mask have incompatible formats.");
+        return p;
+    }
+
+    /* Check invariant that a 1-bit in the value corresponds to a 1-bit in the
+     * mask. */
+    for (int i = 0; i < ARRAY_SIZE(token->mask.be32); i++) {
+        ovs_be32 v = token->value.be32[i];
+        ovs_be32 m = token->mask.be32[i];
+
+        if (v & ~m) {
+            lex_error(token, "Value contains unmasked 1-bits.");
+            break;
+        }
+    }
+
+    /* Done! */
+    lex_token_destroy(&mask);
+    return p;
+}
+
+static const char *
+lex_parse_integer(const char *p, struct lex_token *token)
+{
+    p = lex_parse_integer__(p, token);
+    if (token->type == LEX_T_INTEGER && *p == '/') {
+        p = lex_parse_mask(p, token);
+    }
+    return p;
+}
+
+static const char *
+lex_parse_string(const char *p, struct lex_token *token)
+{
+    const char *start = ++p;
+    for (;;) {
+        switch (*p) {
+        case '\0':
+            lex_error(token, "Input ends inside quoted string.");
+            return p;
+
+        case '"':
+            token->type = (json_string_unescape(start, p - start, &token->s)
+                           ? LEX_T_STRING : LEX_T_ERROR);
+            return p + 1;
+
+        case '\\':
+            p++;
+            if (*p) {
+                p++;
+            }
+            break;
+
+        default:
+            p++;
+            break;
+        }
+    }
+}
+
+static bool
+lex_is_id1(unsigned char c)
+{
+    return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || c == '_' || c == '.');
+}
+
+static bool
+lex_is_idn(unsigned char c)
+{
+    return lex_is_id1(c) || (c >= '0' && c <= '9');
+}
+
+static const char *
+lex_parse_id(const char *p, struct lex_token *token)
+{
+    const char *start = p;
+
+    do {
+        p++;
+    } while (lex_is_idn(*p));
+
+    token->type = LEX_T_ID;
+    token->s = xmemdup0(start, p - start);
+    return p;
+}
+
+/* Initializes 'token' and parses the first token from the beginning of
+ * null-terminated string 'p' into 'token'.  Stores a pointer to the start of
+ * the token (after skipping white space and comments, if any) into '*startp'.
+ * Returns the character position at which to begin parsing the next token. */
+const char *
+lex_token_parse(struct lex_token *token, const char *p, const char **startp)
+{
+    lex_token_init(token);
+
+next:
+    *startp = p;
+    switch (*p) {
+    case '\0':
+        token->type = LEX_T_END;
+        return p;
+
+    case ' ': case '\t': case '\n': case '\r':
+        p++;
+        goto next;
+
+    case '/':
+        p++;
+        if (*p == '/') {
+            do {
+                p++;
+            } while (*p != '\0' && *p != '\n');
+            goto next;
+        } else if (*p == '*') {
+            p++;
+            for (;;) {
+                if (*p == '*' && p[1] == '/') {
+                    p += 2;
+                    goto next;
+                } else if (*p == '\0' || *p == '\n') {
+                    lex_error(token, "`/*' without matching `*/'.");
+                    return p;
+                } else {
+                    p++;
+                }
+            }
+            goto next;
+        } else {
+            lex_error(token,
+                      "`/' is only valid as part of `//' or `/*'.");
+        }
+        break;
+
+    case '(':
+        token->type = LEX_T_LPAREN;
+        p++;
+        break;
+
+    case ')':
+        token->type = LEX_T_RPAREN;
+        p++;
+        break;
+
+    case '{':
+        token->type = LEX_T_LCURLY;
+        p++;
+        break;
+
+    case '}':
+        token->type = LEX_T_RCURLY;
+        p++;
+        break;
+
+    case '[':
+        token->type = LEX_T_LSQUARE;
+        p++;
+        break;
+
+    case ']':
+        token->type = LEX_T_RSQUARE;
+        p++;
+        break;
+
+    case '=':
+        p++;
+        if (*p == '=') {
+            token->type = LEX_T_EQ;
+            p++;
+        } else {
+            token->type = LEX_T_EQUALS;
+        }
+        break;
+
+    case '!':
+        p++;
+        if (*p == '=') {
+            token->type = LEX_T_NE;
+            p++;
+        } else {
+            token->type = LEX_T_LOG_NOT;
+        }
+        break;
+
+    case '&':
+        p++;
+        if (*p == '&') {
+            token->type = LEX_T_LOG_AND;
+            p++;
+        } else {
+            lex_error(token, "`&' is only valid as part of `&&'.");
+        }
+        break;
+
+    case '|':
+        p++;
+        if (*p == '|') {
+            token->type = LEX_T_LOG_OR;
+            p++;
+        } else {
+            lex_error(token, "`|' is only valid as part of `||'.");
+        }
+        break;
+
+    case '<':
+        p++;
+        if (*p == '=') {
+            token->type = LEX_T_LE;
+            p++;
+        } else {
+            token->type = LEX_T_LT;
+        }
+        break;
+
+    case '>':
+        p++;
+        if (*p == '=') {
+            token->type = LEX_T_GE;
+            p++;
+        } else {
+            token->type = LEX_T_GT;
+        }
+        break;
+
+    case '.':
+        p++;
+        if (*p == '.') {
+            token->type = LEX_T_ELLIPSIS;
+            p++;
+        } else {
+            lex_error(token, "`.' is only valid as part of `..' or a number.");
+        }
+        break;
+
+    case ',':
+        p++;
+        token->type = LEX_T_COMMA;
+        break;
+
+    case ';':
+        p++;
+        token->type = LEX_T_SEMICOLON;
+        break;
+
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    case ':':
+        p = lex_parse_integer(p, token);
+        break;
+
+    case '"':
+        p = lex_parse_string(p, token);
+        break;
+
+    case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+    case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+        /* We need to distinguish an Ethernet address or IPv6 address from an
+         * identifier.  Fortunately, Ethernet addresses and IPv6 addresses that
+         * are ambiguous based on the first character, always start with hex
+         * digits followed by a colon, but identifiers never do. */
+        p = (p[strspn(p, "0123456789abcdefABCDEF")] == ':'
+             ? lex_parse_integer(p, token)
+             : lex_parse_id(p, token));
+        break;
+
+    default:
+        if (lex_is_id1(*p)) {
+            p = lex_parse_id(p, token);
+        } else {
+            if (isprint((unsigned char) *p)) {
+                lex_error(token, "Invalid character `%c' in input.", *p);
+            } else {
+                lex_error(token, "Invalid byte 0x%d in input.", *p);
+            }
+            p++;
+        }
+        break;
+    }
+
+    return p;
+}
+
+/* Initializes 'lexer' for parsing 'input'.
+ *
+ * While the lexer is in use, 'input' must remain available, but the caller
+ * otherwise retains ownership of 'input'.
+ *
+ * The caller must call lexer_get() to obtain the first token. */
+void
+lexer_init(struct lexer *lexer, const char *input)
+{
+    lexer->input = input;
+    lexer->start = NULL;
+    lex_token_init(&lexer->token);
+}
+
+/* Frees storage associated with 'lexer'. */
+void
+lexer_destroy(struct lexer *lexer)
+{
+    lex_token_destroy(&lexer->token);
+}
+
+/* Obtains the next token from 'lexer' into 'lexer->token', and returns the
+ * token's type.  The caller may examine 'lexer->token' directly to obtain full
+ * information about the token. */
+enum lex_type
+lexer_get(struct lexer *lexer)
+{
+    lex_token_destroy(&lexer->token);
+    lexer->input = lex_token_parse(&lexer->token, lexer->input, &lexer->start);
+    return lexer->token.type;
+}
+
+/* Returns the type of the next token that will be fetched by lexer_get(),
+ * without advancing 'lexer->token' to that token. */
+enum lex_type
+lexer_lookahead(const struct lexer *lexer)
+{
+    struct lex_token next;
+    enum lex_type type;
+    const char *start;
+
+    lex_token_parse(&next, lexer->input, &start);
+    type = next.type;
+    lex_token_destroy(&next);
+    return type;
+}
+
+/* If 'lexer''s current token has the given 'type', advances 'lexer' to the
+ * next token and returns true.  Otherwise returns false. */
+bool
+lexer_match(struct lexer *lexer, enum lex_type type)
+{
+    if (lexer->token.type == type) {
+        lexer_get(lexer);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/* If 'lexer''s current token is the identifier given in 'id', advances 'lexer'
+ * to the next token and returns true.  Otherwise returns false.  */
+bool
+lexer_match_id(struct lexer *lexer, const char *id)
+{
+    if (lexer->token.type == LEX_T_ID && !strcmp(lexer->token.s, id)) {
+        lexer_get(lexer);
+        return true;
+    } else {
+        return false;
+    }
+}

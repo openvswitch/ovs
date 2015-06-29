@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,7 +170,7 @@ compose_rarp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN])
     memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
     put_16aligned_be32(&arp->ar_tpa, htonl(0));
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 
@@ -192,15 +192,15 @@ eth_push_vlan(struct dp_packet *packet, ovs_be16 tpid, ovs_be16 tci)
 
 /* Removes outermost VLAN header (if any is present) from 'packet'.
  *
- * 'packet->l2_5' should initially point to 'packet''s outer-most MPLS header
- * or may be NULL if there are no MPLS headers. */
+ * 'packet->l2_5' should initially point to 'packet''s outer-most VLAN header
+ * or may be NULL if there are no VLAN headers. */
 void
 eth_pop_vlan(struct dp_packet *packet)
 {
     struct vlan_eth_header *veh = dp_packet_l2(packet);
 
     if (veh && dp_packet_size(packet) >= sizeof *veh
-        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
+        && eth_type_vlan(veh->veth_type)) {
 
         memmove((char *)veh + VLAN_HEADER_LEN, veh, 2 * ETH_ADDR_LEN);
         dp_packet_resize_l2(packet, -VLAN_HEADER_LEN);
@@ -217,7 +217,7 @@ set_ethertype(struct dp_packet *packet, ovs_be16 eth_type)
         return;
     }
 
-    if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
+    if (eth_type_vlan(eh->eth_type)) {
         ovs_be16 *p;
         char *l2_5 = dp_packet_l2_5(packet);
 
@@ -579,7 +579,7 @@ eth_compose(struct dp_packet *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(eth_type);
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, data);
 
     return data;
@@ -1012,9 +1012,16 @@ packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
 #define ARP_PACKET_SIZE  (2 + ETH_HEADER_LEN + VLAN_HEADER_LEN + \
                           ARP_ETH_HEADER_LEN)
 
+/* Clears 'b' and replaces its contents by an ARP frame with the specified
+ * 'arp_op', 'arp_sha', 'arp_tha', 'arp_spa', and 'arp_tpa'.  The outer
+ * Ethernet frame is initialized with Ethernet source 'arp_sha' and destination
+ * 'arp_tha', except that destination ff:ff:ff:ff:ff:ff is used instead if
+ * 'broadcast' is true. */
 void
-compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
-            ovs_be32 ip_src, ovs_be32 ip_dst)
+compose_arp(struct dp_packet *b, uint16_t arp_op,
+            const uint8_t arp_sha[ETH_ADDR_LEN],
+            const uint8_t arp_tha[ETH_ADDR_LEN], bool broadcast,
+            ovs_be32 arp_spa, ovs_be32 arp_tpa)
 {
     struct eth_header *eth;
     struct arp_eth_header *arp;
@@ -1024,8 +1031,9 @@ compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
 
     eth = dp_packet_put_uninit(b, sizeof *eth);
-    memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
+    memcpy(eth->eth_dst, broadcast ? eth_addr_broadcast : arp_tha,
+           ETH_ADDR_LEN);
+    memcpy(eth->eth_src, arp_sha, ETH_ADDR_LEN);
     eth->eth_type = htons(ETH_TYPE_ARP);
 
     arp = dp_packet_put_uninit(b, sizeof *arp);
@@ -1033,14 +1041,14 @@ compose_arp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN],
     arp->ar_pro = htons(ARP_PRO_IP);
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
-    arp->ar_op = htons(ARP_OP_REQUEST);
-    memcpy(arp->ar_sha, eth_src, ETH_ADDR_LEN);
-    memset(arp->ar_tha, 0, ETH_ADDR_LEN);
+    arp->ar_op = htons(arp_op);
+    memcpy(arp->ar_sha, arp_sha, ETH_ADDR_LEN);
+    memcpy(arp->ar_tha, arp_tha, ETH_ADDR_LEN);
 
-    put_16aligned_be32(&arp->ar_spa, ip_src);
-    put_16aligned_be32(&arp->ar_tpa, ip_dst);
+    put_16aligned_be32(&arp->ar_spa, arp_spa);
+    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
 
-    dp_packet_set_frame(b, eth);
+    dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 

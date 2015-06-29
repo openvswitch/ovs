@@ -101,4 +101,4 @@ $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
                 -e 's,[@]DBDIR[@],/usr/local/etc/openvswitch,g' \
 		< $? > $@.tmp && \
 	mv $@.tmp $@
-EXTRA_DIST += python/ovs/dirs.py python/ovs/dirs.py.template
+EXTRA_DIST += python/ovs/dirs.py.template

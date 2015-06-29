@@ -51,6 +51,9 @@ Sets the log pattern for \fIdestination\fR to \fIpattern\fR.  Refer to
 .IP "\fBvlog/list\fR"
 Lists the supported logging modules and their current levels.
 .
+.IP "\fBvlog/list-pattern\fR"
+Lists logging patterns used for each destination.
+.
 .IP "\fBvlog/reopen\fR"
 Causes \fB\*(PN\fR to close and reopen its log file.  (This is useful
 after rotating log files, to cause a new log file to be used.)

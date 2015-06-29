@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,7 +177,8 @@ struct xlate_in {
      * significant decision, e.g. to explain why OFPP_NORMAL translation
      * dropped a packet.  'recurse' is the resubmit recursion depth at time of
      * invocation. */
-    void (*report_hook)(struct xlate_in *, const char *s, int recurse);
+    void (*report_hook)(struct xlate_in *, int recurse,
+                        const char *format, va_list args);
 
     /* If nonnull, flow translation credits the specified statistics to each
      * rule reached through a resubmit or OFPP_TABLE action.
@@ -210,11 +211,8 @@ void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
                        struct rstp *, const struct mcast_snooping *,
                        const struct mbridge *, const struct dpif_sflow *,
                        const struct dpif_ipfix *, const struct netflow *,
-                       bool forward_bpdu,
-                       bool has_in_band, bool enable_recirc,
-                       bool variable_length_userdata,
-                       size_t mpls_label_stack_length,
-                       bool masked_set_action);
+                       bool forward_bpdu, bool has_in_band,
+                       const struct dpif_backer_support *support);
 void xlate_remove_ofproto(struct ofproto_dpif *);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,

@@ -92,6 +92,7 @@ Common commands:\n\
   list-commands      List commands supported by the target\n\
   version            Print version of the target\n\
   vlog/list          List current logging levels\n\
+  vlog/list-pattern  List logging patterns for each destination.\n\
   vlog/set [SPEC]\n\
       Set log levels as detailed in SPEC, which may include:\n\
       A valid module name (all modules, by default)\n\

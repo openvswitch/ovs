@@ -24,7 +24,9 @@ EXTRA_DIST += \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template \
 	rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
 	rhel/usr_lib_systemd_system_openvswitch.service \
-	rhel/usr_lib_systemd_system_openvswitch-nonetwork.service
+	rhel/usr_lib_systemd_system_openvswitch-nonetwork.service \
+	rhel/usr_lib_systemd_system_ovn-controller.service \
+	rhel/usr_lib_systemd_system_ovn-northd.service
 
 update_rhel_spec = \
   $(AM_V_GEN)($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \

@@ -21,6 +21,7 @@
 uint32_t get_allowed_ofp_versions(void);
 void set_allowed_ofp_versions(const char *string);
 void mask_allowed_ofp_versions(uint32_t);
+void add_allowed_ofp_versions(uint32_t);
 void ofp_version_usage(void);
 
 #endif

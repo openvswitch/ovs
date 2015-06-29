@@ -46,7 +46,7 @@ extern PDEVICE_OBJECT gOvsDeviceObject;
  * Reference count used to prevent premature deallocation of the global switch
  * context structure, gOvsSwitchContext.
  */
-volatile LONG      gOvsSwitchContextRefCount = 1;
+volatile LONG      gOvsSwitchContextRefCount = 0;
 
 static NDIS_STATUS OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
                                    POVS_SWITCH_CONTEXT *switchContextOut);
@@ -137,6 +137,7 @@ OvsExtAttach(NDIS_HANDLE ndisFilterHandle,
     switchContext->controlFlowState = OvsSwitchAttached;
     switchContext->dataFlowState = OvsSwitchPaused;
 
+    gOvsSwitchContextRefCount = 1;
     gOvsSwitchContext = switchContext;
     KeMemoryBarrier();
 
@@ -201,6 +202,7 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
     status = OvsInitSwitchContext(switchContext);
     if (status != NDIS_STATUS_SUCCESS) {
         OvsFreeMemoryWithTag(switchContext, OVS_SWITCH_POOL_TAG);
+        switchContext = NULL;
         goto create_switch_done;
     }
 
@@ -240,7 +242,6 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     }
     OvsDeleteSwitch(switchContext);
     OvsCleanupIpHelper();
-    gOvsSwitchContext = NULL;
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
@@ -263,8 +264,8 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
     if (switchContext)
     {
         dpNo = switchContext->dpNo;
-        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsClearAllSwitchVports(switchContext);
+        OvsUninitTunnelFilter(gOvsExtDriverObject);
         OvsUninitSwitchContext(switchContext);
     }
     OVS_LOG_TRACE("Exit: deleted switch %p  dpNo: %d", switchContext, dpNo);
@@ -367,6 +368,8 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
         sizeof(LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE, OVS_SWITCH_POOL_TAG);
     switchContext->pidHashArray = (PLIST_ENTRY)OvsAllocateMemoryWithTag(
         sizeof(LIST_ENTRY) * OVS_MAX_PID_ARRAY_SIZE, OVS_SWITCH_POOL_TAG);
+    switchContext->tunnelVportsArray = (PLIST_ENTRY)OvsAllocateMemoryWithTag(
+        sizeof(LIST_ENTRY) * OVS_MAX_VPORT_ARRAY_SIZE, OVS_SWITCH_POOL_TAG);
     status = OvsAllocateFlowTable(&switchContext->datapath, switchContext);
 
     if (status == NDIS_STATUS_SUCCESS) {
@@ -377,7 +380,8 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
         switchContext->portNoHashArray == NULL ||
         switchContext->ovsPortNameHashArray == NULL ||
         switchContext->portIdHashArray== NULL ||
-        switchContext->pidHashArray == NULL) {
+        switchContext->pidHashArray == NULL ||
+        switchContext->tunnelVportsArray == NULL) {
         if (switchContext->dispatchLock) {
             NdisFreeRWLock(switchContext->dispatchLock);
         }
@@ -398,6 +402,10 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
                                  OVS_SWITCH_POOL_TAG);
         }
 
+        if (switchContext->tunnelVportsArray) {
+            OvsFreeMemory(switchContext->tunnelVportsArray);
+        }
+
         OvsDeleteFlowTable(&switchContext->datapath);
         OvsCleanupBufferPool(switchContext);
 
@@ -407,12 +415,9 @@ OvsInitSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
     for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->ovsPortNameHashArray[i]);
-    }
-    for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->portIdHashArray[i]);
-    }
-    for (i = 0; i < OVS_MAX_VPORT_ARRAY_SIZE; i++) {
         InitializeListHead(&switchContext->portNoHashArray[i]);
+        InitializeListHead(&switchContext->tunnelVportsArray[i]);
     }
 
     for (i = 0; i < OVS_MAX_PID_ARRAY_SIZE; i++) {
@@ -465,6 +470,8 @@ OvsDeleteSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     OvsFreeMemoryWithTag(switchContext->pidHashArray,
                          OVS_SWITCH_POOL_TAG);
     switchContext->pidHashArray = NULL;
+    OvsFreeMemory(switchContext->tunnelVportsArray);
+    switchContext->tunnelVportsArray = NULL;
     OvsDeleteFlowTable(&switchContext->datapath);
     OvsCleanupBufferPool(switchContext);
 
@@ -489,6 +496,7 @@ OvsReleaseSwitchContext(POVS_SWITCH_CONTEXT switchContext)
 
     if (ref == 1) {
         OvsDeleteSwitchContext(switchContext);
+        gOvsSwitchContext = NULL;
     }
 }
 

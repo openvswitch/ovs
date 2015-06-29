@@ -20,6 +20,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/mutation.h \
 	ovsdb/ovsdb.c \
 	ovsdb/ovsdb.h \
+	ovsdb/monitor.c \
+	ovsdb/monitor.h \
 	ovsdb/query.c \
 	ovsdb/query.h \
 	ovsdb/row.c \
@@ -81,7 +83,6 @@ OVSDB_IDLC = $(run_python) $(srcdir)/ovsdb/ovsdb-idlc.in
 .ovsidl.h:
 	$(AM_V_GEN)$(OVSDB_IDLC) c-idl-header $< > $@.tmp && mv $@.tmp $@
 
-EXTRA_DIST += $(OVSIDL_BUILT)
 BUILT_SOURCES += $(OVSIDL_BUILT)
 
 # This must be done late: macros in targets are expanded when the

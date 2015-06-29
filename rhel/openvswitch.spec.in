@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch on Red Hat Enterprise Linux.
 
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -54,9 +54,6 @@ rhel_cp etc_logrotate.d_openvswitch 0644
 rhel_cp etc_sysconfig_network-scripts_ifup-ovs 0755
 rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
 rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
-
-install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
-install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -182,3 +179,10 @@ exit 0
 %doc INSTALL.DPDK.md rhel/README.RHEL README-native-tunneling.md
 /var/lib/openvswitch
 /var/log/openvswitch
+%exclude /usr/bin/ovn-*
+%exclude /usr/share/man/man1/ovs-sim.1.gz
+%exclude /usr/share/man/man5/ovn-*
+%exclude /usr/share/man/man7/ovn-*
+%exclude /usr/share/man/man8/ovn-*
+%exclude /usr/share/openvswitch/ovn-*
+%exclude /usr/share/openvswitch/scripts/ovn-*

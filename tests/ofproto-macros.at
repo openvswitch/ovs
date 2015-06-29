@@ -15,6 +15,23 @@ s/ hard_age=[0-9]*,//
 '
 }
 
+# Filter (multiline) vconn debug messages from ovs-vswitchd.log.
+# Use with vconn_windows_sub() and ofctl_strip()
+print_vconn_debug () { awk -F\| < ovs-vswitchd.log '
+BEGIN { prt=0 }
+/\|vconn\|DBG\|/ { sub(/[ \t]*$/, ""); print $3 "|" $4 "|" $5; prt=1; next }
+$4 != "" { prt=0; next }
+prt==1 { sub(/[ \t]*$/, ""); print $0 }
+'
+}
+
+vconn_windows_sub() {
+    sed '
+s/tcp:127.0.0.1:[0-9][0-9]*:/unix:/
+s/No error/Success/
+'
+}
+
 # parse_listening_port [SERVER]
 #
 # Parses the TCP or SSL port on which a server is listening from the
@@ -36,7 +53,7 @@ m4_divert_pop([PREPARE_TESTS])
 m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([STRIP_USED], [[sed 's/used:[0-9]\.[0-9]*/used:0.0/']])
-m4_define([STRIP_UFID], [[sed 's/ufid:[0-9a-f]* //']])
+m4_define([STRIP_UFID], [[sed 's/ufid:[-0-9a-f]* //']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
 # _OVS_VSWITCHD_START([vswitchd-aux-args])

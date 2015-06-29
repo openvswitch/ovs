@@ -258,6 +258,29 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
 
     *usable_protocols = OFPUTIL_P_ANY;
 
+    if (command == -2) {
+        size_t len;
+
+        string += strspn(string, " \t\r\n");   /* Skip white space. */
+        len = strcspn(string, ", \t\r\n"); /* Get length of the first token. */
+
+        if (!strncmp(string, "add", len)) {
+            command = OFPFC_ADD;
+        } else if (!strncmp(string, "delete", len)) {
+            command = OFPFC_DELETE;
+        } else if (!strncmp(string, "delete_strict", len)) {
+            command = OFPFC_DELETE_STRICT;
+        } else if (!strncmp(string, "modify", len)) {
+            command = OFPFC_MODIFY;
+        } else if (!strncmp(string, "modify_strict", len)) {
+            command = OFPFC_MODIFY_STRICT;
+        } else {
+            len = 0;
+            command = OFPFC_ADD;
+        }
+        string += len;
+    }
+
     switch (command) {
     case -1:
         fields = F_OUT_PORT;
@@ -353,7 +376,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                 if (fm->table_id != 0xff) {
                     *usable_protocols &= OFPUTIL_P_TID;
                 }
-            } else if (!strcmp(name, "out_port")) {
+            } else if (fields & F_OUT_PORT && !strcmp(name, "out_port")) {
                 if (!ofputil_port_from_string(value, &fm->out_port)) {
                     error = xasprintf("%s is not a valid OpenFlow port",
                                       value);
@@ -485,6 +508,10 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
  * To parse syntax for an OFPT_FLOW_MOD (or NXT_FLOW_MOD), use an OFPFC_*
  * constant for 'command'.  To parse syntax for an OFPST_FLOW or
  * OFPST_AGGREGATE (or NXST_FLOW or NXST_AGGREGATE), use -1 for 'command'.
+ *
+ * If 'command' is given as -2, 'str_' may begin with a command name ("add",
+ * "modify", "delete", "modify_strict", or "delete_strict").  A missing command
+ * name is treated as "add".
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
@@ -818,14 +845,19 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
 /* Parses 'string' as an OFPT_FLOW_MOD or NXT_FLOW_MOD with command 'command'
  * (one of OFPFC_*) into 'fm'.
  *
+ * If 'command' is given as -2, 'string' may begin with a command name ("add",
+ * "modify", "delete", "modify_strict", or "delete_strict").  A missing command
+ * name is treated as "add".
+ *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
-                       uint16_t command,
+                       int command,
                        enum ofputil_protocol *usable_protocols)
 {
     char *error = parse_ofp_str(fm, command, string, usable_protocols);
+
     if (!error) {
         /* Normalize a copy of the match.  This ensures that non-normalized
          * flows get logged but doesn't affect what gets sent to the switch, so
@@ -883,10 +915,14 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
  * type (one of OFPFC_*).  Stores each flow_mod in '*fm', an array allocated
  * on the caller's behalf, and the number of flow_mods in '*n_fms'.
  *
+ * If 'command' is given as -2, each line may start with a command name
+ * ("add", "modify", "delete", "modify_strict", or "delete_strict").  A missing
+ * command name is treated as "add".
+ *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
-parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
+parse_ofp_flow_mod_file(const char *file_name, int command,
                         struct ofputil_flow_mod **fms, size_t *n_fms,
                         enum ofputil_protocol *usable_protocols)
 {
@@ -1546,5 +1582,38 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
     if (stream != stdin) {
         fclose(stream);
     }
+    return NULL;
+}
+
+char * OVS_WARN_UNUSED_RESULT
+parse_ofp_geneve_table_mod_str(struct ofputil_geneve_table_mod *gtm,
+                               uint16_t command, const char *s,
+                               enum ofputil_protocol *usable_protocols)
+{
+    *usable_protocols = OFPUTIL_P_NXM_OXM_ANY;
+
+    gtm->command = command;
+    list_init(&gtm->mappings);
+
+    while (*s) {
+        struct ofputil_geneve_map *map = xmalloc(sizeof *map);
+        int n;
+
+        if (*s == ',') {
+            s++;
+        }
+
+        list_push_back(&gtm->mappings, &map->list_node);
+
+        if (!ovs_scan(s, "{class=%"SCNi16",type=%"SCNi8",len=%"SCNi8"}->tun_metadata%"SCNi16"%n",
+                      &map->option_class, &map->option_type, &map->option_len,
+                      &map->index, &n)) {
+            ofputil_uninit_geneve_table(&gtm->mappings);
+            return xstrdup("invalid geneve mapping");
+        }
+
+        s += n;
+    }
+
     return NULL;
 }

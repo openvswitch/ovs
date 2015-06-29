@@ -9,7 +9,9 @@ EXTRA_OPTS=""
 
 function install_kernel()
 {
-    if [[ "$1" =~ ^3.* ]]; then
+    if [[ "$1" =~ ^4.* ]]; then
+        PREFIX="v4.x"
+    elif [[ "$1" =~ ^3.* ]]; then
         PREFIX="v3.x"
     else
         PREFIX="v2.6/longterm/v2.6.32"
@@ -74,7 +76,7 @@ if [ "$DPDK" ]; then
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
         # Disregard cast alignment errors until DPDK is fixed
-        EXTRA_OPTS="$EXTRA_OPTS -Wno-cast-align"
+        CFLAGS="$CFLAGS -Wno-cast-align"
     fi
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-$DPDK_VER/build"
 elif [ "$CC" != "clang" ]; then

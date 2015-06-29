@@ -14,39 +14,40 @@ VERSION = {"1.0": 0x01,
            "1.4": 0x05,
            "1.5": 0x06}
 
-TYPES = {"u8": 1,
-         "be16": 2,
-         "be32": 4,
-         "MAC": 6,
-         "be64": 8,
-         "IPv6": 16}
+TYPES = {"u8":       (1,   False),
+         "be16":     (2,   False),
+         "be32":     (4,   False),
+         "MAC":      (6,   False),
+         "be64":     (8,   False),
+         "IPv6":     (16,  False),
+         "tunnelMD": (124, True)}
 
-FORMATTING = {"decimal":            ("MFS_DECIMAL",      1, 8),
-              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 8),
-              "Ethernet":           ("MFS_ETHERNET",     6, 6),
-              "IPv4":               ("MFS_IPV4",         4, 4),
-              "IPv6":               ("MFS_IPV6",        16,16),
-              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2, 2),
-              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4, 4),
-              "frag":               ("MFS_FRAG",         1, 1),
-              "tunnel flags":       ("MFS_TNL_FLAGS",    2, 2),
-              "TCP flags":          ("MFS_TCP_FLAGS",    2, 2)}
+FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
+              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
+              "Ethernet":           ("MFS_ETHERNET",     6,   6),
+              "IPv4":               ("MFS_IPV4",         4,   4),
+              "IPv6":               ("MFS_IPV6",        16,  16),
+              "OpenFlow 1.0 port":  ("MFS_OFP_PORT",     2,   2),
+              "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,   4),
+              "frag":               ("MFS_FRAG",         1,   1),
+              "tunnel flags":       ("MFS_TNL_FLAGS",    2,   2),
+              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2)}
 
 PREREQS = {"none": "MFP_NONE",
-          "ARP": "MFP_ARP",
-          "VLAN VID": "MFP_VLAN_VID",
-          "IPv4": "MFP_IPV4",
-          "IPv6": "MFP_IPV6",
-          "IPv4/IPv6": "MFP_IP_ANY",
-          "MPLS": "MFP_MPLS",
-          "TCP": "MFP_TCP",
-          "UDP": "MFP_UDP",
-          "SCTP": "MFP_SCTP",
-          "ICMPv4": "MFP_ICMPV4",
-          "ICMPv6": "MFP_ICMPV6",
-          "ND": "MFP_ND",
-          "ND solicit": "MFP_ND_SOLICIT",
-          "ND advert": "MFP_ND_ADVERT"}
+           "ARP": "MFP_ARP",
+           "VLAN VID": "MFP_VLAN_VID",
+           "IPv4": "MFP_IPV4",
+           "IPv6": "MFP_IPV6",
+           "IPv4/IPv6": "MFP_IP_ANY",
+           "MPLS": "MFP_MPLS",
+           "TCP": "MFP_TCP",
+           "UDP": "MFP_UDP",
+           "SCTP": "MFP_SCTP",
+           "ICMPv4": "MFP_ICMPV4",
+           "ICMPv6": "MFP_ICMPV6",
+           "ND": "MFP_ND",
+           "ND solicit": "MFP_ND_SOLICIT",
+           "ND advert": "MFP_ND_ADVERT"}
 
 # Maps a name prefix into an (experimenter ID, class) pair, so:
 #
@@ -67,14 +68,17 @@ OXM_CLASSES = {"NXM_OF_":        (0,          0x0000),
                # used only to test support for experimenter OXM, since there
                # are barely any real uses of experimenter OXM in the wild.
                "NXOXM_ET_":      (0x00002320, 0xffff)}
+
+
 def oxm_name_to_class(name):
     prefix = ''
     class_ = None
-    for p, c in OXM_CLASSES.iteritems():
+    for p, c in OXM_CLASSES.items():
         if name.startswith(p) and len(p) > len(prefix):
             prefix = p
             class_ = c
     return class_
+
 
 def decode_version_range(range):
     if range in VERSION:
@@ -85,6 +89,7 @@ def decode_version_range(range):
         a, b = re.match(r'^([^-]+)-([^-]+)$', range).groups()
         return (VERSION[a], VERSION[b])
 
+
 def get_line():
     global line
     global line_number
@@ -93,27 +98,33 @@ def get_line():
     if line == "":
         fatal("unexpected end of input")
 
+
 n_errors = 0
+
+
 def error(msg):
     global n_errors
     sys.stderr.write("%s:%d: %s\n" % (file_name, line_number, msg))
     n_errors += 1
 
+
 def fatal(msg):
     error(msg)
     sys.exit(1)
 
+
 def usage():
     argv0 = os.path.basename(sys.argv[0])
-    print '''\
+    print('''\
 %(argv0)s, for extracting OpenFlow field properties from meta-flow.h
 usage: %(argv0)s INPUT [--meta-flow | --nx-match]
   where INPUT points to lib/meta-flow.h in the source directory.
 Depending on the option given, the output written to stdout is intended to be
 saved either as lib/meta-flow.inc or lib/nx-match.inc for the respective C
 file to #include.\
-''' % {"argv0": argv0}
+''' % {"argv0": argv0})
     sys.exit(0)
+
 
 def make_sizeof(s):
     m = re.match(r'(.*) up to (.*)', s)
@@ -123,23 +134,38 @@ def make_sizeof(s):
     else:
         return "sizeof(%s)" % s
 
+
 def parse_oxms(s, prefix, n_bytes):
     if s == 'none':
         return ()
 
     return tuple(parse_oxm(s2.strip(), prefix, n_bytes) for s2 in s.split(','))
 
+
+match_types = dict()
+
+
 def parse_oxm(s, prefix, n_bytes):
+    global match_types
+
     m = re.match('([A-Z0-9_]+)\(([0-9]+)\) since(?: OF(1\.[0-9]+) and)? v([12]\.[0-9]+)$', s)
     if not m:
         fatal("%s: syntax error parsing %s" % (s, prefix))
-        
+
     name, oxm_type, of_version, ovs_version = m.groups()
 
     class_ = oxm_name_to_class(name)
     if class_ is None:
         fatal("unknown OXM class for %s" % name)
     oxm_vendor, oxm_class = class_
+
+    if class_ in match_types:
+        if oxm_type in match_types[class_]:
+            fatal("duplicate match type for %s (conflicts with %s)" %
+                  (name, match_types[class_][oxm_type]))
+    else:
+        match_types[class_] = dict()
+    match_types[class_][oxm_type] = name
 
     # Normally the oxm_length is the size of the field, but for experimenter
     # OXMs oxm_length also includes the 4-byte experimenter ID.
@@ -160,6 +186,7 @@ def parse_oxm(s, prefix, n_bytes):
         of_version_nr = 0
 
     return (header, name, of_version_nr, ovs_version)
+
 
 def parse_field(mff, comment):
     f = {'mff': mff}
@@ -197,7 +224,7 @@ def parse_field(mff, comment):
         elif d[key] is not None:
             fatal("%s: duplicate key" % key)
         d[key] = value
-    for key, value in d.iteritems():
+    for key, value in d.items():
         if not value and key not in ("OF1.0", "OF1.1",
                                      "Prefix lookup member", "Notes"):
             fatal("%s: missing %s" % (mff, key))
@@ -208,7 +235,8 @@ def parse_field(mff, comment):
     type_ = m.group(1)
     if type_ not in TYPES:
         fatal("%s: unknown type %s" % (mff, d['Type']))
-    f['n_bytes'] = TYPES[type_]
+
+    f['n_bytes'] = TYPES[type_][0]
     if m.group(2):
         f['n_bits'] = int(m.group(2))
         if f['n_bits'] > f['n_bytes'] * 8:
@@ -216,6 +244,7 @@ def parse_field(mff, comment):
                   % (mff, f['n_bits'], 8 * f['n_bytes']))
     else:
         f['n_bits'] = 8 * f['n_bytes']
+    f['variable'] = TYPES[type_][1]
 
     if d['Maskable'] == 'no':
         f['mask'] = 'MFM_NONE'
@@ -246,7 +275,7 @@ def parse_field(mff, comment):
     f['OF1.0'] = d['OF1.0']
     if not d['OF1.0'] in (None, 'exact match', 'CIDR mask'):
         fatal("%s: unknown OF1.0 match type %s" % (mff, d['OF1.0']))
-        
+
     f['OF1.1'] = d['OF1.1']
     if not d['OF1.1'] in (None, 'exact match', 'bitwise mask'):
         fatal("%s: unknown OF1.1 match type %s" % (mff, d['OF1.1']))
@@ -258,6 +287,7 @@ def parse_field(mff, comment):
 
     return f
 
+
 def protocols_to_c(protocols):
     if protocols == set(['of10', 'of11', 'oxm']):
         return 'OFPUTIL_P_ANY'
@@ -268,7 +298,8 @@ def protocols_to_c(protocols):
     elif protocols == set([]):
         return 'OFPUTIL_P_NONE'
     else:
-        assert False        
+        assert False
+
 
 def make_meta_flow(fields):
     output = []
@@ -279,7 +310,12 @@ def make_meta_flow(fields):
             output += ["    \"%s\", \"%s\"," % (f['name'], f['extra_name'])]
         else:
             output += ["    \"%s\", NULL," % f['name']]
-        output += ["    %d, %d," % (f['n_bytes'], f['n_bits'])]
+
+        if f['variable']:
+            variable = 'true'
+        else:
+            variable = 'false'
+        output += ["    %d, %d, %s," % (f['n_bytes'], f['n_bits'], variable)]
 
         if f['writable']:
             rw = 'true'
@@ -331,7 +367,7 @@ def make_meta_flow(fields):
         output += ["    %s," % protocols_to_c(protocols)]
         output += ["    %s," % protocols_to_c(cidr_protocols)]
         output += ["    %s," % protocols_to_c(bitwise_protocols)]
-        
+
         if f['prefix']:
             output += ["    FLOW_U32OFS(%s)," % f['prefix']]
         else:
@@ -340,16 +376,18 @@ def make_meta_flow(fields):
         output += ["},"]
     return output
 
+
 def make_nx_match(fields):
     output = []
-    print "static struct nxm_field_index all_nxm_fields[] = {";
+    print("static struct nxm_field_index all_nxm_fields[] = {")
     for f in fields:
         # Sort by OpenFlow version number (nx-match.c depends on this).
         for oxm in sorted(f['OXM'], key=lambda x: x[2]):
-            print """{ .nf = { %s, %d, "%s", %s } },""" % (
-                oxm[0], oxm[2], oxm[1], f['mff'])
-    print "};"
+            print("""{ .nf = { %s, %d, "%s", %s } },""" % (
+                oxm[0], oxm[2], oxm[1], f['mff']))
+    print("};")
     return output
+
 
 def extract_ofp_fields(mode):
     global line
@@ -456,9 +494,9 @@ def extract_ofp_fields(mode):
     if n_errors:
         sys.exit(1)
 
-    print """\
+    print("""\
 /* Generated automatically; do not modify!    "-*- buffer-read-only: t -*- */
-"""
+""")
 
     if mode == '--meta-flow':
         output = make_meta_flow(fields)
@@ -486,9 +524,7 @@ if __name__ == '__main__':
         line_number = 0
 
         for oline in extract_ofp_fields(sys.argv[2]):
-            print oline
+            print(oline)
     else:
         sys.stderr.write("invalid arguments; use --help for help\n")
         sys.exit(1)
-
-        
