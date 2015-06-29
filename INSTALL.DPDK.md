@@ -355,7 +355,7 @@ have arbitrary names.
   -  For vhost-user, the name of the port type is `dpdkvhostuser`
 
      ```
-     ovs-ofctl add-port br0 vhost-user-1 -- set Interface vhost-user-1
+     ovs-vsctl add-port br0 vhost-user-1 -- set Interface vhost-user-1
      type=dpdkvhostuser
      ```
 
@@ -461,7 +461,7 @@ arbitrary names.
   -  For vhost-cuse, the name of the port type is `dpdkvhostcuse`
 
      ```
-     ovs-ofctl add-port br0 vhost-cuse-1 -- set Interface vhost-cuse-1
+     ovs-vsctl add-port br0 vhost-cuse-1 -- set Interface vhost-cuse-1
      type=dpdkvhostcuse
      ```
 
