@@ -1884,8 +1884,8 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
     if (mask_key_len) {
         enum odp_key_fitness fitness;
 
-        fitness = odp_flow_key_to_mask(mask_key, mask_key_len, key, key_len,
-                                       &wc->masks, flow);
+        fitness = odp_flow_key_to_mask_udpif(mask_key, mask_key_len, key,
+                                             key_len, &wc->masks, flow);
         if (fitness) {
             /* This should not happen: it indicates that
              * odp_flow_key_from_mask() and odp_flow_key_to_mask()
@@ -1919,7 +1919,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 {
     odp_port_t in_port;
 
-    if (odp_flow_key_to_flow(key, key_len, flow)) {
+    if (odp_flow_key_to_flow_udpif(key, key_len, flow)) {
         /* This should not happen: it indicates that odp_flow_key_from_flow()
          * and odp_flow_key_to_flow() disagree on the acceptable form of a
          * flow.  Log the problem as an error, with enough details to enable
@@ -3022,9 +3022,25 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
                  struct ofpbuf *actions, struct ofpbuf *put_actions)
 {
     struct dp_netdev *dp = pmd->dp;
+    struct flow_tnl orig_tunnel;
+    int err;
 
     if (OVS_UNLIKELY(!dp->upcall_cb)) {
         return ENODEV;
+    }
+
+    /* Upcall processing expects the Geneve options to be in the translated
+     * format but we need to retain the raw format for datapath use. */
+    orig_tunnel.flags = flow->tunnel.flags;
+    if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+        orig_tunnel.metadata.present.len = flow->tunnel.metadata.present.len;
+        memcpy(orig_tunnel.metadata.opts.gnv, flow->tunnel.metadata.opts.gnv,
+               flow->tunnel.metadata.present.len);
+        err = tun_metadata_from_geneve_udpif(&orig_tunnel, &orig_tunnel,
+                                             &flow->tunnel);
+        if (err) {
+            return err;
+        }
     }
 
     if (OVS_UNLIKELY(!VLOG_DROP_DBG(&upcall_rl))) {
@@ -3054,8 +3070,44 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         ds_destroy(&ds);
     }
 
-    return dp->upcall_cb(packet_, flow, ufid, pmd->core_id, type, userdata,
-                         actions, wc, put_actions, dp->upcall_aux);
+    err = dp->upcall_cb(packet_, flow, ufid, pmd->core_id, type, userdata,
+                        actions, wc, put_actions, dp->upcall_aux);
+    if (err && err != ENOSPC) {
+        return err;
+    }
+
+    /* Translate tunnel metadata masks to datapath format. */
+    if (wc) {
+        if (wc->masks.tunnel.metadata.present.map) {
+            struct geneve_opt opts[GENEVE_TOT_OPT_SIZE /
+                                   sizeof(struct geneve_opt)];
+
+            tun_metadata_to_geneve_udpif_mask(&flow->tunnel,
+                                              &wc->masks.tunnel,
+                                              orig_tunnel.metadata.opts.gnv,
+                                              orig_tunnel.metadata.present.len,
+                                              opts);
+
+            memset(&wc->masks.tunnel.metadata, 0,
+                   sizeof wc->masks.tunnel.metadata);
+            memcpy(&wc->masks.tunnel.metadata.opts.gnv, opts,
+                   orig_tunnel.metadata.present.len);
+        }
+        wc->masks.tunnel.metadata.present.len = 0xff;
+    }
+
+    /* Restore tunnel metadata. We need to use the saved options to ensure
+     * that any unknown options are not lost. The generated mask will have
+     * the same structure, matching on types and lengths but wildcarding
+     * option data we don't care about. */
+    if (orig_tunnel.flags & FLOW_TNL_F_UDPIF) {
+        memcpy(&flow->tunnel.metadata.opts.gnv, orig_tunnel.metadata.opts.gnv,
+               orig_tunnel.metadata.present.len);
+        flow->tunnel.metadata.present.len = orig_tunnel.metadata.present.len;
+        flow->tunnel.flags |= FLOW_TNL_F_UDPIF;
+    }
+
+    return err;
 }
 
 static inline uint32_t

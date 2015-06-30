@@ -196,7 +196,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     CASE_MFF_TUN_METADATA: {
         union mf_value value;
 
-        tun_metadata_read(&wc->masks.tunnel.metadata, mf, &value);
+        tun_metadata_read(&wc->masks.tunnel, mf, &value);
         return is_all_zeros(&value.tun_metadata, mf->n_bytes);
     }
     case MFF_METADATA:
@@ -616,7 +616,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->u8 = flow->tunnel.ip_tos;
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_read(&flow->tunnel.metadata, mf, value);
+        tun_metadata_read(&flow->tunnel, mf, value);
         break;
 
     case MFF_METADATA:
@@ -1119,7 +1119,7 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->tunnel.ip_ttl = value->u8;
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_write(&flow->tunnel.metadata, mf, value);
+        tun_metadata_write(&flow->tunnel, mf, value);
         break;
     case MFF_METADATA:
         flow->metadata = value->be64;

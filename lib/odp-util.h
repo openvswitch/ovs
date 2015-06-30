@@ -144,7 +144,7 @@ struct odputil_keybuf {
     uint32_t keybuf[DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)];
 };
 
-enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
+enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *, bool udpif,
                                            struct flow_tnl *);
 
 int odp_ufid_from_string(const char *s_, ovs_u128 *ufid);
@@ -225,6 +225,16 @@ enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
                                           size_t flow_key_len,
                                           struct flow *mask,
                                           const struct flow *flow);
+
+enum odp_key_fitness odp_flow_key_to_flow_udpif(const struct nlattr *, size_t,
+                                                struct flow *);
+enum odp_key_fitness odp_flow_key_to_mask_udpif(const struct nlattr *mask_key,
+                                                size_t mask_key_len,
+                                                const struct nlattr *flow_key,
+                                                size_t flow_key_len,
+                                                struct flow *mask,
+                                                const struct flow *flow);
+
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
 void commit_odp_tunnel_action(const struct flow *, struct flow *base,

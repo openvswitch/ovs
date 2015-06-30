@@ -80,6 +80,12 @@ BUILD_ASSERT_DECL(FLOW_TNL_F_OAM == NX_TUN_FLAG_OAM);
 
 #define FLOW_TNL_F_MASK ((1 << 4) - 1)
 
+/* Purely internal to OVS userspace. These flags should never be exposed to
+ * the outside world and so aren't included in the flags mask. */
+
+/* Tunnel information is in userspace datapath format. */
+#define FLOW_TNL_F_UDPIF (1 << 4)
+
 const char *flow_tun_flag_to_string(uint32_t flags);
 
 /* Maximum number of supported MPLS labels. */
@@ -518,9 +524,12 @@ flow_values_get_next_in_maps(struct flow_for_each_in_maps_aux *aux,
 #define FLOW_U64_SIZE(FIELD)                                            \
     DIV_ROUND_UP(sizeof(((struct flow *)0)->FIELD), sizeof(uint64_t))
 
-#define MINIFLOW_TNL_MAP(FIELD)                                         \
-    (((UINT64_C(1) << FLOW_U64_SIZE(FIELD)) - 1)                        \
+#define MINIFLOW_TNL_MAP__(FIELD, LEN)                                  \
+    (((UINT64_C(1) << DIV_ROUND_UP(LEN, sizeof(uint64_t))) - 1)         \
      << (offsetof(struct flow, FIELD) / sizeof(uint64_t)))
+
+#define MINIFLOW_TNL_MAP(FIELD)                                         \
+    MINIFLOW_TNL_MAP__(FIELD, sizeof(((struct flow *)0)->FIELD))
 #define MINIFLOW_PKT_MAP(FIELD)                                         \
     (((UINT64_C(1) << FLOW_U64_SIZE(FIELD)) - 1)                        \
      << ((offsetof(struct flow, FIELD) / sizeof(uint64_t)) - FLOW_TNL_U64S))

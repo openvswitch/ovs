@@ -1166,7 +1166,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.ipfix);
 
             if (upcall->out_tun_key) {
-                odp_tun_key_from_attr(upcall->out_tun_key,
+                odp_tun_key_from_attr(upcall->out_tun_key, false,
                                       &output_tunnel_key);
             }
             dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow,

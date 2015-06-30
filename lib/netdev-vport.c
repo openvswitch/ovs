@@ -1054,11 +1054,10 @@ parse_gre_header(struct dp_packet *packet,
 static void
 pkt_metadata_init_tnl(struct pkt_metadata *md)
 {
-    memset(md, 0, offsetof(struct pkt_metadata, tunnel.metadata));
-
-    /* If 'opt_map' is zero then none of the rest of the tunnel metadata
-     * will be read, so we can skip clearing it. */
-    md->tunnel.metadata.opt_map = 0;
+    /* Zero up through the tunnel metadata options. The length and table
+     * are before this and as long as they are empty, the options won't
+     * be looked at. */
+    memset(md, 0, offsetof(struct pkt_metadata, tunnel.metadata.opts));
 }
 
 static int
@@ -1208,8 +1207,7 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     struct pkt_metadata *md = &packet->md;
     struct flow_tnl *tnl = &md->tunnel;
     struct genevehdr *gnh;
-    unsigned int hlen;
-    int err;
+    unsigned int hlen, opts_len;
 
     pkt_metadata_init_tnl(md);
     if (GENEVE_BASE_HLEN > dp_packet_size(packet)) {
@@ -1223,7 +1221,8 @@ netdev_geneve_pop_header(struct dp_packet *packet)
         return EINVAL;
     }
 
-    hlen = GENEVE_BASE_HLEN + gnh->opt_len * 4;
+    opts_len = gnh->opt_len * 4;
+    hlen = GENEVE_BASE_HLEN + opts_len;
     if (hlen > dp_packet_size(packet)) {
         VLOG_WARN_RL(&err_rl, "geneve packet too small: header len=%u packet size=%u\n",
                      hlen, dp_packet_size(packet));
@@ -1245,12 +1244,9 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
     tnl->flags |= FLOW_TNL_F_KEY;
 
-    err = tun_metadata_from_geneve_header(gnh->options, gnh->opt_len * 4,
-                                          &tnl->metadata);
-    if (err) {
-        VLOG_WARN_RL(&err_rl, "invalid geneve options");
-        return err;
-    }
+    memcpy(tnl->metadata.opts.gnv, gnh->options, opts_len);
+    tnl->metadata.present.len = opts_len;
+    tnl->flags |= FLOW_TNL_F_UDPIF;
 
     dp_packet_reset_packet(packet, hlen);
 
@@ -1278,7 +1274,7 @@ netdev_geneve_build_header(const struct netdev *netdev,
 
     ovs_mutex_unlock(&dev->mutex);
 
-    opt_len = tun_metadata_to_geneve_header(&tnl_flow->tunnel.metadata,
+    opt_len = tun_metadata_to_geneve_header(&tnl_flow->tunnel,
                                             gnh->options, &crit_opt);
 
     gnh->opt_len = opt_len / 4;

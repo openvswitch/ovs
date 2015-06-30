@@ -20,35 +20,56 @@
 #include <stdint.h>
 
 #include "dynamic-string.h"
+#include "geneve.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 
+struct flow_tnl;
 struct match;
 struct mf_field;
 union mf_value;
 struct ofputil_geneve_table_mod;
 struct ofputil_geneve_table_reply;
 struct tun_table;
-struct geneve_opt;
 
 #define TUN_METADATA_NUM_OPTS 64
 #define TUN_METADATA_TOT_OPT_SIZE 256
 
 /* Tunnel option data, plus metadata to aid in their interpretation.
  *
- * 'opt_map' is indexed by type, that is, by the <i> in TUN_METADATA<i>, so
- * that e.g. TUN_METADATA5 is present if 'opt_map & (1ULL << 5)' is nonzero.
- * The actual data for TUN_METADATA5, if present, might be anywhere in 'opts'
- * (not necessarily even contiguous), and finding it requires referring to
- * 'tab'. */
+ * The option data exists in two forms and is interpreted differently depending
+ * on whether FLOW_TNL_F_UDPIF is set in struct flow_tnl flags:
+ *
+ * When FLOW_TNL_F_UDPIF is set, the tunnel metadata is in "userspace datapath
+ * format". This is typically used for fast-path packet processing to avoid
+ * the cost of translating options and in situations where we need to maintain
+ * tunnel metadata exactly as it came in. In this case 'opts.gnv' is raw
+ * packet data from the tunnel header and 'present.len' indicates the length
+ * of the data stored there. In these situations, 'tab' is NULL.
+ *
+ * In all other cases, we are doing flow-based processing (such as during
+ * upcalls). FLOW_TNL_F_UDPIF is not set and options are reordered into
+ * pre-allocated locations. 'present.map' is indexed by type, that is, by the
+ * <i> in TUN_METADATA<i>, so that e.g. TUN_METADATA5 is present if
+ * 'present.map & (1ULL << 5)' is nonzero. The actual data for TUN_METADATA5,
+ * if present, might be anywhere in 'opts.u8' (not necessarily even contiguous),
+ * and finding it requires referring to 'tab', if set, or the global metadata
+ * table. */
 struct tun_metadata {
-    uint64_t opt_map;                        /* 1-bit for each present TLV. */
-    uint8_t opts[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
+    union { /* Valid members of 'opts'. When 'opts' is sorted into known types,
+             * 'map' is used. When 'opts' is raw packet data, 'len' is used. */
+        uint64_t map;                      /* 1-bit for each present TLV. */
+        uint8_t len;                       /* Length of data in 'opts'. */
+    } present;
     struct tun_table *tab;      /* Types & lengths for 'opts' and 'opt_map'. */
     uint8_t pad[sizeof(uint64_t) - sizeof(struct tun_table *)]; /* Make 8 bytes */
+    union {
+        uint8_t u8[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
+        struct geneve_opt gnv[GENEVE_TOT_OPT_SIZE / sizeof(struct geneve_opt)];
+    } opts;
 };
-BUILD_ASSERT_DECL(sizeof(((struct tun_metadata *)0)->opt_map) * 8 >=
+BUILD_ASSERT_DECL(sizeof(((struct tun_metadata *)0)->present.map) * 8 >=
                   TUN_METADATA_NUM_OPTS);
 
 /* The location of an option can be stored either as a single offset/len
@@ -81,31 +102,34 @@ void tun_metadata_init(void);
 enum ofperr tun_metadata_table_mod(struct ofputil_geneve_table_mod *);
 void tun_metadata_table_request(struct ofputil_geneve_table_reply *);
 
-void tun_metadata_read(const struct tun_metadata *,
+void tun_metadata_read(const struct flow_tnl *,
                        const struct mf_field *, union mf_value *);
-void tun_metadata_write(struct tun_metadata *,
+void tun_metadata_write(struct flow_tnl *,
                         const struct mf_field *, const union mf_value *);
 void tun_metadata_set_match(const struct mf_field *,
                             const union mf_value *value,
                             const union mf_value *mask, struct match *);
-void tun_metadata_get_fmd(const struct tun_metadata *,
-                          struct match *flow_metadata);
+void tun_metadata_get_fmd(const struct flow_tnl *, struct match *flow_metadata);
 
 int tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
                                     const struct nlattr *flow_attrs,
                                     size_t flow_attr_len,
-                                    const struct tun_metadata *flow_metadata,
-                                    struct tun_metadata *metadata);
-int tun_metadata_from_geneve_header(const struct geneve_opt *, int opt_len,
-                                    struct tun_metadata *metadata);
+                                    const struct flow_tnl *flow_tun,
+                                    bool udpif, struct flow_tnl *tun);
+void tun_metadata_to_geneve_nlattr(const struct flow_tnl *tun,
+                                   const struct flow_tnl *flow,
+                                   const struct ofpbuf *key,
+                                   struct ofpbuf *);
 
-void tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
-                                        struct ofpbuf *);
-void tun_metadata_to_geneve_nlattr_mask(const struct ofpbuf *key,
-                                        const struct tun_metadata *mask,
-                                        const struct tun_metadata *flow,
-                                        struct ofpbuf *);
-int tun_metadata_to_geneve_header(const struct tun_metadata *flow,
+int tun_metadata_from_geneve_udpif(const struct flow_tnl *flow,
+                                   const struct flow_tnl *src,
+                                   struct flow_tnl *dst);
+void tun_metadata_to_geneve_udpif_mask(const struct flow_tnl *flow_src,
+                                       const struct flow_tnl *mask_src,
+                                       const struct geneve_opt *flow_src_opt,
+                                       int opts_len, struct geneve_opt *dst);
+
+int tun_metadata_to_geneve_header(const struct flow_tnl *flow,
                                   struct geneve_opt *, bool *crit_opt);
 
 void tun_metadata_to_nx_match(struct ofpbuf *b, enum ofp_version oxm,

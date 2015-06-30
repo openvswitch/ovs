@@ -226,7 +226,7 @@ tun_metadata_table_request(struct ofputil_geneve_table_reply *gtr)
     }
 }
 
-/* Copies the value of field 'mf' from 'metadata' into 'value'.
+/* Copies the value of field 'mf' from 'tnl' (which must be in non-UDPIF format) * into 'value'.
  *
  * 'mf' must be an MFF_TUN_METADATA* field.
  *
@@ -234,7 +234,7 @@ tun_metadata_table_request(struct ofputil_geneve_table_reply *gtr)
  * tun_metadata_init().  If no such table has been created or if 'mf' hasn't
  * been allocated in it yet, this just zeros 'value'. */
 void
-tun_metadata_read(const struct tun_metadata *metadata,
+tun_metadata_read(const struct flow_tnl *tnl,
                   const struct mf_field *mf, union mf_value *value)
 {
     struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
@@ -250,10 +250,10 @@ tun_metadata_read(const struct tun_metadata *metadata,
 
     memset(value->tun_metadata, 0, mf->n_bytes - loc->len);
     memcpy_from_metadata(value->tun_metadata + mf->n_bytes - loc->len,
-                         metadata, loc);
+                         &tnl->metadata, loc);
 }
 
-/* Copies 'value' into field 'mf' in 'metadata'.
+/* Copies 'value' into field 'mf' in 'tnl' (in non-UDPIF format).
  *
  * 'mf' must be an MFF_TUN_METADATA* field.
  *
@@ -261,7 +261,7 @@ tun_metadata_read(const struct tun_metadata *metadata,
  * tun_metadata_init().  If no such table has been created or if 'mf' hasn't
  * been allocated in it yet, this function does nothing. */
 void
-tun_metadata_write(struct tun_metadata *metadata,
+tun_metadata_write(struct flow_tnl *tnl,
                    const struct mf_field *mf, const union mf_value *value)
 {
     struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
@@ -274,9 +274,9 @@ tun_metadata_write(struct tun_metadata *metadata,
 
     loc = &map->entries[idx].loc;
 
-    ULLONG_SET1(metadata->opt_map, idx);
-    memcpy_to_metadata(metadata, value->tun_metadata + mf->n_bytes - loc->len,
-                       loc);
+    ULLONG_SET1(tnl->metadata.present.map, idx);
+    memcpy_to_metadata(&tnl->metadata,
+                       value->tun_metadata + mf->n_bytes - loc->len, loc);
 }
 
 static const struct tun_metadata_loc *
@@ -310,7 +310,7 @@ metadata_loc_from_match(struct tun_table *map, struct match *match,
 
 /* Makes 'match' match 'value'/'mask' on field 'mf'.
  *
- * 'mf' must be an MFF_TUN_METADATA* field.
+ * 'mf' must be an MFF_TUN_METADATA* field. 'match' must be in non-UDPIF format.
  *
  * If there is global tunnel metadata matching table, this function is
  * effective only if there is already a mapping for 'mf'.  Otherwise, the
@@ -334,6 +334,8 @@ tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
     unsigned int data_offset;
     union mf_value data;
 
+    ovs_assert(!(match->flow.tunnel.flags & FLOW_TNL_F_UDPIF));
+
     field_len = mf_field_len(mf, value, mask);
     loc = metadata_loc_from_match(map, match, idx, field_len);
     if (!loc) {
@@ -353,7 +355,7 @@ tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
                                    mask->tun_metadata[data_offset + i];
         }
     }
-    ULLONG_SET1(match->flow.tunnel.metadata.opt_map, idx);
+    ULLONG_SET1(match->flow.tunnel.metadata.present.map, idx);
     memcpy_to_metadata(&match->flow.tunnel.metadata, data.tun_metadata, loc);
 
     if (!value) {
@@ -363,31 +365,67 @@ tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
     } else {
         memcpy(data.tun_metadata, mask->tun_metadata + data_offset, loc->len);
     }
-    ULLONG_SET1(match->wc.masks.tunnel.metadata.opt_map, idx);
+    ULLONG_SET1(match->wc.masks.tunnel.metadata.present.map, idx);
     memcpy_to_metadata(&match->wc.masks.tunnel.metadata, data.tun_metadata, loc);
 }
 
-/* Copies all MFF_TUN_METADATA* fields from 'metadata' to 'flow_metadata'. */
-void
-tun_metadata_get_fmd(const struct tun_metadata *metadata,
-                     struct match *flow_metadata)
+static bool
+udpif_to_parsed(const struct flow_tnl *flow, const struct flow_tnl *mask,
+                struct flow_tnl *flow_xlate, struct flow_tnl *mask_xlate)
 {
-    struct tun_table *map;
-    int i;
+    if (flow->flags & FLOW_TNL_F_UDPIF) {
+        int err;
 
-    map = metadata->tab;
-    if (!map) {
-        map = ovsrcu_get(struct tun_table *, &metadata_tab);
+        err = tun_metadata_from_geneve_udpif(flow, flow, flow_xlate);
+        if (err) {
+            return false;
+        }
+
+        if (mask) {
+            tun_metadata_from_geneve_udpif(flow, mask, mask_xlate);
+            if (err) {
+                return false;
+            }
+        }
+    } else {
+        if (flow->metadata.present.map == 0) {
+            /* There is no tunnel metadata, don't bother copying. */
+            return false;
+        }
+
+        memcpy(flow_xlate, flow, sizeof *flow_xlate);
+        if (mask) {
+            memcpy(mask_xlate, mask, sizeof *mask_xlate);
+        }
+
+        if (!flow_xlate->metadata.tab) {
+            flow_xlate->metadata.tab = ovsrcu_get(struct tun_table *,
+                                                  &metadata_tab);
+        }
     }
 
-    ULLONG_FOR_EACH_1 (i, metadata->opt_map) {
+    return true;
+}
+
+/* Copies all MFF_TUN_METADATA* fields from 'tnl' to 'flow_metadata'. */
+void
+tun_metadata_get_fmd(const struct flow_tnl *tnl, struct match *flow_metadata)
+{
+    struct flow_tnl flow;
+    int i;
+
+    if (!udpif_to_parsed(tnl, NULL, &flow, NULL)) {
+        return;
+    }
+
+    ULLONG_FOR_EACH_1 (i, flow.metadata.present.map) {
         union mf_value opts;
-        const struct tun_metadata_loc *old_loc = &map->entries[i].loc;
+        const struct tun_metadata_loc *old_loc = &flow.metadata.tab->entries[i].loc;
         const struct tun_metadata_loc *new_loc;
 
         new_loc = metadata_loc_from_match(NULL, flow_metadata, i, old_loc->len);
 
-        memcpy_from_metadata(opts.tun_metadata, metadata, old_loc);
+        memcpy_from_metadata(opts.tun_metadata, &flow.metadata, old_loc);
         memcpy_to_metadata(&flow_metadata->flow.tunnel.metadata,
                            opts.tun_metadata, new_loc);
 
@@ -424,7 +462,7 @@ memcpy_to_metadata(struct tun_metadata *dst, const void *src,
     int addr = 0;
 
     while (chain) {
-        memcpy(dst->opts + loc->c.offset + addr, (uint8_t *)src + addr,
+        memcpy(dst->opts.u8 + loc->c.offset + addr, (uint8_t *)src + addr,
                chain->len);
         addr += chain->len;
         chain = chain->next;
@@ -439,7 +477,7 @@ memcpy_from_metadata(void *dst, const struct tun_metadata *src,
     int addr = 0;
 
     while (chain) {
-        memcpy((uint8_t *)dst + addr, src->opts + loc->c.offset + addr,
+        memcpy((uint8_t *)dst + addr, src->opts.u8 + loc->c.offset + addr,
                chain->len);
         addr += chain->len;
         chain = chain->next;
@@ -579,10 +617,21 @@ tun_metadata_del_entry(struct tun_table *map, uint8_t idx)
 }
 
 static int
-tun_metadata_from_geneve__(struct tun_table *map, const struct geneve_opt *opt,
+tun_metadata_from_geneve__(const struct tun_metadata *flow_metadata,
+                           const struct geneve_opt *opt,
                            const struct geneve_opt *flow_opt, int opts_len,
                            struct tun_metadata *metadata)
 {
+    struct tun_table *map;
+    bool is_mask = flow_opt != opt;
+
+    if (!is_mask) {
+        map = ovsrcu_get(struct tun_table *, &metadata_tab);
+        metadata->tab = map;
+    } else {
+        map = flow_metadata->tab;
+    }
+
     if (!map) {
         return 0;
     }
@@ -606,7 +655,7 @@ tun_metadata_from_geneve__(struct tun_table *map, const struct geneve_opt *opt,
         if (entry) {
             if (entry->loc.len == flow_opt->length * 4) {
                 memcpy_to_metadata(metadata, opt + 1, &entry->loc);
-                ULLONG_SET1(metadata->opt_map, entry - map->entries);
+                ULLONG_SET1(metadata->present.map, entry - map->entries);
             } else {
                 return EINVAL;
             }
@@ -622,59 +671,97 @@ tun_metadata_from_geneve__(struct tun_table *map, const struct geneve_opt *opt,
     return 0;
 }
 
+static const struct nlattr *
+tun_metadata_find_geneve_key(const struct nlattr *key, uint32_t key_len)
+{
+    const struct nlattr *tnl_key;
+
+    tnl_key = nl_attr_find__(key, key_len, OVS_KEY_ATTR_TUNNEL);
+    if (!tnl_key) {
+        return NULL;
+    }
+
+    return nl_attr_find_nested(tnl_key, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
+}
+
+/* Converts from Geneve netlink attributes in 'attr' to tunnel metadata
+ * in 'tun'. The result may either in be UDPIF format or not, as determined
+ * by 'udpif'.
+ *
+ * In the event that a mask is being converted, it is also necessary to
+ * pass in flow information. This includes the full set of netlink attributes
+ * (i.e. not just the Geneve attribute) in 'flow_attrs'/'flow_attr_len' and
+ * the previously converted tunnel metadata 'flow_tun'.
+ *
+ * If a flow rather than mask is being converted, 'flow_attrs' must be NULL. */
 int
 tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
                                 const struct nlattr *flow_attrs,
                                 size_t flow_attr_len,
-                                const struct tun_metadata *flow_metadata,
-                                struct tun_metadata *metadata)
+                                const struct flow_tnl *flow_tun, bool udpif,
+                                struct flow_tnl *tun)
 {
-    struct tun_table *map;
     bool is_mask = !!flow_attrs;
+    int attr_len = nl_attr_get_size(attr);
     const struct nlattr *flow;
 
+    /* No need for real translation, just copy things over. */
+    if (udpif) {
+        memcpy(tun->metadata.opts.gnv, nl_attr_get(attr), attr_len);
+
+        if (!is_mask) {
+            tun->metadata.present.len = attr_len;
+            tun->flags |= FLOW_TNL_F_UDPIF;
+        } else {
+            /* We need to exact match on the length so we don't
+             * accidentally match on sets of options that are the same
+             * at the beginning but with additional options after. */
+            tun->metadata.present.len = 0xff;
+        }
+
+        return 0;
+    }
+
     if (is_mask) {
-        const struct nlattr *tnl_key;
-        int mask_len = nl_attr_get_size(attr);
-
-        tnl_key = nl_attr_find__(flow_attrs, flow_attr_len, OVS_KEY_ATTR_TUNNEL);
-        if (!tnl_key) {
-            return mask_len ? EINVAL : 0;
-        }
-
-        flow = nl_attr_find_nested(tnl_key, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
+        flow = tun_metadata_find_geneve_key(flow_attrs, flow_attr_len);
         if (!flow) {
-            return mask_len ? EINVAL : 0;
+            return attr_len ? EINVAL : 0;
         }
 
-        if (mask_len != nl_attr_get_size(flow)) {
+        if (attr_len != nl_attr_get_size(flow)) {
             return EINVAL;
         }
     } else {
         flow = attr;
     }
 
-    if (!is_mask) {
-        map = ovsrcu_get(struct tun_table *, &metadata_tab);
-        metadata->tab = map;
-    } else {
-        map = flow_metadata->tab;
-    }
-
-    return tun_metadata_from_geneve__(map, nl_attr_get(attr), nl_attr_get(flow),
-                                      nl_attr_get_size(flow), metadata);
+    return tun_metadata_from_geneve__(&flow_tun->metadata, nl_attr_get(attr),
+                                      nl_attr_get(flow), nl_attr_get_size(flow),
+                                      &tun->metadata);
 }
 
+/* Converts from the flat Geneve options representation extracted directly
+ * from the tunnel header to the representation that maps options to
+ * pre-allocated locations. The original version (in UDPIF form) is passed
+ * in 'src' and the translated form in stored in 'dst'.  To handle masks, the
+ * flow must also be passed in through 'flow' (in the original, raw form). */
 int
-tun_metadata_from_geneve_header(const struct geneve_opt *opts, int opt_len,
-                                struct tun_metadata *metadata)
+tun_metadata_from_geneve_udpif(const struct flow_tnl *flow,
+                               const struct flow_tnl *src,
+                               struct flow_tnl *dst)
 {
-    struct tun_table *map;
+    ovs_assert(flow->flags & FLOW_TNL_F_UDPIF);
 
-    map = ovsrcu_get(struct tun_table *, &metadata_tab);
-    metadata->tab = map;
-
-    return tun_metadata_from_geneve__(map, opts, opts, opt_len, metadata);
+    if (flow == src) {
+        dst->flags = flow->flags & ~FLOW_TNL_F_UDPIF;
+    } else {
+        dst->metadata.tab = NULL;
+    }
+    dst->metadata.present.map = 0;
+    return tun_metadata_from_geneve__(&flow->metadata, src->metadata.opts.gnv,
+                                      flow->metadata.opts.gnv,
+                                      flow->metadata.present.len,
+                                      &dst->metadata);
 }
 
 static void
@@ -691,7 +778,7 @@ tun_metadata_to_geneve__(const struct tun_metadata *flow, struct ofpbuf *b,
 
     *crit_opt = false;
 
-    ULLONG_FOR_EACH_1 (i, flow->opt_map) {
+    ULLONG_FOR_EACH_1 (i, flow->present.map) {
         struct tun_meta_entry *entry = &map->entries[i];
         struct geneve_opt *opt;
 
@@ -709,14 +796,14 @@ tun_metadata_to_geneve__(const struct tun_metadata *flow, struct ofpbuf *b,
     }
 }
 
-void
-tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
+static void
+tun_metadata_to_geneve_nlattr_flow(const struct flow_tnl *flow,
                                    struct ofpbuf *b)
 {
     size_t nlattr_offset;
     bool crit_opt;
 
-    if (!flow->opt_map) {
+    if (!flow->metadata.present.map) {
         return;
     }
 
@@ -725,58 +812,43 @@ tun_metadata_to_geneve_nlattr_flow(const struct tun_metadata *flow,
      * similar enough that we can use the same mechanism. */
     nlattr_offset = nl_msg_start_nested(b, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
 
-    tun_metadata_to_geneve__(flow, b, &crit_opt);
+    tun_metadata_to_geneve__(&flow->metadata, b, &crit_opt);
 
     nl_msg_end_nested(b, nlattr_offset);
 }
 
+/* Converts from processed tunnel metadata information (in non-udpif
+ * format) in 'flow' to a stream of Geneve options suitable for
+ * transmission in 'opts'. Additionally returns whether there were
+ * any critical options in 'crit_opt' as well as the total length of
+ * data. */
 int
-tun_metadata_to_geneve_header(const struct tun_metadata *flow,
+tun_metadata_to_geneve_header(const struct flow_tnl *flow,
                               struct geneve_opt *opts, bool *crit_opt)
 {
     struct ofpbuf b;
 
+    ovs_assert(!(flow->flags & FLOW_TNL_F_UDPIF));
+
     ofpbuf_use_stack(&b, opts, GENEVE_TOT_OPT_SIZE);
-    tun_metadata_to_geneve__(flow, &b, crit_opt);
+    tun_metadata_to_geneve__(&flow->metadata, &b, crit_opt);
 
     return b.size;
 }
 
-void
-tun_metadata_to_geneve_nlattr_mask(const struct ofpbuf *key,
-                                   const struct tun_metadata *mask,
-                                   const struct tun_metadata *flow,
-                                   struct ofpbuf *b)
+static void
+tun_metadata_to_geneve_mask__(const struct tun_metadata *flow,
+                              const struct tun_metadata *mask,
+                              struct geneve_opt *opt, int opts_len)
 {
     struct tun_table *map = flow->tab;
-    const struct nlattr *tnl_key, *geneve_key;
-    struct nlattr *geneve_mask;
-    struct geneve_opt *opt;
-    int opts_len;
 
     if (!map) {
         return;
     }
 
-    tnl_key = nl_attr_find(key, 0, OVS_KEY_ATTR_TUNNEL);
-    if (!tnl_key) {
-        return;
-    }
-
-    geneve_key = nl_attr_find_nested(tnl_key,
-                                     OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
-    if (!geneve_key) {
-        return;
-    }
-
-    geneve_mask = ofpbuf_tail(b);
-    nl_msg_put(b, geneve_key, geneve_key->nla_len);
-
     /* All of these options have already been validated, so no need
      * for sanity checking. */
-    opt = CONST_CAST(struct geneve_opt *, nl_attr_get(geneve_mask));
-    opts_len = nl_attr_get_size(geneve_mask);
-
     while (opts_len > 0) {
         struct tun_meta_entry *entry;
         int len = sizeof(*opt) + opt->length * 4;
@@ -801,6 +873,80 @@ tun_metadata_to_geneve_nlattr_mask(const struct ofpbuf *key,
     }
 }
 
+static void
+tun_metadata_to_geneve_nlattr_mask(const struct ofpbuf *key,
+                                   const struct flow_tnl *mask,
+                                   const struct flow_tnl *flow,
+                                   struct ofpbuf *b)
+{
+    const struct nlattr *geneve_key;
+    struct nlattr *geneve_mask;
+    struct geneve_opt *opt;
+    int opts_len;
+
+    if (!key) {
+        return;
+    }
+
+    geneve_key = tun_metadata_find_geneve_key(key->data, key->size);
+    if (!geneve_key) {
+        return;
+    }
+
+    geneve_mask = ofpbuf_tail(b);
+    nl_msg_put(b, geneve_key, geneve_key->nla_len);
+
+    opt = CONST_CAST(struct geneve_opt *, nl_attr_get(geneve_mask));
+    opts_len = nl_attr_get_size(geneve_mask);
+
+    tun_metadata_to_geneve_mask__(&flow->metadata, &mask->metadata,
+                                  opt, opts_len);
+}
+
+/* Convert from the tunnel metadata in 'tun' to netlink attributes stored
+ * in 'b'. Either UDPIF or non-UDPIF input forms are accepted.
+ *
+ * To assist with parsing, it is necessary to also pass in the tunnel metadata
+ * from the flow in 'flow' as well in the original netlink form of the flow in
+ * 'key'. */
+void
+tun_metadata_to_geneve_nlattr(const struct flow_tnl *tun,
+                              const struct flow_tnl *flow,
+                              const struct ofpbuf *key,
+                              struct ofpbuf *b)
+{
+    bool is_mask = tun != flow;
+
+    if (!(flow->flags & FLOW_TNL_F_UDPIF)) {
+        if (!is_mask) {
+            tun_metadata_to_geneve_nlattr_flow(tun, b);
+        } else {
+            tun_metadata_to_geneve_nlattr_mask(key, tun, flow, b);
+        }
+    } else if (flow->metadata.present.len || is_mask) {
+        nl_msg_put_unspec(b, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
+                          tun->metadata.opts.gnv,
+                          flow->metadata.present.len);
+    }
+}
+
+/* Converts 'mask_src' (in non-UDPIF format) to a series of masked options in
+ * 'dst'. 'flow_src' (also in non-UDPIF format) and the  original set of
+ * options 'flow_src_opt'/'opts_len' are needed as a guide to interpret the
+ * mask data. */
+void
+tun_metadata_to_geneve_udpif_mask(const struct flow_tnl *flow_src,
+                                  const struct flow_tnl *mask_src,
+                                  const struct geneve_opt *flow_src_opt,
+                                  int opts_len, struct geneve_opt *dst)
+{
+    ovs_assert(!(flow_src->flags & FLOW_TNL_F_UDPIF));
+
+    memcpy(dst, flow_src_opt, opts_len);
+    tun_metadata_to_geneve_mask__(&flow_src->metadata,
+                                  &mask_src->metadata, dst, opts_len);
+}
+
 static const struct tun_metadata_loc *
 metadata_loc_from_match_read(struct tun_table *map, const struct match *match,
                              unsigned int idx)
@@ -816,19 +962,22 @@ void
 tun_metadata_to_nx_match(struct ofpbuf *b, enum ofp_version oxm,
                          const struct match *match)
 {
-    struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
-    const struct tun_metadata *metadata = &match->flow.tunnel.metadata;
-    const struct tun_metadata *mask = &match->wc.masks.tunnel.metadata;
+    struct flow_tnl flow, mask;
     int i;
 
-    ULLONG_FOR_EACH_1 (i, mask->opt_map) {
+    if (!udpif_to_parsed(&match->flow.tunnel, &match->wc.masks.tunnel,
+                         &flow, &mask)) {
+        return;
+    }
+
+    ULLONG_FOR_EACH_1 (i, mask.metadata.present.map) {
         const struct tun_metadata_loc *loc;
         union mf_value opts;
         union mf_value mask_opts;
 
-        loc = metadata_loc_from_match_read(map, match, i);
-        memcpy_from_metadata(opts.tun_metadata, metadata, loc);
-        memcpy_from_metadata(mask_opts.tun_metadata, mask, loc);
+        loc = metadata_loc_from_match_read(flow.metadata.tab, match, i);
+        memcpy_from_metadata(opts.tun_metadata, &flow.metadata, loc);
+        memcpy_from_metadata(mask_opts.tun_metadata, &mask.metadata, loc);
         nxm_put(b, MFF_TUN_METADATA0 + i, oxm, opts.tun_metadata,
                 mask_opts.tun_metadata, loc->len);
     }
@@ -837,22 +986,25 @@ tun_metadata_to_nx_match(struct ofpbuf *b, enum ofp_version oxm,
 void
 tun_metadata_match_format(struct ds *s, const struct match *match)
 {
-    struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
-    const struct tun_metadata *metadata = &match->flow.tunnel.metadata;
-    const struct tun_metadata *mask = &match->wc.masks.tunnel.metadata;
+    struct flow_tnl flow, mask;
     unsigned int i;
 
-    ULLONG_FOR_EACH_1 (i, mask->opt_map) {
+    if (!udpif_to_parsed(&match->flow.tunnel, &match->wc.masks.tunnel,
+                         &flow, &mask)) {
+        return;
+    }
+
+    ULLONG_FOR_EACH_1 (i, mask.metadata.present.map) {
         const struct tun_metadata_loc *loc;
         union mf_value opts;
 
-        loc = metadata_loc_from_match_read(map, match, i);
+        loc = metadata_loc_from_match_read(flow.metadata.tab, match, i);
 
         ds_put_format(s, "tun_metadata%u=", i);
-        memcpy_from_metadata(opts.tun_metadata, metadata, loc);
+        memcpy_from_metadata(opts.tun_metadata, &flow.metadata, loc);
         ds_put_hex(s, opts.tun_metadata, loc->len);
 
-        memcpy_from_metadata(opts.tun_metadata, mask, loc);
+        memcpy_from_metadata(opts.tun_metadata, &mask.metadata, loc);
         if (!is_all_ones(opts.tun_metadata, loc->len)) {
             ds_put_char(s, '/');
             ds_put_hex(s, opts.tun_metadata, loc->len);
