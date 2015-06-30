@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Cloudbase Solutions Srl
+ * Copyright 2013, 2015 Cloudbase Solutions Srl
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may
  * not use this file except in compliance with the License.You may obtain
@@ -50,13 +50,12 @@
 #define LOG_LOCAL7      (23<<3) /* reserved for local use */
 
 static inline void
-openlog(const char *ident OVS_UNUSED, int option OVS_UNUSED,
-        int facility OVS_UNUSED)
+openlog(const char *ident, int option, int facility)
 {
 }
 
 static inline void
-syslog(int priority OVS_UNUSED, const char *format OVS_UNUSED, ...)
+syslog(int priority, const char *format, ...)
 {
 }
 
