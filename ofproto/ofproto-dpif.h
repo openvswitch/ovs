@@ -80,27 +80,22 @@ struct dpif_backer_support {
      * False if the datapath supports only 8-byte (or shorter) userdata. */
     bool variable_length_userdata;
 
-    /* Maximum number of MPLS label stack entries that the datapath supports
-     * in a match */
-    size_t max_mpls_depth;
-
     /* True if the datapath supports masked data in OVS_ACTION_ATTR_SET
      * actions. */
     bool masked_set_action;
-
-    /* True if the datapath supports recirculation. */
-    bool recirc;
 
     /* True if the datapath supports tnl_push and pop actions. */
     bool tnl_push_pop;
 
     /* True if the datapath supports OVS_FLOW_ATTR_UFID. */
     bool ufid;
+
+    /* Each member represents support for related OVS_KEY_ATTR_* fields. */
+    struct odp_support odp;
 };
 
-size_t ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *);
-bool ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *);
-bool ofproto_dpif_get_enable_ufid(struct dpif_backer *backer);
+bool ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer);
+struct dpif_backer_support *ofproto_dpif_get_support(const struct ofproto_dpif *);
 
 cls_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 

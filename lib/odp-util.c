@@ -3467,7 +3467,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
-    if (parms->recirc) {
+    if (parms->support.recirc) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
@@ -3542,7 +3542,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
         n = flow_count_mpls_labels(flow, NULL);
         if (export_mask) {
-            n = MIN(n, parms->max_mpls_depth);
+            n = MIN(n, parms->support.max_mpls_depth);
         }
         mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
                                             n * sizeof *mpls_key);

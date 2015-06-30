@@ -359,22 +359,16 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
 }
 
-size_t
-ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *ofproto)
-{
-    return ofproto->backer->support.max_mpls_depth;
-}
-
 bool
-ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *ofproto)
-{
-    return ofproto->backer->support.recirc;
-}
-
-bool
-ofproto_dpif_get_enable_ufid(struct dpif_backer *backer)
+ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer)
 {
     return backer->support.ufid;
+}
+
+struct dpif_backer_support *
+ofproto_dpif_get_support(const struct ofproto_dpif *ofproto)
+{
+    return &ofproto->backer->support;
 }
 
 static void ofproto_trace(struct ofproto_dpif *, struct flow *,
@@ -1005,7 +999,9 @@ check_recirc(struct dpif_backer *backer)
     bool enable_recirc;
     struct odp_flow_key_parms odp_parms = {
         .flow = &flow,
-        .recirc = true,
+        .support = {
+            .recirc = true,
+        },
     };
 
     memset(&flow, 0, sizeof flow);
@@ -1226,8 +1222,8 @@ check_support(struct dpif_backer *backer)
     /* This feature needs to be tested after udpif threads are set. */
     backer->support.variable_length_userdata = false;
 
-    backer->support.recirc = check_recirc(backer);
-    backer->support.max_mpls_depth = check_max_mpls_depth(backer);
+    backer->support.odp.recirc = check_recirc(backer);
+    backer->support.odp.max_mpls_depth = check_max_mpls_depth(backer);
     backer->support.masked_set_action = check_masked_set_action(backer);
     backer->support.ufid = check_ufid(backer);
     backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);

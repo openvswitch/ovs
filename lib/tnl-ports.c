@@ -167,7 +167,7 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         /* Key. */
         odp_parms.odp_in_port = flow.in_port.odp_port;
-        odp_parms.recirc = true;
+        odp_parms.support.recirc = true;
         ofpbuf_use_stack(&buf, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&odp_parms, &buf);
         key = buf.data;
@@ -175,7 +175,7 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         /* mask*/
         odp_parms.odp_in_port = wc.masks.in_port.odp_port;
-        odp_parms.recirc = false;
+        odp_parms.support.recirc = false;
         ofpbuf_use_stack(&buf, &maskbuf, sizeof maskbuf);
         odp_flow_key_from_mask(&odp_parms, &buf);
         mask = buf.data;

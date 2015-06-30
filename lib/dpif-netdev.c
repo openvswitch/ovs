@@ -87,6 +87,11 @@ static struct shash dp_netdevs OVS_GUARDED_BY(dp_netdev_mutex)
 
 static struct vlog_rate_limit upcall_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
+static struct odp_support dp_netdev_support = {
+    .max_mpls_depth = SIZE_MAX,
+    .recirc = true,
+};
+
 /* Stores a miniflow with inline values */
 
 struct netdev_flow_key {
@@ -1824,8 +1829,7 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         struct odp_flow_key_parms odp_parms = {
             .flow = &netdev_flow->flow,
             .mask = &wc.masks,
-            .recirc = true,
-            .max_mpls_depth = SIZE_MAX,
+            .support = dp_netdev_support,
         };
 
         miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
@@ -3030,7 +3034,7 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
             .flow = flow,
             .mask = &wc->masks,
             .odp_in_port = flow->in_port.odp_port,
-            .recirc = true,
+            .support = dp_netdev_support,
         };
 
         ofpbuf_init(&key, 0);

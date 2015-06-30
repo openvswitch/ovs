@@ -1361,12 +1361,13 @@ ukey_create_from_upcall(struct upcall *upcall)
 {
     struct odputil_keybuf keystub, maskstub;
     struct ofpbuf keybuf, maskbuf;
-    bool recirc, megaflow;
+    bool megaflow;
     struct odp_flow_key_parms odp_parms = {
         .flow = upcall->flow,
         .mask = &upcall->xout.wc.masks,
     };
 
+    odp_parms.support = ofproto_dpif_get_support(upcall->ofproto)->odp;
     if (upcall->key_len) {
         ofpbuf_use_const(&keybuf, upcall->key, upcall->key_len);
     } else {
@@ -1374,17 +1375,13 @@ ukey_create_from_upcall(struct upcall *upcall)
          * upcall, so convert the upcall's flow here. */
         ofpbuf_use_stack(&keybuf, &keystub, sizeof keystub);
         odp_parms.odp_in_port = upcall->flow->in_port.odp_port;
-        odp_parms.recirc = true;
         odp_flow_key_from_flow(&odp_parms, &keybuf);
     }
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
-    recirc = ofproto_dpif_get_enable_recirc(upcall->ofproto);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
     if (megaflow) {
         odp_parms.odp_in_port = ODPP_NONE;
-        odp_parms.max_mpls_depth = ofproto_dpif_get_max_mpls_depth(upcall->ofproto);
-        odp_parms.recirc = recirc;
         odp_parms.key_buf = &keybuf;
 
         odp_flow_key_from_mask(&odp_parms, &maskbuf);

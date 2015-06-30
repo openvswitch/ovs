@@ -1735,7 +1735,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         struct flow_wildcards *wc = &ctx->xout->wc;
         struct ofport_dpif *ofport;
 
-        if (ctx->xbridge->support.recirc) {
+        if (ctx->xbridge->support.odp.recirc) {
             use_recirc = bond_may_recirc(
                 out_xbundle->bond, &xr.recirc_id, &xr.hash_basis);
 
@@ -3625,7 +3625,7 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
     int n = flow_count_mpls_labels(flow, wc);
 
     if (flow_pop_mpls(flow, n, eth_type, wc)) {
-        if (ctx->xbridge->support.recirc) {
+        if (ctx->xbridge->support.odp.recirc) {
             ctx->was_mpls = true;
         }
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
@@ -4808,7 +4808,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         if (is_ip_any(flow)) {
             wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
         }
-        if (xbridge->support.recirc) {
+        if (xbridge->support.odp.recirc) {
             /* Always exactly match recirc_id when datapath supports
              * recirculation.  */
             wc->masks.recirc_id = UINT32_MAX;
