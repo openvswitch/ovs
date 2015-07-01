@@ -937,10 +937,11 @@
 
     <group title="Multicast Snooping Configuration">
       Multicast snooping (RFC 4541) monitors the Internet Group Management
-      Protocol (IGMP) traffic between hosts and multicast routers.  The
-      switch uses what IGMP snooping learns to forward multicast traffic
-      only to interfaces that are connected to interested receivers.
-      Currently it supports IGMPv1, IGMPv2 and IGMPv3 protocols.
+      Protocol (IGMP) and Multicast Listener Discovery traffic between hosts
+      and multicast routers.  The switch uses what IGMP and MLD snooping
+      learns to forward multicast traffic only to interfaces that are connected
+      to interested receivers.  Currently it supports IGMPv1, IGMPv2, IGMPv3,
+      MLDv1 and MLDv2 protocols.
 
       <column name="mcast_snooping_enable">
         Enable multicast snooping on the bridge. For now, the default

@@ -34,6 +34,7 @@
 #include "unaligned.h"
 
 const struct in6_addr in6addr_exact = IN6ADDR_EXACT_INIT;
+const struct in6_addr in6addr_all_hosts = IN6ADDR_ALL_HOSTS_INIT;
 
 /* Parses 's' as a 16-digit hexadecimal number representing a datapath ID.  On
  * success stores the dpid into '*dpidp' and returns true, on failure stores 0

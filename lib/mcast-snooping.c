@@ -499,6 +499,77 @@ mcast_snooping_add_report(struct mcast_snooping *ms,
     return count;
 }
 
+int
+mcast_snooping_add_mld(struct mcast_snooping *ms,
+                          const struct dp_packet *p,
+                          uint16_t vlan, void *port)
+{
+    const struct in6_addr *addr;
+    size_t offset;
+    const struct mld_header *mld;
+    const struct mld2_record *record;
+    int count = 0;
+    int ngrp;
+    bool ret;
+
+    offset = (char *) dp_packet_l4(p) - (char *) dp_packet_data(p);
+    mld = dp_packet_at(p, offset, MLD_HEADER_LEN);
+    if (!mld) {
+        return 0;
+    }
+    ngrp = ntohs(mld->ngrp);
+    offset += MLD_HEADER_LEN;
+    addr = dp_packet_at(p, offset, sizeof(struct in6_addr));
+
+    switch (mld->type) {
+    case MLD_REPORT:
+        ret = mcast_snooping_add_group(ms, addr, vlan, port);
+        if (ret) {
+            count++;
+        }
+        break;
+    case MLD_DONE:
+        ret = mcast_snooping_leave_group(ms, addr, vlan, port);
+        if (ret) {
+            count++;
+        }
+        break;
+    case MLD2_REPORT:
+        while (ngrp--) {
+            record = dp_packet_at(p, offset, sizeof(struct mld2_record));
+            if (!record) {
+                break;
+            }
+            /* Only consider known record types. */
+            if (record->type >= IGMPV3_MODE_IS_INCLUDE
+                && record->type <= IGMPV3_BLOCK_OLD_SOURCES) {
+                struct in6_addr maddr;
+                memcpy(maddr.s6_addr, record->maddr.be16, 16);
+                addr = &maddr;
+                /*
+                 * If record is INCLUDE MODE and there are no sources, it's
+                 * equivalent to a LEAVE.
+                 */
+                if (record->nsrcs == htons(0)
+                    && (record->type == IGMPV3_MODE_IS_INCLUDE
+                        || record->type == IGMPV3_CHANGE_TO_INCLUDE_MODE)) {
+                    ret = mcast_snooping_leave_group(ms, addr, vlan, port);
+                } else {
+                    ret = mcast_snooping_add_group(ms, addr, vlan, port);
+                }
+                if (ret) {
+                    count++;
+                }
+            }
+            offset += sizeof(*record)
+                      + ntohs(record->nsrcs) * sizeof(struct in6_addr)
+                      + record->aux_len;
+        }
+    }
+
+    return count;
+}
+
 bool
 mcast_snooping_leave_group(struct mcast_snooping *ms,
                            const struct in6_addr *addr,

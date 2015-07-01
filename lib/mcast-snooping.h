@@ -194,6 +194,10 @@ int mcast_snooping_add_report(struct mcast_snooping *ms,
                               const struct dp_packet *p,
                               uint16_t vlan, void *port)
     OVS_REQ_WRLOCK(ms->rwlock);
+int mcast_snooping_add_mld(struct mcast_snooping *ms,
+                           const struct dp_packet *p,
+                           uint16_t vlan, void *port)
+    OVS_REQ_WRLOCK(ms->rwlock);
 bool mcast_snooping_leave_group(struct mcast_snooping *ms,
                                 const struct in6_addr *addr,
                                 uint16_t vlan, void *port)

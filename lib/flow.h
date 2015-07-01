@@ -758,6 +758,31 @@ static inline bool is_icmpv6(const struct flow *flow)
             && flow->nw_proto == IPPROTO_ICMPV6);
 }
 
+static inline bool is_igmp(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_IP)
+            && flow->nw_proto == IPPROTO_IGMP);
+}
+
+static inline bool is_mld(const struct flow *flow)
+{
+    return is_icmpv6(flow)
+           && (flow->tp_src == htons(MLD_QUERY)
+               || flow->tp_src == htons(MLD_REPORT)
+               || flow->tp_src == htons(MLD_DONE)
+               || flow->tp_src == htons(MLD2_REPORT));
+}
+
+static inline bool is_mld_query(const struct flow *flow)
+{
+    return is_icmpv6(flow) && flow->tp_src == htons(MLD_QUERY);
+}
+
+static inline bool is_mld_report(const struct flow *flow)
+{
+    return is_mld(flow) && !is_mld_query(flow);
+}
+
 static inline bool is_stp(const struct flow *flow)
 {
     return (eth_addr_equals(flow->dl_dst, eth_addr_stp)

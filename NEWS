@@ -7,6 +7,7 @@ Post-v2.4.0
      * Group chaining (where one OpenFlow group triggers another) is
        now supported.
    - Support for matching and generating options with Geneve tunnels.
+   - Support Multicast Listener Discovery (MLDv1 and MLDv2).
 
 
 v2.4.0 - xx xxx xxxx
