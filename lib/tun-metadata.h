@@ -43,8 +43,8 @@ struct geneve_opt;
  * (not necessarily even contiguous), and finding it requires referring to
  * 'tab'. */
 struct tun_metadata {
-    uint8_t opts[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
     uint64_t opt_map;                        /* 1-bit for each present TLV. */
+    uint8_t opts[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
     struct tun_table *tab;      /* Types & lengths for 'opts' and 'opt_map'. */
     uint8_t pad[sizeof(uint64_t) - sizeof(struct tun_table *)]; /* Make 8 bytes */
 };

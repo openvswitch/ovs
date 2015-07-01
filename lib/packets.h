@@ -35,8 +35,8 @@ struct ds;
 /* Tunnel information used in flow key and metadata. */
 struct flow_tnl {
     ovs_be64 tun_id;
-    ovs_be32 ip_src;
     ovs_be32 ip_dst;
+    ovs_be32 ip_src;
     uint16_t flags;
     uint8_t ip_tos;
     uint8_t ip_ttl;
@@ -69,8 +69,17 @@ struct pkt_metadata {
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
 };
 
-#define PKT_METADATA_INITIALIZER(PORT) \
-    (struct pkt_metadata){ .in_port.odp_port = PORT }
+static inline void
+pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
+{
+    /* It can be expensive to zero out all of the tunnel metadata. However,
+     * we can just zero out ip_dst and the rest of the data will never be
+     * looked at. */
+    memset(md, 0, offsetof(struct pkt_metadata, tunnel));
+    md->tunnel.ip_dst = 0;
+
+    md->in_port.odp_port = port;
+}
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 

@@ -2018,7 +2018,7 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
         if (error) {
             break;
         }
-        packet->md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+        pkt_metadata_init(&packet->md, ODPP_NONE);
         flow_extract(packet, &flow);
         if (flow.dl_type == htons(ETH_TYPE_IP)
             && flow.nw_proto == IPPROTO_TCP
@@ -3374,7 +3374,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
             ovs_fatal(error, "%s: read failed", ctx->argv[1]);
         }
 
-        packet->md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+        pkt_metadata_init(&packet->md, ODPP_NONE);
         flow_extract(packet, &flow);
         flow_print(stdout, &flow);
         putchar('\n');

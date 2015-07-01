@@ -1051,6 +1051,16 @@ parse_gre_header(struct dp_packet *packet,
     return hlen;
 }
 
+static void
+pkt_metadata_init_tnl(struct pkt_metadata *md)
+{
+    memset(md, 0, offsetof(struct pkt_metadata, tunnel.metadata));
+
+    /* If 'opt_map' is zero then none of the rest of the tunnel metadata
+     * will be read, so we can skip clearing it. */
+    md->tunnel.metadata.opt_map = 0;
+}
+
 static int
 netdev_gre_pop_header(struct dp_packet *packet)
 {
@@ -1059,7 +1069,7 @@ netdev_gre_pop_header(struct dp_packet *packet)
     int hlen = sizeof(struct eth_header) +
                sizeof(struct ip_header) + 4;
 
-    memset(md, 0, sizeof *md);
+    pkt_metadata_init_tnl(md);
     if (hlen > dp_packet_size(packet)) {
         return EINVAL;
     }
@@ -1143,7 +1153,7 @@ netdev_vxlan_pop_header(struct dp_packet *packet)
     struct flow_tnl *tnl = &md->tunnel;
     struct vxlanhdr *vxh;
 
-    memset(md, 0, sizeof *md);
+    pkt_metadata_init_tnl(md);
     if (VXLAN_HLEN > dp_packet_size(packet)) {
         return EINVAL;
     }
@@ -1201,7 +1211,7 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     unsigned int hlen;
     int err;
 
-    memset(md, 0, sizeof *md);
+    pkt_metadata_init_tnl(md);
     if (GENEVE_BASE_HLEN > dp_packet_size(packet)) {
         VLOG_WARN_RL(&err_rl, "geneve packet too small: min header=%u packet size=%u\n",
                      (unsigned int)GENEVE_BASE_HLEN, dp_packet_size(packet));

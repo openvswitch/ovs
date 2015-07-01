@@ -1463,6 +1463,7 @@ odp_tun_key_from_attr__(const struct nlattr *attr,
 enum odp_key_fitness
 odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
 {
+    memset(tun, 0, sizeof *tun);
     return odp_tun_key_from_attr__(attr, NULL, 0, NULL, tun);
 }
 
@@ -3666,7 +3667,7 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
         1u << OVS_KEY_ATTR_SKB_MARK | 1u << OVS_KEY_ATTR_TUNNEL |
         1u << OVS_KEY_ATTR_IN_PORT;
 
-    *md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+    pkt_metadata_init(md, ODPP_NONE);
 
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
         uint16_t type = nl_attr_type(nla);
