@@ -2163,7 +2163,6 @@ HandleFlowPut(OvsFlowPut *put,
 
         status = OvsPrepareFlow(&KernelFlow, put, hash);
         if (status != STATUS_SUCCESS) {
-            FreeFlow(KernelFlow);
             return STATUS_UNSUCCESSFUL;
         }
 
