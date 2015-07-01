@@ -2160,7 +2160,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         if (OvsIsTunnelVportType(portType)) {
             UINT16 transportPortDest = 0;
 
-            switch (vport->ovsType) {
+            switch (portType) {
             case OVS_VPORT_TYPE_VXLAN:
                 transportPortDest = VXLAN_UDP_PORT;
                 break;
