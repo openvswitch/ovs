@@ -2012,14 +2012,14 @@ update_mcast_snooping_table__(const struct xbridge *xbridge,
     switch (ntohs(flow->tp_src)) {
     case IGMP_HOST_MEMBERSHIP_REPORT:
     case IGMPV2_HOST_MEMBERSHIP_REPORT:
-        if (mcast_snooping_add_group(ms, ip4, vlan, in_xbundle->ofbundle)) {
+        if (mcast_snooping_add_group4(ms, ip4, vlan, in_xbundle->ofbundle)) {
             VLOG_DBG_RL(&rl, "bridge %s: multicast snooping learned that "
                         IP_FMT" is on port %s in VLAN %d",
                         xbridge->name, IP_ARGS(ip4), in_xbundle->name, vlan);
         }
         break;
     case IGMP_HOST_LEAVE_MESSAGE:
-        if (mcast_snooping_leave_group(ms, ip4, vlan, in_xbundle->ofbundle)) {
+        if (mcast_snooping_leave_group4(ms, ip4, vlan, in_xbundle->ofbundle)) {
             VLOG_DBG_RL(&rl, "bridge %s: multicast snooping leaving "
                         IP_FMT" is on port %s in VLAN %d",
                         xbridge->name, IP_ARGS(ip4), in_xbundle->name, vlan);
@@ -2330,7 +2330,7 @@ xlate_normal(struct xlate_ctx *ctx)
 
         /* forwarding to group base ports */
         ovs_rwlock_rdlock(&ms->rwlock);
-        grp = mcast_snooping_lookup(ms, flow->nw_dst, vlan);
+        grp = mcast_snooping_lookup4(ms, flow->nw_dst, vlan);
         if (grp) {
             xlate_normal_mcast_send_group(ctx, ms, grp, in_xbundle, vlan);
             xlate_normal_mcast_send_fports(ctx, ms, in_xbundle, vlan);

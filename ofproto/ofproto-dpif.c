@@ -4430,8 +4430,9 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
             bundle = b->port;
             ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
                                    name, sizeof name);
-            ds_put_format(&ds, "%5s  %4d  "IP_FMT"         %3d\n",
-                          name, grp->vlan, IP_ARGS(grp->ip4),
+            ds_put_format(&ds, "%5s  %4d  ", name, grp->vlan);
+            print_ipv6_mapped(&ds, &grp->addr);
+            ds_put_format(&ds, "         %3d\n",
                           mcast_bundle_age(ofproto->ms, b));
         }
     }

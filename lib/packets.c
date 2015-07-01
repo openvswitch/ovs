@@ -438,6 +438,17 @@ print_ipv6_addr(struct ds *string, const struct in6_addr *addr)
 }
 
 void
+print_ipv6_mapped(struct ds *s, const struct in6_addr *addr)
+{
+    if (IN6_IS_ADDR_V4MAPPED(addr)) {
+        ds_put_format(s, IP_FMT, addr->s6_addr[12], addr->s6_addr[13],
+                                 addr->s6_addr[14], addr->s6_addr[15]);
+    } else {
+        print_ipv6_addr(s, addr);
+    }
+}
+
+void
 print_ipv6_masked(struct ds *s, const struct in6_addr *addr,
                   const struct in6_addr *mask)
 {

@@ -828,6 +828,7 @@ struct vxlanhdr {
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
 void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
+void print_ipv6_mapped(struct ds *string, const struct in6_addr *addr);
 void print_ipv6_masked(struct ds *string, const struct in6_addr *addr,
                        const struct in6_addr *mask);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
