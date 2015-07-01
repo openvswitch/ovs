@@ -313,7 +313,6 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
                 ovsActionStats.txStt++;
                 break;
             }
-            ovsActionStats.txVxlan++;
             ovsFwdCtx->tunnelTxNic = dstVport;
         }
 
