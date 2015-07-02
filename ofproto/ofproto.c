@@ -84,10 +84,12 @@ static void oftable_set_name(struct oftable *, const char *name);
 
 static enum ofperr evict_rules_from_table(struct oftable *)
     OVS_REQUIRES(ofproto_mutex);
-static void oftable_disable_eviction(struct oftable *);
+static void oftable_disable_eviction(struct oftable *)
+    OVS_REQUIRES(ofproto_mutex);
 static void oftable_enable_eviction(struct oftable *,
                                     const struct mf_subfield *fields,
-                                    size_t n_fields);
+                                    size_t n_fields)
+    OVS_REQUIRES(ofproto_mutex);
 
 /* A set of rules within a single OpenFlow table (oftable) that have the same
  * values for the oftable's eviction_fields.  A rule to be evicted, when one is
@@ -1421,20 +1423,18 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
         return;
     }
 
-    if (s->groups) {
-        oftable_enable_eviction(table, s->groups, s->n_groups);
-    } else {
-        oftable_disable_eviction(table);
-    }
-
-    table->max_flows = s->max_flows;
-
     if (classifier_set_prefix_fields(&table->cls,
                                      s->prefix_fields, s->n_prefix_fields)) {
         /* XXX: Trigger revalidation. */
     }
 
     ovs_mutex_lock(&ofproto_mutex);
+    if (s->groups) {
+        oftable_enable_eviction(table, s->groups, s->n_groups);
+    } else {
+        oftable_disable_eviction(table);
+    }
+    table->max_flows = s->max_flows;
     evict_rules_from_table(table);
     ovs_mutex_unlock(&ofproto_mutex);
 }
@@ -7485,7 +7485,9 @@ static void
 oftable_destroy(struct oftable *table)
 {
     ovs_assert(classifier_is_empty(&table->cls));
+    ovs_mutex_lock(&ofproto_mutex);
     oftable_disable_eviction(table);
+    ovs_mutex_unlock(&ofproto_mutex);
     classifier_destroy(&table->cls);
     free(table->name);
 }
