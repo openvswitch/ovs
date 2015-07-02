@@ -588,6 +588,7 @@ OvsRemoveOpenInstance(PFILE_OBJECT fileObject)
     OvsReleaseCtrlLock();
     ASSERT(instance->eventQueue == NULL);
     ASSERT (instance->packetQueue == NULL);
+    FreeUserDumpState(instance);
     OvsFreeMemoryWithTag(instance, OVS_DATAPATH_POOL_TAG);
 }
 
