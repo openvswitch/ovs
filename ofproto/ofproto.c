@@ -150,10 +150,12 @@ static void oftable_destroy(struct oftable *);
 
 static void oftable_set_name(struct oftable *, const char *name);
 
-static void oftable_disable_eviction(struct oftable *);
+static void oftable_disable_eviction(struct oftable *)
+    OVS_REQUIRES(ofproto_mutex);
 static void oftable_enable_eviction(struct oftable *,
                                     const struct mf_subfield *fields,
-                                    size_t n_fields);
+                                    size_t n_fields)
+    OVS_REQUIRES(ofproto_mutex);
 
 static void oftable_remove_rule(struct rule *rule) OVS_REQUIRES(ofproto_mutex);
 static void oftable_remove_rule__(struct ofproto *, struct rule *)
@@ -1186,13 +1188,15 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
         return;
     }
 
+    ovs_mutex_lock(&ofproto_mutex);
     if (s->groups) {
         oftable_enable_eviction(table, s->groups, s->n_groups);
     } else {
         oftable_disable_eviction(table);
     }
-
     table->max_flows = s->max_flows;
+    ovs_mutex_unlock(&ofproto_mutex);
+
     fat_rwlock_wrlock(&table->cls.rwlock);
     if (classifier_count(&table->cls) > table->max_flows
         && table->eviction_fields) {
@@ -6783,7 +6787,11 @@ oftable_destroy(struct oftable *table)
     fat_rwlock_rdlock(&table->cls.rwlock);
     ovs_assert(classifier_is_empty(&table->cls));
     fat_rwlock_unlock(&table->cls.rwlock);
+
+    ovs_mutex_lock(&ofproto_mutex);
     oftable_disable_eviction(table);
+    ovs_mutex_unlock(&ofproto_mutex);
+
     classifier_destroy(&table->cls);
     free(table->name);
 }
