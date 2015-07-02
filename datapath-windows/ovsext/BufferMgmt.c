@@ -560,7 +560,8 @@ OvsInitExternalNBLContext(PVOID ovsContext,
 
     poolHandle = NdisGetPoolFromNetBufferList(nbl);
 
-    if (poolHandle == context->ovsPool.ndisHandle) {
+    if (poolHandle == context->ovsPool.ndisHandle ||
+        nbl->SourceHandle == context->ovsPool.ndisHandle) {
         return (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(nbl);
     }
     status = NdisAllocateNetBufferListContext(nbl, sizeof (OVS_BUFFER_CONTEXT),
@@ -801,6 +802,7 @@ OvsPartialCopyNBL(PVOID ovsContext,
                       OVS_DEFAULT_PORT_NO);
 
     InterlockedIncrement((LONG volatile *)&srcCtx->refCount);
+
 #ifdef DBG
     OvsDumpNetBufferList(nbl);
     OvsDumpForwardingDetails(nbl);
@@ -808,6 +810,7 @@ OvsPartialCopyNBL(PVOID ovsContext,
     OvsDumpNetBufferList(newNbl);
     OvsDumpForwardingDetails(newNbl);
 #endif
+
     OVS_LOG_LOUD("Partial Copy new NBL: %p", newNbl);
     return newNbl;
 
