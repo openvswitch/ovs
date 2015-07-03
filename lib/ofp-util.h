@@ -609,13 +609,33 @@ enum ofputil_table_miss {
     OFPUTIL_TABLE_MISS_DROP,       /* Drop the packet. */
 };
 
-ovs_be32 ofputil_table_miss_to_config(enum ofputil_table_miss,
-                                      enum ofp_version);
+/* Abstract version of OFPTC14_EVICTION.
+ *
+ * OpenFlow 1.0 through 1.3 don't know anything about eviction, so decoding a
+ * message for one of these protocols always yields
+ * OFPUTIL_TABLE_EVICTION_DEFAULT. */
+enum ofputil_table_eviction {
+    OFPUTIL_TABLE_EVICTION_DEFAULT, /* No value. */
+    OFPUTIL_TABLE_EVICTION_ON,      /* Enable eviction. */
+    OFPUTIL_TABLE_EVICTION_OFF      /* Disable eviction. */
+};
 
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
     uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */
-    enum ofputil_table_miss miss_config;
+
+    /* OpenFlow 1.1 and 1.2 only.  For other versions, ignored on encoding,
+     * decoded to OFPUTIL_TABLE_MISS_DEFAULT. */
+    enum ofputil_table_miss miss;
+
+    /* OpenFlow 1.4+ only.  For other versions, ignored on encoding, decoded to
+     * OFPUTIL_TABLE_EVICTION_DEFAULT. */
+    enum ofputil_table_eviction eviction;
+
+    /* OpenFlow 1.4+ only and optional even there; UINT32_MAX indicates
+     * absence.  For other versions, ignored on encoding, decoded to
+     * UINT32_MAX.*/
+    uint32_t eviction_flags;    /* OFPTMPEF14_*. */
 };
 
 enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
@@ -623,15 +643,37 @@ enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
                                        enum ofputil_protocol);
 
-/* Abstract ofp_table_features. */
+/* Abstract ofp_table_features.
+ *
+ * This is used for all versions of OpenFlow, even though ofp_table_features
+ * was only introduced in OpenFlow 1.3, because earlier versions of OpenFlow
+ * include support for a subset of ofp_table_features through OFPST_TABLE (aka
+ * OFPMP_TABLE). */
 struct ofputil_table_features {
     uint8_t table_id;         /* Identifier of table. Lower numbered tables
                                  are consulted first. */
     char name[OFP_MAX_TABLE_NAME_LEN];
     ovs_be64 metadata_match;  /* Bits of metadata table can match. */
     ovs_be64 metadata_write;  /* Bits of metadata table can write. */
-    enum ofputil_table_miss miss_config;
     uint32_t max_entries;     /* Max number of entries supported. */
+
+    /* Flags.
+     *
+     * 'miss_config' is relevant for OpenFlow 1.1 and 1.2 only, because those
+     * versions include OFPTC_MISS_* flags in OFPST_TABLE.  For other versions,
+     * it is decoded to OFPUTIL_TABLE_MISS_DEFAULT and ignored for encoding.
+     *
+     * 'supports_eviction' and 'supports_vacancy_events' are relevant only for
+     * OpenFlow 1.4 and later only.  For OF1.4, they are boolean: 1 if
+     * supported, otherwise 0.  For other versions, they are decoded as -1 and
+     * ignored for encoding.
+     *
+     * See the section "OFPTC_* Table Configuration" in DESIGN.md for more
+     * details of how OpenFlow has changed in this area.
+     */
+    enum ofputil_table_miss miss_config; /* OF1.1 and 1.2 only. */
+    int supports_eviction;               /* OF1.4+ only. */
+    int supports_vacancy_events;         /* OF1.4+ only. */
 
     /* Table features related to instructions.  There are two instances:
      *

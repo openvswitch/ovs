@@ -62,20 +62,13 @@ Prints to the console statistics for each of the flow tables used by
 \fBdump\-table\-features \fIswitch\fR
 Prints to the console features for each of the flow tables used by
 \fIswitch\fR.
-.
-.IP "\fBmod\-table \fIswitch\fR \fItable_id\fR  \fIflow_miss_handling\fR"
-An OpenFlow 1.0 switch looks up each packet that arrives at the switch
-in table 0, then in table 1 if there is no match in table 0, then in
-table 2, and so on until the packet finds a match in some table.
-Finally, if no match was found, the switch sends the packet to the
-controller
-.IP
-OpenFlow 1.1 and later offer more flexibility.  This command
-configures the flow table miss handling configuration for table
-\fItable_id\fR in \fIswitch\fR.  \fItable_id\fR may be an OpenFlow
-table number between 0 and 254, inclusive, or the keyword \fBALL\fR to
-modify all tables.  \fIflow_miss_handling\fR may be any one of the
-following:
+.IP "\fBmod\-table \fIswitch\fR \fItable_id\fR \fIsetting\fR"
+This command configures flow table settings for OpenFlow table
+\fItable_id\fR within \fIswitch\fR.  The available settings depend on
+the OpenFlow version in use.  In OpenFlow 1.1 and 1.2 (which must be
+enabled with the \fB\-O\fR option) only, \fBmod\-table\fR configures
+behavior when no flow is found when a packet is looked up in a flow
+table.  The following \fIsetting\fR values are available:
 .RS
 .IP \fBdrop\fR
 Drop the packet.
@@ -86,6 +79,21 @@ tables other than the last one.)
 .IP \fBcontroller\fR
 Send to controller.  (This is how an OpenFlow 1.0 switch always
 handles packets that do not match any flow in the last table.)
+.RE
+.IP
+In OpenFlow 1.4 and later (which must be enabled with the \fB\-O\fR
+option) only, \fBmod\-table\fR configures the behavior when a
+controller attempts to add a flow to a flow table that is full.  The
+following \fIsetting\fR values are available:
+.RS
+.IP \fBevict\fR
+Delete some existing flow from the flow table, according to the
+algorithm described for the \fBFlow_Table\fR table in
+\fBovs-vswitchd.conf.db\fR(5).
+.IP \fBnoevict\fR
+Refuse to add the new flow.  (Eviction might still be enabled through
+the \fBoverflow_policy\fR oclumn in the \fBFlow_Table\fR table
+documented in \fBovs-vswitchd.conf.db\fR(5).)
 .RE
 .
 .TP

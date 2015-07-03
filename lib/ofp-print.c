@@ -942,23 +942,54 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
     }
 }
 
-static void
-ofp_print_table_miss_config(struct ds *string, enum ofputil_table_miss miss)
+static const char *
+ofputil_table_miss_to_string(enum ofputil_table_miss miss)
 {
     switch (miss) {
-    case OFPUTIL_TABLE_MISS_CONTROLLER:
-        ds_put_cstr(string, "controller\n");
-        break;
-    case OFPUTIL_TABLE_MISS_CONTINUE:
-        ds_put_cstr(string, "continue\n");
-        break;
-    case OFPUTIL_TABLE_MISS_DROP:
-        ds_put_cstr(string, "drop\n");
-        break;
-    case OFPUTIL_TABLE_MISS_DEFAULT:
-    default:
-        ds_put_format(string, "Unknown (%d)\n", miss);
-        break;
+    case OFPUTIL_TABLE_MISS_DEFAULT: return "default";
+    case OFPUTIL_TABLE_MISS_CONTROLLER: return "controller";
+    case OFPUTIL_TABLE_MISS_CONTINUE: return "continue";
+    case OFPUTIL_TABLE_MISS_DROP: return "drop";
+    default: return "***error***";
+    }
+}
+
+static const char *
+ofputil_table_eviction_to_string(enum ofputil_table_eviction eviction)
+{
+    switch (eviction) {
+    case OFPUTIL_TABLE_EVICTION_DEFAULT: return "default";
+    case OFPUTIL_TABLE_EVICTION_ON: return "on";
+    case OFPUTIL_TABLE_EVICTION_OFF: return "off";
+    default: return "***error***";
+    }
+
+}
+
+static const char *
+ofputil_eviction_flag_to_string(uint32_t bit)
+{
+    enum ofp14_table_mod_prop_eviction_flag eviction_flag = bit;
+
+    switch (eviction_flag) {
+    case OFPTMPEF14_OTHER:      return "OTHER";
+    case OFPTMPEF14_IMPORTANCE: return "IMPORTANCE";
+    case OFPTMPEF14_LIFETIME:   return "LIFETIME";
+    }
+
+    return NULL;
+}
+
+/* Appends to 'string' a description of the bitmap of OFPTMPEF14_* values in
+ * 'eviction_flags'. */
+static void
+ofputil_put_eviction_flags(struct ds *string, uint32_t eviction_flags)
+{
+    if (eviction_flags != UINT32_MAX) {
+        ofp_print_bit_names(string, eviction_flags,
+                            ofputil_eviction_flag_to_string, '|');
+    } else {
+        ds_put_cstr(string, "(default)");
     }
 }
 
@@ -980,9 +1011,17 @@ ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
         ds_put_format(string, " table_id=%"PRIu8, pm.table_id);
     }
 
-    if (pm.miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
-        ds_put_cstr(string, ", flow_miss_config=");
-        ofp_print_table_miss_config(string, pm.miss_config);
+    if (pm.miss != OFPUTIL_TABLE_MISS_DEFAULT) {
+        ds_put_format(string, ", flow_miss_config=%s",
+                      ofputil_table_miss_to_string(pm.miss));
+    }
+    if (pm.eviction != OFPUTIL_TABLE_EVICTION_DEFAULT) {
+        ds_put_format(string, ", eviction=%s",
+                      ofputil_table_eviction_to_string(pm.eviction));
+    }
+    if (pm.eviction_flags != UINT32_MAX) {
+        ds_put_cstr(string, "eviction_flags=");
+        ofputil_put_eviction_flags(string, pm.eviction_flags);
     }
 }
 
@@ -2500,8 +2539,19 @@ ofp_print_table_features(struct ds *s,
     }
 
     if (features->miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
-        ds_put_cstr(s, "    config=");
-        ofp_print_table_miss_config(s, features->miss_config);
+        ds_put_format(s, "    config=%s\n",
+                      ofputil_table_miss_to_string(features->miss_config));
+    }
+
+    if (features->supports_eviction >= 0) {
+        ds_put_format(s, "    eviction: %ssupported\n",
+                      features->supports_eviction ? "" : "not ");
+
+    }
+    if (features->supports_vacancy_events >= 0) {
+        ds_put_format(s, "    vacancy events: %ssupported\n",
+                      features->supports_vacancy_events ? "" : "not ");
+
     }
 
     if (features->max_entries) {

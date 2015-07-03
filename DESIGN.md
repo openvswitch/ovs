@@ -277,13 +277,19 @@ The table for 1.3 is the same as the one shown above for 1.2.
 
 
 OpenFlow 1.4
-------------
+-----------
 
-OpenFlow 1.4 adds the "importance" field to flow_mods, but it does not
-explicitly specify which kinds of flow_mods set the importance.  For
-consistency, Open vSwitch uses the same rule for importance as for
-idle_timeout and hard_timeout, that is, only an "ADD" flow_mod sets
-the importance.  (This issue has been filed with the ONF as EXT-496.)
+OpenFlow 1.4 makes these changes:
+
+  - Adds the "importance" field to flow_mods, but it does not
+    explicitly specify which kinds of flow_mods set the importance.
+    For consistency, Open vSwitch uses the same rule for importance
+    as for idle_timeout and hard_timeout, that is, only an "ADD"
+    flow_mod sets the importance.  (This issue has been filed with
+    the ONF as EXT-496.)
+
+  - Eviction Mechanism to automatically delete entries of lower
+    importance to make space for newer entries.
 
 
 OpenFlow 1.4 Bundles
@@ -604,6 +610,73 @@ NXAST_RESUBMIT_TABLE action specifies another table to search.
 
 Tables 128 and above are reserved for use by the switch itself.
 Controllers should use only tables 0 through 127.
+
+
+OFPTC_* Table Configuration
+===========================
+
+This section covers the history of the OFPTC_* table configuration
+bits across OpenFlow versions.
+
+OpenFlow 1.0 flow tables had fixed configurations.
+
+OpenFlow 1.1 enabled controllers to configure behavior upon flow table
+miss and added the OFPTC_MISS_* constants for that purpose.  OFPTC_*
+did not control anything else but it was nevertheless conceptualized
+as a set of bit-fields instead of an enum.  OF1.1 added the
+OFPT_TABLE_MOD message to set OFPTC_MISS_* for a flow table and added
+the 'config' field to the OFPST_TABLE reply to report the current
+setting.
+
+OpenFlow 1.2 did not change anything in this regard.
+
+OpenFlow 1.3 switched to another means to changing flow table miss
+behavior and deprecated OFPTC_MISS_* without adding any more OFPTC_*
+constants.  This meant that OFPT_TABLE_MOD now had no purpose at all,
+but OF1.3 kept it around "for backward compatibility with older and
+newer versions of the specification."  At the same time, OF1.3
+introduced a new message OFPMP_TABLE_FEATURES that included a field
+'config' documented as reporting the OFPTC_* values set with
+OFPT_TABLE_MOD; of course this served no real purpose because no
+OFPTC_* values are defined.  OF1.3 did remove the OFPTC_* field from
+OFPMP_TABLE (previously named OFPST_TABLE).
+
+OpenFlow 1.4 defined two new OFPTC_* constants, OFPTC_EVICTION and
+OFPTC_VACANCY_EVENTS, using bits that did not overlap with
+OFPTC_MISS_* even though those bits had not been defined since OF1.2.
+OFPT_TABLE_MOD still controlled these settings.  The field for OFPTC_*
+values in OFPMP_TABLE_FEATURES was renamed from 'config' to
+'capabilities' and documented as reporting the flags that are
+supported in a OFPT_TABLE_MOD message.  The OFPMP_TABLE_DESC message
+newly added in OF1.4 reported the OFPTC_* setting.
+
+OpenFlow 1.5 did not change anything in this regard.
+
+The following table summarizes.  The columns say:
+
+  - OpenFlow version(s).
+
+  - The OFPTC_* flags defined in those versions.
+
+  - Whether OFPT_TABLE_MOD can modify OFPTC_* flags.
+
+  - Whether OFPST_TABLE/OFPMP_TABLE reports the OFPTC_* flags.
+
+  - What OFPMP_TABLE_FEATURES reports (if it exists): either the
+    current configuration or the switch's capabilities.
+
+  - Whether OFPMP_TABLE_DESC reports the current configuration.
+
+OpenFlow   OFPTC_* flags            TABLE_MOD stats? TABLE_FEATURES TABLE_DESC
+---------  -----------------------  --------- ------ -------------- ----------
+OF1.0      none                     no[*][+]  no[*]  nothing[*][+]  no[*][+]
+OF1.1/1.2  MISS_*                   yes       yes    nothing[+]     no[+]
+OF1.3      none                     yes[*]    no[*]  config[*]      no[*][+]
+OF1.4/1.5  EVICTION/VACANCY_EVENTS  yes       no     capabilities   yes
+
+   [*] Nothing to report/change anyway.
+
+   [+] No such message.
 
 
 IPv6

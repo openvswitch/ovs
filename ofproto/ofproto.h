@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -459,14 +459,18 @@ struct ofproto_table_settings {
     char *name;                 /* Name exported via OpenFlow or NULL. */
     unsigned int max_flows;     /* Maximum number of flows or UINT_MAX. */
 
-    /* These members determine the handling of an attempt to add a flow that
-     * would cause the table to have more than 'max_flows' flows.
+    /* These members, together with OpenFlow OFPT_TABLE_MOD, determine the
+     * handling of an attempt to add a flow that would cause the table to have
+     * more than 'max_flows' flows:
      *
-     * If 'groups' is NULL, overflows will be rejected with an error.
+     *    - If 'enable_eviction' is false and OFPT_TABLE_MOD does not enable
+     *      eviction, overflows will be rejected with an error.
      *
-     * If 'groups' is nonnull, an overflow will cause a flow to be removed.
-     * The flow to be removed is chosen to give fairness among groups
-     * distinguished by different values for the subfields within 'groups'. */
+     *    - If 'enable_eviction' is true or OFPT_TABLE_MOD enables eviction, an
+     *      overflow will cause a flow to be removed.  The flow to be removed
+     *      is chosen to give fairness among groups distinguished by different
+     *      values for the 'n_groups' subfields within 'groups'. */
+    bool enable_eviction;
     struct mf_subfield *groups;
     size_t n_groups;
 

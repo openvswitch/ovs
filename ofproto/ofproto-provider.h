@@ -246,8 +246,15 @@ struct oftable {
     struct hmap eviction_groups_by_id;
     struct heap eviction_groups_by_size;
 
-    /* Table configuration. */
+    /* Flow table miss handling configuration. */
     ATOMIC(enum ofputil_table_miss) miss_config;
+
+    /* Eviction is enabled if either the client (vswitchd) enables it or an
+     * OpenFlow controller enables it; thus, a nonzero value indicates that
+     * eviction is enabled.  */
+#define EVICTION_CLIENT  (1 << 0)  /* Set to 1 if client enables eviction. */
+#define EVICTION_OPENFLOW (1 << 1) /* Set to 1 if OpenFlow enables eviction. */
+    unsigned int eviction;
 
     atomic_ulong n_matched;
     atomic_ulong n_missed;

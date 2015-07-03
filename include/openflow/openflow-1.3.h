@@ -232,7 +232,14 @@ struct ofp13_table_features {
     char name[OFP_MAX_TABLE_NAME_LEN];
     ovs_be64 metadata_match;  /* Bits of metadata table can match. */
     ovs_be64 metadata_write;  /* Bits of metadata table can write. */
-    ovs_be32 config;          /* Bitmap of OFPTC_* values */
+
+    /* In OF1.3 this field was named 'config' and it was useless because OF1.3
+     * did not define any OFPTC_* bits.
+     *
+     * OF1.4 renamed this field to 'capabilities' and added OFPTC14_EVICTION
+     * and OFPTC14_VACANCY_EVENTS. */
+    ovs_be32 capabilities;    /* Bitmap of OFPTC_* values */
+
     ovs_be32 max_entries;     /* Max number of entries supported. */
 
     /* Table Feature Property list */

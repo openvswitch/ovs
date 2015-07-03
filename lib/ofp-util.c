@@ -53,8 +53,11 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-static enum ofputil_table_miss ofputil_table_miss_from_config(
-    ovs_be32 config_, enum ofp_version);
+static enum ofputil_table_eviction ofputil_decode_table_eviction(
+    ovs_be32 config, enum ofp_version);
+static ovs_be32 ofputil_encode_table_config(enum ofputil_table_miss,
+                                            enum ofputil_table_eviction,
+                                            enum ofp_version);
 
 struct ofp_prop_header {
     ovs_be16 type;
@@ -4644,7 +4647,15 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     ovs_strlcpy(tf->name, otf->name, OFP_MAX_TABLE_NAME_LEN);
     tf->metadata_match = otf->metadata_match;
     tf->metadata_write = otf->metadata_write;
-    tf->miss_config = ofputil_table_miss_from_config(otf->config, oh->version);
+    tf->miss_config = OFPUTIL_TABLE_MISS_DEFAULT;
+    if (oh->version >= OFP14_VERSION) {
+        uint32_t caps = ntohl(otf->capabilities);
+        tf->supports_eviction = (caps & OFPTC14_EVICTION) != 0;
+        tf->supports_vacancy_events = (caps & OFPTC14_VACANCY_EVENTS) != 0;
+    } else {
+        tf->supports_eviction = -1;
+        tf->supports_vacancy_events = -1;
+    }
     tf->max_entries = ntohl(otf->max_entries);
 
     while (properties.size > 0) {
@@ -4852,7 +4863,14 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     ovs_strlcpy(otf->name, tf->name, sizeof otf->name);
     otf->metadata_match = tf->metadata_match;
     otf->metadata_write = tf->metadata_write;
-    otf->config = ofputil_table_miss_to_config(tf->miss_config, version);
+    if (version >= OFP14_VERSION) {
+        if (tf->supports_eviction) {
+            otf->capabilities |= htonl(OFPTC14_EVICTION);
+        }
+        if (tf->supports_vacancy_events) {
+            otf->capabilities |= htonl(OFPTC14_VACANCY_EVENTS);
+        }
+    }
     otf->max_entries = htonl(tf->max_entries);
 
     put_table_instruction_features(reply, &tf->nonmiss, 0, version);
@@ -4868,17 +4886,97 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     ofpmp_postappend(replies, start_ofs);
 }
 
-/* ofputil_table_mod */
+static enum ofperr
+parse_table_mod_eviction_property(struct ofpbuf *property,
+                                  struct ofputil_table_mod *tm)
+{
+    struct ofp14_table_mod_prop_eviction *ote = property->data;
+
+    if (property->size != sizeof *ote) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    tm->eviction_flags = ntohl(ote->flags);
+    return 0;
+}
 
 /* Given 'config', taken from an OpenFlow 'version' message that specifies
  * table configuration (a table mod, table stats, or table features message),
- * returns the table miss configuration that it specifies.  */
+ * returns the table eviction configuration that it specifies.
+ *
+ * Only OpenFlow 1.4 and later specify table eviction configuration this way,
+ * so for other 'version' values this function always returns
+ * OFPUTIL_TABLE_EVICTION_DEFAULT. */
+static enum ofputil_table_eviction
+ofputil_decode_table_eviction(ovs_be32 config, enum ofp_version version)
+{
+    return (version < OFP14_VERSION ? OFPUTIL_TABLE_EVICTION_DEFAULT
+            : config & htonl(OFPTC14_EVICTION) ? OFPUTIL_TABLE_EVICTION_ON
+            : OFPUTIL_TABLE_EVICTION_OFF);
+}
+
+/* Returns a bitmap of OFPTC* values suitable for 'config' fields in various
+ * OpenFlow messages of the given 'version', based on the provided 'miss' and
+ * 'eviction' values. */
+static ovs_be32
+ofputil_encode_table_config(enum ofputil_table_miss miss,
+                            enum ofputil_table_eviction eviction,
+                            enum ofp_version version)
+{
+    /* See the section "OFPTC_* Table Configuration" in DESIGN.md for more
+     * information on the crazy evolution of this field. */
+    switch (version) {
+    case OFP10_VERSION:
+        /* OpenFlow 1.0 didn't have such a field, any value ought to do. */
+        return htonl(0);
+
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        /* OpenFlow 1.1 and 1.2 define only OFPTC11_TABLE_MISS_*. */
+        switch (miss) {
+        case OFPUTIL_TABLE_MISS_DEFAULT:
+            /* Really this shouldn't be used for encoding (the caller should
+             * provide a specific value) but I can't imagine that defaulting to
+             * the fall-through case here will hurt. */
+        case OFPUTIL_TABLE_MISS_CONTROLLER:
+        default:
+            return htonl(OFPTC11_TABLE_MISS_CONTROLLER);
+        case OFPUTIL_TABLE_MISS_CONTINUE:
+            return htonl(OFPTC11_TABLE_MISS_CONTINUE);
+        case OFPUTIL_TABLE_MISS_DROP:
+            return htonl(OFPTC11_TABLE_MISS_DROP);
+        }
+        OVS_NOT_REACHED();
+
+    case OFP13_VERSION:
+        /* OpenFlow 1.3 removed OFPTC11_TABLE_MISS_* and didn't define any new
+         * flags, so this is correct. */
+        return htonl(0);
+
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        /* OpenFlow 1.4 introduced OFPTC14_EVICTION and OFPTC14_VACANCY_EVENTS
+         * and we don't support the latter yet. */
+        return htonl(eviction == OFPUTIL_TABLE_EVICTION_ON
+                     ? OFPTC14_EVICTION : 0);
+    }
+
+    OVS_NOT_REACHED();
+}
+
+/* Given 'config', taken from an OpenFlow 'version' message that specifies
+ * table configuration (a table mod, table stats, or table features message),
+ * returns the table miss configuration that it specifies.
+ *
+ * Only OpenFlow 1.1 and 1.2 specify table miss configurations this way, so for
+ * other 'version' values this function always returns
+ * OFPUTIL_TABLE_MISS_DEFAULT. */
 static enum ofputil_table_miss
-ofputil_table_miss_from_config(ovs_be32 config_, enum ofp_version version)
+ofputil_decode_table_miss(ovs_be32 config_, enum ofp_version version)
 {
     uint32_t config = ntohl(config_);
 
-    if (version < OFP13_VERSION) {
+    if (version == OFP11_VERSION || version == OFP12_VERSION) {
         switch (config & OFPTC11_TABLE_MISS_MASK) {
         case OFPTC11_TABLE_MISS_CONTROLLER:
             return OFPUTIL_TABLE_MISS_CONTROLLER;
@@ -4898,32 +4996,6 @@ ofputil_table_miss_from_config(ovs_be32 config_, enum ofp_version version)
     }
 }
 
-/* Given a table miss configuration, returns the corresponding OpenFlow table
- * configuration for use in an OpenFlow message of the given 'version'. */
-ovs_be32
-ofputil_table_miss_to_config(enum ofputil_table_miss miss,
-                             enum ofp_version version)
-{
-    if (version < OFP13_VERSION) {
-        switch (miss) {
-        case OFPUTIL_TABLE_MISS_CONTROLLER:
-        case OFPUTIL_TABLE_MISS_DEFAULT:
-            return htonl(OFPTC11_TABLE_MISS_CONTROLLER);
-
-        case OFPUTIL_TABLE_MISS_CONTINUE:
-            return htonl(OFPTC11_TABLE_MISS_CONTINUE);
-
-        case OFPUTIL_TABLE_MISS_DROP:
-            return htonl(OFPTC11_TABLE_MISS_DROP);
-
-        default:
-            OVS_NOT_REACHED();
-        }
-    } else {
-        return htonl(0);
-    }
-}
-
 /* Decodes the OpenFlow "table mod" message in '*oh' into an abstract form in
  * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
@@ -4933,6 +5005,10 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
     enum ofpraw raw;
     struct ofpbuf b;
 
+    memset(pm, 0, sizeof *pm);
+    pm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
+    pm->eviction = OFPUTIL_TABLE_EVICTION_DEFAULT;
+    pm->eviction_flags = UINT32_MAX;
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
 
@@ -4940,16 +5016,37 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
         const struct ofp11_table_mod *otm = b.data;
 
         pm->table_id = otm->table_id;
-        pm->miss_config = ofputil_table_miss_from_config(otm->config,
-                                                         oh->version);
+        pm->miss = ofputil_decode_table_miss(otm->config, oh->version);
     } else if (raw == OFPRAW_OFPT14_TABLE_MOD) {
         const struct ofp14_table_mod *otm = ofpbuf_pull(&b, sizeof *otm);
 
         pm->table_id = otm->table_id;
-        pm->miss_config = ofputil_table_miss_from_config(otm->config,
-                                                         oh->version);
-        /* We do not understand any properties yet, so we do not bother
-         * parsing them. */
+        pm->miss = ofputil_decode_table_miss(otm->config, oh->version);
+        pm->eviction = ofputil_decode_table_eviction(otm->config, oh->version);
+        while (b.size > 0) {
+            struct ofpbuf property;
+            enum ofperr error;
+            uint16_t type;
+
+            error = ofputil_pull_property(&b, &property, &type);
+            if (error) {
+                return error;
+            }
+
+            switch (type) {
+            case OFPTMPT14_EVICTION:
+                error = parse_table_mod_eviction_property(&property, pm);
+                break;
+
+            default:
+                error = OFPERR_OFPBRC_BAD_TYPE;
+                break;
+            }
+
+            if (error) {
+                return error;
+            }
+        }
     } else {
         return OFPERR_OFPBRC_BAD_TYPE;
     }
@@ -4957,11 +5054,11 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
     return 0;
 }
 
-/* Converts the abstract form of a "table mod" message in '*pm' into an OpenFlow
- * message suitable for 'protocol', and returns that encoded form in a buffer
- * owned by the caller. */
+/* Converts the abstract form of a "table mod" message in '*tm' into an
+ * OpenFlow message suitable for 'protocol', and returns that encoded form in a
+ * buffer owned by the caller. */
 struct ofpbuf *
-ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
+ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
                         enum ofputil_protocol protocol)
 {
     enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
@@ -4980,20 +5077,28 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
 
         b = ofpraw_alloc(OFPRAW_OFPT11_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
-        otm->table_id = pm->table_id;
-        otm->config = ofputil_table_miss_to_config(pm->miss_config,
-                                                   ofp_version);
+        otm->table_id = tm->table_id;
+        otm->config = ofputil_encode_table_config(tm->miss, tm->eviction,
+                                                  ofp_version);
         break;
     }
     case OFP14_VERSION:
     case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
+        struct ofp14_table_mod_prop_eviction *ote;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
-        otm->table_id = pm->table_id;
-        otm->config = ofputil_table_miss_to_config(pm->miss_config,
-                                                   ofp_version);
+        otm->table_id = tm->table_id;
+        otm->config = ofputil_encode_table_config(tm->miss, tm->eviction,
+                                                  ofp_version);
+
+        if (tm->eviction_flags != UINT32_MAX) {
+            ote = ofpbuf_put_zeros(b, sizeof *ote);
+            ote->type = htons(OFPTMPT14_EVICTION);
+            ote->length = htons(sizeof *ote);
+            ote->flags = htonl(tm->eviction_flags);
+        }
         break;
     }
     default:
@@ -5339,8 +5444,9 @@ ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
     out->metadata_write = features->metadata_write;
     out->instructions = ovsinst_bitmap_to_openflow(
         features->nonmiss.instructions, OFP12_VERSION);
-    out->config = ofputil_table_miss_to_config(features->miss_config,
-                                               OFP12_VERSION);
+    out->config = ofputil_encode_table_config(features->miss_config,
+                                              OFPUTIL_TABLE_EVICTION_DEFAULT,
+                                              OFP12_VERSION);
     out->max_entries = htonl(features->max_entries);
     out->active_count = htonl(stats->active_count);
     out->lookup_count = htonll(stats->lookup_count);
@@ -5446,8 +5552,8 @@ ofputil_decode_ofp11_table_stats(struct ofpbuf *msg,
     features->nonmiss.apply.ofpacts = ofpact_bitmap_from_openflow(
         ots->write_actions, OFP11_VERSION);
     features->miss = features->nonmiss;
-    features->miss_config = ofputil_table_miss_from_config(ots->config,
-                                                           OFP11_VERSION);
+    features->miss_config = ofputil_decode_table_miss(ots->config,
+                                                      OFP11_VERSION);
     features->match = mf_bitmap_from_of11(ots->match);
     features->wildcard = mf_bitmap_from_of11(ots->wildcards);
     bitmap_or(features->match.bm, features->wildcard.bm, MFF_N_IDS);
@@ -5476,8 +5582,8 @@ ofputil_decode_ofp12_table_stats(struct ofpbuf *msg,
     ovs_strlcpy(features->name, ots->name, sizeof features->name);
     features->metadata_match = ots->metadata_match;
     features->metadata_write = ots->metadata_write;
-    features->miss_config = ofputil_table_miss_from_config(ots->config,
-                                                           OFP12_VERSION);
+    features->miss_config = ofputil_decode_table_miss(ots->config,
+                                                      OFP12_VERSION);
     features->max_entries = ntohl(ots->max_entries);
 
     features->nonmiss.instructions = ovsinst_bitmap_from_openflow(
@@ -5545,6 +5651,8 @@ ofputil_decode_table_stats_reply(struct ofpbuf *msg,
 
     memset(stats, 0, sizeof *stats);
     memset(features, 0, sizeof *features);
+    features->supports_eviction = -1;
+    features->supports_vacancy_events = -1;
 
     switch ((enum ofp_version) oh->version) {
     case OFP10_VERSION:

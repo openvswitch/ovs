@@ -340,8 +340,11 @@ usage(void)
            "  dump-table-features SWITCH  print table features\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
+           "      OF1.1/1.2 MOD: controller, continue, drop\n"
+           "      OF1.4+ MOD: evict, noevict\n"
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
+           "      FRAG_MODE: normal, drop, reassemble, nx-match\n"
            "  dump-ports SWITCH [PORT]    print port statistics\n"
            "  dump-ports-desc SWITCH [PORT]  print port descriptions\n"
            "  dump-flows SWITCH           print all flow entries\n"
@@ -1848,35 +1851,28 @@ found:
 static void
 ofctl_mod_table(struct ovs_cmdl_context *ctx)
 {
-    enum ofputil_protocol protocol, usable_protocols;
+    uint32_t usable_versions;
     struct ofputil_table_mod tm;
     struct vconn *vconn;
     char *error;
-    int i;
 
-    error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3], &usable_protocols);
+    error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3],
+                                &usable_versions);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
 
-    protocol = open_vconn(ctx->argv[1], &vconn);
-    if (!(protocol & usable_protocols)) {
-        for (i = 0; i < sizeof(enum ofputil_protocol) * CHAR_BIT; i++) {
-            enum ofputil_protocol f = 1 << i;
-            if (f != protocol
-                && f & usable_protocols
-                && try_set_protocol(vconn, f, &protocol)) {
-                protocol = f;
-                break;
-            }
-        }
+    uint32_t allowed_versions = get_allowed_ofp_versions();
+    if (!(allowed_versions & usable_versions)) {
+        struct ds versions = DS_EMPTY_INITIALIZER;
+        ofputil_format_version_bitmap_names(&versions, allowed_versions);
+        ovs_fatal(0, "table_mod '%s' requires one of the OpenFlow "
+                  "versions %s but none is enabled (use -O)",
+                  ctx->argv[3], ds_cstr(&versions));
     }
+    mask_allowed_ofp_versions(usable_versions);
 
-    if (!(protocol & usable_protocols)) {
-        char *usable_s = ofputil_protocols_to_string(usable_protocols);
-        ovs_fatal(0, "Switch does not support table mod message(%s)", usable_s);
-    }
-
+    enum ofputil_protocol protocol = open_vconn(ctx->argv[1], &vconn);
     transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
     vconn_close(vconn);
 }

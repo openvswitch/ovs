@@ -84,12 +84,17 @@ static void oftable_set_name(struct oftable *, const char *name);
 
 static enum ofperr evict_rules_from_table(struct oftable *)
     OVS_REQUIRES(ofproto_mutex);
-static void oftable_disable_eviction(struct oftable *)
+static void oftable_configure_eviction(struct oftable *,
+                                       unsigned int eviction,
+                                       const struct mf_subfield *fields,
+                                       size_t n_fields)
     OVS_REQUIRES(ofproto_mutex);
-static void oftable_enable_eviction(struct oftable *,
-                                    const struct mf_subfield *fields,
-                                    size_t n_fields)
-    OVS_REQUIRES(ofproto_mutex);
+
+/* This is the only combination of OpenFlow eviction flags that OVS supports: a
+ * combination of OF1.4+ importance, the remaining lifetime of the flow, and
+ * fairness based on user-specified fields. */
+#define OFPROTO_EVICTION_FLAGS \
+    (OFPTMPEF14_OTHER | OFPTMPEF14_IMPORTANCE | OFPTMPEF14_LIFETIME)
 
 /* A set of rules within a single OpenFlow table (oftable) that have the same
  * values for the oftable's eviction_fields.  A rule to be evicted, when one is
@@ -1429,11 +1434,10 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
     }
 
     ovs_mutex_lock(&ofproto_mutex);
-    if (s->groups) {
-        oftable_enable_eviction(table, s->groups, s->n_groups);
-    } else {
-        oftable_disable_eviction(table);
-    }
+    unsigned int new_eviction = (s->enable_eviction
+                                 ? table->eviction | EVICTION_CLIENT
+                                 : table->eviction & ~EVICTION_CLIENT);
+    oftable_configure_eviction(table, new_eviction, s->groups, s->n_groups);
     table->max_flows = s->max_flows;
     evict_rules_from_table(table);
     ovs_mutex_unlock(&ofproto_mutex);
@@ -1695,7 +1699,7 @@ ofproto_run(struct ofproto *p)
             struct eviction_group *evg;
             struct rule *rule;
 
-            if (!table->eviction_fields) {
+            if (!table->eviction) {
                 continue;
             }
 
@@ -6560,10 +6564,38 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 enum ofputil_table_miss
 ofproto_table_get_miss_config(const struct ofproto *ofproto, uint8_t table_id)
 {
-    enum ofputil_table_miss value;
+    enum ofputil_table_miss miss;
 
-    atomic_read_relaxed(&ofproto->tables[table_id].miss_config, &value);
-    return value;
+    atomic_read_relaxed(&ofproto->tables[table_id].miss_config, &miss);
+    return miss;
+}
+
+static void
+table_mod__(struct oftable *oftable,
+            enum ofputil_table_miss miss, enum ofputil_table_eviction eviction)
+{
+    if (miss == OFPUTIL_TABLE_MISS_DEFAULT) {
+        /* This is how an OFPT_TABLE_MOD decodes if it doesn't specify any
+         * table-miss configuration (because the protocol used doesn't have
+         * such a concept), so there's nothing to do. */
+    } else {
+        atomic_store_relaxed(&oftable->miss_config, miss);
+    }
+
+    unsigned int new_eviction = oftable->eviction;
+    if (eviction == OFPUTIL_TABLE_EVICTION_ON) {
+        new_eviction |= EVICTION_OPENFLOW;
+    } else if (eviction == OFPUTIL_TABLE_EVICTION_OFF) {
+        new_eviction &= ~EVICTION_OPENFLOW;
+    }
+
+    if (new_eviction != oftable->eviction) {
+        ovs_mutex_lock(&ofproto_mutex);
+        oftable_configure_eviction(oftable, new_eviction,
+                                   oftable->eviction_fields,
+                                   oftable->n_eviction_fields);
+        ovs_mutex_unlock(&ofproto_mutex);
+    }
 }
 
 static enum ofperr
@@ -6571,18 +6603,33 @@ table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
 {
     if (!check_table_id(ofproto, tm->table_id)) {
         return OFPERR_OFPTMFC_BAD_TABLE;
-    } else if (tm->miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
-        if (tm->table_id == OFPTT_ALL) {
-            int i;
-            for (i = 0; i < ofproto->n_tables; i++) {
-                atomic_store_relaxed(&ofproto->tables[i].miss_config,
-                                     tm->miss_config);
-            }
-        } else {
-            atomic_store_relaxed(&ofproto->tables[tm->table_id].miss_config,
-                                 tm->miss_config);
-        }
     }
+
+    /* Don't allow the eviction flags to be changed (except to the only fixed
+     * value that OVS supports).  OF1.4 says this is normal: "The
+     * OFPTMPT_EVICTION property usually cannot be modified using a
+     * OFP_TABLE_MOD request, because the eviction mechanism is switch
+     * defined". */
+    if (tm->eviction_flags != UINT32_MAX
+        && tm->eviction_flags != OFPROTO_EVICTION_FLAGS) {
+        return OFPERR_OFPTMFC_BAD_CONFIG;
+    }
+
+    if (tm->table_id == OFPTT_ALL) {
+        struct oftable *oftable;
+        OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
+            if (!(oftable->flags & (OFTABLE_HIDDEN | OFTABLE_READONLY))) {
+                table_mod__(oftable, tm->miss, tm->eviction);
+            }
+        }
+    } else {
+        struct oftable *oftable = &ofproto->tables[tm->table_id];
+        if (oftable->flags & OFTABLE_READONLY) {
+            return OFPERR_OFPTMFC_EPERM;
+        }
+        table_mod__(oftable, tm->miss, tm->eviction);
+    }
+
     return 0;
 }
 
@@ -7231,7 +7278,7 @@ choose_rule_to_evict(struct oftable *table, struct rule **rulep)
     struct eviction_group *evg;
 
     *rulep = NULL;
-    if (!table->eviction_fields) {
+    if (!table->eviction) {
         return false;
     }
 
@@ -7452,7 +7499,7 @@ eviction_group_add_rule(struct rule *rule)
      * so no additional protection is needed. */
     has_timeout = rule->hard_timeout || rule->idle_timeout;
 
-    if (table->eviction_fields && has_timeout) {
+    if (table->eviction && has_timeout) {
         struct eviction_group *evg;
 
         evg = eviction_group_find(table, eviction_group_hash_rule(rule));
@@ -7474,6 +7521,8 @@ oftable_init(struct oftable *table)
     classifier_init(&table->cls, flow_segment_u64s);
     table->max_flows = UINT_MAX;
     table->n_flows = 0;
+    hmap_init(&table->eviction_groups_by_id);
+    heap_init(&table->eviction_groups_by_size);
     atomic_init(&table->miss_config, OFPUTIL_TABLE_MISS_DEFAULT);
 
     classifier_set_prefix_fields(&table->cls, default_prefix_fields,
@@ -7490,9 +7539,13 @@ static void
 oftable_destroy(struct oftable *table)
 {
     ovs_assert(classifier_is_empty(&table->cls));
+
     ovs_mutex_lock(&ofproto_mutex);
-    oftable_disable_eviction(table);
+    oftable_configure_eviction(table, 0, NULL, 0);
     ovs_mutex_unlock(&ofproto_mutex);
+
+    hmap_destroy(&table->eviction_groups_by_id);
+    heap_destroy(&table->eviction_groups_by_size);
     classifier_destroy(&table->cls);
     free(table->name);
 }
@@ -7520,60 +7573,56 @@ oftable_set_name(struct oftable *table, const char *name)
 /* oftables support a choice of two policies when adding a rule would cause the
  * number of flows in the table to exceed the configured maximum number: either
  * they can refuse to add the new flow or they can evict some existing flow.
- * This function configures the former policy on 'table'. */
-static void
-oftable_disable_eviction(struct oftable *table)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    if (table->eviction_fields) {
-        struct eviction_group *evg, *next;
-
-        HMAP_FOR_EACH_SAFE (evg, next, id_node,
-                            &table->eviction_groups_by_id) {
-            eviction_group_destroy(table, evg);
-        }
-        hmap_destroy(&table->eviction_groups_by_id);
-        heap_destroy(&table->eviction_groups_by_size);
-
-        free(table->eviction_fields);
-        table->eviction_fields = NULL;
-        table->n_eviction_fields = 0;
-    }
-}
-
-/* oftables support a choice of two policies when adding a rule would cause the
- * number of flows in the table to exceed the configured maximum number: either
- * they can refuse to add the new flow or they can evict some existing flow.
  * This function configures the latter policy on 'table', with fairness based
  * on the values of the 'n_fields' fields specified in 'fields'.  (Specifying
  * 'n_fields' as 0 disables fairness.) */
 static void
-oftable_enable_eviction(struct oftable *table,
-                        const struct mf_subfield *fields, size_t n_fields)
+oftable_configure_eviction(struct oftable *table, unsigned int eviction,
+                           const struct mf_subfield *fields, size_t n_fields)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule *rule;
 
-    if (table->eviction_fields
+    if ((table->eviction != 0) == (eviction != 0)
         && n_fields == table->n_eviction_fields
         && (!n_fields
             || !memcmp(fields, table->eviction_fields,
                        n_fields * sizeof *fields))) {
-        /* No change. */
+        /* The set of eviction fields did not change.  If 'eviction' changed,
+         * it remains nonzero, so that we can just update table->eviction
+         * without fussing with the eviction groups. */
+        table->eviction = eviction;
         return;
     }
 
-    oftable_disable_eviction(table);
-
-    table->n_eviction_fields = n_fields;
-    table->eviction_fields = xmemdup(fields, n_fields * sizeof *fields);
-
-    table->eviction_group_id_basis = random_uint32();
+    /* Destroy existing eviction groups, then destroy and recreate data
+     * structures to recover memory. */
+    struct eviction_group *evg, *next;
+    HMAP_FOR_EACH_SAFE (evg, next, id_node, &table->eviction_groups_by_id) {
+        eviction_group_destroy(table, evg);
+    }
+    hmap_destroy(&table->eviction_groups_by_id);
     hmap_init(&table->eviction_groups_by_id);
+    heap_destroy(&table->eviction_groups_by_size);
     heap_init(&table->eviction_groups_by_size);
 
-    CLS_FOR_EACH (rule, cr, &table->cls) {
-        eviction_group_add_rule(rule);
+    /* Replace eviction groups by the new ones, if there is a change.  Free the
+     * old fields only after allocating the new ones, because 'fields ==
+     * table->eviction_fields' is possible. */
+    struct mf_subfield *old_fields = table->eviction_fields;
+    table->n_eviction_fields = n_fields;
+    table->eviction_fields = (fields
+                              ? xmemdup(fields, n_fields * sizeof *fields)
+                              : NULL);
+    free(old_fields);
+
+    /* Add the new eviction groups, if enabled. */
+    table->eviction = eviction;
+    if (table->eviction) {
+        table->eviction_group_id_basis = random_uint32();
+        CLS_FOR_EACH (rule, cr, &table->cls) {
+            eviction_group_add_rule(rule);
+        }
     }
 }
 

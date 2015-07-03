@@ -869,20 +869,20 @@ parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
     return error;
 }
 
-/* Convert 'table_id' and 'flow_miss_handling' (as described for the
- * "mod-table" command in the ovs-ofctl man page) into 'tm' for sending the
- * specified table_mod 'command' to a switch.
+/* Convert 'table_id' and 'setting' (as described for the "mod-table" command
+ * in the ovs-ofctl man page) into 'tm' for sending a table_mod command to a
+ * switch.
+ *
+ * Stores a bitmap of the OpenFlow versions that are usable for 'tm' into
+ * '*usable_versions'.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
-                    const char *flow_miss_handling,
-                    enum ofputil_protocol *usable_protocols)
+                    const char *setting, uint32_t *usable_versions)
 {
-    /* Table mod requires at least OF 1.1. */
-    *usable_protocols = OFPUTIL_P_OF11_UP;
-
+    *usable_versions = 0;
     if (!strcasecmp(table_id, "all")) {
         tm->table_id = OFPTT_ALL;
     } else {
@@ -892,18 +892,38 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
         }
     }
 
-    if (strcmp(flow_miss_handling, "controller") == 0) {
-        tm->miss_config = OFPUTIL_TABLE_MISS_CONTROLLER;
-    } else if (strcmp(flow_miss_handling, "continue") == 0) {
-        tm->miss_config = OFPUTIL_TABLE_MISS_CONTINUE;
-    } else if (strcmp(flow_miss_handling, "drop") == 0) {
-        tm->miss_config = OFPUTIL_TABLE_MISS_DROP;
+    tm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
+    tm->eviction = OFPUTIL_TABLE_EVICTION_DEFAULT;
+    tm->eviction_flags = UINT32_MAX;
+
+    /* Only OpenFlow 1.1 and 1.2 can configure table-miss via table_mod.
+     * Only OpenFlow 1.4+ can configure eviction via table_mod.
+     *
+     * (OpenFlow 1.4+ can also configure vacancy events via table_mod, but OVS
+     * doesn't support those yet and they're also logically a per-OpenFlow
+     * session setting so it wouldn't make sense to support them here anyway.)
+     */
+    if (!strcmp(setting, "controller")) {
+        tm->miss = OFPUTIL_TABLE_MISS_CONTROLLER;
+        *usable_versions = (1u << OFP11_VERSION) | (1u << OFP12_VERSION);
+    } else if (!strcmp(setting, "continue")) {
+        tm->miss = OFPUTIL_TABLE_MISS_CONTINUE;
+        *usable_versions = (1u << OFP11_VERSION) | (1u << OFP12_VERSION);
+    } else if (!strcmp(setting, "drop")) {
+        tm->miss = OFPUTIL_TABLE_MISS_DROP;
+        *usable_versions = (1u << OFP11_VERSION) | (1u << OFP12_VERSION);
+    } else if (!strcmp(setting, "evict")) {
+        tm->eviction = OFPUTIL_TABLE_EVICTION_ON;
+        *usable_versions = (1 << OFP14_VERSION) | (1u << OFP15_VERSION);
+    } else if (!strcmp(setting, "noevict")) {
+        tm->eviction = OFPUTIL_TABLE_EVICTION_OFF;
+        *usable_versions = (1 << OFP14_VERSION) | (1u << OFP15_VERSION);
     } else {
-        return xasprintf("invalid flow_miss_handling %s", flow_miss_handling);
+        return xasprintf("invalid table_mod setting %s", setting);
     }
 
     if (tm->table_id == 0xfe
-        && tm->miss_config == OFPUTIL_TABLE_MISS_CONTINUE) {
+        && tm->miss == OFPUTIL_TABLE_MISS_CONTINUE) {
         return xstrdup("last table's flow miss handling can not be continue");
     }
 
