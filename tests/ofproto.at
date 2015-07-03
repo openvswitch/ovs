@@ -1664,6 +1664,28 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0 | sed '/^$/d
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - table description (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+(x=0
+ while test $x -lt 254; do
+   y=`expr $x + 1`
+   echo "  table $x:
+   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME"
+   x=$y
+ done) > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
+/^OFPST_TABLE_DESC/d'], [0], [expout])
+
+# Change the configuration.
+AT_CHECK([ovs-ofctl -O Openflow14 mod-table br0 0 evict])
+# Check that the configuration was updated.
+mv expout orig-expout
+sed -e '2s/eviction=off/eviction=on/' <orig-expout > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
+/^OFPST_TABLE_DESC/d'], [0], [expout])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - hard limits on flow table size (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Configure a maximum of 4 flows.

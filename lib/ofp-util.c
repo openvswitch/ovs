@@ -4887,6 +4887,139 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
 }
 
 static enum ofperr
+parse_table_desc_eviction_property(struct ofpbuf *property,
+                                   struct ofputil_table_desc *td)
+{
+    struct ofp14_table_mod_prop_eviction *ote = property->data;
+
+    if (property->size != sizeof *ote) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    td->eviction_flags = ntohl(ote->flags);
+    return 0;
+}
+
+/* Decodes the next OpenFlow "table desc" message (of possibly several) from
+ * 'msg' into an abstract form in '*td'.  Returns 0 if successful, EOF if the
+ * last "table desc" in 'msg' was already decoded, otherwise an OFPERR_*
+ * value. */
+int
+ofputil_decode_table_desc(struct ofpbuf *msg,
+                          struct ofputil_table_desc *td,
+                          enum ofp_version version)
+{
+    struct ofp14_table_desc *otd;
+    struct ofpbuf properties;
+    size_t length;
+
+    memset(td, 0, sizeof *td);
+
+    if (!msg->header) {
+        ofpraw_pull_assert(msg);
+    }
+
+    if (!msg->size) {
+        return EOF;
+    }
+
+    otd = ofpbuf_try_pull(msg, sizeof *otd);
+    if (!otd) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFP14_TABLE_DESC reply has %"PRIu32" "
+                     "leftover bytes at end", msg->size);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    td->table_id = otd->table_id;
+    length = ntohs(otd->length);
+    if (length < sizeof *otd || length - sizeof *otd > msg->size) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFP14_TABLE_DESC reply claims invalid "
+                     "length %"PRIuSIZE, length);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    length -= sizeof *otd;
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, length), length);
+
+    td->eviction = ofputil_decode_table_eviction(otd->config, version);
+    td->eviction_flags = UINT32_MAX;
+
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = ofputil_pull_property(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPTMPT14_EVICTION:
+            error = parse_table_desc_eviction_property(&payload, td);
+            break;
+
+        default:
+            log_property(true, "unknown table_desc property %"PRIu16, type);
+            error = 0;
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
+/* Encodes and returns a request to obtain description of tables of a switch.
+ * The message is encoded for OpenFlow version 'ofp_version'. */
+struct ofpbuf *
+ofputil_encode_table_desc_request(enum ofp_version ofp_version)
+{
+    struct ofpbuf *request = NULL;
+
+    if (ofp_version >= OFP14_VERSION) {
+        request = ofpraw_alloc(OFPRAW_OFPST14_TABLE_DESC_REQUEST,
+                               ofp_version, 0);
+    } else {
+        ovs_fatal(0, "dump-table-desc needs OpenFlow 1.4 or later "
+                  "(\'-O OpenFlow14\')");
+    }
+
+    return request;
+}
+
+/* Function to append Table desc information in a reply list. */
+void
+ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
+                                struct ovs_list *replies,
+                                enum ofp_version version)
+{
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    size_t start_otd;
+    struct ofp14_table_desc *otd;
+
+    start_otd = reply->size;
+    ofpbuf_put_zeros(reply, sizeof *otd);
+    if (td->eviction_flags != UINT32_MAX) {
+        struct ofp14_table_mod_prop_eviction *ote;
+
+        ote = ofpbuf_put_zeros(reply, sizeof *ote);
+        ote->type = htons(OFPTMPT14_EVICTION);
+        ote->length = htons(sizeof *ote);
+        ote->flags = htonl(td->eviction_flags);
+    }
+
+    otd = ofpbuf_at_assert(reply, start_otd, sizeof *otd);
+    otd->length = htons(reply->size - start_otd);
+    otd->table_id = td->table_id;
+    otd->config = ofputil_encode_table_config(OFPUTIL_TABLE_MISS_DEFAULT,
+                                              td->eviction, version);
+    ofpmp_postappend(replies, start_otd);
+}
+
+static enum ofperr
 parse_table_mod_eviction_property(struct ofpbuf *property,
                                   struct ofputil_table_mod *tm)
 {
@@ -8890,6 +9023,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_AGGREGATE_STATS_REQUEST:
     case OFPTYPE_TABLE_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
+    case OFPTYPE_TABLE_DESC_REQUEST:
     case OFPTYPE_PORT_STATS_REQUEST:
     case OFPTYPE_QUEUE_STATS_REQUEST:
     case OFPTYPE_PORT_DESC_STATS_REQUEST:
@@ -8931,6 +9065,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_METER_CONFIG_STATS_REPLY:
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
     case OFPTYPE_NXT_GENEVE_TABLE_REPLY:

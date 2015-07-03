@@ -155,6 +155,16 @@ struct ofp14_table_mod {
 };
 OFP_ASSERT(sizeof(struct ofp14_table_mod) == 8);
 
+/* Body of reply to OFPMP_TABLE_DESC request. */
+struct ofp14_table_desc {
+    ovs_be16 length;       /* Length is padded to 64 bits. */
+    uint8_t table_id;      /* Identifier of table. Lower numbered tables
+                              are consulted first. */
+    uint8_t pad[1];        /* Align to 32-bits. */
+    ovs_be32 config;       /* Bitmap of OFPTC_* values. */
+    /* Followed by 0 or more OFPTMPT14_* properties. */
+};
+OFP_ASSERT(sizeof(struct ofp14_table_desc) == 8);
 
 /* ## ---------------- ## */
 /* ## ofp14_port_stats ## */

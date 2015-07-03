@@ -638,6 +638,13 @@ struct ofputil_table_mod {
     uint32_t eviction_flags;    /* OFPTMPEF14_*. */
 };
 
+/* Abstract ofp14_table_desc. */
+struct ofputil_table_desc {
+    uint8_t table_id;         /* ID of the table. */
+    enum ofputil_table_eviction eviction;
+    uint32_t eviction_flags;    /* UINT32_MAX if not present. */
+};
+
 enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
                                     struct ofputil_table_mod *);
 struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
@@ -726,10 +733,21 @@ struct ofputil_table_features {
 
 int ofputil_decode_table_features(struct ofpbuf *,
                                   struct ofputil_table_features *, bool loose);
+
+int ofputil_decode_table_desc(struct ofpbuf *,
+                              struct ofputil_table_desc *,
+                              enum ofp_version);
+
 struct ofpbuf *ofputil_encode_table_features_request(enum ofp_version);
+
+struct ofpbuf *ofputil_encode_table_desc_request(enum ofp_version);
 
 void ofputil_append_table_features_reply(
     const struct ofputil_table_features *tf, struct ovs_list *replies);
+
+void ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
+                                     struct ovs_list *replies,
+                                     enum ofp_version);
 
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {
@@ -857,6 +875,9 @@ struct ofputil_table_stats {
 };
 
 struct ofpbuf *ofputil_encode_table_stats_reply(const struct ofp_header *rq);
+
+struct ofpbuf *ofputil_encode_table_desc_reply(const struct ofp_header *rq);
+
 void ofputil_append_table_stats_reply(struct ofpbuf *reply,
                                       const struct ofputil_table_stats *,
                                       const struct ofputil_table_features *);

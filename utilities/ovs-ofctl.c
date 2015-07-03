@@ -338,6 +338,7 @@ usage(void)
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  dump-table-features SWITCH  print table features\n"
+           "  dump-table-desc SWITCH      print table description (OF1.4+)\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
            "      OF1.1/1.2 MOD: controller, continue, drop\n"
@@ -736,6 +737,22 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
 
     vconn_close(vconn);
 }
+
+static void
+ofctl_dump_table_desc(struct ovs_cmdl_context *ctx)
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    open_vconn(ctx->argv[1], &vconn);
+    request = ofputil_encode_table_desc_request(vconn_get_version(vconn));
+    if (request) {
+        dump_stats_transaction(vconn, request);
+    }
+
+    vconn_close(vconn);
+}
+
 
 static bool fetch_port_by_stats(struct vconn *,
                                 const char *port_name, ofp_port_t port_no,
@@ -3612,6 +3629,8 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 1, ofctl_dump_tables },
     { "dump-table-features", "switch",
       1, 1, ofctl_dump_table_features },
+    { "dump-table-desc", "switch",
+      1, 1, ofctl_dump_table_desc },
     { "dump-flows", "switch",
       1, 2, ofctl_dump_flows },
     { "dump-aggregate", "switch",

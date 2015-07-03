@@ -62,6 +62,10 @@ Prints to the console statistics for each of the flow tables used by
 \fBdump\-table\-features \fIswitch\fR
 Prints to the console features for each of the flow tables used by
 \fIswitch\fR.
+.TP
+\fBdump\-table\-desc \fIswitch\fR
+Prints to the console configuration for each of the flow tables used
+by \fIswitch\fR for OpenFlow 1.4+.
 .IP "\fBmod\-table \fIswitch\fR \fItable_id\fR \fIsetting\fR"
 This command configures flow table settings for OpenFlow table
 \fItable_id\fR within \fIswitch\fR.  The available settings depend on

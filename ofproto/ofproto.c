@@ -3576,6 +3576,47 @@ handle_table_features_request(struct ofconn *ofconn,
     return 0;
 }
 
+/* This function queries the database for dumping table-desc. */
+static void
+query_tables_desc(struct ofproto *ofproto, struct ofputil_table_desc **descp)
+{
+    struct ofputil_table_desc *table_desc;
+    size_t i;
+
+    table_desc = *descp = xcalloc(ofproto->n_tables, sizeof *table_desc);
+    for (i = 0; i < ofproto->n_tables; i++) {
+        struct ofputil_table_desc *td = &table_desc[i];
+        td->table_id = i;
+        td->eviction = (ofproto->tables[i].eviction & EVICTION_OPENFLOW
+                        ? OFPUTIL_TABLE_EVICTION_ON
+                        : OFPUTIL_TABLE_EVICTION_OFF);
+        td->eviction_flags = OFPROTO_EVICTION_FLAGS;
+    }
+}
+
+/* Function to handle dump-table-desc request. */
+static enum ofperr
+handle_table_desc_request(struct ofconn *ofconn,
+                          const struct ofp_header *request)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ofputil_table_desc *table_desc;
+    struct ovs_list replies;
+    size_t i;
+
+    query_tables_desc(ofproto, &table_desc);
+    ofpmp_init(&replies, request);
+    for (i = 0; i < ofproto->n_tables; i++) {
+        if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
+            ofputil_append_table_desc_reply(&table_desc[i], &replies,
+                                            request->version);
+        }
+    }
+    ofconn_send_replies(ofconn, &replies);
+    free(table_desc);
+    return 0;
+}
+
 static void
 append_port_stat(struct ofport *port, struct ovs_list *replies)
 {
@@ -7105,6 +7146,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
         return handle_table_features_request(ofconn, oh);
 
+    case OFPTYPE_TABLE_DESC_REQUEST:
+        return handle_table_desc_request(ofconn, oh);
+
     case OFPTYPE_PORT_STATS_REQUEST:
         return handle_port_stats_request(ofconn, oh);
 
@@ -7176,6 +7220,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_METER_CONFIG_STATS_REPLY:
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
     default:

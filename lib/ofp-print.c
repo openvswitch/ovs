@@ -1025,6 +1025,18 @@ ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
     }
 }
 
+/* This function will print the Table description properties. */
+static void
+ofp_print_table_desc(struct ds *string, const struct ofputil_table_desc *td)
+{
+    ds_put_format(string, "\n  table %"PRIu8, td->table_id);
+    ds_put_cstr(string, ":\n");
+    ds_put_format(string, "   eviction=%s eviction_flags=",
+                  ofputil_table_eviction_to_string(td->eviction));
+    ofputil_put_eviction_flags(string, td->eviction_flags);
+    ds_put_char(string, '\n');
+}
+
 static void
 ofp_print_queue_get_config_request(struct ds *string,
                                    const struct ofp_header *oh)
@@ -2607,6 +2619,28 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
     }
 }
 
+static void
+ofp_print_table_desc_reply(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+
+    for (;;) {
+        struct ofputil_table_desc td;
+        int retval;
+
+        retval = ofputil_decode_table_desc(&b, &td, oh->version);
+        if (retval) {
+            if (retval != EOF) {
+                ofp_print_error(s, retval);
+            }
+            return;
+        }
+        ofp_print_table_desc(s, &td);
+    }
+}
+
 static const char *
 bundle_flags_to_name(uint32_t bit)
 {
@@ -2812,6 +2846,11 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
         ofp_print_table_features_reply(string, oh);
+        break;
+
+    case OFPTYPE_TABLE_DESC_REQUEST:
+    case OFPTYPE_TABLE_DESC_REPLY:
+        ofp_print_table_desc_reply(string, oh);
         break;
 
     case OFPTYPE_HELLO:
