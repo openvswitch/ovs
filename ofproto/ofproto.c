@@ -115,8 +115,8 @@ struct eviction_group {
 
 static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep)
     OVS_REQUIRES(ofproto_mutex);
-static uint32_t rule_eviction_priority(struct ofproto *ofproto, struct rule *)
-    OVS_REQUIRES(ofproto_mutex);;
+static uint64_t rule_eviction_priority(struct ofproto *ofproto, struct rule *)
+    OVS_REQUIRES(ofproto_mutex);
 static void eviction_group_add_rule(struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 static void eviction_group_remove_rule(struct rule *)
@@ -7384,23 +7384,21 @@ eviction_group_find(struct oftable *table, uint32_t id)
 }
 
 /* Returns an eviction priority for 'rule'.  The return value should be
- * interpreted so that higher priorities make a rule more attractive candidates
- * for eviction.
- * Called only if have a timeout. */
-static uint32_t
+ * interpreted so that higher priorities make a rule a more attractive
+ * candidate for eviction. */
+static uint64_t
 rule_eviction_priority(struct ofproto *ofproto, struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
+    /* Calculate absolute time when this flow will expire.  If it will never
+     * expire, then return 0 to make it unevictable.  */
     long long int expiration = LLONG_MAX;
-    long long int modified;
-    uint32_t expiration_offset;
-
-    /* 'modified' needs protection even when we hold 'ofproto_mutex'. */
-    ovs_mutex_lock(&rule->mutex);
-    modified = rule->modified;
-    ovs_mutex_unlock(&rule->mutex);
-
     if (rule->hard_timeout) {
+        /* 'modified' needs protection even when we hold 'ofproto_mutex'. */
+        ovs_mutex_lock(&rule->mutex);
+        long long int modified = rule->modified;
+        ovs_mutex_unlock(&rule->mutex);
+
         expiration = modified + rule->hard_timeout * 1000;
     }
     if (rule->idle_timeout) {
@@ -7412,7 +7410,6 @@ rule_eviction_priority(struct ofproto *ofproto, struct rule *rule)
         idle_expiration = used + rule->idle_timeout * 1000;
         expiration = MIN(expiration, idle_expiration);
     }
-
     if (expiration == LLONG_MAX) {
         return 0;
     }
@@ -7422,10 +7419,19 @@ rule_eviction_priority(struct ofproto *ofproto, struct rule *rule)
      *
      * This should work OK for program runs that last UINT32_MAX seconds or
      * less.  Therefore, please restart OVS at least once every 136 years. */
-    expiration_offset = (expiration >> 10) - (time_boot_msec() >> 10);
+    uint32_t expiration_ofs = (expiration >> 10) - (time_boot_msec() >> 10);
 
-    /* Invert the expiration offset because we're using a max-heap. */
-    return UINT32_MAX - expiration_offset;
+    /* Combine expiration time with OpenFlow "importance" to form a single
+     * priority value.  We want flows with relatively low "importance" to be
+     * evicted before even considering expiration time, so put "importance" in
+     * the most significant bits and expiration time in the least significant
+     * bits.
+     *
+     * Small 'priority' should be evicted before those with large 'priority'.
+     * The caller expects the opposite convention (a large return value being
+     * more attractive for eviction) so we invert it before returning. */
+    uint64_t priority = ((uint64_t) rule->importance << 32) + expiration_ofs;
+    return UINT64_MAX - priority;
 }
 
 /* Adds 'rule' to an appropriate eviction group for its oftable's

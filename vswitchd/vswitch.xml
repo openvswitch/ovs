@@ -3082,15 +3082,18 @@
 
       <p>
         When a flow must be evicted due to overflow, the flow to evict is
-        chosen through an approximation of the following algorithm:
+        chosen through an approximation of the following algorithm.  This
+        algorithm is used regardless of how eviction was enabled:
       </p>
 
       <ol>
         <li>
           Divide the flows in the table into groups based on the values of the
-          specified fields or subfields, so that all of the flows in a given
-          group have the same values for those fields.  If a flow does not
-          specify a given field, that field's value is treated as 0.
+          fields or subfields specified in the <ref column="groups"/> column,
+          so that all of the flows in a given group have the same values for
+          those fields.  If a flow does not specify a given field, that field's
+          value is treated as 0.  If <ref column="groups"/> is empty, then all
+          of the flows in the flow table are treated as a single group.
         </li>
 
         <li>
@@ -3098,6 +3101,14 @@
           contains the greatest number of flows.  If two or more groups all
           have the same largest number of flows, consider the flows in all of
           those groups.
+        </li>
+
+        <li>
+          If the flows under consideration have different importance values,
+          eliminate from consideration any flows except those with the lowest
+          importance.  (``Importance,'' a 16-bit integer value attached to each
+          flow, was introduced in OpenFlow 1.4.  Flows inserted with older
+          versions of OpenFlow always have an importance of 0.)
         </li>
 
         <li>
