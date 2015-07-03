@@ -971,6 +971,7 @@ do_ssl_init(void)
     SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                        NULL);
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 
     return 0;
 }
