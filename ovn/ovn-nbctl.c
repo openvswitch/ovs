@@ -139,30 +139,25 @@ lswitch_by_name_or_uuid(struct nbctl_context *nb_ctx, const char *id)
 }
 
 static void
-print_lswitch(const struct nbctl_context *nb_ctx,
-              const struct nbrec_logical_switch *lswitch)
+print_lswitch(const struct nbrec_logical_switch *lswitch)
 {
-    const struct nbrec_logical_port *lport;
-
     printf("    lswitch "UUID_FMT" (%s)\n",
            UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
 
-    NBREC_LOGICAL_PORT_FOR_EACH(lport, nb_ctx->idl) {
-        int i;
+    for (size_t i = 0; i < lswitch->n_ports; i++) {
+        const struct nbrec_logical_port *lport = lswitch->ports[i];
 
-        if (lport->lswitch == lswitch) {
-            printf("        lport %s\n", lport->name);
-            if (lport->parent_name && lport->n_tag) {
-                printf("            parent: %s, tag:%"PRIu64"\n",
-                       lport->parent_name, lport->tag[0]);
+        printf("        lport %s\n", lport->name);
+        if (lport->parent_name && lport->n_tag) {
+            printf("            parent: %s, tag:%"PRIu64"\n",
+                   lport->parent_name, lport->tag[0]);
+        }
+        if (lport->n_macs) {
+            printf("            macs:");
+            for (size_t j = 0; j < lport->n_macs; j++) {
+                printf(" %s", lport->macs[j]);
             }
-            if (lport->n_macs) {
-                printf("            macs:");
-                for (i=0; i < lport->n_macs; i++) {
-                    printf(" %s", lport->macs[i]);
-                }
-                printf("\n");
-            }
+            printf("\n");
         }
     }
 }
@@ -176,11 +171,11 @@ do_show(struct ovs_cmdl_context *ctx)
     if (ctx->argc == 2) {
         lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
         if (lswitch) {
-            print_lswitch(nb_ctx, lswitch);
+            print_lswitch(lswitch);
         }
     } else {
         NBREC_LOGICAL_SWITCH_FOR_EACH(lswitch, nb_ctx->idl) {
-            print_lswitch(nb_ctx, lswitch);
+            print_lswitch(lswitch);
         }
     }
 }
@@ -323,7 +318,7 @@ do_lport_add(struct ovs_cmdl_context *ctx)
     }
 
     if (ctx->argc != 3 && ctx->argc != 5) {
-        /* If a parent_name is specififed, a tag must be specified as well. */
+        /* If a parent_name is specified, a tag must be specified as well. */
         VLOG_WARN("Invalid arguments to lport-add.");
         return;
     }
@@ -336,14 +331,44 @@ do_lport_add(struct ovs_cmdl_context *ctx)
         }
     }
 
-    /* Finally, create the transaction. */
+    /* Create the logical port. */
     lport = nbrec_logical_port_insert(nb_ctx->txn);
     nbrec_logical_port_set_name(lport, ctx->argv[2]);
-    nbrec_logical_port_set_lswitch(lport, lswitch);
     if (ctx->argc == 5) {
         nbrec_logical_port_set_parent_name(lport, ctx->argv[3]);
         nbrec_logical_port_set_tag(lport, &tag, 1);
     }
+
+    /* Insert the logical port into the logical switch. */
+    nbrec_logical_switch_verify_ports(lswitch);
+    struct nbrec_logical_port **new_ports = xmalloc(sizeof *new_ports *
+                                                    (lswitch->n_ports + 1));
+    memcpy(new_ports, lswitch->ports, sizeof *new_ports * lswitch->n_ports);
+    new_ports[lswitch->n_ports] = lport;
+    nbrec_logical_switch_set_ports(lswitch, new_ports, lswitch->n_ports + 1);
+    free(new_ports);
+}
+
+/* Removes lport 'lswitch->ports[idx]'. */
+static void
+remove_lport(const struct nbrec_logical_switch *lswitch, size_t idx)
+{
+    const struct nbrec_logical_port *lport = lswitch->ports[idx];
+
+    /* First remove 'lport' from the array of ports.  This is what will
+     * actually cause the logical port to be deleted when the transaction is
+     * sent to the database server (due to garbage collection). */
+    struct nbrec_logical_port **new_ports
+        = xmemdup(lswitch->ports, sizeof *new_ports * lswitch->n_ports);
+    new_ports[idx] = new_ports[lswitch->n_ports - 1];
+    nbrec_logical_switch_verify_ports(lswitch);
+    nbrec_logical_switch_set_ports(lswitch, new_ports, lswitch->n_ports - 1);
+    free(new_ports);
+
+    /* Delete 'lport' from the IDL.  This won't have a real effect on the
+     * database server (the IDL will suppress it in fact) but it means that it
+     * won't show up when we iterate with NBREC_LOGICAL_PORT_FOR_EACH later. */
+    nbrec_logical_port_delete(lport);
 }
 
 static void
@@ -357,44 +382,35 @@ do_lport_del(struct ovs_cmdl_context *ctx)
         return;
     }
 
-    nbrec_logical_port_delete(lport);
-}
-
-static bool
-is_lswitch(const struct nbrec_logical_switch *lswitch,
-        struct uuid *lswitch_uuid, const char *name)
-{
-    if (lswitch_uuid) {
-        return uuid_equals(lswitch_uuid, &lswitch->header_.uuid);
-    } else {
-        return !strcmp(lswitch->name, name);
+    /* Find the switch that contains 'lport', then delete it. */
+    const struct nbrec_logical_switch *lswitch;
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, nb_ctx->idl) {
+        for (size_t i = 0; i < lswitch->n_ports; i++) {
+            if (lswitch->ports[i] == lport) {
+                remove_lport(lswitch, i);
+                return;
+            }
+        }
     }
-}
 
+    VLOG_WARN("logical port %s is not part of any logical switch",
+              ctx->argv[1]);
+}
 
 static void
 do_lport_list(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_port *lport;
-    bool is_uuid = false;
-    struct uuid lswitch_uuid;
+    const struct nbrec_logical_switch *lswitch;
 
-    if (uuid_from_string(&lswitch_uuid, id)) {
-        is_uuid = true;
+    lswitch = lswitch_by_name_or_uuid(nb_ctx, id);
+    if (!lswitch) {
+        return;
     }
 
-    NBREC_LOGICAL_PORT_FOR_EACH(lport, nb_ctx->idl) {
-        bool match;
-        if (is_uuid) {
-            match = is_lswitch(lport->lswitch, &lswitch_uuid, NULL);
-        } else {
-            match = is_lswitch(lport->lswitch, NULL, id);
-        }
-        if (!match) {
-            continue;
-        }
+    for (size_t i = 0; i < lswitch->n_ports; i++) {
+        const struct nbrec_logical_port *lport = lswitch->ports[i];
         printf(UUID_FMT " (%s)\n",
                UUID_ARGS(&lport->header_.uuid), lport->name);
     }

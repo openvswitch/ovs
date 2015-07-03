@@ -32,9 +32,7 @@
 
   <table name="Logical_Switch" title="L2 logical switch">
     <p>
-      Each row represents one L2 logical switch.  A given switch's ports are
-      the <ref table="Logical_Port"/> rows whose <ref table="Logical_Port"
-      column="lswitch"/> column points to its row.
+      Each row represents one L2 logical switch.
     </p>
 
     <column name="name">
@@ -46,6 +44,17 @@
       </p>
     </column>
 
+    <column name="ports">
+      <p>
+        The logical ports connected to the logical switch.
+      </p>
+
+      <p>
+        It is an error for multiple logical switches to include the same
+        logical port.
+      </p>
+    </column>
+
     <column name="router_port">
       <p>
         The router port to which this logical switch is connected, or empty if
@@ -54,6 +63,15 @@
         restriction because logical routers may be connected into arbitrary
         topologies.
       </p>
+
+      <p>
+        It is an error for multiple logical switches to refer to the same
+        router port.
+      </p>
+    </column>
+
+    <column name="acls">
+      Access control rules that apply to packets within the logical switch.
     </column>
 
     <group title="Common Columns">
@@ -67,10 +85,6 @@
     <p>
       A port within an L2 logical switch.
     </p>
-
-    <column name="lswitch">
-      The logical switch to which the logical port is connected.
-    </column>
 
     <column name="name">
       <p>
@@ -170,20 +184,14 @@
 
   <table name="ACL" title="Access Control List (ACL) rule">
     <p>
-      Each row in this table represents one ACL rule for the logical switch in
-      its <ref column="lswitch"/> column.  The <ref column="action"/> column for
-      the highest-<ref column="priority"/> matching row in this table
-      determines a packet's treatment.  If no row matches, packets are allowed
-      by default.  (Default-deny treatment is possible: add a rule with <ref
-      column="priority"/> 1, <code>1</code> as <ref column="match"/>, and
-      <code>deny</code> as <ref column="action"/>.)
+      Each row in this table represents one ACL rule for a logical switch
+      that points to it through its <ref column="acls"/> column.  The <ref
+      column="action"/> column for the highest-<ref column="priority"/>
+      matching row in this table determines a packet's treatment.  If no row
+      matches, packets are allowed by default.  (Default-deny treatment is
+      possible: add a rule with <ref column="priority"/> 1, <code>1</code> as
+      <ref column="match"/>, and <code>deny</code> as <ref column="action"/>.)
     </p>
-
-    <column name="lswitch">
-      The switch to which the ACL rule applies.  The expression in the
-      <ref column="match"/> column may match against logical ports
-      within this switch.
-    </column>
 
     <column name="priority">
       The ACL rule's priority.  Rules with numerically higher priority take
@@ -255,10 +263,14 @@
 
   <table name="Logical_Router" title="L3 logical router">
     <p>
-      Each row represents one L3 logical router.  A given router's ports are
-      the <ref table="Logical_Router_Port"/> rows whose <ref
-      table="Logical_Router_Port" column="router"/> column points to its row.
+      Each row represents one L3 logical router.
     </p>
+
+    <column name="ports">
+      The router's ports.  This is a set of weak references, so a <ref
+      table="Logical_Switch"/> must also refer to any given <ref
+      table="Logical_Router_Port"/> or it will automatically be deleted.
+    </column>
 
     <column name="ip">
       The logical router's own IP address.  The logical router uses this
@@ -284,15 +296,15 @@
     </p>
 
     <p>
-      A router port is always attached to a switch port.  The connection can be
-      identified by following the <ref column="router_port"
-      table="Logical_Port"/> column from an appropriate <ref
-      table="Logical_Port"/> row.
+      A router port is always attached to a logical switch and to a logical
+      router.  The former attachment, which is enforced by the database schema,
+      can be identified by finding the <ref table="Logical_Switch"/> row whose
+      <ref column="router_port" table="Logical_Switch"/> column points to the
+      router port.  The latter attachment, which the database schema does not
+      enforce, can be identified by finding the <ref table="Logical_Router"/>
+      row whose <ref column="ports" table="Logical_Router"/> column includes
+      the router port.
     </p>
-
-    <column name="router">
-      The router to which the port belongs.
-    </column>
 
     <column name="network">
       The IP network and netmask of the network on the router port.  Used for

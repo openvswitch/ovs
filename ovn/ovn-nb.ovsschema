@@ -4,18 +4,26 @@
         "Logical_Switch": {
             "columns": {
                 "name": {"type": "string"},
+                "ports": {"type": {"key": {"type": "uuid",
+                                           "refTable": "Logical_Port",
+                                           "refType": "strong"},
+                                   "min": 0,
+                                   "max": "unlimited"}},
+                "acls": {"type": {"key": {"type": "uuid",
+                                          "refTable": "ACL",
+                                          "refType": "strong"},
+                                  "min": 0,
+                                  "max": "unlimited"}},
                 "router_port": {"type": {"key": {"type": "uuid",
                                                  "refTable": "Logical_Router_Port",
                                                  "refType": "strong"},
                                          "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}}},
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": true},
         "Logical_Port": {
             "columns": {
-                "lswitch": {"type": {"key": {"type": "uuid",
-                                             "refTable": "Logical_Switch",
-                                             "refType": "strong"}}},
                 "name": {"type": "string"},
                 "parent_name": {"type": {"key": "string", "min": 0, "max": 1}},
                 "tag": {
@@ -34,12 +42,10 @@
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
-            "indexes": [["name"]]},
+            "indexes": [["name"]],
+            "isRoot": false},
         "ACL": {
             "columns": {
-                "lswitch": {"type": {"key": {"type": "uuid",
-                                             "refTable": "Logical_Switch",
-                                             "refType": "strong"}}},
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 1,
                                               "maxInteger": 65535}}},
@@ -49,22 +55,27 @@
                 "log": {"type": "boolean"},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}}},
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": false},
         "Logical_Router": {
             "columns": {
+                "ports": {"type": {"key": {"type": "uuid",
+                                           "refTable": "Logical_Router_Port",
+                                           "refType": "weak"},
+                                   "min": 0,
+                                   "max": "unlimited"}},
                 "ip": {"type": "string"},
                 "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}}},
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": true},
         "Logical_Router_Port": {
             "columns": {
-                "router": {"type": {"key": {"type": "uuid",
-                                            "refTable": "Logical_Router",
-                                            "refType": "strong"}}},
                 "network": {"type": "string"},
                 "mac": {"type": "string"},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}}}},
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": false}},
     "version": "1.0.0"}
