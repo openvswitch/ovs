@@ -18,6 +18,7 @@ m4_include([tests/ovs-macros.at])
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
 
+m4_include([tests/ovn-controller-vtep.at])
 m4_include([tests/completion.at])
 m4_include([tests/bfd.at])
 m4_include([tests/cfm.at])
