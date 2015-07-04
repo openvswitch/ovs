@@ -275,3 +275,55 @@ ${chassis_uuid}
 
 OVN_CONTROLLER_VTEP_STOP([/has already been associated with logical datapath/d])
 AT_CLEANUP
+
+
+# Tests vtep module vtep logical switch tunnel key update.
+AT_SETUP([ovn-controller-vtep - test vtep-lswitch])
+OVN_CONTROLLER_VTEP_START
+
+# creates the logical switch in vtep and adds the corresponding logical
+# port to 'br-test'.
+AT_CHECK([vtep-ctl add-ls lswitch0 -- bind-ls br-vtep p0 100 lswitch0])
+OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep_lswitch0], [br-vtep], [lswitch0])
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding  | grep -- br-vtep_lswitch0`"])
+
+# retrieves the expected tunnel key.
+datapath_uuid=$(ovn-sbctl --columns=datapath list Port_Binding br-vtep_lswitch0 | cut -d ':' -f2 | tr -d ' ')
+tunnel_key=$(ovn-sbctl --columns=tunnel_key list Datapath_Binding ${datapath_uuid} | cut -d ':' -f2 | tr -d ' ')
+OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=tunnel_key list Logical_Switch | grep 0`"])
+# checks the vtep logical switch tunnel key configuration.
+AT_CHECK_UNQUOTED([vtep-ctl --columns=tunnel_key list Logical_Switch | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+${tunnel_key}
+])
+
+# creates a second physical switch in vtep database, and binds its p0 vlan-100
+# to the same logical switch 'lswitch0'.
+AT_CHECK([vtep-ctl add-ps br-vtep-void -- add-port br-vtep-void p0 -- bind-ls br-vtep-void p0 100 lswitch0])
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl --columns=name list Chassis  | grep -- br-vtep-void`"])
+OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep-void_lswitch0], [br-vtep-void], [lswitch0])
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding  | grep -- br-vtep-void_lswitch0`"])
+
+# checks the vtep logical switch tunnel key configuration.
+AT_CHECK_UNQUOTED([vtep-ctl --columns=tunnel_key list Logical_Switch | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+${tunnel_key}
+])
+
+# now, deletes br-vtep-void.
+AT_CHECK([vtep-ctl del-ps br-vtep-void])
+OVS_WAIT_UNTIL([test -z "`ovn-sbctl --columns=name list Chassis  | grep -- br-vtep-void`"])
+# checks the vtep logical switch tunnel key configuration.
+AT_CHECK_UNQUOTED([vtep-ctl --columns=tunnel_key list Logical_Switch | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+${tunnel_key}
+])
+
+# changes the ovn-nb logical port type so that it is no longer
+# vtep port.
+AT_CHECK([ovn-nbctl lport-set-type br-vtep_lswitch0 void])
+OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=tunnel_key list Logical_Switch | grep 1`"])
+# now should see the tunnel key reset.
+AT_CHECK([vtep-ctl --columns=tunnel_key list Logical_Switch | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+0
+])
+
+OVN_CONTROLLER_VTEP_STOP
+AT_CLEANUP
