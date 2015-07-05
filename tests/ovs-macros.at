@@ -42,13 +42,14 @@ ovs_wait () {
     # in the normal case.  POSIX doesn't require fractional times to
     # work, so this might not work.
     sleep 0.1
-    ovs_wait_cond && exit 0
+    ovs_wait_cond && return 0
+
     # Then wait up to 10 seconds.
     for d in 0 1 2 3 4 5 6 7 8 9; do
         sleep 1
-        ovs_wait_cond && exit 0
+        ovs_wait_cond && return 0
     done
-    exit 1
+    return 1
 }
 
 # Prints the integers from $1 to $2, increasing by $3 (default 1) on stdout.
@@ -98,11 +99,16 @@ fi
 ]
 m4_divert_pop([PREPARE_TESTS])
 
-m4_define([OVS_WAIT],
-  [AT_CHECK(
-     [ovs_wait_cond () { $1
+m4_define([OVS_WAIT], [dnl
+ovs_wait_cond () {
+    $1
 }
-ovs_wait], [0], [ignore], [ignore], [$2])])
+if ovs_wait; then :
+else
+    $2
+    AT_FAIL_IF([:])
+fi
+])
 
 dnl OVS_WAIT_UNTIL(COMMAND)
 dnl
