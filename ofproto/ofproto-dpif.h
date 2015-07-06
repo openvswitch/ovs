@@ -163,7 +163,8 @@ void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofproto_packet_in *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);
 int ofproto_dpif_send_packet(const struct ofport_dpif *, struct dp_packet *);
-void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
+void ofproto_dpif_flow_mod(struct ofproto_dpif *,
+                           const struct ofputil_flow_mod *);
 struct rule_dpif *ofproto_dpif_refresh_rule(struct rule_dpif *);
 
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);

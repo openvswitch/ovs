@@ -386,9 +386,18 @@ static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
  * it. */
 void
 ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
-                      struct ofputil_flow_mod *fm)
+                      const struct ofputil_flow_mod *fm)
 {
-    ofproto_flow_mod(&ofproto->up, fm);
+    struct ofproto_flow_mod ofm;
+
+    /* Multiple threads may do this for the same 'fm' at the same time.
+     * Allocate ofproto_flow_mod with execution context from stack.
+     *
+     * Note: This copy could be avoided by making ofproto_flow_mod more
+     * complex, but that may not be desireable, and a learn action is not that
+     * fast to begin with. */
+    ofm.fm = *fm;
+    ofproto_flow_mod(&ofproto->up, &ofm);
 }
 
 /* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
@@ -5474,28 +5483,28 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
                                const struct ofpbuf *ofpacts,
                                struct rule **rulep)
 {
-    struct ofputil_flow_mod fm;
+    struct ofproto_flow_mod ofm;
     struct rule_dpif *rule;
     int error;
 
-    fm.match = *match;
-    fm.priority = priority;
-    fm.new_cookie = htonll(0);
-    fm.cookie = htonll(0);
-    fm.cookie_mask = htonll(0);
-    fm.modify_cookie = false;
-    fm.table_id = TBL_INTERNAL;
-    fm.command = OFPFC_ADD;
-    fm.idle_timeout = idle_timeout;
-    fm.hard_timeout = 0;
-    fm.importance = 0;
-    fm.buffer_id = 0;
-    fm.out_port = 0;
-    fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    fm.ofpacts = ofpacts->data;
-    fm.ofpacts_len = ofpacts->size;
+    ofm.fm.match = *match;
+    ofm.fm.priority = priority;
+    ofm.fm.new_cookie = htonll(0);
+    ofm.fm.cookie = htonll(0);
+    ofm.fm.cookie_mask = htonll(0);
+    ofm.fm.modify_cookie = false;
+    ofm.fm.table_id = TBL_INTERNAL;
+    ofm.fm.command = OFPFC_ADD;
+    ofm.fm.idle_timeout = idle_timeout;
+    ofm.fm.hard_timeout = 0;
+    ofm.fm.importance = 0;
+    ofm.fm.buffer_id = 0;
+    ofm.fm.out_port = 0;
+    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
+    ofm.fm.ofpacts = ofpacts->data;
+    ofm.fm.ofpacts_len = ofpacts->size;
 
-    error = ofproto_flow_mod(&ofproto->up, &fm);
+    error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
         VLOG_ERR_RL(&rl, "failed to add internal flow (%s)",
                     ofperr_to_string(error));
@@ -5505,8 +5514,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
 
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
-                                     TBL_INTERNAL, &fm.match.flow,
-                                     &fm.match.wc, false);
+                                     TBL_INTERNAL, &ofm.fm.match.flow,
+                                     &ofm.fm.match.wc, false);
     if (rule) {
         *rulep = &rule->up;
     } else {
@@ -5519,20 +5528,20 @@ int
 ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
                                   struct match *match, int priority)
 {
-    struct ofputil_flow_mod fm;
+    struct ofproto_flow_mod ofm;
     int error;
 
-    fm.match = *match;
-    fm.priority = priority;
-    fm.new_cookie = htonll(0);
-    fm.cookie = htonll(0);
-    fm.cookie_mask = htonll(0);
-    fm.modify_cookie = false;
-    fm.table_id = TBL_INTERNAL;
-    fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    fm.command = OFPFC_DELETE_STRICT;
+    ofm.fm.match = *match;
+    ofm.fm.priority = priority;
+    ofm.fm.new_cookie = htonll(0);
+    ofm.fm.cookie = htonll(0);
+    ofm.fm.cookie_mask = htonll(0);
+    ofm.fm.modify_cookie = false;
+    ofm.fm.table_id = TBL_INTERNAL;
+    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
+    ofm.fm.command = OFPFC_DELETE_STRICT;
 
-    error = ofproto_flow_mod(&ofproto->up, &fm);
+    error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
         VLOG_ERR_RL(&rl, "failed to delete internal flow (%s)",
                     ofperr_to_string(error));

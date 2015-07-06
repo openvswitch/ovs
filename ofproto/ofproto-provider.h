@@ -1762,7 +1762,23 @@ extern const struct ofproto_class ofproto_dpif_class;
 int ofproto_class_register(const struct ofproto_class *);
 int ofproto_class_unregister(const struct ofproto_class *);
 
-enum ofperr ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *)
+/* flow_mod with execution context. */
+struct ofproto_flow_mod {
+    struct ofputil_flow_mod fm;
+
+    cls_version_t version;              /* Version in which changes take
+                                         * effect. */
+    struct rule_collection old_rules;   /* Affected rules. */
+    struct rule_collection new_rules;   /* Replacement rules. */
+};
+
+/* port_mod with execution context. */
+struct ofproto_port_mod {
+    struct ofputil_port_mod pm;
+    struct ofport *port;                /* Affected port. */
+};
+
+enum ofperr ofproto_flow_mod(struct ofproto *, struct ofproto_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *, int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len)
