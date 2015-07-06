@@ -1619,8 +1619,32 @@ numbered 0 through \fIn_links\fR minus 1, and stores the link into
 \fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as
 described above.
 .IP
-Currently, \fIfields\fR must be either \fBeth_src\fR or
-\fBsymmetric_l4\fR and \fIalgorithm\fR must be one of \fBmodulo_n\fR,
+\fIfields\fR must be one of the following:
+.RS
+.IP \fBeth_src\fR
+Hashes Ethernet source address only.
+.IP \fBsymmetric_l4\fR
+Hashes Ethernet source, destination, and type, VLAN ID, IPv4/IPv6
+source, destination, and protocol, and TCP or SCTP (but not UDP)
+ports.  The hash is computed so that pairs of corresponding flows in
+each direction hash to the same value, in environments where L2 paths
+are the same in each direction.  UDP ports are not included in the
+hash to support protocols such as VXLAN that use asymmetric ports in
+each direction.
+.IP \fBsymmetric_l3l4\fR
+Hashes IPv4/IPv6 source, destination, and protocol, and TCP or SCTP
+(but not UDP) ports.  Like \fBsymmetric_l4\fR, this is a symmetric
+hash, but by excluding L2 headers it is more effective in environments
+with asymmetric L2 paths (e.g. paths involving VRRP IP addresses on a
+router).  Not an effective hash function for protocols other than IPv4
+and IPv6, which hash to a constant zero.
+.IP \fBsymmetric_l3l4+udp\fR
+Like \fBsymmetric_l3l4+udp\fR, but UDP ports are included in the hash.
+This is a more effective hash when asymmetric UDP protocols such as
+VXLAN are not a consideration.
+.RE
+.IP
+\fIalgorithm\fR must be one of \fBmodulo_n\fR,
 \fBhash_threshold\fR, \fBhrw\fR, and \fBiter_hash\fR.  Only
 the \fBiter_hash\fR algorithm uses \fIarg\fR.
 .IP
@@ -1633,8 +1657,8 @@ slaves represented as \fIslave_type\fR.  Currently the only supported
 \fIslave_type\fR is \fBofport\fR.  Thus, each \fIs1\fR through \fIsN\fR should
 be an OpenFlow port number. Outputs to the selected slave.
 .IP
-Currently, \fIfields\fR must be either \fBeth_src\fR or \fBsymmetric_l4\fR and
-\fIalgorithm\fR must be one of \fBhrw\fR and \fBactive_backup\fR.
+Currently, \fIfields\fR must be either \fBeth_src\fR, \fBsymmetric_l4\fR, \fBsymmetric_l3l4\fR, or \fBsymmetric_l3l4+udp\fR, 
+and \fIalgorithm\fR must be one of \fBhrw\fR and \fBactive_backup\fR.
 .IP
 Example: \fBbundle(eth_src,0,hrw,ofport,slaves:4,8)\fR uses an Ethernet source
 hash with basis 0, to select between OpenFlow ports 4 and 8 using the Highest

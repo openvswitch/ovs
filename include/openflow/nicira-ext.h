@@ -109,7 +109,28 @@ enum nx_hash_fields {
      *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
      *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
      */
-    NX_HASH_FIELDS_SYMMETRIC_L4
+    NX_HASH_FIELDS_SYMMETRIC_L4,
+
+    /* L3+L4 only, including the following fields:
+     *
+     *  - NXM_OF_IP_PROTO
+     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
+     *  - NXM_OF_SCTP_SRC / NXM_OF_SCTP_DST
+     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
+     */
+    NX_HASH_FIELDS_SYMMETRIC_L3L4,
+
+    /* L3+L4 only with UDP ports, including the following fields:
+     *
+     *  - NXM_OF_IP_PROTO
+     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
+     *  - NXM_OF_SCTP_SRC / NXM_OF_SCTP_DST
+     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
+     *  - NXM_OF_UDP_SRC / NXM_OF_UDP_DST
+     */
+    NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP
+
+
 };
 
 /* This command enables or disables an Open vSwitch extension that allows a

@@ -1347,6 +1347,40 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     return jhash_bytes(&fields, sizeof fields, basis);
 }
 
+/* Hashes 'flow' based on its L3 through L4 protocol information */
+uint32_t
+flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
+                         bool inc_udp_ports)
+{
+    uint32_t hash = basis;
+
+    /* UDP source and destination port are also taken into account. */
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        hash = hash_add(hash,
+                        (OVS_FORCE uint32_t) (flow->nw_src ^ flow->nw_dst));
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        /* IPv6 addresses are 64-bit aligned inside struct flow. */
+        const uint64_t *a = ALIGNED_CAST(uint64_t *, flow->ipv6_src.s6_addr);
+        const uint64_t *b = ALIGNED_CAST(uint64_t *, flow->ipv6_dst.s6_addr);
+
+        for (int i = 0; i < 4; i++) {
+            hash = hash_add64(hash, a[i] ^ b[i]);
+        }
+    } else {
+        /* Cannot hash non-IP flows */
+        return 0;
+    }
+
+    hash = hash_add(hash, flow->nw_proto);
+    if (flow->nw_proto == IPPROTO_TCP || flow->nw_proto == IPPROTO_SCTP ||
+         (inc_udp_ports && flow->nw_proto == IPPROTO_UDP)) {
+        hash = hash_add(hash,
+                        (OVS_FORCE uint16_t) (flow->tp_src ^ flow->tp_dst));
+    }
+
+    return hash_finish(hash, basis);
+}
+
 /* Initialize a flow with random fields that matter for nx_hash_fields. */
 void
 flow_random_hash_fields(struct flow *flow)
@@ -1414,6 +1448,30 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
         break;
 
+    case NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP:
+        if (is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        }
+        /* no break */
+    case NX_HASH_FIELDS_SYMMETRIC_L3L4:
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+            memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
+            memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+        } else {
+            break; /* non-IP flow */
+        }
+
+        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        if (flow->nw_proto == IPPROTO_TCP || flow->nw_proto == IPPROTO_SCTP) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        }
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -1431,6 +1489,13 @@ flow_hash_fields(const struct flow *flow, enum nx_hash_fields fields,
 
     case NX_HASH_FIELDS_SYMMETRIC_L4:
         return flow_hash_symmetric_l4(flow, basis);
+
+    case NX_HASH_FIELDS_SYMMETRIC_L3L4:
+        return flow_hash_symmetric_l3l4(flow, basis, false);
+
+    case NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP:
+        return flow_hash_symmetric_l3l4(flow, basis, true);
+
     }
 
     OVS_NOT_REACHED();
@@ -1443,6 +1508,8 @@ flow_hash_fields_to_str(enum nx_hash_fields fields)
     switch (fields) {
     case NX_HASH_FIELDS_ETH_SRC: return "eth_src";
     case NX_HASH_FIELDS_SYMMETRIC_L4: return "symmetric_l4";
+    case NX_HASH_FIELDS_SYMMETRIC_L3L4: return "symmetric_l3l4";
+    case NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP: return "symmetric_l3l4+udp";
     default: return "<unknown>";
     }
 }
@@ -1452,7 +1519,9 @@ bool
 flow_hash_fields_valid(enum nx_hash_fields fields)
 {
     return fields == NX_HASH_FIELDS_ETH_SRC
-        || fields == NX_HASH_FIELDS_SYMMETRIC_L4;
+        || fields == NX_HASH_FIELDS_SYMMETRIC_L4
+        || fields == NX_HASH_FIELDS_SYMMETRIC_L3L4
+        || fields == NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP;
 }
 
 /* Returns a hash value for the bits of 'flow' that are active based on
