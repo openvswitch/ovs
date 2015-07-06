@@ -2521,10 +2521,11 @@ fte_insert(struct classifier *cls, const struct match *match,
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
-    cls_rule_init(&fte->rule, match, priority, CLS_MIN_VERSION);
+    cls_rule_init(&fte->rule, match, priority);
     fte->versions[index] = version;
 
-    old = fte_from_cls_rule(classifier_replace(cls, &fte->rule, NULL, 0));
+    old = fte_from_cls_rule(classifier_replace(cls, &fte->rule,
+                                               CLS_MIN_VERSION, NULL, 0));
     if (old) {
         fte->versions[!index] = old->versions[!index];
         old->versions[!index] = NULL;

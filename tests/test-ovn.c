@@ -889,8 +889,9 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             classifier_init(&cls, NULL);
             HMAP_FOR_EACH (m, hmap_node, &matches) {
                 test_rule = xmalloc(sizeof *test_rule);
-                cls_rule_init(&test_rule->cr, &m->match, 0, CLS_MIN_VERSION);
-                classifier_insert(&cls, &test_rule->cr, m->conjunctions, m->n);
+                cls_rule_init(&test_rule->cr, &m->match, 0);
+                classifier_insert(&cls, &test_rule->cr, CLS_MIN_VERSION,
+                                  m->conjunctions, m->n);
             }
         }
         for (int subst = 0; subst < 1 << (n_bits * n_vars); subst++) {

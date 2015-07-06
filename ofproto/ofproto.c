@@ -137,6 +137,7 @@ struct rule_criteria {
      * collect_rules_loose() and "strict" way by collect_rules_strict(), as
      * defined in the OpenFlow spec. */
     struct cls_rule cr;
+    cls_version_t version;
 
     /* Matching criteria for the OpenFlow cookie.  Consider a bit B in a rule's
      * cookie and the corresponding bits C in 'cookie' and M in 'cookie_mask'.
@@ -3802,7 +3803,8 @@ rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
                    uint32_t out_group)
 {
     criteria->table_id = table_id;
-    cls_rule_init(&criteria->cr, match, priority, version);
+    cls_rule_init(&criteria->cr, match, priority);
+    criteria->version = version;
     criteria->cookie = cookie;
     criteria->cookie_mask = cookie_mask;
     criteria->out_port = out_port;
@@ -3953,7 +3955,7 @@ collect_rule(struct rule *rule, const struct rule_criteria *c,
         && ofproto_rule_has_out_group(rule, c->out_group)
         && !((rule->flow_cookie ^ c->cookie) & c->cookie_mask)
         && (!rule_is_hidden(rule) || c->include_hidden)
-        && cls_rule_visible_in_version(&rule->cr, c->cr.version)) {
+        && cls_rule_visible_in_version(&rule->cr, c->version)) {
         /* Rule matches all the criteria... */
         if (!rule_is_readonly(rule) || c->include_readonly) {
             /* ...add it. */
@@ -4002,7 +4004,8 @@ collect_rules_loose(struct ofproto *ofproto,
         FOR_EACH_MATCHING_TABLE (table, criteria->table_id, ofproto) {
             struct rule *rule;
 
-            CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &criteria->cr) {
+            CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &criteria->cr,
+                                 criteria->version) {
                 collect_rule(rule, criteria, rules, &n_readonly);
             }
         }
@@ -4058,7 +4061,8 @@ collect_rules_strict(struct ofproto *ofproto,
             struct rule *rule;
 
             rule = rule_from_cls_rule(classifier_find_rule_exactly(
-                                          &table->cls, &criteria->cr));
+                                          &table->cls, &criteria->cr,
+                                          criteria->version));
             if (rule) {
                 collect_rule(rule, criteria, rules, &n_readonly);
             }
@@ -4552,16 +4556,17 @@ add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         return OFPERR_OFPBRC_EPERM;
     }
 
-    cls_rule_init(&cr, &fm->match, fm->priority, ofm->version);
+    cls_rule_init(&cr, &fm->match, fm->priority);
 
     /* Check for the existence of an identical rule.
      * This will not return rules earlier marked for removal. */
-    rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr));
+    rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr,
+                                                           ofm->version));
     *old_rule = rule;
     if (!rule) {
         /* Check for overlap, if requested. */
         if (fm->flags & OFPUTIL_FF_CHECK_OVERLAP
-            && classifier_rule_overlaps(&table->cls, &cr)) {
+            && classifier_rule_overlaps(&table->cls, &cr, ofm->version)) {
             cls_rule_destroy(&cr);
             return OFPERR_OFPFMFC_OVERLAP;
         }
@@ -4752,7 +4757,7 @@ replace_rule_start(struct ofproto *ofproto, cls_version_t version,
     ofproto_rule_insert__(ofproto, new_rule);
     /* Make the new rule visible for classifier lookups only from the next
      * version. */
-    classifier_insert(&table->cls, &new_rule->cr, conjs, n_conjs);
+    classifier_insert(&table->cls, &new_rule->cr, version, conjs, n_conjs);
 }
 
 static void replace_rule_revert(struct ofproto *ofproto,
@@ -4862,7 +4867,7 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
             struct rule *new_rule;
             struct cls_rule cr;
 
-            cls_rule_clone_in_version(&cr, &old_rule->cr, ofm->version);
+            cls_rule_clone(&cr, &old_rule->cr);
             error = replace_rule_create(ofproto, fm, &cr, old_rule->table_id,
                                         old_rule, &new_rule);
             if (!error) {
@@ -5548,11 +5553,11 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
     const struct oftable *table;
     struct cls_rule target;
 
-    cls_rule_init_from_minimatch(&target, &m->match, 0, CLS_MAX_VERSION);
+    cls_rule_init_from_minimatch(&target, &m->match, 0);
     FOR_EACH_MATCHING_TABLE (table, m->table_id, ofproto) {
         struct rule *rule;
 
-        CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &target) {
+        CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &target, CLS_MAX_VERSION) {
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
         }
     }
@@ -7776,7 +7781,7 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
 
     match_init_catchall(&match);
     match_set_vlan_vid_masked(&match, htons(VLAN_CFI), htons(VLAN_CFI));
-    cls_rule_init(&target, &match, 0, CLS_MAX_VERSION);
+    cls_rule_init(&target, &match, 0);
 
     free(ofproto->vlan_bitmap);
     ofproto->vlan_bitmap = bitmap_allocate(4096);
@@ -7785,7 +7790,8 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
     OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
         struct rule *rule;
 
-        CLS_FOR_EACH_TARGET (rule, cr, &oftable->cls, &target) {
+        CLS_FOR_EACH_TARGET (rule, cr, &oftable->cls, &target,
+                             CLS_MAX_VERSION) {
             if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
                 uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
 

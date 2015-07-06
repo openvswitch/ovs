@@ -87,7 +87,7 @@ cls_conjunction_set_alloc(struct cls_match *match,
 }
 
 static struct cls_match *
-cls_match_alloc(const struct cls_rule *rule,
+cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
                 const struct cls_conjunction conj[], size_t n)
 {
     int count = count_1bits(rule->match.flow.map);
@@ -99,9 +99,9 @@ cls_match_alloc(const struct cls_rule *rule,
     ovsrcu_init(&cls_match->next, NULL);
     *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
     *CONST_CAST(int *, &cls_match->priority) = rule->priority;
-    *CONST_CAST(cls_version_t *, &cls_match->add_version) = rule->version;
-    atomic_init(&cls_match->remove_version, rule->version);  /* Initially
-                                                                invisible. */
+    *CONST_CAST(cls_version_t *, &cls_match->add_version) = version;
+    atomic_init(&cls_match->remove_version, version);   /* Initially
+                                                         * invisible. */
     miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
                           &rule->match.flow, count);
     ovsrcu_set_hidden(&cls_match->conj_set,
@@ -163,12 +163,10 @@ static bool mask_prefix_bits_set(const struct flow_wildcards *,
 /* cls_rule. */
 
 static inline void
-cls_rule_init__(struct cls_rule *rule, unsigned int priority,
-                cls_version_t version)
+cls_rule_init__(struct cls_rule *rule, unsigned int priority)
 {
     rculist_init(&rule->node);
     *CONST_CAST(int *, &rule->priority) = priority;
-    *CONST_CAST(cls_version_t *, &rule->version) = version;
     rule->cls_match = NULL;
 }
 
@@ -181,32 +179,19 @@ cls_rule_init__(struct cls_rule *rule, unsigned int priority,
  * Clients should not use priority INT_MIN.  (OpenFlow uses priorities between
  * 0 and UINT16_MAX, inclusive.) */
 void
-cls_rule_init(struct cls_rule *rule, const struct match *match, int priority,
-              cls_version_t version)
+cls_rule_init(struct cls_rule *rule, const struct match *match, int priority)
 {
-    cls_rule_init__(rule, priority, version);
+    cls_rule_init__(rule, priority);
     minimatch_init(CONST_CAST(struct minimatch *, &rule->match), match);
 }
 
 /* Same as cls_rule_init() for initialization from a "struct minimatch". */
 void
 cls_rule_init_from_minimatch(struct cls_rule *rule,
-                             const struct minimatch *match, int priority,
-                             cls_version_t version)
+                             const struct minimatch *match, int priority)
 {
-    cls_rule_init__(rule, priority, version);
+    cls_rule_init__(rule, priority);
     minimatch_clone(CONST_CAST(struct minimatch *, &rule->match), match);
-}
-
-/* Initializes 'dst' as a copy of 'src', but with 'version'.
- *
- * The caller must eventually destroy 'dst' with cls_rule_destroy(). */
-void
-cls_rule_clone_in_version(struct cls_rule *dst, const struct cls_rule *src,
-                          cls_version_t version)
-{
-    cls_rule_init__(dst, src->priority, version);
-    minimatch_clone(CONST_CAST(struct minimatch *, &dst->match), &src->match);
 }
 
 /* Initializes 'dst' as a copy of 'src'.
@@ -215,7 +200,8 @@ cls_rule_clone_in_version(struct cls_rule *dst, const struct cls_rule *src,
 void
 cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 {
-    cls_rule_clone_in_version(dst, src, src->version);
+    cls_rule_init__(dst, src->priority);
+    minimatch_clone(CONST_CAST(struct minimatch *, &dst->match), &src->match);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.
@@ -226,7 +212,7 @@ cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 void
 cls_rule_move(struct cls_rule *dst, struct cls_rule *src)
 {
-    cls_rule_init__(dst, src->priority, src->version);
+    cls_rule_init__(dst, src->priority);
     minimatch_move(CONST_CAST(struct minimatch *, &dst->match),
                    CONST_CAST(struct minimatch *, &src->match));
 }
@@ -312,7 +298,7 @@ cls_rule_make_invisible_in_version(const struct cls_rule *rule,
     cls_match_set_remove_version(rule->cls_match, remove_version);
 }
 
-/* This undoes the change made by cls_rule_make_invisible_after_version().
+/* This undoes the change made by cls_rule_make_invisible_in_version().
  *
  * 'rule' must be in a classifier. */
 void
@@ -572,14 +558,15 @@ subtable_replace_head_rule(struct classifier *cls OVS_UNUSED,
     cmap_replace(&subtable->rules, &head->cmap_node, &new->cmap_node, hash);
 }
 
-/* Inserts 'rule' into 'cls'.  Until 'rule' is removed from 'cls', the caller
- * must not modify or free it.
+/* Inserts 'rule' into 'cls' in 'version'.  Until 'rule' is removed from 'cls',
+ * the caller must not modify or free it.
  *
  * If 'cls' already contains an identical rule (including wildcards, values of
- * fixed fields, and priority), replaces the old rule by 'rule' and returns the
- * rule that was replaced.  The caller takes ownership of the returned rule and
- * is thus responsible for destroying it with cls_rule_destroy(), after RCU
- * grace period has passed (see ovsrcu_postpone()).
+ * fixed fields, and priority) that is visible in 'version', replaces the old
+ * rule by 'rule' and returns the rule that was replaced.  The caller takes
+ * ownership of the returned rule and is thus responsible for destroying it
+ * with cls_rule_destroy(), after RCU grace period has passed (see
+ * ovsrcu_postpone()).
  *
  * Returns NULL if 'cls' does not contain a rule with an identical key, after
  * inserting the new rule.  In this case, no rules are displaced by the new
@@ -588,6 +575,7 @@ subtable_replace_head_rule(struct classifier *cls OVS_UNUSED,
  */
 const struct cls_rule *
 classifier_replace(struct classifier *cls, const struct cls_rule *rule,
+                   cls_version_t version,
                    const struct cls_conjunction *conjs, size_t n_conjs)
 {
     struct cls_match *new;
@@ -601,7 +589,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     int i;
 
     /* 'new' is initially invisible to lookups. */
-    new = cls_match_alloc(rule, conjs, n_conjs);
+    new = cls_match_alloc(rule, version, conjs, n_conjs);
 
     CONST_CAST(struct cls_rule *, rule)->cls_match = new;
 
@@ -773,10 +761,11 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
  * such a rule. */
 void
 classifier_insert(struct classifier *cls, const struct cls_rule *rule,
-                  const struct cls_conjunction conj[], size_t n_conj)
+                  cls_version_t version, const struct cls_conjunction conj[],
+                  size_t n_conj)
 {
     const struct cls_rule *displaced_rule
-        = classifier_replace(cls, rule, conj, n_conj);
+        = classifier_replace(cls, rule, version, conj, n_conj);
     ovs_assert(!displaced_rule);
 }
 
@@ -1292,12 +1281,13 @@ classifier_lookup(const struct classifier *cls, cls_version_t version,
 }
 
 /* Finds and returns a rule in 'cls' with exactly the same priority and
- * matching criteria as 'target', and that is visible in 'target->version.
+ * matching criteria as 'target', and that is visible in 'version'.
  * Only one such rule may ever exist.  Returns a null pointer if 'cls' doesn't
  * contain an exact match. */
 const struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
-                             const struct cls_rule *target)
+                             const struct cls_rule *target,
+                             cls_version_t version)
 {
     const struct cls_match *head, *rule;
     const struct cls_subtable *subtable;
@@ -1318,7 +1308,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
             break; /* Not found. */
         }
         if (rule->priority == target->priority
-            && cls_match_visible_in_version(rule, target->version)) {
+            && cls_match_visible_in_version(rule, version)) {
             return rule->cls_rule;
         }
     }
@@ -1337,16 +1327,16 @@ classifier_find_match_exactly(const struct classifier *cls,
     const struct cls_rule *retval;
     struct cls_rule cr;
 
-    cls_rule_init(&cr, target, priority, version);
-    retval = classifier_find_rule_exactly(cls, &cr);
+    cls_rule_init(&cr, target, priority);
+    retval = classifier_find_rule_exactly(cls, &cr, version);
     cls_rule_destroy(&cr);
 
     return retval;
 }
 
-/* Checks if 'target' would overlap any other rule in 'cls'.  Two rules are
- * considered to overlap if both rules have the same priority and a packet
- * could match both, and if both rules are visible in the same version.
+/* Checks if 'target' would overlap any other rule in 'cls' in 'version'.  Two
+ * rules are considered to overlap if both rules have the same priority and a
+ * packet could match both, and if both rules are visible in the same version.
  *
  * A trivial example of overlapping rules is two rules matching disjoint sets
  * of fields. E.g., if one rule matches only on port number, while another only
@@ -1354,7 +1344,7 @@ classifier_find_match_exactly(const struct classifier *cls,
  * dl_type could match both, if the rules also have the same priority. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
-                         const struct cls_rule *target)
+                         const struct cls_rule *target, cls_version_t version)
 {
     struct cls_subtable *subtable;
 
@@ -1371,8 +1361,7 @@ classifier_rule_overlaps(const struct classifier *cls,
             if (rule->priority == target->priority
                 && miniflow_equal_in_minimask(&target->match.flow,
                                               &rule->match.flow, &mask)
-                && cls_match_visible_in_version(rule->cls_match,
-                                                target->version)) {
+                && cls_match_visible_in_version(rule->cls_match, version)) {
                 return true;
             }
         }
@@ -1424,17 +1413,15 @@ cls_rule_is_loose_match(const struct cls_rule *rule,
 
 /* Iteration. */
 
-/* Rule may only match a target if it is visible in target's version.  For NULL
- * target we only return rules that are not invisible in any version. */
 static bool
-rule_matches(const struct cls_rule *rule, const struct cls_rule *target)
+rule_matches(const struct cls_rule *rule, const struct cls_rule *target,
+             cls_version_t version)
 {
-    /* Iterators never see duplicate rules with the same priority. */
-    return target
-        ? (miniflow_equal_in_minimask(&rule->match.flow, &target->match.flow,
-                                      &target->match.mask)
-           && cls_match_visible_in_version(rule->cls_match, target->version))
-        : !cls_match_is_eventually_invisible(rule->cls_match);
+    /* Rule may only match a target if it is visible in target's version. */
+    return cls_match_visible_in_version(rule->cls_match, version)
+        && (!target || miniflow_equal_in_minimask(&rule->match.flow,
+                                                  &target->match.flow,
+                                                  &target->match.mask));
 }
 
 static const struct cls_rule *
@@ -1446,7 +1433,7 @@ search_subtable(const struct cls_subtable *subtable,
         const struct cls_rule *rule;
 
         RCULIST_FOR_EACH (rule, node, &subtable->rules_list) {
-            if (rule_matches(rule, cursor->target)) {
+            if (rule_matches(rule, cursor->target, cursor->version)) {
                 return rule;
             }
         }
@@ -1455,27 +1442,26 @@ search_subtable(const struct cls_subtable *subtable,
 }
 
 /* Initializes 'cursor' for iterating through rules in 'cls', and returns the
- * first matching cls_rule via '*pnode', or NULL if there are no matches.
+ * cursor.
  *
- *     - If 'target' is null, or if the 'target' is a catchall target and the
- *       target's version is CLS_MAX_VERSION, the cursor will visit every rule
- *       in 'cls' that is not invisible in any version.
+ *     - If 'target' is null, or if the 'target' is a catchall target, the
+ *       cursor will visit every rule in 'cls' that is visible in 'version'.
  *
  *     - If 'target' is nonnull, the cursor will visit each 'rule' in 'cls'
  *       such that cls_rule_is_loose_match(rule, target) returns true and that
- *       the rule is visible in 'target->version'.
+ *       the rule is visible in 'version'.
  *
  * Ignores target->priority. */
 struct cls_cursor
-cls_cursor_start(const struct classifier *cls, const struct cls_rule *target)
+cls_cursor_start(const struct classifier *cls, const struct cls_rule *target,
+                 cls_version_t version)
 {
     struct cls_cursor cursor;
     struct cls_subtable *subtable;
 
     cursor.cls = cls;
-    cursor.target = target && (!cls_rule_is_catchall(target)
-                               || target->version != CLS_MAX_VERSION)
-        ? target : NULL;
+    cursor.target = target && !cls_rule_is_catchall(target) ? target : NULL;
+    cursor.version = version;
     cursor.rule = NULL;
 
     /* Find first rule. */
@@ -1502,7 +1488,7 @@ cls_cursor_next(struct cls_cursor *cursor)
     rule = cursor->rule;
     subtable = cursor->subtable;
     RCULIST_FOR_EACH_CONTINUE (rule, node, &subtable->rules_list) {
-        if (rule_matches(rule, cursor->target)) {
+        if (rule_matches(rule, cursor->target, cursor->version)) {
             return rule;
         }
     }

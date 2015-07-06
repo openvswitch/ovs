@@ -94,11 +94,11 @@ tnl_port_map_insert(odp_port_t port, ovs_be16 udp_port, const char dev_name[])
         match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
         match.wc.masks.tp_dst = OVS_BE16_MAX;
 
-        cls_rule_init(&p->cr, &match, 0, CLS_MIN_VERSION); /* Priority == 0. */
+        cls_rule_init(&p->cr, &match, 0); /* Priority == 0. */
         ovs_refcount_init(&p->ref_cnt);
         ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
 
-        classifier_insert(&cls, &p->cr, NULL, 0);
+        classifier_insert(&cls, &p->cr, CLS_MIN_VERSION, NULL, 0);
     }
     ovs_mutex_unlock(&mutex);
 }
