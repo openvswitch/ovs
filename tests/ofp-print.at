@@ -3247,11 +3247,13 @@ AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - reject OFPT_HELLO])
 AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
 05 00 00 10 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_UNSUP***
+], [dnl
+ofp_util|WARN|OFPT_HELLO message not allowed inside OFPT14_BUNDLE_ADD_MESSAGE
 ])
 AT_CLEANUP
 

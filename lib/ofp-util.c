@@ -9119,6 +9119,8 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     }
 
     if (!ofputil_is_bundlable(*type_ptr)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s message not allowed inside "
+                     "OFPT14_BUNDLE_ADD_MESSAGE", ofptype_get_name(*type_ptr));
         return OFPERR_OFPBFC_MSG_UNSUP;
     }
 
