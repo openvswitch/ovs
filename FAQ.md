@@ -1432,8 +1432,7 @@ A: The following table lists the versions of OpenFlow supported by
    [OPENFLOW-1.1+.md] in the Open vSwitch source tree tracks support for
    OpenFlow 1.1 and later features.  When support for OpenFlow 1.4 and
    1.5 is solidly implemented, Open vSwitch will enable those version
-   by default.  Also, the OpenFlow 1.5 specification is still under
-   development and thus subject to change.
+   by default.
 
 ### Q: Does Open vSwitch support MPLS?
 
