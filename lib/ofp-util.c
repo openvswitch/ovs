@@ -9096,6 +9096,9 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     msg->flags = ntohs(m->flags);
 
     msg->msg = b.data;
+    if (msg->msg->version != oh->version) {
+        return OFPERR_NXBFC_BAD_VERSION;
+    }
     inner_len = ntohs(msg->msg->length);
     if (inner_len < sizeof(struct ofp_header) || inner_len > b.size) {
         return OFPERR_OFPBFC_MSG_BAD_LEN;

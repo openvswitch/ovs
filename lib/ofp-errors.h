@@ -675,6 +675,10 @@ enum ofperr {
     /* OF1.4+(17,15).  Bundle is locking the resource. */
     OFPERR_OFPBFC_BUNDLE_IN_PROGRESS,
 
+    /* NX1.4+(22).  In an OFPT_BUNDLE_ADD_MESSAGE, the OpenFlow version in the
+     * inner and outer messages differ. */
+    OFPERR_NXBFC_BAD_VERSION,
+
 /* ## ------------------------- ## */
 /* ## OFPET_FLOW_MONITOR_FAILED ## */
 /* ## ------------------------- ## */
