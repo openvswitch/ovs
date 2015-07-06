@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -653,6 +653,9 @@ enum ofptype {
 enum ofperr ofptype_decode(enum ofptype *, const struct ofp_header *);
 enum ofperr ofptype_pull(enum ofptype *, struct ofpbuf *);
 enum ofptype ofptype_from_ofpraw(enum ofpraw);
+
+/* Information about OFTYPE_* values. */
+const char *ofptype_get_name(enum ofptype);
 
 /* OpenFlow message properties. */
 void ofpmsg_update_length(struct ofpbuf *);
