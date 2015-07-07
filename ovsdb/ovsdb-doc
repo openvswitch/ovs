@@ -29,9 +29,9 @@ from build.nroff import *
 argv0 = sys.argv[0]
 
 def typeAndConstraintsToNroff(column):
-    type = column.type.toEnglish(escapeNroffLiteral)
-    constraints = column.type.constraintsToEnglish(escapeNroffLiteral,
-                                                   textToNroff)
+    type = column.type.toEnglish(escape_nroff_literal)
+    constraints = column.type.constraintsToEnglish(escape_nroff_literal,
+                                                   text_to_nroff)
     if constraints:
         type += ", " + constraints
     if column.unique:
@@ -53,7 +53,7 @@ def columnGroupToNroff(table, groupXml, documented_columns):
             introNodes += [node]
 
     summary = []
-    intro = blockXmlToNroff(introNodes)
+    intro = block_xml_to_nroff(introNodes)
     body = ''
     for node in columnNodes:
         if node.tagName == 'column':
@@ -76,7 +76,7 @@ def columnGroupToNroff(table, groupXml, documented_columns):
 
                 if column.type.value:
                     typeNroff = "optional %s" % column.type.value.toEnglish(
-                        escapeNroffLiteral)
+                        escape_nroff_literal)
                     if (column.type.value.type == ovs.db.types.StringType and
                         type_.type == ovs.db.types.BooleanType):
                         # This is a little more explicit and helpful than
@@ -90,8 +90,8 @@ def columnGroupToNroff(table, groupXml, documented_columns):
                             else:
                                 typeNroff += ", containing a %s" % type_english
                         constraints = (
-                            type_.constraintsToEnglish(escapeNroffLiteral,
-                                                       textToNroff))
+                            type_.constraintsToEnglish(escape_nroff_literal,
+                                                       text_to_nroff))
                         if constraints:
                             typeNroff += ", %s" % constraints
                 else:
@@ -102,14 +102,14 @@ def columnGroupToNroff(table, groupXml, documented_columns):
             if not column.mutable:
                 typeNroff = "immutable %s" % typeNroff
             body += '.IP "\\fB%s\\fR: %s"\n' % (nameNroff, typeNroff)
-            body += blockXmlToNroff(node.childNodes, '.IP') + "\n"
+            body += block_xml_to_nroff(node.childNodes, '.IP') + "\n"
             summary += [('column', nameNroff, typeNroff)]
         elif node.tagName == 'group':
             title = node.attributes["title"].nodeValue
             subSummary, subIntro, subBody = columnGroupToNroff(
                 table, node, documented_columns)
             summary += [('group', title, subSummary)]
-            body += '.ST "%s:"\n' % textToNroff(title)
+            body += '.ST "%s:"\n' % text_to_nroff(title)
             body += subIntro + subBody
         else:
             raise error.Error("unknown element %s in <table>" % node.tagName)
@@ -186,7 +186,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, version=None):
 .SH NAME
 %s \- %s database schema
 .PP
-''' % (manpage, schema.version, version, textToNroff(manpage), schema.name)
+''' % (manpage, schema.version, version, text_to_nroff(manpage), schema.name)
 
     tables = ""
     introNodes = []
@@ -212,7 +212,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, version=None):
     for table in undocumented_tables:
         raise error.Error("undocumented table %s" % table)
 
-    s += blockXmlToNroff(introNodes) + "\n"
+    s += block_xml_to_nroff(introNodes) + "\n"
 
     s += r"""
 .SH "TABLE SUMMARY"
@@ -228,7 +228,7 @@ Purpose
 .TQ 1in
 \fB%s\fR
 %s
-""" % (name, textToNroff(title))
+""" % (name, text_to_nroff(title))
 
     if erFile:
         s += """
