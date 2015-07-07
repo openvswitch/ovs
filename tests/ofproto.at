@@ -1307,12 +1307,9 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(printf "OFPST_TABLE reply (xid=0x2):"
- x=0
- name=classifier
- while test $x -lt 254; do
-   printf "
-  table %d (\"%s\"):
+head_table() {
+    printf 'OFPST_TABLE reply (xid=0x2):
+  table 0 ("%s"):
     active=0, lookup=0, matched=0
     max_entries=1000000
     matching:
@@ -1328,10 +1325,15 @@ OVS_VSWITCHD_START
       nw_tos: exact match or wildcard
       tcp_src: exact match or wildcard
       tcp_dst: exact match or wildcard
-" $x $name
-   x=`expr $x + 1`
-   name=table$x
- done) > expout
+
+' $1
+}
+ditto() {
+    for i in `seq $1 $2`; do
+        printf '  table %d ("table%d"): ditto\n' $i $i
+    done
+}
+(head_table classifier; ditto 1 253) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -1344,9 +1346,16 @@ AT_CHECK(
 <1>
 ])
 # Check that the configuration was updated.
-mv expout orig-expout
-sed -e 's/classifier/main/
-21s/1000000/1024/' orig-expout > expout
+(head_table main; echo '  table 1 ("table1"):
+    active=0, lookup=0, matched=0
+    max_entries=1024
+    (same matching)
+
+  table 2 ("table2"):
+    active=0, lookup=0, matched=0
+    max_entries=1000000
+    (same matching)
+'; ditto 3 253) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1374,12 +1383,9 @@ AT_CHECK([ovs-appctl bridge/dump-flows br0], [0], [stdout])
 AT_CHECK([test `grep '240\.0\.0\.1' stdout | grep -v table_id= | wc -l` -gt 0])
 
 # Check that dump-tables doesn't count the hidden flows.
-(printf "OFPST_TABLE reply (xid=0x2):"
- x=0
- name=classifier
- while test $x -lt 254; do
-   printf "
-  table %d (\"%s\"):
+head_table() {
+    printf 'OFPST_TABLE reply (xid=0x2):
+  table 0 ("%s"):
     active=0, lookup=0, matched=0
     max_entries=1000000
     matching:
@@ -1395,10 +1401,15 @@ AT_CHECK([test `grep '240\.0\.0\.1' stdout | grep -v table_id= | wc -l` -gt 0])
       nw_tos: exact match or wildcard
       tcp_src: exact match or wildcard
       tcp_dst: exact match or wildcard
-" $x $name
-   x=`expr $x + 1`
-   name=table$x
- done) > expout
+
+' $1
+}
+ditto() {
+    for i in `seq $1 $2`; do
+        printf '  table %d ("table%d"): ditto\n' $i $i
+    done
+}
+(head_table classifier; ditto 1 253) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP(["/cannot find route for controller/d"])
 AT_CLEANUP
@@ -1406,23 +1417,15 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(printf "OFPST_TABLE reply (OF1.2) (xid=0x2):"
- x=0
- name=classifier
- while test $x -lt 254; do
-   if test $x = 253; then
-     goto=
-   else
-     goto=,goto_table
-   fi
-   echo "
-  table $x (\"$name\"):
+head_table() {
+    printf 'OFPST_TABLE reply (OF1.2) (xid=0x2):
+  table 0 ("%s"):
     active=0, lookup=0, matched=0
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     config=controller
     max_entries=1000000
     instructions (table miss and others):
-      instructions: apply_actions,clear_actions,write_actions,write_metadata$goto
+      instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: metadata in_port_oxm eth_src eth_dst vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
@@ -1461,10 +1464,28 @@ OVS_VSWITCHD_START
       icmpv6_code: exact match or wildcard
       nd_target: exact match or wildcard
       nd_sll: exact match or wildcard
-      nd_tll: exact match or wildcard"
-   x=`expr $x + 1`
-   name=table$x
- done) > expout
+      nd_tll: exact match or wildcard
+
+' $1
+}
+ditto() {
+    for i in `seq $1 $2`; do
+        printf '  table %d ("table%d"): ditto\n' $i $i
+    done
+}
+tail_table() {
+    printf '  table 253 ("table253"):
+    active=0, lookup=0, matched=0
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    config=controller
+    max_entries=1000000
+    instructions (table miss and others):
+      instructions: apply_actions,clear_actions,write_actions,write_metadata
+      (same actions)
+    (same matching)
+'
+}
+(head_table classifier; ditto 1 252; tail_table) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -1477,37 +1498,35 @@ AT_CHECK(
 <1>
 ])
 # Check that the configuration was updated.
-mv expout orig-expout
-sed 's/classifier/main/
-53s/1000000/1024/' < orig-expout > expout
+(head_table main; echo '  table 1 ("table1"):
+    active=0, lookup=0, matched=0
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    config=controller
+    max_entries=1024
+    (same instructions)
+    (same matching)
+
+  table 2 ("table2"):
+    active=0, lookup=0, matched=0
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    config=controller
+    max_entries=1000000
+    (same instructions)
+    (same matching)
+'; ditto 3 252; tail_table) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto - table features (OpenFlow 1.3)])
 OVS_VSWITCHD_START
-(x=0
- name=classifier
- while test $x -lt 254; do
-   y=`expr $x + 1`
-   if test $x = 253; then
-     next=
-     goto=
-   else
-     goto=,goto_table
-     if test $x = 252; then
-       next='
-      next tables: 253'
-     else
-       next="
-      next tables: $y-253"
-     fi
-   fi
-   echo "  table $x (\"$name\"):
+head_table () {
+    printf '  table 0 ("%s"):
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
-    instructions (table miss and others):$next
-      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata$goto
+    instructions (table miss and others):
+      next tables: 1-253
+      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata,goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
@@ -1640,12 +1659,47 @@ OVS_VSWITCHD_START
       icmpv6_code: exact match or wildcard
       nd_target: arbitrary mask
       nd_sll: arbitrary mask
-      nd_tll: arbitrary mask"
-   x=$y
-   name=table$x
- done) > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0 | sed '/^$/d
-/^OFPST_TABLE_FEATURES/d'], [0], [expout])
+      nd_tll: arbitrary mask
+
+' $1
+}
+ditto() {
+    printf '  table %d ("%s"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    max_entries=%d
+    instructions (table miss and others):
+      next tables: %d-253
+      (same instructions)
+      (same actions)
+    (same matching)
+
+' $1 $2 $3 `expr $1 + 1`
+}
+tail_tables() {
+echo '  table 252 ("table252"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    max_entries=1000000
+    instructions (table miss and others):
+      next tables: 253
+      (same instructions)
+      (same actions)
+    (same matching)
+
+  table 253 ("table253"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    max_entries=1000000
+    instructions (table miss and others):
+      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata
+      (same actions)
+    (same matching)
+'
+}
+(head_table classifier
+ for i in `seq 1 251`; do
+     ditto $i table$i 1000000
+ done
+ tail_tables) > expout
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
   [ovs-vsctl \
@@ -1657,11 +1711,13 @@ AT_CHECK(
 <1>
 ])
 # Check that the configuration was updated.
-mv expout orig-expout
-sed 's/classifier/main/
-142s/1000000/1024/' < orig-expout > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0 | sed '/^$/d
-/^OFPST_TABLE_FEATURES/d'], [0], [expout])
+(head_table main
+ ditto 1 table1 1024
+ for i in `seq 2 251`; do
+     ditto $i table$i 1000000
+ done
+ tail_tables) > expout
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

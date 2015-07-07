@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2012, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ struct ofp10_match;
 struct ofp_flow_mod;
 struct ofp_header;
 struct ofputil_flow_stats;
+struct ofputil_table_features;
+struct ofputil_table_stats;
 
 #ifdef  __cplusplus
 extern "C" {
@@ -43,6 +45,11 @@ char *ofp_packet_to_string(const void *data, size_t len);
 
 void ofp_print_flow_stats(struct ds *, struct ofputil_flow_stats *);
 void ofp_print_version(const struct ofp_header *, struct ds *);
+void ofp_print_table_features(
+    struct ds *, const struct ofputil_table_features *features,
+    const struct ofputil_table_features *prev_features,
+    const struct ofputil_table_stats *stats,
+    const struct ofputil_table_stats *prev_stats);
 
 #ifdef  __cplusplus
 }

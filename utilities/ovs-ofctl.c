@@ -731,8 +731,72 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
 
     open_vconn(ctx->argv[1], &vconn);
     request = ofputil_encode_table_features_request(vconn_get_version(vconn));
-    if (request) {
-        dump_stats_transaction(vconn, request);
+
+    /* The following is similar to dump_trivial_stats_transaction(), but it
+     * maintains the previous 'ofputil_table_features' from one stats reply
+     * message to the next, which allows duplication to be eliminated in the
+     * output across messages.  Otherwise the output is much larger and harder
+     * to read, because only 17 or so ofputil_table_features elements fit in a
+     * single 64 kB OpenFlow message and therefore you get a ton of repetition
+     * (every 17th element is printed in full instead of abbreviated). */
+
+    const struct ofp_header *request_oh = request->data;
+    ovs_be32 send_xid = request_oh->xid;
+    bool done = false;
+
+    struct ofputil_table_features prev;
+    int n = 0;
+
+    send_openflow_buffer(vconn, request);
+    while (!done) {
+        ovs_be32 recv_xid;
+        struct ofpbuf *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            enum ofptype type;
+            enum ofperr error;
+            error = ofptype_decode(&type, reply->data);
+            if (error) {
+                ovs_fatal(0, "decode error: %s", ofperr_get_name(error));
+            } else if (type == OFPTYPE_ERROR) {
+                ofp_print(stdout, reply->data, reply->size, verbosity + 1);
+                done = true;
+            } else if (type == OFPTYPE_TABLE_FEATURES_STATS_REPLY) {
+                done = !ofpmp_more(reply->data);
+                for (;;) {
+                    struct ofputil_table_features tf;
+                    int retval;
+
+                    retval = ofputil_decode_table_features(reply, &tf, true);
+                    if (retval) {
+                        if (retval != EOF) {
+                            ovs_fatal(0, "decode error: %s",
+                                      ofperr_get_name(retval));
+                        }
+                        break;
+                    }
+
+                    struct ds s = DS_EMPTY_INITIALIZER;
+                    ofp_print_table_features(&s, &tf, n ? &prev : NULL,
+                                             NULL, NULL);
+                    puts(ds_cstr(&s));
+                    ds_destroy(&s);
+
+                    prev = tf;
+                    n++;
+                }
+            } else {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(reply->data, reply->size,
+                                        verbosity + 1));
+            }
+        } else {
+            VLOG_DBG("received reply with xid %08"PRIx32" "
+                     "!= expected %08"PRIx32, recv_xid, send_xid);
+        }
+        ofpbuf_delete(reply);
     }
 
     vconn_close(vconn);

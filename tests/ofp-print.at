@@ -1466,7 +1466,9 @@ AT_CLEANUP
 
 AT_SETUP([OFPST_TABLE reply - OF1.2])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
-(tail="
+(echo 'OFPST_TABLE reply (OF1.2) (xid=0x2):
+  table 0 ("classifier"):
+    active=1, lookup=74614, matched=106024
     config=controller
     max_entries=1000000
     instructions (table miss and others):
@@ -1508,21 +1510,18 @@ AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
       icmpv6_code: exact match or wildcard
       nd_target: exact match or wildcard
       nd_sll: exact match or wildcard
-      nd_tll: exact match or wildcard"
- echo "OFPST_TABLE reply (OF1.2) (xid=0x2):
-  table 0 (\"classifier\"):
-    active=1, lookup=74614, matched=106024$tail"
- x=1
- while test $x -lt 254; do
-   printf "
-  table %d (\"%s\"):
-    active=0, lookup=0, matched=0$tail
-" $x table$x
-   x=`expr $x + 1`
+      nd_tll: exact match or wildcard
+
+  table 1 ("table1"):
+    active=0, lookup=0, matched=0
+    (same features)
+'
+ for i in `seq 2 253`; do
+     printf '  table %d ("table%d"): ditto\n' $i $i
  done
- echo "
-  table 254 (\"table254\"):
-    active=2, lookup=0, matched=0$tail") > expout
+ echo '  table 254 ("table254"):
+    active=2, lookup=0, matched=0
+    (same features)') > expout
 
 (pad32="\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
  pad7="00 00 00 00 00 00 00 "

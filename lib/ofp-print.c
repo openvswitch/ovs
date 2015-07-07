@@ -52,9 +52,6 @@
 
 static void ofp_print_queue_name(struct ds *string, uint32_t port);
 static void ofp_print_error(struct ds *, enum ofperr);
-static void ofp_print_table_features(struct ds *,
-                                     const struct ofputil_table_features *,
-                                     const struct ofputil_table_stats *);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data'.  The caller must free the returned string.*/
@@ -1621,7 +1618,9 @@ ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    for (;;) {
+    struct ofputil_table_features prev_features;
+    struct ofputil_table_stats prev_stats;
+    for (int i = 0;; i++) {
         struct ofputil_table_features features;
         struct ofputil_table_stats stats;
         int retval;
@@ -1634,7 +1633,12 @@ ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh)
             return;
         }
 
-        ofp_print_table_features(string, &features, &stats);
+        ds_put_char(string, '\n');
+        ofp_print_table_features(string,
+                                 &features, i ? &prev_features : NULL,
+                                 &stats, i ? &prev_stats : NULL);
+        prev_features = features;
+        prev_stats = stats;
     }
 }
 
@@ -2615,7 +2619,9 @@ table_action_features_empty(const struct ofputil_table_action_features *taf)
 
 static void
 print_table_instruction_features(
-    struct ds *s, const struct ofputil_table_instruction_features *tif)
+    struct ds *s,
+    const struct ofputil_table_instruction_features *tif,
+    const struct ofputil_table_instruction_features *prev_tif)
 {
     int start, end;
 
@@ -2638,19 +2644,28 @@ print_table_instruction_features(
     }
 
     if (tif->instructions) {
-        ds_put_cstr(s, "      instructions: ");
-        int i;
+        if (prev_tif && tif->instructions == prev_tif->instructions) {
+            ds_put_cstr(s, "      (same instructions)\n");
+        } else {
+            ds_put_cstr(s, "      instructions: ");
+            int i;
 
-        for (i = 0; i < 32; i++) {
-            if (tif->instructions & (1u << i)) {
-                ds_put_format(s, "%s,", ovs_instruction_name_from_type(i));
+            for (i = 0; i < 32; i++) {
+                if (tif->instructions & (1u << i)) {
+                    ds_put_format(s, "%s,", ovs_instruction_name_from_type(i));
+                }
             }
+            ds_chomp(s, ',');
+            ds_put_char(s, '\n');
         }
-        ds_chomp(s, ',');
-        ds_put_char(s, '\n');
     }
 
-    if (!table_action_features_equal(&tif->write, &tif->apply)) {
+    if (prev_tif
+        && table_action_features_equal(&tif->write, &prev_tif->write)
+        && table_action_features_equal(&tif->apply, &prev_tif->apply)
+        && !bitmap_is_all_zeros(tif->write.set_fields.bm, MFF_N_IDS)) {
+        ds_put_cstr(s, "      (same actions)\n");
+    } else if (!table_action_features_equal(&tif->write, &tif->apply)) {
         ds_put_cstr(s, "      Write-Actions features:\n");
         print_table_action_features(s, &tif->write);
         ds_put_cstr(s, "      Apply-Actions features:\n");
@@ -2683,24 +2698,79 @@ table_instruction_features_empty(
             && table_action_features_empty(&tif->apply));
 }
 
-static void
+static bool
+table_features_equal(const struct ofputil_table_features *a,
+                     const struct ofputil_table_features *b)
+{
+    return (a->metadata_match == b->metadata_match
+            && a->metadata_write == b->metadata_write
+            && a->miss_config == b->miss_config
+            && a->supports_eviction == b->supports_eviction
+            && a->supports_vacancy_events == b->supports_vacancy_events
+            && a->max_entries == b->max_entries
+            && table_instruction_features_equal(&a->nonmiss, &b->nonmiss)
+            && table_instruction_features_equal(&a->miss, &b->miss)
+            && bitmap_equal(a->match.bm, b->match.bm, MFF_N_IDS));
+}
+
+static bool
+table_features_empty(const struct ofputil_table_features *tf)
+{
+    return (!tf->metadata_match
+            && !tf->metadata_write
+            && tf->miss_config == OFPUTIL_TABLE_MISS_DEFAULT
+            && tf->supports_eviction < 0
+            && tf->supports_vacancy_events < 0
+            && !tf->max_entries
+            && table_instruction_features_empty(&tf->nonmiss)
+            && table_instruction_features_empty(&tf->miss)
+            && bitmap_is_all_zeros(tf->match.bm, MFF_N_IDS));
+}
+
+static bool
+table_stats_equal(const struct ofputil_table_stats *a,
+                  const struct ofputil_table_stats *b)
+{
+    return (a->active_count == b->active_count
+            && a->lookup_count == b->lookup_count
+            && a->matched_count == b->matched_count);
+}
+
+void
 ofp_print_table_features(struct ds *s,
                          const struct ofputil_table_features *features,
-                         const struct ofputil_table_stats *stats)
+                         const struct ofputil_table_features *prev_features,
+                         const struct ofputil_table_stats *stats,
+                         const struct ofputil_table_stats *prev_stats)
 {
     int i;
 
-    ds_put_format(s, "\n  table %"PRIu8, features->table_id);
+    ds_put_format(s, "  table %"PRIu8, features->table_id);
     if (features->name[0]) {
         ds_put_format(s, " (\"%s\")", features->name);
     }
-    ds_put_cstr(s, ":\n");
+    ds_put_char(s, ':');
+
+    bool same_stats = prev_stats && table_stats_equal(stats, prev_stats);
+    bool same_features = prev_features && table_features_equal(features,
+                                                               prev_features);
+    if ((!stats || same_stats) && (!features || same_features)) {
+        ds_put_cstr(s, " ditto");
+        return;
+    }
+    ds_put_char(s, '\n');
     if (stats) {
         ds_put_format(s, "    active=%"PRIu32", ", stats->active_count);
         ds_put_format(s, "lookup=%"PRIu64", ", stats->lookup_count);
         ds_put_format(s, "matched=%"PRIu64"\n", stats->matched_count);
     }
-    if (features->metadata_match || features->metadata_match) {
+    if (same_features) {
+        if (!table_features_empty(features)) {
+            ds_put_cstr(s, "    (same features)\n");
+        }
+        return;
+    }
+    if (features->metadata_match || features->metadata_write) {
         ds_put_format(s, "    metadata: match=%#"PRIx64" write=%#"PRIx64"\n",
                       ntohll(features->metadata_match),
                       ntohll(features->metadata_write));
@@ -2726,29 +2796,45 @@ ofp_print_table_features(struct ds *s,
         ds_put_format(s, "    max_entries=%"PRIu32"\n", features->max_entries);
     }
 
-    if (!table_instruction_features_equal(&features->nonmiss,
-                                          &features->miss)) {
+    const struct ofputil_table_instruction_features *prev_nonmiss
+        = prev_features ? &prev_features->nonmiss : NULL;
+    const struct ofputil_table_instruction_features *prev_miss
+        = prev_features ? &prev_features->miss : NULL;
+    if (prev_features
+        && table_instruction_features_equal(&features->nonmiss, prev_nonmiss)
+        && table_instruction_features_equal(&features->miss, prev_miss)) {
+        if (!table_instruction_features_empty(&features->nonmiss)) {
+            ds_put_cstr(s, "    (same instructions)\n");
+        }
+    } else if (!table_instruction_features_equal(&features->nonmiss,
+                                                 &features->miss)) {
         ds_put_cstr(s, "    instructions (other than table miss):\n");
-        print_table_instruction_features(s, &features->nonmiss);
+        print_table_instruction_features(s, &features->nonmiss, prev_nonmiss);
         ds_put_cstr(s, "    instructions (table miss):\n");
-        print_table_instruction_features(s, &features->miss);
+        print_table_instruction_features(s, &features->miss, prev_miss);
     } else if (!table_instruction_features_empty(&features->nonmiss)) {
         ds_put_cstr(s, "    instructions (table miss and others):\n");
-        print_table_instruction_features(s, &features->nonmiss);
+        print_table_instruction_features(s, &features->nonmiss, prev_nonmiss);
     }
 
-    if (!bitmap_is_all_zeros(features->match.bm, MFF_N_IDS)){
-        ds_put_cstr(s, "    matching:\n");
-        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, features->match.bm) {
-            const struct mf_field *f = mf_from_id(i);
-            bool mask = bitmap_is_set(features->mask.bm, i);
-            bool wildcard = bitmap_is_set(features->wildcard.bm, i);
+    if (!bitmap_is_all_zeros(features->match.bm, MFF_N_IDS)) {
+        if (prev_features
+            && bitmap_equal(features->match.bm, prev_features->match.bm,
+                            MFF_N_IDS)) {
+            ds_put_cstr(s, "    (same matching)\n");
+        } else {
+            ds_put_cstr(s, "    matching:\n");
+            BITMAP_FOR_EACH_1 (i, MFF_N_IDS, features->match.bm) {
+                const struct mf_field *f = mf_from_id(i);
+                bool mask = bitmap_is_set(features->mask.bm, i);
+                bool wildcard = bitmap_is_set(features->wildcard.bm, i);
 
-            ds_put_format(s, "      %s: %s\n",
-                          f->name,
-                          (mask ? "arbitrary mask"
-                           : wildcard ? "exact match or wildcard"
-                           : "must exact match"));
+                ds_put_format(s, "      %s: %s\n",
+                              f->name,
+                              (mask ? "arbitrary mask"
+                               : wildcard ? "exact match or wildcard"
+                               : "must exact match"));
+            }
         }
     }
 }
@@ -2760,7 +2846,8 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
-    for (;;) {
+    struct ofputil_table_features prev;
+    for (int i = 0; ; i++) {
         struct ofputil_table_features tf;
         int retval;
 
@@ -2771,7 +2858,10 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
             }
             return;
         }
-        ofp_print_table_features(s, &tf, NULL);
+
+        ds_put_char(s, '\n');
+        ofp_print_table_features(s, &tf, i ? &prev : NULL, NULL, NULL);
+        prev = tf;
     }
 }
 
