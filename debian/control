@@ -3,11 +3,12 @@ Section: net
 Priority: extra
 Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
-Build-Depends: autoconf (>= 2.64),
+Build-Depends: graphviz,
+               autoconf (>= 2.64),
                automake (>= 1.10) | automake1.10,
                bzip2,
                debhelper (>= 8),
-               graphviz,
+               dh-autoreconf,
                libssl-dev,
                libtool,
                openssl,
