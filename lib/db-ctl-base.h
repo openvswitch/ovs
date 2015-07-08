@@ -250,9 +250,8 @@ struct ctl_table_class {
  * entry. */
 extern const struct ctl_table_class tables[];
 
-const struct ctl_table_class *get_table(const char *table_name);
-void set_column(const struct ctl_table_class *,
-                const struct ovsdb_idl_row *, const char *arg,
-                struct ovsdb_symbol_table *);
+void ctl_set_column(const char *table_name,
+                    const struct ovsdb_idl_row *, const char *arg,
+                    struct ovsdb_symbol_table *);
 
 #endif /* db-ctl-base.h */

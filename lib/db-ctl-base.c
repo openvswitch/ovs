@@ -47,6 +47,10 @@ struct ovsdb_idl *the_idl;
 struct ovsdb_idl_txn *the_idl_txn;
 
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
+static const struct ctl_table_class *get_table(const char *table_name);
+static void set_column(const struct ctl_table_class *,
+                       const struct ovsdb_idl_row *, const char *,
+                       struct ovsdb_symbol_table *);
 
 
 static struct option *
@@ -1990,7 +1994,7 @@ ctl_context_done(struct ctl_context *ctx,
 
 /* Finds and returns the "struct ctl_table_class *" with 'table_name' by
  * searching the 'tables'. */
-const struct ctl_table_class *
+static const struct ctl_table_class *
 get_table(const char *table_name)
 {
     const struct ctl_table_class *table;
@@ -2018,7 +2022,7 @@ get_table(const char *table_name)
 }
 
 /* Sets the column of 'row' in 'table'. */
-void
+static void
 set_column(const struct ctl_table_class *table,
            const struct ovsdb_idl_row *row, const char *arg,
            struct ovsdb_symbol_table *symtab)
@@ -2069,4 +2073,11 @@ set_column(const struct ctl_table_class *table,
 
     free(key_string);
     free(value_string);
+}
+
+void ctl_set_column(const char *table_name,
+                    const struct ovsdb_idl_row *row, const char *arg,
+                    struct ovsdb_symbol_table *symtab)
+{
+    set_column(get_table(table_name), row, arg, symtab);
 }
