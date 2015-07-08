@@ -1149,6 +1149,26 @@ if \fImask\fR is specified, then a 1-bit in \fImask\fR indicates that the
 corresponding bit in \fItunnel-id\fR must match exactly, and a 0-bit
 wildcards that bit.
 .
+.IP \fBtun_flags=\fIflags\fR
+Matches flags indicating various aspects of the tunnel encapsulation. Currently,
+there is only one flag defined:
+.IP
+\fBoam\fR: The tunnel protocol indicated that this is an OAM control packet.
+.IP
+Flags can be prefixed by \fB+\fR or \fB-\fR to indicate that the flag should
+be matched as either present or not present, respectively. In addition, flags
+can be specified without a prefix and separated by \fB|\fR to indicate an exact
+match.
+.IP
+Note that it is possible for newer version of Open vSwitch to introduce
+additional flags with varying meaning. It is therefore not recommended to use
+an exact match on this field since the behavior of these new flags is unknown
+and should be ignored.
+.IP
+For non-tunneled packets, the value is 0.
+.IP
+This field was introduced in Open vSwitch 2.5.
+.
 .IP \fBtun_src=\fIip\fR[\fB/\fInetmask\fR]
 .IQ \fBtun_dst=\fIip\fR[\fB/\fInetmask\fR]
 Matches tunnel IPv4 source (or destination) address \fIip\fR. Only packets

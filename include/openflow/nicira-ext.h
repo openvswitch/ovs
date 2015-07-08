@@ -500,6 +500,9 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
 #define NX_IP_FRAG_ANY   (1 << 0) /* Is this a fragment? */
 #define NX_IP_FRAG_LATER (1 << 1) /* Is this a fragment with nonzero offset? */
 
+/* Bits in the value of NXM_NX_TUN_FLAGS. */
+#define NX_TUN_FLAG_OAM  (1 << 0) /* Is this an OAM packet? */
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */

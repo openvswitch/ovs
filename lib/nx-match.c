@@ -895,7 +895,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -1000,6 +1000,8 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->tunnel.tun_id, match->wc.masks.tunnel.tun_id);
 
     /* Other tunnel metadata. */
+    nxm_put_16m(b, MFF_TUN_FLAGS, oxm,
+                htons(flow->tunnel.flags), htons(match->wc.masks.tunnel.flags));
     nxm_put_32m(b, MFF_TUN_SRC, oxm,
                 flow->tunnel.ip_src, match->wc.masks.tunnel.ip_src);
     nxm_put_32m(b, MFF_TUN_DST, oxm,

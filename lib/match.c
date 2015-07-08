@@ -225,6 +225,8 @@ match_set_tun_flags(struct match *match, uint16_t flags)
 void
 match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask)
 {
+    mask &= FLOW_TNL_PUB_F_MASK;
+
     match->wc.masks.tunnel.flags = mask;
     match->flow.tunnel.flags = flags & mask;
 }
@@ -899,7 +901,10 @@ format_flow_tunnel(struct ds *s, const struct match *match)
         ds_put_format(s, "tun_ttl=%"PRIu8",", tnl->ip_ttl);
     }
     if (wc->masks.tunnel.flags) {
-        format_flags(s, flow_tun_flag_to_string, tnl->flags, '|');
+        format_flags_masked(s, "tun_flags", flow_tun_flag_to_string,
+                            tnl->flags,
+                            wc->masks.tunnel.flags & FLOW_TNL_F_MASK,
+                            FLOW_TNL_F_MASK);
         ds_put_char(s, ',');
     }
     tun_metadata_match_format(s, match);
@@ -918,7 +923,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);

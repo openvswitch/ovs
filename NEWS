@@ -9,7 +9,8 @@ Post-v2.4.0
      * OpenFlow 1.4+ "importance" is now considered for flow eviction.
      * OpenFlow 1.4+ OFPTC_EVICTION is now implemented.
      * OpenFlow 1.4+ OFPMP_TABLE_DESC is now implemented.
-   - Support for matching and generating options with Geneve tunnels.
+   - Support for matching/generating options as well as the OAM bit with
+     Geneve tunnels.
    - Support Multicast Listener Discovery (MLDv1 and MLDv2).
    - Add 'symmetric_l3l4' and 'symmetric_l3l4+udp' hash functions.
 

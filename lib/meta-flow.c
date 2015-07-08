@@ -182,10 +182,13 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_TUN_DST:
         return !wc->masks.tunnel.ip_dst;
     case MFF_TUN_ID:
-    case MFF_TUN_TOS:
-    case MFF_TUN_TTL:
-    case MFF_TUN_FLAGS:
         return !wc->masks.tunnel.tun_id;
+    case MFF_TUN_TOS:
+        return !wc->masks.tunnel.ip_tos;
+    case MFF_TUN_TTL:
+        return !wc->masks.tunnel.ip_ttl;
+    case MFF_TUN_FLAGS:
+        return !(wc->masks.tunnel.flags & FLOW_TNL_PUB_F_MASK);
     case MFF_TUN_GBP_ID:
         return !wc->masks.tunnel.gbp_id;
     case MFF_TUN_GBP_FLAGS:
@@ -484,7 +487,6 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_DST:
     case MFF_TUN_TOS:
     case MFF_TUN_TTL:
-    case MFF_TUN_FLAGS:
     case MFF_TUN_GBP_ID:
     case MFF_TUN_GBP_FLAGS:
     CASE_MFF_TUN_METADATA:
@@ -564,6 +566,9 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_MPLS_BOS:
         return !(value->u8 & ~(MPLS_BOS_MASK >> MPLS_BOS_SHIFT));
 
+    case MFF_TUN_FLAGS:
+        return !(value->be16 & ~htons(FLOW_TNL_PUB_F_MASK));
+
     case MFF_N_IDS:
     default:
         OVS_NOT_REACHED();
@@ -596,7 +601,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->be32 = flow->tunnel.ip_dst;
         break;
     case MFF_TUN_FLAGS:
-        value->be16 = htons(flow->tunnel.flags);
+        value->be16 = htons(flow->tunnel.flags & FLOW_TNL_PUB_F_MASK);
         break;
     case MFF_TUN_GBP_ID:
         value->be16 = flow->tunnel.gbp_id;
@@ -1098,7 +1103,8 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->tunnel.ip_dst = value->be32;
         break;
     case MFF_TUN_FLAGS:
-        flow->tunnel.flags = ntohs(value->be16);
+        flow->tunnel.flags = (flow->tunnel.flags & ~FLOW_TNL_PUB_F_MASK) |
+                             ntohs(value->be16);
         break;
     case MFF_TUN_GBP_ID:
         flow->tunnel.gbp_id = value->be16;
@@ -2047,9 +2053,8 @@ mf_from_tcp_flags_string(const char *s, ovs_be16 *flagsp, ovs_be16 *maskp)
 static char *
 mf_from_tun_flags_string(const char *s, ovs_be16 *flagsp, ovs_be16 *maskp)
 {
-    *maskp = OVS_BE16_MAX;
     return parse_mf_flags(s, flow_tun_flag_to_string, "tunnel", flagsp,
-                          htons(FLOW_TNL_F_MASK), NULL);
+                          htons(FLOW_TNL_PUB_F_MASK), maskp);
 }
 
 /* Parses 's', a string value for field 'mf', into 'value' and 'mask'.  Returns
@@ -2180,9 +2185,10 @@ mf_format_frag_string(uint8_t value, uint8_t mask, struct ds *s)
 }
 
 static void
-mf_format_tnl_flags_string(ovs_be16 value, struct ds *s)
+mf_format_tnl_flags_string(ovs_be16 value, ovs_be16 mask, struct ds *s)
 {
-    format_flags(s, flow_tun_flag_to_string, ntohs(value), '|');
+    format_flags_masked(s, NULL, flow_tun_flag_to_string, ntohs(value),
+                        ntohs(mask) & FLOW_TNL_PUB_F_MASK, FLOW_TNL_PUB_F_MASK);
 }
 
 static void
@@ -2245,7 +2251,8 @@ mf_format(const struct mf_field *mf,
         break;
 
     case MFS_TNL_FLAGS:
-        mf_format_tnl_flags_string(value->be16, s);
+        mf_format_tnl_flags_string(value->be16,
+                                   mask ? mask->be16 : OVS_BE16_MAX, s);
         break;
 
     case MFS_TCP_FLAGS:

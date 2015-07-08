@@ -39,7 +39,7 @@ struct match;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 32
+#define FLOW_WC_SEQ 33
 
 /* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 8
@@ -64,10 +64,19 @@ BUILD_ASSERT_DECL(FLOW_N_REGS % 2 == 0); /* Even. */
 BUILD_ASSERT_DECL(FLOW_NW_FRAG_ANY == NX_IP_FRAG_ANY);
 BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
 
-#define FLOW_TNL_F_DONT_FRAGMENT (1 << 0)
-#define FLOW_TNL_F_CSUM (1 << 1)
-#define FLOW_TNL_F_KEY (1 << 2)
-#define FLOW_TNL_F_OAM (1 << 3)
+/* Some flags are exposed through OpenFlow while others are used only
+ * internally. */
+
+/* Public flags */
+#define FLOW_TNL_F_OAM (1 << 0)
+
+#define FLOW_TNL_PUB_F_MASK ((1 << 1) - 1)
+BUILD_ASSERT_DECL(FLOW_TNL_F_OAM == NX_TUN_FLAG_OAM);
+
+/* Private flags */
+#define FLOW_TNL_F_DONT_FRAGMENT (1 << 1)
+#define FLOW_TNL_F_CSUM (1 << 2)
+#define FLOW_TNL_F_KEY (1 << 3)
 
 #define FLOW_TNL_F_MASK ((1 << 4) - 1)
 
@@ -157,7 +166,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % sizeof(uint64_t) == 0);
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
                   == sizeof(struct flow_tnl) + 192
-                  && FLOW_WC_SEQ == 32);
+                  && FLOW_WC_SEQ == 33);
 
 /* Incremental points at which flow classification may be performed in
  * segments.

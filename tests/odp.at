@@ -117,7 +117,7 @@ skb_mark(0x1234/0xfff0),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,ttl=64,vxlan(gbp(id=10\/0xff,flags=0xb)),flags(csum|key)),/' odp-base.txt
+ sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,ttl=64,vxlan(gbp(id=10\/0xff,flags=0xb)),flags(oam|csum|key)),/' odp-base.txt
 
  echo
  echo '# Valid forms with tunnel header (wildcard flag).'
