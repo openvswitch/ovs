@@ -1962,7 +1962,7 @@ cmd_set_manager(struct ctl_context *ctx)
 }
 
 /* Parameter commands. */
-const struct ctl_table_class tables[] = {
+static const struct ctl_table_class tables[] = {
     {&vteprec_table_global,
      {{&vteprec_table_global, NULL, NULL},
       {NULL, NULL, NULL}}},
@@ -2310,6 +2310,6 @@ static const struct ctl_command_syntax vtep_commands[] = {
 static void
 vtep_ctl_cmd_init(void)
 {
-    ctl_init();
+    ctl_init(tables);
     ctl_register_commands(vtep_commands);
 }

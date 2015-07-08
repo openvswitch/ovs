@@ -2262,7 +2262,7 @@ cmd_get_aa_mapping(struct ctl_context *ctx)
 }
 
 
-const struct ctl_table_class tables[] = {
+static const struct ctl_table_class tables[] = {
     {&ovsrec_table_bridge,
      {{&ovsrec_table_bridge, &ovsrec_bridge_col_name, NULL},
       {&ovsrec_table_flow_sample_collector_set, NULL,
@@ -2749,6 +2749,6 @@ static const struct ctl_command_syntax vsctl_commands[] = {
 static void
 vsctl_cmd_init(void)
 {
-    ctl_init();
+    ctl_init(tables);
     ctl_register_commands(vsctl_commands);
 }

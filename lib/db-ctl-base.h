@@ -43,9 +43,6 @@ struct table;
  * - the *ctl command context by inheriting the 'struct ctl_context' for
  *   additional commands implemented by user.  (See 'struct ctl_context' for
  *   more info)
- *
- * - the 'tables[]' for each table in the schema.
- *
 */
 
 /* ctl_fatal() also logs the error, so it is preferred in this file. */
@@ -56,7 +53,8 @@ struct table;
 extern struct ovsdb_idl *the_idl;
 extern struct ovsdb_idl_txn *the_idl_txn;
 
-void ctl_init(void);
+struct ctl_table_class;
+void ctl_init(const struct ctl_table_class *tables);
 char *ctl_default_db(void);
 OVS_NO_RETURN void ctl_exit(int status);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
@@ -244,11 +242,6 @@ struct ctl_table_class {
     struct ovsdb_idl_table_class *class;
     struct ctl_row_id row_ids[2];
 };
-
-/* Represents all tables in the schema.  User must define 'tables'
- * in implementation.  And the definition must end with an all-NULL
- * entry. */
-extern const struct ctl_table_class tables[];
 
 void ctl_set_column(const char *table_name,
                     const struct ovsdb_idl_row *, const char *arg,

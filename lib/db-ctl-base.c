@@ -46,6 +46,11 @@ VLOG_DEFINE_THIS_MODULE(db_ctl_base);
 struct ovsdb_idl *the_idl;
 struct ovsdb_idl_txn *the_idl_txn;
 
+/* Represents all tables in the schema.  User must define 'tables'
+ * in implementation and supply via clt_init().  The definition must end
+ * with an all-NULL entry. */
+static const struct ctl_table_class *tables;
+
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
 static const struct ctl_table_class *get_table(const char *table_name);
 static void set_column(const struct ctl_table_class *,
@@ -1908,8 +1913,9 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
 
 /* Registers the 'db_ctl_commands' to 'all_commands'. */
 void
-ctl_init(void)
+ctl_init(const struct ctl_table_class tables_[])
 {
+    tables = tables_;
     ctl_register_commands(db_ctl_commands);
     ctl_register_commands(db_ctl_show_command);
 }
