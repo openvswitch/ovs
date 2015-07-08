@@ -266,6 +266,15 @@
       Each row represents one L3 logical router.
     </p>
 
+    <column name="name">
+      <p>
+        A name for the logical router.  This name has no special meaning or purpose
+        other than to provide convenience for human interaction with the ovn-nb
+        database.  There is no requirement for the name to be unique.  The
+        logical router's UUID should be used as the unique identifier.
+      </p>
+    </column>
+
     <column name="ports">
       The router's ports.  This is a set of weak references, so a <ref
       table="Logical_Switch"/> must also refer to any given <ref

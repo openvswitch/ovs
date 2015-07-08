@@ -59,6 +59,7 @@
             "isRoot": false},
         "Logical_Router": {
             "columns": {
+                "name": {"type": "string"},
                 "ports": {"type": {"key": {"type": "uuid",
                                            "refTable": "Logical_Router_Port",
                                            "refType": "weak"},
