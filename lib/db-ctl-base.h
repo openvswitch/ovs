@@ -61,7 +61,7 @@ char *ctl_default_db(void);
 OVS_NO_RETURN void ctl_exit(int status);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 
-/* *clt command syntax structure, to be defined by each command implementation.
+/* *ctl command syntax structure, to be defined by each command implementation.
  *
  * Execution Path
  * ==============
@@ -72,7 +72,7 @@ OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
  *            ---------------  ------------  -----------------
  * *ctl       ->prerequisites     ->run        ->postprocess
  *
- * Any *clt command implementation should go through the following execution
+ * Any *ctl command implementation should go through the following execution
  * path:
  *
  *   1. parses user command-line input and finds the corresponding syntax
@@ -250,7 +250,7 @@ struct ctl_table_class {
  * entry. */
 extern const struct ctl_table_class tables[];
 
-const struct ctl_table_class * get_table(const char *table_name);
+const struct ctl_table_class *get_table(const char *table_name);
 void set_column(const struct ctl_table_class *,
                 const struct ovsdb_idl_row *, const char *arg,
                 struct ovsdb_symbol_table *);
