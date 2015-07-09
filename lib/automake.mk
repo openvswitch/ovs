@@ -418,14 +418,14 @@ $(srcdir)/lib/ofp-errors.inc: \
 		$(srcdir)/lib/ofp-errors.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp
 	mv $@.tmp $@
-$(srcdir)/lib/ofp-errors.c: $(srcdir)/lib/ofp-errors.inc
+$(srcdir)/lib/ofp-errors.lo: $(srcdir)/lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors lib/ofp-errors.inc
 
 $(srcdir)/lib/ofp-msgs.inc: \
 	lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
-$(srcdir)/lib/ofp-msgs.c: $(srcdir)/lib/ofp-msgs.inc
+$(srcdir)/lib/ofp-msgs.lo: $(srcdir)/lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs lib/ofp-msgs.inc
 
 INSTALL_DATA_LOCAL += lib-install-data-local
