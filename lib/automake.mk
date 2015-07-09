@@ -483,13 +483,13 @@ lib/ofp-errors.inc: lib/ofp-errors.h include/openflow/openflow-common.h \
 		$(srcdir)/lib/ofp-errors.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
-lib/ofp-errors.c: lib/ofp-errors.inc
+lib/ofp-errors.lo: lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors
 
 lib/ofp-msgs.inc: lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
-lib/ofp-msgs.c: lib/ofp-msgs.inc
+lib/ofp-msgs.lo: lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs
 
 INSTALL_DATA_LOCAL += lib-install-data-local
