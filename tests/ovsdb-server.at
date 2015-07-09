@@ -851,6 +851,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server positive ssl6 $5])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+   AT_SKIP_IF([test $HAVE_IPV6 = no])
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    $2 > schema
@@ -939,6 +940,7 @@ AT_BANNER([OVSDB -- ovsdb-server transactions (TCP IPv6 sockets)])
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server positive tcp6 $5])
+   AT_SKIP_IF([test $HAVE_IPV6 = no])
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    $2 > schema

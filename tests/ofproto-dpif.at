@@ -4697,14 +4697,11 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | sort],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-# CHECK_SFLOW_SAMPLING_PACKET(LOOPBACK_ADDR, ADDR_WITHOUT_BRACKETS)
+# CHECK_SFLOW_SAMPLING_PACKET(LOOPBACK_ADDR)
 #
 # Test that sFlow samples packets correctly using IPv4/IPv6 sFlow collector
-#
-# IP_VERSION_TYPE is used in AT_SETUP
 m4_define([CHECK_SFLOW_SAMPLING_PACKET],
-  [AT_SETUP([ofproto-dpif - sFlow packet sampling - $2 collector])
-  AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+  [AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
   OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
   ON_EXIT([kill `cat test-sflow.pid`])
@@ -5021,11 +5018,16 @@ PORTNAME
 	portName=p2
 PORTNAME
 	portName=p2
-])
-  AT_CLEANUP])
+])])
 
-CHECK_SFLOW_SAMPLING_PACKET([127.0.0.1], [IPv4])
-CHECK_SFLOW_SAMPLING_PACKET([[[::1]]], [IPv6])
+AT_SETUP([ofproto-dpif - sFlow packet sampling - IPv4 collector])
+CHECK_SFLOW_SAMPLING_PACKET([127.0.0.1])
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - sFlow packet sampling - IPv6 collector])
+AT_SKIP_IF([test $HAVE_IPV6 = no])
+CHECK_SFLOW_SAMPLING_PACKET([[[::1]]])
+AT_CLEANUP
 
 dnl Test sFlow LAG structures
 AT_SETUP([ofproto-dpif - sFlow LACP structures])
@@ -5085,18 +5087,15 @@ LACPCOUNTERS
 
 AT_CLEANUP
 
-# CHECK_NETFLOW_EXPIRATION(LOOPBACK_ADDR, IP_VERSION_TYPE)
+# CHECK_NETFLOW_EXPIRATION(LOOPBACK_ADDR)
 #
 # Test that basic NetFlow reports flow statistics correctly:
 # The initial packet of a flow are correctly accounted.
 # Later packets within a flow are correctly accounted.
 # Flow actions changing (in this case, due to MAC learning)
 # cause a record to be sent.
-#
-# IP_VERSION_TYPE is used in AT_SETUP
 m4_define([CHECK_NETFLOW_EXPIRATION],
-  [AT_SETUP([ofproto-dpif - NetFlow flow expiration - $2 collector])
-  OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+  [OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
   ADD_OF_PORTS([br0], 1, 2)
 
   ovs-appctl time/stop
@@ -5129,22 +5128,22 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
 
   combined=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0" netflow.log | wc -l`
   separate=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 1 pkts, 60 bytes, ICMP 0:0" netflow.log | wc -l`
-  AT_CHECK([test $separate = 2 || test $combined = 1], [0])
+  AT_CHECK([test $separate = 2 || test $combined = 1], [0])])
 
-  AT_CLEANUP])
+AT_SETUP([ofproto-dpif - NetFlow flow expiration - IPv4 collector])
+CHECK_NETFLOW_EXPIRATION([127.0.0.1])
+AT_CLEANUP
 
-CHECK_NETFLOW_EXPIRATION([127.0.0.1], [IPv4])
-CHECK_NETFLOW_EXPIRATION([[[::1]]], [IPv6])
+AT_SETUP([ofproto-dpif - NetFlow flow expiration - IPv6 collector])
+AT_SKIP_IF([test $HAVE_IPV6 = no])
+CHECK_NETFLOW_EXPIRATION([[[::1]]])
+AT_CLEANUP
 
-# CHECK_NETFLOW_ACTIVE_EXPIRATION(LOOPBACK_ADDR, IP_VERSION_TYPE)
+# CHECK_NETFLOW_ACTIVE_EXPIRATION(LOOPBACK_ADDR)
 #
 # Test that basic NetFlow reports active expirations correctly.
-#
-# IP_VERSION_TYPE is used in AT_SETUP
 m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
-  [AT_SETUP([ofproto-dpif - NetFlow active expiration - $2 collector])
-
-  OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+  [OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
   ADD_OF_PORTS([br0], 1, 2)
 
   ON_EXIT([kill `cat test-netflow.pid`])
@@ -5213,12 +5212,16 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
   # exactly 59 other packets in that direction,
   # and exactly 60 packets in the other direction.
   AT_CHECK([echo $n_learn $n_in $n_out $n_other], [0], [1 59 60 0
-])
+])])
 
-  AT_CLEANUP])
+AT_SETUP([ofproto-dpif - NetFlow active expiration - IPv4 collector])
+CHECK_NETFLOW_ACTIVE_EXPIRATION([127.0.0.1])
+AT_CLEANUP
 
-CHECK_NETFLOW_ACTIVE_EXPIRATION([127.0.0.1], [IPv4])
-CHECK_NETFLOW_ACTIVE_EXPIRATION([[[::1]]], [IPv6])
+AT_SETUP([ofproto-dpif - NetFlow active expiration - IPv6 collector])
+AT_SKIP_IF([test $HAVE_IPV6 = no])
+CHECK_NETFLOW_ACTIVE_EXPIRATION([[[::1]]])
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - flow stats])
 OVS_VSWITCHD_START
@@ -5814,12 +5817,9 @@ recirc_id=0,mpls,in_port=1,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions: <del>
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-# CHECK_MEGAFLOW_NETFLOW(LOOPBACK_ADDR, IP_VERSION_TYPE)
-#
-# IP_VERSION_TYPE is used in AT_SETUP
+# CHECK_MEGAFLOW_NETFLOW(LOOPBACK_ADDR)
 m4_define([CHECK_MEGAFLOW_NETFLOW],
-  [AT_SETUP([ofproto-dpif megaflow - netflow - $2 collector])
-  OVS_VSWITCHD_START
+  [OVS_VSWITCHD_START
   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
   ADD_OF_PORTS([br0], [1], [2])
 
@@ -5841,11 +5841,16 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
 recirc_id=0,icmp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_frag=no,icmp_type=0x8/0xff,icmp_code=0x0/0xff, actions: <del>
 recirc_id=0,icmp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_src=10.0.0.4,nw_dst=10.0.0.3,nw_tos=0,nw_frag=no,icmp_type=0x8/0xff,icmp_code=0x0/0xff, actions: <del>
 ])
-  OVS_VSWITCHD_STOP
-  AT_CLEANUP])
+  OVS_VSWITCHD_STOP])
 
+AT_SETUP([ofproto-dpif megaflow - netflow - IPv4 collector])
 CHECK_MEGAFLOW_NETFLOW([127.0.0.1], [IPv4])
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - netflow - IPv6 collector])
+AT_SKIP_IF([test $HAVE_IPV6 = no])
 CHECK_MEGAFLOW_NETFLOW([[[::1]]], [IPv6])
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - normal, active-backup bonding])
 OVS_VSWITCHD_START(
