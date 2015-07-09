@@ -988,6 +988,35 @@ cmd_list(struct ctl_context *ctx)
     free(columns);
 }
 
+/* Finds and returns the "struct ctl_table_class *" with 'table_name' by
+ * searching the 'tables'. */
+static const struct ctl_table_class *
+get_table(const char *table_name)
+{
+    const struct ctl_table_class *table;
+    const struct ctl_table_class *best_match = NULL;
+    unsigned int best_score = 0;
+
+    for (table = tables; table->class; table++) {
+        unsigned int score = score_partial_match(table->class->name,
+                                                 table_name);
+        if (score > best_score) {
+            best_match = table;
+            best_score = score;
+        } else if (score == best_score) {
+            best_match = NULL;
+        }
+    }
+    if (best_match) {
+        return best_match;
+    } else if (best_score) {
+        ctl_fatal("multiple table names match \"%s\"", table_name);
+    } else {
+        ctl_fatal("unknown table \"%s\"", table_name);
+    }
+    return NULL;
+}
+
 static void
 pre_cmd_find(struct ctl_context *ctx)
 {
@@ -1032,6 +1061,60 @@ cmd_find(struct ctl_context *ctx)
     next_row: ;
     }
     free(columns);
+}
+
+/* Sets the column of 'row' in 'table'. */
+static void
+set_column(const struct ctl_table_class *table,
+           const struct ovsdb_idl_row *row, const char *arg,
+           struct ovsdb_symbol_table *symtab)
+{
+    const struct ovsdb_idl_column *column;
+    char *key_string, *value_string;
+    char *error;
+
+    error = parse_column_key_value(arg, table, &column, &key_string,
+                                   NULL, NULL, 0, &value_string);
+    die_if_error(error);
+    if (!value_string) {
+        ctl_fatal("%s: missing value", arg);
+    }
+    check_mutable(row, column);
+
+    if (key_string) {
+        union ovsdb_atom key, value;
+        struct ovsdb_datum datum;
+
+        if (column->type.value.type == OVSDB_TYPE_VOID) {
+            ctl_fatal("cannot specify key to set for non-map column %s",
+                      column->name);
+        }
+
+        die_if_error(ovsdb_atom_from_string(&key, &column->type.key,
+                                            key_string, symtab));
+        die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
+                                            value_string, symtab));
+
+        ovsdb_datum_init_empty(&datum);
+        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
+
+        ovsdb_atom_destroy(&key, column->type.key.type);
+        ovsdb_atom_destroy(&value, column->type.value.type);
+
+        ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
+                          &column->type, false);
+        ovsdb_idl_txn_verify(row, column);
+        ovsdb_idl_txn_write(row, column, &datum);
+    } else {
+        struct ovsdb_datum datum;
+
+        die_if_error(ovsdb_datum_from_string(&datum, &column->type,
+                                             value_string, symtab));
+        ovsdb_idl_txn_write(row, column, &datum);
+    }
+
+    free(key_string);
+    free(value_string);
 }
 
 static void
@@ -1996,89 +2079,6 @@ ctl_context_done(struct ctl_context *ctx,
         ctl_context_done_command(ctx, command);
     }
     invalidate_cache(ctx);
-}
-
-/* Finds and returns the "struct ctl_table_class *" with 'table_name' by
- * searching the 'tables'. */
-static const struct ctl_table_class *
-get_table(const char *table_name)
-{
-    const struct ctl_table_class *table;
-    const struct ctl_table_class *best_match = NULL;
-    unsigned int best_score = 0;
-
-    for (table = tables; table->class; table++) {
-        unsigned int score = score_partial_match(table->class->name,
-                                                 table_name);
-        if (score > best_score) {
-            best_match = table;
-            best_score = score;
-        } else if (score == best_score) {
-            best_match = NULL;
-        }
-    }
-    if (best_match) {
-        return best_match;
-    } else if (best_score) {
-        ctl_fatal("multiple table names match \"%s\"", table_name);
-    } else {
-        ctl_fatal("unknown table \"%s\"", table_name);
-    }
-    return NULL;
-}
-
-/* Sets the column of 'row' in 'table'. */
-static void
-set_column(const struct ctl_table_class *table,
-           const struct ovsdb_idl_row *row, const char *arg,
-           struct ovsdb_symbol_table *symtab)
-{
-    const struct ovsdb_idl_column *column;
-    char *key_string, *value_string;
-    char *error;
-
-    error = parse_column_key_value(arg, table, &column, &key_string,
-                                   NULL, NULL, 0, &value_string);
-    die_if_error(error);
-    if (!value_string) {
-        ctl_fatal("%s: missing value", arg);
-    }
-    check_mutable(row, column);
-
-    if (key_string) {
-        union ovsdb_atom key, value;
-        struct ovsdb_datum datum;
-
-        if (column->type.value.type == OVSDB_TYPE_VOID) {
-            ctl_fatal("cannot specify key to set for non-map column %s",
-                      column->name);
-        }
-
-        die_if_error(ovsdb_atom_from_string(&key, &column->type.key,
-                                            key_string, symtab));
-        die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
-                                            value_string, symtab));
-
-        ovsdb_datum_init_empty(&datum);
-        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
-
-        ovsdb_atom_destroy(&key, column->type.key.type);
-        ovsdb_atom_destroy(&value, column->type.value.type);
-
-        ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
-                          &column->type, false);
-        ovsdb_idl_txn_verify(row, column);
-        ovsdb_idl_txn_write(row, column, &datum);
-    } else {
-        struct ovsdb_datum datum;
-
-        die_if_error(ovsdb_datum_from_string(&datum, &column->type,
-                                             value_string, symtab));
-        ovsdb_idl_txn_write(row, column, &datum);
-    }
-
-    free(key_string);
-    free(value_string);
 }
 
 void ctl_set_column(const char *table_name,
