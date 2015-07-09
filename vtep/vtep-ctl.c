@@ -495,7 +495,7 @@ del_cached_port(struct vtep_ctl_context *vtepctl_ctx,
     free(port);
 }
 
-static struct vtep_ctl_pswitch *
+static void
 add_pswitch_to_cache(struct vtep_ctl_context *vtepctl_ctx,
                      struct vteprec_physical_switch *ps_cfg)
 {
@@ -504,7 +504,6 @@ add_pswitch_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     ps->name = xstrdup(ps_cfg->name);
     list_init(&ps->ports);
     shash_add(&vtepctl_ctx->pswitches, ps->name, ps);
-    return ps;
 }
 
 static void
@@ -837,7 +836,6 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
     sset_init(&ports);
     for (i = 0; i < vtep_global->n_switches; i++) {
         struct vteprec_physical_switch *ps_cfg = vtep_global->switches[i];
-        struct vtep_ctl_pswitch *ps;
         size_t j;
 
         if (!sset_add(&pswitches, ps_cfg->name)) {
@@ -845,10 +843,7 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
                       ps_cfg->name);
             continue;
         }
-        ps = add_pswitch_to_cache(vtepctl_ctx, ps_cfg);
-        if (!ps) {
-            continue;
-        }
+        add_pswitch_to_cache(vtepctl_ctx, ps_cfg);
 
         for (j = 0; j < ps_cfg->n_ports; j++) {
             struct vteprec_physical_port *port_cfg = ps_cfg->ports[j];
