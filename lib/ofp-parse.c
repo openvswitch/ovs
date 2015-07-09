@@ -477,7 +477,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
 
             err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match.flow,
                                 OFPP_MAX, fm->table_id, 255, usable_protocols);
-            if (!err && !usable_protocols) {
+            if (!err && !*usable_protocols) {
                 err = OFPERR_OFPBAC_MATCH_INCONSISTENT;
             }
             if (err) {

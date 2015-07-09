@@ -127,9 +127,9 @@ do
     echo "### test case: '$1' should have usable protocols '$2'"
     if test "$2" = none; then
       AT_CHECK([ovs-ofctl parse-flow "$1,actions=drop"], [1],
-               [usable protocols: none
+               [dnl
 ],
-               [ovs-ofctl: no usable protocol
+               [ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
 ])
     else
       AT_CHECK_UNQUOTED([ovs-ofctl parse-flow "$1,actions=drop" | sed 1q], [0],
@@ -309,7 +309,7 @@ skb_priority=0x12341234,tcp,tp_src=123,actions=flood
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
-], [1], [usable protocols: none
+], [1], [dnl
 ], [stderr])
 
 AT_CLEANUP
