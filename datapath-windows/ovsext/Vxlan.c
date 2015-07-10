@@ -154,10 +154,10 @@ OvsCleanupVxlanTunnel(PIRP irp,
                                       vxlanPort->filterID,
                                       callback,
                                       tunnelContext);
+    } else {
+        OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
+        vport->priv = NULL;
     }
-
-    OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
-    vport->priv = NULL;
 
     return status;
 }
