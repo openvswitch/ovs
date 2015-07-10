@@ -2531,6 +2531,12 @@ OvsTunnelVportPendingRemove(PVOID context,
     RemoveEntryList(&vport->ovsNameLink);
     RemoveEntryList(&vport->portNoLink);
     RemoveEntryList(&vport->tunnelVportLink);
+
+    if (vport->priv) {
+        OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
+        vport->priv = NULL;
+    }
+
     OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
