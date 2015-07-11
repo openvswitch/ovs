@@ -1595,6 +1595,20 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
             put = &op->u.flow_put;
+#ifdef _WIN32
+            /* Windows datapath doesn't support DPIF_FP_PROBE yet. */
+            if (put->flags & DPIF_FP_PROBE) {
+                /* Report an error immediately if this is the first operation.
+                 * Otherwise the easiest thing to do is to postpone to the next
+                 * call (when this will be the first operation). */
+                if (i == 0) {
+                    op->error = EINVAL;
+                    return 1;
+                }
+                n_ops = i;
+                break;
+            }
+#endif
             dpif_netlink_init_flow_put(dpif, put, &flow);
             if (put->stats) {
                 flow.nlmsg_flags |= NLM_F_ECHO;

@@ -1010,14 +1010,8 @@ check_recirc(struct dpif_backer *backer)
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
-#ifdef _WIN32
-    /* XXX Force disable of datapath recirculation from userspace until the
-     * dpif_probe_feature is properly implemented in the windows datapath */
-    enable_recirc = false;
-#else
     enable_recirc = dpif_probe_feature(backer->dpif, "recirculation", &key,
                                        NULL);
-#endif
 
     if (enable_recirc) {
         VLOG_INFO("%s: Datapath supports recirculation",
@@ -1051,13 +1045,7 @@ check_ufid(struct dpif_backer *backer)
     odp_flow_key_from_flow(&key, &flow, NULL, 0, true);
     dpif_flow_hash(backer->dpif, key.data, key.size, &ufid);
 
-#ifdef _WIN32
-    /* XXX Force disable of datapath recirculation from userspace until the
-     * dpif_probe_feature is properly implemented in the windows datapath */
-    enable_ufid = false;
-#else
     enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, &ufid);
-#endif
 
     if (enable_ufid) {
         VLOG_INFO("%s: Datapath supports unique flow ids",
@@ -1163,11 +1151,6 @@ check_max_mpls_depth(struct dpif_backer *backer)
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, &flow, NULL, 0, false);
-#ifdef _WIN32
-        /* XXX Force disable of datapath recirculation from userspace until the
-         * dpif_probe_feature is properly implemented in the windows datapath */
-        break;
-#endif
         if (!dpif_probe_feature(backer->dpif, "MPLS", &key, NULL)) {
             break;
         }
