@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -921,7 +921,7 @@ struct nx_flow_monitor_cancel {
 };
 OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 4);
 
-/* Geneve option table maintainance commands.
+/* Geneve option table maintenance commands.
  *
  * In order to work with Geneve options, we need to maintain a mapping
  * table between an option (defined by <class, type, length>) and
