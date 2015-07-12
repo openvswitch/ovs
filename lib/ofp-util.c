@@ -9178,7 +9178,8 @@ ofputil_encode_geneve_table_mod(enum ofp_version ofp_version,
 }
 
 static enum ofperr
-decode_geneve_table_mappings(struct ofpbuf *msg, struct ovs_list *mappings)
+decode_geneve_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
+                             struct ovs_list *mappings)
 {
     list_init(mappings);
 
@@ -9204,10 +9205,10 @@ decode_geneve_table_mappings(struct ofpbuf *msg, struct ovs_list *mappings)
         }
 
         map->index = ntohs(nx_map->index);
-        if (map->index >= TUN_METADATA_NUM_OPTS) {
+        if (map->index >= max_fields) {
             VLOG_WARN_RL(&bad_ofmsg_rl,
                          "geneve table field index (%u) is too large (max %u)",
-                         map->index, TUN_METADATA_NUM_OPTS - 1);
+                         map->index, max_fields - 1);
             ofputil_uninit_geneve_table(mappings);
             return OFPERR_NXGTMFC_BAD_FIELD_IDX;
         }
@@ -9235,7 +9236,8 @@ ofputil_decode_geneve_table_mod(const struct ofp_header *oh,
         return OFPERR_NXGTMFC_BAD_COMMAND;
     }
 
-    return decode_geneve_table_mappings(&msg, &gtm->mappings);
+    return decode_geneve_table_mappings(&msg, TUN_METADATA_NUM_OPTS,
+                                        &gtm->mappings);
 }
 
 struct ofpbuf *
@@ -9255,6 +9257,12 @@ ofputil_encode_geneve_table_reply(const struct ofp_header *oh,
     return b;
 }
 
+/* Decodes the NXT_GENEVE_TABLE_REPLY message in 'oh' into '*gtr'.  Returns 0
+ * if successful, otherwise an ofperr.
+ *
+ * The decoder verifies that the indexes in 'gtr->mappings' are less than
+ * 'gtr->max_fields', but the caller must ensure, if necessary, that they are
+ * less than TUN_METADATA_NUM_OPTS. */
 enum ofperr
 ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
                                   struct ofputil_geneve_table_reply *gtr)
@@ -9269,7 +9277,7 @@ ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
     gtr->max_option_space = ntohl(nx_gtr->max_option_space);
     gtr->max_fields = ntohs(nx_gtr->max_fields);
 
-    return decode_geneve_table_mappings(&msg, &gtr->mappings);
+    return decode_geneve_table_mappings(&msg, gtr->max_fields, &gtr->mappings);
 }
 
 void
