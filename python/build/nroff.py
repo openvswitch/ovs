@@ -178,6 +178,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 s += pre_to_nroff(node.childNodes, para, font)
             else:
                 s += inline_xml_to_nroff(node, r'\fR')
+        elif node.nodeType == node.COMMENT_NODE:
+            pass
         else:
             raise error.Error("unknown node %s in block xml" % node)
     if s != "" and not s.endswith('\n'):
