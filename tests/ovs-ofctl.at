@@ -10,7 +10,6 @@ for test_case in \
     'tun_dst=1.2.3.4                             NXM,OXM' \
     'tun_dst=1.2.3.4/0.0.0.1                     NXM,OXM' \
     'tun_flags=0                                 none' \
-    'tun_flags=1/1                               none' \
     'tun_tos=0                                   none' \
     'tun_ttl=0                                   none' \
     'tun_gbp_id=0                                NXM,OXM' \

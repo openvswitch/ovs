@@ -235,130 +235,11 @@ slow_path_reason_to_explanation(enum slow_path_reason reason)
 }
 
 static int
-parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
-            uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask)
+parse_odp_flags(const char *s, const char *(*bit_to_string)(uint32_t),
+                uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask)
 {
-    uint32_t result = 0;
-    int n;
-
-    /* Parse masked flags in numeric format? */
-    if (res_mask && ovs_scan(s, "%"SCNi32"/%"SCNi32"%n",
-                             res_flags, res_mask, &n) && n > 0) {
-        if (*res_flags & ~allowed || *res_mask & ~allowed) {
-            return -EINVAL;
-        }
-        return n;
-    }
-
-    n = 0;
-
-    if (res_mask && (*s == '+' || *s == '-')) {
-        uint32_t flags = 0, mask = 0;
-
-        /* Parse masked flags. */
-        while (s[0] != ')') {
-            bool set;
-            uint32_t bit;
-            int name_len;
-
-            if (s[0] == '+') {
-                set = true;
-            } else if (s[0] == '-') {
-                set = false;
-            } else {
-                return -EINVAL;
-            }
-            s++;
-            n++;
-
-            name_len = strcspn(s, "+-)");
-
-            for (bit = 1; bit; bit <<= 1) {
-                const char *fname = bit_to_string(bit);
-                size_t len;
-
-                if (!fname) {
-                    continue;
-                }
-
-                len = strlen(fname);
-                if (len != name_len) {
-                    continue;
-                }
-                if (!strncmp(s, fname, len)) {
-                    if (mask & bit) {
-                        /* bit already set. */
-                        return -EINVAL;
-                    }
-                    if (!(bit & allowed)) {
-                        return -EINVAL;
-                    }
-                    if (set) {
-                        flags |= bit;
-                    }
-                    mask |= bit;
-                    break;
-                }
-            }
-
-            if (!bit) {
-                return -EINVAL; /* Unknown flag name */
-            }
-            s += name_len;
-            n += name_len;
-        }
-
-        *res_flags = flags;
-        *res_mask = mask;
-        return n;
-    }
-
-    /* Parse unmasked flags.  If a flag is present, it is set, otherwise
-     * it is not set. */
-    while (s[n] != ')') {
-        unsigned long long int flags;
-        uint32_t bit;
-        int n0;
-
-        if (ovs_scan(&s[n], "%lli%n", &flags, &n0)) {
-            if (flags & ~allowed) {
-                return -EINVAL;
-            }
-            n += n0 + (s[n + n0] == ',');
-            result |= flags;
-            continue;
-        }
-
-        for (bit = 1; bit; bit <<= 1) {
-            const char *name = bit_to_string(bit);
-            size_t len;
-
-            if (!name) {
-                continue;
-            }
-
-            len = strlen(name);
-            if (!strncmp(s + n, name, len) &&
-                (s[n + len] == ',' || s[n + len] == ')')) {
-                if (!(bit & allowed)) {
-                    return -EINVAL;
-                }
-                result |= bit;
-                n += len + (s[n + len] == ',');
-                break;
-            }
-        }
-
-        if (!bit) {
-            return -EINVAL;
-        }
-    }
-
-    *res_flags = result;
-    if (res_mask) {
-        *res_mask = UINT32_MAX;
-    }
-    return n;
+    return parse_flags(s, bit_to_string, ')', NULL, NULL,
+                       res_flags, allowed, res_mask);
 }
 
 static void
@@ -823,9 +704,9 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.slow_path.unused = 0;
             cookie.slow_path.reason = 0;
 
-            res = parse_flags(&s[n], slow_path_reason_to_string,
-                              &cookie.slow_path.reason,
-                              SLOW_PATH_REASON_MASK, NULL);
+            res = parse_odp_flags(&s[n], slow_path_reason_to_string,
+                                  &cookie.slow_path.reason,
+                                  SLOW_PATH_REASON_MASK, NULL);
             if (res < 0 || s[n + res] != ')') {
                 return res;
             }
@@ -1791,14 +1672,13 @@ format_tun_flags(struct ds *ds, const char *name, uint16_t key,
     bool mask_empty = mask && !*mask;
 
     if (verbose || !mask_empty) {
-        bool mask_full = !mask || (*mask & FLOW_TNL_F_MASK) == FLOW_TNL_F_MASK;
-
         ds_put_cstr(ds, name);
         ds_put_char(ds, '(');
-        if (!mask_full) { /* Partially masked. */
-            format_flags_masked(ds, NULL, flow_tun_flag_to_string, key, *mask);
+        if (mask) {
+            format_flags_masked(ds, NULL, flow_tun_flag_to_string, key,
+                                *mask & FLOW_TNL_F_MASK, FLOW_TNL_F_MASK);
         } else { /* Fully masked. */
-            format_flags(ds, flow_tun_flag_to_string, key, ',');
+            format_flags(ds, flow_tun_flag_to_string, key, '|');
         }
         ds_put_cstr(ds, "),");
     }
@@ -2277,10 +2157,11 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         if (!is_exact) {
             format_flags_masked(ds, NULL, packet_tcp_flag_to_string,
                                 ntohs(nl_attr_get_be16(a)),
-                                ntohs(nl_attr_get_be16(ma)));
+                                TCP_FLAGS(nl_attr_get_be16(ma)),
+                                TCP_FLAGS(OVS_BE16_MAX));
         } else {
             format_flags(ds, packet_tcp_flag_to_string,
-                         ntohs(nl_attr_get_be16(a)), ',');
+                         ntohs(nl_attr_get_be16(a)), '|');
         }
         break;
 
@@ -2680,8 +2561,8 @@ scan_tun_flags(const char *s, uint16_t *key, uint16_t *mask)
     uint32_t flags, fmask;
     int n;
 
-    n = parse_flags(s, flow_tun_flag_to_string, &flags,
-                    FLOW_TNL_F_MASK, mask ? &fmask : NULL);
+    n = parse_odp_flags(s, flow_tun_flag_to_string, &flags,
+                        FLOW_TNL_F_MASK, mask ? &fmask : NULL);
     if (n >= 0 && s[n] == ')') {
         *key = flags;
         if (mask) {
@@ -2698,8 +2579,8 @@ scan_tcp_flags(const char *s, ovs_be16 *key, ovs_be16 *mask)
     uint32_t flags, fmask;
     int n;
 
-    n = parse_flags(s, packet_tcp_flag_to_string, &flags,
-                    TCP_FLAGS(OVS_BE16_MAX), mask ? &fmask : NULL);
+    n = parse_odp_flags(s, packet_tcp_flag_to_string, &flags,
+                        TCP_FLAGS(OVS_BE16_MAX), mask ? &fmask : NULL);
     if (n >= 0) {
         *key = htons(flags);
         if (mask) {

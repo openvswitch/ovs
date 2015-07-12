@@ -838,6 +838,7 @@ format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
     uint32_t bad = 0;
 
     if (!flags) {
+        ds_put_char(ds, '0');
         return;
     }
     while (flags) {
@@ -863,11 +864,22 @@ format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
 void
 format_flags_masked(struct ds *ds, const char *name,
                     const char *(*bit_to_string)(uint32_t), uint32_t flags,
-                    uint32_t mask)
+                    uint32_t mask, uint32_t max_mask)
 {
     if (name) {
         ds_put_format(ds, "%s=", name);
     }
+
+    if (mask == max_mask) {
+        format_flags(ds, bit_to_string, flags, '|');
+        return;
+    }
+
+    if (!mask) {
+        ds_put_cstr(ds, "0/0");
+        return;
+    }
+
     while (mask) {
         uint32_t bit = rightmost_1bit(mask);
         const char *s = bit_to_string(bit);
@@ -876,6 +888,165 @@ format_flags_masked(struct ds *ds, const char *name,
                       s ? s : "[Unknown]");
         mask &= ~bit;
     }
+}
+
+/* Scans a string 's' of flags to determine their numerical value and
+ * returns the number of characters parsed using 'bit_to_string' to
+ * lookup flag names. Scanning continues until the character 'end' is
+ * reached.
+ *
+ * In the event of a failure, a negative error code will be returned. In
+ * addition, if 'res_string' is non-NULL then a descriptive string will
+ * be returned incorporating the identifying string 'field_name'. This
+ * error string must be freed by the caller.
+ *
+ * Upon success, the flag values will be stored in 'res_flags' and
+ * optionally 'res_mask', if it is non-NULL (if it is NULL then any masks
+ * present in the original string will be considered an error). The
+ * caller may restrict the acceptable set of values through the mask
+ * 'allowed'. */
+int
+parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
+            char end, const char *field_name, char **res_string,
+            uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask)
+{
+    uint32_t result = 0;
+    int n;
+
+    /* Parse masked flags in numeric format? */
+    if (res_mask && ovs_scan(s, "%"SCNi32"/%"SCNi32"%n",
+                             res_flags, res_mask, &n) && n > 0) {
+        if (*res_flags & ~allowed || *res_mask & ~allowed) {
+            goto unknown;
+        }
+        return n;
+    }
+
+    n = 0;
+
+    if (res_mask && (*s == '+' || *s == '-')) {
+        uint32_t flags = 0, mask = 0;
+
+        /* Parse masked flags. */
+        while (s[0] != end) {
+            bool set;
+            uint32_t bit;
+            size_t len;
+
+            if (s[0] == '+') {
+                set = true;
+            } else if (s[0] == '-') {
+                set = false;
+            } else {
+                if (res_string) {
+                    *res_string = xasprintf("%s: %s must be preceded by '+' "
+                                            "(for SET) or '-' (NOT SET)", s,
+                                            field_name);
+                }
+                return -EINVAL;
+            }
+            s++;
+            n++;
+
+            for (bit = 1; bit; bit <<= 1) {
+                const char *fname = bit_to_string(bit);
+
+                if (!fname) {
+                    continue;
+                }
+
+                len = strlen(fname);
+                if (strncmp(s, fname, len) ||
+                    (s[len] != '+' && s[len] != '-' && s[len] != end)) {
+                    continue;
+                }
+
+                if (mask & bit) {
+                    /* bit already set. */
+                    if (res_string) {
+                        *res_string = xasprintf("%s: Each %s flag can be "
+                                                "specified only once", s,
+                                                field_name);
+                    }
+                    return -EINVAL;
+                }
+                if (!(bit & allowed)) {
+                    goto unknown;
+                }
+                if (set) {
+                   flags |= bit;
+                }
+                mask |= bit;
+                break;
+            }
+
+            if (!bit) {
+                goto unknown;
+            }
+            s += len;
+            n += len;
+        }
+
+        *res_flags = flags;
+        *res_mask = mask;
+        return n;
+    }
+
+    /* Parse unmasked flags.  If a flag is present, it is set, otherwise
+     * it is not set. */
+    while (s[n] != end) {
+        unsigned long long int flags;
+        uint32_t bit;
+        int n0;
+
+        if (ovs_scan(&s[n], "%lli%n", &flags, &n0)) {
+            if (flags & ~allowed) {
+                goto unknown;
+            }
+            n += n0 + (s[n + n0] == '|');
+            result |= flags;
+            continue;
+        }
+
+        for (bit = 1; bit; bit <<= 1) {
+            const char *name = bit_to_string(bit);
+            size_t len;
+
+            if (!name) {
+                continue;
+            }
+
+            len = strlen(name);
+            if (!strncmp(s + n, name, len) &&
+                (s[n + len] == '|' || s[n + len] == end)) {
+                if (!(bit & allowed)) {
+                    goto unknown;
+                }
+                result |= bit;
+                n += len + (s[n + len] == '|');
+                break;
+            }
+        }
+
+        if (!bit) {
+            goto unknown;
+        }
+    }
+
+    *res_flags = result;
+    if (res_mask) {
+        *res_mask = UINT32_MAX;
+    }
+    if (res_string) {
+        *res_string = NULL;
+    }
+    return n;
+
+unknown:
+    if (res_string) {
+        *res_string = xasprintf("%s: unknown %s flag(s)", s, field_name);
+    }
+    return -EINVAL;
 }
 
 void

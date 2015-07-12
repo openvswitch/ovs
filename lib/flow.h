@@ -191,7 +191,10 @@ void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
                   uint32_t flags, char del);
 void format_flags_masked(struct ds *ds, const char *name,
                          const char *(*bit_to_string)(uint32_t),
-                         uint32_t flags, uint32_t mask);
+                         uint32_t flags, uint32_t mask, uint32_t max_mask);
+int parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
+                char end, const char *field_name, char **res_string,
+                uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask);
 
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);

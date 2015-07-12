@@ -39,7 +39,7 @@ s/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/skb_priority(0),tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,ttl=64,flags(csum,key)),skb_mark(0x1234),recirc_id(0),dp_hash(0),/' odp-base.txt
+ sed 's/^/skb_priority(0),tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,ttl=64,flags(csum|key)),skb_mark(0x1234),recirc_id(0),dp_hash(0),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -117,7 +117,7 @@ skb_mark(0x1234/0xfff0),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,ttl=64,vxlan(gbp(id=10\/0xff,flags=0xb)),flags(csum,key)),/' odp-base.txt
+ sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,ttl=64,vxlan(gbp(id=10\/0xff,flags=0xb)),flags(csum|key)),/' odp-base.txt
 
  echo
  echo '# Valid forms with tunnel header (wildcard flag).'
@@ -125,7 +125,7 @@ skb_mark(0x1234/0xfff0),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:
 
  echo
  echo '# Valid forms with Geneve header.'
- sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,ttl=64,geneve({class=0,type=0,len=4,0xa\/0xff}{class=0xffff,type=0x1,len=4,0xffffffff}),flags(csum,key)),/' odp-base.txt
+ sed 's/^/tunnel(tun_id=0x7f10354\/0xff,src=10.10.10.10\/255.255.255.0,dst=20.20.20.20\/255.255.255.0,ttl=64,geneve({class=0,type=0,len=4,0xa\/0xff}{class=0xffff,type=0x1,len=4,0xffffffff}),flags(csum|key)),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -236,8 +236,8 @@ userspace(pid=555666777)
 userspace(pid=555666777,tunnel_out_port=10)
 userspace(pid=6633,sFlow(vid=9,pcp=7,output=10))
 userspace(pid=6633,sFlow(vid=9,pcp=7,output=10),tunnel_out_port=10)
-userspace(pid=9765,slow_path())
-userspace(pid=9765,slow_path(),tunnel_out_port=10)
+userspace(pid=9765,slow_path(0))
+userspace(pid=9765,slow_path(0),tunnel_out_port=10)
 userspace(pid=9765,slow_path(cfm))
 userspace(pid=9765,slow_path(cfm),tunnel_out_port=10)
 userspace(pid=1234567,userdata(0102030405060708090a0b0c0d0e0f))
@@ -284,7 +284,7 @@ push_vlan(tpid=0x9100,vid=13,pcp=5)
 push_vlan(tpid=0x9100,vid=13,pcp=5,cfi=0)
 pop_vlan
 sample(sample=9.7%,actions(1,2,3,push_vlan(vid=1,pcp=2)))
-set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,ttl=64,flags(df,csum,key)))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,ttl=64,flags(df|csum|key)))
 set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,ttl=64,flags(key)))
 tnl_pop(4)
 tnl_push(tnl_port(4),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x40),gre((flags=0x2000,proto=0x6558),key=0x1e241)),out_port(1))
