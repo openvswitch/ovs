@@ -401,6 +401,11 @@ static size_t upcall_msg_size(const struct dp_upcall_info *upcall_info,
 	if (upcall_info->egress_tun_info)
 		size += nla_total_size(ovs_tun_key_attr_size());
 
+	/* OVS_PACKET_ATTR_ACTIONS */
+	if(upcall_info->actions_len) {
+		size += nla_total_size(upcall_info->actions_len);
+	}
+
 	return size;
 }
 
@@ -484,6 +489,19 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 						    upcall_info->egress_tun_info);
 		BUG_ON(err);
 		nla_nest_end(user_skb, nla);
+	}
+
+	if(upcall_info->actions_len) {
+		nla = nla_nest_start(user_skb, OVS_PACKET_ATTR_ACTIONS);
+		err = ovs_nla_put_actions(upcall_info->actions,
+					  upcall_info->actions_len,
+					  user_skb);
+		if(!err) {
+			nla_nest_end(user_skb, nla);
+		}
+		else {
+			nla_nest_cancel(user_skb, nla);
+		}
 	}
 
 	/* Only reserve room for attribute header, packet data is added
