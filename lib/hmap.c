@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,8 +54,8 @@ hmap_destroy(struct hmap *hmap)
  * not free memory allocated for 'hmap'.
  *
  * This function is appropriate when 'hmap' will soon have about as many
- * elements as it before.  If 'hmap' will likely have fewer elements than
- * before, use hmap_destroy() followed by hmap_clear() to save memory and
+ * elements as it did before.  If 'hmap' will likely have fewer elements than
+ * before, use hmap_destroy() followed by hmap_init() to save memory and
  * iteration time. */
 void
 hmap_clear(struct hmap *hmap)
