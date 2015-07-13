@@ -210,22 +210,6 @@ main(int argc, char *argv[])
             break;
         }
 
-        if (!ovsdb_idl_is_alive(ctx.ovnsb_idl)) {
-            int retval = ovsdb_idl_get_last_error(ctx.ovnsb_idl);
-            VLOG_ERR("%s: database connection failed (%s)",
-                     ovnsb_remote, ovs_retval_to_string(retval));
-            retval = EXIT_FAILURE;
-            break;
-        }
-
-        if (!ovsdb_idl_is_alive(ctx.ovs_idl)) {
-            int retval = ovsdb_idl_get_last_error(ctx.ovs_idl);
-            VLOG_ERR("%s: database connection failed (%s)",
-                     ovs_remote, ovs_retval_to_string(retval));
-            retval = EXIT_FAILURE;
-            break;
-        }
-
         ofctrl_clear_flows();
 
         chassis_run(&ctx);
