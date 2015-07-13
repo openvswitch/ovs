@@ -1136,7 +1136,7 @@ cmd_set(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
-    const struct ctl_table_class*table;
+    const struct ctl_table_class *table;
     const struct ovsdb_idl_row *row;
     int i;
 
@@ -1949,12 +1949,6 @@ ctl_exit(int status)
     exit(status);
 }
 
-/* Command for showing overview of database contents. */
-static const struct ctl_command_syntax db_ctl_show_command[] = {
-    {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO},
-    {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
-};
-
 /* Comman database commands to be registered. */
 static const struct ctl_command_syntax db_ctl_commands[] = {
     {"comment", 0, INT_MAX, "[ARG]...", NULL, NULL, NULL, "", RO},
@@ -1978,6 +1972,7 @@ static const struct ctl_command_syntax db_ctl_commands[] = {
      NULL, "--if-exists,--all", RW},
     {"wait-until", 2, INT_MAX, "TABLE RECORD [COLUMN[:KEY]=VALUE]...",
      pre_cmd_wait_until, cmd_wait_until, NULL, "", RO},
+    {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO},
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };
 
@@ -2000,7 +1995,6 @@ ctl_init(const struct ctl_table_class tables_[])
 {
     tables = tables_;
     ctl_register_commands(db_ctl_commands);
-    ctl_register_commands(db_ctl_show_command);
 }
 
 /* Returns 'all_commands'. */
