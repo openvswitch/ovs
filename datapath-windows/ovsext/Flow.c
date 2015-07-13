@@ -102,7 +102,8 @@ const NL_POLICY nlFlowPolicy[] = {
                              .maxLen = sizeof(struct ovs_flow_stats),
                              .optional = TRUE},
     [OVS_FLOW_ATTR_TCP_FLAGS] = {NL_A_U8, .optional = TRUE},
-    [OVS_FLOW_ATTR_USED] = {NL_A_U64, .optional = TRUE}
+    [OVS_FLOW_ATTR_USED] = {NL_A_U64, .optional = TRUE},
+    [OVS_FLOW_ATTR_PROBE] = {.type = NL_A_FLAG, .optional = TRUE}
 };
 
 /* For Parsing nested OVS_FLOW_ATTR_KEY attributes.
@@ -307,6 +308,12 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
        }
 
        goto done;
+    }
+
+    if (flowAttrs[OVS_FLOW_ATTR_PROBE]) {
+        OVS_LOG_ERROR("Attribute OVS_FLOW_ATTR_PROBE not supported");
+        nlError = NL_ERROR_NOENT;
+        goto done;
     }
 
     if ((rc = _MapNlToFlowPut(msgIn, nlAttrs[OVS_FLOW_ATTR_KEY],
