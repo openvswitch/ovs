@@ -1340,8 +1340,8 @@ dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
                            const struct dpif_flow_del *del,
                            struct dpif_netlink_flow *request)
 {
-    return dpif_netlink_init_flow_del__(dpif, del->key, del->key_len,
-                                        del->ufid, del->terse, request);
+    dpif_netlink_init_flow_del__(dpif, del->key, del->key_len,
+                                 del->ufid, del->terse, request);
 }
 
 struct dpif_netlink_flow_dump {
