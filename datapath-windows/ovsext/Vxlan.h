@@ -25,6 +25,7 @@ typedef struct _OVS_VXLAN_VPORT {
     UINT64 slowInPkts;
     UINT64 slowOutPkts;
     UINT64 filterID;
+    UINT64 ipId;
     /*
      * To be filled
      */
