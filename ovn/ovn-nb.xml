@@ -281,13 +281,6 @@
       table="Logical_Router_Port"/> or it will automatically be deleted.
     </column>
 
-    <column name="ip">
-      The logical router's own IP address.  The logical router uses this
-      address for ICMP replies (e.g. network unreachable messages) and other
-      traffic that it originates and responds to traffic destined to this
-      address (e.g. ICMP echo requests).
-    </column>
-
     <column name="default_gw">
       IP address to use as default gateway, if any.
     </column>
@@ -316,8 +309,10 @@
     </p>
 
     <column name="network">
-      The IP network and netmask of the network on the router port.  Used for
-      routing.
+      The IP address of the router and the netmask.  For example,
+      <code>192.168.0.1/24</code> indicates that the router's IP address is
+      192.168.0.1 and that packets destined to 192.168.0.<var>x</var> should be
+      routed to this port.
     </column>
 
     <column name="mac">

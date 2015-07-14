@@ -65,7 +65,6 @@
                                            "refType": "weak"},
                                    "min": 0,
                                    "max": "unlimited"}},
-                "ip": {"type": "string"},
                 "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
