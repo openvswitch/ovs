@@ -1762,7 +1762,7 @@ ctl_add_cmd_options(struct option **options_p, size_t *n_options_p,
     const struct shash_node *node;
     size_t n_existing_options = *n_options_p;
 
-    SHASH_FOR_EACH (node, ctl_get_all_commands()) {
+    SHASH_FOR_EACH (node, &all_commands) {
         const struct ctl_command_syntax *p = node->data;
 
         if (p->options[0]) {
@@ -1852,7 +1852,7 @@ ctl_print_commands(void)
 {
     const struct shash_node *node;
 
-    SHASH_FOR_EACH (node, ctl_get_all_commands()) {
+    SHASH_FOR_EACH (node, &all_commands) {
         const struct ctl_command_syntax *p = node->data;
         char *options = xstrdup(p->options);
         char *options_begin = options;
@@ -1908,7 +1908,8 @@ bool
 ctl_might_write_to_db(char **argv)
 {
     for (; *argv; argv++) {
-        const struct ctl_command_syntax *p = shash_find_data(&all_commands, *argv);
+        const struct ctl_command_syntax *p = shash_find_data(&all_commands,
+                                                             *argv);
         if (p && p->mode == RW) {
             return true;
         }
@@ -1995,13 +1996,6 @@ ctl_init(const struct ctl_table_class tables_[])
 {
     tables = tables_;
     ctl_register_commands(db_ctl_commands);
-}
-
-/* Returns 'all_commands'. */
-const struct shash *
-ctl_get_all_commands(void)
-{
-    return &all_commands;
 }
 
 /* Returns the text for the database commands usage.  */
