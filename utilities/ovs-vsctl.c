@@ -740,9 +740,6 @@ vsctl_context_populate_cache(struct ctl_context *ctx)
             continue;
         }
         br = add_bridge_to_cache(vsctl_ctx, br_cfg, br_cfg->name, NULL, 0);
-        if (!br) {
-            continue;
-        }
 
         for (j = 0; j < br_cfg->n_ports; j++) {
             struct ovsrec_port *port_cfg = br_cfg->ports[j];
@@ -2137,7 +2134,7 @@ cmd_add_aa_mapping(struct ctl_context *ctx)
         br = br->parent;
     }
 
-    if (br && br->br_cfg) {
+    if (br->br_cfg) {
         if (!br->br_cfg->auto_attach) {
             struct ovsrec_autoattach *aa = ovsrec_autoattach_insert(ctx->txn);
             ovsrec_bridge_set_auto_attach(br->br_cfg, aa);
@@ -2197,7 +2194,7 @@ cmd_del_aa_mapping(struct ctl_context *ctx)
         br = br->parent;
     }
 
-    if (br && br->br_cfg && br->br_cfg->auto_attach &&
+    if (br->br_cfg && br->br_cfg->auto_attach &&
         br->br_cfg->auto_attach->key_mappings &&
         br->br_cfg->auto_attach->value_mappings) {
         size_t i;
@@ -2248,7 +2245,7 @@ cmd_get_aa_mapping(struct ctl_context *ctx)
 
     verify_auto_attach(br->br_cfg);
 
-    if (br && br->br_cfg && br->br_cfg->auto_attach &&
+    if (br->br_cfg && br->br_cfg->auto_attach &&
         br->br_cfg->auto_attach->key_mappings &&
         br->br_cfg->auto_attach->value_mappings) {
         size_t i;
