@@ -33,8 +33,6 @@ struct table;
  * (structs, commands and functions).  To utilize this module, user must
  * define the following:
  *
- * - the 'the_idl' and 'the_idl_txn'.
- *
  * - the 'cmd_show_tables'.  (See 'struct cmd_show_table' for more info).
  *
  * - the command syntaxes for each command.  (See 'struct ctl_command_syntax'
@@ -48,15 +46,10 @@ struct table;
 /* ctl_fatal() also logs the error, so it is preferred in this file. */
 #define ovs_fatal please_use_ctl_fatal_instead_of_ovs_fatal
 
-/* idl and idl transaction to be used for the *ctl command execution.
- * User must provide them.  */
-extern struct ovsdb_idl *the_idl;
-extern struct ovsdb_idl_txn *the_idl_txn;
-
 struct ctl_table_class;
-void ctl_init(const struct ctl_table_class *tables);
+void ctl_init(const struct ctl_table_class *tables,
+	      void (*ctl_exit_func)(int status));
 char *ctl_default_db(void);
-OVS_NO_RETURN void ctl_exit(int status);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 
 /* *ctl command syntax structure, to be defined by each command implementation.

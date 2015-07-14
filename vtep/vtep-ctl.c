@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,13 @@ static int timeout;
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
+/* The IDL we're using and the current transaction, if any.
+ * This is for use by vtep_ctl_exit() only, to allow it to clean up.
+ * Other code should use its context arguments. */
+static struct ovsdb_idl *the_idl;
+static struct ovsdb_idl_txn *the_idl_txn;
+
+OVS_NO_RETURN static void vtep_ctl_exit(int status);
 static void vtep_ctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
@@ -268,6 +275,23 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         free(CONST_CAST(char *, options[i].name));
     }
     free(options);
+}
+
+/* Frees the current transaction and the underlying IDL and then calls
+ * exit(status).
+ *
+ * Freeing the transaction and the IDL is not strictly necessary, but it makes
+ * for a clean memory leak report from valgrind in the normal case.  That makes
+ * it easier to notice real memory leaks. */
+static void
+vtep_ctl_exit(int status)
+{
+    if (the_idl_txn) {
+        ovsdb_idl_txn_abort(the_idl_txn);
+        ovsdb_idl_txn_destroy(the_idl_txn);
+    }
+    ovsdb_idl_destroy(the_idl);
+    exit(status);
 }
 
 static void
@@ -1189,7 +1213,7 @@ cmd_ps_exists(struct ctl_context *ctx)
 
     vtep_ctl_context_populate_cache(ctx);
     if (!find_pswitch(vtepctl_ctx, ctx->argv[1], false)) {
-        ctl_exit(2);
+        vtep_ctl_exit(2);
     }
 }
 
@@ -1363,7 +1387,7 @@ cmd_ls_exists(struct ctl_context *ctx)
 
     vtep_ctl_context_populate_cache(ctx);
     if (!find_lswitch(vtepctl_ctx, ctx->argv[1], false)) {
-        ctl_exit(2);
+        vtep_ctl_exit(2);
     }
 }
 
@@ -2305,6 +2329,6 @@ static const struct ctl_command_syntax vtep_commands[] = {
 static void
 vtep_ctl_cmd_init(void)
 {
-    ctl_init(tables);
+    ctl_init(tables, vtep_ctl_exit);
     ctl_register_commands(vtep_commands);
 }

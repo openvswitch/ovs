@@ -40,11 +40,25 @@
 
 VLOG_DEFINE_THIS_MODULE(db_ctl_base);
 
-/* The IDL we're using and the current transaction, if any.
- * This is for use by ctl_exit() only, to allow it to clean up.
- * Other code should use its context arguments. */
-struct ovsdb_idl *the_idl;
-struct ovsdb_idl_txn *the_idl_txn;
+/* This array defines the 'show' command output format.  User can check the
+ * definition in utilities/ovs-vsctl.c as reference.
+ *
+ * Particularly, if an element in 'columns[]' represents a reference to
+ * another table, the referred table must also be defined as an entry in
+ * in 'cmd_show_tables[]'.
+ *
+ * The definition must end with an all-NULL entry.  It is initalized once
+ * when ctl_init() is called.
+ *
+ * */
+extern struct cmd_show_table cmd_show_tables[];
+
+/* ctl_exit() is called by ctl_fatal(). User can optionally supply an exit
+ * function ctl_exit_func() via ctl_init. If supplied, this function will
+ * be called by ctl_exit()
+ */
+static void (*ctl_exit_func)(int status) = NULL;
+OVS_NO_RETURN static void ctl_exit(int status);
 
 /* Represents all tables in the schema.  User must define 'tables'
  * in implementation and supply via clt_init().  The definition must end
@@ -1942,11 +1956,9 @@ ctl_fatal(const char *format, ...)
 void
 ctl_exit(int status)
 {
-    if (the_idl_txn) {
-        ovsdb_idl_txn_abort(the_idl_txn);
-        ovsdb_idl_txn_destroy(the_idl_txn);
+    if (ctl_exit_func) {
+        ctl_exit_func(status);
     }
-    ovsdb_idl_destroy(the_idl);
     exit(status);
 }
 
@@ -1992,9 +2004,11 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
 
 /* Registers the 'db_ctl_commands' to 'all_commands'. */
 void
-ctl_init(const struct ctl_table_class tables_[])
+ctl_init(const struct ctl_table_class tables_[],
+         void (*ctl_exit_func_)(int status))
 {
     tables = tables_;
+    ctl_exit_func = ctl_exit_func_;
     ctl_register_commands(db_ctl_commands);
 }
 

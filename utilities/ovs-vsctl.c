@@ -84,6 +84,14 @@ static bool retry;
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 static void vsctl_cmd_init(void);
+
+/* The IDL we're using and the current transaction, if any.
+ * This is for use by vsctl_exit() only, to allow it to clean up.
+ * Other code should use its context arguments. */
+static struct ovsdb_idl *the_idl;
+static struct ovsdb_idl_txn *the_idl_txn;
+OVS_NO_RETURN static void vsctl_exit(int status);
+
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
@@ -1340,7 +1348,7 @@ cmd_br_exists(struct ctl_context *ctx)
 
     vsctl_context_populate_cache(ctx);
     if (!find_bridge(vsctl_ctx, ctx->argv[1], false)) {
-        ctl_exit(2);
+        vsctl_exit(2);
     }
 }
 
@@ -2645,6 +2653,23 @@ try_again:
     free(error);
 }
 
+/* Frees the current transaction and the underlying IDL and then calls
+ * exit(status).
+ *
+ * Freeing the transaction and the IDL is not strictly necessary, but it makes
+ * for a clean memory leak report from valgrind in the normal case.  That makes
+ * it easier to notice real memory leaks. */
+static void
+vsctl_exit(int status)
+{
+    if (the_idl_txn) {
+        ovsdb_idl_txn_abort(the_idl_txn);
+        ovsdb_idl_txn_destroy(the_idl_txn);
+    }
+    ovsdb_idl_destroy(the_idl);
+    exit(status);
+}
+
 /*
  * Developers who add new commands to the 'struct ctl_command_syntax' must
  * define the 'arguments' member of the struct.  The following keywords are
@@ -2746,6 +2771,6 @@ static const struct ctl_command_syntax vsctl_commands[] = {
 static void
 vsctl_cmd_init(void)
 {
-    ctl_init(tables);
+    ctl_init(tables, vsctl_exit);
     ctl_register_commands(vsctl_commands);
 }
