@@ -255,6 +255,8 @@ eth.src > 00:00:00:00:11:11/00:00:00:00:ff:ff => Only == and != operators may be
 ip4.src == ::1 => 128-bit constant is not compatible with 32-bit field ip4.src.
 
 1 == eth.type == 2 => Range expressions must have the form `x < field < y' or `x > field > y', with each `<' optionally replaced by `<=' or `>' by `>=').
+
+eth.dst[40] x => Extra tokens at end of input.
 ]])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout
