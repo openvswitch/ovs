@@ -43,6 +43,7 @@ bool bfd_should_process_flow(const struct bfd *, const struct flow *,
 void bfd_process_packet(struct bfd *, const struct flow *,
                         const struct dp_packet *);
 
+void bfd_init(void);
 struct bfd *bfd_configure(struct bfd *, const char *name,
                           const struct smap *smap,
                           struct netdev *netdev);
