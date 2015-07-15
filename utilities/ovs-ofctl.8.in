@@ -467,7 +467,7 @@ Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Unlike other \fBovs\-ofctl\fR commands, if
 \fIswitch\fR is the name of a bridge, then the \fBsnoop\fR command
 connects to a Unix domain socket named
-\fB@RUNDIR@/\fIbridge\fB.snoop\fR.  \fBovs\-vswitchd\fR listens on
+\fB@RUNDIR@/\fIswitch\fB.snoop\fR.  \fBovs\-vswitchd\fR listens on
 such a socket for each bridge and sends to it all of the OpenFlow
 messages sent to or received from its configured OpenFlow controller.
 Thus, this command can be used to view OpenFlow protocol activity
