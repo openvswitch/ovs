@@ -2076,24 +2076,11 @@ miniflow_create(const struct flow *src)
     return dst;
 }
 
-/* Returns a copy of 'src'.  The caller must eventually free the returned
- * miniflow with free(). */
-struct miniflow *
-miniflow_clone(const struct miniflow *src)
-{
-    struct miniflow *dst;
-    size_t data_size;
-
-    data_size = miniflow_alloc(&dst, 1, src);
-    memcpy(dst->values, src->values, data_size);
-    return dst;
-}
-
 /* Initializes 'dst' as a copy of 'src'.  The caller must have allocated
  * 'dst' to have inline space for 'n_values' data in 'src'. */
 void
-miniflow_clone_inline(struct miniflow *dst, const struct miniflow *src,
-                      size_t n_values)
+miniflow_clone(struct miniflow *dst, const struct miniflow *src,
+               size_t n_values)
 {
     dst->map = src->map;
     memcpy(dst->values, src->values, MINIFLOW_VALUES_SIZE(n_values));
@@ -2183,14 +2170,6 @@ struct minimask *
 minimask_create(const struct flow_wildcards *wc)
 {
     return (struct minimask *)miniflow_create(&wc->masks);
-}
-
-/* Returns a copy of 'src'.  The caller must eventually free the returned
- * minimask with free(). */
-struct minimask *
-minimask_clone(const struct minimask *src)
-{
-    return (struct minimask *)miniflow_clone(&src->masks);
 }
 
 /* Initializes 'dst_' as the bit-wise "and" of 'a_' and 'b_'.

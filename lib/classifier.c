@@ -101,8 +101,8 @@ cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
     *CONST_CAST(cls_version_t *, &cls_match->add_version) = version;
     atomic_init(&cls_match->remove_version, version);   /* Initially
                                                          * invisible. */
-    miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
-                          rule->match.flow, count);
+    miniflow_clone(CONST_CAST(struct miniflow *, &cls_match->flow),
+                   rule->match.flow, count);
     ovsrcu_set_hidden(&cls_match->conj_set,
                       cls_conjunction_set_alloc(cls_match, conj, n));
 
@@ -1541,8 +1541,8 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
 
     subtable = xzalloc(sizeof *subtable + MINIFLOW_VALUES_SIZE(count));
     cmap_init(&subtable->rules);
-    miniflow_clone_inline(CONST_CAST(struct miniflow *, &subtable->mask.masks),
-                          &mask->masks, count);
+    miniflow_clone(CONST_CAST(struct miniflow *, &subtable->mask.masks),
+                   &mask->masks, count);
 
     /* Init indices for segmented lookup, if any. */
     flow_wildcards_init_catchall(&new);

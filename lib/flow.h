@@ -402,12 +402,9 @@ void miniflow_map_init(struct miniflow *, const struct flow *);
 size_t miniflow_alloc(struct miniflow *dsts[], size_t n,
                       const struct miniflow *src);
 void miniflow_init(struct miniflow *, const struct flow *);
-
+void miniflow_clone(struct miniflow *, const struct miniflow *,
+                    size_t n_values);
 struct miniflow * miniflow_create(const struct flow *);
-struct miniflow * miniflow_clone(const struct miniflow *);
-
-void miniflow_clone_inline(struct miniflow *, const struct miniflow *,
-                           size_t n_values);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
 
@@ -565,7 +562,6 @@ struct minimask {
 
 void minimask_init(struct minimask *, const struct flow_wildcards *);
 struct minimask * minimask_create(const struct flow_wildcards *);
-struct minimask * minimask_clone(const struct minimask *);
 void minimask_combine(struct minimask *dst,
                       const struct minimask *a, const struct minimask *b,
                       uint64_t storage[FLOW_U64S]);
