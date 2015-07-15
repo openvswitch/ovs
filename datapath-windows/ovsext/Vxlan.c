@@ -114,11 +114,11 @@ OvsInitVxlanTunnel(PIRP irp,
     vport->priv = (PVOID)vxlanPort;
 
     if (!OvsIsTunnelFilterCreated(gOvsSwitchContext, udpDestPort)) {
-        status = OvsTunelFilterCreate(irp,
-                                      udpDestPort,
-                                      &vxlanPort->filterID,
-                                      callback,
-                                      tunnelContext);
+        status = OvsTunnelFilterCreate(irp,
+                                       udpDestPort,
+                                       &vxlanPort->filterID,
+                                       callback,
+                                       tunnelContext);
     } else {
         status = STATUS_OBJECT_NAME_EXISTS;
     }
@@ -151,10 +151,10 @@ OvsCleanupVxlanTunnel(PIRP irp,
     vxlanPort = (POVS_VXLAN_VPORT)vport->priv;
 
     if (vxlanPort->filterID != 0) {
-        status = OvsTunelFilterDelete(irp,
-                                      vxlanPort->filterID,
-                                      callback,
-                                      tunnelContext);
+        status = OvsTunnelFilterDelete(irp,
+				       vxlanPort->filterID,
+				       callback,
+				       tunnelContext);
     } else {
         OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
         vport->priv = NULL;
