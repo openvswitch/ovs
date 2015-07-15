@@ -446,6 +446,9 @@ init(const struct shash *iface_hints)
 
         shash_add(&init_ofp_ports, node->name, new_hint);
     }
+
+    ofproto_unixctl_init();
+    udpif_init();
 }
 
 static void
@@ -1270,8 +1273,6 @@ construct(struct ofproto *ofproto_)
     ovs_mutex_init(&ofproto->vsp_mutex);
 
     guarded_list_init(&ofproto->pins);
-
-    ofproto_unixctl_init();
 
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);

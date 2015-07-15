@@ -329,6 +329,16 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
     ovs_mutex_unlock(&mutex);
 }
 
+void
+bfd_init(void)
+{
+    unixctl_command_register("bfd/show", "[interface]", 0, 1,
+                             bfd_unixctl_show, NULL);
+    unixctl_command_register("bfd/set-forwarding",
+                             "[interface] normal|false|true", 1, 2,
+                             bfd_unixctl_set_forwarding_override, NULL);
+}
+
 /* Initializes, destroys, or reconfigures the BFD session 'bfd' (named 'name'),
  * according to the database configuration contained in 'cfg'.  Takes ownership
  * of 'bfd', which may be NULL.  Returns a BFD object which may be used as a
@@ -338,7 +348,6 @@ struct bfd *
 bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
               struct netdev *netdev) OVS_EXCLUDED(mutex)
 {
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static atomic_count udp_src = ATOMIC_COUNT_INIT(0);
 
     int decay_min_rx;
@@ -349,15 +358,6 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     const char *hwaddr, *ip_src, *ip_dst;
     struct in_addr in_addr;
     uint8_t ea[ETH_ADDR_LEN];
-
-    if (ovsthread_once_start(&once)) {
-        unixctl_command_register("bfd/show", "[interface]", 0, 1,
-                                 bfd_unixctl_show, NULL);
-        unixctl_command_register("bfd/set-forwarding",
-                                 "[interface] normal|false|true", 1, 2,
-                                 bfd_unixctl_set_forwarding_override, NULL);
-        ovsthread_once_done(&once);
-    }
 
     if (!cfg || !smap_get_bool(cfg, "enable", false)) {
         bfd_unref(bfd);
