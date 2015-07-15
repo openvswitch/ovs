@@ -1114,7 +1114,7 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_write(&flow->tunnel.metadata, mf, value);
-
+        break;
     case MFF_METADATA:
         flow->metadata = value->be64;
         break;
