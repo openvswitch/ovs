@@ -825,20 +825,24 @@ OvsInitTunnelFilter(PDRIVER_OBJECT driverObject, PVOID deviceObject)
 {
     NTSTATUS status = STATUS_SUCCESS;
 
-    status = OvsSubscribeTunnelInitBfeStateChanges(driverObject, deviceObject);
-    if (NT_SUCCESS(status)) {
-        if (FWPM_SERVICE_RUNNING == FwpmBfeStateGet()) {
-            status = OvsTunnelFilterInitialize(driverObject);
-            if (!NT_SUCCESS(status)) {
-                /* XXX: We need to decide what actions to take in case of
-                 * failure to initialize tunnel filter. */
-                ASSERT(status == NDIS_STATUS_SUCCESS);
-                OVS_LOG_ERROR(
-                    "Failed to initialize tunnel filter, status: %x.",
-                    status);
+    if (deviceObject) {
+        status = OvsSubscribeTunnelInitBfeStateChanges(driverObject, deviceObject);
+        if (NT_SUCCESS(status)) {
+            if (FWPM_SERVICE_RUNNING == FwpmBfeStateGet()) {
+                status = OvsTunnelFilterInitialize(driverObject);
+                if (!NT_SUCCESS(status)) {
+                    /* XXX: We need to decide what actions to take in case of
+                     * failure to initialize tunnel filter. */
+                    ASSERT(status == NDIS_STATUS_SUCCESS);
+                    OVS_LOG_ERROR(
+                        "Failed to initialize tunnel filter, status: %x.",
+                        status);
+                }
+                OvsUnsubscribeTunnelInitBfeStateChanges();
             }
-            OvsUnsubscribeTunnelInitBfeStateChanges();
         }
+    } else {
+        status = OvsTunnelFilterInitialize(driverObject);
     }
 
     return status;
