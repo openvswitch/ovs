@@ -90,6 +90,7 @@
     <ClInclude Include="PacketIO.h" />
     <ClInclude Include="PacketParser.h" />
     <ClInclude Include="precomp.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="Stt.h" />
     <ClInclude Include="Switch.h" />
     <ClInclude Include="Tunnel.h" />

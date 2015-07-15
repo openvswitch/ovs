@@ -1,23 +1,87 @@
+// Microsoft Visual C++ generated resource script.
 //
-// Copyright (c) Microsoft Corporation. All Rights Reserved.
+#include "resource.h"
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
 //
 
-#include <windows.h>
-#include <ntverp.h>
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 6,3,9600,17298
+ PRODUCTVERSION 6,3,9600,17298
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x9L
+#else
+ FILEFLAGS 0x8L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x3L
+ FILESUBTYPE 0x6L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "000004b0"
+        BEGIN
+            VALUE "CompanyName", "Open vSwitch"
+            VALUE "FileDescription", "Open vSwitch Extension"
+            VALUE "FileVersion", "6.3.9600.17298"
+            VALUE "InternalName", "OVSExt.SYS"
+            VALUE "LegalCopyright", "� Licensed under the Apache License, Version 2.0 (the ""License"")"
+            VALUE "OriginalFilename", "OVSExt.SYS"
+            VALUE "ProductName", "Open vSwitch 8/8.1 DDK driver"
+            VALUE "ProductVersion", "6.3.9600.17298"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0, 1200
+    END
+END
 
-/*-----------------------------------------------*/
-/* the following lines are specific to this file */
-/*-----------------------------------------------*/
 
-/* VER_FILETYPE, VER_FILESUBTYPE, VER_FILEDESCRIPTION_STR
- * and VER_INTERNALNAME_STR must be defined before including COMMON.VER
- * The strings don't need a '\0', since common.ver has them.
- */
-#define	VER_FILETYPE	VFT_DRV
-#define	VER_FILESUBTYPE	VFT2_DRV_NETWORK
-#define VER_FILEDESCRIPTION_STR     "VMWare OVS Extension"
-#define VER_INTERNALNAME_STR        "OVSExt.SYS"
-#define VER_ORIGINALFILENAME_STR    "OVSExt.SYS"
-#define VER_LANGNEUTRAL
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
 
-#include "common.ver"
+1 TEXTINCLUDE
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE
+BEGIN
+    "\0"
+END
+
+3 TEXTINCLUDE
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
