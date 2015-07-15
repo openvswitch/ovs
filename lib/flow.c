@@ -2006,62 +2006,74 @@ miniflow_n_values(const struct miniflow *flow)
 }
 
 /* Completes an initialization of 'dst' as a miniflow copy of 'src' begun by
- * the caller.  The caller must have already computed 'map' properly
+ * the caller.  The caller must have already computed 'dst->map' properly
  * to indicate the significant uint64_t elements of 'src'.
  *
  * Normally the significant elements are the ones that are non-zero.  However,
  * when a miniflow is initialized from a (mini)mask, the values can be zeroes,
- * so that the flow and mask always have the same maps.
- *
- * This function always dynamically allocates a miniflow with the correct
- * amount of inline storage and copies the uint64_t elements of 'src' indicated
- * by 'map' into it. */
-static struct miniflow *
-miniflow_init__(const struct flow *src, uint64_t map)
+ * so that the flow and mask always have the same maps. */
+void
+miniflow_init(struct miniflow *dst, const struct flow *src)
 {
     const uint64_t *src_u64 = (const uint64_t *) src;
-    struct miniflow *dst = xmalloc(sizeof *dst
-                                   + MINIFLOW_VALUES_SIZE(count_1bits(map)));
     uint64_t *dst_u64 = dst->values;
     int idx;
 
-    COVERAGE_INC(miniflow_malloc);
-
-    dst->map = map;
-    MAP_FOR_EACH_INDEX(idx, map) {
+    MAP_FOR_EACH_INDEX(idx, dst->map) {
         *dst_u64++ = src_u64[idx];
     }
-    return dst;
 }
 
-/* Returns a miniflow copy of 'src'.  The caller must eventually free the
- * returned miniflow with free(). */
+/* Initialize the map of 'flow' from 'src'. */
+void
+miniflow_map_init(struct miniflow *flow, const struct flow *src)
+{
+    const uint64_t *src_u64 = (const uint64_t *) src;
+    int i;
+
+    /* Initialize map, counting the number of nonzero elements. */
+    flow->map = 0;
+    for (i = 0; i < FLOW_U64S; i++) {
+        if (src_u64[i]) {
+            flow->map |= UINT64_C(1) << i;
+        }
+    }
+}
+
+/* Allocates 'n' count of miniflows, consecutive in memory, initializing the
+ * map of each from 'src'.
+ * Returns the size of the miniflow data. */
+size_t
+miniflow_alloc(struct miniflow *dsts[], size_t n, const struct miniflow *src)
+{
+    size_t data_size = MINIFLOW_VALUES_SIZE(count_1bits(src->map));
+    size_t size = sizeof *src + data_size;
+    struct miniflow *dst = xmalloc(n * size);
+    unsigned int i;
+
+    COVERAGE_INC(miniflow_malloc);
+
+    for (i = 0; i < n; i++) {
+        dst->map = src->map;
+        dsts[i] = dst;
+        dst += size / sizeof *dst;
+    }
+    return data_size;
+}
+
+/* Returns a miniflow copy of 'src'.  The caller must eventually free() the
+ * returned miniflow. */
 struct miniflow *
 miniflow_create(const struct flow *src)
 {
-    const uint64_t *src_u64 = (const uint64_t *) src;
-    uint64_t map;
-    unsigned int i;
+    struct miniflow tmp;
+    struct miniflow *dst;
 
-    /* Initialize dst->map, counting the number of nonzero elements. */
-    map = 0;
+    miniflow_map_init(&tmp, src);
 
-    for (i = 0; i < FLOW_U64S; i++) {
-        if (src_u64[i]) {
-            map |= UINT64_C(1) << i;
-        }
-    }
-
-    return miniflow_init__(src, map);
-}
-
-/* Returns a copy of 'src', using 'mask->map'.  The caller must eventually free
- * the returned miniflow with free(). */
-struct miniflow *
-miniflow_create_with_minimask(const struct flow *src,
-                              const struct minimask *mask)
-{
-    return miniflow_init__(src, mask->masks.map);
+    miniflow_alloc(&dst, 1, &tmp);
+    miniflow_init(dst, src);
+    return dst;
 }
 
 /* Returns a copy of 'src'.  The caller must eventually free the returned
@@ -2070,11 +2082,10 @@ struct miniflow *
 miniflow_clone(const struct miniflow *src)
 {
     struct miniflow *dst;
-    int n = miniflow_n_values(src);
+    size_t data_size;
 
-    COVERAGE_INC(miniflow_malloc);
-    dst = xmalloc(sizeof *dst + MINIFLOW_VALUES_SIZE(n));
-    miniflow_clone_inline(dst, src, n);
+    data_size = miniflow_alloc(&dst, 1, src);
+    memcpy(dst->values, src->values, data_size);
     return dst;
 }
 
@@ -2160,6 +2171,12 @@ miniflow_equal_flow_in_minimask(const struct miniflow *a, const struct flow *b,
 }
 
 
+void
+minimask_init(struct minimask *mask, const struct flow_wildcards *wc)
+{
+    miniflow_init(&mask->masks, &wc->masks);
+}
+
 /* Returns a minimask copy of 'wc'.  The caller must eventually free the
  * returned minimask with free(). */
 struct minimask *

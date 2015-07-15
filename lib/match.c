@@ -1195,8 +1195,13 @@ match_print(const struct match *match)
 void
 minimatch_init(struct minimatch *dst, const struct match *src)
 {
-    dst->mask = minimask_create(&src->wc);
-    dst->flow = miniflow_create_with_minimask(&src->flow, dst->mask);
+    struct miniflow tmp;
+
+    miniflow_map_init(&tmp, &src->wc.masks);
+    /* Allocate two consecutive miniflows. */
+    miniflow_alloc(dst->flows, 2, &tmp);
+    miniflow_init(dst->flow, &src->flow);
+    minimask_init(dst->mask, &src->wc);
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
@@ -1204,8 +1209,11 @@ minimatch_init(struct minimatch *dst, const struct match *src)
 void
 minimatch_clone(struct minimatch *dst, const struct minimatch *src)
 {
-    dst->flow = miniflow_clone(src->flow);
-    dst->mask = minimask_clone(src->mask);
+    /* Allocate two consecutive miniflows. */
+    size_t data_size = miniflow_alloc(dst->flows, 2, &src->mask->masks);
+
+    memcpy(dst->flow->values, src->flow->values, data_size);
+    memcpy(dst->mask->masks.values, src->mask->masks.values, data_size);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.  The caller must
@@ -1223,7 +1231,6 @@ void
 minimatch_destroy(struct minimatch *match)
 {
     free(match->flow);
-    free(match->mask);
 }
 
 /* Initializes 'dst' as a copy of 'src'. */

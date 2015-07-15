@@ -398,10 +398,14 @@ struct pkt_metadata;
  * 'dst->map' is ignored on input and set on output to indicate which fields
  * were extracted. */
 void miniflow_extract(struct dp_packet *packet, struct miniflow *dst);
+void miniflow_map_init(struct miniflow *, const struct flow *);
+size_t miniflow_alloc(struct miniflow *dsts[], size_t n,
+                      const struct miniflow *src);
+void miniflow_init(struct miniflow *, const struct flow *);
+
 struct miniflow * miniflow_create(const struct flow *);
-struct miniflow * miniflow_create_with_minimask(const struct flow *,
-                                              const struct minimask *);
 struct miniflow * miniflow_clone(const struct miniflow *);
+
 void miniflow_clone_inline(struct miniflow *, const struct miniflow *,
                            size_t n_values);
 
@@ -559,6 +563,7 @@ struct minimask {
     struct miniflow masks;
 };
 
+void minimask_init(struct minimask *, const struct flow_wildcards *);
 struct minimask * minimask_create(const struct flow_wildcards *);
 struct minimask * minimask_clone(const struct minimask *);
 void minimask_combine(struct minimask *dst,
