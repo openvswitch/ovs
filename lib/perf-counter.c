@@ -31,7 +31,7 @@
 #include "shash.h"
 #include "util.h"
 
-static struct shash perf_counters;
+static struct shash perf_counters = SHASH_INITIALIZER(&perf_counters);
 static int fd__ = 0;
 
 uint64_t
