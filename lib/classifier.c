@@ -90,11 +90,10 @@ static struct cls_match *
 cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
                 const struct cls_conjunction conj[], size_t n)
 {
-    int count = count_1bits(rule->match.flow.map);
+    int count = count_1bits(rule->match.flow->map);
 
     struct cls_match *cls_match
-        = xmalloc(sizeof *cls_match - sizeof cls_match->flow.inline_values
-                  + MINIFLOW_VALUES_SIZE(count));
+        = xmalloc(sizeof *cls_match + MINIFLOW_VALUES_SIZE(count));
 
     ovsrcu_init(&cls_match->next, NULL);
     *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
@@ -103,7 +102,7 @@ cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
     atomic_init(&cls_match->remove_version, version);   /* Initially
                                                          * invisible. */
     miniflow_clone_inline(CONST_CAST(struct miniflow *, &cls_match->flow),
-                          &rule->match.flow, count);
+                          rule->match.flow, count);
     ovsrcu_set_hidden(&cls_match->conj_set,
                       cls_conjunction_set_alloc(cls_match, conj, n));
 
@@ -281,7 +280,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 bool
 cls_rule_is_catchall(const struct cls_rule *rule)
 {
-    return minimask_is_catchall(&rule->match.mask);
+    return minimask_is_catchall(rule->match.mask);
 }
 
 /* Makes rule invisible after 'version'.  Once that version is made invisible
@@ -536,8 +535,8 @@ create_partition(struct classifier *cls, struct cls_subtable *subtable,
 static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
 {
     /* Could optimize to use the same map if needed for fast path. */
-    return MINIFLOW_GET_BE32(&match->flow, tp_src)
-        & MINIFLOW_GET_BE32(&match->mask.masks, tp_src);
+    return MINIFLOW_GET_BE32(match->flow, tp_src)
+        & MINIFLOW_GET_BE32(&match->mask->masks, tp_src);
 }
 
 static void
@@ -593,9 +592,9 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
     CONST_CAST(struct cls_rule *, rule)->cls_match = new;
 
-    subtable = find_subtable(cls, &rule->match.mask);
+    subtable = find_subtable(cls, rule->match.mask);
     if (!subtable) {
-        subtable = insert_subtable(cls, &rule->match.mask);
+        subtable = insert_subtable(cls, rule->match.mask);
     }
 
     /* Compute hashes in segments. */
@@ -607,7 +606,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     }
     hash = minimatch_hash_range(&rule->match, prev_be64ofs, FLOW_U64S, &basis);
 
-    head = find_equal(subtable, &rule->match.flow, hash);
+    head = find_equal(subtable, rule->match.flow, hash);
     if (!head) {
         /* Add rule to tries.
          *
@@ -636,8 +635,8 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
          * Concurrent readers might miss seeing the rule until this update,
          * which might require being fixed up by revalidation later. */
         new->partition = NULL;
-        if (minimask_get_metadata_mask(&rule->match.mask) == OVS_BE64_MAX) {
-            ovs_be64 metadata = miniflow_get_metadata(&rule->match.flow);
+        if (minimask_get_metadata_mask(rule->match.mask) == OVS_BE64_MAX) {
+            ovs_be64 metadata = miniflow_get_metadata(rule->match.flow);
 
             new->partition = create_partition(cls, subtable, metadata);
         }
@@ -799,7 +798,7 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     /* Remove 'cls_rule' from the subtable's rules list. */
     rculist_remove(CONST_CAST(struct rculist *, &cls_rule->node));
 
-    subtable = find_subtable(cls, &cls_rule->match.mask);
+    subtable = find_subtable(cls, cls_rule->match.mask);
     ovs_assert(subtable);
 
     for (i = 0; i < subtable->n_indices; i++) {
@@ -810,7 +809,7 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     hash = minimatch_hash_range(&cls_rule->match, prev_be64ofs, FLOW_U64S,
                                 &basis);
 
-    head = find_equal(subtable, &cls_rule->match.flow, hash);
+    head = find_equal(subtable, cls_rule->match.flow, hash);
 
     /* Check if the rule is not the head rule. */
     if (rule != head) {
@@ -1292,14 +1291,14 @@ classifier_find_rule_exactly(const struct classifier *cls,
     const struct cls_match *head, *rule;
     const struct cls_subtable *subtable;
 
-    subtable = find_subtable(cls, &target->match.mask);
+    subtable = find_subtable(cls, target->match.mask);
     if (!subtable) {
         return NULL;
     }
 
-    head = find_equal(subtable, &target->match.flow,
-                      miniflow_hash_in_minimask(&target->match.flow,
-                                                &target->match.mask, 0));
+    head = find_equal(subtable, target->match.flow,
+                      miniflow_hash_in_minimask(target->match.flow,
+                                                target->match.mask, 0));
     if (!head) {
         return NULL;
     }
@@ -1351,16 +1350,19 @@ classifier_rule_overlaps(const struct classifier *cls,
     /* Iterate subtables in the descending max priority order. */
     PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority - 1, 2,
                                sizeof(struct cls_subtable), &cls->subtables) {
-        uint64_t storage[FLOW_U64S];
-        struct minimask mask;
+        struct {
+            struct minimask mask;
+            uint64_t storage[FLOW_U64S];
+        } m;
         const struct cls_rule *rule;
 
-        minimask_combine(&mask, &target->match.mask, &subtable->mask, storage);
+        minimask_combine(&m.mask, target->match.mask, &subtable->mask,
+                         m.storage);
 
         RCULIST_FOR_EACH (rule, node, &subtable->rules_list) {
             if (rule->priority == target->priority
-                && miniflow_equal_in_minimask(&target->match.flow,
-                                              &rule->match.flow, &mask)
+                && miniflow_equal_in_minimask(target->match.flow,
+                                              rule->match.flow, &m.mask)
                 && cls_match_visible_in_version(rule->cls_match, version)) {
                 return true;
             }
@@ -1406,9 +1408,9 @@ bool
 cls_rule_is_loose_match(const struct cls_rule *rule,
                         const struct minimatch *criteria)
 {
-    return (!minimask_has_extra(&rule->match.mask, &criteria->mask)
-            && miniflow_equal_in_minimask(&rule->match.flow, &criteria->flow,
-                                          &criteria->mask));
+    return (!minimask_has_extra(rule->match.mask, criteria->mask)
+            && miniflow_equal_in_minimask(rule->match.flow, criteria->flow,
+                                          criteria->mask));
 }
 
 /* Iteration. */
@@ -1419,9 +1421,9 @@ rule_matches(const struct cls_rule *rule, const struct cls_rule *target,
 {
     /* Rule may only match a target if it is visible in target's version. */
     return cls_match_visible_in_version(rule->cls_match, version)
-        && (!target || miniflow_equal_in_minimask(&rule->match.flow,
-                                                  &target->match.flow,
-                                                  &target->match.mask));
+        && (!target || miniflow_equal_in_minimask(rule->match.flow,
+                                                  target->match.flow,
+                                                  target->match.mask));
 }
 
 static const struct cls_rule *
@@ -1429,7 +1431,7 @@ search_subtable(const struct cls_subtable *subtable,
                 struct cls_cursor *cursor)
 {
     if (!cursor->target
-        || !minimask_has_extra(&subtable->mask, &cursor->target->match.mask)) {
+        || !minimask_has_extra(&subtable->mask, cursor->target->match.mask)) {
         const struct cls_rule *rule;
 
         RCULIST_FOR_EACH (rule, node, &subtable->rules_list) {
@@ -1537,8 +1539,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     uint8_t prev;
     int count = count_1bits(mask->masks.map);
 
-    subtable = xzalloc(sizeof *subtable - sizeof mask->masks.inline_values
-                       + MINIFLOW_VALUES_SIZE(count));
+    subtable = xzalloc(sizeof *subtable + MINIFLOW_VALUES_SIZE(count));
     cmap_init(&subtable->rules);
     miniflow_clone_inline(CONST_CAST(struct miniflow *, &subtable->mask.masks),
                           &mask->masks, count);
@@ -1697,8 +1698,8 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
                                const struct minimask *mask,
                                const struct flow *target)
 {
-    const uint64_t *flowp = miniflow_get_values(flow);
-    const uint64_t *maskp = miniflow_get_values(&mask->masks);
+    const uint64_t *flowp = flow->values;
+    const uint64_t *maskp = mask->masks.values;
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
@@ -1746,8 +1747,8 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
                                   const struct flow *target,
                                   struct flow_wildcards *wc)
 {
-    const uint64_t *flowp = miniflow_get_values(flow);
-    const uint64_t *maskp = miniflow_get_values(&mask->masks);
+    const uint64_t *flowp = flow->values;
+    const uint64_t *maskp = mask->masks.values;
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
@@ -2190,8 +2191,8 @@ static const ovs_be32 *
 minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
     return (OVS_FORCE const ovs_be32 *)
-        (miniflow_get_values(&match->flow)
-         + count_1bits(match->flow.map &
+        (match->flow->values
+         + count_1bits(match->flow->map &
                        ((UINT64_C(1) << mf->flow_be32ofs / 2) - 1)))
         + (mf->flow_be32ofs & 1);
 }

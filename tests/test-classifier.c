@@ -280,11 +280,11 @@ tcls_delete_matches(struct tcls *cls, const struct cls_rule *target)
 
     for (i = 0; i < cls->n_rules; ) {
         struct test_rule *pos = cls->rules[i];
-        if (!minimask_has_extra(&pos->cls_rule.match.mask,
-                                &target->match.mask)) {
+        if (!minimask_has_extra(pos->cls_rule.match.mask,
+                                target->match.mask)) {
             struct flow flow;
 
-            miniflow_expand(&pos->cls_rule.match.flow, &flow);
+            miniflow_expand(pos->cls_rule.match.flow, &flow);
             if (match(target, &flow)) {
                 tcls_remove(cls, pos);
                 continue;
@@ -1432,33 +1432,33 @@ test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
     random_set_seed(0xb3faca38);
     for (idx = 0; next_random_flow(&flow, idx); idx++) {
         const uint64_t *flow_u64 = (const uint64_t *) &flow;
-        struct miniflow miniflow, miniflow2, miniflow3;
+        struct miniflow *miniflow, *miniflow2, *miniflow3;
         struct flow flow2, flow3;
         struct flow_wildcards mask;
-        struct minimask minimask;
+        struct minimask *minimask;
         int i;
 
         /* Convert flow to miniflow. */
-        miniflow_init(&miniflow, &flow);
+        miniflow = miniflow_create(&flow);
 
         /* Check that the flow equals its miniflow. */
-        assert(miniflow_get_vid(&miniflow) == vlan_tci_to_vid(flow.vlan_tci));
+        assert(miniflow_get_vid(miniflow) == vlan_tci_to_vid(flow.vlan_tci));
         for (i = 0; i < FLOW_U64S; i++) {
-            assert(miniflow_get(&miniflow, i) == flow_u64[i]);
+            assert(miniflow_get(miniflow, i) == flow_u64[i]);
         }
 
         /* Check that the miniflow equals itself. */
-        assert(miniflow_equal(&miniflow, &miniflow));
+        assert(miniflow_equal(miniflow, miniflow));
 
         /* Convert miniflow back to flow and verify that it's the same. */
-        miniflow_expand(&miniflow, &flow2);
+        miniflow_expand(miniflow, &flow2);
         assert(flow_equal(&flow, &flow2));
 
         /* Check that copying a miniflow works properly. */
-        miniflow_clone(&miniflow2, &miniflow);
-        assert(miniflow_equal(&miniflow, &miniflow2));
-        assert(miniflow_hash(&miniflow, 0) == miniflow_hash(&miniflow2, 0));
-        miniflow_expand(&miniflow2, &flow3);
+        miniflow2 = miniflow_clone(miniflow);
+        assert(miniflow_equal(miniflow, miniflow2));
+        assert(miniflow_hash(miniflow, 0) == miniflow_hash(miniflow2, 0));
+        miniflow_expand(miniflow2, &flow3);
         assert(flow_equal(&flow, &flow3));
 
         /* Check that masked matches work as expected for identical flows and
@@ -1466,26 +1466,26 @@ test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
         do {
             next_random_flow(&mask.masks, 1);
         } while (flow_wildcards_is_catchall(&mask));
-        minimask_init(&minimask, &mask);
-        assert(minimask_is_catchall(&minimask)
+        minimask = minimask_create(&mask);
+        assert(minimask_is_catchall(minimask)
                == flow_wildcards_is_catchall(&mask));
-        assert(miniflow_equal_in_minimask(&miniflow, &miniflow2, &minimask));
-        assert(miniflow_equal_flow_in_minimask(&miniflow, &flow2, &minimask));
-        assert(miniflow_hash_in_minimask(&miniflow, &minimask, 0x12345678) ==
-               flow_hash_in_minimask(&flow, &minimask, 0x12345678));
+        assert(miniflow_equal_in_minimask(miniflow, miniflow2, minimask));
+        assert(miniflow_equal_flow_in_minimask(miniflow, &flow2, minimask));
+        assert(miniflow_hash_in_minimask(miniflow, minimask, 0x12345678) ==
+               flow_hash_in_minimask(&flow, minimask, 0x12345678));
 
         /* Check that masked matches work as expected for differing flows and
          * miniflows. */
         toggle_masked_flow_bits(&flow2, &mask);
-        assert(!miniflow_equal_flow_in_minimask(&miniflow, &flow2, &minimask));
-        miniflow_init(&miniflow3, &flow2);
-        assert(!miniflow_equal_in_minimask(&miniflow, &miniflow3, &minimask));
+        assert(!miniflow_equal_flow_in_minimask(miniflow, &flow2, minimask));
+        miniflow3 = miniflow_create(&flow2);
+        assert(!miniflow_equal_in_minimask(miniflow, miniflow3, minimask));
 
         /* Clean up. */
-        miniflow_destroy(&miniflow);
-        miniflow_destroy(&miniflow2);
-        miniflow_destroy(&miniflow3);
-        minimask_destroy(&minimask);
+        free(miniflow);
+        free(miniflow2);
+        free(miniflow3);
+        free(minimask);
     }
 }
 
@@ -1493,79 +1493,82 @@ static void
 test_minimask_has_extra(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct flow_wildcards catchall;
-    struct minimask minicatchall;
+    struct minimask *minicatchall;
     struct flow flow;
     unsigned int idx;
 
     flow_wildcards_init_catchall(&catchall);
-    minimask_init(&minicatchall, &catchall);
-    assert(minimask_is_catchall(&minicatchall));
+    minicatchall = minimask_create(&catchall);
+    assert(minimask_is_catchall(minicatchall));
 
     random_set_seed(0x2ec7905b);
     for (idx = 0; next_random_flow(&flow, idx); idx++) {
         struct flow_wildcards mask;
-        struct minimask minimask;
+        struct minimask *minimask;
 
         mask.masks = flow;
-        minimask_init(&minimask, &mask);
-        assert(!minimask_has_extra(&minimask, &minimask));
-        assert(minimask_has_extra(&minicatchall, &minimask)
-               == !minimask_is_catchall(&minimask));
-        if (!minimask_is_catchall(&minimask)) {
-            struct minimask minimask2;
+        minimask = minimask_create(&mask);
+        assert(!minimask_has_extra(minimask, minimask));
+        assert(minimask_has_extra(minicatchall, minimask)
+               == !minimask_is_catchall(minimask));
+        if (!minimask_is_catchall(minimask)) {
+            struct minimask *minimask2;
 
             wildcard_extra_bits(&mask);
-            minimask_init(&minimask2, &mask);
-            assert(minimask_has_extra(&minimask2, &minimask));
-            assert(!minimask_has_extra(&minimask, &minimask2));
-            minimask_destroy(&minimask2);
+            minimask2 = minimask_create(&mask);
+            assert(minimask_has_extra(minimask2, minimask));
+            assert(!minimask_has_extra(minimask, minimask2));
+            free(minimask2);
         }
 
-        minimask_destroy(&minimask);
+        free(minimask);
     }
 
-    minimask_destroy(&minicatchall);
+    free(minicatchall);
 }
 
 static void
 test_minimask_combine(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct flow_wildcards catchall;
-    struct minimask minicatchall;
+    struct minimask *minicatchall;
     struct flow flow;
     unsigned int idx;
 
     flow_wildcards_init_catchall(&catchall);
-    minimask_init(&minicatchall, &catchall);
-    assert(minimask_is_catchall(&minicatchall));
+    minicatchall = minimask_create(&catchall);
+    assert(minimask_is_catchall(minicatchall));
 
     random_set_seed(0x181bf0cd);
     for (idx = 0; next_random_flow(&flow, idx); idx++) {
-        struct minimask minimask, minimask2, minicombined;
+        struct minimask *minimask, *minimask2;
         struct flow_wildcards mask, mask2, combined, combined2;
-        uint64_t storage[FLOW_U64S];
+        struct {
+            struct minimask minicombined;
+            uint64_t storage[FLOW_U64S];
+        } m;
         struct flow flow2;
 
         mask.masks = flow;
-        minimask_init(&minimask, &mask);
+        minimask = minimask_create(&mask);
 
-        minimask_combine(&minicombined, &minimask, &minicatchall, storage);
-        assert(minimask_is_catchall(&minicombined));
+        minimask_combine(&m.minicombined, minimask, minicatchall, m.storage);
+        assert(minimask_is_catchall(&m.minicombined));
 
         any_random_flow(&flow2);
         mask2.masks = flow2;
-        minimask_init(&minimask2, &mask2);
+        minimask2 = minimask_create(&mask2);
 
-        minimask_combine(&minicombined, &minimask, &minimask2, storage);
+        minimask_combine(&m.minicombined, minimask, minimask2, m.storage);
         flow_wildcards_and(&combined, &mask, &mask2);
-        minimask_expand(&minicombined, &combined2);
+        minimask_expand(&m.minicombined, &combined2);
         assert(flow_wildcards_equal(&combined, &combined2));
 
-        minimask_destroy(&minimask);
-        minimask_destroy(&minimask2);
+        free(minimask);
+        free(minimask2);
     }
 
-    minimask_destroy(&minicatchall);
+    free(minicatchall);
 }
 
 static const struct ovs_cmdl_command commands[] = {

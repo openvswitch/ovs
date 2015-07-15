@@ -254,7 +254,7 @@ static inline uint32_t
 flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
                       uint32_t basis)
 {
-    const uint64_t *mask_values = miniflow_get_values(&mask->masks);
+    const uint64_t *mask_values = mask->masks.values;
     const uint64_t *flow_u64 = (const uint64_t *)flow;
     const uint64_t *p = mask_values;
     uint32_t hash;
@@ -277,7 +277,7 @@ static inline uint32_t
 miniflow_hash_in_minimask(const struct miniflow *flow,
                           const struct minimask *mask, uint32_t basis)
 {
-    const uint64_t *mask_values = miniflow_get_values(&mask->masks);
+    const uint64_t *mask_values = mask->masks.values;
     const uint64_t *p = mask_values;
     uint32_t hash = basis;
     uint64_t flow_u64;
@@ -299,7 +299,7 @@ flow_hash_in_minimask_range(const struct flow *flow,
                             const struct minimask *mask,
                             uint8_t start, uint8_t end, uint32_t *basis)
 {
-    const uint64_t *mask_values = miniflow_get_values(&mask->masks);
+    const uint64_t *mask_values = mask->masks.values;
     const uint64_t *flow_u64 = (const uint64_t *)flow;
     unsigned int offset;
     uint64_t map;
@@ -339,7 +339,7 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
     int idx;
 
     map = miniflow_get_map_in_range(&mask->masks, start, end, &offset);
-    p = miniflow_get_values(&mask->masks) + offset;
+    p = mask->masks.values + offset;
     MAP_FOR_EACH_INDEX(idx, map) {
         dst_u64[idx] |= *p++;
     }
@@ -349,7 +349,7 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
 static inline uint32_t
 miniflow_hash(const struct miniflow *flow, uint32_t basis)
 {
-    const uint64_t *values = miniflow_get_values(flow);
+    const uint64_t *values = flow->values;
     const uint64_t *p = values;
     uint32_t hash = basis;
     uint64_t hash_map = 0;
@@ -378,7 +378,7 @@ minimask_hash(const struct minimask *mask, uint32_t basis)
 static inline uint32_t
 minimatch_hash(const struct minimatch *match, uint32_t basis)
 {
-    return miniflow_hash(&match->flow, minimask_hash(&match->mask, basis));
+    return miniflow_hash(match->flow, minimask_hash(match->mask, basis));
 }
 
 /* Returns a hash value for the bits of range [start, end) in 'minimatch',
@@ -395,10 +395,10 @@ minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
     uint32_t hash = *basis;
     int n, i;
 
-    n = count_1bits(miniflow_get_map_in_range(&match->mask.masks, start, end,
+    n = count_1bits(miniflow_get_map_in_range(&match->mask->masks, start, end,
                                               &offset));
-    q = miniflow_get_values(&match->mask.masks) + offset;
-    p = miniflow_get_values(&match->flow) + offset;
+    q = match->mask->masks.values + offset;
+    p = match->flow->values + offset;
 
     for (i = 0; i < n; i++) {
         hash = hash_add64(hash, p[i] & q[i]);

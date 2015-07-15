@@ -1195,8 +1195,8 @@ match_print(const struct match *match)
 void
 minimatch_init(struct minimatch *dst, const struct match *src)
 {
-    minimask_init(&dst->mask, &src->wc);
-    miniflow_init_with_minimask(&dst->flow, &src->flow, &dst->mask);
+    dst->mask = minimask_create(&src->wc);
+    dst->flow = miniflow_create_with_minimask(&src->flow, dst->mask);
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
@@ -1204,8 +1204,8 @@ minimatch_init(struct minimatch *dst, const struct match *src)
 void
 minimatch_clone(struct minimatch *dst, const struct minimatch *src)
 {
-    miniflow_clone(&dst->flow, &src->flow);
-    minimask_clone(&dst->mask, &src->mask);
+    dst->flow = miniflow_clone(src->flow);
+    dst->mask = minimask_clone(src->mask);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.  The caller must
@@ -1213,8 +1213,8 @@ minimatch_clone(struct minimatch *dst, const struct minimatch *src)
 void
 minimatch_move(struct minimatch *dst, struct minimatch *src)
 {
-    miniflow_move(&dst->flow, &src->flow);
-    minimask_move(&dst->mask, &src->mask);
+    dst->flow = src->flow;
+    dst->mask = src->mask;
 }
 
 /* Frees any memory owned by 'match'.  Does not free the storage in which
@@ -1222,16 +1222,16 @@ minimatch_move(struct minimatch *dst, struct minimatch *src)
 void
 minimatch_destroy(struct minimatch *match)
 {
-    miniflow_destroy(&match->flow);
-    minimask_destroy(&match->mask);
+    free(match->flow);
+    free(match->mask);
 }
 
 /* Initializes 'dst' as a copy of 'src'. */
 void
 minimatch_expand(const struct minimatch *src, struct match *dst)
 {
-    miniflow_expand(&src->flow, &dst->flow);
-    minimask_expand(&src->mask, &dst->wc);
+    miniflow_expand(src->flow, &dst->flow);
+    minimask_expand(src->mask, &dst->wc);
     memset(&dst->tun_md, 0, sizeof dst->tun_md);
 }
 
@@ -1239,8 +1239,8 @@ minimatch_expand(const struct minimatch *src, struct match *dst)
 bool
 minimatch_equal(const struct minimatch *a, const struct minimatch *b)
 {
-    return (miniflow_equal(&a->flow, &b->flow)
-            && minimask_equal(&a->mask, &b->mask));
+    return minimask_equal(a->mask, b->mask)
+        && miniflow_equal(a->flow, b->flow);
 }
 
 /* Returns true if 'target' satisifies 'match', that is, if each bit for which
@@ -1254,11 +1254,11 @@ minimatch_matches_flow(const struct minimatch *match,
                        const struct flow *target)
 {
     const uint64_t *target_u64 = (const uint64_t *) target;
-    const uint64_t *flowp = miniflow_get_values(&match->flow);
-    const uint64_t *maskp = miniflow_get_values(&match->mask.masks);
+    const uint64_t *flowp = match->flow->values;
+    const uint64_t *maskp = match->mask->masks.values;
     int idx;
 
-    MAP_FOR_EACH_INDEX(idx, match->flow.map) {
+    MAP_FOR_EACH_INDEX(idx, match->flow->map) {
         if ((*flowp++ ^ target_u64[idx]) & *maskp++) {
             return false;
         }

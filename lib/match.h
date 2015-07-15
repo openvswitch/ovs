@@ -170,8 +170,8 @@ void match_print(const struct match *);
  *     'values', which makes minimatch_matches_flow() faster.
  */
 struct minimatch {
-    struct miniflow flow;
-    struct minimask mask;
+    struct miniflow *flow;
+    struct minimask *mask;
 };
 
 void minimatch_init(struct minimatch *, const struct match *);

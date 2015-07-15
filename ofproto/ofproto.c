@@ -4636,9 +4636,9 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     if (old_rule) {
         ovsrcu_postpone(remove_rule_rcu, old_rule);
     } else {
-        if (minimask_get_vid_mask(&new_rule->cr.match.mask) == VLAN_VID_MASK) {
+        if (minimask_get_vid_mask(new_rule->cr.match.mask) == VLAN_VID_MASK) {
             if (ofproto->vlan_bitmap) {
-                uint16_t vid = miniflow_get_vid(&new_rule->cr.match.flow);
+                uint16_t vid = miniflow_get_vid(new_rule->cr.match.flow);
 
                 if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
                     bitmap_set1(ofproto->vlan_bitmap, vid);
@@ -7433,7 +7433,7 @@ eviction_group_hash_rule(struct rule *rule)
     uint32_t hash;
 
     hash = table->eviction_group_id_basis;
-    miniflow_expand(&rule->cr.match.flow, &flow);
+    miniflow_expand(rule->cr.match.flow, &flow);
     for (sf = table->eviction_fields;
          sf < &table->eviction_fields[table->n_eviction_fields];
          sf++)
@@ -7792,8 +7792,8 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
 
         CLS_FOR_EACH_TARGET (rule, cr, &oftable->cls, &target,
                              CLS_MAX_VERSION) {
-            if (minimask_get_vid_mask(&rule->cr.match.mask) == VLAN_VID_MASK) {
-                uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
+            if (minimask_get_vid_mask(rule->cr.match.mask) == VLAN_VID_MASK) {
+                uint16_t vid = miniflow_get_vid(rule->cr.match.flow);
 
                 bitmap_set1(vlan_bitmap, vid);
                 bitmap_set1(ofproto->vlan_bitmap, vid);

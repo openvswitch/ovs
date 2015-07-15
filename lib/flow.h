@@ -362,91 +362,48 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
 
 /* Compressed flow. */
 
-/* Number of 64-bit words present in struct miniflow. */
-#define MINI_N_INLINE 4
-
 /* Maximum number of 64-bit words supported. */
-BUILD_ASSERT_DECL(FLOW_U64S <= 63);
+BUILD_ASSERT_DECL(FLOW_U64S <= 64);
 
 /* A sparse representation of a "struct flow".
  *
  * A "struct flow" is fairly large and tends to be mostly zeros.  Sparse
- * representation has two advantages.  First, it saves memory.  Second, it
- * saves time when the goal is to iterate over only the nonzero parts of the
- * struct.
+ * representation has two advantages.  First, it saves memory and, more
+ * importantly, minimizes the number of accessed cache lines.  Second, it saves
+ * time when the goal is to iterate over only the nonzero parts of the struct.
  *
  * The 'map' member holds one bit for each uint64_t in a "struct flow".  Each
  * 0-bit indicates that the corresponding uint64_t is zero, each 1-bit that it
  * *may* be nonzero (see below how this applies to minimasks).
- *
- * The 'values_inline' boolean member indicates that the values are at
- * 'inline_values'.  If 'values_inline' is zero, then the values are
- * offline at 'offline_values'.  In either case, values is an array that has
- * one element for each 1-bit in 'map'.  The least-numbered 1-bit is in
- * the first element of the values array, the next 1-bit is in the next array
- * element, and so on.
- *
- * MINI_N_INLINE is the default number of inline words.  When a miniflow is
- * dynamically allocated the actual amount of inline storage may be different.
- * In that case 'inline_values' contains storage at least for the number
- * of words indicated by 'map' (one uint64_t for each 1-bit in the map).
  *
  * Elements in values array are allowed to be zero.  This is useful for "struct
  * minimatch", for which ensuring that the miniflow and minimask members have
  * same 'map' allows optimization.  This allowance applies only to a miniflow
  * that is not a mask.  That is, a minimask may NOT have zero elements in
  * its 'values'.
- */
+ *
+ * A miniflow is always dynamically allocated so that the 'values' array has as
+ * many elements as there are 1-bits in 'map'. */
 struct miniflow {
-    uint64_t map:63;
-    uint64_t values_inline:1;
-    union {
-        uint64_t *offline_values;
-        uint64_t inline_values[MINI_N_INLINE]; /* Minimum inline size. */
-    };
+    uint64_t map;
+    uint64_t values[0];
 };
-BUILD_ASSERT_DECL(sizeof(struct miniflow)
-                  == sizeof(uint64_t) + MINI_N_INLINE * sizeof(uint64_t));
+BUILD_ASSERT_DECL(sizeof(struct miniflow) == sizeof(uint64_t));
 
 #define MINIFLOW_VALUES_SIZE(COUNT) ((COUNT) * sizeof(uint64_t))
 
-static inline uint64_t *miniflow_values(struct miniflow *mf)
-{
-    return OVS_LIKELY(mf->values_inline)
-        ? mf->inline_values : mf->offline_values;
-}
-
-static inline const uint64_t *miniflow_get_values(const struct miniflow *mf)
-{
-    return OVS_LIKELY(mf->values_inline)
-        ? mf->inline_values : mf->offline_values;
-}
-
-/* This is useful for initializing a miniflow for a miniflow_extract() call. */
-static inline void miniflow_initialize(struct miniflow *mf,
-                                       uint64_t buf[FLOW_U64S])
-{
-    mf->map = 0;
-    mf->values_inline = (buf == (uint64_t *)(mf + 1));
-    if (!mf->values_inline) {
-        mf->offline_values = buf;
-    }
-}
-
 struct pkt_metadata;
 
-/* The 'dst->values' must be initialized with a buffer with space for
- * FLOW_U64S.  'dst->map' is ignored on input and set on output to
- * indicate which fields were extracted. */
+/* The 'dst' must follow with buffer space for FLOW_U64S 64-bit units.
+ * 'dst->map' is ignored on input and set on output to indicate which fields
+ * were extracted. */
 void miniflow_extract(struct dp_packet *packet, struct miniflow *dst);
-void miniflow_init(struct miniflow *, const struct flow *);
-void miniflow_init_with_minimask(struct miniflow *, const struct flow *,
-                                 const struct minimask *);
-void miniflow_clone(struct miniflow *, const struct miniflow *);
+struct miniflow * miniflow_create(const struct flow *);
+struct miniflow * miniflow_create_with_minimask(const struct flow *,
+                                              const struct minimask *);
+struct miniflow * miniflow_clone(const struct miniflow *);
 void miniflow_clone_inline(struct miniflow *, const struct miniflow *,
                            size_t n_values);
-void miniflow_move(struct miniflow *dst, struct miniflow *);
-void miniflow_destroy(struct miniflow *);
 
 void miniflow_expand(const struct miniflow *, struct flow *);
 
@@ -523,10 +480,10 @@ mf_get_next_in_map(struct mf_for_each_in_map_aux *aux, uint64_t *value)
 }
 
 /* Iterate through all miniflow u64 values specified by 'MAP'. */
-#define MINIFLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)                      \
-    for (struct mf_for_each_in_map_aux aux__                            \
-             = { miniflow_get_values(FLOW), (FLOW)->map, MAP };         \
-         mf_get_next_in_map(&aux__, &(VALUE));                          \
+#define MINIFLOW_FOR_EACH_IN_MAP(VALUE, FLOW, MAP)           \
+    for (struct mf_for_each_in_map_aux aux__                 \
+             = { (FLOW)->values, (FLOW)->map, MAP };         \
+         mf_get_next_in_map(&aux__, &(VALUE));               \
         )
 
 /* This can be used when it is known that 'u64_idx' is set in 'map'. */
@@ -541,7 +498,7 @@ miniflow_values_get__(const uint64_t *values, uint64_t map, int u64_idx)
 static inline uint64_t
 miniflow_get__(const struct miniflow *mf, int u64_idx)
 {
-    return miniflow_values_get__(miniflow_get_values(mf), mf->map, u64_idx);
+    return miniflow_values_get__(mf->values, mf->map, u64_idx);
 }
 
 /* Get the value of 'FIELD' of an up to 8 byte wide integer type 'TYPE' of
@@ -549,7 +506,7 @@ miniflow_get__(const struct miniflow *mf, int u64_idx)
 #define MINIFLOW_GET_TYPE(MF, TYPE, OFS)                                \
     (((MF)->map & (UINT64_C(1) << (OFS) / sizeof(uint64_t)))            \
      ? ((OVS_FORCE const TYPE *)                                        \
-        (miniflow_get_values(MF)                                        \
+        ((MF)->values                                                   \
          + count_1bits((MF)->map &                                      \
                        ((UINT64_C(1) << (OFS) / sizeof(uint64_t)) - 1)))) \
      [(OFS) % sizeof(uint64_t) / sizeof(TYPE)]                          \
@@ -602,13 +559,11 @@ struct minimask {
     struct miniflow masks;
 };
 
-void minimask_init(struct minimask *, const struct flow_wildcards *);
-void minimask_clone(struct minimask *, const struct minimask *);
-void minimask_move(struct minimask *dst, struct minimask *src);
+struct minimask * minimask_create(const struct flow_wildcards *);
+struct minimask * minimask_clone(const struct minimask *);
 void minimask_combine(struct minimask *dst,
                       const struct minimask *a, const struct minimask *b,
                       uint64_t storage[FLOW_U64S]);
-void minimask_destroy(struct minimask *);
 
 void minimask_expand(const struct minimask *, struct flow_wildcards *);
 
@@ -724,7 +679,7 @@ static inline void
 flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
 {
     uint64_t *dst_u64 = (uint64_t *) dst;
-    const uint64_t *p = miniflow_get_values(src);
+    const uint64_t *p = src->values;
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, src->map) {

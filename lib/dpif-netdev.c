@@ -98,7 +98,7 @@ struct netdev_flow_key {
     uint32_t hash;       /* Hash function differs for different users. */
     uint32_t len;        /* Length of the following miniflow (incl. map). */
     struct miniflow mf;
-    uint64_t buf[FLOW_MAX_PACKET_U64S - MINI_N_INLINE];
+    uint64_t buf[FLOW_MAX_PACKET_U64S];
 };
 
 /* Exact match cache for frequently used flows
@@ -488,16 +488,15 @@ emc_cache_init(struct emc_cache *flow_cache)
 {
     int i;
 
-    BUILD_ASSERT(offsetof(struct miniflow, inline_values) == sizeof(uint64_t));
+    BUILD_ASSERT(offsetof(struct miniflow, values) == sizeof(uint64_t));
 
     flow_cache->sweep_idx = 0;
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
         flow_cache->entries[i].key.len
-            = offsetof(struct miniflow, inline_values);
-        miniflow_initialize(&flow_cache->entries[i].key.mf,
-                            flow_cache->entries[i].key.buf);
+            = offsetof(struct miniflow, values);
+        flow_cache->entries[i].key.mf.map = 0;
     }
 }
 
@@ -1526,16 +1525,14 @@ static bool dp_netdev_flow_ref(struct dp_netdev_flow *flow)
  * The following assertions make sure that what we're doing with miniflow is
  * safe
  */
-BUILD_ASSERT_DECL(offsetof(struct miniflow, inline_values)
-                  == sizeof(uint64_t));
+BUILD_ASSERT_DECL(offsetof(struct miniflow, values) == sizeof(uint64_t));
 
 /* Given the number of bits set in the miniflow map, returns the size of the
  * 'netdev_flow_key.mf' */
 static inline uint32_t
 netdev_flow_key_size(uint32_t flow_u32s)
 {
-    return offsetof(struct miniflow, inline_values) +
-        MINIFLOW_VALUES_SIZE(flow_u32s);
+    return offsetof(struct miniflow, values) + MINIFLOW_VALUES_SIZE(flow_u32s);
 }
 
 static inline bool
@@ -1572,8 +1569,6 @@ netdev_flow_key_from_flow(struct netdev_flow_key *dst,
     struct dp_packet packet;
     uint64_t buf_stub[512 / 8];
 
-    miniflow_initialize(&dst->mf, dst->buf);
-
     dp_packet_use_stub(&packet, buf_stub, sizeof buf_stub);
     pkt_metadata_from_flow(&packet.md, src);
     flow_compose(&packet, src);
@@ -1590,7 +1585,7 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
                       const struct match *match)
 {
     const uint64_t *mask_u64 = (const uint64_t *) &match->wc.masks;
-    uint64_t *dst = mask->mf.inline_values;
+    uint64_t *dst = mask->mf.values;
     uint64_t map, mask_map = 0;
     uint32_t hash = 0;
     int n;
@@ -1610,12 +1605,11 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
         map -= rm1bit;
     }
 
-    mask->mf.values_inline = true;
     mask->mf.map = mask_map;
 
     hash = hash_add64(hash, mask_map);
 
-    n = dst - mask->mf.inline_values;
+    n = dst - mask->mf.values;
 
     mask->hash = hash_finish(hash, n * 8);
     mask->len = netdev_flow_key_size(n);
@@ -1627,27 +1621,26 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             const struct flow *flow,
                             const struct netdev_flow_key *mask)
 {
-    uint64_t *dst_u64 = dst->mf.inline_values;
-    const uint64_t *mask_u64 = mask->mf.inline_values;
+    uint64_t *dst_u64 = dst->mf.values;
+    const uint64_t *mask_u64 = mask->mf.values;
     uint32_t hash = 0;
     uint64_t value;
 
     dst->len = mask->len;
-    dst->mf.values_inline = true;
     dst->mf.map = mask->mf.map;
 
     FLOW_FOR_EACH_IN_MAP(value, flow, mask->mf.map) {
         *dst_u64 = value & *mask_u64++;
         hash = hash_add64(hash, *dst_u64++);
     }
-    dst->hash = hash_finish(hash, (dst_u64 - dst->mf.inline_values) * 8);
+    dst->hash = hash_finish(hash, (dst_u64 - dst->mf.values) * 8);
 }
 
 /* Iterate through all netdev_flow_key u64 values specified by 'MAP' */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(VALUE, KEY, MAP)           \
-    for (struct mf_for_each_in_map_aux aux__                       \
-             = { (KEY)->mf.inline_values, (KEY)->mf.map, MAP };    \
-         mf_get_next_in_map(&aux__, &(VALUE));                     \
+#define NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(VALUE, KEY, MAP)   \
+    for (struct mf_for_each_in_map_aux aux__               \
+             = { (KEY)->mf.values, (KEY)->mf.map, MAP };   \
+         mf_get_next_in_map(&aux__, &(VALUE));             \
         )
 
 /* Returns a hash value for the bits of 'key' where there are 1-bits in
@@ -1656,7 +1649,7 @@ static inline uint32_t
 netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
                              const struct netdev_flow_key *mask)
 {
-    const uint64_t *p = mask->mf.inline_values;
+    const uint64_t *p = mask->mf.values;
     uint32_t hash = 0;
     uint64_t key_u64;
 
@@ -1664,7 +1657,7 @@ netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
         hash = hash_add64(hash, key_u64 & *p++);
     }
 
-    return hash_finish(hash, (p - mask->mf.inline_values) * 8);
+    return hash_finish(hash, (p - mask->mf.values) * 8);
 }
 
 static inline bool
@@ -3168,7 +3161,6 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
     struct netdev_flow_key key;
     size_t i, notfound_cnt = 0;
 
-    miniflow_initialize(&key.mf, key.buf);
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
 
@@ -3863,8 +3855,8 @@ static inline bool
 dpcls_rule_matches_key(const struct dpcls_rule *rule,
                        const struct netdev_flow_key *target)
 {
-    const uint64_t *keyp = rule->flow.mf.inline_values;
-    const uint64_t *maskp = rule->mask->mf.inline_values;
+    const uint64_t *keyp = rule->flow.mf.values;
+    const uint64_t *maskp = rule->mask->mf.values;
     uint64_t target_u64;
 
     NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(target_u64, target, rule->flow.mf.map) {

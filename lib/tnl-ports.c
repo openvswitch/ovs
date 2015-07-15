@@ -162,8 +162,8 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         };
 
         ds_put_format(&ds, "%s (%"PRIu32") : ", p->dev_name, p->portno);
-        minimask_expand(&p->cr.match.mask, &wc);
-        miniflow_expand(&p->cr.match.flow, &flow);
+        minimask_expand(p->cr.match.mask, &wc);
+        miniflow_expand(p->cr.match.flow, &flow);
 
         /* Key. */
         odp_parms.odp_in_port = flow.in_port.odp_port;
