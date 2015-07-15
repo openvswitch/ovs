@@ -2272,7 +2272,7 @@ Cleanup:
                         OvsCleanupVxlanTunnel(NULL, vport, NULL, NULL);
                         break;
                     case OVS_VPORT_TYPE_STT:
-                        OvsCleanupSttTunnel(vport);;
+                        OvsCleanupSttTunnel(vport);
                         break;
                     default:
                         ASSERT(!"Invalid tunnel port type");

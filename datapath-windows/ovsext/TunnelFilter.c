@@ -1444,7 +1444,7 @@ OvsTunnelFilterQueueRequest(PIRP irp,
  * <OvsNewVportCmdHandler>
  *     <OvsInitTunnelVport>
  *         <OvsInitVxlanTunnel>
- *             <OvsTunelFilterCreate>
+ *             <OvsTunnelFilterCreate>
  *                 <OvsTunnelFilterQueueRequest>
  *                     --> if thread STOP event is signalled:
  *                         --> Complete request with STATUS_CANCELLED
@@ -1455,11 +1455,11 @@ OvsTunnelFilterQueueRequest(PIRP irp,
  * --------------------------------------------------------------------------
  */
 NTSTATUS
-OvsTunelFilterCreate(PIRP irp,
-                     UINT16 filterPort,
-                     UINT64 *filterID,
-                     PFNTunnelVportPendingOp callback,
-                     PVOID tunnelContext)
+OvsTunnelFilterCreate(PIRP irp,
+                      UINT16 filterPort,
+                      UINT64 *filterID,
+                      PFNTunnelVportPendingOp callback,
+                      PVOID tunnelContext)
 {
     return OvsTunnelFilterQueueRequest(irp,
                                        filterPort,
@@ -1483,7 +1483,7 @@ OvsTunelFilterCreate(PIRP irp,
  * <OvsDeleteVportCmdHandler>
  *     <OvsRemoveAndDeleteVport>
  *         <OvsCleanupVxlanTunnel>
- *             <OvsTunelFilterCreate>
+ *             <OvsTunnelFilterDelete>
  *                 <OvsTunnelFilterQueueRequest>
  *                     --> if thread STOP event is signalled:
  *                         --> Complete request with STATUS_CANCELLED
@@ -1494,10 +1494,10 @@ OvsTunelFilterCreate(PIRP irp,
  * --------------------------------------------------------------------------
  */
 NTSTATUS
-OvsTunelFilterDelete(PIRP irp,
-                     UINT64 filterID,
-                     PFNTunnelVportPendingOp callback,
-                     PVOID tunnelContext)
+OvsTunnelFilterDelete(PIRP irp,
+                      UINT64 filterID,
+                      PFNTunnelVportPendingOp callback,
+                      PVOID tunnelContext)
 {
     return OvsTunnelFilterQueueRequest(irp,
                                        0,

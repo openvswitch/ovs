@@ -30,15 +30,15 @@ VOID OvsRegisterSystemProvider(PVOID deviceObject);
 
 VOID OvsUnregisterSystemProvider();
 
-NTSTATUS OvsTunelFilterCreate(PIRP irp,
-                              UINT16 filterPort,
-                              UINT64 *filterID,
-                              PFNTunnelVportPendingOp callback,
-                              PVOID context);
+NTSTATUS OvsTunnelFilterCreate(PIRP irp,
+                               UINT16 filterPort,
+                               UINT64 *filterID,
+                               PFNTunnelVportPendingOp callback,
+                               PVOID context);
 
-NTSTATUS OvsTunelFilterDelete(PIRP irp,
-                              UINT64 filterID,
-                              PFNTunnelVportPendingOp callback,
-                              PVOID context);
+NTSTATUS OvsTunnelFilterDelete(PIRP irp,
+                               UINT64 filterID,
+                               PFNTunnelVportPendingOp callback,
+                               PVOID context);
 
 #endif /* __TUNNEL_INTF_H_ */
