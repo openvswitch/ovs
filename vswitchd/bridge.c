@@ -473,6 +473,7 @@ bridge_init(const char *remote)
     lacp_init();
     bond_init();
     cfm_init();
+    bfd_init();
     ovs_numa_init();
     stp_init();
     lldp_init();

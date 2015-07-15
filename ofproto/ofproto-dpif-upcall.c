@@ -304,12 +304,10 @@ static upcall_callback upcall_cb;
 static atomic_bool enable_megaflows = ATOMIC_VAR_INIT(true);
 static atomic_bool enable_ufid = ATOMIC_VAR_INIT(true);
 
-struct udpif *
-udpif_create(struct dpif_backer *backer, struct dpif *dpif)
+void
+udpif_init(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-    struct udpif *udpif = xzalloc(sizeof *udpif);
-
     if (ovsthread_once_start(&once)) {
         unixctl_command_register("upcall/show", "", 0, 0, upcall_unixctl_show,
                                  NULL);
@@ -329,6 +327,12 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
                                  upcall_unixctl_purge, NULL);
         ovsthread_once_done(&once);
     }
+}
+
+struct udpif *
+udpif_create(struct dpif_backer *backer, struct dpif *dpif)
+{
+    struct udpif *udpif = xzalloc(sizeof *udpif);
 
     udpif->dpif = dpif;
     udpif->backer = backer;

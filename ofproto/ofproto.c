@@ -379,6 +379,8 @@ ofproto_init(const struct shash *iface_hints)
     for (i = 0; i < n_ofproto_classes; i++) {
         ofproto_classes[i]->init(&init_ofp_ports);
     }
+
+    ofproto_unixctl_init();
 }
 
 /* 'type' should be a normalized datapath type, as returned by
@@ -506,8 +508,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     int i;
 
     *ofprotop = NULL;
-
-    ofproto_unixctl_init();
 
     datapath_type = ofproto_normalize_type(datapath_type);
     class = ofproto_class_find__(datapath_type);
