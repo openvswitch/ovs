@@ -64,4 +64,5 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/ovsext.vcxproj \
 	datapath-windows/ovsext/ovsext.vcxproj.user \
 	datapath-windows/ovsext/precomp.h \
-	datapath-windows/ovsext/precompsrc.c
+	datapath-windows/ovsext/precompsrc.c \
+	datapath-windows/ovsext/resource.h
