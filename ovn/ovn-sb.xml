@@ -453,7 +453,7 @@
         logical ports.  Thus, the useful values are <ref
         column="logical_port"/> names from the <ref column="Binding"/> and
         <ref column="Gateway"/> tables in a logical flow's <ref
-	column="logical_datapath"/>.
+        column="logical_datapath"/>.
       </p>
 
       <p>
@@ -548,66 +548,66 @@
 
     <column name="actions">
       <p>
-	Logical datapath actions, to be executed when the logical flow
-	represented by this row is the highest-priority match.
+        Logical datapath actions, to be executed when the logical flow
+        represented by this row is the highest-priority match.
       </p>
 
       <p>
-	Actions share lexical syntax with the <ref column="match"/> column.  An
-	empty set of actions (or one that contains just white space or
-	comments), or a set of actions that consists of just
-	<code>drop;</code>, causes the matched packets to be dropped.
-	Otherwise, the column should contain a sequence of actions, each
-	terminated by a semicolon.
+        Actions share lexical syntax with the <ref column="match"/> column.  An
+        empty set of actions (or one that contains just white space or
+        comments), or a set of actions that consists of just
+        <code>drop;</code>, causes the matched packets to be dropped.
+        Otherwise, the column should contain a sequence of actions, each
+        terminated by a semicolon.
       </p>
 
       <p>
-	The following actions will be initially supported:
+        The following actions will be initially supported:
       </p>
 
       <dl>
         <dt><code>output;</code></dt>
         <dd>
-	  Outputs the packet to the logical port current designated by
-	  <code>outport</code>.  Output to the ingress port is implicitly
-	  dropped, that is, <code>output</code> becomes a no-op if
-	  <code>outport</code> == <code>inport</code>.
-	</dd>
+          Outputs the packet to the logical port current designated by
+          <code>outport</code>.  Output to the ingress port is implicitly
+          dropped, that is, <code>output</code> becomes a no-op if
+          <code>outport</code> == <code>inport</code>.
+        </dd>
 
         <dt><code>next;</code></dt>
         <dd>
-	  Executes the next logical datapath table as a subroutine.
-	</dd>
+          Executes the next logical datapath table as a subroutine.
+        </dd>
 
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>
         <dd>
-	  Sets data or metadata field <var>field</var> to constant value
-	  <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
-	  logical output port.  Assigning to a field with prerequisites
-	  implicitly adds those prerequisites to <ref column="match"/>; thus,
-	  for example, a flow that sets <code>tcp.dst</code> applies only to
-	  TCP flows, regardless of whether its <ref column="match"/> mentions
-	  any TCP field.  To set only a subset of bits in a field,
-	  <var>field</var> may be a subfield or <var>constant</var> may be
-	  masked, e.g. <code>vlan.pcp[2] = 1;</code> and <code>vlan.pcp =
-	  4/4;</code> both set the most sigificant bit of the VLAN PCP.  Not
-	  all fields are modifiable (e.g. <code>eth.type</code> and
-	  <code>ip.proto</code> are read-only), and not all modifiable fields
-	  may be partially modified (e.g. <code>ip.ttl</code> must assigned as
-	  a whole).
-	</dd>
+          Sets data or metadata field <var>field</var> to constant value
+          <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
+          logical output port.  Assigning to a field with prerequisites
+          implicitly adds those prerequisites to <ref column="match"/>; thus,
+          for example, a flow that sets <code>tcp.dst</code> applies only to
+          TCP flows, regardless of whether its <ref column="match"/> mentions
+          any TCP field.  To set only a subset of bits in a field,
+          <var>field</var> may be a subfield or <var>constant</var> may be
+          masked, e.g. <code>vlan.pcp[2] = 1;</code> and <code>vlan.pcp =
+          4/4;</code> both set the most sigificant bit of the VLAN PCP.  Not
+          all fields are modifiable (e.g. <code>eth.type</code> and
+          <code>ip.proto</code> are read-only), and not all modifiable fields
+          may be partially modified (e.g. <code>ip.ttl</code> must assigned as
+          a whole).
+        </dd>
       </dl>
 
       <p>
-	The following actions will likely be useful later, but they have not
-	been thought out carefully.
+        The following actions will likely be useful later, but they have not
+        been thought out carefully.
       </p>
 
       <dl>
         <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
-	<dd>
-	  Extends the assignment action to allow copying between fields.
-	</dd>
+        <dd>
+          Extends the assignment action to allow copying between fields.
+        </dd>
 
         <dt><code>learn</code></dt>
 
