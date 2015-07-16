@@ -271,7 +271,7 @@ dnl translated to uppercase.
 AC_DEFUN([OVS_FIND_FIELD_IFELSE], [
   AC_MSG_CHECKING([whether $2 has member $3 in $1])
   if test -f $1; then
-    awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3'
+    awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3' >/dev/null
     status=$?
     case $status in
       0)
