@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "bitmap.h"
 #include "cmap.h"
 #include "csum.h"
 #include "dp-packet.h"
@@ -44,7 +45,6 @@
 #include "latch.h"
 #include "list.h"
 #include "match.h"
-#include "meta-flow.h"
 #include "netdev.h"
 #include "netdev-dpdk.h"
 #include "netdev-vport.h"
@@ -1879,13 +1879,13 @@ static int
 dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               const struct nlattr *mask_key,
                               uint32_t mask_key_len, const struct flow *flow,
-                              struct flow *mask)
+                              struct flow_wildcards *wc)
 {
     if (mask_key_len) {
         enum odp_key_fitness fitness;
 
         fitness = odp_flow_key_to_mask(mask_key, mask_key_len, key, key_len,
-                                       mask, flow);
+                                       &wc->masks, flow);
         if (fitness) {
             /* This should not happen: it indicates that
              * odp_flow_key_from_mask() and odp_flow_key_to_mask()
@@ -1907,31 +1907,9 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
             return EINVAL;
         }
     } else {
-        enum mf_field_id id;
-        /* No mask key, unwildcard everything except fields whose
-         * prerequisities are not met. */
-        memset(mask, 0x0, sizeof *mask);
-
-        for (id = 0; id < MFF_N_IDS; ++id) {
-            /* Skip registers and metadata. */
-            if (!(id >= MFF_REG0 && id < MFF_REG0 + FLOW_N_REGS)
-                && !(id >= MFF_XREG0 && id < MFF_XREG0 + FLOW_N_XREGS)
-                && id != MFF_METADATA) {
-                const struct mf_field *mf = mf_from_id(id);
-                if (mf_are_prereqs_ok(mf, flow)) {
-                    mf_mask_field(mf, mask);
-                }
-            }
-        }
+        flow_wildcards_init_for_packet(wc, flow);
     }
 
-    /* Force unwildcard the in_port.
-     *
-     * We need to do this even in the case where we unwildcard "everything"
-     * above because "everything" only includes the 16-bit OpenFlow port number
-     * mask->in_port.ofp_port, which only covers half of the 32-bit datapath
-     * port number mask->in_port.odp_port. */
-    mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
     return 0;
 }
 
@@ -2069,7 +2047,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     }
     error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
                                           put->mask, put->mask_len,
-                                          &match.flow, &match.wc.masks);
+                                          &match.flow, &match.wc);
     if (error) {
         return error;
     }
