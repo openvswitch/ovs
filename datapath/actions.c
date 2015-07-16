@@ -168,10 +168,7 @@ static int pop_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 	if (unlikely(err))
 		return err;
 
-	if (skb->ip_summed == CHECKSUM_COMPLETE)
-		skb->csum = csum_sub(skb->csum,
-				     csum_partial(skb_mpls_header(skb),
-						  MPLS_HLEN, 0));
+	skb_postpull_rcsum(skb, skb_mpls_header(skb), MPLS_HLEN);
 
 	memmove(skb_mac_header(skb) + MPLS_HLEN, skb_mac_header(skb),
 		skb->mac_len);
