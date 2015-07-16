@@ -423,52 +423,98 @@ dpdk_watchdog(void *dummy OVS_UNUSED)
 }
 
 static int
+dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
+{
+    int diag = 0;
+    int i;
+
+    /* A device may report more queues than it makes available (this has
+     * been observed for Intel xl710, which reserves some of them for
+     * SRIOV):  rte_eth_*_queue_setup will fail if a queue is not
+     * available.  When this happens we can retry the configuration
+     * and request less queues */
+    while (n_rxq && n_txq) {
+        if (diag) {
+            VLOG_INFO("Retrying setup with (rxq:%d txq:%d)", n_rxq, n_txq);
+        }
+
+        diag = rte_eth_dev_configure(dev->port_id, n_rxq, n_txq, &port_conf);
+        if (diag) {
+            break;
+        }
+
+        for (i = 0; i < n_txq; i++) {
+            diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
+                                          dev->socket_id, NULL);
+            if (diag) {
+                VLOG_INFO("Interface %s txq(%d) setup error: %s",
+                          dev->up.name, i, rte_strerror(-diag));
+                break;
+            }
+        }
+
+        if (i != n_txq) {
+            /* Retry with less tx queues */
+            n_txq = i;
+            continue;
+        }
+
+        for (i = 0; i < n_rxq; i++) {
+            diag = rte_eth_rx_queue_setup(dev->port_id, i, NIC_PORT_RX_Q_SIZE,
+                                          dev->socket_id, NULL,
+                                          dev->dpdk_mp->mp);
+            if (diag) {
+                VLOG_INFO("Interface %s rxq(%d) setup error: %s",
+                          dev->up.name, i, rte_strerror(-diag));
+                break;
+            }
+        }
+
+        if (i != n_rxq) {
+            /* Retry with less rx queues */
+            n_rxq = i;
+            continue;
+        }
+
+        dev->up.n_rxq = n_rxq;
+        dev->real_n_txq = n_txq;
+
+        return 0;
+    }
+
+    return diag;
+}
+
+
+static int
 dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
 {
     struct rte_pktmbuf_pool_private *mbp_priv;
     struct rte_eth_dev_info info;
     struct ether_addr eth_addr;
     int diag;
-    int i;
+    int n_rxq, n_txq;
 
     if (dev->port_id < 0 || dev->port_id >= rte_eth_dev_count()) {
         return ENODEV;
     }
 
     rte_eth_dev_info_get(dev->port_id, &info);
-    dev->up.n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
-    dev->real_n_txq = MIN(info.max_tx_queues, dev->up.n_txq);
 
-    diag = rte_eth_dev_configure(dev->port_id, dev->up.n_rxq, dev->real_n_txq,
-                                 &port_conf);
+    n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
+    n_txq = MIN(info.max_tx_queues, dev->up.n_txq);
+
+    diag = dpdk_eth_dev_queue_setup(dev, n_rxq, n_txq);
     if (diag) {
-        VLOG_ERR("eth dev config error %d. rxq:%d txq:%d", diag, dev->up.n_rxq,
-                 dev->real_n_txq);
+        VLOG_ERR("Interface %s(rxq:%d txq:%d) configure error: %s",
+                 dev->up.name, n_rxq, n_txq, rte_strerror(-diag));
         return -diag;
-    }
-
-    for (i = 0; i < dev->real_n_txq; i++) {
-        diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
-                                      dev->socket_id, NULL);
-        if (diag) {
-            VLOG_ERR("eth dev tx queue setup error %d",diag);
-            return -diag;
-        }
-    }
-
-    for (i = 0; i < dev->up.n_rxq; i++) {
-        diag = rte_eth_rx_queue_setup(dev->port_id, i, NIC_PORT_RX_Q_SIZE,
-                                      dev->socket_id,
-                                      NULL, dev->dpdk_mp->mp);
-        if (diag) {
-            VLOG_ERR("eth dev rx queue setup error %d",diag);
-            return -diag;
-        }
     }
 
     diag = rte_eth_dev_start(dev->port_id);
     if (diag) {
-        VLOG_ERR("eth dev start error %d",diag);
+        VLOG_ERR("Interface %s start error: %s", dev->up.name,
+                 rte_strerror(-diag));
         return -diag;
     }
 
