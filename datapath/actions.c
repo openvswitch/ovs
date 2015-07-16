@@ -28,6 +28,7 @@
 #include <linux/in6.h>
 #include <linux/if_arp.h>
 #include <linux/if_vlan.h>
+
 #include <net/ip.h>
 #include <net/ipv6.h>
 #include <net/checksum.h>
@@ -228,7 +229,6 @@ static int pop_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 		invalidate_flow_key(key);
 	else
 		key->eth.tci = 0;
-
 	return err;
 }
 
@@ -239,7 +239,6 @@ static int push_vlan(struct sk_buff *skb, struct sw_flow_key *key,
 		invalidate_flow_key(key);
 	else
 		key->eth.tci = vlan->vlan_tci;
-
 	return skb_vlan_push(skb, vlan->vlan_tpid,
 			     ntohs(vlan->vlan_tci) & ~VLAN_TAG_PRESENT);
 }
@@ -557,7 +556,6 @@ static int set_tcp(struct sk_buff *skb, struct sw_flow_key *flow_key,
 		return err;
 
 	th = tcp_hdr(skb);
-
 	src = MASKED(th->source, key->tcp_src, mask->tcp_src);
 	if (likely(src != th->source)) {
 		set_tp_port(skb, &th->source, src, &th->check);
@@ -587,7 +585,6 @@ static int set_sctp(struct sk_buff *skb, struct sw_flow_key *flow_key,
 		return err;
 
 	sh = sctp_hdr(skb);
-
 	old_csum = sh->checksum;
 	old_correct_csum = sctp_compute_cksum(skb, sctphoff);
 
@@ -747,7 +744,6 @@ static int execute_set_action(struct sk_buff *skb,
 	}
 
 	return -EINVAL;
-
 }
 
 /* Mask is at the midpoint of the data. */
