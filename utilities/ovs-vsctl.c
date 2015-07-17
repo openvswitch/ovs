@@ -975,7 +975,7 @@ cmd_init(struct ctl_context *ctx OVS_UNUSED)
 {
 }
 
-struct cmd_show_table cmd_show_tables[] = {
+static struct cmd_show_table cmd_show_tables[] = {
     {&ovsrec_table_open_vswitch,
      NULL,
      {&ovsrec_open_vswitch_col_manager_options,
@@ -2771,6 +2771,6 @@ static const struct ctl_command_syntax vsctl_commands[] = {
 static void
 vsctl_cmd_init(void)
 {
-    ctl_init(tables, vsctl_exit);
+    ctl_init(tables, cmd_show_tables, vsctl_exit);
     ctl_register_commands(vsctl_commands);
 }

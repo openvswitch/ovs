@@ -52,7 +52,7 @@ VLOG_DEFINE_THIS_MODULE(db_ctl_base);
  * when ctl_init() is called.
  *
  * */
-extern struct cmd_show_table cmd_show_tables[];
+static const struct cmd_show_table *cmd_show_tables;
 
 /* ctl_exit() is called by ctl_fatal(). User can optionally supply an exit
  * function ctl_exit_func() via ctl_init. If supplied, this function will
@@ -1605,7 +1605,7 @@ parse_command(int argc, char *argv[], struct shash *local_options,
 static void
 pre_cmd_show(struct ctl_context *ctx)
 {
-    struct cmd_show_table *show;
+    const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
         size_t i;
@@ -1623,10 +1623,10 @@ pre_cmd_show(struct ctl_context *ctx)
     }
 }
 
-static struct cmd_show_table *
+static const struct cmd_show_table *
 cmd_show_find_table_by_row(const struct ovsdb_idl_row *row)
 {
-    struct cmd_show_table *show;
+    const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
         if (show->table == row->table->class) {
@@ -1636,10 +1636,10 @@ cmd_show_find_table_by_row(const struct ovsdb_idl_row *row)
     return NULL;
 }
 
-static struct cmd_show_table *
+static const struct cmd_show_table *
 cmd_show_find_table_by_name(const char *name)
 {
-    struct cmd_show_table *show;
+    const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
         if (!strcmp(show->table->name, name)) {
@@ -1656,7 +1656,7 @@ static void
 cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
              int level, struct sset *shown)
 {
-    struct cmd_show_table *show = cmd_show_find_table_by_row(row);
+    const struct cmd_show_table *show = cmd_show_find_table_by_row(row);
     size_t i;
 
     ds_put_char_multiple(&ctx->output, ' ', level * 4);
@@ -1687,7 +1687,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
         datum = ovsdb_idl_read(row, column);
         if (column->type.key.type == OVSDB_TYPE_UUID &&
             column->type.key.u.uuid.refTableName) {
-            struct cmd_show_table *ref_show;
+            const struct cmd_show_table *ref_show;
             size_t j;
 
             ref_show = cmd_show_find_table_by_name(
@@ -1708,7 +1708,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
         } else if (ovsdb_type_is_map(&column->type) &&
                    column->type.value.type == OVSDB_TYPE_UUID &&
                    column->type.value.u.uuid.refTableName) {
-            struct cmd_show_table *ref_show;
+            const struct cmd_show_table *ref_show;
             size_t j;
 
             /* Prints the key to ref'ed table name map if the ref'ed table
@@ -2013,9 +2013,11 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
 /* Registers the 'db_ctl_commands' to 'all_commands'. */
 void
 ctl_init(const struct ctl_table_class tables_[],
+         const struct cmd_show_table cmd_show_tables_[],
          void (*ctl_exit_func_)(int status))
 {
     tables = tables_;
+    cmd_show_tables = cmd_show_tables_;
     ctl_exit_func = ctl_exit_func_;
     ctl_register_commands(db_ctl_commands);
 }

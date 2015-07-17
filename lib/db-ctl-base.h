@@ -33,8 +33,6 @@ struct table;
  * (structs, commands and functions).  To utilize this module, user must
  * define the following:
  *
- * - the 'cmd_show_tables'.  (See 'struct cmd_show_table' for more info).
- *
  * - the command syntaxes for each command.  (See 'struct ctl_command_syntax'
  *   for more info)  and regiters them using ctl_register_commands().
  *
@@ -47,8 +45,10 @@ struct table;
 #define ovs_fatal please_use_ctl_fatal_instead_of_ovs_fatal
 
 struct ctl_table_class;
+struct cmd_show_table;
 void ctl_init(const struct ctl_table_class *tables,
-	      void (*ctl_exit_func)(int status));
+              const struct cmd_show_table *cmd_show_tables,
+              void (*ctl_exit_func)(int status));
 char *ctl_default_db(void);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 
@@ -163,17 +163,6 @@ struct cmd_show_table {
     const struct ovsdb_idl_column *name_column;
     const struct ovsdb_idl_column *columns[3]; /* Seems like a good number. */
 };
-
-/* This array defines the 'show' command output format.  User can check the
- * definition in utilities/ovs-vsctl.c as reference.
- *
- * Particularly, if an element in 'columns[]' represents a reference to
- * another table, the referred table must also be defined as an entry in
- * in 'cmd_show_tables[]'.
- *
- * The definition must end with an all-NULL entry.
- * */
-extern struct cmd_show_table cmd_show_tables[];
 
 
 /* The base context struct for conducting the common database

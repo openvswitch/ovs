@@ -364,7 +364,7 @@ Other options:\n\
 }
 
 
-struct cmd_show_table cmd_show_tables[] = {
+static struct cmd_show_table cmd_show_tables[] = {
     {&vteprec_table_global,
      NULL,
      {&vteprec_global_col_managers,
@@ -2329,6 +2329,6 @@ static const struct ctl_command_syntax vtep_commands[] = {
 static void
 vtep_ctl_cmd_init(void)
 {
-    ctl_init(tables, vtep_ctl_exit);
+    ctl_init(tables, cmd_show_tables, vtep_ctl_exit);
     ctl_register_commands(vtep_commands);
 }
