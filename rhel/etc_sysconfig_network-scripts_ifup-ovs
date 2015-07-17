@@ -117,7 +117,11 @@ case "$TYPE" in
 	OVSPort)
 		ifup_ovs_bridge
 		${OTHERSCRIPT} ${CONFIG} ${2}
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		# The port might be already in the database but not yet
+		# in the datapath.  So, remove the stale interface first.
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
 	OVSIntPort)
