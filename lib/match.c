@@ -1206,8 +1206,10 @@ minimatch_clone(struct minimatch *dst, const struct minimatch *src)
     /* Allocate two consecutive miniflows. */
     size_t data_size = miniflow_alloc(dst->flows, 2, &src->mask->masks);
 
-    memcpy(dst->flow->values, src->flow->values, data_size);
-    memcpy(dst->mask->masks.values, src->mask->masks.values, data_size);
+    memcpy(miniflow_values(dst->flow),
+           miniflow_get_values(src->flow), data_size);
+    memcpy(miniflow_values(&dst->mask->masks),
+           miniflow_get_values(&src->mask->masks), data_size);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.  The caller must
@@ -1255,8 +1257,8 @@ minimatch_matches_flow(const struct minimatch *match,
                        const struct flow *target)
 {
     const uint64_t *target_u64 = (const uint64_t *) target;
-    const uint64_t *flowp = match->flow->values;
-    const uint64_t *maskp = match->mask->masks.values;
+    const uint64_t *flowp = miniflow_get_values(match->flow);
+    const uint64_t *maskp = miniflow_get_values(&match->mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, match->flow->map) {

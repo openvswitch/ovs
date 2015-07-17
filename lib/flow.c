@@ -428,7 +428,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     const struct pkt_metadata *md = &packet->md;
     const void *data = dp_packet_data(packet);
     size_t size = dp_packet_size(packet);
-    uint64_t *values = dst->values;
+    uint64_t *values = miniflow_values(dst);
     struct mf_ctx mf = { 0, values, values + FLOW_U64S };
     const char *l2;
     ovs_be16 dl_type;
@@ -2191,7 +2191,7 @@ void
 miniflow_init(struct miniflow *dst, const struct flow *src)
 {
     const uint64_t *src_u64 = (const uint64_t *) src;
-    uint64_t *dst_u64 = dst->values;
+    uint64_t *dst_u64 = miniflow_values(dst);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, dst->map) {
@@ -2258,7 +2258,8 @@ miniflow_clone(struct miniflow *dst, const struct miniflow *src,
                size_t n_values)
 {
     dst->map = src->map;
-    memcpy(dst->values, src->values, MINIFLOW_VALUES_SIZE(n_values));
+    memcpy(miniflow_values(dst), miniflow_get_values(src),
+           MINIFLOW_VALUES_SIZE(n_values));
 }
 
 /* Initializes 'dst' as a copy of 'src'. */
@@ -2273,8 +2274,8 @@ miniflow_expand(const struct miniflow *src, struct flow *dst)
 bool
 miniflow_equal(const struct miniflow *a, const struct miniflow *b)
 {
-    const uint64_t *ap = a->values;
-    const uint64_t *bp = b->values;
+    const uint64_t *ap = miniflow_get_values(a);
+    const uint64_t *bp = miniflow_get_values(b);
 
     if (OVS_LIKELY(a->map == b->map)) {
         int count = miniflow_n_values(a);
@@ -2301,7 +2302,7 @@ bool
 miniflow_equal_in_minimask(const struct miniflow *a, const struct miniflow *b,
                            const struct minimask *mask)
 {
-    const uint64_t *p = mask->masks.values;
+    const uint64_t *p = miniflow_get_values(&mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
@@ -2320,7 +2321,7 @@ miniflow_equal_flow_in_minimask(const struct miniflow *a, const struct flow *b,
                                 const struct minimask *mask)
 {
     const uint64_t *b_u64 = (const uint64_t *) b;
-    const uint64_t *p = mask->masks.values;
+    const uint64_t *p = miniflow_get_values(&mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
@@ -2389,8 +2390,8 @@ bool
 minimask_equal(const struct minimask *a, const struct minimask *b)
 {
     return a->masks.map == b->masks.map &&
-        !memcmp(a->masks.values, b->masks.values,
-                count_1bits(a->masks.map) * sizeof *a->masks.values);
+        !memcmp(miniflow_get_values(&a->masks), miniflow_get_values(&b->masks),
+                MINIFLOW_VALUES_SIZE(count_1bits(a->masks.map)));
 }
 
 /* Returns true if at least one bit matched by 'b' is wildcarded by 'a',
@@ -2398,8 +2399,8 @@ minimask_equal(const struct minimask *a, const struct minimask *b)
 bool
 minimask_has_extra(const struct minimask *a, const struct minimask *b)
 {
-    const uint64_t *ap = a->masks.values;
-    const uint64_t *bp = b->masks.values;
+    const uint64_t *ap = miniflow_get_values(&a->masks);
+    const uint64_t *bp = miniflow_get_values(&b->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, b->masks.map) {

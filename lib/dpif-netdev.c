@@ -488,14 +488,13 @@ emc_cache_init(struct emc_cache *flow_cache)
 {
     int i;
 
-    BUILD_ASSERT(offsetof(struct miniflow, values) == sizeof(uint64_t));
+    BUILD_ASSERT(sizeof(struct miniflow) == sizeof(uint64_t));
 
     flow_cache->sweep_idx = 0;
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
-        flow_cache->entries[i].key.len
-            = offsetof(struct miniflow, values);
+        flow_cache->entries[i].key.len = sizeof(struct miniflow);
         flow_cache->entries[i].key.mf.map = 0;
     }
 }
@@ -1525,14 +1524,14 @@ static bool dp_netdev_flow_ref(struct dp_netdev_flow *flow)
  * The following assertions make sure that what we're doing with miniflow is
  * safe
  */
-BUILD_ASSERT_DECL(offsetof(struct miniflow, values) == sizeof(uint64_t));
+BUILD_ASSERT_DECL(sizeof(struct miniflow) == sizeof(uint64_t));
 
 /* Given the number of bits set in the miniflow map, returns the size of the
  * 'netdev_flow_key.mf' */
 static inline uint32_t
 netdev_flow_key_size(uint32_t flow_u32s)
 {
-    return offsetof(struct miniflow, values) + MINIFLOW_VALUES_SIZE(flow_u32s);
+    return sizeof(struct miniflow) + MINIFLOW_VALUES_SIZE(flow_u32s);
 }
 
 static inline bool
@@ -1585,7 +1584,7 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
                       const struct match *match)
 {
     const uint64_t *mask_u64 = (const uint64_t *) &match->wc.masks;
-    uint64_t *dst = mask->mf.values;
+    uint64_t *dst = miniflow_values(&mask->mf);
     uint64_t map, mask_map = 0;
     uint32_t hash = 0;
     int n;
@@ -1609,7 +1608,7 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
 
     hash = hash_add64(hash, mask_map);
 
-    n = dst - mask->mf.values;
+    n = dst - miniflow_get_values(&mask->mf);
 
     mask->hash = hash_finish(hash, n * 8);
     mask->len = netdev_flow_key_size(n);
@@ -1621,8 +1620,8 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             const struct flow *flow,
                             const struct netdev_flow_key *mask)
 {
-    uint64_t *dst_u64 = dst->mf.values;
-    const uint64_t *mask_u64 = mask->mf.values;
+    uint64_t *dst_u64 = miniflow_values(&dst->mf);
+    const uint64_t *mask_u64 = miniflow_get_values(&mask->mf);
     uint32_t hash = 0;
     uint64_t value;
 
@@ -1633,14 +1632,15 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
         *dst_u64 = value & *mask_u64++;
         hash = hash_add64(hash, *dst_u64++);
     }
-    dst->hash = hash_finish(hash, (dst_u64 - dst->mf.values) * 8);
+    dst->hash = hash_finish(hash,
+                            (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
 /* Iterate through all netdev_flow_key u64 values specified by 'MAP' */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(VALUE, KEY, MAP)   \
-    for (struct mf_for_each_in_map_aux aux__               \
-             = { (KEY)->mf.values, (KEY)->mf.map, MAP };   \
-         mf_get_next_in_map(&aux__, &(VALUE));             \
+#define NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(VALUE, KEY, MAP)                \
+    for (struct mf_for_each_in_map_aux aux__                            \
+             = { miniflow_get_values(&(KEY)->mf), (KEY)->mf.map, MAP }; \
+         mf_get_next_in_map(&aux__, &(VALUE));                          \
         )
 
 /* Returns a hash value for the bits of 'key' where there are 1-bits in
@@ -1649,7 +1649,7 @@ static inline uint32_t
 netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
                              const struct netdev_flow_key *mask)
 {
-    const uint64_t *p = mask->mf.values;
+    const uint64_t *p = miniflow_get_values(&mask->mf);
     uint32_t hash = 0;
     uint64_t key_u64;
 
@@ -1657,7 +1657,7 @@ netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
         hash = hash_add64(hash, key_u64 & *p++);
     }
 
-    return hash_finish(hash, (p - mask->mf.values) * 8);
+    return hash_finish(hash, (p - miniflow_get_values(&mask->mf)) * 8);
 }
 
 static inline bool
@@ -3855,8 +3855,8 @@ static inline bool
 dpcls_rule_matches_key(const struct dpcls_rule *rule,
                        const struct netdev_flow_key *target)
 {
-    const uint64_t *keyp = rule->flow.mf.values;
-    const uint64_t *maskp = rule->mask->mf.values;
+    const uint64_t *keyp = miniflow_get_values(&rule->flow.mf);
+    const uint64_t *maskp = miniflow_get_values(&rule->mask->mf);
     uint64_t target_u64;
 
     NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(target_u64, target, rule->flow.mf.map) {

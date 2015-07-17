@@ -1698,8 +1698,8 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
                                const struct minimask *mask,
                                const struct flow *target)
 {
-    const uint64_t *flowp = flow->values;
-    const uint64_t *maskp = mask->masks.values;
+    const uint64_t *flowp = miniflow_get_values(flow);
+    const uint64_t *maskp = miniflow_get_values(&mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
@@ -1747,8 +1747,8 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
                                   const struct flow *target,
                                   struct flow_wildcards *wc)
 {
-    const uint64_t *flowp = flow->values;
-    const uint64_t *maskp = mask->masks.values;
+    const uint64_t *flowp = miniflow_get_values(flow);
+    const uint64_t *maskp = miniflow_get_values(&mask->masks);
     int idx;
 
     MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
@@ -2191,7 +2191,7 @@ static const ovs_be32 *
 minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
     return (OVS_FORCE const ovs_be32 *)
-        (match->flow->values
+        (miniflow_get_values(match->flow)
          + count_1bits(match->flow->map &
                        ((UINT64_C(1) << mf->flow_be32ofs / 2) - 1)))
         + (mf->flow_be32ofs & 1);
