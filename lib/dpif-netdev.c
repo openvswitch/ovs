@@ -1894,6 +1894,7 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         for (id = 0; id < MFF_N_IDS; ++id) {
             /* Skip registers and metadata. */
             if (!(id >= MFF_REG0 && id < MFF_REG0 + FLOW_N_REGS)
+                && !(id >= MFF_XREG0 && id < MFF_XREG0 + FLOW_N_XREGS)
                 && id != MFF_METADATA) {
                 const struct mf_field *mf = mf_from_id(id);
                 if (mf_are_prereqs_ok(mf, flow)) {
