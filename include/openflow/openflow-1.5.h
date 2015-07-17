@@ -144,6 +144,13 @@ struct ofp15_group_mod {
 };
 OFP_ASSERT(sizeof(struct ofp15_group_mod) == 16);
 
+/* Body for ofp15_multipart_request of type OFPMP_GROUP_DESC. */
+struct ofp15_group_desc_request {
+    ovs_be32 group_id;         /* All groups if OFPG_ALL. */
+    uint8_t pad[4];            /* Align to 64 bits. */
+};
+OFP_ASSERT(sizeof(struct ofp15_group_desc_request) == 8);
+
 /* Body of reply to OFPMP_GROUP_DESC request. */
 struct ofp15_group_desc_stats {
     ovs_be16 length;              /* Length of this entry. */
