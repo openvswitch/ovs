@@ -1259,9 +1259,9 @@ minimatch_matches_flow(const struct minimatch *match,
     const uint64_t *target_u64 = (const uint64_t *) target;
     const uint64_t *flowp = miniflow_get_values(match->flow);
     const uint64_t *maskp = miniflow_get_values(&match->mask->masks);
-    int idx;
+    size_t idx;
 
-    MAP_FOR_EACH_INDEX(idx, match->flow->map) {
+    MAPS_FOR_EACH_INDEX(idx, *match->flow) {
         if ((*flowp++ ^ target_u64[idx]) & *maskp++) {
             return false;
         }

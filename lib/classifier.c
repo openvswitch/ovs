@@ -90,7 +90,7 @@ static struct cls_match *
 cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
                 const struct cls_conjunction conj[], size_t n)
 {
-    int count = count_1bits(rule->match.flow->map);
+    size_t count = miniflow_n_values(rule->match.flow);
 
     struct cls_match *cls_match
         = xmalloc(sizeof *cls_match + MINIFLOW_VALUES_SIZE(count));
@@ -1537,7 +1537,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     int i, index = 0;
     struct flow_wildcards old, new;
     uint8_t prev;
-    int count = count_1bits(mask->masks.map);
+    size_t count = miniflow_n_values(&mask->masks);
 
     subtable = xzalloc(sizeof *subtable + MINIFLOW_VALUES_SIZE(count));
     cmap_init(&subtable->rules);
@@ -1700,12 +1700,17 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
 {
     const uint64_t *flowp = miniflow_get_values(flow);
     const uint64_t *maskp = miniflow_get_values(&mask->masks);
-    int idx;
+    const uint64_t *target_u64 = (const uint64_t *)target;
+    size_t idx;
 
-    MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
-        uint64_t diff = (*flowp++ ^ flow_u64_value(target, idx)) & *maskp++;
-
-        if (diff) {
+    MAP_FOR_EACH_INDEX(idx, mask->masks.tnl_map) {
+        if ((*flowp++ ^ target_u64[idx]) & *maskp++) {
+            return false;
+        }
+    }
+    target_u64 += FLOW_TNL_U64S;
+    MAP_FOR_EACH_INDEX(idx, mask->masks.pkt_map) {
+        if ((*flowp++ ^ target_u64[idx]) & *maskp++) {
             return false;
         }
     }
@@ -1749,27 +1754,47 @@ miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
 {
     const uint64_t *flowp = miniflow_get_values(flow);
     const uint64_t *maskp = miniflow_get_values(&mask->masks);
-    int idx;
+    const uint64_t *target_u64 = (const uint64_t *)target;
+    uint64_t *wc_u64 = (uint64_t *)&wc->masks;
+    uint64_t diff;
+    size_t idx;
 
-    MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
-        uint64_t mask = *maskp++;
-        uint64_t diff = (*flowp++ ^ flow_u64_value(target, idx)) & mask;
+    MAP_FOR_EACH_INDEX(idx, mask->masks.tnl_map) {
+        uint64_t msk = *maskp++;
 
+        diff = (*flowp++ ^ target_u64[idx]) & msk;
         if (diff) {
-            /* Only unwildcard if none of the differing bits is already
-             * exact-matched. */
-            if (!(flow_u64_value(&wc->masks, idx) & diff)) {
-                /* Keep one bit of the difference.  The selected bit may be
-                 * different in big-endian v.s. little-endian systems. */
-                *flow_u64_lvalue(&wc->masks, idx) |= rightmost_1bit(diff);
-            }
-            return false;
+            goto out;
         }
+
         /* Fill in the bits that were looked at. */
-        *flow_u64_lvalue(&wc->masks, idx) |= mask;
+        wc_u64[idx] |= msk;
+    }
+    target_u64 += FLOW_TNL_U64S;
+    wc_u64 += FLOW_TNL_U64S;
+    MAP_FOR_EACH_INDEX(idx, mask->masks.pkt_map) {
+        uint64_t msk = *maskp++;
+
+        diff = (*flowp++ ^ target_u64[idx]) & msk;
+        if (diff) {
+            goto out;
+        }
+
+        /* Fill in the bits that were looked at. */
+        wc_u64[idx] |= msk;
     }
 
     return true;
+
+out:
+    /* Only unwildcard if none of the differing bits is already
+     * exact-matched. */
+    if (!(wc_u64[idx] & diff)) {
+        /* Keep one bit of the difference.  The selected bit may be
+         * different in big-endian v.s. little-endian systems. */
+        wc_u64[idx] |= rightmost_1bit(diff);
+    }
+    return false;
 }
 
 /* Unwildcard the fields looked up so far, if any. */
@@ -2190,10 +2215,9 @@ minimask_get_prefix_len(const struct minimask *minimask,
 static const ovs_be32 *
 minimatch_get_prefix(const struct minimatch *match, const struct mf_field *mf)
 {
-    return (OVS_FORCE const ovs_be32 *)
-        (miniflow_get_values(match->flow)
-         + count_1bits(match->flow->map &
-                       ((UINT64_C(1) << mf->flow_be32ofs / 2) - 1)))
+    size_t u64_ofs = mf->flow_be32ofs / 2;
+
+    return (OVS_FORCE const ovs_be32 *)miniflow_get__(match->flow, u64_ofs)
         + (mf->flow_be32ofs & 1);
 }
 
