@@ -157,15 +157,11 @@ struct ctl_command *ctl_parse_commands(int argc, char *argv[],
  *
  * - 'columns[]' allows user to specify the print of additional columns
  *   in 'table'.
- *
- * - 'recurse' is used to avoid duplicate print.
- *
  * */
 struct cmd_show_table {
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *name_column;
     const struct ovsdb_idl_column *columns[3]; /* Seems like a good number. */
-    bool recurse;
 };
 
 /* This array defines the 'show' command output format.  User can check the

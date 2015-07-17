@@ -34,6 +34,7 @@
 #include "ovsdb-idl.h"
 #include "ovsdb-idl-provider.h"
 #include "shash.h"
+#include "sset.h"
 #include "string.h"
 #include "table.h"
 #include "util.h"
@@ -1648,9 +1649,12 @@ cmd_show_find_table_by_name(const char *name)
     return NULL;
 }
 
+/* 'shown' records the tables that has been displayed by the current
+ * command to avoid duplicated prints.
+ */
 static void
 cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
-             int level)
+             int level, struct sset *shown)
 {
     struct cmd_show_table *show = cmd_show_find_table_by_row(row);
     size_t i;
@@ -1667,11 +1671,11 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
     }
     ds_put_char(&ctx->output, '\n');
 
-    if (!show || show->recurse) {
+    if (!show || sset_find(shown, show->table->name)) {
         return;
     }
 
-    show->recurse = true;
+    sset_add(shown, show->table->name);
     for (i = 0; i < ARRAY_SIZE(show->columns); i++) {
         const struct ovsdb_idl_column *column = show->columns[i];
         const struct ovsdb_datum *datum;
@@ -1696,7 +1700,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
                                                          ref_show->table,
                                                          &datum->keys[j].uuid);
                     if (ref_row) {
-                        cmd_show_row(ctx, ref_row, level + 1);
+                        cmd_show_row(ctx, ref_row, level + 1, shown);
                     }
                 }
                 continue;
@@ -1749,18 +1753,22 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
             ds_put_char(&ctx->output, '\n');
         }
     }
-    show->recurse = false;
+    sset_find_and_delete_assert(shown, show->table->name);
 }
 
 static void
 cmd_show(struct ctl_context *ctx)
 {
     const struct ovsdb_idl_row *row;
+    struct sset shown = SSET_INITIALIZER(&shown);
 
     for (row = ovsdb_idl_first_row(ctx->idl, cmd_show_tables[0].table);
          row; row = ovsdb_idl_next_row(row)) {
-        cmd_show_row(ctx, row, 0);
+        cmd_show_row(ctx, row, 0, &shown);
     }
+
+    ovs_assert(sset_is_empty(&shown));
+    sset_destroy(&shown);
 }
 
 

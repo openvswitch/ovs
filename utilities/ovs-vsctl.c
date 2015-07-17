@@ -980,45 +980,45 @@ struct cmd_show_table cmd_show_tables[] = {
      NULL,
      {&ovsrec_open_vswitch_col_manager_options,
       &ovsrec_open_vswitch_col_bridges,
-      &ovsrec_open_vswitch_col_ovs_version},
-     false},
+      &ovsrec_open_vswitch_col_ovs_version}
+    },
 
     {&ovsrec_table_bridge,
      &ovsrec_bridge_col_name,
      {&ovsrec_bridge_col_controller,
       &ovsrec_bridge_col_fail_mode,
-      &ovsrec_bridge_col_ports},
-     false},
+      &ovsrec_bridge_col_ports}
+    },
 
     {&ovsrec_table_port,
      &ovsrec_port_col_name,
      {&ovsrec_port_col_tag,
       &ovsrec_port_col_trunks,
-      &ovsrec_port_col_interfaces},
-     false},
+      &ovsrec_port_col_interfaces}
+    },
 
     {&ovsrec_table_interface,
      &ovsrec_interface_col_name,
      {&ovsrec_interface_col_type,
       &ovsrec_interface_col_options,
-      &ovsrec_interface_col_error},
-     false},
+      &ovsrec_interface_col_error}
+    },
 
     {&ovsrec_table_controller,
      &ovsrec_controller_col_target,
      {&ovsrec_controller_col_is_connected,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
     {&ovsrec_table_manager,
      &ovsrec_manager_col_target,
      {&ovsrec_manager_col_is_connected,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
-    {NULL, NULL, {NULL, NULL, NULL}, false}
+    {NULL, NULL, {NULL, NULL, NULL}}
 };
 
 static void
