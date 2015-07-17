@@ -2092,8 +2092,8 @@ AT_CLEANUP
 AT_SETUP([OFPST_PORT_DESC request - OF1.5])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
-06 12 00 14 00 00 00 02 00 0d 00 00 00 00 00 00 \
-00 00 00 05"], [0], [dnl
+06 12 00 18 00 00 00 02 00 0d 00 00 00 00 00 00 \
+00 00 00 05 00 00 00 00"], [0], [dnl
 OFPST_PORT_DESC request (OF1.5) (xid=0x2): port=5
 ])
 AT_CLEANUP

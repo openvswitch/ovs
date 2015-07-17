@@ -383,7 +383,7 @@ enum ofpraw {
 
     /* OFPST 1.0-1.4 (13): void. */
     OFPRAW_OFPST10_PORT_DESC_REQUEST,
-    /* OFPST 1.5+ (13): ovs_be32. */
+    /* OFPST 1.5+ (13): struct ofp15_port_desc_request. */
     OFPRAW_OFPST15_PORT_DESC_REQUEST,
 
     /* OFPST 1.0 (13): struct ofp10_phy_port[]. */

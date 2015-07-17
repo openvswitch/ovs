@@ -3994,7 +3994,6 @@ ofputil_encode_port_desc_stats_request(enum ofp_version ofp_version,
                                        ofp_port_t port)
 {
     struct ofpbuf *request;
-    ovs_be32 ofp11_port;
 
     switch (ofp_version) {
     case OFP10_VERSION:
@@ -4005,14 +4004,14 @@ ofputil_encode_port_desc_stats_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST10_PORT_DESC_REQUEST,
                                ofp_version, 0);
         break;
-
-    case OFP15_VERSION:
+    case OFP15_VERSION:{
+        struct ofp15_port_desc_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST15_PORT_DESC_REQUEST,
                                ofp_version, 0);
-        ofp11_port = ofputil_port_to_ofp11(port);
-        ofpbuf_put(request, &ofp11_port, sizeof ofp11_port);
+        req = ofpbuf_put_zeros(request, sizeof *req);
+        req->port_no = ofputil_port_to_ofp11(port);
         break;
-
+    }
     default:
         OVS_NOT_REACHED();
     }
