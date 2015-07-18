@@ -104,6 +104,10 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
 bool
 chassis_cleanup(struct controller_ctx *ctx, const char *chassis_id)
 {
+    if (!chassis_id) {
+        return true;
+    }
+
     /* Delete Chassis row. */
     const struct sbrec_chassis *chassis_rec
         = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);

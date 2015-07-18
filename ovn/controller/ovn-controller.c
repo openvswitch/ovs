@@ -88,6 +88,13 @@ get_bridge(struct controller_ctx *ctx, const char *name)
     return NULL;
 }
 
+static const char *
+get_chassis_id(const struct ovsdb_idl *ovs_idl)
+{
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    return cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+}
+
 /* Retrieve the OVN integration bridge from the "external-ids:ovn-bridge"
  * key, the remote location from the "external-ids:ovn-remote" key, and
  * the chassis name from the "external-ids:system-id" key in the
@@ -96,8 +103,7 @@ get_bridge(struct controller_ctx *ctx, const char *name)
  * xxx ovn-controller does not support changing any of these mid-run,
  * xxx but that should be addressed later. */
 static void
-get_core_config(struct controller_ctx *ctx, char **br_int_namep,
-                char **chassis_idp)
+get_core_config(struct controller_ctx *ctx, char **br_int_namep)
 {
     while (1) {
         ovsdb_idl_run(ctx->ovs_idl);
@@ -110,7 +116,7 @@ get_core_config(struct controller_ctx *ctx, char **br_int_namep,
             exit(EXIT_FAILURE);
         }
 
-        const char *remote, *system_id, *br_int_name;
+        const char *remote, *br_int_name;
 
         br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
         if (!br_int_name) {
@@ -123,14 +129,7 @@ get_core_config(struct controller_ctx *ctx, char **br_int_namep,
             goto try_again;
         }
 
-        system_id = smap_get(&cfg->external_ids, "system-id");
-        if (!system_id) {
-            VLOG_INFO("system-id not specified.  Waiting...");
-            goto try_again;
-        }
-
         ovnsb_remote = xstrdup(remote);
-        *chassis_idp = xstrdup(system_id);
         *br_int_namep = xstrdup(br_int_name);
         return;
 
@@ -270,8 +269,8 @@ main(int argc, char *argv[])
 
     get_initial_snapshot(ctx.ovs_idl);
 
-    char *br_int_name, *chassis_id;
-    get_core_config(&ctx, &br_int_name, &chassis_id);
+    char *br_int_name;
+    get_core_config(&ctx, &br_int_name);
 
     ctx.ovnsb_idl = ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class,
                                      true, true);
@@ -287,15 +286,20 @@ main(int argc, char *argv[])
         ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
         const struct ovsrec_bridge *br_int = get_bridge(&ctx, br_int_name);
+        const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
-        chassis_run(&ctx, chassis_id);
-        encaps_run(&ctx, br_int, chassis_id);
-        binding_run(&ctx, br_int, chassis_id);
+        if (chassis_id) {
+            chassis_run(&ctx, chassis_id);
+            encaps_run(&ctx, br_int, chassis_id);
+            binding_run(&ctx, br_int, chassis_id);
+        }
 
         if (br_int) {
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             pipeline_run(&ctx, &flow_table);
-            physical_run(&ctx, br_int, chassis_id, &flow_table);
+            if (chassis_id) {
+                physical_run(&ctx, br_int, chassis_id, &flow_table);
+            }
             ofctrl_run(br_int, &flow_table);
             hmap_destroy(&flow_table);
         }
@@ -323,6 +327,7 @@ main(int argc, char *argv[])
         ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
         const struct ovsrec_bridge *br_int = get_bridge(&ctx, br_int_name);
+        const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
@@ -346,7 +351,6 @@ main(int argc, char *argv[])
     idl_loop_destroy(&ovnsb_idl_loop);
 
     free(br_int_name);
-    free(chassis_id);
     free(ovnsb_remote);
     free(ovs_remote);
 

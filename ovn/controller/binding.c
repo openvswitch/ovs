@@ -138,6 +138,9 @@ binding_cleanup(struct controller_ctx *ctx, const char *chassis_id)
         return false;
     }
 
+    if (!chassis_id) {
+        return true;
+    }
     const struct sbrec_chassis *chassis_rec
         = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
