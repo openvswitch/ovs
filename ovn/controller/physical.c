@@ -43,13 +43,14 @@ physical_init(struct controller_ctx *ctx)
 }
 
 void
-physical_run(struct controller_ctx *ctx, struct hmap *flow_table)
+physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+             struct hmap *flow_table)
 {
     struct simap lport_to_ofport = SIMAP_INITIALIZER(&lport_to_ofport);
     struct simap chassis_to_ofport = SIMAP_INITIALIZER(&chassis_to_ofport);
-    for (int i = 0; i < ctx->br_int->n_ports; i++) {
-        const struct ovsrec_port *port_rec = ctx->br_int->ports[i];
-        if (!strcmp(port_rec->name, ctx->br_int_name)) {
+    for (int i = 0; i < br_int->n_ports; i++) {
+        const struct ovsrec_port *port_rec = br_int->ports[i];
+        if (!strcmp(port_rec->name, br_int->name)) {
             continue;
         }
 

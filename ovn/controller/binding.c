@@ -45,16 +45,16 @@ binding_init(struct controller_ctx *ctx)
 }
 
 static void
-get_local_iface_ids(struct controller_ctx *ctx, struct sset *lports)
+get_local_iface_ids(const struct ovsrec_bridge *br_int, struct sset *lports)
 {
     int i;
 
-    for (i = 0; i < ctx->br_int->n_ports; i++) {
-        const struct ovsrec_port *port_rec = ctx->br_int->ports[i];
+    for (i = 0; i < br_int->n_ports; i++) {
+        const struct ovsrec_port *port_rec = br_int->ports[i];
         const char *iface_id;
         int j;
 
-        if (!strcmp(port_rec->name, ctx->br_int_name)) {
+        if (!strcmp(port_rec->name, br_int->name)) {
             continue;
         }
 
@@ -72,7 +72,7 @@ get_local_iface_ids(struct controller_ctx *ctx, struct sset *lports)
 }
 
 void
-binding_run(struct controller_ctx *ctx)
+binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_binding *binding_rec;
@@ -90,7 +90,7 @@ binding_run(struct controller_ctx *ctx)
 
     sset_init(&lports);
     sset_init(&all_lports);
-    get_local_iface_ids(ctx, &lports);
+    get_local_iface_ids(br_int, &lports);
     sset_clone(&all_lports, &lports);
 
     ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,

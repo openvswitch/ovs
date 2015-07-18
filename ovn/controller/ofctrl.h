@@ -23,10 +23,11 @@ struct controller_ctx;
 struct hmap;
 struct match;
 struct ofpbuf;
+struct ovsrec_bridge;
 
 /* Interface for OVN main loop. */
 void ofctrl_init(void);
-void ofctrl_run(struct controller_ctx *, struct hmap *flow_table);
+void ofctrl_run(const struct ovsrec_bridge *br_int, struct hmap *flow_table);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
 

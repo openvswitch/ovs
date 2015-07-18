@@ -296,7 +296,7 @@ preferred_encap(const struct sbrec_chassis *chassis_rec)
 }
 
 static void
-update_encaps(struct controller_ctx *ctx)
+update_encaps(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct ovsrec_bridge *br;
@@ -304,7 +304,7 @@ update_encaps(struct controller_ctx *ctx)
     struct tunnel_ctx tc = {
         .tunnel_hmap = HMAP_INITIALIZER(&tc.tunnel_hmap),
         .port_names = SSET_INITIALIZER(&tc.port_names),
-        .br_int = ctx->br_int
+        .br_int = br_int
     };
 
     tc.ovs_txn = ctx->ovs_idl_txn;
@@ -357,21 +357,21 @@ update_encaps(struct controller_ctx *ctx)
 }
 
 void
-chassis_run(struct controller_ctx *ctx)
+chassis_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 {
     if (ctx->ovnsb_idl_txn) {
         register_chassis(ctx);
     }
 
     if (ctx->ovs_idl_txn) {
-        update_encaps(ctx);
+        update_encaps(ctx, br_int);
     }
 }
 
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-chassis_cleanup(struct controller_ctx *ctx)
+chassis_cleanup(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 {
     if (!ctx->ovnsb_idl_txn || !ctx->ovs_idl_txn) {
         return false;
@@ -394,17 +394,17 @@ chassis_cleanup(struct controller_ctx *ctx)
     ovsdb_idl_txn_add_comment(ctx->ovs_idl_txn,
                               "ovn-controller: destroying tunnels");
     struct ovsrec_port **ports
-        = xmalloc(sizeof *ctx->br_int->ports * ctx->br_int->n_ports);
+        = xmalloc(sizeof *br_int->ports * br_int->n_ports);
     size_t n = 0;
-    for (size_t i = 0; i < ctx->br_int->n_ports; i++) {
-        if (!smap_get(&ctx->br_int->ports[i]->external_ids,
+    for (size_t i = 0; i < br_int->n_ports; i++) {
+        if (!smap_get(&br_int->ports[i]->external_ids,
                       "ovn-chassis-id")) {
-            ports[n++] = ctx->br_int->ports[i];
+            ports[n++] = br_int->ports[i];
             any_changes = true;
         }
     }
-    ovsrec_bridge_verify_ports(ctx->br_int);
-    ovsrec_bridge_set_ports(ctx->br_int, ports, n);
+    ovsrec_bridge_verify_ports(br_int);
+    ovsrec_bridge_set_ports(br_int, ports, n);
     free(ports);
 
     return !any_changes;
