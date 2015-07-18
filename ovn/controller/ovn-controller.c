@@ -286,13 +286,15 @@ main(int argc, char *argv[])
             goto exit;
         }
 
-        ofctrl_clear_flows();
-
         chassis_run(&ctx);
         binding_run(&ctx);
-        pipeline_run(&ctx);
-        physical_run(&ctx);
-        ofctrl_run(&ctx);
+
+        struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
+        pipeline_run(&ctx, &flow_table);
+        physical_run(&ctx, &flow_table);
+        ofctrl_run(&ctx, &flow_table);
+        hmap_destroy(&flow_table);
+
         unixctl_server_run(unixctl);
 
         unixctl_server_wait(unixctl);

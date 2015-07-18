@@ -250,11 +250,11 @@ pipeline_init(void)
 }
 
 /* Translates logical flows in the Pipeline table in the OVN_SB database
- * into OpenFlow flows.
+ * into OpenFlow flows, adding the OpenFlow flows to 'flow_table'.
  *
  * We put the Pipeline flows into OpenFlow tables 16 through 47 (inclusive). */
 void
-pipeline_run(struct controller_ctx *ctx)
+pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
 {
     struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
@@ -327,8 +327,8 @@ pipeline_run(struct controller_ctx *ctx)
                 m->match.flow.conj_id += conj_id_ofs;
             }
             if (!m->n) {
-                ofctrl_add_flow(pipeline->table_id + 16, pipeline->priority,
-                                &m->match, &ofpacts);
+                ofctrl_add_flow(flow_table, pipeline->table_id + 16,
+                                pipeline->priority, &m->match, &ofpacts);
             } else {
                 uint64_t conj_stubs[64 / 8];
                 struct ofpbuf conj;
@@ -343,8 +343,8 @@ pipeline_run(struct controller_ctx *ctx)
                     dst->clause = src->clause;
                     dst->n_clauses = src->n_clauses;
                 }
-                ofctrl_add_flow(pipeline->table_id + 16, pipeline->priority,
-                                &m->match, &conj);
+                ofctrl_add_flow(flow_table, pipeline->table_id + 16,
+                                pipeline->priority, &m->match, &conj);
                 ofpbuf_uninit(&conj);
             }
         }

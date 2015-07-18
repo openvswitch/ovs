@@ -35,7 +35,7 @@ VLOG_DEFINE_THIS_MODULE(ofctrl);
 /* An OpenFlow flow. */
 struct ovn_flow {
     /* Key. */
-    struct hmap_node hmap_node; /* In 'desired_flows' or 'installed_flows'. */
+    struct hmap_node hmap_node;
     uint8_t table_id;
     uint16_t priority;
     struct match match;
@@ -64,17 +64,14 @@ static unsigned int seqno;
  * zero, to avoid unbounded buffering. */
 static struct rconn_packet_counter *tx_counter;
 
-/* Flow tables.  Each holds "struct ovn_flow"s.
- *
- * 'desired_flows' is the flow table that we want the switch to have.
- * 'installed_flows' is the flow table currently installed in the switch. */
-static struct hmap desired_flows;
+/* Flow table of "struct ovn_flow"s, that holds the flow table currently
+ * installed in the switch. */
 static struct hmap installed_flows;
 
 static void ovn_flow_table_clear(struct hmap *flow_table);
 static void ovn_flow_table_destroy(struct hmap *flow_table);
 
-static void ofctrl_update_flows(void);
+static void ofctrl_update_flows(struct hmap *desired_flows);
 static void ofctrl_recv(const struct ofpbuf *msg);
 
 void
@@ -82,19 +79,22 @@ ofctrl_init(void)
 {
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     tx_counter = rconn_packet_counter_create();
-    hmap_init(&desired_flows);
     hmap_init(&installed_flows);
 }
 
-/* This function should be called in the main loop after anything that updates
- * the flow table (e.g. after calls to ofctrl_clear_flows() and
- * ofctrl_add_flow()). */
+/* Attempts to update the OpenFlow flows in bridge 'br_int_name' to those in
+ * 'flow_table'.  Removes all of the flows from 'flow_table' and frees them.
+ *
+ * The flow table will only be updated if we've got an OpenFlow connection to
+ * 'br_int_name' and it's not backlogged.  Otherwise, it'll have to wait until
+ * the next iteration. */
 void
-ofctrl_run(struct controller_ctx *ctx)
+ofctrl_run(struct controller_ctx *ctx, struct hmap *flow_table)
 {
     char *target;
     target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), ctx->br_int_name);
     if (strcmp(target, rconn_get_target(swconn))) {
+        VLOG_INFO("%s: connecting to switch", target);
         rconn_connect(swconn, target, target);
     }
     free(target);
@@ -102,10 +102,10 @@ ofctrl_run(struct controller_ctx *ctx)
     rconn_run(swconn);
 
     if (!rconn_is_connected(swconn)) {
-        return;
+        goto exit;
     }
     if (!rconn_packet_counter_n_packets(tx_counter)) {
-        ofctrl_update_flows();
+        ofctrl_update_flows(flow_table);
     }
 
     for (int i = 0; i < 50; i++) {
@@ -117,6 +117,9 @@ ofctrl_run(struct controller_ctx *ctx)
         ofctrl_recv(msg);
         ofpbuf_delete(msg);
     }
+
+exit:
+    ovn_flow_table_clear(flow_table);
 }
 
 void
@@ -131,7 +134,6 @@ ofctrl_destroy(void)
 {
     rconn_destroy(swconn);
     ovn_flow_table_destroy(&installed_flows);
-    ovn_flow_table_destroy(&desired_flows);
     rconn_packet_counter_destroy(tx_counter);
 }
 
@@ -246,22 +248,17 @@ ofctrl_recv(const struct ofpbuf *msg)
 
 /* Flow table interface to the rest of ovn-controller. */
 
-/* Clears the table of flows desired to be in the switch.  Call this before
- * adding the desired flows (with ofctrl_add_flow()). */
-void
-ofctrl_clear_flows(void)
-{
-    ovn_flow_table_clear(&desired_flows);
-}
-
-/* Adds a flow with the specified 'match' and 'actions' to the OpenFlow table
- * numbered 'table_id' with the given 'priority'.  The caller retains ownership
- * of 'match' and 'actions'.
+/* Adds a flow to 'desired_flows' with the specified 'match' and 'actions' to
+ * the OpenFlow table numbered 'table_id' with the given 'priority'.  The
+ * caller retains ownership of 'match' and 'actions'.
  *
  * This just assembles the desired flow table in memory.  Nothing is actually
- * sent to the switch until a later call to ofctrl_run(). */
+ * sent to the switch until a later call to ofctrl_run().
+ *
+ * The caller should initialize its own hmap to hold the flows. */
 void
-ofctrl_add_flow(uint8_t table_id, uint16_t priority,
+ofctrl_add_flow(struct hmap *desired_flows,
+                uint8_t table_id, uint16_t priority,
                 const struct match *match, const struct ofpbuf *actions)
 {
     struct ovn_flow *f = xmalloc(sizeof *f);
@@ -271,7 +268,7 @@ ofctrl_add_flow(uint8_t table_id, uint16_t priority,
     f->ofpacts = xmemdup(actions->data, actions->size);
     f->ofpacts_len = actions->size;
 
-    if (ovn_flow_lookup(&desired_flows, f)) {
+    if (ovn_flow_lookup(desired_flows, f)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
         if (!VLOG_DROP_INFO(&rl)) {
             char *s = ovn_flow_to_string(f);
@@ -283,7 +280,7 @@ ofctrl_add_flow(uint8_t table_id, uint16_t priority,
         return;
     }
 
-    hmap_insert(&desired_flows, &f->hmap_node, ovn_flow_hash(f));
+    hmap_insert(desired_flows, &f->hmap_node, ovn_flow_hash(f));
 }
 
 /* ovn_flow. */
@@ -376,7 +373,7 @@ queue_flow_mod(struct ofputil_flow_mod *fm)
 }
 
 static void
-ofctrl_update_flows(void)
+ofctrl_update_flows(struct hmap *desired_flows)
 {
     /* If we've (re)connected, don't make any assumptions about the flows in
      * the switch: delete all of them.  (We'll immediately repopulate it
@@ -402,7 +399,7 @@ ofctrl_update_flows(void)
      * actions, update them. */
     struct ovn_flow *i, *next;
     HMAP_FOR_EACH_SAFE (i, next, hmap_node, &installed_flows) {
-        struct ovn_flow *d = ovn_flow_lookup(&desired_flows, i);
+        struct ovn_flow *d = ovn_flow_lookup(desired_flows, i);
         if (!d) {
             /* Installed flow is no longer desirable.  Delete it from the
              * switch and from installed_flows. */
@@ -440,16 +437,16 @@ ofctrl_update_flows(void)
                 d->ofpacts_len = 0;
             }
 
-            hmap_remove(&desired_flows, &d->hmap_node);
+            hmap_remove(desired_flows, &d->hmap_node);
             ovn_flow_destroy(d);
         }
     }
 
-    /* The previous loop removed from desired_flows all of the flows that are
-     * already installed.  Thus, any flows remaining in desired_flows need to
+    /* The previous loop removed from 'desired_flows' all of the flows that are
+     * already installed.  Thus, any flows remaining in 'desired_flows' need to
      * be added to the flow table. */
     struct ovn_flow *d;
-    HMAP_FOR_EACH_SAFE (d, next, hmap_node, &desired_flows) {
+    HMAP_FOR_EACH_SAFE (d, next, hmap_node, desired_flows) {
         /* Send flow_mod to add flow. */
         struct ofputil_flow_mod fm = {
             .match = d->match,
@@ -462,8 +459,8 @@ ofctrl_update_flows(void)
         queue_flow_mod(&fm);
         ovn_flow_log(d, "adding");
 
-        /* Move 'd' from desired_flows to installed_flows. */
-        hmap_remove(&desired_flows, &d->hmap_node);
+        /* Move 'd' from 'desired_flows' to installed_flows. */
+        hmap_remove(desired_flows, &d->hmap_node);
         hmap_insert(&installed_flows, &d->hmap_node, d->hmap_node.hash);
     }
 }

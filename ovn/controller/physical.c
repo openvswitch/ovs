@@ -43,7 +43,7 @@ physical_init(struct controller_ctx *ctx)
 }
 
 void
-physical_run(struct controller_ctx *ctx)
+physical_run(struct controller_ctx *ctx, struct hmap *flow_table)
 {
     struct simap lport_to_ofport = SIMAP_INITIALIZER(&lport_to_ofport);
     struct simap chassis_to_ofport = SIMAP_INITIALIZER(&chassis_to_ofport);
@@ -177,7 +177,7 @@ physical_run(struct controller_ctx *ctx)
             struct ofpact_resubmit *resubmit = ofpact_put_RESUBMIT(&ofpacts);
             resubmit->in_port = OFPP_IN_PORT;
             resubmit->table_id = 16;
-            ofctrl_add_flow(0, tag ? 150 : 100, &match, &ofpacts);
+            ofctrl_add_flow(flow_table, 0, tag ? 150 : 100, &match, &ofpacts);
 
             /* Table 0, Priority 50.
              * =====================
@@ -195,7 +195,7 @@ physical_run(struct controller_ctx *ctx)
                 vlan_vid->push_vlan_if_needed = true;
             }
             ofpact_put_OUTPUT(&ofpacts)->port = ofport;
-            ofctrl_add_flow(0, 50, &match, &ofpacts);
+            ofctrl_add_flow(flow_table, 0, 50, &match, &ofpacts);
         }
 
         /* Table 64, Priority 100.
@@ -206,7 +206,7 @@ physical_run(struct controller_ctx *ctx)
         ofpbuf_clear(&ofpacts);
         match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, binding->tunnel_key);
         match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, binding->tunnel_key);
-        ofctrl_add_flow(64, 100, &match, &ofpacts);
+        ofctrl_add_flow(flow_table, 64, 100, &match, &ofpacts);
 
         /* Table 64, Priority 50.
          * ======================
@@ -241,7 +241,7 @@ physical_run(struct controller_ctx *ctx)
             sf->mask.be16 = OVS_BE16_MAX;
         }
         ofpact_put_OUTPUT(&ofpacts)->port = ofport;
-        ofctrl_add_flow(64, 50, &match, &ofpacts);
+        ofctrl_add_flow(flow_table, 64, 50, &match, &ofpacts);
     }
 
     ofpbuf_uninit(&ofpacts);

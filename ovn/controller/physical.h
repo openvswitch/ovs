@@ -25,8 +25,9 @@
  */
 
 struct controller_ctx;
+struct hmap;
 
 void physical_init(struct controller_ctx *);
-void physical_run(struct controller_ctx *);
+void physical_run(struct controller_ctx *, struct hmap *flow_table);
 
 #endif /* ovn/physical.h */

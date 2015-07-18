@@ -34,6 +34,7 @@
 #include <stdint.h>
 
 struct controller_ctx;
+struct hmap;
 struct uuid;
 
 /* Logical ports. */
@@ -41,7 +42,7 @@ struct uuid;
 #define MFF_LOG_OUTPORT MFF_REG7 /* Logical output port. */
 
 void pipeline_init(void);
-void pipeline_run(struct controller_ctx *);
+void pipeline_run(struct controller_ctx *, struct hmap *flow_table);
 void pipeline_destroy(struct controller_ctx *);
 
 uint32_t ldp_to_integer(const struct uuid *logical_datapath);
