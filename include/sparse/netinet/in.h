@@ -67,6 +67,7 @@ struct sockaddr_in6 {
 #define IPPROTO_ROUTING 43
 #define IPPROTO_FRAGMENT 44
 #define IPPROTO_GRE 47
+#define IPPROTO_ESP 50
 #define IPPROTO_AH 51
 #define IPPROTO_ICMPV6 58
 #define IPPROTO_NONE 59

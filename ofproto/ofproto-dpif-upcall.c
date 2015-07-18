@@ -166,6 +166,7 @@ struct upcall {
 
     enum dpif_upcall_type type;    /* Datapath type of the upcall. */
     const struct nlattr *userdata; /* Userdata for DPIF_UC_ACTION Upcalls. */
+    const struct nlattr *actions;  /* Flow actions in DPIF_UC_ACTION Upcalls. */
 
     bool xout_initialized;         /* True if 'xout' must be uninitialized. */
     struct xlate_out xout;         /* Result of xlate_actions(). */
@@ -694,6 +695,7 @@ recv_upcalls(struct handler *handler)
         upcall->ufid = &dupcall->ufid;
 
         upcall->out_tun_key = dupcall->out_tun_key;
+	upcall->actions = dupcall->actions;
 
         if (vsp_adjust_flow(upcall->ofproto, flow, &dupcall->packet)) {
             upcall->vsp_adjusted = true;
@@ -893,8 +895,8 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
         ? ODPP_NONE
         : odp_in_port;
     pid = dpif_port_get_pid(udpif->dpif, port, flow_hash_5tuple(flow, 0));
-    odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, ODPP_NONE,
-                             buf);
+    odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path,
+                             ODPP_NONE, false, buf);
 }
 
 /* If there is no error, the upcall must be destroyed with upcall_uninit()
@@ -934,6 +936,7 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     upcall->key_len = 0;
 
     upcall->out_tun_key = NULL;
+    upcall->actions = NULL;
 
     return 0;
 }
@@ -1121,11 +1124,34 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
     case SFLOW_UPCALL:
         if (upcall->sflow) {
             union user_action_cookie cookie;
-
+            const struct nlattr *actions;
+            int actions_len = 0;
+            struct dpif_sflow_actions sflow_actions;
+            memset(&sflow_actions, 0, sizeof sflow_actions);
             memset(&cookie, 0, sizeof cookie);
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.sflow);
+            if (upcall->actions) {
+                /* Actions were passed up from datapath. */
+                actions = nl_attr_get(upcall->actions);
+                actions_len = nl_attr_get_size(upcall->actions);
+                if (actions && actions_len) {
+                    dpif_sflow_read_actions(flow, actions, actions_len,
+                                            &sflow_actions);
+                }
+            }
+            if (actions_len == 0) {
+                /* Lookup actions in userspace cache. */
+                struct udpif_key *ukey = ukey_lookup(udpif, upcall->ufid);
+                if (ukey) {
+                    actions = ukey->actions->data;
+                    actions_len = ukey->actions->size;
+                    dpif_sflow_read_actions(flow, actions, actions_len,
+                                            &sflow_actions);
+                }
+            }
             dpif_sflow_received(upcall->sflow, packet, flow,
-                                flow->in_port.odp_port, &cookie);
+                                flow->in_port.odp_port, &cookie,
+                                actions_len > 0 ? &sflow_actions : NULL);
         }
         break;
 

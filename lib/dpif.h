@@ -784,6 +784,7 @@ struct dpif_upcall {
     /* DPIF_UC_ACTION only. */
     struct nlattr *userdata;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
     struct nlattr *out_tun_key;    /* Output tunnel key. */
+    struct nlattr *actions;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
 
 /* A callback to process an upcall, currently implemented only by dpif-netdev.

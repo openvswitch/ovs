@@ -13,6 +13,7 @@ Post-v2.4.0
      Geneve tunnels.
    - Support Multicast Listener Discovery (MLDv1 and MLDv2).
    - Add 'symmetric_l3l4' and 'symmetric_l3l4+udp' hash functions.
+   - sFlow agent now reports tunnel and MPLS structures.
 
 
 v2.4.0 - xx xxx xxxx

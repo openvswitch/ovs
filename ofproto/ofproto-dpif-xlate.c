@@ -2440,7 +2440,8 @@ compose_sample_action(const struct xbridge *xbridge,
                       const uint32_t probability,
                       const union user_action_cookie *cookie,
                       const size_t cookie_size,
-                      const odp_port_t tunnel_out_port)
+                      const odp_port_t tunnel_out_port,
+                      bool include_actions)
 {
     size_t sample_offset, actions_offset;
     odp_port_t odp_port;
@@ -2457,7 +2458,9 @@ compose_sample_action(const struct xbridge *xbridge,
     pid = dpif_port_get_pid(xbridge->dpif, odp_port,
                             flow_hash_5tuple(flow, 0));
     cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size,
-                                             tunnel_out_port, odp_actions);
+                                             tunnel_out_port,
+                                             include_actions,
+                                             odp_actions);
 
     nl_msg_end_nested(odp_actions, actions_offset);
     nl_msg_end_nested(odp_actions, sample_offset);
@@ -2515,7 +2518,8 @@ compose_sflow_action(const struct xbridge *xbridge,
                          odp_port == ODPP_NONE ? 0 : 1, &cookie);
 
     return compose_sample_action(xbridge, odp_actions, flow,  probability,
-                                 &cookie, sizeof cookie.sflow, ODPP_NONE);
+                                 &cookie, sizeof cookie.sflow, ODPP_NONE,
+                                 true);
 }
 
 static void
@@ -2578,7 +2582,8 @@ compose_ipfix_action(const struct xbridge *xbridge,
     compose_ipfix_cookie(&cookie, output_odp_port);
 
     compose_sample_action(xbridge, odp_actions, flow,  probability,
-                          &cookie, sizeof cookie.ipfix, tunnel_out_port);
+                          &cookie, sizeof cookie.ipfix, tunnel_out_port,
+                          false);
 }
 
 /* SAMPLE action for sFlow must be first action in any given list of
@@ -3969,7 +3974,8 @@ xlate_sample_action(struct xlate_ctx *ctx,
                                os->obs_domain_id, os->obs_point_id, &cookie);
     compose_sample_action(ctx->xbridge, ctx->xout->odp_actions,
                           &ctx->xin->flow, probability, &cookie,
-                          sizeof cookie.flow_sample, ODPP_NONE);
+                          sizeof cookie.flow_sample, ODPP_NONE,
+                          false);
 }
 
 static bool

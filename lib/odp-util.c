@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -251,6 +251,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                                           .optional = true },
         [OVS_USERSPACE_ATTR_EGRESS_TUN_PORT] = { .type = NL_A_U32,
                                                  .optional = true },
+        [OVS_USERSPACE_ATTR_ACTIONS] = { .type = NL_A_UNSPEC,
+                                                 .optional = true },
     };
     struct nlattr *a[ARRAY_SIZE(ovs_userspace_policy)];
     const struct nlattr *userdata_attr;
@@ -320,6 +322,10 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             }
             ds_put_char(ds, ')');
         }
+    }
+
+    if (a[OVS_USERSPACE_ATTR_ACTIONS]) {
+        ds_put_cstr(ds, ",actions");
     }
 
     tunnel_out_port_attr = a[OVS_USERSPACE_ATTR_EGRESS_TUN_PORT];
@@ -666,6 +672,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
     int n = -1;
     void *user_data = NULL;
     size_t user_data_size = 0;
+    bool include_actions = false;
 
     if (!ovs_scan(s, "userspace(pid=%"SCNi32"%n", &pid, &n)) {
         return -EINVAL;
@@ -754,12 +761,22 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
 
     {
         int n1 = -1;
+        if (ovs_scan(&s[n], ",actions%n", &n1)) {
+            n += n1;
+            include_actions = true;
+        }
+    }
+
+    {
+        int n1 = -1;
         if (ovs_scan(&s[n], ",tunnel_out_port=%"SCNi32")%n",
                      &tunnel_out_port, &n1)) {
-            odp_put_userspace_action(pid, user_data, user_data_size, tunnel_out_port, actions);
+            odp_put_userspace_action(pid, user_data, user_data_size,
+                                     tunnel_out_port, include_actions, actions);
             return n + n1;
         } else if (s[n] == ')') {
-            odp_put_userspace_action(pid, user_data, user_data_size, ODPP_NONE, actions);
+            odp_put_userspace_action(pid, user_data, user_data_size,
+                                     ODPP_NONE, include_actions, actions);
             return n + 1;
         }
     }
@@ -4251,6 +4268,7 @@ size_t
 odp_put_userspace_action(uint32_t pid,
                          const void *userdata, size_t userdata_size,
                          odp_port_t tunnel_out_port,
+                         bool include_actions,
                          struct ofpbuf *odp_actions)
 {
     size_t userdata_ofs;
@@ -4280,6 +4298,9 @@ odp_put_userspace_action(uint32_t pid,
     if (tunnel_out_port != ODPP_NONE) {
         nl_msg_put_odp_port(odp_actions, OVS_USERSPACE_ATTR_EGRESS_TUN_PORT,
                             tunnel_out_port);
+    }
+    if (include_actions) {
+        nl_msg_put_flag(odp_actions, OVS_USERSPACE_ATTR_ACTIONS);
     }
     nl_msg_end_nested(odp_actions, offset);
 
