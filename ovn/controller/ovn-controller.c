@@ -42,6 +42,7 @@
 #include "ofctrl.h"
 #include "binding.h"
 #include "chassis.h"
+#include "encaps.h"
 #include "physical.h"
 #include "pipeline.h"
 
@@ -267,6 +268,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ctx.ovs_idl, &ovsrec_open_vswitch_col_external_ids);
 
     chassis_init(&ctx);
+    encaps_init(&ctx);
     binding_init(&ctx);
     physical_init(&ctx);
     pipeline_init();
@@ -298,7 +300,8 @@ main(int argc, char *argv[])
             goto exit;
         }
 
-        chassis_run(&ctx, br_int);
+        chassis_run(&ctx);
+        encaps_run(&ctx, br_int);
         binding_run(&ctx, br_int);
 
         struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
@@ -336,10 +339,11 @@ main(int argc, char *argv[])
             goto exit;
         }
 
-        /* Run both the binding and chassis cleanup, even if one of them
-         * returns false.  We're done if both return true. */
+        /* Run all of the cleanup functions, even if one of them returns false.
+         * We're done if all of them return true. */
         done = binding_cleanup(&ctx);
-        done = chassis_cleanup(&ctx, br_int) && done;
+        done = chassis_cleanup(&ctx) && done;
+        done = encaps_cleanup(&ctx, br_int) && done;
         if (done) {
             poll_immediate_wake();
         }

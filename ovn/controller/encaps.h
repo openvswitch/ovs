@@ -13,16 +13,18 @@
  * limitations under the License.
  */
 
-#ifndef OVN_CHASSIS_H
-#define OVN_CHASSIS_H 1
+#ifndef OVN_ENCAPS_H
+#define OVN_ENCAPS_H 1
 
 #include <stdbool.h>
 
 struct controller_ctx;
 struct ovsrec_bridge;
 
-void chassis_init(struct controller_ctx *);
-void chassis_run(struct controller_ctx *);
-bool chassis_cleanup(struct controller_ctx *);
+void encaps_init(struct controller_ctx *);
+void encaps_run(struct controller_ctx *,
+                 const struct ovsrec_bridge *br_int);
+bool encaps_cleanup(struct controller_ctx *,
+                     const struct ovsrec_bridge *br_int);
 
-#endif /* ovn/chassis.h */
+#endif /* ovn/encaps.h */

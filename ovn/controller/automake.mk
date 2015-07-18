@@ -4,6 +4,8 @@ ovn_controller_ovn_controller_SOURCES = \
 	ovn/controller/binding.h \
 	ovn/controller/chassis.c \
 	ovn/controller/chassis.h \
+	ovn/controller/encaps.c \
+	ovn/controller/encaps.h \
 	ovn/controller/ofctrl.c \
 	ovn/controller/ofctrl.h \
 	ovn/controller/ovn-controller.c \
