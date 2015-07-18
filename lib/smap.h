@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2014 Nicira, Inc.
+/* Copyright (c) 2012, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include "hmap.h"
 
 struct json;
+struct uuid;
 
 /* A map from string to string. */
 struct smap {
@@ -57,6 +58,7 @@ const char *smap_get(const struct smap *, const char *);
 struct smap_node *smap_get_node(const struct smap *, const char *);
 bool smap_get_bool(const struct smap *smap, const char *key, bool def);
 int smap_get_int(const struct smap *smap, const char *key, int def);
+bool smap_get_uuid(const struct smap *, const char *key, struct uuid *);
 
 bool smap_is_empty(const struct smap *);
 size_t smap_count(const struct smap *);
