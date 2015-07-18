@@ -24,10 +24,10 @@
 VLOG_DEFINE_THIS_MODULE(chassis);
 
 void
-chassis_init(struct controller_ctx *ctx)
+chassis_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 {
-    ovsdb_idl_add_table(ctx->ovs_idl, &ovsrec_table_open_vswitch);
-    ovsdb_idl_add_column(ctx->ovs_idl, &ovsrec_open_vswitch_col_external_ids);
+    ovsdb_idl_add_table(ovs_idl, &ovsrec_table_open_vswitch);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_external_ids);
 }
 
 void

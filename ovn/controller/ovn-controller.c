@@ -255,16 +255,13 @@ main(int argc, char *argv[])
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
     ctx.ovs_idl = ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true);
-
-    /* Register interest in "external_ids" column in "Open_vSwitch" table,
-     * since we'll need to get the OVN OVSDB remote. */
     ovsdb_idl_add_table(ctx.ovs_idl, &ovsrec_table_open_vswitch);
     ovsdb_idl_add_column(ctx.ovs_idl, &ovsrec_open_vswitch_col_external_ids);
+    chassis_register_ovs_idl(ctx.ovs_idl);
+    encaps_register_ovs_idl(ctx.ovs_idl);
+    binding_register_ovs_idl(ctx.ovs_idl);
+    physical_register_ovs_idl(ctx.ovs_idl);
 
-    chassis_init(&ctx);
-    encaps_init(&ctx);
-    binding_init(&ctx);
-    physical_init(&ctx);
     pipeline_init();
 
     get_initial_snapshot(ctx.ovs_idl);
