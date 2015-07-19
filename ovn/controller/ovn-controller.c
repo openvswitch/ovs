@@ -216,7 +216,6 @@ int
 main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
-    struct controller_ctx ctx = { .ovs_idl = NULL };
     bool exiting;
     int retval;
 
@@ -243,29 +242,32 @@ main(int argc, char *argv[])
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
-    ctx.ovs_idl = ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true);
-    ovsdb_idl_add_table(ctx.ovs_idl, &ovsrec_table_open_vswitch);
-    ovsdb_idl_add_column(ctx.ovs_idl, &ovsrec_open_vswitch_col_external_ids);
-    chassis_register_ovs_idl(ctx.ovs_idl);
-    encaps_register_ovs_idl(ctx.ovs_idl);
-    binding_register_ovs_idl(ctx.ovs_idl);
-    physical_register_ovs_idl(ctx.ovs_idl);
+    struct idl_loop ovs_idl_loop = IDL_LOOP_INITIALIZER(
+        ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true));
+    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_open_vswitch);
+    ovsdb_idl_add_column(ovs_idl_loop.idl,
+                         &ovsrec_open_vswitch_col_external_ids);
+    chassis_register_ovs_idl(ovs_idl_loop.idl);
+    encaps_register_ovs_idl(ovs_idl_loop.idl);
+    binding_register_ovs_idl(ovs_idl_loop.idl);
+    physical_register_ovs_idl(ovs_idl_loop.idl);
+    get_initial_snapshot(ovs_idl_loop.idl);
 
-    get_initial_snapshot(ctx.ovs_idl);
-
-    char *ovnsb_remote = get_ovnsb_remote(ctx.ovs_idl);
-    ctx.ovnsb_idl = ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class,
-                                     true, true);
-    get_initial_snapshot(ctx.ovnsb_idl);
-
-    struct idl_loop ovnsb_idl_loop = IDL_LOOP_INITIALIZER(ctx.ovnsb_idl);
-    struct idl_loop ovs_idl_loop = IDL_LOOP_INITIALIZER(ctx.ovs_idl);
+    /* Connect to OVN SB database. */
+    char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
+    struct idl_loop ovnsb_idl_loop = IDL_LOOP_INITIALIZER(
+        ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+    get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Main loop. */
     exiting = false;
     while (!exiting) {
-        ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
-        ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
+        struct controller_ctx ctx = {
+            .ovs_idl = ovs_idl_loop.idl,
+            .ovs_idl_txn = idl_loop_run(&ovs_idl_loop),
+            .ovnsb_idl = ovnsb_idl_loop.idl,
+            .ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop),
+        };
 
         const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
@@ -305,8 +307,12 @@ main(int argc, char *argv[])
     /* It's time to exit.  Clean up the databases. */
     bool done = false;
     while (!done) {
-        ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
-        ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
+        struct controller_ctx ctx = {
+            .ovs_idl = ovs_idl_loop.idl,
+            .ovs_idl_txn = idl_loop_run(&ovs_idl_loop),
+            .ovnsb_idl = ovnsb_idl_loop.idl,
+            .ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop),
+        };
 
         const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
