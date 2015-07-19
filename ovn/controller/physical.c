@@ -127,7 +127,7 @@ physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         }
 
         /* Translate the logical datapath into the form we use in
-         * MFF_METADATA. */
+         * MFF_LOG_DATAPATH. */
         uint32_t ldp = ldp_to_integer(&binding->logical_datapath);
         if (!ldp) {
             continue;
@@ -147,8 +147,8 @@ physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
              * traffic, match on the tags and then strip the tag.
              * Priority 100 is for traffic belonging to VMs.
              *
-             * For both types of traffic: set MFF_LOG_INPORT to the
-             * logical input port, MFF_METADATA to the logical datapath, and
+             * For both types of traffic: set MFF_LOG_INPORT to the logical
+             * input port, MFF_LOG_DATAPATH to the logical datapath, and
              * resubmit into the logical pipeline starting at table 16. */
             match_init_catchall(&match);
             ofpbuf_clear(&ofpacts);
@@ -157,9 +157,9 @@ physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 match_set_dl_vlan(&match, htons(tag));
             }
 
-            /* Set MFF_METADATA. */
+            /* Set MFF_LOG_DATAPATH. */
             struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
-            sf->field = mf_from_id(MFF_METADATA);
+            sf->field = mf_from_id(MFF_LOG_DATAPATH);
             sf->value.be64 = htonll(ldp);
             sf->mask.be64 = OVS_BE64_MAX;
 
