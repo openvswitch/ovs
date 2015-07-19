@@ -17,10 +17,12 @@
 #ifndef OVN_BINDING_H
 #define OVN_BINDING_H 1
 
+#include <stdbool.h>
+
 struct controller_ctx;
 
 void binding_init(struct controller_ctx *);
 void binding_run(struct controller_ctx *);
-void binding_destroy(struct controller_ctx *);
+bool binding_cleanup(struct controller_ctx *);
 
 #endif /* ovn/binding.h */

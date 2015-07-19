@@ -16,10 +16,12 @@
 #ifndef OVN_CHASSIS_H
 #define OVN_CHASSIS_H 1
 
+#include <stdbool.h>
+
 struct controller_ctx;
 
 void chassis_init(struct controller_ctx *);
 void chassis_run(struct controller_ctx *);
-void chassis_destroy(struct controller_ctx *);
+bool chassis_cleanup(struct controller_ctx *);
 
 #endif /* ovn/chassis.h */

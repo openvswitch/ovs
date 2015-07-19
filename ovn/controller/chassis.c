@@ -52,8 +52,6 @@ register_chassis(struct controller_ctx *ctx)
     const char *encap_type, *encap_ip;
     struct sbrec_encap *encap_rec;
     static bool inited = false;
-    int retval = TXN_TRY_AGAIN;
-    struct ovsdb_idl_txn *txn;
 
     chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
 
@@ -92,30 +90,21 @@ register_chassis(struct controller_ctx *ctx)
         }
     }
 
-    txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
-    ovsdb_idl_txn_add_comment(txn,
+    ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                               "ovn-controller: registering chassis '%s'",
                               ctx->chassis_id);
 
     if (!chassis_rec) {
-        chassis_rec = sbrec_chassis_insert(txn);
+        chassis_rec = sbrec_chassis_insert(ctx->ovnsb_idl_txn);
         sbrec_chassis_set_name(chassis_rec, ctx->chassis_id);
     }
 
-    encap_rec = sbrec_encap_insert(txn);
+    encap_rec = sbrec_encap_insert(ctx->ovnsb_idl_txn);
 
     sbrec_encap_set_type(encap_rec, encap_type);
     sbrec_encap_set_ip(encap_rec, encap_ip);
 
     sbrec_chassis_set_encaps(chassis_rec, &encap_rec, 1);
-
-    retval = ovsdb_idl_txn_commit_block(txn);
-    if (retval != TXN_SUCCESS && retval != TXN_UNCHANGED) {
-        VLOG_INFO("Problem registering chassis: %s",
-                  ovsdb_idl_txn_status_to_string(retval));
-        poll_immediate_wake();
-    }
-    ovsdb_idl_txn_destroy(txn);
 
     inited = true;
 }
@@ -311,7 +300,6 @@ update_encaps(struct controller_ctx *ctx)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct ovsrec_bridge *br;
-    int retval;
 
     struct tunnel_ctx tc = {
         .tunnel_hmap = HMAP_INITIALIZER(&tc.tunnel_hmap),
@@ -319,7 +307,7 @@ update_encaps(struct controller_ctx *ctx)
         .br_int = ctx->br_int
     };
 
-    tc.ovs_txn = ovsdb_idl_txn_create(ctx->ovs_idl);
+    tc.ovs_txn = ctx->ovs_idl_txn;
     ovsdb_idl_txn_add_comment(tc.ovs_txn,
                               "ovn-controller: modifying OVS tunnels '%s'",
                               ctx->chassis_id);
@@ -366,81 +354,58 @@ update_encaps(struct controller_ctx *ctx)
     }
     hmap_destroy(&tc.tunnel_hmap);
     sset_destroy(&tc.port_names);
-
-    retval = ovsdb_idl_txn_commit_block(tc.ovs_txn);
-    if (retval != TXN_SUCCESS && retval != TXN_UNCHANGED) {
-        VLOG_INFO("Problem modifying OVS tunnels: %s",
-                  ovsdb_idl_txn_status_to_string(retval));
-        poll_immediate_wake();
-    }
-    ovsdb_idl_txn_destroy(tc.ovs_txn);
 }
 
 void
 chassis_run(struct controller_ctx *ctx)
 {
-    register_chassis(ctx);
-    update_encaps(ctx);
+    if (ctx->ovnsb_idl_txn) {
+        register_chassis(ctx);
+    }
+
+    if (ctx->ovs_idl_txn) {
+        update_encaps(ctx);
+    }
 }
 
-void
-chassis_destroy(struct controller_ctx *ctx)
+/* Returns true if the database is all cleaned up, false if more work is
+ * required. */
+bool
+chassis_cleanup(struct controller_ctx *ctx)
 {
-    int retval = TXN_TRY_AGAIN;
+    if (!ctx->ovnsb_idl_txn || !ctx->ovs_idl_txn) {
+        return false;
+    }
 
-    ovs_assert(ctx->ovnsb_idl);
+    bool any_changes = false;
 
-    while (retval != TXN_SUCCESS && retval != TXN_UNCHANGED) {
-        const struct sbrec_chassis *chassis_rec;
-        struct ovsdb_idl_txn *txn;
-
-        chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
-        if (!chassis_rec) {
-            break;
-        }
-
-        txn = ovsdb_idl_txn_create(ctx->ovnsb_idl);
-        ovsdb_idl_txn_add_comment(txn,
+    /* Delete Chassis row. */
+    const struct sbrec_chassis *chassis_rec
+        = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+    if (chassis_rec) {
+        ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                                   "ovn-controller: unregistering chassis '%s'",
                                   ctx->chassis_id);
         sbrec_chassis_delete(chassis_rec);
-
-        retval = ovsdb_idl_txn_commit_block(txn);
-        if (retval == TXN_ERROR) {
-            VLOG_INFO("Problem unregistering chassis: %s",
-                      ovsdb_idl_txn_status_to_string(retval));
-        }
-        ovsdb_idl_txn_destroy(txn);
+        any_changes = true;
     }
 
-    retval = TXN_TRY_AGAIN;
-    while (retval != TXN_SUCCESS && retval != TXN_UNCHANGED) {
-        struct ovsrec_port **ports;
-        struct ovsdb_idl_txn *txn;
-        size_t i, n;
-
-        txn = ovsdb_idl_txn_create(ctx->ovs_idl);
-        ovsdb_idl_txn_add_comment(txn,
-                                  "ovn-controller: destroying tunnels");
-
-        /* Delete all the OVS-created tunnels from the integration
-         * bridge. */
-        ports = xmalloc(sizeof *ctx->br_int->ports * ctx->br_int->n_ports);
-        for (i = n = 0; i < ctx->br_int->n_ports; i++) {
-            if (!smap_get(&ctx->br_int->ports[i]->external_ids,
-                          "ovn-chassis-id")) {
-                ports[n++] = ctx->br_int->ports[i];
-            }
+    /* Delete all the OVS-created tunnels from the integration bridge. */
+    ovsdb_idl_txn_add_comment(ctx->ovs_idl_txn,
+                              "ovn-controller: destroying tunnels");
+    struct ovsrec_port **ports
+        = xmalloc(sizeof *ctx->br_int->ports * ctx->br_int->n_ports);
+    size_t n = 0;
+    for (size_t i = 0; i < ctx->br_int->n_ports; i++) {
+        if (!smap_get(&ctx->br_int->ports[i]->external_ids,
+                      "ovn-chassis-id")) {
+            ports[n++] = ctx->br_int->ports[i];
+            any_changes = true;
         }
-        ovsrec_bridge_verify_ports(ctx->br_int);
-        ovsrec_bridge_set_ports(ctx->br_int, ports, n);
-        free(ports);
-
-        retval = ovsdb_idl_txn_commit_block(txn);
-        if (retval == TXN_ERROR) {
-            VLOG_INFO("Problem destroying tunnels: %s",
-                      ovsdb_idl_txn_status_to_string(retval));
-        }
-        ovsdb_idl_txn_destroy(txn);
     }
+    ovsrec_bridge_verify_ports(ctx->br_int);
+    ovsrec_bridge_set_ports(ctx->br_int, ports, n);
+    free(ports);
+
+    return !any_changes;
 }

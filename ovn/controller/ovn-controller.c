@@ -145,6 +145,78 @@ try_again:
 
 }
 
+struct idl_loop {
+    struct ovsdb_idl *idl;
+    unsigned int skip_seqno;
+
+    struct ovsdb_idl_txn *committing_txn;
+    unsigned int precommit_seqno;
+
+    struct ovsdb_idl_txn *open_txn;
+};
+
+#define IDL_LOOP_INITIALIZER(IDL) { .idl = (IDL) }
+
+static void
+idl_loop_destroy(struct idl_loop *loop)
+{
+    if (loop) {
+        ovsdb_idl_destroy(loop->idl);
+    }
+}
+
+static struct ovsdb_idl_txn *
+idl_loop_run(struct idl_loop *loop)
+{
+    ovsdb_idl_run(loop->idl);
+    loop->open_txn = (loop->committing_txn
+                      || ovsdb_idl_get_seqno(loop->idl) == loop->skip_seqno
+                      ? NULL
+                      : ovsdb_idl_txn_create(loop->idl));
+    return loop->open_txn;
+}
+
+static void
+idl_loop_commit_and_wait(struct idl_loop *loop)
+{
+    if (loop->open_txn) {
+        loop->committing_txn = loop->open_txn;
+        loop->open_txn = NULL;
+
+        loop->precommit_seqno = ovsdb_idl_get_seqno(loop->idl);
+    }
+
+    struct ovsdb_idl_txn *txn = loop->committing_txn;
+    if (txn) {
+        enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(txn);
+        switch (status) {
+        case TXN_INCOMPLETE:
+            break;
+
+        case TXN_TRY_AGAIN:
+            loop->skip_seqno = loop->precommit_seqno;
+            if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
+                poll_immediate_wake();
+            }
+            /* Fall through. */
+        case TXN_UNCHANGED:
+        case TXN_ABORTED:
+        case TXN_SUCCESS:
+        case TXN_NOT_LOCKED:
+        case TXN_ERROR:
+            ovsdb_idl_txn_destroy(txn);
+            loop->committing_txn = NULL;
+            break;
+
+        case TXN_UNCOMMITTED:
+            OVS_NOT_REACHED();
+
+        }
+    }
+
+    ovsdb_idl_wait(loop->idl);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -195,10 +267,14 @@ main(int argc, char *argv[])
                                      true, true);
     get_initial_snapshot(ctx.ovnsb_idl);
 
+    struct idl_loop ovnsb_idl_loop = IDL_LOOP_INITIALIZER(ctx.ovnsb_idl);
+    struct idl_loop ovs_idl_loop = IDL_LOOP_INITIALIZER(ctx.ovs_idl);
+
+    /* Main loop. */
     exiting = false;
     while (!exiting) {
-        ovsdb_idl_run(ctx.ovs_idl);
-        ovsdb_idl_run(ctx.ovnsb_idl);
+        ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
+        ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
         /* xxx If run into any surprising changes, we exit.  We should
          * xxx handle this more gracefully. */
@@ -207,7 +283,7 @@ main(int argc, char *argv[])
             VLOG_ERR("Integration bridge '%s' disappeared",
                      ctx.br_int_name);
             retval = EXIT_FAILURE;
-            break;
+            goto exit;
         }
 
         ofctrl_clear_flows();
@@ -224,20 +300,49 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
 
-        ovsdb_idl_wait(ctx.ovs_idl);
-        ovsdb_idl_wait(ctx.ovnsb_idl);
+        idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        idl_loop_commit_and_wait(&ovs_idl_loop);
+
         ofctrl_wait();
         poll_block();
     }
 
+    /* It's time to exit.  Clean up the databases. */
+    bool done = false;
+    while (!done) {
+        ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
+        ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
+
+        /* xxx If run into any surprising changes, we exit.  We should
+         * xxx handle this more gracefully. */
+        ctx.br_int = get_bridge(&ctx, ctx.br_int_name);
+        if (!ctx.br_int) {
+            VLOG_ERR("Integration bridge '%s' disappeared",
+                     ctx.br_int_name);
+            retval = EXIT_FAILURE;
+            goto exit;
+        }
+
+        /* Run both the binding and chassis cleanup, even if one of them
+         * returns false.  We're done if both return true. */
+        done = binding_cleanup(&ctx);
+        done = chassis_cleanup(&ctx) && done;
+        if (done) {
+            poll_immediate_wake();
+        }
+
+        idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        idl_loop_commit_and_wait(&ovs_idl_loop);
+        poll_block();
+    }
+
+exit:
     unixctl_server_destroy(unixctl);
     pipeline_destroy(&ctx);
     ofctrl_destroy();
-    binding_destroy(&ctx);
-    chassis_destroy(&ctx);
 
-    ovsdb_idl_destroy(ctx.ovs_idl);
-    ovsdb_idl_destroy(ctx.ovnsb_idl);
+    idl_loop_destroy(&ovs_idl_loop);
+    idl_loop_destroy(&ovnsb_idl_loop);
 
     free(ctx.br_int_name);
     free(ctx.chassis_id);
