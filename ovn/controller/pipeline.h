@@ -43,7 +43,7 @@ struct uuid;
 
 void pipeline_init(void);
 void pipeline_run(struct controller_ctx *, struct hmap *flow_table);
-void pipeline_destroy(struct controller_ctx *);
+void pipeline_destroy(void);
 
 uint32_t ldp_to_integer(const struct uuid *logical_datapath);
 

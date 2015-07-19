@@ -357,7 +357,7 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
 }
 
 void
-pipeline_destroy(struct controller_ctx *ctx OVS_UNUSED)
+pipeline_destroy(void)
 {
     expr_symtab_destroy(&symtab);
     ldp_destroy();

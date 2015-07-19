@@ -239,6 +239,7 @@ main(int argc, char *argv[])
     sbrec_init();
 
     ofctrl_init();
+    pipeline_init();
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
@@ -249,8 +250,6 @@ main(int argc, char *argv[])
     encaps_register_ovs_idl(ctx.ovs_idl);
     binding_register_ovs_idl(ctx.ovs_idl);
     physical_register_ovs_idl(ctx.ovs_idl);
-
-    pipeline_init();
 
     get_initial_snapshot(ctx.ovs_idl);
 
@@ -327,7 +326,7 @@ main(int argc, char *argv[])
     }
 
     unixctl_server_destroy(unixctl);
-    pipeline_destroy(&ctx);
+    pipeline_destroy();
     ofctrl_destroy();
 
     idl_loop_destroy(&ovs_idl_loop);
