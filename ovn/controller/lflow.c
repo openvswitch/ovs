@@ -283,7 +283,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
         next_table_id = lflow->table_id < 31 ? lflow->table_id + 17 : 0;
         error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
-                                     next_table_id, &ofpacts, &prereqs);
+                                     next_table_id, 64, &ofpacts, &prereqs);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",

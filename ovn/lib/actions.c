@@ -31,6 +31,7 @@ struct action_context {
     struct lexer *lexer;        /* Lexer for pulling more tokens. */
     const struct shash *symtab; /* Symbol table. */
     uint8_t next_table_id;      /* OpenFlow table for 'next' to resubmit. */
+    uint8_t output_table_id;    /* OpenFlow table for 'output' to resubmit. */
     const struct simap *ports;  /* Map from port name to number. */
 
     /* State. */
@@ -161,8 +162,7 @@ parse_actions(struct action_context *ctx)
                 action_error(ctx, "\"next\" action not allowed here.");
             }
         } else if (lexer_match_id(ctx->lexer, "output")) {
-            /* Table 64 does logical-to-physical translation. */
-            emit_resubmit(ctx, 64);
+            emit_resubmit(ctx, ctx->output_table_id);
         } else {
             action_syntax_error(ctx, "expecting action");
         }
@@ -189,6 +189,9 @@ parse_actions(struct action_context *ctx)
  * 'next_table_id' should be the OpenFlow table to which the "next" action will
  * resubmit, or 0 to disable "next".
  *
+ * 'output_table_id' should be the OpenFlow table to which the "output" action
+ * will resubmit
+ *
  * Some actions add extra requirements (prerequisites) to the flow's match.  If
  * so, this function sets '*prereqsp' to the actions' prerequisites; otherwise,
  * it sets '*prereqsp' to NULL.  The caller owns '*prereqsp' and must
@@ -202,7 +205,8 @@ parse_actions(struct action_context *ctx)
 char * OVS_WARN_UNUSED_RESULT
 actions_parse(struct lexer *lexer, const struct shash *symtab,
               const struct simap *ports, uint8_t next_table_id,
-              struct ofpbuf *ofpacts, struct expr **prereqsp)
+              uint8_t output_table_id, struct ofpbuf *ofpacts,
+              struct expr **prereqsp)
 {
     size_t ofpacts_start = ofpacts->size;
 
@@ -211,6 +215,7 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
     ctx.symtab = symtab;
     ctx.ports = ports;
     ctx.next_table_id = next_table_id;
+    ctx.output_table_id = output_table_id;
     ctx.error = NULL;
     ctx.ofpacts = ofpacts;
     ctx.prereqs = NULL;
@@ -232,7 +237,8 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
 char * OVS_WARN_UNUSED_RESULT
 actions_parse_string(const char *s, const struct shash *symtab,
                      const struct simap *ports, uint8_t next_table_id,
-                     struct ofpbuf *ofpacts, struct expr **prereqsp)
+                     uint8_t output_table_id, struct ofpbuf *ofpacts,
+                     struct expr **prereqsp)
 {
     struct lexer lexer;
     char *error;
@@ -240,7 +246,7 @@ actions_parse_string(const char *s, const struct shash *symtab,
     lexer_init(&lexer, s);
     lexer_get(&lexer);
     error = actions_parse(&lexer, symtab, ports, next_table_id,
-                          ofpacts, prereqsp);
+                          output_table_id, ofpacts, prereqsp);
     lexer_destroy(&lexer);
 
     return error;
