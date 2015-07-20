@@ -258,9 +258,14 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
     new_data = (char *) new_base + new_headroom;
     if (b->data != new_data) {
         if (b->header) {
-            uintptr_t data_delta = (char *) new_data - (char *) b->data;
+            uintptr_t data_delta = (char *) b->header - (char *) b->data;
 
-            b->header = (char *) b->header + data_delta;
+            b->header = (char *) new_data + data_delta;
+        }
+        if (b->msg) {
+            uintptr_t data_delta = (char *) b->msg - (char *) b->data;
+
+            b->msg = (char *) new_data + data_delta;
         }
         b->data = new_data;
     }
@@ -292,7 +297,13 @@ ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size)
  * tailroom to 0, if any.
  *
  * Buffers not obtained from malloc() are not resized, since that wouldn't save
- * any memory. */
+ * any memory.
+ *
+ * Caller needs to updates 'b->header' and 'b->msg' so that they point to the
+ * same locations in the data.  (If they pointed into the tailroom or headroom
+ * then they become invalid.)
+ *
+ */
 void
 ofpbuf_trim(struct ofpbuf *b)
 {
@@ -315,7 +326,11 @@ ofpbuf_padto(struct ofpbuf *b, size_t length)
 /* Shifts all of the data within the allocated space in 'b' by 'delta' bytes.
  * For example, a 'delta' of 1 would cause each byte of data to move one byte
  * forward (from address 'p' to 'p+1'), and a 'delta' of -1 would cause each
- * byte to move one byte backward (from 'p' to 'p-1'). */
+ * byte to move one byte backward (from 'p' to 'p-1').
+ *
+ * If used, user must make sure the 'header' and 'msg' pointers are updated
+ * after shifting.
+ */
 void
 ofpbuf_shift(struct ofpbuf *b, int delta)
 {
@@ -454,6 +469,8 @@ ofpbuf_steal_data(struct ofpbuf *b)
     }
     b->base = NULL;
     b->data = NULL;
+    b->header = NULL;
+    b->msg = NULL;
     return p;
 }
 

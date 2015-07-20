@@ -143,6 +143,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-lockfile \
 	tests/valgrind/test-multipath \
 	tests/valgrind/test-odp \
+	tests/valgrind/test-ofpbuf \
 	tests/valgrind/test-ovsdb \
 	tests/valgrind/test-packets \
 	tests/valgrind/test-random \
@@ -281,6 +282,7 @@ tests_ovstest_SOURCES = \
 	tests/test-multipath.c \
 	tests/test-netflow.c \
 	tests/test-odp.c \
+	tests/test-ofpbuf.c \
 	tests/test-ovn.c \
 	tests/test-packets.c \
 	tests/test-random.c \

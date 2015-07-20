@@ -43,6 +43,10 @@ enum OVS_PACKED_ENUM ofpbuf_source {
  *    When parsing, the 'data' will move past these, as data is being
  *    pulled from the OpenFlow message.
  *
+ *    Caution: buffer manipulation of 'struct ofpbuf' must always update
+ *             the 'header' and 'msg' pointers.
+ *
+ *
  * Actions: When encoding OVS action lists, the 'header' is used
  *    as a pointer to the beginning of the current action (see ofpact_put()).
  *

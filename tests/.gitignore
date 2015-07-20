@@ -29,6 +29,7 @@
 /test-multipath
 /test-netflow
 /test-odp
+/test-ofpbuf
 /test-ovsdb
 /test-packets
 /test-random
