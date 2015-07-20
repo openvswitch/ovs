@@ -5,6 +5,8 @@ compiler:
 
 before_install: ./.travis/prepare.sh
 
+sudo: true
+
 env:
   - OPTS="--disable-ssl"
   - TESTSUITE=1 KERNEL=3.18.1
