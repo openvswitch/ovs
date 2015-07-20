@@ -10,7 +10,7 @@ VTEP_IDL_FILES = \
 vtep/vtep-idl.ovsidl: $(VTEP_IDL_FILES)
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(VTEP_IDL_FILES) > $@.tmp && \
 	mv $@.tmp $@
-CLEANFILES += vtep/vtep-idl.c vtep/vtep-idl.h
+CLEANFILES += vtep/vtep-idl.c vtep/vtep-idl.h vtep/vtep-idl.ovsidl
 
 # libvtep
 lib_LTLIBRARIES += vtep/libvtep.la
