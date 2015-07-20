@@ -209,3 +209,7 @@ AT_CLEANUP
 AT_SETUP([use of public headers])
 AT_CHECK([test-lib], [0], [])
 AT_CLEANUP
+
+AT_SETUP([test ofpbuf module])
+AT_CHECK([ovstest test-ofpbuf], [0], [])
+AT_CLEANUP
