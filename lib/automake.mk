@@ -445,8 +445,9 @@ MAN_FRAGMENTS += \
 OVSIDL_BUILT += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 
 EXTRA_DIST += lib/vswitch-idl.ann
-$(srcdir)/lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
+lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(srcdir)/vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann > $@.tmp && mv $@.tmp $@
+CLEANFILES += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 
 lib/dirs.c: lib/dirs.c.in Makefile
 	$(AM_V_GEN)($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \
@@ -484,12 +485,14 @@ lib/ofp-errors.inc: lib/ofp-errors.h include/openflow/openflow-common.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
 lib/ofp-errors.lo: lib/ofp-errors.inc
+CLEANFILES += lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors
 
 lib/ofp-msgs.inc: lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
 lib/ofp-msgs.lo: lib/ofp-msgs.inc
+CLEANFILES += lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs
 
 INSTALL_DATA_LOCAL += lib-install-data-local
