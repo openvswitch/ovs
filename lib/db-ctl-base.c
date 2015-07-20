@@ -1953,7 +1953,7 @@ ctl_fatal(const char *format, ...)
  * Freeing the transaction and the IDL is not strictly necessary, but it makes
  * for a clean memory leak report from valgrind in the normal case.  That makes
  * it easier to notice real memory leaks. */
-void
+static void
 ctl_exit(int status)
 {
     if (ctl_exit_func) {
