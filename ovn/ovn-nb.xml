@@ -308,6 +308,15 @@
       the router port.
     </p>
 
+    <column name="name">
+      <p>
+        A name for the logical router port.  This name has no special meaning or purpose
+        other than to provide convenience for human interaction with the ovn-nb
+        database.  There is no requirement for the name to be unique.  The
+        logical router port's UUID should be used as the unique identifier.
+      </p>
+    </column>
+
     <column name="network">
       The IP address of the router and the netmask.  For example,
       <code>192.168.0.1/24</code> indicates that the router's IP address is

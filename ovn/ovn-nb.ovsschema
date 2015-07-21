@@ -72,6 +72,7 @@
             "isRoot": true},
         "Logical_Router_Port": {
             "columns": {
+                "name": {"type": "string"},
                 "network": {"type": "string"},
                 "mac": {"type": "string"},
                 "external_ids": {
