@@ -154,7 +154,7 @@ tnl_arp_cache_run(void)
 }
 
 static void
-tnl_arp_cache_flush(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
+tnl_arp_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct tnl_arp_entry *arp;
