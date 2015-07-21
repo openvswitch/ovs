@@ -405,33 +405,41 @@ build_pipeline(struct northd_context *ctx)
     hmap_destroy(&pc.pipeline_hmap);
 }
 
+/*
+ * Take two string columns and return true if:
+ *  - neither are set
+ *  - both are set and the strings are equal
+ */
 static bool
-parents_equal(const struct sbrec_binding *binding,
-              const struct nbrec_logical_port *lport)
+strings_equal(const char *s1, const char *s2)
 {
-    if (!!binding->parent_port != !!lport->parent_name) {
+    if (!!s1 != !!s2) {
         /* One is set and the other is not. */
         return false;
     }
 
-    if (binding->parent_port) {
+    if (s1) {
         /* Both are set. */
-        return strcmp(binding->parent_port, lport->parent_name) ? false : true;
+        return strcmp(s1, s2) ? false : true;
     }
 
     /* Both are NULL. */
     return true;
 }
 
+/*
+ * Take two int64_t columns and return true if either:
+ *  - neither are set
+ *  - both are set and the first integers in each are equal
+ */
 static bool
-tags_equal(const struct sbrec_binding *binding,
-           const struct nbrec_logical_port *lport)
+int64_first_equal(int64_t *i1, size_t n_i1, int64_t *i2, size_t n_i2)
 {
-    if (binding->n_tag != lport->n_tag) {
+    if (n_i1 != n_i2) {
         return false;
     }
 
-    return binding->n_tag ? (binding->tag[0] == lport->tag[0]) : true;
+    return i1 ? (i1[0] == i2[0]) : true;
 }
 
 struct binding_hash_node {
@@ -538,10 +546,11 @@ set_bindings(struct northd_context *ctx)
                     sbrec_binding_set_mac(binding, (const char **) lport->macs,
                                           lport->n_macs);
                 }
-                if (!parents_equal(binding, lport)) {
+                if (!strings_equal(binding->parent_port, lport->parent_name)) {
                     sbrec_binding_set_parent_port(binding, lport->parent_name);
                 }
-                if (!tags_equal(binding, lport)) {
+                if (!int64_first_equal(binding->tag, binding->n_tag,
+                                       lport->tag, lport->n_tag)) {
                     sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
                 }
                 if (!uuid_equals(&binding->logical_datapath,
