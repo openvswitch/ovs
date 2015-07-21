@@ -30,6 +30,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
+#include "socket-util.h"
 #include "timeval.h"
 #include "tnl-arp-cache.h"
 #include "unaligned.h"
@@ -95,12 +96,35 @@ tnl_arp_delete(struct tnl_arp_entry *arp)
     ovsrcu_postpone(arp_entry_free, arp);
 }
 
+static void
+tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst, const struct eth_addr mac)
+{
+    ovs_mutex_lock(&mutex);
+    struct tnl_arp_entry *arp = tnl_arp_lookup__(name, dst);
+    if (arp) {
+        if (eth_addr_equals(arp->mac, mac)) {
+            arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
+            ovs_mutex_unlock(&mutex);
+            return;
+        }
+        tnl_arp_delete(arp);
+        seq_change(tnl_conf_seq);
+    }
+
+    arp = xmalloc(sizeof *arp);
+
+    arp->ip = dst;
+    arp->mac = mac;
+    arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
+    ovs_strlcpy(arp->br_name, name, sizeof arp->br_name);
+    cmap_insert(&table, &arp->cmap_node, (OVS_FORCE uint32_t) arp->ip);
+    ovs_mutex_unlock(&mutex);
+}
+
 int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
-    struct tnl_arp_entry *arp;
-
     if (flow->dl_type != htons(ETH_TYPE_ARP)) {
         return EINVAL;
     }
@@ -110,26 +134,8 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
     memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
     memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
 
-    ovs_mutex_lock(&mutex);
-    arp = tnl_arp_lookup__(name, flow->nw_src);
-    if (arp) {
-        if (eth_addr_equals(arp->mac, flow->arp_sha)) {
-            arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
-            ovs_mutex_unlock(&mutex);
-            return 0;
-        }
-        tnl_arp_delete(arp);
-        seq_change(tnl_conf_seq);
-    }
+    tnl_arp_set(name, flow->nw_src, flow->arp_sha);
 
-    arp = xmalloc(sizeof *arp);
-
-    arp->ip = flow->nw_src;
-    arp->mac = flow->arp_sha;
-    arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
-    ovs_strlcpy(arp->br_name, name, sizeof arp->br_name);
-    cmap_insert(&table, &arp->cmap_node, (OVS_FORCE uint32_t) arp->ip);
-    ovs_mutex_unlock(&mutex);
     return 0;
 }
 
@@ -172,6 +178,28 @@ tnl_arp_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
     unixctl_command_reply(conn, "OK");
 }
 
+static void
+tnl_arp_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                  const char *argv[], void *aux OVS_UNUSED)
+{
+    const char *br_name = argv[1];
+    struct eth_addr mac;
+    struct in_addr ip;
+
+    if (lookup_ip(argv[2], &ip)) {
+        unixctl_command_reply_error(conn, "bad IP address");
+        return;
+    }
+
+    if (!eth_addr_from_string(argv[3], &mac)) {
+        unixctl_command_reply_error(conn, "bad MAC address");
+        return;
+    }
+
+    tnl_arp_set(br_name, ip.s_addr, mac);
+    unixctl_command_reply(conn, "OK");
+}
+
 #define MAX_IP_ADDR_LEN 17
 
 static void
@@ -208,5 +236,6 @@ tnl_arp_cache_init(void)
     cmap_init(&table);
 
     unixctl_command_register("tnl/arp/show", "", 0, 0, tnl_arp_cache_show, NULL);
+    unixctl_command_register("tnl/arp/set", "BRIDGE IP MAC", 3, 3, tnl_arp_cache_add, NULL);
     unixctl_command_register("tnl/arp/flush", "", 0, 0, tnl_arp_cache_flush, NULL);
 }
