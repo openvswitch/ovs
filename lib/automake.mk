@@ -276,8 +276,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vlandev.c \
 	lib/vlandev.h \
 	lib/vlog.c \
-	lib/vswitch-idl.c \
-	lib/vswitch-idl.h \
 	lib/lldp/aa-structs.h \
 	lib/lldp/lldp.c \
 	lib/lldp/lldp-const.h \
@@ -310,7 +308,9 @@ EXTRA_DIST += \
 	lib/string.h.in
 
 nodist_lib_libopenvswitch_la_SOURCES = \
-	lib/dirs.c
+	lib/dirs.c \
+	lib/vswitch-idl.c \
+	lib/vswitch-idl.h
 CLEANFILES += $(nodist_lib_libopenvswitch_la_SOURCES)
 
 lib_LTLIBRARIES += lib/libsflow.la
@@ -447,7 +447,6 @@ OVSIDL_BUILT += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 EXTRA_DIST += lib/vswitch-idl.ann
 lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(srcdir)/vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann > $@.tmp && mv $@.tmp $@
-CLEANFILES += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 
 lib/dirs.c: lib/dirs.c.in Makefile
 	$(AM_V_GEN)($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \
