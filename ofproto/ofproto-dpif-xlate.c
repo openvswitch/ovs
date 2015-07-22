@@ -4582,23 +4582,6 @@ xlate_actions_for_side_effects(struct xlate_in *xin)
     xlate_actions(xin, &xout);
     xlate_out_uninit(&xout);
 }
-
-void
-xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
-{
-    dst->wc = src->wc;
-    dst->slow = src->slow;
-    dst->has_learn = src->has_learn;
-    dst->has_normal = src->has_normal;
-    dst->has_fin_timeout = src->has_fin_timeout;
-    dst->nf_output_iface = src->nf_output_iface;
-    dst->mirrors = src->mirrors;
-
-    dst->odp_actions = &dst->odp_actions_buf;
-    ofpbuf_use_stub(dst->odp_actions, dst->odp_actions_stub,
-                    sizeof dst->odp_actions_stub);
-    ofpbuf_put(dst->odp_actions, src->odp_actions->data, src->odp_actions->size);
-}
 
 static struct skb_priority_to_dscp *
 get_skb_priority(const struct xport *xport, uint32_t skb_priority)
