@@ -417,7 +417,7 @@ connmgr_get_memory_usage(const struct connmgr *mgr, struct simap *usage)
             struct pinsched_stats stats;
 
             pinsched_get_stats(ofconn->schedulers[i], &stats);
-            packets += stats.n_queued;;
+            packets += stats.n_queued;
         }
         packets += pktbuf_count_packets(ofconn->pktbuf);
     }

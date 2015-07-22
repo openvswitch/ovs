@@ -6929,7 +6929,7 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
         break;
     case OFPBCT_CLOSE_REQUEST:
         error = ofp_bundle_close(ofconn, bctrl.bundle_id, bctrl.flags);
-        reply.type = OFPBCT_CLOSE_REPLY;;
+        reply.type = OFPBCT_CLOSE_REPLY;
         break;
     case OFPBCT_COMMIT_REQUEST:
         error = do_bundle_commit(ofconn, bctrl.bundle_id, bctrl.flags);

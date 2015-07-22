@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -811,7 +811,7 @@ vlog_get_patterns(void)
     ds_put_format(&ds, "         ------                            ------\n");
 
     for (destination = 0; destination < VLF_N_DESTINATIONS; destination++) {
-        struct destination *f = &destinations[destination];;
+        struct destination *f = &destinations[destination];
         const char *prefix = "none";
 
         if (destination == VLF_SYSLOG && syslogger) {

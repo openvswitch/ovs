@@ -29,10 +29,10 @@ struct simap;
 char *actions_parse(struct lexer *, const struct shash *symtab,
                     const struct simap *ports, uint8_t next_table_id,
                     struct ofpbuf *ofpacts, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;;
+    OVS_WARN_UNUSED_RESULT;
 char *actions_parse_string(const char *s, const struct shash *symtab,
                            const struct simap *ports, uint8_t next_table_id,
                            struct ofpbuf *ofpacts, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;;
+    OVS_WARN_UNUSED_RESULT;
 
 #endif /* ovn/actions.h */
