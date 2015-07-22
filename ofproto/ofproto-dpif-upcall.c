@@ -170,7 +170,7 @@ struct upcall {
 
     bool xout_initialized;         /* True if 'xout' must be uninitialized. */
     struct xlate_out xout;         /* Result of xlate_actions(). */
-    struct ofpbuf put_actions;     /* Actions 'put' in the fastapath. */
+    struct ofpbuf put_actions;     /* Actions 'put' in the fastpath. */
 
     struct dpif_ipfix *ipfix;      /* IPFIX pointer or NULL. */
     struct dpif_sflow *sflow;      /* SFlow pointer or NULL. */
