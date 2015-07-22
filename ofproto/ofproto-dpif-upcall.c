@@ -695,7 +695,7 @@ recv_upcalls(struct handler *handler)
         upcall->ufid = &dupcall->ufid;
 
         upcall->out_tun_key = dupcall->out_tun_key;
-	upcall->actions = dupcall->actions;
+        upcall->actions = dupcall->actions;
 
         if (vsp_adjust_flow(upcall->ofproto, flow, &dupcall->packet)) {
             upcall->vsp_adjusted = true;
