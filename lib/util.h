@@ -568,6 +568,13 @@ ovs_u128_equals(const ovs_u128 *a, const ovs_u128 *b)
     return (a->u64.hi == b->u64.hi) && (a->u64.lo == b->u64.lo);
 }
 
+/* Returns true if 'val' is 0. */
+static inline bool
+ovs_u128_is_zero(const ovs_u128 *val)
+{
+    return !(val->u64.hi || val->u64.lo);
+}
+
 void xsleep(unsigned int seconds);
 
 #ifdef _WIN32
