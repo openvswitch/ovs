@@ -4738,7 +4738,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     struct flow *flow = &xin->flow;
-    struct rule_dpif *rule = NULL;
 
     union mf_subvalue stack_stub[1024 / sizeof(union mf_subvalue)];
     uint64_t action_set_stub[1024 / 8];
@@ -4907,25 +4906,22 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.tables_version = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
 
     if (!xin->ofpacts && !ctx.rule) {
-        rule = rule_dpif_lookup_from_table(ctx.xbridge->ofproto,
-                                           ctx.tables_version, flow, xin->wc,
-                                           ctx.xin->xcache != NULL,
-                                           ctx.xin->resubmit_stats,
-                                           &ctx.table_id,
-                                           flow->in_port.ofp_port, true, true);
+        ctx.rule = rule_dpif_lookup_from_table(
+            ctx.xbridge->ofproto, ctx.tables_version, flow, xin->wc,
+            ctx.xin->xcache != NULL, ctx.xin->resubmit_stats, &ctx.table_id,
+            flow->in_port.ofp_port, true, true);
         if (ctx.xin->resubmit_stats) {
-            rule_dpif_credit_stats(rule, ctx.xin->resubmit_stats);
+            rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats);
         }
         if (ctx.xin->xcache) {
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_RULE);
-            entry->u.rule = rule;
+            entry->u.rule = ctx.rule;
         }
-        ctx.rule = rule;
 
         if (OVS_UNLIKELY(ctx.xin->resubmit_hook)) {
-            ctx.xin->resubmit_hook(ctx.xin, rule, 0);
+            ctx.xin->resubmit_hook(ctx.xin, ctx.rule, 0);
         }
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
