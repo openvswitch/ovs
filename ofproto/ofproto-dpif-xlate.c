@@ -4717,6 +4717,58 @@ too_many_output_actions(const struct ofpbuf *odp_actions OVS_UNUSED)
 #endif
 }
 
+static void
+xlate_wc_init(struct xlate_ctx *ctx)
+{
+    flow_wildcards_init_catchall(ctx->wc);
+
+    /* Some fields we consider to always be examined. */
+    memset(&ctx->wc->masks.in_port, 0xff, sizeof ctx->wc->masks.in_port);
+    memset(&ctx->wc->masks.dl_type, 0xff, sizeof ctx->wc->masks.dl_type);
+    if (is_ip_any(&ctx->xin->flow)) {
+        ctx->wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    }
+
+    if (ctx->xbridge->support.odp.recirc) {
+        /* Always exactly match recirc_id when datapath supports
+         * recirculation.  */
+        ctx->wc->masks.recirc_id = UINT32_MAX;
+    }
+
+    if (ctx->xbridge->netflow) {
+        netflow_mask_wc(&ctx->xin->flow, ctx->wc);
+    }
+
+    tnl_wc_init(&ctx->xin->flow, ctx->wc);
+}
+
+static void
+xlate_wc_finish(struct xlate_ctx *ctx)
+{
+    /* Clear the metadata and register wildcard masks, because we won't
+     * use non-header fields as part of the cache. */
+    flow_wildcards_clear_non_packet_fields(ctx->wc);
+
+    /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow
+     * uses the low 8 bits of the 16-bit tp_src and tp_dst members to
+     * represent these fields.  The datapath interface, on the other hand,
+     * represents them with just 8 bits each.  This means that if the high
+     * 8 bits of the masks for these fields somehow become set, then they
+     * will get chopped off by a round trip through the datapath, and
+     * revalidation will spot that as an inconsistency and delete the flow.
+     * Avoid the problem here by making sure that only the low 8 bits of
+     * either field can be unwildcarded for ICMP.
+     */
+    if (is_icmpv4(&ctx->xin->flow) || is_icmpv6(&ctx->xin->flow)) {
+        ctx->wc->masks.tp_src &= htons(UINT8_MAX);
+        ctx->wc->masks.tp_dst &= htons(UINT8_MAX);
+    }
+    /* VLAN_TCI CFI bit must be matched if any of the TCI is matched. */
+    if (ctx->wc->masks.vlan_tci) {
+        ctx->wc->masks.vlan_tci |= htons(VLAN_CFI);
+    }
+}
+
 /* Translates the flow, actions, or rule in 'xin' into datapath actions in
  * 'xout'.
  * The caller must take responsibility for eventually freeing 'xout', with
@@ -4782,9 +4834,11 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     };
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
     ofpbuf_reserve(ctx.odp_actions, NL_A_U32_SIZE);
+    if (xin->wc) {
+        xlate_wc_init(&ctx);
+    }
 
     struct xport *in_port;
-    bool tnl_may_send;
 
     COVERAGE_INC(xlate_actions);
 
@@ -4808,26 +4862,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
      * - Tunnel 'base_flow' is completely cleared since that is what the
      *   kernel does.  If we wish to maintain the original values an action
      *   needs to be generated. */
-
-    if (xin->wc) {
-        flow_wildcards_init_catchall(ctx.wc);
-        memset(&ctx.wc->masks.in_port, 0xff, sizeof ctx.wc->masks.in_port);
-        memset(&ctx.wc->masks.dl_type, 0xff, sizeof ctx.wc->masks.dl_type);
-        if (is_ip_any(flow)) {
-            ctx.wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
-        }
-        if (xbridge->support.odp.recirc) {
-            /* Always exactly match recirc_id when datapath supports
-             * recirculation.  */
-            ctx.wc->masks.recirc_id = UINT32_MAX;
-        }
-        if (xbridge->netflow) {
-            netflow_mask_wc(flow, ctx.wc);
-        }
-        tnl_wc_init(flow, xin->wc);
-    }
-
-    tnl_may_send = tnl_process_ecn(flow);
 
     /* The in_port of the original packet before recirculation. */
     in_port = get_ofp_port(xbridge, flow->in_port.ofp_port);
@@ -4968,7 +5002,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
         size_t sample_actions_len = ctx.odp_actions->size;
 
-        if (tnl_may_send && (!in_port || may_receive(in_port, &ctx))) {
+        if (tnl_process_ecn(flow)
+            && (!in_port || may_receive(in_port, &ctx))) {
             const struct ofpact *ofpacts;
             size_t ofpacts_len;
 
@@ -5079,28 +5114,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     if (xin->wc) {
-        /* Clear the metadata and register wildcard masks, because we won't
-         * use non-header fields as part of the cache. */
-        flow_wildcards_clear_non_packet_fields(ctx.wc);
-
-        /* ICMPv4 and ICMPv6 have 8-bit "type" and "code" fields.  struct flow
-         * uses the low 8 bits of the 16-bit tp_src and tp_dst members to
-         * represent these fields.  The datapath interface, on the other hand,
-         * represents them with just 8 bits each.  This means that if the high
-         * 8 bits of the masks for these fields somehow become set, then they
-         * will get chopped off by a round trip through the datapath, and
-         * revalidation will spot that as an inconsistency and delete the flow.
-         * Avoid the problem here by making sure that only the low 8 bits of
-         * either field can be unwildcarded for ICMP.
-         */
-        if (is_icmpv4(flow) || is_icmpv6(flow)) {
-            ctx.wc->masks.tp_src &= htons(UINT8_MAX);
-            ctx.wc->masks.tp_dst &= htons(UINT8_MAX);
-        }
-        /* VLAN_TCI CFI bit must be matched if any of the TCI is matched. */
-        if (ctx.wc->masks.vlan_tci) {
-            ctx.wc->masks.vlan_tci |= htons(VLAN_CFI);
-        }
+        xlate_wc_finish(&ctx);
     }
 
 exit:
