@@ -61,11 +61,27 @@ sent, an entry labeled "---" means that the message is suppressed.
     OFPRR_IDLE_TIMEOUT                         yes       ---
     OFPRR_HARD_TIMEOUT                         yes       ---
     OFPRR_DELETE                               yes       ---
+    OFPRR_GROUP_DELETE (OF1.4+)                yes       ---
+    OFPRR_METER_DELETE (OF1.4+)                yes       ---
+    OFPRR_EVICTION (OF1.4+)                    yes       ---
 
   OFPT_PORT_STATUS
     OFPPR_ADD                                  yes       yes
     OFPPR_DELETE                               yes       yes
     OFPPR_MODIFY                               yes       yes
+
+  OFPT_ROLE_REQUEST / OFPT_ROLE_REPLY (OF1.4+)
+    OFPCRR_MASTER_REQUEST                      ---       ---
+    OFPCRR_CONFIG                              ---       ---
+    OFPCRR_EXPERIMENTER                        ---       ---
+
+  OFPT_TABLE_STATUS (OF1.4+)
+    OFPTR_VACANCY_DOWN                         ---       ---
+    OFPTR_VACANCY_UP                           ---       ---
+
+  OFPT_REQUESTFORWARD (OF1.4+)
+    OFPRFR_GROUP_MOD                           ---       ---
+    OFPRFR_METER_MOD                           ---       ---
 ```
 
 The NXT_SET_ASYNC_CONFIG message directly sets all of the values in

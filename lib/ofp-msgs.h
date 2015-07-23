@@ -226,14 +226,20 @@ enum ofpraw {
     /* NXT 1.0+ (11): struct nx_role_request. */
     OFPRAW_NXT_ROLE_REPLY,
 
-    /* OFPT 1.3+ (26): void. */
+    /* OFPT 1.3 (26): void. */
     OFPRAW_OFPT13_GET_ASYNC_REQUEST,
-    /* OFPT 1.3+ (27): struct ofp13_async_config. */
+    /* OFPT 1.4+ (26): void. */
+    OFPRAW_OFPT14_GET_ASYNC_REQUEST,
+    /* OFPT 1.3 (27): struct ofp13_async_config. */
     OFPRAW_OFPT13_GET_ASYNC_REPLY,
-    /* OFPT 1.3+ (28): struct ofp13_async_config. */
+    /* OFPT 1.4+ (27): struct ofp14_async_config, uint8_t[8][]. */
+    OFPRAW_OFPT14_GET_ASYNC_REPLY,
+    /* OFPT 1.3 (28): struct ofp13_async_config. */
     OFPRAW_OFPT13_SET_ASYNC,
     /* NXT 1.0+ (19): struct nx_async_config. */
     OFPRAW_NXT_SET_ASYNC_CONFIG,
+    /* OFPT 1.4+ (28): struct ofp14_async_config, uint8_t[8][]. */
+    OFPRAW_OFPT14_SET_ASYNC,
 
     /* OFPT 1.3+ (29): struct ofp13_meter_mod, uint8_t[8][]. */
     OFPRAW_OFPT13_METER_MOD,
@@ -539,10 +545,13 @@ enum ofptype {
                                    * OFPRAW_NXT_ROLE_REPLY. */
 
     /* Asynchronous message configuration. */
-    OFPTYPE_GET_ASYNC_REQUEST,    /* OFPRAW_OFPT13_GET_ASYNC_REQUEST. */
-    OFPTYPE_GET_ASYNC_REPLY,      /* OFPRAW_OFPT13_GET_ASYNC_REPLY. */
+    OFPTYPE_GET_ASYNC_REQUEST,    /* OFPRAW_OFPT13_GET_ASYNC_REQUEST.
+                                   * OFPRAW_OFPT14_GET_ASYNC_REQUEST. */
+    OFPTYPE_GET_ASYNC_REPLY,      /* OFPRAW_OFPT13_GET_ASYNC_REPLY.
+                                   * OFPRAW_OFPT14_GET_ASYNC_REPLY. */
     OFPTYPE_SET_ASYNC_CONFIG,     /* OFPRAW_NXT_SET_ASYNC_CONFIG.
-                                   * OFPRAW_OFPT13_SET_ASYNC. */
+                                   * OFPRAW_OFPT13_SET_ASYNC.
+                                   * OFPRAW_OFPT14_SET_ASYNC. */
 
     /* Meters and rate limiters configuration messages. */
     OFPTYPE_METER_MOD,            /* OFPRAW_OFPT13_METER_MOD. */

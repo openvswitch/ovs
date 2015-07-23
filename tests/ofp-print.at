@@ -2752,6 +2752,33 @@ NXT_SET_ASYNC_CONFIG (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_SET_ASYNC_CONFIG])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 1c 00 38 00 00 00 02 00 00 00 08 00 00 00 05 \
+00 01 00 08 00 00 00 02 00 02 00 08 00 00 00 02 \
+00 03 00 08 00 00 00 05 00 04 00 08 00 00 00 1c \
+00 05 00 08 00 00 00 05 \
+"], [0], [dnl
+OFPT_SET_ASYNC (OF1.4) (xid=0x2):
+ master:
+       PACKET_IN: action
+     PORT_STATUS: add modify
+    FLOW_REMOVED: idle delete
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
+
+ slave:
+       PACKET_IN: no_match invalid_ttl
+     PORT_STATUS: delete
+    FLOW_REMOVED: delete group_delete meter_delete
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_CONTROLLER_ID])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

@@ -9289,3 +9289,210 @@ ofputil_uninit_geneve_table(struct ovs_list *mappings)
         free(map);
     }
 }
+
+/* Decodes the OpenFlow "set async config" request and "get async config
+ * reply" message in '*oh' into an abstract form in 'master' and 'slave'.
+ *
+ * If 'loose' is true, this function ignores properties and values that it does
+ * not understand, as a controller would want to do when interpreting
+ * capabilities provided by a switch.  If 'loose' is false, this function
+ * treats unknown properties and values as an error, as a switch would want to
+ * do when interpreting a configuration request made by a controller.
+ *
+ * Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_decode_set_async_config(const struct ofp_header *oh,
+                                uint32_t master[OAM_N_TYPES],
+                                uint32_t slave[OAM_N_TYPES],
+                                bool loose)
+{
+    enum ofpraw raw;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+
+    if (raw == OFPRAW_OFPT13_SET_ASYNC ||
+        raw == OFPRAW_NXT_SET_ASYNC_CONFIG ||
+        raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
+        const struct nx_async_config *msg = ofpmsg_body(oh);
+
+        master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
+        master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
+        master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
+
+        slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
+        slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
+        slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
+
+    } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
+               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+
+        while (b.size > 0) {
+            struct ofp14_async_config_prop_reasons *msg;
+            struct ofpbuf property;
+            enum ofperr error;
+            uint16_t type;
+
+            error = ofputil_pull_property(&b, &property, &type);
+            if (error) {
+                return error;
+            }
+
+            msg = property.data;
+
+            if (property.size != sizeof *msg) {
+                return OFPERR_OFPBRC_BAD_LEN;
+            }
+
+            switch (type) {
+            case OFPACPT_PACKET_IN_SLAVE:
+                slave[OAM_PACKET_IN] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_PACKET_IN_MASTER:
+                master[OAM_PACKET_IN] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_PORT_STATUS_SLAVE:
+                slave[OAM_PORT_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_PORT_STATUS_MASTER:
+                master[OAM_PORT_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_FLOW_REMOVED_SLAVE:
+                slave[OAM_FLOW_REMOVED] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_FLOW_REMOVED_MASTER:
+                master[OAM_FLOW_REMOVED] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_ROLE_STATUS_SLAVE:
+                slave[OAM_ROLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_ROLE_STATUS_MASTER:
+                master[OAM_ROLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_TABLE_STATUS_SLAVE:
+                slave[OAM_TABLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_TABLE_STATUS_MASTER:
+                master[OAM_TABLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_REQUESTFORWARD_SLAVE:
+                slave[OAM_REQUESTFORWARD] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_REQUESTFORWARD_MASTER:
+                master[OAM_REQUESTFORWARD] = ntohl(msg->mask);
+                break;
+
+            default:
+                error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
+                break;
+            }
+            if (error) {
+                return error;
+            }
+        }
+    } else {
+        return OFPERR_OFPBRC_BAD_VERSION;
+    }
+    return 0;
+}
+
+/* Append all asynchronous configuration properties in GET_ASYNC_REPLY
+ * message, describing if various set of asynchronous messages are enabled
+ * or not. */
+static enum ofperr
+ofputil_get_async_reply(struct ofpbuf *buf, const uint32_t master_mask,
+                        const uint32_t slave_mask, const uint32_t type)
+{
+    int role;
+
+    for (role = 0; role < 2; role++) {
+        struct ofp14_async_config_prop_reasons *msg;
+
+        msg = ofpbuf_put_zeros(buf, sizeof *msg);
+
+        switch (type) {
+        case OAM_PACKET_IN:
+            msg->type = (role ? htons(OFPACPT_PACKET_IN_SLAVE)
+                              : htons(OFPACPT_PACKET_IN_MASTER));
+            break;
+
+        case OAM_PORT_STATUS:
+            msg->type = (role ? htons(OFPACPT_PORT_STATUS_SLAVE)
+                              : htons(OFPACPT_PORT_STATUS_MASTER));
+            break;
+
+        case OAM_FLOW_REMOVED:
+            msg->type = (role ? htons(OFPACPT_FLOW_REMOVED_SLAVE)
+                              : htons(OFPACPT_FLOW_REMOVED_MASTER));
+            break;
+
+        case OAM_ROLE_STATUS:
+            msg->type = (role ? htons(OFPACPT_ROLE_STATUS_SLAVE)
+                              : htons(OFPACPT_ROLE_STATUS_MASTER));
+            break;
+
+        case OAM_TABLE_STATUS:
+            msg->type = (role ? htons(OFPACPT_TABLE_STATUS_SLAVE)
+                              : htons(OFPACPT_TABLE_STATUS_MASTER));
+            break;
+
+        case OAM_REQUESTFORWARD:
+            msg->type = (role ? htons(OFPACPT_REQUESTFORWARD_SLAVE)
+                              : htons(OFPACPT_REQUESTFORWARD_MASTER));
+            break;
+
+        default:
+            return OFPERR_OFPBRC_BAD_TYPE;
+        }
+        msg->length = htons(sizeof *msg);
+        msg->mask = (role ? htonl(slave_mask) : htonl(master_mask));
+    }
+
+    return 0;
+}
+
+/* Returns a OpenFlow message that encodes 'asynchronous configuration' properly
+ * as a reply to get async config request. */
+struct ofpbuf *
+ofputil_encode_get_async_config(const struct ofp_header *oh,
+                                uint32_t master[OAM_N_TYPES],
+                                uint32_t slave[OAM_N_TYPES])
+{
+    struct ofpbuf *buf;
+    uint32_t type;
+
+    buf = ofpraw_alloc_reply((oh->version < OFP14_VERSION
+                              ? OFPRAW_OFPT13_GET_ASYNC_REPLY
+                              : OFPRAW_OFPT14_GET_ASYNC_REPLY), oh, 0);
+
+    if (oh->version < OFP14_VERSION) {
+        struct nx_async_config *msg;
+        msg = ofpbuf_put_zeros(buf, sizeof *msg);
+
+        msg->packet_in_mask[0] = htonl(master[OAM_PACKET_IN]);
+        msg->port_status_mask[0] = htonl(master[OAM_PORT_STATUS]);
+        msg->flow_removed_mask[0] = htonl(master[OAM_FLOW_REMOVED]);
+
+        msg->packet_in_mask[1] = htonl(slave[OAM_PACKET_IN]);
+        msg->port_status_mask[1] = htonl(slave[OAM_PORT_STATUS]);
+        msg->flow_removed_mask[1] = htonl(slave[OAM_FLOW_REMOVED]);
+    } else if (oh->version == OFP14_VERSION) {
+        for (type = 0; type < OAM_N_TYPES; type++) {
+            ofputil_get_async_reply(buf, master[type], slave[type], type);
+        }
+    }
+
+    return buf;
+}

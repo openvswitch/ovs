@@ -5384,17 +5384,10 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    const struct nx_async_config *msg = ofpmsg_body(oh);
-    uint32_t master[OAM_N_TYPES];
-    uint32_t slave[OAM_N_TYPES];
+    uint32_t master[OAM_N_TYPES] = {0};
+    uint32_t slave[OAM_N_TYPES] = {0};
 
-    master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
-    master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
-    master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
-
-    slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
-    slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
-    slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
+    ofputil_decode_set_async_config(oh, master, slave, false);
 
     ofconn_set_async_config(ofconn, master, slave);
     if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&
@@ -5411,20 +5404,10 @@ handle_nxt_get_async_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
     uint32_t master[OAM_N_TYPES];
     uint32_t slave[OAM_N_TYPES];
-    struct nx_async_config *msg;
 
     ofconn_get_async_config(ofconn, master, slave);
-    buf = ofpraw_alloc_reply(OFPRAW_OFPT13_GET_ASYNC_REPLY, oh, 0);
-    msg = ofpbuf_put_zeros(buf, sizeof *msg);
 
-    msg->packet_in_mask[0] = htonl(master[OAM_PACKET_IN]);
-    msg->port_status_mask[0] = htonl(master[OAM_PORT_STATUS]);
-    msg->flow_removed_mask[0] = htonl(master[OAM_FLOW_REMOVED]);
-
-    msg->packet_in_mask[1] = htonl(slave[OAM_PACKET_IN]);
-    msg->port_status_mask[1] = htonl(slave[OAM_PORT_STATUS]);
-    msg->flow_removed_mask[1] = htonl(slave[OAM_FLOW_REMOVED]);
-
+    buf = ofputil_encode_get_async_config(oh, master, slave);
     ofconn_send_reply(ofconn, buf);
 
     return 0;

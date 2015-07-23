@@ -130,6 +130,12 @@ enum ofp14_table_mod_prop_eviction_flag {
     OFPTMPEF14_LIFETIME        = 1 << 2,     /* Using flow entry lifetime. */
 };
 
+/* What changed about the table */
+enum ofp14_table_reason {
+    OFPTR_VACANCY_DOWN = 3,    /* Vacancy down threshold event. */
+    OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
+};
+
 struct ofp14_table_mod_prop_eviction {
     ovs_be16         type;    /* OFPTMPT14_EVICTION. */
     ovs_be16         length;  /* Length in bytes of this property. */
@@ -248,6 +254,12 @@ struct ofp14_async_config {
     struct ofp14_async_config_prop_header properties[0];
 };
 OFP_ASSERT(sizeof(struct ofp14_async_config) == 8);
+
+/* Request forward reason */
+enum ofp14_requestforward_reason {
+    OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
+    OFPRFR_METER_MOD = 1,      /* Forward meter mod requests. */
+};
 
 /* Async Config property types.
 * Low order bit cleared indicates a property for the slave role.

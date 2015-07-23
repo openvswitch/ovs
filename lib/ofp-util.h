@@ -1219,4 +1219,24 @@ enum ofperr ofputil_decode_geneve_table_reply(const struct ofp_header *,
                                               struct ofputil_geneve_table_reply *);
 void ofputil_uninit_geneve_table(struct ovs_list *mappings);
 
+enum ofputil_async_msg_type {
+    OAM_PACKET_IN,              /* OFPT_PACKET_IN or NXT_PACKET_IN. */
+    OAM_PORT_STATUS,            /* OFPT_PORT_STATUS. */
+    OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or
+                                 * NXT_FLOW_REMOVED. */
+    OAM_ROLE_STATUS,            /* OFPT_ROLE_STATUS. */
+    OAM_TABLE_STATUS,           /* OFPT_TABLE_STATUS. */
+    OAM_REQUESTFORWARD,         /* OFPT_REQUESTFORWARD. */
+    OAM_N_TYPES
+};
+
+enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
+                                            uint32_t master[OAM_N_TYPES],
+                                            uint32_t slave[OAM_N_TYPES],
+                                            bool loose);
+
+struct ofpbuf *ofputil_encode_get_async_config(const struct ofp_header *,
+                                               uint32_t master[OAM_N_TYPES],
+                                               uint32_t slave[OAM_N_TYPES]);
+
 #endif /* ofp-util.h */
