@@ -632,8 +632,9 @@ table=2,priority=10                  actions=5,goto_table(3)
 table=3,priority=20,xreg0=2  actions=6,goto_table(4)
 table=3,priority=10          actions=7,goto_table(4)
 
-# Verify that adding a group action unsets actset_output.
-table=4 actions=write_actions(group(5)),goto_table(5)
+# Verify that adding a group action unsets actset_output,
+# even if output follows group.
+table=4 actions=write_actions(group(5),output(10)),goto_table(5)
 table=5,priority=20,actset_output=unset  actions=8,goto_table(6)
 table=5,priority=10                      actions=9,goto_table(6)
 

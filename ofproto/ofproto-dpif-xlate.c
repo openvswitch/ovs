@@ -4022,6 +4022,7 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
             } else if (inner->type == OFPACT_GROUP) {
                 ctx->xin->flow.actset_output = OFPP_UNSET;
                 ctx->action_set_has_group = true;
+                break;
             }
         }
     }
