@@ -4784,7 +4784,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ofpbuf_reserve(ctx.odp_actions, NL_A_U32_SIZE);
 
     struct xport *in_port;
-    struct flow orig_flow;
     bool tnl_may_send;
 
     COVERAGE_INC(xlate_actions);
@@ -4927,6 +4926,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
+    struct flow orig_flow;
     if (mbridge_has_mirrors(xbridge->mbridge)) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles. */
