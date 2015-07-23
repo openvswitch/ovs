@@ -2647,20 +2647,22 @@ fix_sflow_action(struct xlate_ctx *ctx)
                          ctx->sflow_odp_port, ctx->sflow_n_outputs, cookie);
 }
 
-static enum slow_path_reason
-process_special(struct xlate_ctx *ctx, const struct flow *flow,
-                const struct xport *xport, const struct dp_packet *packet)
+static bool
+process_special(struct xlate_ctx *ctx, const struct xport *xport)
 {
+    const struct flow *flow = &ctx->xin->flow;
     struct flow_wildcards *wc = ctx->wc;
     const struct xbridge *xbridge = ctx->xbridge;
+    const struct dp_packet *packet = ctx->xin->packet;
+    enum slow_path_reason slow;
 
     if (!xport) {
-        return 0;
+        slow = 0;
     } else if (xport->cfm && cfm_should_process_flow(xport->cfm, flow, wc)) {
         if (packet) {
             cfm_process_heartbeat(xport->cfm, packet);
         }
-        return SLOW_CFM;
+        slow = SLOW_CFM;
     } else if (xport->bfd && bfd_should_process_flow(xport->bfd, flow, wc)) {
         if (packet) {
             bfd_process_packet(xport->bfd, flow, packet);
@@ -2669,13 +2671,13 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
                 ofproto_dpif_monitor_port_send_soon(xport->ofport);
             }
         }
-        return SLOW_BFD;
+        slow = SLOW_BFD;
     } else if (xport->xbundle && xport->xbundle->lacp
                && flow->dl_type == htons(ETH_TYPE_LACP)) {
         if (packet) {
             lacp_process_packet(xport->xbundle->lacp, xport->ofport, packet);
         }
-        return SLOW_LACP;
+        slow = SLOW_LACP;
     } else if ((xbridge->stp || xbridge->rstp) &&
                stp_should_process_flow(flow, wc)) {
         if (packet) {
@@ -2683,14 +2685,21 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
                 ? stp_process_packet(xport, packet)
                 : rstp_process_packet(xport, packet);
         }
-        return SLOW_STP;
+        slow = SLOW_STP;
     } else if (xport->lldp && lldp_should_process_flow(xport->lldp, flow)) {
         if (packet) {
             lldp_process_packet(xport->lldp, packet);
         }
-        return SLOW_LLDP;
+        slow = SLOW_LLDP;
     } else {
-        return 0;
+        slow = 0;
+    }
+
+    if (slow) {
+        ctx->xout->slow |= slow;
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -2890,7 +2899,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         struct flow old_flow = ctx->xin->flow;
         bool old_was_mpls = ctx->was_mpls;
         cls_version_t old_version = ctx->tables_version;
-        enum slow_path_reason special;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
         struct ofpbuf old_action_set = ctx->action_set;
@@ -2909,11 +2917,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->tables_version
             = ofproto_dpif_get_tables_version(ctx->xbridge->ofproto);
 
-        special = process_special(ctx, &ctx->xin->flow, peer,
-                                  ctx->xin->packet);
-        if (special) {
-            ctx->xout->slow |= special;
-        } else if (may_receive(peer, ctx)) {
+        if (!process_special(ctx, peer) && may_receive(peer, ctx)) {
             if (xport_stp_forward_state(peer) && xport_rstp_forward_state(peer)) {
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
                 if (ctx->action_set.size) {
@@ -4779,7 +4783,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
     ofpbuf_reserve(ctx.odp_actions, NL_A_U32_SIZE);
 
-    enum slow_path_reason special;
     struct xport *in_port;
     struct flow orig_flow;
     bool tnl_may_send;
@@ -4951,10 +4954,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     /* Do not perform special processing on recirculated packets,
      * as recirculated packets are not really received by the bridge. */
-    if (!xin->recirc &&
-        (special = process_special(&ctx, flow, in_port, ctx.xin->packet))) {
-        ctx.xout->slow |= special;
-    } else {
+    if (xin->recirc || !process_special(&ctx, in_port)) {
         size_t sample_actions_len;
 
         if (flow->in_port.ofp_port
