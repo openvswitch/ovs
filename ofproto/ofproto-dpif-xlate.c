@@ -175,7 +175,6 @@ struct xlate_ctx {
 
     /* Stack for the push and pop actions.  Each stack element is of type
      * "union mf_subvalue". */
-    union mf_subvalue init_stack[1024 / sizeof(union mf_subvalue)];
     struct ofpbuf stack;
 
     /* The rule that we are currently translating, or NULL. */
@@ -294,7 +293,6 @@ struct xlate_ctx {
      * datapath actions. */
     bool action_set_has_group;  /* Action set contains OFPACT_GROUP? */
     struct ofpbuf action_set;   /* Action set. */
-    uint64_t action_set_stub[1024 / 8];
 };
 
 static void xlate_action_set(struct xlate_ctx *ctx);
@@ -4732,16 +4730,53 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     };
 
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct xbridge *xbridge = xbridge_lookup(xcfg, xin->ofproto);
+    if (!xbridge) {
+        return;
+    }
+
     struct flow_wildcards *wc = NULL;
     struct flow *flow = &xin->flow;
     struct rule_dpif *rule = NULL;
 
+    union mf_subvalue stack_stub[1024 / sizeof(union mf_subvalue)];
+    uint64_t action_set_stub[1024 / 8];
+    struct xlate_ctx ctx = {
+        .xin = xin,
+        .xout = xout,
+        .base_flow = *flow,
+        .orig_tunnel_ip_dst = flow->tunnel.ip_dst,
+        .xbridge = xbridge,
+        .stack = OFPBUF_STUB_INITIALIZER(stack_stub),
+        .rule = xin->rule,
+
+        .recurse = 0,
+        .resubmits = 0,
+        .in_group = false,
+        .in_action_set = false,
+
+        .table_id = 0,
+        .rule_cookie = OVS_BE64_MAX,
+        .orig_skb_priority = flow->skb_priority,
+        .sflow_n_outputs = 0,
+        .sflow_odp_port = 0,
+        .user_cookie_offset = 0,
+        .exit = false,
+
+        .recirc_action_offset = -1,
+        .last_unroll_offset = -1,
+
+        .was_mpls = false,
+
+        .action_set_has_group = false,
+        .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),
+    };
+    memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
+
     enum slow_path_reason special;
     const struct ofpact *ofpacts;
-    struct xbridge *xbridge;
     struct xport *in_port;
     struct flow orig_flow;
-    struct xlate_ctx ctx;
     size_t ofpacts_len;
     bool tnl_may_send;
     bool is_icmp;
@@ -4769,9 +4804,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
      *   kernel does.  If we wish to maintain the original values an action
      *   needs to be generated. */
 
-    ctx.xin = xin;
-    ctx.xout = xout;
-
     xout->odp_actions = xin->odp_actions;
     if (!xout->odp_actions) {
         xout->odp_actions = &xout->odp_actions_buf;
@@ -4779,19 +4811,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                         sizeof xout->odp_actions_stub);
     }
     ofpbuf_reserve(xout->odp_actions, NL_A_U32_SIZE);
-
-    xbridge = xbridge_lookup(xcfg, xin->ofproto);
-    if (!xbridge) {
-        return;
-    }
-    /* 'ctx.xbridge' may be changed by action processing, whereas 'xbridge'
-     * will remain set on the original input bridge. */
-    ctx.xbridge = xbridge;
-    ctx.rule = xin->rule;
-
-    ctx.base_flow = *flow;
-    memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
-    ctx.orig_tunnel_ip_dst = flow->tunnel.ip_dst;
 
     if (!xin->skip_wildcards) {
         wc = &xout->wc;
@@ -4813,24 +4832,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     is_icmp = is_icmpv4(flow) || is_icmpv6(flow);
 
     tnl_may_send = tnl_xlate_init(flow, wc);
-
-    ctx.recurse = 0;
-    ctx.resubmits = 0;
-    ctx.in_group = false;
-    ctx.in_action_set = false;
-    ctx.orig_skb_priority = flow->skb_priority;
-    ctx.table_id = 0;
-    ctx.rule_cookie = OVS_BE64_MAX;
-    ctx.exit = false;
-    ctx.was_mpls = false;
-    ctx.recirc_action_offset = -1;
-    ctx.last_unroll_offset = -1;
-
-    ctx.action_set_has_group = false;
-    ofpbuf_use_stub(&ctx.action_set,
-                    ctx.action_set_stub, sizeof ctx.action_set_stub);
-
-    ofpbuf_use_stub(&ctx.stack, ctx.init_stack, sizeof ctx.init_stack);
 
     /* The in_port of the original packet before recirculation. */
     in_port = get_ofp_port(xbridge, flow->in_port.ofp_port);
