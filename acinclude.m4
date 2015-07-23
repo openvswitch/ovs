@@ -175,7 +175,11 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_LIB="-lintel_dpdk"
     DPDK_EXTRA_LIB=""
 
-    OVS_GREP_IFELSE([$RTE_SDK/include/rte_config.h], [define RTE_LIBRTE_VHOST_USER 1],
+    AC_COMPILE_IFELSE(
+      [AC_LANG_PROGRAM([#include <$RTE_SDK/include/rte_config.h>
+#if !RTE_LIBRTE_VHOST_USER
+#error
+#endif], [])],
                     [], [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
                          DPDK_EXTRA_LIB="-lfuse"])
 
