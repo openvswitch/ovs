@@ -4786,7 +4786,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct xport *in_port;
     struct flow orig_flow;
     bool tnl_may_send;
-    bool is_icmp;
 
     COVERAGE_INC(xlate_actions);
 
@@ -4827,7 +4826,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             netflow_mask_wc(flow, ctx.wc);
         }
     }
-    is_icmp = is_icmpv4(flow) || is_icmpv6(flow);
 
     tnl_may_send = tnl_xlate_init(flow, xin->wc);
 
@@ -5098,7 +5096,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
          * Avoid the problem here by making sure that only the low 8 bits of
          * either field can be unwildcarded for ICMP.
          */
-        if (is_icmp) {
+        if (is_icmpv4(flow) || is_icmpv6(flow)) {
             ctx.wc->masks.tp_src &= htons(UINT8_MAX);
             ctx.wc->masks.tp_dst &= htons(UINT8_MAX);
         }
