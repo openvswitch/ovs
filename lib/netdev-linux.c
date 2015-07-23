@@ -458,6 +458,7 @@ struct netdev_linux {
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
+    int in6_error;              /* Cached error code from reading in6 addr. */
 
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
@@ -2481,12 +2482,14 @@ parse_if_inet6_line(const char *line,
                     ifname);
 }
 
-/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address (if
- * 'in6' is non-null) and returns true.  Otherwise, returns false. */
+/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
+ * Otherwise, sets '*in6' to 'in6addr_any' and returns the corresponding
+ * error. */
 static int
 netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
 
     ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_IN6)) {
@@ -2494,6 +2497,7 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
         char line[128];
 
         netdev->in6 = in6addr_any;
+        netdev->in6_error = EADDRNOTAVAIL;
 
         file = fopen("/proc/net/if_inet6", "r");
         if (file != NULL) {
@@ -2505,17 +2509,21 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
                     && !strcmp(name, ifname))
                 {
                     netdev->in6 = in6_tmp;
+                    netdev->in6_error = 0;
                     break;
                 }
             }
             fclose(file);
+        } else {
+            netdev->in6_error = EOPNOTSUPP;
         }
         netdev->cache_valid |= VALID_IN6;
     }
     *in6 = netdev->in6;
+    error = netdev->in6_error;
     ovs_mutex_unlock(&netdev->mutex);
 
-    return 0;
+    return error;
 }
 
 static void
