@@ -4781,10 +4781,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ofpbuf_reserve(ctx.odp_actions, NL_A_U32_SIZE);
 
     enum slow_path_reason special;
-    const struct ofpact *ofpacts;
     struct xport *in_port;
     struct flow orig_flow;
-    size_t ofpacts_len;
     bool tnl_may_send;
     bool is_icmp;
 
@@ -4932,20 +4930,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
-    if (xin->ofpacts) {
-        ofpacts = xin->ofpacts;
-        ofpacts_len = xin->ofpacts_len;
-    } else if (ctx.rule) {
-        const struct rule_actions *actions = rule_dpif_get_actions(ctx.rule);
-
-        ofpacts = actions->ofpacts;
-        ofpacts_len = actions->ofpacts_len;
-
-        ctx.rule_cookie = rule_dpif_get_flow_cookie(ctx.rule);
-    } else {
-        OVS_NOT_REACHED();
-    }
-
     if (mbridge_has_mirrors(xbridge->mbridge)) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles. */
@@ -4994,6 +4978,22 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         if (tnl_may_send && (!in_port || may_receive(in_port, &ctx))) {
+            const struct ofpact *ofpacts;
+            size_t ofpacts_len;
+
+            if (xin->ofpacts) {
+                ofpacts = xin->ofpacts;
+                ofpacts_len = xin->ofpacts_len;
+            } else if (ctx.rule) {
+                const struct rule_actions *actions
+                    = rule_dpif_get_actions(ctx.rule);
+                ofpacts = actions->ofpacts;
+                ofpacts_len = actions->ofpacts_len;
+                ctx.rule_cookie = rule_dpif_get_flow_cookie(ctx.rule);
+            } else {
+                OVS_NOT_REACHED();
+            }
+
             do_xlate_actions(ofpacts, ofpacts_len, &ctx);
 
             /* We've let OFPP_NORMAL and the learning action look at the
@@ -5068,28 +5068,22 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    /* Do netflow only for packets really received by the bridge. */
-    if (!xin->recirc && xbridge->netflow) {
-        /* Only update netflow if we don't have controller flow.  We don't
-         * report NetFlow expiration messages for such facets because they
-         * are just part of the control logic for the network, not real
-         * traffic. */
-        if (ofpacts_len == 0
-            || ofpacts->type != OFPACT_CONTROLLER
-            || ofpact_next(ofpacts) < ofpact_end(ofpacts, ofpacts_len)) {
-            if (ctx.xin->resubmit_stats) {
-                netflow_flow_update(xbridge->netflow, flow,
-                                    xout->nf_output_iface,
-                                    ctx.xin->resubmit_stats);
-            }
-            if (ctx.xin->xcache) {
-                struct xc_entry *entry;
+    /* Do netflow only for packets really received by the bridge and not sent
+     * to the controller.  We consider packets sent to the controller to be
+     * part of the control plane rather than the data plane. */
+    if (!xin->recirc && xbridge->netflow && !(xout->slow & SLOW_CONTROLLER)) {
+        if (ctx.xin->resubmit_stats) {
+            netflow_flow_update(xbridge->netflow, flow,
+                                xout->nf_output_iface,
+                                ctx.xin->resubmit_stats);
+        }
+        if (ctx.xin->xcache) {
+            struct xc_entry *entry;
 
-                entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETFLOW);
-                entry->u.nf.netflow = netflow_ref(xbridge->netflow);
-                entry->u.nf.flow = xmemdup(flow, sizeof *flow);
-                entry->u.nf.iface = xout->nf_output_iface;
-            }
+            entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETFLOW);
+            entry->u.nf.netflow = netflow_ref(xbridge->netflow);
+            entry->u.nf.flow = xmemdup(flow, sizeof *flow);
+            entry->u.nf.iface = xout->nf_output_iface;
         }
     }
 
