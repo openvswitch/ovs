@@ -4809,7 +4809,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
     is_icmp = is_icmpv4(flow) || is_icmpv6(flow);
 
-    tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
+    tnl_may_send = tnl_xlate_init(flow, wc);
 
     ctx.recurse = 0;
     ctx.resubmits = 0;

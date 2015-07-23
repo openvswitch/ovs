@@ -333,15 +333,14 @@ out:
 }
 
 static bool
-tnl_ecn_ok(const struct flow *base_flow, struct flow *flow,
-           struct flow_wildcards *wc)
+tnl_ecn_ok(struct flow *flow, struct flow_wildcards *wc)
 {
-    if (is_ip_any(base_flow)) {
+    if (is_ip_any(flow)) {
         if ((flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
             if (wc) {
                 wc->masks.nw_tos |= IP_ECN_MASK;
             }
-            if ((base_flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
+            if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
                 VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
                              " but is not ECN capable");
                 return false;
@@ -360,8 +359,7 @@ tnl_ecn_ok(const struct flow *base_flow, struct flow *flow,
  *
  * Returns false if the packet must be dropped. */
 bool
-tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
-               struct flow_wildcards *wc)
+tnl_xlate_init(struct flow *flow, struct flow_wildcards *wc)
 {
     /* tnl_port_should_receive() examines the 'tunnel.ip_dst' field to
      * determine the presence of the tunnel metadata.  However, since tunnels'
@@ -385,7 +383,7 @@ tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
 
             memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
         }
-        if (!tnl_ecn_ok(base_flow, flow, wc)) {
+        if (!tnl_ecn_ok(flow, wc)) {
             return false;
         }
 
