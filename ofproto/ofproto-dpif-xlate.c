@@ -4953,8 +4953,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     /* Do not perform special processing on recirculated packets,
      * as recirculated packets are not really received by the bridge. */
     if (xin->recirc || !process_special(&ctx, in_port)) {
-        size_t sample_actions_len;
-
         if (flow->in_port.ofp_port
             != vsp_realdev_to_vlandev(xbridge->ofproto,
                                       flow->in_port.ofp_port,
@@ -4966,10 +4964,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         if (!xin->recirc) {
             add_sflow_action(&ctx);
             add_ipfix_action(&ctx);
-            sample_actions_len = ctx.odp_actions->size;
-        } else {
-            sample_actions_len = 0;
         }
+        size_t sample_actions_len = ctx.odp_actions->size;
 
         if (tnl_may_send && (!in_port || may_receive(in_port, &ctx))) {
             const struct ofpact *ofpacts;
