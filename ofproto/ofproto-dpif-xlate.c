@@ -4770,7 +4770,29 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .action_set_has_group = false,
         .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),
     };
+
+    /* 'base_flow' reflects the packet as it came in, but we need it to reflect
+     * the packet as the datapath will treat it for output actions:
+     *
+     *     - Our datapath doesn't retain tunneling information without us
+     *       re-setting it, so clear the tunnel data.
+     *
+     *     - For VLAN splinters, a higher layer may pretend that the packet
+     *       came in on 'flow->in_port.ofp_port' with 'flow->vlan_tci'
+     *       attached, because that's how we want to treat it from an OpenFlow
+     *       perspective.  But from the datapath's perspective it actually came
+     *       in on a VLAN device without any VLAN attached.  So here we put the
+     *       datapath's view of the VLAN information in 'base_flow' to ensure
+     *       correct treatment.
+     */
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
+    if (flow->in_port.ofp_port
+        != vsp_realdev_to_vlandev(xbridge->ofproto,
+                                  flow->in_port.ofp_port,
+                                  flow->vlan_tci)) {
+        ctx.base_flow.vlan_tci = 0;
+    }
+
     ofpbuf_reserve(ctx.odp_actions, NL_A_U32_SIZE);
     if (xin->wc) {
         xlate_wc_init(&ctx);
@@ -4779,27 +4801,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct xport *in_port;
 
     COVERAGE_INC(xlate_actions);
-
-    /* Flow initialization rules:
-     * - 'base_flow' must match the kernel's view of the packet at the
-     *   time that action processing starts.  'flow' represents any
-     *   transformations we wish to make through actions.
-     * - By default 'base_flow' and 'flow' are the same since the input
-     *   packet matches the output before any actions are applied.
-     * - When using VLAN splinters, 'base_flow''s VLAN is set to the value
-     *   of the received packet as seen by the kernel.  If we later output
-     *   to another device without any modifications this will cause us to
-     *   insert a new tag since the original one was stripped off by the
-     *   VLAN device.
-     * - Tunnel metadata as received is retained in 'flow'. This allows
-     *   tunnel metadata matching also in later tables.
-     *   Since a kernel action for setting the tunnel metadata will only be
-     *   generated with actual tunnel output, changing the tunnel metadata
-     *   values in 'flow' (such as tun_id) will only have effect with a later
-     *   tunnel output action.
-     * - Tunnel 'base_flow' is completely cleared since that is what the
-     *   kernel does.  If we wish to maintain the original values an action
-     *   needs to be generated. */
 
     /* The in_port of the original packet before recirculation. */
     in_port = get_ofp_port(xbridge, flow->in_port.ofp_port);
@@ -4926,13 +4927,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     /* Do not perform special processing on recirculated packets,
      * as recirculated packets are not really received by the bridge. */
     if (xin->recirc || !process_special(&ctx, in_port)) {
-        if (flow->in_port.ofp_port
-            != vsp_realdev_to_vlandev(xbridge->ofproto,
-                                      flow->in_port.ofp_port,
-                                      flow->vlan_tci)) {
-            ctx.base_flow.vlan_tci = 0;
-        }
-
         /* Sampling is done only for packets really received by the bridge. */
         unsigned int user_cookie_offset = 0;
         if (!xin->recirc) {
