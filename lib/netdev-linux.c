@@ -458,6 +458,7 @@ struct netdev_linux {
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
+    int in4_error;              /* Cached error code from reading in4 addr. */
     int in6_error;              /* Cached error code from reading in6 addr. */
 
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
@@ -2422,12 +2423,11 @@ netdev_linux_get_in4(const struct netdev *netdev_,
         if (!error) {
             error = netdev_linux_get_ipv4(netdev_, &netdev->netmask,
                                           SIOCGIFNETMASK, "SIOCGIFNETMASK");
-            if (!error) {
-                netdev->cache_valid |= VALID_IN4;
-            }
         }
+        netdev->in4_error = error;
+        netdev->cache_valid |= VALID_IN4;
     } else {
-        error = 0;
+        error = netdev->in4_error;
     }
 
     if (!error) {
@@ -2453,13 +2453,19 @@ netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev->cache_valid |= VALID_IN4;
         netdev->address = address;
         netdev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
         }
+    }
+
+    if (!error) {
+        netdev->cache_valid |= VALID_IN4;
+        netdev->in4_error = 0;
+    } else {
+        netdev->cache_valid &= ~VALID_IN4;
     }
     ovs_mutex_unlock(&netdev->mutex);
 
