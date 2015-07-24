@@ -230,11 +230,20 @@ physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             /* For containers sitting behind a local vif, tag the packets
              * before delivering them. Since there is a possibility of
              * packets needing to hair-pin back into the same vif from
-             * which it came, make the in_port as zero. */
+             * which it came, push the in_port to stack and make the
+             * in_port as zero. */
             struct ofpact_vlan_vid *vlan_vid;
             vlan_vid = ofpact_put_SET_VLAN_VID(&ofpacts);
             vlan_vid->vlan_vid = tag;
             vlan_vid->push_vlan_if_needed = true;
+
+            struct ofpact_stack *stack_action;
+            const struct mf_field *field;
+            stack_action = ofpact_put_STACK_PUSH(&ofpacts);
+            field = mf_from_id(MFF_IN_PORT);
+            stack_action->subfield.field = field;
+            stack_action->subfield.ofs = 0;
+            stack_action->subfield.n_bits = field->n_bits;
 
             struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
             sf->field = mf_from_id(MFF_IN_PORT);
@@ -242,6 +251,22 @@ physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             sf->mask.be16 = OVS_BE16_MAX;
         }
         ofpact_put_OUTPUT(&ofpacts)->port = ofport;
+        if (tag) {
+            /* Revert the tag added to the packets headed to containers
+             * in the previous step. If we don't do this, the packets
+             * that are to be broadcasted to a VM in the same logical
+             * switch will also contain the tag. Also revert the zero'd
+             * in_port. */
+            ofpact_put_STRIP_VLAN(&ofpacts);
+
+            struct ofpact_stack *stack_action;
+            const struct mf_field *field;
+            stack_action = ofpact_put_STACK_POP(&ofpacts);
+            field = mf_from_id(MFF_IN_PORT);
+            stack_action->subfield.field = field;
+            stack_action->subfield.ofs = 0;
+            stack_action->subfield.n_bits = field->n_bits;
+        }
         ofctrl_add_flow(flow_table, 64, 50, &match, &ofpacts);
     }
 
