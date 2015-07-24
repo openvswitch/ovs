@@ -1564,7 +1564,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     while (mirrors) {
         mirror_mask_t dup_mirrors;
         struct ofbundle *out;
-        unsigned long *vlans;
+        const unsigned long *vlans;
         bool vlan_mirrored;
         bool has_mirror;
         int out_vlan;
@@ -1577,7 +1577,6 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
             ctx->xout->wc.masks.vlan_tci |= htons(VLAN_CFI | VLAN_VID_MASK);
         }
         vlan_mirrored = !vlans || bitmap_is_set(vlans, vlan);
-        free(vlans);
 
         if (!vlan_mirrored) {
             mirrors = zero_rightmost_1bit(mirrors);
