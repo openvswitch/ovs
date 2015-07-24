@@ -40,9 +40,6 @@ struct xlate_cache;
 struct xlate_out {
     enum slow_path_reason slow; /* 0 if fast path may be used. */
     bool fail_open;             /* Initial rule is fail open? */
-    bool has_learn;             /* Actions include NXAST_LEARN? */
-    bool has_normal;            /* Actions output to OFPP_NORMAL? */
-    bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
 
     /* Recirculation IDs on which references are held. */

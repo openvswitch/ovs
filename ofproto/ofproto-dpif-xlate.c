@@ -2260,8 +2260,6 @@ xlate_normal(struct xlate_ctx *ctx)
     uint16_t vlan;
     uint16_t vid;
 
-    ctx->xout->has_normal = true;
-
     memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
@@ -3835,7 +3833,6 @@ xlate_learn_action__(struct xlate_ctx *ctx, const struct ofpact_learn *learn,
 static void
 xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
 {
-    ctx->xout->has_learn = true;
     learn_mask(learn, ctx->wc);
 
     if (ctx->xin->xcache) {
@@ -4423,7 +4420,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_FIN_TIMEOUT:
             CHECK_MPLS_RECIRCULATION();
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-            ctx->xout->has_fin_timeout = true;
             xlate_fin_timeout(ctx, ofpact_get_FIN_TIMEOUT(a));
             break;
 
@@ -4719,9 +4715,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     *xout = (struct xlate_out) {
         .slow = 0,
         .fail_open = false,
-        .has_learn = false,
-        .has_normal = false,
-        .has_fin_timeout = false,
         .nf_output_iface = NF_OUT_DROP,
         .n_recircs = 0,
     };
