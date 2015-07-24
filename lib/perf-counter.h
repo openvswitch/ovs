@@ -113,7 +113,7 @@ char *perf_counters_to_string(void);
           perf_counter_accumulate(&c, start_count);               \
       }
 #else
-#define PERF(name, expr)
+#define PERF(name, expr) { expr; }
 
 static inline void perf_counters_init(void) {}
 static inline void perf_counters_destroy(void) {}
