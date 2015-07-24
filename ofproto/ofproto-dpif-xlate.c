@@ -206,6 +206,7 @@ struct xlate_ctx {
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
     bool exit;                  /* No further actions should be processed. */
+    mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
    /* These are used for non-bond recirculation.  The recirculation IDs are
     * stored in xout and must be associated with a datapath flow (ukey),
@@ -1536,8 +1537,8 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     uint16_t vlan;
     uint16_t vid;
 
-    mirrors = ctx->xout->mirrors;
-    ctx->xout->mirrors = 0;
+    mirrors = ctx->mirrors;
+    ctx->mirrors = 0;
 
     in_xbundle = lookup_input_bundle(xbridge, orig_flow->in_port.ofp_port,
                                      ctx->xin->packet != NULL, NULL);
@@ -1595,7 +1596,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
         }
 
         mirrors &= ~dup_mirrors;
-        ctx->xout->mirrors |= dup_mirrors;
+        ctx->mirrors |= dup_mirrors;
         if (out) {
             struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
             struct xbundle *out_xbundle = xbundle_lookup(xcfg, out);
@@ -2825,8 +2826,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (mbridge_has_mirrors(ctx->xbridge->mbridge) && xport->xbundle) {
-        ctx->xout->mirrors |= xbundle_mirror_dst(xport->xbundle->xbridge,
-                                                 xport->xbundle);
+        ctx->mirrors |= xbundle_mirror_dst(xport->xbundle->xbridge,
+                                           xport->xbundle);
     }
 
     if (xport->peer) {
@@ -2871,10 +2872,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                  * the learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->odp_actions->size;
-                mirror_mask_t old_mirrors = ctx->xout->mirrors;
+                mirror_mask_t old_mirrors = ctx->mirrors;
 
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
-                ctx->xout->mirrors = old_mirrors;
+                ctx->mirrors = old_mirrors;
                 ctx->base_flow = old_base_flow;
                 ctx->odp_actions->size = old_size;
 
@@ -4722,7 +4723,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .has_normal = false,
         .has_fin_timeout = false,
         .nf_output_iface = NF_OUT_DROP,
-        .mirrors = 0,
         .n_recircs = 0,
     };
 
@@ -4761,6 +4761,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .sflow_n_outputs = 0,
         .sflow_odp_port = 0,
         .exit = false,
+        .mirrors = 0,
 
         .recirc_action_offset = -1,
         .last_unroll_offset = -1,
@@ -5014,7 +5015,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     /* Update mirror stats only for packets really received by the bridge. */
     if (!xin->recirc && mbridge_has_mirrors(xbridge->mbridge)) {
         if (ctx.xin->resubmit_stats) {
-            mirror_update_stats(xbridge->mbridge, xout->mirrors,
+            mirror_update_stats(xbridge->mbridge, ctx.mirrors,
                                 ctx.xin->resubmit_stats->n_packets,
                                 ctx.xin->resubmit_stats->n_bytes);
         }
@@ -5023,7 +5024,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_MIRROR);
             entry->u.mirror.mbridge = mbridge_ref(xbridge->mbridge);
-            entry->u.mirror.mirrors = xout->mirrors;
+            entry->u.mirror.mirrors = ctx.mirrors;
         }
     }
 

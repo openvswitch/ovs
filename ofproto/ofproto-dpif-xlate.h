@@ -44,7 +44,6 @@ struct xlate_out {
     bool has_normal;            /* Actions output to OFPP_NORMAL? */
     bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
-    mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
     /* Recirculation IDs on which references are held. */
     unsigned n_recircs;
