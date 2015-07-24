@@ -339,7 +339,7 @@ enum ofpraw {
 
     /* OFPST 1.1-1.4 (7): void. */
     OFPRAW_OFPST11_GROUP_DESC_REQUEST,
-    /* OFPST 1.5+ (7): ovs_be32. */
+    /* OFPST 1.5+ (7): struct ofp15_group_desc_request. */
     OFPRAW_OFPST15_GROUP_DESC_REQUEST,
 
     /* OFPST 1.1+ (7): uint8_t[8][]. */

@@ -7257,7 +7257,6 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version,
                                   uint32_t group_id)
 {
     struct ofpbuf *request;
-    ovs_be32 gid;
 
     switch (ofp_version) {
     case OFP10_VERSION:
@@ -7270,12 +7269,14 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST,
                                ofp_version, 0);
         break;
-    case OFP15_VERSION:
+    case OFP15_VERSION:{
+        struct ofp15_group_desc_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST15_GROUP_DESC_REQUEST,
                                ofp_version, 0);
-        gid = htonl(group_id);
-        ofpbuf_put(request, &gid, sizeof gid);
+        req = ofpbuf_put_zeros(request, sizeof *req);
+        req->group_id = htonl(group_id);
         break;
+    }
     default:
         OVS_NOT_REACHED();
     }
