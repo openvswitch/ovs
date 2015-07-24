@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -375,11 +375,17 @@ mirror_update_stats(struct mbridge *mbridge, mirror_mask_t mirrors,
     }
 }
 
-/* Retrieves the mirror in 'mbridge' represented by the first bet set of
- * 'mirrors'.  Returns true if such a mirror exists, false otherwise.
- * The caller takes ownership of, and is expected to deallocate, 'vlans' */
+/* Retrieves the mirror numbered 'index' in 'mbridge'.  Returns true if such a
+ * mirror exists, false otherwise.
+ *
+ * If successful, '*vlans' receives the mirror's VLAN membership information,
+ * either a null pointer if the mirror includes all VLANs or a 4096-bit bitmap
+ * in which a 1-bit indicates that the mirror includes a particular VLAN,
+ * '*dup_mirrors' receives a bitmap of mirrors whose output duplicates mirror
+ * 'index', '*out' receives the output ofbundle (if any), and '*out_vlan'
+ * receives the output VLAN (if any). */
 bool
-mirror_get(struct mbridge *mbridge, int index, unsigned long **vlans,
+mirror_get(struct mbridge *mbridge, int index, const unsigned long **vlans,
            mirror_mask_t *dup_mirrors, struct ofbundle **out, int *out_vlan)
 {
     struct mirror *mirror;
@@ -393,7 +399,7 @@ mirror_get(struct mbridge *mbridge, int index, unsigned long **vlans,
         return false;
     }
 
-    *vlans = vlan_bitmap_clone(mirror->vlans);
+    *vlans = mirror->vlans;
     *dup_mirrors = mirror->dup_mirrors;
     *out = mirror->out ? mirror->out->ofbundle : NULL;
     *out_vlan = mirror->out_vlan;

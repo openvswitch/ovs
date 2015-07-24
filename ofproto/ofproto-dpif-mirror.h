@@ -1,4 +1,4 @@
-/* Copyright (c) 2013 Nicira, Inc.
+/* Copyright (c) 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,8 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
-#ifndef OFPROT_DPIF_MIRROR_H
-#define OFPROT_DPIF_MIRROR_H 1
+#ifndef OFPROTO_DPIF_MIRROR_H
+#define OFPROTO_DPIF_MIRROR_H 1
 
 #include <stdint.h>
 
@@ -48,7 +48,7 @@ int mirror_get_stats(struct mbridge *, void *aux, uint64_t *packets,
                      uint64_t *bytes);
 void mirror_update_stats(struct mbridge*, mirror_mask_t, uint64_t packets,
                          uint64_t bytes);
-bool mirror_get(struct mbridge *, int index, unsigned long **vlans,
+bool mirror_get(struct mbridge *, int index, const unsigned long **vlans,
                 mirror_mask_t *dup_mirrors, struct ofbundle **out,
                 int *out_vlan);
 
