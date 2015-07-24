@@ -205,6 +205,7 @@ struct xlate_ctx {
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
+    ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     bool exit;                  /* No further actions should be processed. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
@@ -2245,7 +2246,7 @@ xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
             output_normal(ctx, xbundle, vlan);
         }
     }
-    ctx->xout->nf_output_iface = NF_OUT_FLOOD;
+    ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
 static void
@@ -3040,7 +3041,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         ctx->sflow_odp_port = odp_port;
         ctx->sflow_n_outputs++;
-        ctx->xout->nf_output_iface = ofp_port;
+        ctx->nf_output_iface = ofp_port;
     }
 
  out:
@@ -3427,7 +3428,7 @@ flood_packets(struct xlate_ctx *ctx, bool all)
         }
     }
 
-    ctx->xout->nf_output_iface = NF_OUT_FLOOD;
+    ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
 static void
@@ -3667,9 +3668,9 @@ static void
 xlate_output_action(struct xlate_ctx *ctx,
                     ofp_port_t port, uint16_t max_len, bool may_packet_in)
 {
-    ofp_port_t prev_nf_output_iface = ctx->xout->nf_output_iface;
+    ofp_port_t prev_nf_output_iface = ctx->nf_output_iface;
 
-    ctx->xout->nf_output_iface = NF_OUT_DROP;
+    ctx->nf_output_iface = NF_OUT_DROP;
 
     switch (port) {
     case OFPP_IN_PORT:
@@ -3708,12 +3709,12 @@ xlate_output_action(struct xlate_ctx *ctx,
     }
 
     if (prev_nf_output_iface == NF_OUT_FLOOD) {
-        ctx->xout->nf_output_iface = NF_OUT_FLOOD;
-    } else if (ctx->xout->nf_output_iface == NF_OUT_DROP) {
-        ctx->xout->nf_output_iface = prev_nf_output_iface;
+        ctx->nf_output_iface = NF_OUT_FLOOD;
+    } else if (ctx->nf_output_iface == NF_OUT_DROP) {
+        ctx->nf_output_iface = prev_nf_output_iface;
     } else if (prev_nf_output_iface != NF_OUT_DROP &&
-               ctx->xout->nf_output_iface != NF_OUT_FLOOD) {
-        ctx->xout->nf_output_iface = NF_OUT_MULTI;
+               ctx->nf_output_iface != NF_OUT_FLOOD) {
+        ctx->nf_output_iface = NF_OUT_MULTI;
     }
 }
 
@@ -3763,10 +3764,10 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     ctx->xin->flow.skb_priority = flow_priority;
 
     /* Update NetFlow output port. */
-    if (ctx->xout->nf_output_iface == NF_OUT_DROP) {
-        ctx->xout->nf_output_iface = ofp_port;
-    } else if (ctx->xout->nf_output_iface != NF_OUT_FLOOD) {
-        ctx->xout->nf_output_iface = NF_OUT_MULTI;
+    if (ctx->nf_output_iface == NF_OUT_DROP) {
+        ctx->nf_output_iface = ofp_port;
+    } else if (ctx->nf_output_iface != NF_OUT_FLOOD) {
+        ctx->nf_output_iface = NF_OUT_MULTI;
     }
 }
 
@@ -4715,7 +4716,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     *xout = (struct xlate_out) {
         .slow = 0,
         .fail_open = false,
-        .nf_output_iface = NF_OUT_DROP,
         .n_recircs = 0,
     };
 
@@ -4753,6 +4753,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .orig_skb_priority = flow->skb_priority,
         .sflow_n_outputs = 0,
         .sflow_odp_port = 0,
+        .nf_output_iface = NF_OUT_DROP,
         .exit = false,
         .mirrors = 0,
 
@@ -5027,7 +5028,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (!xin->recirc && xbridge->netflow && !(xout->slow & SLOW_CONTROLLER)) {
         if (ctx.xin->resubmit_stats) {
             netflow_flow_update(xbridge->netflow, flow,
-                                xout->nf_output_iface,
+                                ctx.nf_output_iface,
                                 ctx.xin->resubmit_stats);
         }
         if (ctx.xin->xcache) {
@@ -5036,7 +5037,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETFLOW);
             entry->u.nf.netflow = netflow_ref(xbridge->netflow);
             entry->u.nf.flow = xmemdup(flow, sizeof *flow);
-            entry->u.nf.iface = xout->nf_output_iface;
+            entry->u.nf.iface = ctx.nf_output_iface;
         }
     }
 
