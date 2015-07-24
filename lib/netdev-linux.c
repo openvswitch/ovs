@@ -66,7 +66,7 @@
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "rtnetlink-link.h"
+#include "rtnetlink.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "sset.h"
@@ -541,7 +541,7 @@ netdev_rxq_linux_cast(const struct netdev_rxq *rx)
 }
 
 static void netdev_linux_update(struct netdev_linux *netdev,
-                                const struct rtnetlink_link_change *)
+                                const struct rtnetlink_change *)
     OVS_REQUIRES(netdev->mutex);
 static void netdev_linux_changed(struct netdev_linux *netdev,
                                  unsigned int ifi_flags, unsigned int mask)
@@ -601,9 +601,9 @@ netdev_linux_run(void)
         ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
         error = nl_sock_recv(sock, &buf, false);
         if (!error) {
-            struct rtnetlink_link_change change;
+            struct rtnetlink_change change;
 
-            if (rtnetlink_link_parse(&buf, &change)) {
+            if (rtnetlink_parse(&buf, &change)) {
                 struct netdev *netdev_ = netdev_from_name(change.ifname);
                 if (netdev_ && is_netdev_linux_class(netdev_->netdev_class)) {
                     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
@@ -674,7 +674,7 @@ netdev_linux_changed(struct netdev_linux *dev,
 
 static void
 netdev_linux_update(struct netdev_linux *dev,
-                    const struct rtnetlink_link_change *change)
+                    const struct rtnetlink_change *change)
     OVS_REQUIRES(dev->mutex)
 {
     if (change->nlmsg_type == RTM_NEWLINK) {
@@ -694,10 +694,9 @@ netdev_linux_update(struct netdev_linux *dev,
             dev->ether_addr_error = 0;
         }
 
-        dev->ifindex = change->ifi_index;
+        dev->ifindex = change->if_index;
         dev->cache_valid |= VALID_IFINDEX;
         dev->get_ifindex_error = 0;
-
     } else {
         netdev_linux_changed(dev, change->ifi_flags, 0);
     }

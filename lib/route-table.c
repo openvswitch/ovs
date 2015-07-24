@@ -30,7 +30,7 @@
 #include "netlink-socket.h"
 #include "ofpbuf.h"
 #include "ovs-router.h"
-#include "rtnetlink-link.h"
+#include "rtnetlink.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(route_table);
@@ -74,7 +74,7 @@ static void route_table_change(const struct route_table_msg *, void *);
 static void route_map_clear(void);
 
 static void name_table_init(void);
-static void name_table_change(const struct rtnetlink_link_change *, void *);
+static void name_table_change(const struct rtnetlink_change *, void *);
 
 uint64_t
 route_table_get_change_seq(void)
@@ -113,7 +113,7 @@ route_table_run(void)
 {
     ovs_mutex_lock(&route_table_mutex);
     if (nln) {
-        rtnetlink_link_run();
+        rtnetlink_run();
         nln_run(nln);
 
         if (!route_table_valid) {
@@ -130,7 +130,7 @@ route_table_wait(void)
 {
     ovs_mutex_lock(&route_table_mutex);
     if (nln) {
-        rtnetlink_link_wait();
+        rtnetlink_wait();
         nln_wait(nln);
     }
     ovs_mutex_unlock(&route_table_mutex);
@@ -278,12 +278,12 @@ route_table_fallback_lookup(ovs_be32 ip_dst OVS_UNUSED,
 static void
 name_table_init(void)
 {
-    name_notifier = rtnetlink_link_notifier_create(name_table_change, NULL);
+    name_notifier = rtnetlink_notifier_create(name_table_change, NULL);
 }
 
 
 static void
-name_table_change(const struct rtnetlink_link_change *change OVS_UNUSED,
+name_table_change(const struct rtnetlink_change *change OVS_UNUSED,
                   void *aux OVS_UNUSED)
 {
     /* Changes to interface status can cause routing table changes that some
