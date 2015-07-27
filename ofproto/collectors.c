@@ -95,7 +95,7 @@ collectors_destroy(struct collectors *c)
         size_t i;
 
         for (i = 0; i < c->n_fds; i++) {
-            close(c->fds[i]);
+            closesocket(c->fds[i]);
         }
         free(c->fds);
         free(c);
