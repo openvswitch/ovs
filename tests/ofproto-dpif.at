@@ -5258,6 +5258,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - sFlow packet sampling - MPLS])
+AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 ADD_OF_PORTS([br0], [1], [2])
