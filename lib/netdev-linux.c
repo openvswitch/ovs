@@ -547,23 +547,31 @@ static void netdev_linux_changed(struct netdev_linux *netdev,
                                  unsigned int ifi_flags, unsigned int mask)
     OVS_REQUIRES(netdev->mutex);
 
-/* Returns a NETLINK_ROUTE socket listening for RTNLGRP_LINK changes, or NULL
+/* Returns a NETLINK_ROUTE socket listening for RTNLGRP_LINK,
+ * RTNLGRP_IPV4_IFADDR and RTNLGRP_IPV6_IFADDR changes, or NULL
  * if no such socket could be created. */
 static struct nl_sock *
 netdev_linux_notify_sock(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static struct nl_sock *sock;
+    unsigned int mcgroups[3] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
+                                RTNLGRP_IPV6_IFADDR};
 
     if (ovsthread_once_start(&once)) {
         int error;
 
         error = nl_sock_create(NETLINK_ROUTE, &sock);
         if (!error) {
-            error = nl_sock_join_mcgroup(sock, RTNLGRP_LINK);
-            if (error) {
-                nl_sock_destroy(sock);
-                sock = NULL;
+            size_t i;
+
+            for (i = 0; i < ARRAY_SIZE(mcgroups); i++) {
+                error = nl_sock_join_mcgroup(sock, mcgroups[i]);
+                if (error) {
+                    nl_sock_destroy(sock);
+                    sock = NULL;
+                    break;
+                }
             }
         }
         ovsthread_once_done(&once);
@@ -677,28 +685,37 @@ netdev_linux_update(struct netdev_linux *dev,
                     const struct rtnetlink_change *change)
     OVS_REQUIRES(dev->mutex)
 {
-    if (change->nlmsg_type == RTM_NEWLINK) {
-        /* Keep drv-info */
-        netdev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
+    if (rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)){
+        if (change->nlmsg_type == RTM_NEWLINK) {
+            /* Keep drv-info, in4, in6. */
+            netdev_linux_changed(dev, change->ifi_flags,
+                                 VALID_DRVINFO | VALID_IN4 | VALID_IN6);
 
-        /* Update netdev from rtnl-change msg. */
-        if (change->mtu) {
-            dev->mtu = change->mtu;
-            dev->cache_valid |= VALID_MTU;
-            dev->netdev_mtu_error = 0;
+            /* Update netdev from rtnl-change msg. */
+            if (change->mtu) {
+                dev->mtu = change->mtu;
+                dev->cache_valid |= VALID_MTU;
+                dev->netdev_mtu_error = 0;
+            }
+
+            if (!eth_addr_is_zero(change->addr)) {
+                memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
+                dev->cache_valid |= VALID_ETHERADDR;
+                dev->ether_addr_error = 0;
+            }
+
+            dev->ifindex = change->if_index;
+            dev->cache_valid |= VALID_IFINDEX;
+            dev->get_ifindex_error = 0;
+        } else {
+            netdev_linux_changed(dev, change->ifi_flags, 0);
         }
-
-        if (!eth_addr_is_zero(change->addr)) {
-            memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
-            dev->cache_valid |= VALID_ETHERADDR;
-            dev->ether_addr_error = 0;
-        }
-
-        dev->ifindex = change->if_index;
-        dev->cache_valid |= VALID_IFINDEX;
-        dev->get_ifindex_error = 0;
+    } else if (rtnetlink_type_is_rtnlgrp_addr(change->nlmsg_type)) {
+        /* Invalidates in4, in6. */
+        netdev_linux_changed(dev, dev->ifi_flags,
+                             ~(VALID_IN4 | VALID_IN6));
     } else {
-        netdev_linux_changed(dev, change->ifi_flags, 0);
+        OVS_NOT_REACHED();
     }
 }
 
