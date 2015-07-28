@@ -268,6 +268,7 @@ ofctrl_add_flow(struct hmap *desired_flows,
     f->match = *match;
     f->ofpacts = xmemdup(actions->data, actions->size);
     f->ofpacts_len = actions->size;
+    f->hmap_node.hash = ovn_flow_hash(f);
 
     if (ovn_flow_lookup(desired_flows, f)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -281,7 +282,7 @@ ofctrl_add_flow(struct hmap *desired_flows,
         return;
     }
 
-    hmap_insert(desired_flows, &f->hmap_node, ovn_flow_hash(f));
+    hmap_insert(desired_flows, &f->hmap_node, f->hmap_node.hash);
 }
 
 /* ovn_flow. */
