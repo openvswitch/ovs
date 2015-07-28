@@ -330,6 +330,7 @@ static struct vport *gre64_create(const struct vport_parms *parms)
 	struct vport *vport;
 	int err;
 
+	pr_warn_once("GRE64 tunnel protocol is deprecated.");
 	err = gre_init();
 	if (err)
 		return ERR_PTR(err);

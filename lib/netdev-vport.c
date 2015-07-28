@@ -242,6 +242,13 @@ netdev_vport_alloc(void)
     return &netdev->up;
 }
 
+static struct netdev *
+netdev_gre64_vport_alloc(void)
+{
+    VLOG_WARN_ONCE("GRE64 tunnel protocol is deprecated. It will be removed from OVS release 2.5.");
+    return netdev_vport_alloc();
+}
+
 static int
 netdev_vport_construct(struct netdev *netdev_)
 {
@@ -1315,7 +1322,7 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
 }
 
 
-#define VPORT_FUNCTIONS(GET_CONFIG, SET_CONFIG,             \
+#define VPORT_FUNCTIONS(ALLOC, GET_CONFIG, SET_CONFIG,      \
                         GET_TUNNEL_CONFIG, GET_STATUS,      \
                         BUILD_HEADER,                       \
                         PUSH_HEADER, POP_HEADER)            \
@@ -1323,7 +1330,7 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
                                                             \
-    netdev_vport_alloc,                                     \
+    ALLOC,                                                  \
     netdev_vport_construct,                                 \
     netdev_vport_destruct,                                  \
     netdev_vport_dealloc,                                   \
@@ -1385,9 +1392,10 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
     NULL,                   /* rx_drain */
 
 
-#define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
+#define TUNNEL_CLASS(NAME, DPIF_PORT, ALLOC, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
     { DPIF_PORT,                                                               \
-        { NAME, VPORT_FUNCTIONS(get_tunnel_config,                             \
+        { NAME, VPORT_FUNCTIONS(ALLOC,                                         \
+                                get_tunnel_config,                             \
                                 set_tunnel_config,                             \
                                 get_netdev_tunnel_config,                      \
                                 tunnel_get_status,                             \
@@ -1399,20 +1407,26 @@ netdev_vport_tunnel_register(void)
     /* The name of the dpif_port should be short enough to accomodate adding
      * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
-        TUNNEL_CLASS("geneve", "genev_sys", netdev_geneve_build_header,
+        TUNNEL_CLASS("geneve", "genev_sys", netdev_vport_alloc,
+                                            netdev_geneve_build_header,
                                             push_udp_header,
                                             netdev_geneve_pop_header),
-        TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
+        TUNNEL_CLASS("gre", "gre_sys", netdev_vport_alloc,
+                                       netdev_gre_build_header,
                                        netdev_gre_push_header,
                                        netdev_gre_pop_header),
-        TUNNEL_CLASS("ipsec_gre", "gre_sys", NULL, NULL, NULL),
-        TUNNEL_CLASS("gre64", "gre64_sys", NULL,  NULL, NULL),
-        TUNNEL_CLASS("ipsec_gre64", "gre64_sys", NULL, NULL, NULL),
-        TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
+        TUNNEL_CLASS("ipsec_gre", "gre_sys", netdev_vport_alloc,
+                                             NULL, NULL, NULL),
+        TUNNEL_CLASS("gre64", "gre64_sys", netdev_gre64_vport_alloc,
+                                             NULL,  NULL, NULL),
+        TUNNEL_CLASS("ipsec_gre64", "gre64_sys", netdev_gre64_vport_alloc,
+                                                 NULL, NULL, NULL),
+        TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vport_alloc,
+                                           netdev_vxlan_build_header,
                                            push_udp_header,
                                            netdev_vxlan_pop_header),
-        TUNNEL_CLASS("lisp", "lisp_sys", NULL, NULL, NULL),
-        TUNNEL_CLASS("stt", "stt_sys", NULL, NULL, NULL),
+        TUNNEL_CLASS("lisp", "lisp_sys", netdev_vport_alloc, NULL, NULL, NULL),
+        TUNNEL_CLASS("stt", "stt_sys", netdev_vport_alloc, NULL, NULL, NULL),
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
@@ -1435,7 +1449,8 @@ netdev_vport_patch_register(void)
 {
     static const struct vport_class patch_class =
         { NULL,
-            { "patch", VPORT_FUNCTIONS(get_patch_config,
+            { "patch", VPORT_FUNCTIONS(netdev_vport_alloc,
+                                       get_patch_config,
                                        set_patch_config,
                                        NULL,
                                        NULL, NULL, NULL, NULL) }};

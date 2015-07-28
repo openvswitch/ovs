@@ -108,6 +108,8 @@ v2.4.0 - xx xxx xxxx
      how daemons will talk with syslog.
    - Support for "ovs-appctl vlog/list-pattern" command that lets to query
      logging message format for each destination.
+   - GRE64 and ipsec_gre64 tunnel protocol is deprecated and will be removed
+     from OVS v2.5 release.
 
 
 v2.3.0 - 14 Aug 2014

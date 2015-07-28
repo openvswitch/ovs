@@ -1850,6 +1850,8 @@
 
           <dt><code>gre64</code></dt>
           <dd>
+            GRE64 tunnel protocol is deprecated and will be removed from OVS
+            v2.5 release.
             It is same as GRE, but it allows 64 bit key. To store higher 32-bits
             of key, it uses GRE protocol sequence number field. This is non
             standard use of GRE protocol since OVS does not increment
@@ -1860,6 +1862,8 @@
 
           <dt><code>ipsec_gre64</code></dt>
           <dd>
+            GRE64 tunnel protocol is deprecated and will be removed from OVS
+            v2.5 release.
             Same as IPSEC_GRE except 64 bit key.
           </dd>
 

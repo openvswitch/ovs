@@ -123,6 +123,7 @@ check_logs () {
 /timeval.*disk: [[0-9]]* reads, [[0-9]]* writes/d
 /timeval.*context switches: [[0-9]]* voluntary, [[0-9]]* involuntary/d
 /ovs_rcu.*blocked [[0-9]]* ms waiting for .* to quiesce/d
+/netdev_vport.*GRE64 tunnel protocol is deprecated*/d
 /|WARN|/p
 /|ERR|/p
 /|EMER|/p" ovs-vswitchd.log ovsdb-server.log
