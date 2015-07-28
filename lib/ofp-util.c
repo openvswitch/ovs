@@ -53,8 +53,11 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-static enum ofputil_table_miss ofputil_table_miss_from_config(
-    ovs_be32 config_, enum ofp_version);
+static enum ofputil_table_eviction ofputil_decode_table_eviction(
+    ovs_be32 config, enum ofp_version);
+static ovs_be32 ofputil_encode_table_config(enum ofputil_table_miss,
+                                            enum ofputil_table_eviction,
+                                            enum ofp_version);
 
 struct ofp_prop_header {
     ovs_be16 type;
@@ -196,7 +199,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -1318,7 +1321,7 @@ ofputil_decode_hello_bitmap(const struct ofp_hello_elem_header *oheh,
 
     /* Only use the first 32-bit element of the bitmap as that is all the
      * current implementation supports.  Subsequent elements are ignored which
-     * should have no effect on session negotiation until Open vSwtich supports
+     * should have no effect on session negotiation until Open vSwitch supports
      * wire-protocol versions greater than 31.
      */
     allowed_versions = ntohl(bitmap[0]);
@@ -4644,7 +4647,15 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     ovs_strlcpy(tf->name, otf->name, OFP_MAX_TABLE_NAME_LEN);
     tf->metadata_match = otf->metadata_match;
     tf->metadata_write = otf->metadata_write;
-    tf->miss_config = ofputil_table_miss_from_config(otf->config, oh->version);
+    tf->miss_config = OFPUTIL_TABLE_MISS_DEFAULT;
+    if (oh->version >= OFP14_VERSION) {
+        uint32_t caps = ntohl(otf->capabilities);
+        tf->supports_eviction = (caps & OFPTC14_EVICTION) != 0;
+        tf->supports_vacancy_events = (caps & OFPTC14_VACANCY_EVENTS) != 0;
+    } else {
+        tf->supports_eviction = -1;
+        tf->supports_vacancy_events = -1;
+    }
     tf->max_entries = ntohl(otf->max_entries);
 
     while (properties.size > 0) {
@@ -4852,7 +4863,14 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     ovs_strlcpy(otf->name, tf->name, sizeof otf->name);
     otf->metadata_match = tf->metadata_match;
     otf->metadata_write = tf->metadata_write;
-    otf->config = ofputil_table_miss_to_config(tf->miss_config, version);
+    if (version >= OFP14_VERSION) {
+        if (tf->supports_eviction) {
+            otf->capabilities |= htonl(OFPTC14_EVICTION);
+        }
+        if (tf->supports_vacancy_events) {
+            otf->capabilities |= htonl(OFPTC14_VACANCY_EVENTS);
+        }
+    }
     otf->max_entries = htonl(tf->max_entries);
 
     put_table_instruction_features(reply, &tf->nonmiss, 0, version);
@@ -4868,17 +4886,230 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     ofpmp_postappend(replies, start_ofs);
 }
 
-/* ofputil_table_mod */
+static enum ofperr
+parse_table_desc_eviction_property(struct ofpbuf *property,
+                                   struct ofputil_table_desc *td)
+{
+    struct ofp14_table_mod_prop_eviction *ote = property->data;
+
+    if (property->size != sizeof *ote) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    td->eviction_flags = ntohl(ote->flags);
+    return 0;
+}
+
+/* Decodes the next OpenFlow "table desc" message (of possibly several) from
+ * 'msg' into an abstract form in '*td'.  Returns 0 if successful, EOF if the
+ * last "table desc" in 'msg' was already decoded, otherwise an OFPERR_*
+ * value. */
+int
+ofputil_decode_table_desc(struct ofpbuf *msg,
+                          struct ofputil_table_desc *td,
+                          enum ofp_version version)
+{
+    struct ofp14_table_desc *otd;
+    struct ofpbuf properties;
+    size_t length;
+
+    memset(td, 0, sizeof *td);
+
+    if (!msg->header) {
+        ofpraw_pull_assert(msg);
+    }
+
+    if (!msg->size) {
+        return EOF;
+    }
+
+    otd = ofpbuf_try_pull(msg, sizeof *otd);
+    if (!otd) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFP14_TABLE_DESC reply has %"PRIu32" "
+                     "leftover bytes at end", msg->size);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    td->table_id = otd->table_id;
+    length = ntohs(otd->length);
+    if (length < sizeof *otd || length - sizeof *otd > msg->size) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFP14_TABLE_DESC reply claims invalid "
+                     "length %"PRIuSIZE, length);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    length -= sizeof *otd;
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, length), length);
+
+    td->eviction = ofputil_decode_table_eviction(otd->config, version);
+    td->eviction_flags = UINT32_MAX;
+
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = ofputil_pull_property(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPTMPT14_EVICTION:
+            error = parse_table_desc_eviction_property(&payload, td);
+            break;
+
+        default:
+            log_property(true, "unknown table_desc property %"PRIu16, type);
+            error = 0;
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
+/* Encodes and returns a request to obtain description of tables of a switch.
+ * The message is encoded for OpenFlow version 'ofp_version'. */
+struct ofpbuf *
+ofputil_encode_table_desc_request(enum ofp_version ofp_version)
+{
+    struct ofpbuf *request = NULL;
+
+    if (ofp_version >= OFP14_VERSION) {
+        request = ofpraw_alloc(OFPRAW_OFPST14_TABLE_DESC_REQUEST,
+                               ofp_version, 0);
+    } else {
+        ovs_fatal(0, "dump-table-desc needs OpenFlow 1.4 or later "
+                  "(\'-O OpenFlow14\')");
+    }
+
+    return request;
+}
+
+/* Function to append Table desc information in a reply list. */
+void
+ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
+                                struct ovs_list *replies,
+                                enum ofp_version version)
+{
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    size_t start_otd;
+    struct ofp14_table_desc *otd;
+
+    start_otd = reply->size;
+    ofpbuf_put_zeros(reply, sizeof *otd);
+    if (td->eviction_flags != UINT32_MAX) {
+        struct ofp14_table_mod_prop_eviction *ote;
+
+        ote = ofpbuf_put_zeros(reply, sizeof *ote);
+        ote->type = htons(OFPTMPT14_EVICTION);
+        ote->length = htons(sizeof *ote);
+        ote->flags = htonl(td->eviction_flags);
+    }
+
+    otd = ofpbuf_at_assert(reply, start_otd, sizeof *otd);
+    otd->length = htons(reply->size - start_otd);
+    otd->table_id = td->table_id;
+    otd->config = ofputil_encode_table_config(OFPUTIL_TABLE_MISS_DEFAULT,
+                                              td->eviction, version);
+    ofpmp_postappend(replies, start_otd);
+}
+
+static enum ofperr
+parse_table_mod_eviction_property(struct ofpbuf *property,
+                                  struct ofputil_table_mod *tm)
+{
+    struct ofp14_table_mod_prop_eviction *ote = property->data;
+
+    if (property->size != sizeof *ote) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    tm->eviction_flags = ntohl(ote->flags);
+    return 0;
+}
 
 /* Given 'config', taken from an OpenFlow 'version' message that specifies
  * table configuration (a table mod, table stats, or table features message),
- * returns the table miss configuration that it specifies.  */
+ * returns the table eviction configuration that it specifies.
+ *
+ * Only OpenFlow 1.4 and later specify table eviction configuration this way,
+ * so for other 'version' values this function always returns
+ * OFPUTIL_TABLE_EVICTION_DEFAULT. */
+static enum ofputil_table_eviction
+ofputil_decode_table_eviction(ovs_be32 config, enum ofp_version version)
+{
+    return (version < OFP14_VERSION ? OFPUTIL_TABLE_EVICTION_DEFAULT
+            : config & htonl(OFPTC14_EVICTION) ? OFPUTIL_TABLE_EVICTION_ON
+            : OFPUTIL_TABLE_EVICTION_OFF);
+}
+
+/* Returns a bitmap of OFPTC* values suitable for 'config' fields in various
+ * OpenFlow messages of the given 'version', based on the provided 'miss' and
+ * 'eviction' values. */
+static ovs_be32
+ofputil_encode_table_config(enum ofputil_table_miss miss,
+                            enum ofputil_table_eviction eviction,
+                            enum ofp_version version)
+{
+    /* See the section "OFPTC_* Table Configuration" in DESIGN.md for more
+     * information on the crazy evolution of this field. */
+    switch (version) {
+    case OFP10_VERSION:
+        /* OpenFlow 1.0 didn't have such a field, any value ought to do. */
+        return htonl(0);
+
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        /* OpenFlow 1.1 and 1.2 define only OFPTC11_TABLE_MISS_*. */
+        switch (miss) {
+        case OFPUTIL_TABLE_MISS_DEFAULT:
+            /* Really this shouldn't be used for encoding (the caller should
+             * provide a specific value) but I can't imagine that defaulting to
+             * the fall-through case here will hurt. */
+        case OFPUTIL_TABLE_MISS_CONTROLLER:
+        default:
+            return htonl(OFPTC11_TABLE_MISS_CONTROLLER);
+        case OFPUTIL_TABLE_MISS_CONTINUE:
+            return htonl(OFPTC11_TABLE_MISS_CONTINUE);
+        case OFPUTIL_TABLE_MISS_DROP:
+            return htonl(OFPTC11_TABLE_MISS_DROP);
+        }
+        OVS_NOT_REACHED();
+
+    case OFP13_VERSION:
+        /* OpenFlow 1.3 removed OFPTC11_TABLE_MISS_* and didn't define any new
+         * flags, so this is correct. */
+        return htonl(0);
+
+    case OFP14_VERSION:
+    case OFP15_VERSION:
+        /* OpenFlow 1.4 introduced OFPTC14_EVICTION and OFPTC14_VACANCY_EVENTS
+         * and we don't support the latter yet. */
+        return htonl(eviction == OFPUTIL_TABLE_EVICTION_ON
+                     ? OFPTC14_EVICTION : 0);
+    }
+
+    OVS_NOT_REACHED();
+}
+
+/* Given 'config', taken from an OpenFlow 'version' message that specifies
+ * table configuration (a table mod, table stats, or table features message),
+ * returns the table miss configuration that it specifies.
+ *
+ * Only OpenFlow 1.1 and 1.2 specify table miss configurations this way, so for
+ * other 'version' values this function always returns
+ * OFPUTIL_TABLE_MISS_DEFAULT. */
 static enum ofputil_table_miss
-ofputil_table_miss_from_config(ovs_be32 config_, enum ofp_version version)
+ofputil_decode_table_miss(ovs_be32 config_, enum ofp_version version)
 {
     uint32_t config = ntohl(config_);
 
-    if (version < OFP13_VERSION) {
+    if (version == OFP11_VERSION || version == OFP12_VERSION) {
         switch (config & OFPTC11_TABLE_MISS_MASK) {
         case OFPTC11_TABLE_MISS_CONTROLLER:
             return OFPUTIL_TABLE_MISS_CONTROLLER;
@@ -4898,32 +5129,6 @@ ofputil_table_miss_from_config(ovs_be32 config_, enum ofp_version version)
     }
 }
 
-/* Given a table miss configuration, returns the corresponding OpenFlow table
- * configuration for use in an OpenFlow message of the given 'version'. */
-ovs_be32
-ofputil_table_miss_to_config(enum ofputil_table_miss miss,
-                             enum ofp_version version)
-{
-    if (version < OFP13_VERSION) {
-        switch (miss) {
-        case OFPUTIL_TABLE_MISS_CONTROLLER:
-        case OFPUTIL_TABLE_MISS_DEFAULT:
-            return htonl(OFPTC11_TABLE_MISS_CONTROLLER);
-
-        case OFPUTIL_TABLE_MISS_CONTINUE:
-            return htonl(OFPTC11_TABLE_MISS_CONTINUE);
-
-        case OFPUTIL_TABLE_MISS_DROP:
-            return htonl(OFPTC11_TABLE_MISS_DROP);
-
-        default:
-            OVS_NOT_REACHED();
-        }
-    } else {
-        return htonl(0);
-    }
-}
-
 /* Decodes the OpenFlow "table mod" message in '*oh' into an abstract form in
  * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
@@ -4933,6 +5138,10 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
     enum ofpraw raw;
     struct ofpbuf b;
 
+    memset(pm, 0, sizeof *pm);
+    pm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
+    pm->eviction = OFPUTIL_TABLE_EVICTION_DEFAULT;
+    pm->eviction_flags = UINT32_MAX;
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
 
@@ -4940,16 +5149,37 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
         const struct ofp11_table_mod *otm = b.data;
 
         pm->table_id = otm->table_id;
-        pm->miss_config = ofputil_table_miss_from_config(otm->config,
-                                                         oh->version);
+        pm->miss = ofputil_decode_table_miss(otm->config, oh->version);
     } else if (raw == OFPRAW_OFPT14_TABLE_MOD) {
         const struct ofp14_table_mod *otm = ofpbuf_pull(&b, sizeof *otm);
 
         pm->table_id = otm->table_id;
-        pm->miss_config = ofputil_table_miss_from_config(otm->config,
-                                                         oh->version);
-        /* We do not understand any properties yet, so we do not bother
-         * parsing them. */
+        pm->miss = ofputil_decode_table_miss(otm->config, oh->version);
+        pm->eviction = ofputil_decode_table_eviction(otm->config, oh->version);
+        while (b.size > 0) {
+            struct ofpbuf property;
+            enum ofperr error;
+            uint16_t type;
+
+            error = ofputil_pull_property(&b, &property, &type);
+            if (error) {
+                return error;
+            }
+
+            switch (type) {
+            case OFPTMPT14_EVICTION:
+                error = parse_table_mod_eviction_property(&property, pm);
+                break;
+
+            default:
+                error = OFPERR_OFPBRC_BAD_TYPE;
+                break;
+            }
+
+            if (error) {
+                return error;
+            }
+        }
     } else {
         return OFPERR_OFPBRC_BAD_TYPE;
     }
@@ -4957,11 +5187,11 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
     return 0;
 }
 
-/* Converts the abstract form of a "table mod" message in '*pm' into an OpenFlow
- * message suitable for 'protocol', and returns that encoded form in a buffer
- * owned by the caller. */
+/* Converts the abstract form of a "table mod" message in '*tm' into an
+ * OpenFlow message suitable for 'protocol', and returns that encoded form in a
+ * buffer owned by the caller. */
 struct ofpbuf *
-ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
+ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
                         enum ofputil_protocol protocol)
 {
     enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
@@ -4980,20 +5210,28 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *pm,
 
         b = ofpraw_alloc(OFPRAW_OFPT11_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
-        otm->table_id = pm->table_id;
-        otm->config = ofputil_table_miss_to_config(pm->miss_config,
-                                                   ofp_version);
+        otm->table_id = tm->table_id;
+        otm->config = ofputil_encode_table_config(tm->miss, tm->eviction,
+                                                  ofp_version);
         break;
     }
     case OFP14_VERSION:
     case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
+        struct ofp14_table_mod_prop_eviction *ote;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
-        otm->table_id = pm->table_id;
-        otm->config = ofputil_table_miss_to_config(pm->miss_config,
-                                                   ofp_version);
+        otm->table_id = tm->table_id;
+        otm->config = ofputil_encode_table_config(tm->miss, tm->eviction,
+                                                  ofp_version);
+
+        if (tm->eviction_flags != UINT32_MAX) {
+            ote = ofpbuf_put_zeros(b, sizeof *ote);
+            ote->type = htons(OFPTMPT14_EVICTION);
+            ote->length = htons(sizeof *ote);
+            ote->flags = htonl(tm->eviction_flags);
+        }
         break;
     }
     default:
@@ -5339,8 +5577,9 @@ ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
     out->metadata_write = features->metadata_write;
     out->instructions = ovsinst_bitmap_to_openflow(
         features->nonmiss.instructions, OFP12_VERSION);
-    out->config = ofputil_table_miss_to_config(features->miss_config,
-                                               OFP12_VERSION);
+    out->config = ofputil_encode_table_config(features->miss_config,
+                                              OFPUTIL_TABLE_EVICTION_DEFAULT,
+                                              OFP12_VERSION);
     out->max_entries = htonl(features->max_entries);
     out->active_count = htonl(stats->active_count);
     out->lookup_count = htonll(stats->lookup_count);
@@ -5446,8 +5685,8 @@ ofputil_decode_ofp11_table_stats(struct ofpbuf *msg,
     features->nonmiss.apply.ofpacts = ofpact_bitmap_from_openflow(
         ots->write_actions, OFP11_VERSION);
     features->miss = features->nonmiss;
-    features->miss_config = ofputil_table_miss_from_config(ots->config,
-                                                           OFP11_VERSION);
+    features->miss_config = ofputil_decode_table_miss(ots->config,
+                                                      OFP11_VERSION);
     features->match = mf_bitmap_from_of11(ots->match);
     features->wildcard = mf_bitmap_from_of11(ots->wildcards);
     bitmap_or(features->match.bm, features->wildcard.bm, MFF_N_IDS);
@@ -5476,8 +5715,8 @@ ofputil_decode_ofp12_table_stats(struct ofpbuf *msg,
     ovs_strlcpy(features->name, ots->name, sizeof features->name);
     features->metadata_match = ots->metadata_match;
     features->metadata_write = ots->metadata_write;
-    features->miss_config = ofputil_table_miss_from_config(ots->config,
-                                                           OFP12_VERSION);
+    features->miss_config = ofputil_decode_table_miss(ots->config,
+                                                      OFP12_VERSION);
     features->max_entries = ntohl(ots->max_entries);
 
     features->nonmiss.instructions = ovsinst_bitmap_from_openflow(
@@ -5545,6 +5784,8 @@ ofputil_decode_table_stats_reply(struct ofpbuf *msg,
 
     memset(stats, 0, sizeof *stats);
     memset(features, 0, sizeof *features);
+    features->supports_eviction = -1;
+    features->supports_vacancy_events = -1;
 
     switch ((enum ofp_version) oh->version) {
     case OFP10_VERSION:
@@ -8782,6 +9023,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_AGGREGATE_STATS_REQUEST:
     case OFPTYPE_TABLE_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
+    case OFPTYPE_TABLE_DESC_REQUEST:
     case OFPTYPE_PORT_STATS_REQUEST:
     case OFPTYPE_QUEUE_STATS_REQUEST:
     case OFPTYPE_PORT_DESC_STATS_REQUEST:
@@ -8823,6 +9065,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_METER_CONFIG_STATS_REPLY:
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
     case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
@@ -8853,6 +9096,9 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     msg->flags = ntohs(m->flags);
 
     msg->msg = b.data;
+    if (msg->msg->version != oh->version) {
+        return OFPERR_NXBFC_BAD_VERSION;
+    }
     inner_len = ntohs(msg->msg->length);
     if (inner_len < sizeof(struct ofp_header) || inner_len > b.size) {
         return OFPERR_OFPBFC_MSG_BAD_LEN;
@@ -8873,6 +9119,8 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     }
 
     if (!ofputil_is_bundlable(*type_ptr)) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "%s message not allowed inside "
+                     "OFPT14_BUNDLE_ADD_MESSAGE", ofptype_get_name(*type_ptr));
         return OFPERR_OFPBFC_MSG_UNSUP;
     }
 
@@ -8930,7 +9178,8 @@ ofputil_encode_geneve_table_mod(enum ofp_version ofp_version,
 }
 
 static enum ofperr
-decode_geneve_table_mappings(struct ofpbuf *msg, struct ovs_list *mappings)
+decode_geneve_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
+                             struct ovs_list *mappings)
 {
     list_init(mappings);
 
@@ -8956,10 +9205,10 @@ decode_geneve_table_mappings(struct ofpbuf *msg, struct ovs_list *mappings)
         }
 
         map->index = ntohs(nx_map->index);
-        if (map->index >= TUN_METADATA_NUM_OPTS) {
+        if (map->index >= max_fields) {
             VLOG_WARN_RL(&bad_ofmsg_rl,
                          "geneve table field index (%u) is too large (max %u)",
-                         map->index, TUN_METADATA_NUM_OPTS - 1);
+                         map->index, max_fields - 1);
             ofputil_uninit_geneve_table(mappings);
             return OFPERR_NXGTMFC_BAD_FIELD_IDX;
         }
@@ -8987,7 +9236,8 @@ ofputil_decode_geneve_table_mod(const struct ofp_header *oh,
         return OFPERR_NXGTMFC_BAD_COMMAND;
     }
 
-    return decode_geneve_table_mappings(&msg, &gtm->mappings);
+    return decode_geneve_table_mappings(&msg, TUN_METADATA_NUM_OPTS,
+                                        &gtm->mappings);
 }
 
 struct ofpbuf *
@@ -9007,6 +9257,12 @@ ofputil_encode_geneve_table_reply(const struct ofp_header *oh,
     return b;
 }
 
+/* Decodes the NXT_GENEVE_TABLE_REPLY message in 'oh' into '*gtr'.  Returns 0
+ * if successful, otherwise an ofperr.
+ *
+ * The decoder verifies that the indexes in 'gtr->mappings' are less than
+ * 'gtr->max_fields', but the caller must ensure, if necessary, that they are
+ * less than TUN_METADATA_NUM_OPTS. */
 enum ofperr
 ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
                                   struct ofputil_geneve_table_reply *gtr)
@@ -9021,7 +9277,7 @@ ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
     gtr->max_option_space = ntohl(nx_gtr->max_option_space);
     gtr->max_fields = ntohs(nx_gtr->max_fields);
 
-    return decode_geneve_table_mappings(&msg, &gtr->mappings);
+    return decode_geneve_table_mappings(&msg, gtr->max_fields, &gtr->mappings);
 }
 
 void
@@ -9032,4 +9288,211 @@ ofputil_uninit_geneve_table(struct ovs_list *mappings)
     LIST_FOR_EACH_POP (map, list_node, mappings) {
         free(map);
     }
+}
+
+/* Decodes the OpenFlow "set async config" request and "get async config
+ * reply" message in '*oh' into an abstract form in 'master' and 'slave'.
+ *
+ * If 'loose' is true, this function ignores properties and values that it does
+ * not understand, as a controller would want to do when interpreting
+ * capabilities provided by a switch.  If 'loose' is false, this function
+ * treats unknown properties and values as an error, as a switch would want to
+ * do when interpreting a configuration request made by a controller.
+ *
+ * Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_decode_set_async_config(const struct ofp_header *oh,
+                                uint32_t master[OAM_N_TYPES],
+                                uint32_t slave[OAM_N_TYPES],
+                                bool loose)
+{
+    enum ofpraw raw;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+
+    if (raw == OFPRAW_OFPT13_SET_ASYNC ||
+        raw == OFPRAW_NXT_SET_ASYNC_CONFIG ||
+        raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
+        const struct nx_async_config *msg = ofpmsg_body(oh);
+
+        master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
+        master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
+        master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
+
+        slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
+        slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
+        slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
+
+    } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
+               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+
+        while (b.size > 0) {
+            struct ofp14_async_config_prop_reasons *msg;
+            struct ofpbuf property;
+            enum ofperr error;
+            uint16_t type;
+
+            error = ofputil_pull_property(&b, &property, &type);
+            if (error) {
+                return error;
+            }
+
+            msg = property.data;
+
+            if (property.size != sizeof *msg) {
+                return OFPERR_OFPBRC_BAD_LEN;
+            }
+
+            switch (type) {
+            case OFPACPT_PACKET_IN_SLAVE:
+                slave[OAM_PACKET_IN] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_PACKET_IN_MASTER:
+                master[OAM_PACKET_IN] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_PORT_STATUS_SLAVE:
+                slave[OAM_PORT_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_PORT_STATUS_MASTER:
+                master[OAM_PORT_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_FLOW_REMOVED_SLAVE:
+                slave[OAM_FLOW_REMOVED] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_FLOW_REMOVED_MASTER:
+                master[OAM_FLOW_REMOVED] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_ROLE_STATUS_SLAVE:
+                slave[OAM_ROLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_ROLE_STATUS_MASTER:
+                master[OAM_ROLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_TABLE_STATUS_SLAVE:
+                slave[OAM_TABLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_TABLE_STATUS_MASTER:
+                master[OAM_TABLE_STATUS] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_REQUESTFORWARD_SLAVE:
+                slave[OAM_REQUESTFORWARD] = ntohl(msg->mask);
+                break;
+
+            case OFPACPT_REQUESTFORWARD_MASTER:
+                master[OAM_REQUESTFORWARD] = ntohl(msg->mask);
+                break;
+
+            default:
+                error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
+                break;
+            }
+            if (error) {
+                return error;
+            }
+        }
+    } else {
+        return OFPERR_OFPBRC_BAD_VERSION;
+    }
+    return 0;
+}
+
+/* Append all asynchronous configuration properties in GET_ASYNC_REPLY
+ * message, describing if various set of asynchronous messages are enabled
+ * or not. */
+static enum ofperr
+ofputil_get_async_reply(struct ofpbuf *buf, const uint32_t master_mask,
+                        const uint32_t slave_mask, const uint32_t type)
+{
+    int role;
+
+    for (role = 0; role < 2; role++) {
+        struct ofp14_async_config_prop_reasons *msg;
+
+        msg = ofpbuf_put_zeros(buf, sizeof *msg);
+
+        switch (type) {
+        case OAM_PACKET_IN:
+            msg->type = (role ? htons(OFPACPT_PACKET_IN_SLAVE)
+                              : htons(OFPACPT_PACKET_IN_MASTER));
+            break;
+
+        case OAM_PORT_STATUS:
+            msg->type = (role ? htons(OFPACPT_PORT_STATUS_SLAVE)
+                              : htons(OFPACPT_PORT_STATUS_MASTER));
+            break;
+
+        case OAM_FLOW_REMOVED:
+            msg->type = (role ? htons(OFPACPT_FLOW_REMOVED_SLAVE)
+                              : htons(OFPACPT_FLOW_REMOVED_MASTER));
+            break;
+
+        case OAM_ROLE_STATUS:
+            msg->type = (role ? htons(OFPACPT_ROLE_STATUS_SLAVE)
+                              : htons(OFPACPT_ROLE_STATUS_MASTER));
+            break;
+
+        case OAM_TABLE_STATUS:
+            msg->type = (role ? htons(OFPACPT_TABLE_STATUS_SLAVE)
+                              : htons(OFPACPT_TABLE_STATUS_MASTER));
+            break;
+
+        case OAM_REQUESTFORWARD:
+            msg->type = (role ? htons(OFPACPT_REQUESTFORWARD_SLAVE)
+                              : htons(OFPACPT_REQUESTFORWARD_MASTER));
+            break;
+
+        default:
+            return OFPERR_OFPBRC_BAD_TYPE;
+        }
+        msg->length = htons(sizeof *msg);
+        msg->mask = (role ? htonl(slave_mask) : htonl(master_mask));
+    }
+
+    return 0;
+}
+
+/* Returns a OpenFlow message that encodes 'asynchronous configuration' properly
+ * as a reply to get async config request. */
+struct ofpbuf *
+ofputil_encode_get_async_config(const struct ofp_header *oh,
+                                uint32_t master[OAM_N_TYPES],
+                                uint32_t slave[OAM_N_TYPES])
+{
+    struct ofpbuf *buf;
+    uint32_t type;
+
+    buf = ofpraw_alloc_reply((oh->version < OFP14_VERSION
+                              ? OFPRAW_OFPT13_GET_ASYNC_REPLY
+                              : OFPRAW_OFPT14_GET_ASYNC_REPLY), oh, 0);
+
+    if (oh->version < OFP14_VERSION) {
+        struct nx_async_config *msg;
+        msg = ofpbuf_put_zeros(buf, sizeof *msg);
+
+        msg->packet_in_mask[0] = htonl(master[OAM_PACKET_IN]);
+        msg->port_status_mask[0] = htonl(master[OAM_PORT_STATUS]);
+        msg->flow_removed_mask[0] = htonl(master[OAM_FLOW_REMOVED]);
+
+        msg->packet_in_mask[1] = htonl(slave[OAM_PACKET_IN]);
+        msg->port_status_mask[1] = htonl(slave[OAM_PORT_STATUS]);
+        msg->flow_removed_mask[1] = htonl(slave[OAM_FLOW_REMOVED]);
+    } else if (oh->version == OFP14_VERSION) {
+        for (type = 0; type < OAM_N_TYPES; type++) {
+            ofputil_get_async_reply(buf, master[type], slave[type], type);
+        }
+    }
+
+    return buf;
 }

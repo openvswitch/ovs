@@ -115,8 +115,19 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
+# check_logs scans through all *.log files (except '*.log' and testsuite.log)
+# and reports all WARN, ERR, EMER log entries.  User can add custom sed filters
+# in $1.
 m4_divert_push([PREPARE_TESTS])
 check_logs () {
+    local logs
+    for log in *.log; do
+        case ${log} in # (
+            '*.log'|testsuite.log) ;; # (
+            *) logs="${logs} ${log}" ;;
+        esac
+    done
+
     sed -n "$1
 /timeval.*Unreasonably long [[0-9]]*ms poll interval/d
 /timeval.*faults: [[0-9]]* minor, [[0-9]]* major/d
@@ -125,7 +136,7 @@ check_logs () {
 /ovs_rcu.*blocked [[0-9]]* ms waiting for .* to quiesce/d
 /|WARN|/p
 /|ERR|/p
-/|EMER|/p" ovs-vswitchd.log ovsdb-server.log
+/|EMER|/p" ${logs}
 }
 m4_divert_pop([PREPARE_TESTS])
 
@@ -146,8 +157,6 @@ m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
   [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off], [0], [dnl
 Tunnel push-pop off
 ])])
-
-  [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off])])
 
 # ADD_OF_PORTS(BRIDGE, OF_PORT[, OF_PORT...])
 #

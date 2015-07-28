@@ -9,149 +9,80 @@
 #
 # Modified to make a template file for a multi-binary package with separated
 # build-arch and build-indep targets  by Bill Allombert 2001
+#export DH_VERBOSE=1
 
 PACKAGE=openvswitch
-pdkms=openvswitch-datapath-dkms
+PACKAGE_DKMS=openvswitch-datapath-dkms
 DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([0-9]:)*([^-]+).*,\2,p')
-srcfiles := $(filter-out debian, $(wildcard * .[^.]*))
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 PARALLEL = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 else
 PARALLEL =
 endif
-MAKEFLAGS += $(PARALLEL)
 
-# Old versions of dpkg-buildflags do not understand --export=configure.
-# When dpkg-buildflags does not understand an option, it prints its full
-# --help output on stdout, so we have to avoid that here.
-buildflags := $(shell if dpkg-buildflags --export=configure >/dev/null 2>&1; \
-	              then dpkg-buildflags --export=configure; fi)
+%:
+	dh $@ --with autoreconf,python2 --parallel
 
-configure: configure-stamp
-configure-stamp:
-	dh_testdir
-	test -e configure || ./boot.sh
-	test -d _debian || mkdir _debian
-	echo $(DEB_BUILD_OPTIONS)
-	echo $$CC
-	cd _debian && ( \
-		test -e Makefile || \
-		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-			--sysconfdir=/etc --host=$(DEB_HOST_GNU_TYPE) \
-			$(buildflags) $(DATAPATH_CONFIGURE_OPTS))
-	touch configure-stamp
+# use --as-needed only if supported by dh-autoreconf (to simplify backporting)
+DH_AS_NEEDED=$(shell dpkg --compare-versions $$(dpkg --status dh-autoreconf | grep Version | cut -d' ' -f2) ge 6 && echo --as-needed)
+override_dh_autoreconf:
+	dh_autoreconf $(DH_AS_NEEDED)
 
-#Architecture 
-build: build-arch build-indep
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-ssl $(DATAPATH_CONFIGURE_OPTS)
 
-build-arch: build-arch-stamp
-build-arch-stamp: configure-stamp 
-	$(MAKE) -C _debian
+override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	if $(MAKE) -C _debian check TESTSUITEFLAGS='$(PARALLEL)' || \
-		$(MAKE) -C _debian check TESTSUITEFLAGS='--recheck'; then :; \
+	if $(MAKE) check TESTSUITEFLAGS='$(PARALLEL)' || \
+				$(MAKE) check TESTSUITEFLAGS='--recheck'; then :; \
 	else \
-		cat _debian/tests/testsuite.log; \
+		cat tests/testsuite.log; \
 		exit 1; \
 	fi
 endif
-	touch $@
 
-build-indep: build-indep-stamp
-build-indep-stamp: configure-stamp 
-	$(MAKE) -C _debian dist distdir=openvswitch
-	touch $@
+override_dh_auto_build:
+	dh_auto_build -- dist distdir=openvswitch
 
-clean:
-	dh_testdir
-	dh_testroot
-	rm -f build-arch-stamp build-indep-stamp configure-stamp
-	rm -rf _debian
-	[ ! -f Makefile ] || $(MAKE) distclean
-	dh_clean 
+override_dh_auto_clean:
 	rm -f python/ovs/*.pyc python/ovs/db/*.pyc
+	dh_auto_clean
 
-install: install-indep install-arch
-install-indep: build-indep
-	dh_testdir
-	dh_testroot
-	dh_prep -i
-	dh_installdirs -i
-	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/tmp install
-	dh_install -i
+override_dh_install:
+	dh_install
+	# openvswitch-switch
+	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
+
+	# openvswitch-datapath-source
 	cp debian/rules.modules debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
 	chmod 755 debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
 	cd debian/openvswitch-datapath-source/usr/src && tar -c modules | bzip2 -9 > openvswitch-datapath.tar.bz2 && rm -rf modules
 
-	#dkms stuff
+	# openvswitch-datapath-dkms
 	# setup the dirs
-	dh_installdirs -p$(pdkms) usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)
+	dh_installdirs -p$(PACKAGE_DKMS) usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)
 
 	# copy the source
-	cd debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION) && tar xvzf $(CURDIR)/_debian/openvswitch.tar.gz && mv openvswitch/* openvswitch/.[a-z]* . && rmdir openvswitch
+	cd debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION) && tar xvzf $(CURDIR)/openvswitch.tar.gz && mv openvswitch/* openvswitch/.[a-z]* . && rmdir openvswitch
 
 	# check we can get kernel module names
-	$(MAKE) -C _debian/datapath print-build-modules
+	$(MAKE) -C datapath print-build-modules
 
 	# Prepare dkms.conf from the dkms.conf.in template
-	sed "s/__VERSION__/$(DEB_UPSTREAM_VERSION)/g; s/__MODULES__/$(shell $(MAKE) -C _debian/datapath print-build-modules | grep -v make)/" debian/dkms.conf.in > debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/dkms.conf
+	sed "s/__VERSION__/$(DEB_UPSTREAM_VERSION)/g; s/__MODULES__/$(shell $(MAKE) -C datapath print-build-modules | grep -v make)/" debian/dkms.conf.in > debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/dkms.conf
 
 	# We don't need the debian folder in there, just upstream sources...
-	rm -rf debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/debian
+	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/debian
 	# We don't need the rhel stuff in there either
-	rm -rf debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/rhel
+	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/rhel
 	# And we should also clean useless license files, which are already
-	# descriped in our debian/copyright anyway.
-	rm -f debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/COPYING \
-		debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/xenserver/LICENSE
+	# described in our debian/copyright anyway.
+	rm -f debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/COPYING \
+		debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/xenserver/LICENSE
 
-install-arch: build-arch
-	dh_testdir
-	dh_testroot
-	dh_prep -s
-	dh_installdirs -s
-	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/tmp install
-	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
-	dh_install -s
-	dh_link -s
-
-# Must not depend on anything. This is to be called by
-# binary-arch/binary-indep
-# in another 'make' thread.
-binary-common:
-	dh_testdir
-	dh_testroot
-	dh_installchangelogs 
-	dh_installdocs
-	dh_installexamples
-	dh_installdebconf
-	dh_installlogrotate
+override_dh_installinit:
 	dh_installinit -R
-	dh_installcron
-	dh_installman --language=C
-	dh_link
+
+override_dh_strip:
 	dh_strip --dbg-package=openvswitch-dbg
-	dh_compress 
-	dh_fixperms
-	dh_python2
-	dh_perl
-	dh_makeshlibs
-	dh_installdeb
-	dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb
-binary-indep: install-indep
-	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
-binary-arch: install-arch
-	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
-
-binary: binary-arch binary-indep
-.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch configure
-
-# This GNU make extensions disables parallel builds for the current Makefile
-# but not for sub-Makefiles.  This is appropriate here because build-arch and
-# build-indep both invoke "make" on OVS, which can update some of the same
-# targets in ways that conflict (e.g. both update tests/testsuite).
-.NOTPARALLEL:

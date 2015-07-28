@@ -1,6 +1,7 @@
 The following people authored or signed off on commits in the Open
 vSwitch source code or webpage version control repository.
 
+Aaron Conole            aaron@bytheb.org
 Aaron Rosen             arosen@clemson.edu
 Alexandru Copot         alex.mihai.c@gmail.com
 Alexei Starovoitov      ast@plumgrid.com
@@ -70,10 +71,12 @@ Gianluca Merlo          gianluca.merlo@gmail.com
 Giuseppe Lettieri       g.lettieri@iet.unipi.it
 Glen Gibb               grg@stanford.edu
 Guolin Yang             gyang@nicira.com
+Guru Chaitanya Perakam  gperakam@Brocade.com
 Gurucharan Shetty       gshetty@nicira.com
 Henry Mai               hmai@nicira.com
 Hao Zheng               hzheng@nicira.com
 Helmut Schaa            helmut.schaa@googlemail.com
+Huanle Han              hanxueluo@gmail.com
 Ian Campbell            Ian.Campbell@citrix.com
 Isaku Yamahata          yamahata@valinux.co.jp
 James P.                roampune@gmail.com
@@ -84,6 +87,7 @@ Jason Kölker            jason@koelker.net
 Jasper Capel            jasper@capel.tv
 Jean Tourrilhes         jt@hpl.hp.com
 Jeremy Stribling        strib@nicira.com
+Jeroen van Bemmel       jvb127@gmail.com
 Jesse Gross             jesse@nicira.com
 Jing Ai                 jinga@google.com
 Joe Perches             joe@perches.com
@@ -100,6 +104,7 @@ Kevin Traynor           kevin.traynor@intel.com
 Kmindg G                kmindg@gmail.com
 Krishna Kondaka         kkondaka@vmware.com
 Kyle Mestery            mestery@mestery.com
+Kyle Upton              kupton@baymicrosystems.com
 Lars Kellogg-Stedman    lars@redhat.com
 Leo Alterman            lalterman@nicira.com
 Lilijun                 jerry.lilijun@huawei.com
@@ -109,6 +114,7 @@ Lorand Jakab            lojakab@cisco.com
 Luca Giraudo            lgiraudo@nicira.com
 Lucian Petrut           lpetrut@cloudbasesolutions.com
 Luigi Rizzo             rizzo@iet.unipi.it
+Luis E. P.              l31g@hotmail.com
 Madhu Challa            challa@noironetworks.com
 Mark D. Gray            mark.d.gray@intel.com
 Mark Hamilton           mhamilton@nicira.com
@@ -124,6 +130,7 @@ Natasha Gude            natasha@nicira.com
 Neil McKee              neil.mckee@inmon.com
 Neil Zhu                zhuj@centecnetworks.com
 Nithin Raju             nithin@vmware.com
+Niti Rohilla            niti.rohilla@tcs.com
 Padmanabhan Krishnan    kprad1@yahoo.com
 Paraneetharan Chandrasekaran    paraneetharanc@gmail.com
 Paul Fazzone            pfazzone@nicira.com
@@ -161,6 +168,7 @@ Shu Shen                shu.shen@radisys.com
 Simon Horman            horms@verge.net.au
 Simon Horman            simon.horman@netronome.com
 Sorin Vinturis          svinturis@cloudbasesolutions.com
+Steffen Gebert          steffen.gebert@informatik.uni-wuerzburg.de
 Stephane A. Sezer       sas@cd80.net
 Stephen Finucane        stephen.finucane@intel.com
 SUGYO Kazushi           sugyo.org@gmail.com
@@ -180,6 +188,7 @@ Tyler Coumbes           coumbes@gmail.com
 Valient Gough           vgough@pobox.com
 Vivien Bernet-Rollande  vbr@soprive.net
 Wang Sheng-Hui          shhuiw@gmail.com
+Wei Li                  liw@dtdream.com
 Wei Yongjun             yjwei@cn.fujitsu.com
 William Fulton
 YAMAMOTO Takashi        yamamoto@midokura.com
@@ -371,6 +380,7 @@ chen zhang              3zhangchen9211@gmail.com
 kk yap                  yapkke@stanford.edu
 likunyun                kunyunli@hotmail.com
 rahim entezari          rahim.entezari@gmail.com
+俊 赵                    zhaojun12@outlook.com
 冯全树(Crab)            fqs888@126.com
 胡靖飞                  hujingfei914@msn.com
 张伟                     zhangwqh@126.com

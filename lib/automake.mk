@@ -276,8 +276,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vlandev.c \
 	lib/vlandev.h \
 	lib/vlog.c \
-	lib/vswitch-idl.c \
-	lib/vswitch-idl.h \
 	lib/lldp/aa-structs.h \
 	lib/lldp/lldp.c \
 	lib/lldp/lldp-const.h \
@@ -310,7 +308,9 @@ EXTRA_DIST += \
 	lib/string.h.in
 
 nodist_lib_libopenvswitch_la_SOURCES = \
-	lib/dirs.c
+	lib/dirs.c \
+	lib/vswitch-idl.c \
+	lib/vswitch-idl.h
 CLEANFILES += $(nodist_lib_libopenvswitch_la_SOURCES)
 
 lib_LTLIBRARIES += lib/libsflow.la
@@ -445,7 +445,7 @@ MAN_FRAGMENTS += \
 OVSIDL_BUILT += lib/vswitch-idl.c lib/vswitch-idl.h lib/vswitch-idl.ovsidl
 
 EXTRA_DIST += lib/vswitch-idl.ann
-$(srcdir)/lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
+lib/vswitch-idl.ovsidl: vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
 	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(srcdir)/vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann > $@.tmp && mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile
@@ -483,13 +483,15 @@ lib/ofp-errors.inc: lib/ofp-errors.h include/openflow/openflow-common.h \
 		$(srcdir)/lib/ofp-errors.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
-lib/ofp-errors.c: lib/ofp-errors.inc
+lib/ofp-errors.lo: lib/ofp-errors.inc
+CLEANFILES += lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors
 
 lib/ofp-msgs.inc: lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
 		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
-lib/ofp-msgs.c: lib/ofp-msgs.inc
+lib/ofp-msgs.lo: lib/ofp-msgs.inc
+CLEANFILES += lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs
 
 INSTALL_DATA_LOCAL += lib-install-data-local

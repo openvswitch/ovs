@@ -95,6 +95,13 @@ int af_inet_ifreq_ioctl(const char *name, struct ifreq *,
 #endif
 
 #ifdef _WIN32
+static inline int make_unix_socket(int style, bool nonblock,
+                                   const char *bind_path,
+                                   const char *connect_path)
+{
+    return -EINVAL;
+}
+
 /* Windows defines the 'optval' argument as char * instead of void *. */
 #define setsockopt(sock, level, optname, optval, optlen) \
     rpl_setsockopt(sock, level, optname, optval, optlen)

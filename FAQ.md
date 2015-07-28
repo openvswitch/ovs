@@ -110,8 +110,7 @@ A: You can start by joining the mailing lists and helping to answer
 
    http://openvswitch.org/mlists/
 
-### Q: Why can I no longer connect to my OpenFlow controller or OVSDB
-manager?
+### Q: Why can I no longer connect to my OpenFlow controller or OVSDB manager?
 
 A: Starting in OVS 2.4, we switched the default ports to the
    IANA-specified port numbers for OpenFlow (6633->6653) and OVSDB
@@ -1432,8 +1431,7 @@ A: The following table lists the versions of OpenFlow supported by
    [OPENFLOW-1.1+.md] in the Open vSwitch source tree tracks support for
    OpenFlow 1.1 and later features.  When support for OpenFlow 1.4 and
    1.5 is solidly implemented, Open vSwitch will enable those version
-   by default.  Also, the OpenFlow 1.5 specification is still under
-   development and thus subject to change.
+   by default.
 
 ### Q: Does Open vSwitch support MPLS?
 

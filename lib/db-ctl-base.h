@@ -33,35 +33,26 @@ struct table;
  * (structs, commands and functions).  To utilize this module, user must
  * define the following:
  *
- * - the 'the_idl' and 'the_idl_txn'.
- *
- * - the 'cmd_show_tables'.  (See 'struct cmd_show_table' for more info).
- *
  * - the command syntaxes for each command.  (See 'struct ctl_command_syntax'
  *   for more info)  and regiters them using ctl_register_commands().
  *
  * - the *ctl command context by inheriting the 'struct ctl_context' for
  *   additional commands implemented by user.  (See 'struct ctl_context' for
  *   more info)
- *
- * - the 'tables[]' for each table in the schema.
- *
 */
 
 /* ctl_fatal() also logs the error, so it is preferred in this file. */
 #define ovs_fatal please_use_ctl_fatal_instead_of_ovs_fatal
 
-/* idl and idl transaction to be used for the *ctl command execution.
- * User must provide them.  */
-extern struct ovsdb_idl *the_idl;
-extern struct ovsdb_idl_txn *the_idl_txn;
-
-void ctl_init(void);
+struct ctl_table_class;
+struct cmd_show_table;
+void ctl_init(const struct ctl_table_class *tables,
+              const struct cmd_show_table *cmd_show_tables,
+              void (*ctl_exit_func)(int status));
 char *ctl_default_db(void);
-OVS_NO_RETURN void ctl_exit(int status);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 
-/* *clt command syntax structure, to be defined by each command implementation.
+/* *ctl command syntax structure, to be defined by each command implementation.
  *
  * Execution Path
  * ==============
@@ -72,7 +63,7 @@ OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
  *            ---------------  ------------  -----------------
  * *ctl       ->prerequisites     ->run        ->postprocess
  *
- * Any *clt command implementation should go through the following execution
+ * Any *ctl command implementation should go through the following execution
  * path:
  *
  *   1. parses user command-line input and finds the corresponding syntax
@@ -153,7 +144,6 @@ void ctl_print_options(const struct option *);
 void ctl_add_cmd_options(struct option **, size_t *n_options_p,
                          size_t *allocated_options_p, int opt_val);
 void ctl_register_commands(const struct ctl_command_syntax *);
-const struct shash *ctl_get_all_commands(void);
 struct ctl_command *ctl_parse_commands(int argc, char *argv[],
                                        struct shash *local_options,
                                        size_t *n_commandsp);
@@ -167,27 +157,12 @@ struct ctl_command *ctl_parse_commands(int argc, char *argv[],
  *
  * - 'columns[]' allows user to specify the print of additional columns
  *   in 'table'.
- *
- * - 'recurse' is used to avoid duplicate print.
- *
  * */
 struct cmd_show_table {
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *name_column;
     const struct ovsdb_idl_column *columns[3]; /* Seems like a good number. */
-    bool recurse;
 };
-
-/* This array defines the 'show' command output format.  User can check the
- * definition in utilities/ovs-vsctl.c as reference.
- *
- * Particularly, if an element in 'columns[]' represents a reference to
- * another table, the referred table must also be defined as an entry in
- * in 'cmd_show_tables[]'.
- *
- * The definition must end with an all-NULL entry.
- * */
-extern struct cmd_show_table cmd_show_tables[];
 
 
 /* The base context struct for conducting the common database
@@ -245,14 +220,8 @@ struct ctl_table_class {
     struct ctl_row_id row_ids[2];
 };
 
-/* Represents all tables in the schema.  User must define 'tables'
- * in implementation.  And the definition must end with an all-NULL
- * entry. */
-extern const struct ctl_table_class tables[];
-
-const struct ctl_table_class * get_table(const char *table_name);
-void set_column(const struct ctl_table_class *,
-                const struct ovsdb_idl_row *, const char *arg,
-                struct ovsdb_symbol_table *);
+void ctl_set_column(const char *table_name,
+                    const struct ovsdb_idl_row *, const char *arg,
+                    struct ovsdb_symbol_table *);
 
 #endif /* db-ctl-base.h */

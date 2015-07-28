@@ -87,13 +87,18 @@ static struct shash dp_netdevs OVS_GUARDED_BY(dp_netdev_mutex)
 
 static struct vlog_rate_limit upcall_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
+static struct odp_support dp_netdev_support = {
+    .max_mpls_depth = SIZE_MAX,
+    .recirc = true,
+};
+
 /* Stores a miniflow with inline values */
 
 struct netdev_flow_key {
     uint32_t hash;       /* Hash function differs for different users. */
     uint32_t len;        /* Length of the following miniflow (incl. map). */
     struct miniflow mf;
-    uint64_t buf[FLOW_MAX_PACKET_U64S - MINI_N_INLINE];
+    uint64_t buf[FLOW_MAX_PACKET_U64S];
 };
 
 /* Exact match cache for frequently used flows
@@ -235,7 +240,7 @@ enum pmd_cycles_counter_type {
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
-    struct pkt_metadata md;
+    odp_port_t port_no;
     struct netdev *netdev;
     struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
@@ -483,16 +488,15 @@ emc_cache_init(struct emc_cache *flow_cache)
 {
     int i;
 
-    BUILD_ASSERT(offsetof(struct miniflow, inline_values) == sizeof(uint64_t));
+    BUILD_ASSERT(sizeof(struct miniflow) == 2 * sizeof(uint64_t));
 
     flow_cache->sweep_idx = 0;
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
-        flow_cache->entries[i].key.len
-            = offsetof(struct miniflow, inline_values);
-        miniflow_initialize(&flow_cache->entries[i].key.mf,
-                            flow_cache->entries[i].key.buf);
+        flow_cache->entries[i].key.len = sizeof(struct miniflow);
+        flow_cache->entries[i].key.mf.tnl_map = 0;
+        flow_cache->entries[i].key.mf.pkt_map = 0;
     }
 }
 
@@ -1085,7 +1089,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         }
     }
     port = xzalloc(sizeof *port);
-    port->md = PKT_METADATA_INITIALIZER(port_no);
+    port->port_no = port_no;
     port->netdev = netdev;
     port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
     port->type = xstrdup(type);
@@ -1190,7 +1194,7 @@ dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
     struct dp_netdev_port *port;
 
     CMAP_FOR_EACH_WITH_HASH (port, node, hash_port_no(port_no), &dp->ports) {
-        if (port->md.in_port.odp_port == port_no) {
+        if (port->port_no == port_no) {
             return port;
         }
     }
@@ -1300,8 +1304,7 @@ static void
 do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
     OVS_REQUIRES(dp->port_mutex)
 {
-    cmap_remove(&dp->ports, &port->node,
-                hash_odp_port(port->md.in_port.odp_port));
+    cmap_remove(&dp->ports, &port->node, hash_odp_port(port->port_no));
     seq_change(dp->port_seq);
     if (netdev_is_pmd(port->netdev)) {
         int numa_id = netdev_get_numa_id(port->netdev);
@@ -1323,7 +1326,7 @@ answer_port_query(const struct dp_netdev_port *port,
 {
     dpif_port->name = xstrdup(netdev_get_name(port->netdev));
     dpif_port->type = xstrdup(port->type);
-    dpif_port->port_no = port->md.in_port.odp_port;
+    dpif_port->port_no = port->port_no;
 }
 
 static int
@@ -1388,6 +1391,8 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     struct cmap_node *node = CONST_CAST(struct cmap_node *, &flow->node);
 
     dpcls_remove(&pmd->cls, &flow->cr);
+    flow->cr.mask = NULL;   /* Accessing rule's mask after this is not safe. */
+
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
     flow->dead = true;
 
@@ -1450,7 +1455,7 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
         state->name = xstrdup(netdev_get_name(port->netdev));
         dpif_port->name = state->name;
         dpif_port->type = port->type;
-        dpif_port->port_no = port->md.in_port.odp_port;
+        dpif_port->port_no = port->port_no;
 
         retval = 0;
     } else {
@@ -1516,22 +1521,19 @@ static bool dp_netdev_flow_ref(struct dp_netdev_flow *flow)
  *   miniflow_extract(), if the map is different the miniflow is different.
  *   Therefore we can be faster by comparing the map and the miniflow in a
  *   single memcmp().
- * _ netdev_flow_key's miniflow has always inline values.
  * - These functions can be inlined by the compiler.
  *
  * The following assertions make sure that what we're doing with miniflow is
- * safe
+ * safe.
  */
-BUILD_ASSERT_DECL(offsetof(struct miniflow, inline_values)
-                  == sizeof(uint64_t));
+BUILD_ASSERT_DECL(sizeof(struct miniflow) == 2 * sizeof(uint64_t));
 
-/* Given the number of bits set in the miniflow map, returns the size of the
+/* Given the number of bits set in miniflow's maps, returns the size of the
  * 'netdev_flow_key.mf' */
-static inline uint32_t
-netdev_flow_key_size(uint32_t flow_u32s)
+static inline size_t
+netdev_flow_key_size(size_t flow_u64s)
 {
-    return offsetof(struct miniflow, inline_values) +
-        MINIFLOW_VALUES_SIZE(flow_u32s);
+    return sizeof(struct miniflow) + MINIFLOW_VALUES_SIZE(flow_u64s);
 }
 
 static inline bool
@@ -1568,15 +1570,13 @@ netdev_flow_key_from_flow(struct netdev_flow_key *dst,
     struct dp_packet packet;
     uint64_t buf_stub[512 / 8];
 
-    miniflow_initialize(&dst->mf, dst->buf);
-
     dp_packet_use_stub(&packet, buf_stub, sizeof buf_stub);
     pkt_metadata_from_flow(&packet.md, src);
     flow_compose(&packet, src);
     miniflow_extract(&packet, &dst->mf);
     dp_packet_uninit(&packet);
 
-    dst->len = netdev_flow_key_size(count_1bits(dst->mf.map));
+    dst->len = netdev_flow_key_size(miniflow_n_values(&dst->mf));
     dst->hash = 0; /* Not computed yet. */
 }
 
@@ -1586,65 +1586,80 @@ netdev_flow_mask_init(struct netdev_flow_key *mask,
                       const struct match *match)
 {
     const uint64_t *mask_u64 = (const uint64_t *) &match->wc.masks;
-    uint64_t *dst = mask->mf.inline_values;
-    uint64_t map, mask_map = 0;
+    uint64_t *dst = miniflow_values(&mask->mf);
+    struct miniflow maps;
+    uint64_t map;
     uint32_t hash = 0;
     int n;
 
     /* Only check masks that make sense for the flow. */
-    map = flow_wc_map(&match->flow);
+    flow_wc_map(&match->flow, &maps);
+    memset(&mask->mf, 0, sizeof mask->mf);   /* Clear maps. */
 
+    map = maps.tnl_map;
     while (map) {
         uint64_t rm1bit = rightmost_1bit(map);
         int i = raw_ctz(map);
 
         if (mask_u64[i]) {
-            mask_map |= rm1bit;
+            mask->mf.tnl_map |= rm1bit;
+            *dst++ = mask_u64[i];
+            hash = hash_add64(hash, mask_u64[i]);
+        }
+        map -= rm1bit;
+    }
+    mask_u64 += FLOW_TNL_U64S;
+    map = maps.pkt_map;
+    while (map) {
+        uint64_t rm1bit = rightmost_1bit(map);
+        int i = raw_ctz(map);
+
+        if (mask_u64[i]) {
+            mask->mf.pkt_map |= rm1bit;
             *dst++ = mask_u64[i];
             hash = hash_add64(hash, mask_u64[i]);
         }
         map -= rm1bit;
     }
 
-    mask->mf.values_inline = true;
-    mask->mf.map = mask_map;
+    hash = hash_add64(hash, mask->mf.tnl_map);
+    hash = hash_add64(hash, mask->mf.pkt_map);
 
-    hash = hash_add64(hash, mask_map);
-
-    n = dst - mask->mf.inline_values;
+    n = dst - miniflow_get_values(&mask->mf);
 
     mask->hash = hash_finish(hash, n * 8);
     mask->len = netdev_flow_key_size(n);
 }
 
-/* Initializes 'dst' as a copy of 'src' masked with 'mask'. */
+/* Initializes 'dst' as a copy of 'flow' masked with 'mask'. */
 static inline void
 netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             const struct flow *flow,
                             const struct netdev_flow_key *mask)
 {
-    uint64_t *dst_u64 = dst->mf.inline_values;
-    const uint64_t *mask_u64 = mask->mf.inline_values;
+    uint64_t *dst_u64 = miniflow_values(&dst->mf);
+    const uint64_t *mask_u64 = miniflow_get_values(&mask->mf);
     uint32_t hash = 0;
     uint64_t value;
 
     dst->len = mask->len;
-    dst->mf.values_inline = true;
-    dst->mf.map = mask->mf.map;
+    dst->mf = mask->mf;   /* Copy maps. */
 
-    FLOW_FOR_EACH_IN_MAP(value, flow, mask->mf.map) {
+    FLOW_FOR_EACH_IN_MAPS(value, flow, mask->mf) {
         *dst_u64 = value & *mask_u64++;
         hash = hash_add64(hash, *dst_u64++);
     }
-    dst->hash = hash_finish(hash, (dst_u64 - dst->mf.inline_values) * 8);
+    dst->hash = hash_finish(hash,
+                            (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
-/* Iterate through all netdev_flow_key u64 values specified by 'MAP' */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(VALUE, KEY, MAP)           \
-    for (struct mf_for_each_in_map_aux aux__                       \
-             = { (KEY)->mf.inline_values, (KEY)->mf.map, MAP };    \
-         mf_get_next_in_map(&aux__, &(VALUE));                     \
-        )
+/* Iterate through netdev_flow_key TNL u64 values specified by 'MAPS'. */
+#define NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(VALUE, KEY, MAPS)   \
+    MINIFLOW_FOR_EACH_IN_TNL_MAP(VALUE, &(KEY)->mf, MAPS)
+
+/* Iterate through netdev_flow_key PKT u64 values specified by 'MAPS'. */
+#define NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(VALUE, KEY, MAPS)   \
+    MINIFLOW_FOR_EACH_IN_PKT_MAP(VALUE, &(KEY)->mf, MAPS)
 
 /* Returns a hash value for the bits of 'key' where there are 1-bits in
  * 'mask'. */
@@ -1652,15 +1667,18 @@ static inline uint32_t
 netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
                              const struct netdev_flow_key *mask)
 {
-    const uint64_t *p = mask->mf.inline_values;
+    const uint64_t *p = miniflow_get_values(&mask->mf);
     uint32_t hash = 0;
     uint64_t key_u64;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(key_u64, key, mask->mf.map) {
+    NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(key_u64, key, mask->mf) {
+        hash = hash_add64(hash, key_u64 & *p++);
+    }
+    NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(key_u64, key, mask->mf) {
         hash = hash_add64(hash, key_u64 & *p++);
     }
 
-    return hash_finish(hash, (p - mask->mf.inline_values) * 8);
+    return hash_finish(hash, (p - miniflow_get_values(&mask->mf)) * 8);
 }
 
 static inline bool
@@ -1825,8 +1843,7 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         struct odp_flow_key_parms odp_parms = {
             .flow = &netdev_flow->flow,
             .mask = &wc.masks,
-            .recirc = true,
-            .max_mpls_depth = SIZE_MAX,
+            .support = dp_netdev_support,
         };
 
         miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
@@ -1898,6 +1915,7 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         for (id = 0; id < MFF_N_IDS; ++id) {
             /* Skip registers and metadata. */
             if (!(id >= MFF_REG0 && id < MFF_REG0 + FLOW_N_REGS)
+                && !(id >= MFF_XREG0 && id < MFF_XREG0 + FLOW_N_XREGS)
                 && id != MFF_METADATA) {
                 const struct mf_field *mf = mf_from_id(id);
                 if (mf_are_prereqs_ok(mf, flow)) {
@@ -1914,7 +1932,6 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
      * mask->in_port.ofp_port, which only covers half of the 32-bit datapath
      * port number mask->in_port.odp_port. */
     mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
-
     return 0;
 }
 
@@ -1991,7 +2008,8 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 
     netdev_flow_mask_init(&mask, match);
     /* Make sure wc does not have metadata. */
-    ovs_assert(!(mask.mf.map & (MINIFLOW_MAP(metadata) | MINIFLOW_MAP(regs))));
+    ovs_assert(!(mask.mf.pkt_map
+                 & (MINIFLOW_PKT_MAP(metadata) | MINIFLOW_PKT_MAP(regs))));
 
     /* Do not allocate extra space. */
     flow = xmalloc(sizeof *flow - sizeof flow->cr.flow.mf + mask.len);
@@ -2540,7 +2558,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
 
         /* XXX: initialize md in netdev implementation. */
         for (i = 0; i < cnt; i++) {
-            packets[i]->md = port->md;
+            pkt_metadata_init(&packets[i]->md, port->port_no);
         }
         cycles_count_start(pmd);
         dp_netdev_input(pmd, packets, cnt);
@@ -3031,7 +3049,7 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
             .flow = flow,
             .mask = &wc->masks,
             .odp_in_port = flow->in_port.odp_port,
-            .recirc = true,
+            .support = dp_netdev_support,
         };
 
         ofpbuf_init(&key, 0);
@@ -3165,7 +3183,6 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
     struct netdev_flow_key key;
     size_t i, notfound_cnt = 0;
 
-    miniflow_initialize(&key.mf, key.buf);
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
 
@@ -3222,7 +3239,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
     for (i = 0; i < cnt; i++) {
         /* Key length is needed in all the cases, hash computed on demand. */
-        keys[i].len = netdev_flow_key_size(count_1bits(keys[i].mf.map));
+        keys[i].len = netdev_flow_key_size(miniflow_n_values(&keys[i].mf));
     }
     any_miss = !dpcls_lookup(&pmd->cls, keys, rules, cnt);
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
@@ -3652,12 +3669,12 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 
     /* Remove old port. */
-    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->md.in_port.odp_port));
+    cmap_remove(&dp->ports, &old_port->node, hash_port_no(old_port->port_no));
     ovsrcu_postpone(free, old_port);
 
     /* Insert new port (cmap semantics mean we cannot re-insert 'old_port'). */
     new_port = xmemdup(old_port, sizeof *old_port);
-    new_port->md.in_port.odp_port = port_no;
+    new_port->port_no = port_no;
     cmap_insert(&dp->ports, &new_port->node, hash_port_no(port_no));
 
     seq_change(dp->port_seq);
@@ -3688,7 +3705,7 @@ dpif_dummy_delete_port(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ovs_mutex_lock(&dp->port_mutex);
     if (get_port_by_name(dp, argv[2], &port)) {
         unixctl_command_reply_error(conn, "unknown port");
-    } else if (port->md.in_port.odp_port == ODPP_LOCAL) {
+    } else if (port->port_no == ODPP_LOCAL) {
         unixctl_command_reply_error(conn, "can't delete local port");
     } else {
         do_del_port(dp, port);
@@ -3786,6 +3803,7 @@ dpcls_destroy(struct dpcls *cls)
         struct dpcls_subtable *subtable;
 
         CMAP_FOR_EACH (subtable, cmap_node, &cls->subtables_map) {
+            ovs_assert(cmap_count(&subtable->rules) == 0);
             dpcls_destroy_subtable(cls, subtable);
         }
         cmap_destroy(&cls->subtables_map);
@@ -3852,19 +3870,22 @@ dpcls_remove(struct dpcls *cls, struct dpcls_rule *rule)
     }
 }
 
-/* Returns true if 'target' satisifies 'key' in 'mask', that is, if each 1-bit
- * in 'mask' the values in 'key' and 'target' are the same.
- *
- * Note: 'key' and 'mask' have the same mask, and 'key' is already masked. */
+/* Returns true if 'target' satisfies 'key' in 'mask', that is, if each 1-bit
+ * in 'mask' the values in 'key' and 'target' are the same. */
 static inline bool
 dpcls_rule_matches_key(const struct dpcls_rule *rule,
                        const struct netdev_flow_key *target)
 {
-    const uint64_t *keyp = rule->flow.mf.inline_values;
-    const uint64_t *maskp = rule->mask->mf.inline_values;
+    const uint64_t *keyp = miniflow_get_values(&rule->flow.mf);
+    const uint64_t *maskp = miniflow_get_values(&rule->mask->mf);
     uint64_t target_u64;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_MAP(target_u64, target, rule->flow.mf.map) {
+    NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(target_u64, target, rule->flow.mf) {
+        if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
+            return false;
+        }
+    }
+    NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(target_u64, target, rule->flow.mf) {
         if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
             return false;
         }

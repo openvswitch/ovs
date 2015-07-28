@@ -225,6 +225,8 @@ match_set_tun_flags(struct match *match, uint16_t flags)
 void
 match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask)
 {
+    mask &= FLOW_TNL_PUB_F_MASK;
+
     match->wc.masks.tunnel.flags = mask;
     match->flow.tunnel.flags = flags & mask;
 }
@@ -899,7 +901,10 @@ format_flow_tunnel(struct ds *s, const struct match *match)
         ds_put_format(s, "tun_ttl=%"PRIu8",", tnl->ip_ttl);
     }
     if (wc->masks.tunnel.flags) {
-        format_flags(s, flow_tun_flag_to_string, tnl->flags, '|');
+        format_flags_masked(s, "tun_flags", flow_tun_flag_to_string,
+                            tnl->flags,
+                            wc->masks.tunnel.flags & FLOW_TNL_F_MASK,
+                            FLOW_TNL_F_MASK);
         ds_put_char(s, ',');
     }
     tun_metadata_match_format(s, match);
@@ -918,7 +923,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 32);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);
@@ -1150,20 +1155,9 @@ match_format(const struct match *match, struct ds *s, int priority)
         format_be16_masked(s, "tp_dst", f->tp_dst, wc->masks.tp_dst);
     }
     if (is_ip_any(f) && f->nw_proto == IPPROTO_TCP && wc->masks.tcp_flags) {
-        uint16_t mask = TCP_FLAGS(wc->masks.tcp_flags);
-
-        if (mask == TCP_FLAGS(OVS_BE16_MAX)) {
-            ds_put_cstr(s, "tcp_flags=");
-            if (f->tcp_flags) {
-                format_flags(s, packet_tcp_flag_to_string, ntohs(f->tcp_flags),
-                             '|');
-            } else {
-                ds_put_cstr(s, "0"); /* Zero flags. */
-            }
-        } else if (mask) {
-            format_flags_masked(s, "tcp_flags", packet_tcp_flag_to_string,
-                                ntohs(f->tcp_flags), mask);
-        }
+        format_flags_masked(s, "tcp_flags", packet_tcp_flag_to_string,
+                            ntohs(f->tcp_flags), TCP_FLAGS(wc->masks.tcp_flags),
+                            TCP_FLAGS(OVS_BE16_MAX));
     }
 
     if (s->length > start_len) {
@@ -1195,8 +1189,13 @@ match_print(const struct match *match)
 void
 minimatch_init(struct minimatch *dst, const struct match *src)
 {
-    minimask_init(&dst->mask, &src->wc);
-    miniflow_init_with_minimask(&dst->flow, &src->flow, &dst->mask);
+    struct miniflow tmp;
+
+    miniflow_map_init(&tmp, &src->wc.masks);
+    /* Allocate two consecutive miniflows. */
+    miniflow_alloc(dst->flows, 2, &tmp);
+    miniflow_init(dst->flow, &src->flow);
+    minimask_init(dst->mask, &src->wc);
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
@@ -1204,8 +1203,13 @@ minimatch_init(struct minimatch *dst, const struct match *src)
 void
 minimatch_clone(struct minimatch *dst, const struct minimatch *src)
 {
-    miniflow_clone(&dst->flow, &src->flow);
-    minimask_clone(&dst->mask, &src->mask);
+    /* Allocate two consecutive miniflows. */
+    size_t data_size = miniflow_alloc(dst->flows, 2, &src->mask->masks);
+
+    memcpy(miniflow_values(dst->flow),
+           miniflow_get_values(src->flow), data_size);
+    memcpy(miniflow_values(&dst->mask->masks),
+           miniflow_get_values(&src->mask->masks), data_size);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.  The caller must
@@ -1213,8 +1217,8 @@ minimatch_clone(struct minimatch *dst, const struct minimatch *src)
 void
 minimatch_move(struct minimatch *dst, struct minimatch *src)
 {
-    miniflow_move(&dst->flow, &src->flow);
-    minimask_move(&dst->mask, &src->mask);
+    dst->flow = src->flow;
+    dst->mask = src->mask;
 }
 
 /* Frees any memory owned by 'match'.  Does not free the storage in which
@@ -1222,16 +1226,15 @@ minimatch_move(struct minimatch *dst, struct minimatch *src)
 void
 minimatch_destroy(struct minimatch *match)
 {
-    miniflow_destroy(&match->flow);
-    minimask_destroy(&match->mask);
+    free(match->flow);
 }
 
 /* Initializes 'dst' as a copy of 'src'. */
 void
 minimatch_expand(const struct minimatch *src, struct match *dst)
 {
-    miniflow_expand(&src->flow, &dst->flow);
-    minimask_expand(&src->mask, &dst->wc);
+    miniflow_expand(src->flow, &dst->flow);
+    minimask_expand(src->mask, &dst->wc);
     memset(&dst->tun_md, 0, sizeof dst->tun_md);
 }
 
@@ -1239,8 +1242,8 @@ minimatch_expand(const struct minimatch *src, struct match *dst)
 bool
 minimatch_equal(const struct minimatch *a, const struct minimatch *b)
 {
-    return (miniflow_equal(&a->flow, &b->flow)
-            && minimask_equal(&a->mask, &b->mask));
+    return minimask_equal(a->mask, b->mask)
+        && miniflow_equal(a->flow, b->flow);
 }
 
 /* Returns true if 'target' satisifies 'match', that is, if each bit for which
@@ -1254,11 +1257,11 @@ minimatch_matches_flow(const struct minimatch *match,
                        const struct flow *target)
 {
     const uint64_t *target_u64 = (const uint64_t *) target;
-    const uint64_t *flowp = miniflow_get_values(&match->flow);
-    const uint64_t *maskp = miniflow_get_values(&match->mask.masks);
-    int idx;
+    const uint64_t *flowp = miniflow_get_values(match->flow);
+    const uint64_t *maskp = miniflow_get_values(&match->mask->masks);
+    size_t idx;
 
-    MAP_FOR_EACH_INDEX(idx, match->flow.map) {
+    MAPS_FOR_EACH_INDEX(idx, *match->flow) {
         if ((*flowp++ ^ target_u64[idx]) & *maskp++) {
             return false;
         }

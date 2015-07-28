@@ -1513,6 +1513,11 @@ OvsDeleteFlowTable(OVS_DATAPATH *datapath)
     DeleteAllFlows(datapath);
     OvsFreeMemoryWithTag(datapath->flowTable, OVS_FLOW_POOL_TAG);
     datapath->flowTable = NULL;
+
+    if (datapath->lock == NULL) {
+        return NDIS_STATUS_SUCCESS;
+    }
+
     NdisFreeRWLock(datapath->lock);
 
     return NDIS_STATUS_SUCCESS;
@@ -1543,6 +1548,10 @@ OvsAllocateFlowTable(OVS_DATAPATH *datapath,
         InitializeListHead(bucket);
     }
     datapath->lock = NdisAllocateRWLock(switchContext->NdisFilterHandle);
+
+    if (!datapath->lock) {
+        return NDIS_STATUS_RESOURCES;
+    }
 
     return NDIS_STATUS_SUCCESS;
 }
@@ -2163,7 +2172,6 @@ HandleFlowPut(OvsFlowPut *put,
 
         status = OvsPrepareFlow(&KernelFlow, put, hash);
         if (status != STATUS_SUCCESS) {
-            FreeFlow(KernelFlow);
             return STATUS_UNSUCCESSFUL;
         }
 

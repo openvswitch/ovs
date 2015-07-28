@@ -62,20 +62,17 @@ Prints to the console statistics for each of the flow tables used by
 \fBdump\-table\-features \fIswitch\fR
 Prints to the console features for each of the flow tables used by
 \fIswitch\fR.
-.
-.IP "\fBmod\-table \fIswitch\fR \fItable_id\fR  \fIflow_miss_handling\fR"
-An OpenFlow 1.0 switch looks up each packet that arrives at the switch
-in table 0, then in table 1 if there is no match in table 0, then in
-table 2, and so on until the packet finds a match in some table.
-Finally, if no match was found, the switch sends the packet to the
-controller
-.IP
-OpenFlow 1.1 and later offer more flexibility.  This command
-configures the flow table miss handling configuration for table
-\fItable_id\fR in \fIswitch\fR.  \fItable_id\fR may be an OpenFlow
-table number between 0 and 254, inclusive, or the keyword \fBALL\fR to
-modify all tables.  \fIflow_miss_handling\fR may be any one of the
-following:
+.TP
+\fBdump\-table\-desc \fIswitch\fR
+Prints to the console configuration for each of the flow tables used
+by \fIswitch\fR for OpenFlow 1.4+.
+.IP "\fBmod\-table \fIswitch\fR \fItable_id\fR \fIsetting\fR"
+This command configures flow table settings for OpenFlow table
+\fItable_id\fR within \fIswitch\fR.  The available settings depend on
+the OpenFlow version in use.  In OpenFlow 1.1 and 1.2 (which must be
+enabled with the \fB\-O\fR option) only, \fBmod\-table\fR configures
+behavior when no flow is found when a packet is looked up in a flow
+table.  The following \fIsetting\fR values are available:
 .RS
 .IP \fBdrop\fR
 Drop the packet.
@@ -86,6 +83,21 @@ tables other than the last one.)
 .IP \fBcontroller\fR
 Send to controller.  (This is how an OpenFlow 1.0 switch always
 handles packets that do not match any flow in the last table.)
+.RE
+.IP
+In OpenFlow 1.4 and later (which must be enabled with the \fB\-O\fR
+option) only, \fBmod\-table\fR configures the behavior when a
+controller attempts to add a flow to a flow table that is full.  The
+following \fIsetting\fR values are available:
+.RS
+.IP \fBevict\fR
+Delete some existing flow from the flow table, according to the
+algorithm described for the \fBFlow_Table\fR table in
+\fBovs-vswitchd.conf.db\fR(5).
+.IP \fBnoevict\fR
+Refuse to add the new flow.  (Eviction might still be enabled through
+the \fBoverflow_policy\fR oclumn in the \fBFlow_Table\fR table
+documented in \fBovs-vswitchd.conf.db\fR(5).)
 .RE
 .
 .TP
@@ -455,7 +467,7 @@ Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Unlike other \fBovs\-ofctl\fR commands, if
 \fIswitch\fR is the name of a bridge, then the \fBsnoop\fR command
 connects to a Unix domain socket named
-\fB@RUNDIR@/\fIbridge\fB.snoop\fR.  \fBovs\-vswitchd\fR listens on
+\fB@RUNDIR@/\fIswitch\fB.snoop\fR.  \fBovs\-vswitchd\fR listens on
 such a socket for each bridge and sends to it all of the OpenFlow
 messages sent to or received from its configured OpenFlow controller.
 Thus, this command can be used to view OpenFlow protocol activity
@@ -1137,6 +1149,26 @@ if \fImask\fR is specified, then a 1-bit in \fImask\fR indicates that the
 corresponding bit in \fItunnel-id\fR must match exactly, and a 0-bit
 wildcards that bit.
 .
+.IP \fBtun_flags=\fIflags\fR
+Matches flags indicating various aspects of the tunnel encapsulation. Currently,
+there is only one flag defined:
+.IP
+\fBoam\fR: The tunnel protocol indicated that this is an OAM control packet.
+.IP
+Flags can be prefixed by \fB+\fR or \fB-\fR to indicate that the flag should
+be matched as either present or not present, respectively. In addition, flags
+can be specified without a prefix and separated by \fB|\fR to indicate an exact
+match.
+.IP
+Note that it is possible for newer version of Open vSwitch to introduce
+additional flags with varying meaning. It is therefore not recommended to use
+an exact match on this field since the behavior of these new flags is unknown
+and should be ignored.
+.IP
+For non-tunneled packets, the value is 0.
+.IP
+This field was introduced in Open vSwitch 2.5.
+.
 .IP \fBtun_src=\fIip\fR[\fB/\fInetmask\fR]
 .IQ \fBtun_dst=\fIip\fR[\fB/\fInetmask\fR]
 Matches tunnel IPv4 source (or destination) address \fIip\fR. Only packets
@@ -1607,8 +1639,32 @@ numbered 0 through \fIn_links\fR minus 1, and stores the link into
 \fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as
 described above.
 .IP
-Currently, \fIfields\fR must be either \fBeth_src\fR or
-\fBsymmetric_l4\fR and \fIalgorithm\fR must be one of \fBmodulo_n\fR,
+\fIfields\fR must be one of the following:
+.RS
+.IP \fBeth_src\fR
+Hashes Ethernet source address only.
+.IP \fBsymmetric_l4\fR
+Hashes Ethernet source, destination, and type, VLAN ID, IPv4/IPv6
+source, destination, and protocol, and TCP or SCTP (but not UDP)
+ports.  The hash is computed so that pairs of corresponding flows in
+each direction hash to the same value, in environments where L2 paths
+are the same in each direction.  UDP ports are not included in the
+hash to support protocols such as VXLAN that use asymmetric ports in
+each direction.
+.IP \fBsymmetric_l3l4\fR
+Hashes IPv4/IPv6 source, destination, and protocol, and TCP or SCTP
+(but not UDP) ports.  Like \fBsymmetric_l4\fR, this is a symmetric
+hash, but by excluding L2 headers it is more effective in environments
+with asymmetric L2 paths (e.g. paths involving VRRP IP addresses on a
+router).  Not an effective hash function for protocols other than IPv4
+and IPv6, which hash to a constant zero.
+.IP \fBsymmetric_l3l4+udp\fR
+Like \fBsymmetric_l3l4+udp\fR, but UDP ports are included in the hash.
+This is a more effective hash when asymmetric UDP protocols such as
+VXLAN are not a consideration.
+.RE
+.IP
+\fIalgorithm\fR must be one of \fBmodulo_n\fR,
 \fBhash_threshold\fR, \fBhrw\fR, and \fBiter_hash\fR.  Only
 the \fBiter_hash\fR algorithm uses \fIarg\fR.
 .IP
@@ -1621,8 +1677,8 @@ slaves represented as \fIslave_type\fR.  Currently the only supported
 \fIslave_type\fR is \fBofport\fR.  Thus, each \fIs1\fR through \fIsN\fR should
 be an OpenFlow port number. Outputs to the selected slave.
 .IP
-Currently, \fIfields\fR must be either \fBeth_src\fR or \fBsymmetric_l4\fR and
-\fIalgorithm\fR must be one of \fBhrw\fR and \fBactive_backup\fR.
+Currently, \fIfields\fR must be either \fBeth_src\fR, \fBsymmetric_l4\fR, \fBsymmetric_l3l4\fR, or \fBsymmetric_l3l4+udp\fR, 
+and \fIalgorithm\fR must be one of \fBhrw\fR and \fBactive_backup\fR.
 .IP
 Example: \fBbundle(eth_src,0,hrw,ofport,slaves:4,8)\fR uses an Ethernet source
 hash with basis 0, to select between OpenFlow ports 4 and 8 using the Highest

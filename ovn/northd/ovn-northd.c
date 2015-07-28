@@ -281,139 +281,118 @@ build_pipeline(struct northd_context *ctx)
     }
 
     /* Table 0: Ingress port security. */
-    const struct nbrec_logical_port *lport;
-    NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
-        struct ds match = DS_EMPTY_INITIALIZER;
-        ds_put_cstr(&match, "inport == ");
-        json_string_escape(lport->name, &match);
-        build_port_security("eth.src",
-                            lport->port_security, lport->n_port_security,
-                            &match);
-        pipeline_add(&pc, lport->lswitch, 0, 50, ds_cstr(&match),
-                     lport_is_enabled(lport) ? "next;" : "drop;");
-        ds_destroy(&match);
-    }
-
-    /* Table 1: Destination lookup, broadcast and multicast handling (priority
-     * 100). */
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
-        struct ds actions;
-
-        ds_init(&actions);
-        NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
-            if (lport->lswitch == lswitch && lport_is_enabled(lport)) {
-                ds_put_cstr(&actions, "outport = ");
-                json_string_escape(lport->name, &actions);
-                ds_put_cstr(&actions, "; next; ");
-            }
+        for (size_t i = 0; i < lswitch->n_ports; i++) {
+            const struct nbrec_logical_port *lport = lswitch->ports[i];
+            struct ds match = DS_EMPTY_INITIALIZER;
+            ds_put_cstr(&match, "inport == ");
+            json_string_escape(lport->name, &match);
+            build_port_security("eth.src",
+                                lport->port_security, lport->n_port_security,
+                                &match);
+            pipeline_add(&pc, lswitch, 0, 50, ds_cstr(&match),
+                         lport_is_enabled(lport) ? "next;" : "drop;");
+            ds_destroy(&match);
         }
-        ds_chomp(&actions, ' ');
-
-        pipeline_add(&pc, lswitch, 1, 100, "eth.dst[40]", ds_cstr(&actions));
-        ds_destroy(&actions);
     }
 
-    /* Table 1: Destination lookup, unicast handling (priority 50),  */
-    struct unknown_actions {
-        struct hmap_node hmap_node;
-        const struct nbrec_logical_switch *ls;
-        struct ds actions;
-    };
-    struct hmap unknown_actions = HMAP_INITIALIZER(&unknown_actions);
-    NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
-        lswitch = lport->lswitch;
-        for (size_t i = 0; i < lport->n_macs; i++) {
-            uint8_t mac[ETH_ADDR_LEN];
+    /* Table 1: Destination lookup:
+     *
+     *   - Broadcast and multicast handling (priority 100).
+     *   - Unicast handling (priority 50).
+     *   - Unknown unicast address handling (priority 0).
+     *   */
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        struct ds bcast;        /* Actions for broadcast on 'lswitch'. */
+        struct ds unknown;      /* Actions for unknown MACs on 'lswitch'. */
 
-            if (eth_addr_from_string(lport->macs[i], mac)) {
-                struct ds match, actions;
+        ds_init(&bcast);
+        ds_init(&unknown);
+        for (size_t i = 0; i < lswitch->n_ports; i++) {
+            const struct nbrec_logical_port *lport = lswitch->ports[i];
 
-                ds_init(&match);
-                ds_put_format(&match, "eth.dst == %s", lport->macs[i]);
+            ds_put_cstr(&bcast, "outport = ");
+            json_string_escape(lport->name, &bcast);
+            ds_put_cstr(&bcast, "; next; ");
 
-                ds_init(&actions);
-                ds_put_cstr(&actions, "outport = ");
-                json_string_escape(lport->name, &actions);
-                ds_put_cstr(&actions, "; next;");
-                pipeline_add(&pc, lswitch, 1, 50,
-                             ds_cstr(&match), ds_cstr(&actions));
-                ds_destroy(&actions);
-                ds_destroy(&match);
-            } else if (!strcmp(lport->macs[i], "unknown")) {
-                const struct uuid *uuid = &lswitch->header_.uuid;
-                struct unknown_actions *ua = NULL;
-                struct unknown_actions *iter;
-                HMAP_FOR_EACH_WITH_HASH (iter, hmap_node, uuid_hash(uuid),
-                                         &unknown_actions) {
-                    if (uuid_equals(&iter->ls->header_.uuid, uuid)) {
-                        ua = iter;
-                        break;
-                    }
-                }
-                if (!ua) {
-                    ua = xmalloc(sizeof *ua);
-                    hmap_insert(&unknown_actions, &ua->hmap_node,
-                                uuid_hash(uuid));
-                    ua->ls = lswitch;
-                    ds_init(&ua->actions);
+            for (size_t j = 0; j < lport->n_macs; j++) {
+                const char *s = lport->macs[j];
+                uint8_t mac[ETH_ADDR_LEN];
+
+                if (eth_addr_from_string(s, mac)) {
+                    struct ds match, unicast;
+
+                    ds_init(&match);
+                    ds_put_format(&match, "eth.dst == %s", s);
+
+                    ds_init(&unicast);
+                    ds_put_cstr(&unicast, "outport = ");
+                    json_string_escape(lport->name, &unicast);
+                    ds_put_cstr(&unicast, "; next;");
+                    pipeline_add(&pc, lswitch, 1, 50,
+                                 ds_cstr(&match), ds_cstr(&unicast));
+                    ds_destroy(&unicast);
+                    ds_destroy(&match);
+                } else if (!strcmp(s, "unknown")) {
+                    ds_put_cstr(&unknown, "outport = ");
+                    json_string_escape(lport->name, &unknown);
+                    ds_put_cstr(&unknown, "; next; ");
                 } else {
-                    ds_put_char(&ua->actions, ' ');
+                    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+
+                    VLOG_INFO_RL(&rl, "%s: invalid syntax '%s' in macs column",
+                                 lport->name, s);
                 }
-
-                ds_put_cstr(&ua->actions, "outport = ");
-                json_string_escape(lport->name, &ua->actions);
-                ds_put_cstr(&ua->actions, "; next;");
-            } else {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
-                VLOG_INFO_RL(&rl, "%s: invalid syntax '%s' in macs column",
-                             lport->name, lport->macs[i]);
             }
         }
-    }
 
-    /* Table 1: Destination lookup for unknown MACs (priority 0). */
-    struct unknown_actions *ua, *next_ua;
-    HMAP_FOR_EACH_SAFE (ua, next_ua, hmap_node, &unknown_actions) {
-        pipeline_add(&pc, ua->ls, 1, 0, "1", ds_cstr(&ua->actions));
-        hmap_remove(&unknown_actions, &ua->hmap_node);
-        ds_destroy(&ua->actions);
-        free(ua);
+        ds_chomp(&bcast, ' ');
+        pipeline_add(&pc, lswitch, 1, 100, "eth.dst[40]", ds_cstr(&bcast));
+        ds_destroy(&bcast);
+
+        if (unknown.length) {
+            ds_chomp(&unknown, ' ');
+            pipeline_add(&pc, lswitch, 1, 0, "1", ds_cstr(&unknown));
+        }
+        ds_destroy(&unknown);
     }
-    hmap_destroy(&unknown_actions);
 
     /* Table 2: ACLs. */
-    const struct nbrec_acl *acl;
-    NBREC_ACL_FOR_EACH (acl, ctx->ovnnb_idl) {
-        const char *action;
-
-        action = (!strcmp(acl->action, "allow") ||
-                  !strcmp(acl->action, "allow-related"))
-                      ? "next;" : "drop;";
-        pipeline_add(&pc, acl->lswitch, 2, acl->priority, acl->match, action);
-    }
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        for (size_t i = 0; i < lswitch->n_acls; i++) {
+            const struct nbrec_acl *acl = lswitch->acls[i];
+
+            NBREC_ACL_FOR_EACH (acl, ctx->ovnnb_idl) {
+                pipeline_add(&pc, lswitch, 2, acl->priority, acl->match,
+                             (!strcmp(acl->action, "allow") ||
+                              !strcmp(acl->action, "allow-related")
+                              ? "next;" : "drop;"));
+            }
+        }
+
         pipeline_add(&pc, lswitch, 2, 0, "1", "next;");
     }
 
     /* Table 3: Egress port security. */
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
         pipeline_add(&pc, lswitch, 3, 100, "eth.dst[40]", "output;");
-    }
-    NBREC_LOGICAL_PORT_FOR_EACH (lport, ctx->ovnnb_idl) {
-        struct ds match;
 
-        ds_init(&match);
-        ds_put_cstr(&match, "outport == ");
-        json_string_escape(lport->name, &match);
-        build_port_security("eth.dst",
-                            lport->port_security, lport->n_port_security,
-                            &match);
+        for (size_t i = 0; i < lswitch->n_ports; i++) {
+            const struct nbrec_logical_port *lport = lswitch->ports[i];
+            struct ds match;
 
-        pipeline_add(&pc, lport->lswitch, 3, 50, ds_cstr(&match),
-                     lport_is_enabled(lport) ? "output;" : "drop;");
+            ds_init(&match);
+            ds_put_cstr(&match, "outport == ");
+            json_string_escape(lport->name, &match);
+            build_port_security("eth.dst",
+                                lport->port_security, lport->n_port_security,
+                                &match);
 
-        ds_destroy(&match);
+            pipeline_add(&pc, lswitch, 3, 50, ds_cstr(&match),
+                         lport_is_enabled(lport) ? "output;" : "drop;");
+
+            ds_destroy(&match);
+        }
     }
 
     /* Delete any existing Pipeline rows that were not re-generated.  */
@@ -504,7 +483,6 @@ static void
 set_bindings(struct northd_context *ctx)
 {
     const struct sbrec_binding *binding;
-    const struct nbrec_logical_port *lport;
 
     /*
      * We will need to look up a binding for every logical port.  We don't want
@@ -533,72 +511,74 @@ set_bindings(struct northd_context *ctx)
                     hash_int(binding->tunnel_key, 0));
     }
 
-    NBREC_LOGICAL_PORT_FOR_EACH(lport, ctx->ovnnb_idl) {
-        struct binding_hash_node *hash_node;
-        binding = NULL;
-        HMAP_FOR_EACH_WITH_HASH(hash_node, lp_node,
-                                hash_string(lport->name, 0), &lp_hmap) {
-            if (!strcmp(lport->name, hash_node->binding->logical_port)) {
-                binding = hash_node->binding;
-                break;
-            }
-        }
+    const struct nbrec_logical_switch *lswitch;
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
+        const struct uuid *logical_datapath = &lswitch->header_.uuid;
 
-        struct uuid logical_datapath;
-        if (lport->lswitch) {
-            logical_datapath = lport->lswitch->header_.uuid;
-        } else {
-            uuid_zero(&logical_datapath);
-        }
-
-        if (binding) {
-            /* We found an existing binding for this logical port.  Update its
-             * contents. */
-
-            hmap_remove(&lp_hmap, &hash_node->lp_node);
-
-            if (!macs_equal(binding->mac, binding->n_mac,
-                        lport->macs, lport->n_macs)) {
-                sbrec_binding_set_mac(binding,
-                        (const char **) lport->macs, lport->n_macs);
-            }
-            if (!parents_equal(binding, lport)) {
-                sbrec_binding_set_parent_port(binding, lport->parent_name);
-            }
-            if (!tags_equal(binding, lport)) {
-                sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
-            }
-            if (!uuid_equals(&binding->logical_datapath, &logical_datapath)) {
-                sbrec_binding_set_logical_datapath(binding,
-                                                    logical_datapath);
-            }
-        } else {
-            /* There is no binding for this logical port, so create one. */
-
-            uint16_t tunnel_key = choose_tunnel_key(&tk_hmap);
-            if (!tunnel_key) {
-                continue;
+        for (size_t i = 0; i < lswitch->n_ports; i++) {
+            const struct nbrec_logical_port *lport = lswitch->ports[i];
+            struct binding_hash_node *hash_node;
+            binding = NULL;
+            HMAP_FOR_EACH_WITH_HASH(hash_node, lp_node,
+                                    hash_string(lport->name, 0), &lp_hmap) {
+                if (!strcmp(lport->name, hash_node->binding->logical_port)) {
+                    binding = hash_node->binding;
+                    break;
+                }
             }
 
-            binding = sbrec_binding_insert(ctx->ovnsb_txn);
-            sbrec_binding_set_logical_port(binding, lport->name);
-            sbrec_binding_set_mac(binding,
-                    (const char **) lport->macs, lport->n_macs);
-            if (lport->parent_name && lport->n_tag > 0) {
-                sbrec_binding_set_parent_port(binding, lport->parent_name);
-                sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
+            if (binding) {
+                /* We found an existing binding for this logical port.  Update
+                 * its contents. */
+
+                hmap_remove(&lp_hmap, &hash_node->lp_node);
+
+                if (!macs_equal(binding->mac, binding->n_mac,
+                                lport->macs, lport->n_macs)) {
+                    sbrec_binding_set_mac(binding, (const char **) lport->macs,
+                                          lport->n_macs);
+                }
+                if (!parents_equal(binding, lport)) {
+                    sbrec_binding_set_parent_port(binding, lport->parent_name);
+                }
+                if (!tags_equal(binding, lport)) {
+                    sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
+                }
+                if (!uuid_equals(&binding->logical_datapath,
+                                 logical_datapath)) {
+                    sbrec_binding_set_logical_datapath(binding,
+                                                       *logical_datapath);
+                }
+            } else {
+                /* There is no binding for this logical port, so create one. */
+
+                uint16_t tunnel_key = choose_tunnel_key(&tk_hmap);
+                if (!tunnel_key) {
+                    continue;
+                }
+
+                binding = sbrec_binding_insert(ctx->ovnsb_txn);
+                sbrec_binding_set_logical_port(binding, lport->name);
+                sbrec_binding_set_mac(binding, (const char **) lport->macs,
+                                      lport->n_macs);
+                if (lport->parent_name && lport->n_tag > 0) {
+                    sbrec_binding_set_parent_port(binding, lport->parent_name);
+                    sbrec_binding_set_tag(binding, lport->tag, lport->n_tag);
+                }
+
+                sbrec_binding_set_tunnel_key(binding, tunnel_key);
+                sbrec_binding_set_logical_datapath(binding, *logical_datapath);
+
+                /* Add the tunnel key to the tk_hmap so that we don't try to
+                 * use it for another port.  (We don't want it in the lp_hmap
+                 * because that would just get the Binding record deleted
+                 * later.) */
+                struct binding_hash_node *hash_node
+                    = xzalloc(sizeof *hash_node);
+                hash_node->binding = binding;
+                hmap_insert(&tk_hmap, &hash_node->tk_node,
+                            hash_int(binding->tunnel_key, 0));
             }
-
-            sbrec_binding_set_tunnel_key(binding, tunnel_key);
-            sbrec_binding_set_logical_datapath(binding, logical_datapath);
-
-            /* Add the tunnel key to the tk_hmap so that we don't try to use it
-             * for another port.  (We don't want it in the lp_hmap because that
-             * would just get the Binding record deleted later.) */
-            struct binding_hash_node *hash_node = xzalloc(sizeof *hash_node);
-            hash_node->binding = binding;
-            hmap_insert(&tk_hmap, &hash_node->tk_node,
-                        hash_int(binding->tunnel_key, 0));
         }
     }
 

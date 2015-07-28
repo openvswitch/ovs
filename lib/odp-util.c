@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,130 +235,11 @@ slow_path_reason_to_explanation(enum slow_path_reason reason)
 }
 
 static int
-parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
-            uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask)
+parse_odp_flags(const char *s, const char *(*bit_to_string)(uint32_t),
+                uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask)
 {
-    uint32_t result = 0;
-    int n;
-
-    /* Parse masked flags in numeric format? */
-    if (res_mask && ovs_scan(s, "%"SCNi32"/%"SCNi32"%n",
-                             res_flags, res_mask, &n) && n > 0) {
-        if (*res_flags & ~allowed || *res_mask & ~allowed) {
-            return -EINVAL;
-        }
-        return n;
-    }
-
-    n = 0;
-
-    if (res_mask && (*s == '+' || *s == '-')) {
-        uint32_t flags = 0, mask = 0;
-
-        /* Parse masked flags. */
-        while (s[0] != ')') {
-            bool set;
-            uint32_t bit;
-            int name_len;
-
-            if (s[0] == '+') {
-                set = true;
-            } else if (s[0] == '-') {
-                set = false;
-            } else {
-                return -EINVAL;
-            }
-            s++;
-            n++;
-
-            name_len = strcspn(s, "+-)");
-
-            for (bit = 1; bit; bit <<= 1) {
-                const char *fname = bit_to_string(bit);
-                size_t len;
-
-                if (!fname) {
-                    continue;
-                }
-
-                len = strlen(fname);
-                if (len != name_len) {
-                    continue;
-                }
-                if (!strncmp(s, fname, len)) {
-                    if (mask & bit) {
-                        /* bit already set. */
-                        return -EINVAL;
-                    }
-                    if (!(bit & allowed)) {
-                        return -EINVAL;
-                    }
-                    if (set) {
-                        flags |= bit;
-                    }
-                    mask |= bit;
-                    break;
-                }
-            }
-
-            if (!bit) {
-                return -EINVAL; /* Unknown flag name */
-            }
-            s += name_len;
-            n += name_len;
-        }
-
-        *res_flags = flags;
-        *res_mask = mask;
-        return n;
-    }
-
-    /* Parse unmasked flags.  If a flag is present, it is set, otherwise
-     * it is not set. */
-    while (s[n] != ')') {
-        unsigned long long int flags;
-        uint32_t bit;
-        int n0;
-
-        if (ovs_scan(&s[n], "%lli%n", &flags, &n0)) {
-            if (flags & ~allowed) {
-                return -EINVAL;
-            }
-            n += n0 + (s[n + n0] == ',');
-            result |= flags;
-            continue;
-        }
-
-        for (bit = 1; bit; bit <<= 1) {
-            const char *name = bit_to_string(bit);
-            size_t len;
-
-            if (!name) {
-                continue;
-            }
-
-            len = strlen(name);
-            if (!strncmp(s + n, name, len) &&
-                (s[n + len] == ',' || s[n + len] == ')')) {
-                if (!(bit & allowed)) {
-                    return -EINVAL;
-                }
-                result |= bit;
-                n += len + (s[n + len] == ',');
-                break;
-            }
-        }
-
-        if (!bit) {
-            return -EINVAL;
-        }
-    }
-
-    *res_flags = result;
-    if (res_mask) {
-        *res_mask = UINT32_MAX;
-    }
-    return n;
+    return parse_flags(s, bit_to_string, ')', NULL, NULL,
+                       res_flags, allowed, res_mask);
 }
 
 static void
@@ -369,6 +250,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
         [OVS_USERSPACE_ATTR_USERDATA] = { .type = NL_A_UNSPEC,
                                           .optional = true },
         [OVS_USERSPACE_ATTR_EGRESS_TUN_PORT] = { .type = NL_A_U32,
+                                                 .optional = true },
+        [OVS_USERSPACE_ATTR_ACTIONS] = { .type = NL_A_UNSPEC,
                                                  .optional = true },
     };
     struct nlattr *a[ARRAY_SIZE(ovs_userspace_policy)];
@@ -439,6 +322,10 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             }
             ds_put_char(ds, ')');
         }
+    }
+
+    if (a[OVS_USERSPACE_ATTR_ACTIONS]) {
+        ds_put_cstr(ds, ",actions");
     }
 
     tunnel_out_port_attr = a[OVS_USERSPACE_ATTR_EGRESS_TUN_PORT];
@@ -785,6 +672,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
     int n = -1;
     void *user_data = NULL;
     size_t user_data_size = 0;
+    bool include_actions = false;
 
     if (!ovs_scan(s, "userspace(pid=%"SCNi32"%n", &pid, &n)) {
         return -EINVAL;
@@ -823,9 +711,9 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.slow_path.unused = 0;
             cookie.slow_path.reason = 0;
 
-            res = parse_flags(&s[n], slow_path_reason_to_string,
-                              &cookie.slow_path.reason,
-                              SLOW_PATH_REASON_MASK, NULL);
+            res = parse_odp_flags(&s[n], slow_path_reason_to_string,
+                                  &cookie.slow_path.reason,
+                                  SLOW_PATH_REASON_MASK, NULL);
             if (res < 0 || s[n + res] != ')') {
                 return res;
             }
@@ -873,12 +761,22 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
 
     {
         int n1 = -1;
+        if (ovs_scan(&s[n], ",actions%n", &n1)) {
+            n += n1;
+            include_actions = true;
+        }
+    }
+
+    {
+        int n1 = -1;
         if (ovs_scan(&s[n], ",tunnel_out_port=%"SCNi32")%n",
                      &tunnel_out_port, &n1)) {
-            odp_put_userspace_action(pid, user_data, user_data_size, tunnel_out_port, actions);
+            odp_put_userspace_action(pid, user_data, user_data_size,
+                                     tunnel_out_port, include_actions, actions);
             return n + n1;
         } else if (s[n] == ')') {
-            odp_put_userspace_action(pid, user_data, user_data_size, ODPP_NONE, actions);
+            odp_put_userspace_action(pid, user_data, user_data_size,
+                                     ODPP_NONE, include_actions, actions);
             return n + 1;
         }
     }
@@ -1463,6 +1361,7 @@ odp_tun_key_from_attr__(const struct nlattr *attr,
 enum odp_key_fitness
 odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
 {
+    memset(tun, 0, sizeof *tun);
     return odp_tun_key_from_attr__(attr, NULL, 0, NULL, tun);
 }
 
@@ -1790,14 +1689,13 @@ format_tun_flags(struct ds *ds, const char *name, uint16_t key,
     bool mask_empty = mask && !*mask;
 
     if (verbose || !mask_empty) {
-        bool mask_full = !mask || (*mask & FLOW_TNL_F_MASK) == FLOW_TNL_F_MASK;
-
         ds_put_cstr(ds, name);
         ds_put_char(ds, '(');
-        if (!mask_full) { /* Partially masked. */
-            format_flags_masked(ds, NULL, flow_tun_flag_to_string, key, *mask);
+        if (mask) {
+            format_flags_masked(ds, NULL, flow_tun_flag_to_string, key,
+                                *mask & FLOW_TNL_F_MASK, FLOW_TNL_F_MASK);
         } else { /* Fully masked. */
-            format_flags(ds, flow_tun_flag_to_string, key, ',');
+            format_flags(ds, flow_tun_flag_to_string, key, '|');
         }
         ds_put_cstr(ds, "),");
     }
@@ -2276,10 +2174,11 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         if (!is_exact) {
             format_flags_masked(ds, NULL, packet_tcp_flag_to_string,
                                 ntohs(nl_attr_get_be16(a)),
-                                ntohs(nl_attr_get_be16(ma)));
+                                TCP_FLAGS(nl_attr_get_be16(ma)),
+                                TCP_FLAGS(OVS_BE16_MAX));
         } else {
             format_flags(ds, packet_tcp_flag_to_string,
-                         ntohs(nl_attr_get_be16(a)), ',');
+                         ntohs(nl_attr_get_be16(a)), '|');
         }
         break;
 
@@ -2679,8 +2578,8 @@ scan_tun_flags(const char *s, uint16_t *key, uint16_t *mask)
     uint32_t flags, fmask;
     int n;
 
-    n = parse_flags(s, flow_tun_flag_to_string, &flags,
-                    FLOW_TNL_F_MASK, mask ? &fmask : NULL);
+    n = parse_odp_flags(s, flow_tun_flag_to_string, &flags,
+                        FLOW_TNL_F_MASK, mask ? &fmask : NULL);
     if (n >= 0 && s[n] == ')') {
         *key = flags;
         if (mask) {
@@ -2697,8 +2596,8 @@ scan_tcp_flags(const char *s, ovs_be16 *key, ovs_be16 *mask)
     uint32_t flags, fmask;
     int n;
 
-    n = parse_flags(s, packet_tcp_flag_to_string, &flags,
-                    TCP_FLAGS(OVS_BE16_MAX), mask ? &fmask : NULL);
+    n = parse_odp_flags(s, packet_tcp_flag_to_string, &flags,
+                        TCP_FLAGS(OVS_BE16_MAX), mask ? &fmask : NULL);
     if (n >= 0) {
         *key = htons(flags);
         if (mask) {
@@ -3466,7 +3365,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
-    if (parms->recirc) {
+    if (parms->support.recirc) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
@@ -3541,7 +3440,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
         n = flow_count_mpls_labels(flow, NULL);
         if (export_mask) {
-            n = MIN(n, parms->max_mpls_depth);
+            n = MIN(n, parms->support.max_mpls_depth);
         }
         mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
                                             n * sizeof *mpls_key);
@@ -3666,7 +3565,7 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
         1u << OVS_KEY_ATTR_SKB_MARK | 1u << OVS_KEY_ATTR_TUNNEL |
         1u << OVS_KEY_ATTR_IN_PORT;
 
-    *md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+    pkt_metadata_init(md, ODPP_NONE);
 
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
         uint16_t type = nl_attr_type(nla);
@@ -4369,6 +4268,7 @@ size_t
 odp_put_userspace_action(uint32_t pid,
                          const void *userdata, size_t userdata_size,
                          odp_port_t tunnel_out_port,
+                         bool include_actions,
                          struct ofpbuf *odp_actions)
 {
     size_t userdata_ofs;
@@ -4398,6 +4298,9 @@ odp_put_userspace_action(uint32_t pid,
     if (tunnel_out_port != ODPP_NONE) {
         nl_msg_put_odp_port(odp_actions, OVS_USERSPACE_ATTR_EGRESS_TUN_PORT,
                             tunnel_out_port);
+    }
+    if (include_actions) {
+        nl_msg_put_flag(odp_actions, OVS_USERSPACE_ATTR_ACTIONS);
     }
     nl_msg_end_nested(odp_actions, offset);
 

@@ -1340,8 +1340,8 @@ dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
                            const struct dpif_flow_del *del,
                            struct dpif_netlink_flow *request)
 {
-    return dpif_netlink_init_flow_del__(dpif, del->key, del->key_len,
-                                        del->ufid, del->terse, request);
+    dpif_netlink_init_flow_del__(dpif, del->key, del->key_len,
+                                 del->ufid, del->terse, request);
 }
 
 struct dpif_netlink_flow_dump {
@@ -1969,6 +1969,7 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
         /* OVS_PACKET_CMD_ACTION only. */
         [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_UNSPEC, .optional = true },
         [OVS_PACKET_ATTR_EGRESS_TUN_KEY] = { .type = NL_A_NESTED, .optional = true },
+        [OVS_PACKET_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
     };
 
     struct ovs_header *ovs_header;
@@ -2005,6 +2006,7 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
     dpif_flow_hash(&dpif->dpif, upcall->key, upcall->key_len, &upcall->ufid);
     upcall->userdata = a[OVS_PACKET_ATTR_USERDATA];
     upcall->out_tun_key = a[OVS_PACKET_ATTR_EGRESS_TUN_KEY];
+    upcall->actions = a[OVS_PACKET_ATTR_ACTIONS];
 
     /* Allow overwriting the netlink attribute header without reallocating. */
     dp_packet_use_stub(&upcall->packet,

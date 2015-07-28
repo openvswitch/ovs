@@ -143,6 +143,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-lockfile \
 	tests/valgrind/test-multipath \
 	tests/valgrind/test-odp \
+	tests/valgrind/test-ofpbuf \
 	tests/valgrind/test-ovsdb \
 	tests/valgrind/test-packets \
 	tests/valgrind/test-random \
@@ -229,10 +230,8 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 	} >'$(srcdir)/package.m4'
 
 noinst_PROGRAMS += tests/test-ovsdb
-tests_test_ovsdb_SOURCES = \
-	tests/test-ovsdb.c \
-	tests/idltest.c \
-	tests/idltest.h
+tests_test_ovsdb_SOURCES = tests/test-ovsdb.c
+nodist_tests_test_ovsdb_SOURCES = tests/idltest.c tests/idltest.h
 EXTRA_DIST += tests/uuidfilt.pl tests/ovsdb-monitor-sort.pl
 tests_test_ovsdb_LDADD = ovsdb/libovsdb.la lib/libopenvswitch.la
 
@@ -281,6 +280,7 @@ tests_ovstest_SOURCES = \
 	tests/test-multipath.c \
 	tests/test-netflow.c \
 	tests/test-odp.c \
+	tests/test-ofpbuf.c \
 	tests/test-ovn.c \
 	tests/test-packets.c \
 	tests/test-random.c \

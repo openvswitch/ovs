@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ static void netflow_expire__(struct netflow *, struct netflow_flow *)
 static void netflow_run__(struct netflow *) OVS_REQUIRES(mutex);
 
 void
-netflow_mask_wc(struct flow *flow, struct flow_wildcards *wc)
+netflow_mask_wc(const struct flow *flow, struct flow_wildcards *wc)
 {
     if (flow->dl_type != htons(ETH_TYPE_IP)) {
         return;
@@ -276,7 +276,8 @@ netflow_expire__(struct netflow *nf, struct netflow_flow *nf_flow)
 }
 
 void
-netflow_flow_clear(struct netflow *nf, struct flow *flow) OVS_EXCLUDED(mutex)
+netflow_flow_clear(struct netflow *nf, const struct flow *flow)
+    OVS_EXCLUDED(mutex)
 {
     struct netflow_flow *nf_flow;
 

@@ -370,17 +370,28 @@ enum OVS_PACKED_ENUM mf_field_id {
 
     /* "tun_flags".
      *
-     * Combination of FLOW_TNL_F_* bitmapped flags that indicate properties of
-     * a tunneled packet.  Internal use only, not programmable from controller.
+     * Flags representing aspects of tunnel behavior.
+     *
+     * This field currently only has a single flag defined:
+     *
+     *   - NX_TUN_FLAG_OAM: The tunnel protocol indicated that this is an
+     *                      OAM control packet.
+     *
+     * The switch may reject matches against values that it is not aware of.
+     *
+     * Note that it is possible for newer version of Open vSwitch to
+     * introduce additional flags with varying meaning. It is therefore not
+     * recommended to use an exact match on this field since the behavior of
+     * these new flags is unknown and should be ignored.
      *
      * For non-tunneled packets, the value is 0.
      *
-     * Type: be16.
-     * Maskable: no.
+     * Type: be16 (low 1 bits).
+     * Maskable: bitwise.
      * Formatting: tunnel flags.
      * Prerequisites: none.
-     * Access: read-only.
-     * NXM: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_FLAGS(104) since v2.5.
      * OXM: none.
      */
     MFF_TUN_FLAGS,

@@ -225,6 +225,8 @@ ofctrl_recv(const struct ofpbuf *msg)
     case OFPTYPE_METER_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_DESC_REQUEST:
+    case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_BUNDLE_CONTROL:
     case OFPTYPE_BUNDLE_ADD_MESSAGE:
     case OFPTYPE_NXT_GENEVE_TABLE_MOD:
@@ -404,12 +406,12 @@ ofctrl_update_flows(void)
         if (!d) {
             /* Installed flow is no longer desirable.  Delete it from the
              * switch and from installed_flows. */
-            struct ofputil_flow_mod fm;
-            memset(&fm, 0, sizeof fm);
-            fm.match = i->match;
-            fm.priority = i->priority;
-            fm.table_id = i->table_id;
-            fm.command = OFPFC_DELETE_STRICT;
+            struct ofputil_flow_mod fm = {
+                .match = i->match,
+                .priority = i->priority,
+                .table_id = i->table_id,
+                .command = OFPFC_DELETE_STRICT,
+            };
             queue_flow_mod(&fm);
             ovn_flow_log(i, "removing");
 
@@ -419,14 +421,14 @@ ofctrl_update_flows(void)
             if (!ofpacts_equal(i->ofpacts, i->ofpacts_len,
                                d->ofpacts, d->ofpacts_len)) {
                 /* Update actions in installed flow. */
-                struct ofputil_flow_mod fm;
-                memset(&fm, 0, sizeof fm);
-                fm.match = i->match;
-                fm.priority = i->priority;
-                fm.table_id = i->table_id;
-                fm.ofpacts = d->ofpacts;
-                fm.ofpacts_len = d->ofpacts_len;
-                fm.command = OFPFC_MODIFY_STRICT;
+                struct ofputil_flow_mod fm = {
+                    .match = i->match,
+                    .priority = i->priority,
+                    .table_id = i->table_id,
+                    .ofpacts = d->ofpacts,
+                    .ofpacts_len = d->ofpacts_len,
+                    .command = OFPFC_MODIFY_STRICT,
+                };
                 queue_flow_mod(&fm);
                 ovn_flow_log(i, "updating");
 
@@ -449,14 +451,14 @@ ofctrl_update_flows(void)
     struct ovn_flow *d;
     HMAP_FOR_EACH_SAFE (d, next, hmap_node, &desired_flows) {
         /* Send flow_mod to add flow. */
-        struct ofputil_flow_mod fm;
-        memset(&fm, 0, sizeof fm);
-        fm.match = d->match;
-        fm.priority = d->priority;
-        fm.table_id = d->table_id;
-        fm.ofpacts = d->ofpacts;
-        fm.ofpacts_len = d->ofpacts_len;
-        fm.command = OFPFC_ADD;
+        struct ofputil_flow_mod fm = {
+            .match = d->match,
+            .priority = d->priority,
+            .table_id = d->table_id,
+            .ofpacts = d->ofpacts,
+            .ofpacts_len = d->ofpacts_len,
+            .command = OFPFC_ADD,
+        };
         queue_flow_mod(&fm);
         ovn_flow_log(d, "adding");
 

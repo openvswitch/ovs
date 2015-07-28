@@ -40,6 +40,7 @@
 #include "timeval.h"
 #include "openvswitch/vlog.h"
 #include "lib/odp-util.h"
+#include "lib/unaligned.h"
 #include "ofproto-provider.h"
 #include "lacp.h"
 
@@ -52,11 +53,26 @@ static struct ovs_mutex mutex;
 #define SFLOW_GC_SUBID_UNCLAIMED (uint32_t)-1
 static uint32_t sflow_global_counters_subid = SFLOW_GC_SUBID_UNCLAIMED;
 
+/*
+ * The enum dpif_sflow_tunnel_type is to declare the types supported
+ */
+enum dpif_sflow_tunnel_type {
+    DPIF_SFLOW_TUNNEL_UNKNOWN = 0,
+    DPIF_SFLOW_TUNNEL_VXLAN,
+    DPIF_SFLOW_TUNNEL_GRE,
+    DPIF_SFLOW_TUNNEL_GRE64,
+    DPIF_SFLOW_TUNNEL_LISP,
+    DPIF_SFLOW_TUNNEL_IPSEC_GRE,
+    DPIF_SFLOW_TUNNEL_IPSEC_GRE64,
+    DPIF_SFLOW_TUNNEL_GENEVE
+};
+
 struct dpif_sflow_port {
     struct hmap_node hmap_node; /* In struct dpif_sflow's "ports" hmap. */
     SFLDataSource_instance dsi; /* sFlow library's notion of port number. */
     struct ofport *ofport;      /* To retrive port stats. */
     odp_port_t odp_port;
+    enum dpif_sflow_tunnel_type tunnel_type;
 };
 
 struct dpif_sflow {
@@ -568,20 +584,76 @@ dpif_sflow_add_poller(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
     sfl_poller_set_bridgePort(poller, odp_to_u32(dsp->odp_port));
 }
 
+static enum dpif_sflow_tunnel_type
+dpif_sflow_tunnel_type(struct ofport *ofport) {
+    const char *type = netdev_get_type(ofport->netdev);
+    if (type) {
+	if (strcmp(type, "gre") == 0) {
+	    return DPIF_SFLOW_TUNNEL_GRE;
+	} else if (strcmp(type, "gre64") == 0) {
+	    return DPIF_SFLOW_TUNNEL_GRE64;
+	} else if (strcmp(type, "ipsec_gre") == 0) {
+	    return DPIF_SFLOW_TUNNEL_IPSEC_GRE;
+	} else if (strcmp(type, "ipsec_gre64") == 0) {
+	    return DPIF_SFLOW_TUNNEL_IPSEC_GRE64;
+	} else if (strcmp(type, "vxlan") == 0) {
+	    return DPIF_SFLOW_TUNNEL_VXLAN;
+	} else if (strcmp(type, "lisp") == 0) {
+	    return DPIF_SFLOW_TUNNEL_LISP;
+	} else if (strcmp(type, "geneve") == 0) {
+	    return DPIF_SFLOW_TUNNEL_GENEVE;
+	}
+    }
+    return DPIF_SFLOW_TUNNEL_UNKNOWN;
+}
+
+static uint8_t
+dpif_sflow_tunnel_proto(enum dpif_sflow_tunnel_type tunnel_type)
+{
+    /* Default to 0 (IPPROTO_IP), meaning "unknown". */
+    uint8_t ipproto = 0;
+    switch(tunnel_type) {
+
+    case DPIF_SFLOW_TUNNEL_GRE:
+    case DPIF_SFLOW_TUNNEL_GRE64:
+        ipproto = IPPROTO_GRE;
+        break;
+
+    case DPIF_SFLOW_TUNNEL_IPSEC_GRE:
+    case DPIF_SFLOW_TUNNEL_IPSEC_GRE64:
+        ipproto = IPPROTO_ESP;
+        break;
+
+    case DPIF_SFLOW_TUNNEL_VXLAN:
+    case DPIF_SFLOW_TUNNEL_LISP:
+    case DPIF_SFLOW_TUNNEL_GENEVE:
+        ipproto = IPPROTO_UDP;
+
+    case DPIF_SFLOW_TUNNEL_UNKNOWN:
+        break;
+    }
+    return ipproto;
+}
+
 void
 dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport,
                     odp_port_t odp_port) OVS_EXCLUDED(mutex)
 {
     struct dpif_sflow_port *dsp;
     int ifindex;
+    enum dpif_sflow_tunnel_type tunnel_type;
 
     ovs_mutex_lock(&mutex);
     dpif_sflow_del_port(ds, odp_port);
 
+    tunnel_type = dpif_sflow_tunnel_type(ofport);
     ifindex = netdev_get_ifindex(ofport->netdev);
 
-    if (ifindex <= 0) {
-        /* Not an ifindex port, so do not add a cross-reference to it here */
+    if (ifindex <= 0
+	&& tunnel_type == DPIF_SFLOW_TUNNEL_UNKNOWN) {
+        /* Not an ifindex port, and not a tunnel port either
+	 * so do not add a cross-reference to it here.
+	 */
         goto out;
     }
 
@@ -589,12 +661,18 @@ dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport,
     dsp = xmalloc(sizeof *dsp);
     dsp->ofport = ofport;
     dsp->odp_port = odp_port;
-    SFL_DS_SET(dsp->dsi, SFL_DSCLASS_IFINDEX, ifindex, 0);
+    dsp->tunnel_type = tunnel_type;
     hmap_insert(&ds->ports, &dsp->hmap_node, hash_odp_port(odp_port));
 
-    /* Add poller. */
-    if (ds->sflow_agent) {
-        dpif_sflow_add_poller(ds, dsp);
+    if (ifindex > 0) {
+	/* Add poller for ports that have ifindex. */
+	SFL_DS_SET(dsp->dsi, SFL_DSCLASS_IFINDEX, ifindex, 0);
+	if (ds->sflow_agent) {
+	    dpif_sflow_add_poller(ds, dsp);
+	}
+    } else {
+	/* Record "ifindex unknown" for the others */
+	SFL_DS_SET(dsp->dsi, SFL_DSCLASS_IFINDEX, 0, 0);
     }
 
 out:
@@ -605,9 +683,10 @@ static void
 dpif_sflow_del_port__(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
     OVS_REQUIRES(mutex)
 {
-    if (ds->sflow_agent) {
-        sfl_agent_removePoller(ds->sflow_agent, &dsp->dsi);
-        sfl_agent_removeSampler(ds->sflow_agent, &dsp->dsi);
+    if (ds->sflow_agent
+	&& SFL_DS_INDEX(dsp->dsi)) {
+	sfl_agent_removePoller(ds->sflow_agent, &dsp->dsi);
+	sfl_agent_removeSampler(ds->sflow_agent, &dsp->dsi);
     }
     hmap_remove(&ds->ports, &dsp->hmap_node);
     free(dsp);
@@ -730,7 +809,9 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
 
     /* Add pollers for the currently known ifindex-ports */
     HMAP_FOR_EACH (dsp, hmap_node, &ds->ports) {
-        dpif_sflow_add_poller(ds, dsp);
+        if (SFL_DS_INDEX(dsp->dsi)) {
+            dpif_sflow_add_poller(ds, dsp);
+	}
     }
 
 
@@ -752,18 +833,414 @@ dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
     return ret;
 }
 
+static void
+dpif_sflow_tunnel_v4(uint8_t tunnel_ipproto,
+                     const struct flow_tnl *tunnel,
+                     SFLSampled_ipv4 *ipv4)
+
+{
+    ipv4->protocol = tunnel_ipproto;
+    ipv4->tos = tunnel->ip_tos;
+    ipv4->src_ip.addr = (OVS_FORCE uint32_t) tunnel->ip_src;
+    ipv4->dst_ip.addr = (OVS_FORCE uint32_t) tunnel->ip_dst;
+    ipv4->src_port = (OVS_FORCE uint16_t) tunnel->tp_src;
+    ipv4->dst_port = (OVS_FORCE uint16_t) tunnel->tp_dst;
+}
+
+static void
+dpif_sflow_push_mpls_lse(struct dpif_sflow_actions *sflow_actions,
+                         ovs_be32 lse)
+{
+    if (sflow_actions->mpls_stack_depth >= FLOW_MAX_MPLS_LABELS) {
+	sflow_actions->mpls_err = true;
+	return;
+    }
+
+    /* Record the new lse in host-byte-order. */
+    /* BOS flag will be fixed later when we send stack to sFlow library. */
+    sflow_actions->mpls_lse[sflow_actions->mpls_stack_depth++] = ntohl(lse);
+}
+
+static void
+dpif_sflow_pop_mpls_lse(struct dpif_sflow_actions *sflow_actions)
+{
+    if (sflow_actions->mpls_stack_depth == 0) {
+	sflow_actions->mpls_err = true;
+	return;
+    }
+    sflow_actions->mpls_stack_depth--;
+}
+
+static void
+dpif_sflow_set_mpls(struct dpif_sflow_actions *sflow_actions,
+		    const struct ovs_key_mpls *mpls_key, int n)
+{
+    int ii;
+    if (n > FLOW_MAX_MPLS_LABELS) {
+	sflow_actions->mpls_err = true;
+	return;
+    }
+
+    for (ii = 0; ii < n; ii++) {
+	/* Reverse stack order, and use host-byte-order for each lse. */
+	sflow_actions->mpls_lse[n - ii - 1] = ntohl(mpls_key[ii].mpls_lse);
+    }
+    sflow_actions->mpls_stack_depth = n;
+}
+
+static void
+sflow_read_tnl_push_action(const struct nlattr *attr,
+                           struct dpif_sflow_actions *sflow_actions)
+{
+    /* Modeled on lib/odp-util.c: format_odp_tnl_push_header */
+    const struct ovs_action_push_tnl *data = nl_attr_get(attr);
+    const struct eth_header *eth = (const struct eth_header *) data->header;
+    const struct ip_header *ip
+        = ALIGNED_CAST(const struct ip_header *, eth + 1);
+
+    sflow_actions->out_port = u32_to_odp(data->out_port);
+
+    /* Ethernet. */
+    /* TODO: SFlow does not currently define a MAC-in-MAC
+     * encapsulation structure.  We could use an extension
+     * structure to report this.
+     */
+
+    /* IPv4 */
+    /* Cannot assume alignment so just use memcpy. */
+    sflow_actions->tunnel.ip_src = get_16aligned_be32(&ip->ip_src);
+    sflow_actions->tunnel.ip_dst = get_16aligned_be32(&ip->ip_dst);
+    sflow_actions->tunnel.ip_tos = ip->ip_tos;
+    sflow_actions->tunnel.ip_ttl = ip->ip_ttl;
+    /* The tnl_push action can supply the ip_protocol too. */
+    sflow_actions->tunnel_ipproto = ip->ip_proto;
+
+    /* Layer 4 */
+    if (data->tnl_type == OVS_VPORT_TYPE_VXLAN
+        || data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
+        const struct udp_header *udp = (const struct udp_header *) (ip + 1);
+        sflow_actions->tunnel.tp_src = udp->udp_src;
+        sflow_actions->tunnel.tp_dst = udp->udp_dst;
+
+        if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
+            const struct vxlanhdr *vxh = (const struct vxlanhdr *) (udp + 1);
+            uint64_t tun_id = ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8;
+            sflow_actions->tunnel.tun_id = htonll(tun_id);
+        } else {
+            const struct genevehdr *gnh = (const struct genevehdr *) (udp + 1);
+            uint64_t tun_id = ntohl(get_16aligned_be32(&gnh->vni)) >> 8;
+            sflow_actions->tunnel.tun_id = htonll(tun_id);
+        }
+    } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
+        const void *l4 = ip + 1;
+        const struct gre_base_hdr *greh = (const struct gre_base_hdr *) l4;
+        ovs_16aligned_be32 *options = (ovs_16aligned_be32 *)(greh + 1);
+        if (greh->flags & htons(GRE_CSUM)) {
+            options++;
+        }
+        if (greh->flags & htons(GRE_KEY)) {
+            uint64_t tun_id = ntohl(get_16aligned_be32(options));
+            sflow_actions->tunnel.tun_id = htonll(tun_id);
+        }
+    }
+}
+
+static void
+sflow_read_set_action(const struct nlattr *attr,
+                      struct dpif_sflow_actions *sflow_actions)
+{
+    enum ovs_key_attr type = nl_attr_type(attr);
+    switch (type) {
+    case OVS_KEY_ATTR_ENCAP:
+        if (++sflow_actions->encap_depth > 1) {
+            /* Do not handle multi-encap for now. */
+            sflow_actions->tunnel_err = true;
+        } else {
+            dpif_sflow_read_actions(NULL,
+                                    nl_attr_get(attr), nl_attr_get_size(attr),
+                                    sflow_actions);
+        }
+        break;
+    case OVS_KEY_ATTR_PRIORITY:
+    case OVS_KEY_ATTR_SKB_MARK:
+    case OVS_KEY_ATTR_DP_HASH:
+    case OVS_KEY_ATTR_RECIRC_ID:
+        break;
+
+    case OVS_KEY_ATTR_TUNNEL: {
+        if (++sflow_actions->encap_depth > 1) {
+            /* Do not handle multi-encap for now. */
+            sflow_actions->tunnel_err = true;
+        } else {
+            if (odp_tun_key_from_attr(attr, &sflow_actions->tunnel)
+                == ODP_FIT_ERROR) {
+                /* Tunnel parsing error. */
+                sflow_actions->tunnel_err = true;
+            }
+        }
+        break;
+    }
+
+    case OVS_KEY_ATTR_IN_PORT:
+    case OVS_KEY_ATTR_ETHERNET:
+    case OVS_KEY_ATTR_VLAN:
+        break;
+
+    case OVS_KEY_ATTR_MPLS: {
+        const struct ovs_key_mpls *mpls_key = nl_attr_get(attr);
+        size_t size = nl_attr_get_size(attr);
+        dpif_sflow_set_mpls(sflow_actions, mpls_key, size / sizeof *mpls_key);
+        break;
+    }
+
+    case OVS_KEY_ATTR_ETHERTYPE:
+    case OVS_KEY_ATTR_IPV4:
+        if (sflow_actions->encap_depth == 1) {
+            const struct ovs_key_ipv4 *key = nl_attr_get(attr);
+            if (key->ipv4_src) {
+                sflow_actions->tunnel.ip_src = key->ipv4_src;
+            }
+            if (key->ipv4_dst) {
+                sflow_actions->tunnel.ip_dst = key->ipv4_dst;
+            }
+            if (key->ipv4_proto) {
+                sflow_actions->tunnel_ipproto = key->ipv4_proto;
+            }
+            if (key->ipv4_tos) {
+                sflow_actions->tunnel.ip_tos = key->ipv4_tos;
+            }
+            if (key->ipv4_ttl) {
+                sflow_actions->tunnel.ip_tos = key->ipv4_ttl;
+            }
+        }
+        break;
+
+    case OVS_KEY_ATTR_IPV6:
+        /* TODO: parse IPv6 encap. */
+        break;
+
+        /* These have the same structure and format. */
+    case OVS_KEY_ATTR_TCP:
+    case OVS_KEY_ATTR_UDP:
+    case OVS_KEY_ATTR_SCTP:
+        if (sflow_actions->encap_depth == 1) {
+            const struct ovs_key_tcp *key = nl_attr_get(attr);
+            if (key->tcp_src) {
+                sflow_actions->tunnel.tp_src = key->tcp_src;
+            }
+            if (key->tcp_dst) {
+                sflow_actions->tunnel.tp_dst = key->tcp_dst;
+            }
+        }
+        break;
+
+    case OVS_KEY_ATTR_TCP_FLAGS:
+    case OVS_KEY_ATTR_ICMP:
+    case OVS_KEY_ATTR_ICMPV6:
+    case OVS_KEY_ATTR_ARP:
+    case OVS_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_UNSPEC:
+    case __OVS_KEY_ATTR_MAX:
+    default:
+        break;
+    }
+}
+
+static void
+dpif_sflow_capture_input_mpls(const struct flow *flow,
+                              struct dpif_sflow_actions *sflow_actions)
+{
+    if (eth_type_mpls(flow->dl_type)) {
+        int depth = 0;
+        int ii;
+        ovs_be32 lse;
+        /* Calculate depth by detecting BOS. */
+        for (ii = 0; ii < FLOW_MAX_MPLS_LABELS; ii++) {
+            lse = flow->mpls_lse[ii];
+            depth++;
+            if (lse & htonl(MPLS_BOS_MASK)) {
+                break;
+            }
+        }
+        /* Capture stack, reversing stack order, and
+         * using host-byte-order for each lse. BOS flag
+         * is ignored for now. It is set later when
+         * the output stack is encoded.
+         */
+        for (ii = 0; ii < depth; ii++) {
+            lse = flow->mpls_lse[ii];
+            sflow_actions->mpls_lse[depth - ii - 1] = ntohl(lse);
+        }
+        sflow_actions->mpls_stack_depth = depth;
+    }
+}
+
+void
+dpif_sflow_read_actions(const struct flow *flow,
+			const struct nlattr *actions, size_t actions_len,
+			struct dpif_sflow_actions *sflow_actions)
+{
+    const struct nlattr *a;
+    unsigned int left;
+
+    if (actions_len == 0) {
+	/* Packet dropped.*/
+	return;
+    }
+
+    if (flow != NULL) {
+	/* Make sure the MPLS output stack
+	 * is seeded with the input stack.
+	 */
+	dpif_sflow_capture_input_mpls(flow, sflow_actions);
+
+	/* XXX when 802.1AD(QinQ) is supported then
+	 * we can do the same with VLAN stacks here
+	 */
+    }
+
+    NL_ATTR_FOR_EACH (a, left, actions, actions_len) {
+	enum ovs_action_attr type = nl_attr_type(a);
+	switch (type) {
+	case OVS_ACTION_ATTR_OUTPUT:
+	    /* Capture the output port in case we need it
+	     * to get the output tunnel type.
+	     */
+	    sflow_actions->out_port = u32_to_odp(nl_attr_get_u32(a));
+	    break;
+
+	case OVS_ACTION_ATTR_TUNNEL_POP:
+	    /* XXX: Do not handle this for now.  It's not clear
+	     * if we should start with encap_depth == 1 when we
+	     * see an input tunnel,  or if we should assume
+	     * that the input tunnel was always "popped" if it
+	     * was presented to us decoded in flow->tunnel?
+	     *
+	     * If we do handle this it might look like this,
+	     * as we clear the captured tunnel info and decrement
+	     * the encap_depth:
+	     *
+	     * memset(&sflow_actions->tunnel, 0, sizeof struct flow_tnl);
+	     * sflow_actions->tunnel_ipproto = 0;
+	     * --sflow_actions->encap_depth;
+	     *
+	     * but for now just disable the tunnel annotation:
+	     */
+	    sflow_actions->tunnel_err = true;
+	    break;
+
+	case OVS_ACTION_ATTR_TUNNEL_PUSH:
+	    /* XXX: This actions appears to come with it's own
+	     * OUTPUT action, so should it be regarded as having
+	     * an implicit "pop" following it too?  Put another
+	     * way, would two tnl_push() actions in succession
+	     * result in a packet with two layers of encap?
+	     */
+	    if (++sflow_actions->encap_depth > 1) {
+		/* Do not handle multi-encap for now. */
+		sflow_actions->tunnel_err = true;
+	    } else {
+		sflow_read_tnl_push_action(a, sflow_actions);
+	    }
+	    break;
+
+	case OVS_ACTION_ATTR_USERSPACE:
+	case OVS_ACTION_ATTR_RECIRC:
+	case OVS_ACTION_ATTR_HASH:
+	    break;
+
+	case OVS_ACTION_ATTR_SET_MASKED:
+	    /* TODO: apply mask. XXX: Are we likely to see this? */
+	    break;
+
+	case OVS_ACTION_ATTR_SET:
+	    sflow_read_set_action(nl_attr_get(a), sflow_actions);
+	    break;
+
+	case OVS_ACTION_ATTR_PUSH_VLAN:
+	case OVS_ACTION_ATTR_POP_VLAN:
+	    /* TODO: 802.1AD(QinQ) is not supported by OVS (yet), so do not
+	     * construct a VLAN-stack. The sFlow user-action cookie already
+	     * captures the egress VLAN ID so there is nothing more to do here.
+	     */
+	    break;
+
+	case OVS_ACTION_ATTR_PUSH_MPLS: {
+	    const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
+	    if (mpls) {
+		dpif_sflow_push_mpls_lse(sflow_actions, mpls->mpls_lse);
+	    }
+	    break;
+	}
+	case OVS_ACTION_ATTR_POP_MPLS: {
+	    dpif_sflow_pop_mpls_lse(sflow_actions);
+	    break;
+	}
+	case OVS_ACTION_ATTR_SAMPLE:
+	case OVS_ACTION_ATTR_UNSPEC:
+	case __OVS_ACTION_ATTR_MAX:
+	default:
+	    break;
+	}
+    }
+}
+
+static void
+dpif_sflow_encode_mpls_stack(SFLLabelStack *stack,
+                             uint32_t *mpls_lse_buf,
+                             const struct dpif_sflow_actions *sflow_actions)
+{
+    /* Put the MPLS stack back into "packet header" order,
+     * and make sure the BOS flag is set correctly on the last
+     * one.  Each lse is still in host-byte-order.
+     */
+    int ii;
+    uint32_t lse;
+    stack->depth = sflow_actions->mpls_stack_depth;
+    stack->stack = mpls_lse_buf;
+    for (ii = 0; ii < stack->depth; ii++) {
+        lse = sflow_actions->mpls_lse[stack->depth - ii - 1];
+        stack->stack[ii] = (lse & ~MPLS_BOS_MASK);
+    }
+    stack->stack[stack->depth - 1] |= MPLS_BOS_MASK;
+}
+
+/* Extract the output port count from the user action cookie.
+ * See http://sflow.org/sflow_version_5.txt "Input/Output port information"
+ */
+static uint32_t
+dpif_sflow_cookie_num_outputs(const union user_action_cookie *cookie)
+{
+    uint32_t format = cookie->sflow.output & 0xC0000000;
+    uint32_t port_n = cookie->sflow.output & 0x3FFFFFFF;
+    if (format == 0) {
+        return port_n ? 1 : 0;
+    }
+    else if (format == 0x80000000) {
+        return port_n;
+    }
+    return 0;
+}
+
 void
 dpif_sflow_received(struct dpif_sflow *ds, const struct dp_packet *packet,
-                    const struct flow *flow, odp_port_t odp_in_port,
-                    const union user_action_cookie *cookie)
+		    const struct flow *flow, odp_port_t odp_in_port,
+		    const union user_action_cookie *cookie,
+		    const struct dpif_sflow_actions *sflow_actions)
     OVS_EXCLUDED(mutex)
 {
     SFL_FLOW_SAMPLE_TYPE fs;
     SFLFlow_sample_element hdrElem;
     SFLSampled_header *header;
     SFLFlow_sample_element switchElem;
+    uint8_t tnlInProto, tnlOutProto;
+    SFLFlow_sample_element tnlInElem, tnlOutElem;
+    SFLFlow_sample_element vniInElem, vniOutElem;
+    SFLFlow_sample_element mplsElem;
+    uint32_t mpls_lse_buf[FLOW_MAX_MPLS_LABELS];
     SFLSampler *sampler;
     struct dpif_sflow_port *in_dsp;
+    struct dpif_sflow_port *out_dsp;
     ovs_be16 vlan_tci;
 
     ovs_mutex_lock(&mutex);
@@ -813,6 +1290,67 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dp_packet *packet,
     switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(vlan_tci);
 
     fs.output = cookie->sflow.output;
+
+    /* Input tunnel. */
+    if (flow->tunnel.ip_dst) {
+	memset(&tnlInElem, 0, sizeof(tnlInElem));
+	tnlInElem.tag = SFLFLOW_EX_IPV4_TUNNEL_INGRESS;
+	tnlInProto = dpif_sflow_tunnel_proto(in_dsp->tunnel_type);
+	dpif_sflow_tunnel_v4(tnlInProto,
+			     &flow->tunnel,
+			     &tnlInElem.flowType.ipv4);
+	SFLADD_ELEMENT(&fs, &tnlInElem);
+	if (flow->tunnel.tun_id) {
+	    memset(&vniInElem, 0, sizeof(vniInElem));
+	    vniInElem.tag = SFLFLOW_EX_VNI_INGRESS;
+	    vniInElem.flowType.tunnel_vni.vni
+		= ntohll(flow->tunnel.tun_id);
+	    SFLADD_ELEMENT(&fs, &vniInElem);
+	}
+    }
+
+    /* Output tunnel. */
+    if (sflow_actions
+	&& sflow_actions->encap_depth == 1
+	&& !sflow_actions->tunnel_err
+	&& dpif_sflow_cookie_num_outputs(cookie) == 1) {
+	tnlOutProto = sflow_actions->tunnel_ipproto;
+	if (tnlOutProto == 0) {
+	    /* Try to infer the ip-protocol from the output port. */
+	    if (sflow_actions->out_port != ODPP_NONE) {
+		out_dsp = dpif_sflow_find_port(ds, sflow_actions->out_port);
+		if (out_dsp) {
+		    tnlOutProto = dpif_sflow_tunnel_proto(out_dsp->tunnel_type);
+		}
+	    }
+	}
+	memset(&tnlOutElem, 0, sizeof(tnlOutElem));
+	tnlOutElem.tag = SFLFLOW_EX_IPV4_TUNNEL_EGRESS;
+	dpif_sflow_tunnel_v4(tnlOutProto,
+			     &sflow_actions->tunnel,
+			     &tnlOutElem.flowType.ipv4);
+	SFLADD_ELEMENT(&fs, &tnlOutElem);
+	if (sflow_actions->tunnel.tun_id) {
+	    memset(&vniOutElem, 0, sizeof(vniOutElem));
+	    vniOutElem.tag = SFLFLOW_EX_VNI_EGRESS;
+	    vniOutElem.flowType.tunnel_vni.vni
+		= ntohll(sflow_actions->tunnel.tun_id);
+	    SFLADD_ELEMENT(&fs, &vniOutElem);
+	}
+    }
+
+    /* MPLS output label stack. */
+    if (sflow_actions
+	&& sflow_actions->mpls_stack_depth > 0
+	&& !sflow_actions->mpls_err
+	&& dpif_sflow_cookie_num_outputs(cookie) == 1) {
+	memset(&mplsElem, 0, sizeof(mplsElem));
+	mplsElem.tag = SFLFLOW_EX_MPLS;
+	dpif_sflow_encode_mpls_stack(&mplsElem.flowType.mpls.out_stack,
+				     mpls_lse_buf,
+				     sflow_actions);
+	SFLADD_ELEMENT(&fs, &mplsElem);
+    }
 
     /* Submit the flow sample to be encoded into the next datagram. */
     SFLADD_ELEMENT(&fs, &hdrElem);

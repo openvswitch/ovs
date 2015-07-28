@@ -16,6 +16,8 @@
 
 #include <config.h>
 
+#include "rtbsd.h"
+
 #include <unistd.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -27,7 +29,6 @@
 #include "socket-util.h"
 #include "poll-loop.h"
 #include "openvswitch/vlog.h"
-#include "rtbsd.h"
 
 VLOG_DEFINE_THIS_MODULE(rtbsd);
 COVERAGE_DEFINE(rtbsd_changed);

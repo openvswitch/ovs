@@ -937,10 +937,11 @@
 
     <group title="Multicast Snooping Configuration">
       Multicast snooping (RFC 4541) monitors the Internet Group Management
-      Protocol (IGMP) traffic between hosts and multicast routers.  The
-      switch uses what IGMP snooping learns to forward multicast traffic
-      only to interfaces that are connected to interested receivers.
-      Currently it supports IGMPv1, IGMPv2 and IGMPv3 protocols.
+      Protocol (IGMP) and Multicast Listener Discovery traffic between hosts
+      and multicast routers.  The switch uses what IGMP and MLD snooping
+      learns to forward multicast traffic only to interfaces that are connected
+      to interested receivers.  Currently it supports IGMPv1, IGMPv2, IGMPv3,
+      MLDv1 and MLDv2 protocols.
 
       <column name="mcast_snooping_enable">
         Enable multicast snooping on the bridge. For now, the default
@@ -3038,58 +3039,42 @@
       dump-tables</code>.  The name does not affect switch behavior.
     </column>
 
-    <column name="flow_limit">
-      If set, limits the number of flows that may be added to the table.  Open
-      vSwitch may limit the number of flows in a table for other reasons,
-      e.g. due to hardware limitations or for resource availability or
-      performance reasons.
-    </column>
-
-    <column name="overflow_policy">
+    <group title="Eviction Policy">
       <p>
-        Controls the switch's behavior when an OpenFlow flow table modification
-        request would add flows in excess of <ref column="flow_limit"/>.  The
-        supported values are:
+        Open vSwitch supports limiting the number of flows that may be
+        installed in a flow table, via the <ref column="flow_limit"/> column.
+        When adding a flow would exceed this limit, by default Open vSwitch
+        reports an error, but there are two ways to configure Open vSwitch to
+        instead delete (``evict'') a flow to make room for the new one:
       </p>
 
-      <dl>
-        <dt><code>refuse</code></dt>
-        <dd>
-          Refuse to add the flow or flows.  This is also the default policy
-          when <ref column="overflow_policy"/> is unset.
-        </dd>
+      <ul>
+        <li>
+          Set the <ref column="overflow_policy"/> column to <code>evict</code>.
+        </li>
 
-        <dt><code>evict</code></dt>
-        <dd>
-          Delete the flow that will expire soonest.  See <ref column="groups"/>
-          for details.
-        </dd>
-      </dl>
-    </column>
-
-    <column name="groups">
-      <p>
-        When <ref column="overflow_policy"/> is <code>evict</code>, this
-        controls how flows are chosen for eviction when the flow table would
-        otherwise exceed <ref column="flow_limit"/> flows.  Its value is a set
-        of NXM fields or sub-fields, each of which takes one of the forms
-        <code><var>field</var>[]</code> or
-        <code><var>field</var>[<var>start</var>..<var>end</var>]</code>,
-        e.g. <code>NXM_OF_IN_PORT[]</code>.  Please see
-        <code>nicira-ext.h</code> for a complete list of NXM field names.
-      </p>
+        <li>
+          Send an OpenFlow 1.4+ ``table mod request'' to enable eviction for
+          the flow table (e.g. <code>ovs-ofctl -O OpenFlow14 mod-table br0 0
+          evict</code> to enable eviction on flow table 0 of bridge
+          <code>br0</code>).
+        </li>
+      </ul>
 
       <p>
         When a flow must be evicted due to overflow, the flow to evict is
-        chosen through an approximation of the following algorithm:
+        chosen through an approximation of the following algorithm.  This
+        algorithm is used regardless of how eviction was enabled:
       </p>
 
       <ol>
         <li>
           Divide the flows in the table into groups based on the values of the
-          specified fields or subfields, so that all of the flows in a given
-          group have the same values for those fields.  If a flow does not
-          specify a given field, that field's value is treated as 0.
+          fields or subfields specified in the <ref column="groups"/> column,
+          so that all of the flows in a given group have the same values for
+          those fields.  If a flow does not specify a given field, that field's
+          value is treated as 0.  If <ref column="groups"/> is empty, then all
+          of the flows in the flow table are treated as a single group.
         </li>
 
         <li>
@@ -3100,101 +3085,152 @@
         </li>
 
         <li>
+          If the flows under consideration have different importance values,
+          eliminate from consideration any flows except those with the lowest
+          importance.  (``Importance,'' a 16-bit integer value attached to each
+          flow, was introduced in OpenFlow 1.4.  Flows inserted with older
+          versions of OpenFlow always have an importance of 0.)
+        </li>
+
+        <li>
           Among the flows under consideration, choose the flow that expires
           soonest for eviction.
         </li>
       </ol>
 
       <p>
-        The eviction process only considers flows that have an idle timeout or
-        a hard timeout.  That is, eviction never deletes permanent flows.
+        The eviction process only considers flows that have an idle timeout
+        or a hard timeout.  That is, eviction never deletes permanent flows.
         (Permanent flows do count against <ref column="flow_limit"/>.)
       </p>
 
-      <p>
-        Open vSwitch ignores any invalid or unknown field specifications.
-      </p>
+      <column name="flow_limit">
+        If set, limits the number of flows that may be added to the table.
+        Open vSwitch may limit the number of flows in a table for other
+        reasons, e.g. due to hardware limitations or for resource availability
+        or performance reasons.
+      </column>
 
-      <p>
-        When <ref column="overflow_policy"/> is not <code>evict</code>, this
-        column has no effect.
-      </p>
-    </column>
+      <column name="overflow_policy">
+        <p>
+          Controls the switch's behavior when an OpenFlow flow table
+          modification request would add flows in excess of <ref
+          column="flow_limit"/>.  The supported values are:
+        </p>
 
-    <column name="prefixes">
-      <p>
-        This string set specifies which fields should be used for
-        address prefix tracking.  Prefix tracking allows the
-        classifier to skip rules with longer than necessary prefixes,
-        resulting in better wildcarding for datapath flows.
-      </p>
-      <p>
-        Prefix tracking may be beneficial when a flow table contains
-        matches on IP address fields with different prefix lengths.
-        For example, when a flow table contains IP address matches on
-        both full addresses and proper prefixes, the full address
-        matches will typically cause the datapath flow to un-wildcard
-        the whole address field (depending on flow entry priorities).
-        In this case each packet with a different address gets handed
-        to the userspace for flow processing and generates its own
-        datapath flow.  With prefix tracking enabled for the address
-        field in question packets with addresses matching shorter
-        prefixes would generate datapath flows where the irrelevant
-        address bits are wildcarded, allowing the same datapath flow
-        to handle all the packets within the prefix in question.  In
-        this case many userspace upcalls can be avoided and the
-        overall performance can be better.
-      </p>
-      <p>
-        This is a performance optimization only, so packets will
-        receive the same treatment with or without prefix tracking.
-      </p>
-      <p>
-        The supported fields are: <code>tun_id</code>,
-        <code>tun_src</code>, <code>tun_dst</code>,
-        <code>nw_src</code>, <code>nw_dst</code> (or aliases
-        <code>ip_src</code> and <code>ip_dst</code>),
-        <code>ipv6_src</code>, and <code>ipv6_dst</code>.  (Using this
-        feature for <code>tun_id</code> would only make sense if the
-        tunnel IDs have prefix structure similar to IP addresses.)
-      </p>
+        <dl>
+          <dt><code>refuse</code></dt>
+          <dd>
+            Refuse to add the flow or flows.  This is also the default policy
+            when <ref column="overflow_policy"/> is unset.
+          </dd>
 
-      <p>
-        By default, the <code>prefixes=ip_dst,ip_src</code> are used
-        on each flow table.  This instructs the flow classifier to
-        track the IP destination and source addresses used by the
-        rules in this specific flow table.
-      </p>
+          <dt><code>evict</code></dt>
+          <dd>
+            Delete a flow chosen according to the algorithm described above.
+          </dd>
+        </dl>
+      </column>
 
-      <p>
-        The keyword <code>none</code> is recognized as an explicit
-        override of the default values, causing no prefix fields to be
-        tracked.
-      </p>
+      <column name="groups">
+        <p>
+          When <ref column="overflow_policy"/> is <code>evict</code>, this
+          controls how flows are chosen for eviction when the flow table would
+          otherwise exceed <ref column="flow_limit"/> flows.  Its value is a
+          set of NXM fields or sub-fields, each of which takes one of the forms
+          <code><var>field</var>[]</code> or
+          <code><var>field</var>[<var>start</var>..<var>end</var>]</code>,
+          e.g. <code>NXM_OF_IN_PORT[]</code>.  Please see
+          <code>nicira-ext.h</code> for a complete list of NXM field names.
+        </p>
 
-      <p>
-        To set the prefix fields, the flow table record needs to
-        exist:
-      </p>
+        <p>
+          Open vSwitch ignores any invalid or unknown field specifications.
+        </p>
 
-      <dl>
-        <dt><code>ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=table0</code></dt>
-        <dd>
-          Creates a flow table record for the OpenFlow table number 0.
-        </dd>
+        <p>
+          When eviction is not enabled, via <ref column="overflow_policy"/> or
+          an OpenFlow 1.4+ ``table mod,'' this column has no effect.
+        </p>
+      </column>
+    </group>
 
-        <dt><code>ovs-vsctl set Flow_Table table0 prefixes=ip_dst,ip_src</code></dt>
-        <dd>
-          Enables prefix tracking for IP source and destination
-          address fields.
-        </dd>
-      </dl>
+    <group title="Classifier Optimization">
+      <column name="prefixes">
+        <p>
+          This string set specifies which fields should be used for
+          address prefix tracking.  Prefix tracking allows the
+          classifier to skip rules with longer than necessary prefixes,
+          resulting in better wildcarding for datapath flows.
+        </p>
+        <p>
+          Prefix tracking may be beneficial when a flow table contains
+          matches on IP address fields with different prefix lengths.
+          For example, when a flow table contains IP address matches on
+          both full addresses and proper prefixes, the full address
+          matches will typically cause the datapath flow to un-wildcard
+          the whole address field (depending on flow entry priorities).
+          In this case each packet with a different address gets handed
+          to the userspace for flow processing and generates its own
+          datapath flow.  With prefix tracking enabled for the address
+          field in question packets with addresses matching shorter
+          prefixes would generate datapath flows where the irrelevant
+          address bits are wildcarded, allowing the same datapath flow
+          to handle all the packets within the prefix in question.  In
+          this case many userspace upcalls can be avoided and the
+          overall performance can be better.
+        </p>
+        <p>
+          This is a performance optimization only, so packets will
+          receive the same treatment with or without prefix tracking.
+        </p>
+        <p>
+          The supported fields are: <code>tun_id</code>,
+          <code>tun_src</code>, <code>tun_dst</code>,
+          <code>nw_src</code>, <code>nw_dst</code> (or aliases
+          <code>ip_src</code> and <code>ip_dst</code>),
+          <code>ipv6_src</code>, and <code>ipv6_dst</code>.  (Using this
+          feature for <code>tun_id</code> would only make sense if the
+          tunnel IDs have prefix structure similar to IP addresses.)
+        </p>
 
-      <p>
-        There is a maximum number of fields that can be enabled for any
-        one flow table.  Currently this limit is 3.
-      </p>
-    </column>
+        <p>
+          By default, the <code>prefixes=ip_dst,ip_src</code> are used
+          on each flow table.  This instructs the flow classifier to
+          track the IP destination and source addresses used by the
+          rules in this specific flow table.
+        </p>
+
+        <p>
+          The keyword <code>none</code> is recognized as an explicit
+          override of the default values, causing no prefix fields to be
+          tracked.
+        </p>
+
+        <p>
+          To set the prefix fields, the flow table record needs to
+          exist:
+        </p>
+
+        <dl>
+          <dt><code>ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=table0</code></dt>
+          <dd>
+            Creates a flow table record for the OpenFlow table number 0.
+          </dd>
+
+          <dt><code>ovs-vsctl set Flow_Table table0 prefixes=ip_dst,ip_src</code></dt>
+          <dd>
+            Enables prefix tracking for IP source and destination
+            address fields.
+          </dd>
+        </dl>
+
+        <p>
+          There is a maximum number of fields that can be enabled for any
+          one flow table.  Currently this limit is 3.
+        </p>
+      </column>
+    </group>
 
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common

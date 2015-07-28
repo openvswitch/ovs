@@ -226,23 +226,52 @@ struct trie_node {
  * These are only used by the classifier, so place them here to allow
  * for better optimization. */
 
-static inline uint64_t
+/* Initializes 'map->tnl_map' and 'map->pkt_map' with a subset of 'miniflow'
+ * that includes only the portions with u64-offset 'i' such that start <= i <
+ * end.  Does not copy any data from 'miniflow' to 'map'.
+ *
+ * TODO: Ensure that 'start' and 'end' are compile-time constants. */
+static inline unsigned int /* offset */
 miniflow_get_map_in_range(const struct miniflow *miniflow,
-                          uint8_t start, uint8_t end, unsigned int *offset)
+                          uint8_t start, uint8_t end, struct miniflow *map)
 {
-    uint64_t map = miniflow->map;
-    *offset = 0;
+    unsigned int offset = 0;
 
-    if (start > 0) {
-        uint64_t msk = (UINT64_C(1) << start) - 1; /* 'start' LSBs set */
-        *offset = count_1bits(map & msk);
-        map &= ~msk;
+    map->tnl_map = miniflow->tnl_map;
+    map->pkt_map = miniflow->pkt_map;
+
+    if (start >= FLOW_TNL_U64S) {
+        offset += count_1bits(map->tnl_map);
+        map->tnl_map = 0;
+        if (start > FLOW_TNL_U64S) {
+            /* Clear 'start - FLOW_TNL_U64S' LSBs from pkt_map. */
+            start -= FLOW_TNL_U64S;
+            uint64_t msk = (UINT64_C(1) << start) - 1;
+
+            offset += count_1bits(map->pkt_map & msk);
+            map->pkt_map &= ~msk;
+        }
+    } else if (start > 0) {
+        /* Clear 'start' LSBs from tnl_map. */
+        uint64_t msk = (UINT64_C(1) << start) - 1;
+
+        offset += count_1bits(map->tnl_map & msk);
+        map->tnl_map &= ~msk;
     }
-    if (end < FLOW_U64S) {
-        uint64_t msk = (UINT64_C(1) << end) - 1; /* 'end' LSBs set */
-        map &= msk;
+
+    if (end <= FLOW_TNL_U64S) {
+        map->pkt_map = 0;
+        if (end < FLOW_TNL_U64S) {
+            /* Keep 'end' LSBs in tnl_map. */
+            map->tnl_map &= (UINT64_C(1) << end) - 1;
+        }
+    } else {
+        if (end < FLOW_U64S) {
+            /* Keep 'end - FLOW_TNL_U64S' LSBs in pkt_map. */
+            map->pkt_map &= (UINT64_C(1) << (end - FLOW_TNL_U64S)) - 1;
+        }
     }
-    return map;
+    return offset;
 }
 
 /* Returns a hash value for the bits of 'flow' where there are 1-bits in
@@ -258,10 +287,14 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
     const uint64_t *flow_u64 = (const uint64_t *)flow;
     const uint64_t *p = mask_values;
     uint32_t hash;
-    int idx;
+    size_t idx;
 
     hash = basis;
-    MAP_FOR_EACH_INDEX(idx, mask->masks.map) {
+    MAP_FOR_EACH_INDEX(idx, mask->masks.tnl_map) {
+        hash = hash_add64(hash, flow_u64[idx] & *p++);
+    }
+    flow_u64 += FLOW_TNL_U64S;
+    MAP_FOR_EACH_INDEX(idx, mask->masks.pkt_map) {
         hash = hash_add64(hash, flow_u64[idx] & *p++);
     }
 
@@ -282,7 +315,10 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
     uint32_t hash = basis;
     uint64_t flow_u64;
 
-    MINIFLOW_FOR_EACH_IN_MAP(flow_u64, flow, mask->masks.map) {
+    MINIFLOW_FOR_EACH_IN_TNL_MAP(flow_u64, flow, mask->masks) {
+        hash = hash_add64(hash, flow_u64 & *p++);
+    }
+    MINIFLOW_FOR_EACH_IN_PKT_MAP(flow_u64, flow, mask->masks) {
         hash = hash_add64(hash, flow_u64 & *p++);
     }
 
@@ -302,14 +338,18 @@ flow_hash_in_minimask_range(const struct flow *flow,
     const uint64_t *mask_values = miniflow_get_values(&mask->masks);
     const uint64_t *flow_u64 = (const uint64_t *)flow;
     unsigned int offset;
-    uint64_t map;
+    struct miniflow map;
     const uint64_t *p;
     uint32_t hash = *basis;
-    int idx;
+    size_t idx;
 
-    map = miniflow_get_map_in_range(&mask->masks, start, end, &offset);
+    offset = miniflow_get_map_in_range(&mask->masks, start, end, &map);
     p = mask_values + offset;
-    MAP_FOR_EACH_INDEX(idx, map) {
+    MAP_FOR_EACH_INDEX(idx, map.tnl_map) {
+        hash = hash_add64(hash, flow_u64[idx] & *p++);
+    }
+    flow_u64 += FLOW_TNL_U64S;
+    MAP_FOR_EACH_INDEX(idx, map.pkt_map) {
         hash = hash_add64(hash, flow_u64[idx] & *p++);
     }
 
@@ -332,15 +372,17 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
                                    const struct minimask *mask,
                                    uint8_t start, uint8_t end)
 {
+    const uint64_t *p = miniflow_get_values(&mask->masks);
     uint64_t *dst_u64 = (uint64_t *)&wc->masks;
-    unsigned int offset;
-    uint64_t map;
-    const uint64_t *p;
-    int idx;
+    struct miniflow map;
+    size_t idx;
 
-    map = miniflow_get_map_in_range(&mask->masks, start, end, &offset);
-    p = miniflow_get_values(&mask->masks) + offset;
-    MAP_FOR_EACH_INDEX(idx, map) {
+    p += miniflow_get_map_in_range(&mask->masks, start, end, &map);
+    MAP_FOR_EACH_INDEX(idx, map.tnl_map) {
+        dst_u64[idx] |= *p++;
+    }
+    dst_u64 += FLOW_TNL_U64S;
+    MAP_FOR_EACH_INDEX(idx, map.pkt_map) {
         dst_u64[idx] |= *p++;
     }
 }
@@ -352,17 +394,25 @@ miniflow_hash(const struct miniflow *flow, uint32_t basis)
     const uint64_t *values = miniflow_get_values(flow);
     const uint64_t *p = values;
     uint32_t hash = basis;
-    uint64_t hash_map = 0;
+    uint64_t hash_tnl_map = 0, hash_pkt_map = 0;
     uint64_t map;
 
-    for (map = flow->map; map; map = zero_rightmost_1bit(map)) {
+    for (map = flow->tnl_map; map; map = zero_rightmost_1bit(map)) {
         if (*p) {
             hash = hash_add64(hash, *p);
-            hash_map |= rightmost_1bit(map);
+            hash_tnl_map |= rightmost_1bit(map);
         }
         p++;
     }
-    hash = hash_add64(hash, hash_map);
+    for (map = flow->pkt_map; map; map = zero_rightmost_1bit(map)) {
+        if (*p) {
+            hash = hash_add64(hash, *p);
+            hash_pkt_map |= rightmost_1bit(map);
+        }
+        p++;
+    }
+    hash = hash_add64(hash, hash_tnl_map);
+    hash = hash_add64(hash, hash_pkt_map);
 
     return hash_finish(hash, p - values);
 }
@@ -378,7 +428,7 @@ minimask_hash(const struct minimask *mask, uint32_t basis)
 static inline uint32_t
 minimatch_hash(const struct minimatch *match, uint32_t basis)
 {
-    return miniflow_hash(&match->flow, minimask_hash(&match->mask, basis));
+    return miniflow_hash(match->flow, minimask_hash(match->mask, basis));
 }
 
 /* Returns a hash value for the bits of range [start, end) in 'minimatch',
@@ -390,15 +440,18 @@ static inline uint32_t
 minimatch_hash_range(const struct minimatch *match, uint8_t start, uint8_t end,
                      uint32_t *basis)
 {
+    const uint64_t *p = miniflow_get_values(match->flow);
+    const uint64_t *q = miniflow_get_values(&match->mask->masks);
     unsigned int offset;
-    const uint64_t *p, *q;
+    struct miniflow map;
     uint32_t hash = *basis;
     int n, i;
 
-    n = count_1bits(miniflow_get_map_in_range(&match->mask.masks, start, end,
-                                              &offset));
-    q = miniflow_get_values(&match->mask.masks) + offset;
-    p = miniflow_get_values(&match->flow) + offset;
+    offset = miniflow_get_map_in_range(&match->mask->masks, start, end, &map);
+    n = miniflow_n_values(&map);
+
+    q += offset;
+    p += offset;
 
     for (i = 0; i < n; i++) {
         hash = hash_add64(hash, p[i] & q[i]);

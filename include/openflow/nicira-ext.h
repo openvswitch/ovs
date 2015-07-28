@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,28 @@ enum nx_hash_fields {
      *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
      *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
      */
-    NX_HASH_FIELDS_SYMMETRIC_L4
+    NX_HASH_FIELDS_SYMMETRIC_L4,
+
+    /* L3+L4 only, including the following fields:
+     *
+     *  - NXM_OF_IP_PROTO
+     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
+     *  - NXM_OF_SCTP_SRC / NXM_OF_SCTP_DST
+     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
+     */
+    NX_HASH_FIELDS_SYMMETRIC_L3L4,
+
+    /* L3+L4 only with UDP ports, including the following fields:
+     *
+     *  - NXM_OF_IP_PROTO
+     *  - NXM_OF_IP_SRC / NXM_OF_IP_DST
+     *  - NXM_OF_SCTP_SRC / NXM_OF_SCTP_DST
+     *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
+     *  - NXM_OF_UDP_SRC / NXM_OF_UDP_DST
+     */
+    NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP
+
+
 };
 
 /* This command enables or disables an Open vSwitch extension that allows a
@@ -478,6 +499,9 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
 /* Bits in the value of NXM_NX_IP_FRAG. */
 #define NX_IP_FRAG_ANY   (1 << 0) /* Is this a fragment? */
 #define NX_IP_FRAG_LATER (1 << 1) /* Is this a fragment with nonzero offset? */
+
+/* Bits in the value of NXM_NX_TUN_FLAGS. */
+#define NX_TUN_FLAG_OAM  (1 << 0) /* Is this an OAM packet? */
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
@@ -900,7 +924,7 @@ struct nx_flow_monitor_cancel {
 };
 OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 4);
 
-/* Geneve option table maintainance commands.
+/* Geneve option table maintenance commands.
  *
  * In order to work with Geneve options, we need to maintain a mapping
  * table between an option (defined by <class, type, length>) and

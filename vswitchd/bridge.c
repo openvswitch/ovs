@@ -473,6 +473,7 @@ bridge_init(const char *remote)
     lacp_init();
     bond_init();
     cfm_init();
+    bfd_init();
     ovs_numa_init();
     stp_init();
     lldp_init();
@@ -3603,6 +3604,7 @@ bridge_configure_tables(struct bridge *br)
         s.name = NULL;
         s.max_flows = UINT_MAX;
         s.groups = NULL;
+        s.enable_eviction = false;
         s.n_groups = 0;
         s.n_prefix_fields = 0;
         memset(s.prefix_fields, ~0, sizeof(s.prefix_fields));
@@ -3614,9 +3616,10 @@ bridge_configure_tables(struct bridge *br)
             if (cfg->n_flow_limit && *cfg->flow_limit < UINT_MAX) {
                 s.max_flows = *cfg->flow_limit;
             }
-            if (cfg->overflow_policy
-                && !strcmp(cfg->overflow_policy, "evict")) {
 
+            s.enable_eviction = (cfg->overflow_policy
+                                 && !strcmp(cfg->overflow_policy, "evict"));
+            if (cfg->n_groups) {
                 s.groups = xmalloc(cfg->n_groups * sizeof *s.groups);
                 for (k = 0; k < cfg->n_groups; k++) {
                     const char *string = cfg->groups[k];
@@ -3636,6 +3639,7 @@ bridge_configure_tables(struct bridge *br)
                     }
                 }
             }
+
             /* Prefix lookup fields. */
             s.n_prefix_fields = 0;
             for (k = 0; k < cfg->n_prefixes; k++) {

@@ -1044,7 +1044,7 @@ expr_parse_string(const char *s, const struct shash *symtab, char **errorp)
     lexer_init(&lexer, s);
     lexer_get(&lexer);
     expr = expr_parse(&lexer, symtab, errorp);
-    if (!errorp && lexer.token.type != LEX_T_END) {
+    if (!*errorp && lexer.token.type != LEX_T_END) {
         *errorp = xstrdup("Extra tokens at end of input.");
         expr_destroy(expr);
         expr = NULL;

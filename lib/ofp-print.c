@@ -942,23 +942,54 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
     }
 }
 
-static void
-ofp_print_table_miss_config(struct ds *string, enum ofputil_table_miss miss)
+static const char *
+ofputil_table_miss_to_string(enum ofputil_table_miss miss)
 {
     switch (miss) {
-    case OFPUTIL_TABLE_MISS_CONTROLLER:
-        ds_put_cstr(string, "controller\n");
-        break;
-    case OFPUTIL_TABLE_MISS_CONTINUE:
-        ds_put_cstr(string, "continue\n");
-        break;
-    case OFPUTIL_TABLE_MISS_DROP:
-        ds_put_cstr(string, "drop\n");
-        break;
-    case OFPUTIL_TABLE_MISS_DEFAULT:
-    default:
-        ds_put_format(string, "Unknown (%d)\n", miss);
-        break;
+    case OFPUTIL_TABLE_MISS_DEFAULT: return "default";
+    case OFPUTIL_TABLE_MISS_CONTROLLER: return "controller";
+    case OFPUTIL_TABLE_MISS_CONTINUE: return "continue";
+    case OFPUTIL_TABLE_MISS_DROP: return "drop";
+    default: return "***error***";
+    }
+}
+
+static const char *
+ofputil_table_eviction_to_string(enum ofputil_table_eviction eviction)
+{
+    switch (eviction) {
+    case OFPUTIL_TABLE_EVICTION_DEFAULT: return "default";
+    case OFPUTIL_TABLE_EVICTION_ON: return "on";
+    case OFPUTIL_TABLE_EVICTION_OFF: return "off";
+    default: return "***error***";
+    }
+
+}
+
+static const char *
+ofputil_eviction_flag_to_string(uint32_t bit)
+{
+    enum ofp14_table_mod_prop_eviction_flag eviction_flag = bit;
+
+    switch (eviction_flag) {
+    case OFPTMPEF14_OTHER:      return "OTHER";
+    case OFPTMPEF14_IMPORTANCE: return "IMPORTANCE";
+    case OFPTMPEF14_LIFETIME:   return "LIFETIME";
+    }
+
+    return NULL;
+}
+
+/* Appends to 'string' a description of the bitmap of OFPTMPEF14_* values in
+ * 'eviction_flags'. */
+static void
+ofputil_put_eviction_flags(struct ds *string, uint32_t eviction_flags)
+{
+    if (eviction_flags != UINT32_MAX) {
+        ofp_print_bit_names(string, eviction_flags,
+                            ofputil_eviction_flag_to_string, '|');
+    } else {
+        ds_put_cstr(string, "(default)");
     }
 }
 
@@ -980,10 +1011,30 @@ ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
         ds_put_format(string, " table_id=%"PRIu8, pm.table_id);
     }
 
-    if (pm.miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
-        ds_put_cstr(string, ", flow_miss_config=");
-        ofp_print_table_miss_config(string, pm.miss_config);
+    if (pm.miss != OFPUTIL_TABLE_MISS_DEFAULT) {
+        ds_put_format(string, ", flow_miss_config=%s",
+                      ofputil_table_miss_to_string(pm.miss));
     }
+    if (pm.eviction != OFPUTIL_TABLE_EVICTION_DEFAULT) {
+        ds_put_format(string, ", eviction=%s",
+                      ofputil_table_eviction_to_string(pm.eviction));
+    }
+    if (pm.eviction_flags != UINT32_MAX) {
+        ds_put_cstr(string, "eviction_flags=");
+        ofputil_put_eviction_flags(string, pm.eviction_flags);
+    }
+}
+
+/* This function will print the Table description properties. */
+static void
+ofp_print_table_desc(struct ds *string, const struct ofputil_table_desc *td)
+{
+    ds_put_format(string, "\n  table %"PRIu8, td->table_id);
+    ds_put_cstr(string, ":\n");
+    ds_put_format(string, "   eviction=%s eviction_flags=",
+                  ofputil_table_eviction_to_string(td->eviction));
+    ofputil_put_eviction_flags(string, td->eviction_flags);
+    ds_put_char(string, '\n');
 }
 
 static void
@@ -1852,64 +1903,220 @@ ofp_port_reason_to_string(enum ofp_port_reason reason,
     }
 }
 
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_ASYNC_CONFIG_REASON_BUFSIZE. */
+static const char*
+ofp_role_reason_to_string(enum ofp14_controller_role_reason reason,
+                          char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPCRR_MASTER_REQUEST:
+        return "master_request";
+
+    case OFPCRR_CONFIG:
+        return "configuration_changed";
+
+    case OFPCRR_EXPERIMENTER:
+        return "experimenter_data_changed";
+
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_ASYNC_CONFIG_REASON_BUFSIZE. */
+static const char*
+ofp_table_reason_to_string(enum ofp14_table_reason reason,
+                           char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPTR_VACANCY_DOWN:
+        return "vacancy_down";
+
+    case OFPTR_VACANCY_UP:
+        return "vacancy_up";
+
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_ASYNC_CONFIG_REASON_BUFSIZE. */
+static const char*
+ofp_requestforward_reason_to_string(enum ofp14_requestforward_reason reason,
+                                    char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPRFR_GROUP_MOD:
+        return "group_mod_request";
+
+    case OFPRFR_METER_MOD:
+        return "meter_mod_request";
+
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
+static const char *
+ofp_async_config_reason_to_string(uint32_t reason,
+                                  enum ofputil_async_msg_type type,
+                                  char *reasonbuf, size_t bufsize)
+{
+    switch (type) {
+    case OAM_PACKET_IN:
+        return ofputil_packet_in_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_PORT_STATUS:
+        return ofp_port_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_FLOW_REMOVED:
+        return ofp_flow_removed_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_ROLE_STATUS:
+        return ofp_role_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_TABLE_STATUS:
+        return ofp_table_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_REQUESTFORWARD:
+        return ofp_requestforward_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_N_TYPES:
+    default:
+        return "Unknown asynchronous configuration message type";
+    }
+}
+
+
+#define OFP_ASYNC_CONFIG_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 static void
 ofp_print_nxt_set_async_config(struct ds *string,
-                               const struct nx_async_config *nac)
+                               const struct ofp_header *oh)
 {
-    int i;
+    int i, j;
+    enum ofpraw raw;
 
-    for (i = 0; i < 2; i++) {
-        int j;
+    ofpraw_decode(&raw, oh);
 
-        ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+    if (raw == OFPRAW_OFPT13_SET_ASYNC ||
+        raw == OFPRAW_NXT_SET_ASYNC_CONFIG ||
+        raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
+        const struct nx_async_config *nac = ofpmsg_body(oh);
 
-        ds_put_cstr(string, "       PACKET_IN:");
-        for (j = 0; j < 32; j++) {
-            if (nac->packet_in_mask[i] & htonl(1u << j)) {
-                char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
-                const char *reason;
+        for (i = 0; i < 2; i++) {
 
-                reason = ofputil_packet_in_reason_to_string(j, reasonbuf,
+            ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+
+            ds_put_cstr(string, "       PACKET_IN:");
+            for (j = 0; j < 32; j++) {
+                if (nac->packet_in_mask[i] & htonl(1u << j)) {
+                    char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
+                    const char *reason;
+
+                    reason = ofputil_packet_in_reason_to_string(j, reasonbuf,
                                                             sizeof reasonbuf);
-                ds_put_format(string, " %s", reason);
+                    ds_put_format(string, " %s", reason);
+                }
             }
-        }
-        if (!nac->packet_in_mask[i]) {
-            ds_put_cstr(string, " (off)");
-        }
-        ds_put_char(string, '\n');
-
-        ds_put_cstr(string, "     PORT_STATUS:");
-        for (j = 0; j < 32; j++) {
-            if (nac->port_status_mask[i] & htonl(1u << j)) {
-                char reasonbuf[OFP_PORT_REASON_BUFSIZE];
-                const char *reason;
-
-                reason = ofp_port_reason_to_string(j, reasonbuf,
-                                                   sizeof reasonbuf);
-                ds_put_format(string, " %s", reason);
+            if (!nac->packet_in_mask[i]) {
+                ds_put_cstr(string, " (off)");
             }
-        }
-        if (!nac->port_status_mask[i]) {
-            ds_put_cstr(string, " (off)");
-        }
-        ds_put_char(string, '\n');
+            ds_put_char(string, '\n');
 
-        ds_put_cstr(string, "    FLOW_REMOVED:");
-        for (j = 0; j < 32; j++) {
-            if (nac->flow_removed_mask[i] & htonl(1u << j)) {
-                char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
-                const char *reason;
+            ds_put_cstr(string, "     PORT_STATUS:");
+            for (j = 0; j < 32; j++) {
+                if (nac->port_status_mask[i] & htonl(1u << j)) {
+                    char reasonbuf[OFP_PORT_REASON_BUFSIZE];
+                    const char *reason;
 
-                reason = ofp_flow_removed_reason_to_string(j, reasonbuf,
+                    reason = ofp_port_reason_to_string(j, reasonbuf,
+                                                       sizeof reasonbuf);
+                    ds_put_format(string, " %s", reason);
+                }
+            }
+            if (!nac->port_status_mask[i]) {
+                ds_put_cstr(string, " (off)");
+            }
+            ds_put_char(string, '\n');
+
+            ds_put_cstr(string, "    FLOW_REMOVED:");
+            for (j = 0; j < 32; j++) {
+                if (nac->flow_removed_mask[i] & htonl(1u << j)) {
+                    char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
+                    const char *reason;
+
+                    reason = ofp_flow_removed_reason_to_string(j, reasonbuf,
                                                            sizeof reasonbuf);
-                ds_put_format(string, " %s", reason);
+                    ds_put_format(string, " %s", reason);
+                }
+            }
+            if (!nac->flow_removed_mask[i]) {
+                ds_put_cstr(string, " (off)");
+            }
+            ds_put_char(string, '\n');
+        }
+    } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
+               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+        uint32_t role[2][OAM_N_TYPES] = {{0}};
+        uint32_t type;
+
+        ofputil_decode_set_async_config(oh, role[0], role[1], true);
+        for (i = 0; i < 2; i++) {
+
+            ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+            for (type = 0; type < OAM_N_TYPES; type++) {
+                switch (type) {
+                case OAM_PACKET_IN:
+                    ds_put_cstr(string, "       PACKET_IN:");
+                    break;
+
+                case OAM_PORT_STATUS:
+                    ds_put_cstr(string, "     PORT_STATUS:");
+                    break;
+
+                case OAM_FLOW_REMOVED:
+                    ds_put_cstr(string, "    FLOW_REMOVED:");
+                    break;
+
+                case OAM_ROLE_STATUS:
+                    ds_put_cstr(string, "     ROLE_STATUS:");
+                    break;
+
+                case OAM_TABLE_STATUS:
+                    ds_put_cstr(string, "    TABLE_STATUS:");
+                    break;
+
+                case OAM_REQUESTFORWARD:
+                    ds_put_cstr(string, "  REQUESTFORWARD:");
+                    break;
+                }
+
+                for (j = 0; j < 32; j++) {
+                    if (role[i][type] & (1u << j)) {
+                        char reasonbuf[OFP_ASYNC_CONFIG_REASON_BUFSIZE];
+                        const char *reason;
+
+                        reason = ofp_async_config_reason_to_string(j, type,
+                                                                   reasonbuf,
+                                                           sizeof reasonbuf);
+                        ds_put_format(string, " %s", reason);
+                    }
+                }
+                if (!role[i][type]) {
+                    ds_put_cstr(string, " (off)");
+                }
+                ds_put_char(string, '\n');
             }
         }
-        if (!nac->flow_removed_mask[i]) {
-            ds_put_cstr(string, " (off)");
-        }
-        ds_put_char(string, '\n');
     }
 }
 
@@ -2500,8 +2707,19 @@ ofp_print_table_features(struct ds *s,
     }
 
     if (features->miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
-        ds_put_cstr(s, "    config=");
-        ofp_print_table_miss_config(s, features->miss_config);
+        ds_put_format(s, "    config=%s\n",
+                      ofputil_table_miss_to_string(features->miss_config));
+    }
+
+    if (features->supports_eviction >= 0) {
+        ds_put_format(s, "    eviction: %ssupported\n",
+                      features->supports_eviction ? "" : "not ");
+
+    }
+    if (features->supports_vacancy_events >= 0) {
+        ds_put_format(s, "    vacancy events: %ssupported\n",
+                      features->supports_vacancy_events ? "" : "not ");
+
     }
 
     if (features->max_entries) {
@@ -2554,6 +2772,28 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
             return;
         }
         ofp_print_table_features(s, &tf, NULL);
+    }
+}
+
+static void
+ofp_print_table_desc_reply(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+
+    for (;;) {
+        struct ofputil_table_desc td;
+        int retval;
+
+        retval = ofputil_decode_table_desc(&b, &td, oh->version);
+        if (retval) {
+            if (retval != EOF) {
+                ofp_print_error(s, retval);
+            }
+            return;
+        }
+        ofp_print_table_desc(s, &td);
     }
 }
 
@@ -2764,6 +3004,11 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         ofp_print_table_features_reply(string, oh);
         break;
 
+    case OFPTYPE_TABLE_DESC_REQUEST:
+    case OFPTYPE_TABLE_DESC_REPLY:
+        ofp_print_table_desc_reply(string, oh);
+        break;
+
     case OFPTYPE_HELLO:
         ofp_print_hello(string, oh);
         break;
@@ -2951,7 +3196,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_SET_ASYNC_CONFIG:
-        ofp_print_nxt_set_async_config(string, ofpmsg_body(oh));
+        ofp_print_nxt_set_async_config(string, oh);
         break;
     case OFPTYPE_GET_ASYNC_REQUEST:
         break;

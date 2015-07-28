@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,9 +50,9 @@ int netflow_set_options(struct netflow *, const struct netflow_options *);
 void netflow_run(struct netflow *);
 void netflow_wait(struct netflow *);
 
-void netflow_mask_wc(struct flow *, struct flow_wildcards *);
+void netflow_mask_wc(const struct flow *, struct flow_wildcards *);
 
-void netflow_flow_clear(struct netflow *netflow, struct flow *flow);
+void netflow_flow_clear(struct netflow *, const struct flow *);
 
 void netflow_flow_update(struct netflow *nf, const struct flow *flow,
                          ofp_port_t output_iface,

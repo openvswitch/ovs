@@ -173,7 +173,11 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
     DPDK_LIB="-lintel_dpdk"
-    DPDK_EXTRA_LIB="-lfuse"
+    DPDK_EXTRA_LIB=""
+
+    OVS_GREP_IFELSE([$RTE_SDK/include/rte_config.h], [define RTE_LIBRTE_VHOST_USER 1],
+                    [], [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
+                         DPDK_EXTRA_LIB="-lfuse"])
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
@@ -221,8 +225,6 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
 
-    OVS_GREP_IFELSE([$RTE_SDK/include/rte_config.h], [define RTE_LIBRTE_VHOST_USER 1],
-                    [], [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])])
   else
     RTE_SDK=
   fi
@@ -269,7 +271,7 @@ dnl translated to uppercase.
 AC_DEFUN([OVS_FIND_FIELD_IFELSE], [
   AC_MSG_CHECKING([whether $2 has member $3 in $1])
   if test -f $1; then
-    awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3'
+    awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3' >/dev/null
     status=$?
     case $status in
       0)

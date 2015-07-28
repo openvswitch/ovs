@@ -1137,7 +1137,7 @@ bond_rebalance(struct bond *bond)
     }
     bond->next_rebalance = time_msec() + bond->rebalance_interval;
 
-    use_recirc = ofproto_dpif_get_enable_recirc(bond->ofproto) &&
+    use_recirc = ofproto_dpif_get_support(bond->ofproto)->odp.recirc &&
                  bond_may_recirc(bond, NULL, NULL);
 
     if (use_recirc) {

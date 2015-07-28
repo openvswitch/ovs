@@ -84,6 +84,7 @@ OVSDB_IDLC = $(run_python) $(srcdir)/ovsdb/ovsdb-idlc.in
 	$(AM_V_GEN)$(OVSDB_IDLC) c-idl-header $< > $@.tmp && mv $@.tmp $@
 
 BUILT_SOURCES += $(OVSIDL_BUILT)
+CLEANFILES += $(OVSIDL_BUILT)
 
 # This must be done late: macros in targets are expanded when the
 # target line is read, so if this file were to be included before some

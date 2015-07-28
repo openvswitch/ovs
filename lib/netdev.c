@@ -790,7 +790,7 @@ netdev_push_header(const struct netdev *netdev,
 
     for (i = 0; i < cnt; i++) {
         netdev->netdev_class->push_header(buffers[i], data);
-        buffers[i]->md = PKT_METADATA_INITIALIZER(u32_to_odp(data->out_port));
+        pkt_metadata_init(&buffers[i]->md, u32_to_odp(data->out_port));
     }
 
     return 0;

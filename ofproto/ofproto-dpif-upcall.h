@@ -28,6 +28,7 @@ struct simap;
  * them.  Additionally, it's responsible for maintaining the datapath flow
  * table. */
 
+void udpif_init(void);
 struct udpif *udpif_create(struct dpif_backer *, struct dpif *);
 void udpif_run(struct udpif *udpif);
 void udpif_set_threads(struct udpif *, size_t n_handlers,

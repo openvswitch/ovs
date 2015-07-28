@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -823,6 +823,13 @@ enum ofptype
 ofptype_from_ofpraw(enum ofpraw raw)
 {
     return raw_info_get(raw)->type;
+}
+
+const char *
+ofptype_get_name(enum ofptype type)
+{
+    ovs_assert(type < ARRAY_SIZE(type_names));
+    return type_names[type];
 }
 
 /* Updates the 'length' field of the OpenFlow message in 'buf' to

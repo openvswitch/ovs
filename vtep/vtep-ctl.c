@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,13 @@ static int timeout;
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
+/* The IDL we're using and the current transaction, if any.
+ * This is for use by vtep_ctl_exit() only, to allow it to clean up.
+ * Other code should use its context arguments. */
+static struct ovsdb_idl *the_idl;
+static struct ovsdb_idl_txn *the_idl_txn;
+
+OVS_NO_RETURN static void vtep_ctl_exit(int status);
 static void vtep_ctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
@@ -270,6 +277,23 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(options);
 }
 
+/* Frees the current transaction and the underlying IDL and then calls
+ * exit(status).
+ *
+ * Freeing the transaction and the IDL is not strictly necessary, but it makes
+ * for a clean memory leak report from valgrind in the normal case.  That makes
+ * it easier to notice real memory leaks. */
+static void
+vtep_ctl_exit(int status)
+{
+    if (the_idl_txn) {
+        ovsdb_idl_txn_abort(the_idl_txn);
+        ovsdb_idl_txn_destroy(the_idl_txn);
+    }
+    ovsdb_idl_destroy(the_idl);
+    exit(status);
+}
+
 static void
 usage(void)
 {
@@ -340,43 +364,43 @@ Other options:\n\
 }
 
 
-struct cmd_show_table cmd_show_tables[] = {
+static struct cmd_show_table cmd_show_tables[] = {
     {&vteprec_table_global,
      NULL,
      {&vteprec_global_col_managers,
       &vteprec_global_col_switches,
-      NULL},
-     false},
+      NULL}
+    },
 
     {&vteprec_table_manager,
      &vteprec_manager_col_target,
      {&vteprec_manager_col_is_connected,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
     {&vteprec_table_physical_switch,
      &vteprec_physical_switch_col_name,
      {&vteprec_physical_switch_col_management_ips,
       &vteprec_physical_switch_col_tunnel_ips,
-      &vteprec_physical_switch_col_ports},
-     false},
+      &vteprec_physical_switch_col_ports}
+    },
 
     {&vteprec_table_physical_port,
      &vteprec_physical_port_col_name,
      {&vteprec_physical_port_col_vlan_bindings,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
     {&vteprec_table_logical_switch,
      &vteprec_logical_switch_col_name,
      {NULL,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
-    {NULL, NULL, {NULL, NULL, NULL}, false}
+    {NULL, NULL, {NULL, NULL, NULL}}
 };
 
 /* vtep-ctl specific context.  Inherits the 'struct ctl_context' as base. */
@@ -495,7 +519,7 @@ del_cached_port(struct vtep_ctl_context *vtepctl_ctx,
     free(port);
 }
 
-static struct vtep_ctl_pswitch *
+static void
 add_pswitch_to_cache(struct vtep_ctl_context *vtepctl_ctx,
                      struct vteprec_physical_switch *ps_cfg)
 {
@@ -504,7 +528,6 @@ add_pswitch_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     ps->name = xstrdup(ps_cfg->name);
     list_init(&ps->ports);
     shash_add(&vtepctl_ctx->pswitches, ps->name, ps);
-    return ps;
 }
 
 static void
@@ -837,7 +860,6 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
     sset_init(&ports);
     for (i = 0; i < vtep_global->n_switches; i++) {
         struct vteprec_physical_switch *ps_cfg = vtep_global->switches[i];
-        struct vtep_ctl_pswitch *ps;
         size_t j;
 
         if (!sset_add(&pswitches, ps_cfg->name)) {
@@ -845,10 +867,7 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
                       ps_cfg->name);
             continue;
         }
-        ps = add_pswitch_to_cache(vtepctl_ctx, ps_cfg);
-        if (!ps) {
-            continue;
-        }
+        add_pswitch_to_cache(vtepctl_ctx, ps_cfg);
 
         for (j = 0; j < ps_cfg->n_ports; j++) {
             struct vteprec_physical_port *port_cfg = ps_cfg->ports[j];
@@ -1194,7 +1213,7 @@ cmd_ps_exists(struct ctl_context *ctx)
 
     vtep_ctl_context_populate_cache(ctx);
     if (!find_pswitch(vtepctl_ctx, ctx->argv[1], false)) {
-        ctl_exit(2);
+        vtep_ctl_exit(2);
     }
 }
 
@@ -1368,7 +1387,7 @@ cmd_ls_exists(struct ctl_context *ctx)
 
     vtep_ctl_context_populate_cache(ctx);
     if (!find_lswitch(vtepctl_ctx, ctx->argv[1], false)) {
-        ctl_exit(2);
+        vtep_ctl_exit(2);
     }
 }
 
@@ -1962,7 +1981,7 @@ cmd_set_manager(struct ctl_context *ctx)
 }
 
 /* Parameter commands. */
-const struct ctl_table_class tables[] = {
+static const struct ctl_table_class tables[] = {
     {&vteprec_table_global,
      {{&vteprec_table_global, NULL, NULL},
       {NULL, NULL, NULL}}},
@@ -2310,6 +2329,6 @@ static const struct ctl_command_syntax vtep_commands[] = {
 static void
 vtep_ctl_cmd_init(void)
 {
-    ctl_init();
+    ctl_init(tables, cmd_show_tables, vtep_ctl_exit);
     ctl_register_commands(vtep_commands);
 }

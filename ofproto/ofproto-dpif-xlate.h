@@ -247,7 +247,6 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    uint16_t tcp_flags, const struct dp_packet *packet);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
-void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
 
 int xlate_send_packet(const struct ofport_dpif *, struct dp_packet *);
 

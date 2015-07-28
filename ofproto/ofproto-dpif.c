@@ -359,22 +359,16 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
 }
 
-size_t
-ofproto_dpif_get_max_mpls_depth(const struct ofproto_dpif *ofproto)
-{
-    return ofproto->backer->support.max_mpls_depth;
-}
-
 bool
-ofproto_dpif_get_enable_recirc(const struct ofproto_dpif *ofproto)
-{
-    return ofproto->backer->support.recirc;
-}
-
-bool
-ofproto_dpif_get_enable_ufid(struct dpif_backer *backer)
+ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer)
 {
     return backer->support.ufid;
+}
+
+struct dpif_backer_support *
+ofproto_dpif_get_support(const struct ofproto_dpif *ofproto)
+{
+    return &ofproto->backer->support;
 }
 
 static void ofproto_trace(struct ofproto_dpif *, struct flow *,
@@ -392,9 +386,18 @@ static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
  * it. */
 void
 ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
-                      struct ofputil_flow_mod *fm)
+                      const struct ofputil_flow_mod *fm)
 {
-    ofproto_flow_mod(&ofproto->up, fm);
+    struct ofproto_flow_mod ofm;
+
+    /* Multiple threads may do this for the same 'fm' at the same time.
+     * Allocate ofproto_flow_mod with execution context from stack.
+     *
+     * Note: This copy could be avoided by making ofproto_flow_mod more
+     * complex, but that may not be desireable, and a learn action is not that
+     * fast to begin with. */
+    ofm.fm = *fm;
+    ofproto_flow_mod(&ofproto->up, &ofm);
 }
 
 /* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
@@ -443,6 +446,9 @@ init(const struct shash *iface_hints)
 
         shash_add(&init_ofp_ports, node->name, new_hint);
     }
+
+    ofproto_unixctl_init();
+    udpif_init();
 }
 
 static void
@@ -1005,7 +1011,9 @@ check_recirc(struct dpif_backer *backer)
     bool enable_recirc;
     struct odp_flow_key_parms odp_parms = {
         .flow = &flow,
-        .recirc = true,
+        .support = {
+            .recirc = true,
+        },
     };
 
     memset(&flow, 0, sizeof flow);
@@ -1226,8 +1234,8 @@ check_support(struct dpif_backer *backer)
     /* This feature needs to be tested after udpif threads are set. */
     backer->support.variable_length_userdata = false;
 
-    backer->support.recirc = check_recirc(backer);
-    backer->support.max_mpls_depth = check_max_mpls_depth(backer);
+    backer->support.odp.recirc = check_recirc(backer);
+    backer->support.odp.max_mpls_depth = check_max_mpls_depth(backer);
     backer->support.masked_set_action = check_masked_set_action(backer);
     backer->support.ufid = check_ufid(backer);
     backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
@@ -1265,8 +1273,6 @@ construct(struct ofproto *ofproto_)
     ovs_mutex_init(&ofproto->vsp_mutex);
 
     guarded_list_init(&ofproto->pins);
-
-    ofproto_unixctl_init();
 
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
@@ -4430,8 +4436,9 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
             bundle = b->port;
             ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
                                    name, sizeof name);
-            ds_put_format(&ds, "%5s  %4d  "IP_FMT"         %3d\n",
-                          name, grp->vlan, IP_ARGS(grp->ip4),
+            ds_put_format(&ds, "%5s  %4d  ", name, grp->vlan);
+            print_ipv6_mapped(&ds, &grp->addr);
+            ds_put_format(&ds, "         %3d\n",
                           mcast_bundle_age(ofproto->ms, b));
         }
     }
@@ -5477,28 +5484,28 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
                                const struct ofpbuf *ofpacts,
                                struct rule **rulep)
 {
-    struct ofputil_flow_mod fm;
+    struct ofproto_flow_mod ofm;
     struct rule_dpif *rule;
     int error;
 
-    fm.match = *match;
-    fm.priority = priority;
-    fm.new_cookie = htonll(0);
-    fm.cookie = htonll(0);
-    fm.cookie_mask = htonll(0);
-    fm.modify_cookie = false;
-    fm.table_id = TBL_INTERNAL;
-    fm.command = OFPFC_ADD;
-    fm.idle_timeout = idle_timeout;
-    fm.hard_timeout = 0;
-    fm.importance = 0;
-    fm.buffer_id = 0;
-    fm.out_port = 0;
-    fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    fm.ofpacts = ofpacts->data;
-    fm.ofpacts_len = ofpacts->size;
+    ofm.fm.match = *match;
+    ofm.fm.priority = priority;
+    ofm.fm.new_cookie = htonll(0);
+    ofm.fm.cookie = htonll(0);
+    ofm.fm.cookie_mask = htonll(0);
+    ofm.fm.modify_cookie = false;
+    ofm.fm.table_id = TBL_INTERNAL;
+    ofm.fm.command = OFPFC_ADD;
+    ofm.fm.idle_timeout = idle_timeout;
+    ofm.fm.hard_timeout = 0;
+    ofm.fm.importance = 0;
+    ofm.fm.buffer_id = 0;
+    ofm.fm.out_port = 0;
+    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
+    ofm.fm.ofpacts = ofpacts->data;
+    ofm.fm.ofpacts_len = ofpacts->size;
 
-    error = ofproto_flow_mod(&ofproto->up, &fm);
+    error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
         VLOG_ERR_RL(&rl, "failed to add internal flow (%s)",
                     ofperr_to_string(error));
@@ -5508,8 +5515,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
 
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
-                                     TBL_INTERNAL, &fm.match.flow,
-                                     &fm.match.wc, false);
+                                     TBL_INTERNAL, &ofm.fm.match.flow,
+                                     &ofm.fm.match.wc, false);
     if (rule) {
         *rulep = &rule->up;
     } else {
@@ -5522,20 +5529,20 @@ int
 ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
                                   struct match *match, int priority)
 {
-    struct ofputil_flow_mod fm;
+    struct ofproto_flow_mod ofm;
     int error;
 
-    fm.match = *match;
-    fm.priority = priority;
-    fm.new_cookie = htonll(0);
-    fm.cookie = htonll(0);
-    fm.cookie_mask = htonll(0);
-    fm.modify_cookie = false;
-    fm.table_id = TBL_INTERNAL;
-    fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    fm.command = OFPFC_DELETE_STRICT;
+    ofm.fm.match = *match;
+    ofm.fm.priority = priority;
+    ofm.fm.new_cookie = htonll(0);
+    ofm.fm.cookie = htonll(0);
+    ofm.fm.cookie_mask = htonll(0);
+    ofm.fm.modify_cookie = false;
+    ofm.fm.table_id = TBL_INTERNAL;
+    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
+    ofm.fm.command = OFPFC_DELETE_STRICT;
 
-    error = ofproto_flow_mod(&ofproto->up, &fm);
+    error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
         VLOG_ERR_RL(&rl, "failed to delete internal flow (%s)",
                     ofperr_to_string(error));

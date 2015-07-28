@@ -160,6 +160,9 @@ void match_print(const struct match *);
 
 /* A sparse representation of a "struct match".
  *
+ * 'flows' is used for allocating both 'flow' and 'mask' with one
+ * miniflow_alloc() call.
+ *
  * There are two invariants:
  *
  *   - The same invariant as "struct match", that is, a 1-bit in the 'flow'
@@ -170,8 +173,13 @@ void match_print(const struct match *);
  *     'values', which makes minimatch_matches_flow() faster.
  */
 struct minimatch {
-    struct miniflow flow;
-    struct minimask mask;
+    union {
+        struct {
+            struct miniflow *flow;
+            struct minimask *mask;
+        };
+        struct miniflow *flows[2];
+    };
 };
 
 void minimatch_init(struct minimatch *, const struct match *);

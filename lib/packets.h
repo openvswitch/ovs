@@ -35,8 +35,8 @@ struct ds;
 /* Tunnel information used in flow key and metadata. */
 struct flow_tnl {
     ovs_be64 tun_id;
-    ovs_be32 ip_src;
     ovs_be32 ip_dst;
+    ovs_be32 ip_src;
     uint16_t flags;
     uint8_t ip_tos;
     uint8_t ip_ttl;
@@ -69,8 +69,17 @@ struct pkt_metadata {
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
 };
 
-#define PKT_METADATA_INITIALIZER(PORT) \
-    (struct pkt_metadata){ .in_port.odp_port = PORT }
+static inline void
+pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
+{
+    /* It can be expensive to zero out all of the tunnel metadata. However,
+     * we can just zero out ip_dst and the rest of the data will never be
+     * looked at. */
+    memset(md, 0, offsetof(struct pkt_metadata, tunnel));
+    md->tunnel.ip_dst = 0;
+
+    md->in_port.odp_port = port;
+}
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
@@ -570,6 +579,9 @@ BUILD_ASSERT_DECL(IGMPV3_RECORD_LEN == sizeof(struct igmpv3_record));
 #define IGMP_HOST_LEAVE_MESSAGE       0x17
 #define IGMPV3_HOST_MEMBERSHIP_REPORT 0x22 /* V3 version of 0x12 */
 
+/*
+ * IGMPv3 and MLDv2 use the same codes.
+ */
 #define IGMPV3_MODE_IS_INCLUDE 1
 #define IGMPV3_MODE_IS_EXCLUDE 2
 #define IGMPV3_CHANGE_TO_INCLUDE_MODE 3
@@ -707,6 +719,35 @@ struct ovs_nd_msg {
 };
 BUILD_ASSERT_DECL(ND_MSG_LEN == sizeof(struct ovs_nd_msg));
 
+/*
+ * Use the same struct for MLD and MLD2, naming members as the defined fields in
+ * in the corresponding version of the protocol, though they are reserved in the
+ * other one.
+ */
+#define MLD_HEADER_LEN 8
+struct mld_header {
+    uint8_t type;
+    uint8_t code;
+    ovs_be16 csum;
+    ovs_be16 mrd;
+    ovs_be16 ngrp;
+};
+BUILD_ASSERT_DECL(MLD_HEADER_LEN == sizeof(struct mld_header));
+
+#define MLD2_RECORD_LEN 20
+struct mld2_record {
+    uint8_t type;
+    uint8_t aux_len;
+    ovs_be16 nsrcs;
+    union ovs_16aligned_in6_addr maddr;
+};
+BUILD_ASSERT_DECL(MLD2_RECORD_LEN == sizeof(struct mld2_record));
+
+#define MLD_QUERY 130
+#define MLD_REPORT 131
+#define MLD_DONE 132
+#define MLD2_REPORT 143
+
 /* The IPv6 flow label is in the lower 20 bits of the first 32-bit word. */
 #define IPV6_LABEL_MASK 0x000fffff
 
@@ -728,6 +769,10 @@ extern const struct in6_addr in6addr_exact;
 #define IN6ADDR_EXACT_INIT { { { 0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff, \
                                  0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff } } }
 
+extern const struct in6_addr in6addr_all_hosts;
+#define IN6ADDR_ALL_HOSTS_INIT { { { 0xff,0x02,0x00,0x00,0x00,0x00,0x00,0x00, \
+                                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01 } } }
+
 static inline bool ipv6_addr_equals(const struct in6_addr *a,
                                     const struct in6_addr *b)
 {
@@ -744,6 +789,10 @@ static inline bool ipv6_mask_is_any(const struct in6_addr *mask) {
 
 static inline bool ipv6_mask_is_exact(const struct in6_addr *mask) {
     return ipv6_addr_equals(mask, &in6addr_exact);
+}
+
+static inline bool ipv6_is_all_hosts(const struct in6_addr *addr) {
+    return ipv6_addr_equals(addr, &in6addr_all_hosts);
 }
 
 static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
@@ -819,6 +868,7 @@ struct vxlanhdr {
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
 void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
+void print_ipv6_mapped(struct ds *string, const struct in6_addr *addr);
 void print_ipv6_masked(struct ds *string, const struct in6_addr *addr,
                        const struct in6_addr *mask);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,

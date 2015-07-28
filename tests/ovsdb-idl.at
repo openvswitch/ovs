@@ -76,6 +76,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
 m4_define([OVSDB_CHECK_IDL_TCP6_PY],
   [AT_SETUP([$1 - Python tcp6])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR

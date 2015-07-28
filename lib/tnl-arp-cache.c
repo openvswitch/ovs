@@ -75,8 +75,8 @@ tnl_arp_lookup(const char br_name[IFNAMSIZ], ovs_be32 dst,
 
     arp = tnl_arp_lookup__(br_name, dst);
     if (arp) {
-            memcpy(mac, arp->mac, ETH_ADDR_LEN);
-            res = 0;
+        memcpy(mac, arp->mac, ETH_ADDR_LEN);
+        res = 0;
     }
 
     return res;
@@ -142,8 +142,8 @@ tnl_arp_cache_run(void)
     ovs_mutex_lock(&mutex);
     CMAP_FOR_EACH(arp, cmap_node, &table) {
         if (arp->expires <= time_now()) {
-             tnl_arp_delete(arp);
-             changed = true;
+            tnl_arp_delete(arp);
+            changed = true;
         }
     }
     ovs_mutex_unlock(&mutex);
@@ -154,7 +154,7 @@ tnl_arp_cache_run(void)
 }
 
 static void
-tnl_arp_cache_flush(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
+tnl_arp_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct tnl_arp_entry *arp;
@@ -162,8 +162,8 @@ tnl_arp_cache_flush(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
 
     ovs_mutex_lock(&mutex);
     CMAP_FOR_EACH(arp, cmap_node, &table) {
-          tnl_arp_delete(arp);
-          changed = true;
+        tnl_arp_delete(arp);
+        changed = true;
     }
     ovs_mutex_unlock(&mutex);
     if (changed) {

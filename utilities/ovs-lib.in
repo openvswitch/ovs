@@ -250,3 +250,78 @@ daemon_is_running () {
     pidfile=$rundir/$1.pid
     test -e "$pidfile" && pid=`cat "$pidfile"` && pid_exists "$pid" && pid_comm_check $1 $pid
 } >/dev/null 2>&1
+
+# Prints commands needed to move the ip address from interface $1 to interface
+# $2
+move_ip_address () {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        return
+    fi
+    dev="$1"
+    dst="$2"
+
+    # IP addresses (including IPv6).
+    echo "ip addr flush dev $dev 2>/dev/null" # Suppresses "Nothing to flush".
+    ip addr show dev $dev | while read addr; do
+        set -- $addr
+
+        # Check and trim family.
+        family=$1
+        shift
+        case $family in
+            inet | inet6) ;;
+            *) continue ;;
+        esac
+
+        # Trim device off the end--"ip" insists on having "dev" precede it.
+        addrcmd=
+        while test $# != 0; do
+            case $1 in
+                dynamic)
+                    # Omit kernel-maintained route.
+                    continue 2
+                    ;;
+                scope)
+                    if test "$2" = link -a "$family" != inet6; then
+                        # Omit route derived from IP address, e.g.
+                        # 172.16.0.0/16 derived from 172.16.12.34,
+                        # but preserve IPv6 link-local address.
+                        continue 2
+                    fi
+                    ;;
+                "$dev"|"$dev:"*)
+                    # Address label string
+                    label=`echo $1 | sed "s/$dev/$dst/"`
+                    addrcmd="$addrcmd label $label"
+                    shift
+                    continue
+                    ;;
+            esac
+            addrcmd="$addrcmd $1"
+            shift
+        done
+        if test "$1" != "$dev"; then
+            addrcmd="$addrcmd $1"
+        fi
+
+        echo ip -f $family addr add $addrcmd dev $dst
+    done
+}
+
+# Prints commands needed to move the ip route of interface $1 to interface $2
+move_ip_routes () {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        return
+    fi
+    dev="$1"
+    dst="$2"
+    echo "ip route flush dev $dev proto boot 2>/dev/null" # Suppresses "Nothing to flush".
+    ip route show dev $dev | while read route; do
+        # "proto kernel" routes are installed by the kernel automatically.
+        case $route in
+            *" proto kernel "*) continue ;;
+        esac
+
+        echo "ip route add $route dev $dst"
+    done
+}

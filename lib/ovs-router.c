@@ -116,10 +116,10 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
     p->plen = plen;
     p->priority = priority;
     /* Longest prefix matches first. */
-    cls_rule_init(&p->cr, &match, priority, CLS_MIN_VERSION);
+    cls_rule_init(&p->cr, &match, priority);
 
     ovs_mutex_lock(&mutex);
-    cr = classifier_replace(&cls, &p->cr, NULL, 0);
+    cr = classifier_replace(&cls, &p->cr, CLS_MIN_VERSION, NULL, 0);
     ovs_mutex_unlock(&mutex);
 
     if (cr) {
@@ -145,10 +145,10 @@ rt_entry_delete(uint8_t priority, ovs_be32 ip_dst, uint8_t plen)
 
     rt_init_match(&match, ip_dst, plen);
 
-    cls_rule_init(&rule, &match, priority, CLS_MIN_VERSION);
+    cls_rule_init(&rule, &match, priority);
 
     /* Find the exact rule. */
-    cr = classifier_find_rule_exactly(&cls, &rule);
+    cr = classifier_find_rule_exactly(&cls, &rule, CLS_MAX_VERSION);
     if (cr) {
         /* Remove it. */
         ovs_mutex_lock(&mutex);

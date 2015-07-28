@@ -34,19 +34,43 @@
 #include "ovsdb-idl.h"
 #include "ovsdb-idl-provider.h"
 #include "shash.h"
+#include "sset.h"
 #include "string.h"
 #include "table.h"
 #include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(db_ctl_base);
 
-/* The IDL we're using and the current transaction, if any.
- * This is for use by ctl_exit() only, to allow it to clean up.
- * Other code should use its context arguments. */
-struct ovsdb_idl *the_idl;
-struct ovsdb_idl_txn *the_idl_txn;
+/* This array defines the 'show' command output format.  User can check the
+ * definition in utilities/ovs-vsctl.c as reference.
+ *
+ * Particularly, if an element in 'columns[]' represents a reference to
+ * another table, the referred table must also be defined as an entry in
+ * in 'cmd_show_tables[]'.
+ *
+ * The definition must end with an all-NULL entry.  It is initalized once
+ * when ctl_init() is called.
+ *
+ * */
+static const struct cmd_show_table *cmd_show_tables;
+
+/* ctl_exit() is called by ctl_fatal(). User can optionally supply an exit
+ * function ctl_exit_func() via ctl_init. If supplied, this function will
+ * be called by ctl_exit()
+ */
+static void (*ctl_exit_func)(int status) = NULL;
+OVS_NO_RETURN static void ctl_exit(int status);
+
+/* Represents all tables in the schema.  User must define 'tables'
+ * in implementation and supply via clt_init().  The definition must end
+ * with an all-NULL entry. */
+static const struct ctl_table_class *tables;
 
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
+static const struct ctl_table_class *get_table(const char *table_name);
+static void set_column(const struct ctl_table_class *,
+                       const struct ovsdb_idl_row *, const char *,
+                       struct ovsdb_symbol_table *);
 
 
 static struct option *
@@ -979,6 +1003,35 @@ cmd_list(struct ctl_context *ctx)
     free(columns);
 }
 
+/* Finds and returns the "struct ctl_table_class *" with 'table_name' by
+ * searching the 'tables'. */
+static const struct ctl_table_class *
+get_table(const char *table_name)
+{
+    const struct ctl_table_class *table;
+    const struct ctl_table_class *best_match = NULL;
+    unsigned int best_score = 0;
+
+    for (table = tables; table->class; table++) {
+        unsigned int score = score_partial_match(table->class->name,
+                                                 table_name);
+        if (score > best_score) {
+            best_match = table;
+            best_score = score;
+        } else if (score == best_score) {
+            best_match = NULL;
+        }
+    }
+    if (best_match) {
+        return best_match;
+    } else if (best_score) {
+        ctl_fatal("multiple table names match \"%s\"", table_name);
+    } else {
+        ctl_fatal("unknown table \"%s\"", table_name);
+    }
+    return NULL;
+}
+
 static void
 pre_cmd_find(struct ctl_context *ctx)
 {
@@ -1025,6 +1078,60 @@ cmd_find(struct ctl_context *ctx)
     free(columns);
 }
 
+/* Sets the column of 'row' in 'table'. */
+static void
+set_column(const struct ctl_table_class *table,
+           const struct ovsdb_idl_row *row, const char *arg,
+           struct ovsdb_symbol_table *symtab)
+{
+    const struct ovsdb_idl_column *column;
+    char *key_string, *value_string;
+    char *error;
+
+    error = parse_column_key_value(arg, table, &column, &key_string,
+                                   NULL, NULL, 0, &value_string);
+    die_if_error(error);
+    if (!value_string) {
+        ctl_fatal("%s: missing value", arg);
+    }
+    check_mutable(row, column);
+
+    if (key_string) {
+        union ovsdb_atom key, value;
+        struct ovsdb_datum datum;
+
+        if (column->type.value.type == OVSDB_TYPE_VOID) {
+            ctl_fatal("cannot specify key to set for non-map column %s",
+                      column->name);
+        }
+
+        die_if_error(ovsdb_atom_from_string(&key, &column->type.key,
+                                            key_string, symtab));
+        die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
+                                            value_string, symtab));
+
+        ovsdb_datum_init_empty(&datum);
+        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
+
+        ovsdb_atom_destroy(&key, column->type.key.type);
+        ovsdb_atom_destroy(&value, column->type.value.type);
+
+        ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
+                          &column->type, false);
+        ovsdb_idl_txn_verify(row, column);
+        ovsdb_idl_txn_write(row, column, &datum);
+    } else {
+        struct ovsdb_datum datum;
+
+        die_if_error(ovsdb_datum_from_string(&datum, &column->type,
+                                             value_string, symtab));
+        ovsdb_idl_txn_write(row, column, &datum);
+    }
+
+    free(key_string);
+    free(value_string);
+}
+
 static void
 pre_cmd_set(struct ctl_context *ctx)
 {
@@ -1044,7 +1151,7 @@ cmd_set(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
-    const struct ctl_table_class*table;
+    const struct ctl_table_class *table;
     const struct ovsdb_idl_row *row;
     int i;
 
@@ -1498,7 +1605,7 @@ parse_command(int argc, char *argv[], struct shash *local_options,
 static void
 pre_cmd_show(struct ctl_context *ctx)
 {
-    struct cmd_show_table *show;
+    const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
         size_t i;
@@ -1516,10 +1623,10 @@ pre_cmd_show(struct ctl_context *ctx)
     }
 }
 
-static struct cmd_show_table *
+static const struct cmd_show_table *
 cmd_show_find_table_by_row(const struct ovsdb_idl_row *row)
 {
-    struct cmd_show_table *show;
+    const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
         if (show->table == row->table->class) {
@@ -1529,10 +1636,10 @@ cmd_show_find_table_by_row(const struct ovsdb_idl_row *row)
     return NULL;
 }
 
-static struct cmd_show_table *
+static const struct cmd_show_table *
 cmd_show_find_table_by_name(const char *name)
 {
-    struct cmd_show_table *show;
+    const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
         if (!strcmp(show->table->name, name)) {
@@ -1542,11 +1649,14 @@ cmd_show_find_table_by_name(const char *name)
     return NULL;
 }
 
+/* 'shown' records the tables that has been displayed by the current
+ * command to avoid duplicated prints.
+ */
 static void
 cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
-             int level)
+             int level, struct sset *shown)
 {
-    struct cmd_show_table *show = cmd_show_find_table_by_row(row);
+    const struct cmd_show_table *show = cmd_show_find_table_by_row(row);
     size_t i;
 
     ds_put_char_multiple(&ctx->output, ' ', level * 4);
@@ -1561,11 +1671,11 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
     }
     ds_put_char(&ctx->output, '\n');
 
-    if (!show || show->recurse) {
+    if (!show || sset_find(shown, show->table->name)) {
         return;
     }
 
-    show->recurse = true;
+    sset_add(shown, show->table->name);
     for (i = 0; i < ARRAY_SIZE(show->columns); i++) {
         const struct ovsdb_idl_column *column = show->columns[i];
         const struct ovsdb_datum *datum;
@@ -1577,7 +1687,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
         datum = ovsdb_idl_read(row, column);
         if (column->type.key.type == OVSDB_TYPE_UUID &&
             column->type.key.u.uuid.refTableName) {
-            struct cmd_show_table *ref_show;
+            const struct cmd_show_table *ref_show;
             size_t j;
 
             ref_show = cmd_show_find_table_by_name(
@@ -1590,7 +1700,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
                                                          ref_show->table,
                                                          &datum->keys[j].uuid);
                     if (ref_row) {
-                        cmd_show_row(ctx, ref_row, level + 1);
+                        cmd_show_row(ctx, ref_row, level + 1, shown);
                     }
                 }
                 continue;
@@ -1598,7 +1708,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
         } else if (ovsdb_type_is_map(&column->type) &&
                    column->type.value.type == OVSDB_TYPE_UUID &&
                    column->type.value.u.uuid.refTableName) {
-            struct cmd_show_table *ref_show;
+            const struct cmd_show_table *ref_show;
             size_t j;
 
             /* Prints the key to ref'ed table name map if the ref'ed table
@@ -1643,18 +1753,22 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
             ds_put_char(&ctx->output, '\n');
         }
     }
-    show->recurse = false;
+    sset_find_and_delete_assert(shown, show->table->name);
 }
 
 static void
 cmd_show(struct ctl_context *ctx)
 {
     const struct ovsdb_idl_row *row;
+    struct sset shown = SSET_INITIALIZER(&shown);
 
     for (row = ovsdb_idl_first_row(ctx->idl, cmd_show_tables[0].table);
          row; row = ovsdb_idl_next_row(row)) {
-        cmd_show_row(ctx, row, 0);
+        cmd_show_row(ctx, row, 0, &shown);
     }
+
+    ovs_assert(sset_is_empty(&shown));
+    sset_destroy(&shown);
 }
 
 
@@ -1670,7 +1784,7 @@ ctl_add_cmd_options(struct option **options_p, size_t *n_options_p,
     const struct shash_node *node;
     size_t n_existing_options = *n_options_p;
 
-    SHASH_FOR_EACH (node, ctl_get_all_commands()) {
+    SHASH_FOR_EACH (node, &all_commands) {
         const struct ctl_command_syntax *p = node->data;
 
         if (p->options[0]) {
@@ -1760,7 +1874,7 @@ ctl_print_commands(void)
 {
     const struct shash_node *node;
 
-    SHASH_FOR_EACH (node, ctl_get_all_commands()) {
+    SHASH_FOR_EACH (node, &all_commands) {
         const struct ctl_command_syntax *p = node->data;
         char *options = xstrdup(p->options);
         char *options_begin = options;
@@ -1816,7 +1930,8 @@ bool
 ctl_might_write_to_db(char **argv)
 {
     for (; *argv; argv++) {
-        const struct ctl_command_syntax *p = shash_find_data(&all_commands, *argv);
+        const struct ctl_command_syntax *p = shash_find_data(&all_commands,
+                                                             *argv);
         if (p && p->mode == RW) {
             return true;
         }
@@ -1846,22 +1961,14 @@ ctl_fatal(const char *format, ...)
  * Freeing the transaction and the IDL is not strictly necessary, but it makes
  * for a clean memory leak report from valgrind in the normal case.  That makes
  * it easier to notice real memory leaks. */
-void
+static void
 ctl_exit(int status)
 {
-    if (the_idl_txn) {
-        ovsdb_idl_txn_abort(the_idl_txn);
-        ovsdb_idl_txn_destroy(the_idl_txn);
+    if (ctl_exit_func) {
+        ctl_exit_func(status);
     }
-    ovsdb_idl_destroy(the_idl);
     exit(status);
 }
-
-/* Command for showing overview of database contents. */
-static const struct ctl_command_syntax db_ctl_show_command[] = {
-    {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO},
-    {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
-};
 
 /* Comman database commands to be registered. */
 static const struct ctl_command_syntax db_ctl_commands[] = {
@@ -1886,6 +1993,7 @@ static const struct ctl_command_syntax db_ctl_commands[] = {
      NULL, "--if-exists,--all", RW},
     {"wait-until", 2, INT_MAX, "TABLE RECORD [COLUMN[:KEY]=VALUE]...",
      pre_cmd_wait_until, cmd_wait_until, NULL, "", RO},
+    {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO},
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };
 
@@ -1904,17 +2012,14 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
 
 /* Registers the 'db_ctl_commands' to 'all_commands'. */
 void
-ctl_init(void)
+ctl_init(const struct ctl_table_class tables_[],
+         const struct cmd_show_table cmd_show_tables_[],
+         void (*ctl_exit_func_)(int status))
 {
+    tables = tables_;
+    cmd_show_tables = cmd_show_tables_;
+    ctl_exit_func = ctl_exit_func_;
     ctl_register_commands(db_ctl_commands);
-    ctl_register_commands(db_ctl_show_command);
-}
-
-/* Returns 'all_commands'. */
-const struct shash *
-ctl_get_all_commands(void)
-{
-    return &all_commands;
 }
 
 /* Returns the text for the database commands usage.  */
@@ -1988,85 +2093,9 @@ ctl_context_done(struct ctl_context *ctx,
     invalidate_cache(ctx);
 }
 
-/* Finds and returns the "struct ctl_table_class *" with 'table_name' by
- * searching the 'tables'. */
-const struct ctl_table_class *
-get_table(const char *table_name)
+void ctl_set_column(const char *table_name,
+                    const struct ovsdb_idl_row *row, const char *arg,
+                    struct ovsdb_symbol_table *symtab)
 {
-    const struct ctl_table_class *table;
-    const struct ctl_table_class *best_match = NULL;
-    unsigned int best_score = 0;
-
-    for (table = tables; table->class; table++) {
-        unsigned int score = score_partial_match(table->class->name,
-                                                 table_name);
-        if (score > best_score) {
-            best_match = table;
-            best_score = score;
-        } else if (score == best_score) {
-            best_match = NULL;
-        }
-    }
-    if (best_match) {
-        return best_match;
-    } else if (best_score) {
-        ctl_fatal("multiple table names match \"%s\"", table_name);
-    } else {
-        ctl_fatal("unknown table \"%s\"", table_name);
-    }
-    return NULL;
-}
-
-/* Sets the column of 'row' in 'table'. */
-void
-set_column(const struct ctl_table_class *table,
-           const struct ovsdb_idl_row *row, const char *arg,
-           struct ovsdb_symbol_table *symtab)
-{
-    const struct ovsdb_idl_column *column;
-    char *key_string, *value_string;
-    char *error;
-
-    error = parse_column_key_value(arg, table, &column, &key_string,
-                                   NULL, NULL, 0, &value_string);
-    die_if_error(error);
-    if (!value_string) {
-        ctl_fatal("%s: missing value", arg);
-    }
-    check_mutable(row, column);
-
-    if (key_string) {
-        union ovsdb_atom key, value;
-        struct ovsdb_datum datum;
-
-        if (column->type.value.type == OVSDB_TYPE_VOID) {
-            ctl_fatal("cannot specify key to set for non-map column %s",
-                      column->name);
-        }
-
-        die_if_error(ovsdb_atom_from_string(&key, &column->type.key,
-                                            key_string, symtab));
-        die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
-                                            value_string, symtab));
-
-        ovsdb_datum_init_empty(&datum);
-        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
-
-        ovsdb_atom_destroy(&key, column->type.key.type);
-        ovsdb_atom_destroy(&value, column->type.value.type);
-
-        ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
-                          &column->type, false);
-        ovsdb_idl_txn_verify(row, column);
-        ovsdb_idl_txn_write(row, column, &datum);
-    } else {
-        struct ovsdb_datum datum;
-
-        die_if_error(ovsdb_datum_from_string(&datum, &column->type,
-                                             value_string, symtab));
-        ovsdb_idl_txn_write(row, column, &datum);
-    }
-
-    free(key_string);
-    free(value_string);
+    set_column(get_table(table_name), row, arg, symtab);
 }

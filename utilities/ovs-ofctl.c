@@ -338,10 +338,14 @@ usage(void)
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  dump-table-features SWITCH  print table features\n"
+           "  dump-table-desc SWITCH      print table description (OF1.4+)\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
+           "      OF1.1/1.2 MOD: controller, continue, drop\n"
+           "      OF1.4+ MOD: evict, noevict\n"
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
+           "      FRAG_MODE: normal, drop, reassemble, nx-match\n"
            "  dump-ports SWITCH [PORT]    print port statistics\n"
            "  dump-ports-desc SWITCH [PORT]  print port descriptions\n"
            "  dump-flows SWITCH           print all flow entries\n"
@@ -733,6 +737,22 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
 
     vconn_close(vconn);
 }
+
+static void
+ofctl_dump_table_desc(struct ovs_cmdl_context *ctx)
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    open_vconn(ctx->argv[1], &vconn);
+    request = ofputil_encode_table_desc_request(vconn_get_version(vconn));
+    if (request) {
+        dump_stats_transaction(vconn, request);
+    }
+
+    vconn_close(vconn);
+}
+
 
 static bool fetch_port_by_stats(struct vconn *,
                                 const char *port_name, ofp_port_t port_no,
@@ -1848,35 +1868,28 @@ found:
 static void
 ofctl_mod_table(struct ovs_cmdl_context *ctx)
 {
-    enum ofputil_protocol protocol, usable_protocols;
+    uint32_t usable_versions;
     struct ofputil_table_mod tm;
     struct vconn *vconn;
     char *error;
-    int i;
 
-    error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3], &usable_protocols);
+    error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3],
+                                &usable_versions);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
 
-    protocol = open_vconn(ctx->argv[1], &vconn);
-    if (!(protocol & usable_protocols)) {
-        for (i = 0; i < sizeof(enum ofputil_protocol) * CHAR_BIT; i++) {
-            enum ofputil_protocol f = 1 << i;
-            if (f != protocol
-                && f & usable_protocols
-                && try_set_protocol(vconn, f, &protocol)) {
-                protocol = f;
-                break;
-            }
-        }
+    uint32_t allowed_versions = get_allowed_ofp_versions();
+    if (!(allowed_versions & usable_versions)) {
+        struct ds versions = DS_EMPTY_INITIALIZER;
+        ofputil_format_version_bitmap_names(&versions, allowed_versions);
+        ovs_fatal(0, "table_mod '%s' requires one of the OpenFlow "
+                  "versions %s but none is enabled (use -O)",
+                  ctx->argv[3], ds_cstr(&versions));
     }
+    mask_allowed_ofp_versions(usable_versions);
 
-    if (!(protocol & usable_protocols)) {
-        char *usable_s = ofputil_protocols_to_string(usable_protocols);
-        ovs_fatal(0, "Switch does not support table mod message(%s)", usable_s);
-    }
-
+    enum ofputil_protocol protocol = open_vconn(ctx->argv[1], &vconn);
     transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
     vconn_close(vconn);
 }
@@ -2018,7 +2031,7 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
         if (error) {
             break;
         }
-        packet->md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+        pkt_metadata_init(&packet->md, ODPP_NONE);
         flow_extract(packet, &flow);
         if (flow.dl_type == htons(ETH_TYPE_IP)
             && flow.nw_proto == IPPROTO_TCP
@@ -2508,10 +2521,11 @@ fte_insert(struct classifier *cls, const struct match *match,
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
-    cls_rule_init(&fte->rule, match, priority, CLS_MIN_VERSION);
+    cls_rule_init(&fte->rule, match, priority);
     fte->versions[index] = version;
 
-    old = fte_from_cls_rule(classifier_replace(cls, &fte->rule, NULL, 0));
+    old = fte_from_cls_rule(classifier_replace(cls, &fte->rule,
+                                               CLS_MIN_VERSION, NULL, 0));
     if (old) {
         fte->versions[!index] = old->versions[!index];
         old->versions[!index] = NULL;
@@ -3374,7 +3388,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
             ovs_fatal(error, "%s: read failed", ctx->argv[1]);
         }
 
-        packet->md = PKT_METADATA_INITIALIZER(ODPP_NONE);
+        pkt_metadata_init(&packet->md, ODPP_NONE);
         flow_extract(packet, &flow);
         flow_print(stdout, &flow);
         putchar('\n');
@@ -3616,6 +3630,8 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 1, ofctl_dump_tables },
     { "dump-table-features", "switch",
       1, 1, ofctl_dump_table_features },
+    { "dump-table-desc", "switch",
+      1, 1, ofctl_dump_table_desc },
     { "dump-flows", "switch",
       1, 2, ofctl_dump_flows },
     { "dump-aggregate", "switch",

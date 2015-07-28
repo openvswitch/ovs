@@ -27,6 +27,7 @@
 #include "ovsdb.h"
 #include "row.h"
 #include "table.h"
+#include "perf-counter.h"
 #include "uuid.h"
 
 struct ovsdb_txn {
@@ -747,8 +748,8 @@ check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
     return NULL;
 }
 
-struct ovsdb_error *
-ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
+static struct ovsdb_error *
+ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
 {
     struct ovsdb_replica *replica;
     struct ovsdb_error *error;
@@ -819,6 +820,15 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
     ovsdb_txn_free(txn);
 
     return NULL;
+}
+
+struct ovsdb_error *
+ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
+{
+   struct ovsdb_error *err;
+
+   PERF(__func__, err = ovsdb_txn_commit_(txn, durable));
+   return err;
 }
 
 void

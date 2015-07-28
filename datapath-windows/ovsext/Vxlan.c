@@ -15,6 +15,7 @@
  */
 
 #include "precomp.h"
+#include "Atomic.h"
 #include "NetProto.h"
 #include "Switch.h"
 #include "Vport.h"
@@ -113,11 +114,11 @@ OvsInitVxlanTunnel(PIRP irp,
     vport->priv = (PVOID)vxlanPort;
 
     if (!OvsIsTunnelFilterCreated(gOvsSwitchContext, udpDestPort)) {
-        status = OvsTunelFilterCreate(irp,
-                                      udpDestPort,
-                                      &vxlanPort->filterID,
-                                      callback,
-                                      tunnelContext);
+        status = OvsTunnelFilterCreate(irp,
+                                       udpDestPort,
+                                       &vxlanPort->filterID,
+                                       callback,
+                                       tunnelContext);
     } else {
         status = STATUS_OBJECT_NAME_EXISTS;
     }
@@ -150,14 +151,14 @@ OvsCleanupVxlanTunnel(PIRP irp,
     vxlanPort = (POVS_VXLAN_VPORT)vport->priv;
 
     if (vxlanPort->filterID != 0) {
-        status = OvsTunelFilterDelete(irp,
-                                      vxlanPort->filterID,
-                                      callback,
-                                      tunnelContext);
+        status = OvsTunnelFilterDelete(irp,
+				       vxlanPort->filterID,
+				       callback,
+				       tunnelContext);
+    } else {
+        OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
+        vport->priv = NULL;
     }
-
-    OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
-    vport->priv = NULL;
 
     return status;
 }
@@ -263,11 +264,13 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
         ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
 
         ipHdr->ihl = sizeof *ipHdr / 4;
-        ipHdr->version = IPV4;
-        ipHdr->tos = 0;
+        ipHdr->version = IPPROTO_IPV4;
+        ipHdr->tos = tunKey->tos;
         ipHdr->tot_len = htons(NET_BUFFER_DATA_LENGTH(curNb) - sizeof *ethHdr);
-        ipHdr->id = 0;
-        ipHdr->frag_off = IP_DF_NBO;
+        ipHdr->id = (uint16)atomic_add64(&vportVxlan->ipId,
+                                         NET_BUFFER_DATA_LENGTH(curNb));
+        ipHdr->frag_off = (tunKey->flags & OVS_TNL_F_DONT_FRAGMENT) ?
+                          IP_DF_NBO : 0;
         ipHdr->ttl = tunKey->ttl ? tunKey->ttl : VXLAN_DEFAULT_TTL;
         ipHdr->protocol = IPPROTO_UDP;
         ASSERT(tunKey->dst == fwdInfo->dstIpAddr);
@@ -279,7 +282,7 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
 
         /* UDP header */
         udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
-        udpHdr->source = htons(tunKey->flow_hash | 32768);
+        udpHdr->source = htons(tunKey->flow_hash | MAXINT16);
         udpHdr->dest = htons(vportVxlan->dstPort);
         udpHdr->len = htons(NET_BUFFER_DATA_LENGTH(curNb) - headRoom +
                             sizeof *udpHdr + sizeof *vxlanHdr);

@@ -743,6 +743,7 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
     int err = 0;
+    int old_rxq, old_txq;
 
     if (netdev->up.n_txq == n_txq && netdev->up.n_rxq == n_rxq) {
         return err;
@@ -753,12 +754,20 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
 
     rte_eth_dev_stop(netdev->port_id);
 
+    old_txq = netdev->up.n_txq;
+    old_rxq = netdev->up.n_rxq;
     netdev->up.n_txq = n_txq;
     netdev->up.n_rxq = n_rxq;
 
     rte_free(netdev->tx_q);
     err = dpdk_eth_dev_init(netdev);
     netdev_dpdk_alloc_txq(netdev, netdev->real_n_txq);
+    if (err) {
+        /* If there has been an error, it means that the requested queues
+         * have not been created.  Restore the old numbers. */
+        netdev->up.n_txq = old_txq;
+        netdev->up.n_rxq = old_rxq;
+    }
 
     netdev->txq_needs_locking = netdev->real_n_txq != netdev->up.n_txq;
 

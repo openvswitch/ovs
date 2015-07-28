@@ -84,6 +84,14 @@ static bool retry;
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 static void vsctl_cmd_init(void);
+
+/* The IDL we're using and the current transaction, if any.
+ * This is for use by vsctl_exit() only, to allow it to clean up.
+ * Other code should use its context arguments. */
+static struct ovsdb_idl *the_idl;
+static struct ovsdb_idl_txn *the_idl_txn;
+OVS_NO_RETURN static void vsctl_exit(int status);
+
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
@@ -740,9 +748,6 @@ vsctl_context_populate_cache(struct ctl_context *ctx)
             continue;
         }
         br = add_bridge_to_cache(vsctl_ctx, br_cfg, br_cfg->name, NULL, 0);
-        if (!br) {
-            continue;
-        }
 
         for (j = 0; j < br_cfg->n_ports; j++) {
             struct ovsrec_port *port_cfg = br_cfg->ports[j];
@@ -970,50 +975,50 @@ cmd_init(struct ctl_context *ctx OVS_UNUSED)
 {
 }
 
-struct cmd_show_table cmd_show_tables[] = {
+static struct cmd_show_table cmd_show_tables[] = {
     {&ovsrec_table_open_vswitch,
      NULL,
      {&ovsrec_open_vswitch_col_manager_options,
       &ovsrec_open_vswitch_col_bridges,
-      &ovsrec_open_vswitch_col_ovs_version},
-     false},
+      &ovsrec_open_vswitch_col_ovs_version}
+    },
 
     {&ovsrec_table_bridge,
      &ovsrec_bridge_col_name,
      {&ovsrec_bridge_col_controller,
       &ovsrec_bridge_col_fail_mode,
-      &ovsrec_bridge_col_ports},
-     false},
+      &ovsrec_bridge_col_ports}
+    },
 
     {&ovsrec_table_port,
      &ovsrec_port_col_name,
      {&ovsrec_port_col_tag,
       &ovsrec_port_col_trunks,
-      &ovsrec_port_col_interfaces},
-     false},
+      &ovsrec_port_col_interfaces}
+    },
 
     {&ovsrec_table_interface,
      &ovsrec_interface_col_name,
      {&ovsrec_interface_col_type,
       &ovsrec_interface_col_options,
-      &ovsrec_interface_col_error},
-     false},
+      &ovsrec_interface_col_error}
+    },
 
     {&ovsrec_table_controller,
      &ovsrec_controller_col_target,
      {&ovsrec_controller_col_is_connected,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
     {&ovsrec_table_manager,
      &ovsrec_manager_col_target,
      {&ovsrec_manager_col_is_connected,
       NULL,
-      NULL},
-     false},
+      NULL}
+    },
 
-    {NULL, NULL, {NULL, NULL, NULL}, false}
+    {NULL, NULL, {NULL, NULL, NULL}}
 };
 
 static void
@@ -1343,7 +1348,7 @@ cmd_br_exists(struct ctl_context *ctx)
 
     vsctl_context_populate_cache(ctx);
     if (!find_bridge(vsctl_ctx, ctx->argv[1], false)) {
-        ctl_exit(2);
+        vsctl_exit(2);
     }
 }
 
@@ -1556,8 +1561,8 @@ add_port(struct ctl_context *ctx,
     }
 
     for (i = 0; i < n_settings; i++) {
-        set_column(get_table("Port"), &port->header_, settings[i],
-                   ctx->symtab);
+        ctl_set_column("Port", &port->header_, settings[i],
+                       ctx->symtab);
     }
 
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
@@ -2137,7 +2142,7 @@ cmd_add_aa_mapping(struct ctl_context *ctx)
         br = br->parent;
     }
 
-    if (br && br->br_cfg) {
+    if (br->br_cfg) {
         if (!br->br_cfg->auto_attach) {
             struct ovsrec_autoattach *aa = ovsrec_autoattach_insert(ctx->txn);
             ovsrec_bridge_set_auto_attach(br->br_cfg, aa);
@@ -2197,7 +2202,7 @@ cmd_del_aa_mapping(struct ctl_context *ctx)
         br = br->parent;
     }
 
-    if (br && br->br_cfg && br->br_cfg->auto_attach &&
+    if (br->br_cfg && br->br_cfg->auto_attach &&
         br->br_cfg->auto_attach->key_mappings &&
         br->br_cfg->auto_attach->value_mappings) {
         size_t i;
@@ -2248,7 +2253,7 @@ cmd_get_aa_mapping(struct ctl_context *ctx)
 
     verify_auto_attach(br->br_cfg);
 
-    if (br && br->br_cfg && br->br_cfg->auto_attach &&
+    if (br->br_cfg && br->br_cfg->auto_attach &&
         br->br_cfg->auto_attach->key_mappings &&
         br->br_cfg->auto_attach->value_mappings) {
         size_t i;
@@ -2262,7 +2267,7 @@ cmd_get_aa_mapping(struct ctl_context *ctx)
 }
 
 
-const struct ctl_table_class tables[] = {
+static const struct ctl_table_class tables[] = {
     {&ovsrec_table_bridge,
      {{&ovsrec_table_bridge, &ovsrec_bridge_col_name, NULL},
       {&ovsrec_table_flow_sample_collector_set, NULL,
@@ -2648,6 +2653,23 @@ try_again:
     free(error);
 }
 
+/* Frees the current transaction and the underlying IDL and then calls
+ * exit(status).
+ *
+ * Freeing the transaction and the IDL is not strictly necessary, but it makes
+ * for a clean memory leak report from valgrind in the normal case.  That makes
+ * it easier to notice real memory leaks. */
+static void
+vsctl_exit(int status)
+{
+    if (the_idl_txn) {
+        ovsdb_idl_txn_abort(the_idl_txn);
+        ovsdb_idl_txn_destroy(the_idl_txn);
+    }
+    ovsdb_idl_destroy(the_idl);
+    exit(status);
+}
+
 /*
  * Developers who add new commands to the 'struct ctl_command_syntax' must
  * define the 'arguments' member of the struct.  The following keywords are
@@ -2749,6 +2771,6 @@ static const struct ctl_command_syntax vsctl_commands[] = {
 static void
 vsctl_cmd_init(void)
 {
-    ctl_init();
+    ctl_init(tables, cmd_show_tables, vsctl_exit);
     ctl_register_commands(vsctl_commands);
 }

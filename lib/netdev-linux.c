@@ -1597,7 +1597,7 @@ get_stats_via_vport(const struct netdev *netdev_,
         int error;
 
         error = get_stats_via_vport__(netdev_, stats);
-        if (error && error != ENOENT) {
+        if (error && error != ENOENT && error != ENODEV) {
             VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed "
                          "(%s)",
                          netdev_get_name(netdev_), ovs_strerror(error));

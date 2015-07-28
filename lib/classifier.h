@@ -357,18 +357,14 @@ struct cls_conjunction {
 struct cls_rule {
     struct rculist node;          /* In struct cls_subtable 'rules_list'. */
     const int priority;           /* Larger numbers are higher priorities. */
-    const cls_version_t version;  /* Version in which the rule was added. */
     struct cls_match *cls_match;  /* NULL if not in a classifier. */
     const struct minimatch match; /* Matching rule. */
 };
 
-void cls_rule_init(struct cls_rule *, const struct match *, int priority,
-                   cls_version_t);
+void cls_rule_init(struct cls_rule *, const struct match *, int priority);
 void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
-                                  int priority, cls_version_t);
+                                  int priority);
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
-void cls_rule_clone_in_version(struct cls_rule *, const struct cls_rule *,
-        cls_version_t);
 void cls_rule_move(struct cls_rule *dst, struct cls_rule *src);
 void cls_rule_destroy(struct cls_rule *);
 
@@ -395,9 +391,11 @@ bool classifier_set_prefix_fields(struct classifier *,
                                   const enum mf_field_id *trie_fields,
                                   unsigned int n_trie_fields);
 void classifier_insert(struct classifier *, const struct cls_rule *,
-                       const struct cls_conjunction *, size_t n_conjunctions);
+                       cls_version_t, const struct cls_conjunction *,
+                       size_t n_conjunctions);
 const struct cls_rule *classifier_replace(struct classifier *,
                                           const struct cls_rule *,
+                                          cls_version_t,
                                           const struct cls_conjunction *,
                                           size_t n_conjunctions);
 const struct cls_rule *classifier_remove(struct classifier *,
@@ -411,9 +409,10 @@ const struct cls_rule *classifier_lookup(const struct classifier *,
                                          cls_version_t, struct flow *,
                                          struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
-                              const struct cls_rule *);
+                              const struct cls_rule *, cls_version_t);
 const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                                    const struct cls_rule *);
+                                                    const struct cls_rule *,
+                                                    cls_version_t);
 const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      const struct match *,
                                                      int priority,
@@ -437,18 +436,20 @@ struct cls_cursor {
     const struct classifier *cls;
     const struct cls_subtable *subtable;
     const struct cls_rule *target;
+    cls_version_t version;   /* Version to iterate. */
     struct pvector_cursor subtables;
     const struct cls_rule *rule;
 };
 
-struct cls_cursor cls_cursor_start(const struct classifier *cls,
-                                   const struct cls_rule *target);
+struct cls_cursor cls_cursor_start(const struct classifier *,
+                                   const struct cls_rule *target,
+                                   cls_version_t);
 void cls_cursor_advance(struct cls_cursor *);
 
 #define CLS_FOR_EACH(RULE, MEMBER, CLS)             \
-    CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, NULL)
-#define CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, TARGET)                  \
-    for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET);    \
+    CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, NULL, CLS_MAX_VERSION)
+#define CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, TARGET, VERSION)         \
+    for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET, VERSION); \
          (cursor__.rule                                                 \
           ? (INIT_CONTAINER(RULE, cursor__.rule, MEMBER),               \
              cls_cursor_advance(&cursor__),                             \
@@ -456,9 +457,6 @@ void cls_cursor_advance(struct cls_cursor *);
           : false);                                                     \
         )
 
-#ifdef __cplusplus
-}
-#endif
 
 static inline void
 classifier_defer(struct classifier *cls)
@@ -472,4 +470,8 @@ classifier_publish(struct classifier *cls)
     cls->publish = true;
     pvector_publish(&cls->subtables);
 }
+
+#ifdef __cplusplus
+}
+#endif
 #endif /* classifier.h */

@@ -44,54 +44,37 @@
  * Those are not fundamental limits, but only limited by current
  * implementation.
  *
- * Function instruction counter sample point Usage
- * ================================================
+ * Usage:
+ * =======
  *
- * There are two macros provided:
+ * Adding performance counter is easy. Simply use the following macro to
+ * wrap around the expression you are interested in measuring.
  *
- * Macro 'PERF_FUNCTON_COUNT_BEGIN' needs to be inserted towards the
- * beginning of the function where local variables are declared.
+ * PERF(name, expr).
  *
- * Macro 'PERF_FUNCTON_COUNT_END' needs to appear in the same function,
- * some where below 'PERF_FUNCTION_COUNT_BEGIN', usually towards of
- * a function.
+ * The 'expr' is a set of C expressions you are interested in measuring.
+ * 'name' is the counter name.
  *
- * For example:
+ * For example, if we are interested in performance of perf_func():
  *
- *    void my_func() {
- *      int some_local_variable;
- *
- *      PERF_FUNCTION_COUNT_BEGIN;
- *
- *      < implementation >
- *
- *      PERF_FUNCTION_COUNT_END
+ *    int perf_func() {
+ *        <implemenation>
  *    }
  *
- * This will maintain the number of times 'my_func()' is called, total
- * number of instructions '<implementation>' executed during all those calls.
+ *    void func() {
+ *        int rt;
  *
- * Currently there are two limitation:
- * 1). At most one pair can appear in the same variable scope.
- * 2). The Macros use function name as the counter name for display.
- *     Thus, all functions in one annotation session are required to
- *     have unique names.
+ *        ...
+ *        PERF("perf_func", rt = perf_func());
  *
- * Note, there is no requirement for those macros to be balanced.
- * For example:
- *
- *    void my_func(int i){
- *
- *      PERF_FUNCTION_COUNT_BEGIN;
- *
- *      if (i == 300) {
- *          PERF_FUNCTION_COUNT_END;
- *          return;
- *      } else {
- *           <some code>
- *      }
+ *        return rt;
  *    }
- * will work just fine.
+ *
+ *
+ * This will maintain the number of times 'perf_func()' is called, total
+ * number of instructions '<implementation>' plus function call overhead
+ * executed.
+ *
  */
 
 #if defined(__linux__) && defined(HAVE_LINUX_PERF_EVENT_H)
@@ -120,17 +103,17 @@ void perf_counter_accumulate(struct perf_counter *counter,
 char *perf_counters_to_string(void);
 
 /* User access macros. */
-#define PERF_FUNCTION_BEGIN \
-    static struct perf_counter x__ = PERF_COUNTER_ONCE_INITIALIZER(__func__); \
-    uint64_t start_count__ = perf_counter_read(&start_count__);               \
-
-#define PERF_FUNCTION_END \
-    perf_counter_accumulate(&x__, start_count__);
-
+#define PERF(name, expr) \
+      { \
+          static struct perf_counter c = PERF_COUNTER_ONCE_INITIALIZER(name);\
+          uint64_t start_count = perf_counter_read(&start_count); \
+                                                                  \
+          expr;                                                   \
+                                                                  \
+          perf_counter_accumulate(&c, start_count);               \
+      }
 #else
-
-#define PERF_FUNCTON_BEGIN
-#define PERF_FUNCTON_END
+#define PERF(name, expr) { expr; }
 
 static inline void perf_counters_init(void) {}
 static inline void perf_counters_destroy(void) {}

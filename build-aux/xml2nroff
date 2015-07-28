@@ -73,9 +73,10 @@ def manpage_to_nroff(xml_file, subst, version=None):
 .  I "\\$1"
 .  RE
 ..
-''' % (textToNroff(program), textToNroff(section), textToNroff(title), textToNroff(version))
+''' % (text_to_nroff(program), text_to_nroff(section),
+       text_to_nroff(title), text_to_nroff(version))
 
-    s += blockXmlToNroff(doc.childNodes) + "\n"
+    s += block_xml_to_nroff(doc.childNodes) + "\n"
 
     return s
 

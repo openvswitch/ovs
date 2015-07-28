@@ -130,6 +130,12 @@ enum ofp14_table_mod_prop_eviction_flag {
     OFPTMPEF14_LIFETIME        = 1 << 2,     /* Using flow entry lifetime. */
 };
 
+/* What changed about the table */
+enum ofp14_table_reason {
+    OFPTR_VACANCY_DOWN = 3,    /* Vacancy down threshold event. */
+    OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
+};
+
 struct ofp14_table_mod_prop_eviction {
     ovs_be16         type;    /* OFPTMPT14_EVICTION. */
     ovs_be16         length;  /* Length in bytes of this property. */
@@ -155,6 +161,16 @@ struct ofp14_table_mod {
 };
 OFP_ASSERT(sizeof(struct ofp14_table_mod) == 8);
 
+/* Body of reply to OFPMP_TABLE_DESC request. */
+struct ofp14_table_desc {
+    ovs_be16 length;       /* Length is padded to 64 bits. */
+    uint8_t table_id;      /* Identifier of table. Lower numbered tables
+                              are consulted first. */
+    uint8_t pad[1];        /* Align to 32-bits. */
+    ovs_be32 config;       /* Bitmap of OFPTC_* values. */
+    /* Followed by 0 or more OFPTMPT14_* properties. */
+};
+OFP_ASSERT(sizeof(struct ofp14_table_desc) == 8);
 
 /* ## ---------------- ## */
 /* ## ofp14_port_stats ## */
@@ -238,6 +254,12 @@ struct ofp14_async_config {
     struct ofp14_async_config_prop_header properties[0];
 };
 OFP_ASSERT(sizeof(struct ofp14_async_config) == 8);
+
+/* Request forward reason */
+enum ofp14_requestforward_reason {
+    OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
+    OFPRFR_METER_MOD = 1,      /* Forward meter mod requests. */
+};
 
 /* Async Config property types.
 * Low order bit cleared indicates a property for the slave role.

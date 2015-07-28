@@ -14,6 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+case $0 in
+    */*) dir0=`echo "$0" | sed 's,/[^/]*$,,'` ;;
+    *) dir0=./ ;;
+esac
+. "$dir0/ovs-lib" || exit 1
+
 usage() {
     UTIL=$(basename $0)
     cat <<EOF
@@ -78,62 +84,9 @@ save_interfaces () {
             echo ip link set dev $dev $linkcmd
         fi
 
-        # IP addresses (including IPv6).
-        echo "ip addr flush dev $dev 2>/dev/null" # Suppresses "Nothing to flush".
-        ip addr show dev $dev | while read addr; do
-            set -- $addr
+        move_ip_address $dev $dev
 
-            # Check and trim family.
-            family=$1
-            shift
-            case $family in
-                inet | inet6) ;;
-                *) continue ;;
-            esac
-
-            # Trim device off the end--"ip" insists on having "dev" precede it.
-            addrcmd=
-            while test $# != 0; do
-                case $1 in
-                    dynamic)
-                        # Omit kernel-maintained route.
-                        continue 2
-                        ;;
-                    scope)
-                        if test "$2" = link -a "$family" != inet6; then
-                            # Omit route derived from IP address, e.g.
-                            # 172.16.0.0/16 derived from 172.16.12.34,
-                            # but preserve IPv6 link-local address.
-                            continue 2
-                        fi
-                        ;;
-                    "$dev"|"$dev:"*)
-                        # Address label string
-                        addrcmd="$addrcmd label $1"
-                        shift
-                        continue
-                        ;;
-                esac
-                addrcmd="$addrcmd $1"
-                shift
-            done
-            if test "$1" != "$dev"; then
-                addrcmd="$addrcmd $1"
-            fi
-
-            echo ip -f $family addr add $addrcmd dev $dev
-        done
-
-        # Routes.
-        echo "ip route flush dev $dev proto boot 2>/dev/null" # Suppresses "Nothing to flush".
-        ip route show dev $dev | while read route; do
-            # "proto kernel" routes are installed by the kernel automatically.
-            case $route in
-                *" proto kernel "*) continue ;;
-            esac
-
-            echo "ip route add $route dev $dev"
-        done
+        move_ip_routes $dev $dev
 
         echo
     done

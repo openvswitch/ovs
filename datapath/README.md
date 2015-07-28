@@ -99,10 +99,11 @@ passed over the Netlink socket. A flow key, exactly as described above, and an
 optional corresponding flow mask.
 
 A wildcarded flow can represent a group of exact match flows. Each '1' bit
-in the mask specifies a exact match with the corresponding bit in the flow key.
+in the mask specifies an exact match with the corresponding bit in the flow key.
 A '0' bit specifies a don't care bit, which will match either a '1' or '0' bit
-of a incoming packet. Using wildcarded flow can improve the flow set up rate
-by reduce the number of new flows need to be processed by the user space program.
+of an incoming packet. Using a wildcarded flow can improve the flow set up rate
+by reducing the number of new flows that need to be processed by the user space
+program.
 
 Support for the mask Netlink attribute is optional for both the kernel and user
 space program. The kernel can ignore the mask attribute, installing an exact

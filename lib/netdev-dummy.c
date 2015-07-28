@@ -388,7 +388,7 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
     if (stream) {
         int error;
         struct stream *active_stream;
-        struct reconnect *reconnect;;
+        struct reconnect *reconnect;
 
         reconnect = reconnect_create(time_msec());
         reconnect_set_name(reconnect, stream);

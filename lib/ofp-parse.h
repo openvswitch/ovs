@@ -49,7 +49,7 @@ char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
 
 char *parse_ofp_table_mod(struct ofputil_table_mod *,
                           const char *table_id, const char *flow_miss_handling,
-                          enum ofputil_protocol *usable_protocols)
+                          uint32_t *usable_versions)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_file(const char *file_name, int command,

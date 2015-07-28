@@ -87,10 +87,11 @@ mcast_bundle_age(const struct mcast_snooping *ms,
 }
 
 static uint32_t
-mcast_table_hash(const struct mcast_snooping *ms, ovs_be32 grp_ip4,
-                 uint16_t vlan)
+mcast_table_hash(const struct mcast_snooping *ms,
+                 const struct in6_addr *grp_addr, uint16_t vlan)
 {
-    return hash_3words((OVS_FORCE uint32_t) grp_ip4, vlan, ms->secret);
+    return hash_bytes(grp_addr->s6_addr, 16,
+                      hash_2words(ms->secret, vlan));
 }
 
 static struct mcast_group_bundle *
@@ -108,8 +109,8 @@ mcast_group_from_lru_node(struct ovs_list *list)
 /* Searches 'ms' for and returns an mcast group for destination address
  * 'dip' in 'vlan'. */
 struct mcast_group *
-mcast_snooping_lookup(const struct mcast_snooping *ms, ovs_be32 dip,
-                      uint16_t vlan)
+mcast_snooping_lookup(const struct mcast_snooping *ms,
+                      const struct in6_addr *dip, uint16_t vlan)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
     struct mcast_group *grp;
@@ -117,11 +118,30 @@ mcast_snooping_lookup(const struct mcast_snooping *ms, ovs_be32 dip,
 
     hash = mcast_table_hash(ms, dip, vlan);
     HMAP_FOR_EACH_WITH_HASH (grp, hmap_node, hash, &ms->table) {
-        if (grp->vlan == vlan && grp->ip4 == dip) {
+        if (grp->vlan == vlan && ipv6_addr_equals(&grp->addr, dip)) {
            return grp;
         }
     }
     return NULL;
+}
+
+static inline void
+in6_addr_set_mapped_ipv4(struct in6_addr *addr, ovs_be32 ip4)
+{
+    union ovs_16aligned_in6_addr *taddr = (void *) addr;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[5] = OVS_BE16_MAX;
+    put_16aligned_be32(&taddr->be32[3], ip4);
+}
+
+struct mcast_group *
+mcast_snooping_lookup4(const struct mcast_snooping *ms, ovs_be32 ip4,
+                      uint16_t vlan)
+    OVS_REQ_RDLOCK(ms->rwlock)
+{
+    struct in6_addr addr;
+    in6_addr_set_mapped_ipv4(&addr, ip4);
+    return mcast_snooping_lookup(ms, &addr, vlan);
 }
 
 /* If the LRU list is not empty, stores the least-recently-used entry
@@ -376,7 +396,8 @@ mcast_snooping_prune_expired(struct mcast_snooping *ms,
  * move to the last position in the LRU list.
  */
 bool
-mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
+mcast_snooping_add_group(struct mcast_snooping *ms,
+                         const struct in6_addr *addr,
                          uint16_t vlan, void *port)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
@@ -390,9 +411,9 @@ mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
     }
 
     learned = false;
-    grp = mcast_snooping_lookup(ms, ip4, vlan);
+    grp = mcast_snooping_lookup(ms, addr, vlan);
     if (!grp) {
-        uint32_t hash = mcast_table_hash(ms, ip4, vlan);
+        uint32_t hash = mcast_table_hash(ms, addr, vlan);
 
         if (hmap_count(&ms->table) >= ms->max_entries) {
             group_get_lru(ms, &grp);
@@ -401,7 +422,7 @@ mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
 
         grp = xmalloc(sizeof *grp);
         hmap_insert(&ms->table, &grp->hmap_node, hash);
-        grp->ip4 = ip4;
+        grp->addr = *addr;
         grp->vlan = vlan;
         list_init(&grp->bundle_lru);
         learned = true;
@@ -415,6 +436,16 @@ mcast_snooping_add_group(struct mcast_snooping *ms, ovs_be32 ip4,
     /* Mark 'grp' as recently used. */
     list_push_back(&ms->group_lru, &grp->group_node);
     return learned;
+}
+
+bool
+mcast_snooping_add_group4(struct mcast_snooping *ms, ovs_be32 ip4,
+                         uint16_t vlan, void *port)
+    OVS_REQ_WRLOCK(ms->rwlock)
+{
+    struct in6_addr addr;
+    in6_addr_set_mapped_ipv4(&addr, ip4);
+    return mcast_snooping_add_group(ms, &addr, vlan, port);
 }
 
 int
@@ -455,9 +486,9 @@ mcast_snooping_add_report(struct mcast_snooping *ms,
         if (ntohs(record->nsrcs) == 0
             && (record->type == IGMPV3_MODE_IS_INCLUDE
                 || record->type == IGMPV3_CHANGE_TO_INCLUDE_MODE)) {
-            ret = mcast_snooping_leave_group(ms, ip4, vlan, port);
+            ret = mcast_snooping_leave_group4(ms, ip4, vlan, port);
         } else {
-            ret = mcast_snooping_add_group(ms, ip4, vlan, port);
+            ret = mcast_snooping_add_group4(ms, ip4, vlan, port);
         }
         if (ret) {
             count++;
@@ -468,8 +499,80 @@ mcast_snooping_add_report(struct mcast_snooping *ms,
     return count;
 }
 
+int
+mcast_snooping_add_mld(struct mcast_snooping *ms,
+                          const struct dp_packet *p,
+                          uint16_t vlan, void *port)
+{
+    const struct in6_addr *addr;
+    size_t offset;
+    const struct mld_header *mld;
+    const struct mld2_record *record;
+    int count = 0;
+    int ngrp;
+    bool ret;
+
+    offset = (char *) dp_packet_l4(p) - (char *) dp_packet_data(p);
+    mld = dp_packet_at(p, offset, MLD_HEADER_LEN);
+    if (!mld) {
+        return 0;
+    }
+    ngrp = ntohs(mld->ngrp);
+    offset += MLD_HEADER_LEN;
+    addr = dp_packet_at(p, offset, sizeof(struct in6_addr));
+
+    switch (mld->type) {
+    case MLD_REPORT:
+        ret = mcast_snooping_add_group(ms, addr, vlan, port);
+        if (ret) {
+            count++;
+        }
+        break;
+    case MLD_DONE:
+        ret = mcast_snooping_leave_group(ms, addr, vlan, port);
+        if (ret) {
+            count++;
+        }
+        break;
+    case MLD2_REPORT:
+        while (ngrp--) {
+            record = dp_packet_at(p, offset, sizeof(struct mld2_record));
+            if (!record) {
+                break;
+            }
+            /* Only consider known record types. */
+            if (record->type >= IGMPV3_MODE_IS_INCLUDE
+                && record->type <= IGMPV3_BLOCK_OLD_SOURCES) {
+                struct in6_addr maddr;
+                memcpy(maddr.s6_addr, record->maddr.be16, 16);
+                addr = &maddr;
+                /*
+                 * If record is INCLUDE MODE and there are no sources, it's
+                 * equivalent to a LEAVE.
+                 */
+                if (record->nsrcs == htons(0)
+                    && (record->type == IGMPV3_MODE_IS_INCLUDE
+                        || record->type == IGMPV3_CHANGE_TO_INCLUDE_MODE)) {
+                    ret = mcast_snooping_leave_group(ms, addr, vlan, port);
+                } else {
+                    ret = mcast_snooping_add_group(ms, addr, vlan, port);
+                }
+                if (ret) {
+                    count++;
+                }
+            }
+            offset += sizeof(*record)
+                      + ntohs(record->nsrcs) * sizeof(struct in6_addr)
+                      + record->aux_len;
+        }
+    }
+
+    return count;
+}
+
 bool
-mcast_snooping_leave_group(struct mcast_snooping *ms, ovs_be32 ip4,
+mcast_snooping_leave_group(struct mcast_snooping *ms,
+                           const struct in6_addr *addr,
                            uint16_t vlan, void *port)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
@@ -482,12 +585,21 @@ mcast_snooping_leave_group(struct mcast_snooping *ms, ovs_be32 ip4,
         return false;
     }
 
-    grp = mcast_snooping_lookup(ms, ip4, vlan);
+    grp = mcast_snooping_lookup(ms, addr, vlan);
     if (grp && mcast_group_delete_bundle(ms, grp, port)) {
         ms->need_revalidate = true;
         return true;
     }
     return false;
+}
+
+bool
+mcast_snooping_leave_group4(struct mcast_snooping *ms, ovs_be32 ip4,
+                           uint16_t vlan, void *port)
+{
+    struct in6_addr addr;
+    in6_addr_set_mapped_ipv4(&addr, ip4);
+    return mcast_snooping_leave_group(ms, &addr, vlan, port);
 }
 
 

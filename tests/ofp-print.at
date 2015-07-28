@@ -1132,7 +1132,7 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 11 00 10 00 00 00 02 02 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2
+OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, eviction=off
 ])
 AT_CLEANUP
 
@@ -2752,6 +2752,33 @@ NXT_SET_ASYNC_CONFIG (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_SET_ASYNC_CONFIG])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 1c 00 38 00 00 00 02 00 00 00 08 00 00 00 05 \
+00 01 00 08 00 00 00 02 00 02 00 08 00 00 00 02 \
+00 03 00 08 00 00 00 05 00 04 00 08 00 00 00 1c \
+00 05 00 08 00 00 00 05 \
+"], [0], [dnl
+OFPT_SET_ASYNC (OF1.4) (xid=0x2):
+ master:
+       PACKET_IN: action
+     PORT_STATUS: add modify
+    FLOW_REMOVED: idle delete
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
+
+ slave:
+       PACKET_IN: no_match invalid_ttl
+     PORT_STATUS: delete
+    FLOW_REMOVED: delete group_delete meter_delete
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_CONTROLLER_ID])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -3239,7 +3266,7 @@ AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - verify xid])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
-02 00 00 08 00 00 00 01 00 00 00 00 00 00 00 00 \
+05 00 00 08 00 00 00 01 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_BAD_XID***
 ])
@@ -3247,11 +3274,13 @@ AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - reject OFPT_HELLO])
 AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
-02 00 00 10 00 00 00 00 00 00 00 00 00 00 00 00 \
+05 00 00 10 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_UNSUP***
+], [dnl
+ofp_util|WARN|OFPT_HELLO message not allowed inside OFPT14_BUNDLE_ADD_MESSAGE
 ])
 AT_CLEANUP
 
@@ -3259,7 +3288,7 @@ AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - FLOW_MOD])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 22 00 a0 00 00 00 02 00 00 00 01 00 00 00 01 \
-03 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
+05 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
 ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
 00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
@@ -3271,7 +3300,7 @@ ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
 "], [0], [dnl
 OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x2):
  bundle_id=0x1 flags=atomic
-OFPT_FLOW_MOD (OF1.2) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
+OFPT_FLOW_MOD (OF1.4) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
 ])
 AT_CLEANUP
 

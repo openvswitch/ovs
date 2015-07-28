@@ -92,7 +92,7 @@ physical_run(struct controller_ctx *ctx)
      * 64 for logical-to-physical translation. */
     const struct sbrec_binding *binding;
     SBREC_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        /* Find the Openflow port for the logical port, as 'ofport'.  If it's
+        /* Find the OpenFlow port for the logical port, as 'ofport'.  If it's
          * on a remote chassis, this is the OpenFlow port for the tunnel to
          * that chassis (and set 'local' to false).  Otherwise, if it's on the
          * chassis we're managing, this is the OpenFlow port for the vif itself
@@ -134,13 +134,14 @@ physical_run(struct controller_ctx *ctx)
 
         struct match match;
         if (local) {
-            /*
-             * Packets that arrive from a vif can belong to a VM or
+            /* Packets that arrive from a vif can belong to a VM or
              * to a container located inside that VM. Packets that
              * arrive from containers have a tag (vlan) associated with them.
-             *
-             * Table 0, Priority 150 and 100.
+             */
+
+            /* Table 0, Priority 150 and 100.
              * ==============================
+             *
              * Priority 150 is for traffic belonging to containers. For such
              * traffic, match on the tags and then strip the tag.
              * Priority 100 is for traffic belonging to VMs.

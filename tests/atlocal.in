@@ -97,6 +97,13 @@ FreeBSD|NetBSD)
     ;;
 esac
 
+# Check whether to run IPv6 tests.
+if perl -e 'use Socket; socket(FH, PF_INET6, SOCK_STREAM, 0) || exit 1;'; then
+    HAVE_IPV6=yes
+else
+    HAVE_IPV6=no
+fi
+
 # XXX: Disable Python related tests on Windows because Open vSwitch code
 # written in Python has not been ported to the Windows platform. We will
 # need to remove the next block after porting is complete.

@@ -246,6 +246,7 @@ def extract_ofp_msgs(output_file_name):
         if re.match('enum ofptype', line):
             break
 
+    all_types = []
     while True:
         get_line()
         if re.match(r'\s*/?\*', line) or line.isspace():
@@ -279,6 +280,8 @@ def extract_ofp_msgs(output_file_name):
                 fatal("%s: already part of %s"
                       % (raw, all_raws[raw]["ofptype"]))
             all_raws[raw]["ofptype"] = ofptype
+
+        all_types.append(all_raws[raws[0]]["human_name"])
 
     input_file.close()
 
@@ -344,6 +347,12 @@ def extract_ofp_msgs(output_file_name):
                     else:
                         fatal("%s has no corresponding request"
                               % r["human_name"])
+    output.append("};")
+
+    output.append("");
+    output.append("static const char *type_names[] = {");
+    for t in all_types:
+        output.append("    \"%s\"," % t)
     output.append("};")
 
     if n_errors:

@@ -94,11 +94,11 @@ tnl_port_map_insert(odp_port_t port, ovs_be16 udp_port, const char dev_name[])
         match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
         match.wc.masks.tp_dst = OVS_BE16_MAX;
 
-        cls_rule_init(&p->cr, &match, 0, CLS_MIN_VERSION); /* Priority == 0. */
+        cls_rule_init(&p->cr, &match, 0); /* Priority == 0. */
         ovs_refcount_init(&p->ref_cnt);
         ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
 
-        classifier_insert(&cls, &p->cr, NULL, 0);
+        classifier_insert(&cls, &p->cr, CLS_MIN_VERSION, NULL, 0);
     }
     ovs_mutex_unlock(&mutex);
 }
@@ -162,12 +162,12 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         };
 
         ds_put_format(&ds, "%s (%"PRIu32") : ", p->dev_name, p->portno);
-        minimask_expand(&p->cr.match.mask, &wc);
-        miniflow_expand(&p->cr.match.flow, &flow);
+        minimask_expand(p->cr.match.mask, &wc);
+        miniflow_expand(p->cr.match.flow, &flow);
 
         /* Key. */
         odp_parms.odp_in_port = flow.in_port.odp_port;
-        odp_parms.recirc = true;
+        odp_parms.support.recirc = true;
         ofpbuf_use_stack(&buf, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&odp_parms, &buf);
         key = buf.data;
@@ -175,7 +175,7 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
         /* mask*/
         odp_parms.odp_in_port = wc.masks.in_port.odp_port;
-        odp_parms.recirc = false;
+        odp_parms.support.recirc = false;
         ofpbuf_use_stack(&buf, &maskbuf, sizeof maskbuf);
         odp_flow_key_from_mask(&odp_parms, &buf);
         mask = buf.data;
