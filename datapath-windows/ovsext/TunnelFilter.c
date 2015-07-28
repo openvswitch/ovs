@@ -1419,7 +1419,6 @@ OvsTunnelFilterQueueRequest(PIRP irp,
     } while (error);
 
     if (error) {
-        OvsTunnelFilterCompleteRequest(irp, callback, tunnelContext, status);
         if (request) {
             OvsFreeMemory(request);
             request = NULL;
