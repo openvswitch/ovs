@@ -986,12 +986,12 @@ OFP_ASSERT(sizeof(struct nx_geneve_table_mod) == 8);
 struct nx_geneve_table_reply {
     ovs_be32 max_option_space; /* Maximum total of option sizes supported. */
     ovs_be16 max_fields;       /* Maximum number of match fields supported. */
-    uint8_t pad[2];
+    uint8_t reserved[10];
     /* struct nx_geneve_map[0]; Array of maps between indicies and Geneve
                                 options. The number of elements is
                                 inferred from the length field in the
                                 header. */
 };
-OFP_ASSERT(sizeof(struct nx_geneve_table_reply) == 8);
+OFP_ASSERT(sizeof(struct nx_geneve_table_reply) == 16);
 
 #endif /* openflow/nicira-ext.h */
