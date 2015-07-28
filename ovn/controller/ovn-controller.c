@@ -95,20 +95,19 @@ get_bridge(struct controller_ctx *ctx, const char *name)
 static void
 get_core_config(struct controller_ctx *ctx)
 {
-    const struct ovsrec_open_vswitch *cfg;
-
-    cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
-    if (!cfg) {
-        VLOG_ERR("No Open_vSwitch row defined.");
-        ovsdb_idl_destroy(ctx->ovs_idl);
-        exit(EXIT_FAILURE);
-    }
-
     while (1) {
+        ovsdb_idl_run(ctx->ovs_idl);
+
+        const struct ovsrec_open_vswitch *cfg;
+        cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
+        if (!cfg) {
+            VLOG_ERR("No Open_vSwitch row defined.");
+            ovsdb_idl_destroy(ctx->ovs_idl);
+            exit(EXIT_FAILURE);
+        }
+
         const struct ovsrec_bridge *br_int;
         const char *remote, *system_id, *br_int_name;
-
-        ovsdb_idl_run(ctx->ovs_idl);
 
         br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
         if (!br_int_name) {
