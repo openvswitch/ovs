@@ -189,28 +189,40 @@ idl_loop_commit_and_wait(struct idl_loop *loop)
     struct ovsdb_idl_txn *txn = loop->committing_txn;
     if (txn) {
         enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(txn);
-        switch (status) {
-        case TXN_INCOMPLETE:
-            break;
+        if (status != TXN_INCOMPLETE) {
+            switch (status) {
+            case TXN_TRY_AGAIN:
+                /* We want to re-evaluate the database when it's changed from
+                 * the contents that it had when we started the commit.  (That
+                 * might have already happened.) */
+                loop->skip_seqno = loop->precommit_seqno;
+                if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
+                    poll_immediate_wake();
+                }
+                break;
 
-        case TXN_TRY_AGAIN:
-            loop->skip_seqno = loop->precommit_seqno;
-            if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
-                poll_immediate_wake();
+            case TXN_SUCCESS:
+                /* If the database has already changed since we started the
+                 * commit, re-evaluate it immediately to avoid missing a change
+                 * for a while. */
+                if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
+                    poll_immediate_wake();
+                }
+                break;
+
+            case TXN_UNCHANGED:
+            case TXN_ABORTED:
+            case TXN_NOT_LOCKED:
+            case TXN_ERROR:
+                break;
+
+            case TXN_UNCOMMITTED:
+            case TXN_INCOMPLETE:
+                OVS_NOT_REACHED();
+
             }
-            /* Fall through. */
-        case TXN_UNCHANGED:
-        case TXN_ABORTED:
-        case TXN_SUCCESS:
-        case TXN_NOT_LOCKED:
-        case TXN_ERROR:
             ovsdb_idl_txn_destroy(txn);
             loop->committing_txn = NULL;
-            break;
-
-        case TXN_UNCOMMITTED:
-            OVS_NOT_REACHED();
-
         }
     }
 
