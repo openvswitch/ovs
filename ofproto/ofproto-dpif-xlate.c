@@ -205,7 +205,6 @@ struct xlate_ctx {
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
-    uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
 
    /* These are used for non-bond recirculation.  The recirculation IDs are
@@ -2440,211 +2439,147 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 }
 
-/* Compose SAMPLE action for sFlow or IPFIX.  The given probability is
- * the number of packets out of UINT32_MAX to sample.  The given
- * cookie is passed back in the callback for each sampled packet.
+/* Appends a "sample" action for sFlow or IPFIX to 'ctx->odp_actions'.  The
+ * 'probability' is the number of packets out of UINT32_MAX to sample.  The
+ * 'cookie' (of length 'cookie_size' bytes) is passed back in the callback for
+ * each sampled packet.  'tunnel_out_port', if not ODPP_NONE, is added as the
+ * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT attribute.  If 'include_actions', an
+ * OVS_USERSPACE_ATTR_ACTIONS attribute is added.
  */
 static size_t
-compose_sample_action(const struct xbridge *xbridge,
-                      struct ofpbuf *odp_actions,
-                      const struct flow *flow,
+compose_sample_action(struct xlate_ctx *ctx,
                       const uint32_t probability,
                       const union user_action_cookie *cookie,
                       const size_t cookie_size,
                       const odp_port_t tunnel_out_port,
                       bool include_actions)
 {
-    size_t sample_offset, actions_offset;
-    odp_port_t odp_port;
-    int cookie_offset;
-    uint32_t pid;
+    size_t sample_offset = nl_msg_start_nested(ctx->odp_actions,
+                                               OVS_ACTION_ATTR_SAMPLE);
 
-    sample_offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SAMPLE);
+    nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY, probability);
 
-    nl_msg_put_u32(odp_actions, OVS_SAMPLE_ATTR_PROBABILITY, probability);
+    size_t actions_offset = nl_msg_start_nested(ctx->odp_actions,
+                                                OVS_SAMPLE_ATTR_ACTIONS);
 
-    actions_offset = nl_msg_start_nested(odp_actions, OVS_SAMPLE_ATTR_ACTIONS);
+    odp_port_t odp_port = ofp_port_to_odp_port(
+        ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
+    uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
+                                     flow_hash_5tuple(&ctx->xin->flow, 0));
+    int cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size,
+                                                 tunnel_out_port,
+                                                 include_actions,
+                                                 ctx->odp_actions);
 
-    odp_port = ofp_port_to_odp_port(xbridge, flow->in_port.ofp_port);
-    pid = dpif_port_get_pid(xbridge->dpif, odp_port,
-                            flow_hash_5tuple(flow, 0));
-    cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size,
-                                             tunnel_out_port,
-                                             include_actions,
-                                             odp_actions);
+    nl_msg_end_nested(ctx->odp_actions, actions_offset);
+    nl_msg_end_nested(ctx->odp_actions, sample_offset);
 
-    nl_msg_end_nested(odp_actions, actions_offset);
-    nl_msg_end_nested(odp_actions, sample_offset);
     return cookie_offset;
 }
 
-static void
-compose_sflow_cookie(const struct xbridge *xbridge, ovs_be16 vlan_tci,
-                     odp_port_t odp_port, unsigned int n_outputs,
-                     union user_action_cookie *cookie)
-{
-    int ifindex;
-
-    cookie->type = USER_ACTION_COOKIE_SFLOW;
-    cookie->sflow.vlan_tci = vlan_tci;
-
-    /* See http://www.sflow.org/sflow_version_5.txt (search for "Input/output
-     * port information") for the interpretation of cookie->output. */
-    switch (n_outputs) {
-    case 0:
-        /* 0x40000000 | 256 means "packet dropped for unknown reason". */
-        cookie->sflow.output = 0x40000000 | 256;
-        break;
-
-    case 1:
-        ifindex = dpif_sflow_odp_port_to_ifindex(xbridge->sflow, odp_port);
-        if (ifindex) {
-            cookie->sflow.output = ifindex;
-            break;
-        }
-        /* Fall through. */
-    default:
-        /* 0x80000000 means "multiple output ports. */
-        cookie->sflow.output = 0x80000000 | n_outputs;
-        break;
-    }
-}
-
-/* Compose SAMPLE action for sFlow bridge sampling. */
+/* If sFLow is not enabled, returns 0 without doing anything.
+ *
+ * If sFlow is enabled, appends a template "sample" action to the ODP actions
+ * in 'ctx'.  This action is a template because some of the information needed
+ * to fill it out is not available until flow translation is complete.  In this
+ * case, this functions returns an offset, which is always nonzero, to pass
+ * later to fix_sflow_action() to fill in the rest of the template. */
 static size_t
-compose_sflow_action(const struct xbridge *xbridge,
-                     struct ofpbuf *odp_actions,
-                     const struct flow *flow,
-                     odp_port_t odp_port)
+compose_sflow_action(struct xlate_ctx *ctx)
 {
-    uint32_t probability;
-    union user_action_cookie cookie;
-
-    if (!xbridge->sflow || flow->in_port.ofp_port == OFPP_NONE) {
+    struct dpif_sflow *sflow = ctx->xbridge->sflow;
+    if (!sflow || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
         return 0;
     }
 
-    probability = dpif_sflow_get_probability(xbridge->sflow);
-    compose_sflow_cookie(xbridge, htons(0), odp_port,
-                         odp_port == ODPP_NONE ? 0 : 1, &cookie);
-
-    return compose_sample_action(xbridge, odp_actions, flow,  probability,
+    union user_action_cookie cookie = { .type = USER_ACTION_COOKIE_SFLOW };
+    return compose_sample_action(ctx, dpif_sflow_get_probability(sflow),
                                  &cookie, sizeof cookie.sflow, ODPP_NONE,
                                  true);
 }
 
+/* If IPFIX is enabled, this appends a "sample" action to implement IPFIX to
+ * 'ctx->odp_actions'. */
 static void
-compose_flow_sample_cookie(uint16_t probability, uint32_t collector_set_id,
-                           uint32_t obs_domain_id, uint32_t obs_point_id,
-                           union user_action_cookie *cookie)
+compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
 {
-    cookie->type = USER_ACTION_COOKIE_FLOW_SAMPLE;
-    cookie->flow_sample.probability = probability;
-    cookie->flow_sample.collector_set_id = collector_set_id;
-    cookie->flow_sample.obs_domain_id = obs_domain_id;
-    cookie->flow_sample.obs_point_id = obs_point_id;
-}
-
-static void
-compose_ipfix_cookie(union user_action_cookie *cookie,
-                     odp_port_t output_odp_port)
-{
-    cookie->type = USER_ACTION_COOKIE_IPFIX;
-    cookie->ipfix.output_odp_port = output_odp_port;
-}
-
-/* Compose SAMPLE action for IPFIX bridge sampling. */
-static void
-compose_ipfix_action(const struct xbridge *xbridge,
-                     struct ofpbuf *odp_actions,
-                     const struct flow *flow,
-                     odp_port_t output_odp_port)
-{
-    uint32_t probability;
-    union user_action_cookie cookie;
+    struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
     odp_port_t tunnel_out_port = ODPP_NONE;
 
-    if (!xbridge->ipfix || flow->in_port.ofp_port == OFPP_NONE) {
+    if (!ipfix || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
         return;
     }
 
     /* For input case, output_odp_port is ODPP_NONE, which is an invalid port
      * number. */
     if (output_odp_port == ODPP_NONE &&
-        !dpif_ipfix_get_bridge_exporter_input_sampling(xbridge->ipfix)) {
+        !dpif_ipfix_get_bridge_exporter_input_sampling(ipfix)) {
         return;
     }
 
     /* For output case, output_odp_port is valid*/
     if (output_odp_port != ODPP_NONE) {
-        if (!dpif_ipfix_get_bridge_exporter_output_sampling(xbridge->ipfix)) {
+        if (!dpif_ipfix_get_bridge_exporter_output_sampling(ipfix)) {
             return;
         }
         /* If tunnel sampling is enabled, put an additional option attribute:
          * OVS_USERSPACE_ATTR_TUNNEL_OUT_PORT
          */
-        if (dpif_ipfix_get_bridge_exporter_tunnel_sampling(xbridge->ipfix) &&
-            dpif_ipfix_get_tunnel_port(xbridge->ipfix, output_odp_port) ) {
+        if (dpif_ipfix_get_bridge_exporter_tunnel_sampling(ipfix) &&
+            dpif_ipfix_get_tunnel_port(ipfix, output_odp_port) ) {
            tunnel_out_port = output_odp_port;
         }
     }
 
-    probability = dpif_ipfix_get_bridge_exporter_probability(xbridge->ipfix);
-    compose_ipfix_cookie(&cookie, output_odp_port);
-
-    compose_sample_action(xbridge, odp_actions, flow,  probability,
+    union user_action_cookie cookie = {
+        .ipfix = {
+            .type = USER_ACTION_COOKIE_IPFIX,
+            .output_odp_port = output_odp_port,
+        }
+    };
+    compose_sample_action(ctx,
+                          dpif_ipfix_get_bridge_exporter_probability(ipfix),
                           &cookie, sizeof cookie.ipfix, tunnel_out_port,
                           false);
 }
 
-/* SAMPLE action for sFlow must be first action in any given list of
- * actions.  At this point we do not have all information required to
- * build it. So try to build sample action as complete as possible. */
+/* Fix "sample" action according to data collected while composing ODP actions,
+ * as described in compose_sflow_action().
+ *
+ * 'user_cookie_offset' must be the offset returned by add_sflow_action(). */
 static void
-add_sflow_action(struct xlate_ctx *ctx)
-{
-    ctx->user_cookie_offset = compose_sflow_action(ctx->xbridge,
-                                                   ctx->odp_actions,
-                                                   &ctx->xin->flow, ODPP_NONE);
-    ctx->sflow_odp_port = 0;
-    ctx->sflow_n_outputs = 0;
-}
-
-/* SAMPLE action for IPFIX must be 1st or 2nd action in any given list
- * of actions, eventually after the SAMPLE action for sFlow. */
-static void
-add_ipfix_action(struct xlate_ctx *ctx)
-{
-    compose_ipfix_action(ctx->xbridge, ctx->odp_actions,
-                         &ctx->xin->flow, ODPP_NONE);
-}
-
-static void
-add_ipfix_output_action(struct xlate_ctx *ctx, odp_port_t port)
-{
-    compose_ipfix_action(ctx->xbridge, ctx->odp_actions,
-                         &ctx->xin->flow, port);
-}
-
-/* Fix SAMPLE action according to data collected while composing ODP actions.
- * We need to fix SAMPLE actions OVS_SAMPLE_ATTR_ACTIONS attribute, i.e. nested
- * USERSPACE action's user-cookie which is required for sflow. */
-static void
-fix_sflow_action(struct xlate_ctx *ctx)
+fix_sflow_action(struct xlate_ctx *ctx, unsigned int user_cookie_offset)
 {
     const struct flow *base = &ctx->base_flow;
     union user_action_cookie *cookie;
 
-    if (!ctx->user_cookie_offset) {
-        return;
-    }
-
-    cookie = ofpbuf_at(ctx->odp_actions, ctx->user_cookie_offset,
+    cookie = ofpbuf_at(ctx->odp_actions, user_cookie_offset,
                        sizeof cookie->sflow);
     ovs_assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
 
-    compose_sflow_cookie(ctx->xbridge, base->vlan_tci,
-                         ctx->sflow_odp_port, ctx->sflow_n_outputs, cookie);
+    cookie->type = USER_ACTION_COOKIE_SFLOW;
+    cookie->sflow.vlan_tci = base->vlan_tci;
+
+    /* See http://www.sflow.org/sflow_version_5.txt (search for "Input/output
+     * port information") for the interpretation of cookie->output. */
+    switch (ctx->sflow_n_outputs) {
+    case 0:
+        /* 0x40000000 | 256 means "packet dropped for unknown reason". */
+        cookie->sflow.output = 0x40000000 | 256;
+        break;
+
+    case 1:
+        cookie->sflow.output = dpif_sflow_odp_port_to_ifindex(
+            ctx->xbridge->sflow, ctx->sflow_odp_port);
+        if (cookie->sflow.output) {
+            break;
+        }
+        /* Fall through. */
+    default:
+        /* 0x80000000 means "multiple output ports. */
+        cookie->sflow.output = 0x80000000 | ctx->sflow_n_outputs;
+        break;
+    }
 }
 
 static bool
@@ -3096,7 +3031,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 } else {
                     /* Tunnel push-pop action is not compatible with
                      * IPFIX action. */
-                    add_ipfix_output_action(ctx, out_port);
+                    compose_ipfix_action(ctx, out_port);
                     nl_msg_put_odp_port(ctx->odp_actions,
                                         OVS_ACTION_ATTR_OUTPUT,
                                         out_port);
@@ -3955,7 +3890,6 @@ static void
 xlate_sample_action(struct xlate_ctx *ctx,
                     const struct ofpact_sample *os)
 {
-    union user_action_cookie cookie;
     /* Scale the probability from 16-bit to 32-bit while representing
      * the same percentage. */
     uint32_t probability = (os->probability << 16) | os->probability;
@@ -3975,12 +3909,17 @@ xlate_sample_action(struct xlate_ctx *ctx,
                                           ctx->odp_actions,
                                           ctx->wc, use_masked);
 
-    compose_flow_sample_cookie(os->probability, os->collector_set_id,
-                               os->obs_domain_id, os->obs_point_id, &cookie);
-    compose_sample_action(ctx->xbridge, ctx->odp_actions,
-                          &ctx->xin->flow, probability, &cookie,
-                          sizeof cookie.flow_sample, ODPP_NONE,
-                          false);
+    union user_action_cookie cookie = {
+        .flow_sample = {
+            .type = USER_ACTION_COOKIE_FLOW_SAMPLE,
+            .probability = os->probability,
+            .collector_set_id = os->collector_set_id,
+            .obs_domain_id = os->obs_domain_id,
+            .obs_point_id = os->obs_point_id,
+        }
+    };
+    compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,
+                          ODPP_NONE, false);
 }
 
 static bool
@@ -4821,7 +4760,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .orig_skb_priority = flow->skb_priority,
         .sflow_n_outputs = 0,
         .sflow_odp_port = 0,
-        .user_cookie_offset = 0,
         .exit = false,
 
         .recirc_action_offset = -1,
@@ -4996,9 +4934,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         /* Sampling is done only for packets really received by the bridge. */
+        unsigned int user_cookie_offset = 0;
         if (!xin->recirc) {
-            add_sflow_action(&ctx);
-            add_ipfix_action(&ctx);
+            user_cookie_offset = compose_sflow_action(&ctx);
+            compose_ipfix_action(&ctx, ODPP_NONE);
         }
         size_t sample_actions_len = ctx.odp_actions->size;
 
@@ -5056,8 +4995,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             compose_output_action(&ctx, OFPP_LOCAL, NULL);
         }
 
-        if (!xin->recirc) {
-            fix_sflow_action(&ctx);
+        if (user_cookie_offset) {
+            fix_sflow_action(&ctx, user_cookie_offset);
         }
         /* Only mirror fully processed packets. */
         if (!exit_recirculates(&ctx)
