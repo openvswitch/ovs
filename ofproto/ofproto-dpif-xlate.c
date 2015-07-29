@@ -1548,18 +1548,6 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     }
     mirrors |= xbundle_mirror_src(xbridge, in_xbundle);
 
-    /* Drop frames on bundles reserved for mirroring. */
-    if (xbundle_mirror_out(xbridge, in_xbundle)) {
-        if (ctx->xin->packet != NULL) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
-                         "%s, which is reserved exclusively for mirroring",
-                         ctx->xbridge->name, in_xbundle->name);
-        }
-        ofpbuf_clear(ctx->odp_actions);
-        return;
-    }
-
     /* Check VLAN. */
     vid = vlan_tci_to_vid(orig_flow->vlan_tci);
     if (!input_vid_is_valid(vid, in_xbundle, ctx->xin->packet != NULL)) {
@@ -4919,9 +4907,20 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    /* Do not perform special processing on recirculated packets,
-     * as recirculated packets are not really received by the bridge. */
-    if (xin->recirc || !process_special(&ctx, in_port)) {
+    if (!xin->recirc && process_special(&ctx, in_port)) {
+        /* process_special() did all the processing for this packet.
+         *
+         * We do not perform special processing on recirculated packets, as
+         * recirculated packets are not really received by the bridge.*/
+    } else if (in_port && in_port->xbundle
+               && xbundle_mirror_out(xbridge, in_port->xbundle)) {
+        if (ctx.xin->packet != NULL) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
+                         "%s, which is reserved exclusively for mirroring",
+                         ctx.xbridge->name, in_port->xbundle->name);
+        }
+    } else {
         /* Sampling is done only for packets really received by the bridge. */
         unsigned int user_cookie_offset = 0;
         if (!xin->recirc) {
