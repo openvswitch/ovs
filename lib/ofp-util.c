@@ -7822,7 +7822,8 @@ parse_ofp15_group_bucket_prop_watch(const struct ofpbuf *payload,
 
 static enum ofperr
 ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
-                           enum ofp_version version, struct ovs_list *buckets)
+                           enum ofp_version version, uint8_t group_type,
+                           struct ovs_list *buckets)
 {
     struct ofp15_bucket *ob;
 
@@ -7835,7 +7836,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
         size_t ob_len, actions_len, properties_len;
         ovs_be32 watch_port = ofputil_port_to_ofp11(OFPP_ANY);
         ovs_be32 watch_group = htonl(OFPG_ANY);
-        ovs_be16 weight = htons(1);
+        ovs_be16 weight = htons(group_type == OFPGT11_SELECT ? 1 : 0);
 
         ofpbuf_init(&ofpacts, 0);
 
@@ -8217,7 +8218,7 @@ ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
                      "bucket list length %u", bucket_list_len);
         return OFPERR_OFPBRC_BAD_LEN;
     }
-    error = ofputil_pull_ofp15_buckets(msg, bucket_list_len, version,
+    error = ofputil_pull_ofp15_buckets(msg, bucket_list_len, version, gd->type,
                                        &gd->buckets);
     if (error) {
         return error;
@@ -8515,7 +8516,7 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
 
     bucket_list_len = ntohs(ogm->bucket_array_len);
     error = ofputil_pull_ofp15_buckets(msg, bucket_list_len, ofp_version,
-                                       &gm->buckets);
+                                       gm->type, &gm->buckets);
     if (error) {
         return error;
     }
@@ -8592,6 +8593,10 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     }
 
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
+        if (bucket->weight && gm->type != OFPGT11_SELECT) {
+            return OFPERR_OFPGMFC_INVALID_GROUP;
+        }
+
         switch (gm->type) {
         case OFPGT11_ALL:
         case OFPGT11_INDIRECT:

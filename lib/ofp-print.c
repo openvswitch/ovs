@@ -2376,7 +2376,7 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
         ds_put_cstr(s, "bucket=");
 
         ofp_print_bucket_id(s, "bucket_id:", bucket->bucket_id, ofp_version);
-        if (bucket->weight != 1) {
+        if (bucket->weight != (type == OFPGT11_SELECT ? 1 : 0)) {
             ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
         }
         if (bucket->watch_port != OFPP_NONE) {
