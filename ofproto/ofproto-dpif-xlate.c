@@ -4793,12 +4793,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         xlate_wc_init(&ctx);
     }
 
-    struct xport *in_port;
-
     COVERAGE_INC(xlate_actions);
-
-    /* The in_port of the original packet before recirculation. */
-    in_port = get_ofp_port(xbridge, flow->in_port.ofp_port);
 
     if (xin->recirc) {
         const struct recirc_id_node *recirc = xin->recirc;
@@ -4901,6 +4896,11 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
          * shows up in profiles. */
         orig_flow = *flow;
     }
+
+    /* Get the proximate input port of the packet.  (If xin->recirc,
+     * flow->in_port is the ultimate input port of the packet.) */
+    struct xport *in_port = get_ofp_port(xbridge,
+                                         ctx.base_flow.in_port.ofp_port);
 
     /* Tunnel stats only for non-recirculated packets. */
     if (!xin->recirc && in_port && in_port->is_tunnel) {
