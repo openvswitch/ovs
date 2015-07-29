@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,14 +117,14 @@ bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
 
     for (i = 0; i < bundle->n_slaves; i++) {
         ofp_port_t ofp_port = bundle->slaves[i];
-        enum ofperr error;
 
-        error = ofpact_check_output_port(ofp_port, max_ports);
-        if (error) {
-            VLOG_WARN_RL(&rl, "invalid slave %"PRIu16, ofp_port);
-            return error;
+        if (ofp_port != OFPP_NONE) {
+            enum ofperr error = ofpact_check_output_port(ofp_port, max_ports);
+            if (error) {
+                VLOG_WARN_RL(&rl, "invalid slave %"PRIu16, ofp_port);
+                return error;
+            }
         }
-
         /* Controller slaves are unsupported due to the lack of a max_len
          * argument. This may or may not change in the future.  There doesn't
          * seem to be a real-world use-case for supporting it. */

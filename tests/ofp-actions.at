@@ -135,6 +135,9 @@ ffff 0018 00002320 001d 3039 00005BA0 00008707 0000B26E
 & ofp_actions|WARN|OpenFlow action NXAST_DEC_TTL_CNT_IDS length 17 is not a multiple of 8
 ffff 0011 00002320 0015 0001 00000000 0000000000000000
 
+# bad OpenFlow10 actions: OFPBAC_BAD_OUT_PORT
+0000 0008 ffff 0000
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
@@ -296,6 +299,11 @@ ffff 0020 00002320 0015 000500000000 80003039005A02fd 0400000000000000
 
 # actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ffff 0018 00002320 001d 3039 00005BA0 00008707 0000B26E
+
+# bad OpenFlow11 actions: OFPBAC_BAD_OUT_PORT
+& ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_OUT_PORT):
+& 00000000  00 00 00 10 ff ff ff ff-00 00 00 00 00 00 00 00
+0000 0010 ffffffff 0000 000000000000
 
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
