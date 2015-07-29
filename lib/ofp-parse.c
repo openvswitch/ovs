@@ -1123,7 +1123,7 @@ exit:
 }
 
 static char * OVS_WARN_UNUSED_RESULT
-parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
+parse_bucket_str(struct ofputil_bucket *bucket, char *str_, uint8_t group_type,
                   enum ofputil_protocol *usable_protocols)
 {
     char *pos, *key, *value;
@@ -1131,7 +1131,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
     struct ds actions;
     char *error;
 
-    bucket->weight = 1;
+    bucket->weight = group_type == OFPGT11_SELECT ? 1 : 0;
     bucket->bucket_id = OFPG15_BUCKET_ALL;
     bucket->watch_port = OFPP_ANY;
     bucket->watch_group = OFPG11_ANY;
@@ -1313,40 +1313,19 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
 
     *usable_protocols = OFPUTIL_P_OF11_UP;
 
-    if (fields & F_BUCKETS) {
-        char *bkt_str = strstr(string, "bucket=");
-
-        if (bkt_str) {
-            *bkt_str = '\0';
+    /* Strip the buckets off the end of 'string', if there are any, saving a
+     * pointer for later.  We want to parse the buckets last because the bucket
+     * type influences bucket defaults. */
+    char *bkt_str = strstr(string, "bucket=");
+    if (bkt_str) {
+        if (!(fields & F_BUCKETS)) {
+            error = xstrdup("bucket is not needed");
+            goto out;
         }
-
-        while (bkt_str) {
-            char *next_bkt_str;
-
-            bkt_str = strchr(bkt_str + 1, '=');
-            if (!bkt_str) {
-                error = xstrdup("must specify bucket content");
-                goto out;
-            }
-            bkt_str++;
-
-            next_bkt_str = strstr(bkt_str, "bucket=");
-            if (next_bkt_str) {
-                *next_bkt_str = '\0';
-            }
-
-            bucket = xzalloc(sizeof(struct ofputil_bucket));
-            error = parse_bucket_str(bucket, bkt_str, usable_protocols);
-            if (error) {
-                free(bucket);
-                goto out;
-            }
-            list_push_back(&gm->buckets, &bucket->list_node);
-
-            bkt_str = next_bkt_str;
-        }
+        *bkt_str = '\0';
     }
 
+    /* Parse everything before the buckets. */
     for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
          name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
         char *value;
@@ -1421,9 +1400,6 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
                 goto out;
             }
             had_type = true;
-        } else if (!strcmp(name, "bucket")) {
-            error = xstrdup("bucket is not needed");
-            goto out;
         } else if (!strcmp(name, "selection_method")) {
             if (!(fields & F_GROUP_TYPE)) {
                 error = xstrdup("selection method is not needed");
@@ -1484,12 +1460,36 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         goto out;
     }
 
-    /* Validate buckets. */
-    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-        if (bucket->weight != 1 && gm->type != OFPGT11_SELECT) {
+    /* Now parse the buckets, if any. */
+    while (bkt_str) {
+        char *next_bkt_str;
+
+        bkt_str = strchr(bkt_str + 1, '=');
+        if (!bkt_str) {
+            error = xstrdup("must specify bucket content");
+            goto out;
+        }
+        bkt_str++;
+
+        next_bkt_str = strstr(bkt_str, "bucket=");
+        if (next_bkt_str) {
+            *next_bkt_str = '\0';
+        }
+
+        bucket = xzalloc(sizeof(struct ofputil_bucket));
+        error = parse_bucket_str(bucket, bkt_str, gm->type, usable_protocols);
+        if (error) {
+            free(bucket);
+            goto out;
+        }
+        list_push_back(&gm->buckets, &bucket->list_node);
+
+        if (gm->type != OFPGT11_SELECT && bucket->weight) {
             error = xstrdup("Only select groups can have bucket weights.");
             goto out;
         }
+
+        bkt_str = next_bkt_str;
     }
     if (gm->type == OFPGT11_INDIRECT && !list_is_short(&gm->buckets)) {
         error = xstrdup("Indirect groups can have at most one bucket.");
