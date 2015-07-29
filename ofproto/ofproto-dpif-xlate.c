@@ -4824,9 +4824,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         if (xbridge->netflow) {
             netflow_mask_wc(flow, ctx.wc);
         }
+        tnl_wc_init(flow, xin->wc);
     }
 
-    tnl_may_send = tnl_xlate_init(flow, xin->wc);
+    tnl_may_send = tnl_process_ecn(flow);
 
     /* The in_port of the original packet before recirculation. */
     in_port = get_ofp_port(xbridge, flow->in_port.ofp_port);
