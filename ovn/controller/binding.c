@@ -91,7 +91,12 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 
     sset_init(&lports);
     sset_init(&all_lports);
-    get_local_iface_ids(br_int, &lports);
+    if (br_int) {
+        get_local_iface_ids(br_int, &lports);
+    } else {
+        /* We have no integration bridge, therefore no local logical ports.
+         * We'll remove our chassis from all port binding records below. */
+    }
     sset_clone(&all_lports, &lports);
 
     ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,

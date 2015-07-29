@@ -83,6 +83,8 @@ get_bridge(struct controller_ctx *ctx, const char *name)
         }
     }
 
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    VLOG_WARN_RL(&rl, "%s: integration bridge does not exist", name);
     return NULL;
 }
 
@@ -108,19 +110,11 @@ get_core_config(struct controller_ctx *ctx, char **br_int_namep,
             exit(EXIT_FAILURE);
         }
 
-        const struct ovsrec_bridge *br_int;
         const char *remote, *system_id, *br_int_name;
 
         br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
         if (!br_int_name) {
             br_int_name = DEFAULT_BRIDGE_NAME;
-        }
-
-        br_int = get_bridge(ctx, br_int_name);
-        if (!br_int) {
-            VLOG_INFO("Integration bridge '%s' does not exist.  Waiting...",
-                      br_int_name);
-            goto try_again;
         }
 
         remote = smap_get(&cfg->external_ids, "ovn-remote");
@@ -292,24 +286,19 @@ main(int argc, char *argv[])
         ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
         ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
-        /* xxx If run into any surprising changes, we exit.  We should
-         * xxx handle this more gracefully. */
         const struct ovsrec_bridge *br_int = get_bridge(&ctx, br_int_name);
-        if (!br_int) {
-            VLOG_ERR("Integration bridge '%s' disappeared", br_int_name);
-            retval = EXIT_FAILURE;
-            goto exit;
-        }
 
         chassis_run(&ctx, chassis_id);
         encaps_run(&ctx, br_int, chassis_id);
         binding_run(&ctx, br_int, chassis_id);
 
-        struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-        pipeline_run(&ctx, &flow_table);
-        physical_run(&ctx, br_int, chassis_id, &flow_table);
-        ofctrl_run(br_int, &flow_table);
-        hmap_destroy(&flow_table);
+        if (br_int) {
+            struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
+            pipeline_run(&ctx, &flow_table);
+            physical_run(&ctx, br_int, chassis_id, &flow_table);
+            ofctrl_run(br_int, &flow_table);
+            hmap_destroy(&flow_table);
+        }
 
         unixctl_server_run(unixctl);
 
@@ -321,7 +310,9 @@ main(int argc, char *argv[])
         idl_loop_commit_and_wait(&ovnsb_idl_loop);
         idl_loop_commit_and_wait(&ovs_idl_loop);
 
-        ofctrl_wait();
+        if (br_int) {
+            ofctrl_wait();
+        }
         poll_block();
     }
 
@@ -331,14 +322,7 @@ main(int argc, char *argv[])
         ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
         ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
-        /* xxx If run into any surprising changes, we exit.  We should
-         * xxx handle this more gracefully. */
         const struct ovsrec_bridge *br_int = get_bridge(&ctx, br_int_name);
-        if (!br_int) {
-            VLOG_ERR("Integration bridge '%s' disappeared", br_int_name);
-            retval = EXIT_FAILURE;
-            goto exit;
-        }
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
@@ -354,7 +338,6 @@ main(int argc, char *argv[])
         poll_block();
     }
 
-exit:
     unixctl_server_destroy(unixctl);
     pipeline_destroy(&ctx);
     ofctrl_destroy();

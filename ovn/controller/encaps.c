@@ -231,7 +231,7 @@ void
 encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
            const char *chassis_id)
 {
-    if (!ctx->ovs_idl_txn) {
+    if (!ctx->ovs_idl_txn || !br_int) {
         return;
     }
 
@@ -298,6 +298,10 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 bool
 encaps_cleanup(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 {
+    if (!br_int) {
+        return true;
+    }
+
     /* Delete all the OVS-created tunnels from the integration bridge. */
     struct ovsrec_port **ports
         = xmalloc(sizeof *br_int->ports * br_int->n_ports);
