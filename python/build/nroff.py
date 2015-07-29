@@ -105,6 +105,101 @@ def pre_to_nroff(nodes, para, font):
     s += '.fi\n'
     return s
 
+def diagram_header_to_nroff(header_node):
+    header_fields = []
+    i = 0
+    for node in header_node.childNodes:
+        if node.nodeType == node.ELEMENT_NODE and node.tagName == 'bits':
+            name = node.attributes['name'].nodeValue
+            width = node.attributes['width'].nodeValue
+            above = node.getAttribute('above')
+            below = node.getAttribute('below')
+            fill = node.getAttribute('fill')
+            header_fields += [{"name": name,
+                              "tag": "B%d" % i,
+                              "width": width,
+                              "above": above,
+                              "below": below,
+                              "fill": fill}]
+            i += 1
+        elif node.nodeType == node.COMMENT_NODE:
+            pass
+        elif node.nodeType == node.TEXT_NODE and node.data.isspace():
+            pass
+        else:
+            fatal("unknown node %s in diagram <header> element" % node)
+
+    pic_s = ""
+    for f in header_fields:
+        pic_s += "  %s: box \"%s\" width %s" % (f['tag'], f['name'], f['width'])
+        if f['fill'] == 'yes':
+            pic_s += " fill"
+        pic_s += '\n'
+    for f in header_fields:
+        pic_s += "  \"%s\" at %s.n above\n" % (f['above'], f['tag'])
+        pic_s += "  \"%s\" at %s.s below\n" % (f['below'], f['tag'])
+    name = header_node.getAttribute('name')
+    if name == "":
+        visible = " invis"
+    else:
+        visible = ""
+    pic_s += "line <->%s \"%s\" above " % (visible, name)
+    pic_s += "from %s.nw + (0,textht) " % header_fields[0]['tag']
+    pic_s += "to %s.ne + (0,textht)\n" % header_fields[-1]['tag']
+
+    text_s = ""
+    for f in header_fields:
+        text_s += """.IP \\(bu
+%s bits""" % (f['above'])
+        if f['name']:
+            text_s += ": %s" % f['name']
+        if f['below']:
+            text_s += " (%s)" % f['below']
+        text_s += "\n"
+    return pic_s, text_s
+
+def diagram_to_nroff(nodes, para):
+    pic_s = ''
+    text_s = ''
+    move = False
+    for node in nodes:
+        if node.nodeType == node.ELEMENT_NODE and node.tagName == 'header':
+            if move:
+                pic_s += "move .1\n"
+                text_s += ".sp\n"
+            pic_header, text_header = diagram_header_to_nroff(node)
+            pic_s += "[\n" + pic_header + "]\n"
+            text_s += text_header
+            move = True
+        elif node.nodeType == node.ELEMENT_NODE and node.tagName == 'nospace':
+            move = False
+        elif node.nodeType == node.ELEMENT_NODE and node.tagName == 'dots':
+            pic_s += "move .1\n"
+            pic_s += '". . ." ljust\n'
+            text_s += ".sp\n"
+        elif node.nodeType == node.COMMENT_NODE:
+            pass
+        elif node.nodeType == node.TEXT_NODE and node.data.isspace():
+            pass
+        else:
+            fatal("unknown node %s in diagram <header> element" % node)
+    return para + """
+.\\" check if in troff mode (TTY)
+.if t \{
+.PS
+boxht = .2
+textht = 1/6
+fillval = .2
+""" + pic_s + """\
+.PE
+\\}
+.\\" check if in nroff mode:
+.if n \{
+.RS
+""" + text_s + """\
+.RE
+\\}"""
+
 def block_xml_to_nroff(nodes, para='.PP'):
     s = ''
     for node in nodes:
@@ -176,6 +271,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 else:
                     font = r'\fB'
                 s += pre_to_nroff(node.childNodes, para, font)
+            elif node.tagName == 'diagram':
+                s += diagram_to_nroff(node.childNodes, para)
             else:
                 s += inline_xml_to_nroff(node, r'\fR')
         elif node.nodeType == node.COMMENT_NODE:
