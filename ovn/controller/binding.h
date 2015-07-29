@@ -23,7 +23,8 @@ struct controller_ctx;
 struct ovsrec_bridge;
 
 void binding_init(struct controller_ctx *);
-void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int);
-bool binding_cleanup(struct controller_ctx *);
+void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
+                 const char *chassis_id);
+bool binding_cleanup(struct controller_ctx *, const char *chassis_id);
 
 #endif /* ovn/binding.h */

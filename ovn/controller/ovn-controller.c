@@ -94,7 +94,8 @@ get_bridge(struct controller_ctx *ctx, const char *name)
  * xxx ovn-controller does not support changing any of these mid-run,
  * xxx but that should be addressed later. */
 static void
-get_core_config(struct controller_ctx *ctx, char **br_int_namep)
+get_core_config(struct controller_ctx *ctx, char **br_int_namep,
+                char **chassis_idp)
 {
     while (1) {
         ovsdb_idl_run(ctx->ovs_idl);
@@ -135,7 +136,7 @@ get_core_config(struct controller_ctx *ctx, char **br_int_namep)
         }
 
         ovnsb_remote = xstrdup(remote);
-        ctx->chassis_id = xstrdup(system_id);
+        *chassis_idp = xstrdup(system_id);
         *br_int_namep = xstrdup(br_int_name);
         return;
 
@@ -234,7 +235,7 @@ int
 main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
-    struct controller_ctx ctx = { .chassis_id = NULL };
+    struct controller_ctx ctx = { .ovs_idl = NULL };
     bool exiting;
     int retval;
 
@@ -275,8 +276,8 @@ main(int argc, char *argv[])
 
     get_initial_snapshot(ctx.ovs_idl);
 
-    char *br_int_name;
-    get_core_config(&ctx, &br_int_name);
+    char *br_int_name, *chassis_id;
+    get_core_config(&ctx, &br_int_name, &chassis_id);
 
     ctx.ovnsb_idl = ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class,
                                      true, true);
@@ -300,13 +301,13 @@ main(int argc, char *argv[])
             goto exit;
         }
 
-        chassis_run(&ctx);
-        encaps_run(&ctx, br_int);
-        binding_run(&ctx, br_int);
+        chassis_run(&ctx, chassis_id);
+        encaps_run(&ctx, br_int, chassis_id);
+        binding_run(&ctx, br_int, chassis_id);
 
         struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
         pipeline_run(&ctx, &flow_table);
-        physical_run(&ctx, br_int, &flow_table);
+        physical_run(&ctx, br_int, chassis_id, &flow_table);
         ofctrl_run(br_int, &flow_table);
         hmap_destroy(&flow_table);
 
@@ -341,8 +342,8 @@ main(int argc, char *argv[])
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
-        done = binding_cleanup(&ctx);
-        done = chassis_cleanup(&ctx) && done;
+        done = binding_cleanup(&ctx, chassis_id);
+        done = chassis_cleanup(&ctx, chassis_id) && done;
         done = encaps_cleanup(&ctx, br_int) && done;
         if (done) {
             poll_immediate_wake();
@@ -362,7 +363,7 @@ exit:
     idl_loop_destroy(&ovnsb_idl_loop);
 
     free(br_int_name);
-    free(ctx.chassis_id);
+    free(chassis_id);
     free(ovnsb_remote);
     free(ovs_remote);
 

@@ -23,8 +23,8 @@ struct ovsrec_bridge;
 
 void encaps_init(struct controller_ctx *);
 void encaps_run(struct controller_ctx *,
-                 const struct ovsrec_bridge *br_int);
+                const struct ovsrec_bridge *br_int, const char *chassis_id);
 bool encaps_cleanup(struct controller_ctx *,
-                     const struct ovsrec_bridge *br_int);
+                    const struct ovsrec_bridge *br_int);
 
 #endif /* ovn/encaps.h */

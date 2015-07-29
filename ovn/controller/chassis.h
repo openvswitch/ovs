@@ -22,7 +22,7 @@ struct controller_ctx;
 struct ovsrec_bridge;
 
 void chassis_init(struct controller_ctx *);
-void chassis_run(struct controller_ctx *);
-bool chassis_cleanup(struct controller_ctx *);
+void chassis_run(struct controller_ctx *, const char *chassis_id);
+bool chassis_cleanup(struct controller_ctx *, const char *chassis_id);
 
 #endif /* ovn/chassis.h */

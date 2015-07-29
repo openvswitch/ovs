@@ -44,7 +44,7 @@ physical_init(struct controller_ctx *ctx)
 
 void
 physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-             struct hmap *flow_table)
+             const char *this_chassis_id, struct hmap *flow_table)
 {
     struct simap lport_to_ofport = SIMAP_INITIALIZER(&lport_to_ofport);
     struct simap chassis_to_ofport = SIMAP_INITIALIZER(&chassis_to_ofport);
@@ -56,7 +56,7 @@ physical_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 
         const char *chassis_id = smap_get(&port_rec->external_ids,
                                           "ovn-chassis-id");
-        if (chassis_id && !strcmp(chassis_id, ctx->chassis_id)) {
+        if (chassis_id && !strcmp(chassis_id, this_chassis_id)) {
             continue;
         }
 

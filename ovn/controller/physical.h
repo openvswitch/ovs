@@ -30,6 +30,6 @@ struct ovsrec_bridge;
 
 void physical_init(struct controller_ctx *);
 void physical_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-                  struct hmap *flow_table);
+                  const char *chassis_id, struct hmap *flow_table);
 
 #endif /* ovn/physical.h */

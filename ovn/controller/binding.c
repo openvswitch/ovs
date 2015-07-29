@@ -72,7 +72,8 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int, struct sset *lports)
 }
 
 void
-binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
+binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+            const char *chassis_id)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_binding *binding_rec;
@@ -83,7 +84,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
         return;
     }
 
-    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return;
     }
@@ -95,7 +96,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 
     ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                               "ovn-controller: updating bindings for '%s'",
-                              ctx->chassis_id);
+                              chassis_id);
 
     SBREC_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
         if (sset_find_and_delete(&lports, binding_rec->logical_port) ||
@@ -126,21 +127,21 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-binding_cleanup(struct controller_ctx *ctx)
+binding_cleanup(struct controller_ctx *ctx, const char *chassis_id)
 {
     if (!ctx->ovnsb_idl_txn) {
         return false;
     }
 
     const struct sbrec_chassis *chassis_rec
-        = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+        = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }
 
     ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                               "ovn-controller: removing all bindings for '%s'",
-                              ctx->chassis_id);
+                              chassis_id);
 
     const struct sbrec_binding *binding_rec;
     bool any_changes = false;

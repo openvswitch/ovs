@@ -228,7 +228,8 @@ preferred_encap(const struct sbrec_chassis *chassis_rec)
 }
 
 void
-encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
+encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+           const char *chassis_id)
 {
     if (!ctx->ovs_idl_txn) {
         return;
@@ -246,7 +247,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
     tc.ovs_txn = ctx->ovs_idl_txn;
     ovsdb_idl_txn_add_comment(tc.ovs_txn,
                               "ovn-controller: modifying OVS tunnels '%s'",
-                              ctx->chassis_id);
+                              chassis_id);
 
     /* Collect all port names into tc.port_names.
      *
@@ -270,7 +271,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
     }
 
     SBREC_CHASSIS_FOR_EACH(chassis_rec, ctx->ovnsb_idl) {
-        if (strcmp(chassis_rec->name, ctx->chassis_id)) {
+        if (strcmp(chassis_rec->name, chassis_id)) {
             /* Create tunnels to the other chassis. */
             const struct sbrec_encap *encap = preferred_encap(chassis_rec);
             if (!encap) {

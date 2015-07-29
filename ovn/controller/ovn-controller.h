@@ -20,8 +20,6 @@
 #include "ovn/lib/ovn-sb-idl.h"
 
 struct controller_ctx {
-    char *chassis_id;               /* ID for this chassis. */
-
     struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnsb_idl_txn;
 

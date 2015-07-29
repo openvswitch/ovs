@@ -31,7 +31,7 @@ chassis_init(struct controller_ctx *ctx)
 }
 
 void
-chassis_run(struct controller_ctx *ctx)
+chassis_run(struct controller_ctx *ctx, const char *chassis_id)
 {
     if (!ctx->ovnsb_idl_txn) {
         return;
@@ -43,7 +43,7 @@ chassis_run(struct controller_ctx *ctx)
     struct sbrec_encap *encap_rec;
     static bool inited = false;
 
-    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
 
     /* xxx Need to support more than one encap.  Also need to support
      * xxx encap options. */
@@ -82,11 +82,11 @@ chassis_run(struct controller_ctx *ctx)
 
     ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                               "ovn-controller: registering chassis '%s'",
-                              ctx->chassis_id);
+                              chassis_id);
 
     if (!chassis_rec) {
         chassis_rec = sbrec_chassis_insert(ctx->ovnsb_idl_txn);
-        sbrec_chassis_set_name(chassis_rec, ctx->chassis_id);
+        sbrec_chassis_set_name(chassis_rec, chassis_id);
     }
 
     encap_rec = sbrec_encap_insert(ctx->ovnsb_idl_txn);
@@ -102,18 +102,18 @@ chassis_run(struct controller_ctx *ctx)
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-chassis_cleanup(struct controller_ctx *ctx)
+chassis_cleanup(struct controller_ctx *ctx, const char *chassis_id)
 {
     /* Delete Chassis row. */
     const struct sbrec_chassis *chassis_rec
-        = get_chassis_by_name(ctx->ovnsb_idl, ctx->chassis_id);
+        = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }
     if (ctx->ovnsb_idl_txn) {
         ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                                   "ovn-controller: unregistering chassis '%s'",
-                                  ctx->chassis_id);
+                                  chassis_id);
         sbrec_chassis_delete(chassis_rec);
     }
     return false;
