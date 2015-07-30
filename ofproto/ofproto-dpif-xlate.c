@@ -1530,56 +1530,55 @@ lookup_input_bundle(const struct xbridge *xbridge, ofp_port_t in_port,
 }
 
 static void
-add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
+mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
+              mirror_mask_t mirrors)
 {
+    bool warn = ctx->xin->packet != NULL;
+    uint16_t vid = vlan_tci_to_vid(ctx->xin->flow.vlan_tci);
+    if (!input_vid_is_valid(vid, xbundle, warn)) {
+        return;
+    }
+    uint16_t vlan = input_vid_to_vlan(xbundle, vid);
+
     const struct xbridge *xbridge = ctx->xbridge;
-    mirror_mask_t mirrors;
-    struct xbundle *in_xbundle;
-    uint16_t vlan;
-    uint16_t vid;
 
-    mirrors = ctx->mirrors;
-    ctx->mirrors = 0;
-
-    in_xbundle = lookup_input_bundle(xbridge, orig_flow->in_port.ofp_port,
-                                     ctx->xin->packet != NULL, NULL);
-    if (!in_xbundle) {
-        return;
-    }
-    mirrors |= xbundle_mirror_src(xbridge, in_xbundle);
-
-    /* Check VLAN. */
-    vid = vlan_tci_to_vid(orig_flow->vlan_tci);
-    if (!input_vid_is_valid(vid, in_xbundle, ctx->xin->packet != NULL)) {
-        return;
-    }
-    vlan = input_vid_to_vlan(in_xbundle, vid);
-
+    /* Don't mirror to destinations that we've already mirrored to. */
+    mirrors &= ~ctx->mirrors;
     if (!mirrors) {
         return;
     }
 
-    /* Restore the original packet before adding the mirror actions. */
-    ctx->xin->flow = *orig_flow;
+    /* Record these mirrors so that we don't mirror to them again. */
+    ctx->mirrors |= mirrors;
+
+    if (ctx->xin->resubmit_stats) {
+        mirror_update_stats(xbridge->mbridge, mirrors,
+                            ctx->xin->resubmit_stats->n_packets,
+                            ctx->xin->resubmit_stats->n_bytes);
+    }
+    if (ctx->xin->xcache) {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_MIRROR);
+        entry->u.mirror.mbridge = mbridge_ref(xbridge->mbridge);
+        entry->u.mirror.mirrors = mirrors;
+    }
 
     while (mirrors) {
+        const unsigned long *vlans;
         mirror_mask_t dup_mirrors;
         struct ofbundle *out;
-        const unsigned long *vlans;
-        bool vlan_mirrored;
-        bool has_mirror;
         int out_vlan;
 
-        has_mirror = mirror_get(xbridge->mbridge, raw_ctz(mirrors),
-                                &vlans, &dup_mirrors, &out, &out_vlan);
+        bool has_mirror = mirror_get(xbridge->mbridge, raw_ctz(mirrors),
+                                     &vlans, &dup_mirrors, &out, &out_vlan);
         ovs_assert(has_mirror);
 
         if (vlans) {
             ctx->wc->masks.vlan_tci |= htons(VLAN_CFI | VLAN_VID_MASK);
         }
-        vlan_mirrored = !vlans || bitmap_is_set(vlans, vlan);
 
-        if (!vlan_mirrored) {
+        if (vlans && !bitmap_is_set(vlans, vlan)) {
             mirrors = zero_rightmost_1bit(mirrors);
             continue;
         }
@@ -1593,7 +1592,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
                 output_normal(ctx, out_xbundle, vlan);
             }
         } else if (vlan != out_vlan
-                   && !eth_addr_is_reserved(orig_flow->dl_dst)) {
+                   && !eth_addr_is_reserved(ctx->xin->flow.dl_dst)) {
             struct xbundle *xbundle;
 
             LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
@@ -1602,6 +1601,20 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
                     output_normal(ctx, xbundle, out_vlan);
                 }
             }
+        }
+    }
+}
+
+static void
+mirror_ingress_packet(struct xlate_ctx *ctx)
+{
+    if (mbridge_has_mirrors(ctx->xbridge->mbridge)) {
+        bool warn = ctx->xin->packet != NULL;
+        struct xbundle *xbundle = lookup_input_bundle(
+            ctx->xbridge, ctx->xin->flow.in_port.ofp_port, warn, NULL);
+        if (xbundle) {
+            mirror_packet(ctx, xbundle,
+                          xbundle_mirror_src(ctx->xbridge, xbundle));
         }
     }
 }
@@ -2812,11 +2825,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         }
     }
 
-    if (mbridge_has_mirrors(ctx->xbridge->mbridge) && xport->xbundle) {
-        ctx->mirrors |= xbundle_mirror_dst(xport->xbundle->xbridge,
-                                           xport->xbundle);
-    }
-
     if (xport->peer) {
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
@@ -3030,6 +3038,12 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->sflow_odp_port = odp_port;
         ctx->sflow_n_outputs++;
         ctx->nf_output_iface = ofp_port;
+    }
+
+    if (mbridge_has_mirrors(ctx->xbridge->mbridge) && xport->xbundle) {
+        mirror_packet(ctx, xport->xbundle,
+                      xbundle_mirror_dst(xport->xbundle->xbridge,
+                                         xport->xbundle));
     }
 
  out:
@@ -4878,13 +4892,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
     xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
-    struct flow orig_flow;
-    if (mbridge_has_mirrors(xbridge->mbridge)) {
-        /* Do this conditionally because the copy is expensive enough that it
-         * shows up in profiles. */
-        orig_flow = *flow;
-    }
-
     /* Get the proximate input port of the packet.  (If xin->recirc,
      * flow->in_port is the ultimate input port of the packet.) */
     struct xport *in_port = get_ofp_port(xbridge,
@@ -4947,6 +4954,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 OVS_NOT_REACHED();
             }
 
+            mirror_ingress_packet(&ctx);
             do_xlate_actions(ofpacts, ofpacts_len, &ctx);
 
             /* We've let OFPP_NORMAL and the learning action look at the
@@ -4986,11 +4994,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         if (user_cookie_offset) {
             fix_sflow_action(&ctx, user_cookie_offset);
         }
-        /* Only mirror fully processed packets. */
-        if (!exit_recirculates(&ctx)
-            && mbridge_has_mirrors(xbridge->mbridge)) {
-            add_mirror_actions(&ctx, &orig_flow);
-        }
     }
 
     if (nl_attr_oversized(ctx.odp_actions->size)) {
@@ -5003,22 +5006,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     } else if (too_many_output_actions(ctx.odp_actions)) {
         COVERAGE_INC(xlate_actions_too_many_output);
         ctx.xout->slow |= SLOW_ACTION;
-    }
-
-    /* Update mirror stats only for packets really received by the bridge. */
-    if (!xin->recirc && mbridge_has_mirrors(xbridge->mbridge)) {
-        if (ctx.xin->resubmit_stats) {
-            mirror_update_stats(xbridge->mbridge, ctx.mirrors,
-                                ctx.xin->resubmit_stats->n_packets,
-                                ctx.xin->resubmit_stats->n_bytes);
-        }
-        if (ctx.xin->xcache) {
-            struct xc_entry *entry;
-
-            entry = xlate_cache_add_entry(ctx.xin->xcache, XC_MIRROR);
-            entry->u.mirror.mbridge = mbridge_ref(xbridge->mbridge);
-            entry->u.mirror.mirrors = ctx.mirrors;
-        }
     }
 
     /* Do netflow only for packets really received by the bridge and not sent
