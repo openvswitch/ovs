@@ -137,6 +137,7 @@ recirc_metadata_hash(const struct recirc_state *state)
         hash = hash_words64((const uint64_t *) state->stack->data,
                             state->stack->size / sizeof(uint64_t), hash);
     }
+    hash = hash_int(state->mirrors, hash);
     hash = hash_int(state->action_set_len, hash);
     if (state->ofpacts_len) {
         hash = hash_words64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
@@ -156,6 +157,7 @@ recirc_metadata_equal(const struct recirc_state *a,
             && (((!a->stack || !a->stack->size) &&
                  (!b->stack || !b->stack->size))
                 || (a->stack && b->stack && ofpbuf_equal(a->stack, b->stack)))
+            && a->mirrors == b->mirrors
             && a->action_set_len == b->action_set_len
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len));

@@ -3522,6 +3522,7 @@ compose_recirculate_action(struct xlate_ctx *ctx)
         .ofproto = ctx->xbridge->ofproto,
         .metadata = md,
         .stack = &ctx->stack,
+        .mirrors = ctx->mirrors,
         .action_set_len = ctx->recirc_action_offset,
         .ofpacts_len = ctx->action_set.size,
         .ofpacts = ctx->action_set.data,
@@ -4867,6 +4868,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         if (state->stack) {
             ofpbuf_put(&ctx.stack, state->stack->data, state->stack->size);
         }
+
+        /* Restore mirror state. */
+        ctx.mirrors = state->mirrors;
 
         /* Restore action set, if any. */
         if (state->action_set_len) {

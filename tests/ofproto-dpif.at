@@ -4144,6 +4144,34 @@ AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# This test verifies that mirror state is preserved across recirculation.
+#
+# Otherwise, post-recirculation the ingress and the output to port 4
+# would cause the packet to be mirrored to port 3 a second time.
+AT_SETUP([ofproto-dpif - mirroring with recirculation])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3, 4)
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=2,debug_recirc,4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow" -generate], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 3,2,recirc(0x1)
+])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow,recirc_id(1)" -generate], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 4
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # Two testcases below are for the ofproto/trace command
 # The first one tests all correct syntax:
 # ofproto/trace [dp_name] odp_flow [-generate|packet]
