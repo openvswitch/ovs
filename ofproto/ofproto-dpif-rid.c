@@ -124,62 +124,52 @@ recirc_id_node_find(uint32_t id)
 }
 
 static uint32_t
-recirc_metadata_hash(struct ofproto_dpif *ofproto, uint8_t table_id,
-                     struct recirc_metadata *md, struct ofpbuf *stack,
-                     uint32_t action_set_len, uint32_t ofpacts_len,
-                     const struct ofpact *ofpacts)
+recirc_metadata_hash(const struct recirc_state *state)
 {
     uint32_t hash;
 
-    BUILD_ASSERT(OFPACT_ALIGNTO == sizeof(uint64_t));
-
-    hash = hash_pointer(ofproto, 0);
-    hash = hash_int(table_id, hash);
-    hash = hash_words64((const uint64_t *)md, sizeof *md / sizeof(uint64_t),
+    hash = hash_pointer(state->ofproto, 0);
+    hash = hash_int(state->table_id, hash);
+    hash = hash_words64((const uint64_t *) &state->metadata,
+                        sizeof state->metadata / sizeof(uint64_t),
                         hash);
-    if (stack && stack->size != 0) {
-        hash = hash_words64((const uint64_t *)stack->data,
-                            stack->size / sizeof(uint64_t), hash);
+    if (state->stack && state->stack->size != 0) {
+        hash = hash_words64((const uint64_t *) state->stack->data,
+                            state->stack->size / sizeof(uint64_t), hash);
     }
-    hash = hash_int(action_set_len, hash);
-    if (ofpacts_len) {
-        hash = hash_words64(ALIGNED_CAST(const uint64_t *, ofpacts),
-                            OFPACT_ALIGN(ofpacts_len) / sizeof(uint64_t),
+    hash = hash_int(state->action_set_len, hash);
+    if (state->ofpacts_len) {
+        hash = hash_words64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
+                            state->ofpacts_len / sizeof(uint64_t),
                             hash);
     }
     return hash;
 }
 
 static bool
-recirc_metadata_equal(const struct recirc_id_node *node,
-                      struct ofproto_dpif *ofproto, uint8_t table_id,
-                      struct recirc_metadata *md, struct ofpbuf *stack,
-                      uint32_t action_set_len, uint32_t ofpacts_len,
-                      const struct ofpact *ofpacts)
+recirc_metadata_equal(const struct recirc_state *a,
+                      const struct recirc_state *b)
 {
-    return node->ofproto == ofproto
-        && node->table_id == table_id
-        && !memcmp(&node->metadata, md, sizeof *md)
-        && ((!node->stack && (!stack || stack->size == 0))
-            || (node->stack && stack && ofpbuf_equal(node->stack, stack)))
-        && node->action_set_len == action_set_len
-        && node->ofpacts_len == ofpacts_len
-        && (ofpacts_len == 0 || !memcmp(node->ofpacts, ofpacts, ofpacts_len));
+    return (a->table_id == b->table_id
+            && a->ofproto == b->ofproto
+            && !memcmp(&a->metadata, &b->metadata, sizeof a->metadata)
+            && (((!a->stack || !a->stack->size) &&
+                 (!b->stack || !b->stack->size))
+                || (a->stack && b->stack && ofpbuf_equal(a->stack, b->stack)))
+            && a->action_set_len == b->action_set_len
+            && ofpacts_equal(a->ofpacts, a->ofpacts_len,
+                             b->ofpacts, b->ofpacts_len));
 }
 
 /* Lockless RCU protected lookup.  If node is needed accross RCU quiescent
  * state, caller should take a reference. */
 static struct recirc_id_node *
-recirc_find_equal(struct ofproto_dpif *ofproto, uint8_t table_id,
-                  struct recirc_metadata *md, struct ofpbuf *stack,
-                  uint32_t action_set_len, uint32_t ofpacts_len,
-                  const struct ofpact *ofpacts, uint32_t hash)
+recirc_find_equal(const struct recirc_state *target, uint32_t hash)
 {
     struct recirc_id_node *node;
 
-    CMAP_FOR_EACH_WITH_HASH(node, metadata_node, hash, &metadata_map) {
-        if (recirc_metadata_equal(node, ofproto, table_id, md, stack,
-                                  action_set_len, ofpacts_len, ofpacts)) {
+    CMAP_FOR_EACH_WITH_HASH (node, metadata_node, hash, &metadata_map) {
+        if (recirc_metadata_equal(&node->state, target)) {
             return node;
         }
     }
@@ -187,16 +177,12 @@ recirc_find_equal(struct ofproto_dpif *ofproto, uint8_t table_id,
 }
 
 static struct recirc_id_node *
-recirc_ref_equal(struct ofproto_dpif *ofproto, uint8_t table_id,
-                 struct recirc_metadata *md, struct ofpbuf *stack,
-                 uint32_t action_set_len, uint32_t ofpacts_len,
-                 const struct ofpact *ofpacts, uint32_t hash)
+recirc_ref_equal(const struct recirc_state *target, uint32_t hash)
 {
     struct recirc_id_node *node;
 
     do {
-        node = recirc_find_equal(ofproto, table_id, md, stack, action_set_len,
-                                 ofpacts_len, ofpacts, hash);
+        node = recirc_find_equal(target, hash);
 
         /* Try again if the node was released before we get the reference. */
     } while (node && !ovs_refcount_try_ref_rcu(&node->refcount));
@@ -204,30 +190,33 @@ recirc_ref_equal(struct ofproto_dpif *ofproto, uint8_t table_id,
     return node;
 }
 
+static void
+recirc_state_clone(struct recirc_state *new, const struct recirc_state *old)
+{
+    *new = *old;
+    if (new->stack) {
+        new->stack = new->stack->size ? ofpbuf_clone(new->stack) : NULL;
+    }
+    if (new->ofpacts) {
+        new->ofpacts = (new->ofpacts_len
+                        ? xmemdup(new->ofpacts, new->ofpacts_len)
+                        : NULL);
+    }
+}
+
 /* Allocate a unique recirculation id for the given set of flow metadata.
  * The ID space is 2^^32, so there should never be a situation in which all
  * the IDs are used up.  We loop until we find a free one.
  * hash is recomputed if it is passed in as 0. */
 static struct recirc_id_node *
-recirc_alloc_id__(struct ofproto_dpif *ofproto, uint8_t table_id,
-                  struct recirc_metadata *md, struct ofpbuf *stack,
-                  uint32_t action_set_len, uint32_t ofpacts_len,
-                  const struct ofpact *ofpacts, uint32_t hash)
+recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
 {
-    struct recirc_id_node *node = xzalloc(sizeof *node +
-                                          OFPACT_ALIGN(ofpacts_len));
+    ovs_assert(state->action_set_len <= state->ofpacts_len);
+
+    struct recirc_id_node *node = xzalloc(sizeof *node);
     node->hash = hash;
     ovs_refcount_init(&node->refcount);
-
-    node->ofproto = ofproto;
-    node->table_id = table_id;
-    memcpy(&node->metadata, md, sizeof node->metadata);
-    node->stack = (stack && stack->size) ? ofpbuf_clone(stack) : NULL;
-    node->action_set_len = action_set_len;
-    node->ofpacts_len = ofpacts_len;
-    if (ofpacts_len) {
-        memcpy(node->ofpacts, ofpacts, ofpacts_len);
-    }
+    recirc_state_clone(CONST_CAST(struct recirc_state *, &node->state), state);
 
     ovs_mutex_lock(&mutex);
     for (;;) {
@@ -254,48 +243,23 @@ recirc_alloc_id__(struct ofproto_dpif *ofproto, uint8_t table_id,
 /* Look up an existing ID for the given flow's metadata and optional actions.
  */
 uint32_t
-recirc_find_id(struct ofproto_dpif *ofproto, uint8_t table_id,
-               struct recirc_metadata *md, struct ofpbuf *stack,
-               uint32_t action_set_len, uint32_t ofpacts_len,
-               const struct ofpact *ofpacts)
+recirc_find_id(const struct recirc_state *target)
 {
-    /* Check if an ID with the given metadata already exists. */
-    struct recirc_id_node *node;
-    uint32_t hash;
-
-    hash = recirc_metadata_hash(ofproto, table_id, md, stack, action_set_len,
-                                ofpacts_len, ofpacts);
-    node = recirc_find_equal(ofproto, table_id, md, stack, action_set_len,
-                             ofpacts_len, ofpacts, hash);
-
+    uint32_t hash = recirc_metadata_hash(target);
+    struct recirc_id_node *node = recirc_find_equal(target, hash);
     return node ? node->id : 0;
 }
 
 /* Allocate a unique recirculation id for the given set of flow metadata and
    optional actions. */
 uint32_t
-recirc_alloc_id_ctx(struct ofproto_dpif *ofproto, uint8_t table_id,
-                    struct recirc_metadata *md, struct ofpbuf *stack,
-                    uint32_t action_set_len, uint32_t ofpacts_len,
-                    const struct ofpact *ofpacts)
+recirc_alloc_id_ctx(const struct recirc_state *state)
 {
-    struct recirc_id_node *node;
-    uint32_t hash;
-
-    /* Look up an existing ID. */
-    hash = recirc_metadata_hash(ofproto, table_id, md, stack, action_set_len,
-                                ofpacts_len, ofpacts);
-    node = recirc_ref_equal(ofproto, table_id, md, stack, action_set_len,
-                            ofpacts_len, ofpacts, hash);
-
-    /* Allocate a new recirc ID if needed. */
+    uint32_t hash = recirc_metadata_hash(state);
+    struct recirc_id_node *node = recirc_ref_equal(state, hash);
     if (!node) {
-        ovs_assert(action_set_len <= ofpacts_len);
-
-        node = recirc_alloc_id__(ofproto, table_id, md, stack, action_set_len,
-                                 ofpacts_len, ofpacts, hash);
+        node = recirc_alloc_id__(state, hash);
     }
-
     return node->id;
 }
 
@@ -303,16 +267,12 @@ recirc_alloc_id_ctx(struct ofproto_dpif *ofproto, uint8_t table_id,
 uint32_t
 recirc_alloc_id(struct ofproto_dpif *ofproto)
 {
-    struct recirc_metadata md;
-    struct recirc_id_node *node;
-    uint32_t hash;
-
-    memset(&md, 0, sizeof md);
-    md.in_port = OFPP_NONE;
-    hash = recirc_metadata_hash(ofproto, TBL_INTERNAL, &md, NULL, 0, 0, NULL);
-    node = recirc_alloc_id__(ofproto, TBL_INTERNAL, &md, NULL, 0, 0, NULL,
-                             hash);
-    return node->id;
+    struct recirc_state state = {
+        .table_id = TBL_INTERNAL,
+        .ofproto = ofproto,
+        .metadata = { .in_port = OFPP_NONE },
+    };
+    return recirc_alloc_id__(&state, recirc_metadata_hash(&state))->id;
 }
 
 void
@@ -356,7 +316,7 @@ recirc_free_ofproto(struct ofproto_dpif *ofproto, const char *ofproto_name)
     struct recirc_id_node *n;
 
     CMAP_FOR_EACH (n, metadata_node, &metadata_map) {
-        if (n->ofproto == ofproto) {
+        if (n->state.ofproto == ofproto) {
             VLOG_ERR("recirc_id %"PRIu32
                      " left allocated when ofproto (%s)"
                      " is destructed", n->id, ofproto_name);

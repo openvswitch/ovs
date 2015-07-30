@@ -3505,14 +3505,22 @@ compose_recirculate_action(struct xlate_ctx *ctx)
 
     ovs_assert(ctx->recirc_action_offset >= 0);
 
+    struct recirc_state state = {
+        .table_id = 0,
+        .ofproto = ctx->xbridge->ofproto,
+        .metadata = md,
+        .stack = &ctx->stack,
+        .action_set_len = ctx->recirc_action_offset,
+        .ofpacts_len = ctx->action_set.size,
+        .ofpacts = ctx->action_set.data,
+    };
+
     /* Only allocate recirculation ID if we have a packet. */
     if (ctx->xin->packet) {
         /* Allocate a unique recirc id for the given metadata state in the
          * flow.  The life-cycle of this recirc id is managed by associating it
          * with the udpif key ('ukey') created for each new datapath flow. */
-        id = recirc_alloc_id_ctx(ctx->xbridge->ofproto, 0, &md, &ctx->stack,
-                                 ctx->recirc_action_offset,
-                                 ctx->action_set.size, ctx->action_set.data);
+        id = recirc_alloc_id_ctx(&state);
         if (!id) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_ERR_RL(&rl, "Failed to allocate recirculation id");
@@ -3522,12 +3530,12 @@ compose_recirculate_action(struct xlate_ctx *ctx)
     } else {
         /* Look up an existing recirc id for the given metadata state in the
          * flow.  No new reference is taken, as the ID is RCU protected and is
-         * only required temporarily for verification. */
-        id = recirc_find_id(ctx->xbridge->ofproto, 0, &md, &ctx->stack,
-                            ctx->recirc_action_offset,
-                            ctx->action_set.size, ctx->action_set.data);
-        /* We let zero 'id' to be used in the RECIRC action below, which will
-         * fail all revalidations as zero is not a valid recirculation ID. */
+         * only required temporarily for verification.
+         *
+         * This might fail and return 0.  We let zero 'id' to be used in the
+         * RECIRC action below, which will fail all revalidations as zero is
+         * not a valid recirculation ID. */
+        id = recirc_find_id(&state);
     }
 
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
@@ -4798,7 +4806,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     COVERAGE_INC(xlate_actions);
 
     if (xin->recirc) {
-        const struct recirc_id_node *recirc = xin->recirc;
+        const struct recirc_state *state = &xin->recirc->state;
 
         if (xin->ofpacts_len > 0 || ctx.rule) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -4811,10 +4819,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         /* Set the bridge for post-recirculation processing if needed. */
-        if (ctx.xbridge->ofproto != recirc->ofproto) {
+        if (ctx.xbridge->ofproto != state->ofproto) {
             struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-            const struct xbridge *new_bridge = xbridge_lookup(xcfg,
-                                                              recirc->ofproto);
+            const struct xbridge *new_bridge
+                = xbridge_lookup(xcfg, state->ofproto);
 
             if (OVS_UNLIKELY(!new_bridge)) {
                 /* Drop the packet if the bridge cannot be found. */
@@ -4827,26 +4835,25 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Set the post-recirculation table id.  Note: A table lookup is done
          * only if there are no post-recirculation actions. */
-        ctx.table_id = recirc->table_id;
+        ctx.table_id = state->table_id;
 
         /* Restore pipeline metadata. May change flow's in_port and other
          * metadata to the values that existed when recirculation was
          * triggered. */
-        recirc_metadata_to_flow(&recirc->metadata, flow);
+        recirc_metadata_to_flow(&state->metadata, flow);
 
         /* Restore stack, if any. */
-        if (recirc->stack) {
-            ofpbuf_put(&ctx.stack, recirc->stack->data, recirc->stack->size);
+        if (state->stack) {
+            ofpbuf_put(&ctx.stack, state->stack->data, state->stack->size);
         }
 
         /* Restore action set, if any. */
-        if (recirc->action_set_len) {
+        if (state->action_set_len) {
             const struct ofpact *a;
 
-            ofpbuf_put(&ctx.action_set, recirc->ofpacts,
-                       recirc->action_set_len);
+            ofpbuf_put(&ctx.action_set, state->ofpacts, state->action_set_len);
 
-            OFPACT_FOR_EACH(a, recirc->ofpacts, recirc->action_set_len) {
+            OFPACT_FOR_EACH(a, state->ofpacts, state->action_set_len) {
                 if (a->type == OFPACT_GROUP) {
                     ctx.action_set_has_group = true;
                     break;
@@ -4856,10 +4863,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Restore recirculation actions.  If there are no actions, processing
          * will start with a lookup in the table set above. */
-        if (recirc->ofpacts_len > recirc->action_set_len) {
-            xin->ofpacts_len = recirc->ofpacts_len - recirc->action_set_len;
-            xin->ofpacts = recirc->ofpacts +
-                recirc->action_set_len / sizeof *recirc->ofpacts;
+        if (state->ofpacts_len > state->action_set_len) {
+            xin->ofpacts_len = state->ofpacts_len - state->action_set_len;
+            xin->ofpacts = state->ofpacts +
+                state->action_set_len / sizeof *state->ofpacts;
         }
     } else if (OVS_UNLIKELY(flow->recirc_id)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);

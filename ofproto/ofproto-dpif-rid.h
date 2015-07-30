@@ -125,16 +125,9 @@ recirc_metadata_to_flow(const struct recirc_metadata *md,
     flow->actset_output = md->actset_output;
 }
 
-/* Pool node fields should NOT be modified after placing the node in the pool.
- */
-struct recirc_id_node {
-    struct ovs_list exp_node OVS_GUARDED;
-    struct cmap_node id_node;
-    struct cmap_node metadata_node;
-    uint32_t id;
-    uint32_t hash;
-    struct ovs_refcount refcount;
-
+/* State that flow translation can save, to restore when recirculation
+ * occurs.  */
+struct recirc_state {
     /* Initial table for post-recirculation processing. */
     uint8_t table_id;
 
@@ -147,7 +140,25 @@ struct recirc_id_node {
     uint32_t action_set_len;      /* How much of 'ofpacts' consists of an
                                    * action set? */
     uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */
-    struct ofpact ofpacts[];      /* Sequence of "struct ofpacts". */
+    struct ofpact *ofpacts;       /* Sequence of "struct ofpacts". */
+};
+
+/* This maps a recirculation ID to saved state that flow translation can
+ * restore when recirculation occurs. */
+struct recirc_id_node {
+    /* Index data. */
+    struct ovs_list exp_node OVS_GUARDED;
+    struct cmap_node id_node;
+    struct cmap_node metadata_node;
+    uint32_t id;
+    uint32_t hash;
+    struct ovs_refcount refcount;
+
+    /* Saved state.
+     *
+     * This state should not be modified after inserting a node in the pool,
+     * hence the 'const' to emphasize that. */
+    const struct recirc_state state;
 };
 
 void recirc_init(void);
@@ -156,14 +167,8 @@ void recirc_init(void);
  * updated to use this mechanism instead of internal rules. */
 uint32_t recirc_alloc_id(struct ofproto_dpif *);
 
-uint32_t recirc_alloc_id_ctx(struct ofproto_dpif *, uint8_t table_id,
-                             struct recirc_metadata *, struct ofpbuf *stack,
-                             uint32_t action_set_len, uint32_t ofpacts_len,
-                             const struct ofpact *);
-uint32_t recirc_find_id(struct ofproto_dpif *, uint8_t table_id,
-                        struct recirc_metadata *, struct ofpbuf *stack,
-                        uint32_t action_set_len, uint32_t ofpacts_len,
-                        const struct ofpact *);
+uint32_t recirc_alloc_id_ctx(const struct recirc_state *);
+uint32_t recirc_find_id(const struct recirc_state *);
 void recirc_free_id(uint32_t recirc_id);
 void recirc_free_ofproto(struct ofproto_dpif *, const char *ofproto_name);
 
