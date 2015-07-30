@@ -530,6 +530,18 @@ xlate_report(struct xlate_ctx *ctx, const char *format, ...)
     }
 }
 
+static inline void
+xlate_report_actions(struct xlate_ctx *ctx, const char *title,
+                     const struct ofpact *ofpacts, size_t ofpacts_len)
+{
+    if (OVS_UNLIKELY(ctx->xin->report_hook)) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+        ofpacts_format(ofpacts, ofpacts_len, &s);
+        xlate_report(ctx, "%s: %s", title, ds_cstr(&s));
+        ds_destroy(&s);
+    }
+}
+
 static void
 xlate_xbridge_init(struct xlate_cfg *xcfg, struct xbridge *xbridge)
 {
@@ -4814,13 +4826,14 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (xin->recirc) {
         const struct recirc_state *state = &xin->recirc->state;
 
+        xlate_report(&ctx, "Restoring state post-recirculation:");
+
         if (xin->ofpacts_len > 0 || ctx.rule) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            const char *conflict = xin->ofpacts_len ? "actions" : "rule";
 
-            VLOG_WARN_RL(&rl, "Recirculation conflict (%s)!",
-                         xin->ofpacts_len > 0
-                         ? "actions"
-                         : "rule");
+            VLOG_WARN_RL(&rl, "Recirculation conflict (%s)!", conflict);
+            xlate_report(&ctx, "- Recirculation conflict (%s)!", conflict);
             goto exit;
         }
 
@@ -4834,6 +4847,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 /* Drop the packet if the bridge cannot be found. */
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
                 VLOG_WARN_RL(&rl, "Recirculation bridge no longer exists.");
+                xlate_report(&ctx, "- Recirculation bridge no longer exists.");
                 goto exit;
             }
             ctx.xbridge = new_bridge;
@@ -4842,6 +4856,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         /* Set the post-recirculation table id.  Note: A table lookup is done
          * only if there are no post-recirculation actions. */
         ctx.table_id = state->table_id;
+        xlate_report(&ctx, "- Resuming from table %"PRIu8, ctx.table_id);
 
         /* Restore pipeline metadata. May change flow's in_port and other
          * metadata to the values that existed when recirculation was
@@ -4856,6 +4871,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         /* Restore action set, if any. */
         if (state->action_set_len) {
             const struct ofpact *a;
+
+            xlate_report_actions(&ctx, "- Restoring action set",
+                                 state->ofpacts, state->action_set_len);
 
             ofpbuf_put(&ctx.action_set, state->ofpacts, state->action_set_len);
 
@@ -4873,6 +4891,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             xin->ofpacts_len = state->ofpacts_len - state->action_set_len;
             xin->ofpacts = state->ofpacts +
                 state->action_set_len / sizeof *state->ofpacts;
+
+            xlate_report_actions(&ctx, "- Restoring actions",
+                                 xin->ofpacts, xin->ofpacts_len);
         }
     } else if (OVS_UNLIKELY(flow->recirc_id)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
