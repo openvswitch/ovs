@@ -4720,6 +4720,17 @@ too_many_output_actions(const struct ofpbuf *odp_actions OVS_UNUSED)
 void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
+    *xout = (struct xlate_out) {
+        .slow = 0,
+        .fail_open = false,
+        .has_learn = false,
+        .has_normal = false,
+        .has_fin_timeout = false,
+        .nf_output_iface = NF_OUT_DROP,
+        .mirrors = 0,
+        .n_recircs = 0,
+    };
+
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     struct flow_wildcards *wc = NULL;
     struct flow *flow = &xin->flow;
@@ -4760,13 +4771,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     ctx.xin = xin;
     ctx.xout = xout;
-    ctx.xout->slow = 0;
-    ctx.xout->has_learn = false;
-    ctx.xout->has_normal = false;
-    ctx.xout->has_fin_timeout = false;
-    ctx.xout->nf_output_iface = NF_OUT_DROP;
-    ctx.xout->mirrors = 0;
-    ctx.xout->n_recircs = 0;
 
     xout->odp_actions = xin->odp_actions;
     if (!xout->odp_actions) {
