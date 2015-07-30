@@ -19,6 +19,7 @@
 #include "bundle.h"
 #include "byte-order.h"
 #include "compiler.h"
+#include "dummy.h"
 #include "dynamic-string.h"
 #include "hmap.h"
 #include "learn.h"
@@ -284,6 +285,16 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(34): struct nx_action_conjunction. */
     NXAST_RAW_CONJUNCTION,
+
+/* ## ------------------ ## */
+/* ## Debugging actions. ## */
+/* ## ------------------ ## */
+
+/* These are intentionally undocumented, subject to change, and ovs-vswitchd */
+/* accepts them only if started with --enable-dummy. */
+
+    /* NX1.0+(255): void. */
+    NXAST_RAW_DEBUG_RECIRC,
 };
 
 /* OpenFlow actions are always a multiple of 8 bytes in length. */
@@ -4384,6 +4395,49 @@ format_SAMPLE(const struct ofpact_sample *a, struct ds *s)
                   a->obs_domain_id, a->obs_point_id);
 }
 
+/* debug_recirc instruction. */
+
+static bool enable_debug;
+
+void
+ofpact_dummy_enable(void)
+{
+    enable_debug = true;
+}
+
+static enum ofperr
+decode_NXAST_RAW_DEBUG_RECIRC(struct ofpbuf *out)
+{
+    if (!enable_debug) {
+        return OFPERR_OFPBAC_BAD_VENDOR_TYPE;
+    }
+
+    ofpact_put_DEBUG_RECIRC(out);
+    return 0;
+}
+
+static void
+encode_DEBUG_RECIRC(const struct ofpact_null *n OVS_UNUSED,
+                    enum ofp_version ofp_version OVS_UNUSED,
+                    struct ofpbuf *out)
+{
+    put_NXAST_DEBUG_RECIRC(out);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_DEBUG_RECIRC(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
+                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    ofpact_put_DEBUG_RECIRC(ofpacts);
+    return NULL;
+}
+
+static void
+format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
+{
+    ds_put_cstr(s, "debug_recirc");
+}
+
 /* Meter instruction. */
 
 static void
@@ -4790,6 +4844,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_STRIP_VLAN:
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_WRITE_METADATA:
+    case OFPACT_DEBUG_RECIRC:
         return false;
     default:
         OVS_NOT_REACHED();
@@ -4850,6 +4905,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_SAMPLE:
     case OFPACT_STACK_POP:
     case OFPACT_STACK_PUSH:
+    case OFPACT_DEBUG_RECIRC:
 
     /* The action set may only include actions and thus
      * may not include any instructions */
@@ -5063,6 +5119,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_EXIT:
     case OFPACT_UNROLL_XLATE:
     case OFPACT_SAMPLE:
+    case OFPACT_DEBUG_RECIRC:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -5659,6 +5716,9 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
          * OpenFlow. */
         return OFPERR_OFPBAC_BAD_TYPE;
 
+    case OFPACT_DEBUG_RECIRC:
+        return 0;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -6061,6 +6121,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:
     case OFPACT_GROUP:
+    case OFPACT_DEBUG_RECIRC:
     default:
         return false;
     }

@@ -46,5 +46,6 @@ dummy_enable(const char *arg)
     dpif_dummy_register(level);
     timeval_dummy_register();
     vlandev_dummy_enable();
+    ofpact_dummy_enable();
 }
 

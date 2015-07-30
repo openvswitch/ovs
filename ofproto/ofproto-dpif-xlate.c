@@ -4086,6 +4086,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_WRITE_ACTIONS:
         case OFPACT_METER:
         case OFPACT_SAMPLE:
+        case OFPACT_DEBUG_RECIRC:
             break;
 
             /* These need not be copied for restoration. */
@@ -4470,6 +4471,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SAMPLE:
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
+            break;
+
+        case OFPACT_DEBUG_RECIRC:
+            ctx_trigger_recirculation(ctx);
+            a = ofpact_next(a);
             break;
         }
 
