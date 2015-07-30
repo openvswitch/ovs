@@ -191,7 +191,7 @@ class Idl(object):
                     self._monitor_request_id = None
                     self.__clear()
                     self.__parse_update(msg.result)
-                except error.Error, e:
+                except error.Error as e:
                     vlog.err("%s: parse error in received schema: %s"
                               % (self._session.get_name(), e))
                     self.__error()
@@ -354,7 +354,7 @@ class Idl(object):
     def __parse_update(self, update):
         try:
             self.__do_parse_update(update)
-        except error.Error, e:
+        except error.Error as e:
             vlog.err("%s: error parsing update: %s"
                      % (self._session.get_name(), e))
 
@@ -451,7 +451,7 @@ class Idl(object):
 
             try:
                 datum = ovs.db.data.Datum.from_json(column.type, datum_json)
-            except error.Error, e:
+            except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
                           % (column_name, table.name, e))
@@ -600,7 +600,7 @@ class Row(object):
         try:
             datum = ovs.db.data.Datum.from_python(column.type, value,
                                                   _row_to_uuid)
-        except error.Error, e:
+        except error.Error as e:
             # XXX rate-limit
             vlog.err("attempting to write bad value to column %s (%s)"
                      % (column_name, e))
@@ -619,7 +619,7 @@ class Row(object):
                 continue
             try:
                 datum = ovs.db.data.Datum.from_json(column.type, datum_json)
-            except error.Error, e:
+            except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
                           % (column_name, table.name, e))

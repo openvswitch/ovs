@@ -168,7 +168,7 @@ class Poller(object):
             try:
                 events = self.poll.poll(self.timeout)
                 self.__log_wakeup(events)
-            except select.error, e:
+            except select.error as e:
                 # XXX rate-limit
                 error, msg = e
                 if error != errno.EINTR:
