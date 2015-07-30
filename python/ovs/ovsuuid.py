@@ -42,7 +42,7 @@ def from_json(json, symtab=None):
         if not uuidRE.match(s):
             raise error.Error("\"%s\" is not a valid UUID" % s, json)
         return uuid.UUID(s)
-    except error.Error, e:
+    except error.Error as e:
         if not symtab:
             raise e
         try:
