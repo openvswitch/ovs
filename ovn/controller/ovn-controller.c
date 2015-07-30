@@ -56,8 +56,6 @@ static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
-static char *ovnsb_remote;
-
 
 static void
 get_initial_snapshot(struct ovsdb_idl *idl)
@@ -73,18 +71,27 @@ get_initial_snapshot(struct ovsdb_idl *idl)
 }
 
 static const struct ovsrec_bridge *
-get_bridge(struct controller_ctx *ctx, const char *name)
+get_br_int(struct ovsdb_idl *ovs_idl)
 {
-    const struct ovsrec_bridge *br;
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    if (!cfg) {
+        return NULL;
+    }
 
-    OVSREC_BRIDGE_FOR_EACH(br, ctx->ovs_idl) {
-        if (!strcmp(br->name, name)) {
+    const char *br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
+    if (!br_int_name) {
+        br_int_name = DEFAULT_BRIDGE_NAME;
+    }
+
+    const struct ovsrec_bridge *br;
+    OVSREC_BRIDGE_FOR_EACH (br, ovs_idl) {
+        if (!strcmp(br->name, br_int_name)) {
             return br;
         }
     }
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-    VLOG_WARN_RL(&rl, "%s: integration bridge does not exist", name);
+    VLOG_WARN_RL(&rl, "%s: integration bridge does not exist", br_int_name);
     return NULL;
 }
 
@@ -95,49 +102,30 @@ get_chassis_id(const struct ovsdb_idl *ovs_idl)
     return cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
 }
 
-/* Retrieve the OVN integration bridge from the "external-ids:ovn-bridge"
- * key, the remote location from the "external-ids:ovn-remote" key, and
- * the chassis name from the "external-ids:system-id" key in the
- * Open_vSwitch table of the OVS database instance.
+/* Retrieves the OVN Southbound remote location from the
+ * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it.
  *
- * xxx ovn-controller does not support changing any of these mid-run,
- * xxx but that should be addressed later. */
-static void
-get_core_config(struct controller_ctx *ctx, char **br_int_namep)
+ * XXX ovn-controller does not support this changing mid-run, but that should
+ * be addressed later. */
+static char *
+get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 {
     while (1) {
-        ovsdb_idl_run(ctx->ovs_idl);
+        ovsdb_idl_run(ovs_idl);
 
-        const struct ovsrec_open_vswitch *cfg;
-        cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
-        if (!cfg) {
-            VLOG_ERR("No Open_vSwitch row defined.");
-            ovsdb_idl_destroy(ctx->ovs_idl);
-            exit(EXIT_FAILURE);
+        const struct ovsrec_open_vswitch *cfg
+            = ovsrec_open_vswitch_first(ovs_idl);
+        if (cfg) {
+            const char *remote = smap_get(&cfg->external_ids, "ovn-remote");
+            if (remote) {
+                return xstrdup(remote);
+            }
         }
 
-        const char *remote, *br_int_name;
-
-        br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
-        if (!br_int_name) {
-            br_int_name = DEFAULT_BRIDGE_NAME;
-        }
-
-        remote = smap_get(&cfg->external_ids, "ovn-remote");
-        if (!remote) {
-            VLOG_INFO("OVN OVSDB remote not specified.  Waiting...");
-            goto try_again;
-        }
-
-        ovnsb_remote = xstrdup(remote);
-        *br_int_namep = xstrdup(br_int_name);
-        return;
-
-try_again:
-        ovsdb_idl_wait(ctx->ovs_idl);
+        VLOG_INFO("OVN OVSDB remote not specified.  Waiting...");
+        ovsdb_idl_wait(ovs_idl);
         poll_block();
     }
-
 }
 
 struct idl_loop {
@@ -266,9 +254,7 @@ main(int argc, char *argv[])
 
     get_initial_snapshot(ctx.ovs_idl);
 
-    char *br_int_name;
-    get_core_config(&ctx, &br_int_name);
-
+    char *ovnsb_remote = get_ovnsb_remote(ctx.ovs_idl);
     ctx.ovnsb_idl = ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class,
                                      true, true);
     get_initial_snapshot(ctx.ovnsb_idl);
@@ -282,7 +268,7 @@ main(int argc, char *argv[])
         ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
         ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
-        const struct ovsrec_bridge *br_int = get_bridge(&ctx, br_int_name);
+        const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
         if (chassis_id) {
@@ -323,7 +309,7 @@ main(int argc, char *argv[])
         ctx.ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop);
         ctx.ovs_idl_txn = idl_loop_run(&ovs_idl_loop);
 
-        const struct ovsrec_bridge *br_int = get_bridge(&ctx, br_int_name);
+        const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
         /* Run all of the cleanup functions, even if one of them returns false.
@@ -347,7 +333,6 @@ main(int argc, char *argv[])
     idl_loop_destroy(&ovs_idl_loop);
     idl_loop_destroy(&ovnsb_idl_loop);
 
-    free(br_int_name);
     free(ovnsb_remote);
     free(ovs_remote);
 
