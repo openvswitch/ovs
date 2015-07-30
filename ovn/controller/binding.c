@@ -76,7 +76,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const char *chassis_id)
 {
     const struct sbrec_chassis *chassis_rec;
-    const struct sbrec_binding *binding_rec;
+    const struct sbrec_port_binding *binding_rec;
     struct sset lports, all_lports;
     const char *name;
 
@@ -99,11 +99,11 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     }
     sset_clone(&all_lports, &lports);
 
-    ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
-                              "ovn-controller: updating bindings for '%s'",
-                              chassis_id);
+    ovsdb_idl_txn_add_comment(
+        ctx->ovnsb_idl_txn,"ovn-controller: updating port bindings for '%s'",
+        chassis_id);
 
-    SBREC_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+    SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
         if (sset_find_and_delete(&lports, binding_rec->logical_port) ||
                 (binding_rec->parent_port && binding_rec->parent_port[0] &&
                  sset_contains(&all_lports, binding_rec->parent_port))) {
@@ -116,14 +116,14 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                           binding_rec->chassis->name,
                           chassis_rec->name);
             }
-            sbrec_binding_set_chassis(binding_rec, chassis_rec);
+            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         } else if (binding_rec->chassis == chassis_rec) {
-            sbrec_binding_set_chassis(binding_rec, NULL);
+            sbrec_port_binding_set_chassis(binding_rec, NULL);
         }
     }
 
     SSET_FOR_EACH (name, &lports) {
-        VLOG_DBG("No binding record for lport %s", name);
+        VLOG_DBG("No port binding record for lport %s", name);
     }
     sset_destroy(&lports);
     sset_destroy(&all_lports);
@@ -147,15 +147,15 @@ binding_cleanup(struct controller_ctx *ctx, const char *chassis_id)
         return true;
     }
 
-    ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
-                              "ovn-controller: removing all bindings for '%s'",
-                              chassis_id);
+    ovsdb_idl_txn_add_comment(
+        ctx->ovnsb_idl_txn,
+        "ovn-controller: removing all port bindings for '%s'", chassis_id);
 
-    const struct sbrec_binding *binding_rec;
+    const struct sbrec_port_binding *binding_rec;
     bool any_changes = false;
-    SBREC_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+    SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
         if (binding_rec->chassis == chassis_rec) {
-            sbrec_binding_set_chassis(binding_rec, NULL);
+            sbrec_port_binding_set_chassis(binding_rec, NULL);
             any_changes = true;
         }
     }

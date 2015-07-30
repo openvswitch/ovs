@@ -129,8 +129,8 @@
         logical network in terms of ``logical datapath flows,'' and
         <dfn>Binding</dfn> tables that link logical network components'
         locations to the physical network.  The hypervisors populate the PN and
-        Binding tables, whereas <code>ovn-northd</code>(8) populates the LN
-        tables.
+        Port_Binding tables, whereas <code>ovn-northd</code>(8) populates the
+        LN tables.
       </p>
 
       <p>
