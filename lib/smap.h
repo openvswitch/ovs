@@ -67,4 +67,6 @@ const struct smap_node **smap_sort(const struct smap *);
 void smap_from_json(struct smap *, const struct json *);
 struct json *smap_to_json(const struct smap *);
 
+bool smap_equal(const struct smap *, const struct smap *);
+
 #endif /* smap.h */

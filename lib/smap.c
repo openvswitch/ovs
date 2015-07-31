@@ -302,6 +302,26 @@ smap_to_json(const struct smap *smap)
     }
     return json;
 }
+
+/* Returns true if the two maps are equal, meaning that they have the same set
+ * of key-value pairs.
+ */
+bool
+smap_equal(const struct smap *smap1, const struct smap *smap2)
+{
+    if (smap_count(smap1) != smap_count(smap2)) {
+        return false;
+    }
+
+    const struct smap_node *node;
+    SMAP_FOR_EACH (node, smap1) {
+        const char *value2 = smap_get(smap2, node->key);
+        if (!value2 || strcmp(node->value, value2)) {
+            return false;
+        }
+    }
+    return true;
+}
 
 /* Private Helpers. */
 
