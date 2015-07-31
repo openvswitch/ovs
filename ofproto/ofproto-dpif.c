@@ -3660,15 +3660,17 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
         rule_dpif_credit_stats(rule, &stats);
     }
 
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions = OFPBUF_STUB_INITIALIZER(odp_actions_stub);
     xlate_in_init(&xin, ofproto, flow, flow->in_port.ofp_port, rule,
-                  stats.tcp_flags, packet, NULL);
+                  stats.tcp_flags, packet, NULL, &odp_actions);
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
     xlate_actions(&xin, &xout);
 
-    execute.actions = xout.odp_actions->data;
-    execute.actions_len = xout.odp_actions->size;
+    execute.actions = odp_actions.data;
+    execute.actions_len = odp_actions.size;
 
     pkt_metadata_from_flow(&packet->md, flow);
     execute.packet = packet;
@@ -3685,6 +3687,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     error = dpif_execute(ofproto->backer->dpif, &execute);
 
     xlate_out_uninit(&xout);
+    ofpbuf_uninit(&odp_actions);
 
     return error;
 }
@@ -4465,6 +4468,8 @@ struct trace_ctx {
     const struct flow *key;
     struct flow flow;
     struct ds *result;
+    struct flow_wildcards wc;
+    struct ofpbuf odp_actions;
 };
 
 static void
@@ -4531,7 +4536,7 @@ static void
 trace_format_odp(struct ds *result, int level, const char *title,
                  struct trace_ctx *trace)
 {
-    struct ofpbuf *odp_actions = trace->xout.odp_actions;
+    struct ofpbuf *odp_actions = &trace->odp_actions;
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
@@ -4547,7 +4552,7 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
-    match_init(&match, trace->key, &trace->xout.wc);
+    match_init(&match, trace->key, &trace->wc);
     match_format(&match, result, OFP_DEFAULT_PRIORITY);
     ds_put_char(result, '\n');
 }
@@ -4889,11 +4894,14 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
 
+    ofpbuf_init(&trace.odp_actions, 0);
+
     trace.result = ds;
     trace.key = flow; /* Original flow key, used for megaflow. */
     trace.flow = *flow; /* May be modified by actions. */
     xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, NULL,
-                  ntohs(flow->tcp_flags), packet, &trace.wc);
+                  ntohs(flow->tcp_flags), packet, &trace.wc,
+                  &trace.odp_actions);
     trace.xin.ofpacts = ofpacts;
     trace.xin.ofpacts_len = ofpacts_len;
     trace.xin.resubmit_hook = trace_resubmit;
@@ -4906,8 +4914,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace_format_megaflow(ds, 0, "Megaflow", &trace);
 
     ds_put_cstr(ds, "Datapath actions: ");
-    format_odp_actions(ds, trace.xout.odp_actions->data,
-                       trace.xout.odp_actions->size);
+    format_odp_actions(ds, trace.odp_actions.data, trace.odp_actions.size);
 
     if (trace.xout.slow) {
         enum slow_path_reason slow;
@@ -4927,6 +4934,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     }
 
     xlate_out_uninit(&trace.xout);
+    ofpbuf_uninit(&trace.odp_actions);
 }
 
 /* Store the current ofprotos in 'ofproto_shash'.  Returns a sorted list

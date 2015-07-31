@@ -52,10 +52,6 @@ struct xlate_out {
         uint32_t recirc[2];   /* When n_recircs == 1 or 2 */
         uint32_t *recircs;    /* When 'n_recircs' > 2 */
     };
-
-    uint64_t odp_actions_stub[256 / 8];
-    struct ofpbuf odp_actions_buf;
-    struct ofpbuf *odp_actions;
 };
 
 /* Helpers to abstract the recirculation union away. */
@@ -181,9 +177,8 @@ struct xlate_in {
      * calling xlate_in_init(). */
     struct xlate_cache *xcache;
 
-    /* Allows callers to optionally supply their own buffer for the resulting
-     * odp_actions stored in xlate_out.  If NULL, the default buffer will be
-     * used. */
+    /* If nonnull, flow translation puts the resulting datapath actions in this
+     * buffer.  If null, flow translation will not produce datapath actions. */
     struct ofpbuf *odp_actions;
 
     /* If nonnull, flow translation populates this with wildcards relevant in
@@ -239,7 +234,7 @@ void xlate_actions(struct xlate_in *, struct xlate_out *);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, ofp_port_t in_port, struct rule_dpif *,
                    uint16_t tcp_flags, const struct dp_packet *packet,
-                   struct flow_wildcards *);
+                   struct flow_wildcards *, struct ofpbuf *odp_actions);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 
