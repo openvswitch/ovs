@@ -189,7 +189,7 @@ static int stt_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
 	return ovs_tunnel_get_egress_info(egress_tun_info,
 					  ovs_dp_get_net(vport->dp),
 					  OVS_CB(skb)->egress_tun_info,
-					  IPPROTO_UDP, skb->mark, sport, dport);
+					  IPPROTO_TCP, skb->mark, sport, dport);
 }
 
 static struct vport_ops ovs_stt_vport_ops = {
