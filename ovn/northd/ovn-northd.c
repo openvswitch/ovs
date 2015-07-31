@@ -558,6 +558,12 @@ set_bindings(struct northd_context *ctx)
                     sbrec_binding_set_logical_datapath(binding,
                                                        *logical_datapath);
                 }
+                if (!strings_equal(binding->type, lport->type)) {
+                    sbrec_binding_set_type(binding, lport->type);
+                }
+                if (!smap_equal(&binding->options, &lport->options)) {
+                    sbrec_binding_set_options(binding, &lport->options);
+                }
             } else {
                 /* There is no binding for this logical port, so create one. */
 
@@ -577,6 +583,9 @@ set_bindings(struct northd_context *ctx)
 
                 sbrec_binding_set_tunnel_key(binding, tunnel_key);
                 sbrec_binding_set_logical_datapath(binding, *logical_datapath);
+
+                sbrec_binding_set_type(binding, lport->type);
+                sbrec_binding_set_options(binding, &lport->options);
 
                 /* Add the tunnel key to the tk_hmap so that we don't try to
                  * use it for another port.  (We don't want it in the lp_hmap
@@ -806,6 +815,8 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_parent_port);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_logical_datapath);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_tunnel_key);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_type);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_binding_col_options);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_table_id);

@@ -48,6 +48,12 @@
             "columns": {
                 "logical_datapath": {"type": "uuid"},
                 "logical_port": {"type": "string"},
+                "type": {"type": "string"},
+                "options": {
+                     "type": {"key": "string",
+                              "value": "string",
+                              "min": 0,
+                              "max": "unlimited"}},
                 "tunnel_key": {
                      "type": {"key": {"type": "integer",
                                       "minInteger": 1,

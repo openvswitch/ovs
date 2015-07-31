@@ -673,6 +673,23 @@
       prescribe a particular format for the logical port ID.
     </column>
 
+    <column name="type">
+      <p>
+      A type for this logical port.  Logical ports can be used to model
+      other types of connectivity into an OVN logical switch.  Leaving this column
+      blank maintains the default logical port behavior.
+      </p>
+
+      <p>
+      There are no other logical port types implemented yet.
+      </p>
+    </column>
+
+    <column name="options">
+        This column provides key/value settings specific to the logical port
+        <ref column="type"/>.
+    </column>
+
     <column name="tunnel_key">
       <p>
         A number that represents the logical port in the key (e.g. VXLAN VNI or
