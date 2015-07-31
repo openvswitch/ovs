@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,6 +170,7 @@ struct upcall {
 
     bool xout_initialized;         /* True if 'xout' must be uninitialized. */
     struct xlate_out xout;         /* Result of xlate_actions(). */
+    struct flow_wildcards wc;      /* Dependencies that megaflow must match. */
     struct ofpbuf put_actions;     /* Actions 'put' in the fastpath. */
 
     struct dpif_ipfix *ipfix;      /* IPFIX pointer or NULL. */
@@ -250,7 +251,7 @@ static struct ovs_list all_udpifs = OVS_LIST_INITIALIZER(&all_udpifs);
 
 static size_t recv_upcalls(struct handler *);
 static int process_upcall(struct udpif *, struct upcall *,
-                          struct ofpbuf *odp_actions);
+                          struct ofpbuf *odp_actions, struct flow_wildcards *);
 static void handle_upcalls(struct udpif *, struct upcall *, size_t n_upcalls);
 static void udpif_stop_threads(struct udpif *);
 static void udpif_start_threads(struct udpif *, size_t n_handlers,
@@ -278,7 +279,8 @@ static void upcall_unixctl_dump_wait(struct unixctl_conn *conn, int argc,
 static void upcall_unixctl_purge(struct unixctl_conn *conn, int argc,
                                  const char *argv[], void *aux);
 
-static struct udpif_key *ukey_create_from_upcall(struct upcall *);
+static struct udpif_key *ukey_create_from_upcall(struct upcall *,
+                                                 struct flow_wildcards *);
 static int ukey_create_from_dpif_flow(const struct udpif *,
                                       const struct dpif_flow *,
                                       struct udpif_key **);
@@ -704,7 +706,7 @@ recv_upcalls(struct handler *handler)
         pkt_metadata_from_flow(&dupcall->packet.md, flow);
         flow_extract(&dupcall->packet, flow);
 
-        error = process_upcall(udpif, upcall, NULL);
+        error = process_upcall(udpif, upcall, NULL, &upcall->wc);
         if (error) {
             goto cleanup;
         }
@@ -943,7 +945,7 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
 
 static void
 upcall_xlate(struct udpif *udpif, struct upcall *upcall,
-             struct ofpbuf *odp_actions)
+             struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     struct dpif_flow_stats stats;
     struct xlate_in xin;
@@ -954,7 +956,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     stats.tcp_flags = ntohs(upcall->flow->tcp_flags);
 
     xlate_in_init(&xin, upcall->ofproto, upcall->flow, upcall->in_port, NULL,
-                  stats.tcp_flags, upcall->packet);
+                  stats.tcp_flags, upcall->packet, wc);
     xin.odp_actions = odp_actions;
 
     if (upcall->type == DPIF_UC_MISS) {
@@ -1022,7 +1024,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
      * going to create new datapath flows for actual datapath misses, there is
      * no point in creating a ukey otherwise. */
     if (upcall->type == DPIF_UC_MISS) {
-        upcall->ukey = ukey_create_from_upcall(upcall);
+        upcall->ukey = ukey_create_from_upcall(upcall, wc);
     }
 }
 
@@ -1066,7 +1068,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
         return error;
     }
 
-    error = process_upcall(udpif, &upcall, actions);
+    error = process_upcall(udpif, &upcall, actions, wc);
     if (error) {
         goto out;
     }
@@ -1076,13 +1078,8 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
                    upcall.put_actions.size);
     }
 
-    if (OVS_LIKELY(wc)) {
-        if (megaflow) {
-            /* XXX: This could be avoided with sufficient API changes. */
-            *wc = upcall.xout.wc;
-        } else {
-            flow_wildcards_init_for_packet(wc, flow);
-        }
+    if (OVS_UNLIKELY(!megaflow)) {
+        flow_wildcards_init_for_packet(wc, flow);
     }
 
     if (udpif_get_n_flows(udpif) >= flow_limit) {
@@ -1110,7 +1107,7 @@ out:
 
 static int
 process_upcall(struct udpif *udpif, struct upcall *upcall,
-               struct ofpbuf *odp_actions)
+               struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     const struct nlattr *userdata = upcall->userdata;
     const struct dp_packet *packet = upcall->packet;
@@ -1118,7 +1115,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
 
     switch (classify_upcall(upcall->type, userdata)) {
     case MISS_UPCALL:
-        upcall_xlate(udpif, upcall, odp_actions);
+        upcall_xlate(udpif, upcall, odp_actions, wc);
         return 0;
 
     case SFLOW_UPCALL:
@@ -1387,14 +1384,14 @@ ukey_create__(const struct nlattr *key, size_t key_len,
 }
 
 static struct udpif_key *
-ukey_create_from_upcall(struct upcall *upcall)
+ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
 {
     struct odputil_keybuf keystub, maskstub;
     struct ofpbuf keybuf, maskbuf;
     bool megaflow;
     struct odp_flow_key_parms odp_parms = {
         .flow = upcall->flow,
-        .mask = &upcall->xout.wc.masks,
+        .mask = &wc->masks,
     };
 
     odp_parms.support = ofproto_dpif_get_support(upcall->ofproto)->odp;
@@ -1673,6 +1670,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     struct dpif_flow_stats push;
     struct ofpbuf xout_actions;
     struct flow flow, dp_mask;
+    struct flow_wildcards wc;
     uint64_t *dp64, *xout64;
     ofp_port_t ofp_in_port;
     struct xlate_in xin;
@@ -1735,13 +1733,12 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL, push.tcp_flags,
-                  NULL);
+                  NULL, need_revalidate ? &wc : NULL);
     if (push.n_packets) {
         xin.resubmit_stats = &push;
         xin.may_learn = true;
     }
     xin.xcache = ukey->xcache;
-    xin.skip_wildcards = !need_revalidate;
     xlate_actions(&xin, &xout);
     xoutp = &xout;
 
@@ -1774,7 +1771,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
      * we've calculated here.  This guarantees we don't catch any packets we
      * shouldn't with the megaflow. */
     dp64 = (uint64_t *) &dp_mask;
-    xout64 = (uint64_t *) &xout.wc.masks;
+    xout64 = (uint64_t *) &wc.masks;
     for (i = 0; i < FLOW_U64S; i++) {
         if ((dp64[i] | xout64[i]) != dp64[i]) {
             goto exit;
@@ -1883,10 +1880,9 @@ push_ukey_ops__(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
                 struct xlate_in xin;
 
                 xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL,
-                              push->tcp_flags, NULL);
+                              push->tcp_flags, NULL, NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
                 xin.may_learn = push->n_packets > 0;
-                xin.skip_wildcards = true;
                 xlate_actions_for_side_effects(&xin);
 
                 if (netflow) {

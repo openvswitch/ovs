@@ -3661,7 +3661,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     }
 
     xlate_in_init(&xin, ofproto, flow, flow->in_port.ofp_port, rule,
-                  stats.tcp_flags, packet);
+                  stats.tcp_flags, packet, NULL);
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
@@ -4893,7 +4893,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace.key = flow; /* Original flow key, used for megaflow. */
     trace.flow = *flow; /* May be modified by actions. */
     xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, NULL,
-                  ntohs(flow->tcp_flags), packet);
+                  ntohs(flow->tcp_flags), packet, &trace.wc);
     trace.xin.ofpacts = ofpacts;
     trace.xin.ofpacts_len = ofpacts_len;
     trace.xin.resubmit_hook = trace_resubmit;
