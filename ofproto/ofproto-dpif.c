@@ -4464,7 +4464,6 @@ struct trace_ctx {
     struct xlate_in xin;
     const struct flow *key;
     struct flow flow;
-    struct flow_wildcards wc;
     struct ds *result;
 };
 
@@ -4548,8 +4547,7 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
-    flow_wildcards_or(&trace->wc, &trace->xout.wc, &trace->wc);
-    match_init(&match, trace->key, &trace->wc);
+    match_init(&match, trace->key, &trace->xout.wc);
     match_format(&match, result, OFP_DEFAULT_PRIORITY);
     ds_put_char(result, '\n');
 }
@@ -4890,8 +4888,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     ds_put_cstr(ds, "Flow: ");
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
-
-    flow_wildcards_init_catchall(&trace.wc);
 
     trace.result = ds;
     trace.key = flow; /* Original flow key, used for megaflow. */

@@ -270,7 +270,7 @@ table=2 in_port=1,icmp6,icmpv6_type=135 actions=set_field:fe80::4->nd_target,set
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,icmp6,ipv6_src=fe80::1,ipv6_dst=fe80::2,nw_tos=0,nw_ttl=128,icmpv6_type=135,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11'], [0], [stdout])
 AT_CHECK([tail -4 stdout], [0],
-  [Megaflow: recirc_id=0,icmp6,in_port=1,nw_frag=no,icmp_type=135,icmp_code=0x0/0xff,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11
+  [Megaflow: recirc_id=0,icmp6,in_port=1,nw_frag=no,icmp_type=0x87/0xff,icmp_code=0x0/0xff,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11
 Datapath actions: 10,set(nd(target=fe80::4,sll=cc:cc:cc:cc:cc:cc)),11,set(nd(target=fe80::3,sll=aa:aa:aa:aa:aa:aa)),13
 This flow is handled by the userspace slow path because it:
 	- Uses action(s) not supported by datapath.
