@@ -3765,29 +3765,19 @@ ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
 }
 
 /* The returned rule (if any) is valid at least until the next RCU quiescent
- * period.  If the rule needs to stay around longer, a non-zero 'take_ref'
- * must be passed in to cause a reference to be taken on it.
+ * period.  If the rule needs to stay around longer, the caller should take
+ * a reference.
  *
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static struct rule_dpif *
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
                           uint8_t table_id, struct flow *flow,
-                          struct flow_wildcards *wc, bool take_ref)
+                          struct flow_wildcards *wc)
 {
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
-    const struct cls_rule *cls_rule;
-    struct rule_dpif *rule;
-
-    do {
-        cls_rule = classifier_lookup(cls, version, flow, wc);
-
-        rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-
-        /* Try again if the rule was released before we get the reference. */
-    } while (rule && take_ref && !rule_dpif_try_ref(rule));
-
-    return rule;
+    return rule_dpif_cast(rule_from_cls_rule(classifier_lookup(cls, version,
+                                                               flow, wc)));
 }
 
 /* Look up 'flow' in 'ofproto''s classifier version 'version', starting from
@@ -3807,9 +3797,8 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
  * '*table_id'.
  *
  * The rule is returned in '*rule', which is valid at least until the next
- * RCU quiescent period.  If the '*rule' needs to stay around longer,
- * a non-zero 'take_ref' must be passed in to cause a reference to be taken
- * on it before this returns.
+ * RCU quiescent period.  If the '*rule' needs to stay around longer, the
+ * caller must take a reference.
  *
  * 'in_port' allows the lookup to take place as if the in port had the value
  * 'in_port'.  This is needed for resubmit action support.
@@ -3819,7 +3808,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
 struct rule_dpif *
 rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             cls_version_t version, struct flow *flow,
-                            struct flow_wildcards *wc, bool take_ref,
+                            struct flow_wildcards *wc,
                             const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
                             bool may_packet_in, bool honor_table_miss)
@@ -3842,9 +3831,6 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
             /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
              * Use the drop_frags_rule (which cannot disappear). */
             rule = ofproto->drop_frags_rule;
-            if (take_ref) {
-                rule_dpif_ref(rule);
-            }
             if (stats) {
                 struct oftable *tbl = &ofproto->up.tables[*table_id];
                 unsigned long orig;
@@ -3871,8 +3857,7 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
          next_id++, next_id += (next_id == TBL_INTERNAL))
     {
         *table_id = next_id;
-        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc,
-                                         take_ref);
+        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc);
         if (stats) {
             struct oftable *tbl = &ofproto->up.tables[next_id];
             unsigned long orig;
@@ -3910,9 +3895,6 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                    connmgr_wants_packet_in_on_miss(ofproto->up.connmgr)) {
             rule = ofproto->miss_rule;
         }
-    }
-    if (take_ref) {
-        rule_dpif_ref(rule);
     }
 out:
     /* Restore port numbers, as they may have been modified above. */
@@ -5520,7 +5502,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
                                      TBL_INTERNAL, &ofm.fm.match.flow,
-                                     &ofm.fm.match.wc, false);
+                                     &ofm.fm.match.wc);
     if (rule) {
         *rulep = &rule->up;
     } else {

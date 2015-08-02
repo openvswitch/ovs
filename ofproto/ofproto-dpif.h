@@ -102,7 +102,6 @@ cls_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               cls_version_t, struct flow *,
                                               struct flow_wildcards *,
-                                              bool take_ref,
                                               const struct dpif_flow_stats *,
                                               uint8_t *table_id,
                                               ofp_port_t in_port,
@@ -199,15 +198,6 @@ static inline void rule_dpif_ref(struct rule_dpif *rule)
         ofproto_rule_ref(RULE_CAST(rule));
     }
 }
-
-static inline bool rule_dpif_try_ref(struct rule_dpif *rule)
-{
-    if (rule) {
-        return ofproto_rule_try_ref(RULE_CAST(rule));
-    }
-    return false;
-}
-
 
 static inline void rule_dpif_unref(struct rule_dpif *rule)
 {

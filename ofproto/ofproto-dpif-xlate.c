@@ -3133,7 +3133,6 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
                                            ctx->tables_version,
                                            &ctx->xin->flow, ctx->xin->wc,
-                                           ctx->xin->xcache != NULL,
                                            ctx->xin->resubmit_stats,
                                            &ctx->table_id, in_port,
                                            may_packet_in, honor_table_miss);
@@ -3152,6 +3151,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
                 entry = xlate_cache_add_entry(ctx->xin->xcache, XC_RULE);
                 entry->u.rule = rule;
+                rule_dpif_ref(rule);
             }
             xlate_recursively(ctx, rule);
         }
@@ -4912,7 +4912,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (!xin->ofpacts && !ctx.rule) {
         ctx.rule = rule_dpif_lookup_from_table(
             ctx.xbridge->ofproto, ctx.tables_version, flow, xin->wc,
-            ctx.xin->xcache != NULL, ctx.xin->resubmit_stats, &ctx.table_id,
+            ctx.xin->resubmit_stats, &ctx.table_id,
             flow->in_port.ofp_port, true, true);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats);
@@ -4922,6 +4922,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_RULE);
             entry->u.rule = ctx.rule;
+            rule_dpif_ref(ctx.rule);
         }
 
         if (OVS_UNLIKELY(ctx.xin->resubmit_hook)) {
