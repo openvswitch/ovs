@@ -29,6 +29,15 @@ struct hmap;
 struct ovsdb_idl;
 struct ovsrec_bridge;
 
+/* OVN Geneve option information.
+ *
+ * These are placeholders until OVS is assigned a Geneve option class.
+ *
+ * Keep these in sync with the documentation in ovn-architecture(7). */
+#define OVN_GENEVE_CLASS 0xffff  /* Geneve experimental class. */
+#define OVN_GENEVE_TYPE 0
+#define OVN_GENEVE_LEN 4
+
 void physical_register_ovs_idl(struct ovsdb_idl *);
 void physical_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
                   const char *chassis_id, struct hmap *flow_table);
