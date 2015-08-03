@@ -32,7 +32,7 @@
                                               "value": {"type": "string"},
                                               "min": 0,
                                               "max": "unlimited"}}}},
-        "Pipeline": {
+        "Logical_Flow": {
             "columns": {
                 "logical_datapath": {"type": "uuid"},
                 "table_id": {"type": {"key": {"type": "integer",

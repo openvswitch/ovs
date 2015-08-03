@@ -14,7 +14,7 @@
  */
 
 #include <config.h>
-#include "pipeline.h"
+#include "lflow.h"
 #include "dynamic-string.h"
 #include "ofctrl.h"
 #include "ofp-actions.h"
@@ -26,11 +26,11 @@
 #include "ovn/lib/ovn-sb-idl.h"
 #include "simap.h"
 
-VLOG_DEFINE_THIS_MODULE(pipeline);
+VLOG_DEFINE_THIS_MODULE(lflow);
 
 /* Symbol table. */
 
-/* Contains "struct expr_symbol"s for fields supported by OVN pipeline. */
+/* Contains "struct expr_symbol"s for fields supported by OVN lflows. */
 static struct shash symtab;
 
 static void
@@ -244,31 +244,31 @@ ldp_destroy(void)
 }
 
 void
-pipeline_init(void)
+lflow_init(void)
 {
     symtab_init();
 }
 
-/* Translates logical flows in the Pipeline table in the OVN_SB database
+/* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows, adding the OpenFlow flows to 'flow_table'.
  *
- * We put the Pipeline flows into OpenFlow tables 16 through 47 (inclusive). */
+ * We put the logical flows into OpenFlow tables 16 through 47 (inclusive). */
 void
-pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
+lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
 {
     struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
 
     ldp_run(ctx);
 
-    const struct sbrec_pipeline *pipeline;
-    SBREC_PIPELINE_FOR_EACH (pipeline, ctx->ovnsb_idl) {
-        /* Find the "struct logical_datapath" asssociated with this Pipeline
-         * row.  If there's no such struct, that must be because no logical
-         * ports are bound to that logical datapath, so there's no point in
-         * maintaining any flows for it anyway, so skip it. */
+    const struct sbrec_logical_flow *lflow;
+    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+        /* Find the "struct logical_datapath" asssociated with this
+         * Logical_Flow row.  If there's no such struct, that must be because
+         * no logical ports are bound to that logical datapath, so there's no
+         * point in maintaining any flows for it anyway, so skip it. */
         const struct logical_datapath *ldp;
-        ldp = ldp_lookup(&pipeline->logical_datapath);
+        ldp = ldp_lookup(&lflow->logical_datapath);
         if (!ldp) {
             continue;
         }
@@ -281,13 +281,13 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
         char *error;
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-        next_table_id = pipeline->table_id < 31 ? pipeline->table_id + 17 : 0;
-        error = actions_parse_string(pipeline->actions, &symtab, &ldp->ports,
+        next_table_id = lflow->table_id < 31 ? lflow->table_id + 17 : 0;
+        error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
                                      next_table_id, &ofpacts, &prereqs);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",
-                         pipeline->actions, error);
+                         lflow->actions, error);
             free(error);
             continue;
         }
@@ -296,7 +296,7 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
         struct hmap matches;
         struct expr *expr;
 
-        expr = expr_parse_string(pipeline->match, &symtab, &error);
+        expr = expr_parse_string(lflow->match, &symtab, &error);
         if (!error) {
             if (prereqs) {
                 expr = expr_combine(EXPR_T_AND, expr, prereqs);
@@ -307,7 +307,7 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "error parsing match \"%s\": %s",
-                         pipeline->match, error);
+                         lflow->match, error);
             expr_destroy(prereqs);
             ofpbuf_uninit(&ofpacts);
             free(error);
@@ -327,8 +327,8 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
                 m->match.flow.conj_id += conj_id_ofs;
             }
             if (!m->n) {
-                ofctrl_add_flow(flow_table, pipeline->table_id + 16,
-                                pipeline->priority, &m->match, &ofpacts);
+                ofctrl_add_flow(flow_table, lflow->table_id + 16,
+                                lflow->priority, &m->match, &ofpacts);
             } else {
                 uint64_t conj_stubs[64 / 8];
                 struct ofpbuf conj;
@@ -343,8 +343,8 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
                     dst->clause = src->clause;
                     dst->n_clauses = src->n_clauses;
                 }
-                ofctrl_add_flow(flow_table, pipeline->table_id + 16,
-                                pipeline->priority, &m->match, &conj);
+                ofctrl_add_flow(flow_table, lflow->table_id + 16,
+                                lflow->priority, &m->match, &conj);
                 ofpbuf_uninit(&conj);
             }
         }
@@ -357,7 +357,7 @@ pipeline_run(struct controller_ctx *ctx, struct hmap *flow_table)
 }
 
 void
-pipeline_destroy(void)
+lflow_destroy(void)
 {
     expr_symtab_destroy(&symtab);
     ldp_destroy();

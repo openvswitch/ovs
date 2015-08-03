@@ -15,13 +15,13 @@
 
 #include <config.h>
 #include "physical.h"
+#include "lflow.h"
 #include "match.h"
 #include "ofctrl.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"
 #include "ovn-controller.h"
 #include "ovn/lib/ovn-sb-idl.h"
-#include "pipeline.h"
 #include "simap.h"
 #include "vswitch-idl.h"
 

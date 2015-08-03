@@ -44,7 +44,7 @@
 #include "chassis.h"
 #include "encaps.h"
 #include "physical.h"
-#include "pipeline.h"
+#include "lflow.h"
 
 VLOG_DEFINE_THIS_MODULE(main);
 
@@ -238,7 +238,7 @@ main(int argc, char *argv[])
     sbrec_init();
 
     ofctrl_init();
-    pipeline_init();
+    lflow_init();
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
@@ -280,7 +280,7 @@ main(int argc, char *argv[])
 
         if (br_int) {
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            pipeline_run(&ctx, &flow_table);
+            lflow_run(&ctx, &flow_table);
             if (chassis_id) {
                 physical_run(&ctx, br_int, chassis_id, &flow_table);
             }
@@ -332,7 +332,7 @@ main(int argc, char *argv[])
     }
 
     unixctl_server_destroy(unixctl);
-    pipeline_destroy();
+    lflow_destroy();
     ofctrl_destroy();
 
     idl_loop_destroy(&ovs_idl_loop);

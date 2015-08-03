@@ -48,7 +48,7 @@
     Currently, clients monitor the entire contents of a table.  It
     might make sense to allow clients to monitor only rows that
     satisfy specific criteria, e.g. to allow an ovn-controller to
-    receive only Pipeline rows for logical networks on its hypervisor.
+    receive only Logical_Flow rows for logical networks on its hypervisor.
 
 *** Reducing redundant data and code within ovsdb-server.
 

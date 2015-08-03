@@ -74,7 +74,7 @@
   </p>
 
   <p>
-    The <ref table="Pipeline"/> table is currently the only LN table.
+    The <ref table="Logical_Flow"/> table is currently the only LN table.
   </p>
 
   <h3>Bindings data</h3>
@@ -198,7 +198,7 @@
     </column>
   </table>
 
-  <table name="Pipeline" title="Logical Network Pipeline">
+  <table name="Logical_Flow" title="Logical Network Flow">
     <p>
       Each row in this table represents one logical flow.  The cloud management
       system, via its OVN integration, populates this table with logical flows
@@ -663,7 +663,7 @@
     <column name="logical_datapath">
       The logical datapath to which the logical port belongs.  A logical
       datapath implements a logical pipeline via logical flows in the <ref
-      table="Pipeline"/> table.  (No table represents a logical datapath.)
+      table="Logical_Flow"/> table.  (No table represents a logical datapath.)
     </column>
 
     <column name="logical_port">

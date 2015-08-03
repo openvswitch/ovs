@@ -219,9 +219,9 @@
 
     <column name="match">
       The packets that the ACL should match, in the same expression
-      language used for the <ref column="match" table="Pipeline"
+      language used for the <ref column="match" table="Logical_Flow"
       db="OVN_Southbound"/> column in the OVN Southbound database's <ref
-      table="Pipeline" db="OVN_Southbound"/> table.  Match
+      table="Logical_Flow" db="OVN_Southbound"/> table.  Match
       <code>inport</code> and <code>outport</code> against names of
       logical ports within <ref column="lswitch"/> to implement ingress
       and egress ACLs, respectively.  In logical switches connected to

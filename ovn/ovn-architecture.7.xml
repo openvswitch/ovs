@@ -346,7 +346,7 @@
       <code>ovn-northd</code> receives the OVN Northbound database update.
       In turn, it makes the corresponding updates to the OVN Southbound
       database, by adding rows to the OVN Southbound database
-      <code>Pipeline</code> table to reflect the new port, e.g. add a
+      <code>Logical_Flow</code> table to reflect the new port, e.g. add a
       flow to recognize that packets destined to the new port's MAC
       address should be delivered to it, and update the flow that
       delivers broadcast and multicast packets to include the new port.
@@ -357,7 +357,7 @@
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
+      <code>Logical_Flow</code> table updates that <code>ovn-northd</code> made
       in the previous step.  As long as the VM that owns the VIF is powered off,
       <code>ovn-controller</code> cannot do much; it cannot, for example,
       arrange to send packets to or receive packets from the VIF, because the
@@ -404,7 +404,7 @@
       <code>Binding</code> table.  This provides <code>ovn-controller</code>
       the physical location of the logical port, so each instance updates the
       OpenFlow tables of its switch (based on logical datapath flows in the OVN
-      DB <code>Pipeline</code> table) so that packets to and from the VIF can
+      DB <code>Logical_Flow</code> table) so that packets to and from the VIF can
       be properly handled via tunnels.
     </li>
 
@@ -444,13 +444,13 @@
       <code>ovn-northd</code> receives the OVN Northbound update and in turn
       updates the OVN Southbound database accordingly, by removing or
       updating the rows from the OVN Southbound database
-      <code>Pipeline</code> table and <code>Binding</code> table that
+      <code>Logical_Flow</code> table and <code>Binding</code> table that
       were related to the now-destroyed VIF.
     </li>
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
+      <code>Logical_Flow</code> table updates that <code>ovn-northd</code> made
       in the previous step.  <code>ovn-controller</code> updates OpenFlow tables
       to reflect the update, although there may not be much to do, since the VIF
       had already become unreachable when it was removed from the
@@ -541,7 +541,7 @@
       <code>ovn-northd</code> receives the OVN Northbound database update.
       In turn, it makes the corresponding updates to the OVN Southbound
       database, by adding rows to the OVN Southbound database's
-      <code>Pipeline</code> table to reflect the new port and also by
+      <code>Logical_Flow</code> table to reflect the new port and also by
       creating a new row in the <code>Binding</code> table and
       populating all its columns except the column that identifies the
       <code>chassis</code>.
@@ -582,16 +582,16 @@
       <code>ovn-northd</code> receives the OVN Northbound update and in turn
       updates the OVN Southbound database accordingly, by removing or
       updating the rows from the OVN Southbound database
-      <code>Pipeline</code> table that were related to the now-destroyed
+      <code>Logical_Flow</code> table that were related to the now-destroyed
       CIF.  It also deletes the row in the <code>Binding</code> table
       for that CIF.
     </li>
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
-      in the previous step.  <code>ovn-controller</code> updates OpenFlow tables
-      to reflect the update.
+      <code>Logical_Flow</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  <code>ovn-controller</code> updates OpenFlow
+      tables to reflect the update.
     </li>
   </ol>
 

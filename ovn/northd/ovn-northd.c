@@ -120,35 +120,35 @@ macs_equal(char **binding_macs_, size_t b_n_macs,
     return (i == b_n_macs) ? true : false;
 }
 
-/* Pipeline generation.
+/* Logical flow generation.
  *
- * This code generates the Pipeline table in the southbound database, as a
+ * This code generates the Logical_Flow table in the southbound database, as a
  * function of most of the northbound database.
  */
 
-/* Enough context to add a Pipeline row, using pipeline_add(). */
-struct pipeline_ctx {
+/* Enough context to add a Logical_Flow row, using lflow_add(). */
+struct lflow_ctx {
     /* From northd_context. */
     struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnsb_txn;
 
-    /* Contains "struct pipeline_hash_node"s.  Used to figure out what existing
-     * Pipeline rows should be deleted: we index all of the Pipeline rows into
-     * this data structure, then as existing rows are generated we remove them.
-     * After generating all the rows, any remaining in 'pipeline_hmap' must be
-     * deleted from the database. */
-    struct hmap pipeline_hmap;
+    /* Contains "struct lflow_hash_node"s.  Used to figure out what existing
+     * Logical_Flow rows should be deleted: we index all of the Logical_Flow
+     * rows into this data structure, then as existing rows are generated we
+     * remove them.  After generating all the rows, any remaining in
+     * 'lflow_hmap' must be deleted from the database. */
+    struct hmap lflow_hmap;
 };
 
-/* A row in the Pipeline table, indexed by its full contents, */
-struct pipeline_hash_node {
+/* A row in the Logical_Flow table, indexed by its full contents, */
+struct lflow_hash_node {
     struct hmap_node node;
-    const struct sbrec_pipeline *pipeline;
+    const struct sbrec_logical_flow *lflow;
 };
 
 static size_t
-pipeline_hash(const struct uuid *logical_datapath, uint8_t table_id,
-              uint16_t priority, const char *match, const char *actions)
+lflow_hash(const struct uuid *logical_datapath, uint8_t table_id,
+          uint16_t priority, const char *match, const char *actions)
 {
     size_t hash = uuid_hash(logical_datapath);
     hash = hash_2words((table_id << 16) | priority, hash);
@@ -157,52 +157,52 @@ pipeline_hash(const struct uuid *logical_datapath, uint8_t table_id,
 }
 
 static size_t
-pipeline_hash_rec(const struct sbrec_pipeline *pipeline)
+lflow_hash_rec(const struct sbrec_logical_flow *lflow)
 {
-    return pipeline_hash(&pipeline->logical_datapath, pipeline->table_id,
-                         pipeline->priority, pipeline->match,
-                         pipeline->actions);
+    return lflow_hash(&lflow->logical_datapath, lflow->table_id,
+                      lflow->priority, lflow->match,
+                      lflow->actions);
 }
 
-/* Adds a row with the specified contents to the Pipeline table. */
+/* Adds a row with the specified contents to the Logical_Flow table. */
 static void
-pipeline_add(struct pipeline_ctx *ctx,
-             const struct nbrec_logical_switch *logical_datapath,
-             uint8_t table_id,
-             uint16_t priority,
-             const char *match,
-             const char *actions)
+lflow_add(struct lflow_ctx *ctx,
+          const struct nbrec_logical_switch *logical_datapath,
+          uint8_t table_id,
+          uint16_t priority,
+          const char *match,
+          const char *actions)
 {
-    struct pipeline_hash_node *hash_node;
+    struct lflow_hash_node *hash_node;
 
-    /* Check whether such a row already exists in the Pipeline table.  If so,
-     * remove it from 'ctx->pipeline_hmap' and we're done. */
+    /* Check whether such a row already exists in the Logical_Flow table.  If
+     * so, remove it from 'ctx->lflow_hmap' and we're done. */
     HMAP_FOR_EACH_WITH_HASH (hash_node, node,
-                             pipeline_hash(&logical_datapath->header_.uuid,
-                                           table_id, priority, match, actions),
-                             &ctx->pipeline_hmap) {
-        const struct sbrec_pipeline *pipeline = hash_node->pipeline;
-        if (uuid_equals(&pipeline->logical_datapath,
+                             lflow_hash(&logical_datapath->header_.uuid,
+                                        table_id, priority, match, actions),
+                             &ctx->lflow_hmap) {
+        const struct sbrec_logical_flow *lflow = hash_node->lflow;
+        if (uuid_equals(&lflow->logical_datapath,
                         &logical_datapath->header_.uuid)
-            && pipeline->table_id == table_id
-            && pipeline->priority == priority
-            && !strcmp(pipeline->match, match)
-            && !strcmp(pipeline->actions, actions)) {
-            hmap_remove(&ctx->pipeline_hmap, &hash_node->node);
+            && lflow->table_id == table_id
+            && lflow->priority == priority
+            && !strcmp(lflow->match, match)
+            && !strcmp(lflow->actions, actions)) {
+            hmap_remove(&ctx->lflow_hmap, &hash_node->node);
             free(hash_node);
             return;
         }
     }
 
-    /* No such Pipeline row.  Add one. */
-    const struct sbrec_pipeline *pipeline;
-    pipeline = sbrec_pipeline_insert(ctx->ovnsb_txn);
-    sbrec_pipeline_set_logical_datapath(pipeline,
-                                        logical_datapath->header_.uuid);
-    sbrec_pipeline_set_table_id(pipeline, table_id);
-    sbrec_pipeline_set_priority(pipeline, priority);
-    sbrec_pipeline_set_match(pipeline, match);
-    sbrec_pipeline_set_actions(pipeline, actions);
+    /* No such Logical_Flow row.  Add one. */
+    const struct sbrec_logical_flow *lflow;
+    lflow = sbrec_logical_flow_insert(ctx->ovnsb_txn);
+    sbrec_logical_flow_set_logical_datapath(lflow,
+                                            logical_datapath->header_.uuid);
+    sbrec_logical_flow_set_table_id(lflow, table_id);
+    sbrec_logical_flow_set_priority(lflow, priority);
+    sbrec_logical_flow_set_match(lflow, match);
+    sbrec_logical_flow_set_actions(lflow, actions);
 }
 
 /* Appends port security constraints on L2 address field 'eth_addr_field'
@@ -241,43 +241,43 @@ lport_is_enabled(const struct nbrec_logical_port *lport)
     return !lport->enabled || *lport->enabled;
 }
 
-/* Updates the Pipeline table in the OVN_SB database, constructing its contents
- * based on the OVN_NB database. */
+/* Updates the Logical_Flow table in the OVN_SB database, constructing its
+ * contents based on the OVN_NB database. */
 static void
-build_pipeline(struct northd_context *ctx)
+build_lflow(struct northd_context *ctx)
 {
-    struct pipeline_ctx pc = {
+    struct lflow_ctx pc = {
         .ovnsb_idl = ctx->ovnsb_idl,
         .ovnsb_txn = ctx->ovnsb_txn,
-        .pipeline_hmap = HMAP_INITIALIZER(&pc.pipeline_hmap)
+        .lflow_hmap = HMAP_INITIALIZER(&pc.lflow_hmap)
     };
 
-    /* Add all the Pipeline entries currently in the southbound database to
-     * 'pc.pipeline_hmap'.  We remove entries that we generate from the hmap,
+    /* Add all the Logical_Flow entries currently in the southbound database to
+     * 'pc.lflow_hmap'.  We remove entries that we generate from the hmap,
      * thus by the time we're done only entries that need to be removed
      * remain. */
-    const struct sbrec_pipeline *pipeline;
-    SBREC_PIPELINE_FOR_EACH (pipeline, ctx->ovnsb_idl) {
-        struct pipeline_hash_node *hash_node = xzalloc(sizeof *hash_node);
-        hash_node->pipeline = pipeline;
-        hmap_insert(&pc.pipeline_hmap, &hash_node->node,
-                    pipeline_hash_rec(pipeline));
+    const struct sbrec_logical_flow *lflow;
+    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+        struct lflow_hash_node *hash_node = xzalloc(sizeof *hash_node);
+        hash_node->lflow = lflow;
+        hmap_insert(&pc.lflow_hmap, &hash_node->node,
+                    lflow_hash_rec(lflow));
     }
 
     /* Table 0: Admission control framework. */
     const struct nbrec_logical_switch *lswitch;
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
         /* Logical VLANs not supported. */
-        pipeline_add(&pc, lswitch, 0, 100, "vlan.present", "drop;");
+        lflow_add(&pc, lswitch, 0, 100, "vlan.present", "drop;");
 
         /* Broadcast/multicast source address is invalid. */
-        pipeline_add(&pc, lswitch, 0, 100, "eth.src[40]", "drop;");
+        lflow_add(&pc, lswitch, 0, 100, "eth.src[40]", "drop;");
 
         /* Port security flows have priority 50 (see below) and will continue
          * to the next table if packet source is acceptable. */
 
         /* Otherwise drop the packet. */
-        pipeline_add(&pc, lswitch, 0, 0, "1", "drop;");
+        lflow_add(&pc, lswitch, 0, 0, "1", "drop;");
     }
 
     /* Table 0: Ingress port security. */
@@ -290,8 +290,8 @@ build_pipeline(struct northd_context *ctx)
             build_port_security("eth.src",
                                 lport->port_security, lport->n_port_security,
                                 &match);
-            pipeline_add(&pc, lswitch, 0, 50, ds_cstr(&match),
-                         lport_is_enabled(lport) ? "next;" : "drop;");
+            lflow_add(&pc, lswitch, 0, 50, ds_cstr(&match),
+                      lport_is_enabled(lport) ? "next;" : "drop;");
             ds_destroy(&match);
         }
     }
@@ -329,8 +329,8 @@ build_pipeline(struct northd_context *ctx)
                     ds_put_cstr(&unicast, "outport = ");
                     json_string_escape(lport->name, &unicast);
                     ds_put_cstr(&unicast, "; next;");
-                    pipeline_add(&pc, lswitch, 1, 50,
-                                 ds_cstr(&match), ds_cstr(&unicast));
+                    lflow_add(&pc, lswitch, 1, 50,
+                             ds_cstr(&match), ds_cstr(&unicast));
                     ds_destroy(&unicast);
                     ds_destroy(&match);
                 } else if (!strcmp(s, "unknown")) {
@@ -347,12 +347,12 @@ build_pipeline(struct northd_context *ctx)
         }
 
         ds_chomp(&bcast, ' ');
-        pipeline_add(&pc, lswitch, 1, 100, "eth.dst[40]", ds_cstr(&bcast));
+        lflow_add(&pc, lswitch, 1, 100, "eth.dst[40]", ds_cstr(&bcast));
         ds_destroy(&bcast);
 
         if (unknown.length) {
             ds_chomp(&unknown, ' ');
-            pipeline_add(&pc, lswitch, 1, 0, "1", ds_cstr(&unknown));
+            lflow_add(&pc, lswitch, 1, 0, "1", ds_cstr(&unknown));
         }
         ds_destroy(&unknown);
     }
@@ -363,19 +363,19 @@ build_pipeline(struct northd_context *ctx)
             const struct nbrec_acl *acl = lswitch->acls[i];
 
             NBREC_ACL_FOR_EACH (acl, ctx->ovnnb_idl) {
-                pipeline_add(&pc, lswitch, 2, acl->priority, acl->match,
-                             (!strcmp(acl->action, "allow") ||
-                              !strcmp(acl->action, "allow-related")
-                              ? "next;" : "drop;"));
+                lflow_add(&pc, lswitch, 2, acl->priority, acl->match,
+                          (!strcmp(acl->action, "allow") ||
+                           !strcmp(acl->action, "allow-related")
+                           ? "next;" : "drop;"));
             }
         }
 
-        pipeline_add(&pc, lswitch, 2, 0, "1", "next;");
+        lflow_add(&pc, lswitch, 2, 0, "1", "next;");
     }
 
     /* Table 3: Egress port security. */
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->ovnnb_idl) {
-        pipeline_add(&pc, lswitch, 3, 100, "eth.dst[40]", "output;");
+        lflow_add(&pc, lswitch, 3, 100, "eth.dst[40]", "output;");
 
         for (size_t i = 0; i < lswitch->n_ports; i++) {
             const struct nbrec_logical_port *lport = lswitch->ports[i];
@@ -388,21 +388,21 @@ build_pipeline(struct northd_context *ctx)
                                 lport->port_security, lport->n_port_security,
                                 &match);
 
-            pipeline_add(&pc, lswitch, 3, 50, ds_cstr(&match),
-                         lport_is_enabled(lport) ? "output;" : "drop;");
+            lflow_add(&pc, lswitch, 3, 50, ds_cstr(&match),
+                      lport_is_enabled(lport) ? "output;" : "drop;");
 
             ds_destroy(&match);
         }
     }
 
-    /* Delete any existing Pipeline rows that were not re-generated.  */
-    struct pipeline_hash_node *hash_node, *next_hash_node;
-    HMAP_FOR_EACH_SAFE (hash_node, next_hash_node, node, &pc.pipeline_hmap) {
-        hmap_remove(&pc.pipeline_hmap, &hash_node->node);
-        sbrec_pipeline_delete(hash_node->pipeline);
+    /* Delete any existing Logical_Flow rows that were not re-generated.  */
+    struct lflow_hash_node *hash_node, *next_hash_node;
+    HMAP_FOR_EACH_SAFE (hash_node, next_hash_node, node, &pc.lflow_hmap) {
+        hmap_remove(&pc.lflow_hmap, &hash_node->node);
+        sbrec_logical_flow_delete(hash_node->lflow);
         free(hash_node);
     }
-    hmap_destroy(&pc.pipeline_hmap);
+    hmap_destroy(&pc.lflow_hmap);
 }
 
 /*
@@ -628,7 +628,7 @@ ovnnb_db_changed(struct northd_context *ctx)
     VLOG_DBG("ovn-nb db contents have changed.");
 
     set_port_bindings(ctx);
-    build_pipeline(ctx);
+    build_lflow(ctx);
 }
 
 /*
@@ -824,16 +824,16 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_port_binding_col_tunnel_key);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_port_binding_col_type);
     ovsdb_idl_add_column(ovnsb_idl, &sbrec_port_binding_col_options);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
-    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_logical_datapath);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_table_id);
-    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_table_id);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_priority);
-    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_priority);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_match);
-    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_match);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_pipeline_col_actions);
-    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_pipeline_col_actions);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_logical_flow_col_logical_datapath);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_logical_flow_col_logical_datapath);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_logical_flow_col_table_id);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_logical_flow_col_table_id);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_logical_flow_col_priority);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_logical_flow_col_priority);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_logical_flow_col_match);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_logical_flow_col_match);
+    ovsdb_idl_add_column(ovnsb_idl, &sbrec_logical_flow_col_actions);
+    ovsdb_idl_omit_alert(ovnsb_idl, &sbrec_logical_flow_col_actions);
 
     /*
      * The loop here just runs the IDL in a loop waiting for the seqno to

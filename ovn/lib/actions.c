@@ -176,8 +176,8 @@ parse_actions(struct action_context *ctx)
 }
 
 /* Parses OVN actions, in the format described for the "actions" column in the
- * Pipeline table in ovn-sb(5), and appends the parsed versions of the actions
- * to 'ofpacts' as "struct ofpact"s.
+ * Logical_Flow table in ovn-sb(5), and appends the parsed versions of the
+ * actions to 'ofpacts' as "struct ofpact"s.
  *
  * 'symtab' provides a table of "struct expr_symbol"s to support (as one would
  * provide to expr_parse()).

@@ -14,17 +14,18 @@
  */
 
 
-#ifndef OVN_PIPELINE_H
-#define OVN_PIPELINE_H 1
+#ifndef OVN_LFLOW_H
+#define OVN_LFLOW_H 1
 
-/* Pipeline table translation to OpenFlow
- * ======================================
+/* Logical_Flow table translation to OpenFlow
+ * ==========================================
  *
- * The Pipeline table obtained from the OVN_Southbound database works in terms
- * of logical entities, that is, logical flows among logical datapaths and
- * logical ports.  This code translates these logical flows into OpenFlow flows
- * that, again, work in terms of logical entities implemented through OpenFlow
- * extensions (e.g. registers represent the logical input and output ports).
+ * The Logical_Flow table obtained from the OVN_Southbound database works in
+ * terms of logical entities, that is, logical flows among logical datapaths
+ * and logical ports.  This code translates these logical flows into OpenFlow
+ * flows that, again, work in terms of logical entities implemented through
+ * OpenFlow extensions (e.g. registers represent the logical input and output
+ * ports).
  *
  * Physical-to-logical and logical-to-physical translation are implemented in
  * physical.[ch] as separate OpenFlow tables that run before and after,
@@ -41,10 +42,10 @@ struct uuid;
 #define MFF_LOG_INPORT  MFF_REG6 /* Logical input port. */
 #define MFF_LOG_OUTPORT MFF_REG7 /* Logical output port. */
 
-void pipeline_init(void);
-void pipeline_run(struct controller_ctx *, struct hmap *flow_table);
-void pipeline_destroy(void);
+void lflow_init(void);
+void lflow_run(struct controller_ctx *, struct hmap *flow_table);
+void lflow_destroy(void);
 
 uint32_t ldp_to_integer(const struct uuid *logical_datapath);
 
-#endif /* ovn/pipeline.h */
+#endif /* ovn/lflow.h */
