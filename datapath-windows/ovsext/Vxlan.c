@@ -410,7 +410,7 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     PUINT8 bufferStart;
     NDIS_STATUS status;
 
-    /* Check the the length of the UDP payload */
+    /* Check the length of the UDP payload */
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
     tunnelSize = OvsGetVxlanTunHdrSize();

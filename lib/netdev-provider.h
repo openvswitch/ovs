@@ -177,7 +177,7 @@ struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
  * not yet been uninitialized, so the "destruct" function may refer to it.  The
  * "destruct" function is not allowed to fail.
  *
- * Each "dealloc" function frees raw memory that was allocated by the the
+ * Each "dealloc" function frees raw memory that was allocated by the
  * "alloc" function.  The memory's base and derived members might not have ever
  * been initialized (but if "construct" returned successfully, then it has been
  * "destruct"ed already).  The "dealloc" function is not allowed to fail.

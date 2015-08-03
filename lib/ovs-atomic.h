@@ -121,7 +121,7 @@
  *        operation (atomic_read_explicit, or a load operation preceding a
  *        atomic_thread_fence) will not be moved prior to the consume
  *        barrier.  Non-data-dependent loads and stores can be reordered to
- *        happen before the the consume barrier.
+ *        happen before the consume barrier.
  *
  *        RCU is the prime example of the use of the consume barrier: The
  *        consume barrier guarantees that reads from a RCU protected object

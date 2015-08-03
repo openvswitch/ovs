@@ -294,7 +294,7 @@ set_mpls_lse(struct dp_packet *packet, ovs_be32 mpls_lse)
     }
 }
 
-/* Push MPLS label stack entry 'lse' onto 'packet' as the the outermost MPLS
+/* Push MPLS label stack entry 'lse' onto 'packet' as the outermost MPLS
  * header.  If 'packet' does not already have any MPLS labels, then its
  * Ethertype is changed to 'ethtype' (which must be an MPLS Ethertype). */
 void

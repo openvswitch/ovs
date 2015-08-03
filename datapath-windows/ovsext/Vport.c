@@ -1417,7 +1417,7 @@ cleanup:
  * Deletes ports added from the Hyper-V switch as well as OVS usersapce. The
  * function deletes ports in 'portIdHashArray'. This will delete most of the
  * ports that are in the 'portNoHashArray' as well. Any remaining ports
- * are deleted by walking the the 'portNoHashArray'.
+ * are deleted by walking the 'portNoHashArray'.
  * --------------------------------------------------------------------------
  */
 VOID
