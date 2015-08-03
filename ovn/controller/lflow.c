@@ -34,6 +34,15 @@ VLOG_DEFINE_THIS_MODULE(lflow);
 static struct shash symtab;
 
 static void
+add_logical_register(struct shash *symtab, enum mf_field_id id)
+{
+    char name[8];
+
+    snprintf(name, sizeof name, "reg%d", id - MFF_REG0);
+    expr_symtab_add_field(symtab, name, id, NULL, false);
+}
+
+static void
 symtab_init(void)
 {
     shash_init(&symtab);
@@ -44,16 +53,10 @@ symtab_init(void)
     expr_symtab_add_string(&symtab, "inport", MFF_LOG_INPORT, NULL);
     expr_symtab_add_string(&symtab, "outport", MFF_LOG_OUTPORT, NULL);
 
-    /* Registers.  We omit the registers that would otherwise overlap the
-     * reserved fields. */
-    for (enum mf_field_id id = MFF_REG0; id < MFF_REG0 + FLOW_N_REGS; id++) {
-        if (id != MFF_LOG_INPORT && id != MFF_LOG_OUTPORT) {
-            char name[8];
-
-            snprintf(name, sizeof name, "reg%d", id - MFF_REG0);
-            expr_symtab_add_field(&symtab, name, id, NULL, false);
-        }
-    }
+    /* Logical registers. */
+#define MFF_LOG_REG(ID) add_logical_register(&symtab, ID);
+    MFF_LOG_REGS;
+#undef MFF_LOG_REG
 
     /* Data fields. */
     expr_symtab_add_field(&symtab, "eth.src", MFF_ETH_SRC, NULL, false);
@@ -135,65 +138,53 @@ symtab_init(void)
 
 /* A logical datapath.
  *
- * 'uuid' is the UUID that represents the logical datapath in the OVN_SB
- * database.
- *
- * 'integer' represents the logical datapath as an integer value that is unique
- * only within the local hypervisor.  Because of its size, this value is more
- * practical for use in an OpenFlow flow table than a UUID.
- *
  * 'ports' maps 'logical_port' names to 'tunnel_key' values in the OVN_SB
  * Port_Binding table within the logical datapath. */
 struct logical_datapath {
     struct hmap_node hmap_node; /* Indexed on 'uuid'. */
-    struct uuid uuid;           /* The logical_datapath's UUID. */
-    uint32_t integer;           /* Locally unique among logical datapaths. */
+    struct uuid uuid;           /* UUID from Datapath_Binding row. */
+    uint32_t tunnel_key;        /* 'tunnel_key' from Datapath_Binding row. */
     struct simap ports;         /* Logical port name to port number. */
 };
 
 /* Contains "struct logical_datapath"s. */
 static struct hmap logical_datapaths = HMAP_INITIALIZER(&logical_datapaths);
 
-/* Finds and returns the logical_datapath with the given 'uuid', or NULL if
- * no such logical_datapath exists. */
+/* Finds and returns the logical_datapath for 'binding', or NULL if no such
+ * logical_datapath exists. */
 static struct logical_datapath *
-ldp_lookup(const struct uuid *uuid)
+ldp_lookup(const struct sbrec_datapath_binding *binding)
 {
     struct logical_datapath *ldp;
-    HMAP_FOR_EACH_IN_BUCKET (ldp, hmap_node, uuid_hash(uuid),
+    HMAP_FOR_EACH_IN_BUCKET (ldp, hmap_node, uuid_hash(&binding->header_.uuid),
                              &logical_datapaths) {
-        if (uuid_equals(&ldp->uuid, uuid)) {
+        if (uuid_equals(&ldp->uuid, &binding->header_.uuid)) {
             return ldp;
         }
     }
     return NULL;
 }
 
-/* Finds and returns the integer value corresponding to the given 'uuid', or 0
- * if no such logical datapath exists. */
-uint32_t
-ldp_to_integer(const struct uuid *logical_datapath)
-{
-    const struct logical_datapath *ldp = ldp_lookup(logical_datapath);
-    return ldp ? ldp->integer : 0;
-}
-
-/* Creates a new logical_datapath with the given 'uuid'. */
+/* Creates a new logical_datapath for the given 'binding'. */
 static struct logical_datapath *
-ldp_create(const struct uuid *uuid)
+ldp_create(const struct sbrec_datapath_binding *binding)
 {
-    static uint32_t next_integer = 1;
     struct logical_datapath *ldp;
 
-    /* We don't handle the case where the logical datapaths wrap around. */
-    ovs_assert(next_integer);
-
     ldp = xmalloc(sizeof *ldp);
-    hmap_insert(&logical_datapaths, &ldp->hmap_node, uuid_hash(uuid));
-    ldp->uuid = *uuid;
-    ldp->integer = next_integer++;
+    hmap_insert(&logical_datapaths, &ldp->hmap_node,
+                uuid_hash(&binding->header_.uuid));
+    ldp->uuid = binding->header_.uuid;
+    ldp->tunnel_key = binding->tunnel_key;
     simap_init(&ldp->ports);
     return ldp;
+}
+
+static struct logical_datapath *
+ldp_lookup_or_create(const struct sbrec_datapath_binding *binding)
+{
+    struct logical_datapath *ldp = ldp_lookup(binding);
+    return ldp ? ldp : ldp_create(binding);
 }
 
 static void
@@ -205,7 +196,8 @@ ldp_free(struct logical_datapath *ldp)
 }
 
 /* Iterates through all of the records in the Port_Binding table, updating the
- * table of logical_datapaths to match the values found in active Bindings. */
+ * table of logical_datapaths to match the values found in active
+ * Port_Bindings. */
 static void
 ldp_run(struct controller_ctx *ctx)
 {
@@ -216,14 +208,15 @@ ldp_run(struct controller_ctx *ctx)
 
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        struct logical_datapath *ldp;
-
-        ldp = ldp_lookup(&binding->logical_datapath);
-        if (!ldp) {
-            ldp = ldp_create(&binding->logical_datapath);
-        }
+        struct logical_datapath *ldp = ldp_lookup_or_create(binding->datapath);
 
         simap_put(&ldp->ports, binding->logical_port, binding->tunnel_key);
+    }
+
+    const struct sbrec_multicast_group *mc;
+    SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
+        struct logical_datapath *ldp = ldp_lookup_or_create(mc->datapath);
+        simap_put(&ldp->ports, mc->name, mc->tunnel_key);
     }
 
     struct logical_datapath *next_ldp;
@@ -250,9 +243,7 @@ lflow_init(void)
 }
 
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
- * into OpenFlow flows, adding the OpenFlow flows to 'flow_table'.
- *
- * We put the logical flows into OpenFlow tables 16 through 47 (inclusive). */
+ * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
 lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
 {
@@ -268,22 +259,33 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
          * no logical ports are bound to that logical datapath, so there's no
          * point in maintaining any flows for it anyway, so skip it. */
         const struct logical_datapath *ldp;
-        ldp = ldp_lookup(&lflow->logical_datapath);
+        ldp = ldp_lookup(lflow->logical_datapath);
         if (!ldp) {
             continue;
         }
 
-        /* Translate OVN actions into OpenFlow actions. */
+        /* Translate logical table ID to physical table ID. */
+        bool ingress = !strcmp(lflow->pipeline, "ingress");
+        uint8_t phys_table = lflow->table_id + (ingress
+                                                ? OFTABLE_LOG_INGRESS_PIPELINE
+                                                : OFTABLE_LOG_EGRESS_PIPELINE);
+        uint8_t next_phys_table
+            = lflow->table_id + 1 < LOG_PIPELINE_LEN ? phys_table + 1 : 0;
+        uint8_t output_phys_table = (ingress
+                                     ? OFTABLE_REMOTE_OUTPUT
+                                     : OFTABLE_LOG_TO_PHY);
+        /* Translate OVN actions into OpenFlow actions.
+         *
+         * XXX Deny changes to 'outport' in egress pipeline. */
         uint64_t ofpacts_stub[64 / 8];
         struct ofpbuf ofpacts;
         struct expr *prereqs;
-        uint8_t next_table_id;
         char *error;
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-        next_table_id = lflow->table_id < 31 ? lflow->table_id + 17 : 0;
         error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
-                                     next_table_id, 64, &ofpacts, &prereqs);
+                                     next_phys_table, output_phys_table,
+                                     &ofpacts, &prereqs);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",
@@ -322,13 +324,13 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
         /* Prepare the OpenFlow matches for adding to the flow table. */
         struct expr_match *m;
         HMAP_FOR_EACH (m, hmap_node, &matches) {
-            match_set_metadata(&m->match, htonll(ldp->integer));
+            match_set_metadata(&m->match, htonll(ldp->tunnel_key));
             if (m->match.wc.masks.conj_id) {
                 m->match.flow.conj_id += conj_id_ofs;
             }
             if (!m->n) {
-                ofctrl_add_flow(flow_table, lflow->table_id + 16,
-                                lflow->priority, &m->match, &ofpacts);
+                ofctrl_add_flow(flow_table, phys_table, lflow->priority,
+                                &m->match, &ofpacts);
             } else {
                 uint64_t conj_stubs[64 / 8];
                 struct ofpbuf conj;
@@ -343,8 +345,8 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
                     dst->clause = src->clause;
                     dst->n_clauses = src->n_clauses;
                 }
-                ofctrl_add_flow(flow_table, lflow->table_id + 16,
-                                lflow->priority, &m->match, &conj);
+                ofctrl_add_flow(flow_table, phys_table, lflow->priority,
+                                &m->match, &conj);
                 ofpbuf_uninit(&conj);
             }
         }

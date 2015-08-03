@@ -20,9 +20,12 @@
  * ============================
  *
  * This module implements physical-to-logical and logical-to-physical
- * translation as separate OpenFlow tables that run before and after,
- * respectively, the logical pipeline OpenFlow tables.
+ * translation as separate OpenFlow tables that run before the ingress pipeline
+ * and after the egress pipeline, respectively, as well as to connect the
+ * two pipelines.
  */
+
+#include "meta-flow.h"
 
 struct controller_ctx;
 struct hmap;
@@ -39,7 +42,8 @@ struct ovsrec_bridge;
 #define OVN_GENEVE_LEN 4
 
 void physical_register_ovs_idl(struct ovsdb_idl *);
-void physical_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-                  const char *chassis_id, struct hmap *flow_table);
+void physical_run(struct controller_ctx *, enum mf_field_id mff_ovn_geneve,
+                  const struct ovsrec_bridge *br_int, const char *chassis_id,
+                  struct hmap *flow_table);
 
 #endif /* ovn/physical.h */

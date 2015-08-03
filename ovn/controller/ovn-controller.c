@@ -279,12 +279,13 @@ main(int argc, char *argv[])
         }
 
         if (br_int) {
-            ofctrl_run(br_int);
+            enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &flow_table);
             if (chassis_id) {
-                physical_run(&ctx, br_int, chassis_id, &flow_table);
+                physical_run(&ctx, mff_ovn_geneve,
+                             br_int, chassis_id, &flow_table);
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);

@@ -74,15 +74,17 @@
   </p>
 
   <p>
-    The <ref table="Logical_Flow"/> table is currently the only LN table.
+    <ref table="Logical_Flow"/> and <ref table="Multicast_Group"/> contain LN
+    data.
   </p>
 
   <h3>Bindings data</h3>
 
   <p>
-    The Binding tables contain the current placement of logical components
-    (such as VMs and VIFs) onto chassis and the bindings between logical ports
-    and MACs.
+    Bindings data link logical and physical components.  They show the current
+    placement of logical components (such as VMs and VIFs) onto chassis, and
+    map logical entities to the values that represent them in tunnel
+    encapsulations.
   </p>
 
   <p>
@@ -98,8 +100,31 @@
   </p>
 
   <p>
-    The <ref table="Port_Binding"/> table is currently the only binding data.
+    The <ref table="Port_Binding"/> and <ref table="Datapath_Binding"/> tables
+    contain binding data.
   </p>
+
+  <h2>Common Columns</h2>
+
+  <p>
+    Some tables contain a special column named <code>external_ids</code>.  This
+    column has the same form and purpose each place that it appears, so we
+    describe it here to save space later.
+  </p>
+
+  <dl>
+    <dt><code>external_ids</code>: map of string-string pairs</dt>
+    <dd>
+      Key-value pairs for use by the software that manages the OVN Southbound
+      database rather than by <code>ovn-controller</code>.  In particular,
+      <code>ovn-northd</code> can use key-value pairs in this column to relate
+      entities in the southbound database to higher-level entities (such as
+      entities in the OVN Northbound database).  Individual key-value pairs in
+      this column may be documented in some cases to aid in understanding and
+      troubleshooting, but the reader should not mistake such documentation as
+      comprehensive.
+    </dd>
+  </dl>
 
   <table name="Chassis" title="Physical Network Hypervisor and Gateway Information">
     <p>
@@ -198,7 +223,7 @@
     </column>
   </table>
 
-  <table name="Logical_Flow" title="Logical Network Flow">
+  <table name="Logical_Flow" title="Logical Network Flows">
     <p>
       Each row in this table represents one logical flow.  The cloud management
       system, via its OVN integration, populates this table with logical flows
@@ -223,14 +248,107 @@
       The default action when no flow matches is to drop packets.
     </p>
 
+    <p><em>Logical Life Cycle of a Packet</em></p>
+
+    <p>
+      This following description focuses on the life cycle of a packet through
+      a logical datapath, ignoring physical details of the implementation.
+      Please refer to <em>Life Cycle of a Packet</em> in
+      <code>ovn-architecture</code>(7) for the physical information.
+    </p>
+
+    <p>
+      The description here is written as if OVN itself executes these steps,
+      but in fact OVN (that is, <code>ovn-controller</code>) programs Open
+      vSwitch, via OpenFlow and OVSDB, to execute them on its behalf.
+    </p>
+
+    <p>
+      At a high level, OVN passes each packet through the logical datapath's
+      logical ingress pipeline, which may output the packet to one or more
+      logical port or logical multicast groups.  For each such logical output
+      port, OVN passes the packet through the datapath's logical egress
+      pipeline, which may either drop the packet or deliver it to the
+      destination.  Between the two pipelines, outputs to logical multicast
+      groups are expanded into logical ports, so that the egress pipeline only
+      processes a single logical output port at a time.  Between the two
+      pipelines is also where, when necessary, OVN encapsulates a packet in a
+      tunnel (or tunnels) to transmit to remote hypervisors.
+    </p>
+
+    <p>
+      In more detail, to start, OVN searches the <ref table="Logical_Flow"/>
+      table for a row with correct <ref column="logical_datapath"/>, a <ref
+      column="pipeline"/> of <code>ingress</code>, a <ref column="table_id"/>
+      of 0, and a <ref column="match"/> that is true for the packet.  If none
+      is found, OVN drops the packet.  If OVN finds more than one, it chooses
+      the match with the highest <ref column="priority"/>.  Then OVN executes
+      each of the actions specified in the row's <ref table="actions"/> column,
+      in the order specified.  Some actions, such as those to modify packet
+      headers, require no further details.  The <code>next</code> and
+      <code>output</code> actions are special.
+    </p>
+
+    <p>
+      The <code>next</code> action causes the above process to be repeated
+      recursively, except that OVN searches for <ref column="table_id"/> of 1
+      instead of 0.  Similarly, any <code>next</code> action in a row found in
+      that table would cause a further search for a <ref column="table_id"/> of
+      2, and so on.  When recursive processing completes, flow control returns
+      to the action following <code>next</code>.
+    </p>
+
+    <p>
+      The <code>output</code> action also introduces recursion.  Its effect
+      depends on the current value of the <code>outport</code> field.  Suppose
+      <code>outport</code> designates a logical port.  First, OVN compares
+      <code>inport</code> to <code>outport</code>; if they are equal, it treats
+      the <code>output</code> as a no-op.  In the common case, where they are
+      different, the packet enters the egress pipeline.  This transition to the
+      egress pipeline discards register data, e.g. <code>reg0</code>
+      ... <code>reg5</code>, to achieve uniform behavior regardless of whether
+      the egress pipeline is on a different hypervisor (because registers
+      aren't preserve across tunnel encapsulation).
+    </p>
+
+    <p>
+      To execute the egress pipeline, OVN again searches the <ref
+      table="Logical_Flow"/> table for a row with correct <ref
+      column="logical_datapath"/>, a <ref column="table_id"/> of 0, a <ref
+      column="match"/> that is true for the packet, but now looking for a <ref
+      column="pipeline"/> of <code>egress</code>.  If no matching row is found,
+      the output becomes a no-op.  Otherwise, OVN executes the actions for the
+      matching flow (which is chosen from multiple, if necessary, as already
+      described).
+    </p>
+
+    <p>
+      In the <code>egress</code> pipeline, the <code>next</code> action acts as
+      already described, except that it, of course, searches for
+      <code>egress</code> flows.  The <code>output</code> action, however, now
+      directly outputs the packet to the output port (which is now fixed,
+      because <code>outport</code> is read-only within the egress pipeline).
+    </p>
+
+    <p>
+      The description earlier assumed that <code>outport</code> referred to a
+      logical port.  If it instead designates a logical multicast group, then
+      the description above still applies, with the addition of fan-out from
+      the logical multicast group to each logical port in the group.  For each
+      member of the group, OVN executes the logical pipeline as described, with
+      the logical output port replaced by the group member.
+    </p>
+
     <column name="logical_datapath">
-      The logical datapath to which the logical flow belongs.  A logical
-      datapath implements a logical pipeline among the ports in the <ref
-      table="Port_Binding"/> table associated with it.  (No table represents a
-      logical datapath.)  In practice, the pipeline in a given logical datapath
-      implements either a logical switch or a logical router, and
-      <code>ovn-northd</code> reuses the UUIDs for those logical entities from
-      the <code>OVN_Northbound</code> for logical datapaths.
+      The logical datapath to which the logical flow belongs.
+    </column>
+
+    <column name="pipeline">
+      <p>
+        The primary flows used for deciding on a packet's destination are the
+        <code>ingress</code> flows.  The <code>egress</code> flows implement
+        ACLs.  See <em>Logical Life Cycle of a Packet</em>, above, for details.
+      </p>
     </column>
 
     <column name="table_id">
@@ -449,11 +567,7 @@
 
       <p>
         String constants have the same syntax as quoted strings in JSON (thus,
-        they are Unicode strings).  String constants are used for naming
-        logical ports.  Thus, the useful values are <ref
-        column="logical_port"/> names from the <ref column="Port_Binding"/> and
-        <ref column="Gateway"/> tables in a logical flow's <ref
-        column="logical_datapath"/>.
+        they are Unicode strings).
       </p>
 
       <p>
@@ -524,12 +638,20 @@
 
       <p><em>Symbols</em></p>
 
+      <p>
+        Most of the symbols below have integer type.  Only <code>inport</code>
+        and <code>outport</code> have string type.  <code>inport</code> names a
+        logical port.  Thus, its value is a <ref column="logical_port"/> name
+        from the <ref table="Port_Binding"/> or <ref table="Gateway"/> tables.
+        <code>outport</code> may name a logical port, as <code>inport</code>,
+        or a logical multicast group defined in the <ref
+        table="Multicast_Group"/> table.  For both symbols, only names within
+        the flow's logical datapath may be used.
+      </p>
+
       <ul>
-        <li>
-          <code>metadata</code> <code>reg0</code> ... <code>reg7</code>
-          <code>xreg0</code> ... <code>xreg3</code>
-        </li>
-        <li><code>inport</code> <code>outport</code> <code>queue</code></li>
+        <li><code>reg0</code>...<code>reg5</code></li>
+        <li><code>inport</code> <code>outport</code></li>
         <li><code>eth.src</code> <code>eth.dst</code> <code>eth.type</code></li>
         <li><code>vlan.tci</code> <code>vlan.vid</code> <code>vlan.pcp</code> <code>vlan.present</code></li>
         <li><code>ip.proto</code> <code>ip.dscp</code> <code>ip.ecn</code> <code>ip.ttl</code> <code>ip.frag</code></li>
@@ -562,17 +684,32 @@
       </p>
 
       <p>
-        The following actions will be initially supported:
+	The following actions are defined:
       </p>
 
       <dl>
         <dt><code>output;</code></dt>
         <dd>
-          Outputs the packet to the logical port current designated by
-          <code>outport</code>.  Output to the ingress port is implicitly
-          dropped, that is, <code>output</code> becomes a no-op if
-          <code>outport</code> == <code>inport</code>.
-        </dd>
+          <p>
+	    In the ingress pipeline, this action executes the
+	    <code>egress</code> pipeline as a subroutine.  If
+	    <code>outport</code> names a logical port, the egress pipeline
+	    executes once; if it is a multicast group, the egress pipeline runs
+	    once for each logical port in the group.
+          </p>
+
+          <p>
+            In the egress pipeline, this action performs the actual
+            output to the <code>outport</code> logical port.  (In the egress
+            pipeline, <code>outport</code> never names a multicast group.)
+          </p>
+
+          <p>
+            Output to the input port is implicitly dropped, that is,
+            <code>output</code> becomes a no-op if <code>outport</code> ==
+            <code>inport</code>.
+          </p>
+	</dd>
 
         <dt><code>next;</code></dt>
         <dd>
@@ -581,21 +718,33 @@
 
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>
         <dd>
-          Sets data or metadata field <var>field</var> to constant value
-          <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
-          logical output port.  Assigning to a field with prerequisites
-          implicitly adds those prerequisites to <ref column="match"/>; thus,
-          for example, a flow that sets <code>tcp.dst</code> applies only to
-          TCP flows, regardless of whether its <ref column="match"/> mentions
-          any TCP field.  To set only a subset of bits in a field,
-          <var>field</var> may be a subfield or <var>constant</var> may be
-          masked, e.g. <code>vlan.pcp[2] = 1;</code> and <code>vlan.pcp =
-          4/4;</code> both set the most sigificant bit of the VLAN PCP.  Not
-          all fields are modifiable (e.g. <code>eth.type</code> and
-          <code>ip.proto</code> are read-only), and not all modifiable fields
-          may be partially modified (e.g. <code>ip.ttl</code> must assigned as
-          a whole).
-        </dd>
+          <p>
+	    Sets data or metadata field <var>field</var> to constant value
+	    <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
+	    logical output port.  To set only a subset of bits in a field,
+	    specify a subfield for <var>field</var> or a masked
+	    <var>constant</var>, e.g. one may use <code>vlan.pcp[2] = 1;</code>
+	    or <code>vlan.pcp = 4/4;</code> to set the most sigificant bit of
+	    the VLAN PCP.
+          </p>
+
+          <p>
+            Assigning to a field with prerequisites implicitly adds those
+            prerequisites to <ref column="match"/>; thus, for example, a flow
+            that sets <code>tcp.dst</code> applies only to TCP flows,
+            regardless of whether its <ref column="match"/> mentions any TCP
+            field.
+          </p>
+
+          <p>
+            Not all fields are modifiable (e.g. <code>eth.type</code> and
+            <code>ip.proto</code> are read-only), and not all modifiable fields
+            may be partially modified (e.g. <code>ip.ttl</code> must assigned
+            as a whole).  The <code>outport</code> field is modifiable in the
+            <code>ingress</code> pipeline but not in the <code>egress</code>
+            pipeline.
+          </p>
+	</dd>
       </dl>
 
       <p>
@@ -628,6 +777,86 @@
     </column>
   </table>
 
+  <table name="Multicast_Group" title="Logical Port Multicast Groups">
+    <p>
+      The rows in this table define multicast groups of logical ports.
+      Multicast groups allow a single packet transmitted over a tunnel to a
+      hypervisor to be delivered to multiple VMs on that hypervisor, which
+      uses bandwidth more efficiently.
+    </p>
+
+    <p>
+      Each row in this table defines a logical multicast group numbered <ref
+      column="tunnel_key"/> within <ref column="datapath"/>, whose logical
+      ports are listed in the <ref column="ports"/> column.
+    </p>
+
+    <column name="datapath">
+      The logical datapath in which the multicast group resides.
+    </column>
+
+    <column name="tunnel_key">
+      The value used to designate this logical egress port in tunnel
+      encapsulations.  An index forces the key to be unique within the <ref
+      column="datapath"/>.  The unusual range ensures that multicast group IDs
+      do not overlap with logical port IDs.
+    </column>
+
+    <column name="name">
+      <p>
+        The logical multicast group's name.  An index forces the name to be
+        unique within the <ref column="datapath"/>.  Logical flows in the
+        ingress pipeline may output to the group just as for individual logical
+        ports, by assigning the group's name to <code>outport</code> and
+        executing an <code>output</code> action.
+      </p>
+
+      <p>
+        Multicast group names and logical port names share a single namespace
+        and thus should not overlap (but the database schema cannot enforce
+        this).  To try to avoid conflicts, <code>ovn-northd</code> uses names
+        that begin with <code>_MC_</code>.
+      </p>
+    </column>
+
+    <column name="ports">
+      The logical ports included in the multicast group.  All of these ports
+      must be in the <ref column="datapath"/> logical datapath (but the
+      database schema cannot enforce this).
+    </column>
+  </table>
+
+  <table name="Datapath_Binding" title="Physical-Logical Datapath Bindings">
+    <p>
+      Each row in this table identifies physical bindings of a logical
+      datapath.  A logical datapath implements a logical pipeline among the
+      ports in the <ref table="Port_Binding"/> table associated with it.  In
+      practice, the pipeline in a given logical datapath implements either a
+      logical switch or a logical router.
+    </p>
+
+    <column name="tunnel_key">
+      The tunnel key value to which the logical datapath is bound.
+      The <code>Tunnel Encapsulation</code> section in
+      <code>ovn-architecture</code>(7) describes how tunnel keys are
+      constructed for each supported encapsulation.
+    </column>
+
+    <column name="external_ids" key="logical-switch" type='{"type": "uuid"}'>
+      Each row in <ref table="Datapath_Binding"/> is associated with some
+      logical datapath.  <code>ovn-northd</code> uses this key to store the
+      UUID of the logical datapath <ref table="Logical_Switch"
+      db="OVN_Northbound"/> row in the <ref db="OVN_Northbound"/> database.
+    </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
+    </group>
+  </table>
+
   <table name="Port_Binding" title="Physical-Logical Port Bindings">
     <p>
       Each row in this table identifies the physical location of a logical
@@ -651,7 +880,7 @@
     </p>
 
     <p>
-      When a chassis shuts down gracefully, it should cleanup the
+      When a chassis shuts down gracefully, it should clean up the
       <code>chassis</code> column that it previously had populated.
       (This is not critical because resources hosted on the chassis are equally
       unreachable regardless of whether their rows are present.)  To handle the
@@ -660,10 +889,8 @@
       <code>chassis</code> column with new information.
     </p>
 
-    <column name="logical_datapath">
-      The logical datapath to which the logical port belongs.  A logical
-      datapath implements a logical pipeline via logical flows in the <ref
-      table="Logical_Flow"/> table.  (No table represents a logical datapath.)
+    <column name="datapath">
+      The logical datapath to which the logical port belongs.
     </column>
 
     <column name="logical_port">
@@ -692,15 +919,12 @@
 
     <column name="tunnel_key">
       <p>
-        A number that represents the logical port in the key (e.g. VXLAN VNI or
-        STT key) field carried within tunnel protocol packets.  (This avoids
-        wasting space for a whole UUID in tunneled packets.  It also allows OVN
-        to support encapsulations that cannot fit an entire UUID in their
-        tunnel keys.)
+        A number that represents the logical port in the key (e.g. STT key or
+        Geneve TLV) field carried within tunnel protocol packets.
       </p>
 
       <p>
-        Tunnel ID 0 is reserved for internal use within OVN.
+        The tunnel ID must be unique within the scope of a logical datapath.
       </p>
     </column>
 
