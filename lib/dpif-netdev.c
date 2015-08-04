@@ -2961,6 +2961,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
      * pmd threads for the numa node. */
     if (!n_pmds) {
         int can_have, n_unpinned, i;
+        struct dp_netdev_pmd_thread **pmds;
 
         n_unpinned = ovs_numa_get_n_unpinned_cores_on_numa(numa_id);
         if (!n_unpinned) {
@@ -2972,15 +2973,22 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         /* If cpu mask is specified, uses all unpinned cores, otherwise
          * tries creating NR_PMD_THREADS pmd threads. */
         can_have = dp->pmd_cmask ? n_unpinned : MIN(n_unpinned, NR_PMD_THREADS);
+        pmds = xzalloc(can_have * sizeof *pmds);
         for (i = 0; i < can_have; i++) {
-            struct dp_netdev_pmd_thread *pmd = xzalloc(sizeof *pmd);
             unsigned core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
-
-            dp_netdev_configure_pmd(pmd, dp, i, core_id, numa_id);
+            pmds[i] = xzalloc(sizeof **pmds);
+            dp_netdev_configure_pmd(pmds[i], dp, i, core_id, numa_id);
+        }
+        /* The pmd thread code needs to see all the others configured pmd
+         * threads on the same numa node.  That's why we call
+         * 'dp_netdev_configure_pmd()' on all the threads and then we actually
+         * start them. */
+        for (i = 0; i < can_have; i++) {
             /* Each thread will distribute all devices rx-queues among
              * themselves. */
-            pmd->thread = ovs_thread_create("pmd", pmd_thread_main, pmd);
+            pmds[i]->thread = ovs_thread_create("pmd", pmd_thread_main, pmds[i]);
         }
+        free(pmds);
         VLOG_INFO("Created %d pmd threads on numa node %d", can_have, numa_id);
     }
 }
