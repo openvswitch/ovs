@@ -57,19 +57,6 @@ OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
 
-static void
-get_initial_snapshot(struct ovsdb_idl *idl)
-{
-    while (1) {
-        ovsdb_idl_run(idl);
-        if (ovsdb_idl_has_ever_connected(idl)) {
-            return;
-        }
-        ovsdb_idl_wait(idl);
-        poll_block();
-    }
-}
-
 static const struct ovsrec_bridge *
 get_br_int(struct ovsdb_idl *ovs_idl)
 {
@@ -167,13 +154,13 @@ main(int argc, char *argv[])
     encaps_register_ovs_idl(ovs_idl_loop.idl);
     binding_register_ovs_idl(ovs_idl_loop.idl);
     physical_register_ovs_idl(ovs_idl_loop.idl);
-    get_initial_snapshot(ovs_idl_loop.idl);
+    ovsdb_idl_get_initial_snapshot(ovs_idl_loop.idl);
 
     /* Connect to OVN SB database. */
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
-    get_initial_snapshot(ovnsb_idl_loop.idl);
+    ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Main loop. */
     exiting = false;

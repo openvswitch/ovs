@@ -47,19 +47,6 @@ OVS_NO_RETURN static void usage(void);
 static char *vtep_remote;
 static char *ovnsb_remote;
 
-static void
-get_initial_snapshot(struct ovsdb_idl *idl)
-{
-    while (1) {
-        ovsdb_idl_run(idl);
-        if (ovsdb_idl_has_ever_connected(idl)) {
-            return;
-        }
-        ovsdb_idl_wait(idl);
-        poll_block();
-    }
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -89,12 +76,12 @@ main(int argc, char *argv[])
     /* Connect to VTEP database. */
     struct ovsdb_idl_loop vtep_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(vtep_remote, &vteprec_idl_class, true, true));
-    get_initial_snapshot(vtep_idl_loop.idl);
+    ovsdb_idl_get_initial_snapshot(vtep_idl_loop.idl);
 
     /* Connect to OVN SB database. */
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
-    get_initial_snapshot(ovnsb_idl_loop.idl);
+    ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Main loop. */
     exiting = false;

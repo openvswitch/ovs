@@ -222,6 +222,7 @@ const struct ovsdb_idl_row *ovsdb_idl_txn_insert(
     const struct uuid *);
 
 struct ovsdb_idl *ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *);
+void ovsdb_idl_get_initial_snapshot(struct ovsdb_idl *);
 
 
 /* ovsdb_idl_loop provides an easy way to manage the transactions related

@@ -2496,6 +2496,21 @@ ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *txn)
 {
     return txn->idl;
 }
+
+/* Blocks until 'idl' successfully connects to the remote database and
+ * retrieves its contents. */
+void
+ovsdb_idl_get_initial_snapshot(struct ovsdb_idl *idl)
+{
+    while (1) {
+        ovsdb_idl_run(idl);
+        if (ovsdb_idl_has_ever_connected(idl)) {
+            return;
+        }
+        ovsdb_idl_wait(idl);
+        poll_block();
+    }
+}
 
 /* If 'lock_name' is nonnull, configures 'idl' to obtain the named lock from
  * the database server and to avoid modifying the database when the lock cannot
