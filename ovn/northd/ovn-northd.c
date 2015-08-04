@@ -397,6 +397,8 @@ join_logical_ports(struct northd_context *ctx,
 static void
 ovn_port_update_sbrec(const struct ovn_port *op)
 {
+    sbrec_port_binding_set_type(op->sb, op->nb->type);
+    sbrec_port_binding_set_options(op->sb, &op->nb->options);
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     sbrec_port_binding_set_parent_port(op->sb, op->nb->parent_name);
     sbrec_port_binding_set_tag(op->sb, op->nb->tag, op->nb->n_tag);

@@ -57,5 +57,18 @@ mac                 : [["f0:ab:cd:ef:01:02"]]
 chassis             : ${uuid}
 ])
 
+# test the passing down of logical port type and options.
+AT_CHECK([ovn-nbctl lport-add br-test vtep0])
+AT_CHECK([ovn-nbctl lport-set-type vtep0 vtep])
+AT_CHECK([ovn-nbctl lport-set-options vtep0 vtep_physical_switch=p0 vtep_logical_switch=l0])
+
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl --columns=logical_port list Port_Binding | grep vtep0`" ])
+AT_CHECK_UNQUOTED([ovn-sbctl --columns=logical_port,mac,type,options list Port_Binding vtep0], [0], [dnl
+logical_port        : "vtep0"
+mac                 : [[]]
+type                : vtep
+options             : {vtep_logical_switch="l0", vtep_physical_switch="p0"}
+])
+
 OVN_SBCTL_TEST_STOP
 AT_CLEANUP
