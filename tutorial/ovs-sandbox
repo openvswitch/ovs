@@ -248,7 +248,7 @@ if $built; then
     fi
     PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
     if $ovn; then
-        PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/northd:$PATH
+        PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/northd:$builddir/ovn/utilities:$PATH
     fi
     export PATH
 else
