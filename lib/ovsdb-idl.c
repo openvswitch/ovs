@@ -2632,3 +2632,75 @@ ovsdb_idl_parse_lock_notify(struct ovsdb_idl *idl,
         }
     }
 }
+
+void
+ovsdb_idl_loop_destroy(struct ovsdb_idl_loop *loop)
+{
+    if (loop) {
+        ovsdb_idl_destroy(loop->idl);
+    }
+}
+
+struct ovsdb_idl_txn *
+ovsdb_idl_loop_run(struct ovsdb_idl_loop *loop)
+{
+    ovsdb_idl_run(loop->idl);
+    loop->open_txn = (loop->committing_txn
+                      || ovsdb_idl_get_seqno(loop->idl) == loop->skip_seqno
+                      ? NULL
+                      : ovsdb_idl_txn_create(loop->idl));
+    return loop->open_txn;
+}
+
+void
+ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
+{
+    if (loop->open_txn) {
+        loop->committing_txn = loop->open_txn;
+        loop->open_txn = NULL;
+
+        loop->precommit_seqno = ovsdb_idl_get_seqno(loop->idl);
+    }
+
+    struct ovsdb_idl_txn *txn = loop->committing_txn;
+    if (txn) {
+        enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(txn);
+        if (status != TXN_INCOMPLETE) {
+            switch (status) {
+            case TXN_TRY_AGAIN:
+                /* We want to re-evaluate the database when it's changed from
+                 * the contents that it had when we started the commit.  (That
+                 * might have already happened.) */
+                loop->skip_seqno = loop->precommit_seqno;
+                if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
+                    poll_immediate_wake();
+                }
+                break;
+
+            case TXN_SUCCESS:
+                /* If the database has already changed since we started the
+                 * commit, re-evaluate it immediately to avoid missing a change
+                 * for a while. */
+                if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
+                    poll_immediate_wake();
+                }
+                break;
+
+            case TXN_UNCHANGED:
+            case TXN_ABORTED:
+            case TXN_NOT_LOCKED:
+            case TXN_ERROR:
+                break;
+
+            case TXN_UNCOMMITTED:
+            case TXN_INCOMPLETE:
+                OVS_NOT_REACHED();
+
+            }
+            ovsdb_idl_txn_destroy(txn);
+            loop->committing_txn = NULL;
+        }
+    }
+
+    ovsdb_idl_wait(loop->idl);
+}
