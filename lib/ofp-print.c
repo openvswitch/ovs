@@ -2754,7 +2754,7 @@ ofp_print_table_features(struct ds *s,
     bool same_stats = prev_stats && table_stats_equal(stats, prev_stats);
     bool same_features = prev_features && table_features_equal(features,
                                                                prev_features);
-    if ((!stats || same_stats) && (!features || same_features)) {
+    if ((!stats || same_stats) && same_features) {
         ds_put_cstr(s, " ditto");
         return;
     }
