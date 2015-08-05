@@ -69,16 +69,16 @@ static struct genl_family dp_datapath_genl_family;
 
 static const struct nla_policy flow_policy[];
 
-static const struct genl_multicast_group ovs_dp_flow_multicast_group = {
-	.name = OVS_FLOW_MCGROUP,
+static struct genl_multicast_group ovs_dp_flow_multicast_group = {
+	.name = OVS_FLOW_MCGROUP
 };
 
-static const struct genl_multicast_group ovs_dp_datapath_multicast_group = {
-	.name = OVS_DATAPATH_MCGROUP,
+static struct genl_multicast_group ovs_dp_datapath_multicast_group = {
+	.name = OVS_DATAPATH_MCGROUP
 };
 
-const struct genl_multicast_group ovs_dp_vport_multicast_group = {
-	.name = OVS_VPORT_MCGROUP,
+struct genl_multicast_group ovs_dp_vport_multicast_group = {
+	.name = OVS_VPORT_MCGROUP
 };
 
 /* Check if need to build a reply message.
@@ -91,8 +91,7 @@ static bool ovs_must_notify(struct genl_family *family, struct genl_info *info,
 	       genl_has_listeners(family, genl_info_net(info), group);
 }
 
-static void ovs_notify(struct genl_family *family,
-		       const struct genl_multicast_group *grp,
+static void ovs_notify(struct genl_family *family, struct genl_multicast_group *grp,
 		       struct sk_buff *skb, struct genl_info *info)
 {
 	genl_notify(family, skb, genl_info_net(info),
@@ -637,7 +636,7 @@ static const struct nla_policy packet_policy[OVS_PACKET_ATTR_MAX + 1] = {
 	[OVS_PACKET_ATTR_PROBE] = { .type = NLA_FLAG },
 };
 
-static const struct genl_ops dp_packet_genl_ops[] = {
+static struct genl_ops dp_packet_genl_ops[] = {
 	{ .cmd = OVS_PACKET_CMD_EXECUTE,
 	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
 	  .policy = packet_policy,
@@ -1372,7 +1371,7 @@ static const struct nla_policy flow_policy[OVS_FLOW_ATTR_MAX + 1] = {
 	[OVS_FLOW_ATTR_UFID_FLAGS] = { .type = NLA_U32 },
 };
 
-static const struct genl_ops dp_flow_genl_ops[] = {
+static struct genl_ops dp_flow_genl_ops[] = {
 	{ .cmd = OVS_FLOW_CMD_NEW,
 	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
 	  .policy = flow_policy,
@@ -1758,7 +1757,7 @@ static const struct nla_policy datapath_policy[OVS_DP_ATTR_MAX + 1] = {
 	[OVS_DP_ATTR_USER_FEATURES] = { .type = NLA_U32 },
 };
 
-static const struct genl_ops dp_datapath_genl_ops[] = {
+static struct genl_ops dp_datapath_genl_ops[] = {
 	{ .cmd = OVS_DP_CMD_NEW,
 	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
 	  .policy = datapath_policy,
@@ -2137,7 +2136,7 @@ static const struct nla_policy vport_policy[OVS_VPORT_ATTR_MAX + 1] = {
 	[OVS_VPORT_ATTR_OPTIONS] = { .type = NLA_NESTED },
 };
 
-static const struct genl_ops dp_vport_genl_ops[] = {
+static struct genl_ops dp_vport_genl_ops[] = {
 	{ .cmd = OVS_VPORT_CMD_NEW,
 	  .flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
 	  .policy = vport_policy,
@@ -2175,7 +2174,7 @@ struct genl_family dp_vport_genl_family = {
 	.n_mcgrps = 1,
 };
 
-static struct genl_family * const dp_genl_families[] = {
+static struct genl_family *dp_genl_families[] = {
 	&dp_datapath_genl_family,
 	&dp_vport_genl_family,
 	&dp_flow_genl_family,
