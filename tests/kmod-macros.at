@@ -77,3 +77,14 @@ m4_define([ADD_VETH],
       AT_CHECK([ip netns exec $2 ip link set dev $1 up])
     ]
 )
+
+# ADD_VLAN([port], [namespace], [vlan-id], [ip-addr])
+#
+# Add a VLAN device named 'port' within 'namespace'. It will be configured
+# with the ID 'vlan-id' and the address 'ip-addr'.
+m4_define([ADD_VLAN],
+    [ AT_CHECK([ip netns exec $2 ip link add link $1 name $1.$3 type vlan id $3])
+      AT_CHECK([ip netns exec $2 ip link set dev $1.$3 up])
+      AT_CHECK([ip netns exec $2 ip addr add dev $1.$3 $4])
+    ]
+)

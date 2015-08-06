@@ -39,6 +39,13 @@
 
 #include <openflow/openflow-common.h>
 
+/* Body for ofp15_multipart_request of type OFPMP_PORT_DESC. */
+struct ofp15_port_desc_request {
+    ovs_be32 port_no;         /* All ports if OFPP_ANY. */
+    uint8_t pad[4];            /* Align to 64 bits. */
+};
+OFP_ASSERT(sizeof(struct ofp15_port_desc_request) == 8);
+
 /* Group commands */
 enum ofp15_group_mod_command {
     /* Present since OpenFlow 1.1 - 1.4 */
@@ -136,6 +143,13 @@ struct ofp15_group_mod {
      *     length in header.length. */
 };
 OFP_ASSERT(sizeof(struct ofp15_group_mod) == 16);
+
+/* Body for ofp15_multipart_request of type OFPMP_GROUP_DESC. */
+struct ofp15_group_desc_request {
+    ovs_be32 group_id;         /* All groups if OFPG_ALL. */
+    uint8_t pad[4];            /* Align to 64 bits. */
+};
+OFP_ASSERT(sizeof(struct ofp15_group_desc_request) == 8);
 
 /* Body of reply to OFPMP_GROUP_DESC request. */
 struct ofp15_group_desc_stats {

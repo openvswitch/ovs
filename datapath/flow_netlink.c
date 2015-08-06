@@ -340,6 +340,7 @@ static const struct ovs_len_tbl ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 				     .next = ovs_tunnel_key_lens, },
 	[OVS_KEY_ATTR_MPLS]	 = { .len = sizeof(struct ovs_key_mpls) },
 };
+
 static bool is_all_zero(const u8 *fp, size_t size)
 {
 	int i;
@@ -813,7 +814,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 		if (is_mask) {
 			/* Always exact match EtherType. */
 			eth_type = htons(0xffff);
-		} else if (ntohs(eth_type) < ETH_P_802_3_MIN) {
+		} else if (!eth_proto_is_802_3(eth_type)) {
 			OVS_NLERR(log, "EtherType %x is less than min %x",
 				  ntohs(eth_type), ETH_P_802_3_MIN);
 			return -EINVAL;
@@ -858,12 +859,14 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
 				  ipv6_key->ipv6_frag, OVS_FRAG_TYPE_MAX);
 			return -EINVAL;
 		}
+
 		if (!is_mask && ipv6_key->ipv6_label & htonl(0xFFF00000)) {
 			OVS_NLERR(log,
 				  "Invalid IPv6 flow label value (value=%x, max=%x).",
 				  ntohl(ipv6_key->ipv6_label), (1 << 20) - 1);
 			return -EINVAL;
 		}
+
 		SW_FLOW_KEY_PUT(match, ipv6.label,
 				ipv6_key->ipv6_label, is_mask);
 		SW_FLOW_KEY_PUT(match, ip.proto,
@@ -1797,7 +1800,6 @@ static int validate_and_copy_set_tun(const struct nlattr *attr,
 		memcpy((tun_info + 1),
 		       TUN_METADATA_OPTS(&key, key.tun_opts_len), key.tun_opts_len);
 		tun_info->options = (tun_info + 1);
-
 	} else {
 		tun_info->options = NULL;
 	}
@@ -1895,6 +1897,7 @@ static int validate_set(const struct nlattr *a,
 			return -EINVAL;
 
 		ipv6_key = nla_data(ovs_key);
+
 		if (masked) {
 			const struct ovs_key_ipv6 *mask = ipv6_key + 1;
 
@@ -2066,7 +2069,6 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 		case OVS_ACTION_ATTR_OUTPUT:
 			if (nla_get_u32(a) >= DP_MAX_PORTS)
 				return -EINVAL;
-
 			break;
 
 		case OVS_ACTION_ATTR_HASH: {
@@ -2103,7 +2105,6 @@ static int __ovs_nla_copy_actions(const struct nlattr *attr,
 
 			if (!eth_p_mpls(mpls->mpls_ethertype))
 				return -EINVAL;
-
 			/* Prohibit push MPLS other than to a white list
 			 * for packets that have a known tag order.
 			 */

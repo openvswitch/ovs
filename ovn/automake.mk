@@ -72,7 +72,8 @@ DISTCLEANFILES += ovn/ovn-nbctl.8 ovn/ovn-architecture.7
 
 EXTRA_DIST += \
 	ovn/TODO \
-	ovn/CONTAINERS.OpenStack.md
+	ovn/CONTAINERS.OpenStack.md \
+	ovn/OVN-GW-HA.md
 
 # ovn-nbctl
 bin_PROGRAMS += ovn/ovn-nbctl

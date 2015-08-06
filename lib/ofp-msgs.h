@@ -339,7 +339,7 @@ enum ofpraw {
 
     /* OFPST 1.1-1.4 (7): void. */
     OFPRAW_OFPST11_GROUP_DESC_REQUEST,
-    /* OFPST 1.5+ (7): ovs_be32. */
+    /* OFPST 1.5+ (7): struct ofp15_group_desc_request. */
     OFPRAW_OFPST15_GROUP_DESC_REQUEST,
 
     /* OFPST 1.1+ (7): uint8_t[8][]. */
@@ -383,7 +383,7 @@ enum ofpraw {
 
     /* OFPST 1.0-1.4 (13): void. */
     OFPRAW_OFPST10_PORT_DESC_REQUEST,
-    /* OFPST 1.5+ (13): ovs_be32. */
+    /* OFPST 1.5+ (13): struct ofp15_port_desc_request. */
     OFPRAW_OFPST15_PORT_DESC_REQUEST,
 
     /* OFPST 1.0 (13): struct ofp10_phy_port[]. */

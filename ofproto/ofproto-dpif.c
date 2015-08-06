@@ -3660,15 +3660,17 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
         rule_dpif_credit_stats(rule, &stats);
     }
 
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions = OFPBUF_STUB_INITIALIZER(odp_actions_stub);
     xlate_in_init(&xin, ofproto, flow, flow->in_port.ofp_port, rule,
-                  stats.tcp_flags, packet);
+                  stats.tcp_flags, packet, NULL, &odp_actions);
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
     xlate_actions(&xin, &xout);
 
-    execute.actions = xout.odp_actions->data;
-    execute.actions_len = xout.odp_actions->size;
+    execute.actions = odp_actions.data;
+    execute.actions_len = odp_actions.size;
 
     pkt_metadata_from_flow(&packet->md, flow);
     execute.packet = packet;
@@ -3685,6 +3687,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     error = dpif_execute(ofproto->backer->dpif, &execute);
 
     xlate_out_uninit(&xout);
+    ofpbuf_uninit(&odp_actions);
 
     return error;
 }
@@ -3762,29 +3765,19 @@ ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
 }
 
 /* The returned rule (if any) is valid at least until the next RCU quiescent
- * period.  If the rule needs to stay around longer, a non-zero 'take_ref'
- * must be passed in to cause a reference to be taken on it.
+ * period.  If the rule needs to stay around longer, the caller should take
+ * a reference.
  *
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static struct rule_dpif *
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
                           uint8_t table_id, struct flow *flow,
-                          struct flow_wildcards *wc, bool take_ref)
+                          struct flow_wildcards *wc)
 {
     struct classifier *cls = &ofproto->up.tables[table_id].cls;
-    const struct cls_rule *cls_rule;
-    struct rule_dpif *rule;
-
-    do {
-        cls_rule = classifier_lookup(cls, version, flow, wc);
-
-        rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
-
-        /* Try again if the rule was released before we get the reference. */
-    } while (rule && take_ref && !rule_dpif_try_ref(rule));
-
-    return rule;
+    return rule_dpif_cast(rule_from_cls_rule(classifier_lookup(cls, version,
+                                                               flow, wc)));
 }
 
 /* Look up 'flow' in 'ofproto''s classifier version 'version', starting from
@@ -3804,9 +3797,8 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
  * '*table_id'.
  *
  * The rule is returned in '*rule', which is valid at least until the next
- * RCU quiescent period.  If the '*rule' needs to stay around longer,
- * a non-zero 'take_ref' must be passed in to cause a reference to be taken
- * on it before this returns.
+ * RCU quiescent period.  If the '*rule' needs to stay around longer, the
+ * caller must take a reference.
  *
  * 'in_port' allows the lookup to take place as if the in port had the value
  * 'in_port'.  This is needed for resubmit action support.
@@ -3816,7 +3808,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, cls_version_t version,
 struct rule_dpif *
 rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             cls_version_t version, struct flow *flow,
-                            struct flow_wildcards *wc, bool take_ref,
+                            struct flow_wildcards *wc,
                             const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
                             bool may_packet_in, bool honor_table_miss)
@@ -3839,9 +3831,6 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
             /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
              * Use the drop_frags_rule (which cannot disappear). */
             rule = ofproto->drop_frags_rule;
-            if (take_ref) {
-                rule_dpif_ref(rule);
-            }
             if (stats) {
                 struct oftable *tbl = &ofproto->up.tables[*table_id];
                 unsigned long orig;
@@ -3868,8 +3857,7 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
          next_id++, next_id += (next_id == TBL_INTERNAL))
     {
         *table_id = next_id;
-        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc,
-                                         take_ref);
+        rule = rule_dpif_lookup_in_table(ofproto, version, next_id, flow, wc);
         if (stats) {
             struct oftable *tbl = &ofproto->up.tables[next_id];
             unsigned long orig;
@@ -3907,9 +3895,6 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                    connmgr_wants_packet_in_on_miss(ofproto->up.connmgr)) {
             rule = ofproto->miss_rule;
         }
-    }
-    if (take_ref) {
-        rule_dpif_ref(rule);
     }
 out:
     /* Restore port numbers, as they may have been modified above. */
@@ -4464,8 +4449,9 @@ struct trace_ctx {
     struct xlate_in xin;
     const struct flow *key;
     struct flow flow;
-    struct flow_wildcards wc;
     struct ds *result;
+    struct flow_wildcards wc;
+    struct ofpbuf odp_actions;
 };
 
 static void
@@ -4532,7 +4518,7 @@ static void
 trace_format_odp(struct ds *result, int level, const char *title,
                  struct trace_ctx *trace)
 {
-    struct ofpbuf *odp_actions = trace->xout.odp_actions;
+    struct ofpbuf *odp_actions = &trace->odp_actions;
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
@@ -4548,7 +4534,6 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
-    flow_wildcards_or(&trace->wc, &trace->xout.wc, &trace->wc);
     match_init(&match, trace->key, &trace->wc);
     match_format(&match, result, OFP_DEFAULT_PRIORITY);
     ds_put_char(result, '\n');
@@ -4891,13 +4876,14 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
 
-    flow_wildcards_init_catchall(&trace.wc);
+    ofpbuf_init(&trace.odp_actions, 0);
 
     trace.result = ds;
     trace.key = flow; /* Original flow key, used for megaflow. */
     trace.flow = *flow; /* May be modified by actions. */
     xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, NULL,
-                  ntohs(flow->tcp_flags), packet);
+                  ntohs(flow->tcp_flags), packet, &trace.wc,
+                  &trace.odp_actions);
     trace.xin.ofpacts = ofpacts;
     trace.xin.ofpacts_len = ofpacts_len;
     trace.xin.resubmit_hook = trace_resubmit;
@@ -4910,8 +4896,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace_format_megaflow(ds, 0, "Megaflow", &trace);
 
     ds_put_cstr(ds, "Datapath actions: ");
-    format_odp_actions(ds, trace.xout.odp_actions->data,
-                       trace.xout.odp_actions->size);
+    format_odp_actions(ds, trace.odp_actions.data, trace.odp_actions.size);
 
     if (trace.xout.slow) {
         enum slow_path_reason slow;
@@ -4931,6 +4916,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     }
 
     xlate_out_uninit(&trace.xout);
+    ofpbuf_uninit(&trace.odp_actions);
 }
 
 /* Store the current ofprotos in 'ofproto_shash'.  Returns a sorted list
@@ -5516,7 +5502,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
                                      TBL_INTERNAL, &ofm.fm.match.flow,
-                                     &ofm.fm.match.wc, false);
+                                     &ofm.fm.match.wc);
     if (rule) {
         *rulep = &rule->up;
     } else {

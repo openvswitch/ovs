@@ -81,6 +81,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/fatal-signal.h \
 	lib/flow.c \
 	lib/flow.h \
+	lib/geneve.h \
 	lib/guarded-list.c \
 	lib/guarded-list.h \
 	lib/hash.c \
@@ -292,6 +293,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/getrusage-windows.c \
 	lib/latch-windows.c \
 	lib/route-table-stub.c \
+	lib/if-notifier-stub.c \
 	lib/strsep.c
 else
 lib_libopenvswitch_la_SOURCES += \
@@ -338,6 +340,8 @@ if LINUX
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-netlink.c \
 	lib/dpif-netlink.h \
+	lib/if-notifier.c \
+	lib/if-notifier.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
 	lib/netlink-notifier.c \
@@ -347,8 +351,8 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/netlink-socket.h \
 	lib/ovs-numa.c \
 	lib/ovs-numa.h \
-	lib/rtnetlink-link.c \
-	lib/rtnetlink-link.h \
+	lib/rtnetlink.c \
+	lib/rtnetlink.h \
 	lib/route-table.c \
 	lib/route-table.h
 endif
@@ -379,11 +383,13 @@ endif
 
 if ESX
 lib_libopenvswitch_la_SOURCES += \
-        lib/route-table-stub.c
+	lib/route-table-stub.c \
+	lib/if-notifier-stub.c
 endif
 
 if HAVE_IF_DL
 lib_libopenvswitch_la_SOURCES += \
+	lib/if-notifier-bsd.c \
 	lib/netdev-bsd.c \
 	lib/rtbsd.c \
 	lib/rtbsd.h \

@@ -19,19 +19,23 @@
 
 #include <stdint.h>
 
+#include "meta-flow.h"
+
 struct controller_ctx;
+struct hmap;
 struct match;
 struct ofpbuf;
+struct ovsrec_bridge;
 
 /* Interface for OVN main loop. */
 void ofctrl_init(void);
-void ofctrl_run(struct controller_ctx *);
+enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int);
+void ofctrl_put(struct hmap *flows);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
 
 /* Flow table interface to the rest of ovn-controller. */
-void ofctrl_clear_flows(void);
-void ofctrl_add_flow(uint8_t table_id, uint16_t priority,
+void ofctrl_add_flow(struct hmap *flows, uint8_t table_id, uint16_t priority,
                      const struct match *, const struct ofpbuf *ofpacts);
 
 #endif /* ovn/ofctrl.h */

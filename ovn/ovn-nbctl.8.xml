@@ -23,9 +23,7 @@
     <h1>Logical Switch Commands</h1>
 
     <dl>
-      <dt><code>lswitch-add</code> [<var>lswitch</var>]</dt>
-      <dd>
-        Creates a new logical switch named <var>lswitch</var>.  If
+      <dt><code>lswitch-add</code> [<var>lswitch</var>]</dt> <dd> Creates a new logical switch named <var>lswitch</var>.  If
         <var>lswitch</var> is not provided, the switch will not have a
         name so other commands must refer to this switch by its UUID.
         Initially the switch will have no ports.
@@ -190,6 +188,26 @@
       <dd>
         Prints the administrative state of <var>lport</var>, either <code>enabled</code>
         or <code>disabled</code>.
+      </dd>
+
+      <dt><code>lport-set-type</code> <var>lport</var> <var>type</var></dt>
+      <dd>
+        Set the type for the logical port.  No special types have been implemented yet.
+      </dd>
+
+      <dt><code>lport-get-type</code> <var>lport</var></dt>
+      <dd>
+        Get the type for the logical port.
+      </dd>
+
+      <dt><code>lport-set-options</code> <var>lport</var> [<var>key=value</var>]...</dt>
+      <dd>
+        Set type-specific key-value options for the logical port.
+      </dd>
+
+      <dt><code>lport-get-options</code> <var>lport</var></dt>
+      <dd>
+        Get the type-specific options for the logical port.
       </dd>
 
     </dl>

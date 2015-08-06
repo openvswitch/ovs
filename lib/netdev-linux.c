@@ -66,7 +66,7 @@
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "rtnetlink-link.h"
+#include "rtnetlink.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "sset.h"
@@ -458,6 +458,8 @@ struct netdev_linux {
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
+    int in4_error;              /* Cached error code from reading in4 addr. */
+    int in6_error;              /* Cached error code from reading in6 addr. */
 
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
@@ -541,29 +543,37 @@ netdev_rxq_linux_cast(const struct netdev_rxq *rx)
 }
 
 static void netdev_linux_update(struct netdev_linux *netdev,
-                                const struct rtnetlink_link_change *)
+                                const struct rtnetlink_change *)
     OVS_REQUIRES(netdev->mutex);
 static void netdev_linux_changed(struct netdev_linux *netdev,
                                  unsigned int ifi_flags, unsigned int mask)
     OVS_REQUIRES(netdev->mutex);
 
-/* Returns a NETLINK_ROUTE socket listening for RTNLGRP_LINK changes, or NULL
+/* Returns a NETLINK_ROUTE socket listening for RTNLGRP_LINK,
+ * RTNLGRP_IPV4_IFADDR and RTNLGRP_IPV6_IFADDR changes, or NULL
  * if no such socket could be created. */
 static struct nl_sock *
 netdev_linux_notify_sock(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static struct nl_sock *sock;
+    unsigned int mcgroups[3] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
+                                RTNLGRP_IPV6_IFADDR};
 
     if (ovsthread_once_start(&once)) {
         int error;
 
         error = nl_sock_create(NETLINK_ROUTE, &sock);
         if (!error) {
-            error = nl_sock_join_mcgroup(sock, RTNLGRP_LINK);
-            if (error) {
-                nl_sock_destroy(sock);
-                sock = NULL;
+            size_t i;
+
+            for (i = 0; i < ARRAY_SIZE(mcgroups); i++) {
+                error = nl_sock_join_mcgroup(sock, mcgroups[i]);
+                if (error) {
+                    nl_sock_destroy(sock);
+                    sock = NULL;
+                    break;
+                }
             }
         }
         ovsthread_once_done(&once);
@@ -601,9 +611,9 @@ netdev_linux_run(void)
         ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
         error = nl_sock_recv(sock, &buf, false);
         if (!error) {
-            struct rtnetlink_link_change change;
+            struct rtnetlink_change change;
 
-            if (rtnetlink_link_parse(&buf, &change)) {
+            if (rtnetlink_parse(&buf, &change)) {
                 struct netdev *netdev_ = netdev_from_name(change.ifname);
                 if (netdev_ && is_netdev_linux_class(netdev_->netdev_class)) {
                     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
@@ -674,32 +684,40 @@ netdev_linux_changed(struct netdev_linux *dev,
 
 static void
 netdev_linux_update(struct netdev_linux *dev,
-                    const struct rtnetlink_link_change *change)
+                    const struct rtnetlink_change *change)
     OVS_REQUIRES(dev->mutex)
 {
-    if (change->nlmsg_type == RTM_NEWLINK) {
-        /* Keep drv-info */
-        netdev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
+    if (rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)){
+        if (change->nlmsg_type == RTM_NEWLINK) {
+            /* Keep drv-info, in4, in6. */
+            netdev_linux_changed(dev, change->ifi_flags,
+                                 VALID_DRVINFO | VALID_IN4 | VALID_IN6);
 
-        /* Update netdev from rtnl-change msg. */
-        if (change->mtu) {
-            dev->mtu = change->mtu;
-            dev->cache_valid |= VALID_MTU;
-            dev->netdev_mtu_error = 0;
+            /* Update netdev from rtnl-change msg. */
+            if (change->mtu) {
+                dev->mtu = change->mtu;
+                dev->cache_valid |= VALID_MTU;
+                dev->netdev_mtu_error = 0;
+            }
+
+            if (!eth_addr_is_zero(change->addr)) {
+                memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
+                dev->cache_valid |= VALID_ETHERADDR;
+                dev->ether_addr_error = 0;
+            }
+
+            dev->ifindex = change->if_index;
+            dev->cache_valid |= VALID_IFINDEX;
+            dev->get_ifindex_error = 0;
+        } else {
+            netdev_linux_changed(dev, change->ifi_flags, 0);
         }
-
-        if (!eth_addr_is_zero(change->addr)) {
-            memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
-            dev->cache_valid |= VALID_ETHERADDR;
-            dev->ether_addr_error = 0;
-        }
-
-        dev->ifindex = change->ifi_index;
-        dev->cache_valid |= VALID_IFINDEX;
-        dev->get_ifindex_error = 0;
-
+    } else if (rtnetlink_type_is_rtnlgrp_addr(change->nlmsg_type)) {
+        /* Invalidates in4, in6. */
+        netdev_linux_changed(dev, dev->ifi_flags,
+                             ~(VALID_IN4 | VALID_IN6));
     } else {
-        netdev_linux_changed(dev, change->ifi_flags, 0);
+        OVS_NOT_REACHED();
     }
 }
 
@@ -2405,12 +2423,11 @@ netdev_linux_get_in4(const struct netdev *netdev_,
         if (!error) {
             error = netdev_linux_get_ipv4(netdev_, &netdev->netmask,
                                           SIOCGIFNETMASK, "SIOCGIFNETMASK");
-            if (!error) {
-                netdev->cache_valid |= VALID_IN4;
-            }
         }
+        netdev->in4_error = error;
+        netdev->cache_valid |= VALID_IN4;
     } else {
-        error = 0;
+        error = netdev->in4_error;
     }
 
     if (!error) {
@@ -2436,13 +2453,19 @@ netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev->cache_valid |= VALID_IN4;
         netdev->address = address;
         netdev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
         }
+    }
+
+    if (!error) {
+        netdev->cache_valid |= VALID_IN4;
+        netdev->in4_error = 0;
+    } else {
+        netdev->cache_valid &= ~VALID_IN4;
     }
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -2465,12 +2488,14 @@ parse_if_inet6_line(const char *line,
                     ifname);
 }
 
-/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address (if
- * 'in6' is non-null) and returns true.  Otherwise, returns false. */
+/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
+ * Otherwise, sets '*in6' to 'in6addr_any' and returns the corresponding
+ * error. */
 static int
 netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
 
     ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_IN6)) {
@@ -2478,6 +2503,7 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
         char line[128];
 
         netdev->in6 = in6addr_any;
+        netdev->in6_error = EADDRNOTAVAIL;
 
         file = fopen("/proc/net/if_inet6", "r");
         if (file != NULL) {
@@ -2489,17 +2515,21 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
                     && !strcmp(name, ifname))
                 {
                     netdev->in6 = in6_tmp;
+                    netdev->in6_error = 0;
                     break;
                 }
             }
             fclose(file);
+        } else {
+            netdev->in6_error = EOPNOTSUPP;
         }
         netdev->cache_valid |= VALID_IN6;
     }
     *in6 = netdev->in6;
+    error = netdev->in6_error;
     ovs_mutex_unlock(&netdev->mutex);
 
-    return 0;
+    return error;
 }
 
 static void

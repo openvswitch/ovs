@@ -3424,6 +3424,32 @@
     traffic may also be referred to as SPAN or RSPAN, depending on how
     the mirrored traffic is sent.</p>
 
+    <p>
+      When a packet enters an Open vSwitch bridge, it becomes eligible for
+      mirroring based on its ingress port and VLAN.  As the packet travels
+      through the flow tables, each time it is output to a port, it becomes
+      eligible for mirroring based on the egress port and VLAN.  In Open
+      vSwitch 2.5 and later, mirroring occurs just after a packet first becomes
+      eligible, using the packet as it exists at that point; in Open vSwitch
+      2.4 and earlier, mirroring occurs only after a packet has traversed all
+      the flow tables, using the original packet as it entered the bridge.
+      This makes a difference only when the flow table modifies the packet: in
+      Open vSwitch 2.4, the modifications are never visible to mirrors, whereas
+      in Open vSwitch 2.5 and later modifications made before the first output
+      that makes it eligible for mirroring to a particular destination are
+      visible.
+    </p>
+
+    <p>
+      A packet that enters an Open vSwitch bridge is mirrored to a particular
+      destination only once, even if it is eligible for multiple reasons.  For
+      example, a packet would be mirrored to a particular <ref
+      column="output_port"/> only once, even if it is selected for mirroring to
+      that port by <ref column="select_dst_port"/> and <ref
+      column="select_src_port"/> in the same or different <ref table="Mirror"/>
+      records.
+    </p>
+
     <column name="name">
       Arbitrary identifier for the <ref table="Mirror"/>.
     </column>

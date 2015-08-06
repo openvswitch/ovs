@@ -529,7 +529,7 @@ DPDK vhost-cuse VM configuration:
        subprocess.call("qemu-system-x86_64 .... -netdev tap,id=vhostnet0,\
                         vhost=on,vhostfd=" + fd +"...", shell=True)
 
-   Alternatively the the `qemu-wrap.py` script can be used to automate the
+   Alternatively the `qemu-wrap.py` script can be used to automate the
    requirements specified above and can be used in conjunction with libvirt if
    desired. See the "DPDK vhost VM configuration with QEMU wrapper" section
    below.

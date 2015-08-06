@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "bitmap.h"
 #include "cmap.h"
 #include "csum.h"
 #include "dp-packet.h"
@@ -44,7 +45,6 @@
 #include "latch.h"
 #include "list.h"
 #include "match.h"
-#include "meta-flow.h"
 #include "netdev.h"
 #include "netdev-dpdk.h"
 #include "netdev-vport.h"
@@ -1879,13 +1879,13 @@ static int
 dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               const struct nlattr *mask_key,
                               uint32_t mask_key_len, const struct flow *flow,
-                              struct flow *mask)
+                              struct flow_wildcards *wc)
 {
     if (mask_key_len) {
         enum odp_key_fitness fitness;
 
-        fitness = odp_flow_key_to_mask(mask_key, mask_key_len, key, key_len,
-                                       mask, flow);
+        fitness = odp_flow_key_to_mask_udpif(mask_key, mask_key_len, key,
+                                             key_len, &wc->masks, flow);
         if (fitness) {
             /* This should not happen: it indicates that
              * odp_flow_key_from_mask() and odp_flow_key_to_mask()
@@ -1907,31 +1907,9 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
             return EINVAL;
         }
     } else {
-        enum mf_field_id id;
-        /* No mask key, unwildcard everything except fields whose
-         * prerequisities are not met. */
-        memset(mask, 0x0, sizeof *mask);
-
-        for (id = 0; id < MFF_N_IDS; ++id) {
-            /* Skip registers and metadata. */
-            if (!(id >= MFF_REG0 && id < MFF_REG0 + FLOW_N_REGS)
-                && !(id >= MFF_XREG0 && id < MFF_XREG0 + FLOW_N_XREGS)
-                && id != MFF_METADATA) {
-                const struct mf_field *mf = mf_from_id(id);
-                if (mf_are_prereqs_ok(mf, flow)) {
-                    mf_mask_field(mf, mask);
-                }
-            }
-        }
+        flow_wildcards_init_for_packet(wc, flow);
     }
 
-    /* Force unwildcard the in_port.
-     *
-     * We need to do this even in the case where we unwildcard "everything"
-     * above because "everything" only includes the 16-bit OpenFlow port number
-     * mask->in_port.ofp_port, which only covers half of the 32-bit datapath
-     * port number mask->in_port.odp_port. */
-    mask->in_port.odp_port = u32_to_odp(UINT32_MAX);
     return 0;
 }
 
@@ -1941,7 +1919,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 {
     odp_port_t in_port;
 
-    if (odp_flow_key_to_flow(key, key_len, flow)) {
+    if (odp_flow_key_to_flow_udpif(key, key_len, flow)) {
         /* This should not happen: it indicates that odp_flow_key_from_flow()
          * and odp_flow_key_to_flow() disagree on the acceptable form of a
          * flow.  Log the problem as an error, with enough details to enable
@@ -2069,7 +2047,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     }
     error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
                                           put->mask, put->mask_len,
-                                          &match.flow, &match.wc.masks);
+                                          &match.flow, &match.wc);
     if (error) {
         return error;
     }
@@ -2961,6 +2939,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
      * pmd threads for the numa node. */
     if (!n_pmds) {
         int can_have, n_unpinned, i;
+        struct dp_netdev_pmd_thread **pmds;
 
         n_unpinned = ovs_numa_get_n_unpinned_cores_on_numa(numa_id);
         if (!n_unpinned) {
@@ -2972,15 +2951,22 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         /* If cpu mask is specified, uses all unpinned cores, otherwise
          * tries creating NR_PMD_THREADS pmd threads. */
         can_have = dp->pmd_cmask ? n_unpinned : MIN(n_unpinned, NR_PMD_THREADS);
+        pmds = xzalloc(can_have * sizeof *pmds);
         for (i = 0; i < can_have; i++) {
-            struct dp_netdev_pmd_thread *pmd = xzalloc(sizeof *pmd);
             unsigned core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
-
-            dp_netdev_configure_pmd(pmd, dp, i, core_id, numa_id);
+            pmds[i] = xzalloc(sizeof **pmds);
+            dp_netdev_configure_pmd(pmds[i], dp, i, core_id, numa_id);
+        }
+        /* The pmd thread code needs to see all the others configured pmd
+         * threads on the same numa node.  That's why we call
+         * 'dp_netdev_configure_pmd()' on all the threads and then we actually
+         * start them. */
+        for (i = 0; i < can_have; i++) {
             /* Each thread will distribute all devices rx-queues among
              * themselves. */
-            pmd->thread = ovs_thread_create("pmd", pmd_thread_main, pmd);
+            pmds[i]->thread = ovs_thread_create("pmd", pmd_thread_main, pmds[i]);
         }
+        free(pmds);
         VLOG_INFO("Created %d pmd threads on numa node %d", can_have, numa_id);
     }
 }
@@ -3036,9 +3022,25 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
                  struct ofpbuf *actions, struct ofpbuf *put_actions)
 {
     struct dp_netdev *dp = pmd->dp;
+    struct flow_tnl orig_tunnel;
+    int err;
 
     if (OVS_UNLIKELY(!dp->upcall_cb)) {
         return ENODEV;
+    }
+
+    /* Upcall processing expects the Geneve options to be in the translated
+     * format but we need to retain the raw format for datapath use. */
+    orig_tunnel.flags = flow->tunnel.flags;
+    if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+        orig_tunnel.metadata.present.len = flow->tunnel.metadata.present.len;
+        memcpy(orig_tunnel.metadata.opts.gnv, flow->tunnel.metadata.opts.gnv,
+               flow->tunnel.metadata.present.len);
+        err = tun_metadata_from_geneve_udpif(&orig_tunnel, &orig_tunnel,
+                                             &flow->tunnel);
+        if (err) {
+            return err;
+        }
     }
 
     if (OVS_UNLIKELY(!VLOG_DROP_DBG(&upcall_rl))) {
@@ -3068,8 +3070,44 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         ds_destroy(&ds);
     }
 
-    return dp->upcall_cb(packet_, flow, ufid, pmd->core_id, type, userdata,
-                         actions, wc, put_actions, dp->upcall_aux);
+    err = dp->upcall_cb(packet_, flow, ufid, pmd->core_id, type, userdata,
+                        actions, wc, put_actions, dp->upcall_aux);
+    if (err && err != ENOSPC) {
+        return err;
+    }
+
+    /* Translate tunnel metadata masks to datapath format. */
+    if (wc) {
+        if (wc->masks.tunnel.metadata.present.map) {
+            struct geneve_opt opts[GENEVE_TOT_OPT_SIZE /
+                                   sizeof(struct geneve_opt)];
+
+            tun_metadata_to_geneve_udpif_mask(&flow->tunnel,
+                                              &wc->masks.tunnel,
+                                              orig_tunnel.metadata.opts.gnv,
+                                              orig_tunnel.metadata.present.len,
+                                              opts);
+
+            memset(&wc->masks.tunnel.metadata, 0,
+                   sizeof wc->masks.tunnel.metadata);
+            memcpy(&wc->masks.tunnel.metadata.opts.gnv, opts,
+                   orig_tunnel.metadata.present.len);
+        }
+        wc->masks.tunnel.metadata.present.len = 0xff;
+    }
+
+    /* Restore tunnel metadata. We need to use the saved options to ensure
+     * that any unknown options are not lost. The generated mask will have
+     * the same structure, matching on types and lengths but wildcarding
+     * option data we don't care about. */
+    if (orig_tunnel.flags & FLOW_TNL_F_UDPIF) {
+        memcpy(&flow->tunnel.metadata.opts.gnv, orig_tunnel.metadata.opts.gnv,
+               orig_tunnel.metadata.present.len);
+        flow->tunnel.metadata.present.len = orig_tunnel.metadata.present.len;
+        flow->tunnel.flags |= FLOW_TNL_F_UDPIF;
+    }
+
+    return err;
 }
 
 static inline uint32_t

@@ -920,7 +920,8 @@ OvsInitTunnelVport(PVOID userContext,
     {
         POVS_TUNFLT_INIT_CONTEXT tunnelContext = NULL;
 
-        tunnelContext = OvsAllocateMemory(sizeof(*tunnelContext));
+        tunnelContext = OvsAllocateMemoryWithTag(sizeof(*tunnelContext),
+                                                 OVS_VPORT_POOL_TAG);
         if (tunnelContext == NULL) {
             status = STATUS_INSUFFICIENT_RESOURCES;
             break;
@@ -935,6 +936,10 @@ OvsInitTunnelVport(PVOID userContext,
                                     dstPort,
                                     OvsTunnelVportPendingInit,
                                     (PVOID)tunnelContext);
+        if (status != STATUS_PENDING) {
+            OvsFreeMemoryWithTag(tunnelContext, OVS_VPORT_POOL_TAG);
+            tunnelContext = NULL;
+        }
         break;
     }
     case OVS_VPORT_TYPE_STT:
@@ -1412,7 +1417,7 @@ cleanup:
  * Deletes ports added from the Hyper-V switch as well as OVS usersapce. The
  * function deletes ports in 'portIdHashArray'. This will delete most of the
  * ports that are in the 'portNoHashArray' as well. Any remaining ports
- * are deleted by walking the the 'portNoHashArray'.
+ * are deleted by walking the 'portNoHashArray'.
  * --------------------------------------------------------------------------
  */
 VOID

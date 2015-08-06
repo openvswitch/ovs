@@ -38,22 +38,8 @@ struct mcast_snooping;
 struct xlate_cache;
 
 struct xlate_out {
-    /* Wildcards relevant in translation.  Any fields that were used to
-     * calculate the action must be set for caching and kernel
-     * wildcarding to work.  For example, if the flow lookup involved
-     * performing the "normal" action on IPv4 and ARP packets, 'wc'
-     * would have the 'in_port' (always set), 'dl_type' (flow match),
-     * 'vlan_tci' (normal action), and 'dl_dst' (normal action) fields
-     * set. */
-    struct flow_wildcards wc;
-
     enum slow_path_reason slow; /* 0 if fast path may be used. */
     bool fail_open;             /* Initial rule is fail open? */
-    bool has_learn;             /* Actions include NXAST_LEARN? */
-    bool has_normal;            /* Actions output to OFPP_NORMAL? */
-    bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
-    ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
-    mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
     /* Recirculation IDs on which references are held. */
     unsigned n_recircs;
@@ -61,10 +47,6 @@ struct xlate_out {
         uint32_t recirc[2];   /* When n_recircs == 1 or 2 */
         uint32_t *recircs;    /* When 'n_recircs' > 2 */
     };
-
-    uint64_t odp_actions_stub[256 / 8];
-    struct ofpbuf odp_actions_buf;
-    struct ofpbuf *odp_actions;
 };
 
 /* Helpers to abstract the recirculation union away. */
@@ -140,12 +122,6 @@ struct xlate_in {
      * not if we are just revalidating. */
     bool may_learn;
 
-    /* If the caller of xlate_actions() doesn't need the flow_wildcards
-     * contained in struct xlate_out.  'skip_wildcards' can be set to true
-     * disabling the expensive wildcard computation.  When true, 'wc' in struct
-     * xlate_out is undefined and should not be read. */
-    bool skip_wildcards;
-
     /* The rule initiating translation or NULL. If both 'rule' and 'ofpacts'
      * are NULL, xlate_actions() will do the initial rule lookup itself. */
     struct rule_dpif *rule;
@@ -196,10 +172,18 @@ struct xlate_in {
      * calling xlate_in_init(). */
     struct xlate_cache *xcache;
 
-    /* Allows callers to optionally supply their own buffer for the resulting
-     * odp_actions stored in xlate_out.  If NULL, the default buffer will be
-     * used. */
+    /* If nonnull, flow translation puts the resulting datapath actions in this
+     * buffer.  If null, flow translation will not produce datapath actions. */
     struct ofpbuf *odp_actions;
+
+    /* If nonnull, flow translation populates this with wildcards relevant in
+     * translation.  Any fields that were used to calculate the action are set,
+     * to allow caching and kernel wildcarding to work.  For example, if the
+     * flow lookup involved performing the "normal" action on IPv4 and ARP
+     * packets, 'wc' would have the 'in_port' (always set), 'dl_type' (flow
+     * match), 'vlan_tci' (normal action), and 'dl_dst' (normal action) fields
+     * set. */
+    struct flow_wildcards *wc;
 
     /* The recirculation context related to this translation, as returned by
      * xlate_lookup. */
@@ -244,7 +228,8 @@ int xlate_lookup(const struct dpif_backer *, const struct flow *,
 void xlate_actions(struct xlate_in *, struct xlate_out *);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, ofp_port_t in_port, struct rule_dpif *,
-                   uint16_t tcp_flags, const struct dp_packet *packet);
+                   uint16_t tcp_flags, const struct dp_packet *packet,
+                   struct flow_wildcards *, struct ofpbuf *odp_actions);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 

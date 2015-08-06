@@ -88,7 +88,7 @@ following forms:
 .
 .IP "\fB\-\-no\-wait\fR"
 Prevents \fBovs\-vsctl\fR from waiting for \fBovs\-vswitchd\fR to
-reconfigure itself according to the the modified database.  This
+reconfigure itself according to the modified database.  This
 option should be used if \fBovs\-vswitchd\fR is not running;
 otherwise, \fBovs\-vsctl\fR will not exit until \fBovs\-vswitchd\fR
 starts.

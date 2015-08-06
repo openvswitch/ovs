@@ -51,4 +51,17 @@ static inline void ether_addr_copy(u8 *dst, const u8 *src)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#define eth_proto_is_802_3 rpl_eth_proto_is_802_3
+static inline bool eth_proto_is_802_3(__be16 proto)
+{
+#ifndef __BIG_ENDIAN
+	/* if CPU is little endian mask off bits representing LSB */
+	proto &= htons(0xFF00);
+#endif
+	/* cast both to u16 and compare since LSB can be ignored */
+	return (__force u16)proto >= (__force u16)htons(ETH_P_802_3_MIN);
+}
+#endif
+
 #endif

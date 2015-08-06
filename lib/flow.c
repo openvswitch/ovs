@@ -462,9 +462,22 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         miniflow_push_words(mf, tunnel, &md->tunnel,
                             offsetof(struct flow_tnl, metadata) /
                             sizeof(uint64_t));
-        if (md->tunnel.metadata.opt_map) {
-            miniflow_push_words(mf, tunnel.metadata, &md->tunnel.metadata,
-                                 sizeof md->tunnel.metadata / sizeof(uint64_t));
+
+        if (!(md->tunnel.flags & FLOW_TNL_F_UDPIF)) {
+            if (md->tunnel.metadata.present.map) {
+                miniflow_push_words(mf, tunnel.metadata, &md->tunnel.metadata,
+                                    sizeof md->tunnel.metadata /
+                                    sizeof(uint64_t));
+            }
+        } else {
+            if (md->tunnel.metadata.present.len) {
+                miniflow_push_words(mf, tunnel.metadata.present,
+                                    &md->tunnel.metadata.present, 1);
+                miniflow_push_words(mf, tunnel.metadata.opts.gnv,
+                                    md->tunnel.metadata.opts.gnv,
+                                    DIV_ROUND_UP(md->tunnel.metadata.present.len,
+                                                 sizeof(uint64_t)));
+            }
         }
     }
     if (md->skb_priority || md->pkt_mark) {
@@ -815,7 +828,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     if (flow->tunnel.gbp_flags) {
         match_set_tun_gbp_flags(flow_metadata, flow->tunnel.gbp_flags);
     }
-    tun_metadata_get_fmd(&flow->tunnel.metadata, flow_metadata);
+    tun_metadata_get_fmd(&flow->tunnel, flow_metadata);
     if (flow->metadata != htonll(0)) {
         match_set_metadata(flow_metadata, flow->metadata);
     }
@@ -1161,9 +1174,16 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
         WC_MASK_FIELD(wc, tunnel.gbp_id);
         WC_MASK_FIELD(wc, tunnel.gbp_flags);
 
-        if (flow->tunnel.metadata.opt_map) {
-            wc->masks.tunnel.metadata.opt_map = flow->tunnel.metadata.opt_map;
-            WC_MASK_FIELD(wc, tunnel.metadata.opts);
+        if (!(flow->tunnel.flags & FLOW_TNL_F_UDPIF)) {
+            if (flow->tunnel.metadata.present.map) {
+                wc->masks.tunnel.metadata.present.map =
+                                              flow->tunnel.metadata.present.map;
+                WC_MASK_FIELD(wc, tunnel.metadata.opts.u8);
+            }
+        } else {
+            WC_MASK_FIELD(wc, tunnel.metadata.present.len);
+            memset(wc->masks.tunnel.metadata.opts.gnv, 0xff,
+                   flow->tunnel.metadata.present.len);
         }
     } else if (flow->tunnel.tun_id) {
         WC_MASK_FIELD(wc, tunnel.tun_id);
@@ -1253,9 +1273,16 @@ flow_wc_map(const struct flow *flow, struct miniflow *map)
 
     map->tnl_map = 0;
     if (flow->tunnel.ip_dst) {
-        map->tnl_map = MINIFLOW_TNL_MAP(tunnel);
-        if (!flow->tunnel.metadata.opt_map) {
-            map->tnl_map &= ~MINIFLOW_TNL_MAP(tunnel.metadata);
+        map->tnl_map |= MINIFLOW_TNL_MAP__(tunnel,
+                                          offsetof(struct flow_tnl, metadata));
+        if (!(flow->tunnel.flags & FLOW_TNL_F_UDPIF)) {
+            if (flow->tunnel.metadata.present.map) {
+                map->tnl_map |= MINIFLOW_TNL_MAP(tunnel.metadata);
+            }
+        } else {
+            map->tnl_map |= MINIFLOW_TNL_MAP(tunnel.metadata.present.len);
+            map->tnl_map |= MINIFLOW_TNL_MAP__(tunnel.metadata.opts.gnv,
+                                             flow->tunnel.metadata.present.len);
         }
     }
 

@@ -270,7 +270,7 @@ table=2 in_port=1,icmp6,icmpv6_type=135 actions=set_field:fe80::4->nd_target,set
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,icmp6,ipv6_src=fe80::1,ipv6_dst=fe80::2,nw_tos=0,nw_ttl=128,icmpv6_type=135,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11'], [0], [stdout])
 AT_CHECK([tail -4 stdout], [0],
-  [Megaflow: recirc_id=0,icmp6,in_port=1,nw_frag=no,icmp_type=135,icmp_code=0x0/0xff,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11
+  [Megaflow: recirc_id=0,icmp6,in_port=1,nw_frag=no,icmp_type=0x87/0xff,icmp_code=0x0/0xff,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11
 Datapath actions: 10,set(nd(target=fe80::4,sll=cc:cc:cc:cc:cc:cc)),11,set(nd(target=fe80::3,sll=aa:aa:aa:aa:aa:aa)),13
 This flow is handled by the userspace slow path because it:
 	- Uses action(s) not supported by datapath.
@@ -3954,13 +3954,13 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: 2,3
+  [Datapath actions: 3,2
 ])
 
 flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: 1,3
+  [Datapath actions: 3,1
 ])
 
 OVS_VSWITCHD_STOP
@@ -3984,7 +3984,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: 2,3
+  [Datapath actions: 3,2
 ])
 
 flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -4074,7 +4074,7 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0],
 flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=11,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: 2,3
+  [Datapath actions: 3,2
 ])
 
 OVS_VSWITCHD_STOP
@@ -4098,13 +4098,13 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: push_vlan(vid=17,pcp=0),2,pop_vlan,3
+  [Datapath actions: 3,push_vlan(vid=17,pcp=0),2
 ])
 
 flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: 1,3
+  [Datapath actions: 3,1
 ])
 
 OVS_VSWITCHD_STOP
@@ -4140,6 +4140,34 @@ expected="push_vlan(vid=17,pcp=0),1,pop_vlan,push_vlan(vid=12,pcp=0),1,2,100"
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
 mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# This test verifies that mirror state is preserved across recirculation.
+#
+# Otherwise, post-recirculation the ingress and the output to port 4
+# would cause the packet to be mirrored to port 3 a second time.
+AT_SETUP([ofproto-dpif - mirroring with recirculation])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3, 4)
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=2,debug_recirc,4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow" -generate], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 3,2,recirc(0x1)
+])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow,recirc_id(1)" -generate], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 4
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6726,13 +6754,13 @@ NXST_FLOW reply:
 
 (echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
-    active=1, lookup=0, matched=0"
- x=1
- while test $x -lt 254; do
-   echo "
-  table $x:
-    active=0, lookup=0, matched=0"
-   x=`expr $x + 1`
+    active=1, lookup=0, matched=0
+
+  table 1:
+    active=0, lookup=0, matched=0
+"
+ for i in `seq 2 253`; do
+     printf '  table %d: ditto\n' $i
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 
@@ -6770,25 +6798,24 @@ NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via no_match) data_l
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 ])
 
-(printf "OFPST_TABLE reply (OF1.3) (xid=0x2):"
- x=0
- while test $x -lt 254; do
-   echo "
-  table $x:
-    active=0, lookup=0, matched=0"
-   x=`expr $x + 1`
+(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+  table 0:
+    active=0, lookup=0, matched=0
+"
+ for i in `seq 1 253`; do
+     printf '  table %d: ditto\n' $i
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 
 (echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
-    active=0, lookup=3, matched=0"
- x=1
- while test $x -lt 254; do
-   echo "
-  table $x:
-    active=0, lookup=0, matched=0"
-   x=`expr $x + 1`
+    active=0, lookup=3, matched=0
+
+  table 1:
+    active=0, lookup=0, matched=0
+"
+ for i in `seq 2 253`; do
+     printf '  table %d: ditto\n' $i
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br1 ], [0], [expout])
 
@@ -6837,14 +6864,12 @@ OFPST_FLOW reply (OF1.3):
   table 0:
     active=1, lookup=3, matched=3
 
-  table 1:
-    active=1, lookup=3, matched=3"
- x=2
- while test $x -lt 254; do
-   echo "
-  table $x:
-    active=0, lookup=0, matched=0"
-   x=`expr $x + 1`
+  table 1: ditto
+  table 2:
+    active=0, lookup=0, matched=0
+"
+ for i in `seq 3 253`; do
+     printf '  table %d: ditto\n' $i
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 
@@ -6890,13 +6915,13 @@ OFPST_FLOW reply (OF1.1):
     active=0, lookup=3, matched=0
 
   table 1:
-    active=1, lookup=3, matched=3"
- x=2
- while test $x -lt 254; do
-   echo "
-  table $x:
-    active=0, lookup=0, matched=0"
-   x=`expr $x + 1`
+    active=1, lookup=3, matched=3
+
+  table 2:
+    active=0, lookup=0, matched=0
+"
+ for i in `seq 3 253`; do
+     printf '  table %d: ditto\n' $i
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 

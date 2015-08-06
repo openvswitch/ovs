@@ -86,6 +86,11 @@ Logical port commands:\n\
                             ('enabled' or 'disabled')\n\
   lport-get-enabled LPORT   get administrative state LPORT\n\
                             ('enabled' or 'disabled')\n\
+  lport-set-type LPORT TYPE Set the type for LPORT\n\
+  lport-get-type LPORT      Get the type for LPORT\n\
+  lport-set-options LPORT KEY=VALUE [KEY=VALUE]...\n\
+                            Set options related to the type of LPORT\n\
+  lport-get-options LPORT   Get the type specific options for LPORT\n\
 \n\
 Options:\n\
   --db=DATABASE             connect to DATABASE\n\
@@ -627,6 +632,84 @@ do_lport_get_enabled(struct ovs_cmdl_context *ctx)
     printf("%s\n",
            (!lport->enabled || *lport->enabled) ? "enabled" : "disabled");
 }
+
+static void
+do_lport_set_type(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const char *type = ctx->argv[2];
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    nbrec_logical_port_set_type(lport, type);
+}
+
+static void
+do_lport_get_type(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    printf("%s\n", lport->type);
+}
+
+static void
+do_lport_set_options(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+    size_t i;
+    struct smap options = SMAP_INITIALIZER(&options);
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    for (i = 2; i < ctx->argc; i++) {
+        char *key, *value;
+        value = xstrdup(ctx->argv[i]);
+        key = strsep(&value, "=");
+        if (value) {
+            smap_add(&options, key, value);
+        }
+        free(key);
+    }
+
+    nbrec_logical_port_set_options(lport, &options);
+
+    smap_destroy(&options);
+}
+
+static void
+do_lport_get_options(struct ovs_cmdl_context *ctx)
+{
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_port *lport;
+    struct smap_node *node;
+
+    lport = lport_by_name_or_uuid(nb_ctx, id);
+    if (!lport) {
+        return;
+    }
+
+    SMAP_FOR_EACH(node, &lport->options) {
+        printf("%s=%s\n", node->key, node->value);
+    }
+}
 
 static void
 parse_options(int argc, char *argv[])
@@ -827,6 +910,34 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         .max_args = 1,
         .handler = do_lport_get_enabled,
+    },
+    {
+        .name = "lport-set-type",
+        .usage = "LPORT TYPE",
+        .min_args = 2,
+        .max_args = 2,
+        .handler = do_lport_set_type,
+    },
+    {
+        .name = "lport-get-type",
+        .usage = "LPORT",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_type,
+    },
+    {
+        .name = "lport-set-options",
+        .usage = "LPORT KEY=VALUE [KEY=VALUE]...",
+        .min_args = 1,
+        .max_args = INT_MAX,
+        .handler = do_lport_set_options
+    },
+    {
+        .name = "lport-get-options",
+        .usage = "LPORT",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_lport_get_options,
     },
 
     {

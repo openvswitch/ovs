@@ -836,7 +836,7 @@ OvsGetUpcallMsgSize(PVOID userData,
         size += NlAttrTotalSize(userDataLen);
     }
     /* OVS_PACKET_ATTR_EGRESS_TUN_KEY */
-    /* Is it included in the the flwo key attr XXX */
+    /* Is it included in the flow key attr XXX */
     if (tunnelKey) {
         size += NlAttrTotalSize(OvsTunKeyAttrSize());
     }

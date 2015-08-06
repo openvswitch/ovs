@@ -32,26 +32,64 @@
                                               "value": {"type": "string"},
                                               "min": 0,
                                               "max": "unlimited"}}}},
-        "Pipeline": {
+        "Logical_Flow": {
             "columns": {
-                "logical_datapath": {"type": "uuid"},
+                "logical_datapath": {"type": {"key": {"type": "uuid",
+                                                      "refTable": "Datapath_Binding"}}},
+                "pipeline": {"type": {"key": {"type": "string",
+                                      "enum": ["set", ["ingress",
+                                                       "egress"]]}}},
                 "table_id": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
-                                              "maxInteger": 31}}},
+                                              "maxInteger": 15}}},
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
                                               "maxInteger": 65535}}},
                 "match": {"type": "string"},
                 "actions": {"type": "string"}},
             "isRoot": true},
-        "Binding": {
+        "Multicast_Group": {
             "columns": {
-                "logical_datapath": {"type": "uuid"},
-                "logical_port": {"type": "string"},
+                "datapath": {"type": {"key": {"type": "uuid",
+                                              "refTable": "Datapath_Binding"}}},
+                "name": {"type": "string"},
+                "tunnel_key": {
+                    "type": {"key": {"type": "integer",
+                                     "minInteger": 32768,
+                                     "maxInteger": 65535}}},
+                "ports": {"type": {"key": {"type": "uuid",
+                                           "refTable": "Port_Binding",
+                                           "refType": "weak"},
+                                   "min": 1, "max": "unlimited"}}},
+            "indexes": [["datapath", "tunnel_key"],
+                        ["datapath", "name"]],
+            "isRoot": true},
+        "Datapath_Binding": {
+            "columns": {
                 "tunnel_key": {
                      "type": {"key": {"type": "integer",
                                       "minInteger": 1,
-                                      "maxInteger": 65535}}},
+                                      "maxInteger": 16777215}}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["tunnel_key"]],
+            "isRoot": true},
+        "Port_Binding": {
+            "columns": {
+                "logical_port": {"type": "string"},
+                "type": {"type": "string"},
+                "options": {
+                     "type": {"key": "string",
+                              "value": "string",
+                              "min": 0,
+                              "max": "unlimited"}},
+                "datapath": {"type": {"key": {"type": "uuid",
+                                              "refTable": "Datapath_Binding"}}},
+                "tunnel_key": {
+                     "type": {"key": {"type": "integer",
+                                      "minInteger": 1,
+                                      "maxInteger": 32767}}},
                 "parent_port": {"type": {"key": "string", "min": 0, "max": 1}},
                 "tag": {
                      "type": {"key": {"type": "integer",
@@ -65,6 +103,6 @@
                 "mac": {"type": {"key": "string",
                                  "min": 0,
                                  "max": "unlimited"}}},
-            "indexes": [["logical_port"], ["tunnel_key"]],
+            "indexes": [["datapath", "tunnel_key"], ["logical_port"]],
             "isRoot": true}},
     "version": "1.0.0"}

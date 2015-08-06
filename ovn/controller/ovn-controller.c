@@ -42,8 +42,9 @@
 #include "ofctrl.h"
 #include "binding.h"
 #include "chassis.h"
+#include "encaps.h"
 #include "physical.h"
-#include "pipeline.h"
+#include "lflow.h"
 
 VLOG_DEFINE_THIS_MODULE(main);
 
@@ -55,8 +56,6 @@ static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
-static char *ovnsb_remote;
-
 
 static void
 get_initial_snapshot(struct ovsdb_idl *idl)
@@ -72,85 +71,151 @@ get_initial_snapshot(struct ovsdb_idl *idl)
 }
 
 static const struct ovsrec_bridge *
-get_bridge(struct controller_ctx *ctx, const char *name)
+get_br_int(struct ovsdb_idl *ovs_idl)
 {
-    const struct ovsrec_bridge *br;
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    if (!cfg) {
+        return NULL;
+    }
 
-    OVSREC_BRIDGE_FOR_EACH(br, ctx->ovs_idl) {
-        if (!strcmp(br->name, name)) {
+    const char *br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
+    if (!br_int_name) {
+        br_int_name = DEFAULT_BRIDGE_NAME;
+    }
+
+    const struct ovsrec_bridge *br;
+    OVSREC_BRIDGE_FOR_EACH (br, ovs_idl) {
+        if (!strcmp(br->name, br_int_name)) {
             return br;
         }
     }
 
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    VLOG_WARN_RL(&rl, "%s: integration bridge does not exist", br_int_name);
     return NULL;
 }
 
-/* Retrieve the OVN integration bridge from the "external-ids:ovn-bridge"
- * key, the remote location from the "external-ids:ovn-remote" key, and
- * the chassis name from the "external-ids:system-id" key in the
- * Open_vSwitch table of the OVS database instance.
- *
- * xxx ovn-controller does not support changing any of these mid-run,
- * xxx but that should be addressed later. */
-static void
-get_core_config(struct controller_ctx *ctx)
+static const char *
+get_chassis_id(const struct ovsdb_idl *ovs_idl)
 {
-    const struct ovsrec_open_vswitch *cfg;
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    return cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+}
 
-    cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
-    if (!cfg) {
-        VLOG_ERR("No Open_vSwitch row defined.");
-        ovsdb_idl_destroy(ctx->ovs_idl);
-        exit(EXIT_FAILURE);
-    }
-
+/* Retrieves the OVN Southbound remote location from the
+ * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it.
+ *
+ * XXX ovn-controller does not support this changing mid-run, but that should
+ * be addressed later. */
+static char *
+get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
+{
     while (1) {
-        const struct ovsrec_bridge *br_int;
-        const char *remote, *system_id, *br_int_name;
+        ovsdb_idl_run(ovs_idl);
 
-        ovsdb_idl_run(ctx->ovs_idl);
-
-        br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
-        if (!br_int_name) {
-            br_int_name = DEFAULT_BRIDGE_NAME;
-        }
-        ctx->br_int_name = xstrdup(br_int_name);
-
-        br_int = get_bridge(ctx, ctx->br_int_name);
-        if (!br_int) {
-            VLOG_INFO("Integration bridge '%s' does not exist.  Waiting...",
-                      ctx->br_int_name);
-            goto try_again;
+        const struct ovsrec_open_vswitch *cfg
+            = ovsrec_open_vswitch_first(ovs_idl);
+        if (cfg) {
+            const char *remote = smap_get(&cfg->external_ids, "ovn-remote");
+            if (remote) {
+                return xstrdup(remote);
+            }
         }
 
-        remote = smap_get(&cfg->external_ids, "ovn-remote");
-        if (!remote) {
-            VLOG_INFO("OVN OVSDB remote not specified.  Waiting...");
-            goto try_again;
-        }
-
-        system_id = smap_get(&cfg->external_ids, "system-id");
-        if (!system_id) {
-            VLOG_INFO("system-id not specified.  Waiting...");
-            goto try_again;
-        }
-
-        ovnsb_remote = xstrdup(remote);
-        ctx->chassis_id = xstrdup(system_id);
-        return;
-
-try_again:
-        ovsdb_idl_wait(ctx->ovs_idl);
+        VLOG_INFO("OVN OVSDB remote not specified.  Waiting...");
+        ovsdb_idl_wait(ovs_idl);
         poll_block();
     }
+}
 
+struct idl_loop {
+    struct ovsdb_idl *idl;
+    unsigned int skip_seqno;
+
+    struct ovsdb_idl_txn *committing_txn;
+    unsigned int precommit_seqno;
+
+    struct ovsdb_idl_txn *open_txn;
+};
+
+#define IDL_LOOP_INITIALIZER(IDL) { .idl = (IDL) }
+
+static void
+idl_loop_destroy(struct idl_loop *loop)
+{
+    if (loop) {
+        ovsdb_idl_destroy(loop->idl);
+    }
+}
+
+static struct ovsdb_idl_txn *
+idl_loop_run(struct idl_loop *loop)
+{
+    ovsdb_idl_run(loop->idl);
+    loop->open_txn = (loop->committing_txn
+                      || ovsdb_idl_get_seqno(loop->idl) == loop->skip_seqno
+                      ? NULL
+                      : ovsdb_idl_txn_create(loop->idl));
+    return loop->open_txn;
+}
+
+static void
+idl_loop_commit_and_wait(struct idl_loop *loop)
+{
+    if (loop->open_txn) {
+        loop->committing_txn = loop->open_txn;
+        loop->open_txn = NULL;
+
+        loop->precommit_seqno = ovsdb_idl_get_seqno(loop->idl);
+    }
+
+    struct ovsdb_idl_txn *txn = loop->committing_txn;
+    if (txn) {
+        enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(txn);
+        if (status != TXN_INCOMPLETE) {
+            switch (status) {
+            case TXN_TRY_AGAIN:
+                /* We want to re-evaluate the database when it's changed from
+                 * the contents that it had when we started the commit.  (That
+                 * might have already happened.) */
+                loop->skip_seqno = loop->precommit_seqno;
+                if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
+                    poll_immediate_wake();
+                }
+                break;
+
+            case TXN_SUCCESS:
+                /* If the database has already changed since we started the
+                 * commit, re-evaluate it immediately to avoid missing a change
+                 * for a while. */
+                if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
+                    poll_immediate_wake();
+                }
+                break;
+
+            case TXN_UNCHANGED:
+            case TXN_ABORTED:
+            case TXN_NOT_LOCKED:
+            case TXN_ERROR:
+                break;
+
+            case TXN_UNCOMMITTED:
+            case TXN_INCOMPLETE:
+                OVS_NOT_REACHED();
+
+            }
+            ovsdb_idl_txn_destroy(txn);
+            loop->committing_txn = NULL;
+        }
+    }
+
+    ovsdb_idl_wait(loop->idl);
 }
 
 int
 main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
-    struct controller_ctx ctx = { .chassis_id = NULL };
     bool exiting;
     int retval;
 
@@ -173,67 +238,59 @@ main(int argc, char *argv[])
     sbrec_init();
 
     ofctrl_init();
+    lflow_init();
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
-    ctx.ovs_idl = ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true);
+    struct idl_loop ovs_idl_loop = IDL_LOOP_INITIALIZER(
+        ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true));
+    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_open_vswitch);
+    ovsdb_idl_add_column(ovs_idl_loop.idl,
+                         &ovsrec_open_vswitch_col_external_ids);
+    chassis_register_ovs_idl(ovs_idl_loop.idl);
+    encaps_register_ovs_idl(ovs_idl_loop.idl);
+    binding_register_ovs_idl(ovs_idl_loop.idl);
+    physical_register_ovs_idl(ovs_idl_loop.idl);
+    get_initial_snapshot(ovs_idl_loop.idl);
 
-    /* Register interest in "external_ids" column in "Open_vSwitch" table,
-     * since we'll need to get the OVN OVSDB remote. */
-    ovsdb_idl_add_table(ctx.ovs_idl, &ovsrec_table_open_vswitch);
-    ovsdb_idl_add_column(ctx.ovs_idl, &ovsrec_open_vswitch_col_external_ids);
+    /* Connect to OVN SB database. */
+    char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
+    struct idl_loop ovnsb_idl_loop = IDL_LOOP_INITIALIZER(
+        ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+    get_initial_snapshot(ovnsb_idl_loop.idl);
 
-    chassis_init(&ctx);
-    binding_init(&ctx);
-    physical_init(&ctx);
-    pipeline_init();
-
-    get_initial_snapshot(ctx.ovs_idl);
-
-    get_core_config(&ctx);
-
-    ctx.ovnsb_idl = ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class,
-                                     true, true);
-    get_initial_snapshot(ctx.ovnsb_idl);
-
+    /* Main loop. */
     exiting = false;
     while (!exiting) {
-        ovsdb_idl_run(ctx.ovs_idl);
-        ovsdb_idl_run(ctx.ovnsb_idl);
+        struct controller_ctx ctx = {
+            .ovs_idl = ovs_idl_loop.idl,
+            .ovs_idl_txn = idl_loop_run(&ovs_idl_loop),
+            .ovnsb_idl = ovnsb_idl_loop.idl,
+            .ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop),
+        };
 
-        /* xxx If run into any surprising changes, we exit.  We should
-         * xxx handle this more gracefully. */
-        ctx.br_int = get_bridge(&ctx, ctx.br_int_name);
-        if (!ctx.br_int) {
-            VLOG_ERR("Integration bridge '%s' disappeared",
-                     ctx.br_int_name);
-            retval = EXIT_FAILURE;
-            break;
+        const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
+        const char *chassis_id = get_chassis_id(ctx.ovs_idl);
+
+        if (chassis_id) {
+            chassis_run(&ctx, chassis_id);
+            encaps_run(&ctx, br_int, chassis_id);
+            binding_run(&ctx, br_int, chassis_id);
         }
 
-        if (!ovsdb_idl_is_alive(ctx.ovnsb_idl)) {
-            int retval = ovsdb_idl_get_last_error(ctx.ovnsb_idl);
-            VLOG_ERR("%s: database connection failed (%s)",
-                     ovnsb_remote, ovs_retval_to_string(retval));
-            retval = EXIT_FAILURE;
-            break;
+        if (br_int) {
+            enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
+
+            struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
+            lflow_run(&ctx, &flow_table);
+            if (chassis_id) {
+                physical_run(&ctx, mff_ovn_geneve,
+                             br_int, chassis_id, &flow_table);
+            }
+            ofctrl_put(&flow_table);
+            hmap_destroy(&flow_table);
         }
 
-        if (!ovsdb_idl_is_alive(ctx.ovs_idl)) {
-            int retval = ovsdb_idl_get_last_error(ctx.ovs_idl);
-            VLOG_ERR("%s: database connection failed (%s)",
-                     ovs_remote, ovs_retval_to_string(retval));
-            retval = EXIT_FAILURE;
-            break;
-        }
-
-        ofctrl_clear_flows();
-
-        chassis_run(&ctx);
-        binding_run(&ctx);
-        pipeline_run(&ctx);
-        physical_run(&ctx);
-        ofctrl_run(&ctx);
         unixctl_server_run(unixctl);
 
         unixctl_server_wait(unixctl);
@@ -241,23 +298,49 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
 
-        ovsdb_idl_wait(ctx.ovs_idl);
-        ovsdb_idl_wait(ctx.ovnsb_idl);
-        ofctrl_wait();
+        idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        idl_loop_commit_and_wait(&ovs_idl_loop);
+
+        if (br_int) {
+            ofctrl_wait();
+        }
+        poll_block();
+    }
+
+    /* It's time to exit.  Clean up the databases. */
+    bool done = false;
+    while (!done) {
+        struct controller_ctx ctx = {
+            .ovs_idl = ovs_idl_loop.idl,
+            .ovs_idl_txn = idl_loop_run(&ovs_idl_loop),
+            .ovnsb_idl = ovnsb_idl_loop.idl,
+            .ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop),
+        };
+
+        const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
+        const char *chassis_id = get_chassis_id(ctx.ovs_idl);
+
+        /* Run all of the cleanup functions, even if one of them returns false.
+         * We're done if all of them return true. */
+        done = binding_cleanup(&ctx, chassis_id);
+        done = chassis_cleanup(&ctx, chassis_id) && done;
+        done = encaps_cleanup(&ctx, br_int) && done;
+        if (done) {
+            poll_immediate_wake();
+        }
+
+        idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        idl_loop_commit_and_wait(&ovs_idl_loop);
         poll_block();
     }
 
     unixctl_server_destroy(unixctl);
-    pipeline_destroy(&ctx);
+    lflow_destroy();
     ofctrl_destroy();
-    binding_destroy(&ctx);
-    chassis_destroy(&ctx);
 
-    ovsdb_idl_destroy(ctx.ovs_idl);
-    ovsdb_idl_destroy(ctx.ovnsb_idl);
+    idl_loop_destroy(&ovs_idl_loop);
+    idl_loop_destroy(&ovnsb_idl_loop);
 
-    free(ctx.br_int_name);
-    free(ctx.chassis_id);
     free(ovnsb_remote);
     free(ovs_remote);
 

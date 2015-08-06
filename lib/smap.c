@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2014 Nicira, Inc.
+/* Copyright (c) 2012, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include "hash.h"
 #include "json.h"
+#include "uuid.h"
 
 static struct smap_node *smap_add__(struct smap *, char *, void *,
                                     size_t hash);
@@ -215,6 +216,16 @@ smap_get_int(const struct smap *smap, const char *key, int def)
     return value ? atoi(value) : def;
 }
 
+/* Gets the value associated with 'key' in 'smap' and converts it to a UUID
+ * using uuid_from_string().  Returns true if successful, false if 'key' is not
+ * in 'smap' or if 'key' does not have the correct syntax for a UUID. */
+bool
+smap_get_uuid(const struct smap *smap, const char *key, struct uuid *uuid)
+{
+    const char *value = smap_get(smap, key);
+    return value && uuid_from_string(uuid, value);
+}
+
 /* Returns true of there are no elements in 'smap'. */
 bool
 smap_is_empty(const struct smap *smap)
@@ -301,6 +312,26 @@ smap_to_json(const struct smap *smap)
         json_object_put_string(json, node->key, node->value);
     }
     return json;
+}
+
+/* Returns true if the two maps are equal, meaning that they have the same set
+ * of key-value pairs.
+ */
+bool
+smap_equal(const struct smap *smap1, const struct smap *smap2)
+{
+    if (smap_count(smap1) != smap_count(smap2)) {
+        return false;
+    }
+
+    const struct smap_node *node;
+    SMAP_FOR_EACH (node, smap1) {
+        const char *value2 = smap_get(smap2, node->key);
+        if (!value2 || strcmp(node->value, value2)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /* Private Helpers. */

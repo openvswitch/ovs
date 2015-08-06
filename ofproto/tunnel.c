@@ -332,65 +332,56 @@ out:
     return ofport;
 }
 
-static bool
-tnl_ecn_ok(struct flow *flow, struct flow_wildcards *wc)
-{
-    if (is_ip_any(flow)) {
-        if ((flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
-            if (wc) {
-                wc->masks.nw_tos |= IP_ECN_MASK;
-            }
-            if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
-                VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
-                             " but is not ECN capable");
-                return false;
-            } else {
-                /* Set the ECN CE value in the tunneled packet. */
-                flow->nw_tos |= IP_ECN_CE;
-            }
-        }
-    }
-
-    return true;
-}
-
 /* Should be called at the beginning of action translation to initialize
  * wildcards and perform any actions based on receiving on tunnel port.
  *
  * Returns false if the packet must be dropped. */
 bool
-tnl_xlate_init(struct flow *flow, struct flow_wildcards *wc)
+tnl_process_ecn(struct flow *flow)
 {
-    /* tnl_port_should_receive() examines the 'tunnel.ip_dst' field to
-     * determine the presence of the tunnel metadata.  However, since tunnels'
-     * datapath port numbers are different from the non-tunnel ports, and we
-     * always unwildcard the 'in_port', we do not need to unwildcard
-     * the 'tunnel.ip_dst' for non-tunneled packets. */
-    if (tnl_port_should_receive(flow)) {
-        if (wc) {
-            wc->masks.tunnel.tun_id = OVS_BE64_MAX;
-            wc->masks.tunnel.ip_src = OVS_BE32_MAX;
-            wc->masks.tunnel.ip_dst = OVS_BE32_MAX;
-            wc->masks.tunnel.flags = (FLOW_TNL_F_DONT_FRAGMENT |
-                                      FLOW_TNL_F_CSUM |
-                                      FLOW_TNL_F_KEY);
-            wc->masks.tunnel.ip_tos = UINT8_MAX;
-            wc->masks.tunnel.ip_ttl = UINT8_MAX;
-            /* The tp_src and tp_dst members in flow_tnl are set to be always
-             * wildcarded, not to unwildcard them here. */
-            wc->masks.tunnel.tp_src = 0;
-            wc->masks.tunnel.tp_dst = 0;
+    if (!tnl_port_should_receive(flow)) {
+        return true;
+    }
 
-            memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
-        }
-        if (!tnl_ecn_ok(flow, wc)) {
+    if (is_ip_any(flow) && (flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+        if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
+            VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
+                         " but is not ECN capable");
             return false;
         }
 
-        flow->pkt_mark &= ~IPSEC_MARK;
+        /* Set the ECN CE value in the tunneled packet. */
+        flow->nw_tos |= IP_ECN_CE;
     }
 
+    flow->pkt_mark &= ~IPSEC_MARK;
     return true;
+}
+
+void
+tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
+{
+    if (tnl_port_should_receive(flow)) {
+        wc->masks.tunnel.tun_id = OVS_BE64_MAX;
+        wc->masks.tunnel.ip_src = OVS_BE32_MAX;
+        wc->masks.tunnel.ip_dst = OVS_BE32_MAX;
+        wc->masks.tunnel.flags = (FLOW_TNL_F_DONT_FRAGMENT |
+                                  FLOW_TNL_F_CSUM |
+                                  FLOW_TNL_F_KEY);
+        wc->masks.tunnel.ip_tos = UINT8_MAX;
+        wc->masks.tunnel.ip_ttl = UINT8_MAX;
+        /* The tp_src and tp_dst members in flow_tnl are set to be always
+         * wildcarded, not to unwildcard them here. */
+        wc->masks.tunnel.tp_src = 0;
+        wc->masks.tunnel.tp_dst = 0;
+
+        memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
+
+        if (is_ip_any(flow)
+            && (flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+            wc->masks.nw_tos |= IP_ECN_MASK;
+        }
+    }
 }
 
 /* Given that 'flow' should be output to the ofport corresponding to

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,6 +63,25 @@ struct ofpbuf {
     struct ovs_list list_node;  /* Private list element for use by owner. */
     enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
 };
+
+/* An initializer for a struct ofpbuf that will be initially empty and
+ * uses the space in STUB (which should be an array) as a stub.
+ *
+ * Usage example:
+ *
+ *     uint64_t stub[1024 / 8]; // 1 kB stub properly aligned for 64-bit data.
+ *     struct ofpbuf ofpbuf = OFPBUF_STUB_INITIALIZER(stub);
+ */
+#define OFPBUF_STUB_INITIALIZER(STUB) {         \
+        .base = (STUB),                         \
+        .data = (STUB),                         \
+        .size = 0,                              \
+        .allocated = sizeof (STUB),             \
+        .header = NULL,                         \
+        .msg = NULL,                            \
+        .list_node = OVS_LIST_POISON,           \
+        .source = OFPBUF_STUB,                  \
+    }
 
 void ofpbuf_use(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);

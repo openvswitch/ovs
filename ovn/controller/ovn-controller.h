@@ -20,16 +20,15 @@
 #include "ovn/lib/ovn-sb-idl.h"
 
 struct controller_ctx {
-    char *chassis_id;               /* ID for this chassis. */
-    char *br_int_name;              /* Name of local integration bridge. */
     struct ovsdb_idl *ovnsb_idl;
-    struct ovsdb_idl *ovs_idl;
+    struct ovsdb_idl_txn *ovnsb_idl_txn;
 
-    const struct ovsrec_bridge *br_int;
+    struct ovsdb_idl *ovs_idl;
+    struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
 static inline const struct sbrec_chassis *
-get_chassis_by_name(struct ovsdb_idl *ovnsb_idl, char *chassis_id)
+get_chassis_by_name(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
 {
     const struct sbrec_chassis *chassis_rec;
 

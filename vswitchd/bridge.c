@@ -48,6 +48,7 @@
 #include "ofproto/ofproto.h"
 #include "ovs-numa.h"
 #include "poll-loop.h"
+#include "if-notifier.h"
 #include "seq.h"
 #include "sha1.h"
 #include "shash.h"
@@ -217,6 +218,12 @@ static long long int stats_timer = LLONG_MIN;
 #define AA_REFRESH_INTERVAL (1000) /* In milliseconds. */
 static long long int aa_refresh_timer = LLONG_MIN;
 
+/* Whenever system interfaces are added, removed or change state, the bridge
+ * will be reconfigured.
+ */
+static struct if_notifier *ifnotifier;
+static bool ifaces_changed = false;
+
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
@@ -375,6 +382,12 @@ bridge_init_ofproto(const struct ovsrec_open_vswitch *cfg)
     shash_destroy_free_data(&iface_hints);
     initialized = true;
 }
+
+static void
+if_change_cb(void *aux OVS_UNUSED)
+{
+    ifaces_changed = true;
+}
 
 /* Public functions. */
 
@@ -478,6 +491,7 @@ bridge_init(const char *remote)
     stp_init();
     lldp_init();
     rstp_init();
+    ifnotifier = if_notifier_create(if_change_cb, NULL);
 }
 
 void
@@ -485,6 +499,7 @@ bridge_exit(void)
 {
     struct bridge *br, *next_br;
 
+    if_notifier_destroy(ifnotifier);
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
         bridge_destroy(br);
     }
@@ -2877,6 +2892,8 @@ bridge_run(void)
 
     ovsdb_idl_run(idl);
 
+    if_notifier_run();
+
     if (ovsdb_idl_is_lock_contended(idl)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
         struct bridge *br, *next_br;
@@ -2943,8 +2960,11 @@ bridge_run(void)
         }
     }
 
-    if (ovsdb_idl_get_seqno(idl) != idl_seqno || vlan_splinters_changed) {
+    if (ovsdb_idl_get_seqno(idl) != idl_seqno || vlan_splinters_changed
+        || ifaces_changed) {
         struct ovsdb_idl_txn *txn;
+
+        ifaces_changed = false;
 
         idl_seqno = ovsdb_idl_get_seqno(idl);
         txn = ovsdb_idl_txn_create(idl);
@@ -3000,6 +3020,11 @@ bridge_wait(void)
     ovsdb_idl_wait(idl);
     if (daemonize_txn) {
         ovsdb_idl_txn_wait(daemonize_txn);
+    }
+
+    if_notifier_wait();
+    if (ifaces_changed) {
+        poll_immediate_wake();
     }
 
     sset_init(&types);

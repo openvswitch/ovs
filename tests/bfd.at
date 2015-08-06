@@ -290,7 +290,7 @@ ovs-appctl time/warp 5000 500
 BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
 BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
 
-# advance clock by 5000ms and check the the flags are all 'none'.
+# advance clock by 5000ms and check the flags are all 'none'.
 ovs-appctl time/warp 5000 500
 BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
 BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])

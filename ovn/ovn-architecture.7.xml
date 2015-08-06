@@ -98,7 +98,7 @@
         OVN/CMS Plugin.  The database schema is meant to be ``impedance
         matched'' with the concepts used in a CMS, so that it directly supports
         notions of logical switches, routers, ACLs, and so on.  See
-        <code>ovs-nb</code>(5) for details.
+        <code>ovn-nb</code>(5) for details.
       </p>
 
       <p>
@@ -129,8 +129,8 @@
         logical network in terms of ``logical datapath flows,'' and
         <dfn>Binding</dfn> tables that link logical network components'
         locations to the physical network.  The hypervisors populate the PN and
-        Binding tables, whereas <code>ovn-northd</code>(8) populates the LN
-        tables.
+        Port_Binding tables, whereas <code>ovn-northd</code>(8) populates the
+        LN tables.
       </p>
 
       <p>
@@ -343,23 +343,22 @@
     </li>
 
     <li>
-      <code>ovn-northd</code> receives the OVN Northbound database update.
-      In turn, it makes the corresponding updates to the OVN Southbound
-      database, by adding rows to the OVN Southbound database
-      <code>Pipeline</code> table to reflect the new port, e.g. add a
-      flow to recognize that packets destined to the new port's MAC
-      address should be delivered to it, and update the flow that
-      delivers broadcast and multicast packets to include the new port.
-      It also creates a record in the <code>Binding</code> table and
-      populates all its columns except the column that identifies the
+      <code>ovn-northd</code> receives the OVN Northbound database update.  In
+      turn, it makes the corresponding updates to the OVN Southbound database,
+      by adding rows to the OVN Southbound database <code>Logical_Flow</code>
+      table to reflect the new port, e.g. add a flow to recognize that packets
+      destined to the new port's MAC address should be delivered to it, and
+      update the flow that delivers broadcast and multicast packets to include
+      the new port.  It also creates a record in the <code>Binding</code> table
+      and populates all its columns except the column that identifies the
       <code>chassis</code>.
     </li>
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
-      in the previous step.  As long as the VM that owns the VIF is powered off,
-      <code>ovn-controller</code> cannot do much; it cannot, for example,
+      <code>Logical_Flow</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  As long as the VM that owns the VIF is powered
+      off, <code>ovn-controller</code> cannot do much; it cannot, for example,
       arrange to send packets to or receive packets from the VIF, because the
       VIF does not actually exist anywhere.
     </li>
@@ -404,8 +403,8 @@
       <code>Binding</code> table.  This provides <code>ovn-controller</code>
       the physical location of the logical port, so each instance updates the
       OpenFlow tables of its switch (based on logical datapath flows in the OVN
-      DB <code>Pipeline</code> table) so that packets to and from the VIF can
-      be properly handled via tunnels.
+      DB <code>Logical_Flow</code> table) so that packets to and from the VIF
+      can be properly handled via tunnels.
     </li>
 
     <li>
@@ -442,18 +441,18 @@
 
     <li>
       <code>ovn-northd</code> receives the OVN Northbound update and in turn
-      updates the OVN Southbound database accordingly, by removing or
-      updating the rows from the OVN Southbound database
-      <code>Pipeline</code> table and <code>Binding</code> table that
-      were related to the now-destroyed VIF.
+      updates the OVN Southbound database accordingly, by removing or updating
+      the rows from the OVN Southbound database <code>Logical_Flow</code> table
+      and <code>Binding</code> table that were related to the now-destroyed
+      VIF.
     </li>
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
-      in the previous step.  <code>ovn-controller</code> updates OpenFlow tables
-      to reflect the update, although there may not be much to do, since the VIF
-      had already become unreachable when it was removed from the
+      <code>Logical_Flow</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  <code>ovn-controller</code> updates OpenFlow
+      tables to reflect the update, although there may not be much to do, since
+      the VIF had already become unreachable when it was removed from the
       <code>Binding</code> table in a previous step.
     </li>
   </ol>
@@ -538,13 +537,12 @@
     </li>
 
     <li>
-      <code>ovn-northd</code> receives the OVN Northbound database update.
-      In turn, it makes the corresponding updates to the OVN Southbound
-      database, by adding rows to the OVN Southbound database's
-      <code>Pipeline</code> table to reflect the new port and also by
-      creating a new row in the <code>Binding</code> table and
-      populating all its columns except the column that identifies the
-      <code>chassis</code>.
+      <code>ovn-northd</code> receives the OVN Northbound database update.  In
+      turn, it makes the corresponding updates to the OVN Southbound database,
+      by adding rows to the OVN Southbound database's <code>Logical_Flow</code>
+      table to reflect the new port and also by creating a new row in the
+      <code>Binding</code> table and populating all its columns except the
+      column that identifies the <code>chassis</code>.
     </li>
 
     <li>
@@ -580,72 +578,321 @@
 
     <li>
       <code>ovn-northd</code> receives the OVN Northbound update and in turn
-      updates the OVN Southbound database accordingly, by removing or
-      updating the rows from the OVN Southbound database
-      <code>Pipeline</code> table that were related to the now-destroyed
-      CIF.  It also deletes the row in the <code>Binding</code> table
-      for that CIF.
+      updates the OVN Southbound database accordingly, by removing or updating
+      the rows from the OVN Southbound database <code>Logical_Flow</code> table
+      that were related to the now-destroyed CIF.  It also deletes the row in
+      the <code>Binding</code> table for that CIF.
     </li>
 
     <li>
       On every hypervisor, <code>ovn-controller</code> receives the
-      <code>Pipeline</code> table updates that <code>ovn-northd</code> made
-      in the previous step.  <code>ovn-controller</code> updates OpenFlow tables
-      to reflect the update.
+      <code>Logical_Flow</code> table updates that <code>ovn-northd</code> made
+      in the previous step.  <code>ovn-controller</code> updates OpenFlow
+      tables to reflect the update.
+    </li>
+  </ol>
+
+  <h2>Life Cycle of a Packet</h2>
+
+  <p>
+    This section describes how a packet travels from one virtual machine or
+    container to another through OVN.  This description focuses on the physical
+    treatment of a packet; for a description of the logical life cycle of a
+    packet, please refer to the <code>Logical_Flow</code> table in
+    <code>ovn-sb</code>(5).
+  </p>
+
+  <p>
+    This section mentions several data and metadata fields, for clarity
+    summarized here:
+  </p>
+
+  <dl>
+    <dt>tunnel key</dt>
+    <dd>
+      When OVN encapsulates a packet in Geneve or another tunnel, it attaches
+      extra data to it to allow the receiving OVN instance to process it
+      correctly.  This takes different forms depending on the particular
+      encapsulation, but in each case we refer to it here as the ``tunnel
+      key.''  See <code>Tunnel Encapsulations</code>, below, for details.
+    </dd>
+
+    <dt>logical datapath field</dt>
+    <dd>
+      A field that denotes the logical datapath through which a packet is being
+      processed.  OVN uses the field that OpenFlow 1.1+ simply (and
+      confusingly) calls ``metadata'' to store the logical datapath.  (This
+      field is passed across tunnels as part of the tunnel key.)
+    </dd>
+
+    <dt>logical input port field</dt>
+    <dd>
+      A field that denotes the logical port from which the packet entered the
+      logical datapath.  OVN stores this in a Nicira extension register.  (This
+      field is passed across tunnels as part of the tunnel key.)
+    </dd>
+
+    <dt>logical output port field</dt>
+    <dd>
+      A field that denotes the logical port from which the packet will leave
+      the logical datapath.  This is initialized to 0 at the beginning of the
+      logical ingress pipeline.  OVN stores this in a Nicira extension
+      register.  (This field is passed across tunnels as part of the tunnel
+      key.)
+    </dd>
+
+    <dt>VLAN ID</dt>
+    <dd>
+      The VLAN ID is used as an interface between OVN and containers nested
+      inside a VM (see <code>Life Cycle of a container interface inside a
+      VM</code>, above, for more information).
+    </dd>
+  </dl>
+
+  <p>
+    Initially, a VM or container on the ingress hypervisor sends a packet on a
+    port attached to the OVN integration bridge.  Then:
+  </p>
+
+  <ol>
+    <li>
+      <p>
+        OpenFlow table 0 performs physical-to-logical translation.  It matches
+        the packet's ingress port.  Its actions annotate the packet with
+        logical metadata, by setting the logical datapath field to identify the
+        logical datapath that the packet is traversing and the logical input
+        port field to identify the ingress port.  Then it resubmits to table 16
+        to enter the logical ingress pipeline.
+      </p>
+
+      <p>
+        Packets that originate from a container nested within a VM are treated
+        in a slightly different way.  The originating container can be
+        distinguished based on the VIF-specific VLAN ID, so the
+        physical-to-logical translation flows additionally match on VLAN ID and
+        the actions strip the VLAN header.  Following this step, OVN treats
+        packets from containers just like any other packets.
+      </p>
+
+      <p>
+        Table 0 also processes packets that arrive from other chassis.  It
+        distinguishes them from other packets by ingress port, which is a
+        tunnel.  As with packets just entering the OVN pipeline, the actions
+        annotate these packets with logical datapath and logical ingress port
+        metadata.  In addition, the actions set the logical output port field,
+        which is available because in OVN tunneling occurs after the logical
+        output port is known.  These three pieces of information are obtained
+        from the tunnel encapsulation metadata (see <code>Tunnel
+        Encapsulations</code> for encoding details).  Then the actions resubmit
+        to table 33 to enter the logical egress pipeline.
+      </p>
+    </li>
+
+    <li>
+      <p>
+        OpenFlow tables 16 through 31 execute the logical ingress pipeline from
+        the <code>Logical_Flow</code> table in the OVN Southbound database.
+        These tables are expressed entirely in terms of logical concepts like
+        logical ports and logical datapaths.  A big part of
+        <code>ovn-controller</code>'s job is to translate them into equivalent
+        OpenFlow (in particular it translates the table numbers:
+        <code>Logical_Flow</code> tables 0 through 15 become OpenFlow tables 16
+        through 31).  For a given packet, the logical ingress pipeline
+        eventually executes zero or more <code>output</code> actions:
+      </p>
+
+      <ul>
+        <li>
+          If the pipeline executes no <code>output</code> actions at all, the
+          packet is effectively dropped.
+        </li>
+
+        <li>
+          Most commonly, the pipeline executes one <code>output</code> action,
+          which <code>ovn-controller</code> implements by resubmitting the
+          packet to table 32.
+        </li>
+
+        <li>
+          If the pipeline can execute more than one <code>output</code> action,
+          then each one is separately resubmitted to table 32.  This can be
+          used to send multiple copies of the packet to multiple ports.  (If
+          the packet was not modified between the <code>output</code> actions,
+          and some of the copies are destined to the same hypervisor, then
+          using a logical multicast output port would save bandwidth between
+          hypervisors.)
+        </li>
+      </ul>
+    </li>
+
+    <li>
+      <p>
+        OpenFlow tables 32 through 47 implement the <code>output</code> action
+        in the logical ingress pipeline.  Specifically, table 32 handles
+        packets to remote hypervisors, table 33 handles packets to the local
+        hypervisor, and table 34 discards packets whose logical ingress and
+        egress port are the same.
+      </p>
+
+      <p>
+        Each flow in table 32 matches on a logical output port for unicast or
+        multicast logical ports that include a logical port on a remote
+        hypervisor.  Each flow's actions implement sending a packet to the port
+        it matches.  For unicast logical output ports on remote hypervisors,
+        the actions set the tunnel key to the correct value, then send the
+        packet on the tunnel port to the correct hypervisor.  (When the remote
+        hypervisor receives the packet, table 0 there will recognize it as a
+        tunneled packet and pass it along to table 33.)  For multicast logical
+        output ports, the actions send one copy of the packet to each remote
+        hypervisor, in the same way as for unicast destinations.  If a
+        multicast group includes a logical port or ports on the local
+        hypervisor, then its actions also resubmit to table 33.  Table 32 also
+        includes a fallback flow that resubmits to table 33 if there is no
+        other match.
+      </p>
+
+      <p>
+        Flows in table 33 resemble those in table 32 but for logical ports that
+        reside locally rather than remotely.  For unicast logical output ports
+        on the local hypervisor, the actions just resubmit to table 34.  For
+        multicast output ports that include one or more logical ports on the
+        local hypervisor, for each such logical port <var>P</var>, the actions
+        change the logical output port to <var>P</var>, then resubmit to table
+        34.
+      </p>
+
+      <p>
+        Table 34 matches and drops packets for which the logical input and
+        output ports are the same.  It resubmits other packets to table 48.
+      </p>
+    </li>
+
+    <li>
+      <p>
+        OpenFlow tables 48 through 63 execute the logical egress pipeline from
+        the <code>Logical_Flow</code> table in the OVN Southbound database.
+        The egress pipeline can perform a final stage of validation before
+        packet delivery.  Eventually, it may execute an <code>output</code>
+        action, which <code>ovn-controller</code> implements by resubmitting to
+        table 64.  A packet for which the pipeline never executes
+        <code>output</code> is effectively dropped (although it may have been
+        transmitted through a tunnel across a physical network).
+      </p>
+
+      <p>
+        The egress pipeline cannot change the logical output port or cause
+        further tunneling.
+      </p>
+    </li>
+
+    <li>
+      <p>
+        OpenFlow table 64 performs logical-to-physical translation, the
+        opposite of table 0.  It matches the packet's logical egress port.  Its
+        actions output the packet to the port attached to the OVN integration
+        bridge that represents that logical port.  If the logical egress port
+        is a container nested with a VM, then before sending the packet the
+        actions push on a VLAN header with an appropriate VLAN ID.
+      </p>
     </li>
   </ol>
 
   <h1>Design Decisions</h1>
 
-  <h2>Supported Tunnel Encapsulations</h2>
+  <h2>Tunnel Encapsulations</h2>
+
   <p>
-    For connecting hypervisors to each other, the only supported tunnel
-    encapsulations are Geneve and STT. Hypervisors may use VXLAN to
-    connect to gateways. We have limited support to these encapsulations
-    for the following reasons:
+    OVN annotates logical network packets that it sends from one hypervisor to
+    another with the following three pieces of metadata, which are encoded in
+    an encapsulation-specific fashion:
   </p>
 
   <ul>
     <li>
-      <p>
-        They support large amounts of metadata.  In addition to
-        specifying the logical switch, we will likely want to indicate
-        the logical source port and where we are in the logical
-        pipeline.  Geneve supports a 24-bit VNI field and TLV-based
-        extensions.  The header of STT includes a 64-bit context id.
-      </p>
+      24-bit logical datapath identifier, from the <code>tunnel_key</code>
+      column in the OVN Southbound <code>Datapath_Binding</code> table.
     </li>
 
     <li>
-      <p>
-        They use randomized UDP or TCP source ports that allows
-        efficient distribution among multiple paths in environments that
-        use ECMP in their underlay.
-      </p>
+      15-bit logical ingress port identifier.  ID 0 is reserved for internal
+      use within OVN.  IDs 1 through 32767, inclusive, may be assigned to
+      logical ports (see the <code>tunnel_key</code> column in the OVN
+      Southbound <code>Port_Binding</code> table).
     </li>
 
     <li>
-      <p>
-        NICs are available that accelerate encapsulation and decapsulation.
-      </p>
+      16-bit logical egress port identifier.  IDs 0 through 32767 have the same
+      meaning as for logical ingress ports.  IDs 32768 through 65535,
+      inclusive, may be assigned to logical multicast groups (see the
+      <code>tunnel_key</code> column in the OVN Southbound
+      <code>Multicast_Group</code> table).
     </li>
   </ul>
 
   <p>
-    Due to its flexibility, the preferred encapsulation between
-    hypervisors is Geneve.  Some environments may want to use STT for
-    performance reasons until the NICs they use support hardware offload
-    of Geneve.
+    For hypervisor-to-hypervisor traffic, OVN supports only Geneve and STT
+    encapsulations, for the following reasons:
   </p>
 
+  <ul>
+    <li>
+      Only STT and Geneve support the large amounts of metadata (over 32 bits
+      per packet) that OVN uses (as described above).
+    </li>
+
+    <li>
+      STT and Geneve use randomized UDP or TCP source ports that allows
+      efficient distribution among multiple paths in environments that use ECMP
+      in their underlay.
+    </li>
+
+    <li>
+      NICs are available to offload STT and Geneve encapsulation and
+      decapsulation.
+    </li>
+  </ul>
+
   <p>
-    For connecting to gateways, the only supported tunnel encapsulations
-    are VXLAN, Geneve, and STT.  While support for Geneve is becoming
-    available for TOR (top-of-rack) switches, VXLAN is far more common.
-    Currently, gateways have a feature set that matches the capabilities
-    as defined by the VTEP schema, so fewer bits of metadata are
-    necessary.  In the future, gateways that do not support
-    encapsulations with large amounts of metadata may continue to have a
-    reduced feature set.
+    Due to its flexibility, the preferred encapsulation between hypervisors is
+    Geneve.  For Geneve encapsulation, OVN transmits the logical datapath
+    identifier in the Geneve VNI.
+
+    <!-- Keep the following in sync with ovn/controller/physical.h. -->
+    OVN transmits the logical ingress and logical egress ports in a TLV with
+    class 0xffff, type 0, and a 32-bit value encoded as follows, from MSB to
+    LSB:
+  </p>
+
+  <diagram>
+    <header name="">
+      <bits name="rsv" above="1" below="0" width=".25"/>
+      <bits name="ingress port" above="15" width=".75"/>
+      <bits name="egress port" above="16" width=".75"/>
+    </header>
+  </diagram>
+
+  <p>
+    Environments whose NICs lack Geneve offload may prefer STT encapsulation
+    for performance reasons.  For STT encapsulation, OVN encodes all three
+    pieces of logical metadata in the STT 64-bit tunnel ID as follows, from MSB
+    to LSB:
+  </p>
+
+  <diagram>
+    <header name="">
+      <bits name="reserved" above="9" below="0" width=".5"/>
+      <bits name="ingress port" above="15" width=".75"/>
+      <bits name="egress port" above="16" width=".75"/>
+      <bits name="datapath" above="24" width="1.25"/>
+    </header>
+  </diagram>
+
+  <p>
+    For connecting to gateways, in addition to Geneve and STT, OVN supports
+    VXLAN, because only VXLAN support is common on top-of-rack (ToR) switches.
+    Currently, gateways have a feature set that matches the capabilities as
+    defined by the VTEP schema, so fewer bits of metadata are necessary.  In
+    the future, gateways that do not support encapsulations with large amounts
+    of metadata may continue to have a reduced feature set.
   </p>
 </manpage>

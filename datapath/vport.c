@@ -501,7 +501,6 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 		kfree_skb(skb);
 		return;
 	}
-
 	ovs_dp_process_packet(skb, &key);
 }
 EXPORT_SYMBOL_GPL(ovs_vport_receive);
@@ -533,7 +532,6 @@ int ovs_vport_send(struct vport *vport, struct sk_buff *skb)
 	} else {
 		ovs_vport_record_error(vport, VPORT_E_TX_DROPPED);
 	}
-
 	return sent;
 }
 
@@ -566,6 +564,7 @@ static void ovs_vport_record_error(struct vport *vport,
 		atomic_long_inc(&vport->err_stats.tx_errors);
 		break;
 	}
+
 }
 
 static void free_vport_rcu(struct rcu_head *rcu)

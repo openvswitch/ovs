@@ -108,6 +108,23 @@
       </p>
     </column>
 
+    <column name="type">
+      <p>
+      Specify a type for this logical port.  Logical ports can be used to model
+      other types of connectivity into an OVN logical switch.  Leaving this column
+      blank maintains the default logical port behavior.
+      </p>
+
+      <p>
+      There are no other logical port types implemented yet.
+      </p>
+    </column>
+
+    <column name="options">
+        This column provides key/value settings specific to the logical port
+        <ref column="type"/>.
+    </column>
+
     <column name="parent_name">
       When <ref column="name"/> identifies the interface of a container
       spawned inside a tenant VM, this column represents the VM interface
@@ -201,15 +218,15 @@
     </column>
 
     <column name="match">
-      The packets that the ACL should match, in the same expression
-      language used for the <ref column="match" table="Pipeline"
+      The packets that the ACL should match, in the same expression language
+      used for the <ref column="match" table="Logical_Flow"
       db="OVN_Southbound"/> column in the OVN Southbound database's <ref
-      table="Pipeline" db="OVN_Southbound"/> table.  Match
-      <code>inport</code> and <code>outport</code> against names of
-      logical ports within <ref column="lswitch"/> to implement ingress
-      and egress ACLs, respectively.  In logical switches connected to
-      logical routers, the special port name <code>ROUTER</code> refers
-      to the logical router port.
+      table="Logical_Flow" db="OVN_Southbound"/> table.  Match
+      <code>inport</code> and <code>outport</code> against names of logical
+      ports within <ref column="lswitch"/> to implement ingress and egress
+      ACLs, respectively.  In logical switches connected to logical routers,
+      the special port name <code>ROUTER</code> refers to the logical router
+      port.
     </column>
 
     <column name="action">

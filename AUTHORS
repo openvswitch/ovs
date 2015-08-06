@@ -3,6 +3,7 @@ vSwitch source code or webpage version control repository.
 
 Aaron Conole            aaron@bytheb.org
 Aaron Rosen             arosen@clemson.edu
+Alexander Duyck         alexander.h.duyck@redhat.com
 Alexandru Copot         alex.mihai.c@gmail.com
 Alexei Starovoitov      ast@plumgrid.com
 Alexey I. Froloff       raorn@raorn.name
@@ -125,6 +126,7 @@ Martino Fornasa         mf@fornasa.it
 Maryam Tahhan           maryam.tahhan@intel.com
 Mehak Mahajan           mmahajan@nicira.com
 Mijo Safradin           mijo@linux.vnet.ibm.com
+Minoru TAKAHASHI        takahashi.minoru7@gmail.com
 Murphy McCauley         murphy.mccauley@gmail.com
 Natasha Gude            natasha@nicira.com
 Neil McKee              neil.mckee@inmon.com

@@ -226,7 +226,6 @@ static inline struct vport *vport_from_priv(void *priv)
 void ovs_vport_receive(struct vport *, struct sk_buff *,
 		       const struct ovs_tunnel_info *);
 
-
 static inline void ovs_skb_postpush_rcsum(struct sk_buff *skb,
 				      const void *start, unsigned int len)
 {

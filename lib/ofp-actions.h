@@ -107,6 +107,12 @@
     OFPACT(SAMPLE,          ofpact_sample,      ofpact, "sample")       \
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
                                                                         \
+    /* Debugging actions.                                               \
+     *                                                                  \
+     * These are intentionally undocumented, subject to change, and     \
+     * only accepted if ovs-vswitchd is started with --enable-dummy. */ \
+    OFPACT(DEBUG_RECIRC, ofpact_null,           ofpact, "debug_recirc") \
+                                                                        \
     /* Instructions. */                                                 \
     OFPACT(METER,           ofpact_meter,       ofpact, "meter")        \
     OFPACT(CLEAR_ACTIONS,   ofpact_null,        ofpact, "clear_actions") \

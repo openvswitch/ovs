@@ -17,10 +17,15 @@
 #ifndef OVN_BINDING_H
 #define OVN_BINDING_H 1
 
-struct controller_ctx;
+#include <stdbool.h>
 
-void binding_init(struct controller_ctx *);
-void binding_run(struct controller_ctx *);
-void binding_destroy(struct controller_ctx *);
+struct controller_ctx;
+struct ovsdb_idl;
+struct ovsrec_bridge;
+
+void binding_register_ovs_idl(struct ovsdb_idl *);
+void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
+                 const char *chassis_id);
+bool binding_cleanup(struct controller_ctx *, const char *chassis_id);
 
 #endif /* ovn/binding.h */
