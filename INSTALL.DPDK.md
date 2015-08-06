@@ -720,6 +720,19 @@ Restrictions:
     want to share dpdkr rings with other processes on the host, you can do
     this with smaller page sizes.
 
+  Platform and Network Interface:
+  - Currently it is not possible to use an Intel XL710 Network Interface as a
+    DPDK port type on a platform with more than 64 logical cores. This is
+    related to how DPDK reports the number of TX queues that may be used by
+    a DPDK application with an XL710. The maximum number of TX queues supported
+    by a DPDK application for an XL710 is 64. If a user attempts to add an
+    XL710 interface as a DPDK port type to a system as described above the
+    port addition will fail as OVS will attempt to initialize a TX queue greater
+    than 64. This issue is expected to be resolved in a future DPDK release.
+    As a workaround a user can disable hyper-threading to reduce the overall
+    core count of the system to be less than or equal to 64 when using an XL710
+    interface with DPDK.
+
 Bug Reporting:
 --------------
 
