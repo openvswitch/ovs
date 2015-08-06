@@ -90,6 +90,11 @@ add_port () {
                 MTU=`expr X"$1" : 'X[^=]*=\(.*\)'`
                 shift
                 ;;
+            --vlan=*)
+                VLAN=`expr X"$1" : 'X[^=]*=\(.*\)'`
+                IFVLAN="tag=$VLAN"
+                shift
+                ;;
             *)
                 echo >&2 "$UTIL add-port: unknown option \"$1\""
                 exit 1
@@ -125,7 +130,7 @@ add_port () {
     ip link add "${PORTNAME}_l" type veth peer name "${PORTNAME}_c"
 
     # Add one end of veth to OVS bridge.
-    if ovs_vsctl --may-exist add-port "$BRIDGE" "${PORTNAME}_l" \
+    if ovs_vsctl --may-exist add-port "$BRIDGE" "${PORTNAME}_l" $IFVLAN \
        -- set interface "${PORTNAME}_l" \
        external_ids:container_id="$CONTAINER" \
        external_ids:container_iface="$INTERFACE"; then :; else
@@ -224,7 +229,7 @@ usage: ${UTIL} COMMAND
 Commands:
   add-port BRIDGE INTERFACE CONTAINER [--ipaddress="ADDRESS"]
                     [--gateway=GATEWAY] [--macaddress="MACADDRESS"]
-                    [--mtu=MTU]
+                    [--mtu=MTU] [--vlan=VLANID]
                     Adds INTERFACE inside CONTAINER and connects it as a port
                     in Open vSwitch BRIDGE. Optionally, sets ADDRESS on
                     INTERFACE. ADDRESS can include a '/' to represent network
@@ -232,7 +237,7 @@ Commands:
                     and MTU.  e.g.:
                     ${UTIL} add-port br-int eth1 c474a0e2830e
                     --ipaddress=192.168.1.2/24 --gateway=192.168.1.1
-                    --macaddress="a2:c3:0d:49:7f:f8" --mtu=1450
+                    --macaddress="a2:c3:0d:49:7f:f8" --mtu=1450 --vlan=1064
   del-port BRIDGE INTERFACE CONTAINER
                     Deletes INTERFACE inside CONTAINER and removes its
                     connection to Open vSwitch BRIDGE. e.g.:
