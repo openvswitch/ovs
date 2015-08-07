@@ -1,9 +1,9 @@
 EXTRA_DIST += \
 	$(COMMON_MACROS_AT) \
 	$(TESTSUITE_AT) \
-	$(KMOD_TESTSUITE_AT) \
+	$(SYSTEM_KMOD_TESTSUITE_AT) \
 	$(TESTSUITE) \
-	$(KMOD_TESTSUITE) \
+	$(SYSTEM_KMOD_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
 	$(srcdir)/tests/testsuite \
@@ -85,15 +85,15 @@ TESTSUITE_AT = \
 	tests/auto-attach.at \
 	tests/ovn.at
 
-KMOD_TESTSUITE_AT = \
-	tests/kmod-testsuite.at \
-	tests/kmod-macros.at \
-	tests/traffic-common-macros.at \
-	tests/traffic.at
+SYSTEM_KMOD_TESTSUITE_AT = \
+	tests/system-common-macros.at \
+	tests/system-kmod-testsuite.at \
+	tests/system-kmod-macros.at \
+	tests/system-traffic.at
 
 TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
-KMOD_TESTSUITE = $(srcdir)/tests/kmod-testsuite
+SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL)
@@ -190,11 +190,11 @@ check-ryu: all
 EXTRA_DIST += tests/run-ryu
 
 # Run kmod tests. Assume kernel modules has been installed or linked into the kernel
-check-kernel: all tests/atconfig tests/atlocal $(KMOD_TESTSUITE)
-	$(SHELL) '$(KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
+check-kernel: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
+	$(SHELL) '$(SYSTEM_KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
 
 # Testing the out of tree Kernel module
-check-kmod: all tests/atconfig tests/atlocal $(KMOD_TESTSUITE)
+check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 	$(MAKE) modules_install
 	modprobe -r openvswitch
 	$(MAKE) check-kernel
@@ -215,7 +215,7 @@ $(TESTSUITE): package.m4 $(TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_at)mv $@.tmp $@
 endif
 
-$(KMOD_TESTSUITE): package.m4 $(KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
+$(SYSTEM_KMOD_TESTSUITE): package.m4 $(SYSTEM_KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 
