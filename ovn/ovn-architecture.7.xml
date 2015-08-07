@@ -627,18 +627,19 @@
 
     <dt>logical input port field</dt>
     <dd>
-      A field that denotes the logical port from which the packet entered the
-      logical datapath.  OVN stores this in a Nicira extension register.  (This
-      field is passed across tunnels as part of the tunnel key.)
+      A field that denotes the logical port from which the packet
+      entered the logical datapath.  OVN stores this in Nicira extension
+      register number 6.  (This field is passed across tunnels as part
+      of the tunnel key.)
     </dd>
 
     <dt>logical output port field</dt>
     <dd>
-      A field that denotes the logical port from which the packet will leave
-      the logical datapath.  This is initialized to 0 at the beginning of the
-      logical ingress pipeline.  OVN stores this in a Nicira extension
-      register.  (This field is passed across tunnels as part of the tunnel
-      key.)
+      A field that denotes the logical port from which the packet will
+      leave the logical datapath.  This is initialized to 0 at the
+      beginning of the logical ingress pipeline.  OVN stores this in
+      Nicira extension register number 7.  (This field is passed across
+      tunnels as part of the tunnel key.)
     </dd>
 
     <dt>VLAN ID</dt>
