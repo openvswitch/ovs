@@ -483,13 +483,23 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, 100, &match, &ofpacts);
     }
 
+    /* Table 32, Priority 0.
+     * =======================
+     *
+     * Resubmit packets that are not directed at tunnels or part of a
+     * multicast group to the local output table. */
+    struct match match;
+    match_init_catchall(&match);
+    ofpbuf_clear(&ofpacts);
+    put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
+    ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 0, &match, &ofpacts);
+
     /* Table 34, Priority 0.
      * =======================
      *
      * Resubmit packets that don't output to the ingress port (already checked
      * in table 33) to the logical egress pipeline, clearing the logical
      * registers (for consistent behavior with packets that get tunneled). */
-    struct match match;
     match_init_catchall(&match);
     ofpbuf_clear(&ofpacts);
 #define MFF_LOG_REG(ID) put_load(0, ID, 0, 32, &ofpacts);
