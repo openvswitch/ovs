@@ -1,7 +1,7 @@
-AT_BANNER([kmod-sanity])
+AT_BANNER([datapath-sanity])
 
-AT_SETUP([kmod - ping between two ports])
-OVS_KMOD_VSWITCHD_START(
+AT_SETUP([datapath - ping between two ports])
+OVS_TRAFFIC_VSWITCHD_START(
    [set-fail-mode br0 standalone -- ])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -20,11 +20,11 @@ AT_CHECK([cat ping.output | grep "transmitted" | sed 's/time.*ms$/time 0ms/'], [
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-OVS_KMOD_VSWITCHD_STOP
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([kmod - ping between two ports on vlan])
-OVS_KMOD_VSWITCHD_START(
+AT_SETUP([datapath - ping between two ports on vlan])
+OVS_TRAFFIC_VSWITCHD_START(
    [set-fail-mode br0 standalone -- ])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -46,11 +46,11 @@ AT_CHECK([cat ping.output | grep "transmitted" | sed 's/time.*ms$/time 0ms/'], [
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-OVS_KMOD_VSWITCHD_STOP
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([kmod - ping6 between two ports])
-OVS_KMOD_VSWITCHD_START(
+AT_SETUP([datapath - ping6 between two ports])
+OVS_TRAFFIC_VSWITCHD_START(
    [set-fail-mode br0 standalone -- ])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -73,11 +73,11 @@ AT_CHECK([cat ping.output | grep "transmitted" | sed 's/time.*ms$/time 0ms/'], [
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-OVS_KMOD_VSWITCHD_STOP
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([kmod - ping6 between two ports on vlan])
-OVS_KMOD_VSWITCHD_START(
+AT_SETUP([datapath - ping6 between two ports on vlan])
+OVS_TRAFFIC_VSWITCHD_START(
    [set-fail-mode br0 standalone -- ])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -103,5 +103,5 @@ AT_CHECK([cat ping.output | grep "transmitted" | sed 's/time.*ms$/time 0ms/'], [
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-OVS_KMOD_VSWITCHD_STOP
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

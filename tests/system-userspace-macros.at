@@ -2,7 +2,7 @@
 #
 # Expands into the proper ovs-vsctl commands to create a bridge with the
 # appropriate type
-m4_define([ADD_BR], [[add-br $1]])
+m4_define([ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" ]])
 
 # OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
 #
@@ -12,11 +12,9 @@ m4_define([ADD_BR], [[add-br $1]])
 # commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
 # specifies the expected output after filtering through uuidfilt.pl.
-#
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
-  [ AT_CHECK([modprobe openvswitch])
-    ON_EXIT([modprobe -r openvswitch])
-   _OVS_VSWITCHD_START([])
+  [
+   _OVS_VSWITCHD_START([--disable-system])
    dnl Add bridges, ports, etc.
    AT_CHECK([ovs-vsctl -- ADD_BR([br0]) -- set bridge br0 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
@@ -33,8 +31,10 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
 # 'extra_cmds' are shell commands to be executed afte OVS_VSWITCHD_STOP() is
 # invoked. They can be used to perform additional cleanups such as name space
 # removal.
-m4_define([OVS_KMOD_VSWITCHD_STOP],
+m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
   [AT_CHECK([ovs-vsctl del-br br0])
-   OVS_VSWITCHD_STOP([$1])
+   OVS_VSWITCHD_STOP([dnl
+"/netdev_linux.*obtaining netdev stats via vport failed/d
+/dpif_netlink.*Generic Netlink family 'ovs_datapath' does not exist. The Open vSwitch kernel module is probably not loaded./d"])
    AT_CHECK([:; $2])
   ])

@@ -1,9 +1,12 @@
 EXTRA_DIST += \
 	$(COMMON_MACROS_AT) \
 	$(TESTSUITE_AT) \
+	$(SYSTEM_TESTSUITE_AT) \
 	$(SYSTEM_KMOD_TESTSUITE_AT) \
+	$(SYSTEM_USERSPACE_TESTSUITE_AT) \
 	$(TESTSUITE) \
 	$(SYSTEM_KMOD_TESTSUITE) \
+	$(SYSTEM_USERSPACE_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
 	$(srcdir)/tests/testsuite \
@@ -88,12 +91,20 @@ TESTSUITE_AT = \
 SYSTEM_KMOD_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-kmod-testsuite.at \
-	tests/system-kmod-macros.at \
+	tests/system-kmod-macros.at
+
+SYSTEM_USERSPACE_TESTSUITE_AT = \
+	tests/system-userspace-testsuite.at \
+	tests/system-userspace-macros.at
+
+SYSTEM_TESTSUITE_AT = \
+	tests/system-common-macros.at \
 	tests/system-traffic.at
 
 TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
+SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL)
@@ -199,6 +210,9 @@ check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 	modprobe -r openvswitch
 	$(MAKE) check-kernel
 
+check-system-userspace: all tests/atconfig tests/atlocal $(SYSTEM_USERSPACE_TESTSUITE)
+	$(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS)
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 
@@ -215,7 +229,11 @@ $(TESTSUITE): package.m4 $(TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_at)mv $@.tmp $@
 endif
 
-$(SYSTEM_KMOD_TESTSUITE): package.m4 $(SYSTEM_KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
+$(SYSTEM_KMOD_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_KMOD_TESTSUITE_AT) $(COMMON_MACROS_AT)
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
+
+$(SYSTEM_USERSPACE_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_USERSPACE_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 

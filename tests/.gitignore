@@ -11,6 +11,7 @@
 /ovs-pki.log
 /pki/
 /system-kmod-testsuite
+/system-userspace-testsuite
 /test-aes128
 /test-atomic
 /test-bundle
