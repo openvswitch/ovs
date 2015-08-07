@@ -7,12 +7,9 @@
                 "encaps": {"type": {"key": {"type": "uuid",
                                             "refTable": "Encap"},
                                     "min": 1, "max": "unlimited"}},
-                "gateway_ports": {"type": {"key": "string",
-                                           "value": {"type": "uuid",
-                                                     "refTable": "Gateway",
-                                                     "refType": "strong"},
-                                           "min": 0,
-                                           "max": "unlimited"}}},
+                "vtep_logical_switches" : {"type": {"key": "string",
+                                                    "min": 0,
+                                                    "max": "unlimited"}}},
             "isRoot": true,
             "indexes": [["name"]]},
         "Encap": {
@@ -25,13 +22,6 @@
                                      "min": 0,
                                      "max": "unlimited"}},
                 "ip": {"type": "string"}}},
-        "Gateway": {
-            "columns": {"vlan_map": {"type": {"key": {"type": "integer",
-                                                      "minInteger": 0,
-                                                      "maxInteger": 4095},
-                                              "value": {"type": "string"},
-                                              "min": 0,
-                                              "max": "unlimited"}}}},
         "Logical_Flow": {
             "columns": {
                 "logical_datapath": {"type": {"key": {"type": "uuid",

@@ -35,8 +35,7 @@
   </p>
 
   <p>
-    The <ref table="Chassis"/> and <ref table="Gateway"/> tables comprise the
-    PN tables.
+    The <ref table="Chassis"/> table comprises the PN tables.
   </p>
 
   <h3>Logical Network (LN) data</h3>
@@ -163,20 +162,19 @@
       </column>
     </group>
 
-    <group title="Gateway Configuration">
-      <p>
-        A <dfn>gateway</dfn> is a chassis that forwards traffic between a
-        logical network and a physical VLAN.  Gateways are typically dedicated
-        nodes that do not host VMs.
+     <group title="Gateway Configuration">
+       <p>
+        A <dfn>gateway</dfn> is a chassis that forwards traffic between the
+        OVN-managed part of a logical network and a physical VLAN, extending a
+        tunnel-based logical network into a physical network.  Gateways are
+        typically dedicated nodes that do not host VMs.
       </p>
 
-      <column name="gateway_ports">
-        Maps from the name of a port attached to the OVN integration bridge
-        (typically a physical port or an Open vSwitch patch port) to a <ref
-        table="Gateway"/> record that describes the details of the gatewaying
-        function.
+      <column name="vtep_logical_switches">
+        Stores all vtep logical switch names connected by this gateway
+        chassis.
       </column>
-    </group>
+     </group>
   </table>
 
   <table name="Encap" title="Encapsulation Types">
@@ -203,23 +201,6 @@
 
     <column name="ip">
       The IPv4 address of the encapsulation tunnel endpoint.
-    </column>
-  </table>
-
-  <table name="Gateway" title="Physical Network Gateway Ports">
-    <p>
-      The <ref column="gateway_ports" table="Chassis"/> column in the <ref
-      table="Chassis"/> table refers to rows in this table to connect a chassis
-      port to a gateway function.  Each row in this table describes the logical
-      networks to which a gateway port is attached.  Each chassis, via
-      <code>ovn-controller</code>(8), adds and updates its own rows, if any
-      (since most chassis are not gateways), and keeps a copy of the remaining
-      rows to determine how to reach other chassis.
-    </p>
-
-    <column name="vlan_map">
-      Maps from a VLAN ID to a logical port name.  Thus, each named logical
-      port corresponds to one VLAN on the gateway port.
     </column>
   </table>
 
@@ -642,11 +623,10 @@
         Most of the symbols below have integer type.  Only <code>inport</code>
         and <code>outport</code> have string type.  <code>inport</code> names a
         logical port.  Thus, its value is a <ref column="logical_port"/> name
-        from the <ref table="Port_Binding"/> or <ref table="Gateway"/> tables.
-        <code>outport</code> may name a logical port, as <code>inport</code>,
-        or a logical multicast group defined in the <ref
-        table="Multicast_Group"/> table.  For both symbols, only names within
-        the flow's logical datapath may be used.
+        from the <ref table="Port_Binding"/> table.  <code>outport</code> may
+        name a logical port, as <code>inport</code>, or a logical multicast
+        group defined in the <ref table="Multicast_Group"/> table.  For both
+        symbols, only names within the flow's logical datapath may be used.
       </p>
 
       <ul>
