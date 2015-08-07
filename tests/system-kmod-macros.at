@@ -33,7 +33,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
 # 'extra_cmds' are shell commands to be executed afte OVS_VSWITCHD_STOP() is
 # invoked. They can be used to perform additional cleanups such as name space
 # removal.
-m4_define([OVS_KMOD_VSWITCHD_STOP],
+m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
   [AT_CHECK([ovs-vsctl del-br br0])
    OVS_VSWITCHD_STOP([$1])
    AT_CHECK([:; $2])
