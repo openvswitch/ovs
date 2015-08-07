@@ -111,32 +111,60 @@
     <column name="type">
       <p>
       Specify a type for this logical port.  Logical ports can be used to model
-      other types of connectivity into an OVN logical switch.  Leaving this column
-      blank maintains the default logical port behavior.
+      other types of connectivity into an OVN logical switch.  Leaving this
+      column blank maintains the default logical port behavior, which is
+      for a VM (or VIF) interface.  The following other types are defined:
       </p>
 
-      <p>
-        When this column is set to <code>localnet</code>, this logical port
-        represents a connection to a locally accessible network from each
-        <code>ovn-controller</code> instance.  A logical switch can only have a
-        single <code>localnet</code> port attached and at most one regular
-        logical port.  This is used to model direct connectivity to an existing
-        network.
-      </p>
+      <dl>
+        <dt><code>localnet</code></dt>
+        <dd>A connection to a locally accessible network from each
+        <code>ovn-controller</code> instance.  A logical switch can only
+        have a single <code>localnet</code> port attached and at most one
+        regular logical port.  This is used to model direct connectivity
+        to an existing network.</dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep</code></dt>
+        <dd>A port to a logical switch on a VTEP gateway.  In order
+        to get this port correctly recognized by the OVN controller, the
+        <ref column="options" table="Logical_Port"/>:<code>vtep-physical-switch</code>
+        and <ref column="options" table="Logical_Port"/>:<code>vtep-logical-switch</code>
+        must also be defined.</dd>
+      </dl>
     </column>
 
     <column name="options">
       <p>
         This column provides key/value settings specific to the logical port
-        <ref column="type"/>.
+        <ref column="type"/>.  The following options are defined:
       </p>
 
-      <p>
-        When <ref column="type"/> is set to <code>localnet</code>, you must set
-        the option <code>network_name</code>.  <code>ovn-controller</code> uses
-        local configuration to determine exactly how to connect to this locally
-        accessible network.
-      </p>
+      <dl>
+        <dt><code>network_name</code></dt>
+        <dd>
+          Must be set when <ref column="type"/> is <code>localnet</code>.
+          <code>ovn-controller</code> uses local configuration to determine
+          exactly how to connect to this locally accessible network.
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep-physical-switch</code></dt>
+        <dd>
+          The name of the VTEP gateway.  Must be set when
+          <ref column="type"/> is <code>vtep</code>.
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep-logical-switch</code></dt>
+        <dd>
+          A logical switch name connected by the VTEP gateway.  Must be
+          set when <ref column="type"/> is <code>vtep</code>.
+        </dd>
+      </dl>
     </column>
 
     <column name="parent_name">
@@ -279,7 +307,6 @@
 
     <column name="action">
       <p>The action to take when the ACL rule matches:</p>
-      
       <ul>
         <li>
           <code>allow</code>: Forward the packet.

@@ -80,3 +80,24 @@
    So far, both ovn-controller and ovn-controller-vtep only allow
    chassis to have one tunnel encapsulation entry.  We should extend
    the implementation to support multiple tunnel encapsulations.
+
+** Update learned MAC addresses from VTEP to OVN
+
+   The VTEP gateway stores all MAC addresses learned from its
+   physical interfaces in the 'Ucast_Macs_Local' and the
+   'Mcast_Macs_Local' tables.  ovn-controller-vtep should be
+   able to update that information back to ovn-sb database,
+   so that other chassis know where to send packets destined
+   to the extended external network instead of broadcasting.
+
+** Translate ovn-sb Multicast_Group table into VTEP config
+
+   The ovn-controller-vtep daemon should be able to translate
+   the Multicast_Group table entry in ovn-sb database into
+   Mcast_Macs_Remote table configuration in VTEP database.
+
+* Use BFD as tunnel monitor.
+
+   Both ovn-controller and ovn-contorller-vtep should use BFD to
+   monitor the tunnel liveness.  Both ovs-vswitchd schema and
+   VTEP schema supports BFD.
