@@ -88,7 +88,7 @@ TESTSUITE_AT = \
 KMOD_TESTSUITE_AT = \
 	tests/kmod-testsuite.at \
 	tests/kmod-macros.at \
-	tests/kmod-traffic.at
+	tests/traffic.at
 
 TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
