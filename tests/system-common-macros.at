@@ -7,7 +7,7 @@ m4_define([DEL_NAMESPACES],
 ])
    ]
 )
-#
+
 # ADD_NAMESPACES(ns [, ns ... ])
 #
 # Add new namespaces, if ns exists, the old one
@@ -19,6 +19,21 @@ m4_define([ADD_NAMESPACES],
                 ON_EXIT(DEL_NAMESPACES(ns))
                ])
    ]
+)
+
+# NS_EXEC([namespace], [command])
+#
+# Execute 'command' in 'namespace'
+m4_define([NS_EXEC],
+    [ip netns exec $1 bash -c "$2"]
+)
+
+# NS_CHECK_EXEC([namespace], [command], other_params...)
+#
+# Wrapper for AT_CHECK that executes 'command' inside 'namespace'.
+# 'other_params' as passed as they are to AT_CHECK.
+m4_define([NS_CHECK_EXEC],
+    [ AT_CHECK([NS_EXEC([$1], [$2])], m4_shift(m4_shift($@))) ]
 )
 
 # ADD_VETH([port], [namespace], [ovs-br], [ip_addr])
@@ -36,8 +51,8 @@ m4_define([ADD_VETH],
       AT_CHECK([ip link set $1 netns $2])
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1])
       AT_CHECK([ip link set dev ovs-$1 up])
-      AT_CHECK([ip netns exec $2 ip addr add $4 dev $1])
-      AT_CHECK([ip netns exec $2 ip link set dev $1 up])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1])
+      NS_CHECK_EXEC([$2], [ip link set dev $1 up])
     ]
 )
 
@@ -46,8 +61,8 @@ m4_define([ADD_VETH],
 # Add a VLAN device named 'port' within 'namespace'. It will be configured
 # with the ID 'vlan-id' and the address 'ip-addr'.
 m4_define([ADD_VLAN],
-    [ AT_CHECK([ip netns exec $2 ip link add link $1 name $1.$3 type vlan id $3])
-      AT_CHECK([ip netns exec $2 ip link set dev $1.$3 up])
-      AT_CHECK([ip netns exec $2 ip addr add dev $1.$3 $4])
+    [ NS_CHECK_EXEC([$2], [ip link add link $1 name $1.$3 type vlan id $3])
+      NS_CHECK_EXEC([$2], [ip link set dev $1.$3 up])
+      NS_CHECK_EXEC([$2], [ip addr add dev $1.$3 $4])
     ]
 )
