@@ -21,8 +21,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ovn-controller-vtep.h"
-
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
@@ -38,6 +36,9 @@
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "vtep/vtep-idl.h"
+
+#include "gateway.h"
+#include "ovn-controller-vtep.h"
 
 static unixctl_cb_func ovn_controller_vtep_exit;
 
@@ -86,13 +87,14 @@ main(int argc, char *argv[])
     /* Main loop. */
     exiting = false;
     while (!exiting) {
-        struct controller_vtep_ctx OVS_UNUSED ctx = {
+        struct controller_vtep_ctx ctx = {
             .vtep_idl = vtep_idl_loop.idl,
             .vtep_idl_txn = ovsdb_idl_loop_run(&vtep_idl_loop),
             .ovnsb_idl = ovnsb_idl_loop.idl,
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
+        gateway_run(&ctx);
         unixctl_server_run(unixctl);
 
         unixctl_server_wait(unixctl);
@@ -104,8 +106,29 @@ main(int argc, char *argv[])
         poll_block();
     }
 
-    unixctl_server_destroy(unixctl);
+    /* It's time to exit.  Clean up the databases. */
+    bool done = false;
+    while (!done) {
+        struct controller_vtep_ctx ctx = {
+            .vtep_idl = vtep_idl_loop.idl,
+            .vtep_idl_txn = ovsdb_idl_loop_run(&vtep_idl_loop),
+            .ovnsb_idl = ovnsb_idl_loop.idl,
+            .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
+        };
 
+        /* Run all of the cleanup functions, even if one of them returns false.
+         * We're done if all of them return true. */
+        done = gateway_cleanup(&ctx);
+        if (done) {
+            poll_immediate_wake();
+        }
+
+        ovsdb_idl_loop_commit_and_wait(&vtep_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        poll_block();
+    }
+
+    unixctl_server_destroy(unixctl);
     ovsdb_idl_loop_destroy(&vtep_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
 
