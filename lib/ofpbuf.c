@@ -47,7 +47,7 @@ ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated, size_t size,
  * memory starting at 'base'.  'base' should be the first byte of a region
  * obtained from malloc().  It will be freed (with free()) if 'b' is resized or
  * freed. */
-void
+static void
 ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
 {
     ofpbuf_use__(b, base, allocated, 0, OFPBUF_MALLOC);

@@ -83,7 +83,6 @@ struct ofpbuf {
         .source = OFPBUF_STUB,                  \
     }
 
-void ofpbuf_use(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_ds(struct ofpbuf *, const struct ds *);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stub(struct ofpbuf *, void *, size_t);
