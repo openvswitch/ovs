@@ -286,6 +286,9 @@ enum ofp_raw_action_type {
     /* NX1.0+(34): struct nx_action_conjunction. */
     NXAST_RAW_CONJUNCTION,
 
+    /* NX1.0+(35): struct nx_action_conntrack, ... */
+    NXAST_RAW_CT,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -346,6 +349,10 @@ static void *ofpact_put_raw(struct ofpbuf *, enum ofp_version,
 static char *OVS_WARN_UNUSED_RESULT ofpacts_parse(
     char *str, struct ofpbuf *ofpacts, enum ofputil_protocol *usable_protocols,
     bool allow_instructions, enum ofpact_type outer_action);
+static enum ofperr ofpacts_pull_openflow_actions__(
+    struct ofpbuf *openflow, unsigned int actions_len,
+    enum ofp_version version, uint32_t allowed_ovsinsts,
+    struct ofpbuf *ofpacts, enum ofpact_type outer_action);
 
 /* Pull off existing actions or instructions. Used by nesting actions to keep
  * ofpacts_parse() oblivious of actions nesting. */
@@ -4448,6 +4455,245 @@ format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
     ds_put_cstr(s, "debug_recirc");
 }
+
+/* Action structure for NXAST_CT.
+ *
+ * Pass traffic to the connection tracker.
+ *
+ * The "zone" specifies a context within which the tracking is done:
+ *
+ *      If 'zone_src' is nonzero, this specifies that the zone should be
+ *      sourced from a field zone_src[ofs:ofs+nbits]. The format and semantics
+ *      of 'zone_src' and 'zone_ofs_nbits' are similar to those for the
+ *      NXAST_REG_LOAD action. The acceptable nxm_header values for 'zone_src'
+ *      are the same as the acceptable nxm_header values for the 'src' field of
+ *      NXAST_REG_MOVE.
+ *
+ *      If 'zone_src' is zero, then the value of 'zone_imm' will be used as the
+ *      connection tracking zone.
+ *
+ * If "recirc_table" has a value other than NX_CT_RECIRC_NONE, then this field
+ * specifies that the packet should be logically cloned after the packet is
+ * sent through the connection tracker, and pipeline processing for the cloned
+ * packet will continue in the OpenFlow table specified by this value. The
+ * NXM_NX_CT_* fields will be populated for the subsequent processing. It is
+ * strongly recommended that this table is later than the current table, to
+ * prevent loops.
+ *
+ * A standard "resubmit" action is not sufficient to populate NXM_NX_CT_*
+ * fields, since connection tracking occurs outside of the classifier.
+ */
+struct nx_action_conntrack {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* At least 24. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_CT. */
+    ovs_be16 flags;             /* Zero or more NX_CT_F_* flags.
+                                 * Unspecified flag bits must be zero. */
+    ovs_be32 zone_src;          /* Connection tracking context. */
+    union {
+        ovs_be16 zone_ofs_nbits;/* Range to use from source field. */
+        ovs_be16 zone_imm;      /* Immediate value for zone. */
+    };
+    uint8_t recirc_table;       /* Recirculate to a specific table, or
+                                   NX_CT_RECIRC_NONE for no recirculation. */
+    uint8_t pad[3];             /* Zeroes */
+    ovs_be16 alg;               /* Well-known port number for the protocol.
+                                 * 0 indicates no ALG is required. */
+    /* Followed by a sequence of ofpact elements, until the end of the action
+     * is reached. */
+};
+OFP_ASSERT(sizeof(struct nx_action_conntrack) == 24);
+
+static enum ofperr
+decode_ct_zone(const struct nx_action_conntrack *nac,
+               struct ofpact_conntrack *out)
+{
+    if (nac->zone_src) {
+        enum ofperr error;
+
+        out->zone_src.field = mf_from_nxm_header(ntohl(nac->zone_src));
+        out->zone_src.ofs = nxm_decode_ofs(nac->zone_ofs_nbits);
+        out->zone_src.n_bits = nxm_decode_n_bits(nac->zone_ofs_nbits);
+        error = mf_check_src(&out->zone_src, NULL);
+        if (error) {
+            return error;
+        }
+
+        if (out->zone_src.n_bits != 16) {
+            VLOG_WARN_RL(&rl, "zone n_bits %d not within valid range [16..16]",
+                         out->zone_src.n_bits);
+            return OFPERR_OFPBAC_BAD_SET_LEN;
+        }
+    } else {
+        out->zone_src.field = NULL;
+        out->zone_imm = ntohs(nac->zone_imm);
+    }
+
+    return 0;
+}
+
+static enum ofperr
+decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac, struct ofpbuf *out)
+{
+    const size_t ct_offset = ofpacts_pull(out);
+    struct ofpact_conntrack *conntrack;
+    struct ofpbuf openflow;
+    int error = 0;
+
+    conntrack = ofpact_put_CT(out);
+    conntrack->flags = ntohs(nac->flags);
+    error = decode_ct_zone(nac, conntrack);
+    if (error) {
+        goto out;
+    }
+    conntrack->recirc_table = nac->recirc_table;
+    conntrack->alg = ntohs(nac->alg);
+
+    ofpbuf_pull(out, sizeof(*conntrack));
+
+    /* XXX: version */
+    ofpbuf_use_const(&openflow, nac + 1, ntohs(nac->len) - sizeof(*nac));
+    error = ofpacts_pull_openflow_actions__(&openflow, openflow.size,
+                                            OFP10_VERSION,
+                                            1u << OVSINST_OFPIT11_APPLY_ACTIONS,
+                                            out, OFPACT_CT);
+    if (error) {
+        goto out;
+    }
+
+    conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
+    out->header = &conntrack->ofpact;
+    ofpact_update_len(out, &conntrack->ofpact);
+
+out:
+    ofpbuf_push_uninit(out, ct_offset);
+    return error;
+}
+
+static void
+encode_CT(const struct ofpact_conntrack *conntrack,
+          enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    struct nx_action_conntrack *nac;
+    const size_t ofs = out->size;
+    size_t len;
+
+    nac = put_NXAST_CT(out);
+    nac->flags = htons(conntrack->flags);
+    if (conntrack->zone_src.field) {
+        nac->zone_src = htonl(mf_nxm_header(conntrack->zone_src.field->id));
+        nac->zone_ofs_nbits = nxm_encode_ofs_nbits(conntrack->zone_src.ofs,
+                                                   conntrack->zone_src.n_bits);
+    } else {
+        nac->zone_src = htonl(0);
+        nac->zone_imm = htons(conntrack->zone_imm);
+    }
+    nac->recirc_table = conntrack->recirc_table;
+    nac->alg = htons(conntrack->alg);
+
+    len = ofpacts_put_openflow_actions(conntrack->actions,
+                                       ofpact_ct_get_action_len(conntrack),
+                                       out, ofp_version);
+    len += sizeof(*nac);
+    nac = ofpbuf_at(out, ofs, sizeof(*nac));
+    nac->len = htons(len);
+}
+
+/* Parses 'arg' as the argument to a "ct" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * OVS_WARN_UNUSED_RESULT
+parse_CT(char *arg, struct ofpbuf *ofpacts,
+         enum ofputil_protocol *usable_protocols)
+{
+    const size_t ct_offset = ofpacts_pull(ofpacts);
+    struct ofpact_conntrack *oc;
+    char *error = NULL;
+    char *key, *value;
+
+    oc = ofpact_put_CT(ofpacts);
+    oc->flags = 0;
+    oc->recirc_table = NX_CT_RECIRC_NONE;
+    while (ofputil_parse_key_value(&arg, &key, &value)) {
+        if (!strcmp(key, "commit")) {
+            oc->flags |= NX_CT_F_COMMIT;
+        } else if (!strcmp(key, "table")) {
+            error = str_to_u8(value, "recirc_table", &oc->recirc_table);
+        } else if (!strcmp(key, "zone")) {
+            error = str_to_u16(value, "zone", &oc->zone_imm);
+
+            if (error) {
+                free(error);
+                error = mf_parse_subfield(&oc->zone_src, value);
+                if (error) {
+                    return error;
+                }
+            }
+        } else if (!strcmp(key, "exec")) {
+            /* Hide existing actions from ofpacts_parse_actions(), so the
+             * nesting can be handled transparently. */
+            ofpbuf_pull(ofpacts, sizeof(*oc));
+            error = ofpacts_parse_actions(value, ofpacts, usable_protocols,
+                                          OFPACT_CT);
+
+            /* Put the CT action back on and update its length. */
+            oc = ofpbuf_push_uninit(ofpacts, sizeof(*oc));
+            oc->ofpact.len = ofpacts->size;
+        } else {
+            error = xasprintf("invalid argument to \"ct\" action: `%s'", key);
+        }
+        if (error) {
+            break;
+        }
+    }
+
+    ofpbuf_push_uninit(ofpacts, ct_offset);
+    return error;
+}
+
+static void
+append_comma(struct ds *s, bool *first)
+{
+    if (*first) {
+        *first = false;
+    } else {
+        ds_put_char(s, ',');
+    }
+}
+
+static void
+format_CT(const struct ofpact_conntrack *a, struct ds *s)
+{
+    bool first = true;
+
+    ds_put_cstr(s, "ct(");
+    if (a->flags & NX_CT_F_COMMIT) {
+        append_comma(s, &first);
+        ds_put_cstr(s, "commit");
+    }
+    if (a->recirc_table != NX_CT_RECIRC_NONE) {
+        append_comma(s, &first);
+        ds_put_format(s, "table=%"PRIu8, a->recirc_table);
+    }
+    if (a->zone_src.field) {
+        append_comma(s, &first);
+        ds_put_format(s, "zone=");
+        mf_format_subfield(&a->zone_src, s);
+    } else if (a->zone_imm) {
+        append_comma(s, &first);
+        ds_put_format(s, "zone=%"PRIu16, a->zone_imm);
+    }
+    if (ofpact_ct_get_action_len(a)) {
+        append_comma(s, &first);
+        ds_put_cstr(s, "exec(");
+        ofpacts_format(a->actions, ofpact_ct_get_action_len(a), s);
+        ds_put_char(s, ')');
+    }
+    ds_put_char(s, ')');
+}
 
 /* Meter instruction. */
 
@@ -4827,6 +5073,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
         return true;
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_CT:
     case OFPACT_CONTROLLER:
     case OFPACT_DEC_MPLS_TTL:
     case OFPACT_DEC_TTL:
@@ -4901,6 +5148,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
      * in the action set is undefined. */
     case OFPACT_BUNDLE:
     case OFPACT_CONTROLLER:
+    case OFPACT_CT:
     case OFPACT_ENQUEUE:
     case OFPACT_EXIT:
     case OFPACT_UNROLL_XLATE:
@@ -5130,6 +5378,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_UNROLL_XLATE:
     case OFPACT_SAMPLE:
     case OFPACT_DEBUG_RECIRC:
+    case OFPACT_CT:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -5686,6 +5935,16 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_SAMPLE:
         return 0;
 
+    case OFPACT_CT: {
+        struct ofpact_conntrack *oc = ofpact_get_CT(a);
+
+        if (!dl_type_is_ip_any(flow->dl_type)
+            || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)) {
+            inconsistent_match(usable_protocols);
+        }
+        return 0;
+    }
+
     case OFPACT_CLEAR_ACTIONS:
         return 0;
 
@@ -6155,6 +6414,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_METER:
     case OFPACT_GROUP:
     case OFPACT_DEBUG_RECIRC:
+    case OFPACT_CT:
     default:
         return false;
     }

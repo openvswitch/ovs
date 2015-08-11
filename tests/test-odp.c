@@ -57,7 +57,10 @@ parse_keys(bool wc_keys)
             struct odp_flow_key_parms odp_parms = {
                 .flow = &flow,
                 .support = {
+                    .max_mpls_depth = SIZE_MAX,
                     .recirc = true,
+                    .ct_state = true,
+                    .ct_zone = true,
                 },
             };
 

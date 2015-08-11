@@ -118,3 +118,21 @@ m4_define([ADD_NATIVE_TUNNEL],
 # Strip variant pieces from ping output so the output can be reliably compared.
 #
 m4_define([FORMAT_PING], [grep "transmitted" | sed 's/time.*ms$/time 0ms/'])
+
+# FORMAT_CT()
+#
+# Strip content from the piped input which would differ from test to test.
+#
+m4_define([FORMAT_CT],
+    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/  */ /g' -e 's/secctx[^ ]* //' | cut -d' ' -f4- | sort | uniq]])
+
+# NETNS_DAEMONIZE([namespace], [command], [pidfile])
+#
+# Run 'command' as a background process within 'namespace' and record its pid
+# to 'pidfile' to allow cleanup on exit.
+#
+m4_define([NETNS_DAEMONIZE],
+   [ip netns exec $1 $2 & echo $! > $3
+     echo "kill \`cat $3\`" >> cleanup
+   ]
+)

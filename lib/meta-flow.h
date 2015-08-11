@@ -703,6 +703,51 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_PKT_MARK,
 
+    /* "ct_state".
+     *
+     * Connection tracking state.  The field is populated by the NXAST_CT
+     * action. The following bit values describe the state of the connection:
+     *
+     *   - New (0x01): This is the beginning of a new connection.
+     *   - Established (0x02): This is part of an already existing connection.
+     *   - Related (0x04): This is a separate connection that is related to an
+     *                     existing connection.
+     *   - Invalid (0x20): This flow could not be associated with a connection.
+     *                     This could be set for a variety of reasons,
+     *                     including (but not limited to):
+     *                     - L3/L4 protocol handler is not loaded/unavailable.
+     *                     - L3/L4 protocol handler determines that the packet
+     *                       is malformed or invalid for the current FSM stage.
+     *                     - Packets are unexpected length for protocol.
+     *   - Reply (0x40): This flow is in the reply direction, ie it did not
+     *                   initiate the connection.
+     *   - Tracked (0x80): Connection tracking has occurred.
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: conn state.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_CT_STATE(105) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_STATE,
+
+    /* "ct_zone".
+     *
+     * Connection tracking zone.  The field is populated by the
+     * NXAST_CT action.
+     *
+     * Type: be16.
+     * Maskable: no.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_CT_ZONE(106) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_ZONE,
+
 #if FLOW_N_REGS == 8
     /* "reg<N>".
      *
@@ -1679,6 +1724,7 @@ enum OVS_PACKED_ENUM mf_string {
     MFS_HEXADECIMAL,
 
     /* Other formats. */
+    MFS_CT_STATE,               /* Connection tracking state */
     MFS_ETHERNET,
     MFS_IPV4,
     MFS_IPV6,

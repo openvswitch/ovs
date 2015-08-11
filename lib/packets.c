@@ -1062,3 +1062,24 @@ packet_csum_pseudoheader(const struct ip_header *ip)
 
     return partial;
 }
+
+const char *
+packet_ct_state_to_string(uint32_t flag)
+{
+    switch (flag) {
+    case CS_REPLY_DIR:
+        return "rpl";
+    case CS_TRACKED:
+        return "trk";
+    case CS_NEW:
+        return "new";
+    case CS_ESTABLISHED:
+        return "est";
+    case CS_RELATED:
+        return "rel";
+    case CS_INVALID:
+        return "inv";
+    default:
+        return NULL;
+    }
+}

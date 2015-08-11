@@ -337,6 +337,7 @@ CHECK_PYFILES = \
 	tests/test-daemon.py \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
+	tests/test-l7.py \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
 	tests/MockXenAPI.py \

@@ -326,6 +326,8 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
     case OVS_KEY_ATTR_ICMP:
     case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_TCP_FLAGS:
+    case OVS_KEY_ATTR_CT_STATE:
+    case OVS_KEY_ATTR_CT_ZONE:
     case __OVS_KEY_ATTR_MAX:
     default:
         OVS_NOT_REACHED();
@@ -414,6 +416,8 @@ odp_execute_masked_set_action(struct dp_packet *packet,
 
     case OVS_KEY_ATTR_TUNNEL:    /* Masked data not supported for tunnel. */
     case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_CT_STATE:
+    case OVS_KEY_ATTR_CT_ZONE:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
     case OVS_KEY_ATTR_IN_PORT:
@@ -476,6 +480,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_TUNNEL_POP:
     case OVS_ACTION_ATTR_USERSPACE:
     case OVS_ACTION_ATTR_RECIRC:
+    case OVS_ACTION_ATTR_CT:
         return true;
 
     case OVS_ACTION_ATTR_SET:
@@ -611,6 +616,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
         case OVS_ACTION_ATTR_TUNNEL_POP:
         case OVS_ACTION_ATTR_USERSPACE:
         case OVS_ACTION_ATTR_RECIRC:
+        case OVS_ACTION_ATTR_CT:
         case OVS_ACTION_ATTR_UNSPEC:
         case __OVS_ACTION_ATTR_MAX:
             OVS_NOT_REACHED();

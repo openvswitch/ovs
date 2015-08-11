@@ -21,6 +21,9 @@ Post-v2.4.0
      targets to run a new system testsuite.  These tests can be run inside
      a Vagrant box.  See INSTALL.md for details
    - Dropped support for GRE64 tunnel.
+   - Add support for connection tracking through the new "ct" action
+     and "ct_state"/"ct_zone" match fields.  Only available on Linux kernels
+     with the connection tracking module loaded.
 
 
 v2.4.0 - 20 Aug 2015

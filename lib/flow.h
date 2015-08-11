@@ -103,8 +103,10 @@ struct flow {
     union flow_in_port in_port; /* Input port.*/
     uint32_t recirc_id;         /* Must be exact match. */
     uint32_t conj_id;           /* Conjunction ID. */
+    uint16_t ct_zone;           /* Connection Zone. */
+    uint8_t ct_state;           /* Connection state. */
+    uint8_t pad1[3];            /* Pad to 64 bits. */
     ofp_port_t actset_output;   /* Output port in action set. */
-    uint8_t pad1[6];            /* Pad to 64 bits. */
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
     struct eth_addr dl_dst;     /* Ethernet destination address. */
@@ -980,6 +982,8 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->skb_priority = flow->skb_priority;
     md->pkt_mark = flow->pkt_mark;
     md->in_port = flow->in_port;
+    md->ct_state = flow->ct_state;
+    md->ct_zone = flow->ct_zone;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

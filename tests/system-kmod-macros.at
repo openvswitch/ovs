@@ -43,3 +43,19 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
   [OVS_VSWITCHD_STOP([$1])
    AT_CHECK([:; $2])
   ])
+
+# CHECK_CONNTRACK()
+#
+# Perform requirements checks for running conntrack tests, and flush the
+# kernel conntrack tables when the test is finished.
+#
+m4_define([CHECK_CONNTRACK],
+    [AT_SKIP_IF([test $HAVE_CONNTRACK = no])
+     AT_SKIP_IF([test $HAVE_PYTHON = no])
+     m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6]],
+                [modprobe mod || echo "Module mod not loaded."
+                 on_exit 'modprobe -r mod'
+                ])
+     on_exit 'conntrack -F'
+    ]
+)
