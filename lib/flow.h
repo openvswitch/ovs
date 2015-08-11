@@ -103,10 +103,12 @@ struct flow {
     union flow_in_port in_port; /* Input port.*/
     uint32_t recirc_id;         /* Must be exact match. */
     uint32_t conj_id;           /* Conjunction ID. */
+    uint32_t ct_mark;           /* Connection mark. With L3 to avoid L4 match.*/
     uint16_t ct_zone;           /* Connection Zone. */
     uint8_t ct_state;           /* Connection state. */
-    uint8_t pad1[3];            /* Pad to 64 bits. */
+    uint8_t pad1[1];            /* Pad to 64 bits. */
     ofp_port_t actset_output;   /* Output port in action set. */
+    uint8_t pad2[6];            /* Pad to 64 bits. */
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
     struct eth_addr dl_dst;     /* Ethernet destination address. */
@@ -129,7 +131,7 @@ struct flow {
     struct eth_addr arp_sha;    /* ARP/ND source hardware address. */
     struct eth_addr arp_tha;    /* ARP/ND target hardware address. */
     ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
-    ovs_be16 pad2;              /* Pad to 64 bits. */
+    ovs_be16 pad3;              /* Pad to 64 bits. */
 
     /* L4 (64-bit aligned) */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
@@ -155,7 +157,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 192
+                  == sizeof(struct flow_tnl) + 200
                   && FLOW_WC_SEQ == 33);
 
 /* Incremental points at which flow classification may be performed in
@@ -984,6 +986,7 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->in_port = flow->in_port;
     md->ct_state = flow->ct_state;
     md->ct_zone = flow->ct_zone;
+    md->ct_mark = flow->ct_mark;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

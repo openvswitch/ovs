@@ -1364,6 +1364,10 @@ by using the \fBct\fR action.
 .IP \fBct_zone=\fIvalue
 Matches connection zone \fIvalue\fR exactly.
 .
+.IP \fBct_mark=\fIvalue\fR[\fB/\fImask\fR]
+Matches connection mark \fIvalue\fR either exactly or with optional
+\fImask\fR.
+.
 .PP
 Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
 support for NXM.  The following shorthand notations are available for
@@ -1622,6 +1626,10 @@ is not provided, then the default is to use zone zero. The \fBzone\fR may be
 specified either as an immediate 16-bit \fIvalue\fR, or may be provided from an
 NXM field \fIsrc\fR. The \fIstart\fR and \fIend\fR pair are inclusive, and must
 specify a 16-bit range within the field.
+.IP \fBmark=\fR\fImark\fR[/\fImask\fR]
+Store a 32-bit metadata value (masked by \fImask\fR) with the connection.
+This will populate the \fBct_mark\fR flow field if the \fBtable\fR is
+specified in the \fBct\fR action.
 .RE
 .IP
 Currently, connection tracking is only available on Linux kernels with the

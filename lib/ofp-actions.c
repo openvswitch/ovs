@@ -6049,13 +6049,49 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
             : 0);
 }
 
+static const struct mf_field *
+ofpact_get_mf_field(enum ofpact_type type, const void *ofpact)
+{
+    if (type == OFPACT_SET_FIELD) {
+        const struct ofpact_set_field *orl = ofpact;
+
+        return orl->field;
+    } else if (type == OFPACT_REG_MOVE) {
+        const struct ofpact_reg_move *orm = ofpact;
+
+        return orm->dst.field;
+    }
+
+    return NULL;
+}
+
+static enum ofperr
+unsupported_nesting(enum ofpact_type action, enum ofpact_type outer_action)
+{
+    VLOG_WARN("\"%s\" action doesn't support nested action \"%s\"",
+              ofpact_name(outer_action), ofpact_name(action));
+    return OFPERR_OFPBAC_BAD_ARGUMENT;
+}
+
 static enum ofperr
 ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 {
-    if (outer_action != OFPACT_WRITE_ACTIONS) {
-        VLOG_WARN("\"%s\" action doesn't support nested action \"%s\"",
-                  ofpact_name(outer_action), ofpact_name(a->type));
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    const struct mf_field *field;
+
+    if (outer_action != OFPACT_CT && outer_action != OFPACT_WRITE_ACTIONS) {
+        return unsupported_nesting(a->type, outer_action);
+    }
+
+    field = ofpact_get_mf_field(a->type, a);
+    if (outer_action == OFPACT_CT
+        && (!field
+            || (field && field->id != MFF_CT_MARK))) {
+        return unsupported_nesting(a->type, outer_action);
+    }
+
+    if (field && outer_action != OFPACT_CT && field->id == MFF_CT_MARK) {
+        VLOG_WARN("cannot set CT fields outside of \"ct\" action");
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
     }
 
     return 0;

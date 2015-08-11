@@ -345,6 +345,7 @@ enum ovs_key_attr {
 				 * the accepted length of the array. */
 	OVS_KEY_ATTR_CT_STATE,	/* u8 bitmask of OVS_CS_F_* */
 	OVS_KEY_ATTR_CT_ZONE,	/* u16 connection tracking zone. */
+	OVS_KEY_ATTR_CT_MARK,	/* u32 connection tracking mark */
 
 #ifdef __KERNEL__
 	/* Only used within kernel data path. */
@@ -656,11 +657,15 @@ struct ovs_action_push_tnl {
  * enum ovs_ct_attr - Attributes for %OVS_ACTION_ATTR_CT action.
  * @OVS_CT_ATTR_FLAGS: u32 connection tracking flags.
  * @OVS_CT_ATTR_ZONE: u16 connection tracking zone.
+ * @OVS_CT_ATTR_MARK: u32 value followed by u32 mask. For each bit set in the
+ * mask, the corresponding bit in the value is copied to the connection
+ * tracking mark field in the connection.
  */
 enum ovs_ct_attr {
 	OVS_CT_ATTR_UNSPEC,
 	OVS_CT_ATTR_FLAGS,      /* u32 bitmask of OVS_CT_F_*. */
 	OVS_CT_ATTR_ZONE,       /* u16 zone id. */
+	OVS_CT_ATTR_MARK,       /* mark to associate with this connection. */
 	__OVS_CT_ATTR_MAX
 };
 

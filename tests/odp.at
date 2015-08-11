@@ -70,6 +70,10 @@ s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
  echo
+ echo '# Valid forms with conntrack fields.'
+ sed 's/^/skb_priority(0),skb_mark(0),ct_mark(0x12345678),recirc_id(0),dp_hash(0),/' odp-base.txt
+
+ echo
  echo '# Valid forms with IP first fragment.'
 sed 's/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt | sed -n 's/,frag=no),/,frag=first),/p'
 
@@ -89,7 +93,7 @@ s/^/ODP_FIT_TOO_LITTLE: /
 dnl Some fields are always printed for this test, because wildcards aren't
 dnl specified. We can skip these.
 sed -i 's/\(skb_mark(0)\),\(ct\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
-sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
+sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),\2/' odp-out.txt
 
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
@@ -159,7 +163,7 @@ s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with conntrack fields.'
- sed 's/\(eth([[^)]]*),?\)/\1,ct_state(+trk),/' odp-base.txt
+ sed 's/\(eth([[^)]]*),?\)/\1,ct_state(+trk),ct_mark(0x12345678\/0xFOFOFOFO),/' odp-base.txt
 
  echo
  echo '# Valid forms with IP first fragment.'

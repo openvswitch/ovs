@@ -1921,7 +1921,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
     }
 
     /* Userspace datapath doesn't support conntrack. */
-    if (flow->ct_state || flow->ct_zone) {
+    if (flow->ct_state || flow->ct_zone || flow->ct_mark) {
         return EINVAL;
     }
 
@@ -3607,12 +3607,12 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
         VLOG_WARN("Cannot execute conntrack action in userspace.");
         break;
 
+    case OVS_ACTION_ATTR_SET:
+    case OVS_ACTION_ATTR_SET_MASKED:
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
     case OVS_ACTION_ATTR_PUSH_MPLS:
     case OVS_ACTION_ATTR_POP_MPLS:
-    case OVS_ACTION_ATTR_SET:
-    case OVS_ACTION_ATTR_SET_MASKED:
     case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_UNSPEC:

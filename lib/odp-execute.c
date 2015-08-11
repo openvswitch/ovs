@@ -328,6 +328,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
     case OVS_KEY_ATTR_TCP_FLAGS:
     case OVS_KEY_ATTR_CT_STATE:
     case OVS_KEY_ATTR_CT_ZONE:
+    case OVS_KEY_ATTR_CT_MARK:
     case __OVS_KEY_ATTR_MAX:
     default:
         OVS_NOT_REACHED();
@@ -418,6 +419,7 @@ odp_execute_masked_set_action(struct dp_packet *packet,
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_CT_STATE:
     case OVS_KEY_ATTR_CT_ZONE:
+    case OVS_KEY_ATTR_CT_MARK:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
     case OVS_KEY_ATTR_IN_PORT:
