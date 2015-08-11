@@ -107,6 +107,7 @@ struct flow {
     uint16_t ct_zone;           /* Connection Zone. */
     uint8_t ct_state;           /* Connection state. */
     uint8_t pad1[1];            /* Pad to 64 bits. */
+    ovs_u128 ct_label;        /* Connection label. */
     ofp_port_t actset_output;   /* Output port in action set. */
     uint8_t pad2[6];            /* Pad to 64 bits. */
 
@@ -157,7 +158,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 200
+                  == sizeof(struct flow_tnl) + 216
                   && FLOW_WC_SEQ == 33);
 
 /* Incremental points at which flow classification may be performed in
@@ -987,6 +988,7 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_state = flow->ct_state;
     md->ct_zone = flow->ct_zone;
     md->ct_mark = flow->ct_mark;
+    md->ct_label = flow->ct_label;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

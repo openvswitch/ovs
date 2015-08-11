@@ -6073,6 +6073,12 @@ unsupported_nesting(enum ofpact_type action, enum ofpact_type outer_action)
     return OFPERR_OFPBAC_BAD_ARGUMENT;
 }
 
+static bool
+field_requires_ct(enum mf_field_id field)
+{
+    return field == MFF_CT_MARK || field == MFF_CT_LABEL;
+}
+
 static enum ofperr
 ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 {
@@ -6084,12 +6090,11 @@ ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 
     field = ofpact_get_mf_field(a->type, a);
     if (outer_action == OFPACT_CT
-        && (!field
-            || (field && field->id != MFF_CT_MARK))) {
+        && (!field || (field && !field_requires_ct(field->id)))) {
         return unsupported_nesting(a->type, outer_action);
     }
 
-    if (field && outer_action != OFPACT_CT && field->id == MFF_CT_MARK) {
+    if (outer_action != OFPACT_CT && field && field_requires_ct(field->id)) {
         VLOG_WARN("cannot set CT fields outside of \"ct\" action");
         return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
     }

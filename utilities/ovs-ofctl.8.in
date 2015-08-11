@@ -1368,6 +1368,10 @@ Matches connection zone \fIvalue\fR exactly.
 Matches connection mark \fIvalue\fR either exactly or with optional
 \fImask\fR.
 .
+.IP \fBct_label=\fIvalue\fR[\fB/\fImask\fR]
+Matches connection label \fIvalue\fR either exactly or with optional
+\fImask\fR.
+.
 .PP
 Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
 support for NXM.  The following shorthand notations are available for
@@ -1629,6 +1633,10 @@ specify a 16-bit range within the field.
 .IP \fBmark=\fR\fImark\fR[/\fImask\fR]
 Store a 32-bit metadata value (masked by \fImask\fR) with the connection.
 This will populate the \fBct_mark\fR flow field if the \fBtable\fR is
+specified in the \fBct\fR action.
+.IP \fBlabel=\fR\fIlabel\fR[/\fImask\fR]
+Store a 128-bit metadata value (masked by \fImask\fR) with the connection.
+This will populate the \fBct_label\fR flow field if the \fBtable\fR is
 specified in the \fBct\fR action.
 .RE
 .IP

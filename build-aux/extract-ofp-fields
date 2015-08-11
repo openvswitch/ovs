@@ -20,11 +20,13 @@ TYPES = {"u8":       (1,   False),
          "MAC":      (6,   False),
          "be64":     (8,   False),
          "IPv6":     (16,  False),
+         "u128":     (16,  False),
          "tunnelMD": (124, True)}
 
 FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
               "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
               "conn state":         ("MFS_CT_STATE",     1,   1),
+              "conn label":         ("MFS_CT_LABEL",    16,  16),
               "Ethernet":           ("MFS_ETHERNET",     6,   6),
               "IPv4":               ("MFS_IPV4",         4,   4),
               "IPv6":               ("MFS_IPV6",        16,  16),

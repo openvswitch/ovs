@@ -765,6 +765,23 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_CT_MARK,
 
+    /* "ct_label".
+     *
+     * Connection tracking label.  The label is carried with the
+     * connection tracking state.  On Linux this is held in the
+     * conntrack label extension but the exact implementation is
+     * platform-dependent.
+     *
+     * Type: u128.
+     * Maskable: bitwise.
+     * Formatting: conn label.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_CT_LABEL(108) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_LABEL,
+
 #if FLOW_N_REGS == 8
     /* "reg<N>".
      *
@@ -1742,6 +1759,7 @@ enum OVS_PACKED_ENUM mf_string {
 
     /* Other formats. */
     MFS_CT_STATE,               /* Connection tracking state */
+    MFS_CT_LABEL,               /* Connection tracking label */
     MFS_ETHERNET,
     MFS_IPV4,
     MFS_IPV6,
@@ -1809,6 +1827,7 @@ union mf_value {
     ovs_be32 be32;
     ovs_be16 be16;
     uint8_t u8;
+    ovs_u128 u128;
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == 128);
 BUILD_ASSERT_DECL(sizeof(union mf_value) >= GENEVE_MAX_OPT_SIZE);

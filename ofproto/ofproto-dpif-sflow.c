@@ -1032,6 +1032,7 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_CT_STATE:
     case OVS_KEY_ATTR_CT_ZONE:
     case OVS_KEY_ATTR_CT_MARK:
+    case OVS_KEY_ATTR_CT_LABEL:
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:

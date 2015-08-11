@@ -319,6 +319,25 @@ match_set_ct_mark_masked(struct match *match, uint32_t ct_mark,
 }
 
 void
+match_set_ct_label(struct match *match, ovs_u128 ct_label)
+{
+    ovs_u128 mask;
+
+    mask.u64.lo = UINT64_MAX;
+    mask.u64.hi = UINT64_MAX;
+    match_set_ct_label_masked(match, ct_label, mask);
+}
+
+void
+match_set_ct_label_masked(struct match *match, ovs_u128 value, ovs_u128 mask)
+{
+    match->flow.ct_label.u64.lo = value.u64.lo & mask.u64.lo;
+    match->flow.ct_label.u64.hi = value.u64.hi & mask.u64.hi;
+    match->wc.masks.ct_label.u64.lo = mask.u64.lo;
+    match->wc.masks.ct_label.u64.hi = mask.u64.hi;
+}
+
+void
 match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
     match->wc.masks.dl_type = OVS_BE16_MAX;
@@ -957,6 +976,20 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     tun_metadata_match_format(s, match);
 }
 
+static void
+format_ct_label_masked(struct ds *s, const ovs_u128 *key, const ovs_u128 *mask)
+{
+    if (!is_all_zeros(mask, sizeof(*mask))) {
+        ds_put_format(s, "ct_label=");
+        ds_put_hex(s, key, sizeof(*key));
+        if (!is_all_ones(mask, sizeof(*mask))) {
+            ds_put_char(s, '/');
+            ds_put_hex(s, mask, sizeof(*mask));
+        }
+        ds_put_char(s, ',');
+    }
+}
+
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
@@ -1024,6 +1057,10 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     if (wc->masks.ct_mark) {
         format_uint32_masked(s, "ct_mark", f->ct_mark, wc->masks.ct_mark);
+    }
+
+    if (!is_all_zeros(&wc->masks.ct_label, sizeof(wc->masks.ct_label))) {
+        format_ct_label_masked(s, &f->ct_label, &wc->masks.ct_label);
     }
 
     if (wc->masks.dl_type) {

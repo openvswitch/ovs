@@ -62,6 +62,7 @@ parse_keys(bool wc_keys)
                     .ct_state = true,
                     .ct_zone = true,
                     .ct_mark = true,
+                    .ct_label = true,
                 },
             };
 

@@ -2808,6 +2808,7 @@ clear_conntrack(struct flow *flow)
     flow->ct_state = 0;
     flow->ct_zone = 0;
     flow->ct_mark = 0;
+    memset(&flow->ct_label, 0, sizeof flow->ct_label);
 }
 
 static void
@@ -2822,6 +2823,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     uint32_t flow_pkt_mark, flow_ct_mark;
     uint8_t flow_ct_state;
     uint16_t flow_ct_zone;
+    ovs_u128 flow_ct_label;
     uint8_t flow_nw_tos;
     odp_port_t out_port, odp_port;
     bool tnl_push_pop_send = false;
@@ -2973,6 +2975,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     flow_ct_state = flow->ct_state;
     flow_ct_zone = flow->ct_zone;
     flow_ct_mark = flow->ct_mark;
+    flow_ct_label = flow->ct_label;
     flow_nw_tos = flow->nw_tos;
 
     if (count_skb_priorities(xport)) {
@@ -3098,6 +3101,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     flow->ct_state = flow_ct_state;
     flow->ct_zone = flow_ct_zone;
     flow->ct_mark = flow_ct_mark;
+    flow->ct_label = flow_ct_label;
     flow->nw_tos = flow_nw_tos;
 }
 
@@ -4177,6 +4181,32 @@ put_ct_mark(const struct flow *flow, struct flow *base_flow,
 }
 
 static void
+put_ct_label(const struct flow *flow, struct flow *base_flow,
+             struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+{
+    const ovs_u128 *key;
+    ovs_u128 *mask, *base;
+
+    key = &flow->ct_label;
+    base = &base_flow->ct_label;
+    mask = &wc->masks.ct_label;
+
+    if (!is_all_zeros(mask, sizeof(*mask)) && memcmp(key, base, sizeof(*key))) {
+        struct {
+            ovs_u128 key;
+            ovs_u128 mask;
+        } *odp_ct_label;
+
+        odp_ct_label = nl_msg_put_unspec_uninit(odp_actions, OVS_CT_ATTR_LABEL,
+                                                sizeof(*odp_ct_label));
+        odp_ct_label->key = *key;
+        odp_ct_label->mask = *mask;
+        base_flow->ct_label = *base;
+        wc->masks.ct_label = *mask;
+    }
+}
+
+static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
     uint32_t flags = 0;
@@ -4203,6 +4233,7 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     nl_msg_put_u32(ctx->odp_actions, OVS_CT_ATTR_FLAGS, flags);
     nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
     put_ct_mark(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
+    put_ct_label(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
 
     if (ofc->recirc_table == NX_CT_RECIRC_NONE) {

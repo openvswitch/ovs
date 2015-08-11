@@ -781,6 +781,14 @@ nxm_put_frag(struct ofpbuf *b, const struct match *match,
                nw_frag_mask == FLOW_NW_FRAG_MASK ? UINT8_MAX : nw_frag_mask);
 }
 
+static void
+nxm_put_ct_label(struct ofpbuf *b,
+                 enum mf_field_id field, enum ofp_version version,
+                 const ovs_u128 value, const ovs_u128 mask)
+{
+    nxm_put(b, field, version, &value, &mask, sizeof(value));
+}
+
 /* Appends to 'b' a set of OXM or NXM matches for the IPv4 or IPv6 fields in
  * 'match'.  */
 static void
@@ -1048,6 +1056,11 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     if (match->wc.masks.ct_mark) {
         nxm_put_32m(b, MFF_CT_MARK, oxm, htonl(flow->ct_mark),
                     htonl(match->wc.masks.ct_mark));
+    }
+    if (!is_all_zeros(&match->wc.masks.ct_label,
+                      sizeof(match->wc.masks.ct_label))) {
+        nxm_put_ct_label(b, MFF_CT_LABEL, oxm, flow->ct_label,
+                         match->wc.masks.ct_label);
     }
 
     /* OpenFlow 1.1+ Metadata. */
