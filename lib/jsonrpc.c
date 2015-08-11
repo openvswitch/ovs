@@ -240,7 +240,6 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
     struct json *json;
     struct ds ds = DS_EMPTY_INITIALIZER;
     size_t length;
-    char *s;
 
     if (rpc->status) {
         jsonrpc_msg_destroy(msg);
@@ -252,12 +251,10 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
     json = jsonrpc_msg_to_json(msg);
     json_to_ds(json, 0, &ds);
     length = ds.length;
-    s = ds_steal_cstr(&ds);
     json_destroy(json);
 
     buf = xmalloc(sizeof *buf);
-    ofpbuf_use(buf, s, length);
-    buf->size = length;
+    ofpbuf_use_ds(buf, &ds);
     list_push_back(&rpc->output, &buf->list_node);
     rpc->output_count++;
     rpc->backlog += length;
