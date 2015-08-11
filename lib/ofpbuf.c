@@ -53,6 +53,16 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
     ofpbuf_use__(b, base, allocated, 0, OFPBUF_MALLOC);
 }
 
+/* Converts ds into ofpbuf 'b'. 'b' contains the 'ds->allocated' bytes of
+ * memory starting at 'ds->string'.  'ds' should not be modified any more.
+ * The memory allocated for 'ds' will be freed (with free()) if 'b' is
+ * resized or freed. */
+void
+ofpbuf_use_ds(struct ofpbuf *b, const struct ds *ds)
+{
+    ofpbuf_use__(b, ds->string, ds->allocated + 1, ds->length, OFPBUF_MALLOC);
+}
+
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
  * memory starting at 'base'.  'base' should point to a buffer on the stack.
  * (Nothing actually relies on 'base' being allocated on the stack.  It could
