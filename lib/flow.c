@@ -123,7 +123,7 @@ struct mf_ctx {
  * away.  Some GCC versions gave warnings on ALWAYS_INLINE, so these are
  * defined as macros. */
 
-#if (FLOW_WC_SEQ != 33)
+#if (FLOW_WC_SEQ != 34)
 #define MINIFLOW_ASSERT(X) ovs_assert(X)
 BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
                "assertions enabled. Consider updating FLOW_WC_SEQ after "
@@ -477,9 +477,10 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     }
     miniflow_push_uint32(mf, dp_hash, md->dp_hash);
     miniflow_push_uint32(mf, in_port, odp_to_u32(md->in_port.odp_port));
-    if (md->recirc_id) {
+    if (md->recirc_id || md->ct_state) {
         miniflow_push_uint32(mf, recirc_id, md->recirc_id);
-        miniflow_pad_to_64(mf, conj_id);
+        miniflow_push_uint16(mf, ct_state, md->ct_state);
+        miniflow_push_uint16(mf, ct_zone, md->ct_zone);
     }
 
     /* Initialize packet's layer pointer and offsets. */
@@ -794,7 +795,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
     match_init_catchall(flow_metadata);
     if (flow->tunnel.tun_id != htonll(0)) {
@@ -832,6 +833,32 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     }
 
     match_set_in_port(flow_metadata, flow->in_port.ofp_port);
+    if (flow->ct_state != 0) {
+        match_set_ct_state(flow_metadata, flow->ct_state);
+    }
+    if (flow->ct_zone != 0) {
+        match_set_ct_zone(flow_metadata, flow->ct_zone);
+    }
+}
+
+const char *ct_state_to_string(uint32_t state)
+{
+    switch (state) {
+    case CS_REPLY_DIR:
+        return "rpl";
+    case CS_TRACKED:
+        return "trk";
+    case CS_NEW:
+        return "new";
+    case CS_ESTABLISHED:
+        return "est";
+    case CS_RELATED:
+        return "rel";
+    case CS_INVALID:
+        return "inv";
+    default:
+        return NULL;
+    }
 }
 
 char *
@@ -1107,6 +1134,12 @@ flow_format(struct ds *ds, const struct flow *flow)
     if (!flow->dp_hash) {
         WC_UNMASK_FIELD(wc, dp_hash);
     }
+    if (!flow->ct_state) {
+        WC_UNMASK_FIELD(wc, ct_state);
+    }
+    if (!flow->ct_zone) {
+        WC_UNMASK_FIELD(wc, ct_zone);
+    }
     for (int i = 0; i < FLOW_N_REGS; i++) {
         if (!flow->regs[i]) {
             WC_UNMASK_FIELD(wc, regs[i]);
@@ -1146,7 +1179,7 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     memset(&wc->masks, 0x0, sizeof wc->masks);
 
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
     if (flow->tunnel.ip_dst) {
         if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
@@ -1181,6 +1214,8 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
 
     WC_MASK_FIELD(wc, skb_priority);
     WC_MASK_FIELD(wc, pkt_mark);
+    WC_MASK_FIELD(wc, ct_state);
+    WC_MASK_FIELD(wc, ct_zone);
     WC_MASK_FIELD(wc, recirc_id);
     WC_MASK_FIELD(wc, dp_hash);
     WC_MASK_FIELD(wc, in_port);
@@ -1257,7 +1292,7 @@ void
 flow_wc_map(const struct flow *flow, struct flowmap *map)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
     flowmap_init(map);
 
@@ -1284,6 +1319,8 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
     FLOWMAP_SET(map, dl_src);
     FLOWMAP_SET(map, dl_type);
     FLOWMAP_SET(map, vlan_tci);
+    FLOWMAP_SET(map, ct_state);
+    FLOWMAP_SET(map, ct_zone);
 
     /* Ethertype-dependent fields. */
     if (OVS_LIKELY(flow->dl_type == htons(ETH_TYPE_IP))) {
@@ -1337,7 +1374,7 @@ void
 flow_wildcards_clear_non_packet_fields(struct flow_wildcards *wc)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
     memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
@@ -1964,7 +2001,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
 
         /* Clear all L3 and L4 fields and dp_hash. */
-        BUILD_ASSERT(FLOW_WC_SEQ == 33);
+        BUILD_ASSERT(FLOW_WC_SEQ == 34);
         memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
                sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
         flow->dp_hash = 0;

@@ -138,6 +138,29 @@ ffff 0011 00002320 0015 0001 00000000 0000000000000000
 # bad OpenFlow10 actions: OFPBAC_BAD_OUT_PORT
 0000 0008 ffff 0000
 
+# actions=ct()
+ffff 0018 00002320 0023 0000 00000000 0000 FF 000000 0000
+
+# actions=ct(commit)
+ffff 0018 00002320 0023 0001 00000000 0000 FF 000000 0000
+
+# actions=ct(table=10)
+ffff 0018 00002320 0023 0000 00000000 0000 0A 000000 0000
+
+# actions=ct(zone=10)
+ffff 0018 00002320 0023 0000 00000000 000A FF 000000 0000
+
+# actions=ct(zone=NXM_NX_REG0[0..15])
+ffff 0018 00002320 0023 0000 00010004 000F FF 000000 0000
+
+dnl Can't read 8 bits from register into 16-bit zone.
+# bad OpenFlow10 actions: OFPBAC_BAD_SET_LEN
+ffff 0018 00002320 0023 0000 00010004 0007 FF 000000 0000
+
+dnl Can't read 32 bits from register into 16-bit zone.
+# bad OpenFlow10 actions: OFPBAC_BAD_SET_LEN
+ffff 0018 00002320 0023 0000 00010004 001F FF 000000 0000
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout

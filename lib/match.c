@@ -285,6 +285,26 @@ match_set_pkt_mark_masked(struct match *match, uint32_t pkt_mark, uint32_t mask)
 }
 
 void
+match_set_ct_state(struct match *match, uint32_t ct_state)
+{
+    match_set_ct_state_masked(match, ct_state, UINT32_MAX);
+}
+
+void
+match_set_ct_state_masked(struct match *match, uint32_t ct_state, uint32_t mask)
+{
+    match->flow.ct_state = ct_state & mask & UINT16_MAX;
+    match->wc.masks.ct_state = mask & UINT16_MAX;
+}
+
+void
+match_set_ct_zone(struct match *match, uint16_t ct_zone)
+{
+    match->flow.ct_zone = ct_zone;
+    match->wc.masks.ct_zone = UINT16_MAX;
+}
+
+void
 match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
     match->wc.masks.dl_type = OVS_BE16_MAX;
@@ -816,6 +836,21 @@ format_ipv6_netmask(struct ds *s, const char *name,
 }
 
 static void
+format_uint16_masked(struct ds *s, const char *name,
+                   uint16_t value, uint16_t mask)
+{
+    if (mask != 0) {
+        ds_put_format(s, "%s=", name);
+        if (mask == UINT16_MAX) {
+            ds_put_format(s, "%"PRIu16, value);
+        } else {
+            ds_put_format(s, "0x%"PRIx16"/0x%"PRIx16, value, mask);
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
 format_be16_masked(struct ds *s, const char *name,
                    ovs_be16 value, ovs_be16 mask)
 {
@@ -921,7 +956,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);
@@ -951,6 +986,25 @@ match_format(const struct match *match, struct ds *s, int priority)
         ds_put_cstr(s, "actset_output=");
         ofputil_format_port(f->actset_output, s);
         ds_put_char(s, ',');
+    }
+
+    if (wc->masks.ct_state) {
+        if (wc->masks.ct_state == UINT16_MAX) {
+            ds_put_cstr(s, "ct_state=");
+            if (f->ct_state) {
+                format_flags(s, ct_state_to_string, f->ct_state, '|');
+            } else {
+                ds_put_cstr(s, "0"); /* No state. */
+            }
+        } else {
+            format_flags_masked(s, "ct_state", ct_state_to_string,
+                                f->ct_state, wc->masks.ct_state, UINT16_MAX);
+        }
+        ds_put_char(s, ',');
+    }
+
+    if (wc->masks.ct_zone) {
+        format_uint16_masked(s, "ct_zone", f->ct_zone, wc->masks.ct_zone);
     }
 
     if (wc->masks.dl_type) {

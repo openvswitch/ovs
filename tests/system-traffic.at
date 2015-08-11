@@ -139,3 +139,474 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([conntrack - controller])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp,action=ct(commit),controller
+priority=100,in_port=2,ct_state=-trk,udp,action=ct(table=0)
+priority=100,in_port=2,ct_state=+trk+est,udp,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl Send an unsolicited reply from port 2. This should be dropped.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c00000000001100000a0101020a0101010002000100080000'])
+
+dnl OK, now start a new connection from port 1.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit\),controller '50540000000a50540000000908004500001c00000000001100000a0101010a0101020001000200080000'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c00000000001100000a0101020a0101010002000100080000'])
+
+dnl Check this output. We only see the latter two packets, not the first.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=1,tp_dst=2 udp_csum:0
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=2,tp_dst=1 udp_csum:0
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv4 HTTP])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,action=ct(commit),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0)
+priority=100,in_port=2,ct_state=+trk+est,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Basic connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 >/dev/null])
+
+dnl HTTP requests from ns0->ns1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2)], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 use=1
+])
+
+dnl HTTP requests from ns1->ns0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NS_CHECK_EXEC([at_ns1], [wget 10.1.1.1 -t 3 -T 1 -v -o wget1.log], [4])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 HTTP])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,icmp6,action=normal
+priority=100,in_port=1,tcp6,action=ct(commit),2
+priority=100,in_port=2,ct_state=-trk,tcp6,action=ct(table=0)
+priority=100,in_port=2,ct_state=+trk+est,tcp6,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Without this sleep, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+sleep 2;
+
+dnl HTTP requests from ns0->ns1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
+
+NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::2]] -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl HTTP requests from ns1->ns0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py http6]], [http1.pid])
+NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - commit, recirc])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.3/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.4/24")
+
+dnl Allow any traffic from ns0->ns1, ns2->ns3.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(commit,table=0)
+priority=100,in_port=1,tcp,ct_state=+trk,action=2
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,tcp,ct_state=+trk,action=1
+priority=100,in_port=3,tcp,ct_state=-trk,action=set_field:0->metadata,ct(table=0)
+priority=100,in_port=3,tcp,ct_state=+trk,metadata=0,action=set_field:1->metadata,ct(commit,table=0)
+priority=100,in_port=3,tcp,ct_state=+trk,metadata=1,action=4
+priority=100,in_port=4,tcp,ct_state=-trk,action=ct(commit,table=0)
+priority=100,in_port=4,tcp,ct_state=+trk,action=3
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl HTTP requests from p2->p3 should work fine.
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - preserve registers])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.3/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.4/24")
+
+dnl Allow any traffic from ns0->ns1, ns2->ns3.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(commit,table=0)
+priority=100,in_port=1,tcp,ct_state=+trk,action=2
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,tcp,ct_state=+trk,action=1
+priority=100,in_port=3,tcp,ct_state=-trk,action=load:0->NXM_NX_REG0[[]],ct(table=0)
+priority=100,in_port=3,tcp,ct_state=+trk,reg0=0,action=load:1->NXM_NX_REG0[[]],ct(commit,table=0)
+priority=100,in_port=3,tcp,ct_state=+trk,reg0=1,action=4
+priority=100,in_port=4,tcp,ct_state=-trk,action=ct(commit,table=0)
+priority=100,in_port=4,tcp,ct_state=+trk,action=3
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl HTTP requests from p2->p3 should work fine.
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - invalid])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.3/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.4/24")
+
+dnl Pass traffic from ns0->ns1 without committing, but attempt to track in
+dnl the opposite direction. This should fail.
+dnl Pass traffic from ns3->ns4 without committing, and this time match
+dnl invalid traffic and allow it through.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,action=ct(),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0)
+priority=100,in_port=2,ct_state=+trk+new,tcp,action=1
+priority=100,in_port=3,tcp,action=ct(),4
+priority=100,in_port=4,ct_state=-trk,tcp,action=ct(table=0)
+priority=100,in_port=4,ct_state=+trk+inv,tcp,action=3
+priority=100,in_port=4,ct_state=+trk+new,tcp,action=3
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl We set up our rules to allow the request without committing. The return
+dnl traffic can't be identified, because the initial request wasn't committed.
+dnl For the first pair of ports, this means that the connection fails.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log], [4])
+
+dnl For the second pair, we allow packets from invalid connections, so it works.
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - zones])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.3/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.4/24")
+
+dnl Allow any traffic from ns0->ns1. Allow return traffic, matching on zone.
+dnl For ns2->ns3, use a different zone and see that the match fails.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,action=ct(commit,zone=1),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0,zone=1)
+priority=100,in_port=2,ct_state=+trk,ct_zone=1,tcp,action=1
+priority=100,in_port=3,tcp,action=ct(commit,zone=2),4
+priority=100,in_port=4,ct_state=-trk,tcp,action=ct(table=0,zone=2)
+priority=100,in_port=4,ct_state=+trk,ct_zone=1,tcp,action=3
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2)], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+])
+
+dnl HTTP requests from p2->p3 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.4)], [0], [dnl
+SYN_RECV src=10.1.1.3 dst=10.1.1.4 sport=<cleared> dport=<cleared> src=10.1.1.4 dst=10.1.1.3 sport=<cleared> dport=<cleared> mark=0 zone=2 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - zones from field])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.3/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.4/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,action=load:0x1001->NXM_NX_REG0[[0..15]],ct(commit,zone=NXM_NX_REG0[[0..15]]),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=load:0x1001->NXM_NX_REG0[[0..15]],ct(table=0,zone=NXM_NX_REG0[[0..15]])
+priority=100,in_port=2,ct_state=+trk,ct_zone=0x1001,tcp,action=1
+priority=100,in_port=3,tcp,action=load:0x1002->NXM_NX_REG0[[0..15]],ct(commit,zone=NXM_NX_REG0[[0..15]]),4
+priority=100,in_port=4,ct_state=-trk,tcp,action=load:0x1002->NXM_NX_REG0[[0..15]],ct(table=0,zone=NXM_NX_REG0[[0..15]])
+priority=100,in_port=4,ct_state=+trk,ct_zone=0x1001,tcp,action=3
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2)], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=4097 use=1
+])
+
+dnl HTTP requests from p2->p3 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.4)], [0], [dnl
+SYN_RECV src=10.1.1.3 dst=10.1.1.4 sport=<cleared> dport=<cleared> src=10.1.1.4 dst=10.1.1.3 sport=<cleared> dport=<cleared> mark=0 zone=4098 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - multiple bridges])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone --\
+    add-br br1 --\
+    add-port br0 patch+ -- set int patch+ type=patch options:peer=patch- --\
+    add-port br1 patch- -- set int patch- type=patch options:peer=patch+ --])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br1, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->br1, allow established in reverse.
+AT_DATA([flows-br0.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(commit,zone=1),1
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(table=0,zone=1)
+priority=100,in_port=1,tcp,ct_state=+trk+est,ct_zone=1,action=2
+])
+
+dnl Allow any traffic from br0->ns1, allow established in reverse.
+AT_DATA([flows-br1.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(table=0,zone=2)
+priority=100,in_port=1,tcp,ct_state=+trk+new,ct_zone=2,action=ct(commit,zone=2),2
+priority=100,in_port=1,tcp,ct_state=+trk+est,ct_zone=2,action=2
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0,zone=2)
+priority=100,in_port=2,tcp,ct_state=+trk+est,ct_zone=2,action=ct(commit,zone=2),1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows-br0.txt])
+AT_CHECK([ovs-ofctl add-flows br1 flows-br1.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - multiple zones])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,action=ct(commit,zone=1),ct(commit,zone=2),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0,zone=2)
+priority=100,in_port=2,ct_state=+trk,ct_zone=2,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl (again) HTTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2)], [0], [dnl
+SYN_SENT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[UNREPLIED]] src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> mark=0 zone=1 use=1
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=2 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - ICMP related 2])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "172.16.0.1/24")
+ADD_VETH(p1, at_ns1, br0, "172.16.0.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ct_state=-trk,udp,action=ct(commit,table=0)
+priority=100,in_port=1,ct_state=+trk,actions=controller
+priority=100,in_port=2,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,ct_state=+trk+rel+rpl,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl 1. Send an ICMP port unreach reply for port 8738, without any previous request
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) 'f64c473528c9c6f54ecb72db080045c0003d2e8700004001f355ac100004ac1000030303553f0000000045000021317040004011b138ac100003ac10000411112222000d20966369616f0a'])
+
+dnl 2. Send and UDP packet to port 5555
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit,table=0\) 'c6f94ecb72dbe64c473528c9080045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+
+dnl 3. Send an ICMP port unreach reply for port 5555, related to the first packet
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) 'e64c473528c9c6f94ecb72db080045c0003d2e8700004001f355ac100002ac1000010303553f0000000045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+
+dnl Check this output. We only see the latter two packets, not the first.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

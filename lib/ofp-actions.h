@@ -106,6 +106,7 @@
     OFPACT(EXIT,            ofpact_null,        ofpact, "exit")         \
     OFPACT(SAMPLE,          ofpact_sample,      ofpact, "sample")       \
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
+    OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -470,6 +471,29 @@ struct ofpact_nest {
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions)
                   == sizeof(struct ofpact_nest));
+
+/* Bits for 'flags' in struct nx_action_conntrack.
+ *
+ * If NX_CT_F_COMMIT is set, then the connection entry is moved from the
+ * unconfirmed to confirmed list in the tracker. */
+enum nx_conntrack_flags {
+    NX_CT_F_COMMIT = 1 << 0,
+};
+
+/* Magic value for struct nx_action_conntrack 'recirc_table' field, to specify
+ * that the packet should not be recirculated. */
+#define NX_CT_RECIRC_NONE OFPTT_ALL
+
+/* OFPACT_CT.
+ *
+ * Used for NXAST_CT. */
+struct ofpact_conntrack {
+    struct ofpact ofpact;
+    uint16_t flags;
+    uint16_t zone_imm;
+    struct mf_subfield zone_src;
+    uint8_t recirc_table;
+};
 
 static inline size_t
 ofpact_nest_get_action_len(const struct ofpact_nest *on)

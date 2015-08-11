@@ -120,6 +120,8 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  OVS_KEY_ATTR_SKB_MARK                4    --     4      8
  *  OVS_KEY_ATTR_DP_HASH                 4    --     4      8
  *  OVS_KEY_ATTR_RECIRC_ID               4    --     4      8
+ *  OVS_KEY_ATTR_CT_STATE                4    --     4      8
+ *  OVS_KEY_ATTR_CT_ZONE                 2     2     4      8
  *  OVS_KEY_ATTR_ETHERNET               12    --     4     16
  *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (outer VLAN ethertype)
  *  OVS_KEY_ATTR_VLAN                    2     2     4      8
@@ -129,13 +131,13 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  OVS_KEY_ATTR_ICMPV6                  2     2     4      8
  *  OVS_KEY_ATTR_ND                     28    --     4     32
  *  ----------------------------------------------------------
- *  total                                                 488
+ *  total                                                 504
  *
  * We include some slack space in case the calculation isn't quite right or we
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 512
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
@@ -166,6 +168,10 @@ struct odp_support {
 
     /* If this is true, then recirculation fields will always be serialised. */
     bool recirc;
+
+    /* If true, serialise the corresponding OVS_KEY_ATTR_CONN_* field. */
+    bool ct_state;
+    bool ct_zone;
 };
 
 struct odp_flow_key_parms {

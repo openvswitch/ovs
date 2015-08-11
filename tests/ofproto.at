@@ -1611,6 +1611,8 @@ metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xr
       in_port_oxm: exact match or wildcard
       actset_output: exact match or wildcard
       pkt_mark: arbitrary mask
+      ct_state: arbitrary mask
+      ct_zone: exact match or wildcard
       reg0: arbitrary mask
       reg1: arbitrary mask
       reg2: arbitrary mask

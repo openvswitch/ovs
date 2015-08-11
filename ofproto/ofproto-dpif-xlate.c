@@ -300,6 +300,11 @@ struct xlate_ctx {
      * the MPLS label stack that was originally present. */
     bool was_mpls;
 
+    /* True if conntrack has been performed on this packet during processing
+     * on the current bridge. This is used to determine whether conntrack
+     * state from the datapath should be honored after recirculation. */
+    bool conntracked;
+
     /* OpenFlow 1.1+ action set.
      *
      * 'action_set' accumulates "struct ofpact"s added by OFPACT_WRITE_ACTIONS.
@@ -2798,6 +2803,13 @@ xlate_commit_actions(struct xlate_ctx *ctx)
 }
 
 static void
+clear_conntrack(struct flow *flow)
+{
+    flow->ct_state = 0;
+    flow->ct_zone = 0;
+}
+
+static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp)
 {
@@ -2814,7 +2826,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
     memset(&flow_tnl, 0, sizeof flow_tnl);
 
     if (!xport) {
@@ -2852,6 +2864,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     if (xport->peer) {
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
+        bool old_conntrack = ctx->conntracked;
         bool old_was_mpls = ctx->was_mpls;
         cls_version_t old_version = ctx->tables_version;
         struct ofpbuf old_stack = ctx->stack;
@@ -2867,6 +2880,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
         memset(flow->regs, 0, sizeof flow->regs);
         flow->actset_output = OFPP_UNSET;
+        ctx->conntracked = false;
+        clear_conntrack(flow);
 
         /* The bridge is now known so obtain its table version. */
         ctx->tables_version
@@ -2920,6 +2935,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         /* The peer bridge popping MPLS should have no effect on the original
          * bridge. */
         ctx->was_mpls = old_was_mpls;
+
+        /* The peer bridge's conntrack execution should have no effect on the
+         * original bridge. */
+        ctx->conntracked = old_conntrack;
 
         /* The fact that the peer bridge exits (for any reason) does not mean
          * that the original bridge should exit.  Specifically, if the peer
@@ -3509,24 +3528,23 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     dp_packet_delete(packet);
 }
 
-/* Called only when ctx->recirc_action_offset is set. */
 static void
-compose_recirculate_action(struct xlate_ctx *ctx)
+compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 {
     struct recirc_metadata md;
     uint32_t id;
 
-    xlate_commit_actions(ctx);
     recirc_metadata_from_flow(&md, &ctx->xin->flow);
 
     ovs_assert(ctx->recirc_action_offset >= 0);
 
     struct recirc_state state = {
-        .table_id = 0,
+        .table_id = table,
         .ofproto = ctx->xbridge->ofproto,
         .metadata = md,
         .stack = &ctx->stack,
         .mirrors = ctx->mirrors,
+        .conntracked = ctx->conntracked,
         .action_set_len = ctx->recirc_action_offset,
         .ofpacts_len = ctx->action_set.size,
         .ofpacts = ctx->action_set.data,
@@ -3561,6 +3579,14 @@ compose_recirculate_action(struct xlate_ctx *ctx)
     ctx->action_set.size = ctx->recirc_action_offset;
     ctx->recirc_action_offset = -1;
     ctx->last_unroll_offset = -1;
+}
+
+/* Called only when ctx->recirc_action_offset is set. */
+static void
+compose_recirculate_action(struct xlate_ctx *ctx)
+{
+    xlate_commit_actions(ctx);
+    compose_recirculate_action__(ctx, 0);
 }
 
 static void
@@ -4096,6 +4122,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_METER:
         case OFPACT_SAMPLE:
         case OFPACT_DEBUG_RECIRC:
+        case OFPACT_CT:
             break;
 
             /* These need not be copied for restoration. */
@@ -4117,6 +4144,41 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     if (COND) {                           \
         CHECK_MPLS_RECIRCULATION();       \
     }
+
+static void
+compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
+{
+    size_t ct_offset;
+    uint16_t zone;
+
+    /* Ensure that any prior actions are applied before composing the new
+     * conntrack action. */
+    xlate_commit_actions(ctx);
+
+    if (ofc->zone_src.field) {
+        zone = mf_get_subfield(&ofc->zone_src, &ctx->xin->flow);
+    } else {
+        zone = ofc->zone_imm;
+    }
+
+    ct_offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CT);
+    if (ofc->flags & NX_CT_F_COMMIT) {
+        nl_msg_put_flag(ctx->odp_actions, OVS_CT_ATTR_COMMIT);
+    }
+    nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
+    nl_msg_end_nested(ctx->odp_actions, ct_offset);
+
+    if (ofc->recirc_table == NX_CT_RECIRC_NONE) {
+        /* If we do not recirculate as part of this action, hide the results of
+         * connection tracking from subsequent recirculations. */
+        ctx->conntracked = false;
+    } else {
+        /* Use ct_* fields from datapath during recirculation upcall. */
+        ctx->conntracked = true;
+        ctx_trigger_recirculation(ctx);
+        compose_recirculate_action__(ctx, ofc->recirc_table);
+    }
+}
 
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
@@ -4483,6 +4545,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
             break;
 
+        case OFPACT_CT:
+            CHECK_MPLS_RECIRCULATION();
+            compose_conntrack_action(ctx, ofpact_get_CT(a));
+            break;
+
         case OFPACT_DEBUG_RECIRC:
             ctx_trigger_recirculation(ctx);
             a = ofpact_next(a);
@@ -4789,6 +4856,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .last_unroll_offset = -1,
 
         .was_mpls = false,
+        .conntracked = false,
 
         .action_set_has_group = false,
         .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),
@@ -4857,6 +4925,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
          * only if there are no post-recirculation actions. */
         ctx.table_id = state->table_id;
         xlate_report(&ctx, "- Resuming from table %"PRIu8, ctx.table_id);
+
+        if (!state->conntracked) {
+            clear_conntrack(flow);
+        }
 
         /* Restore pipeline metadata. May change flow's in_port and other
          * metadata to the values that existed when recirculation was

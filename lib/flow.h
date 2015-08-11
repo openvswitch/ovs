@@ -40,7 +40,7 @@ struct match;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 33
+#define FLOW_WC_SEQ 34
 
 /* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 8
@@ -102,9 +102,11 @@ struct flow {
                                  * computation is opaque to the user space. */
     union flow_in_port in_port; /* Input port.*/
     uint32_t recirc_id;         /* Must be exact match. */
+    uint16_t ct_state;          /* Connection tracking state. */
+    uint16_t ct_zone;           /* Connection tracking zone. */
     uint32_t conj_id;           /* Conjunction ID. */
     ofp_port_t actset_output;   /* Output port in action set. */
-    uint8_t pad1[6];            /* Pad to 64 bits. */
+    uint8_t pad1[2];            /* Pad to 64 bits. */
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
     struct eth_addr dl_dst;     /* Ethernet destination address. */
@@ -154,7 +156,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
                   == sizeof(struct flow_tnl) + 192
-                  && FLOW_WC_SEQ == 33);
+                  && FLOW_WC_SEQ == 34);
 
 /* Incremental points at which flow classification may be performed in
  * segments.
@@ -193,6 +195,7 @@ void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_unwildcard_tp_ports(const struct flow *, struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct match *flow_metadata);
 
+const char *ct_state_to_string(uint32_t state);
 char *flow_to_string(const struct flow *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
                   uint32_t flags, char del);
@@ -980,6 +983,8 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->skb_priority = flow->skb_priority;
     md->pkt_mark = flow->pkt_mark;
     md->in_port = flow->in_port;
+    md->ct_state = flow->ct_state;
+    md->ct_zone = flow->ct_zone;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

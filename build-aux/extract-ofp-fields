@@ -24,6 +24,7 @@ TYPES = {"u8":       (1,   False),
 
 FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
               "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
+              "ct state":           ("MFS_CT_STATE",     4,   4),
               "Ethernet":           ("MFS_ETHERNET",     6,   6),
               "IPv4":               ("MFS_IPV4",         4,   4),
               "IPv6":               ("MFS_IPV6",        16,  16),

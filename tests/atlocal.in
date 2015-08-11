@@ -110,3 +110,10 @@ fi
 if test "$IS_WIN32" = "yes"; then
     HAVE_PYTHON="no"
 fi
+
+# Conntrack test requirements
+if test x`which conntrack` != x; then
+    HAVE_CONNTRACK="yes"
+else
+    HAVE_CONNTRACK="no"
+fi

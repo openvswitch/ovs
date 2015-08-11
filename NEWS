@@ -24,6 +24,9 @@ Post-v2.4.0
    - Mark --syslog-target argument as deprecated.  It will be removed in
      the next OVS release.
    - Added --user option to all daemons
+   - Add support for connection tracking through the new "ct" action
+     and "ct_state"/"ct_zone" match fields.  Only available on Linux kernels
+     with the connection tracking module loaded.
 
 
 v2.4.0 - 20 Aug 2015

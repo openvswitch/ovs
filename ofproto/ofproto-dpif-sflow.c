@@ -1029,6 +1029,8 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_ARP:
     case OVS_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_CT_STATE:
+    case OVS_KEY_ATTR_CT_ZONE:
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -1137,6 +1139,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	case OVS_ACTION_ATTR_USERSPACE:
 	case OVS_ACTION_ATTR_RECIRC:
 	case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_CT:
 	    break;
 
 	case OVS_ACTION_ATTR_SET_MASKED:

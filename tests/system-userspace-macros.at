@@ -37,3 +37,12 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
 /dpif_netlink.*Generic Netlink family 'ovs_datapath' does not exist. The Open vSwitch kernel module is probably not loaded./d"])
    AT_CHECK([:; $2])
   ])
+
+# CHECK_CONNTRACK()
+#
+# Perform requirements checks for running conntrack tests, and flush the
+# kernel conntrack tables when the test is finished.
+#
+m4_define([CHECK_CONNTRACK],
+    [AT_SKIP_IF(true)]
+)

@@ -58,6 +58,8 @@ parse_keys(bool wc_keys)
                 .flow = &flow,
                 .support = {
                     .recirc = true,
+                    .ct_state = true,
+                    .ct_zone = true,
                 },
             };
 
