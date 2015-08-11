@@ -1058,6 +1058,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
           const struct nlattr *userdata, struct ofpbuf *actions,
           struct flow_wildcards *wc, struct ofpbuf *put_actions, void *aux)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     struct udpif *udpif = aux;
     unsigned int flow_limit;
     struct upcall upcall;
@@ -1088,6 +1089,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
     }
 
     if (udpif_get_n_flows(udpif) >= flow_limit) {
+        VLOG_WARN_RL(&rl, "upcall_cb failure: datapath flow limit reached");
         error = ENOSPC;
         goto out;
     }
@@ -1095,11 +1097,13 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
     /* Prevent miss flow installation if the key has recirculation ID but we
      * were not able to get a reference on it. */
     if (type == DPIF_UC_MISS && upcall.recirc && !upcall.have_recirc_ref) {
+        VLOG_WARN_RL(&rl, "upcall_cb failure: no reference for recirc flow");
         error = ENOSPC;
         goto out;
     }
 
     if (upcall.ukey && !ukey_install(udpif, upcall.ukey)) {
+        VLOG_WARN_RL(&rl, "upcall_cb failure: ukey installation fails");
         error = ENOSPC;
     }
 out:
