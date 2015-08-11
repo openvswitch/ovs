@@ -33,12 +33,12 @@ ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
 }
 
 static void
-ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated,
+ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated, size_t size,
              enum ofpbuf_source source)
 {
     b->base = base;
     b->data = base;
-    b->size = 0;
+    b->size = size;
 
     ofpbuf_init__(b, allocated, source);
 }
@@ -50,7 +50,7 @@ ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated,
 void
 ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
 {
-    ofpbuf_use__(b, base, allocated, OFPBUF_MALLOC);
+    ofpbuf_use__(b, base, allocated, 0, OFPBUF_MALLOC);
 }
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
@@ -70,7 +70,7 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
 void
 ofpbuf_use_stack(struct ofpbuf *b, void *base, size_t allocated)
 {
-    ofpbuf_use__(b, base, allocated, OFPBUF_STACK);
+    ofpbuf_use__(b, base, allocated, 0, OFPBUF_STACK);
 }
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
@@ -90,7 +90,7 @@ ofpbuf_use_stack(struct ofpbuf *b, void *base, size_t allocated)
 void
 ofpbuf_use_stub(struct ofpbuf *b, void *base, size_t allocated)
 {
-    ofpbuf_use__(b, base, allocated, OFPBUF_STUB);
+    ofpbuf_use__(b, base, allocated, 0, OFPBUF_STUB);
 }
 
 /* Initializes 'b' as an ofpbuf whose data starts at 'data' and continues for
@@ -103,8 +103,7 @@ ofpbuf_use_stub(struct ofpbuf *b, void *base, size_t allocated)
 void
 ofpbuf_use_const(struct ofpbuf *b, const void *data, size_t size)
 {
-    ofpbuf_use__(b, CONST_CAST(void *, data), size, OFPBUF_STACK);
-    b->size = size;
+    ofpbuf_use__(b, CONST_CAST(void *, data), size, size, OFPBUF_STACK);
 }
 
 /* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'
