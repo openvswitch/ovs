@@ -238,6 +238,7 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 {
     struct ofpbuf *buf;
     struct json *json;
+    struct ds ds = DS_EMPTY_INITIALIZER;
     size_t length;
     char *s;
 
@@ -249,8 +250,9 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
     jsonrpc_log_msg(rpc, "send", msg);
 
     json = jsonrpc_msg_to_json(msg);
-    s = json_to_string(json, 0);
-    length = strlen(s);
+    json_to_ds(json, 0, &ds);
+    length = ds.length;
+    s = ds_steal_cstr(&ds);
     json_destroy(json);
 
     buf = xmalloc(sizeof *buf);
