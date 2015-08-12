@@ -424,13 +424,6 @@ minimask_hash(const struct minimask *mask, uint32_t basis)
     return miniflow_hash(&mask->masks, basis);
 }
 
-/* Returns a hash value for 'match', given 'basis'. */
-static inline uint32_t
-minimatch_hash(const struct minimatch *match, uint32_t basis)
-{
-    return miniflow_hash(match->flow, minimask_hash(match->mask, basis));
-}
-
 /* Returns a hash value for the bits of range [start, end) in 'minimatch',
  * given 'basis'.
  *
