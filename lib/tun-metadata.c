@@ -60,7 +60,8 @@ static enum ofperr tun_metadata_add_entry(struct tun_table *map, uint8_t idx,
 static void tun_metadata_del_entry(struct tun_table *map, uint8_t idx)
             OVS_REQUIRES(tab_mutex);
 static void memcpy_to_metadata(struct tun_metadata *dst, const void *src,
-                               const struct tun_metadata_loc *);
+                               const struct tun_metadata_loc *,
+                               unsigned int idx);
 static void memcpy_from_metadata(void *dst, const struct tun_metadata *src,
                                  const struct tun_metadata_loc *);
 
@@ -273,10 +274,8 @@ tun_metadata_write(struct flow_tnl *tnl,
     }
 
     loc = &map->entries[idx].loc;
-
-    ULLONG_SET1(tnl->metadata.present.map, idx);
     memcpy_to_metadata(&tnl->metadata,
-                       value->tun_metadata + mf->n_bytes - loc->len, loc);
+                       value->tun_metadata + mf->n_bytes - loc->len, loc, idx);
 }
 
 static const struct tun_metadata_loc *
@@ -355,8 +354,8 @@ tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
                                    mask->tun_metadata[data_offset + i];
         }
     }
-    ULLONG_SET1(match->flow.tunnel.metadata.present.map, idx);
-    memcpy_to_metadata(&match->flow.tunnel.metadata, data.tun_metadata, loc);
+    memcpy_to_metadata(&match->flow.tunnel.metadata, data.tun_metadata,
+                       loc, idx);
 
     if (!value) {
         memset(data.tun_metadata, 0, loc->len);
@@ -365,8 +364,8 @@ tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
     } else {
         memcpy(data.tun_metadata, mask->tun_metadata + data_offset, loc->len);
     }
-    ULLONG_SET1(match->wc.masks.tunnel.metadata.present.map, idx);
-    memcpy_to_metadata(&match->wc.masks.tunnel.metadata, data.tun_metadata, loc);
+    memcpy_to_metadata(&match->wc.masks.tunnel.metadata, data.tun_metadata,
+                       loc, idx);
 }
 
 static bool
@@ -427,11 +426,11 @@ tun_metadata_get_fmd(const struct flow_tnl *tnl, struct match *flow_metadata)
 
         memcpy_from_metadata(opts.tun_metadata, &flow.metadata, old_loc);
         memcpy_to_metadata(&flow_metadata->flow.tunnel.metadata,
-                           opts.tun_metadata, new_loc);
+                           opts.tun_metadata, new_loc, i);
 
         memset(opts.tun_metadata, 0xff, old_loc->len);
         memcpy_to_metadata(&flow_metadata->wc.masks.tunnel.metadata,
-                           opts.tun_metadata, new_loc);
+                           opts.tun_metadata, new_loc, i);
     }
 }
 
@@ -456,7 +455,7 @@ tun_meta_find_key(const struct hmap *hmap, uint32_t key)
 
 static void
 memcpy_to_metadata(struct tun_metadata *dst, const void *src,
-                   const struct tun_metadata_loc *loc)
+                   const struct tun_metadata_loc *loc, unsigned int idx)
 {
     const struct tun_metadata_loc_chain *chain = &loc->c;
     int addr = 0;
@@ -467,6 +466,8 @@ memcpy_to_metadata(struct tun_metadata *dst, const void *src,
         addr += chain->len;
         chain = chain->next;
     }
+
+    ULLONG_SET1(dst->present.map, idx);
 }
 
 static void
@@ -654,8 +655,8 @@ tun_metadata_from_geneve__(const struct tun_metadata *flow_metadata,
                                                flow_opt->type));
         if (entry) {
             if (entry->loc.len == flow_opt->length * 4) {
-                memcpy_to_metadata(metadata, opt + 1, &entry->loc);
-                ULLONG_SET1(metadata->present.map, entry - map->entries);
+                memcpy_to_metadata(metadata, opt + 1, &entry->loc,
+                                   entry - map->entries);
             } else {
                 return EINVAL;
             }
