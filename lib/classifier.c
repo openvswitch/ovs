@@ -298,11 +298,10 @@ cls_rule_is_catchall(const struct cls_rule *rule)
     return minimask_is_catchall(&rule->match.mask);
 }
 
-/* Makes rule invisible after 'version'.  Once that version is made invisible
- * (by changing the version parameter used in lookups), the rule should be
- * actually removed via ovsrcu_postpone().
+/* Makes 'rule' invisible in 'remove_version'.  Once that version is used in
+ * lookups, the caller should remove 'rule' via ovsrcu_postpone().
  *
- * 'rule_' must be in a classifier. */
+ * 'rule' must be in a classifier. */
 void
 cls_rule_make_invisible_in_version(const struct cls_rule *rule,
                                    cls_version_t remove_version)
