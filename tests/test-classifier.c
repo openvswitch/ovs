@@ -1436,6 +1436,36 @@ miniflow_clone__(const struct miniflow *src)
     return dst;
 }
 
+/* Returns a hash value for 'flow', given 'basis'. */
+static inline uint32_t
+miniflow_hash__(const struct miniflow *flow, uint32_t basis)
+{
+    const uint64_t *values = miniflow_get_values(flow);
+    const uint64_t *p = values;
+    uint32_t hash = basis;
+    uint64_t hash_tnl_map = 0, hash_pkt_map = 0;
+    uint64_t map;
+
+    for (map = flow->tnl_map; map; map = zero_rightmost_1bit(map)) {
+        if (*p) {
+            hash = hash_add64(hash, *p);
+            hash_tnl_map |= rightmost_1bit(map);
+        }
+        p++;
+    }
+    for (map = flow->pkt_map; map; map = zero_rightmost_1bit(map)) {
+        if (*p) {
+            hash = hash_add64(hash, *p);
+            hash_pkt_map |= rightmost_1bit(map);
+        }
+        p++;
+    }
+    hash = hash_add64(hash, hash_tnl_map);
+    hash = hash_add64(hash, hash_pkt_map);
+
+    return hash_finish(hash, p - values);
+}
+
 static void
 test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
@@ -1470,7 +1500,7 @@ test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
         /* Check that copying a miniflow works properly. */
         miniflow2 = miniflow_clone__(miniflow);
         assert(miniflow_equal(miniflow, miniflow2));
-        assert(miniflow_hash(miniflow, 0) == miniflow_hash(miniflow2, 0));
+        assert(miniflow_hash__(miniflow, 0) == miniflow_hash__(miniflow2, 0));
         miniflow_expand(miniflow2, &flow3);
         assert(flow_equal(&flow, &flow3));
 
@@ -1486,6 +1516,8 @@ test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
         assert(miniflow_equal_flow_in_minimask(miniflow, &flow2, minimask));
         assert(miniflow_hash_in_minimask(miniflow, minimask, 0x12345678) ==
                flow_hash_in_minimask(&flow, minimask, 0x12345678));
+        assert(minimask_hash(minimask, 0) ==
+               miniflow_hash__(&minimask->masks, 0));
 
         /* Check that masked matches work as expected for differing flows and
          * miniflows. */
