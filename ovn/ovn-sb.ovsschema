@@ -36,7 +36,10 @@
                                               "minInteger": 0,
                                               "maxInteger": 65535}}},
                 "match": {"type": "string"},
-                "actions": {"type": "string"}},
+                "actions": {"type": "string"},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
             "isRoot": true},
         "Multicast_Group": {
             "columns": {

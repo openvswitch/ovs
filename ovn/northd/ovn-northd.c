@@ -54,6 +54,35 @@ static const char *ovnsb_db;
 
 static const char *default_db(void);
 
+
+/* Ingress pipeline stages.
+ *
+ * These must be listed in the order that the stages will be executed. */
+#define INGRESS_STAGES                         \
+    INGRESS_STAGE(PORT_SEC, port_sec)          \
+    INGRESS_STAGE(L2_LKUP, l2_lkup)
+
+enum ingress_stage {
+#define INGRESS_STAGE(NAME, STR) S_IN_##NAME,
+    INGRESS_STAGES
+#undef INGRESS_STAGE
+    INGRESS_N_STAGES
+};
+
+/* Egress pipeline stages.
+ *
+ * These must be listed in the order that the stages will be executed. */
+#define EGRESS_STAGES                         \
+    EGRESS_STAGE(ACL, acl)                    \
+    EGRESS_STAGE(PORT_SEC, port_sec)
+
+enum egress_stage {
+#define EGRESS_STAGE(NAME, STR) S_OUT_##NAME,
+    EGRESS_STAGES
+#undef EGRESS_STAGE
+    EGRESS_N_STAGES
+};
+
 static void
 usage(void)
 {
@@ -596,6 +625,26 @@ ovn_lflow_init(struct ovn_lflow *lflow, struct ovn_datapath *od,
     lflow->actions = actions;
 }
 
+static const char *
+ingress_stage_to_str(int stage) {
+    switch (stage) {
+#define INGRESS_STAGE(NAME, STR) case S_IN_##NAME: return #STR;
+    INGRESS_STAGES
+#undef INGRESS_STAGE
+        default: return "<unknown>";
+    }
+}
+
+static const char *
+egress_stage_to_str(int stage) {
+    switch (stage) {
+#define EGRESS_STAGE(NAME, STR) case S_OUT_##NAME: return #STR;
+    EGRESS_STAGES
+#undef EGRESS_STAGE
+        default: return "<unknown>";
+    }
+}
+
 /* Adds a row with the specified contents to the Logical_Flow table. */
 static void
 ovn_lflow_add(struct hmap *lflow_map, struct ovn_datapath *od,
@@ -687,16 +736,18 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
         /* Logical VLANs not supported. */
-        ovn_lflow_add(&lflows, od, P_IN, 0, 100, "vlan.present", "drop;");
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 100, "vlan.present",
+                      "drop;");
 
         /* Broadcast/multicast source address is invalid. */
-        ovn_lflow_add(&lflows, od, P_IN, 0, 100, "eth.src[40]", "drop;");
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 100, "eth.src[40]",
+                      "drop;");
 
         /* Port security flows have priority 50 (see below) and will continue
          * to the next table if packet source is acceptable. */
 
         /* Otherwise drop the packet. */
-        ovn_lflow_add(&lflows, od, P_IN, 0, 0, "1", "drop;");
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 0, "1", "drop;");
     }
 
     /* Ingress table 0: Ingress port security (priority 50). */
@@ -708,7 +759,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         build_port_security("eth.src",
                             op->nb->port_security, op->nb->n_port_security,
                             &match);
-        ovn_lflow_add(&lflows, op->od, P_IN, 0, 50, ds_cstr(&match),
+        ovn_lflow_add(&lflows, op->od, P_IN, S_IN_PORT_SEC, 50, ds_cstr(&match),
                       lport_is_enabled(op->nb) ? "next;" : "drop;");
         ds_destroy(&match);
     }
@@ -721,7 +772,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         }
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_IN, 1, 100, "eth.dst[40]",
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 100, "eth.dst[40]",
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
@@ -740,7 +791,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                 ds_put_cstr(&actions, "outport = ");
                 json_string_escape(op->nb->name, &actions);
                 ds_put_cstr(&actions, "; output;");
-                ovn_lflow_add(&lflows, op->od, P_IN, 1, 50,
+                ovn_lflow_add(&lflows, op->od, P_IN, S_IN_L2_LKUP, 50,
                               ds_cstr(&match), ds_cstr(&actions));
                 ds_destroy(&actions);
                 ds_destroy(&match);
@@ -759,7 +810,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     /* Ingress table 1: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (od->has_unknown) {
-            ovn_lflow_add(&lflows, od, P_IN, 1, 0, "1",
+            ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 0, "1",
                           "outport = \""MC_UNKNOWN"\"; output;");
         }
     }
@@ -773,18 +824,19 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
             action = (!strcmp(acl->action, "allow") ||
                       !strcmp(acl->action, "allow-related"))
                 ? "next;" : "drop;";
-            ovn_lflow_add(&lflows, od, P_OUT, 0, acl->priority, acl->match,
-                          action);
+            ovn_lflow_add(&lflows, od, P_OUT, S_OUT_ACL, acl->priority,
+                          acl->match, action);
         }
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_OUT, 0, 0, "1", "next;");
+        ovn_lflow_add(&lflows, od, P_OUT, S_OUT_ACL, 0, "1", "next;");
     }
 
     /* Egress table 1: Egress port security multicast/broadcast (priority
      * 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_OUT, 1, 100, "eth.dst[40]", "output;");
+        ovn_lflow_add(&lflows, od, P_OUT, S_OUT_PORT_SEC, 100, "eth.dst[40]",
+                      "output;");
     }
 
     /* Egress table 1: Egress port security (priority 50). */
@@ -798,7 +850,8 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                             op->nb->port_security, op->nb->n_port_security,
                             &match);
 
-        ovn_lflow_add(&lflows, op->od, P_OUT, 1, 50, ds_cstr(&match),
+        ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 50,
+                      ds_cstr(&match),
                       lport_is_enabled(op->nb) ? "output;" : "drop;");
 
         ds_destroy(&match);
@@ -834,6 +887,15 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         sbrec_logical_flow_set_priority(sbflow, lflow->priority);
         sbrec_logical_flow_set_match(sbflow, lflow->match);
         sbrec_logical_flow_set_actions(sbflow, lflow->actions);
+
+        struct smap external_ids = SMAP_INITIALIZER(&external_ids);
+        smap_add(&external_ids, "stage-name",
+                 lflow->pipeline == P_IN ?
+                  ingress_stage_to_str(lflow->table_id) :
+                  egress_stage_to_str(lflow->table_id));
+        sbrec_logical_flow_set_external_ids(sbflow, &external_ids);
+        smap_destroy(&external_ids);
+
         ovn_lflow_destroy(&lflows, lflow);
     }
     hmap_destroy(&lflows);
