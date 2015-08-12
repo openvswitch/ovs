@@ -300,6 +300,10 @@ Port binding commands:\n\
   lport-bind LPORT CHASSIS    bind logical port LPORT to CHASSIS\n\
   lport-unbind LPORT          reset the port binding of logical port LPORT\n\
 \n\
+Logical flow commands:\n\
+  lflow-list [DATAPATH]       List logical flows for all or a single datapath\n\
+  dump-flows [DATAPATH]       Alias for lflow-list\n\
+\n\
 %s\
 \n\
 Options:\n\
@@ -470,6 +474,13 @@ pre_get_info(struct ctl_context *ctx)
 
     ovsdb_idl_add_column(ctx->idl, &sbrec_port_binding_col_logical_port);
     ovsdb_idl_add_column(ctx->idl, &sbrec_port_binding_col_chassis);
+
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_logical_datapath);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_pipeline);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_actions);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_priority);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_table_id);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_match);
 }
 
 static struct cmd_show_table cmd_show_tables[] = {
@@ -582,6 +593,106 @@ cmd_lport_unbind(struct ctl_context *ctx)
     if (sbctl_bd) {
         sbrec_port_binding_set_chassis(sbctl_bd->bd_cfg, NULL);
     }
+}
+
+enum {
+    PL_INGRESS,
+    PL_EGRESS,
+};
+
+/* Help ensure we catch any future pipeline values */
+static int
+pipeline_encode(const char *pl)
+{
+    if (!strcmp(pl, "ingress")) {
+        return PL_INGRESS;
+    } else if (!strcmp(pl, "egress")) {
+        return PL_EGRESS;
+    }
+
+    OVS_NOT_REACHED();
+}
+
+static int
+lflow_cmp(const void *lf1_, const void *lf2_)
+{
+    const struct sbrec_logical_flow *lf1, *lf2;
+
+    lf1 = *((struct sbrec_logical_flow **) lf1_);
+    lf2 = *((struct sbrec_logical_flow **) lf2_);
+
+    int pl1 = pipeline_encode(lf1->pipeline);
+    int pl2 = pipeline_encode(lf2->pipeline);
+
+#define CMP(expr) \
+    do { \
+        int res; \
+        res = (expr); \
+        if (res) { \
+            return res; \
+        } \
+    } while (0)
+
+    CMP(uuid_compare_3way(&lf1->logical_datapath->header_.uuid,
+                          &lf2->logical_datapath->header_.uuid));
+    CMP(pl1 - pl2);
+    CMP(lf1->table_id > lf2->table_id ? 1 :
+            (lf1->table_id < lf2->table_id ? -1 : 0));
+    CMP(lf1->priority > lf2->priority ? -1 :
+            (lf1->priority < lf2->priority ? 1 : 0));
+    CMP(strcmp(lf1->match, lf2->match));
+
+#undef CMP
+
+    return 0;
+}
+
+static void
+cmd_lflow_list(struct ctl_context *ctx)
+{
+    const char *datapath = ctx->argc == 2 ? ctx->argv[1] : NULL;
+    struct uuid datapath_uuid = { .parts = { 0, }};
+    const struct sbrec_logical_flow **lflows;
+    const struct sbrec_logical_flow *lflow;
+    size_t n_flows = 0, n_capacity = 64;
+
+    if (datapath && !uuid_from_string(&datapath_uuid, datapath)) {
+        VLOG_ERR("Invalid format of datapath UUID");
+        return;
+    }
+
+    lflows = xmalloc(sizeof *lflows * n_capacity);
+    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->idl) {
+        if (n_flows == n_capacity) {
+            lflows = x2nrealloc(lflows, &n_capacity, sizeof *lflows);
+        }
+        lflows[n_flows] = lflow;
+        n_flows++;
+    }
+
+    qsort(lflows, n_flows, sizeof *lflows, lflow_cmp);
+
+    const char *cur_pipeline = "";
+    size_t i;
+    for (i = 0; i < n_flows; i++) {
+        lflow = lflows[i];
+        if (datapath && !uuid_equals(&datapath_uuid,
+                                     &lflow->logical_datapath->header_.uuid)) {
+            continue;
+        }
+        if (strcmp(cur_pipeline, lflow->pipeline)) {
+            printf("Datapath: " UUID_FMT "  Pipeline: %s\n",
+                    UUID_ARGS(&lflow->logical_datapath->header_.uuid),
+                    lflow->pipeline);
+            cur_pipeline = lflow->pipeline;
+        }
+        printf("  table_id=%" PRId64 ", priority=%3" PRId64 ", "
+               "match=(%s), action=(%s)\n",
+               lflow->table_id, lflow->priority,
+               lflow->match, lflow->actions);
+    }
+
+    free(lflows);
 }
 
 
@@ -857,6 +968,12 @@ static const struct ctl_command_syntax sbctl_commands[] = {
      "--may-exist", RW},
     {"lport-unbind", 1, 1, "LPORT", pre_get_info, cmd_lport_unbind, NULL,
      "--if-exists", RW},
+
+    /* Logical flow commands */
+    {"lflow-list", 0, 1, "[DATAPATH]", pre_get_info, cmd_lflow_list, NULL,
+     "", RO},
+    {"dump-flows", 0, 1, "[DATAPATH]", pre_get_info, cmd_lflow_list, NULL,
+     "", RO}, /* Friendly alias for lflow-list */
 
     /* SSL commands (To Be Added). */
 

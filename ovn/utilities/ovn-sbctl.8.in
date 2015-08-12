@@ -146,6 +146,15 @@ Without \fB\-\-if\-exists\fR, attempting to unbind a logical port
 that is not bound is an error.  With \fB\-\-if\-exists\fR, attempting
 to unbind logical port that is not bound has no effect.
 .
+.SS "Logical Flow Commands"
+.
+.IP "\fBlflow\-list\fR [\fIlogical\-datapath\fR]"
+List logical flows. If \fIlogical\-datapath\fR is specified, only list flows for
+that logical datapath.
+.
+.IP "\fBdump\-flows\fR [\fIlogical\-datapath\fR]"
+Alias for \fBlflow\-list\fB.
+.
 .so lib/db-ctl-base.man
 .SH "EXIT STATUS"
 .IP "0"
