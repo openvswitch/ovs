@@ -68,3 +68,9 @@ m4_define([ADD_VLAN],
       NS_CHECK_EXEC([$2], [ip addr add dev $1.$3 $4])
     ]
 )
+
+# FORMAT_PING([])
+#
+# Strip variant pieces from ping output so the output can be reliably compared.
+#
+m4_define([FORMAT_PING], [grep "transmitted" | sed 's/time.*ms$/time 0ms/'])
