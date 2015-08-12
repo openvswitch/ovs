@@ -1236,9 +1236,14 @@ set.
 For more information, please see the corresponding IETF draft:
 https://tools.ietf.org/html/draft-smith-vxlan-group-policy
 .
-.IP "\fBtun_metadata\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
+.IP "\fBtun_metadata\fIidx\fR[\fB=\fIvalue\fR[\fB/\fImask\fR]]"
 Matches \fIvalue\fR either exactly or with optional \fImask\fR in
 tunnel metadata field number \fIidx\fR (numbered from 0 to 63).
+The act of specifying a field implies a match on the existence
+of that field in the packet in addition to the masked value. As
+a shorthand, it is possible to specify only the field name to
+simply match on an option being present.
+.IP
 Tunnel metadata fields can be dynamically assigned onto the data
 contained in the options of Geneve packets using the commands
 described in the section \fBOpenFlow Switch Geneve Option Table

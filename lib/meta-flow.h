@@ -1851,10 +1851,11 @@ void mf_set_flow_value_masked(const struct mf_field *,
                               const union mf_value *value,
                               const union mf_value *mask,
                               struct flow *);
-bool mf_is_zero(const struct mf_field *, const struct flow *);
+bool mf_is_tun_metadata(const struct mf_field *);
+bool mf_is_set(const struct mf_field *, const struct flow *);
 void mf_mask_field(const struct mf_field *, struct flow *);
 int mf_field_len(const struct mf_field *, const union mf_value *value,
-                 const union mf_value *mask);
+                 const union mf_value *mask, bool *is_masked);
 
 void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);

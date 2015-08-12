@@ -202,12 +202,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.tunnel.gbp_id;
     case MFF_TUN_GBP_FLAGS:
         return !wc->masks.tunnel.gbp_flags;
-    CASE_MFF_TUN_METADATA: {
-        union mf_value value;
-
-        tun_metadata_read(&wc->masks.tunnel, mf, &value);
-        return is_all_zeros(&value.tun_metadata, mf->n_bytes);
-    }
+    CASE_MFF_TUN_METADATA:
+        return !ULLONG_GET(wc->masks.tunnel.metadata.present.map,
+                           mf->id - MFF_TUN_METADATA0);
     case MFF_METADATA:
         return !wc->masks.metadata;
     case MFF_IN_PORT:
@@ -1063,17 +1060,26 @@ field_len(const struct mf_field *mf, const union mf_value *value_)
 /* Returns the effective length of the field. For fixed length fields,
  * this is just the defined length. For variable length fields, it is
  * the minimum size encoding that retains the same meaning (i.e.
- * discarding leading zeros). */
+ * discarding leading zeros).
+ *
+ * 'is_masked' returns (if non-NULL) whether the original contained
+ * a mask. Otherwise, a mask that is the same length as the value
+ * might be misinterpreted as an exact match. */
 int
 mf_field_len(const struct mf_field *mf, const union mf_value *value,
-             const union mf_value *mask)
+             const union mf_value *mask, bool *is_masked_)
 {
     int len, mask_len;
+    bool is_masked = mask && !is_all_ones(mask, mf->n_bytes);
 
     len = field_len(mf, value);
-    if (mask && !is_all_ones(mask, mf->n_bytes)) {
+    if (is_masked) {
         mask_len = field_len(mf, mask);
         len = MAX(len, mask_len);
+    }
+
+    if (is_masked_) {
+        *is_masked_ = is_masked;
     }
 
     return len;
@@ -1329,17 +1335,30 @@ mf_set_flow_value_masked(const struct mf_field *field,
     mf_set_flow_value(field, &tmp, flow);
 }
 
-/* Returns true if 'mf' has a zero value in 'flow', false if it is nonzero.
+bool
+mf_is_tun_metadata(const struct mf_field *mf)
+{
+    return mf->id >= MFF_TUN_METADATA0 &&
+           mf->id < MFF_TUN_METADATA0 + TUN_METADATA_NUM_OPTS;
+}
+
+/* Returns true if 'mf' has previously been set in 'flow', false if
+ * it contains a non-default value.
  *
  * The caller is responsible for ensuring that 'flow' meets 'mf''s
  * prerequisites. */
 bool
-mf_is_zero(const struct mf_field *mf, const struct flow *flow)
+mf_is_set(const struct mf_field *mf, const struct flow *flow)
 {
-    union mf_value value;
+    if (!mf_is_tun_metadata(mf)) {
+        union mf_value value;
 
-    mf_get_value(mf, flow, &value);
-    return is_all_zeros(&value, mf->n_bytes);
+        mf_get_value(mf, flow, &value);
+        return !is_all_zeros(&value, mf->n_bytes);
+    } else {
+        return ULLONG_GET(flow->tunnel.metadata.present.map,
+                          mf->id - MFF_TUN_METADATA0);
+    }
 }
 
 /* Makes 'match' wildcard field 'mf'.
@@ -1585,7 +1604,9 @@ mf_set(const struct mf_field *mf,
     if (!mask || is_all_ones(mask, mf->n_bytes)) {
         mf_set_value(mf, value, match);
         return mf->usable_protocols_exact;
-    } else if (is_all_zeros(mask, mf->n_bytes)) {
+    } else if (is_all_zeros(mask, mf->n_bytes) && !mf_is_tun_metadata(mf)) {
+        /* Tunnel metadata matches on the existence of the field itself, so
+         * it still needs to be encoded even if the value is wildcarded. */
         mf_set_wild(mf, match);
         return OFPUTIL_P_ANY;
     }

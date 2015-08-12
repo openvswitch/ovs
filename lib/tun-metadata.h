@@ -86,13 +86,22 @@ struct tun_metadata_loc {
     struct tun_metadata_loc_chain c;
 };
 
+/* Bookkeeping information to keep track of an option that was allocated
+ * inside struct match. */
+struct tun_metadata_match_entry {
+    struct tun_metadata_loc loc; /* Allocated position. */
+    bool masked; /* Source value had a mask. Otherwise we can't tell if the
+                  * entire field was exact matched or only the portion that
+                  * is the same size as the value. */
+};
+
 /* Allocation of options inside struct match.  This is important if we don't
  * have access to a global allocation table - either because there isn't one
  * (ovs-ofctl) or if we need to keep the allocation outside of packet
  * processing context (Packet-In). These structures never have dynamically
  * allocated memory because the address space is never fragmented. */
 struct tun_metadata_allocation {
-    struct tun_metadata_loc loc[TUN_METADATA_NUM_OPTS];
+    struct tun_metadata_match_entry entry[TUN_METADATA_NUM_OPTS];
     uint8_t alloc_offset;       /* Byte offset into 'opts', multiple of 4.  */
     bool valid;                 /* Set to true after any allocation occurs. */
 };

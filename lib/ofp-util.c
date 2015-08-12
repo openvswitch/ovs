@@ -9185,8 +9185,7 @@ decode_geneve_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
         map->option_type = nx_map->option_type;
 
         map->option_len = nx_map->option_len;
-        if (map->option_len == 0 || map->option_len % 4 ||
-            map->option_len > GENEVE_MAX_OPT_SIZE) {
+        if (map->option_len % 4 || map->option_len > GENEVE_MAX_OPT_SIZE) {
             VLOG_WARN_RL(&bad_ofmsg_rl,
                          "geneve table option length (%u) is not a valid option size",
                          map->option_len);

@@ -365,6 +365,21 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         } else if (!strcmp(name, "no_readonly_table")
                    || !strcmp(name, "allow_hidden_fields")) {
              /* ignore these fields. */
+        } else if (mf_from_name(name)) {
+            char *value;
+
+            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
+            if (!value) {
+                /* If there's no value, we're just trying to match on the
+                 * existence of the field, so use a no-op value. */
+                value = "0/0";
+            }
+
+            error = parse_field(mf_from_name(name), value, &fm->match,
+                                usable_protocols);
+            if (error) {
+                return error;
+            }
         } else {
             char *value;
 
@@ -424,9 +439,6 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                     error = str_to_be64(value, &fm->new_cookie);
                     fm->modify_cookie = true;
                 }
-            } else if (mf_from_name(name)) {
-                error = parse_field(mf_from_name(name), value, &fm->match,
-                                    usable_protocols);
             } else if (!strcmp(name, "duration")
                        || !strcmp(name, "n_packets")
                        || !strcmp(name, "n_bytes")
@@ -1098,7 +1110,7 @@ parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                 goto exit;
             }
 
-            if (!mf_is_zero(mf, flow)) {
+            if (mf_is_set(mf, flow)) {
                 error = xasprintf("%s: field %s set multiple times", s, key);
                 goto exit;
             }
@@ -1243,7 +1255,8 @@ parse_select_group_field(char *s, struct field_array *fa,
                 }
 
                 /* The mask cannot be all-zeros */
-                if (is_all_zeros(&value, mf->n_bytes)) {
+                if (!mf_is_tun_metadata(mf) &&
+                    is_all_zeros(&value, mf->n_bytes)) {
                     return xasprintf("%s: values are wildcards here "
                                      "and must not be all-zeros", s);
                 }

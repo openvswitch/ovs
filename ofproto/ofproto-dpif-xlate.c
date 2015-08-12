@@ -3327,6 +3327,11 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
             }
             basis = hash_bytes(&value, mf->n_bytes, basis);
 
+            /* For tunnels, hash in whether the field is present. */
+            if (mf_is_tun_metadata(mf)) {
+                basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
+            }
+
             mf_mask_field(mf, &ctx->wc->masks);
         }
     }

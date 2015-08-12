@@ -278,4 +278,7 @@ bitmap_is_all_zeros(const unsigned long *bitmap, size_t n)
 #define ULLONG_SET0(MAP, OFFSET) ((MAP) &= ~(1ULL << (OFFSET)))
 #define ULLONG_SET1(MAP, OFFSET) ((MAP) |= 1ULL << (OFFSET))
 
+/* Returns the value of a bit in a map as a bool. */
+#define ULLONG_GET(MAP, OFFSET) !!((MAP) & (1ULL << (OFFSET)))
+
 #endif /* bitmap.h */

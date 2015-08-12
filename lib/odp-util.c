@@ -1845,7 +1845,8 @@ format_geneve_opts(const struct geneve_opt *opt,
                     verbose);
         format_u8x(ds, "type", opt->type, MASK(mask, type), verbose);
         format_u8u(ds, "len", data_len, mask ? &data_len_mask : NULL, verbose);
-        if (verbose || !mask || !is_all_zeros(mask + 1, data_len)) {
+        if (data_len &&
+            (verbose || !mask || !is_all_zeros(mask + 1, data_len))) {
             ds_put_hex(ds, opt + 1, data_len);
             if (mask && !is_all_ones(mask + 1, data_len)) {
                 ds_put_char(ds, '/');

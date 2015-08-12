@@ -299,11 +299,11 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
         }
         *header = ntohll(get_unaligned_be64(b->data));
     }
-    if (nxm_length(*header) <= nxm_experimenter_len(*header)) {
+    if (nxm_length(*header) < nxm_experimenter_len(*header)) {
         VLOG_WARN_RL(&rl, "OXM header "NXM_HEADER_FMT" has invalid length %d "
                      "(minimum is %d)",
                      NXM_HEADER_ARGS(*header), nxm_length(*header),
-                     nxm_header_len(*header) + 1);
+                     nxm_header_len(*header));
         goto error;
     }
     ofpbuf_pull(b, nxm_header_len(*header));
@@ -674,26 +674,25 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
  * 'put' functions whose names end in 'm' add a field that might be wildcarded.
  * Other 'put' functions add exact-match fields.
  */
-
-static void
-nxm_put_unmasked(struct ofpbuf *b, enum mf_field_id field,
-                 enum ofp_version version, const void *value, size_t n_bytes)
+void
+nxm_put__(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+          const void *value, const void *mask, size_t n_bytes)
 {
-    nx_put_header_len(b, field, version, false, n_bytes);
+    nx_put_header_len(b, field, version, !!mask, n_bytes);
     ofpbuf_put(b, value, n_bytes);
+    if (mask) {
+        ofpbuf_put(b, mask, n_bytes);
+    }
+
 }
 
-void
+static void
 nxm_put(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
         const void *value, const void *mask, size_t n_bytes)
 {
     if (!is_all_zeros(mask, n_bytes)) {
         bool masked = !is_all_ones(mask, n_bytes);
-        nx_put_header_len(b, field, version, masked, n_bytes);
-        ofpbuf_put(b, value, n_bytes);
-        if (masked) {
-            ofpbuf_put(b, mask, n_bytes);
-        }
+        nxm_put__(b, field, version, value, masked ? mask : NULL, n_bytes);
     }
 }
 
@@ -708,7 +707,7 @@ static void
 nxm_put_8(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
           uint8_t value)
 {
-    nxm_put_unmasked(b, field, version, &value, sizeof value);
+    nxm_put__(b, field, version, &value, NULL, sizeof value);
 }
 
 static void
@@ -722,7 +721,7 @@ static void
 nxm_put_16(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
            ovs_be16 value)
 {
-    nxm_put_unmasked(b, field, version, &value, sizeof value);
+    nxm_put__(b, field, version, &value, NULL, sizeof value);
 }
 
 static void
@@ -736,7 +735,7 @@ static void
 nxm_put_32(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
            ovs_be32 value)
 {
-    nxm_put_unmasked(b, field, version, &value, sizeof value);
+    nxm_put__(b, field, version, &value, NULL, sizeof value);
 }
 
 static void
@@ -1171,10 +1170,10 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
 
     for (i = 0; i < MFF_N_IDS; i++) {
         if (bitmap_is_set(fa->used.bm, i)) {
-            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL);
-            nxm_put_unmasked(b, i, version,
-                             &fa->value[i].u8 + mf_from_id(i)->n_bytes - len,
-                             len);
+            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL, NULL);
+            nxm_put__(b, i, version,
+                      &fa->value[i].u8 + mf_from_id(i)->n_bytes - len, NULL,
+                      len);
         }
     }
 
@@ -1216,10 +1215,10 @@ nx_put_entry(struct ofpbuf *b,
              const union mf_value *value, const union mf_value *mask)
 {
     const struct mf_field *mf = mf_from_id(field);
-    bool masked = mask && !is_all_ones(mask, mf->n_bytes);
+    bool masked;
     int len, offset;
 
-    len = mf_field_len(mf, value, mask);
+    len = mf_field_len(mf, value, mask, &masked);
     offset = mf->n_bytes - len;
 
     nx_put_header_len(b, field, version, masked, len);
