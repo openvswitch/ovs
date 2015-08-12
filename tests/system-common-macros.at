@@ -37,6 +37,12 @@ m4_define([NS_CHECK_EXEC],
     [ AT_CHECK([NS_EXEC([$1], [$2])], m4_shift(m4_shift($@))) ]
 )
 
+# ADD_BR([name], [vsctl-args])
+#
+# Expands into the proper ovs-vsctl commands to create a bridge with the
+# appropriate type, and allows additional arguments to be passed.
+m4_define([ADD_BR], [ovs-vsctl _ADD_BR([$1]) -- $2])
+
 # ADD_VETH([port], [namespace], [ovs-br], [ip_addr])
 #
 # Add a pair of veth ports. 'port' will be added to name space 'namespace',
