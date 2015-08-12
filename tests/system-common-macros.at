@@ -75,6 +75,44 @@ m4_define([ADD_VLAN],
     ]
 )
 
+# ADD_OVS_TUNNEL([type], [bridge], [port], [remote-addr], [overlay-addr])
+#
+# Add an ovs-based tunnel device in the root namespace, with name 'port' and
+# type 'type'. The tunnel device will be configured as point-to-point with the
+# 'remote-addr' as the underlay address of the remote tunnel endpoint.
+#
+# 'port will be configured with the address 'overlay-addr'.
+#
+m4_define([ADD_OVS_TUNNEL],
+   [AT_CHECK([ovs-vsctl add-port $2 $3 -- \
+              set int $3 type=$1 options:remote_ip=$4])
+    AT_CHECK([ip addr add dev $2 $5])
+    AT_CHECK([ip link set dev $2 up])
+    AT_CHECK([ip link set dev $2 mtu 1450])
+    ON_EXIT([ip addr del dev $2 $5])
+   ]
+)
+
+# ADD_NATIVE_TUNNEL([type], [port], [namespace], [remote-addr], [overlay-addr],
+#                   [link-args])
+#
+# Add a native tunnel device within 'namespace', with name 'port' and type
+# 'type'. The tunnel device will be configured as point-to-point with the
+# 'remote-addr' as the underlay address of the remote tunnel endpoint (as
+# viewed from the perspective of that namespace).
+#
+# 'port' will be configured with the address 'overlay-addr'. 'link-args' is
+# made available so that additional arguments can be passed to "ip link",
+# for instance to configure the vxlan destination port.
+#
+m4_define([ADD_NATIVE_TUNNEL],
+   [NS_CHECK_EXEC([$3], [ip link add dev $2 type $1 remote $4 $6])
+    NS_CHECK_EXEC([$3], [ip addr add dev $2 $5])
+    NS_CHECK_EXEC([$3], [ip link set dev $2 up])
+    NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1450])
+   ]
+)
+
 # FORMAT_PING([])
 #
 # Strip variant pieces from ping output so the output can be reliably compared.
