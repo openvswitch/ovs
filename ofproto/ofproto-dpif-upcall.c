@@ -215,7 +215,6 @@ struct udpif_key {
     size_t key_len;                /* Length of 'key'. */
     const struct nlattr *mask;     /* Datapath flow mask. */
     size_t mask_len;               /* Length of 'mask'. */
-    struct ofpbuf *actions;        /* Datapath flow actions as nlattrs. */
     ovs_u128 ufid;                 /* Unique flow identifier. */
     bool ufid_present;             /* True if 'ufid' is in datapath. */
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
@@ -228,6 +227,9 @@ struct udpif_key {
     uint64_t reval_seq OVS_GUARDED;           /* Tracks udpif->reval_seq. */
     bool flow_exists OVS_GUARDED;             /* Ensures flows are only deleted
                                                  once. */
+    /* Datapath flow actions as nlattrs.  Protected by RCU.  Read with
+     * ukey_get_actions(), and write with ukey_set_actions(). */
+    OVSRCU_TYPE(struct ofpbuf *) actions;
 
     struct xlate_cache *xcache OVS_GUARDED;   /* Cache for xlate entries that
                                                * are affected by this ukey.
@@ -287,6 +289,8 @@ static struct udpif_key *ukey_create_from_upcall(struct upcall *,
 static int ukey_create_from_dpif_flow(const struct udpif *,
                                       const struct dpif_flow *,
                                       struct udpif_key **);
+static void ukey_get_actions(struct udpif_key *, const struct nlattr **actions,
+                             size_t *size);
 static bool ukey_install_start(struct udpif *, struct udpif_key *ukey);
 static bool ukey_install_finish(struct udpif_key *ukey, int error);
 static bool ukey_install(struct udpif *udpif, struct udpif_key *ukey);
@@ -1131,7 +1135,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
         if (upcall->sflow) {
             union user_action_cookie cookie;
             const struct nlattr *actions;
-            int actions_len = 0;
+            size_t actions_len = 0;
             struct dpif_sflow_actions sflow_actions;
             memset(&sflow_actions, 0, sizeof sflow_actions);
             memset(&cookie, 0, sizeof cookie);
@@ -1149,8 +1153,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
                 /* Lookup actions in userspace cache. */
                 struct udpif_key *ukey = ukey_lookup(udpif, upcall->ufid);
                 if (ukey) {
-                    actions = ukey->actions->data;
-                    actions_len = ukey->actions->size;
+                    ukey_get_actions(ukey, &actions, &actions_len);
                     dpif_sflow_read_actions(flow, actions, actions_len,
                                             &sflow_actions);
                 }
@@ -1277,8 +1280,8 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->dop.u.flow_put.mask_len = ukey->mask_len;
             op->dop.u.flow_put.ufid = upcall->ufid;
             op->dop.u.flow_put.stats = NULL;
-            op->dop.u.flow_put.actions = ukey->actions->data;
-            op->dop.u.flow_put.actions_len = ukey->actions->size;
+            ukey_get_actions(ukey, &op->dop.u.flow_put.actions,
+                             &op->dop.u.flow_put.actions_len);
         }
 
         if (upcall->odp_actions.size) {
@@ -1344,6 +1347,24 @@ ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid)
     return NULL;
 }
 
+/* Provides safe lockless access of RCU protected 'ukey->actions'.  Callers may
+ * alternatively access the field directly if they take 'ukey->mutex'. */
+static void
+ukey_get_actions(struct udpif_key *ukey, const struct nlattr **actions, size_t *size)
+{
+    const struct ofpbuf *buf = ovsrcu_get(struct ofpbuf *, &ukey->actions);
+    *actions = buf->data;
+    *size = buf->size;
+}
+
+static void
+ukey_set_actions(struct udpif_key *ukey, const struct ofpbuf *actions)
+{
+    ovsrcu_postpone(ofpbuf_delete,
+                    ovsrcu_get_protected(struct ofpbuf *, &ukey->actions));
+    ovsrcu_set(&ukey->actions, ofpbuf_clone(actions));
+}
+
 static struct udpif_key *
 ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
@@ -1367,7 +1388,9 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->ufid = *ufid;
     ukey->pmd_id = pmd_id;
     ukey->hash = get_ufid_hash(&ukey->ufid);
-    ukey->actions = ofpbuf_clone(actions);
+
+    ovsrcu_init(&ukey->actions, NULL);
+    ukey_set_actions(ukey, actions);
 
     ovs_mutex_init(&ukey->mutex);
     ukey->dump_seq = dump_seq;
@@ -1620,7 +1643,7 @@ ukey_delete__(struct udpif_key *ukey)
             recirc_free_id(ukey->recircs[i]);
         }
         xlate_cache_delete(ukey->xcache);
-        ofpbuf_delete(ukey->actions);
+        ofpbuf_delete(ovsrcu_get(struct ofpbuf *, &ukey->actions));
         ovs_mutex_destroy(&ukey->mutex);
         free(ukey);
     }
@@ -1763,7 +1786,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                           &odp_actions);
     }
 
-    if (!ofpbuf_equal(&odp_actions, ukey->actions)) {
+    if (!ofpbuf_equal(&odp_actions,
+                      ovsrcu_get(struct ofpbuf *, &ukey->actions))) {
         goto exit;
     }
 
