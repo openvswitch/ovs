@@ -32,8 +32,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
 # invoked. They can be used to perform additional cleanups such as name space
 # removal.
 m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
-  [AT_CHECK([ovs-vsctl del-br br0])
-   OVS_VSWITCHD_STOP([dnl
+  [OVS_VSWITCHD_STOP([dnl
 "/netdev_linux.*obtaining netdev stats via vport failed/d
 /dpif_netlink.*Generic Netlink family 'ovs_datapath' does not exist. The Open vSwitch kernel module is probably not loaded./d"])
    AT_CHECK([:; $2])
