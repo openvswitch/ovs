@@ -481,6 +481,7 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_priority);
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_table_id);
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_match);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_external_ids);
 }
 
 static struct cmd_show_table cmd_show_tables[] = {
@@ -686,10 +687,12 @@ cmd_lflow_list(struct ctl_context *ctx)
                     lflow->pipeline);
             cur_pipeline = lflow->pipeline;
         }
-        printf("  table_id=%" PRId64 ", priority=%3" PRId64 ", "
-               "match=(%s), action=(%s)\n",
-               lflow->table_id, lflow->priority,
-               lflow->match, lflow->actions);
+
+        const char *table_name = smap_get(&lflow->external_ids, "stage-name");
+        printf("  table=%" PRId64 "(%8s), priority=%3" PRId64
+               ", match=(%s), action=(%s)\n",
+               lflow->table_id, table_name ? table_name : "",
+               lflow->priority, lflow->match, lflow->actions);
     }
 
     free(lflows);
