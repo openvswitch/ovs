@@ -48,6 +48,30 @@ AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis "ch0"
     Encap stt
         ip: "1.2.3.5"
+    Port_Binding "vif0"
+])
+
+# adds another 'vif1'
+AT_CHECK([ovn-nbctl lport-add br-test vif1])
+AT_CHECK([ovn-nbctl lport-set-macs vif1 f0:ab:cd:ef:01:03])
+AT_CHECK([ovn-sbctl lport-bind vif1 ch0])
+
+AT_CHECK([ovn-sbctl show | sed 's/vif[[0-9]]/vif/'], [0], [dnl
+Chassis "ch0"
+    Encap stt
+        ip: "1.2.3.5"
+    Port_Binding "vif"
+    Port_Binding "vif"
+])
+
+# deletes 'vif1'
+AT_CHECK([ovn-nbctl lport-del vif1])
+
+AT_CHECK([ovn-sbctl show], [0], [dnl
+Chassis "ch0"
+    Encap stt
+        ip: "1.2.3.5"
+    Port_Binding "vif0"
 ])
 
 uuid=$(ovn-sbctl --columns=_uuid list Chassis ch0 | cut -d ':' -f2 | tr -d ' ')

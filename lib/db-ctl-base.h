@@ -148,6 +148,17 @@ struct ctl_command *ctl_parse_commands(int argc, char *argv[],
                                        struct shash *local_options,
                                        size_t *n_commandsp);
 
+/* Sometimes, it is desirable to print the table with weak reference to
+ * rows in a 'cmd_show_table' table.  In that case, the 'weak_ref_table'
+ * should be used and user must define all variables. */
+struct weak_ref_table {
+    const struct ovsdb_idl_table_class *table;
+    const struct ovsdb_idl_column *name_column;
+    /* This colum must be a weak reference to the owning
+     * 'struct cmd_show_table''s table row. */
+    const struct ovsdb_idl_column *wref_column;
+};
+
 /* This struct is for organizing the 'show' command output where:
  *
  * - 'table' is the table to show.
@@ -157,11 +168,17 @@ struct ctl_command *ctl_parse_commands(int argc, char *argv[],
  *
  * - 'columns[]' allows user to specify the print of additional columns
  *   in 'table'.
+ *
+ * - if 'wref_table' is populated, print 'wref_table.name_column' for
+ *   each row in table 'wref_table.table' that has a reference to 'table'
+ *   in 'wref_table.wref_column'.  Every field must be populated.
+ *
  * */
 struct cmd_show_table {
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *name_column;
     const struct ovsdb_idl_column *columns[3]; /* Seems like a good number. */
+    const struct weak_ref_table wref_table;
 };
 
 

@@ -1620,6 +1620,15 @@ pre_cmd_show(struct ctl_context *ctx)
                 ovsdb_idl_add_column(ctx->idl, column);
             }
         }
+        if (show->wref_table.table) {
+            ovsdb_idl_add_table(ctx->idl, show->wref_table.table);
+        }
+        if (show->wref_table.name_column) {
+            ovsdb_idl_add_column(ctx->idl, show->wref_table.name_column);
+        }
+        if (show->wref_table.wref_column) {
+            ovsdb_idl_add_column(ctx->idl, show->wref_table.wref_column);
+        }
     }
 }
 
@@ -1647,6 +1656,39 @@ cmd_show_find_table_by_name(const char *name)
         }
     }
     return NULL;
+}
+
+/*  Prints table entries that weak reference the 'cur_row'. */
+static void
+cmd_show_weak_ref(struct ctl_context *ctx, const struct cmd_show_table *show,
+                  const struct ovsdb_idl_row *cur_row, int level)
+{
+    const struct ovsdb_idl_row *row_wref;
+    const struct ovsdb_idl_table_class *table = show->wref_table.table;
+    const struct ovsdb_idl_column *name_column
+        = show->wref_table.name_column;
+    const struct ovsdb_idl_column *wref_column
+        = show->wref_table.wref_column;
+
+    if (!table || !name_column || !wref_column) {
+        return;
+    }
+
+    for (row_wref = ovsdb_idl_first_row(ctx->idl, table); row_wref;
+         row_wref = ovsdb_idl_next_row(row_wref)) {
+        const struct ovsdb_datum *wref_datum
+            = ovsdb_idl_read(row_wref, wref_column);
+        /* If weak reference refers to the 'cur_row', prints it. */
+        if (wref_datum->n
+            && uuid_equals(&cur_row->uuid, &wref_datum->keys[0].uuid)) {
+            const struct ovsdb_datum *name_datum
+                = ovsdb_idl_read(row_wref, name_column);
+            ds_put_char_multiple(&ctx->output, ' ', (level + 1) * 4);
+            ds_put_format(&ctx->output, "%s ", table->name);
+            ovsdb_datum_to_string(name_datum, &name_column->type, &ctx->output);
+            ds_put_char(&ctx->output, '\n');
+        }
+    }
 }
 
 /* 'shown' records the tables that has been displayed by the current
@@ -1753,6 +1795,7 @@ cmd_show_row(struct ctl_context *ctx, const struct ovsdb_idl_row *row,
             ds_put_char(&ctx->output, '\n');
         }
     }
+    cmd_show_weak_ref(ctx, show, row, level);
     sset_find_and_delete_assert(shown, show->table->name);
 }
 
