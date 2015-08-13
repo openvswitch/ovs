@@ -268,7 +268,7 @@ parse_ethertype(void **datap, size_t *sizep)
     return htons(FLOW_DL_TYPE_NONE);
 }
 
-static inline bool
+static inline void
 parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
              const struct in6_addr **nd_target,
              uint8_t arp_buf[2][ETH_ADDR_LEN])
@@ -279,7 +279,7 @@ parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
 
         *nd_target = data_try_pull(datap, sizep, sizeof **nd_target);
         if (OVS_UNLIKELY(!*nd_target)) {
-            return false;
+            return;
         }
 
         while (*sizep >= 8) {
@@ -289,7 +289,7 @@ parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
             int opt_len = nd_opt->nd_opt_len * 8;
 
             if (!opt_len || opt_len > *sizep) {
-                goto invalid;
+                return;
             }
 
             /* Store the link layer address if the appropriate option is
@@ -312,15 +312,18 @@ parse_icmpv6(void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
             }
 
             if (OVS_UNLIKELY(!data_try_pull(datap, sizep, opt_len))) {
-                goto invalid;
+                return;
             }
         }
     }
 
-    return true;
+    return;
 
 invalid:
-    return false;
+    *nd_target = NULL;
+    memset(arp_buf[0], 0, ETH_ADDR_LEN);
+    memset(arp_buf[1], 0, ETH_ADDR_LEN);
+    return;
 }
 
 /* Initializes 'flow' members from 'packet' and 'md'
@@ -605,17 +608,15 @@ miniflow_extract(struct ofpbuf *packet, const struct pkt_metadata *md,
                 const struct icmp6_hdr *icmp = data_pull(&data, &size,
                                                          sizeof *icmp);
                 memset(arp_buf, 0, sizeof arp_buf);
-                if (OVS_LIKELY(parse_icmpv6(&data, &size, icmp, &nd_target,
-                                            arp_buf))) {
-                    miniflow_push_words(mf, arp_sha, arp_buf,
-                                             ETH_ADDR_LEN * 2 / 4);
-                    if (nd_target) {
-                        miniflow_push_words(mf, nd_target, nd_target,
-                                            sizeof *nd_target / 4);
-                    }
-                    miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
-                    miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
+                parse_icmpv6(&data, &size, icmp, &nd_target, arp_buf);
+                miniflow_push_words(mf, arp_sha, arp_buf,
+                                         ETH_ADDR_LEN * 2 / 4);
+                if (nd_target) {
+                    miniflow_push_words(mf, nd_target, nd_target,
+                                        sizeof *nd_target / 4);
                 }
+                miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
+                miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
             }
         }
     }
