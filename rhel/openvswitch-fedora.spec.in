@@ -317,16 +317,20 @@ rm -rf $RPM_BUILD_ROOT
 
 %files ovn
 %{_bindir}/ovn-controller
+%{_bindir}/ovn-controller-vtep
 %{_bindir}/ovn-nbctl
 %{_bindir}/ovn-northd
+%{_bindir}/ovn-sbctl
 %{_datadir}/openvswitch/scripts/ovn-ctl
 %{_mandir}/man8/ovs-testcontroller.8*
 %{_mandir}/man5/ovn-nb.5*
 %{_mandir}/man5/ovn-sb.5*
 %{_mandir}/man7/ovn-architecture.7*
 %{_mandir}/man8/ovn-controller.8*
+%{_mandir}/man8/ovn-controller-vtep.8*
 %{_mandir}/man8/ovn-ctl.8*
 %{_mandir}/man8/ovn-nbctl.8*
+%{_mandir}/man8/ovn-sbctl.8*
 %config %{_datadir}/openvswitch/ovn-nb.ovsschema
 %config %{_datadir}/openvswitch/ovn-sb.ovsschema
 %{_unitdir}/ovn-controller.service
