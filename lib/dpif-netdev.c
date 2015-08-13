@@ -42,6 +42,7 @@
 #include "fat-rwlock.h"
 #include "flow.h"
 #include "cmap.h"
+#include "coverage.h"
 #include "latch.h"
 #include "list.h"
 #include "match.h"
@@ -2696,6 +2697,7 @@ reload:
             lc = 0;
 
             emc_cache_slow_sweep(&pmd->flow_cache);
+            coverage_try_clear();
             ovsrcu_quiesce();
 
             atomic_read_relaxed(&pmd->change_seq, &seq);
