@@ -66,21 +66,17 @@ ovn/ovn-nb.5: \
 		$(srcdir)/ovn/ovn-nb.xml > $@.tmp && \
 	mv $@.tmp $@
 
-man_MANS += ovn/ovn-architecture.7 ovn/ovn-nbctl.8
-EXTRA_DIST += ovn/ovn-architecture.7.xml ovn/ovn-nbctl.8.xml
-DISTCLEANFILES += ovn/ovn-nbctl.8 ovn/ovn-architecture.7
+man_MANS += ovn/ovn-architecture.7
+EXTRA_DIST += ovn/ovn-architecture.7.xml
+DISTCLEANFILES += ovn/ovn-architecture.7
 
 EXTRA_DIST += \
 	ovn/TODO \
 	ovn/CONTAINERS.OpenStack.md \
 	ovn/OVN-GW-HA.md
 
-# ovn-nbctl
-bin_PROGRAMS += ovn/ovn-nbctl
-ovn_ovn_nbctl_SOURCES = ovn/ovn-nbctl.c
-ovn_ovn_nbctl_LDADD = ovn/lib/libovn.la ovsdb/libovsdb.la lib/libopenvswitch.la
-
 include ovn/controller/automake.mk
+include ovn/controller-vtep/automake.mk
 include ovn/lib/automake.mk
 include ovn/northd/automake.mk
 include ovn/utilities/automake.mk

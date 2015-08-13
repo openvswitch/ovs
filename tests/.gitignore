@@ -6,11 +6,12 @@
 /idltest.c
 /idltest.h
 /idltest.ovsidl
-/kmod-testsuite
 /ovstest
 /test-dpdkr
 /ovs-pki.log
 /pki/
+/system-kmod-testsuite
+/system-userspace-testsuite
 /test-aes128
 /test-atomic
 /test-bundle

@@ -57,19 +57,6 @@ OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
 
-static void
-get_initial_snapshot(struct ovsdb_idl *idl)
-{
-    while (1) {
-        ovsdb_idl_run(idl);
-        if (ovsdb_idl_has_ever_connected(idl)) {
-            return;
-        }
-        ovsdb_idl_wait(idl);
-        poll_block();
-    }
-}
-
 static const struct ovsrec_bridge *
 get_br_int(struct ovsdb_idl *ovs_idl)
 {
@@ -128,90 +115,6 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
     }
 }
 
-struct idl_loop {
-    struct ovsdb_idl *idl;
-    unsigned int skip_seqno;
-
-    struct ovsdb_idl_txn *committing_txn;
-    unsigned int precommit_seqno;
-
-    struct ovsdb_idl_txn *open_txn;
-};
-
-#define IDL_LOOP_INITIALIZER(IDL) { .idl = (IDL) }
-
-static void
-idl_loop_destroy(struct idl_loop *loop)
-{
-    if (loop) {
-        ovsdb_idl_destroy(loop->idl);
-    }
-}
-
-static struct ovsdb_idl_txn *
-idl_loop_run(struct idl_loop *loop)
-{
-    ovsdb_idl_run(loop->idl);
-    loop->open_txn = (loop->committing_txn
-                      || ovsdb_idl_get_seqno(loop->idl) == loop->skip_seqno
-                      ? NULL
-                      : ovsdb_idl_txn_create(loop->idl));
-    return loop->open_txn;
-}
-
-static void
-idl_loop_commit_and_wait(struct idl_loop *loop)
-{
-    if (loop->open_txn) {
-        loop->committing_txn = loop->open_txn;
-        loop->open_txn = NULL;
-
-        loop->precommit_seqno = ovsdb_idl_get_seqno(loop->idl);
-    }
-
-    struct ovsdb_idl_txn *txn = loop->committing_txn;
-    if (txn) {
-        enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(txn);
-        if (status != TXN_INCOMPLETE) {
-            switch (status) {
-            case TXN_TRY_AGAIN:
-                /* We want to re-evaluate the database when it's changed from
-                 * the contents that it had when we started the commit.  (That
-                 * might have already happened.) */
-                loop->skip_seqno = loop->precommit_seqno;
-                if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
-                    poll_immediate_wake();
-                }
-                break;
-
-            case TXN_SUCCESS:
-                /* If the database has already changed since we started the
-                 * commit, re-evaluate it immediately to avoid missing a change
-                 * for a while. */
-                if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
-                    poll_immediate_wake();
-                }
-                break;
-
-            case TXN_UNCHANGED:
-            case TXN_ABORTED:
-            case TXN_NOT_LOCKED:
-            case TXN_ERROR:
-                break;
-
-            case TXN_UNCOMMITTED:
-            case TXN_INCOMPLETE:
-                OVS_NOT_REACHED();
-
-            }
-            ovsdb_idl_txn_destroy(txn);
-            loop->committing_txn = NULL;
-        }
-    }
-
-    ovsdb_idl_wait(loop->idl);
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -242,7 +145,7 @@ main(int argc, char *argv[])
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
-    struct idl_loop ovs_idl_loop = IDL_LOOP_INITIALIZER(
+    struct ovsdb_idl_loop ovs_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true));
     ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_open_vswitch);
     ovsdb_idl_add_column(ovs_idl_loop.idl,
@@ -251,22 +154,22 @@ main(int argc, char *argv[])
     encaps_register_ovs_idl(ovs_idl_loop.idl);
     binding_register_ovs_idl(ovs_idl_loop.idl);
     physical_register_ovs_idl(ovs_idl_loop.idl);
-    get_initial_snapshot(ovs_idl_loop.idl);
+    ovsdb_idl_get_initial_snapshot(ovs_idl_loop.idl);
 
     /* Connect to OVN SB database. */
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
-    struct idl_loop ovnsb_idl_loop = IDL_LOOP_INITIALIZER(
+    struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
-    get_initial_snapshot(ovnsb_idl_loop.idl);
+    ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Main loop. */
     exiting = false;
     while (!exiting) {
         struct controller_ctx ctx = {
             .ovs_idl = ovs_idl_loop.idl,
-            .ovs_idl_txn = idl_loop_run(&ovs_idl_loop),
+            .ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop),
             .ovnsb_idl = ovnsb_idl_loop.idl,
-            .ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop),
+            .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
         const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
@@ -298,8 +201,8 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
 
-        idl_loop_commit_and_wait(&ovnsb_idl_loop);
-        idl_loop_commit_and_wait(&ovs_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
 
         if (br_int) {
             ofctrl_wait();
@@ -312,9 +215,9 @@ main(int argc, char *argv[])
     while (!done) {
         struct controller_ctx ctx = {
             .ovs_idl = ovs_idl_loop.idl,
-            .ovs_idl_txn = idl_loop_run(&ovs_idl_loop),
+            .ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop),
             .ovnsb_idl = ovnsb_idl_loop.idl,
-            .ovnsb_idl_txn = idl_loop_run(&ovnsb_idl_loop),
+            .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
         const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
@@ -329,8 +232,8 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
 
-        idl_loop_commit_and_wait(&ovnsb_idl_loop);
-        idl_loop_commit_and_wait(&ovs_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
         poll_block();
     }
 
@@ -338,8 +241,8 @@ main(int argc, char *argv[])
     lflow_destroy();
     ofctrl_destroy();
 
-    idl_loop_destroy(&ovs_idl_loop);
-    idl_loop_destroy(&ovnsb_idl_loop);
+    ovsdb_idl_loop_destroy(&ovs_idl_loop);
+    ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
 
     free(ovnsb_remote);
     free(ovs_remote);

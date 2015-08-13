@@ -631,6 +631,13 @@ To recompile and reinstall OVS using RPM:
 	./boot.sh
 	vagrant provision --provision-with configure_ovs,install_rpm
 
+Two provisioners are included to run system tests with the OVS kernel
+module or with a userspace datapath.  This tests are different from
+the self-tests mentioned above.  To run them:
+
+	./boot.sh
+	vagrant provision --provision-with configure_ovs,test_ovs_kmod,test_ovs_system_userspace
+
 Continuous Integration with Travis-CI
 -------------------------------------
 

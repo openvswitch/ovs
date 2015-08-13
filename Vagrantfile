@@ -47,6 +47,11 @@ systemctl start openvswitch
 systemctl status openvswitch
 SCRIPT
 
+$test_ovs_system_userspace = <<SCRIPT
+cd ~/build
+make check-system-userspace
+SCRIPT
+
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.define "fedora-20" do |fedora|
        fedora.vm.box = "chef/fedora-20"
@@ -54,6 +59,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
        fedora.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
        fedora.vm.provision "build_ovs", type: "shell", inline: $build_ovs
        fedora.vm.provision "test_ovs_kmod", type: "shell", inline: $test_kmod
+       fedora.vm.provision "test_ovs_system_userspace", type: "shell", inline: $test_ovs_system_userspace
        fedora.vm.provision "install_rpm", type: "shell", inline: $install_rpm
   end
 end

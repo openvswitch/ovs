@@ -138,12 +138,18 @@ next_visible_rule_in_list(const struct cls_match *rule, cls_version_t version)
     return rule;
 }
 
+/* Type with maximum supported prefix length. */
+union trie_prefix {
+    struct in6_addr ipv6;  /* For sizing. */
+    ovs_be32 be32;         /* For access. */
+};
+
 static unsigned int minimask_get_prefix_len(const struct minimask *,
                                             const struct mf_field *);
 static void trie_init(struct classifier *cls, int trie_idx,
                       const struct mf_field *);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
-                                union mf_value *plens);
+                                union trie_prefix *plens);
 static unsigned int trie_lookup_value(const rcu_trie_ptr *,
                                       const ovs_be32 value[], ovs_be32 plens[],
                                       unsigned int value_bits);
@@ -262,13 +268,6 @@ cls_rule_equal(const struct cls_rule *a, const struct cls_rule *b)
     return a->priority == b->priority && minimatch_equal(&a->match, &b->match);
 }
 
-/* Returns a hash value for 'rule', folding in 'basis'. */
-uint32_t
-cls_rule_hash(const struct cls_rule *rule, uint32_t basis)
-{
-    return minimatch_hash(&rule->match, hash_int(rule->priority, basis));
-}
-
 /* Appends a string describing 'rule' to 's'. */
 void
 cls_rule_format(const struct cls_rule *rule, struct ds *s)
@@ -283,11 +282,10 @@ cls_rule_is_catchall(const struct cls_rule *rule)
     return minimask_is_catchall(rule->match.mask);
 }
 
-/* Makes rule invisible after 'version'.  Once that version is made invisible
- * (by changing the version parameter used in lookups), the rule should be
- * actually removed via ovsrcu_postpone().
+/* Makes 'rule' invisible in 'remove_version'.  Once that version is used in
+ * lookups, the caller should remove 'rule' via ovsrcu_postpone().
  *
- * 'rule_' must be in a classifier. */
+ * 'rule' must be in a classifier. */
 void
 cls_rule_make_invisible_in_version(const struct cls_rule *rule,
                                    cls_version_t remove_version)
@@ -919,8 +917,8 @@ struct trie_ctx {
     bool lookup_done;        /* Status of the lookup. */
     uint8_t be32ofs;         /* U32 offset of the field in question. */
     unsigned int maskbits;   /* Prefix length needed to avoid false matches. */
-    union mf_value match_plens; /* Bitmask of prefix lengths with possible
-                                 * matches. */
+    union trie_prefix match_plens;  /* Bitmask of prefix lengths with possible
+                                     * matches. */
 };
 
 static void
@@ -2159,7 +2157,7 @@ trie_lookup_value(const rcu_trie_ptr *trie, const ovs_be32 value[],
 
 static unsigned int
 trie_lookup(const struct cls_trie *trie, const struct flow *flow,
-            union mf_value *plens)
+            union trie_prefix *plens)
 {
     const struct mf_field *mf = trie->field;
 
@@ -2292,7 +2290,7 @@ static void
 trie_remove_prefix(rcu_trie_ptr *root, const ovs_be32 *prefix, int mlen)
 {
     struct trie_node *node;
-    rcu_trie_ptr *edges[sizeof(union mf_value) * 8];
+    rcu_trie_ptr *edges[sizeof(union trie_prefix) * CHAR_BIT];
     int depth = 0, ofs = 0;
 
     /* Walk the tree. */

@@ -74,3 +74,9 @@
    Epstein et al., "What's the Difference? Efficient Set
    Reconciliation Without Prior Context".  (I'm not yet aware of
    previous non-academic use of this technique.)
+
+** Support multiple tunnel encapsulations in Chassis.
+
+   So far, both ovn-controller and ovn-controller-vtep only allow
+   chassis to have one tunnel encapsulation entry.  We should extend
+   the implementation to support multiple tunnel encapsulations.

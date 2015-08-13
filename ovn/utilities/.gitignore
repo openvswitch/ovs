@@ -1,1 +1,5 @@
 /ovn-ctl.8
+/ovn-nbctl
+/ovn-nbctl.8
+/ovn-sbctl
+/ovn-sbctl.8

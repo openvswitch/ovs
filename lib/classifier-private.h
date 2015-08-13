@@ -387,48 +387,21 @@ flow_wildcards_fold_minimask_range(struct flow_wildcards *wc,
     }
 }
 
-/* Returns a hash value for 'flow', given 'basis'. */
-static inline uint32_t
-miniflow_hash(const struct miniflow *flow, uint32_t basis)
-{
-    const uint64_t *values = miniflow_get_values(flow);
-    const uint64_t *p = values;
-    uint32_t hash = basis;
-    uint64_t hash_tnl_map = 0, hash_pkt_map = 0;
-    uint64_t map;
-
-    for (map = flow->tnl_map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = hash_add64(hash, *p);
-            hash_tnl_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    for (map = flow->pkt_map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = hash_add64(hash, *p);
-            hash_pkt_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    hash = hash_add64(hash, hash_tnl_map);
-    hash = hash_add64(hash, hash_pkt_map);
-
-    return hash_finish(hash, p - values);
-}
-
 /* Returns a hash value for 'mask', given 'basis'. */
 static inline uint32_t
 minimask_hash(const struct minimask *mask, uint32_t basis)
 {
-    return miniflow_hash(&mask->masks, basis);
-}
+    const uint64_t *p = miniflow_get_values(&mask->masks);
+    size_t n_values = miniflow_n_values(&mask->masks);
+    uint32_t hash = basis;
 
-/* Returns a hash value for 'match', given 'basis'. */
-static inline uint32_t
-minimatch_hash(const struct minimatch *match, uint32_t basis)
-{
-    return miniflow_hash(match->flow, minimask_hash(match->mask, basis));
+    for (size_t i = 0; i < n_values; i++) {
+        hash = hash_add64(hash, *p++);
+    }
+    hash = hash_add64(hash, mask->masks.tnl_map);
+    hash = hash_add64(hash, mask->masks.pkt_map);
+
+    return hash_finish(hash, n_values);
 }
 
 /* Returns a hash value for the bits of range [start, end) in 'minimatch',

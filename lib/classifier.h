@@ -372,7 +372,6 @@ void cls_rule_set_conjunctions(struct cls_rule *,
                                const struct cls_conjunction *, size_t n);
 
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
-uint32_t cls_rule_hash(const struct cls_rule *, uint32_t basis);
 void cls_rule_format(const struct cls_rule *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,

@@ -1,0 +1,152 @@
+AT_BANNER([ovn_controller_vtep])
+
+# OVN_CONTROLLER_VTEP_START
+#
+# Starts the test with a setup with vtep device.
+#
+# Uses vtep-ovs to simulate the vtep switch 'br-vtep' with two physical ports
+# 'p0', 'p1'.
+#
+# Configures ovn-nb with a logical switch 'br-test'.
+#
+#
+m4_define([OVN_CONTROLLER_VTEP_START],
+  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+   OVS_DBDIR=`pwd`; export OVS_DBDIR
+   OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
+
+   dnl Create databases (ovn-nb, ovn-sb, vtep).
+   AT_CHECK([ovsdb-tool create vswitchd.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
+   for daemon in ovn-nb ovn-sb vtep; do
+      AT_CHECK([ovsdb-tool create $daemon.db $abs_top_srcdir/${daemon%%-*}/${daemon}.ovsschema])
+   done
+
+   dnl Start ovsdb-server.
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock vswitchd.db vtep.db ovn-nb.db ovn-sb.db], [0], [], [stderr])
+    ON_EXIT_UNQUOTED([kill `cat ovsdb-server.pid`])
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d
+/ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
+   AT_CAPTURE_FILE([ovsdb-server.log])
+
+   dnl Start ovs-vswitchd.
+   AT_CHECK([ovs-vswitchd --enable-dummy --disable-system --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
+   AT_CAPTURE_FILE([ovs-vswitchd.log])
+   ON_EXIT_UNQUOTED([kill `cat ovs-vswitchd.pid`])
+   AT_CHECK([[sed < stderr '
+/ovs_numa|INFO|Discovered /d
+/vlog|INFO|opened log file/d
+/vswitchd|INFO|ovs-vswitchd (Open vSwitch)/d
+/reconnect|INFO|/d
+/ofproto|INFO|using datapath ID/d
+/ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
+   AT_CHECK([ovs-vsctl -- add-br br-vtep \
+              -- set bridge br-vtep datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure \
+              -- add-port br-vtep p0 -- set Interface p0 type=dummy ofport_request=1 \
+              -- add-port br-vtep p1 -- set Interface p1 type=dummy ofport_request=2])
+
+   dnl Start ovs-vtep.
+   AT_CHECK([vtep-ctl add-ps br-vtep -- set Physical_Switch br-vtep tunnel_ips=1.2.3.4])
+   AT_CHECK([ovs-vtep --log-file=ovs-vtep.log --pidfile=ovs-vtep.pid --detach br-vtep \], [0], [], [stderr])
+   ON_EXIT_UNQUOTED([kill `cat ovs-vtep.pid`])
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d']])
+   # waits until ovs-vtep starts up.
+   OVS_WAIT_UNTIL([test -n "`vtep-ctl show | grep Physical_Port`"])
+
+   dnl Start ovn-northd.
+   AT_CHECK([ovn-nbctl lswitch-add br-test])
+   AT_CHECK([ovn-northd --detach --pidfile --log-file --ovnnb-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
+   ON_EXIT_UNQUOTED([kill `cat ovn-northd.pid`])
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d']])
+   AT_CAPTURE_FILE([ovn-northd.log])
+
+   dnl Start ovn-controllger-vtep.
+   AT_CHECK([ovn-controller-vtep --detach --pidfile --log-file --vtep-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
+   AT_CAPTURE_FILE([ovn-controller-vtep.log])
+   ON_EXIT_UNQUOTED([kill `cat ovn-controller-vtep.pid`])
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d
+/reconnect|INFO|/d']])
+])
+
+# OVN_CONTROLLER_VTEP_STOP
+#
+# So many exits... Yeah, we started a lot daemons~
+#
+m4_define([OVN_CONTROLLER_VTEP_STOP],
+  [AT_CHECK([check_logs $1])
+   AT_CHECK([ovs-appctl -t ovs-vtep exit])
+   AT_CHECK([ovs-appctl -t ovn-northd exit])
+   AT_CHECK([ovs-appctl -t ovsdb-server exit])
+   AT_CHECK([ovs-appctl -t ovn-controller-vtep exit])
+   AT_CHECK([ovs-appctl -t ovs-vswitchd exit])])
+
+
+
+# tests chassis related updates.
+AT_SETUP([ovn-controller-vtep - test chassis])
+OVN_CONTROLLER_VTEP_START
+
+# verifies the initial ovn-sb db configuration.
+AT_CHECK([ovn-sbctl show], [0], [dnl
+Chassis br-vtep
+    Encap vxlan
+        ip: "1.2.3.4"
+])
+
+# deletes the chassis via ovn-sbctl and check that it is readded back
+# with the log.
+AT_CHECK([ovn-sbctl chassis-del br-vtep])
+OVS_WAIT_UNTIL([test -n "`grep WARN ovn-controller-vtep.log`"])
+AT_CHECK([sed -n 's/^.*\(|WARN|.*\)$/\1/p' ovn-controller-vtep.log], [0], [dnl
+|WARN|Chassis for VTEP physical switch (br-vtep) disappears, maybe deleted by ovn-sbctl, adding it back
+])
+
+# changes the tunnel_ip on physical switch, watches the update of chassis's
+# encap.
+AT_CHECK([vtep-ctl set Physical_Switch br-vtep tunnel_ips=1.2.3.5])
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl show | grep 1\.2\.3\.5`"])
+AT_CHECK([ovn-sbctl --columns=ip list Encap | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+"1.2.3.5"
+])
+
+# adds vlan_bindings to physical ports.
+AT_CHECK([vtep-ctl add-ls lswitch0 -- bind-ls br-vtep p0 100 lswitch0 -- bind-ls br-vtep p0 200 lswitch0 -- bind-ls br-vtep p1 300 lswitch0])
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Chassis | grep -- lswitch0`"])
+AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' ' ], [0], [dnl
+[["lswitch0"]]
+])
+
+# adds another logical switch and new vlan_bindings.
+AT_CHECK([vtep-ctl add-ls lswitch1 -- bind-ls br-vtep p0 300 lswitch1])
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Chassis | grep -- lswitch1`"])
+AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+[["lswitch0","lswitch1"]]
+])
+
+# unbinds one port from lswitch0, nothing should change.
+AT_CHECK([vtep-ctl unbind-ls br-vtep p0 200])
+OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=vlan_bindings list physical_port p0 | grep -- 200`"])
+AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' ' ], [0], [dnl
+[["lswitch0","lswitch1"]]
+])
+
+# unbinds all ports from lswitch0.
+AT_CHECK([vtep-ctl unbind-ls br-vtep p0 100 -- unbind-ls br-vtep p1 300])
+OVS_WAIT_UNTIL([test -z "`ovn-sbctl list Chassis | grep -- br-vtep_lswitch0`"])
+AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' ' ], [0], [dnl
+[["lswitch1"]]
+])
+
+# unbinds all ports from lswitch1.
+AT_CHECK([vtep-ctl unbind-ls br-vtep p0 300])
+OVS_WAIT_UNTIL([test -z "`ovn-sbctl list Chassis | grep -- br-vtep_lswitch1`"])
+AT_CHECK([ovn-sbctl --columns=vtep_logical_switches list Chassis | cut -d ':' -f2 | tr -d ' '], [0], [dnl
+[[]]
+])
+
+OVN_CONTROLLER_VTEP_STOP(["/Chassis for VTEP physical switch (br-vtep) disappears/d"])
+AT_CLEANUP

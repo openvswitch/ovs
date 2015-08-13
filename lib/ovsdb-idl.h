@@ -222,5 +222,25 @@ const struct ovsdb_idl_row *ovsdb_idl_txn_insert(
     const struct uuid *);
 
 struct ovsdb_idl *ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *);
+void ovsdb_idl_get_initial_snapshot(struct ovsdb_idl *);
+
+
+/* ovsdb_idl_loop provides an easy way to manage the transactions related
+ * to 'idl' and to cope with different status during transaction. */
+struct ovsdb_idl_loop {
+    struct ovsdb_idl *idl;
+    unsigned int skip_seqno;
+
+    struct ovsdb_idl_txn *committing_txn;
+    unsigned int precommit_seqno;
+
+    struct ovsdb_idl_txn *open_txn;
+};
+
+#define OVSDB_IDL_LOOP_INITIALIZER(IDL) { .idl = (IDL) }
+
+void ovsdb_idl_loop_destroy(struct ovsdb_idl_loop *);
+struct ovsdb_idl_txn *ovsdb_idl_loop_run(struct ovsdb_idl_loop *);
+void ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
 
 #endif /* ovsdb-idl.h */
