@@ -138,12 +138,18 @@ next_visible_rule_in_list(const struct cls_match *rule, cls_version_t version)
     return rule;
 }
 
+/* Type with maximum supported prefix length. */
+union trie_prefix {
+    struct in6_addr ipv6;  /* For sizing. */
+    ovs_be32 be32;         /* For access. */
+};
+
 static unsigned int minimask_get_prefix_len(const struct minimask *,
                                             const struct mf_field *);
 static void trie_init(struct classifier *cls, int trie_idx,
                       const struct mf_field *);
 static unsigned int trie_lookup(const struct cls_trie *, const struct flow *,
-                                union mf_value *plens);
+                                union trie_prefix *plens);
 static unsigned int trie_lookup_value(const rcu_trie_ptr *,
                                       const ovs_be32 value[], ovs_be32 plens[],
                                       unsigned int value_bits);
@@ -911,8 +917,8 @@ struct trie_ctx {
     bool lookup_done;        /* Status of the lookup. */
     uint8_t be32ofs;         /* U32 offset of the field in question. */
     unsigned int maskbits;   /* Prefix length needed to avoid false matches. */
-    union mf_value match_plens; /* Bitmask of prefix lengths with possible
-                                 * matches. */
+    union trie_prefix match_plens;  /* Bitmask of prefix lengths with possible
+                                     * matches. */
 };
 
 static void
@@ -2151,7 +2157,7 @@ trie_lookup_value(const rcu_trie_ptr *trie, const ovs_be32 value[],
 
 static unsigned int
 trie_lookup(const struct cls_trie *trie, const struct flow *flow,
-            union mf_value *plens)
+            union trie_prefix *plens)
 {
     const struct mf_field *mf = trie->field;
 
@@ -2284,7 +2290,7 @@ static void
 trie_remove_prefix(rcu_trie_ptr *root, const ovs_be32 *prefix, int mlen)
 {
     struct trie_node *node;
-    rcu_trie_ptr *edges[sizeof(union mf_value) * 8];
+    rcu_trie_ptr *edges[sizeof(union trie_prefix) * CHAR_BIT];
     int depth = 0, ofs = 0;
 
     /* Walk the tree. */
