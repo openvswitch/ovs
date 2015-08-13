@@ -16,6 +16,12 @@
 # Enable PIE, bz#955181
 %global _hardened_build 1
 
+# some distros (e.g: RHEL-7) don't define _rundir macro yet
+# Fedora 15 onwards uses /run as _rundir
+%if 0%{!?_rundir:1}
+%define _rundir /run
+%endif
+
 Name: openvswitch
 Summary: Open vSwitch
 Group: System Environment/Daemons
