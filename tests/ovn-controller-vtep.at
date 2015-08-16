@@ -104,6 +104,10 @@ OVS_WAIT_UNTIL([test -n "`grep WARN ovn-controller-vtep.log`"])
 AT_CHECK([sed -n 's/^.*\(|WARN|.*\)$/\1/p' ovn-controller-vtep.log], [0], [dnl
 |WARN|Chassis for VTEP physical switch (br-vtep) disappears, maybe deleted by ovn-sbctl, adding it back
 ])
+# this removal of chassis could cause 'Broken pipe' warning in the ovsdb-server.log,
+# due to the race between 'ovn-sbctl' exiting and 'ovn-controller-vtep' adding
+# the chassis back.  so just removes the 'Broken pipe' warning from ovsdb-server.log.
+AT_CHECK([sed -i '/Broken pipe/d' ovsdb-server.log])
 
 # changes the tunnel_ip on physical switch, watches the update of chassis's
 # encap.
