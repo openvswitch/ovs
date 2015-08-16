@@ -548,6 +548,11 @@ cmd_chassis_del(struct ctl_context *ctx)
     sbctl_ch = find_chassis(sbctl_ctx, ctx->argv[1], must_exist);
     if (sbctl_ch) {
         if (sbctl_ch->ch_cfg) {
+            size_t i;
+
+            for (i = 0; i < sbctl_ch->ch_cfg->n_encaps; i++) {
+                sbrec_encap_delete(sbctl_ch->ch_cfg->encaps[i]);
+            }
             sbrec_chassis_delete(sbctl_ch->ch_cfg);
         }
         shash_find_and_delete(&sbctl_ctx->chassis, ctx->argv[1]);
