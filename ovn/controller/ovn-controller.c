@@ -124,6 +124,7 @@ main(int argc, char *argv[])
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
@@ -208,6 +209,9 @@ main(int argc, char *argv[])
             ofctrl_wait();
         }
         poll_block();
+        if (should_service_stop()) {
+            exiting = true;
+        }
     }
 
     /* It's time to exit.  Clean up the databases. */
@@ -246,6 +250,7 @@ main(int argc, char *argv[])
 
     free(ovnsb_remote);
     free(ovs_remote);
+    service_stop();
 
     exit(retval);
 }

@@ -1121,6 +1121,7 @@ main(int argc, char *argv[])
 
     fatal_ignore_sigpipe();
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
     parse_options(argc, argv);
@@ -1311,11 +1312,15 @@ main(int argc, char *argv[])
             }
             poll_block();
         }
+        if (should_service_stop()) {
+            exiting = true;
+        }
     }
 
     unixctl_server_destroy(unixctl);
     ovsdb_idl_destroy(ovnsb_idl);
     ovsdb_idl_destroy(ovnnb_idl);
+    service_stop();
 
     exit(res);
 }
