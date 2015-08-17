@@ -2,7 +2,8 @@ AT_BANNER([ovn_controller_vtep])
 
 # OVN_CONTROLLER_VTEP_START
 #
-# Starts the test with a setup with vtep device.
+# Starts the test with a setup with vtep device.  Each test case must first
+# call this macro.
 #
 # Uses vtep-ovs to simulate the vtep switch 'br-vtep' with two physical ports
 # 'p0', 'p1'.
@@ -11,7 +12,11 @@ AT_BANNER([ovn_controller_vtep])
 #
 #
 m4_define([OVN_CONTROLLER_VTEP_START],
-  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+  [
+   # this will cause skip when 'make check' using Windows setup.
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    OVS_DBDIR=`pwd`; export OVS_DBDIR
    OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
