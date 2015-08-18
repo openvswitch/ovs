@@ -253,6 +253,10 @@ binding_cleanup(struct controller_vtep_ctx *ctx)
         const struct sbrec_chassis *chassis_rec
             = get_chassis_by_name(ctx->ovnsb_idl, pswitch->name);
 
+        if (!chassis_rec) {
+            continue;
+        }
+
         for (;;) {
             port_binding_rec = shash_find_and_delete(&ch_to_pb,
                                                      chassis_rec->name);
