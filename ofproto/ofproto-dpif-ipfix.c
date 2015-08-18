@@ -48,8 +48,8 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
  * used to indicate the type of tunnel (0x01 = VxLAN, 0x02 = GRE) and the three
  * least significant bytes hold the value of the layer 2 overlay network
  * segment identifier: a 24-bit VxLAN tunnel's VNI or a 24-bit GRE tunnel's
- * TNI. This is not compatible with GRE-64 or STT, as implemented in OVS, as
- * their tunnel IDs are 64-bit.
+ * TNI. This is not compatible with STT, as implemented in OVS, as
+ * its tunnel IDs is 64-bit.
  *
  * Two new enterprise information elements are defined which are similar to
  * laryerSegmentId but support 64-bit IDs:
@@ -352,7 +352,7 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 32);
 /*
  * support tunnel key for:
  * VxLAN: 24-bit VIN,
- * GRE: 32- or 64-bit key,
+ * GRE: 32-bit key,
  * LISP: 24-bit instance ID
  * STT: 64-bit key
  */
@@ -588,18 +588,10 @@ dpif_ipfix_add_tunnel_port(struct dpif_ipfix *di, struct ofport *ofport,
         /* 32-bit key gre */
         dip->tunnel_type = DPIF_IPFIX_TUNNEL_GRE;
         dip->tunnel_key_length = 4;
-    } else if (strcmp(type, "gre64") == 0) {
-        /* 64-bit key gre */
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_GRE;
-        dip->tunnel_key_length = 8;
     } else if (strcmp(type, "ipsec_gre") == 0) {
         /* 32-bit key ipsec_gre */
         dip->tunnel_type = DPIF_IPFIX_TUNNEL_IPSEC_GRE;
         dip->tunnel_key_length = 4;
-    } else if (strcmp(type, "ipsec_gre64") == 0) {
-        /* 64-bit key ipsec_gre */
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_IPSEC_GRE;
-        dip->tunnel_key_length = 8;
     } else if (strcmp(type, "vxlan") == 0) {
         dip->tunnel_type = DPIF_IPFIX_TUNNEL_VXLAN;
         dip->tunnel_key_length = 3;

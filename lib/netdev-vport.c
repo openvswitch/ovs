@@ -1423,8 +1423,6 @@ netdev_vport_tunnel_register(void)
                                        netdev_gre_push_header,
                                        netdev_gre_pop_header),
         TUNNEL_CLASS("ipsec_gre", "gre_sys", NULL, NULL, NULL),
-        TUNNEL_CLASS("gre64", "gre64_sys", NULL,  NULL, NULL),
-        TUNNEL_CLASS("ipsec_gre64", "gre64_sys", NULL, NULL, NULL),
         TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
                                            push_udp_header,
                                            netdev_vxlan_pop_header),

@@ -914,8 +914,6 @@ OvsInitTunnelVport(PVOID userContext,
     switch (ovsType) {
     case OVS_VPORT_TYPE_GRE:
         break;
-    case OVS_VPORT_TYPE_GRE64:
-        break;
     case OVS_VPORT_TYPE_VXLAN:
     {
         POVS_TUNFLT_INIT_CONTEXT tunnelContext = NULL;
@@ -1178,7 +1176,6 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
         OvsCleanupSttTunnel(vport);
         break;
     case OVS_VPORT_TYPE_GRE:
-    case OVS_VPORT_TYPE_GRE64:
         break;
     case OVS_VPORT_TYPE_NETDEV:
         if (vport->isExternal) {

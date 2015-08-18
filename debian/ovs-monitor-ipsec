@@ -441,7 +441,7 @@ def main():
 
         new_interfaces = {}
         for rec in idl.tables["Interface"].rows.itervalues():
-            if rec.type == "ipsec_gre" or rec.type == "ipsec_gre64":
+            if rec.type == "ipsec_gre":
                 name = rec.name
                 options = rec.options
                 peer_cert_name = "ovs-%s.pem" % (options.get("remote_ip"))

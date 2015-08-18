@@ -1236,7 +1236,6 @@ m4_foreach(
 [ovs-dummy],
 [genev_sys],
 [gre_sys],
-[gre64_sys],
 [lisp_sys],
 [vxlan_sys]],
 [
@@ -1261,9 +1260,6 @@ AT_SETUP([add-port -- reserved names 2])
 # Creates all type of tunnel ports
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 ofport_request=1\
-                    -- add-port br0 p2 -- set Interface p2 type=gre64 \
-                    options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
-                    ofport_request=2 \
                     -- add-port br0 p3 -- set Interface p3 type=lisp \
                     options:remote_ip=2.2.2.2 ofport_request=3 \
                     -- add-port br0 p4 -- set Interface p4 type=vxlan \
@@ -1276,7 +1272,6 @@ m4_foreach(
 [reserved_name],
 [[genev_sys],
 [gre_sys],
-[gre64_sys],
 [lisp_sys],
 [vxlan_sys]],
 [

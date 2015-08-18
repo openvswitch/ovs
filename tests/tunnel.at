@@ -37,12 +37,12 @@ AT_CHECK([tail -1 stdout], [0],
 dnl reconfigure, local_ip, remote_ip
 AT_CHECK([ovs-vsctl set Interface p2 type=gre options:local_ip=2.2.2.3 \
           options:df_default=false options:ttl=1 options:csum=true \
-          -- set Interface p3 type=gre64])
+          -- set Interface p3 type=vxlan])
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		br0 65534/100: (dummy)
 		p1 1/1: (gre: remote_ip=1.1.1.1)
 		p2 2/1: (gre: csum=true, df_default=false, local_ip=2.2.2.3, remote_ip=1.1.1.1, ttl=1)
-		p3 3/64: (gre64: remote_ip=2.2.2.2)
+		p3 3/4789: (vxlan: remote_ip=2.2.2.2)
 ])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],

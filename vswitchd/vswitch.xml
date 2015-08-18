@@ -1848,21 +1848,6 @@
             IPsec tunnel.
           </dd>
 
-          <dt><code>gre64</code></dt>
-          <dd>
-            It is same as GRE, but it allows 64 bit key. To store higher 32-bits
-            of key, it uses GRE protocol sequence number field. This is non
-            standard use of GRE protocol since OVS does not increment
-            sequence number for every packet at time of encap as expected by
-            standard GRE implementation. See <ref group="Tunnel Options"/>
-            for information on configuring GRE tunnels.
-          </dd>
-
-          <dt><code>ipsec_gre64</code></dt>
-          <dd>
-            Same as IPSEC_GRE except 64 bit key.
-          </dd>
-
           <dt><code>vxlan</code></dt>
           <dd>
 	    <p>
@@ -1927,8 +1912,7 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>geneve</code>, <code>gre</code>, <code>ipsec_gre</code>,
-        <code>gre64</code>, <code>ipsec_gre64</code>, <code>vxlan</code>,
-        <code>lisp</code> and <code>stt</code>.
+        <code>vxlan</code>, <code>lisp</code> and <code>stt</code>.
       </p>
 
       <p>
@@ -2017,7 +2001,7 @@
           </li>
           <li>
             A positive 24-bit (for Geneve, VXLAN, and LISP), 32-bit (for GRE)
-            or 64-bit (for GRE64 and STT) number.  The tunnel receives only
+            or 64-bit (for STT) number.  The tunnel receives only
             packets with the specified key.
           </li>
           <li>
@@ -2044,7 +2028,7 @@
           </li>
           <li>
             A positive 24-bit (for Geneve, VXLAN and LISP), 32-bit (for GRE) or
-            64-bit (for GRE64 and STT) number.  Packets sent through the tunnel
+            64-bit (for STT) number.  Packets sent through the tunnel
             will have the specified key.
           </li>
           <li>
@@ -4551,7 +4535,7 @@
             <p>data type semantics: identifier.</p>
             <p>description: Key which is used for identifying an individual
             traffic flow within a VxLAN (24-bit VNI), GENEVE (24-bit VNI),
-            GRE (32- or 64-bit key), or LISP (24-bit instance ID) tunnel. The
+            GRE (32-bit key), or LISP (24-bit instance ID) tunnel. The
             key is encoded in this octetarray as a 3-, 4-, or 8-byte integer
             ID in network byte order.</p>
           </dd>

@@ -80,7 +80,7 @@ typedef struct _OVS_VPORT_FULL_STATS {
 /*
  * Each internal, external adapter or vritual adapter has
  * one vport entry. In addition, we have one vport for each
- * tunnel type, such as vxlan, gre, gre64
+ * tunnel type, such as vxlan, gre
  */
 typedef struct _OVS_VPORT_ENTRY {
     LIST_ENTRY             ovsNameLink;
@@ -181,8 +181,7 @@ OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
 {
     return ovsType == OVS_VPORT_TYPE_VXLAN ||
            ovsType == OVS_VPORT_TYPE_STT ||
-           ovsType == OVS_VPORT_TYPE_GRE ||
-           ovsType == OVS_VPORT_TYPE_GRE64;
+           ovsType == OVS_VPORT_TYPE_GRE;
 }
 
 
