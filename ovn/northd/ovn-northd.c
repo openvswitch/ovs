@@ -1016,14 +1016,16 @@ ovnsb_db_changed(struct northd_context *ctx)
     hmap_destroy(&lports_hmap);
 }
 
+
+static char *default_db_;
+
 static const char *
 default_db(void)
 {
-    static char *def;
-    if (!def) {
-        def = xasprintf("unix:%s/db.sock", ovs_rundir());
+    if (!default_db_) {
+        default_db_ = xasprintf("unix:%s/db.sock", ovs_rundir());
     }
-    return def;
+    return default_db_;
 }
 
 static void
@@ -1321,6 +1323,8 @@ main(int argc, char *argv[])
     ovsdb_idl_destroy(ovnsb_idl);
     ovsdb_idl_destroy(ovnnb_idl);
     service_stop();
+
+    free(default_db_);
 
     exit(res);
 }
