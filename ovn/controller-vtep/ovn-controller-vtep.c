@@ -48,6 +48,7 @@ OVS_NO_RETURN static void usage(void);
 
 static char *vtep_remote;
 static char *ovnsb_remote;
+static char *default_db_;
 
 int
 main(int argc, char *argv[])
@@ -142,19 +143,19 @@ main(int argc, char *argv[])
 
     free(ovnsb_remote);
     free(vtep_remote);
+    free(default_db_);
     service_stop();
 
     exit(retval);
 }
 
-static char *
+static const char *
 default_db(void)
 {
-    static char *def;
-    if (!def) {
-        def = xasprintf("unix:%s/db.sock", ovs_rundir());
+    if (!default_db_) {
+        default_db_ = xasprintf("unix:%s/db.sock", ovs_rundir());
     }
-    return def;
+    return default_db_;
 }
 
 static void
@@ -189,11 +190,11 @@ parse_options(int argc, char *argv[])
 
         switch (c) {
         case 'd':
-            ovnsb_remote = optarg;
+            ovnsb_remote = xstrdup(optarg);
             break;
 
         case 'D':
-            vtep_remote = optarg;
+            vtep_remote = xstrdup(optarg);
             break;
 
         case 'h':
@@ -224,11 +225,11 @@ parse_options(int argc, char *argv[])
     argv += optind;
 
     if (!ovnsb_remote) {
-        ovnsb_remote = default_db();
+        ovnsb_remote = xstrdup(default_db());
     }
 
     if (!vtep_remote) {
-        vtep_remote = default_db();
+        vtep_remote = xstrdup(default_db());
     }
 }
 
