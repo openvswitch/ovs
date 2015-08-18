@@ -124,8 +124,8 @@ main(int argc, char *argv[])
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
-        done = gateway_cleanup(&ctx);
-        done = binding_cleanup(&ctx) && done;
+        done = binding_cleanup(&ctx);
+        done = gateway_cleanup(&ctx) && done;
         if (done) {
             poll_immediate_wake();
         }
