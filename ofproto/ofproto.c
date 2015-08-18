@@ -5385,10 +5385,14 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    enum ofperr error;
     uint32_t master[OAM_N_TYPES] = {0};
     uint32_t slave[OAM_N_TYPES] = {0};
 
-    ofputil_decode_set_async_config(oh, master, slave, false);
+    error = ofputil_decode_set_async_config(oh, master, slave, false);
+    if (error) {
+        return error;
+    }
 
     ofconn_set_async_config(ofconn, master, slave);
     if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&

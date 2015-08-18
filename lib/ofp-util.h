@@ -140,6 +140,37 @@ enum ofputil_protocol {
                        OFPUTIL_P_ANY_OXM)
 };
 
+/* Valid value of mask for asynhronous messages. */
+#define MAXIMUM_MASK_PACKET_IN ((1 << OFPR_NO_MATCH) | \
+                                (1 << OFPR_ACTION) | \
+                                (1 << OFPR_INVALID_TTL) | \
+                                (1 << OFPR_ACTION_SET) | \
+                                (1 << OFPR_GROUP) | \
+                                (1 << OFPR_PACKET_OUT))
+
+#define MAXIMUM_MASK_FLOW_REMOVED ((1 << OFPRR_IDLE_TIMEOUT) | \
+                                   (1 << OFPRR_HARD_TIMEOUT) | \
+                                   (1 << OFPRR_DELETE) | \
+                                   (1 << OFPRR_GROUP_DELETE) | \
+                                   (1 << OFPRR_METER_DELETE) | \
+                                   (1 << OFPRR_EVICTION))
+
+#define MAXIMUM_MASK_PORT_STATUS ((1 << OFPPR_ADD) | \
+                                  (1 << OFPPR_DELETE) | \
+                                  (1 << OFPPR_MODIFY))
+
+#define MAXIMUM_MASK_ROLE_STATUS ((1 << OFPCRR_MASTER_REQUEST) | \
+                                  (1 << OFPCRR_CONFIG) | \
+                                  (1 << OFPCRR_EXPERIMENTER))
+
+#define MAXIMUM_MASK_TABLE_STATUS ((1 << OFPTR_VACANCY_DOWN) | \
+                                   (1 << OFPTR_VACANCY_UP))
+
+#define MINIMUM_MASK_TABLE_STATUS (1 << OFPTR_VACANCY_DOWN)
+
+#define MAXIMUM_MASK_REQUESTFORWARD ((1 << OFPRFR_GROUP_MOD) | \
+                                     (1 << OFPRFR_METER_MOD))
+
 /* Protocols to use for flow dumps, from most to least preferred. */
 extern enum ofputil_protocol ofputil_flow_dump_protocols[];
 extern size_t ofputil_n_flow_dump_protocols;

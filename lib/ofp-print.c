@@ -2074,10 +2074,22 @@ ofp_print_nxt_set_async_config(struct ds *string,
         }
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+        enum ofperr error = 0;
         uint32_t role[2][OAM_N_TYPES] = {{0}};
         uint32_t type;
 
-        ofputil_decode_set_async_config(oh, role[0], role[1], true);
+        if (raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+            error = ofputil_decode_set_async_config(oh, role[0], role[1], true);
+        }
+        else if (raw == OFPRAW_OFPT14_SET_ASYNC) {
+            error = ofputil_decode_set_async_config(oh, role[0], role[1],
+                                                    false);
+        }
+        if (error) {
+            ofp_print_error(string, error);
+            return;
+        }
+
         for (i = 0; i < 2; i++) {
 
             ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
