@@ -626,10 +626,10 @@ pipeline_encode(const char *pl)
 static int
 lflow_cmp(const void *lf1_, const void *lf2_)
 {
-    const struct sbrec_logical_flow *lf1, *lf2;
-
-    lf1 = *((struct sbrec_logical_flow **) lf1_);
-    lf2 = *((struct sbrec_logical_flow **) lf2_);
+    const struct sbrec_logical_flow *const *lf1p = lf1_;
+    const struct sbrec_logical_flow *const *lf2p = lf2_;
+    const struct sbrec_logical_flow *lf1 = *lf1p;
+    const struct sbrec_logical_flow *lf2 = *lf2p;
 
     int pl1 = pipeline_encode(lf1->pipeline);
     int pl2 = pipeline_encode(lf2->pipeline);
