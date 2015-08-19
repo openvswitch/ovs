@@ -289,6 +289,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         OPT_NO_SYSLOG,
         OPT_NO_WAIT,
         OPT_DRY_RUN,
+        OPT_BOOTSTRAP_CA_CERT,
         OPT_PEER_CA_CERT,
         OPT_LOCAL,
         OPT_RETRY,
@@ -308,6 +309,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         VLOG_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
+        {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         {NULL, 0, NULL, 0},
     };
@@ -442,6 +444,10 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         case OPT_PEER_CA_CERT:
             stream_ssl_set_peer_ca_cert_file(optarg);
+            break;
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            stream_ssl_set_ca_cert_file(optarg, true);
             break;
 
         case '?':
