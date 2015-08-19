@@ -163,6 +163,7 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_PEER_CA_CERT = UCHAR_MAX + 1,
+        OPT_BOOTSTRAP_CA_CERT,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
@@ -176,6 +177,7 @@ parse_options(int argc, char *argv[])
         DAEMON_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
+        {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
         {NULL, 0, NULL, 0}
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -210,6 +212,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_PEER_CA_CERT:
             stream_ssl_set_peer_ca_cert_file(optarg);
+            break;
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            stream_ssl_set_ca_cert_file(optarg, true);
             break;
 
         case '?':

@@ -39,8 +39,9 @@
           name) in IPv4 or IPv6 address format.  If <var>ip</var> is an IPv6
           address, then wrap <var>ip</var> with square brackets, e.g.:
           <code>ssl:[::1]:6640</code>.  The <code>--private-key</code>,
-          <code>--certificate</code>, and <code>--ca-cert</code> options are
-          mandatory when this form is used.
+          <code>--certificate</code> and either of <code>--ca-cert</code>
+          or <code>--bootstrap-ca-cert</code> options are mandatory when this
+          form is used.
         </p>
       </li>
       <li>
