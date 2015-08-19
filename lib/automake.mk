@@ -436,6 +436,7 @@ MAN_FRAGMENTS += \
 	lib/ssl-bootstrap.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-peer-ca-cert.man \
+	lib/ssl-peer-ca-cert-syn.man \
 	lib/ssl.man \
 	lib/ssl-syn.man \
 	lib/table.man \

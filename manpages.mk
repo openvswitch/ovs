@@ -54,6 +54,8 @@ ovsdb/ovsdb-server.1: \
 	lib/service.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-peer-ca-cert-syn.man \
+	lib/ssl-peer-ca-cert.man \
 	lib/ssl-syn.man \
 	lib/ssl.man \
 	lib/unixctl-syn.man \
@@ -74,6 +76,8 @@ lib/service-syn.man:
 lib/service.man:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
+lib/ssl-peer-ca-cert-syn.man:
+lib/ssl-peer-ca-cert.man:
 lib/ssl-syn.man:
 lib/ssl.man:
 lib/unixctl-syn.man:

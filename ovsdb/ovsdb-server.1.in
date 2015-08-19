@@ -21,6 +21,7 @@ ovsdb\-server \- Open vSwitch database server
 .so lib/vlog-syn.man
 .so lib/ssl-syn.man
 .so lib/ssl-bootstrap-syn.man
+.so lib/ssl-peer-ca-cert-syn.man
 .so lib/unixctl-syn.man
 .so lib/common-syn.man
 .
@@ -111,6 +112,7 @@ as the file name.  (This means that ordinarily there should be at most
 one row in \fItable\fR.)
 .so lib/ssl.man
 .so lib/ssl-bootstrap.man
+.so lib/ssl-peer-ca-cert.man
 .SS "Other Options"
 .so lib/unixctl.man
 .so lib/common.man

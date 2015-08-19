@@ -948,6 +948,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
             reconnect_connect_failed(s->reconnect, time_msec(), error);
             stream_close(s->stream);
             s->stream = NULL;
+            s->last_error = error;
         }
     }
 

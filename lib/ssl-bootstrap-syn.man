@@ -1,2 +1,2 @@
 .br
-[\fB\-\-bootstrap\-ca\-cert=\fIcacert.pem]
+[\fB\-\-bootstrap\-ca\-cert=\fIcacert.pem\fR]

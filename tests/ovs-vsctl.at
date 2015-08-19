@@ -1309,3 +1309,27 @@ AT_CHECK([RUN_OVS_VSCTL([get interface 0fcd11a1-2ba8-4b38-a358-4bccf2bf3057 type
 
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+AT_SETUP([peer ca cert])
+AT_KEYWORDS([ovs-vsctl ssl])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+PKIDIR=`pwd`
+OVS_PKI="sh $abs_top_srcdir/utilities/ovs-pki.in --dir=$PKIDIR/pki --log=$PKIDIR/ovs-pki.log"
+$OVS_PKI -B 1024 init && \
+$OVS_PKI -B 1024 req+sign vsctl switch && \
+$OVS_PKI -B 1024 req ovsdbserver && $OVS_PKI self-sign ovsdbserver
+
+dnl Create database.
+touch .conf.db.~lock~
+AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --peer-ca-cert=$PKIDIR/ovsdbserver-cert.pem --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
+ON_EXIT_UNQUOTED([kill `cat pid`])
+SSL_PORT=`parse_listening_port < ovsdb-server.log`
+
+# During bootstrap, the connection gets torn down. So the o/p of ovs-vsctl is error.
+AT_CHECK([ovs-vsctl -t 5 --db=ssl:127.0.0.1:$SSL_PORT --private-key=$PKIDIR/vsctl-privkey.pem --certificate=$PKIDIR/vsctl-cert.pem --bootstrap-ca-cert=$PKIDIR/cacert.pem show], [1], [ignore], [ignore])
+
+# If the bootstrap was successful, the following file should exist.
+OVS_WAIT_UNTIL([test -e $PKIDIR/cacert.pem])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP

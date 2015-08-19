@@ -1252,6 +1252,7 @@ parse_options(int *argcp, char **argvp[],
         OPT_UNIXCTL,
         OPT_RUN,
         OPT_BOOTSTRAP_CA_CERT,
+        OPT_PEER_CA_CERT,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
@@ -1266,6 +1267,7 @@ parse_options(int *argcp, char **argvp[],
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
+        {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         {"private-key", required_argument, NULL, 'p'},
         {"certificate", required_argument, NULL, 'c'},
         {"ca-cert",     required_argument, NULL, 'C'},
@@ -1323,6 +1325,10 @@ parse_options(int *argcp, char **argvp[],
         case OPT_BOOTSTRAP_CA_CERT:
             ca_cert_file = optarg;
             bootstrap_ca_cert = true;
+            break;
+
+        case OPT_PEER_CA_CERT:
+            stream_ssl_set_peer_ca_cert_file(optarg);
             break;
 
         case '?':
