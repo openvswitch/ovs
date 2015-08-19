@@ -53,7 +53,10 @@ struct uuid;
 /* The number of tables for the ingress and egress pipelines. */
 #define LOG_PIPELINE_LEN 16
 
-/* Logical fields. */
+/* Logical fields.
+ *
+ * These values are documented in ovn-architecture(7), please update the
+ * documentation if you change any of them. */
 #define MFF_LOG_DATAPATH MFF_METADATA /* Logical datapath (64 bits). */
 #define MFF_LOG_INPORT   MFF_REG6     /* Logical input port (32 bits). */
 #define MFF_LOG_OUTPORT  MFF_REG7     /* Logical output port (32 bits). */
