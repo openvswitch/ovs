@@ -1508,7 +1508,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         break;
 
     case MFF_IP_FRAG:
-        match->wc.masks.nw_frag |= FLOW_NW_FRAG_MASK;
+        match->wc.masks.nw_frag &= ~FLOW_NW_FRAG_MASK;
         match->flow.nw_frag &= ~FLOW_NW_FRAG_MASK;
         break;
 
