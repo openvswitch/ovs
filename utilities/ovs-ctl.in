@@ -322,6 +322,12 @@ save_ofports_if_required () {
     esac
 }
 
+save_flows_if_required () {
+    if test X"$DELETE_BRIDGES" != Xyes; then
+        action "Saving flows" ovs_save save-flows "${script_flows}"
+    fi
+}
+
 save_interfaces () {
     "$datadir/scripts/ovs-save" save-interfaces ${ifaces} \
         > "${script_interfaces}"
@@ -372,9 +378,7 @@ force_reload_kmod () {
     action "Detected internal interfaces: $ifaces" true
 
     init_restore_scripts
-
-    action "Saving flows" ovs_save save-flows "${script_flows}"
-
+    save_flows_if_required
     save_ofports_if_required
 
     # Restart the database first, since a large database may take a
@@ -450,7 +454,7 @@ restart () {
     if daemon_is_running ovsdb-server && daemon_is_running ovs-vswitchd; then
         init_restore_scripts
         save_interfaces_if_required
-        action "Saving flows" ovs_save save-flows "${script_flows}"
+        save_flows_if_required
         save_ofports_if_required
     fi
 
