@@ -4711,7 +4711,7 @@ get_nd_key(const struct flow *flow, struct ovs_key_nd *nd)
 static void
 put_nd_key(const struct ovs_key_nd *nd, struct flow *flow)
 {
-    memcpy(&flow->nd_target, &flow->nd_target, sizeof flow->nd_target);
+    memcpy(&flow->nd_target, nd->nd_target, sizeof flow->nd_target);
     /* nd_sll and nd_tll are stored in arp_sha and arp_tha, respectively */
     memcpy(flow->arp_sha, nd->nd_sll, ETH_ADDR_LEN);
     memcpy(flow->arp_tha, nd->nd_tll, ETH_ADDR_LEN);
