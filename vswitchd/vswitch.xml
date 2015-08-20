@@ -708,16 +708,8 @@
         </p>
 
         <p>
-          OpenFlow 1.4 is not enabled by default because its implementation is
-          missing features.
-        </p>
-
-        <p>
-          OpenFlow 1.5 has the same risks as OpenFlow 1.4, but it is even more
-          experimental because the OpenFlow 1.5 specification is still under
-          development and thus subject to change.  Pass
-          <code>--enable-of15</code> to <code>ovs-vswitchd</code> to allow
-          OpenFlow 1.5 to be enabled.
+          OpenFlow 1.4 and 1.5 are not enabled by default because their
+          implementations are missing features.
         </p>
       </column>
     </group>
