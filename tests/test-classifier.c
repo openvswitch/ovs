@@ -34,11 +34,15 @@
 #include "byte-order.h"
 #include "classifier-private.h"
 #include "command-line.h"
+#include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-util.h"
 #include "ovstest.h"
+#include "ovs-atomic.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
+#include "timeval.h"
 #include "unaligned.h"
 #include "util.h"
 
@@ -1269,6 +1273,224 @@ test_many_rules_in_five_tables(struct ovs_cmdl_context *ctx OVS_UNUSED)
     test_many_rules_in_n_tables(5);
 }
 
+/* Classifier benchmarks. */
+
+static int n_rules;             /* Number of rules to insert. */
+static int n_priorities;        /* Number of priorities to use. */
+static int n_tables;            /* Number of subtables. */
+static int n_threads;           /* Number of threads to search and mutate. */
+static int n_lookups;           /* Number of lookups each thread performs. */
+
+static void benchmark(bool use_wc);
+
+static int
+elapsed(const struct timeval *start)
+{
+    struct timeval end;
+
+    xgettimeofday(&end);
+    return timeval_to_msec(&end) - timeval_to_msec(start);
+}
+
+static void
+run_benchmarks(struct ovs_cmdl_context *ctx)
+{
+    if (ctx->argc < 5
+        || (ctx->argc > 1 && !strcmp(ctx->argv[1], "--help"))) {
+        printf(
+            "usage: ovstest %s benchmark <n_rules> <n_priorities> <n_subtables> <n_threads> <n_lookups>\n"
+            "\n"
+            "where:\n"
+            "\n"
+            "<n_rules>      - The number of rules to install for lookups.  More rules\n"
+            "                 makes misses less likely.\n"
+            "<n_priorities> - How many different priorities to use.  Using only 1\n"
+            "                 priority will force lookups to continue through all\n"
+            "                 subtables.\n"
+            "<n_subtables>  - Number of subtables to use.  Normally a classifier has\n"
+            "                 rules with different kinds of masks, resulting in\n"
+            "                 multiple subtables (one per mask).  However, in some\n"
+            "                 special cases a table may consist of only one kind of\n"
+            "                 rules, so there will be only one subtable.\n"
+            "<n_threads>    - How many lookup threads to use.  Using one thread should\n"
+            "                 give less variance accross runs, but classifier\n"
+            "                 scaling can be tested with multiple threads.\n"
+            "<n_lookups>    - How many lookups each thread should perform.\n"
+            "\n", program_name);
+        return;
+    }
+
+    n_rules = strtol(ctx->argv[1], NULL, 10);
+    n_priorities = strtol(ctx->argv[2], NULL, 10);
+    n_tables = strtol(ctx->argv[3], NULL, 10);
+    n_threads = strtol(ctx->argv[4], NULL, 10);
+    n_lookups = strtol(ctx->argv[5], NULL, 10);
+
+    printf("\nBenchmarking with:\n"
+           "%d rules with %d priorities in %d tables, "
+           "%d threads doing %d lookups each\n",
+           n_rules, n_priorities, n_tables, n_threads, n_lookups);
+
+    puts("\nWithout wildcards: \n");
+    benchmark(false);
+    puts("\nWith wildcards: \n");
+    benchmark(true);
+}
+
+struct cls_aux {
+    const struct classifier *cls;
+    size_t n_lookup_flows;
+    struct flow *lookup_flows;
+    bool use_wc;
+    atomic_int hits;
+    atomic_int misses;
+};
+
+static void *
+lookup_classifier(void *aux_)
+{
+    struct cls_aux *aux = aux_;
+    cls_version_t version = CLS_MIN_VERSION;
+    int hits = 0, old_hits;
+    int misses = 0, old_misses;
+    size_t i;
+
+    random_set_seed(1);
+
+    for (i = 0; i < n_lookups; i++) {
+        const struct cls_rule *cr;
+        struct flow_wildcards wc;
+        unsigned int x;
+
+        x = random_range(aux->n_lookup_flows);
+
+        if (aux->use_wc) {
+            flow_wildcards_init_catchall(&wc);
+            cr = classifier_lookup(aux->cls, version, &aux->lookup_flows[x],
+                                   &wc);
+        } else {
+            cr = classifier_lookup(aux->cls, version, &aux->lookup_flows[x],
+                                   NULL);
+        }
+        if (cr) {
+            hits++;
+        } else {
+            misses++;
+        }
+    }
+    atomic_add(&aux->hits, hits, &old_hits);
+    atomic_add(&aux->misses, misses, &old_misses);
+    return NULL;
+}
+
+/* Benchmark classification. */
+static void
+benchmark(bool use_wc)
+{
+    struct classifier cls;
+    cls_version_t version = CLS_MIN_VERSION;
+    struct cls_aux aux;
+    int *wcfs = xmalloc(n_tables * sizeof *wcfs);
+    int *priorities = xmalloc(n_priorities * sizeof *priorities);
+    struct timeval start;
+    pthread_t *threads;
+    int i;
+
+    fatal_signal_init();
+
+    random_set_seed(1);
+
+    for (i = 0; i < n_tables; i++) {
+        do {
+            wcfs[i] = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
+        } while (array_contains(wcfs, i, wcfs[i]));
+    }
+
+    for (i = 0; i < n_priorities; i++) {
+        priorities[i] = (i * 129) & INT_MAX;
+    }
+    shuffle(priorities, n_priorities);
+
+    classifier_init(&cls, flow_segment_u64s);
+    set_prefix_fields(&cls);
+
+    /* Create lookup flows. */
+    aux.use_wc = use_wc;
+    aux.cls = &cls;
+    aux.n_lookup_flows = 2 * N_FLOW_VALUES;
+    aux.lookup_flows = xzalloc(aux.n_lookup_flows * sizeof *aux.lookup_flows);
+    for (i = 0; i < aux.n_lookup_flows; i++) {
+        struct flow *flow = &aux.lookup_flows[i];
+        unsigned int x;
+
+        x = random_range(N_FLOW_VALUES);
+        flow->nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
+        flow->nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
+        flow->tunnel.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
+        flow->metadata = metadata_values[get_value(&x, N_METADATA_VALUES)];
+        flow->in_port.ofp_port = in_port_values[get_value(&x,
+                                                          N_IN_PORT_VALUES)];
+        flow->vlan_tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
+        flow->dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
+        flow->tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
+        flow->tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
+        memcpy(flow->dl_src, dl_src_values[get_value(&x, N_DL_SRC_VALUES)],
+               ETH_ADDR_LEN);
+        memcpy(flow->dl_dst, dl_dst_values[get_value(&x, N_DL_DST_VALUES)],
+               ETH_ADDR_LEN);
+        flow->nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
+        flow->nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
+    }
+    atomic_init(&aux.hits, 0);
+    atomic_init(&aux.misses, 0);
+
+    /* Rule insertion. */
+    for (i = 0; i < n_rules; i++) {
+        struct test_rule *rule;
+        const struct cls_rule *old_cr;
+
+        int priority = priorities[random_range(n_priorities)];
+        int wcf = wcfs[random_range(n_tables)];
+        int value_pat = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
+
+        rule = make_rule(wcf, priority, value_pat);
+        old_cr = classifier_find_rule_exactly(&cls, &rule->cls_rule, version);
+        if (!old_cr) {
+            classifier_insert(&cls, &rule->cls_rule, version, NULL, 0);
+        } else {
+            free_rule(rule);
+        }
+    }
+
+    /* Lookup. */
+    xgettimeofday(&start);
+    threads = xmalloc(n_threads * sizeof *threads);
+    for (i = 0; i < n_threads; i++) {
+        threads[i] = ovs_thread_create("lookups", lookup_classifier, &aux);
+    }
+    for (i = 0; i < n_threads; i++) {
+        xpthread_join(threads[i], NULL);
+    }
+
+    int elapsed_msec = elapsed(&start);
+
+    free(threads);
+
+    int hits, misses;
+    atomic_read(&aux.hits, &hits);
+    atomic_read(&aux.misses, &misses);
+    printf("hits: %d, misses: %d\n", hits, misses);
+
+    printf("classifier lookups:  %5d ms, %"PRId64" lookups/sec\n",
+           elapsed_msec,
+           (((uint64_t)hits + misses) * 1000) / elapsed_msec);
+
+    destroy_classifier(&cls);
+    free(aux.lookup_flows);
+    free(priorities);
+    free(wcfs);
+}
+
 /* Miniflow tests. */
 
 static uint32_t
@@ -1616,6 +1838,9 @@ test_minimask_combine(struct ovs_cmdl_context *ctx OVS_UNUSED)
     free(minicatchall);
 }
 
+
+static void help(struct ovs_cmdl_context *ctx);
+
 static const struct ovs_cmdl_command commands[] = {
     /* Classifier tests. */
     {"empty", NULL, 0, 0, test_empty},
@@ -1626,14 +1851,45 @@ static const struct ovs_cmdl_command commands[] = {
     {"many-rules-in-one-table", NULL, 0, 1, test_many_rules_in_one_table},
     {"many-rules-in-two-tables", NULL, 0, 0, test_many_rules_in_two_tables},
     {"many-rules-in-five-tables", NULL, 0, 0, test_many_rules_in_five_tables},
+    {"benchmark", NULL, 0, 5, run_benchmarks},
 
     /* Miniflow and minimask tests. */
     {"miniflow", NULL, 0, 0, test_miniflow},
     {"minimask_has_extra", NULL, 0, 0, test_minimask_has_extra},
     {"minimask_combine", NULL, 0, 0, test_minimask_combine},
 
+    {"--help", NULL, 0, 0, help},
     {NULL, NULL, 0, 0, NULL},
 };
+
+static void
+help(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    const struct ovs_cmdl_command *p;
+    struct ds test_names = DS_EMPTY_INITIALIZER;
+    const int linesize = 80;
+
+    printf("usage: ovstest %s TEST [TESTARGS]\n"
+           "where TEST is one of the following:\n\n",
+           program_name);
+
+    for (p = commands; p->name != NULL; p++) {
+        if (*p->name != '-') { /* Skip internal commands */
+            if (test_names.length > 1
+                && test_names.length + strlen(p->name) + 1 >= linesize) {
+                test_names.length -= 1;
+                printf ("%s\n", ds_cstr(&test_names));
+                ds_clear(&test_names);
+            }
+            ds_put_format(&test_names, "%s, ", p->name);
+        }
+    }
+    if (test_names.length > 2) {
+        test_names.length -= 2;
+        printf("%s\n", ds_cstr(&test_names));
+    }
+    ds_destroy(&test_names);
+}
 
 static void
 test_classifier_main(int argc, char *argv[])
