@@ -59,6 +59,8 @@ gdb_ovn_northd=false
 gdb_ovn_northd_ex=false
 gdb_ovn_controller=false
 gdb_ovn_controller_ex=false
+gdb_ovn_controller_vtep=false
+gdb_ovn_controller_vtep_ex=false
 builddir=
 srcdir=
 schema=
@@ -109,6 +111,7 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -d, --gdb-ovsdb      run ovsdb-server under gdb
   --gdb-ovn-northd     run ovn-northd under gdb
   --gdb-ovn-controller run ovn-controller under gdb
+  --gdb-ovn-controller-vtep run ovn-controller-vtep under gdb
   -R, --gdb-run        automatically start running the daemon in gdb
                        for any daemon set to run under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
@@ -169,6 +172,9 @@ EOF
         --gdb-ovn-controller)
             gdb_ovn_controller=true
             ;;
+        --gdb-ovn-controller-vtep)
+            gdb_ovn_controller_vtep=true
+            ;;
         -o|--ovn)
             ovn=true
             ;;
@@ -177,6 +183,7 @@ EOF
             gdb_ovsdb_ex=true
             gdb_ovn_northd_ex=true
             gdb_ovn_controller_ex=true
+            gdb_ovn_controller_vtep_ex=true
             ;;
         -*)
             echo "unrecognized option $option (use --help for help)" >&2
@@ -239,6 +246,11 @@ if $built; then
             echo >&2 'source directory not found, please use --srcdir'
             exit 1
         fi
+        vtep_schema=$srcdir/vtep/vtep.ovsschema
+        if test ! -e "$vtep_schema"; then
+            echo >&2 'source directory not found, please use --srcdir'
+            exit 1
+        fi
     fi
 
     # Put built tools early in $PATH.
@@ -248,7 +260,7 @@ if $built; then
     fi
     PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
     if $ovn; then
-        PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/northd:$builddir/ovn/utilities:$PATH
+        PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/controller-vtep:$builddir/ovn/northd:$builddir/ovn/utilities:$PATH
     fi
     export PATH
 else
@@ -305,7 +317,8 @@ if $ovn; then
     touch "$sandbox"/.ovnnb.db.~lock~
     run ovsdb-tool create ovnsb.db "$ovnsb_schema"
     run ovsdb-tool create ovnnb.db "$ovnnb_schema"
-    ovsdb_server_args="ovnsb.db ovnnb.db conf.db"
+    run ovsdb-tool create vtep.db "$vtep_schema"
+    ovsdb_server_args="ovnsb.db ovnnb.db vtep.db conf.db"
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
@@ -339,6 +352,7 @@ if $ovn; then
 
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
+    rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off --log-file
 fi
 
 cat <<EOF
