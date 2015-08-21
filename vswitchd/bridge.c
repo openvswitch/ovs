@@ -3561,18 +3561,20 @@ bridge_configure_remotes(struct bridge *br,
                     continue;
                 }
             } else {
-               whitelist = xasprintf("punix:%s/%s.controller",
+               whitelist = xasprintf("punix:%s/%s.",
                                      ovs_rundir(), br->name);
-               if (!equal_pathnames(c->target, whitelist, SIZE_MAX)) {
+               if (!equal_pathnames(c->target, whitelist, strlen(whitelist))
+                   || strchr(c->target + strlen(whitelist), '/')) {
                    /* Prevent remote ovsdb-server users from accessing
                     * arbitrary Unix domain sockets and overwriting arbitrary
                     * local files. */
                    VLOG_ERR_RL(&rl, "bridge %s: Not adding Unix domain socket "
                                   "controller \"%s\" due to possibility of "
                                   "overwriting local files. Instead, specify "
-                                  "whitelisted \"%s\" or connect to "
-                                  "\"unix:%s/%s.mgmt\" (which is always "
-                                  "available without special configuration).",
+                                  "path in whitelisted format \"%s*\" or "
+                                  "connect to \"unix:%s/%s.mgmt\" (which is "
+                                  "always available without special "
+                                  "configuration).",
                                   br->name, c->target, whitelist,
                                   ovs_rundir(), br->name);
                    free(whitelist);

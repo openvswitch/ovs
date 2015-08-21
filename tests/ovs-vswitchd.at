@@ -153,3 +153,17 @@ AT_CHECK([sed -n "
 ])
 
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd -- set service controller])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-vsctl set-controller br0 punix:$(pwd)/br0.void])
+OVS_WAIT_UNTIL([test -e br0.void])
+
+AT_CHECK([ovs-vsctl set-controller br0 punix:$(pwd)/br0.void/../overwrite.file])
+OVS_WAIT_UNTIL([test -n "`grep ERR ovs-vswitchd.log | grep overwrite.file`"])
+
+OVS_VSWITCHD_STOP(["/Not adding Unix domain socket controller/d"])
+AT_CLEANUP
