@@ -344,7 +344,6 @@ ofputil_match_to_ofp10_match(const struct match *match,
     } else if (match->wc.masks.vlan_tci & htons(VLAN_CFI)
                && !(match->flow.vlan_tci & htons(VLAN_CFI))) {
         ofmatch->dl_vlan = htons(OFP10_VLAN_NONE);
-        ofpfw |= OFPFW10_DL_VLAN_PCP;
     } else {
         if (!(match->wc.masks.vlan_tci & htons(VLAN_VID_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN;

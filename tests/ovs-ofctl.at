@@ -1140,14 +1140,16 @@ xxxxxxxx xxxxxxxx xxxx xxxx
 002820fd xxxx xxxxxxxxxxxx xxxxxxxxxxxx 0123 04 xx xxxx xx xx xxxx dnl
 xxxxxxxx xxxxxxxx xxxx xxxx
 
+dnl dl_vlan_pcp doesn't make sense when 802.1Q is not present, so
+dnl OVS ignores it and drops it on output.
 # vlan_tci=0x0000
+#  1: 38 -> 28
 003820fd xxxx xxxxxxxxxxxx xxxxxxxxxxxx ffff xx xx xxxx xx xx xxxx dnl
 xxxxxxxx xxxxxxxx xxxx xxxx
 
-dnl dl_vlan_pcp doesn't make sense when dl_vlan is "none", so
+dnl dl_vlan_pcp doesn't make sense when 802.1Q is not present, so
 dnl OVS ignores it and drops it on output.
 # vlan_tci=0x0000
-#  1: 28 -> 38
 # 20: 05 -> 00
 002820fd xxxx xxxxxxxxxxxx xxxxxxxxxxxx ffff 05 xx xxxx xx xx xxxx dnl
 xxxxxxxx xxxxxxxx xxxx xxxx
@@ -2374,7 +2376,7 @@ AT_CHECK([ovs-ofctl check-vlan 0000 ffff], [0], [dnl
 vlan_tci=0x0000 -> 0000/ffff
 NXM: NXM_OF_VLAN_TCI(0000) -> 0000/ffff
 OXM: OXM_OF_VLAN_VID(0000) -> 0000/1fff,--
-OF1.0: ffff/0,00/1 -> 0000/ffff
+OF1.0: ffff/0,00/0 -> 0000/ffff
 OF1.1: ffff/0,00/1 -> 0000/ffff
 ])
 
@@ -2419,7 +2421,7 @@ AT_CHECK([ovs-ofctl check-vlan 0000 f000], [0], [dnl
 vlan_tci=0x0000/0xf000 -> 0000/f000
 NXM: NXM_OF_VLAN_TCI_W(0000/f000) -> 0000/f000
 OXM: OXM_OF_VLAN_VID_W(0000/1000) -> 0000/1000,--
-OF1.0: ffff/0,00/1 -> 0000/ffff
+OF1.0: ffff/0,00/0 -> 0000/ffff
 OF1.1: ffff/0,00/1 -> 0000/ffff
 ])
 
