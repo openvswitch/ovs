@@ -1,4 +1,4 @@
-v2.4.0 - xx xxx xxxx
+v2.4.0 - 20 Aug 2015
 ---------------------
    - Flow table modifications are now atomic, meaning that each packet
      now sees a coherent version of the OpenFlow pipeline.  For
