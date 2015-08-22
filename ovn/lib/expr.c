@@ -1206,7 +1206,7 @@ expr_parse_level(const char *s, const struct shash *symtab, char **errorp)
 }
 
 /* Adds a predicate symbol, whose value is the given Boolean 'expression',
- * named 'name' to 'symtab'.  For example, "ip4 && ip4.proto == 1" might be an
+ * named 'name' to 'symtab'.  For example, "ip4 && ip4.proto == 6" might be an
  * appropriate predicate named "tcp4". */
 struct expr_symbol *
 expr_symtab_add_predicate(struct shash *symtab, const char *name,
