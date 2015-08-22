@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manpage program="ovn-northd" section="8" title="ovn-northd">
+    <h1>Name</h1>
+    <p>ovn-northd -- Open Virtual Network central control daemon</p>
+
+    <h1>Synopsis</h1>
+    <p><code>ovn-northd</code> [<var>options</var>]</p>
+
+    <h1>Description</h1>
+    <p>
+      <code>ovn-northd</code> is a centralized daemon responsible for
+      translating the high-level OVN configuration into logical
+      configuration consumable by daemons such as
+      <code>ovn-controller</code>.  It translates the logical network
+      configuration in terms of conventional network concepts, taken
+      from the OVN Northbound Database (see <code>ovn-nb</code>(5)),
+      into logical datapath flows in the OVN Southbound Database (see
+      <code>ovn-sb</code>(5)) below it.
+    </p>
+
+    <h1>Configuration</h1>
+    <p>
+      <code>ovn-northd</code> requires a connection to the Northbound
+      and Southbound databases.  The default is <code>db.sock</code>
+      in the local Open vSwitch's "run" directory.  This may be
+      overridden with the following commands:
+    </p>
+    <ul>
+      <li>
+        <p>
+          <code>--ovnnb-db=<var>database</var></code>
+        </p>
+        <p>
+          The database containing the OVN Northbound Database.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>--ovsnb-db=<var>database</var></code>
+        </p>
+        <p>
+          The database containing the OVN Southbound Database.
+        </p>
+      </li>
+    </ul>
+    <p>
+      The <var>database</var> argument must take one of the following forms:
+    </p>
+    <ul>
+      <li>
+        <p>
+          <code>ssl:<var>ip</var>:<var>port</var></code>
+        </p>
+        <p>
+          The specified SSL <var>port</var> on the host at the given
+          <var>ip</var>, which must be expressed as an IP address (not a DNS
+          name) in IPv4 or IPv6 address format.  If <var>ip</var> is an IPv6
+          address, then wrap <var>ip</var> with square brackets, e.g.:
+          <code>ssl:[::1]:6640</code>.  The <code>--private-key</code>,
+          <code>--certificate</code>, and <code>--ca-cert</code> options are
+          mandatory when this form is used.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>tcp:<var>ip</var>:<var>port</var></code>
+        </p>
+        <p>
+          Connect to the given TCP <var>port</var> on <var>ip</var>, where
+          <var>ip</var> can be IPv4 or IPv6 address. If <var>ip</var> is an
+          IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
+          <code>tcp:[::1]:6640</code>.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>unix:<var>file</var></code>
+        </p>
+        <p>
+          On POSIX, connect to the Unix domain server socket named
+          <var>file</var>.
+        </p>
+        <p>
+          On Windows, connect to a localhost TCP port whose value is written
+          in <var>file</var>.
+        </p>
+      </li>
+    </ul>
+
+    <h1>RUNTIME MANAGEMENT COMMANDS</h1>
+    <p>
+      <code>ovs-appctl</code> can send commands to a running
+      <code>ovn-northd</code> process.  The currently supported commands
+      are described below.
+      <dl>
+      <dt><code>exit</code></dt>
+      <dd>
+        Causes <code>ovn-northd</code> to gracefully terminate.
+      </dd>
+      </dl>
+    </p>
+
+</manpage>
