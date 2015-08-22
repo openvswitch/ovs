@@ -119,4 +119,18 @@
         daemon must be restarted.  This behavior should be improved.
       </p>
     </p>
+
+    <h1>RUNTIME MANAGEMENT COMMANDS</h1>
+    <p>
+      <code>ovs-appctl</code> can send commands to a running
+      <code>ovn-controller</code> process.  The currently supported
+      commands are described below.
+      <dl>
+      <dt><code>exit</code></dt>
+      <dd>
+        Causes <code>ovn-controller</code> to gracefully terminate.
+      </dd>
+      </dl>
+    </p>
+
 </manpage>
