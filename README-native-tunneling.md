@@ -22,7 +22,7 @@ Configure OVS bridges as follows.
    ovs-appctl ovs/route/show
    Add tunnel route if not present in OVS route table.
    ovs-appctl ovs/route/add 172.168.1.1/24 br-eth1
-3. Add integration brdge int-br and add tunnel port using standard syntax.
+3. Add integration bridge int-br and add tunnel port using standard syntax.
    ovs-vsctl add-port int-br vxlan0 -- set interface vxlan0 type=vxlan  options:remote_ip=172.168.1.2
 4. Assign IP address to int-br, So final topology looks like:
 
