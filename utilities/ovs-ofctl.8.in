@@ -969,23 +969,44 @@ The following shorthand notations are also available:
 .IP \fBip\fR
 Same as \fBdl_type=0x0800\fR.
 .
+.IP \fBipv6\fR
+Same as \fBdl_type=0x86dd\fR.
+.
 .IP \fBicmp\fR
 Same as \fBdl_type=0x0800,nw_proto=1\fR.
+.
+.IP \fBicmp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=58\fR.
 .
 .IP \fBtcp\fR
 Same as \fBdl_type=0x0800,nw_proto=6\fR.
 .
+.IP \fBtcp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=6\fR.
+.
 .IP \fBudp\fR
 Same as \fBdl_type=0x0800,nw_proto=17\fR.
 .
+.IP \fBudp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=17\fR.
+.
 .IP \fBsctp\fR
 Same as \fBdl_type=0x0800,nw_proto=132\fR.
+.
+.IP \fBsctp6\fR
+Same as \fBdl_type=0x86dd,nw_proto=132\fR.
 .
 .IP \fBarp\fR
 Same as \fBdl_type=0x0806\fR.
 .
 .IP \fBrarp\fR
 Same as \fBdl_type=0x8035\fR.
+.
+.IP \fBmpls\fR
+Same as \fBdl_type=0x8847\fR.
+.
+.IP \fBmplsm\fR
+Same as \fBdl_type=0x8848\fR.
 .
 .PP
 The following field assignments require support for the NXM (Nicira
