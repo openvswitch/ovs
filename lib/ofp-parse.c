@@ -1634,3 +1634,27 @@ parse_ofp_geneve_table_mod_str(struct ofputil_geneve_table_mod *gtm,
 
     return NULL;
 }
+
+/* Convert 'table_id' and table feature flag 'OFPTFF_FIRST_EGRESS' into 'tf'
+ * for sending a set_table_features command to a switch.
+ *
+ * Stores a bitmap of the OpenFlow versions that are usable for 'tf' into
+ * '*usable_versions'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * OVS_WARN_UNUSED_RESULT
+parse_ofp_table_features(struct ofputil_table_features *tf, const char *table_id,
+                         uint32_t *usable_versions)
+{
+    char *error = str_to_u8(table_id, "table_id", &tf->table_id);
+    if (error) {
+        return error;
+    }
+
+    *usable_versions =  (1u << OFP15_VERSION);
+
+    tf->features = OFPTFF_FIRST_EGRESS;
+
+    return NULL;
+}

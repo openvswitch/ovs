@@ -338,6 +338,7 @@ usage(void)
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  dump-table-features SWITCH  print table features\n"
+           "  set-first-egress-table SWITCH TABLE  set first egress table\n"
            "  dump-table-desc SWITCH      print table description (OF1.4+)\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
@@ -728,9 +729,9 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
 {
     struct ofpbuf *request;
     struct vconn *vconn;
-
+    struct ofputil_table_features *tf = NULL;
     open_vconn(ctx->argv[1], &vconn);
-    request = ofputil_encode_table_features_request(vconn_get_version(vconn));
+    request = ofputil_encode_table_features_request(tf, vconn_get_version(vconn));
 
     /* The following is similar to dump_trivial_stats_transaction(), but it
      * maintains the previous 'ofputil_table_features' from one stats reply
@@ -799,6 +800,35 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
         ofpbuf_delete(reply);
     }
 
+    vconn_close(vconn);
+}
+
+static void
+ofctl_set_first_egress_table(struct ovs_cmdl_context *ctx)
+{
+    uint32_t usable_versions;
+    struct ofputil_table_features tf;
+    struct vconn *vconn;
+    char *error;
+
+    error = parse_ofp_table_features(&tf, ctx->argv[2], &usable_versions);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    uint32_t allowed_versions = get_allowed_ofp_versions();
+    if (!(allowed_versions & usable_versions)) {
+        struct ds versions = DS_EMPTY_INITIALIZER;
+        ofputil_format_version_bitmap_names(&versions, allowed_versions);
+        ovs_fatal(0, "set_first_egress_table '%s' requires one of the OpenFlow "
+                  "versions %s but none is enabled (use -O)",
+                  ctx->argv[2], ds_cstr(&versions));
+    }
+    mask_allowed_ofp_versions(usable_versions);
+
+    open_vconn(ctx->argv[1], &vconn);
+    transact_noreply(vconn, ofputil_encode_table_features_request(&tf,
+                                            vconn_get_version(vconn)));
     vconn_close(vconn);
 }
 
@@ -3694,6 +3724,8 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 1, ofctl_dump_tables },
     { "dump-table-features", "switch",
       1, 1, ofctl_dump_table_features },
+    { "set-first-egress-table", "switch table",
+      2, 2, ofctl_set_first_egress_table },
     { "dump-table-desc", "switch",
       1, 1, ofctl_dump_table_desc },
     { "dump-flows", "switch",
