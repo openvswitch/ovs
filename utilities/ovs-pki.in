@@ -195,7 +195,7 @@ if test -z "$dsaparam"; then
     dsaparam=$pkidir/dsaparam.pem
 fi
 case $log in
-    /*) ;;
+    /* | ?:[\\/]*) ;;
     *) log=`pwd`/$log ;;
 esac
 
@@ -462,7 +462,7 @@ sign_request() {
     pkidir_must_exist
 
     case "$1" in
-        "/"*)
+        /* | ?:[\\/]*)
             request_file="$1"
             ;;
         *)
