@@ -2804,6 +2804,12 @@ ofp_print_table_features(struct ds *s,
 
     }
 
+    if(features->features >= 0) {
+        ds_put_format(s, "    features: %s\n",
+                     (features->features & OFPTFF_FIRST_EGRESS) ?
+                      "first egress table" : "none");
+    }
+
     if (features->max_entries) {
         ds_put_format(s, "    max_entries=%"PRIu32"\n", features->max_entries);
     }
