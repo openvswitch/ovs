@@ -258,6 +258,11 @@ struct oftable {
 
     atomic_ulong n_matched;
     atomic_ulong n_missed;
+
+   /* This flag indicates that this flow table is the first egress table, when
+    * a packet is output to a port, egress processing will start with this flow
+    * table. */
+    bool is_first_egress;
 };
 
 /* Assigns TABLE to each oftable, in turn, in OFPROTO.

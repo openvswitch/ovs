@@ -4454,6 +4454,12 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
 
     return b;
 }
+
+/* Variable to store the table-id of the first egress table. If it is set to
+ * 0 it means that egress processing is not enabled.
+ */
+int first_egress_table = 0;
+
 
 /* Table features. */
 
@@ -4486,6 +4492,47 @@ parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
         }
         if (type < CHAR_BIT * sizeof types) {
             types |= 1u << type;
+        }
+    }
+
+    *ofpacts = ofpact_bitmap_from_openflow(htonl(types), ofp_version);
+    return 0;
+}
+
+static enum ofperr
+parse15_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
+                      uint8_t table_id, uint64_t *ofpacts)
+{
+    uint32_t types = 0;
+
+    while (payload->size > 0) {
+        uint16_t type;
+        enum ofperr error;
+
+        error = ofputil_pull_property__(payload, NULL, 1, &type);
+        if (error) {
+            return error;
+        }
+
+        /* If first egress table is set then flow tables used for egress
+         * processing must forbid the use of output actior group action in
+         * write-action instrcution and must advertise the same in flow table
+         * features as mentioned in the specification.
+         *
+         * OFPAT_* values, i.e. 0 for OFPACT_OUTPUT and 22 for OFPACT_GROUP is
+         * used for comparison as ofpact_type cannot be compared directly with
+         * 'type', which is of type ofpat.
+         */
+        if (type < CHAR_BIT * sizeof types) {
+            if (first_egress_table && first_egress_table <= table_id) {
+                if (type == 0 || type == 22) {
+                    continue;
+                } else {
+                    types |= 1u << type;
+                }
+            } else {
+                    types |= 1u << type;
+            }
         }
     }
 
@@ -4575,25 +4622,10 @@ parse_oxms(struct ofpbuf *payload, bool loose,
     return 0;
 }
 
-/* Converts an OFPMP_TABLE_FEATURES request or reply in 'msg' into an abstract
- * ofputil_table_features in 'tf'.
- *
- * If 'loose' is true, this function ignores properties and values that it does
- * not understand, as a controller would want to do when interpreting
- * capabilities provided by a switch.  If 'loose' is false, this function
- * treats unknown properties and values as an error, as a switch would want to
- * do when interpreting a configuration request made by a controller.
- *
- * A single OpenFlow message can specify features for multiple tables.  Calling
- * this function multiple times for a single 'msg' iterates through the tables
- * in the message.  The caller must initially leave 'msg''s layer pointers null
- * and not modify them between calls.
- *
- * Returns 0 if successful, EOF if no tables were left in this 'msg', otherwise
- * a positive "enum ofperr" value. */
-int
-ofputil_decode_table_features(struct ofpbuf *msg,
-                              struct ofputil_table_features *tf, bool loose)
+static int
+ofputil_decode_ofpst13_table_features(struct ofpbuf *msg,
+                                      struct ofputil_table_features *tf,
+                                      bool loose)
 {
     const struct ofp_header *oh;
     struct ofp13_table_features *otf;
@@ -4601,10 +4633,6 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     unsigned int len;
 
     memset(tf, 0, sizeof *tf);
-
-    if (!msg->header) {
-        ofpraw_pull_assert(msg);
-    }
     oh = msg->header;
 
     if (!msg->size) {
@@ -4641,6 +4669,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         tf->supports_vacancy_events = -1;
     }
     tf->max_entries = ntohl(otf->max_entries);
+    tf->features = -1;
 
     while (properties.size > 0) {
         struct ofpbuf payload;
@@ -4742,10 +4771,242 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     return 0;
 }
 
+static int
+ofputil_decode_ofpst15_table_features(struct ofpbuf *msg,
+                                      struct ofputil_table_features *tf,
+                                      bool loose, enum ofpraw raw)
+{
+    const struct ofp_header *oh;
+    struct ofp15_table_features *otf;
+    struct ofpbuf properties;
+    unsigned int len;
+    uint32_t features;
+    uint32_t caps;
+
+    memset(tf, 0, sizeof *tf);
+    oh = msg->header;
+
+    if (!msg->size) {
+        return EOF;
+    }
+
+    if (msg->size < sizeof *otf) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    otf = msg->data;
+    len = ntohs(otf->length);
+    if (len < sizeof *otf || len % 8 || len > msg->size) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+    ofpbuf_pull(&properties, sizeof *otf);
+
+    tf->table_id = otf->table_id;
+    if (tf->table_id == OFPTT_ALL) {
+        return OFPERR_OFPTFFC_BAD_TABLE;
+    }
+
+    if (raw == OFPRAW_OFPST15_TABLE_FEATURES_REQUEST) {
+
+        /* Return an error if TABLE_FEATURES_REQUEST attempts to set table 0
+         * as first egress table. */
+        if (tf->table_id == 0) {
+            return OFPERR_OFPTFFC_BAD_TABLE;
+        }
+
+        /* Return an error if TABLE_FEATURES_REQUEST contain properties. */
+        if (properties.size > 0) {
+            return OFPERR_OFPBPC_BAD_LEN;
+        }
+    }
+
+    ovs_strlcpy(tf->name, otf->name, OFP_MAX_TABLE_NAME_LEN);
+    tf->metadata_match = otf->metadata_match;
+    tf->metadata_write = otf->metadata_write;
+    tf->miss_config = OFPUTIL_TABLE_MISS_DEFAULT;
+
+    caps = ntohl(otf->capabilities);
+    tf->supports_eviction = (caps & OFPTC14_EVICTION) != 0;
+    tf->supports_vacancy_events = (caps & OFPTC14_VACANCY_EVENTS) != 0;
+
+    tf->max_entries = ntohl(otf->max_entries);
+
+    /* Return an error if any flag other than OFPTFF_FIRST_EGRESS is set. */
+    features = ntohl(otf->features);
+    if ((features & OFPTFF_FIRST_EGRESS) != 0) {
+        tf->features = OFPTFF_FIRST_EGRESS;
+        first_egress_table = tf->table_id;
+    } else if ((features & OFPTFF_INGRESS_TABLE) != 0 ||
+               (features & OFPTFF_EGRESS_TABLE) != 0 ) {
+        return OFPERR_OFPBFC_BAD_FLAGS;
+    }
+
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        enum ofperr error;
+        uint16_t type;
+
+        error = pull_table_feature_property(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch ((enum ofp15_table_feature_prop_type) type) {
+        case OFPTFPT15_INSTRUCTIONS:
+            error = parse_instruction_ids(&payload, loose,
+                                          &tf->nonmiss.instructions);
+            break;
+
+        case OFPTFPT15_INSTRUCTIONS_MISS:
+            error = parse_instruction_ids(&payload, loose,
+                                          &tf->miss.instructions);
+            break;
+
+        case OFPTFPT15_NEXT_TABLES:
+            error = parse_table_features_next_table(&payload,
+                                                    tf->nonmiss.next);
+            break;
+
+        case OFPTFPT15_NEXT_TABLES_MISS:
+            error = parse_table_features_next_table(&payload, tf->miss.next);
+            break;
+
+        case OFPTFPT15_WRITE_ACTIONS:
+            error = parse15_action_bitmap(&payload, oh->version, tf->table_id,
+                                          &tf->nonmiss.write.ofpacts);
+            break;
+
+        case OFPTFPT15_WRITE_ACTIONS_MISS:
+            error = parse15_action_bitmap(&payload, oh->version, tf->table_id,
+                                          &tf->miss.write.ofpacts);
+            break;
+
+        case OFPTFPT15_APPLY_ACTIONS:
+            error = parse_action_bitmap(&payload, oh->version,
+                                        &tf->nonmiss.apply.ofpacts);
+            break;
+
+        case OFPTFPT15_APPLY_ACTIONS_MISS:
+            error = parse_action_bitmap(&payload, oh->version,
+                                        &tf->miss.apply.ofpacts);
+            break;
+
+        case OFPTFPT15_MATCH:
+            error = parse_oxms(&payload, loose, &tf->match, &tf->mask);
+            break;
+
+        case OFPTFPT15_WILDCARDS:
+            error = parse_oxms(&payload, loose, &tf->wildcard, NULL);
+            break;
+
+        case OFPTFPT15_WRITE_SETFIELD:
+            error = parse_oxms(&payload, loose,
+                               &tf->nonmiss.write.set_fields, NULL);
+            break;
+
+        case OFPTFPT15_WRITE_SETFIELD_MISS:
+            error = parse_oxms(&payload, loose,
+                               &tf->miss.write.set_fields, NULL);
+            break;
+
+        case OFPTFPT15_APPLY_SETFIELD:
+            error = parse_oxms(&payload, loose,
+                               &tf->nonmiss.apply.set_fields, NULL);
+            break;
+
+        case OFPTFPT15_APPLY_SETFIELD_MISS:
+            error = parse_oxms(&payload, loose,
+                               &tf->miss.apply.set_fields, NULL);
+            break;
+
+        case OFPTFPT15_TABLE_SYNC_FROM:
+        case OFPTFPT15_WRITE_COPYFIELD:
+        case OFPTFPT15_WRITE_COPYFIELD_MISS:
+        case OFPTFPT15_APPLY_COPYFIELD:
+        case OFPTFPT15_APPLY_COPYFIELD_MISS:
+        case OFPTFPT15_PACKET_TYPES:
+            log_property(loose, "unsupported table features property %"PRIu16,
+                         type);
+            break;
+
+        case OFPTFPT15_EXPERIMENTER:
+        case OFPTFPT15_EXPERIMENTER_MISS:
+        default:
+            log_property(loose, "unknown table features property %"PRIu16,
+                         type);
+            error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
+            break;
+        }
+        if (error) {
+            return error;
+        }
+    }
+
+    /* Fix inconsistencies:
+     *
+     *     - Turn on 'match' bits that are set in 'mask', because maskable
+     *       fields are matchable.
+     *
+     *     - Turn on 'wildcard' bits that are set in 'mask', because a field
+     *       that is arbitrarily maskable can be wildcarded entirely.
+     *
+     *     - Turn off 'wildcard' bits that are not in 'match', because a field
+     *       must be matchable for it to be meaningfully wildcarded. */
+    bitmap_or(tf->match.bm, tf->mask.bm, MFF_N_IDS);
+    bitmap_or(tf->wildcard.bm, tf->mask.bm, MFF_N_IDS);
+    bitmap_and(tf->wildcard.bm, tf->match.bm, MFF_N_IDS);
+
+    return 0;
+}
+
+/* Converts an OFPMP_TABLE_FEATURES request or reply in 'msg' into an abstract
+ * ofputil_table_features in 'tf'.
+ *
+ * If 'loose' is true, this function ignores properties and values that it does
+ * not understand, as a controller would want to do when interpreting
+ * capabilities provided by a switch.  If 'loose' is false, this function
+ * treats unknown properties and values as an error, as a switch would want to
+ * do when interpreting a configuration request made by a controller.
+ *
+ * A single OpenFlow message can specify features for multiple tables.  Calling
+ * this function multiple times for a single 'msg' iterates through the tables
+ * in the message.  The caller must initially leave 'msg''s layer pointers null
+ * and not modify them between calls.
+ *
+ * Returns 0 if successful, EOF if no tables were left in this 'msg', otherwise
+ * a positive "enum ofperr" value. */
+int
+ofputil_decode_table_features(struct ofpbuf *msg,
+                              struct ofputil_table_features *tf, bool loose)
+{
+    enum ofpraw raw;
+    enum ofperr error;
+    error = (msg->header ? ofpraw_decode(&raw, msg->header)
+             : ofpraw_pull(&raw, msg));
+    if (error) {
+        return error;
+    }
+
+    switch ((int)raw) {
+    case OFPRAW_OFPST13_TABLE_FEATURES_REQUEST:
+    case OFPRAW_OFPST13_TABLE_FEATURES_REPLY:
+        return ofputil_decode_ofpst13_table_features(msg, tf, loose);
+
+    case OFPRAW_OFPST15_TABLE_FEATURES_REQUEST:
+    case OFPRAW_OFPST15_TABLE_FEATURES_REPLY:
+        return ofputil_decode_ofpst15_table_features(msg, tf, loose, raw);
+
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
 /* Encodes and returns a request to obtain the table features of a switch.
  * The message is encoded for OpenFlow version 'ofp_version'. */
 struct ofpbuf *
-ofputil_encode_table_features_request(enum ofp_version ofp_version)
+ofputil_encode_table_features_request(const struct ofputil_table_features *tf,
+                                      enum ofp_version ofp_version)
 {
     struct ofpbuf *request = NULL;
 
@@ -4757,10 +5018,22 @@ ofputil_encode_table_features_request(enum ofp_version ofp_version)
                      "(\'-O OpenFlow13\')");
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
                                ofp_version, 0);
         break;
+    case OFP15_VERSION: {
+	struct ofp15_table_features *otf;
+
+        request = ofpraw_alloc(OFPRAW_OFPST15_TABLE_FEATURES_REQUEST,
+                               ofp_version, 0);
+        if (tf != NULL && (tf->features & OFPTFF_FIRST_EGRESS)) {
+            otf = ofpbuf_put_zeros(request, sizeof *otf);
+            otf->table_id = tf->table_id;
+            otf->features = htonl(tf->features);
+            otf->length = htons(sizeof *otf);
+        }
+    }
+    break;
     default:
         OVS_NOT_REACHED();
     }
@@ -4769,11 +5042,11 @@ ofputil_encode_table_features_request(enum ofp_version ofp_version)
 }
 
 static void
-put_fields_property(struct ofpbuf *reply,
-                    const struct mf_bitmap *fields,
-                    const struct mf_bitmap *masks,
-                    enum ofp13_table_feature_prop_type property,
-                    enum ofp_version version)
+put_ofpst13_fields_property(struct ofpbuf *reply,
+                            const struct mf_bitmap *fields,
+                            const struct mf_bitmap *masks,
+                            enum ofp13_table_feature_prop_type property,
+                            enum ofp_version version)
 {
     size_t start_ofs;
     int field;
@@ -4787,11 +5060,29 @@ put_fields_property(struct ofpbuf *reply,
 }
 
 static void
-put_table_action_features(struct ofpbuf *reply,
-                          const struct ofputil_table_action_features *taf,
-                          enum ofp13_table_feature_prop_type actions_type,
-                          enum ofp13_table_feature_prop_type set_fields_type,
-                          int miss_offset, enum ofp_version version)
+put_ofpst15_fields_property(struct ofpbuf *reply,
+                            const struct mf_bitmap *fields,
+                            const struct mf_bitmap *masks,
+                            enum ofp15_table_feature_prop_type property,
+                            enum ofp_version version)
+{
+    size_t start_ofs;
+    int field;
+
+    start_ofs = start_property(reply, property);
+    BITMAP_FOR_EACH_1 (field, MFF_N_IDS, fields->bm) {
+        nx_put_header(reply, field, version,
+                      masks && bitmap_is_set(masks->bm, field));
+    }
+    end_property(reply, start_ofs);
+}
+
+static void
+put_ofpst13_table_action_features(
+    struct ofpbuf *reply, const struct ofputil_table_action_features *taf,
+    enum ofp13_table_feature_prop_type actions_type,
+    enum ofp13_table_feature_prop_type set_fields_type,
+    int miss_offset, enum ofp_version version)
 {
     size_t start_ofs;
 
@@ -4801,12 +5092,31 @@ put_table_action_features(struct ofpbuf *reply,
                                                           version)));
     end_property(reply, start_ofs);
 
-    put_fields_property(reply, &taf->set_fields, NULL,
-                        set_fields_type + miss_offset, version);
+    put_ofpst13_fields_property(reply, &taf->set_fields, NULL,
+                                set_fields_type + miss_offset, version);
 }
 
 static void
-put_table_instruction_features(
+put_ofpst15_table_action_features(
+    struct ofpbuf *reply, const struct ofputil_table_action_features *taf,
+    enum ofp15_table_feature_prop_type actions_type,
+    enum ofp15_table_feature_prop_type set_fields_type,
+    int miss_offset, enum ofp_version version)
+{
+    size_t start_ofs;
+
+    start_ofs = start_property(reply, actions_type + miss_offset);
+    put_bitmap_properties(reply,
+                          ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
+                                                          version)));
+    end_property(reply, start_ofs);
+
+    put_ofpst15_fields_property(reply, &taf->set_fields, NULL,
+                                set_fields_type + miss_offset, version);
+}
+
+static void
+put_ofpst13_table_instruction_features(
     struct ofpbuf *reply, const struct ofputil_table_instruction_features *tif,
     int miss_offset, enum ofp_version version)
 {
@@ -4825,17 +5135,49 @@ put_table_instruction_features(
     }
     end_property(reply, start_ofs);
 
-    put_table_action_features(reply, &tif->write,
-                              OFPTFPT13_WRITE_ACTIONS,
-                              OFPTFPT13_WRITE_SETFIELD, miss_offset, version);
-    put_table_action_features(reply, &tif->apply,
-                              OFPTFPT13_APPLY_ACTIONS,
-                              OFPTFPT13_APPLY_SETFIELD, miss_offset, version);
+    put_ofpst13_table_action_features(reply, &tif->write,
+                                      OFPTFPT13_WRITE_ACTIONS,
+                                      OFPTFPT13_WRITE_SETFIELD,
+                                      miss_offset, version);
+    put_ofpst13_table_action_features(reply, &tif->apply,
+                                      OFPTFPT13_APPLY_ACTIONS,
+                                      OFPTFPT13_APPLY_SETFIELD,
+                                      miss_offset, version);
 }
 
-void
-ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
-                                    struct ovs_list *replies)
+static void
+put_ofpst15_table_instruction_features(
+    struct ofpbuf *reply, const struct ofputil_table_instruction_features *tif,
+    int miss_offset, enum ofp_version version)
+{
+    size_t start_ofs;
+    uint8_t table_id;
+
+    start_ofs = start_property(reply, OFPTFPT15_INSTRUCTIONS + miss_offset);
+    put_bitmap_properties(reply,
+                          ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
+                                                           version)));
+    end_property(reply, start_ofs);
+
+    start_ofs = start_property(reply, OFPTFPT15_NEXT_TABLES + miss_offset);
+    BITMAP_FOR_EACH_1 (table_id, 255, tif->next) {
+        ofpbuf_put(reply, &table_id, 1);
+    }
+    end_property(reply, start_ofs);
+
+    put_ofpst15_table_action_features(reply, &tif->write,
+                                      OFPTFPT15_WRITE_ACTIONS,
+                                      OFPTFPT15_WRITE_SETFIELD,
+                                      miss_offset, version);
+    put_ofpst15_table_action_features(reply, &tif->apply,
+                                      OFPTFPT15_APPLY_ACTIONS,
+                                      OFPTFPT15_APPLY_SETFIELD,
+                                      miss_offset, version);
+}
+
+static void
+ofputil_ofpst13_table_features_reply(const struct ofputil_table_features *tf,
+                                     struct ovs_list *replies)
 {
     struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
     enum ofp_version version = ofpmp_version(replies);
@@ -4857,17 +5199,68 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     }
     otf->max_entries = htonl(tf->max_entries);
 
-    put_table_instruction_features(reply, &tf->nonmiss, 0, version);
-    put_table_instruction_features(reply, &tf->miss, 1, version);
+    put_ofpst13_table_instruction_features(reply, &tf->nonmiss, 0, version);
+    put_ofpst13_table_instruction_features(reply, &tf->miss, 1, version);
 
-    put_fields_property(reply, &tf->match, &tf->mask,
-                        OFPTFPT13_MATCH, version);
-    put_fields_property(reply, &tf->wildcard, NULL,
-                        OFPTFPT13_WILDCARDS, version);
+    put_ofpst13_fields_property(reply, &tf->match, &tf->mask,
+                                OFPTFPT13_MATCH, version);
+    put_ofpst13_fields_property(reply, &tf->wildcard, NULL,
+                                OFPTFPT13_WILDCARDS, version);
 
     otf = ofpbuf_at_assert(reply, start_ofs, sizeof *otf);
     otf->length = htons(reply->size - start_ofs);
     ofpmp_postappend(replies, start_ofs);
+}
+
+static void
+ofputil_ofpst15_table_features_reply(const struct ofputil_table_features *tf,
+                                     struct ovs_list *replies)
+{
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    enum ofp_version version = ofpmp_version(replies);
+    size_t start_ofs = reply->size;
+    struct ofp15_table_features *otf;
+
+    otf = ofpbuf_put_zeros(reply, sizeof *otf);
+    otf->table_id = tf->table_id;
+    ovs_strlcpy(otf->name, tf->name, sizeof otf->name);
+    otf->metadata_match = tf->metadata_match;
+    otf->metadata_write = tf->metadata_write;
+    if (tf->supports_eviction) {
+        otf->capabilities |= htonl(OFPTC14_EVICTION);
+    }
+    if (tf->supports_vacancy_events) {
+        otf->capabilities |= htonl(OFPTC14_VACANCY_EVENTS);
+    }
+    otf->max_entries = htonl(tf->max_entries);
+
+    if ((tf->features & OFPTFF_FIRST_EGRESS) != 0) {
+        otf->features = htonl(OFPTFF_FIRST_EGRESS);
+    }
+    put_ofpst15_table_instruction_features(reply, &tf->nonmiss, 0, version);
+    put_ofpst15_table_instruction_features(reply, &tf->miss, 1, version);
+
+    put_ofpst15_fields_property(reply, &tf->match, &tf->mask,
+                                OFPTFPT15_MATCH, version);
+    put_ofpst15_fields_property(reply, &tf->wildcard, NULL,
+                                OFPTFPT15_WILDCARDS, version);
+
+    otf = ofpbuf_at_assert(reply, start_ofs, sizeof *otf);
+    otf->length = htons(reply->size - start_ofs);
+    ofpmp_postappend(replies, start_ofs);
+}
+
+void
+ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
+                                    struct ovs_list *replies)
+{
+    enum ofp_version version = ofpmp_version(replies);
+
+    if (version < OFP15_VERSION) {
+        ofputil_ofpst13_table_features_reply(tf, replies);
+    } else {
+        ofputil_ofpst15_table_features_reply(tf, replies);
+    }
 }
 
 static enum ofperr
@@ -5889,6 +6282,7 @@ ofputil_decode_table_stats_reply(struct ofpbuf *msg,
     memset(features, 0, sizeof *features);
     features->supports_eviction = -1;
     features->supports_vacancy_events = -1;
+    features->features = -1;
 
     switch ((enum ofp_version) oh->version) {
     case OFP10_VERSION:
