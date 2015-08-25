@@ -321,7 +321,6 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
     cls->n_rules = 0;
     cmap_init(&cls->subtables_map);
     pvector_init(&cls->subtables);
-    cmap_init(&cls->partitions);
     cls->n_flow_segments = 0;
     if (flow_segments) {
         while (cls->n_flow_segments < CLS_MAX_INDICES
@@ -343,7 +342,6 @@ void
 classifier_destroy(struct classifier *cls)
 {
     if (cls) {
-        struct cls_partition *partition;
         struct cls_subtable *subtable;
         int i;
 
@@ -355,11 +353,6 @@ classifier_destroy(struct classifier *cls)
             destroy_subtable(cls, subtable);
         }
         cmap_destroy(&cls->subtables_map);
-
-        CMAP_FOR_EACH (partition, cmap_node, &cls->partitions) {
-            ovsrcu_postpone(free, partition);
-        }
-        cmap_destroy(&cls->partitions);
 
         pvector_destroy(&cls->subtables);
     }
@@ -493,43 +486,6 @@ classifier_count(const struct classifier *cls)
     return cls->n_rules;
 }
 
-static uint32_t
-hash_metadata(ovs_be64 metadata)
-{
-    return hash_uint64((OVS_FORCE uint64_t) metadata);
-}
-
-static struct cls_partition *
-find_partition(const struct classifier *cls, ovs_be64 metadata, uint32_t hash)
-{
-    struct cls_partition *partition;
-
-    CMAP_FOR_EACH_WITH_HASH (partition, cmap_node, hash, &cls->partitions) {
-        if (partition->metadata == metadata) {
-            return partition;
-        }
-    }
-
-    return NULL;
-}
-
-static struct cls_partition *
-create_partition(struct classifier *cls, struct cls_subtable *subtable,
-                 ovs_be64 metadata)
-{
-    uint32_t hash = hash_metadata(metadata);
-    struct cls_partition *partition = find_partition(cls, metadata, hash);
-    if (!partition) {
-        partition = xmalloc(sizeof *partition);
-        partition->metadata = metadata;
-        partition->tags = 0;
-        tag_tracker_init(&partition->tracker);
-        cmap_insert(&cls->partitions, &partition->cmap_node, hash);
-    }
-    tag_tracker_add(&partition->tracker, &partition->tags, subtable->tag);
-    return partition;
-}
-
 static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
 {
     /* Could optimize to use the same map if needed for fast path. */
@@ -544,9 +500,6 @@ subtable_replace_head_rule(struct classifier *cls OVS_UNUSED,
                            uint32_t hash, uint32_t ihash[CLS_MAX_INDICES])
 {
     /* Rule's data is already in the tries. */
-
-    new->partition = head->partition; /* Steal partition, if any. */
-    head->partition = NULL;
 
     for (int i = 0; i < subtable->n_indices; i++) {
         cmap_replace(&subtable->indices[i], &head->index_nodes[i],
@@ -627,17 +580,6 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
             trie_insert_prefix(&subtable->ports_trie, &masked_ports,
                                subtable->ports_mask_len);
-        }
-
-        /* Add rule to partitions.
-         *
-         * Concurrent readers might miss seeing the rule until this update,
-         * which might require being fixed up by revalidation later. */
-        new->partition = NULL;
-        if (minimask_get_metadata_mask(rule->match.mask) == OVS_BE64_MAX) {
-            ovs_be64 metadata = miniflow_get_metadata(rule->match.flow);
-
-            new->partition = create_partition(cls, subtable, metadata);
         }
 
         /* Add new node to segment indices.
@@ -779,7 +721,6 @@ const struct cls_rule *
 classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
 {
     struct cls_match *rule, *prev, *next, *head;
-    struct cls_partition *partition;
     struct cls_conjunction_set *conj_set;
     struct cls_subtable *subtable;
     uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
@@ -857,17 +798,6 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
         cmap_remove(&subtable->indices[i], &rule->index_nodes[i], ihash[i]);
     }
     n_rules = cmap_remove(&subtable->rules, &rule->cmap_node, hash);
-
-    partition = rule->partition;
-    if (partition) {
-        tag_tracker_subtract(&partition->tracker, &partition->tags,
-                             subtable->tag);
-        if (!partition->tags) {
-            cmap_remove(&cls->partitions, &partition->cmap_node,
-                        hash_metadata(partition->metadata));
-            ovsrcu_postpone(free, partition);
-        }
-    }
 
     if (n_rules == 0) {
         destroy_subtable(cls, subtable);
@@ -1017,11 +947,8 @@ classifier_lookup__(const struct classifier *cls, cls_version_t version,
                     struct flow *flow, struct flow_wildcards *wc,
                     bool allow_conjunctive_matches)
 {
-    const struct cls_partition *partition;
     struct trie_ctx trie_ctx[CLS_MAX_TRIES];
     const struct cls_match *match;
-    tag_type tags;
-
     /* Highest-priority flow in 'cls' that certainly matches 'flow'. */
     const struct cls_match *hard = NULL;
     int hard_pri = INT_MIN;     /* hard ? hard->priority : INT_MIN. */
@@ -1040,30 +967,6 @@ classifier_lookup__(const struct classifier *cls, cls_version_t version,
      * startup. */
     atomic_thread_fence(memory_order_acquire);
 
-    /* Determine 'tags' such that, if 'subtable->tag' doesn't intersect them,
-     * then 'flow' cannot possibly match in 'subtable':
-     *
-     *     - If flow->metadata maps to a given 'partition', then we can use
-     *       'tags' for 'partition->tags'.
-     *
-     *     - If flow->metadata has no partition, then no rule in 'cls' has an
-     *       exact-match for flow->metadata.  That means that we don't need to
-     *       search any subtable that includes flow->metadata in its mask.
-     *
-     * In either case, we always need to search any cls_subtables that do not
-     * include flow->metadata in its mask.  One way to do that would be to
-     * check the "cls_subtable"s explicitly for that, but that would require an
-     * extra branch per subtable.  Instead, we mark such a cls_subtable's
-     * 'tags' as TAG_ALL and make sure that 'tags' is never empty.  This means
-     * that 'tags' always intersects such a cls_subtable's 'tags', so we don't
-     * need a special case.
-     */
-    partition = (cmap_is_empty(&cls->partitions)
-                 ? NULL
-                 : find_partition(cls, flow->metadata,
-                                  hash_metadata(flow->metadata)));
-    tags = partition ? partition->tags : TAG_ARBITRARY;
-
     /* Initialize trie contexts for find_match_wc(). */
     for (int i = 0; i < cls->n_tries; i++) {
         trie_ctx_init(&trie_ctx[i], &cls->tries[i]);
@@ -1074,11 +977,6 @@ classifier_lookup__(const struct classifier *cls, cls_version_t version,
     PVECTOR_FOR_EACH_PRIORITY (subtable, hard_pri, 2, sizeof *subtable,
                                &cls->subtables) {
         struct cls_conjunction_set *conj_set;
-
-        /* Skip subtables not in our partition. */
-        if (!tag_intersects(tags, subtable->tag)) {
-            continue;
-        }
 
         /* Skip subtables with no match, or where the match is lower-priority
          * than some certain match we've already found. */
@@ -1602,11 +1500,6 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
         }
     }
     *CONST_CAST(uint8_t *, &subtable->n_indices) = index;
-
-    *CONST_CAST(tag_type *, &subtable->tag) =
-        (minimask_get_metadata_mask(mask) == OVS_BE64_MAX
-         ? tag_create_deterministic(hash)
-         : TAG_ALL);
 
     for (i = 0; i < cls->n_tries; i++) {
         subtable->trie_plen[i] = minimask_get_prefix_len(mask,

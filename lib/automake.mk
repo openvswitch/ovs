@@ -245,8 +245,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/syslog-provider.h \
 	lib/table.c \
 	lib/table.h \
-	lib/tag.c \
-	lib/tag.h \
 	lib/timer.c \
 	lib/timer.h \
 	lib/timeval.c \

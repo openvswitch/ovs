@@ -21,7 +21,6 @@
 #include "flow.h"
 #include "hash.h"
 #include "rculist.h"
-#include "tag.h"
 
 /* Classifier internal definitions, subject to change at any time. */
 
@@ -40,7 +39,6 @@ struct cls_subtable {
      * following data structures. */
 
     /* These fields are accessed by readers who care about wildcarding. */
-    const tag_type tag;       /* Tag generated from mask for partitioning. */
     const uint8_t n_indices;                   /* How many indices to use. */
     const struct flowmap index_maps[CLS_MAX_INDICES + 1]; /* Stage maps. */
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'
@@ -55,16 +53,6 @@ struct cls_subtable {
     /* 'mask' must be the last field. */
 };
 
-/* Associates a metadata value (that is, a value of the OpenFlow 1.1+ metadata
- * field) with tags for the "cls_subtable"s that contain rules that match that
- * metadata value.  */
-struct cls_partition {
-    struct cmap_node cmap_node; /* In struct classifier's 'partitions' map. */
-    ovs_be64 metadata;          /* metadata value for this partition. */
-    tag_type tags;              /* OR of each flow's cls_subtable tag. */
-    struct tag_tracker tracker; /* Tracks the bits in 'tags'. */
-};
-
 /* Internal representation of a rule in a "struct cls_subtable".
  *
  * The 'next' member is an element in a singly linked, null-terminated list.
@@ -76,9 +64,6 @@ struct cls_match {
     /* Accessed by everybody. */
     OVSRCU_TYPE(struct cls_match *) next; /* Equal, lower-priority matches. */
     OVSRCU_TYPE(struct cls_conjunction_set *) conj_set;
-
-    /* Accessed only by writers. */
-    struct cls_partition *partition;
 
     /* Accessed by readers interested in wildcarding. */
     const int priority;         /* Larger numbers are higher priorities. */
