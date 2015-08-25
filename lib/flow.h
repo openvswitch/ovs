@@ -65,27 +65,7 @@ BUILD_ASSERT_DECL(FLOW_N_REGS % 2 == 0); /* Even. */
 BUILD_ASSERT_DECL(FLOW_NW_FRAG_ANY == NX_IP_FRAG_ANY);
 BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
 
-/* Some flags are exposed through OpenFlow while others are used only
- * internally. */
-
-/* Public flags */
-#define FLOW_TNL_F_OAM (1 << 0)
-
-#define FLOW_TNL_PUB_F_MASK ((1 << 1) - 1)
 BUILD_ASSERT_DECL(FLOW_TNL_F_OAM == NX_TUN_FLAG_OAM);
-
-/* Private flags */
-#define FLOW_TNL_F_DONT_FRAGMENT (1 << 1)
-#define FLOW_TNL_F_CSUM (1 << 2)
-#define FLOW_TNL_F_KEY (1 << 3)
-
-#define FLOW_TNL_F_MASK ((1 << 4) - 1)
-
-/* Purely internal to OVS userspace. These flags should never be exposed to
- * the outside world and so aren't included in the flags mask. */
-
-/* Tunnel information is in userspace datapath format. */
-#define FLOW_TNL_F_UDPIF (1 << 4)
 
 const char *flow_tun_flag_to_string(uint32_t flags);
 
@@ -988,7 +968,7 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;
-    md->tunnel = flow->tunnel;
+    flow_tnl_copy__(&md->tunnel, &flow->tunnel);
     md->skb_priority = flow->skb_priority;
     md->pkt_mark = flow->pkt_mark;
     md->in_port = flow->in_port;

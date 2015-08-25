@@ -35,9 +35,9 @@ struct ds;
 
 /* Tunnel information used in flow key and metadata. */
 struct flow_tnl {
-    ovs_be64 tun_id;
     ovs_be32 ip_dst;
     ovs_be32 ip_src;
+    ovs_be64 tun_id;
     uint16_t flags;
     uint8_t ip_tos;
     uint8_t ip_ttl;
@@ -48,6 +48,65 @@ struct flow_tnl {
     uint8_t  pad1[5];        /* Pad to 64 bits. */
     struct tun_metadata metadata;
 };
+
+/* Some flags are exposed through OpenFlow while others are used only
+ * internally. */
+
+/* Public flags */
+#define FLOW_TNL_F_OAM (1 << 0)
+
+#define FLOW_TNL_PUB_F_MASK ((1 << 1) - 1)
+
+/* Private flags */
+#define FLOW_TNL_F_DONT_FRAGMENT (1 << 1)
+#define FLOW_TNL_F_CSUM (1 << 2)
+#define FLOW_TNL_F_KEY (1 << 3)
+
+#define FLOW_TNL_F_MASK ((1 << 4) - 1)
+
+/* Purely internal to OVS userspace. These flags should never be exposed to
+ * the outside world and so aren't included in the flags mask. */
+
+/* Tunnel information is in userspace datapath format. */
+#define FLOW_TNL_F_UDPIF (1 << 4)
+
+/* Returns an offset to 'src' covering all the meaningful fields in 'src'. */
+static inline size_t
+flow_tnl_size(const struct flow_tnl *src)
+{
+    if (!src->ip_dst) {
+        /* Covers ip_dst only. */
+        return offsetof(struct flow_tnl, ip_src);
+    }
+    if (src->flags & FLOW_TNL_F_UDPIF) {
+        /* Datapath format, cover all options we have. */
+        return offsetof(struct flow_tnl, metadata.opts)
+            + src->metadata.present.len;
+    }
+    if (!src->metadata.present.map) {
+        /* No TLVs, opts is irrelevant. */
+        return offsetof(struct flow_tnl, metadata.opts);
+    }
+    /* Have decoded TLVs, opts is relevant. */
+    return sizeof *src;
+}
+
+/* Copy flow_tnl, but avoid copying unused portions of tun_metadata.  Unused
+ * data in 'dst' is NOT cleared, so this must not be used in cases where the
+ * uninitialized portion may be hashed over. */
+static inline void
+flow_tnl_copy__(struct flow_tnl *dst, const struct flow_tnl *src)
+{
+    memcpy(dst, src, flow_tnl_size(src));
+}
+
+static inline bool
+flow_tnl_equal(const struct flow_tnl *a, const struct flow_tnl *b)
+{
+    size_t a_size = flow_tnl_size(a);
+
+    return a_size == flow_tnl_size(b) && !memcmp(a, b, a_size);
+}
 
 /* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
  * numbers and other times datapath (dpif) port numbers.  This union allows
@@ -67,7 +126,9 @@ struct pkt_metadata {
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
     union flow_in_port in_port; /* Input port. */
-    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
+    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. Note that
+                                 * if 'ip_dst' == 0, the rest of the fields may
+                                 * be uninitialized. */
 };
 
 static inline void
