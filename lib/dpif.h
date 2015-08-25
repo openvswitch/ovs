@@ -787,6 +787,19 @@ struct dpif_upcall {
     struct nlattr *actions;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
 
+/* A callback to notify higher layer of dpif about to be purged, so that
+ * higher layer could try reacting to this (e.g. grabbing all flow stats
+ * before they are gone).  This function is currently implemented only by
+ * dpif-netdev.
+ *
+ * The caller needs to provide the 'aux' pointer passed down by higher
+ * layer from the dpif_register_notify_cb() function and the 'pmd_id' of
+ * the polling thread.
+ */
+    typedef void dp_purge_callback(void *aux, unsigned pmd_id);
+
+void dpif_register_dp_purge_cb(struct dpif *, dp_purge_callback *, void *aux);
+
 /* A callback to process an upcall, currently implemented only by dpif-netdev.
  *
  * The caller provides the 'packet' and 'flow' to process, the corresponding

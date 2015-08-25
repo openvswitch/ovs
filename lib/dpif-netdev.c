@@ -204,6 +204,11 @@ struct dp_netdev {
     upcall_callback *upcall_cb;  /* Callback function for executing upcalls. */
     void *upcall_aux;
 
+    /* Callback function for notifying the purging of dp flows (during
+     * reseting pmd deletion). */
+    dp_purge_callback *dp_purge_cb;
+    void *dp_purge_aux;
+
     /* Stores all 'struct dp_netdev_pmd_thread's. */
     struct cmap poll_threads;
 
@@ -2851,7 +2856,7 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
 /* Stops the pmd thread, removes it from the 'dp->poll_threads',
  * and unrefs the struct. */
 static void
-dp_netdev_del_pmd(struct dp_netdev_pmd_thread *pmd)
+dp_netdev_del_pmd(struct dp_netdev *dp, struct dp_netdev_pmd_thread *pmd)
 {
     /* Uninit the 'flow_cache' since there is
      * no actual thread uninit it for NON_PMD_CORE_ID. */
@@ -2862,6 +2867,11 @@ dp_netdev_del_pmd(struct dp_netdev_pmd_thread *pmd)
         dp_netdev_reload_pmd__(pmd);
         ovs_numa_unpin_core(pmd->core_id);
         xpthread_join(pmd->thread, NULL);
+    }
+    /* Purges the 'pmd''s flows after stopping the thread, but before
+     * destroying the flows, so that the flow stats can be collected. */
+    if (dp->dp_purge_cb) {
+        dp->dp_purge_cb(dp->dp_purge_aux, pmd->core_id);
     }
     cmap_remove(&pmd->dp->poll_threads, &pmd->node, hash_int(pmd->core_id, 0));
     dp_netdev_pmd_unref(pmd);
@@ -2874,7 +2884,7 @@ dp_netdev_destroy_all_pmds(struct dp_netdev *dp)
     struct dp_netdev_pmd_thread *pmd;
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        dp_netdev_del_pmd(pmd);
+        dp_netdev_del_pmd(dp, pmd);
     }
 }
 
@@ -2886,7 +2896,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         if (pmd->numa_id == numa_id) {
-            dp_netdev_del_pmd(pmd);
+            dp_netdev_del_pmd(dp, pmd);
         }
     }
 }
@@ -3391,6 +3401,15 @@ struct dp_netdev_execute_aux {
 };
 
 static void
+dpif_netdev_register_dp_purge_cb(struct dpif *dpif, dp_purge_callback *cb,
+                                 void *aux)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    dp->dp_purge_aux = aux;
+    dp->dp_purge_cb = cb;
+}
+
+static void
 dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
                                void *aux)
 {
@@ -3637,6 +3656,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* recv */
     NULL,                       /* recv_wait */
     NULL,                       /* recv_purge */
+    dpif_netdev_register_dp_purge_cb,
     dpif_netdev_register_upcall_cb,
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
