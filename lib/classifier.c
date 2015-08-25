@@ -578,12 +578,12 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     struct cls_match *new;
     struct cls_subtable *subtable;
     uint32_t ihash[CLS_MAX_INDICES];
-    uint8_t prev_be64ofs = 0;
     struct cls_match *head;
+    unsigned int mask_offset;
     size_t n_rules = 0;
     uint32_t basis;
     uint32_t hash;
-    int i;
+    unsigned int i;
 
     /* 'new' is initially invisible to lookups. */
     new = cls_match_alloc(rule, version, conjs, n_conjs);
@@ -597,12 +597,13 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
     /* Compute hashes in segments. */
     basis = 0;
+    mask_offset = 0;
     for (i = 0; i < subtable->n_indices; i++) {
-        ihash[i] = minimatch_hash_range(&rule->match, prev_be64ofs,
-                                        subtable->index_ofs[i], &basis);
-        prev_be64ofs = subtable->index_ofs[i];
+        ihash[i] = minimatch_hash_range(&rule->match, &subtable->index_maps[i],
+                                        &mask_offset, &basis);
     }
-    hash = minimatch_hash_range(&rule->match, prev_be64ofs, FLOW_U64S, &basis);
+    hash = minimatch_hash_range(&rule->match, &subtable->index_maps[i],
+                                &mask_offset, &basis);
 
     head = find_equal(subtable, rule->match.flow, hash);
     if (!head) {
@@ -781,10 +782,10 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     struct cls_partition *partition;
     struct cls_conjunction_set *conj_set;
     struct cls_subtable *subtable;
-    int i;
     uint32_t basis = 0, hash, ihash[CLS_MAX_INDICES];
-    uint8_t prev_be64ofs = 0;
+    unsigned int mask_offset;
     size_t n_rules;
+    unsigned int i;
 
     rule = cls_rule->cls_match;
     if (!rule) {
@@ -799,13 +800,14 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     subtable = find_subtable(cls, cls_rule->match.mask);
     ovs_assert(subtable);
 
+    mask_offset = 0;
     for (i = 0; i < subtable->n_indices; i++) {
-        ihash[i] = minimatch_hash_range(&cls_rule->match, prev_be64ofs,
-                                        subtable->index_ofs[i], &basis);
-        prev_be64ofs = subtable->index_ofs[i];
+        ihash[i] = minimatch_hash_range(&cls_rule->match,
+                                        &subtable->index_maps[i],
+                                        &mask_offset, &basis);
     }
-    hash = minimatch_hash_range(&cls_rule->match, prev_be64ofs, FLOW_U64S,
-                                &basis);
+    hash = minimatch_hash_range(&cls_rule->match, &subtable->index_maps[i],
+                                &mask_offset, &basis);
 
     head = find_equal(subtable, cls_rule->match.flow, hash);
 
@@ -1526,6 +1528,45 @@ find_subtable(const struct classifier *cls, const struct minimask *mask)
     return NULL;
 }
 
+/* Initializes 'map' with a subset of 'miniflow''s maps that includes only the
+ * portions with u64-offset 'i' such that 'start' <= i < 'end'.  Does not copy
+ * any data from 'miniflow' to 'map'. */
+static void
+miniflow_get_map_in_range(const struct miniflow *miniflow,
+                          uint8_t start, uint8_t end, struct miniflow *map)
+{
+    *map = *miniflow;   /* Copy maps. */
+
+    if (start >= FLOW_TNL_U64S) {
+        map->tnl_map = 0;
+        if (start > FLOW_TNL_U64S) {
+            /* Clear 'start - FLOW_TNL_U64S' LSBs from pkt_map. */
+            start -= FLOW_TNL_U64S;
+            uint64_t msk = (UINT64_C(1) << start) - 1;
+
+            map->pkt_map &= ~msk;
+        }
+    } else if (start > 0) {
+        /* Clear 'start' LSBs from tnl_map. */
+        uint64_t msk = (UINT64_C(1) << start) - 1;
+
+        map->tnl_map &= ~msk;
+    }
+
+    if (end <= FLOW_TNL_U64S) {
+        map->pkt_map = 0;
+        if (end < FLOW_TNL_U64S) {
+            /* Keep 'end' LSBs in tnl_map. */
+            map->tnl_map &= (UINT64_C(1) << end) - 1;
+        }
+    } else {
+        if (end < FLOW_U64S) {
+            /* Keep 'end - FLOW_TNL_U64S' LSBs in pkt_map. */
+            map->pkt_map &= (UINT64_C(1) << (end - FLOW_TNL_U64S)) - 1;
+        }
+    }
+}
+
 /* The new subtable will be visible to the readers only after this. */
 static struct cls_subtable *
 insert_subtable(struct classifier *cls, const struct minimask *mask)
@@ -1533,7 +1574,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     uint32_t hash = minimask_hash(mask, 0);
     struct cls_subtable *subtable;
     int i, index = 0;
-    struct flow_wildcards old, new;
+    struct minimask stage_mask;
     uint8_t prev;
     size_t count = miniflow_n_values(&mask->masks);
 
@@ -1543,29 +1584,29 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
                    &mask->masks, count);
 
     /* Init indices for segmented lookup, if any. */
-    flow_wildcards_init_catchall(&new);
-    old = new;
     prev = 0;
     for (i = 0; i < cls->n_flow_segments; i++) {
-        flow_wildcards_fold_minimask_range(&new, mask, prev,
-                                           cls->flow_segments[i]);
+        miniflow_get_map_in_range(&mask->masks, prev, cls->flow_segments[i],
+                                  &stage_mask.masks);
         /* Add an index if it adds mask bits. */
-        if (!flow_wildcards_equal(&new, &old)) {
+        if (!minimask_is_catchall(&stage_mask)) {
             cmap_init(&subtable->indices[index]);
-            *CONST_CAST(uint8_t *, &subtable->index_ofs[index])
-                = cls->flow_segments[i];
+            *CONST_CAST(struct miniflow *, &subtable->index_maps[index])
+                = stage_mask.masks;
             index++;
-            old = new;
         }
         prev = cls->flow_segments[i];
     }
-    /* Check if the rest of the subtable's mask adds any bits,
+    /* Map for the final stage. */
+    miniflow_get_map_in_range(
+        &mask->masks, prev, FLOW_U64S,
+        CONST_CAST(struct miniflow *, &subtable->index_maps[index]));
+    /* Check if the final stage adds any bits,
      * and remove the last index if it doesn't. */
     if (index > 0) {
-        flow_wildcards_fold_minimask_range(&new, mask, prev, FLOW_U64S);
-        if (flow_wildcards_equal(&new, &old)) {
+        if (miniflow_equal_maps(&subtable->index_maps[index],
+                                &subtable->index_maps[index - 1])) {
             --index;
-            *CONST_CAST(uint8_t *, &subtable->index_ofs[index]) = 0;
             cmap_destroy(&subtable->indices[index]);
         }
     }
@@ -1616,11 +1657,6 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     ovsrcu_postpone(free, subtable);
 }
 
-struct range {
-    uint8_t start;
-    uint8_t end;
-};
-
 static unsigned int be_get_bit_at(const ovs_be32 value[], unsigned int ofs);
 
 /* Return 'true' if can skip rest of the subtable based on the prefix trie
@@ -1628,7 +1664,7 @@ static unsigned int be_get_bit_at(const ovs_be32 value[], unsigned int ofs);
 static inline bool
 check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
             const unsigned int field_plen[CLS_MAX_TRIES],
-            const struct range ofs, const struct flow *flow,
+            const struct miniflow *range_map, const struct flow *flow,
             struct flow_wildcards *wc)
 {
     int j;
@@ -1644,7 +1680,7 @@ check_tries(struct trie_ctx trie_ctx[CLS_MAX_TRIES], unsigned int n_tries,
             uint8_t be64ofs = be32ofs / 2;
 
             /* Is the trie field within the current range of fields? */
-            if (be64ofs >= ofs.start && be64ofs < ofs.end) {
+            if (MINIFLOW_IN_MAP(range_map, be64ofs)) {
                 /* On-demand trie lookup. */
                 if (!ctx->lookup_done) {
                     memset(&ctx->match_plens, 0, sizeof ctx->match_plens);
@@ -1795,16 +1831,6 @@ out:
     return false;
 }
 
-/* Unwildcard the fields looked up so far, if any. */
-static void
-fill_range_wc(const struct cls_subtable *subtable, struct flow_wildcards *wc,
-              uint8_t to)
-{
-    if (to) {
-        flow_wildcards_fold_minimask_range(wc, &subtable->mask, 0, to);
-    }
-}
-
 static const struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
               const struct flow *flow, struct trie_ctx trie_ctx[CLS_MAX_TRIES],
@@ -1813,35 +1839,37 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
     uint32_t basis = 0, hash;
     const struct cls_match *rule = NULL;
     int i;
-    struct range ofs;
+    struct miniflow stages_map;
+    unsigned int mask_offset = 0;
 
     if (OVS_UNLIKELY(!wc)) {
         return find_match(subtable, version, flow,
                           flow_hash_in_minimask(flow, &subtable->mask, 0));
     }
 
-    ofs.start = 0;
+    memset(&stages_map, 0, sizeof stages_map);
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
         const struct cmap_node *inode;
 
-        ofs.end = subtable->index_ofs[i];
-
-        if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow,
-                        wc)) {
+        if (check_tries(trie_ctx, n_tries, subtable->trie_plen,
+                        &subtable->index_maps[i], flow, wc)) {
             /* 'wc' bits for the trie field set, now unwildcard the preceding
              * bits used so far. */
-            fill_range_wc(subtable, wc, ofs.start);
-            return NULL;
+            goto no_match;
         }
-        hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
-                                           ofs.end, &basis);
+
+        /* Accumulate the map used so far. */
+        stages_map.tnl_map |= subtable->index_maps[i].tnl_map;
+        stages_map.pkt_map |= subtable->index_maps[i].pkt_map;
+
+        hash = flow_hash_in_minimask_range(flow, &subtable->mask,
+                                           &subtable->index_maps[i],
+                                           &mask_offset, &basis);
+
         inode = cmap_find(&subtable->indices[i], hash);
         if (!inode) {
-            /* No match, can stop immediately, but must fold in the bits
-             * used in lookup so far. */
-            fill_range_wc(subtable, wc, ofs.end);
-            return NULL;
+            goto no_match;
         }
 
         /* If we have narrowed down to a single rule already, check whether
@@ -1865,21 +1893,20 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
             }
             return NULL;
         }
-        ofs.start = ofs.end;
     }
-    ofs.end = FLOW_U64S;
     /* Trie check for the final range. */
-    if (check_tries(trie_ctx, n_tries, subtable->trie_plen, ofs, flow, wc)) {
-        fill_range_wc(subtable, wc, ofs.start);
-        return NULL;
+    if (check_tries(trie_ctx, n_tries, subtable->trie_plen,
+                    &subtable->index_maps[i], flow, wc)) {
+        goto no_match;
     }
-    hash = flow_hash_in_minimask_range(flow, &subtable->mask, ofs.start,
-                                       ofs.end, &basis);
+    hash = flow_hash_in_minimask_range(flow, &subtable->mask,
+                                       &subtable->index_maps[i],
+                                       &mask_offset, &basis);
     rule = find_match(subtable, version, flow, hash);
     if (!rule && subtable->ports_mask_len) {
-        /* Ports are always part of the final range, if any.
-         * No match was found for the ports.  Use the ports trie to figure out
-         * which ports bits to unwildcard. */
+        /* The final stage had ports, but there was no match.  Instead of
+         * unwildcarding all the ports bits, use the ports trie to figure out a
+         * smaller set of bits to unwildcard. */
         unsigned int mbits;
         ovs_be32 value, plens, mask;
 
@@ -1890,15 +1917,18 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
         ((OVS_FORCE ovs_be32 *)&wc->masks)[TP_PORTS_OFS32] |=
             mask & be32_prefix_mask(mbits);
 
-        /* Unwildcard all bits in the mask upto the ports, as they were used
-         * to determine there is no match. */
-        fill_range_wc(subtable, wc, TP_PORTS_OFS64);
-        return NULL;
+        goto no_match;
     }
 
     /* Must unwildcard all the fields, as they were looked at. */
     flow_wildcards_fold_minimask(wc, &subtable->mask);
     return rule;
+
+no_match:
+    /* Unwildcard the bits in stages so far, as they were used in determining
+     * there is no match. */
+    flow_wildcards_fold_minimask_in_map(wc, &subtable->mask, &stages_map);
+    return NULL;
 }
 
 static struct cls_match *

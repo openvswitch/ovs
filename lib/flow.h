@@ -636,6 +636,8 @@ static inline ovs_be32 miniflow_get_be32(const struct miniflow *,
 static inline uint16_t miniflow_get_vid(const struct miniflow *);
 static inline uint16_t miniflow_get_tcp_flags(const struct miniflow *);
 static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
+static inline bool miniflow_equal_maps(const struct miniflow *a,
+                                       const struct miniflow *b);
 
 bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
 bool miniflow_equal_in_minimask(const struct miniflow *a,
@@ -759,6 +761,12 @@ static inline ovs_be64
 miniflow_get_metadata(const struct miniflow *flow)
 {
     return MINIFLOW_GET_BE64(flow, metadata);
+}
+
+static inline bool
+miniflow_equal_maps(const struct miniflow *a, const struct miniflow *b)
+{
+    return a->tnl_map == b->tnl_map && a->pkt_map == b->pkt_map;
 }
 
 /* Returns the mask for the OpenFlow 1.1+ "metadata" field in 'mask'.

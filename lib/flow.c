@@ -2345,7 +2345,7 @@ miniflow_equal(const struct miniflow *a, const struct miniflow *b)
     const uint64_t *ap = miniflow_get_values(a);
     const uint64_t *bp = miniflow_get_values(b);
 
-    if (OVS_LIKELY(a->tnl_map == b->tnl_map && a->pkt_map == b->pkt_map)) {
+    if (OVS_LIKELY(miniflow_equal_maps(a, b))) {
         return !memcmp(ap, bp, miniflow_n_values(a) * sizeof *ap);
     } else {
         uint64_t map;
