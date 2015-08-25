@@ -42,7 +42,7 @@ struct cls_subtable {
     /* These fields are accessed by readers who care about wildcarding. */
     const tag_type tag;       /* Tag generated from mask for partitioning. */
     const uint8_t n_indices;                   /* How many indices to use. */
-    const struct miniflow index_maps[CLS_MAX_INDICES + 1]; /* Stage maps. */
+    const struct flowmap index_maps[CLS_MAX_INDICES + 1]; /* Stage maps. */
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'
                                              * (runtime configurable). */
     const int ports_mask_len;
@@ -238,16 +238,16 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
     const uint64_t *mask_values = miniflow_get_values(&mask->masks);
     const uint64_t *flow_u64 = (const uint64_t *)flow;
     const uint64_t *p = mask_values;
-    uint32_t hash;
-    size_t idx;
+    uint32_t hash = basis;
+    map_t map;
 
-    hash = basis;
-    MAP_FOR_EACH_INDEX(idx, mask->masks.tnl_map) {
-        hash = hash_add64(hash, flow_u64[idx] & *p++);
-    }
-    flow_u64 += FLOW_TNL_U64S;
-    MAP_FOR_EACH_INDEX(idx, mask->masks.pkt_map) {
-        hash = hash_add64(hash, flow_u64[idx] & *p++);
+    FLOWMAP_FOR_EACH_MAP (map, mask->masks.map) {
+        size_t idx;
+
+        MAP_FOR_EACH_INDEX (idx, map) {
+            hash = hash_add64(hash, flow_u64[idx] & *p++);
+        }
+        flow_u64 += MAP_T_BITS;
     }
 
     return hash_finish(hash, (p - mask_values) * 8);
@@ -265,13 +265,10 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
     const uint64_t *mask_values = miniflow_get_values(&mask->masks);
     const uint64_t *p = mask_values;
     uint32_t hash = basis;
-    uint64_t flow_u64;
+    uint64_t value;
 
-    MINIFLOW_FOR_EACH_IN_TNL_MAP(flow_u64, flow, mask->masks) {
-        hash = hash_add64(hash, flow_u64 & *p++);
-    }
-    MINIFLOW_FOR_EACH_IN_PKT_MAP(flow_u64, flow, mask->masks) {
-        hash = hash_add64(hash, flow_u64 & *p++);
+    MINIFLOW_FOR_EACH_IN_FLOWMAP(value, flow, mask->masks.map) {
+        hash = hash_add64(hash, value & *p++);
     }
 
     return hash_finish(hash, (p - mask_values) * 8);
@@ -293,22 +290,23 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
 static inline uint32_t
 flow_hash_in_minimask_range(const struct flow *flow,
                             const struct minimask *mask,
-                            const struct miniflow *range,
+                            const struct flowmap range,
                             unsigned int *offset,
                             uint32_t *basis)
 {
     const uint64_t *mask_values = miniflow_get_values(&mask->masks);
-    const uint64_t *p = mask_values + *offset;
     const uint64_t *flow_u64 = (const uint64_t *)flow;
+    const uint64_t *p = mask_values + *offset;
     uint32_t hash = *basis;
-    size_t idx;
+    map_t map;
 
-    MAP_FOR_EACH_INDEX(idx, range->tnl_map) {
-        hash = hash_add64(hash, flow_u64[idx] & *p++);
-    }
-    flow_u64 += FLOW_TNL_U64S;
-    MAP_FOR_EACH_INDEX(idx, range->pkt_map) {
-        hash = hash_add64(hash, flow_u64[idx] & *p++);
+    FLOWMAP_FOR_EACH_MAP (map, range) {
+        size_t idx;
+
+        MAP_FOR_EACH_INDEX (idx, map) {
+            hash = hash_add64(hash, flow_u64[idx] & *p++);
+        }
+        flow_u64 += MAP_T_BITS;
     }
 
     *basis = hash; /* Allow continuation from the unfinished value. */
@@ -325,26 +323,13 @@ flow_wildcards_fold_minimask(struct flow_wildcards *wc,
 }
 
 /* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask for bits in
- * 'map'.  The 1-bits in 'map' correspond to the first 1-bits in 'mask''s
- * map. */
+ * 'fmap'.  1-bits in 'fmap' are a subset of 1-bits in 'mask''s map. */
 static inline void
 flow_wildcards_fold_minimask_in_map(struct flow_wildcards *wc,
                                     const struct minimask *mask,
-                                    const struct miniflow *map)
+                                    const struct flowmap fmap)
 {
-    const uint64_t *p = miniflow_get_values(&mask->masks);
-    uint64_t *dst_u64 = (uint64_t *)&wc->masks;
-    size_t idx;
-
-    if (map->tnl_map) {
-        MAP_FOR_EACH_INDEX(idx, map->tnl_map) {
-            dst_u64[idx] |= *p++;
-        }
-    }
-    dst_u64 += FLOW_TNL_U64S;
-    MAP_FOR_EACH_INDEX(idx, map->pkt_map) {
-        dst_u64[idx] |= *p++;
-    }
+    flow_union_with_miniflow_subset(&wc->masks, &mask->masks, fmap);
 }
 
 /* Returns a hash value for 'mask', given 'basis'. */
@@ -358,8 +343,11 @@ minimask_hash(const struct minimask *mask, uint32_t basis)
     for (size_t i = 0; i < n_values; i++) {
         hash = hash_add64(hash, *p++);
     }
-    hash = hash_add64(hash, mask->masks.tnl_map);
-    hash = hash_add64(hash, mask->masks.pkt_map);
+
+    map_t map;
+    FLOWMAP_FOR_EACH_MAP (map, mask->masks.map) {
+        hash = hash_add64(hash, map);
+    }
 
     return hash_finish(hash, n_values);
 }
@@ -379,20 +367,15 @@ minimask_hash(const struct minimask *mask, uint32_t basis)
  * flow_hash_in_minimask_range(), only the form of the arguments differ. */
 static inline uint32_t
 minimatch_hash_range(const struct minimatch *match,
-                     const struct miniflow *range, unsigned int *offset,
+                     const struct flowmap range, unsigned int *offset,
                      uint32_t *basis)
 {
-    const uint64_t *p = miniflow_get_values(match->flow);
-    const uint64_t *q = miniflow_get_values(&match->mask->masks);
+    const uint64_t *p = miniflow_get_values(match->flow) + *offset;
+    const uint64_t *q = miniflow_get_values(&match->mask->masks) + *offset;
+    unsigned int n = flowmap_n_1bits(range);
     uint32_t hash = *basis;
-    int n, i;
 
-    n = miniflow_n_values(range);
-
-    q += *offset;
-    p += *offset;
-
-    for (i = 0; i < n; i++) {
+    for (unsigned int i = 0; i < n; i++) {
         hash = hash_add64(hash, p[i] & q[i]);
     }
     *basis = hash; /* Allow continuation from the unfinished value. */

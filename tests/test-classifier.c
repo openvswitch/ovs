@@ -1662,30 +1662,26 @@ miniflow_clone__(const struct miniflow *src)
 static inline uint32_t
 miniflow_hash__(const struct miniflow *flow, uint32_t basis)
 {
-    const uint64_t *values = miniflow_get_values(flow);
-    const uint64_t *p = values;
+    const uint64_t *p = miniflow_get_values(flow);
+    size_t n_values = miniflow_n_values(flow);
+    struct flowmap hash_map = FLOWMAP_EMPTY_INITIALIZER;
     uint32_t hash = basis;
-    uint64_t hash_tnl_map = 0, hash_pkt_map = 0;
-    uint64_t map;
+    size_t idx;
 
-    for (map = flow->tnl_map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = hash_add64(hash, *p);
-            hash_tnl_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    for (map = flow->pkt_map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = hash_add64(hash, *p);
-            hash_pkt_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    hash = hash_add64(hash, hash_tnl_map);
-    hash = hash_add64(hash, hash_pkt_map);
+    FLOWMAP_FOR_EACH_INDEX(idx, flow->map) {
+        uint64_t value = *p++;
 
-    return hash_finish(hash, p - values);
+        if (value) {
+            hash = hash_add64(hash, value);
+            flowmap_set(&hash_map, idx, 1);
+        }
+    }
+    map_t map;
+    FLOWMAP_FOR_EACH_MAP (map, hash_map) {
+        hash = hash_add64(hash, map);
+    }
+
+    return hash_finish(hash, n_values);
 }
 
 static void

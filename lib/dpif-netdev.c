@@ -489,15 +489,12 @@ emc_cache_init(struct emc_cache *flow_cache)
 {
     int i;
 
-    BUILD_ASSERT(sizeof(struct miniflow) == 2 * sizeof(uint64_t));
-
     flow_cache->sweep_idx = 0;
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
         flow_cache->entries[i].key.len = sizeof(struct miniflow);
-        flow_cache->entries[i].key.mf.tnl_map = 0;
-        flow_cache->entries[i].key.mf.pkt_map = 0;
+        flowmap_init(&flow_cache->entries[i].key.mf.map);
     }
 }
 
@@ -1522,12 +1519,7 @@ static bool dp_netdev_flow_ref(struct dp_netdev_flow *flow)
  *   miniflow_extract(), if the map is different the miniflow is different.
  *   Therefore we can be faster by comparing the map and the miniflow in a
  *   single memcmp().
- * - These functions can be inlined by the compiler.
- *
- * The following assertions make sure that what we're doing with miniflow is
- * safe.
- */
-BUILD_ASSERT_DECL(sizeof(struct miniflow) == 2 * sizeof(uint64_t));
+ * - These functions can be inlined by the compiler. */
 
 /* Given the number of bits set in miniflow's maps, returns the size of the
  * 'netdev_flow_key.mf' */
@@ -1586,47 +1578,32 @@ static inline void
 netdev_flow_mask_init(struct netdev_flow_key *mask,
                       const struct match *match)
 {
-    const uint64_t *mask_u64 = (const uint64_t *) &match->wc.masks;
     uint64_t *dst = miniflow_values(&mask->mf);
-    struct miniflow maps;
-    uint64_t map;
+    struct flowmap fmap;
     uint32_t hash = 0;
-    int n;
+    size_t idx;
 
     /* Only check masks that make sense for the flow. */
-    flow_wc_map(&match->flow, &maps);
-    memset(&mask->mf, 0, sizeof mask->mf);   /* Clear maps. */
+    flow_wc_map(&match->flow, &fmap);
+    flowmap_init(&mask->mf.map);
 
-    map = maps.tnl_map;
-    while (map) {
-        uint64_t rm1bit = rightmost_1bit(map);
-        int i = raw_ctz(map);
+    FLOWMAP_FOR_EACH_INDEX(idx, fmap) {
+        uint64_t mask_u64 = flow_u64_value(&match->wc.masks, idx);
 
-        if (mask_u64[i]) {
-            mask->mf.tnl_map |= rm1bit;
-            *dst++ = mask_u64[i];
-            hash = hash_add64(hash, mask_u64[i]);
+        if (mask_u64) {
+            flowmap_set(&mask->mf.map, idx, 1);
+            *dst++ = mask_u64;
+            hash = hash_add64(hash, mask_u64);
         }
-        map -= rm1bit;
-    }
-    mask_u64 += FLOW_TNL_U64S;
-    map = maps.pkt_map;
-    while (map) {
-        uint64_t rm1bit = rightmost_1bit(map);
-        int i = raw_ctz(map);
-
-        if (mask_u64[i]) {
-            mask->mf.pkt_map |= rm1bit;
-            *dst++ = mask_u64[i];
-            hash = hash_add64(hash, mask_u64[i]);
-        }
-        map -= rm1bit;
     }
 
-    hash = hash_add64(hash, mask->mf.tnl_map);
-    hash = hash_add64(hash, mask->mf.pkt_map);
+    map_t map;
 
-    n = dst - miniflow_get_values(&mask->mf);
+    FLOWMAP_FOR_EACH_MAP (map, mask->mf.map) {
+        hash = hash_add64(hash, map);
+    }
+
+    size_t n = dst - miniflow_get_values(&mask->mf);
 
     mask->hash = hash_finish(hash, n * 8);
     mask->len = netdev_flow_key_size(n);
@@ -1646,7 +1623,7 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
     dst->len = mask->len;
     dst->mf = mask->mf;   /* Copy maps. */
 
-    FLOW_FOR_EACH_IN_MAPS(value, flow, mask->mf) {
+    FLOW_FOR_EACH_IN_MAPS(value, flow, mask->mf.map) {
         *dst_u64 = value & *mask_u64++;
         hash = hash_add64(hash, *dst_u64++);
     }
@@ -1654,13 +1631,9 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
-/* Iterate through netdev_flow_key TNL u64 values specified by 'MAPS'. */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(VALUE, KEY, MAPS)   \
-    MINIFLOW_FOR_EACH_IN_TNL_MAP(VALUE, &(KEY)->mf, MAPS)
-
-/* Iterate through netdev_flow_key PKT u64 values specified by 'MAPS'. */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(VALUE, KEY, MAPS)   \
-    MINIFLOW_FOR_EACH_IN_PKT_MAP(VALUE, &(KEY)->mf, MAPS)
+/* Iterate through netdev_flow_key TNL u64 values specified by 'FLOWMAP'. */
+#define NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(VALUE, KEY, FLOWMAP)   \
+    MINIFLOW_FOR_EACH_IN_FLOWMAP(VALUE, &(KEY)->mf, FLOWMAP)
 
 /* Returns a hash value for the bits of 'key' where there are 1-bits in
  * 'mask'. */
@@ -1670,13 +1643,10 @@ netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
 {
     const uint64_t *p = miniflow_get_values(&mask->mf);
     uint32_t hash = 0;
-    uint64_t key_u64;
+    uint64_t value;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(key_u64, key, mask->mf) {
-        hash = hash_add64(hash, key_u64 & *p++);
-    }
-    NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(key_u64, key, mask->mf) {
-        hash = hash_add64(hash, key_u64 & *p++);
+    NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(value, key, mask->mf.map) {
+        hash = hash_add64(hash, value & *p++);
     }
 
     return hash_finish(hash, (p - miniflow_get_values(&mask->mf)) * 8);
@@ -1987,8 +1957,8 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 
     netdev_flow_mask_init(&mask, match);
     /* Make sure wc does not have metadata. */
-    ovs_assert(!(mask.mf.pkt_map
-                 & (MINIFLOW_PKT_MAP(metadata) | MINIFLOW_PKT_MAP(regs))));
+    ovs_assert(!FLOWMAP_HAS_FIELD(&mask.mf.map, metadata)
+               && !FLOWMAP_HAS_FIELD(&mask.mf.map, regs));
 
     /* Do not allocate extra space. */
     flow = xmalloc(sizeof *flow - sizeof flow->cr.flow.mf + mask.len);
@@ -3918,15 +3888,10 @@ dpcls_rule_matches_key(const struct dpcls_rule *rule,
 {
     const uint64_t *keyp = miniflow_get_values(&rule->flow.mf);
     const uint64_t *maskp = miniflow_get_values(&rule->mask->mf);
-    uint64_t target_u64;
+    uint64_t value;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(target_u64, target, rule->flow.mf) {
-        if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
-            return false;
-        }
-    }
-    NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(target_u64, target, rule->flow.mf) {
-        if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
+    NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(value, target, rule->flow.mf.map) {
+        if (OVS_UNLIKELY((value & *maskp++) != *keyp++)) {
             return false;
         }
     }
