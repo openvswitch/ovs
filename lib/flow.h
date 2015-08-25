@@ -320,6 +320,8 @@ struct flow_wildcards {
 
 #define WC_MASK_FIELD(WC, FIELD) \
     memset(&(WC)->masks.FIELD, 0xff, sizeof (WC)->masks.FIELD)
+#define WC_MASK_FIELD_MASK(WC, FIELD, MASK)     \
+    ((WC)->masks.FIELD |= (MASK))
 #define WC_UNMASK_FIELD(WC, FIELD) \
     memset(&(WC)->masks.FIELD, 0, sizeof (WC)->masks.FIELD)
 

@@ -4327,7 +4327,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
             /* A flow may wildcard nw_frag.  Do nothing if setting a trasport
              * header field on a packet that does not have them. */
-            mf_mask_field_and_prereqs(mf, &wc->masks);
+            mf_mask_field_and_prereqs(mf, wc);
             if (mf_are_prereqs_ok(mf, flow)) {
                 mf_set_flow_value_masked(mf, &set_field->value,
                                          &set_field->mask, flow);
@@ -4689,16 +4689,16 @@ xlate_wc_init(struct xlate_ctx *ctx)
     flow_wildcards_init_catchall(ctx->wc);
 
     /* Some fields we consider to always be examined. */
-    memset(&ctx->wc->masks.in_port, 0xff, sizeof ctx->wc->masks.in_port);
-    memset(&ctx->wc->masks.dl_type, 0xff, sizeof ctx->wc->masks.dl_type);
+    WC_MASK_FIELD(ctx->wc, in_port);
+    WC_MASK_FIELD(ctx->wc, dl_type);
     if (is_ip_any(&ctx->xin->flow)) {
-        ctx->wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+        WC_MASK_FIELD_MASK(ctx->wc, nw_frag, FLOW_NW_FRAG_MASK);
     }
 
     if (ctx->xbridge->support.odp.recirc) {
         /* Always exactly match recirc_id when datapath supports
          * recirculation.  */
-        ctx->wc->masks.recirc_id = UINT32_MAX;
+        WC_MASK_FIELD(ctx->wc, recirc_id);
     }
 
     if (ctx->xbridge->netflow) {

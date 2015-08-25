@@ -390,21 +390,21 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 
 /* Set field and it's prerequisities in the mask.
  * This is only ever called for writeable 'mf's, but we do not make the
- * distinction here. 
+ * distinction here.
  * The widest field this is ever called for an IPv6 address (16 bytes). */
 void
-mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
+mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
 {
     static union mf_value exact_match_mask = { .ipv6 = IN6ADDR_EXACT_INIT };
 
-    mf_set_flow_value(mf, &exact_match_mask, mask);
+    mf_set_flow_value(mf, &exact_match_mask, &wc->masks);
 
     switch (mf->prereqs) {
     case MFP_ND:
     case MFP_ND_SOLICIT:
     case MFP_ND_ADVERT:
-        mask->tp_src = OVS_BE16_MAX;
-        mask->tp_dst = OVS_BE16_MAX;
+        WC_MASK_FIELD(wc, tp_src);
+        WC_MASK_FIELD(wc, tp_dst);
         /* Fall through. */
     case MFP_TCP:
     case MFP_UDP:
@@ -412,17 +412,17 @@ mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
     case MFP_ICMPV4:
     case MFP_ICMPV6:
         /* nw_frag always unwildcarded. */
-        mask->nw_proto = 0xff;
+        WC_MASK_FIELD(wc, nw_proto);
         /* Fall through. */
     case MFP_ARP:
     case MFP_IPV4:
     case MFP_IPV6:
     case MFP_MPLS:
     case MFP_IP_ANY:
-        mask->dl_type = OVS_BE16_MAX;
+        /* dl_type always unwildcarded. */
         break;
     case MFP_VLAN_VID:
-        mask->vlan_tci |= htons(VLAN_CFI);
+        WC_MASK_FIELD_MASK(wc, vlan_tci, htons(VLAN_CFI));
         break;
     case MFP_NONE:
         break;

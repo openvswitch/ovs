@@ -1577,8 +1577,8 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
     union mf_value src_value;
     union mf_value dst_value;
 
-    mf_mask_field_and_prereqs(move->dst.field, &wc->masks);
-    mf_mask_field_and_prereqs(move->src.field, &wc->masks);
+    mf_mask_field_and_prereqs(move->dst.field, wc);
+    mf_mask_field_and_prereqs(move->src.field, wc);
 
     /* A flow may wildcard nw_frag.  Do nothing if setting a transport
      * header field on a packet that does not have them. */
