@@ -24,9 +24,9 @@
     <p>
       <code>ovn-controller</code> retrieves most of its configuration
       information from the local Open vSwitch's ovsdb-server instance.
-      The default is the <code>db.sock</code> in local Open vSwitch's
-      "run" directory.  <var>ovs-database</var> must take one of the
-      following forms:
+      The default location is <code>db.sock</code> in the local Open
+      vSwitch's "run" directory.  It may be overridden by specifying the
+      <var>ovs-database</var> argument in one of the following forms:
     </p>
     <ul>
       <li>
