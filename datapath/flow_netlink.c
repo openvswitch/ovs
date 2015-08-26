@@ -295,6 +295,7 @@ size_t ovs_key_attr_size(void)
 		+ nla_total_size(1)   /* OVS_KEY_ATTR_CT_STATE */
 		+ nla_total_size(2)   /* OVS_KEY_ATTR_CT_ZONE */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_CT_MARK */
+		+ nla_total_size(16)  /* OVS_KEY_ATTR_CT_LABEL */
 		+ nla_total_size(12)  /* OVS_KEY_ATTR_ETHERNET */
 		+ nla_total_size(2)   /* OVS_KEY_ATTR_ETHERTYPE */
 		+ nla_total_size(4)   /* OVS_KEY_ATTR_VLAN */
@@ -352,6 +353,7 @@ static const struct ovs_len_tbl ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_CT_STATE]	 = { .len = sizeof(u8) },
 	[OVS_KEY_ATTR_CT_ZONE]	 = { .len = sizeof(u16) },
 	[OVS_KEY_ATTR_CT_MARK]	 = { .len = sizeof(u32) },
+	[OVS_KEY_ATTR_CT_LABEL]	 = { .len = sizeof(struct ovs_key_ct_label) },
 };
 
 static bool check_attr_len(unsigned int attr_len, unsigned int expected_len)
@@ -754,9 +756,9 @@ int ovs_nla_put_egress_tunnel_key(struct sk_buff *skb,
 				    egress_tun_info->options_len);
 }
 
-static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
-				 const struct nlattr **a, bool is_mask,
-				 bool log)
+static int metadata_from_nlattrs(struct net *net, struct sw_flow_match *match,
+				  u64 *attrs, const struct nlattr **a,
+				 bool is_mask, bool log)
 {
 	if (*attrs & (1ULL << OVS_KEY_ATTR_DP_HASH)) {
 		u32 hash_val = nla_get_u32(a[OVS_KEY_ATTR_DP_HASH]);
@@ -823,22 +825,31 @@ static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_CT_ZONE);
 	}
 	if (*attrs & (1 << OVS_KEY_ATTR_CT_MARK) &&
-	    ovs_ct_verify(OVS_KEY_ATTR_CT_MARK)) {
+	    ovs_ct_verify(net, OVS_KEY_ATTR_CT_MARK)) {
 		u32 mark = nla_get_u32(a[OVS_KEY_ATTR_CT_MARK]);
 
 		SW_FLOW_KEY_PUT(match, ct.mark, mark, is_mask);
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_CT_MARK);
 	}
+	if (*attrs & (1 << OVS_KEY_ATTR_CT_LABEL) &&
+	    ovs_ct_verify(net, OVS_KEY_ATTR_CT_LABEL)) {
+		const struct ovs_key_ct_label *cl;
+
+		cl = nla_data(a[OVS_KEY_ATTR_CT_LABEL]);
+		SW_FLOW_KEY_MEMCPY(match, ct.label, cl->ct_label,
+				   sizeof(*cl), is_mask);
+		*attrs &= ~(1ULL << OVS_KEY_ATTR_CT_LABEL);
+	}
 	return 0;
 }
 
-static int ovs_key_from_nlattrs(struct sw_flow_match *match, u64 attrs,
-				const struct nlattr **a, bool is_mask,
-				bool log)
+static int ovs_key_from_nlattrs(struct net *net, struct sw_flow_match *match,
+				u64 attrs, const struct nlattr **a,
+				bool is_mask, bool log)
 {
 	int err;
 
-	err = metadata_from_nlattrs(match, &attrs, a, is_mask, log);
+	err = metadata_from_nlattrs(net, match, &attrs, a, is_mask, log);
 	if (err)
 		return err;
 
@@ -1094,6 +1105,7 @@ static void mask_set_nlattr(struct nlattr *attr, u8 val)
  * mask. In case the 'mask' is NULL, the flow is treated as exact match
  * flow. Otherwise, it is treated as a wildcarded flow, except the mask
  * does not include any don't care bit.
+ * @net: Used to determine per-namespace field support.
  * @match: receives the extracted flow match information.
  * @key: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
  * sequence. The fields should of the packet that triggered the creation
@@ -1104,7 +1116,7 @@ static void mask_set_nlattr(struct nlattr *attr, u8 val)
  * probing for feature compatibility this should be passed in as false to
  * suppress unnecessary error logging.
  */
-int ovs_nla_get_match(struct sw_flow_match *match,
+int ovs_nla_get_match(struct net *net, struct sw_flow_match *match,
 		      const struct nlattr *nla_key,
 		      const struct nlattr *nla_mask,
 		      bool log)
@@ -1154,7 +1166,7 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 		}
 	}
 
-	err = ovs_key_from_nlattrs(match, key_attrs, a, false, log);
+	err = ovs_key_from_nlattrs(net, match, key_attrs, a, false, log);
 	if (err)
 		return err;
 
@@ -1234,7 +1246,8 @@ int ovs_nla_get_match(struct sw_flow_match *match,
 			}
 		}
 
-		err = ovs_key_from_nlattrs(match, mask_attrs, a, true, log);
+		err = ovs_key_from_nlattrs(net, match, mask_attrs, a, true,
+					   log);
 		if (err)
 			goto free_newmask;
 	}
@@ -1315,7 +1328,7 @@ u32 ovs_nla_get_ufid_flags(const struct nlattr *attr)
  * extracted from the packet itself.
  */
 
-int ovs_nla_get_flow_metadata(const struct nlattr *attr,
+int ovs_nla_get_flow_metadata(struct net *net, const struct nlattr *attr,
 			      struct sw_flow_key *key,
 			      bool log)
 {
@@ -1335,7 +1348,7 @@ int ovs_nla_get_flow_metadata(const struct nlattr *attr,
 	memset(&key->ct, 0, sizeof(key->ct));
 	key->phy.in_port = DP_MAX_PORTS;
 
-	return metadata_from_nlattrs(&match, &attrs, a, false, log);
+	return metadata_from_nlattrs(net, &match, &attrs, a, false, log);
 }
 
 static int __ovs_nla_put_key(const struct sw_flow_key *swkey,
@@ -1926,6 +1939,7 @@ static int validate_set(const struct nlattr *a,
 	case OVS_KEY_ATTR_PRIORITY:
 	case OVS_KEY_ATTR_SKB_MARK:
 	case OVS_KEY_ATTR_CT_MARK:
+	case OVS_KEY_ATTR_CT_LABEL:
 	case OVS_KEY_ATTR_ETHERNET:
 		break;
 

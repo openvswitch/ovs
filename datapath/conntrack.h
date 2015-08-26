@@ -21,7 +21,9 @@ struct ovs_conntrack_info;
 enum ovs_key_attr;
 
 #if IS_ENABLED(CONFIG_NF_CONNTRACK) && LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0)
-bool ovs_ct_verify(enum ovs_key_attr attr);
+void ovs_ct_init(struct net *);
+void ovs_ct_exit(struct net *);
+bool ovs_ct_verify(struct net *, enum ovs_key_attr attr);
 int ovs_ct_copy_action(struct net *, const struct nlattr *,
 		       const struct sw_flow_key *, struct sw_flow_actions **,
 		       bool log);
@@ -36,7 +38,11 @@ void ovs_ct_free_action(const struct nlattr *a);
 #else
 #include <linux/errno.h>
 
-static inline bool ovs_ct_verify(int attr)
+static inline void ovs_ct_init(struct net *net) { }
+
+static inline void ovs_ct_exit(struct net *net) { }
+
+static inline bool ovs_ct_verify(struct net *net, int attr)
 {
 	return false;
 }
@@ -67,6 +73,7 @@ static inline void ovs_ct_fill_key(const struct sk_buff *skb,
 	key->ct.state = 0;
 	key->ct.zone = 0;
 	key->ct.mark = 0;
+	memset(&key->ct.label, 0, sizeof(key->ct.label));
 }
 
 static inline int ovs_ct_put_key(const struct sw_flow_key *key,
