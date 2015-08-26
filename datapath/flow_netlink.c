@@ -811,14 +811,14 @@ static int metadata_from_nlattrs(struct net *net, struct sw_flow_match *match,
 	}
 
 	if (*attrs & (1 << OVS_KEY_ATTR_CT_STATE) &&
-	    ovs_ct_verify(OVS_KEY_ATTR_CT_STATE)) {
+	    ovs_ct_verify(net, OVS_KEY_ATTR_CT_STATE)) {
 		u8 ct_state = nla_get_u8(a[OVS_KEY_ATTR_CT_STATE]);
 
 		SW_FLOW_KEY_PUT(match, ct.state, ct_state, is_mask);
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_CT_STATE);
 	}
 	if (*attrs & (1 << OVS_KEY_ATTR_CT_ZONE) &&
-	    ovs_ct_verify(OVS_KEY_ATTR_CT_ZONE)) {
+	    ovs_ct_verify(net, OVS_KEY_ATTR_CT_ZONE)) {
 		u16 ct_zone = nla_get_u16(a[OVS_KEY_ATTR_CT_ZONE]);
 
 		SW_FLOW_KEY_PUT(match, ct.zone, ct_zone, is_mask);
