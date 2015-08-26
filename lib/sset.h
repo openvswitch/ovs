@@ -67,6 +67,9 @@ bool sset_equals(const struct sset *, const struct sset *);
 struct sset_node *sset_at_position(const struct sset *,
                                    uint32_t *bucketp, uint32_t *offsetp);
 
+/* Set operations. */
+void sset_intersect(struct sset *, const struct sset *);
+
 /* Iteration macros. */
 #define SSET_FOR_EACH(NAME, SSET)               \
     for ((NAME) = SSET_FIRST(SSET);             \
