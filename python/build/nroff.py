@@ -98,10 +98,11 @@ def inline_xml_to_nroff(node, font, to_upper=False):
 def pre_to_nroff(nodes, para, font):
     s = para + '\n.nf\n'
     for node in nodes:
-        if node.nodeType != node.TEXT_NODE:
+        if node.nodeType == node.TEXT_NODE:
+            for line in node.data.split('\n'):
+                s += escape_nroff_literal(line, font) + '\n.br\n'
+        elif node.nodeType != node.COMMENT_NODE:
             fatal("<pre> element may only have text children")
-        for line in node.data.split('\n'):
-            s += escape_nroff_literal(line, font) + '\n.br\n'
     s += '.fi\n'
     return s
 
@@ -221,6 +222,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         else:
                             s += ".IP %d. .25in\n" % i
                         s += block_xml_to_nroff(li_node.childNodes, ".IP")
+                    elif li_node.nodeType == node.COMMENT_NODE:
+                        pass
                     elif (li_node.nodeType != node.TEXT_NODE
                           or not li_node.data.isspace()):
                         raise error.Error("<%s> element may only have <li> children" % node.tagName)
@@ -243,6 +246,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         if prev == 'dd':
                             s += '.IP\n'
                         prev = 'dd'
+                    elif li_node.nodeType == node.COMMENT_NODE:
+                        continue
                     elif (li_node.nodeType != node.TEXT_NODE
                           or not li_node.data.isspace()):
                         raise error.Error("<dl> element may only have <dt> and <dd> children")
