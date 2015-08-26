@@ -1,0 +1,12 @@
+[Unit]
+Description=OVN VTEP gateway controller daemon
+After=syslog.target
+Requires=openvswitch.service
+After=openvswitch.service
+
+[Service]
+Type=simple
+Environment=OVS_RUNDIR=%t/openvswitch
+ExecStart=/usr/bin/ovn-controller-vtep -vconsole:emer -vsyslog:err -vfile:info \
+          --log-file=/var/log/openvswitch/ovn-controller-vtep.log \
+          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller-vtep.pid
