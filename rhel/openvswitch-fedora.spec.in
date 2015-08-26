@@ -342,8 +342,6 @@ rm -rf $RPM_BUILD_ROOT
 %config %{_datadir}/openvswitch/ovn-sb.ovsschema
 %{_unitdir}/ovn-controller.service
 %{_unitdir}/ovn-northd.service
-%ghost %attr(755,root,root) %{_rundir}/ovn-controller
-%ghost %attr(755,root,root) %{_rundir}/ovn-northd
 
 %changelog
 * Wed Jan 12 2011 Ralf Spenneberg <ralf@os-s.net>
