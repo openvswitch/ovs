@@ -1180,7 +1180,8 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
 
     rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
-         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, ARRAY_SIZE(attrs));
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, ARRAY_SIZE(policy),
+                       attrs, ARRAY_SIZE(attrs));
     if (!rc) {
         status = STATUS_INVALID_PARAMETER;
         goto done;
@@ -1349,7 +1350,9 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         if (!NlAttrParse((PNL_MSG_HDR)msgIn,
                         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
                         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-                        ovsDatapathSetPolicy, dpAttrs, ARRAY_SIZE(dpAttrs))) {
+                        ovsDatapathSetPolicy,
+                        ARRAY_SIZE(ovsDatapathSetPolicy),
+                        dpAttrs, ARRAY_SIZE(dpAttrs))) {
             return STATUS_INVALID_PARAMETER;
         }
 
@@ -1654,7 +1657,8 @@ OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
 
     rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
-         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, ARRAY_SIZE(attrs));
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, ARRAY_SIZE(policy),
+                       attrs, ARRAY_SIZE(attrs));
     if (!rc) {
         status = STATUS_INVALID_PARAMETER;
         goto done;

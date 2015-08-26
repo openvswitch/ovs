@@ -1637,7 +1637,8 @@ OvsGetNetdevCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-        ovsNetdevPolicy, netdevAttrs, ARRAY_SIZE(netdevAttrs))) {
+        ovsNetdevPolicy, ARRAY_SIZE(ovsNetdevPolicy),
+        netdevAttrs, ARRAY_SIZE(netdevAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -1977,7 +1978,8 @@ OvsGetVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        ovsVportPolicy, ARRAY_SIZE(ovsVportPolicy),
+        vportAttrs, ARRAY_SIZE(vportAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -2118,7 +2120,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        ovsVportPolicy, ARRAY_SIZE(ovsVportPolicy),
+        vportAttrs, ARRAY_SIZE(vportAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -2332,7 +2335,8 @@ OvsSetVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        ovsVportPolicy, ARRAY_SIZE(ovsVportPolicy),
+        vportAttrs, ARRAY_SIZE(vportAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -2434,7 +2438,8 @@ OvsDeleteVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (!NlAttrParse((PNL_MSG_HDR)msgIn,
         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-        ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+        ovsVportPolicy, ARRAY_SIZE(ovsVportPolicy),
+        vportAttrs, ARRAY_SIZE(vportAttrs))) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -2590,7 +2595,8 @@ OvsTunnelVportPendingInit(PVOID context,
         if (!NlAttrParse((PNL_MSG_HDR)msgIn,
             NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
             NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-            ovsVportPolicy, vportAttrs, ARRAY_SIZE(vportAttrs))) {
+            ovsVportPolicy, ARRAY_SIZE(ovsVportPolicy),
+            vportAttrs, ARRAY_SIZE(vportAttrs))) {
             nlError = NL_ERROR_INVAL;
             break;
         }
