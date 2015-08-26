@@ -179,6 +179,7 @@ struct sw_flow_key {
 	struct {
 		/* Connection tracking fields. */
 		u16 zone;
+		u32 mark;
 		u8 state;
 	} ct;
 
