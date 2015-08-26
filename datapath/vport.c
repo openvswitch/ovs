@@ -496,6 +496,7 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 	ovs_skb_init_inner_protocol(skb);
 	OVS_CB(skb)->input_vport = vport;
 	OVS_CB(skb)->egress_tun_info = NULL;
+	OVS_CB(skb)->mru = 0;
 	error = ovs_flow_key_extract(tun_info, skb, &key);
 	if (unlikely(error)) {
 		kfree_skb(skb);

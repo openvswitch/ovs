@@ -46,6 +46,7 @@
 #include <net/ndisc.h>
 
 #include "datapath.h"
+#include "conntrack.h"
 #include "flow.h"
 #include "flow_netlink.h"
 
@@ -709,6 +710,7 @@ int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
 	key->phy.priority = skb->priority;
 	key->phy.in_port = OVS_CB(skb)->input_vport->port_no;
 	key->phy.skb_mark = skb->mark;
+	ovs_ct_fill_key(skb, key);
 	key->ovs_flow_hash = 0;
 	key->recirc_id = 0;
 
