@@ -390,13 +390,13 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 
 /* Set field and it's prerequisities in the mask.
  * This is only ever called for writeable 'mf's, but we do not make the
- * distinction here. */
+ * distinction here. 
+ * The widest field this is ever called for an IPv6 address (16 bytes). */
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
 {
-    static union mf_value exact_match_mask;
+    static union mf_value exact_match_mask = { .ipv6 = IN6ADDR_EXACT_INIT };
 
-    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
     mf_set_flow_value(mf, &exact_match_mask, mask);
 
     switch (mf->prereqs) {
