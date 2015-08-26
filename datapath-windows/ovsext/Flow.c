@@ -171,6 +171,7 @@ const NL_POLICY nlFlowKeyPolicy[] = {
                                 .maxLen = 4, .optional = TRUE},
     [OVS_KEY_ATTR_MPLS] = {.type = NL_A_VAR_LEN, .optional = TRUE}
 };
+const UINT32 nlFlowKeyPolicyLen = ARRAY_SIZE(nlFlowKeyPolicy);
 
 /* For Parsing nested OVS_KEY_ATTR_TUNNEL attributes */
 const NL_POLICY nlFlowTunnelKeyPolicy[] = {
@@ -272,7 +273,8 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     /* Get all the top level Flow attributes */
     if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
-                     nlFlowPolicy, nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     nlFlowPolicy, ARRAY_SIZE(nlFlowPolicy),
+                     nlAttrs, ARRAY_SIZE(nlAttrs)))
                      != TRUE) {
         OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
                        nlMsgHdr);
@@ -446,7 +448,8 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     /* Get all the top level Flow attributes */
     if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
-                     nlFlowPolicy, nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     nlFlowPolicy, ARRAY_SIZE(nlFlowPolicy),
+                     nlAttrs, ARRAY_SIZE(nlAttrs)))
                      != TRUE) {
         OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
                        nlMsgHdr);
@@ -460,7 +463,8 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* Get flow keys attributes */
     if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset,
                            NlAttrLen(nlAttrs[OVS_FLOW_ATTR_KEY]),
-                           nlFlowKeyPolicy, keyAttrs, ARRAY_SIZE(keyAttrs)))
+                           nlFlowKeyPolicy, ARRAY_SIZE(nlFlowKeyPolicy),
+                           keyAttrs, ARRAY_SIZE(keyAttrs)))
                            != TRUE) {
         OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
                        nlMsgHdr);
@@ -476,7 +480,8 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         /* Get tunnel keys attributes */
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
                                NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
-                               nlFlowTunnelKeyPolicy,
+                               nlFlowTunnelKeyPolicy, 
+                               ARRAY_SIZE(nlFlowTunnelKeyPolicy),
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
@@ -1182,7 +1187,8 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
 
     /* Get flow keys attributes */
     if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset, NlAttrLen(keyAttr),
-                           nlFlowKeyPolicy, keyAttrs, ARRAY_SIZE(keyAttrs)))
+                           nlFlowKeyPolicy, ARRAY_SIZE(nlFlowKeyPolicy),
+                           keyAttrs, ARRAY_SIZE(keyAttrs)))
                            != TRUE) {
         OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
                        nlMsgHdr);
@@ -1199,6 +1205,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
                                NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
                                nlFlowTunnelKeyPolicy,
+                               ARRAY_SIZE(nlFlowTunnelKeyPolicy),
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",

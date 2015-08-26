@@ -133,10 +133,12 @@ const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,
                                 UINT16 type);
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                     UINT32 totalAttrLen, const NL_POLICY policy[],
-                    PNL_ATTR attrs[], UINT32 n_attrs);
+                    const UINT32 numPolicy, PNL_ATTR attrs[], 
+                    UINT32 numAttrs);
 BOOLEAN NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                           UINT32 totalAttrLen, const NL_POLICY policy[],
-                          PNL_ATTR attrs[], UINT32 n_attrs);
+                          const UINT32 numPolicy, PNL_ATTR attrs[],
+                          UINT32 numAttrs);
 /*
  * --------------------------------------------------------------------------
  * Returns the length of attribute.
