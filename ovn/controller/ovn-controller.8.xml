@@ -112,6 +112,15 @@
             <code>external_ids:ovn-encap-ip</code>.
           </p>
         </li>
+        <li>
+          <p>
+            <code>external_ids:ovn-bridge-mappings</code> specifies a list
+            of key-value pairs that map a physical network name to a local
+            ovs bridge that provides connectivity to that network.
+            An example value mapping two physical network names to two ovs
+            bridges would be: <code>physnet1:br-eth0,physnet2:br-eth1</code>.
+          </p>
+        </li>
       </ul>
       <p>
         Currently, <code>ovn-controller</code> does not support changing
