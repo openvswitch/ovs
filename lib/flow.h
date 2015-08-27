@@ -478,7 +478,9 @@ flowmap_are_set(const struct flowmap *fm, size_t idx, unsigned int n_bits)
     if (fm->bits[unit] & (n_bits_mask << idx)) {
         return true;
     }
-    if (idx + n_bits > MAP_T_BITS) {
+    /* The seemingly unnecessary bounds check on 'unit' is a workaround for a
+     * false-positive array out of bounds error by GCC 4.9. */
+    if (unit + 1 < FLOWMAP_UNITS && idx + n_bits > MAP_T_BITS) {
         /* Check the remaining bits from the next unit. */
         return fm->bits[unit + 1] & (n_bits_mask >> (MAP_T_BITS - idx));
     }
@@ -496,7 +498,9 @@ flowmap_set(struct flowmap *fm, size_t idx, unsigned int n_bits)
     idx %= MAP_T_BITS;
 
     fm->bits[unit] |= n_bits_mask << idx;
-    if (idx + n_bits > MAP_T_BITS) {
+    /* The seemingly unnecessary bounds check on 'unit' is a workaround for a
+     * false-positive array out of bounds error by GCC 4.9. */
+    if (unit + 1 < FLOWMAP_UNITS && idx + n_bits > MAP_T_BITS) {
         /* 'MAP_T_BITS - idx' bits were set on 'unit', set the remaining
          * bits from the next unit. */
         fm->bits[unit + 1] |= n_bits_mask >> (MAP_T_BITS - idx);
@@ -514,7 +518,9 @@ flowmap_clear(struct flowmap *fm, size_t idx, unsigned int n_bits)
     idx %= MAP_T_BITS;
 
     fm->bits[unit] &= ~(n_bits_mask << idx);
-    if (idx + n_bits > MAP_T_BITS) {
+    /* The seemingly unnecessary bounds check on 'unit' is a workaround for a
+     * false-positive array out of bounds error by GCC 4.9. */
+    if (unit + 1 < FLOWMAP_UNITS && idx + n_bits > MAP_T_BITS) {
         /* 'MAP_T_BITS - idx' bits were cleared on 'unit', clear the
          * remaining bits from the next unit. */
         fm->bits[unit + 1] &= ~(n_bits_mask >> (MAP_T_BITS - idx));
