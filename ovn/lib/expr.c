@@ -243,6 +243,11 @@ expr_fix_andor(struct expr *expr, bool short_circuit)
     }
 }
 
+/* Returns 'expr' modified so that top-level oddities are fixed up:
+ *
+ *     - Eliminates any EXPR_T_BOOLEAN operands at the top level.
+ *
+ *     - Replaces one-operand EXPR_T_AND or EXPR_T_OR by its subexpression. */
 static struct expr *
 expr_fix(struct expr *expr)
 {
@@ -626,6 +631,7 @@ make_cmp(struct expr_context *ctx,
 
     if (f->symbol->level == EXPR_L_NOMINAL) {
         if (f->symbol->expansion) {
+            ovs_assert(f->symbol->width > 0);
             for (size_t i = 0; i < cs->n_values; i++) {
                 const union mf_subvalue *value = &cs->values[i].value;
                 bool positive = (value->integer & htonll(1)) != 0;
@@ -1637,6 +1643,7 @@ compare_expr_sort(const void *a_, const void *b_)
 
 static struct expr *crush_cmps(struct expr *, const struct expr_symbol *);
 
+/* Implementation of crush_cmps() for expr->type == EXPR_T_AND. */
 static struct expr *
 crush_and(struct expr *expr, const struct expr_symbol *symbol)
 {
@@ -1806,13 +1813,15 @@ compare_expr(const void *a_, const void *b_)
     return d;
 }
 
+/* Implementation of crush_cmps() for expr->type == EXPR_T_OR. */
 static struct expr *
 crush_or(struct expr *expr, const struct expr_symbol *symbol)
 {
     struct expr *sub, *next = NULL;
 
     /* First, crush all the subexpressions.  That might eliminate the
-     * OR-expression entirely; if so, return the result. */
+     * OR-expression entirely; if so, return the result.  Otherwise, 'expr'
+     * is now a disjunction of cmps over the same symbol. */
     LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
         list_remove(&sub->node);
         expr_insert_andor(expr, next, crush_cmps(sub, symbol));
@@ -1822,7 +1831,7 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
         return expr;
     }
 
-    /* Eliminate duplicates by sorting the subexpressions. */
+    /* Sort subexpressions by value and mask, to bring together duplicates. */
     size_t n = list_size(&expr->andor);
     struct expr **subs = xmalloc(n * sizeof *subs);
 
@@ -1850,8 +1859,10 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
     return expr_fix(expr);
 }
 
-/* Converts 'expr', which must be a cmp in the sense determined by
- * expr_is_cmp().  Returns a cmp, a disjunction of cmps, or a boolean. */
+/* Takes ownership of 'expr', which must be a cmp in the sense determined by
+ * 'expr_is_cmp(expr)', where 'symbol' is the symbol returned by that function.
+ * Returns an equivalent expression owned by the caller that is a single
+ * EXPR_T_CMP or a disjunction of them or a EXPR_T_BOOLEAN. */
 static struct expr *
 crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
 {
