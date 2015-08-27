@@ -216,7 +216,7 @@ start_ovsdb () {
         set_system_ids || return 1
         if test X"$DELETE_BRIDGES" = Xyes; then
             for bridge in `ovs_vsctl list-br`; do
-        ovs_vsctl del-br $bridge
+                ovs_vsctl del-br $bridge
             done
         fi
     fi
