@@ -1750,6 +1750,9 @@ union mf_value {
 BUILD_ASSERT_DECL(sizeof(union mf_value) == 128);
 BUILD_ASSERT_DECL(sizeof(union mf_value) >= GENEVE_MAX_OPT_SIZE);
 
+/* A const mf_value with all bits initialized to ones. */
+extern const union mf_value exact_match_mask;
+
 /* Part of a field. */
 struct mf_subfield {
     const struct mf_field *field;

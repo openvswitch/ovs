@@ -60,6 +60,15 @@ static struct shash mf_by_name;
  * controller and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+#define MF_VALUE_EXACT_8 0xff, 0xff, 0xff, 0xff,  0xff, 0xff, 0xff, 0xff
+#define MF_VALUE_EXACT_16 MF_VALUE_EXACT_8, MF_VALUE_EXACT_8
+#define MF_VALUE_EXACT_32 MF_VALUE_EXACT_16, MF_VALUE_EXACT_16
+#define MF_VALUE_EXACT_64 MF_VALUE_EXACT_32, MF_VALUE_EXACT_32
+#define MF_VALUE_EXACT_128 MF_VALUE_EXACT_64, MF_VALUE_EXACT_64
+#define MF_VALUE_EXACT_INITIALIZER { .tun_metadata = { MF_VALUE_EXACT_128 } }
+
+const union mf_value exact_match_mask = MF_VALUE_EXACT_INITIALIZER;
+
 static void nxm_init(void);
 
 /* Returns the field with the given 'name', or a null pointer if no field has
@@ -390,13 +399,10 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 
 /* Set field and it's prerequisities in the mask.
  * This is only ever called for writeable 'mf's, but we do not make the
- * distinction here.
- * The widest field this is ever called for an IPv6 address (16 bytes). */
+ * distinction here. */
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
 {
-    static union mf_value exact_match_mask = { .ipv6 = IN6ADDR_EXACT_INIT };
-
     mf_set_flow_value(mf, &exact_match_mask, &wc->masks);
 
     switch (mf->prereqs) {
@@ -1020,10 +1026,6 @@ mf_set_value(const struct mf_field *mf,
 void
 mf_mask_field(const struct mf_field *mf, struct flow *mask)
 {
-    union mf_value exact_match_mask;
-
-    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
-
     /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan()
      * as that will be considered as OFP10_VLAN_NONE. So consider it as a
      * special case. For the rest, calling mf_set_flow_value() is good
