@@ -329,6 +329,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_IP_SELECT_IDENT_USING_DST_ENTRY])])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [inet_get_local_port_range.*net],
                   [OVS_DEFINE([HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
