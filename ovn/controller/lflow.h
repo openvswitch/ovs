@@ -36,6 +36,7 @@
 
 struct controller_ctx;
 struct hmap;
+struct simap;
 struct uuid;
 
 /* OpenFlow table numbers.
@@ -58,6 +59,7 @@ struct uuid;
  * These values are documented in ovn-architecture(7), please update the
  * documentation if you change any of them. */
 #define MFF_LOG_DATAPATH MFF_METADATA /* Logical datapath (64 bits). */
+#define MFF_LOG_CT_ZONE  MFF_REG5     /* Logical conntrack zone (32 bits). */
 #define MFF_LOG_INPORT   MFF_REG6     /* Logical input port (32 bits). */
 #define MFF_LOG_OUTPORT  MFF_REG7     /* Logical output port (32 bits). */
 
@@ -69,11 +71,11 @@ struct uuid;
     MFF_LOG_REG(MFF_REG1) \
     MFF_LOG_REG(MFF_REG2) \
     MFF_LOG_REG(MFF_REG3) \
-    MFF_LOG_REG(MFF_REG4) \
-    MFF_LOG_REG(MFF_REG5)
+    MFF_LOG_REG(MFF_REG4)
 
 void lflow_init(void);
-void lflow_run(struct controller_ctx *, struct hmap *flow_table);
+void lflow_run(struct controller_ctx *, struct hmap *flow_table,
+               const struct simap *ct_zones);
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

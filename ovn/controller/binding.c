@@ -16,6 +16,7 @@
 #include <config.h>
 #include "binding.h"
 
+#include "lib/bitmap.h"
 #include "lib/sset.h"
 #include "lib/util.h"
 #include "lib/vswitch-idl.h"
@@ -71,9 +72,55 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int, struct sset *lports)
     }
 }
 
+static void
+update_ct_zones(struct sset *lports, struct simap *ct_zones,
+                unsigned long *ct_zone_bitmap)
+{
+    struct simap_node *ct_zone, *ct_zone_next;
+    const char *iface_id;
+    int scan_start = 1;
+
+    /* xxx This is wasteful to assign a zone to each port--even if no
+     * xxx security policy is applied. */
+
+    /* Delete any zones that are associated with removed ports. */
+    SIMAP_FOR_EACH_SAFE(ct_zone, ct_zone_next, ct_zones) {
+        if (!sset_contains(lports, ct_zone->name)) {
+            bitmap_set0(ct_zone_bitmap, ct_zone->data);
+            simap_delete(ct_zones, ct_zone);
+        }
+    }
+
+    /* Assign a unique zone id for each logical port. */
+    SSET_FOR_EACH(iface_id, lports) {
+        size_t zone;
+
+        if (simap_contains(ct_zones, iface_id)) {
+            continue;
+        }
+
+        /* We assume that there are 64K zones and that we own them all. */
+        zone = bitmap_scan(ct_zone_bitmap, 0, scan_start, MAX_CT_ZONES + 1);
+        if (zone == MAX_CT_ZONES + 1) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "exhausted all ct zones");
+            return;
+        }
+        scan_start = zone + 1;
+
+        bitmap_set1(ct_zone_bitmap, zone);
+        simap_put(ct_zones, iface_id, zone);
+
+        /* xxx We should erase any old entries for this
+         * xxx zone, but we need a generic interface to the conntrack
+         * xxx table. */
+    }
+}
+
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-            const char *chassis_id)
+            const char *chassis_id, struct simap *ct_zones,
+            unsigned long *ct_zone_bitmap)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
@@ -97,6 +144,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         /* We have no integration bridge, therefore no local logical ports.
          * We'll remove our chassis from all port binding records below. */
     }
+    update_ct_zones(&lports, ct_zones, ct_zone_bitmap);
     sset_clone(&all_lports, &lports);
 
     ovsdb_idl_txn_add_comment(
@@ -141,6 +189,7 @@ binding_cleanup(struct controller_ctx *ctx, const char *chassis_id)
     if (!chassis_id) {
         return true;
     }
+
     const struct sbrec_chassis *chassis_rec
         = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {

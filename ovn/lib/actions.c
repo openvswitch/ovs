@@ -24,6 +24,7 @@
 #include "lex.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"
+#include "simap.h"
 
 /* Context maintained during actions_parse(). */
 struct action_context {
@@ -33,6 +34,7 @@ struct action_context {
     uint8_t next_table_id;      /* OpenFlow table for 'next' to resubmit. */
     uint8_t output_table_id;    /* OpenFlow table for 'output' to resubmit. */
     const struct simap *ports;  /* Map from port name to number. */
+    const struct simap *ct_zones; /* Map from port name to conntrack zone. */
 
     /* State. */
     char *error;                /* Error, if any, otherwise NULL. */
@@ -132,6 +134,32 @@ emit_resubmit(struct action_context *ctx, uint8_t table_id)
 }
 
 static void
+emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
+{
+    struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
+    ct->flags |= commit ? NX_CT_F_COMMIT : 0;
+
+    /* If "recirc" is set, we automatically go to the next table. */
+    ct->recirc_table = recirc_next ? ctx->next_table_id: NX_CT_RECIRC_NONE;
+
+    /* xxx Should remove hard-coding reg5 if we refactor library. */
+    ct->zone_src.field = mf_from_id(MFF_REG5);
+    ct->zone_src.ofs = 0;
+    ct->zone_src.n_bits = 16;
+
+    /* We do not support ALGs yet. */
+    ct->alg = htons(0);
+
+    /* CT only works with IP, so set up a prerequisite. */
+    struct expr *expr;
+    char *error;
+
+    expr = expr_parse_string("ip", ctx->symtab, &error);
+    ovs_assert(!error);
+    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
+}
+
+static void
 parse_actions(struct action_context *ctx)
 {
     /* "drop;" by itself is a valid (empty) set of actions, but it can't be
@@ -165,6 +193,10 @@ parse_actions(struct action_context *ctx)
             }
         } else if (lexer_match_id(ctx->lexer, "output")) {
             emit_resubmit(ctx, ctx->output_table_id);
+        } else if (lexer_match_id(ctx->lexer, "ct_next")) {
+            emit_ct(ctx, true, false);
+        } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
+            emit_ct(ctx, false, true);
         } else {
             action_syntax_error(ctx, "expecting action");
         }
@@ -188,6 +220,8 @@ parse_actions(struct action_context *ctx)
  * (as one would provide to expr_to_matches()).  Strings used in the actions
  * that are not in 'ports' are translated to zero.
  *
+ * 'ct_zones' provides a map from a port name to its connection tracking zone.
+ *
  * 'next_table_id' should be the OpenFlow table to which the "next" action will
  * resubmit, or 0 to disable "next".
  *
@@ -206,8 +240,9 @@ parse_actions(struct action_context *ctx)
   */
 char * OVS_WARN_UNUSED_RESULT
 actions_parse(struct lexer *lexer, const struct shash *symtab,
-              const struct simap *ports, uint8_t next_table_id,
-              uint8_t output_table_id, struct ofpbuf *ofpacts,
+              const struct simap *ports, const struct simap *ct_zones,
+              uint8_t next_table_id, uint8_t output_table_id,
+              struct ofpbuf *ofpacts,
               struct expr **prereqsp)
 {
     size_t ofpacts_start = ofpacts->size;
@@ -216,6 +251,7 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
     ctx.lexer = lexer;
     ctx.symtab = symtab;
     ctx.ports = ports;
+    ctx.ct_zones = ct_zones;
     ctx.next_table_id = next_table_id;
     ctx.output_table_id = output_table_id;
     ctx.error = NULL;
@@ -238,16 +274,16 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
 /* Like actions_parse(), but the actions are taken from 's'. */
 char * OVS_WARN_UNUSED_RESULT
 actions_parse_string(const char *s, const struct shash *symtab,
-                     const struct simap *ports, uint8_t next_table_id,
-                     uint8_t output_table_id, struct ofpbuf *ofpacts,
-                     struct expr **prereqsp)
+                     const struct simap *ports, const struct simap *ct_zones,
+                     uint8_t next_table_id, uint8_t output_table_id,
+                     struct ofpbuf *ofpacts, struct expr **prereqsp)
 {
     struct lexer lexer;
     char *error;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    error = actions_parse(&lexer, symtab, ports, next_table_id,
+    error = actions_parse(&lexer, symtab, ports, ct_zones, next_table_id,
                           output_table_id, ofpacts, prereqsp);
     lexer_destroy(&lexer);
 

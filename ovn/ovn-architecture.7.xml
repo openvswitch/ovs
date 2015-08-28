@@ -654,6 +654,14 @@
       tunnels as part of the tunnel key.)
     </dd>
 
+    <dt>conntrack zone field</dt>
+    <dd>
+      A field that denotes the connection tracking zone.  The value only
+      has local significance and is not meaningful between chassis.
+      This is initialized to 0 at the beginning of the logical ingress
+      pipeline.  OVN stores this in Nicira extension register number 5.
+    </dd>
+
     <dt>VLAN ID</dt>
     <dd>
       The VLAN ID is used as an interface between OVN and containers nested
