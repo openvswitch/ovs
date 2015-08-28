@@ -1906,6 +1906,11 @@ push_ukey_ops__(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
             continue;
         }
 
+        if (op->dop.error) {
+            /* flow_del error, 'stats' is unusable. */
+            continue;
+        }
+
         if (op->ukey) {
             ovs_mutex_lock(&op->ukey->mutex);
             push->used = MAX(stats->used, op->ukey->stats.used);
