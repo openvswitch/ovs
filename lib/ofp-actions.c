@@ -2271,11 +2271,11 @@ static void
 set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
 {
     /* If 'sf' cannot be encoded as NXAST_REG_LOAD because it requires an
-     * experimenter OXM (or if it came in as NXAST_REG_LOAD2), encode as
-     * NXAST_REG_LOAD2.  Otherwise use NXAST_REG_LOAD, which is backward
-     * compatible. */
+     * experimenter OXM or is variable length (or if it came in as
+     * NXAST_REG_LOAD2), encode as NXAST_REG_LOAD2.  Otherwise use
+     * NXAST_REG_LOAD, which is backward compatible. */
     if (sf->ofpact.raw == NXAST_RAW_REG_LOAD2
-        || !mf_nxm_header(sf->field->id)) {
+        || !mf_nxm_header(sf->field->id) || sf->field->variable_len) {
         struct nx_action_reg_load2 *narl OVS_UNUSED;
         size_t start_ofs = openflow->size;
 
