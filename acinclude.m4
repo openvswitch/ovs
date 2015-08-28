@@ -449,6 +449,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/netdevice.h], [NET_NAME_UNKNOWN],
                   [OVS_DEFINE([HAVE_NET_NAME_UNKNOWN])])
 
+  OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
+                  [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
+
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
     rm datapath/linux/kcompat.h.new

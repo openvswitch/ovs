@@ -7,7 +7,7 @@
 #define this_cpu_ptr(ptr) per_cpu_ptr(ptr, smp_processor_id())
 #endif
 
-#ifdef HAVE_RHEL_OVS_HOOK
+#ifdef HAVE_RHEL6_PER_CPU
 #undef this_cpu_read
 #undef this_cpu_inc
 #undef this_cpu_dec
