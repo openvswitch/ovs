@@ -4,7 +4,7 @@
 #include_next <linux/in.h>
 
 #include <linux/module.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+#ifndef HAVE_PROTO_PORTS_OFFSET
 static inline int proto_ports_offset(int proto)
 {
 	switch (proto) {
