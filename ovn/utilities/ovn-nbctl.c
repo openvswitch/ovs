@@ -63,6 +63,13 @@ Logical switch commands:\n\
   lswitch-get-external-id LSWITCH [KEY]\n\
                             list one or all external-ids on LSWITCH\n\
 \n\
+ACL commands:\n\
+  acl-add LSWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
+                            add an ACL to LSWITCH\n\
+  acl-del LSWITCH [DIRECTION [PRIORITY MATCH]]\n\
+                            remove ACLs from LSWITCH\n\
+  acl-list LSWITCH          print ACLs for LSWITCH\n\
+\n\
 Logical port commands:\n\
   lport-add LSWITCH LPORT   add logical port LPORT on LSWITCH\n\
   lport-add LSWITCH LPORT PARENT TAG\n\
@@ -747,6 +754,210 @@ do_lport_get_options(struct ovs_cmdl_context *ctx)
         printf("%s=%s\n", node->key, node->value);
     }
 }
+
+enum {
+    DIR_FROM_LPORT,
+    DIR_TO_LPORT
+};
+
+static int
+dir_encode(const char *dir)
+{
+    if (!strcmp(dir, "from-lport")) {
+        return DIR_FROM_LPORT;
+    } else if (!strcmp(dir, "to-lport")) {
+        return DIR_TO_LPORT;
+    }
+
+    OVS_NOT_REACHED();
+}
+
+static int
+acl_cmp(const void *acl1_, const void *acl2_)
+{
+    const struct nbrec_acl *const *acl1p = acl1_;
+    const struct nbrec_acl *const *acl2p = acl2_;
+    const struct nbrec_acl *acl1 = *acl1p;
+    const struct nbrec_acl *acl2 = *acl2p;
+
+    int dir1 = dir_encode(acl1->direction);
+    int dir2 = dir_encode(acl2->direction);
+
+    if (dir1 != dir2) {
+        return dir1 < dir2 ? -1 : 1;
+    } else if (acl1->priority != acl2->priority) {
+        return acl1->priority > acl2->priority ? -1 : 1;
+    } else {
+        return strcmp(acl1->match, acl2->match);
+    }
+}
+
+static void
+do_acl_list(struct ovs_cmdl_context *ctx)
+{
+    const struct nbrec_logical_switch *lswitch;
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const struct nbrec_acl **acls;
+    size_t i;
+
+    lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
+    if (!lswitch) {
+        return;
+    }
+
+    acls = xmalloc(sizeof *acls * lswitch->n_acls);
+    for (i = 0; i < lswitch->n_acls; i++) {
+        acls[i] = lswitch->acls[i];
+    }
+
+    qsort(acls, lswitch->n_acls, sizeof *acls, acl_cmp);
+
+    for (i = 0; i < lswitch->n_acls; i++) {
+        const struct nbrec_acl *acl = acls[i];
+        printf("%10s %5"PRId64" (%s) %s%s\n", acl->direction, acl->priority,
+                acl->match, acl->action, acl->log ? " log" : "");
+    }
+
+    free(acls);
+}
+
+static void
+do_acl_add(struct ovs_cmdl_context *ctx)
+{
+    const struct nbrec_logical_switch *lswitch;
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *action = ctx->argv[5];
+    const char *direction;
+    int64_t priority;
+
+    lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
+    if (!lswitch) {
+        return;
+    }
+
+    /* Validate direction.  Only require the first letter. */
+    if (ctx->argv[2][0] == 't') {
+        direction = "to-lport";
+    } else if (ctx->argv[2][0] == 'f') {
+        direction = "from-lport";
+    } else {
+        VLOG_WARN("Invalid direction '%s'", ctx->argv[2]);
+        return;
+    }
+
+    /* Validate priority. */
+    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 1
+        || priority > 65535) {
+        VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
+        return;
+    }
+
+    /* Validate action. */
+    if (strcmp(action, "allow") && strcmp(action, "allow-related")
+        && strcmp(action, "drop") && strcmp(action, "reject")) {
+        VLOG_WARN("Invalid action '%s'", action);
+        return;
+    }
+
+    /* Create the acl. */
+    struct nbrec_acl *acl = nbrec_acl_insert(nb_ctx->txn);
+    nbrec_acl_set_priority(acl, priority);
+    nbrec_acl_set_direction(acl, direction);
+    nbrec_acl_set_match(acl, ctx->argv[4]);
+    nbrec_acl_set_action(acl, action);
+    if (ctx->argc == 7 && ctx->argv[6][0] == 'l') {
+        nbrec_acl_set_log(acl, true);
+    }
+
+    /* Insert the acl into the logical switch. */
+    nbrec_logical_switch_verify_acls(lswitch);
+    struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls *
+                                          (lswitch->n_acls + 1));
+    memcpy(new_acls, lswitch->acls, sizeof *new_acls * lswitch->n_acls);
+    new_acls[lswitch->n_acls] = acl;
+    nbrec_logical_switch_set_acls(lswitch, new_acls, lswitch->n_acls + 1);
+    free(new_acls);
+}
+
+static void
+do_acl_del(struct ovs_cmdl_context *ctx)
+{
+    const struct nbrec_logical_switch *lswitch;
+    struct nbctl_context *nb_ctx = ctx->pvt;
+    const char *direction;
+    int64_t priority = 0;
+
+    lswitch = lswitch_by_name_or_uuid(nb_ctx, ctx->argv[1]);
+    if (!lswitch) {
+        return;
+    }
+
+    if (ctx->argc != 2 && ctx->argc != 3 && ctx->argc != 5) {
+        VLOG_WARN("Invalid number of arguments");
+        return;
+    }
+
+    if (ctx->argc == 2) {
+        /* If direction, priority, and match are not specified, delete
+         * all ACLs. */
+        nbrec_logical_switch_verify_acls(lswitch);
+        nbrec_logical_switch_set_acls(lswitch, NULL, 0);
+        return;
+    }
+
+    /* Validate direction.  Only require first letter. */
+    if (ctx->argv[2][0] == 't') {
+        direction = "to-lport";
+    } else if (ctx->argv[2][0] == 'f') {
+        direction = "from-lport";
+    } else {
+        VLOG_WARN("Invalid direction '%s'", ctx->argv[2]);
+        return;
+    }
+
+    /* If priority and match are not specified, delete all ACLs with the
+     * specified direction. */
+    if (ctx->argc == 3) {
+        struct nbrec_acl **new_acls
+            = xmalloc(sizeof *new_acls * lswitch->n_acls);
+
+        int n_acls = 0;
+        for (size_t i = 0; i < lswitch->n_acls; i++) {
+            if (strcmp(direction, lswitch->acls[i]->direction)) {
+                new_acls[n_acls++] = lswitch->acls[i];
+            }
+        }
+
+        nbrec_logical_switch_verify_acls(lswitch);
+        nbrec_logical_switch_set_acls(lswitch, new_acls, n_acls);
+        free(new_acls);
+        return;
+    }
+
+    /* Validate priority. */
+    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 1
+        || priority > 65535) {
+        VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
+        return;
+    }
+
+    /* Remove the matching rule. */
+    for (size_t i = 0; i < lswitch->n_acls; i++) {
+        struct nbrec_acl *acl = lswitch->acls[i];
+
+        if (priority == acl->priority && !strcmp(ctx->argv[4], acl->match) &&
+             !strcmp(direction, acl->direction)) {
+            struct nbrec_acl **new_acls
+                = xmemdup(lswitch->acls, sizeof *new_acls * lswitch->n_acls);
+            new_acls[i] = lswitch->acls[lswitch->n_acls - 1];
+            nbrec_logical_switch_verify_acls(lswitch);
+            nbrec_logical_switch_set_acls(lswitch, new_acls,
+                                          lswitch->n_acls - 1);
+            free(new_acls);
+            return;
+        }
+    }
+}
 
 static void
 parse_options(int argc, char *argv[])
@@ -847,6 +1058,27 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         .max_args = 2,
         .handler = do_lswitch_get_external_id,
+    },
+    {
+        .name = "acl-add",
+        .usage = "LSWITCH DIRECTION PRIORITY MATCH ACTION [log]",
+        .min_args = 5,
+        .max_args = 6,
+        .handler = do_acl_add,
+    },
+    {
+        .name = "acl-del",
+        .usage = "LSWITCH [DIRECTION [PRIORITY MATCH]]",
+        .min_args = 1,
+        .max_args = 4,
+        .handler = do_acl_del,
+    },
+    {
+        .name = "acl-list",
+        .usage = "LSWITCH",
+        .min_args = 1,
+        .max_args = 1,
+        .handler = do_acl_list,
     },
     {
         .name = "lport-add",

@@ -112,3 +112,52 @@ AT_CHECK([ovn-nbctl lport-get-port-security lp0], [0], [dnl
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - ACLs])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 600 udp drop log])
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 500 udp drop log])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 300 tcp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop])
+
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+from-lport   600 (udp) drop log
+from-lport   400 (tcp) drop
+from-lport   200 (ip) drop
+  to-lport   500 (udp) drop log
+  to-lport   300 (tcp) drop
+  to-lport   100 (ip) drop
+])
+
+dnl Delete in one direction.
+AT_CHECK([ovn-nbctl acl-del ls0 to-lport])
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+from-lport   600 (udp) drop log
+from-lport   400 (tcp) drop
+from-lport   200 (ip) drop
+])
+
+dnl Delete all ACLs.
+AT_CHECK([ovn-nbctl acl-del ls0])
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+])
+
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 600 udp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
+
+dnl Delete a single flow.
+AT_CHECK([ovn-nbctl acl-del ls0 from-lport 400 tcp])
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+from-lport   600 (udp) drop
+from-lport   200 (ip) drop
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
