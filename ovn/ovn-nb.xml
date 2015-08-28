@@ -225,22 +225,56 @@
     </p>
 
     <column name="priority">
-      The ACL rule's priority.  Rules with numerically higher priority take
-      precedence over those with lower.  If two ACL rules with the same
-      priority both match, then the one actually applied to a packet is
-      undefined.
+      <p>
+        The ACL rule's priority.  Rules with numerically higher priority
+        take precedence over those with lower.  If two ACL rules with
+        the same priority both match, then the one actually applied to a
+        packet is undefined.
+      </p>
+
+      <p>
+        Return traffic from an <code>allow-related</code> flow is always
+        allowed and cannot be changed through an ACL.
+      </p>
+    </column>
+
+    <column name="direction">
+      <p>Direction of the traffic to which this rule should apply:</p>
+      <ul>
+        <li>
+          <code>from-lport</code>: Used to implement filters on traffic
+          arriving from a logical port.  These rules are applied to the
+          logical switch's ingress pipeline.
+        </li>
+        <li>
+          <code>to-lport</code>: Used to implement filters on traffic
+          forwarded to a logical port.  These rules are applied to the
+          logical switch's egress pipeline.
+        </li>
+      </ul>
     </column>
 
     <column name="match">
-      The packets that the ACL should match, in the same expression language
-      used for the <ref column="match" table="Logical_Flow"
-      db="OVN_Southbound"/> column in the OVN Southbound database's <ref
-      table="Logical_Flow" db="OVN_Southbound"/> table.  Match
-      <code>inport</code> and <code>outport</code> against names of logical
-      ports within <ref column="lswitch"/> to implement ingress and egress
-      ACLs, respectively.  In logical switches connected to logical routers,
-      the special port name <code>ROUTER</code> refers to the logical router
-      port.
+      <p>
+        The packets that the ACL should match, in the same expression
+        language used for the <ref column="match" table="Logical_Flow"
+        db="OVN_Southbound"/> column in the OVN Southbound database's
+        <ref table="Logical_Flow" db="OVN_Southbound"/> table.  The
+        <code>outport</code> logical port is only available in the
+        <code>to-lport</code> direction (the <code>inport</code> is
+        available in both directions).
+      </p>
+
+      <p>
+        By default all traffic is allowed.  When writing a more
+        restrictive policy, it is important to remember to allow flows
+        such as ARP and IPv6 neighbor discovery packets.
+      </p>
+
+      <p>
+        In logical switches connected to logical routers, the special
+        port name <code>ROUTER</code> refers to the logical router port.
+      </p>
     </column>
 
     <column name="action">
@@ -263,14 +297,9 @@
         <li>
           <code>reject</code>: Drop the packet, replying with a RST for TCP or
           ICMP unreachable message for other IP-based protocols.
+          <code>Not implemented--currently treated as drop</code>
         </li>
       </ul>
-
-      <p>
-	Only <code>allow</code> and <code>drop</code> are implemented:
-	<code>allow-related</code> is currently treated as <code>allow</code>,
-	and <code>reject</code> as <code>drop</code>.
-      </p>
     </column>
 
     <column name="log">

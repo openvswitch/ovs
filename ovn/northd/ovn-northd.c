@@ -60,6 +60,7 @@ static const char *default_db(void);
  * These must be listed in the order that the stages will be executed. */
 #define INGRESS_STAGES                         \
     INGRESS_STAGE(PORT_SEC, port_sec)          \
+    INGRESS_STAGE(ACL, acl)                    \
     INGRESS_STAGE(L2_LKUP, l2_lkup)
 
 enum ingress_stage {
@@ -762,7 +763,28 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         ds_destroy(&match);
     }
 
-    /* Ingress table 1: Destination lookup, broadcast and multicast handling
+    /* Ingress table 1: ACLs (any priority). */
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        for (size_t i = 0; i < od->nb->n_acls; i++) {
+            const struct nbrec_acl *acl = od->nb->acls[i];
+            const char *action;
+
+            if (strcmp(acl->direction, "from-lport")) {
+                continue;
+            }
+
+            action = (!strcmp(acl->action, "allow") ||
+                      !strcmp(acl->action, "allow-related"))
+                ? "next;" : "drop;";
+            ovn_lflow_add(&lflows, od, P_IN, S_IN_ACL, acl->priority,
+                          acl->match, action);
+        }
+    }
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_ACL, 0, "1", "next;");
+    }
+
+    /* Ingress table 2: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (lport_is_enabled(op->nb)) {
@@ -774,7 +796,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
-    /* Ingress table 1: Destination lookup, unicast handling (priority 50), */
+    /* Ingress table 2: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         for (size_t i = 0; i < op->nb->n_macs; i++) {
             struct eth_addr mac;
@@ -805,7 +827,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         }
     }
 
-    /* Ingress table 1: Destination lookup for unknown MACs (priority 0). */
+    /* Ingress table 2: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (od->has_unknown) {
             ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 0, "1",
@@ -818,6 +840,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         for (size_t i = 0; i < od->nb->n_acls; i++) {
             const struct nbrec_acl *acl = od->nb->acls[i];
             const char *action;
+
+            if (strcmp(acl->direction, "to-lport")) {
+                continue;
+            }
 
             action = (!strcmp(acl->action, "allow") ||
                       !strcmp(acl->action, "allow-related"))
