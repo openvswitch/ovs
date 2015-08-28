@@ -75,7 +75,7 @@ struct netdev_vport {
     /* Protects all members below. */
     struct ovs_mutex mutex;
 
-    uint8_t etheraddr[ETH_ADDR_LEN];
+    struct eth_addr etheraddr;
     struct netdev_stats stats;
 
     /* Tunnels. */
@@ -249,7 +249,7 @@ netdev_vport_construct(struct netdev *netdev_)
     const char *type = netdev_get_type(netdev_);
 
     ovs_mutex_init(&dev->mutex);
-    eth_addr_random(dev->etheraddr);
+    eth_addr_random(&dev->etheraddr);
 
     /* Add a default destination port for tunnel ports if none specified. */
     if (!strcmp(type, "geneve")) {
@@ -284,13 +284,12 @@ netdev_vport_dealloc(struct netdev *netdev_)
 }
 
 static int
-netdev_vport_set_etheraddr(struct netdev *netdev_,
-                           const uint8_t mac[ETH_ADDR_LEN])
+netdev_vport_set_etheraddr(struct netdev *netdev_, const struct eth_addr mac)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
     ovs_mutex_lock(&netdev->mutex);
-    memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+    netdev->etheraddr = mac;
     ovs_mutex_unlock(&netdev->mutex);
     netdev_change_seq_changed(netdev_);
 
@@ -298,13 +297,12 @@ netdev_vport_set_etheraddr(struct netdev *netdev_,
 }
 
 static int
-netdev_vport_get_etheraddr(const struct netdev *netdev_,
-                           uint8_t mac[ETH_ADDR_LEN])
+netdev_vport_get_etheraddr(const struct netdev *netdev_, struct eth_addr *mac)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
     ovs_mutex_lock(&netdev->mutex);
-    memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+    *mac = netdev->etheraddr;
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;

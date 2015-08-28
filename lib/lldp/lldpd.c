@@ -50,7 +50,7 @@ static struct protocol protos[] =
     { LLDPD_MODE_LLDP, 1, "LLDP", 'l', lldp_send, lldp_decode, NULL,
       LLDP_MULTICAST_ADDR },
     { 0, 0, "any", ' ', NULL, NULL, NULL,
-    { 0,0,0,0,0,0 } }
+      { { { 0,0,0,0,0,0 } } } }
 };
 
 void lldpd_assign_cfg_to_protocols(struct lldpd *cfg)
@@ -209,7 +209,7 @@ lldpd_guess_type(struct lldpd *cfg, char *frame, int s)
             continue;
         }
         if (cfg->g_protocols[i].guess == NULL) {
-            if (memcmp(frame, cfg->g_protocols[i].mac, ETH_ADDR_LEN) == 0) {
+            if (memcmp(frame, &cfg->g_protocols[i].mac, ETH_ADDR_LEN) == 0) {
                 VLOG_DBG("guessed protocol is %s (from MAC address)",
                     cfg->g_protocols[i].name);
                 return cfg->g_protocols[i].mode;

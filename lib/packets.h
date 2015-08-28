@@ -147,133 +147,145 @@ bool dpid_from_string(const char *s, uint64_t *dpidp);
 
 #define ETH_ADDR_LEN           6
 
-static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] OVS_UNUSED
-    = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+static const struct eth_addr eth_addr_broadcast OVS_UNUSED
+    = { { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } };
 
-static const uint8_t eth_addr_zero[ETH_ADDR_LEN] OVS_UNUSED
-    = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const struct eth_addr eth_addr_exact OVS_UNUSED
+    = { { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } };
 
-static const uint8_t eth_addr_stp[ETH_ADDR_LEN] OVS_UNUSED
-    = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x00 };
+static const struct eth_addr eth_addr_zero OVS_UNUSED
+    = { { { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } } };
 
-static const uint8_t eth_addr_lacp[ETH_ADDR_LEN] OVS_UNUSED
-    = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x02 };
+static const struct eth_addr eth_addr_stp OVS_UNUSED
+    = { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x00 } } };
 
-static const uint8_t eth_addr_bfd[ETH_ADDR_LEN] OVS_UNUSED
-    = { 0x00, 0x23, 0x20, 0x00, 0x00, 0x01 };
+static const struct eth_addr eth_addr_lacp OVS_UNUSED
+    = { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x02 } } };
 
-static inline bool eth_addr_is_broadcast(const uint8_t ea[ETH_ADDR_LEN])
+static const struct eth_addr eth_addr_bfd OVS_UNUSED
+    = { { { 0x00, 0x23, 0x20, 0x00, 0x00, 0x01 } } };
+
+static inline bool eth_addr_is_broadcast(const struct eth_addr a)
 {
-    return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
+    return (a.be16[0] & a.be16[1] & a.be16[2]) == htons(0xffff);
 }
 
-static inline bool eth_addr_is_multicast(const uint8_t ea[ETH_ADDR_LEN])
+static inline bool eth_addr_is_multicast(const struct eth_addr a)
 {
-    return ea[0] & 1;
+    return a.ea[0] & 1;
 }
-static inline bool eth_addr_is_local(const uint8_t ea[ETH_ADDR_LEN])
+
+static inline bool eth_addr_is_local(const struct eth_addr a)
 {
     /* Local if it is either a locally administered address or a Nicira random
      * address. */
-    return ea[0] & 2
-       || (ea[0] == 0x00 && ea[1] == 0x23 && ea[2] == 0x20 && ea[3] & 0x80);
+    return a.ea[0] & 2
+        || (a.be16[0] == htons(0x0023)
+            && (a.be16[1] & htons(0xff80)) == htons(0x2080));
 }
-static inline bool eth_addr_is_zero(const uint8_t ea[ETH_ADDR_LEN])
+static inline bool eth_addr_is_zero(const struct eth_addr a)
 {
-    return !(ea[0] | ea[1] | ea[2] | ea[3] | ea[4] | ea[5]);
+    return !(a.be16[0] | a.be16[1] | a.be16[2]);
 }
 
-static inline int eth_mask_is_exact(const uint8_t ea[ETH_ADDR_LEN])
+static inline int eth_mask_is_exact(const struct eth_addr a)
 {
-    return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
+    return (a.be16[0] & a.be16[1] & a.be16[2]) == htons(0xffff);
 }
 
-static inline int eth_addr_compare_3way(const uint8_t a[ETH_ADDR_LEN],
-                                        const uint8_t b[ETH_ADDR_LEN])
+static inline int eth_addr_compare_3way(const struct eth_addr a,
+                                        const struct eth_addr b)
 {
-    return memcmp(a, b, ETH_ADDR_LEN);
+    return memcmp(&a, &b, sizeof a);
 }
-static inline bool eth_addr_equals(const uint8_t a[ETH_ADDR_LEN],
-                                   const uint8_t b[ETH_ADDR_LEN])
+
+static inline bool eth_addr_equals(const struct eth_addr a,
+                                   const struct eth_addr b)
 {
     return !eth_addr_compare_3way(a, b);
 }
-static inline bool eth_addr_equal_except(const uint8_t a[ETH_ADDR_LEN],
-                                    const uint8_t b[ETH_ADDR_LEN],
-                                    const uint8_t mask[ETH_ADDR_LEN])
+
+static inline bool eth_addr_equal_except(const struct eth_addr a,
+                                         const struct eth_addr b,
+                                         const struct eth_addr mask)
 {
-    return !(((a[0] ^ b[0]) & mask[0])
-             || ((a[1] ^ b[1]) & mask[1])
-             || ((a[2] ^ b[2]) & mask[2])
-             || ((a[3] ^ b[3]) & mask[3])
-             || ((a[4] ^ b[4]) & mask[4])
-             || ((a[5] ^ b[5]) & mask[5]));
+    return !(((a.be16[0] ^ b.be16[0]) & mask.be16[0])
+             || ((a.be16[1] ^ b.be16[1]) & mask.be16[1])
+             || ((a.be16[2] ^ b.be16[2]) & mask.be16[2]));
 }
-static inline uint64_t eth_addr_to_uint64(const uint8_t ea[ETH_ADDR_LEN])
+
+static inline uint64_t eth_addr_to_uint64(const struct eth_addr ea)
 {
-    return (((uint64_t) ea[0] << 40)
-            | ((uint64_t) ea[1] << 32)
-            | ((uint64_t) ea[2] << 24)
-            | ((uint64_t) ea[3] << 16)
-            | ((uint64_t) ea[4] << 8)
-            | ea[5]);
+    return (((uint64_t) ntohs(ea.be16[0]) << 32)
+            | ((uint64_t) ntohs(ea.be16[1]) << 16)
+            | ntohs(ea.be16[2]));
 }
-static inline uint64_t eth_addr_vlan_to_uint64(const uint8_t ea[ETH_ADDR_LEN],
+
+static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
                                                uint16_t vlan)
 {
     return (((uint64_t)vlan << 48) | eth_addr_to_uint64(ea));
 }
-static inline void eth_addr_from_uint64(uint64_t x, uint8_t ea[ETH_ADDR_LEN])
+
+static inline void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
 {
-    ea[0] = x >> 40;
-    ea[1] = x >> 32;
-    ea[2] = x >> 24;
-    ea[3] = x >> 16;
-    ea[4] = x >> 8;
-    ea[5] = x;
+    ea->be16[0] = htons(x >> 32);
+    ea->be16[1] = htons(x >> 16);
+    ea->be16[2] = htons(x);
 }
-static inline void eth_addr_mark_random(uint8_t ea[ETH_ADDR_LEN])
+
+static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
 {
-    ea[0] &= ~1;                /* Unicast. */
-    ea[0] |= 2;                 /* Private. */
+    struct eth_addr dst;
+
+    for (int i = 0; i < ARRAY_SIZE(src.be16); i++) {
+        dst.be16[i] = ~src.be16[i];
+    }
+
+    return dst;
 }
-static inline void eth_addr_random(uint8_t ea[ETH_ADDR_LEN])
+
+static inline void eth_addr_mark_random(struct eth_addr *ea)
 {
-    random_bytes(ea, ETH_ADDR_LEN);
+    ea->ea[0] &= ~1;                /* Unicast. */
+    ea->ea[0] |= 2;                 /* Private. */
+}
+
+static inline void eth_addr_random(struct eth_addr *ea)
+{
+    random_bytes((uint8_t *)ea, sizeof *ea);
     eth_addr_mark_random(ea);
 }
-static inline void eth_addr_nicira_random(uint8_t ea[ETH_ADDR_LEN])
+
+static inline void eth_addr_nicira_random(struct eth_addr *ea)
 {
     eth_addr_random(ea);
 
     /* Set the OUI to the Nicira one. */
-    ea[0] = 0x00;
-    ea[1] = 0x23;
-    ea[2] = 0x20;
+    ea->ea[0] = 0x00;
+    ea->ea[1] = 0x23;
+    ea->ea[2] = 0x20;
 
     /* Set the top bit to indicate random Nicira address. */
-    ea[3] |= 0x80;
+    ea->ea[3] |= 0x80;
 }
-static inline uint32_t hash_mac(const uint8_t ea[ETH_ADDR_LEN],
+static inline uint32_t hash_mac(const struct eth_addr ea,
                                 const uint16_t vlan, const uint32_t basis)
 {
     return hash_uint64_basis(eth_addr_vlan_to_uint64(ea, vlan), basis);
 }
 
-bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN]);
-bool eth_addr_from_string(const char *, uint8_t ea[ETH_ADDR_LEN]);
+bool eth_addr_is_reserved(const struct eth_addr);
+bool eth_addr_from_string(const char *, struct eth_addr *);
 
-void compose_rarp(struct dp_packet *, const uint8_t eth_src[ETH_ADDR_LEN]);
+void compose_rarp(struct dp_packet *, const struct eth_addr);
 
 void eth_push_vlan(struct dp_packet *, ovs_be16 tpid, ovs_be16 tci);
 void eth_pop_vlan(struct dp_packet *);
 
 const char *eth_from_hex(const char *hex, struct dp_packet **packetp);
-void eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
-                       const uint8_t mask[ETH_ADDR_LEN], struct ds *s);
-void eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
-                     const uint8_t mask[ETH_ADDR_LEN],
-                     uint8_t dst[ETH_ADDR_LEN]);
+void eth_format_masked(const struct eth_addr ea,
+                       const struct eth_addr *mask, struct ds *s);
 
 void set_mpls_lse(struct dp_packet *, ovs_be32 label);
 void push_mpls(struct dp_packet *packet, ovs_be16 ethtype, ovs_be32 lse);
@@ -288,20 +300,20 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
 
 /* Example:
  *
- * uint8_t mac[ETH_ADDR_LEN];
+ * struct eth_addr mac;
  *    [...]
  * printf("The Ethernet address is "ETH_ADDR_FMT"\n", ETH_ADDR_ARGS(mac));
  *
  */
 #define ETH_ADDR_FMT                                                    \
     "%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8
-#define ETH_ADDR_ARGS(ea)                                   \
-    (ea)[0], (ea)[1], (ea)[2], (ea)[3], (ea)[4], (ea)[5]
+#define ETH_ADDR_ARGS(EA)                                               \
+    (EA).ea[0], (EA).ea[1], (EA).ea[2], (EA).ea[3], (EA).ea[4], (EA).ea[5]
 
 /* Example:
  *
  * char *string = "1 00:11:22:33:44:55 2";
- * uint8_t mac[ETH_ADDR_LEN];
+ * struct eth_addr mac;
  * int a, b;
  *
  * if (ovs_scan(string, "%d"ETH_ADDR_SCAN_FMT"%d",
@@ -310,8 +322,8 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
  * }
  */
 #define ETH_ADDR_SCAN_FMT "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8
-#define ETH_ADDR_SCAN_ARGS(ea) \
-        &(ea)[0], &(ea)[1], &(ea)[2], &(ea)[3], &(ea)[4], &(ea)[5]
+#define ETH_ADDR_SCAN_ARGS(EA) \
+    &(EA).ea[0], &(EA).ea[1], &(EA).ea[2], &(EA).ea[3], &(EA).ea[4], &(EA).ea[5]
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
@@ -350,8 +362,8 @@ static inline bool eth_type_vlan(ovs_be16 eth_type)
 #define ETH_VLAN_TOTAL_MAX (ETH_HEADER_LEN + VLAN_HEADER_LEN + ETH_PAYLOAD_MAX)
 OVS_PACKED(
 struct eth_header {
-    uint8_t eth_dst[ETH_ADDR_LEN];
-    uint8_t eth_src[ETH_ADDR_LEN];
+    struct eth_addr eth_dst;
+    struct eth_addr eth_src;
     ovs_be16 eth_type;
 });
 BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
@@ -435,8 +447,8 @@ BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
 #define VLAN_ETH_HEADER_LEN (ETH_HEADER_LEN + VLAN_HEADER_LEN)
 OVS_PACKED(
 struct vlan_eth_header {
-    uint8_t veth_dst[ETH_ADDR_LEN];
-    uint8_t veth_src[ETH_ADDR_LEN];
+    struct eth_addr veth_dst;
+    struct eth_addr veth_src;
     ovs_be16 veth_type;         /* Always htons(ETH_TYPE_VLAN). */
     ovs_be16 veth_tci;          /* Lowest 12 bits are VLAN ID. */
     ovs_be16 veth_next_type;
@@ -713,10 +725,10 @@ struct arp_eth_header {
     ovs_be16 ar_op;            /* Opcode. */
 
     /* Ethernet+IPv4 specific members. */
-    uint8_t ar_sha[ETH_ADDR_LEN]; /* Sender hardware address. */
-    ovs_16aligned_be32 ar_spa;           /* Sender protocol address. */
-    uint8_t ar_tha[ETH_ADDR_LEN]; /* Target hardware address. */
-    ovs_16aligned_be32 ar_tpa;           /* Target protocol address. */
+    struct eth_addr ar_sha;     /* Sender hardware address. */
+    ovs_16aligned_be32 ar_spa;  /* Sender protocol address. */
+    struct eth_addr ar_tha;     /* Target hardware address. */
+    ovs_16aligned_be32 ar_tpa;  /* Target protocol address. */
 };
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
@@ -766,7 +778,7 @@ BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
 struct ovs_nd_opt {
     uint8_t  nd_opt_type;      /* Values defined in icmp6.h */
     uint8_t  nd_opt_len;       /* in units of 8 octets (the size of this struct) */
-    uint8_t  nd_opt_data[6];   /* Ethernet address in the case of SLL or TLL options */
+    struct eth_addr nd_opt_mac;   /* Ethernet address in the case of SLL or TLL options */
 };
 BUILD_ASSERT_DECL(ND_OPT_LEN == sizeof(struct ovs_nd_opt));
 
@@ -899,11 +911,11 @@ struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
 
-void *eth_compose(struct dp_packet *, const uint8_t eth_dst[ETH_ADDR_LEN],
-                  const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
+void *eth_compose(struct dp_packet *, const struct eth_addr eth_dst,
+                  const struct eth_addr eth_src, uint16_t eth_type,
                   size_t size);
-void *snap_compose(struct dp_packet *, const uint8_t eth_dst[ETH_ADDR_LEN],
-                   const uint8_t eth_src[ETH_ADDR_LEN],
+void *snap_compose(struct dp_packet *, const struct eth_addr eth_dst,
+                   const struct eth_addr eth_src,
                    unsigned int oui, uint16_t snap_type, size_t size);
 void packet_set_ipv4(struct dp_packet *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
                      uint8_t ttl);
@@ -914,13 +926,13 @@ void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
-                   const uint8_t sll[6], const uint8_t tll[6]);
+                   const struct eth_addr sll, const struct eth_addr tll);
 
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
 void compose_arp(struct dp_packet *, uint16_t arp_op,
-                 const uint8_t arp_sha[ETH_ADDR_LEN],
-                 const uint8_t arp_tha[ETH_ADDR_LEN], bool broadcast,
+                 const struct eth_addr arp_sha,
+                 const struct eth_addr arp_tha, bool broadcast,
                  ovs_be32 arp_spa, ovs_be32 arp_tpa);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 

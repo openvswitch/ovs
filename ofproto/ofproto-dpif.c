@@ -1829,7 +1829,7 @@ port_modified(struct ofport *port_)
     }
 
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
-                                     port->lldp, port->up.pp.hw_addr);
+                                     port->lldp, &port->up.pp.hw_addr);
 
     dp_port_name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
 
@@ -1965,7 +1965,7 @@ out:
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
-                                     ofport->lldp, ofport->up.pp.hw_addr);
+                                     ofport->lldp, &ofport->up.pp.hw_addr);
     return error;
 }
 
@@ -2007,7 +2007,7 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
-                                     ofport->lldp, ofport->up.pp.hw_addr);
+                                     ofport->lldp, &ofport->up.pp.hw_addr);
     return 0;
 }
 
@@ -2063,7 +2063,7 @@ set_lldp(struct ofport *ofport_,
                                      ofport->bfd,
                                      ofport->cfm,
                                      ofport->lldp,
-                                     ofport->up.pp.hw_addr);
+                                     &ofport->up.pp.hw_addr);
     return error;
 }
 
@@ -2119,7 +2119,7 @@ rstp_send_bpdu_cb(struct dp_packet *pkt, void *ofport_, void *ofproto_)
     struct ofport_dpif *ofport = ofport_;
     struct eth_header *eth = dp_packet_l2(pkt);
 
-    netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+    netdev_get_etheraddr(ofport->up.netdev, &eth->eth_src);
     if (eth_addr_is_zero(eth->eth_src)) {
         VLOG_WARN_RL(&rl, "%s port %d: cannot send RSTP BPDU on a port which "
                      "does not have a configured source MAC address.",
@@ -2144,7 +2144,7 @@ send_bpdu_cb(struct dp_packet *pkt, int port_num, void *ofproto_)
     } else {
         struct eth_header *eth = dp_packet_l2(pkt);
 
-        netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+        netdev_get_etheraddr(ofport->up.netdev, &eth->eth_src);
         if (eth_addr_is_zero(eth->eth_src)) {
             VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
                          "with unknown MAC", ofproto->up.name, port_num);
@@ -2978,10 +2978,10 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
     struct ofport_dpif *port = port_;
-    uint8_t ea[ETH_ADDR_LEN];
+    struct eth_addr ea;
     int error;
 
-    error = netdev_get_etheraddr(port->up.netdev, ea);
+    error = netdev_get_etheraddr(port->up.netdev, &ea);
     if (!error) {
         struct dp_packet packet;
         void *packet_pdu;

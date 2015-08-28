@@ -113,8 +113,6 @@ enum ofp_version {
 #define OFP_OLD_PORT  6633
 #define OFP_PORT  6653
 
-#define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
-
 #define OFP_DEFAULT_MISS_SEND_LEN   128
 
 /* Values below this cutoff are 802.3 packets and the two bytes

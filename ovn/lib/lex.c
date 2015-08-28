@@ -295,7 +295,7 @@ lex_parse_integer__(const char *p, struct lex_token *token)
     size_t len = end - start;
 
     int n;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
 
     if (!len) {
         lex_error(token, "Integer constant expected.");
@@ -303,7 +303,7 @@ lex_parse_integer__(const char *p, struct lex_token *token)
                && ovs_scan(start, ETH_ADDR_SCAN_FMT"%n",
                            ETH_ADDR_SCAN_ARGS(mac), &n)
                && n == len) {
-        memcpy(token->value.mac, mac, sizeof token->value.mac);
+        token->value.mac = mac;
         token->format = LEX_F_ETHERNET;
     } else if (start + strspn(start, "0123456789") == end) {
         if (p[0] == '0' && len > 1) {

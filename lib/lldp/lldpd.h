@@ -54,9 +54,7 @@ struct protocol {
     int(*guess)(PROTO_GUESS_SIG);   /* Can be NULL, use MAC address in this
                                      * case
                                      */
-    u_int8_t mac[ETH_ADDR_LEN];  /* Destination MAC address used by this
-                                  * protocol
-                                  */
+    struct eth_addr mac;  /* Destination MAC address used by this protocol */
 };
 
 #define SMART_HIDDEN(port) (port->p_hidden_in)

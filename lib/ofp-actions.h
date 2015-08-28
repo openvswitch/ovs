@@ -329,7 +329,7 @@ struct ofpact_vlan_pcp {
  * Used for OFPAT10_SET_DL_SRC, OFPAT10_SET_DL_DST. */
 struct ofpact_mac {
     struct ofpact ofpact;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
 };
 
 /* OFPACT_SET_IPV4_SRC, OFPACT_SET_IPV4_DST.

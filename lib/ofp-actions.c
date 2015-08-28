@@ -1334,7 +1334,7 @@ format_PUSH_VLAN(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 struct ofp_action_dl_addr {
     ovs_be16 type;                  /* Type. */
     ovs_be16 len;                   /* Length is 16. */
-    uint8_t dl_addr[OFP_ETH_ALEN];  /* Ethernet address. */
+    struct eth_addr dl_addr;        /* Ethernet address. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct ofp_action_dl_addr) == 16);
@@ -1343,7 +1343,7 @@ static enum ofperr
 decode_OFPAT_RAW_SET_DL_SRC(const struct ofp_action_dl_addr *a,
                             struct ofpbuf *out)
 {
-    memcpy(ofpact_put_SET_ETH_SRC(out)->mac, a->dl_addr, ETH_ADDR_LEN);
+    ofpact_put_SET_ETH_SRC(out)->mac = a->dl_addr;
     return 0;
 }
 
@@ -1351,7 +1351,7 @@ static enum ofperr
 decode_OFPAT_RAW_SET_DL_DST(const struct ofp_action_dl_addr *a,
                             struct ofpbuf *out)
 {
-    memcpy(ofpact_put_SET_ETH_DST(out)->mac, a->dl_addr, ETH_ADDR_LEN);
+    ofpact_put_SET_ETH_DST(out)->mac = a->dl_addr;
     return 0;
 }
 
@@ -1360,16 +1360,14 @@ encode_SET_ETH_addr(const struct ofpact_mac *mac, enum ofp_version ofp_version,
                     enum ofp_raw_action_type raw, enum mf_field_id field,
                     struct ofpbuf *out)
 {
-    const uint8_t *addr = mac->mac;
-
     if (ofp_version < OFP12_VERSION) {
         struct ofp_action_dl_addr *oada;
 
         oada = ofpact_put_raw(out, ofp_version, raw, 0);
-        memcpy(oada->dl_addr, addr, ETH_ADDR_LEN);
+        oada->dl_addr = mac->mac;
     } else {
         ofpact_put_set_field(out, ofp_version, field,
-                             eth_addr_to_uint64(addr));
+                             eth_addr_to_uint64(mac->mac));
     }
 }
 
@@ -1396,14 +1394,14 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_SET_ETH_SRC(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
-    return str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);
+    return str_to_mac(arg, &ofpact_put_SET_ETH_SRC(ofpacts)->mac);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
 parse_SET_ETH_DST(char *arg, struct ofpbuf *ofpacts,
                  enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
-    return str_to_mac(arg, ofpact_put_SET_ETH_DST(ofpacts)->mac);
+    return str_to_mac(arg, &ofpact_put_SET_ETH_DST(ofpacts)->mac);
 }
 
 static void
@@ -2377,13 +2375,11 @@ set_field_to_legacy_openflow(const struct ofpact_set_field *sf,
         break;
 
     case MFF_ETH_SRC:
-        memcpy(put_OFPAT_SET_DL_SRC(out, ofp_version)->dl_addr,
-               sf->value.mac, ETH_ADDR_LEN);
+        put_OFPAT_SET_DL_SRC(out, ofp_version)->dl_addr = sf->value.mac;
         break;
 
     case MFF_ETH_DST:
-        memcpy(put_OFPAT_SET_DL_DST(out, ofp_version)->dl_addr,
-               sf->value.mac, ETH_ADDR_LEN);
+        put_OFPAT_SET_DL_DST(out, ofp_version)->dl_addr = sf->value.mac;
         break;
 
     case MFF_IPV4_SRC:

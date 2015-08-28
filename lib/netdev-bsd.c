@@ -89,7 +89,7 @@ struct netdev_bsd {
     unsigned int cache_valid;
 
     int ifindex;
-    uint8_t etheraddr[ETH_ADDR_LEN];
+    struct eth_addr etheraddr;
     struct in_addr in4;
     struct in_addr netmask;
     struct in6_addr in6;
@@ -137,9 +137,9 @@ static int set_flags(const char *, int flags);
 static int do_set_addr(struct netdev *netdev,
                        unsigned long ioctl_nr, const char *ioctl_name,
                        struct in_addr addr);
-static int get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN]);
+static int get_etheraddr(const char *netdev_name, struct eth_addr *ea);
 static int set_etheraddr(const char *netdev_name, int hwaddr_family,
-                         int hwaddr_len, const uint8_t[ETH_ADDR_LEN]);
+                         int hwaddr_len, const struct eth_addr);
 static int get_ifindex(const struct netdev *, int *ifindexp);
 
 static int ifr_get_flags(const struct ifreq *);
@@ -769,7 +769,7 @@ netdev_bsd_send_wait(struct netdev *netdev_, int qid OVS_UNUSED)
  */
 static int
 netdev_bsd_set_etheraddr(struct netdev *netdev_,
-                         const uint8_t mac[ETH_ADDR_LEN])
+                         const struct eth_addr mac)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int error = 0;
@@ -781,7 +781,7 @@ netdev_bsd_set_etheraddr(struct netdev *netdev_,
                               ETH_ADDR_LEN, mac);
         if (!error) {
             netdev->cache_valid |= VALID_ETHERADDR;
-            memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+            netdev->etheraddr = mac;
             netdev_change_seq_changed(netdev_);
         }
     }
@@ -795,8 +795,7 @@ netdev_bsd_set_etheraddr(struct netdev *netdev_,
  * free the returned buffer.
  */
 static int
-netdev_bsd_get_etheraddr(const struct netdev *netdev_,
-                         uint8_t mac[ETH_ADDR_LEN])
+netdev_bsd_get_etheraddr(const struct netdev *netdev_, struct eth_addr *mac)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int error = 0;
@@ -804,13 +803,13 @@ netdev_bsd_get_etheraddr(const struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_ETHERADDR)) {
         error = get_etheraddr(netdev_get_kernel_name(netdev_),
-                              netdev->etheraddr);
+                              &netdev->etheraddr);
         if (!error) {
             netdev->cache_valid |= VALID_ETHERADDR;
         }
     }
     if (!error) {
-        memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+        *mac = netdev->etheraddr;
     }
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -1408,7 +1407,7 @@ netdev_bsd_get_next_hop(const struct in_addr *host OVS_UNUSED,
 static int
 netdev_bsd_arp_lookup(const struct netdev *netdev OVS_UNUSED,
                       ovs_be32 ip OVS_UNUSED,
-		      uint8_t mac[ETH_ADDR_LEN] OVS_UNUSED)
+                      struct eth_addr *mac OVS_UNUSED)
 {
 #if defined(__NetBSD__)
     const struct rt_msghdr *rtm;
@@ -1678,7 +1677,7 @@ get_ifindex(const struct netdev *netdev_, int *ifindexp)
 }
 
 static int
-get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
+get_etheraddr(const char *netdev_name, struct eth_addr *ea)
 {
     struct ifaddrs *head;
     struct ifaddrs *ifa;
@@ -1711,7 +1710,7 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
 static int
 set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
               int hwaddr_len OVS_UNUSED,
-              const uint8_t mac[ETH_ADDR_LEN] OVS_UNUSED)
+              const struct eth_addr mac OVS_UNUSED)
 {
 #if defined(__FreeBSD__)
     struct ifreq ifr;
@@ -1721,7 +1720,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     ovs_strlcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_addr.sa_family = hwaddr_family;
     ifr.ifr_addr.sa_len = hwaddr_len;
-    memcpy(ifr.ifr_addr.sa_data, mac, hwaddr_len);
+    memcpy(ifr.ifr_addr.sa_data, &mac, hwaddr_len);
     error = af_inet_ioctl(SIOCSIFLLADDR, &ifr);
     if (error) {
         VLOG_ERR("ioctl(SIOCSIFLLADDR) on %s device failed: %s",

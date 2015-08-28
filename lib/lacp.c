@@ -53,7 +53,7 @@ VLOG_DEFINE_THIS_MODULE(lacp);
 OVS_PACKED(
 struct lacp_info {
     ovs_be16 sys_priority;            /* System priority. */
-    uint8_t sys_id[ETH_ADDR_LEN];     /* System ID. */
+    struct eth_addr sys_id;           /* System ID. */
     ovs_be16 key;                     /* Operational key. */
     ovs_be16 port_priority;           /* Port priority. */
     ovs_be16 port_id;                 /* Port ID. */
@@ -94,7 +94,7 @@ enum slave_status {
 struct lacp {
     struct ovs_list node;         /* Node in all_lacps list. */
     char *name;                   /* Name of this lacp object. */
-    uint8_t sys_id[ETH_ADDR_LEN]; /* System ID. */
+    struct eth_addr sys_id;       /* System ID. */
     uint16_t sys_priority;        /* System Priority. */
     bool active;                  /* Active or Passive. */
 
@@ -286,7 +286,7 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 
     if (!eth_addr_equals(lacp->sys_id, s->id)
         || lacp->sys_priority != s->priority) {
-        memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
+        lacp->sys_id = s->id;
         lacp->sys_priority = s->priority;
         lacp->update = true;
     }
@@ -732,7 +732,7 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
     actor->port_priority = htons(slave->port_priority);
     actor->port_id = htons(slave->port_id);
     actor->sys_priority = htons(lacp->sys_priority);
-    memcpy(&actor->sys_id, lacp->sys_id, ETH_ADDR_LEN);
+    actor->sys_id = lacp->sys_id;
 }
 
 /* Given 'slave', populates 'priority' with data representing its LACP link
@@ -1002,12 +1002,8 @@ lacp_get_slave_stats(const struct lacp *lacp, const void *slave_, struct lacp_sl
     if (slave) {
 	ret = true;
 	slave_get_actor(slave, &actor);
-	memcpy(&stats->dot3adAggPortActorSystemID,
-	       actor.sys_id,
-	       ETH_ADDR_LEN);
-	memcpy(&stats->dot3adAggPortPartnerOperSystemID,
-	       slave->partner.sys_id,
-	       ETH_ADDR_LEN);
+	stats->dot3adAggPortActorSystemID = actor.sys_id;
+	stats->dot3adAggPortPartnerOperSystemID = slave->partner.sys_id;
 	stats->dot3adAggPortAttachedAggID = (lacp->key_slave->key ?
 					     lacp->key_slave->key :
 					     lacp->key_slave->port_id);

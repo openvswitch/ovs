@@ -56,7 +56,7 @@ dpid_from_string(const char *s, uint64_t *dpidp)
  * If you change this function's behavior, please update corresponding
  * documentation in vswitch.xml at the same time. */
 bool
-eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
+eth_addr_is_reserved(const struct eth_addr ea)
 {
     struct eth_addr_node {
         struct hmap_node hmap_node;
@@ -129,12 +129,12 @@ eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
 }
 
 bool
-eth_addr_from_string(const char *s, uint8_t ea[ETH_ADDR_LEN])
+eth_addr_from_string(const char *s, struct eth_addr *ea)
 {
-    if (ovs_scan(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(*ea))) {
         return true;
     } else {
-        memset(ea, 0, ETH_ADDR_LEN);
+        *ea = eth_addr_zero;
         return false;
     }
 }
@@ -146,7 +146,7 @@ eth_addr_from_string(const char *s, uint8_t ea[ETH_ADDR_LEN])
  * The returned packet has enough headroom to insert an 802.1Q VLAN header if
  * desired. */
 void
-compose_rarp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN])
+compose_rarp(struct dp_packet *b, const struct eth_addr eth_src)
 {
     struct eth_header *eth;
     struct arp_eth_header *arp;
@@ -156,8 +156,8 @@ compose_rarp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN])
                              + ARP_ETH_HEADER_LEN);
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
     eth = dp_packet_put_uninit(b, sizeof *eth);
-    memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
+    eth->eth_dst = eth_addr_broadcast;
+    eth->eth_src = eth_src;
     eth->eth_type = htons(ETH_TYPE_RARP);
 
     arp = dp_packet_put_uninit(b, sizeof *arp);
@@ -166,9 +166,9 @@ compose_rarp(struct dp_packet *b, const uint8_t eth_src[ETH_ADDR_LEN])
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
     arp->ar_op = htons(ARP_OP_RARP);
-    memcpy(arp->ar_sha, eth_src, ETH_ADDR_LEN);
+    arp->ar_sha = eth_src;
     put_16aligned_be32(&arp->ar_spa, htonl(0));
-    memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
+    arp->ar_tha = eth_src;
     put_16aligned_be32(&arp->ar_tpa, htonl(0));
 
     dp_packet_reset_offsets(b);
@@ -371,24 +371,12 @@ eth_from_hex(const char *hex, struct dp_packet **packetp)
 }
 
 void
-eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
-                  const uint8_t mask[ETH_ADDR_LEN], struct ds *s)
+eth_format_masked(const struct eth_addr eth,
+                  const struct eth_addr *mask, struct ds *s)
 {
     ds_put_format(s, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth));
-    if (mask && !eth_mask_is_exact(mask)) {
-        ds_put_format(s, "/"ETH_ADDR_FMT, ETH_ADDR_ARGS(mask));
-    }
-}
-
-void
-eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
-                const uint8_t mask[ETH_ADDR_LEN],
-                uint8_t dst[ETH_ADDR_LEN])
-{
-    int i;
-
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        dst[i] = src[i] & mask[i];
+    if (mask && !eth_mask_is_exact(*mask)) {
+        ds_put_format(s, "/"ETH_ADDR_FMT, ETH_ADDR_ARGS(*mask));
     }
 }
 
@@ -571,8 +559,8 @@ ipv6_is_cidr(const struct in6_addr *netmask)
  * The returned packet has enough headroom to insert an 802.1Q VLAN header if
  * desired. */
 void *
-eth_compose(struct dp_packet *b, const uint8_t eth_dst[ETH_ADDR_LEN],
-            const uint8_t eth_src[ETH_ADDR_LEN], uint16_t eth_type,
+eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
+            const struct eth_addr eth_src, uint16_t eth_type,
             size_t size)
 {
     void *data;
@@ -587,8 +575,8 @@ eth_compose(struct dp_packet *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     eth = dp_packet_put_uninit(b, ETH_HEADER_LEN);
     data = dp_packet_put_uninit(b, size);
 
-    memcpy(eth->eth_dst, eth_dst, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
+    eth->eth_dst = eth_dst;
+    eth->eth_src = eth_src;
     eth->eth_type = htons(eth_type);
 
     dp_packet_reset_offsets(b);
@@ -889,8 +877,7 @@ packet_set_sctp_port(struct dp_packet *packet, ovs_be16 src, ovs_be16 dst)
 
 void
 packet_set_nd(struct dp_packet *packet, const ovs_be32 target[4],
-              const uint8_t sll[ETH_ADDR_LEN],
-              const uint8_t tll[ETH_ADDR_LEN]) {
+              const struct eth_addr sll, const struct eth_addr tll) {
     struct ovs_nd_msg *ns;
     struct ovs_nd_opt *nd_opt;
     int bytes_remain = dp_packet_l4_size(packet);
@@ -912,22 +899,22 @@ packet_set_nd(struct dp_packet *packet, const ovs_be32 target[4],
     while (bytes_remain >= ND_OPT_LEN && nd_opt->nd_opt_len != 0) {
         if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
             && nd_opt->nd_opt_len == 1) {
-            if (memcmp(nd_opt->nd_opt_data, sll, ETH_ADDR_LEN)) {
+            if (!eth_addr_equals(nd_opt->nd_opt_mac, sll)) {
                 ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
 
-                *csum = recalc_csum48(*csum, nd_opt->nd_opt_data, sll);
-                memcpy(nd_opt->nd_opt_data, sll, ETH_ADDR_LEN);
+                *csum = recalc_csum48(*csum, nd_opt->nd_opt_mac, sll);
+                nd_opt->nd_opt_mac = sll;
             }
 
             /* A packet can only contain one SLL or TLL option */
             break;
         } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
                    && nd_opt->nd_opt_len == 1) {
-            if (memcmp(nd_opt->nd_opt_data, tll, ETH_ADDR_LEN)) {
+            if (!eth_addr_equals(nd_opt->nd_opt_mac, tll)) {
                 ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
 
-                *csum = recalc_csum48(*csum, nd_opt->nd_opt_data, tll);
-                memcpy(nd_opt->nd_opt_data, tll, ETH_ADDR_LEN);
+                *csum = recalc_csum48(*csum, nd_opt->nd_opt_mac, tll);
+                nd_opt->nd_opt_mac = tll;
             }
 
             /* A packet can only contain one SLL or TLL option */
@@ -1031,9 +1018,8 @@ packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
  * 'broadcast' is true. */
 void
 compose_arp(struct dp_packet *b, uint16_t arp_op,
-            const uint8_t arp_sha[ETH_ADDR_LEN],
-            const uint8_t arp_tha[ETH_ADDR_LEN], bool broadcast,
-            ovs_be32 arp_spa, ovs_be32 arp_tpa)
+            const struct eth_addr arp_sha, const struct eth_addr arp_tha,
+            bool broadcast, ovs_be32 arp_spa, ovs_be32 arp_tpa)
 {
     struct eth_header *eth;
     struct arp_eth_header *arp;
@@ -1043,9 +1029,8 @@ compose_arp(struct dp_packet *b, uint16_t arp_op,
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
 
     eth = dp_packet_put_uninit(b, sizeof *eth);
-    memcpy(eth->eth_dst, broadcast ? eth_addr_broadcast : arp_tha,
-           ETH_ADDR_LEN);
-    memcpy(eth->eth_src, arp_sha, ETH_ADDR_LEN);
+    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
+    eth->eth_src = arp_sha;
     eth->eth_type = htons(ETH_TYPE_ARP);
 
     arp = dp_packet_put_uninit(b, sizeof *arp);
@@ -1054,8 +1039,8 @@ compose_arp(struct dp_packet *b, uint16_t arp_op,
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
     arp->ar_op = htons(arp_op);
-    memcpy(arp->ar_sha, arp_sha, ETH_ADDR_LEN);
-    memcpy(arp->ar_tha, arp_tha, ETH_ADDR_LEN);
+    arp->ar_sha = arp_sha;
+    arp->ar_tha = arp_tha;
 
     put_16aligned_be32(&arp->ar_spa, arp_spa);
     put_16aligned_be32(&arp->ar_tpa, arp_tpa);

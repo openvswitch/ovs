@@ -349,7 +349,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
 {
     struct lldpd_chassis *chassis;
     struct lldpd_port *port;
-    const char lldpaddr[] = LLDP_MULTICAST_ADDR;
+    const struct eth_addr lldpaddr = LLDP_MULTICAST_ADDR;
     const char dot1[] = LLDP_TLV_ORG_DOT1;
     const char dot3[] = LLDP_TLV_ORG_DOT3;
     const char med[] = LLDP_TLV_ORG_MED;
@@ -384,7 +384,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
         VLOG_WARN("too short frame received on %s", hardware->h_ifname);
         goto malformed;
     }
-    if (PEEK_CMP(lldpaddr, ETH_ADDR_LEN) != 0) {
+    if (PEEK_CMP(&lldpaddr, ETH_ADDR_LEN) != 0) {
         VLOG_INFO("frame not targeted at LLDP multicast address "
                   "received on %s", hardware->h_ifname);
         goto malformed;

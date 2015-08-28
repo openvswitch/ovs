@@ -204,7 +204,7 @@ struct netdev_dpdk {
     /* Protects stats */
     rte_spinlock_t stats_lock;
 
-    uint8_t hwaddr[ETH_ADDR_LEN];
+    struct eth_addr hwaddr;
     enum netdev_flags flags;
 
     struct rte_eth_link link;
@@ -1265,14 +1265,13 @@ netdev_dpdk_eth_send(struct netdev *netdev, int qid,
 }
 
 static int
-netdev_dpdk_set_etheraddr(struct netdev *netdev,
-                          const uint8_t mac[ETH_ADDR_LEN])
+netdev_dpdk_set_etheraddr(struct netdev *netdev, const struct eth_addr mac)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
     if (!eth_addr_equals(dev->hwaddr, mac)) {
-        memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
+        dev->hwaddr = mac;
         netdev_change_seq_changed(netdev);
     }
     ovs_mutex_unlock(&dev->mutex);
@@ -1281,13 +1280,12 @@ netdev_dpdk_set_etheraddr(struct netdev *netdev,
 }
 
 static int
-netdev_dpdk_get_etheraddr(const struct netdev *netdev,
-                          uint8_t mac[ETH_ADDR_LEN])
+netdev_dpdk_get_etheraddr(const struct netdev *netdev, struct eth_addr *mac)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    memcpy(mac, dev->hwaddr, ETH_ADDR_LEN);
+    *mac = dev->hwaddr;
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;

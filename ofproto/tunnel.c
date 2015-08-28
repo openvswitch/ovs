@@ -669,8 +669,8 @@ tnl_port_get_name(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
 int
 tnl_port_build_header(const struct ofport_dpif *ofport,
                       const struct flow *tnl_flow,
-                      uint8_t dmac[ETH_ADDR_LEN],
-                      uint8_t smac[ETH_ADDR_LEN],
+                      const struct eth_addr dmac,
+                      const struct eth_addr smac,
                       ovs_be32 ip_src, struct ovs_action_push_tnl *data)
 {
     struct tnl_port *tnl_port;
@@ -687,8 +687,8 @@ tnl_port_build_header(const struct ofport_dpif *ofport,
     memset(data->header, 0, sizeof data->header);
 
     eth = (struct eth_header *)data->header;
-    memcpy(eth->eth_dst, dmac, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, smac, ETH_ADDR_LEN);
+    eth->eth_dst = dmac;
+    eth->eth_src = smac;
     eth->eth_type = htons(ETH_TYPE_IP);
 
     l3 = (eth + 1);

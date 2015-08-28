@@ -2707,7 +2707,8 @@ xlate_flood_packet(struct xbridge *xbridge, struct dp_packet *packet)
 }
 
 static void
-tnl_send_arp_request(const struct xport *out_dev, const uint8_t eth_src[ETH_ADDR_LEN],
+tnl_send_arp_request(const struct xport *out_dev,
+                     const struct eth_addr eth_src,
                      ovs_be32 ip_src, ovs_be32 ip_dst)
 {
     struct xbridge *xbridge = out_dev->xbridge;
@@ -2728,8 +2729,8 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     struct ovs_action_push_tnl tnl_push_data;
     struct xport *out_dev = NULL;
     ovs_be32 s_ip, d_ip = 0;
-    uint8_t smac[ETH_ADDR_LEN];
-    uint8_t dmac[ETH_ADDR_LEN];
+    struct eth_addr smac;
+    struct eth_addr dmac;
     int err;
 
     err = tnl_route_lookup_flow(flow, &d_ip, &out_dev);
@@ -2741,7 +2742,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                  IP_ARGS(d_ip), netdev_get_name(out_dev->netdev));
 
     /* Use mac addr of bridge port of the peer. */
-    err = netdev_get_etheraddr(out_dev->netdev, smac);
+    err = netdev_get_etheraddr(out_dev->netdev, &smac);
     if (err) {
         xlate_report(ctx, "tunnel output device lacks Ethernet address");
         return err;
@@ -2753,7 +2754,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
         return err;
     }
 
-    err = tnl_arp_lookup(out_dev->xbridge->name, d_ip, dmac);
+    err = tnl_arp_lookup(out_dev->xbridge->name, d_ip, &dmac);
     if (err) {
         xlate_report(ctx, "ARP cache miss for "IP_FMT" on bridge %s, "
                      "sending ARP request",
@@ -4211,13 +4212,13 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_ETH_SRC:
-            memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
-            memcpy(flow->dl_src, ofpact_get_SET_ETH_SRC(a)->mac, ETH_ADDR_LEN);
+            WC_MASK_FIELD(wc, dl_src);
+            flow->dl_src = ofpact_get_SET_ETH_SRC(a)->mac;
             break;
 
         case OFPACT_SET_ETH_DST:
-            memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-            memcpy(flow->dl_dst, ofpact_get_SET_ETH_DST(a)->mac, ETH_ADDR_LEN);
+            WC_MASK_FIELD(wc, dl_dst);
+            flow->dl_dst = ofpact_get_SET_ETH_DST(a)->mac;
             break;
 
         case OFPACT_SET_IPV4_SRC:
@@ -5167,7 +5168,7 @@ xlate_push_stats(struct xlate_cache *xcache,
 {
     struct xc_entry *entry;
     struct ofpbuf entries = xcache->entries;
-    uint8_t dmac[ETH_ADDR_LEN];
+    struct eth_addr dmac;
 
     if (!stats->n_packets) {
         return;
@@ -5211,7 +5212,8 @@ xlate_push_stats(struct xlate_cache *xcache,
             break;
         case XC_TNL_ARP:
             /* Lookup arp to avoid arp timeout. */
-            tnl_arp_lookup(entry->u.tnl_arp_cache.br_name, entry->u.tnl_arp_cache.d_ip, dmac);
+            tnl_arp_lookup(entry->u.tnl_arp_cache.br_name,
+                           entry->u.tnl_arp_cache.d_ip, &dmac);
             break;
         default:
             OVS_NOT_REACHED();

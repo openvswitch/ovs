@@ -294,55 +294,54 @@ match_set_dl_type(struct match *match, ovs_be16 dl_type)
 /* Modifies 'value_src' so that the Ethernet address must match 'value_dst'
  * exactly.  'mask_dst' is set to all 1s. */
 static void
-set_eth(const uint8_t value_src[ETH_ADDR_LEN],
-        uint8_t value_dst[ETH_ADDR_LEN],
-        uint8_t mask_dst[ETH_ADDR_LEN])
+set_eth(const struct eth_addr value_src,
+        struct eth_addr *value_dst,
+        struct eth_addr *mask_dst)
 {
-    memcpy(value_dst, value_src, ETH_ADDR_LEN);
-    memset(mask_dst, 0xff, ETH_ADDR_LEN);
+    *value_dst = value_src;
+    *mask_dst = eth_addr_exact;
 }
 
 /* Modifies 'value_src' so that the Ethernet address must match 'value_src'
  * after each byte is ANDed with the appropriate byte in 'mask_src'.
  * 'mask_dst' is set to 'mask_src' */
 static void
-set_eth_masked(const uint8_t value_src[ETH_ADDR_LEN],
-               const uint8_t mask_src[ETH_ADDR_LEN],
-               uint8_t value_dst[ETH_ADDR_LEN],
-               uint8_t mask_dst[ETH_ADDR_LEN])
+set_eth_masked(const struct eth_addr value_src,
+               const struct eth_addr mask_src,
+               struct eth_addr *value_dst, struct eth_addr *mask_dst)
 {
     size_t i;
 
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        value_dst[i] = value_src[i] & mask_src[i];
-        mask_dst[i] = mask_src[i];
+    for (i = 0; i < ARRAY_SIZE(value_dst->be16); i++) {
+        value_dst->be16[i] = value_src.be16[i] & mask_src.be16[i];
     }
+    *mask_dst = mask_src;
 }
 
 /* Modifies 'rule' so that the source Ethernet address must match 'dl_src'
  * exactly. */
 void
-match_set_dl_src(struct match *match, const uint8_t dl_src[ETH_ADDR_LEN])
+match_set_dl_src(struct match *match, const struct eth_addr dl_src)
 {
-    set_eth(dl_src, match->flow.dl_src, match->wc.masks.dl_src);
+    set_eth(dl_src, &match->flow.dl_src, &match->wc.masks.dl_src);
 }
 
 /* Modifies 'rule' so that the source Ethernet address must match 'dl_src'
  * after each byte is ANDed with the appropriate byte in 'mask'. */
 void
 match_set_dl_src_masked(struct match *match,
-                        const uint8_t dl_src[ETH_ADDR_LEN],
-                        const uint8_t mask[ETH_ADDR_LEN])
+                        const struct eth_addr dl_src,
+                        const struct eth_addr mask)
 {
-    set_eth_masked(dl_src, mask, match->flow.dl_src, match->wc.masks.dl_src);
+    set_eth_masked(dl_src, mask, &match->flow.dl_src, &match->wc.masks.dl_src);
 }
 
 /* Modifies 'match' so that the Ethernet address must match 'dl_dst'
  * exactly. */
 void
-match_set_dl_dst(struct match *match, const uint8_t dl_dst[ETH_ADDR_LEN])
+match_set_dl_dst(struct match *match, const struct eth_addr dl_dst)
 {
-    set_eth(dl_dst, match->flow.dl_dst, match->wc.masks.dl_dst);
+    set_eth(dl_dst, &match->flow.dl_dst, &match->wc.masks.dl_dst);
 }
 
 /* Modifies 'match' so that the Ethernet address must match 'dl_dst' after each
@@ -352,10 +351,10 @@ match_set_dl_dst(struct match *match, const uint8_t dl_dst[ETH_ADDR_LEN])
  * accepted by flow_wildcards_is_dl_dst_mask_valid() are allowed. */
 void
 match_set_dl_dst_masked(struct match *match,
-                        const uint8_t dl_dst[ETH_ADDR_LEN],
-                        const uint8_t mask[ETH_ADDR_LEN])
+                        const struct eth_addr dl_dst,
+                        const struct eth_addr mask)
 {
-    set_eth_masked(dl_dst, mask, match->flow.dl_dst, match->wc.masks.dl_dst);
+    set_eth_masked(dl_dst, mask, &match->flow.dl_dst, &match->wc.masks.dl_dst);
 }
 
 void
@@ -644,35 +643,35 @@ match_set_icmp_code(struct match *match, uint8_t icmp_code)
 }
 
 void
-match_set_arp_sha(struct match *match, const uint8_t sha[ETH_ADDR_LEN])
+match_set_arp_sha(struct match *match, const struct eth_addr sha)
 {
-    memcpy(match->flow.arp_sha, sha, ETH_ADDR_LEN);
-    memset(match->wc.masks.arp_sha, UINT8_MAX, ETH_ADDR_LEN);
+    match->flow.arp_sha = sha;
+    match->wc.masks.arp_sha = eth_addr_exact;
 }
 
 void
 match_set_arp_sha_masked(struct match *match,
-                         const uint8_t arp_sha[ETH_ADDR_LEN],
-                         const uint8_t mask[ETH_ADDR_LEN])
+                         const struct eth_addr arp_sha,
+                         const struct eth_addr mask)
 {
     set_eth_masked(arp_sha, mask,
-                   match->flow.arp_sha, match->wc.masks.arp_sha);
+                   &match->flow.arp_sha, &match->wc.masks.arp_sha);
 }
 
 void
-match_set_arp_tha(struct match *match, const uint8_t tha[ETH_ADDR_LEN])
+match_set_arp_tha(struct match *match, const struct eth_addr tha)
 {
-    memcpy(match->flow.arp_tha, tha, ETH_ADDR_LEN);
-    memset(match->wc.masks.arp_tha, UINT8_MAX, ETH_ADDR_LEN);
+    match->flow.arp_tha = tha;
+    match->wc.masks.arp_tha = eth_addr_exact;
 }
 
 void
 match_set_arp_tha_masked(struct match *match,
-                         const uint8_t arp_tha[ETH_ADDR_LEN],
-                         const uint8_t mask[ETH_ADDR_LEN])
+                         const struct eth_addr arp_tha,
+                         const struct eth_addr mask)
 {
     set_eth_masked(arp_tha, mask,
-                   match->flow.arp_tha, match->wc.masks.arp_tha);
+                   &match->flow.arp_tha, &match->wc.masks.arp_tha);
 }
 
 void
@@ -784,12 +783,11 @@ match_init_hidden_fields(struct match *m)
 
 static void
 format_eth_masked(struct ds *s, const char *name,
-                  const uint8_t eth[ETH_ADDR_LEN],
-                  const uint8_t mask[ETH_ADDR_LEN])
+                  const struct eth_addr eth, const struct eth_addr mask)
 {
     if (!eth_addr_is_zero(mask)) {
         ds_put_format(s, "%s=", name);
-        eth_format_masked(eth, mask, s);
+        eth_format_masked(eth, &mask, s);
         ds_put_char(s, ',');
     }
 }

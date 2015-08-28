@@ -182,7 +182,7 @@ struct lldpd_hardware {
                                    * to 0. */
     int               h_ifindex;  /* Interface index, used by SNMP */
     char              h_ifname[IFNAMSIZ]; /* Should be unique */
-    u_int8_t          h_lladdr[ETH_ADDR_LEN];
+    struct eth_addr   h_lladdr;
 
     u_int64_t         h_tx_cnt;
     u_int64_t         h_rx_cnt;

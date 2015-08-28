@@ -228,10 +228,10 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     }
 
     if (!(ofpfw & OFPFW10_DL_SRC)) {
-        memset(wc->masks.dl_src, 0xff, ETH_ADDR_LEN);
+        WC_MASK_FIELD(wc, dl_src);
     }
     if (!(ofpfw & OFPFW10_DL_DST)) {
-        memset(wc->masks.dl_dst, 0xff, ETH_ADDR_LEN);
+        WC_MASK_FIELD(wc, dl_dst);
     }
     if (!(ofpfw & OFPFW10_DL_TYPE)) {
         wc->masks.dl_type = OVS_BE16_MAX;
@@ -264,8 +264,8 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
     match->flow.dl_type = ofputil_dl_type_from_openflow(ofmatch->dl_type);
     match->flow.tp_src = ofmatch->tp_src;
     match->flow.tp_dst = ofmatch->tp_dst;
-    memcpy(match->flow.dl_src, ofmatch->dl_src, ETH_ADDR_LEN);
-    memcpy(match->flow.dl_dst, ofmatch->dl_dst, ETH_ADDR_LEN);
+    match->flow.dl_src = ofmatch->dl_src;
+    match->flow.dl_dst = ofmatch->dl_dst;
     match->flow.nw_tos = ofmatch->nw_tos & IP_DSCP_MASK;
     match->flow.nw_proto = ofmatch->nw_proto;
 
@@ -361,8 +361,8 @@ ofputil_match_to_ofp10_match(const struct match *match,
     /* Compose most of the match structure. */
     ofmatch->wildcards = htonl(ofpfw);
     ofmatch->in_port = htons(ofp_to_u16(match->flow.in_port.ofp_port));
-    memcpy(ofmatch->dl_src, match->flow.dl_src, ETH_ADDR_LEN);
-    memcpy(ofmatch->dl_dst, match->flow.dl_dst, ETH_ADDR_LEN);
+    ofmatch->dl_src = match->flow.dl_src;
+    ofmatch->dl_dst = match->flow.dl_dst;
     ofmatch->dl_type = ofputil_dl_type_to_openflow(match->flow.dl_type);
     ofmatch->nw_src = match->flow.nw_src;
     ofmatch->nw_dst = match->flow.nw_dst;
@@ -419,10 +419,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
                                struct match *match)
 {
     uint16_t wc = ntohl(ofmatch->wildcards);
-    uint8_t dl_src_mask[ETH_ADDR_LEN];
-    uint8_t dl_dst_mask[ETH_ADDR_LEN];
     bool ipv4, arp, rarp;
-    int i;
 
     match_init_catchall(match);
 
@@ -437,15 +434,10 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
         match_set_in_port(match, ofp_port);
     }
 
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        dl_src_mask[i] = ~ofmatch->dl_src_mask[i];
-    }
-    match_set_dl_src_masked(match, ofmatch->dl_src, dl_src_mask);
-
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        dl_dst_mask[i] = ~ofmatch->dl_dst_mask[i];
-    }
-    match_set_dl_dst_masked(match, ofmatch->dl_dst, dl_dst_mask);
+    match_set_dl_src_masked(match, ofmatch->dl_src,
+                            eth_addr_invert(ofmatch->dl_src_mask));
+    match_set_dl_dst_masked(match, ofmatch->dl_dst,
+                            eth_addr_invert(ofmatch->dl_dst_mask));
 
     if (!(wc & OFPFW11_DL_VLAN)) {
         if (ofmatch->dl_vlan == htons(OFPVID11_NONE)) {
@@ -572,7 +564,6 @@ ofputil_match_to_ofp11_match(const struct match *match,
                              struct ofp11_match *ofmatch)
 {
     uint32_t wc = 0;
-    int i;
 
     memset(ofmatch, 0, sizeof *ofmatch);
     ofmatch->omh.type = htons(OFPMT_STANDARD);
@@ -584,15 +575,10 @@ ofputil_match_to_ofp11_match(const struct match *match,
         ofmatch->in_port = ofputil_port_to_ofp11(match->flow.in_port.ofp_port);
     }
 
-    memcpy(ofmatch->dl_src, match->flow.dl_src, ETH_ADDR_LEN);
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        ofmatch->dl_src_mask[i] = ~match->wc.masks.dl_src[i];
-    }
-
-    memcpy(ofmatch->dl_dst, match->flow.dl_dst, ETH_ADDR_LEN);
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        ofmatch->dl_dst_mask[i] = ~match->wc.masks.dl_dst[i];
-    }
+    ofmatch->dl_src = match->flow.dl_src;
+    ofmatch->dl_src_mask = eth_addr_invert(match->wc.masks.dl_src);
+    ofmatch->dl_dst = match->flow.dl_dst;
+    ofmatch->dl_dst_mask = eth_addr_invert(match->wc.masks.dl_dst);
 
     if (match->wc.masks.vlan_tci == htons(0)) {
         wc |= OFPFW11_DL_VLAN | OFPFW11_DL_VLAN_PCP;
@@ -3744,7 +3730,7 @@ ofputil_decode_ofp10_phy_port(struct ofputil_phy_port *pp,
                               const struct ofp10_phy_port *opp)
 {
     pp->port_no = u16_to_ofp(ntohs(opp->port_no));
-    memcpy(pp->hw_addr, opp->hw_addr, OFP_ETH_ALEN);
+    pp->hw_addr = opp->hw_addr;
     ovs_strlcpy(pp->name, opp->name, OFP_MAX_PORT_NAME_LEN);
 
     pp->config = ntohl(opp->config) & OFPPC10_ALL;
@@ -3771,7 +3757,7 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
     if (error) {
         return error;
     }
-    memcpy(pp->hw_addr, op->hw_addr, OFP_ETH_ALEN);
+    pp->hw_addr = op->hw_addr;
     ovs_strlcpy(pp->name, op->name, OFP_MAX_PORT_NAME_LEN);
 
     pp->config = ntohl(op->config) & OFPPC11_ALL;
@@ -3833,7 +3819,7 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     if (error) {
         return error;
     }
-    memcpy(pp->hw_addr, op->hw_addr, OFP_ETH_ALEN);
+    pp->hw_addr = op->hw_addr;
     ovs_strlcpy(pp->name, op->name, OFP_MAX_PORT_NAME_LEN);
 
     pp->config = ntohl(op->config) & OFPPC11_ALL;
@@ -3875,7 +3861,7 @@ ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
     memset(opp, 0, sizeof *opp);
 
     opp->port_no = htons(ofp_to_u16(pp->port_no));
-    memcpy(opp->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    opp->hw_addr = pp->hw_addr;
     ovs_strlcpy(opp->name, pp->name, OFP_MAX_PORT_NAME_LEN);
 
     opp->config = htonl(pp->config & OFPPC10_ALL);
@@ -3894,7 +3880,7 @@ ofputil_encode_ofp11_port(const struct ofputil_phy_port *pp,
     memset(op, 0, sizeof *op);
 
     op->port_no = ofputil_port_to_ofp11(pp->port_no);
-    memcpy(op->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    op->hw_addr = pp->hw_addr;
     ovs_strlcpy(op->name, pp->name, OFP_MAX_PORT_NAME_LEN);
 
     op->config = htonl(pp->config & OFPPC11_ALL);
@@ -3921,7 +3907,7 @@ ofputil_put_ofp14_port(const struct ofputil_phy_port *pp,
     op = ofpbuf_put_zeros(b, sizeof *op);
     op->port_no = ofputil_port_to_ofp11(pp->port_no);
     op->length = htons(sizeof *op + sizeof *eth);
-    memcpy(op->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    op->hw_addr = pp->hw_addr;
     ovs_strlcpy(op->name, pp->name, sizeof op->name);
     op->config = htonl(pp->config & OFPPC11_ALL);
     op->state = htonl(pp->state & OFPPS11_ALL);
@@ -4333,7 +4319,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
         const struct ofp10_port_mod *opm = b.data;
 
         pm->port_no = u16_to_ofp(ntohs(opm->port_no));
-        memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
+        pm->hw_addr = opm->hw_addr;
         pm->config = ntohl(opm->config) & OFPPC10_ALL;
         pm->mask = ntohl(opm->mask) & OFPPC10_ALL;
         pm->advertise = netdev_port_features_from_ofp10(opm->advertise);
@@ -4346,7 +4332,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
             return error;
         }
 
-        memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
+        pm->hw_addr = opm->hw_addr;
         pm->config = ntohl(opm->config) & OFPPC11_ALL;
         pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
         pm->advertise = netdev_port_features_from_ofp11(opm->advertise);
@@ -4361,7 +4347,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
             return error;
         }
 
-        memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
+        pm->hw_addr = opm->hw_addr;
         pm->config = ntohl(opm->config) & OFPPC11_ALL;
         pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
 
@@ -4421,7 +4407,7 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         b = ofpraw_alloc(OFPRAW_OFPT10_PORT_MOD, ofp_version, 0);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
         opm->port_no = htons(ofp_to_u16(pm->port_no));
-        memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
+        opm->hw_addr = pm->hw_addr;
         opm->config = htonl(pm->config & OFPPC10_ALL);
         opm->mask = htonl(pm->mask & OFPPC10_ALL);
         opm->advertise = netdev_port_features_to_ofp10(pm->advertise);
@@ -4436,7 +4422,7 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         b = ofpraw_alloc(OFPRAW_OFPT11_PORT_MOD, ofp_version, 0);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
         opm->port_no = ofputil_port_to_ofp11(pm->port_no);
-        memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
+        opm->hw_addr = pm->hw_addr;
         opm->config = htonl(pm->config & OFPPC11_ALL);
         opm->mask = htonl(pm->mask & OFPPC11_ALL);
         opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
@@ -4450,7 +4436,7 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, sizeof *eth);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
         opm->port_no = ofputil_port_to_ofp11(pm->port_no);
-        memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
+        opm->hw_addr = pm->hw_addr;
         opm->config = htonl(pm->config & OFPPC11_ALL);
         opm->mask = htonl(pm->mask & OFPPC11_ALL);
 
@@ -6521,10 +6507,10 @@ ofputil_normalize_match__(struct match *match, bool may_log)
         wc.masks.nw_ttl = 0;
     }
     if (!(may_match & MAY_ARP_SHA)) {
-        memset(wc.masks.arp_sha, 0, ETH_ADDR_LEN);
+        WC_UNMASK_FIELD(&wc, arp_sha);
     }
     if (!(may_match & MAY_ARP_THA)) {
-        memset(wc.masks.arp_tha, 0, ETH_ADDR_LEN);
+        WC_UNMASK_FIELD(&wc, arp_tha);
     }
     if (!(may_match & MAY_IPV6)) {
         wc.masks.ipv6_src = wc.masks.ipv6_dst = in6addr_any;

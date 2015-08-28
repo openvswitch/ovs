@@ -816,7 +816,7 @@ netdev_send_wait(struct netdev *netdev, int qid)
 /* Attempts to set 'netdev''s MAC address to 'mac'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 int
-netdev_set_etheraddr(struct netdev *netdev, const uint8_t mac[ETH_ADDR_LEN])
+netdev_set_etheraddr(struct netdev *netdev, const struct eth_addr mac)
 {
     return netdev->netdev_class->set_etheraddr(netdev, mac);
 }
@@ -825,7 +825,7 @@ netdev_set_etheraddr(struct netdev *netdev, const uint8_t mac[ETH_ADDR_LEN])
  * the MAC address into 'mac'.  On failure, returns a positive errno value and
  * clears 'mac' to all-zeros. */
 int
-netdev_get_etheraddr(const struct netdev *netdev, uint8_t mac[ETH_ADDR_LEN])
+netdev_get_etheraddr(const struct netdev *netdev, struct eth_addr *mac)
 {
     return netdev->netdev_class->get_etheraddr(netdev, mac);
 }
@@ -1259,13 +1259,13 @@ netdev_restore_flags(struct netdev_saved_flags *sf)
  * ENXIO indicates that there is no ARP table entry for 'ip' on 'netdev'. */
 int
 netdev_arp_lookup(const struct netdev *netdev,
-                  ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
+                  ovs_be32 ip, struct eth_addr *mac)
 {
     int error = (netdev->netdev_class->arp_lookup
                  ? netdev->netdev_class->arp_lookup(netdev, ip, mac)
                  : EOPNOTSUPP);
     if (error) {
-        memset(mac, 0, ETH_ADDR_LEN);
+        *mac = eth_addr_zero;
     }
     return error;
 }

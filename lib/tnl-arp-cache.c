@@ -44,7 +44,7 @@
 struct tnl_arp_entry {
     struct cmap_node cmap_node;
     ovs_be32 ip;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
     time_t expires;             /* Expiration time. */
     char br_name[IFNAMSIZ];
 };
@@ -68,14 +68,14 @@ tnl_arp_lookup__(const char br_name[IFNAMSIZ], ovs_be32 dst)
 
 int
 tnl_arp_lookup(const char br_name[IFNAMSIZ], ovs_be32 dst,
-               uint8_t mac[ETH_ADDR_LEN])
+               struct eth_addr *mac)
 {
     struct tnl_arp_entry *arp;
     int res = ENOENT;
 
     arp = tnl_arp_lookup__(br_name, dst);
     if (arp) {
-        memcpy(mac, arp->mac, ETH_ADDR_LEN);
+        *mac = arp->mac;
         res = 0;
     }
 
@@ -113,7 +113,7 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
     ovs_mutex_lock(&mutex);
     arp = tnl_arp_lookup__(name, flow->nw_src);
     if (arp) {
-        if (!memcmp(arp->mac, flow->arp_sha, ETH_ADDR_LEN)) {
+        if (eth_addr_equals(arp->mac, flow->arp_sha)) {
             arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
             ovs_mutex_unlock(&mutex);
             return 0;
@@ -125,7 +125,7 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
     arp = xmalloc(sizeof *arp);
 
     arp->ip = flow->nw_src;
-    memcpy(arp->mac, flow->arp_sha, ETH_ADDR_LEN);
+    arp->mac = flow->arp_sha;
     arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
     ovs_strlcpy(arp->br_name, name, sizeof arp->br_name);
     cmap_insert(&table, &arp->cmap_node, (OVS_FORCE uint32_t) arp->ip);

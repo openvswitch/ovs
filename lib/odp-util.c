@@ -1516,8 +1516,8 @@ odp_portno_names_destroy(struct hmap *portno_names)
 /* Format helpers. */
 
 static void
-format_eth(struct ds *ds, const char *name, const uint8_t key[ETH_ADDR_LEN],
-           const uint8_t (*mask)[ETH_ADDR_LEN], bool verbose)
+format_eth(struct ds *ds, const char *name, const struct eth_addr key,
+           const struct eth_addr *mask, bool verbose)
 {
     bool mask_empty = mask && eth_addr_is_zero(*mask);
 
@@ -1528,7 +1528,7 @@ format_eth(struct ds *ds, const char *name, const uint8_t key[ETH_ADDR_LEN],
             ds_put_format(ds, "%s="ETH_ADDR_FMT",", name, ETH_ADDR_ARGS(key));
         } else {
             ds_put_format(ds, "%s=", name);
-            eth_format_masked(key, *mask, ds);
+            eth_format_masked(key, mask, ds);
             ds_put_char(ds, ',');
         }
     }
@@ -2391,12 +2391,12 @@ ovs_frag_type_from_string(const char *s, enum ovs_frag_type *type)
 /* Parsing. */
 
 static int
-scan_eth(const char *s, uint8_t (*key)[ETH_ADDR_LEN],
-         uint8_t (*mask)[ETH_ADDR_LEN])
+scan_eth(const char *s, struct eth_addr *key, struct eth_addr *mask)
 {
     int n;
 
-    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(*key), &n)) {
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n",
+                 ETH_ADDR_SCAN_ARGS(*key), &n)) {
         int len = n;
 
         if (mask) {
@@ -3495,8 +3495,8 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
                                                     sizeof *nd_key);
                 memcpy(nd_key->nd_target, &data->nd_target,
                         sizeof nd_key->nd_target);
-                memcpy(nd_key->nd_sll, data->arp_sha, ETH_ADDR_LEN);
-                memcpy(nd_key->nd_tll, data->arp_tha, ETH_ADDR_LEN);
+                nd_key->nd_sll = data->arp_sha;
+                nd_key->nd_tll = data->arp_tha;
             }
         }
     }
@@ -3995,8 +3995,8 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                     nd_key = nl_attr_get(attrs[OVS_KEY_ATTR_ND]);
                     memcpy(&flow->nd_target, nd_key->nd_target,
                            sizeof flow->nd_target);
-                    memcpy(flow->arp_sha, nd_key->nd_sll, ETH_ADDR_LEN);
-                    memcpy(flow->arp_tha, nd_key->nd_tll, ETH_ADDR_LEN);
+                    flow->arp_sha = nd_key->nd_sll;
+                    flow->arp_tha = nd_key->nd_tll;
                     if (is_mask) {
                         if (!is_all_zeros(nd_key, sizeof *nd_key) &&
                             (flow->tp_src != htons(0xffff) ||
@@ -4430,15 +4430,15 @@ commit(enum ovs_key_attr attr, bool use_masked_set,
 static void
 get_ethernet_key(const struct flow *flow, struct ovs_key_ethernet *eth)
 {
-    memcpy(eth->eth_src, flow->dl_src, ETH_ADDR_LEN);
-    memcpy(eth->eth_dst, flow->dl_dst, ETH_ADDR_LEN);
+    eth->eth_src = flow->dl_src;
+    eth->eth_dst = flow->dl_dst;
 }
 
 static void
 put_ethernet_key(const struct ovs_key_ethernet *eth, struct flow *flow)
 {
-    memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
-    memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
+    flow->dl_src = eth->eth_src;
+    flow->dl_dst = eth->eth_dst;
 }
 
 static void
@@ -4666,8 +4666,8 @@ get_arp_key(const struct flow *flow, struct ovs_key_arp *arp)
     arp->arp_sip = flow->nw_src;
     arp->arp_tip = flow->nw_dst;
     arp->arp_op = htons(flow->nw_proto);
-    memcpy(arp->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
-    memcpy(arp->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
+    arp->arp_sha = flow->arp_sha;
+    arp->arp_tha = flow->arp_tha;
 }
 
 static void
@@ -4676,8 +4676,8 @@ put_arp_key(const struct ovs_key_arp *arp, struct flow *flow)
     flow->nw_src = arp->arp_sip;
     flow->nw_dst = arp->arp_tip;
     flow->nw_proto = ntohs(arp->arp_op);
-    memcpy(flow->arp_sha, arp->arp_sha, ETH_ADDR_LEN);
-    memcpy(flow->arp_tha, arp->arp_tha, ETH_ADDR_LEN);
+    flow->arp_sha = arp->arp_sha;
+    flow->arp_tha = arp->arp_tha;
 }
 
 static enum slow_path_reason
@@ -4704,8 +4704,8 @@ get_nd_key(const struct flow *flow, struct ovs_key_nd *nd)
 {
     memcpy(nd->nd_target, &flow->nd_target, sizeof flow->nd_target);
     /* nd_sll and nd_tll are stored in arp_sha and arp_tha, respectively */
-    memcpy(nd->nd_sll, flow->arp_sha, ETH_ADDR_LEN);
-    memcpy(nd->nd_tll, flow->arp_tha, ETH_ADDR_LEN);
+    nd->nd_sll = flow->arp_sha;
+    nd->nd_tll = flow->arp_tha;
 }
 
 static void
@@ -4713,8 +4713,8 @@ put_nd_key(const struct ovs_key_nd *nd, struct flow *flow)
 {
     memcpy(&flow->nd_target, nd->nd_target, sizeof flow->nd_target);
     /* nd_sll and nd_tll are stored in arp_sha and arp_tha, respectively */
-    memcpy(flow->arp_sha, nd->nd_sll, ETH_ADDR_LEN);
-    memcpy(flow->arp_tha, nd->nd_tll, ETH_ADDR_LEN);
+    flow->arp_sha = nd->nd_sll;
+    flow->arp_tha = nd->nd_tll;
 }
 
 static enum slow_path_reason

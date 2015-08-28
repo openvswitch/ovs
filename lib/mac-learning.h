@@ -104,7 +104,7 @@ struct mac_entry {
     struct hmap_node hmap_node; /* Node in a mac_learning hmap. */
     time_t expires;             /* Expiration time. */
     time_t grat_arp_lock;       /* Gratuitous ARP lock expiration time. */
-    uint8_t mac[ETH_ADDR_LEN];  /* Known MAC address. */
+    struct eth_addr mac;        /* Known MAC address. */
     uint16_t vlan;              /* VLAN tag. */
 
     /* The following are marked guarded to prevent users from iterating over or
@@ -200,17 +200,17 @@ void mac_learning_set_max_entries(struct mac_learning *ml, size_t max_entries)
 
 /* Learning. */
 bool mac_learning_may_learn(const struct mac_learning *ml,
-                            const uint8_t src_mac[ETH_ADDR_LEN],
+                            const struct eth_addr src_mac,
                             uint16_t vlan)
     OVS_REQ_RDLOCK(ml->rwlock);
 struct mac_entry *mac_learning_insert(struct mac_learning *ml,
-                                      const uint8_t src[ETH_ADDR_LEN],
+                                      const struct eth_addr src,
                                       uint16_t vlan)
     OVS_REQ_WRLOCK(ml->rwlock);
 
 /* Lookup. */
 struct mac_entry *mac_learning_lookup(const struct mac_learning *ml,
-                                      const uint8_t dst[ETH_ADDR_LEN],
+                                      const struct eth_addr dst,
                                       uint16_t vlan)
     OVS_REQ_RDLOCK(ml->rwlock);
 

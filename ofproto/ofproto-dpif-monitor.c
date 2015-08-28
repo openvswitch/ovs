@@ -53,7 +53,7 @@ struct mport {
     struct cfm *cfm;                  /* Reference to cfm. */
     struct bfd *bfd;                  /* Reference to bfd. */
     struct lldp *lldp;                /* Reference to lldp. */
-    uint8_t hw_addr[OFP_ETH_ALEN];    /* Hardware address. */
+    struct eth_addr hw_addr;          /* Hardware address. */
 };
 
 /* Entry of the 'send_soon' list.  Contains the pointer to the
@@ -88,12 +88,13 @@ static void monitor_run(void);
 static void monitor_mport_run(struct mport *, struct dp_packet *);
 
 static void mport_register(const struct ofport_dpif *, struct bfd *,
-                           struct cfm *, struct lldp *, uint8_t[ETH_ADDR_LEN])
+                           struct cfm *, struct lldp *,
+                           const struct eth_addr *)
     OVS_REQUIRES(monitor_mutex);
 static void mport_unregister(const struct ofport_dpif *)
     OVS_REQUIRES(monitor_mutex);
 static void mport_update(struct mport *, struct bfd *, struct cfm *,
-                         struct lldp *, uint8_t[ETH_ADDR_LEN])
+                         struct lldp *, const struct eth_addr *)
     OVS_REQUIRES(monitor_mutex);
 static struct mport *mport_find(const struct ofport_dpif *)
     OVS_REQUIRES(monitor_mutex);
@@ -118,7 +119,8 @@ mport_find(const struct ofport_dpif *ofport) OVS_REQUIRES(monitor_mutex)
  * if it doesn't exist.  Otherwise, just updates its fields. */
 static void
 mport_register(const struct ofport_dpif *ofport, struct bfd *bfd,
-               struct cfm *cfm, struct lldp *lldp, uint8_t *hw_addr)
+               struct cfm *cfm, struct lldp *lldp,
+               const struct eth_addr *hw_addr)
     OVS_REQUIRES(monitor_mutex)
 {
     struct mport *mport = mport_find(ofport);
@@ -150,7 +152,7 @@ mport_unregister(const struct ofport_dpif *ofport)
 /* Updates the fields of an existing mport struct. */
 static void
 mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
-             struct lldp *lldp, uint8_t hw_addr[ETH_ADDR_LEN])
+             struct lldp *lldp, const struct eth_addr *hw_addr)
     OVS_REQUIRES(monitor_mutex)
 {
     ovs_assert(mport);
@@ -167,8 +169,8 @@ mport_update(struct mport *mport, struct bfd *bfd, struct cfm *cfm,
         lldp_unref(mport->lldp);
         mport->lldp = lldp_ref(lldp);
     }
-    if (hw_addr && memcmp(mport->hw_addr, hw_addr, ETH_ADDR_LEN)) {
-        memcpy(mport->hw_addr, hw_addr, ETH_ADDR_LEN);
+    if (hw_addr && !eth_addr_equals(mport->hw_addr, *hw_addr)) {
+        mport->hw_addr = *hw_addr;
     }
     /* If bfd/cfm/lldp is added or reconfigured, move the mport on top of the heap
      * so that the monitor thread can run the mport next time it wakes up. */
@@ -316,7 +318,7 @@ void
 ofproto_dpif_monitor_port_update(const struct ofport_dpif *ofport,
                                  struct bfd *bfd, struct cfm *cfm,
                                  struct lldp *lldp,
-                                 uint8_t hw_addr[ETH_ADDR_LEN])
+                                 const struct eth_addr *hw_addr)
 {
     ovs_mutex_lock(&monitor_mutex);
     if (!cfm && !bfd && !lldp) {

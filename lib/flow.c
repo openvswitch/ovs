@@ -348,7 +348,7 @@ parse_ethertype(const void **datap, size_t *sizep)
 static inline void
 parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
              const struct in6_addr **nd_target,
-             uint8_t arp_buf[2][ETH_ADDR_LEN])
+             struct eth_addr arp_buf[2])
 {
     if (icmp->icmp6_code == 0 &&
         (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
@@ -362,8 +362,8 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
         while (*sizep >= 8) {
             /* The minimum size of an option is 8 bytes, which also is
              * the size of Ethernet link-layer options. */
-            const struct nd_opt_hdr *nd_opt = *datap;
-            int opt_len = nd_opt->nd_opt_len * 8;
+            const struct ovs_nd_opt *nd_opt = *datap;
+            int opt_len = nd_opt->nd_opt_len * ND_OPT_LEN;
 
             if (!opt_len || opt_len > *sizep) {
                 return;
@@ -373,16 +373,16 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
              * provided.  It is considered an error if the same link
              * layer option is specified twice. */
             if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
-                    && opt_len == 8) {
+                && opt_len == 8) {
                 if (OVS_LIKELY(eth_addr_is_zero(arp_buf[0]))) {
-                    memcpy(arp_buf[0], nd_opt + 1, ETH_ADDR_LEN);
+                    arp_buf[0] = nd_opt->nd_opt_mac;
                 } else {
                     goto invalid;
                 }
             } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
-                    && opt_len == 8) {
+                       && opt_len == 8) {
                 if (OVS_LIKELY(eth_addr_is_zero(arp_buf[1]))) {
-                    memcpy(arp_buf[1], nd_opt + 1, ETH_ADDR_LEN);
+                    arp_buf[1] = nd_opt->nd_opt_mac;
                 } else {
                     goto invalid;
                 }
@@ -398,9 +398,8 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
 
 invalid:
     *nd_target = NULL;
-    memset(arp_buf[0], 0, ETH_ADDR_LEN);
-    memset(arp_buf[1], 0, ETH_ADDR_LEN);
-    return;
+    arp_buf[0] = eth_addr_zero;
+    arp_buf[1] = eth_addr_zero;
 }
 
 /* Initializes 'flow' members from 'packet' and 'md'
@@ -660,7 +659,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     } else {
         if (dl_type == htons(ETH_TYPE_ARP) ||
             dl_type == htons(ETH_TYPE_RARP)) {
-            uint8_t arp_buf[2][ETH_ADDR_LEN];
+            struct eth_addr arp_buf[2];
             const struct arp_eth_header *arp = (const struct arp_eth_header *)
                 data_try_pull(&data, &size, ARP_ETH_HEADER_LEN);
 
@@ -682,8 +681,8 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 /* Must be adjacent. */
                 ASSERT_SEQUENTIAL(arp_sha, arp_tha);
 
-                memcpy(arp_buf[0], arp->ar_sha, ETH_ADDR_LEN);
-                memcpy(arp_buf[1], arp->ar_tha, ETH_ADDR_LEN);
+                arp_buf[0] = arp->ar_sha;
+                arp_buf[1] = arp->ar_tha;
                 miniflow_push_macs(mf, arp_sha, arp_buf);
                 miniflow_pad_to_64(mf, tcp_flags);
             }
@@ -700,7 +699,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             if (OVS_LIKELY(size >= TCP_HEADER_LEN)) {
                 const struct tcp_header *tcp = data;
 
-                miniflow_push_be32(mf, arp_tha[2], 0);
+                miniflow_push_be32(mf, arp_tha.ea[2], 0);
                 miniflow_push_be32(mf, tcp_flags,
                                    TCP_FLAGS_BE32(tcp->tcp_ctl));
                 miniflow_push_be16(mf, tp_src, tcp->tcp_src);
@@ -743,14 +742,13 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMPV6)) {
             if (OVS_LIKELY(size >= sizeof(struct icmp6_hdr))) {
                 const struct in6_addr *nd_target = NULL;
-                uint8_t arp_buf[2][ETH_ADDR_LEN];
+                struct eth_addr arp_buf[2] = { };
                 const struct icmp6_hdr *icmp = data_pull(&data, &size,
                                                          sizeof *icmp);
-                memset(arp_buf, 0, sizeof arp_buf);
                 parse_icmpv6(&data, &size, icmp, &nd_target, arp_buf);
                 if (nd_target) {
                     miniflow_push_words(mf, nd_target, nd_target,
-                                        sizeof *nd_target / 8);
+                                        sizeof *nd_target / sizeof(uint64_t));
                 }
                 miniflow_push_macs(mf, arp_sha, arp_buf);
                 miniflow_pad_to_64(mf, tcp_flags);
@@ -1548,15 +1546,15 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
         ovs_be16 eth_type;
         ovs_be16 vlan_tci;
         ovs_be16 tp_port;
-        uint8_t eth_addr[ETH_ADDR_LEN];
+        struct eth_addr eth_addr;
         uint8_t ip_proto;
     } fields;
 
     int i;
 
     memset(&fields, 0, sizeof fields);
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        fields.eth_addr[i] = flow->dl_src[i] ^ flow->dl_dst[i];
+    for (i = 0; i < ARRAY_SIZE(fields.eth_addr.be16); i++) {
+        fields.eth_addr.be16[i] = flow->dl_src.be16[i] ^ flow->dl_dst.be16[i];
     }
     fields.vlan_tci = flow->vlan_tci & htons(VLAN_VID_MASK);
     fields.eth_type = flow->dl_type;
@@ -1628,8 +1626,8 @@ flow_random_hash_fields(struct flow *flow)
     /* Initialize to all zeros. */
     memset(flow, 0, sizeof *flow);
 
-    eth_addr_random(flow->dl_src);
-    eth_addr_random(flow->dl_dst);
+    eth_addr_random(&flow->dl_src);
+    eth_addr_random(&flow->dl_dst);
 
     flow->vlan_tci = (OVS_FORCE ovs_be16) (random_uint16() & VLAN_VID_MASK);
 
@@ -1723,7 +1721,7 @@ flow_hash_fields(const struct flow *flow, enum nx_hash_fields fields,
     switch (fields) {
 
     case NX_HASH_FIELDS_ETH_SRC:
-        return jhash_bytes(flow->dl_src, sizeof flow->dl_src, basis);
+        return jhash_bytes(&flow->dl_src, sizeof flow->dl_src, basis);
 
     case NX_HASH_FIELDS_SYMMETRIC_L4:
         return flow_hash_symmetric_l4(flow, basis);
@@ -2106,7 +2104,7 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
                 (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
                  icmp->icmp6_type == ND_NEIGHBOR_ADVERT)) {
                 struct in6_addr *nd_target;
-                struct nd_opt_hdr *nd_opt;
+                struct ovs_nd_opt *nd_opt;
 
                 l4_len += sizeof *nd_target;
                 nd_target = dp_packet_put_zeros(p, sizeof *nd_target);
@@ -2117,14 +2115,14 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
                     nd_opt = dp_packet_put_zeros(p, 8);
                     nd_opt->nd_opt_len = 1;
                     nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
-                    memcpy(nd_opt + 1, flow->arp_sha, ETH_ADDR_LEN);
+                    nd_opt->nd_opt_mac = flow->arp_sha;
                 }
                 if (!eth_addr_is_zero(flow->arp_tha)) {
                     l4_len += 8;
                     nd_opt = dp_packet_put_zeros(p, 8);
                     nd_opt->nd_opt_len = 1;
                     nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
-                    memcpy(nd_opt + 1, flow->arp_tha, ETH_ADDR_LEN);
+                    nd_opt->nd_opt_mac = flow->arp_tha;
                 }
             }
             icmp->icmp6_cksum = (OVS_FORCE uint16_t)
@@ -2216,8 +2214,8 @@ flow_compose(struct dp_packet *p, const struct flow *flow)
             flow->nw_proto == ARP_OP_REPLY) {
             put_16aligned_be32(&arp->ar_spa, flow->nw_src);
             put_16aligned_be32(&arp->ar_tpa, flow->nw_dst);
-            memcpy(arp->ar_sha, flow->arp_sha, ETH_ADDR_LEN);
-            memcpy(arp->ar_tha, flow->arp_tha, ETH_ADDR_LEN);
+            arp->ar_sha = flow->arp_sha;
+            arp->ar_tha = flow->arp_tha;
         }
     }
 

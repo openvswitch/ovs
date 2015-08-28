@@ -44,11 +44,10 @@ VLOG_DEFINE_THIS_MODULE(cfm);
 #define CFM_MAX_RMPS 256
 
 /* Ethernet destination address of CCM packets. */
-static const uint8_t eth_addr_ccm[ETH_ADDR_LEN] = {
-    0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 };
-static const uint8_t eth_addr_ccm_x[ETH_ADDR_LEN] = {
-    0x01, 0x23, 0x20, 0x00, 0x00, 0x30
-};
+static const struct eth_addr eth_addr_ccm = {
+    { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x30 } } };
+static const struct eth_addr eth_addr_ccm_x = {
+    { { 0x01, 0x23, 0x20, 0x00, 0x00, 0x30 } } };
 
 #define ETH_TYPE_CFM 0x8902
 
@@ -185,7 +184,7 @@ cfm_rx_packets(const struct cfm *cfm) OVS_REQUIRES(mutex)
     }
 }
 
-static const uint8_t *
+static struct eth_addr
 cfm_ccm_addr(struct cfm *cfm)
 {
     bool extended;
@@ -565,7 +564,7 @@ cfm_should_send_ccm(struct cfm *cfm) OVS_EXCLUDED(mutex)
  * should be sent whenever cfm_should_send_ccm() indicates. */
 void
 cfm_compose_ccm(struct cfm *cfm, struct dp_packet *packet,
-                const uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
+                const struct eth_addr eth_src) OVS_EXCLUDED(mutex)
 {
     uint16_t ccm_vlan;
     struct ccm *ccm;

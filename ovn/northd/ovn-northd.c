@@ -701,9 +701,9 @@ build_port_security(const char *eth_addr_field,
 
     size_t n = 0;
     for (size_t i = 0; i < n_port_security; i++) {
-        uint8_t ea[ETH_ADDR_LEN];
+        struct eth_addr ea;
 
-        if (eth_addr_from_string(port_security[i], ea)) {
+        if (eth_addr_from_string(port_security[i], &ea)) {
             ds_put_format(match, ETH_ADDR_FMT, ETH_ADDR_ARGS(ea));
             ds_put_char(match, ' ');
             n++;
@@ -779,9 +779,9 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     /* Ingress table 1: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         for (size_t i = 0; i < op->nb->n_macs; i++) {
-            uint8_t mac[ETH_ADDR_LEN];
+            struct eth_addr mac;
 
-            if (eth_addr_from_string(op->nb->macs[i], mac)) {
+            if (eth_addr_from_string(op->nb->macs[i], &mac)) {
                 struct ds match, actions;
 
                 ds_init(&match);

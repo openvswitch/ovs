@@ -170,10 +170,10 @@ struct bfd {
 
     uint32_t rmt_disc;            /* bfd.RemoteDiscr. */
 
-    uint8_t local_eth_src[ETH_ADDR_LEN]; /* Local eth src address. */
-    uint8_t local_eth_dst[ETH_ADDR_LEN]; /* Local eth dst address. */
+    struct eth_addr local_eth_src; /* Local eth src address. */
+    struct eth_addr local_eth_dst; /* Local eth dst address. */
 
-    uint8_t rmt_eth_dst[ETH_ADDR_LEN];   /* Remote eth dst address. */
+    struct eth_addr rmt_eth_dst;   /* Remote eth dst address. */
 
     ovs_be32 ip_src;              /* IPv4 source address. */
     ovs_be32 ip_dst;              /* IPv4 destination address. */
@@ -357,7 +357,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     bool cpath_down, forwarding_if_rx;
     const char *hwaddr, *ip_src, *ip_dst;
     struct in_addr in_addr;
-    uint8_t ea[ETH_ADDR_LEN];
+    struct eth_addr ea;
 
     if (!cfg || !smap_get_bool(cfg, "enable", false)) {
         bfd_unref(bfd);
@@ -441,24 +441,24 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     }
 
     hwaddr = smap_get(cfg, "bfd_local_src_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
-        memcpy(bfd->local_eth_src, ea, ETH_ADDR_LEN);
+    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
+        bfd->local_eth_src = ea;
     } else {
-        memset(bfd->local_eth_src, 0, ETH_ADDR_LEN);
+        bfd->local_eth_src = eth_addr_zero;
     }
 
     hwaddr = smap_get(cfg, "bfd_local_dst_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
-        memcpy(bfd->local_eth_dst, ea, ETH_ADDR_LEN);
+    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
+        bfd->local_eth_dst = ea;
     } else {
-        memset(bfd->local_eth_dst, 0, ETH_ADDR_LEN);
+        bfd->local_eth_dst = eth_addr_zero;
     }
 
     hwaddr = smap_get(cfg, "bfd_remote_dst_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
-        memcpy(bfd->rmt_eth_dst, ea, ETH_ADDR_LEN);
+    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
+        bfd->rmt_eth_dst = ea;
     } else {
-        memset(bfd->rmt_eth_dst, 0, ETH_ADDR_LEN);
+        bfd->rmt_eth_dst = eth_addr_zero;
     }
 
     ip_src = smap_get(cfg, "bfd_src_ip");
@@ -589,7 +589,7 @@ bfd_should_send_packet(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 
 void
 bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
-               uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
+               const struct eth_addr eth_src) OVS_EXCLUDED(mutex)
 {
     long long int min_tx, min_rx;
     struct udp_header *udp;
@@ -614,14 +614,10 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
 
     dp_packet_reserve(p, 2); /* Properly align after the ethernet header. */
     eth = dp_packet_put_uninit(p, sizeof *eth);
-    memcpy(eth->eth_src,
-           eth_addr_is_zero(bfd->local_eth_src) ? eth_src
-                                                : bfd->local_eth_src,
-           ETH_ADDR_LEN);
-    memcpy(eth->eth_dst,
-           eth_addr_is_zero(bfd->local_eth_dst) ? eth_addr_bfd
-                                                : bfd->local_eth_dst,
-           ETH_ADDR_LEN);
+    eth->eth_src = eth_addr_is_zero(bfd->local_eth_src)
+        ? eth_src : bfd->local_eth_src;
+    eth->eth_dst = eth_addr_is_zero(bfd->local_eth_dst)
+        ? eth_addr_bfd : bfd->local_eth_dst;
     eth->eth_type = htons(ETH_TYPE_IP);
 
     ip = dp_packet_put_zeros(p, sizeof *ip);
@@ -678,7 +674,7 @@ bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
     if (!eth_addr_is_zero(bfd->rmt_eth_dst)) {
         memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
 
-        if (memcmp(bfd->rmt_eth_dst, flow->dl_dst, ETH_ADDR_LEN)) {
+        if (!eth_addr_equals(bfd->rmt_eth_dst, flow->dl_dst)) {
             return false;
         }
     }

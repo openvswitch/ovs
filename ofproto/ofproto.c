@@ -2317,7 +2317,7 @@ ofport_open(struct ofproto *ofproto,
         }
     }
     pp->port_no = ofproto_port->ofp_port;
-    netdev_get_etheraddr(netdev, pp->hw_addr);
+    netdev_get_etheraddr(netdev, &pp->hw_addr);
     ovs_strlcpy(pp->name, ofproto_port->name, sizeof pp->name);
     netdev_get_flags(netdev, &flags);
     pp->config = flags & NETDEV_UP ? 0 : OFPUTIL_PC_PORT_DOWN;
@@ -2424,7 +2424,7 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
 static void
 ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
 {
-    memcpy(port->pp.hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    port->pp.hw_addr = pp->hw_addr;
     port->pp.config = ((port->pp.config & ~OFPUTIL_PC_PORT_DOWN)
                         | (pp->config & OFPUTIL_PC_PORT_DOWN));
     port->pp.state = ((port->pp.state & ~OFPUTIL_PS_LINK_DOWN)
@@ -7277,10 +7277,10 @@ pick_datapath_id(const struct ofproto *ofproto)
 
     port = ofproto_get_port(ofproto, OFPP_LOCAL);
     if (port) {
-        uint8_t ea[ETH_ADDR_LEN];
+        struct eth_addr ea;
         int error;
 
-        error = netdev_get_etheraddr(port->netdev, ea);
+        error = netdev_get_etheraddr(port->netdev, &ea);
         if (!error) {
             return eth_addr_to_uint64(ea);
         }
@@ -7294,8 +7294,8 @@ pick_datapath_id(const struct ofproto *ofproto)
 static uint64_t
 pick_fallback_dpid(void)
 {
-    uint8_t ea[ETH_ADDR_LEN];
-    eth_addr_nicira_random(ea);
+    struct eth_addr ea;
+    eth_addr_nicira_random(&ea);
     return eth_addr_to_uint64(ea);
 }
 

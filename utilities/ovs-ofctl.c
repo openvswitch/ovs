@@ -1899,7 +1899,7 @@ ofctl_mod_port(struct ovs_cmdl_context *ctx)
     fetch_ofputil_phy_port(ctx->argv[1], ctx->argv[2], &pp);
 
     pm.port_no = pp.port_no;
-    memcpy(pm.hw_addr, pp.hw_addr, ETH_ADDR_LEN);
+    pm.hw_addr = pp.hw_addr;
     pm.config = 0;
     pm.mask = 0;
     pm.advertise = 0;

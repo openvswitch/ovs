@@ -700,7 +700,7 @@ rstp_send_bpdu(struct rstp_port *p, const void *bpdu, size_t bpdu_size)
     dp_packet_set_l3(pkt, dp_packet_put(pkt, bpdu, bpdu_size));
 
     /* 802.2 header. */
-    memcpy(eth->eth_dst, eth_addr_stp, ETH_ADDR_LEN);
+    eth->eth_dst = eth_addr_stp;
     /* p->rstp->send_bpdu() must fill in source address. */
     eth->eth_type = htons(dp_packet_size(pkt) - ETH_HEADER_LEN);
 

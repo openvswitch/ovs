@@ -749,10 +749,9 @@ nxm_put_64m(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
 static void
 nxm_put_eth_masked(struct ofpbuf *b,
                    enum mf_field_id field, enum ofp_version version,
-                   const uint8_t value[ETH_ADDR_LEN],
-                   const uint8_t mask[ETH_ADDR_LEN])
+                   const struct eth_addr value, const struct eth_addr mask)
 {
-    nxm_put(b, field, version, value, mask, ETH_ADDR_LEN);
+    nxm_put(b, field, version, value.ea, mask.ea, ETH_ADDR_LEN);
 }
 
 static void

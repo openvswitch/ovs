@@ -1741,7 +1741,7 @@ struct mf_field {
 union mf_value {
     uint8_t tun_metadata[128];
     struct in6_addr ipv6;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
     ovs_be64 be64;
     ovs_be32 be32;
     ovs_be16 be16;
@@ -1779,7 +1779,7 @@ union mf_subvalue {
     };
     struct {
         uint8_t dummy_mac[122];
-        uint8_t mac[6];
+        struct eth_addr mac;
     };
     struct {
         ovs_be32 dummy_ipv4[31];

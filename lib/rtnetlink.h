@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <linux/if_ether.h>
 
+#include "openvswitch/types.h"
+
 struct ofpbuf;
 struct nln_notifier;
 
@@ -41,7 +43,7 @@ struct rtnetlink_change {
     /* Network device link status. */
     int master_ifindex;         /* Ifindex of datapath master (0 if none). */
     int mtu;                    /* Current MTU. */
-    uint8_t addr[ETH_ALEN];
+    struct eth_addr mac;
     unsigned int ifi_flags;     /* Flags of network device. */
 
     /* Network device address status. */

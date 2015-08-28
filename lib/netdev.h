@@ -194,8 +194,8 @@ int netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers,
                       int cnt);
 
 /* Hardware address. */
-int netdev_set_etheraddr(struct netdev *, const uint8_t mac[ETH_ADDR_LEN]);
-int netdev_get_etheraddr(const struct netdev *, uint8_t mac[ETH_ADDR_LEN]);
+int netdev_set_etheraddr(struct netdev *, const struct eth_addr mac);
+int netdev_get_etheraddr(const struct netdev *, struct eth_addr *mac);
 
 /* PHY interface. */
 bool netdev_get_carrier(const struct netdev *);
@@ -260,7 +260,7 @@ int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
                         struct in_addr *next_hop, char **);
 int netdev_get_status(const struct netdev *, struct smap *);
 int netdev_arp_lookup(const struct netdev *, ovs_be32 ip,
-                      uint8_t mac[ETH_ADDR_LEN]);
+                      struct eth_addr *mac);
 
 struct netdev *netdev_find_dev_by_in4(const struct in_addr *);
 

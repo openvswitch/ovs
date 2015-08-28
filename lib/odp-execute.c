@@ -36,13 +36,13 @@
 
 /* Masked copy of an ethernet address. 'src' is already properly masked. */
 static void
-ether_addr_copy_masked(uint8_t *dst, const uint8_t *src,
-                       const uint8_t *mask)
+ether_addr_copy_masked(struct eth_addr *dst, const struct eth_addr src,
+                       const struct eth_addr mask)
 {
     int i;
 
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        dst[i] = src[i] | (dst[i] & ~mask[i]);
+    for (i = 0; i < ARRAY_SIZE(dst->be16); i++) {
+        dst->be16[i] = src.be16[i] | (dst->be16[i] & ~mask.be16[i]);
     }
 }
 
@@ -54,11 +54,11 @@ odp_eth_set_addrs(struct dp_packet *packet, const struct ovs_key_ethernet *key,
 
     if (eh) {
         if (!mask) {
-            memcpy(eh->eth_src, key->eth_src, sizeof eh->eth_src);
-            memcpy(eh->eth_dst, key->eth_dst, sizeof eh->eth_dst);
+            eh->eth_src = key->eth_src;
+            eh->eth_dst = key->eth_dst;
         } else {
-            ether_addr_copy_masked(eh->eth_src, key->eth_src, mask->eth_src);
-            ether_addr_copy_masked(eh->eth_dst, key->eth_dst, mask->eth_dst);
+            ether_addr_copy_masked(&eh->eth_src, key->eth_src, mask->eth_src);
+            ether_addr_copy_masked(&eh->eth_dst, key->eth_dst, mask->eth_dst);
         }
     }
 }
@@ -163,19 +163,19 @@ set_arp(struct dp_packet *packet, const struct ovs_key_arp *key,
 
     if (!mask) {
         arp->ar_op = key->arp_op;
-        memcpy(arp->ar_sha, key->arp_sha, ETH_ADDR_LEN);
+        arp->ar_sha = key->arp_sha;
         put_16aligned_be32(&arp->ar_spa, key->arp_sip);
-        memcpy(arp->ar_tha, key->arp_tha, ETH_ADDR_LEN);
+        arp->ar_tha = key->arp_tha;
         put_16aligned_be32(&arp->ar_tpa, key->arp_tip);
     } else {
         ovs_be32 ar_spa = get_16aligned_be32(&arp->ar_spa);
         ovs_be32 ar_tpa = get_16aligned_be32(&arp->ar_tpa);
 
         arp->ar_op = key->arp_op | (arp->ar_op & ~mask->arp_op);
-        ether_addr_copy_masked(arp->ar_sha, key->arp_sha, mask->arp_sha);
+        ether_addr_copy_masked(&arp->ar_sha, key->arp_sha, mask->arp_sha);
         put_16aligned_be32(&arp->ar_spa,
                            key->arp_sip | (ar_spa & ~mask->arp_sip));
-        ether_addr_copy_masked(arp->ar_tha, key->arp_tha, mask->arp_tha);
+        ether_addr_copy_masked(&arp->ar_tha, key->arp_tha, mask->arp_tha);
         put_16aligned_be32(&arp->ar_tpa,
                            key->arp_tip | (ar_tpa & ~mask->arp_tip));
     }
@@ -191,21 +191,21 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
     if (OVS_LIKELY(ns && nd_opt)) {
         int bytes_remain = dp_packet_l4_size(packet) - sizeof(*ns);
         ovs_be32 tgt_buf[4];
-        uint8_t sll_buf[ETH_ADDR_LEN] = {0};
-        uint8_t tll_buf[ETH_ADDR_LEN] = {0};
+        struct eth_addr sll_buf = eth_addr_zero;
+        struct eth_addr tll_buf = eth_addr_zero;
 
         while (bytes_remain >= ND_OPT_LEN && nd_opt->nd_opt_len != 0) {
             if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
                 && nd_opt->nd_opt_len == 1) {
-                memcpy(sll_buf, nd_opt->nd_opt_data, ETH_ADDR_LEN);
-                ether_addr_copy_masked(sll_buf, key->nd_sll, mask->nd_sll);
+                sll_buf = nd_opt->nd_opt_mac;
+                ether_addr_copy_masked(&sll_buf, key->nd_sll, mask->nd_sll);
 
                 /* A packet can only contain one SLL or TLL option */
                 break;
             } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
                        && nd_opt->nd_opt_len == 1) {
-                memcpy(tll_buf, nd_opt->nd_opt_data, ETH_ADDR_LEN);
-                ether_addr_copy_masked(tll_buf, key->nd_tll, mask->nd_tll);
+                tll_buf = nd_opt->nd_opt_mac;
+                ether_addr_copy_masked(&tll_buf, key->nd_tll, mask->nd_tll);
 
                 /* A packet can only contain one SLL or TLL option */
                 break;
@@ -305,8 +305,8 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         if (OVS_LIKELY(dp_packet_get_nd_payload(packet))) {
             const struct ovs_key_nd *nd_key
                    = nl_attr_get_unspec(a, sizeof(struct ovs_key_nd));
-            packet_set_nd(packet, nd_key->nd_target,
-                          nd_key->nd_sll, nd_key->nd_tll);
+            packet_set_nd(packet, nd_key->nd_target, nd_key->nd_sll,
+                          nd_key->nd_tll);
         }
         break;
 

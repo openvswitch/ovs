@@ -54,7 +54,7 @@ struct bond_settings {
 
     bool lacp_fallback_ab_cfg;  /* Fallback to active-backup on LACP failure. */
 
-    uint8_t active_slave_mac[ETH_ADDR_LEN];
+    struct eth_addr active_slave_mac;
                                 /* The MAC address of the interface
                                    that was active during the last
                                    ovs run. */
@@ -82,9 +82,9 @@ void bond_slave_set_may_enable(struct bond *, void *slave_, bool may_enable);
 /* Special MAC learning support for SLB bonding. */
 bool bond_should_send_learning_packets(struct bond *);
 struct dp_packet *bond_compose_learning_packet(struct bond *,
-                                            const uint8_t eth_src[ETH_ADDR_LEN],
-                                            uint16_t vlan, void **port_aux);
-bool bond_get_changed_active_slave(const char *name, uint8_t mac[ETH_ADDR_LEN],
+                                               const struct eth_addr eth_src,
+                                               uint16_t vlan, void **port_aux);
+bool bond_get_changed_active_slave(const char *name, struct eth_addr *mac,
                                    bool force);
 
 /* Packet processing. */
@@ -94,7 +94,7 @@ enum bond_verdict {
     BV_DROP_IF_MOVED            /* Drop if we've learned a different port. */
 };
 enum bond_verdict bond_check_admissibility(struct bond *, const void *slave_,
-                                           const uint8_t dst[ETH_ADDR_LEN]);
+                                           const struct eth_addr dst);
 void *bond_choose_output_slave(struct bond *, const struct flow *,
                                struct flow_wildcards *, uint16_t vlan);
 

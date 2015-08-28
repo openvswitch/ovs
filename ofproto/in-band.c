@@ -67,10 +67,10 @@ enum {
 
 /* Track one remote IP and next hop information. */
 struct in_band_remote {
-    struct sockaddr_in remote_addr; /* IP address, in network byte order. */
-    uint8_t remote_mac[ETH_ADDR_LEN]; /* Next-hop MAC, all-zeros if unknown. */
-    uint8_t last_remote_mac[ETH_ADDR_LEN]; /* Previous nonzero next-hop MAC. */
-    struct netdev *remote_netdev; /* Device to send to next-hop MAC. */
+    struct sockaddr_in remote_addr;  /* IP address, in network byte order. */
+    struct eth_addr remote_mac;      /* Next-hop MAC, all-zeros if unknown. */
+    struct eth_addr last_remote_mac; /* Previous nonzero next-hop MAC. */
+    struct netdev *remote_netdev;    /* Device to send to next-hop MAC. */
 };
 
 /* What to do to an in_band_rule. */
@@ -98,7 +98,7 @@ struct in_band {
 
     /* Local information. */
     time_t next_local_refresh;       /* Refresh timer. */
-    uint8_t local_mac[ETH_ADDR_LEN]; /* Current MAC. */
+    struct eth_addr local_mac;       /* Current MAC. */
     struct netdev *local_netdev;     /* Local port's network device. */
 
     /* Flow tracking. */
@@ -115,7 +115,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     int retval;
 
     /* Find the next-hop IP address. */
-    memset(r->remote_mac, 0, sizeof r->remote_mac);
+    r->remote_mac = eth_addr_zero;
     retval = netdev_get_next_hop(ib->local_netdev, &r->remote_addr.sin_addr,
                                  &next_hop_inaddr, &next_hop_dev);
     if (retval) {
@@ -149,7 +149,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
 
     /* Look up the MAC address of the next-hop IP address. */
     retval = netdev_arp_lookup(r->remote_netdev, next_hop_inaddr.s_addr,
-                               r->remote_mac);
+                               &r->remote_mac);
     if (retval) {
         VLOG_DBG_RL(&rl, "%s: cannot look up remote MAC address ("IP_FMT"): %s",
                     ib->ofproto->name, IP_ARGS(next_hop_inaddr.s_addr),
@@ -175,11 +175,11 @@ refresh_remotes(struct in_band *ib)
     any_changes = false;
     ib->next_remote_refresh = TIME_MAX;
     for (r = ib->remotes; r < &ib->remotes[ib->n_remotes]; r++) {
-        uint8_t old_remote_mac[ETH_ADDR_LEN];
+        struct eth_addr old_remote_mac;
         time_t next_refresh;
 
         /* Save old MAC. */
-        memcpy(old_remote_mac, r->remote_mac, ETH_ADDR_LEN);
+        old_remote_mac = r->remote_mac;
 
         /* Refresh remote information. */
         next_refresh = refresh_remote(ib, r) + time_now();
@@ -195,7 +195,7 @@ refresh_remotes(struct in_band *ib)
                          ib->ofproto->name,
                          ETH_ADDR_ARGS(r->last_remote_mac),
                          ETH_ADDR_ARGS(r->remote_mac));
-                memcpy(r->last_remote_mac, r->remote_mac, ETH_ADDR_LEN);
+                r->last_remote_mac = r->remote_mac;
             }
         }
     }
@@ -208,7 +208,7 @@ refresh_remotes(struct in_band *ib)
 static bool
 refresh_local(struct in_band *ib)
 {
-    uint8_t ea[ETH_ADDR_LEN];
+    struct eth_addr ea;
     time_t now;
 
     now = time_now();
@@ -217,12 +217,12 @@ refresh_local(struct in_band *ib)
     }
     ib->next_local_refresh = now + 1;
 
-    if (netdev_get_etheraddr(ib->local_netdev, ea)
+    if (netdev_get_etheraddr(ib->local_netdev, &ea)
         || eth_addr_equals(ea, ib->local_mac)) {
         return false;
     }
 
-    memcpy(ib->local_mac, ea, ETH_ADDR_LEN);
+    ib->local_mac = ea;
     return true;
 }
 
@@ -306,23 +306,21 @@ update_rules(struct in_band *ib)
     }
 
     for (r = ib->remotes; r < &ib->remotes[ib->n_remotes]; r++) {
-        const uint8_t *remote_mac = r->remote_mac;
-
-        if (eth_addr_is_zero(remote_mac)) {
+        if (eth_addr_is_zero(r->remote_mac)) {
             continue;
         }
 
         /* (d) Allow ARP replies to the next hop's MAC address. */
         match_init_catchall(&match);
         match_set_dl_type(&match, htons(ETH_TYPE_ARP));
-        match_set_dl_dst(&match, remote_mac);
+        match_set_dl_dst(&match, r->remote_mac);
         match_set_nw_proto(&match, ARP_OP_REPLY);
         add_rule(ib, &match, IBR_TO_NEXT_HOP_ARP);
 
         /* (e) Allow ARP requests from the next hop's MAC address. */
         match_init_catchall(&match);
         match_set_dl_type(&match, htons(ETH_TYPE_ARP));
-        match_set_dl_src(&match, remote_mac);
+        match_set_dl_src(&match, r->remote_mac);
         match_set_nw_proto(&match, ARP_OP_REQUEST);
         add_rule(ib, &match, IBR_FROM_NEXT_HOP_ARP);
     }

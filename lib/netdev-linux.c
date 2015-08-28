@@ -443,7 +443,7 @@ struct netdev_linux {
     /* The following are figured out "on demand" only.  They are only valid
      * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
-    uint8_t etheraddr[ETH_ADDR_LEN];
+    struct eth_addr etheraddr;
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
@@ -506,8 +506,8 @@ static int get_ifindex(const struct netdev *, int *ifindexp);
 static int do_set_addr(struct netdev *netdev,
                        int ioctl_nr, const char *ioctl_name,
                        struct in_addr addr);
-static int get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN]);
-static int set_etheraddr(const char *netdev_name, const uint8_t[ETH_ADDR_LEN]);
+static int get_etheraddr(const char *netdev_name, struct eth_addr *ea);
+static int set_etheraddr(const char *netdev_name, const struct eth_addr);
 static int get_stats_via_netlink(const struct netdev *, struct netdev_stats *);
 static int af_packet_sock(void);
 static bool netdev_linux_miimon_enabled(void);
@@ -700,8 +700,8 @@ netdev_linux_update(struct netdev_linux *dev,
                 dev->netdev_mtu_error = 0;
             }
 
-            if (!eth_addr_is_zero(change->addr)) {
-                memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
+            if (!eth_addr_is_zero(change->mac)) {
+                dev->etheraddr = change->mac;
                 dev->cache_valid |= VALID_ETHERADDR;
                 dev->ether_addr_error = 0;
             }
@@ -1234,8 +1234,7 @@ netdev_linux_send_wait(struct netdev *netdev, int qid OVS_UNUSED)
 /* Attempts to set 'netdev''s MAC address to 'mac'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 static int
-netdev_linux_set_etheraddr(struct netdev *netdev_,
-                           const uint8_t mac[ETH_ADDR_LEN])
+netdev_linux_set_etheraddr(struct netdev *netdev_, const struct eth_addr mac)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     enum netdev_flags old_flags = 0;
@@ -1260,7 +1259,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         netdev->ether_addr_error = error;
         netdev->cache_valid |= VALID_ETHERADDR;
         if (!error) {
-            memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+            netdev->etheraddr = mac;
         }
     }
 
@@ -1275,8 +1274,7 @@ exit:
 
 /* Copies 'netdev''s MAC address to 'mac' which is passed as param. */
 static int
-netdev_linux_get_etheraddr(const struct netdev *netdev_,
-                           uint8_t mac[ETH_ADDR_LEN])
+netdev_linux_get_etheraddr(const struct netdev *netdev_, struct eth_addr *mac)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
@@ -1284,13 +1282,13 @@ netdev_linux_get_etheraddr(const struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_ETHERADDR)) {
         netdev->ether_addr_error = get_etheraddr(netdev_get_name(netdev_),
-                                                 netdev->etheraddr);
+                                                 &netdev->etheraddr);
         netdev->cache_valid |= VALID_ETHERADDR;
     }
 
     error = netdev->ether_addr_error;
     if (!error) {
-        memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+        *mac = netdev->etheraddr;
     }
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -2681,7 +2679,7 @@ netdev_internal_get_status(const struct netdev *netdev OVS_UNUSED,
  * ENXIO indicates that there is not ARP table entry for 'ip' on 'netdev'. */
 static int
 netdev_linux_arp_lookup(const struct netdev *netdev,
-                        ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
+                        ovs_be32 ip, struct eth_addr *mac)
 {
     struct arpreq r;
     struct sockaddr_in sin;
@@ -5493,7 +5491,7 @@ get_ifindex(const struct netdev *netdev_, int *ifindexp)
 }
 
 static int
-get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
+get_etheraddr(const char *netdev_name, struct eth_addr *ea)
 {
     struct ifreq ifr;
     int hwaddr_family;
@@ -5522,8 +5520,7 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
 }
 
 static int
-set_etheraddr(const char *netdev_name,
-              const uint8_t mac[ETH_ADDR_LEN])
+set_etheraddr(const char *netdev_name, const struct eth_addr mac)
 {
     struct ifreq ifr;
     int error;
@@ -5531,7 +5528,7 @@ set_etheraddr(const char *netdev_name,
     memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
-    memcpy(ifr.ifr_hwaddr.sa_data, mac, ETH_ADDR_LEN);
+    memcpy(ifr.ifr_hwaddr.sa_data, &mac, ETH_ADDR_LEN);
     COVERAGE_INC(netdev_set_hwaddr);
     error = af_inet_ioctl(SIOCSIFHWADDR, &ifr);
     if (error) {

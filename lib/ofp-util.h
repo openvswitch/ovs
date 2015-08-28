@@ -496,7 +496,7 @@ enum ofputil_port_state {
 /* Abstract ofp10_phy_port or ofp11_port. */
 struct ofputil_phy_port {
     ofp_port_t port_no;
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     char name[OFP_MAX_PORT_NAME_LEN];
     enum ofputil_port_config config;
     enum ofputil_port_state state;
@@ -572,7 +572,7 @@ struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
 /* Abstract ofp_port_mod. */
 struct ofputil_port_mod {
     ofp_port_t port_no;
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     enum ofputil_port_config config;
     enum ofputil_port_config mask;
     enum netdev_features advertise;

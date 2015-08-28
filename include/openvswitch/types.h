@@ -106,4 +106,14 @@ typedef uint32_t OVS_BITWISE ofp11_port_t;
 #define ODP_PORT_C(X) ((OVS_FORCE odp_port_t) (X))
 #define OFP11_PORT_C(X) ((OVS_FORCE ofp11_port_t) (X))
 
+/* Using this stuct instead of a bare array makes an ethernet address field
+ * assignable.  The size of the array is also part of the type, so it is easier
+ * to deal with. */
+struct eth_addr {
+    union {
+        uint8_t ea[6];
+        ovs_be16 be16[3];
+    };
+};
+
 #endif /* openvswitch/types.h */

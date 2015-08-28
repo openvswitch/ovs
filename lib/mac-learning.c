@@ -42,7 +42,7 @@ mac_entry_age(const struct mac_learning *ml, const struct mac_entry *e)
 }
 
 static uint32_t
-mac_table_hash(const struct mac_learning *ml, const uint8_t mac[ETH_ADDR_LEN],
+mac_table_hash(const struct mac_learning *ml, const struct eth_addr mac,
                uint16_t vlan)
 {
     return hash_mac(mac, vlan, ml->secret);
@@ -56,7 +56,7 @@ mac_entry_from_lru_node(struct ovs_list *list)
 
 static struct mac_entry *
 mac_entry_lookup(const struct mac_learning *ml,
-                 const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
+                 const struct eth_addr mac, uint16_t vlan)
 {
     struct mac_entry *e;
 
@@ -286,7 +286,7 @@ is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
  * 'vlan' is configured on 'ml' to flood all packets. */
 bool
 mac_learning_may_learn(const struct mac_learning *ml,
-                       const uint8_t src_mac[ETH_ADDR_LEN], uint16_t vlan)
+                       const struct eth_addr src_mac, uint16_t vlan)
 {
     return ml && is_learning_vlan(ml, vlan) && !eth_addr_is_multicast(src_mac);
 }
@@ -301,7 +301,7 @@ mac_learning_may_learn(const struct mac_learning *ml,
  * the new entry's port to a nonnull value with mac_entry_set_port(). */
 struct mac_entry *
 mac_learning_insert(struct mac_learning *ml,
-                    const uint8_t src_mac[ETH_ADDR_LEN], uint16_t vlan)
+                    const struct eth_addr src_mac, uint16_t vlan)
 {
     struct mac_entry *e;
 
@@ -315,7 +315,7 @@ mac_learning_insert(struct mac_learning *ml,
 
         e = xmalloc(sizeof *e);
         hmap_insert(&ml->table, &e->hmap_node, hash);
-        memcpy(e->mac, src_mac, ETH_ADDR_LEN);
+        e->mac = src_mac;
         e->vlan = vlan;
         e->grat_arp_lock = TIME_MIN;
         e->mlport = NULL;
@@ -339,7 +339,7 @@ mac_learning_insert(struct mac_learning *ml,
  * learning entry, if any. */
 struct mac_entry *
 mac_learning_lookup(const struct mac_learning *ml,
-                    const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan)
+                    const struct eth_addr dst, uint16_t vlan)
 {
     if (eth_addr_is_multicast(dst)) {
         /* No tag because the treatment of multicast destinations never

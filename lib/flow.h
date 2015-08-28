@@ -107,8 +107,8 @@ struct flow {
     uint8_t pad1[6];            /* Pad to 64 bits. */
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
-    uint8_t dl_dst[ETH_ADDR_LEN]; /* Ethernet destination address. */
-    uint8_t dl_src[ETH_ADDR_LEN]; /* Ethernet source address. */
+    struct eth_addr dl_dst;     /* Ethernet destination address. */
+    struct eth_addr dl_src;     /* Ethernet source address. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be32 mpls_lse[ROUND_UP(FLOW_MAX_MPLS_LABELS, 2)]; /* MPLS label stack
@@ -124,8 +124,8 @@ struct flow {
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
     struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
-    uint8_t arp_sha[ETH_ADDR_LEN]; /* ARP/ND source hardware address. */
-    uint8_t arp_tha[ETH_ADDR_LEN]; /* ARP/ND target hardware address. */
+    struct eth_addr arp_sha;    /* ARP/ND source hardware address. */
+    struct eth_addr arp_tha;    /* ARP/ND target hardware address. */
     ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
     ovs_be16 pad2;              /* Pad to 64 bits. */
 

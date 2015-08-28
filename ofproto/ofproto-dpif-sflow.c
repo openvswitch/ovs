@@ -368,12 +368,10 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     if (ofproto_port_get_lacp_stats(dsp->ofport, &lacp_stats) == 0) {
 	memset(&lacp_elem, 0, sizeof lacp_elem);
 	lacp_elem.tag = SFLCOUNTERS_LACP;
-	memcpy(&lacp_elem.counterBlock.lacp.actorSystemID,
-	       lacp_stats.dot3adAggPortActorSystemID,
-	       ETH_ADDR_LEN);
-	memcpy(&lacp_elem.counterBlock.lacp.partnerSystemID,
-	       lacp_stats.dot3adAggPortPartnerOperSystemID,
-	       ETH_ADDR_LEN);
+	lacp_elem.counterBlock.lacp.actorSystemID =
+        lacp_stats.dot3adAggPortActorSystemID;
+	lacp_elem.counterBlock.lacp.partnerSystemID =
+        lacp_stats.dot3adAggPortPartnerOperSystemID;
 	lacp_elem.counterBlock.lacp.attachedAggID =
 	    lacp_stats.dot3adAggPortAttachedAggID;
 	lacp_elem.counterBlock.lacp.portState.v.actorAdmin =

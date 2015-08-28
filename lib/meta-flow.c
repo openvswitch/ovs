@@ -656,11 +656,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_ETH_SRC:
-        memcpy(value->mac, flow->dl_src, ETH_ADDR_LEN);
+        value->mac = flow->dl_src;
         break;
 
     case MFF_ETH_DST:
-        memcpy(value->mac, flow->dl_dst, ETH_ADDR_LEN);
+        value->mac = flow->dl_dst;
         break;
 
     case MFF_ETH_TYPE:
@@ -753,12 +753,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memcpy(value->mac, flow->arp_sha, ETH_ADDR_LEN);
+        value->mac = flow->arp_sha;
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memcpy(value->mac, flow->arp_tha, ETH_ADDR_LEN);
+        value->mac = flow->arp_tha;
         break;
 
     case MFF_TCP_SRC:
@@ -1155,11 +1155,11 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_ETH_SRC:
-        memcpy(flow->dl_src, value->mac, ETH_ADDR_LEN);
+        flow->dl_src = value->mac;
         break;
 
     case MFF_ETH_DST:
-        memcpy(flow->dl_dst, value->mac, ETH_ADDR_LEN);
+        flow->dl_dst = value->mac;
         break;
 
     case MFF_ETH_TYPE:
@@ -1255,12 +1255,12 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memcpy(flow->arp_sha, value->mac, ETH_ADDR_LEN);
+        flow->arp_sha = value->mac;
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memcpy(flow->arp_tha, value->mac, ETH_ADDR_LEN);
+        flow->arp_tha = value->mac;
         break;
 
     case MFF_TCP_SRC:
@@ -1423,13 +1423,13 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         break;
 
     case MFF_ETH_SRC:
-        memset(match->flow.dl_src, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.dl_src, 0, ETH_ADDR_LEN);
+        match->flow.dl_src = eth_addr_zero;
+        match->wc.masks.dl_src = eth_addr_zero;
         break;
 
     case MFF_ETH_DST:
-        memset(match->flow.dl_dst, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.dl_dst, 0, ETH_ADDR_LEN);
+        match->flow.dl_dst = eth_addr_zero;
+        match->wc.masks.dl_dst = eth_addr_zero;
         break;
 
     case MFF_ETH_TYPE:
@@ -1521,14 +1521,14 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memset(match->flow.arp_sha, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.arp_sha, 0, ETH_ADDR_LEN);
+        match->flow.arp_sha = eth_addr_zero;
+        match->wc.masks.arp_sha = eth_addr_zero;
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memset(match->flow.arp_tha, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.arp_tha, 0, ETH_ADDR_LEN);
+        match->flow.arp_tha = eth_addr_zero;
+        match->wc.masks.arp_tha = eth_addr_zero;
         break;
 
     case MFF_TCP_SRC:
@@ -1858,23 +1858,22 @@ syntax_error:
 
 static char *
 mf_from_ethernet_string(const struct mf_field *mf, const char *s,
-                        uint8_t mac[ETH_ADDR_LEN],
-                        uint8_t mask[ETH_ADDR_LEN])
+                        struct eth_addr *mac, struct eth_addr *mask)
 {
     int n;
 
     ovs_assert(mf->n_bytes == ETH_ADDR_LEN);
 
     n = -1;
-    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(mac), &n)
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(*mac), &n)
         && n == strlen(s)) {
-        memset(mask, 0xff, ETH_ADDR_LEN);
+        *mask = eth_addr_exact;
         return NULL;
     }
 
     n = -1;
     if (ovs_scan(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT"%n",
-                 ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask), &n)
+                 ETH_ADDR_SCAN_ARGS(*mac), ETH_ADDR_SCAN_ARGS(*mask), &n)
         && n == strlen(s)) {
         return NULL;
     }
@@ -2081,7 +2080,7 @@ mf_parse(const struct mf_field *mf, const char *s,
         break;
 
     case MFS_ETHERNET:
-        error = mf_from_ethernet_string(mf, s, value->mac, mask->mac);
+        error = mf_from_ethernet_string(mf, s, &value->mac, &mask->mac);
         break;
 
     case MFS_IPV4:
@@ -2237,7 +2236,7 @@ mf_format(const struct mf_field *mf,
         break;
 
     case MFS_ETHERNET:
-        eth_format_masked(value->mac, mask->mac, s);
+        eth_format_masked(value->mac, mask ? &mask->mac : NULL, s);
         break;
 
     case MFS_IPV4:

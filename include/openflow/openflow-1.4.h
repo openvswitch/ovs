@@ -72,7 +72,7 @@ struct ofp14_port {
     ovs_be32 port_no;
     ovs_be16 length;
     uint8_t pad[2];
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     uint8_t pad2[2];                  /* Align to 64 bits. */
     char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
@@ -106,7 +106,7 @@ OFP_ASSERT(sizeof(struct ofp14_port_mod_prop_ethernet) == 8);
 struct ofp14_port_mod {
     ovs_be32 port_no;
     uint8_t pad[4];
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     uint8_t pad2[2];
     ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
     ovs_be32 mask;          /* Bitmap of OFPPC_* flags to be changed. */
