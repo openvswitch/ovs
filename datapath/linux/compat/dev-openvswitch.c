@@ -33,7 +33,7 @@ void dev_disable_lro(struct net_device *dev) { }
 
 #endif /* HAVE_DEV_DISABLE_LRO */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) || \
+#if !defined HAVE_NETDEV_RX_HANDLER_REGISTER || \
     defined HAVE_RHEL_OVS_HOOK
 
 static int nr_bridges;

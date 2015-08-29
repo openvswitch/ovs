@@ -36,7 +36,7 @@
 
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+#if defined HAVE_RX_HANDLER_PSKB  /* 2.6.39 and above or backports */
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
 {
@@ -254,7 +254,7 @@ drop:
 /* Returns null if this device is not attached to a datapath. */
 struct vport *ovs_netdev_get_vport(struct net_device *dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
+#if defined HAVE_NETDEV_RX_HANDLER_REGISTER || \
     defined HAVE_RHEL_OVS_HOOK
 #if IFF_OVS_DATAPATH != 0
 	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
@@ -264,7 +264,12 @@ struct vport *ovs_netdev_get_vport(struct net_device *dev)
 #ifdef HAVE_RHEL_OVS_HOOK
 		return (struct vport *)rcu_dereference_rtnl(dev->ax25_ptr);
 #else
+#ifdef HAVE_NET_DEVICE_EXTENDED
+		return (struct vport *)
+			rcu_dereference_rtnl(netdev_extended(dev)->rx_handler_data);
+#else
 		return (struct vport *)rcu_dereference_rtnl(dev->rx_handler_data);
+#endif
 #endif
 	else
 		return NULL;
@@ -281,7 +286,7 @@ const struct vport_ops ovs_netdev_vport_ops = {
 	.send		= netdev_send,
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) && \
+#if !defined HAVE_NETDEV_RX_HANDLER_REGISTER && \
     !defined HAVE_RHEL_OVS_HOOK
 /*
  * Enforces, mutual exclusion with the Linux bridge module, by declaring and

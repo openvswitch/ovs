@@ -291,6 +291,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_rx_handler_register])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_extended])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [rx_handler_func_t.*pskb],
+                  [OVS_DEFINE([HAVE_RX_HANDLER_PSKB])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
 
