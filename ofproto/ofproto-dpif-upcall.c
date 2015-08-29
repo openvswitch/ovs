@@ -116,6 +116,20 @@ struct udpif {
     struct seq *dump_seq;              /* Increments each dump iteration. */
     atomic_bool enable_ufid;           /* If true, skip dumping flow attrs. */
 
+    /* These variables provide a mechanism for the main thread to pause
+     * all revalidation without having to completely shut the threads down.
+     * 'pause_latch' is shared between the main thread and the lead
+     * revalidator thread, so when it is desirable to halt revalidation, the
+     * main thread will set the latch. 'pause' and 'pause_barrier' are shared
+     * by revalidator threads. The lead revalidator will set 'pause' when it
+     * observes the latch has been set, and this will cause all revalidator
+     * threads to wait on 'pause_barrier' at the beginning of the next
+     * revalidation round. */
+    bool pause;                        /* Set by leader on 'pause_latch. */
+    struct latch pause_latch;          /* Set to force revalidators pause. */
+    struct ovs_barrier pause_barrier;  /* Barrier used to pause all */
+                                       /* revalidators by main thread. */
+
     /* There are 'N_UMAPS' maps containing 'struct udpif_key' elements.
      *
      * During the flow dump phase, revalidators insert into these with a random
@@ -267,10 +281,13 @@ static void handle_upcalls(struct udpif *, struct upcall *, size_t n_upcalls);
 static void udpif_stop_threads(struct udpif *);
 static void udpif_start_threads(struct udpif *, size_t n_handlers,
                                 size_t n_revalidators);
+static void udpif_pause_revalidators(struct udpif *);
+static void udpif_resume_revalidators(struct udpif *);
 static void *udpif_upcall_handler(void *);
 static void *udpif_revalidator(void *);
 static unsigned long udpif_get_n_flows(struct udpif *);
 static void revalidate(struct revalidator *);
+static void revalidator_pause(struct revalidator *);
 static void revalidator_sweep(struct revalidator *);
 static void revalidator_purge(struct revalidator *);
 static void upcall_unixctl_show(struct unixctl_conn *conn, int argc,
@@ -356,6 +373,7 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->reval_seq = seq_create();
     udpif->dump_seq = seq_create();
     latch_init(&udpif->exit_latch);
+    latch_init(&udpif->pause_latch);
     list_push_back(&all_udpifs, &udpif->list_node);
     atomic_init(&udpif->enable_ufid, false);
     atomic_init(&udpif->n_flows, 0);
@@ -401,6 +419,7 @@ udpif_destroy(struct udpif *udpif)
 
     list_remove(&udpif->list_node);
     latch_destroy(&udpif->exit_latch);
+    latch_destroy(&udpif->pause_latch);
     seq_destroy(udpif->reval_seq);
     seq_destroy(udpif->dump_seq);
     ovs_mutex_destroy(&udpif->n_flows_mutex);
@@ -440,6 +459,7 @@ udpif_stop_threads(struct udpif *udpif)
         latch_poll(&udpif->exit_latch);
 
         ovs_barrier_destroy(&udpif->reval_barrier);
+        ovs_barrier_destroy(&udpif->pause_barrier);
 
         free(udpif->revalidators);
         udpif->revalidators = NULL;
@@ -479,7 +499,9 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
         dpif_enable_upcall(udpif->dpif);
 
         ovs_barrier_init(&udpif->reval_barrier, udpif->n_revalidators);
+        ovs_barrier_init(&udpif->pause_barrier, udpif->n_revalidators + 1);
         udpif->reval_exit = false;
+        udpif->pause = false;
         udpif->revalidators = xzalloc(udpif->n_revalidators
                                       * sizeof *udpif->revalidators);
         for (i = 0; i < udpif->n_revalidators; i++) {
@@ -490,6 +512,25 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                 "revalidator", udpif_revalidator, revalidator);
         }
     }
+}
+
+/* Pauses all revalidators.  Should only be called by the main thread.
+ * When function returns, all revalidators are paused and will proceed
+ * only after udpif_resume_revalidators() is called. */
+static void
+udpif_pause_revalidators(struct udpif *udpif)
+{
+    latch_set(&udpif->pause_latch);
+    ovs_barrier_block(&udpif->pause_barrier);
+}
+
+/* Resumes the pausing of revalidators.  Should only be called by the
+ * main thread. */
+static void
+udpif_resume_revalidators(struct udpif *udpif)
+{
+    latch_poll(&udpif->pause_latch);
+    ovs_barrier_block(&udpif->pause_barrier);
 }
 
 /* Tells 'udpif' how many threads it should use to handle upcalls.
@@ -774,6 +815,12 @@ udpif_revalidator(void *arg)
             udpif->max_n_flows = MAX(n_flows, udpif->max_n_flows);
             udpif->avg_n_flows = (udpif->avg_n_flows + n_flows) / 2;
 
+            /* Only the leader checks the pause latch to prevent a race where
+             * some threads think it's false and proceed to block on
+             * reval_barrier and others think it's true and block indefinitely
+             * on the pause_barrier */
+            udpif->pause = latch_is_set(&udpif->pause_latch);
+
             /* Only the leader checks the exit latch to prevent a race where
              * some threads think it's true and exit and others think it's
              * false and block indefinitely on the reval_barrier */
@@ -790,6 +837,10 @@ udpif_revalidator(void *arg)
 
         /* Wait for the leader to start the flow dump. */
         ovs_barrier_block(&udpif->reval_barrier);
+        if (udpif->pause) {
+            revalidator_pause(revalidator);
+        }
+
         if (udpif->reval_exit) {
             break;
         }
@@ -832,6 +883,7 @@ udpif_revalidator(void *arg)
             poll_timer_wait_until(start_time + MIN(ofproto_max_idle, 500));
             seq_wait(udpif->reval_seq, last_reval_seq);
             latch_wait(&udpif->exit_latch);
+            latch_wait(&udpif->pause_latch);
             poll_block();
         }
     }
@@ -2106,6 +2158,17 @@ revalidate(struct revalidator *revalidator)
     }
     dpif_flow_dump_thread_destroy(dump_thread);
     ofpbuf_uninit(&odp_actions);
+}
+
+/* Pauses the 'revalidator', can only proceed after main thread
+ * calls udpif_resume_revalidators(). */
+static void
+revalidator_pause(struct revalidator *revalidator)
+{
+    /* The first block is for sync'ing the pause with main thread. */
+    ovs_barrier_block(&revalidator->udpif->pause_barrier);
+    /* The second block is for pausing until main thread resumes. */
+    ovs_barrier_block(&revalidator->udpif->pause_barrier);
 }
 
 static void
