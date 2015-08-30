@@ -742,7 +742,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMPV6)) {
             if (OVS_LIKELY(size >= sizeof(struct icmp6_hdr))) {
                 const struct in6_addr *nd_target = NULL;
-                struct eth_addr arp_buf[2] = { };
+                struct eth_addr arp_buf[2] = { { { { 0 } } } };
                 const struct icmp6_hdr *icmp = data_pull(&data, &size,
                                                          sizeof *icmp);
                 parse_icmpv6(&data, &size, icmp, &nd_target, arp_buf);

@@ -529,7 +529,7 @@ flowmap_clear(struct flowmap *fm, size_t idx, unsigned int n_bits)
 
 /* OR the bits in the flowmaps. */
 static inline struct flowmap
-flowmap_or(struct flowmap a, const struct flowmap b)
+flowmap_or(struct flowmap a, struct flowmap b)
 {
     struct flowmap map;
     size_t unit;
@@ -542,7 +542,7 @@ flowmap_or(struct flowmap a, const struct flowmap b)
 
 /* AND the bits in the flowmaps. */
 static inline struct flowmap
-flowmap_and(struct flowmap a, const struct flowmap b)
+flowmap_and(struct flowmap a, struct flowmap b)
 {
     struct flowmap map;
     size_t unit;
@@ -554,7 +554,7 @@ flowmap_and(struct flowmap a, const struct flowmap b)
 }
 
 static inline bool
-flowmap_is_empty(const struct flowmap fm)
+flowmap_is_empty(struct flowmap fm)
 {
     map_t map;
 
