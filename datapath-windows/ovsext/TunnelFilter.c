@@ -168,6 +168,10 @@ static VOID     OvsTunnelFilterThreadStop(POVS_TUNFLT_THREAD_CONTEXT threadCtx,
                                           BOOLEAN signalEvent);
 static NTSTATUS OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
 static VOID     OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
+static VOID     OvsTunnelFilterSetIrpContext(POVS_TUNFLT_REQUEST_LIST listRequests,
+                                             POVS_TUNFLT_REQUEST request);
+static VOID     OvsTunnelFilterCancelIrp(PDEVICE_OBJECT DeviceObject,
+                                         PIRP Irp);
 
 /*
  * Callout driver global variables
@@ -955,20 +959,49 @@ OvsTunnelFilterExecuteAction(HANDLE engineSession,
 
 /*
  * --------------------------------------------------------------------------
- * This function pops the head item from the requests list while holding
- * the list's spinlock.
+ * This function pops the head request from the queue while holding the
+ * queue lock. If the request has already been cancelled or is about to be
+ * cancelled, the function retrieves the next valid request.
+ *
+ * Returns a pointer to the OVS_TUNFLT_REQUEST_LIST request object retrieved
+ * from the queue.
  * --------------------------------------------------------------------------
  */
 POVS_TUNFLT_REQUEST
 OvsTunnelFilterRequestPop(POVS_TUNFLT_REQUEST_LIST listRequests)
 {
     POVS_TUNFLT_REQUEST request = NULL;
+    PLIST_ENTRY         link, next, head;
 
     NdisAcquireSpinLock(&listRequests->spinlock);
 
     if (!IsListEmpty(&listRequests->head)) {
-        request = (POVS_TUNFLT_REQUEST)RemoveHeadList(&listRequests->head);
-        listRequests->numEntries--;
+        head = &listRequests->head;
+        LIST_FORALL_SAFE(head, link, next) {
+            PDRIVER_CANCEL oldCancelRoutine;
+
+            request = CONTAINING_RECORD(link, OVS_TUNFLT_REQUEST, entry);
+            if (request->irp) {
+                oldCancelRoutine = IoSetCancelRoutine(request->irp, NULL);
+                if (oldCancelRoutine == NULL) {
+                    /*
+                     * The Cancel routine for the current IRP is running. The
+                     * request is to be completed by the Cancel routine. Leave
+                     * this request alone and go to the next one.
+                     */
+                    continue;
+                } else {
+                    /*
+                     * The Cancel routine cannot run now and cannot already have
+                     * started to run. This request can be processed.
+                     */
+                }
+            }
+
+            RemoveEntryList(&request->entry);
+            listRequests->numEntries--;
+            break;
+        }
     }
 
     NdisReleaseSpinLock(&listRequests->spinlock);
@@ -978,20 +1011,78 @@ OvsTunnelFilterRequestPop(POVS_TUNFLT_REQUEST_LIST listRequests)
 
 /*
  * --------------------------------------------------------------------------
- * This function pushes the received request to the list while holding the
- * request list spinlock.
+ * This function pushes the received request to the queue, marks the IRP as
+ * pending and sets its Cancel routine, while holding the queue lock.
+ *
+ * Returns STATUS_CANCELLED if the IRP has already been cancelled. Otherwise,
+ * STATUS_SUCCESS is returned.
  * --------------------------------------------------------------------------
  */
-VOID
+NTSTATUS
 OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
                            POVS_TUNFLT_REQUEST request)
 {
+    NTSTATUS status = STATUS_SUCCESS;
+    PIRP irp = request->irp;
+    PDRIVER_CANCEL oldCancelRoutine;
+    BOOLEAN cancelled = FALSE;
+
     NdisAcquireSpinLock(&listRequests->spinlock);
 
-    InsertTailList(&listRequests->head, &(request->entry));
-    listRequests->numEntries++;
+    if (irp) {
+        /*
+         * Mark the IRP pending to indicate that the request may complete on
+         * a different thread.
+         */
+        IoMarkIrpPending(irp);
+
+        /*
+         * Set the Cancel routine for the pending IRP, before checking the
+         * Cancel flag.
+         */
+        oldCancelRoutine = IoSetCancelRoutine(irp, OvsTunnelFilterCancelIrp);
+        ASSERT(oldCancelRoutine == NULL);
+
+        if (irp->Cancel) {
+            /*
+             * The IRP has already been cancelled.
+             * Determine wheather the Cancel routine has started to run.
+             */
+            oldCancelRoutine = IoSetCancelRoutine(irp, NULL);
+            if (oldCancelRoutine) {
+                /*
+                 * The I/O Manager has not called the Cancel routine and it
+                 * won't be called anymore, because we just set it to NULL.
+                 * Return STATUS_CANCELLED and complete the request after
+                 * releasing the lock.
+                 */
+                status = STATUS_CANCELLED;
+                cancelled = TRUE;
+            } else {
+                /*
+                 * The Cancel routine has already started to run, but it is
+                 * blocked while it waits for the queue lock. Release the lock
+                 * and return STATUS_SUCCESS to avoid completing the request.
+                 * It will be completed in the Cancel routine.
+                 */
+            }
+        } else {
+            /*
+             * The IRP has not been cancelled, so set its context used in the
+             * Cancel routine.
+             */
+            OvsTunnelFilterSetIrpContext(listRequests, request);
+        }
+    }
+
+    if (!cancelled) {
+        InsertTailList(&listRequests->head, &(request->entry));
+        listRequests->numEntries++;
+    }
 
     NdisReleaseSpinLock(&listRequests->spinlock);
+
+    return status;
 }
 
 /*
@@ -1004,20 +1095,25 @@ OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
  * calculated based on the received destination port.
  * --------------------------------------------------------------------------
  */
-VOID
+NTSTATUS
 OvsTunnelFilterThreadPush(POVS_TUNFLT_REQUEST request)
 {
+    NTSTATUS status = STATUS_SUCCESS;
     UINT32 threadIndex;
 
     threadIndex = request->port % OVS_TUNFLT_MAX_THREADS;
 
-    OvsTunnelFilterRequestPush(
+    status = OvsTunnelFilterRequestPush(
         &gTunnelThreadCtx[threadIndex].listRequests,
         request);
 
-    KeSetEvent(&gTunnelThreadCtx[threadIndex].requestEvent,
-               IO_NO_INCREMENT,
-               FALSE);
+    if (NT_SUCCESS(status)) {
+        KeSetEvent(&gTunnelThreadCtx[threadIndex].requestEvent,
+                   IO_NO_INCREMENT,
+                   FALSE);
+    }
+
+    return status;
 }
 
 VOID
@@ -1313,7 +1409,7 @@ OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
  * --------------------------------------------------------------------------
  * This function creates a new tunnel filter request and push it to a thread
  * queue. If the thread stop event is signaled, the request is completed with
- * STATUS_CANCELLED without pushing it to any queue.
+ * STATUS_REQUEST_ABORTED without pushing it to any queue.
  * --------------------------------------------------------------------------
  */
 NTSTATUS
@@ -1326,6 +1422,7 @@ OvsTunnelFilterQueueRequest(PIRP irp,
 {
     POVS_TUNFLT_REQUEST request = NULL;
     NTSTATUS            status = STATUS_PENDING;
+    NTSTATUS            result = STATUS_SUCCESS;
     BOOLEAN             error = TRUE;
     UINT64              timeout = 0;
 
@@ -1338,8 +1435,8 @@ OvsTunnelFilterQueueRequest(PIRP irp,
                                   FALSE,
                                   (LARGE_INTEGER *)&timeout)) {
             /* The stop event is signaled. Completed the IRP with
-             * STATUS_CANCELLED. */
-            status = STATUS_CANCELLED;
+             * STATUS_REQUEST_ABORTED. */
+            status = STATUS_REQUEST_ABORTED;
             break;
         }
 
@@ -1370,7 +1467,11 @@ OvsTunnelFilterQueueRequest(PIRP irp,
         request->callback = callback;
         request->context = tunnelContext;
 
-        OvsTunnelFilterThreadPush(request);
+        result = OvsTunnelFilterThreadPush(request);
+        if (!NT_SUCCESS(result)) {
+            status = result;
+            break;
+        }
 
         error = FALSE;
     } while (error);
@@ -1465,4 +1566,65 @@ OvsTunnelFilterDelete(PIRP irp,
                                        OVS_TUN_FILTER_DELETE,
                                        callback,
                                        tunnelContext);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function sets the context for the IRP. The context is used by the
+ * Cancel routine, in order to identify the request object, corresponding to
+ * the IRP, to be completed and to have access to the queue lock to remove
+ * the request link from the queue.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsTunnelFilterSetIrpContext(POVS_TUNFLT_REQUEST_LIST listRequests,
+                             POVS_TUNFLT_REQUEST request)
+{
+    PIRP irp = request->irp;
+
+    if (irp) {
+        /* Set the IRP's DriverContext to be used for later. */
+        irp->Tail.Overlay.DriverContext[0] = (PVOID)request;
+        irp->Tail.Overlay.DriverContext[1] = (PVOID)listRequests;
+    }
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * This function is the Cancel routine to be called by the I/O Manager in the
+ * case when the IRP is cancelled.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsTunnelFilterCancelIrp(PDEVICE_OBJECT DeviceObject,
+                         PIRP irp)
+{
+    POVS_TUNFLT_REQUEST request =
+        (POVS_TUNFLT_REQUEST)irp->Tail.Overlay.DriverContext[0];
+    POVS_TUNFLT_REQUEST_LIST listRequests =
+        (POVS_TUNFLT_REQUEST_LIST)irp->Tail.Overlay.DriverContext[1];
+
+    DBG_UNREFERENCED_PARAMETER(DeviceObject);
+
+    /* Release the global cancel spinlock. */
+    IoReleaseCancelSpinLock(irp->CancelIrql);
+
+    /* Clear the cancel routine from the IRP. */
+    IoSetCancelRoutine(irp, NULL);
+
+    NdisAcquireSpinLock(&listRequests->spinlock);
+
+    /* Remove the request from the corresponding tunnel filter thread queue. */
+    RemoveEntryList(&request->entry);
+    listRequests->numEntries--;
+
+    NdisReleaseSpinLock(&listRequests->spinlock);
+
+    /* We are done with this IRP, so complete it with STATUS_CANCELLED. */
+    OvsTunnelFilterCompleteRequest(request->irp,
+                                   request->callback,
+                                   request->context,
+                                   STATUS_CANCELLED);
+
+    OvsFreeMemory(request);
 }
