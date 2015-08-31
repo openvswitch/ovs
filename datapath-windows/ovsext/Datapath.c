@@ -918,10 +918,6 @@ done:
 exit:
     /* Should not complete a pending IRP unless proceesing is completed. */
     if (status == STATUS_PENDING) {
-        /* STATUS_PENDING is returned by the NL handler when the request is
-         * to be processed later, so we mark the IRP as pending and complete
-         * it in another thread when the request is processed. */
-        IoMarkIrpPending(irp);
         return status;
     }
     return OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
