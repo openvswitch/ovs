@@ -779,7 +779,7 @@ ovsdb_monitor_changes_classify(enum ovsdb_monitor_selection type,
 static bool
 ovsdb_monitor_change_cb(const struct ovsdb_row *old,
                         const struct ovsdb_row *new,
-                        const unsigned long int *changed OVS_UNUSED,
+                        const unsigned long int *changed,
                         void *aux_)
 {
     struct ovsdb_monitor_aux *aux = aux_;
