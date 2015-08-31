@@ -248,7 +248,7 @@ netdev_windows_netdev_from_ofpbuf(struct netdev_windows_netdev_info *info,
     info->port_no = nl_attr_get_odp_port(a[OVS_WIN_NETDEV_ATTR_PORT_NO]);
     info->ovs_type = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_TYPE]);
     info->name = nl_attr_get_string(a[OVS_WIN_NETDEV_ATTR_NAME]);
-    memcpy(info->mac_address, nl_attr_get_unspec(a[OVS_WIN_NETDEV_ATTR_MAC_ADDR],
+    memcpy(&info->mac_address, nl_attr_get_unspec(a[OVS_WIN_NETDEV_ATTR_MAC_ADDR],
                sizeof(info->mac_address)), sizeof(info->mac_address));
     info->mtu = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_MTU]);
     info->ifi_flags = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_IF_FLAGS]);
