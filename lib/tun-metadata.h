@@ -77,8 +77,8 @@ BUILD_ASSERT_DECL(sizeof(((struct tun_metadata *)0)->present.map) * 8 >=
  * linked list of these blocks. */
 struct tun_metadata_loc_chain {
     struct tun_metadata_loc_chain *next;
-    uint8_t offset;       /* In bytes, from start of 'opts', multiple of 4.  */
-    uint8_t len;          /* In bytes, multiple of 4. */
+    int offset;       /* In bytes, from start of 'opts', multiple of 4.  */
+    int len;          /* In bytes, multiple of 4. */
 };
 
 struct tun_metadata_loc {
@@ -102,7 +102,7 @@ struct tun_metadata_match_entry {
  * allocated memory because the address space is never fragmented. */
 struct tun_metadata_allocation {
     struct tun_metadata_match_entry entry[TUN_METADATA_NUM_OPTS];
-    uint8_t alloc_offset;       /* Byte offset into 'opts', multiple of 4.  */
+    int alloc_offset;           /* Byte offset into 'opts', multiple of 4.  */
     bool valid;                 /* Set to true after any allocation occurs. */
 };
 
@@ -117,7 +117,8 @@ void tun_metadata_write(struct flow_tnl *,
                         const struct mf_field *, const union mf_value *);
 void tun_metadata_set_match(const struct mf_field *,
                             const union mf_value *value,
-                            const union mf_value *mask, struct match *);
+                            const union mf_value *mask, struct match *,
+                            char **err_str);
 void tun_metadata_get_fmd(const struct flow_tnl *, struct match *flow_metadata);
 
 int tun_metadata_from_geneve_nlattr(const struct nlattr *attr,

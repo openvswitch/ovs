@@ -229,7 +229,7 @@ parse_field(const struct mf_field *mf, const char *s, struct match *match,
 
     error = mf_parse(mf, s, &value, &mask);
     if (!error) {
-        *usable_protocols &= mf_set(mf, &value, &mask, match);
+        *usable_protocols &= mf_set(mf, &value, &mask, match, &error);
     }
     return error;
 }

@@ -1844,7 +1844,7 @@ bool mf_is_value_valid(const struct mf_field *, const union mf_value *value);
 void mf_get_value(const struct mf_field *, const struct flow *,
                   union mf_value *value);
 void mf_set_value(const struct mf_field *, const union mf_value *value,
-                  struct match *);
+                  struct match *, char **err_str);
 void mf_set_flow_value(const struct mf_field *, const union mf_value *value,
                        struct flow *);
 void mf_set_flow_value_masked(const struct mf_field *,
@@ -1864,9 +1864,9 @@ void mf_get(const struct mf_field *, const struct match *,
 enum ofputil_protocol mf_set(const struct mf_field *,
                              const union mf_value *value,
                              const union mf_value *mask,
-                             struct match *);
+                             struct match *, char **err_str);
 
-void mf_set_wild(const struct mf_field *, struct match *);
+void mf_set_wild(const struct mf_field *, struct match *, char **err_str);
 
 /* Subfields. */
 void mf_write_subfield_flow(const struct mf_subfield *,

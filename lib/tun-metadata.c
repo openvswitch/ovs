@@ -280,9 +280,14 @@ tun_metadata_write(struct flow_tnl *tnl,
 
 static const struct tun_metadata_loc *
 metadata_loc_from_match(struct tun_table *map, struct match *match,
-                        unsigned int idx, unsigned int field_len, bool masked)
+                        const char *name, unsigned int idx,
+                        unsigned int field_len, bool masked, char **err_str)
 {
     ovs_assert(idx < TUN_METADATA_NUM_OPTS);
+
+    if (err_str) {
+        *err_str = NULL;
+    }
 
     if (map) {
         if (map->entries[idx].valid) {
@@ -292,8 +297,22 @@ metadata_loc_from_match(struct tun_table *map, struct match *match,
         }
     }
 
-    if (match->tun_md.alloc_offset + field_len >= TUN_METADATA_TOT_OPT_SIZE ||
-        ULLONG_GET(match->wc.masks.tunnel.metadata.present.map, idx)) {
+    if (match->tun_md.alloc_offset + field_len > TUN_METADATA_TOT_OPT_SIZE) {
+        if (err_str) {
+            *err_str = xasprintf("field %s exceeds maximum size for tunnel "
+                                 "metadata (used %d, max %d)", name,
+                                 match->tun_md.alloc_offset + field_len,
+                                 TUN_METADATA_TOT_OPT_SIZE);
+        }
+
+        return NULL;
+    }
+
+    if (ULLONG_GET(match->wc.masks.tunnel.metadata.present.map, idx)) {
+        if (err_str) {
+            *err_str = xasprintf("field %s set multiple times", name);
+        }
+
         return NULL;
     }
 
@@ -322,10 +341,15 @@ metadata_loc_from_match(struct tun_table *map, struct match *match,
  * value.
  *
  * 'mask' may be NULL; if so, then 'mf' is made exact-match.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string.
  */
 void
 tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
-                       const union mf_value *mask, struct match *match)
+                       const union mf_value *mask, struct match *match,
+                       char **err_str)
 {
     struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
     const struct tun_metadata_loc *loc;
@@ -338,7 +362,8 @@ tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
     ovs_assert(!(match->flow.tunnel.flags & FLOW_TNL_F_UDPIF));
 
     field_len = mf_field_len(mf, value, mask, &is_masked);
-    loc = metadata_loc_from_match(map, match, idx, field_len, is_masked);
+    loc = metadata_loc_from_match(map, match, mf->name, idx, field_len,
+                                  is_masked, err_str);
     if (!loc) {
         return;
     }
@@ -424,8 +449,8 @@ tun_metadata_get_fmd(const struct flow_tnl *tnl, struct match *flow_metadata)
         const struct tun_metadata_loc *old_loc = &flow.metadata.tab->entries[i].loc;
         const struct tun_metadata_loc *new_loc;
 
-        new_loc = metadata_loc_from_match(NULL, flow_metadata, i,
-                                          old_loc->len, false);
+        new_loc = metadata_loc_from_match(NULL, flow_metadata, NULL, i,
+                                          old_loc->len, false, NULL);
 
         memcpy_from_metadata(opts.tun_metadata, &flow.metadata, old_loc);
         memcpy_to_metadata(&flow_metadata->flow.tunnel.metadata,
