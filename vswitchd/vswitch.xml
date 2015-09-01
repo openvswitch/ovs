@@ -1659,6 +1659,14 @@
         <code>fake-bridge-</code>,
         e.g. <code>fake-bridge-xs-network-uuids</code>.
       </column>
+
+      <column name="other_config" key="transient"
+              type='{"type": "boolean"}'>
+        <p>
+          If set to <code>true</code>, the port will be removed when
+          <code>ovs-ctl start --delete-transient-ports</code> is used.
+        </p>
+      </column>
     </group>
 
     <column name="bond_active_slave">

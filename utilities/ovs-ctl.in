@@ -177,6 +177,12 @@ check_force_cores () {
     fi
 }
 
+del_transient_ports () {
+    for port in `ovs-vsctl --bare -- --columns=name find port other_config:transient=true`; do
+        ovs_vsctl -- del-port "$port"
+    done
+}
+
 start_ovsdb () {
     check_force_cores
 
@@ -218,6 +224,9 @@ start_ovsdb () {
             for bridge in `ovs_vsctl list-br`; do
                 ovs_vsctl del-br $bridge
             done
+        fi
+        if test X"$DELETE_TRANSIENT_PORTS" = Xyes; then
+            del_transient_ports
         fi
     fi
 }
@@ -536,6 +545,7 @@ set_defaults () {
     SYSTEM_ID=
 
     DELETE_BRIDGES=no
+    DELETE_TRANSIENT_PORTS=no
 
     DAEMON_CWD=/
     FORCE_COREFILES=yes
