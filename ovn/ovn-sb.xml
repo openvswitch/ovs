@@ -62,8 +62,8 @@
     The LN is a slave of the cloud management system running northbound of OVN.
     That CMS determines the entire OVN logical configuration and therefore the
     LN's content at any given time is a deterministic function of the CMS's
-    configuration, although that happens indirectly via the OVN Northbound DB
-    and <code>ovn-northd</code>.
+    configuration, although that happens indirectly via the
+    <ref db="OVN_Northbound"/> database and <code>ovn-northd</code>.
   </p>
 
   <p>
@@ -206,12 +206,13 @@
 
   <table name="Logical_Flow" title="Logical Network Flows">
     <p>
-      Each row in this table represents one logical flow.  The cloud management
-      system, via its OVN integration, populates this table with logical flows
-      that implement the L2 and L3 topology specified in the CMS configuration.
-      Each hypervisor, via <code>ovn-controller</code>, translates the logical
-      flows into OpenFlow flows specific to its hypervisor and installs them
-      into Open vSwitch.
+      Each row in this table represents one logical flow.
+      <code>ovn-northd</code> populates this table with logical flows
+      that implement the L2 and L3 topologies specified in the
+      <ref db="OVN_Northbound"/> database.  Each hypervisor, via
+      <code>ovn-controller</code>, translates the logical flows into
+      OpenFlow flows specific to its hypervisor and installs them into
+      Open vSwitch.
     </p>
 
     <p>
@@ -220,9 +221,9 @@
       flows are written in terms of logical ports and logical datapaths instead
       of physical ports and physical datapaths.  Translation between logical
       and physical flows helps to ensure isolation between logical datapaths.
-      (The logical flow abstraction also allows the CMS to do less work, since
-      it does not have to separately compute and push out physical flows to each
-      chassis.)
+      (The logical flow abstraction also allows the OVN centralized
+      components to do less work, since they do not have to separately
+      compute and push out physical flows to each chassis.)
     </p>
 
     <p>
