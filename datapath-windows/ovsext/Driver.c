@@ -139,18 +139,26 @@ DriverEntry(PDRIVER_OBJECT driverObject,
     driverObject->DriverUnload = OvsExtUnload;
 
     status = NdisFRegisterFilterDriver(driverObject,
-                                       (NDIS_HANDLE) gOvsExtDriverObject,
-                                       &driverChars, &gOvsExtDriverHandle);
+                                       (NDIS_HANDLE)gOvsExtDriverObject,
+                                       &driverChars,
+                                       &gOvsExtDriverHandle);
     if (status != NDIS_STATUS_SUCCESS) {
-        return status;
+        goto cleanup;
     }
 
-    /* Create the communication channel for usersapce. */
+    /* Create the communication channel for userspace. */
     status = OvsCreateDeviceObject(gOvsExtDriverHandle);
     if (status != NDIS_STATUS_SUCCESS) {
+        goto cleanup;
+    }
+
+cleanup:
+    if (status != NDIS_STATUS_SUCCESS){
         OvsCleanup();
-        NdisFDeregisterFilterDriver(gOvsExtDriverHandle);
-        gOvsExtDriverHandle = NULL;
+        if (gOvsExtDriverHandle) {
+            NdisFDeregisterFilterDriver(gOvsExtDriverHandle);
+            gOvsExtDriverHandle = NULL;
+        }
     }
 
     return status;
