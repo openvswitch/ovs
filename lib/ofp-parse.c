@@ -254,9 +254,8 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         F_PRIORITY = 1 << 4,
         F_FLAGS = 1 << 5,
     } fields;
-    char *save_ptr = NULL;
     char *act_str = NULL;
-    char *name;
+    char *name, *value;
 
     *usable_protocols = OFPUTIL_P_ANY;
 
@@ -339,8 +338,8 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             return xstrdup("must specify an action");
         }
     }
-    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+
+    while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct protocol *p;
         char *error = NULL;
 
@@ -366,25 +365,15 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                    || !strcmp(name, "allow_hidden_fields")) {
              /* ignore these fields. */
         } else if (mf_from_name(name)) {
-            char *value;
-
-            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (!value) {
+            if (!*value) {
                 /* If there's no value, we're just trying to match on the
                  * existence of the field, so use a no-op value. */
                 value = "0/0";
             }
-
             error = parse_field(mf_from_name(name), value, &fm->match,
                                 usable_protocols);
-            if (error) {
-                return error;
-            }
         } else {
-            char *value;
-
-            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (!value) {
+            if (!*value) {
                 return xasprintf("field %s missing value", name);
             }
 
@@ -450,10 +439,10 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             } else {
                 error = xasprintf("unknown keyword %s", name);
             }
+        }
 
-            if (error) {
-                return error;
-            }
+        if (error) {
+            return error;
         }
     }
     /* Check for usable protocol interdependencies between match fields. */
@@ -776,8 +765,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                              enum ofputil_protocol *usable_protocols)
 {
     static atomic_count id = ATOMIC_COUNT_INIT(0);
-    char *save_ptr = NULL;
-    char *name;
+    char *name, *value;
 
     fmr->id = atomic_count_inc(&id);
 
@@ -787,8 +775,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
     fmr->table_id = 0xff;
     match_init_catchall(&fmr->match);
 
-    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+    while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct protocol *p;
 
         if (!strcmp(name, "!initial")) {
@@ -809,10 +796,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                 match_set_nw_proto(&fmr->match, p->nw_proto);
             }
         } else {
-            char *value;
-
-            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (!value) {
+            if (!*value) {
                 return xasprintf("%s: field %s missing value", str_, name);
             }
 
