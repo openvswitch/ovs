@@ -457,7 +457,7 @@
     </li>
   </ol>
 
-  <h2>Life Cycle of a container interface inside a VM</h2>
+  <h2>Life Cycle of a Container Interface Inside a VM</h2>
 
   <p>
     OVN provides virtual network abstractions by converting information
