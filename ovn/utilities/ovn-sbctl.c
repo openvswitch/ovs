@@ -249,8 +249,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout < 0) {
-                ctl_fatal("value %s on -t or --timeout is invalid",
-                            optarg);
+                ctl_fatal("value %s on -t or --timeout is invalid", optarg);
             }
             break;
 
@@ -836,8 +835,8 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         struct ovsdb_symbol *symbol = node->data;
         if (!symbol->created) {
             ctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                        "with \"-- --id=%s create ...\")",
-                        node->name, node->name);
+                      "with \"-- --id=%s create ...\")",
+                      node->name, node->name);
         }
         if (!symbol->strong_ref) {
             if (!symbol->weak_ref) {
