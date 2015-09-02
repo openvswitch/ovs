@@ -40,6 +40,7 @@
 #include "process.h"
 #include "sset.h"
 #include "shash.h"
+#include "stream-ssl.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
@@ -171,6 +172,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"options", no_argument, NULL, OPT_OPTIONS},
         {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
+        STREAM_SSL_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
@@ -255,6 +257,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
+        STREAM_SSL_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);
