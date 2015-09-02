@@ -121,7 +121,7 @@ typedef struct _OVS_TUNFLT_REQUEST {
         UINT64                  delID;
         /* Pointer used to return filter ID to the caller on filter creation. */
         PUINT64                 addID;
-    }filterID;
+    } filterID;
     /* Requested operation to be performed. */
     OVS_TUNFLT_OPERATION    operation;
     /* Current I/O request to be completed when requested
@@ -147,6 +147,8 @@ typedef struct _OVS_TUNFLT_REQUEST_LIST {
 typedef struct _OVS_TUNFLT_THREAD_CONTEXT {
     /* Thread identification. */
     UINT                    threadID;
+    /* Thread initialization flag. */
+    UINT32                  isInitialized;
     /* Thread's engine session handle. */
     HANDLE                  engineSession;
     /* Reference of the thread object. */
@@ -1091,6 +1093,9 @@ OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
  * request queue. The arrival of the new request is signaled to the thread,
  * in order to start processing it.
  *
+ * Note:
+ * If the thread is not initialized, no operation is performed.
+ *
  * For a uniform distribution of requests to thread queues, a thread index is
  * calculated based on the received destination port.
  * --------------------------------------------------------------------------
@@ -1098,19 +1103,32 @@ OvsTunnelFilterRequestPush(POVS_TUNFLT_REQUEST_LIST listRequests,
 NTSTATUS
 OvsTunnelFilterThreadPush(POVS_TUNFLT_REQUEST request)
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status = STATUS_REQUEST_ABORTED;
+    UINT32 count = OVS_TUNFLT_MAX_THREADS;
     UINT32 threadIndex;
 
     threadIndex = request->port % OVS_TUNFLT_MAX_THREADS;
 
-    status = OvsTunnelFilterRequestPush(
-        &gTunnelThreadCtx[threadIndex].listRequests,
-        request);
+    while (count--) {
+        if (gTunnelThreadCtx[threadIndex].isInitialized) {
 
-    if (NT_SUCCESS(status)) {
-        KeSetEvent(&gTunnelThreadCtx[threadIndex].requestEvent,
-                   IO_NO_INCREMENT,
-                   FALSE);
+            status = OvsTunnelFilterRequestPush(
+                &gTunnelThreadCtx[threadIndex].listRequests,
+                request);
+
+            if (NT_SUCCESS(status)) {
+                KeSetEvent(&gTunnelThreadCtx[threadIndex].requestEvent,
+                           IO_NO_INCREMENT,
+                           FALSE);
+            }
+
+            break;
+        } else {
+            OVS_LOG_INFO("OVS tunnel filter thread %d not initialized.",
+                         threadIndex);
+        }
+
+        threadIndex = (threadIndex + 1) % OVS_TUNFLT_MAX_THREADS;
     }
 
     return status;
@@ -1333,20 +1351,23 @@ static VOID
 OvsTunnelFilterThreadStop(POVS_TUNFLT_THREAD_CONTEXT threadCtx,
                           BOOLEAN signalEvent)
 {
-    if (signalEvent) {
-        /* Signal stop thread event. */
-        OVS_LOG_INFO("Received stop event for OVS Tunnel system thread %d.",
-                     threadCtx->threadID);
-        KeSetEvent(&threadCtx->stopEvent, IO_NO_INCREMENT, FALSE);
-    } else {
-        /* Wait for the tunnel thread to finish. */
-        KeWaitForSingleObject(threadCtx->threadObject,
-                              Executive,
-                              KernelMode,
-                              FALSE,
-                              NULL);
+    if (threadCtx->isInitialized) {
 
-        ObDereferenceObject(threadCtx->threadObject);
+        if (signalEvent) {
+            /* Signal stop thread event. */
+            OVS_LOG_INFO("Received stop event for OVS Tunnel system thread %d.",
+                         threadCtx->threadID);
+            KeSetEvent(&threadCtx->stopEvent, IO_NO_INCREMENT, FALSE);
+        } else {
+            /* Wait for the tunnel thread to finish. */
+            KeWaitForSingleObject(threadCtx->threadObject,
+                                  Executive,
+                                  KernelMode,
+                                  FALSE,
+                                  NULL);
+
+            ObDereferenceObject(threadCtx->threadObject);
+        }
     }
 }
 
@@ -1382,6 +1403,8 @@ OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
             SynchronizationEvent,
             FALSE);
 
+        threadCtx->isInitialized = TRUE;
+
         error = FALSE;
     } while (error);
 
@@ -1402,6 +1425,8 @@ OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx)
         OvsTunnelEngineClose(&threadCtx->engineSession);
 
         NdisFreeSpinLock(&threadCtx->listRequests.spinlock);
+
+        threadCtx->isInitialized = FALSE;
     }
 }
 
