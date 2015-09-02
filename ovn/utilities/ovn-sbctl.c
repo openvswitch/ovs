@@ -41,6 +41,7 @@
 #include "sset.h"
 #include "shash.h"
 #include "stream-ssl.h"
+#include "stream.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
@@ -282,13 +283,13 @@ static void
 usage(void)
 {
     printf("\
-%s: ovs-vswitchd management utility\n\
+%s: OVN southbound DB management utility\n\
 \n\
-for debugging and testing only, never use it in production\n\
+For debugging and testing only, not for use in production.\n\
 \n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
-SouthBound DB commands:\n\
+General commands:\n\
   show                        print overview of database contents\n\
 \n\
 Chassis commands:\n\
@@ -311,7 +312,7 @@ Logical flow commands:\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
-  -t, --timeout=SECS          wait at most SECS seconds for ovs-vswitchd\n\
+  -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, ctl_get_db_cmd_usage(), ctl_default_db());
@@ -322,6 +323,7 @@ Options:\n\
 Other options:\n\
   -h, --help                  display this help message\n\
   -V, --version               display version information\n");
+    stream_usage("database", true, true, false);
     exit(EXIT_SUCCESS);
 }
 
