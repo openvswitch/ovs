@@ -342,7 +342,7 @@ struct sbctl_context {
     struct shash port_bindings;
 };
 
-/* Casts 'base' into 'strcut sbctl_context'. */
+/* Casts 'base' into 'struct sbctl_context'. */
 static struct sbctl_context *
 sbctl_context_cast(struct ctl_context *base)
 {

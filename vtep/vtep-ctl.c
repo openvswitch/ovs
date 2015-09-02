@@ -434,7 +434,7 @@ struct vtep_ctl_context {
                              * struct vteprec_physical_locator. */
 };
 
-/* Casts 'base' into 'strcut vtep_ctl_context'. */
+/* Casts 'base' into 'struct vtep_ctl_context'. */
 static struct vtep_ctl_context *
 vtep_ctl_context_cast(struct ctl_context *base)
 {

@@ -483,7 +483,7 @@ struct vsctl_iface {
     struct vsctl_port *port;
 };
 
-/* Casts 'base' into 'strcut vsctl_context'. */
+/* Casts 'base' into 'struct vsctl_context'. */
 static struct vsctl_context *
 vsctl_context_cast(struct ctl_context *base)
 {
