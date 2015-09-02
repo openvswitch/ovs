@@ -1446,7 +1446,9 @@ OvsTunnelFilterQueueRequest(PIRP irp,
             break;
         }
 
-        request = (POVS_TUNFLT_REQUEST) OvsAllocateMemory(sizeof(*request));
+        request = (POVS_TUNFLT_REQUEST)
+            OvsAllocateMemoryWithTag(sizeof(*request),
+                                     OVS_TUNFLT_POOL_TAG);
         if (NULL == request) {
             OVS_LOG_ERROR("Failed to allocate list item.");
             status = STATUS_INSUFFICIENT_RESOURCES;
