@@ -1071,7 +1071,7 @@ stream_ssl_set_private_key_file(const char *file_name)
 static void
 stream_ssl_set_certificate_file__(const char *file_name)
 {
-    if (SSL_CTX_use_certificate_chain_file(ctx, file_name) == 1) {
+    if (SSL_CTX_use_certificate_file(ctx, file_name, SSL_FILETYPE_PEM) == 1) {
         certificate.read = true;
     } else {
         VLOG_ERR("SSL_use_certificate_file: %s",
