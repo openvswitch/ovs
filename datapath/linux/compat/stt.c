@@ -30,6 +30,7 @@
 #include <net/icmp.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
+#include <net/ip6_checksum.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
 #include <net/sock.h>
