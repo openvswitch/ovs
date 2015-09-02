@@ -1270,7 +1270,8 @@ OvsRemoveTunnelVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_TUNFLT_INIT_CONTEXT tunnelContext = NULL;
     PIRP irp = NULL;
 
-    tunnelContext = OvsAllocateMemory(sizeof(*tunnelContext));
+    tunnelContext = OvsAllocateMemoryWithTag(sizeof(*tunnelContext),
+                                             OVS_VPORT_POOL_TAG);
     if (tunnelContext == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
