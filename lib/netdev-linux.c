@@ -5298,7 +5298,11 @@ netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
     }
 
     COVERAGE_INC(netdev_set_ethtool);
-    evalue.data = new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
+    new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
+    if (new_flags == evalue.data) {
+        return 0;
+    }
+    evalue.data = new_flags;
     error = netdev_linux_do_ethtool(netdev_name,
                                     (struct ethtool_cmd *)&evalue,
                                     ETHTOOL_SFLAGS, "ETHTOOL_SFLAGS");
