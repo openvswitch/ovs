@@ -1,4 +1,4 @@
-AT_BANNER([ovn_controller_gw])
+AT_BANNER([ovn-sbctl])
 
 # OVN_SBCTL_TEST_START
 m4_define([OVN_SBCTL_TEST_START],
