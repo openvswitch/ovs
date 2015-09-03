@@ -258,7 +258,7 @@ if $built; then
         echo >&2 'build not found, please change set $builddir or change directory'
         exit 1
     fi
-    PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
+    PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$builddir/vtep:$PATH
     if $ovn; then
         PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/controller-vtep:$builddir/ovn/northd:$builddir/ovn/utilities:$PATH
     fi
