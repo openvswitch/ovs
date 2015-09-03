@@ -2177,10 +2177,12 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 break;
             }
 
-            PNL_ATTR attr = NlAttrFindNested(vportAttrs[OVS_VPORT_ATTR_OPTIONS],
-                                             OVS_TUNNEL_ATTR_DST_PORT);
-            if (attr) {
-                transportPortDest = NlAttrGetU16(attr);
+            if (vportAttrs[OVS_VPORT_ATTR_OPTIONS]) {
+                PNL_ATTR attr = NlAttrFindNested(vportAttrs[OVS_VPORT_ATTR_OPTIONS],
+                                                 OVS_TUNNEL_ATTR_DST_PORT);
+                if (attr) {
+                    transportPortDest = NlAttrGetU16(attr);
+                }
             }
 
             status = OvsInitTunnelVport(usrParamsCtx,
