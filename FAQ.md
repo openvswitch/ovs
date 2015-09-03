@@ -1623,6 +1623,9 @@ A: To debug network behavior problems, trace the path of a packet,
    that's correct, then trace the path of the response packet back to
    the origin.
 
+   The open source tool called "plotnetcfg" can help to understand the
+   relationship between the networking devices on a single host.
+
    Usually a simple ICMP echo request and reply ("ping") packet is
    good enough.  Start by initiating an ongoing "ping" from the origin
    host to a remote host.  If you are tracking down a connectivity
