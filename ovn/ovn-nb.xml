@@ -116,13 +116,27 @@
       </p>
 
       <p>
-      There are no other logical port types implemented yet.
+        When this column is set to <code>localnet</code>, this logical port
+        represents a connection to a locally accessible network from each
+        <code>ovn-controller</code> instance.  A logical switch can only have a
+        single <code>localnet</code> port attached and at most one regular
+        logical port.  This is used to model direct connectivity to an existing
+        network.
       </p>
     </column>
 
     <column name="options">
+      <p>
         This column provides key/value settings specific to the logical port
         <ref column="type"/>.
+      </p>
+
+      <p>
+        When <ref column="type"/> is set to <code>localnet</code>, you must set
+        the option <code>network_name</code>.  <code>ovn-controller</code> uses
+        local configuration to determine exactly how to connect to this locally
+        accessible network.
+      </p>
     </column>
 
     <column name="parent_name">

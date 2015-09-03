@@ -964,13 +964,43 @@
       </p>
 
       <p>
-      There are no other logical port types implemented yet.
+        When this column is set to <code>localnet</code>, this logical port
+        represents a connection to a locally accessible network from each
+        ovn-controller instance.  A logical switch can only have a single
+        <code>localnet</code> port attached and at most one regular logical
+        port.  This is used to model direct connectivity to an existing
+        network.
       </p>
     </column>
 
     <column name="options">
+      <p>
         This column provides key/value settings specific to the logical port
         <ref column="type"/>.
+      </p>
+
+      <p>
+        When <ref column="type"/> is set to <code>localnet</code>, you must set
+        the option <code>network_name</code>.  <code>ovn-controller</code> uses
+        the configuration entry <code>ovn-bridge-mappings</code> to determine
+        how to connect to this network.  <code>ovn-bridge-mappings</code> is a
+        list of network names mapped to a local OVS bridge that provides access
+        to that network.  An example of configuring
+        <code>ovn-bridge-mappings</code> would be:
+      </p>
+
+      <p>
+        <code>$ ovs-vsctl set open
+        . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1</code>
+      </p>
+
+      <p>
+        Also note that when a logical switch has a <code>localnet</code> port
+        attached, every chassis that may have a local vif attached to that
+        logical switch must have a bridge mapping configured to reach that
+        <code>localnet</code>.  Traffic that arrives on a <code>localnet</code>
+        port is never forwarded over a tunnel to another chassis.
+      </p>
     </column>
 
     <column name="tunnel_key">
