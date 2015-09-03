@@ -25,8 +25,10 @@
 #include "ovn/lib/ovn-nb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "smap.h"
 #include "stream.h"
 #include "stream-ssl.h"
+#include "svec.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
@@ -217,11 +219,20 @@ do_lswitch_list(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const struct nbrec_logical_switch *lswitch;
+    struct smap lswitches;
 
+    smap_init(&lswitches);
     NBREC_LOGICAL_SWITCH_FOR_EACH(lswitch, nb_ctx->idl) {
-        printf(UUID_FMT " (%s)\n",
-               UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
+        smap_add_format(&lswitches, lswitch->name, UUID_FMT " (%s)",
+                        UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
     }
+    const struct smap_node **nodes = smap_sort(&lswitches);
+    for (size_t i = 0; i < smap_count(&lswitches); i++) {
+        const struct smap_node *node = nodes[i];
+        printf("%s\n", node->value);
+    }
+    smap_destroy(&lswitches);
+    free(nodes);
 }
 
 static void
@@ -408,17 +419,27 @@ do_lport_list(struct ovs_cmdl_context *ctx)
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch *lswitch;
+    struct smap lports;
+    size_t i;
 
     lswitch = lswitch_by_name_or_uuid(nb_ctx, id);
     if (!lswitch) {
         return;
     }
 
-    for (size_t i = 0; i < lswitch->n_ports; i++) {
+    smap_init(&lports);
+    for (i = 0; i < lswitch->n_ports; i++) {
         const struct nbrec_logical_port *lport = lswitch->ports[i];
-        printf(UUID_FMT " (%s)\n",
-               UUID_ARGS(&lport->header_.uuid), lport->name);
+        smap_add_format(&lports, lport->name, UUID_FMT " (%s)",
+                        UUID_ARGS(&lport->header_.uuid), lport->name);
     }
+    const struct smap_node **nodes = smap_sort(&lports);
+    for (i = 0; i < smap_count(&lports); i++) {
+        const struct smap_node *node = nodes[i];
+        printf("%s\n", node->value);
+    }
+    smap_destroy(&lports);
+    free(nodes);
 }
 
 static void
@@ -532,6 +553,8 @@ do_lport_get_macs(struct ovs_cmdl_context *ctx)
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
+    struct svec macs;
+    const char *mac;
     size_t i;
 
     lport = lport_by_name_or_uuid(nb_ctx, id);
@@ -539,9 +562,15 @@ do_lport_get_macs(struct ovs_cmdl_context *ctx)
         return;
     }
 
+    svec_init(&macs);
     for (i = 0; i < lport->n_macs; i++) {
-        printf("%s\n", lport->macs[i]);
+        svec_add(&macs, lport->macs[i]);
     }
+    svec_sort(&macs);
+    SVEC_FOR_EACH(i, mac, &macs) {
+        printf("%s\n", mac);
+    }
+    svec_destroy(&macs);
 }
 
 static void
@@ -566,6 +595,8 @@ do_lport_get_port_security(struct ovs_cmdl_context *ctx)
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
+    struct svec addrs;
+    const char *addr;
     size_t i;
 
     lport = lport_by_name_or_uuid(nb_ctx, id);
@@ -573,9 +604,15 @@ do_lport_get_port_security(struct ovs_cmdl_context *ctx)
         return;
     }
 
+    svec_init(&addrs);
     for (i = 0; i < lport->n_port_security; i++) {
-        printf("%s\n", lport->port_security[i]);
+        svec_add(&addrs, lport->port_security[i]);
     }
+    svec_sort(&addrs);
+    SVEC_FOR_EACH(i, addr, &addrs) {
+        printf("%s\n", addr);
+    }
+    svec_destroy(&addrs);
 }
 
 static void
