@@ -205,8 +205,10 @@
   <p>
     Each chassis in an OVN deployment must be configured with an Open vSwitch
     bridge dedicated for OVN's use, called the <dfn>integration bridge</dfn>.
-    System startup scripts create this bridge prior to starting
-    <code>ovn-controller</code>.  The ports on the integration bridge include:
+    System startup scripts may create this bridge prior to starting
+    <code>ovn-controller</code> if desired.  If this bridge does not exist when
+    ovn-controller starts, it will be created automatically with the default
+    configuration suggested below.  The ports on the integration bridge include:
   </p>
 
   <ul>
@@ -248,6 +250,8 @@
     <code>ovs-vswitchd.conf.db</code>(5):
   </p>
 
+  <!-- Keep the following in sync with create_br_int() in
+       ovn/controller/ovn-controller.c. -->
   <dl>
     <dt><code>fail-mode=secure</code></dt>
     <dd>

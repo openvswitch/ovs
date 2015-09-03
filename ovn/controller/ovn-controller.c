@@ -70,9 +70,53 @@ get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
 }
 
 static const struct ovsrec_bridge *
-get_br_int(struct ovsdb_idl *ovs_idl)
+create_br_int(struct controller_ctx *ctx,
+              const struct ovsrec_open_vswitch *cfg,
+              const char *bridge_name)
 {
-    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
+    if (!ctx->ovs_idl_txn) {
+        return NULL;
+    }
+
+    ovsdb_idl_txn_add_comment(ctx->ovs_idl_txn,
+            "ovn-controller: creating integration bridge '%s'", bridge_name);
+
+    struct ovsrec_interface *iface;
+    iface = ovsrec_interface_insert(ctx->ovs_idl_txn);
+    ovsrec_interface_set_name(iface, bridge_name);
+    ovsrec_interface_set_type(iface, "internal");
+
+    struct ovsrec_port *port;
+    port = ovsrec_port_insert(ctx->ovs_idl_txn);
+    ovsrec_port_set_name(port, bridge_name);
+    ovsrec_port_set_interfaces(port, &iface, 1);
+
+    struct ovsrec_bridge *bridge;
+    bridge = ovsrec_bridge_insert(ctx->ovs_idl_txn);
+    ovsrec_bridge_set_name(bridge, bridge_name);
+    ovsrec_bridge_set_fail_mode(bridge, "secure");
+    struct smap other_config = SMAP_INITIALIZER(&other_config);
+    smap_add(&other_config, "disable-in-band", "true");
+    ovsrec_bridge_set_other_config(bridge, &other_config);
+    smap_destroy(&other_config);
+    ovsrec_bridge_set_ports(bridge, &port, 1);
+
+    struct ovsrec_bridge **bridges;
+    size_t bytes = sizeof *bridges * cfg->n_bridges;
+    bridges = xmalloc(bytes + sizeof *bridges);
+    memcpy(bridges, cfg->bridges, bytes);
+    bridges[cfg->n_bridges] = bridge;
+    ovsrec_open_vswitch_verify_bridges(cfg);
+    ovsrec_open_vswitch_set_bridges(cfg, bridges, cfg->n_bridges + 1);
+
+    return bridge;
+}
+
+static const struct ovsrec_bridge *
+get_br_int(struct controller_ctx *ctx)
+{
+    const struct ovsrec_open_vswitch *cfg;
+    cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (!cfg) {
         return NULL;
     }
@@ -83,14 +127,11 @@ get_br_int(struct ovsdb_idl *ovs_idl)
     }
 
     const struct ovsrec_bridge *br;
-    br = get_bridge(ovs_idl, br_int_name);
-    if (br) {
-        return br;
+    br = get_bridge(ctx->ovs_idl, br_int_name);
+    if (!br) {
+        return create_br_int(ctx, cfg, br_int_name);
     }
-
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-    VLOG_WARN_RL(&rl, "%s: integration bridge does not exist", br_int_name);
-    return NULL;
+    return br;
 }
 
 static const char *
@@ -374,6 +415,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_open_vswitch);
     ovsdb_idl_add_column(ovs_idl_loop.idl,
                          &ovsrec_open_vswitch_col_external_ids);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_open_vswitch_col_bridges);
     ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_interface);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_name);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_type);
@@ -384,6 +426,9 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_port_col_external_ids);
     ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_bridge);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_ports);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_name);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_fail_mode);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_other_config);
     chassis_register_ovs_idl(ovs_idl_loop.idl);
     encaps_register_ovs_idl(ovs_idl_loop.idl);
     binding_register_ovs_idl(ovs_idl_loop.idl);
@@ -406,7 +451,7 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
+        const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
         /* Map bridges to local nets from ovn-bridge-mappings */
@@ -462,7 +507,7 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        const struct ovsrec_bridge *br_int = get_br_int(ctx.ovs_idl);
+        const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
         /* Run all of the cleanup functions, even if one of them returns false.
