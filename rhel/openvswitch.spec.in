@@ -56,7 +56,7 @@ rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
 rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
 
 # Get rid of stuff we don't want to make RPM happy.
-rm \
+rm -rf \
     $RPM_BUILD_ROOT/usr/bin/ovs-testcontroller \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-testcontroller.8 \
     $RPM_BUILD_ROOT/usr/bin/ovs-test \
