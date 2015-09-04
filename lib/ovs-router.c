@@ -15,6 +15,9 @@
  */
 
 #include <config.h>
+
+#include "ovs-router.h"
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -34,7 +37,6 @@
 #include "netdev.h"
 #include "packets.h"
 #include "seq.h"
-#include "ovs-router.h"
 #include "ovs-thread.h"
 #include "route-table.h"
 #include "tnl-ports.h"
