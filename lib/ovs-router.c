@@ -291,6 +291,7 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
             ds_put_format(&ds, "gateway " IP_FMT "\n", IP_ARGS(gw));
             ds_put_format(&ds, "dev %s\n", iface);
             unixctl_command_reply(conn, ds_cstr(&ds));
+            ds_destroy(&ds);
         } else {
             unixctl_command_reply(conn, "Not found");
         }
