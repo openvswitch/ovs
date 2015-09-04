@@ -172,7 +172,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
-    DPDK_LIB="-lintel_dpdk"
+    DPDK_LIB="-ldpdk"
     DPDK_EXTRA_LIB=""
 
     AC_COMPILE_IFELSE(

@@ -65,11 +65,17 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 /*
  * need to reserve tons of extra space in the mbufs so we can align the
  * DMA addresses to 4KB.
+ * The minimum mbuf size is limited to avoid scatter behaviour and drop in
+ * performance for standard Ethernet MTU.
  */
-
 #define MTU_TO_MAX_LEN(mtu)  ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
-#define MBUF_SIZE(mtu)       (MTU_TO_MAX_LEN(mtu) + (512) + \
-                             sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
+#define MBUF_SIZE_MTU(mtu)   (MTU_TO_MAX_LEN(mtu)        \
+                              + sizeof(struct dp_packet) \
+                              + RTE_PKTMBUF_HEADROOM)
+#define MBUF_SIZE_DRIVER     (2048                       \
+                              + sizeof (struct rte_mbuf) \
+                              + RTE_PKTMBUF_HEADROOM)
+#define MBUF_SIZE(mtu)       MAX(MBUF_SIZE_MTU(mtu), MBUF_SIZE_DRIVER)
 
 /* Max and min number of packets in the mempool.  OVS tries to allocate a
  * mempool with MAX_NB_MBUF: if this fails (because the system doesn't have
