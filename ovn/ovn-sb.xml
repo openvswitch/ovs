@@ -690,6 +690,27 @@
         <li><code>nd.target</code> <code>nd.sll</code> <code>nd.tll</code></li>
       </ul>
 
+      <p>
+        The following predicates are supported:
+      </p>
+
+      <ul>
+        <li><code>vlan.present</code> expands to <code>vlan.tci[12]</code></li>
+        <li><code>ip4</code> expands to <code>eth.type == 0x800</code></li>
+        <li><code>ip6</code> expands to <code>eth.type == 0x86dd</code></li>
+        <li><code>ip</code> expands to <code>ip4 || ip6</code></li>
+        <li><code>icmp4</code> expands to <code>ip4 &amp;&amp; ip.proto == 1</code></li>
+        <li><code>icmp6</code> expands to <code>ip6 &amp;&amp; ip.proto == 58</code></li>
+        <li><code>icmp</code> expands to <code>icmp4 || icmp6</code></li>
+        <li><code>ip.is_frag</code> expands to <code>ip.frag[0]</code></li>
+        <li><code>ip.later_frag</code> expands to <code>ip.frag[1]</code></li>
+        <li><code>ip.first_frag</code> expands to <code>ip.is_frag &amp;&amp; !ip.later_frag</code></li>
+        <li><code>arp</code> expands to <code>eth.type == 0x806</code></li>
+        <li><code>nd</code> expands to <code>icmp6.type == {135, 136} &amp;&amp; icmp6.code == 0</code></li>
+        <li><code>tcp</code> expands to <code>ip.proto == 6</code></li>
+        <li><code>udp</code> expands to <code>ip.proto == 17</code></li>
+        <li><code>sctp</code> expands to <code>ip.proto == 132</code></li>
+      </ul>
     </column>
 
     <column name="actions">
