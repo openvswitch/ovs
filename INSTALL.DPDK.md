@@ -173,9 +173,9 @@ Using the DPDK with ovs-vswitchd:
 
    `ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev`
 
-   Now you can add dpdk devices. OVS expect DPDK device name start with dpdk
-   and end with portid. vswitchd should print (in the log file) the number
-   of dpdk devices found.
+   Now you can add dpdk devices. OVS expects DPDK device names to start with
+   "dpdk" and end with a portid. vswitchd should print (in the log file) the
+   number of dpdk devices found.
 
    ```
    ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
