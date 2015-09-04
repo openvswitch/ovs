@@ -524,9 +524,9 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     memset(&eth_addr, 0x0, sizeof(eth_addr));
     rte_eth_macaddr_get(dev->port_id, &eth_addr);
     VLOG_INFO_RL(&rl, "Port %d: "ETH_ADDR_FMT"",
-                    dev->port_id, ETH_ADDR_ARGS(eth_addr.addr_bytes));
+                    dev->port_id, ETH_ADDR_BYTES_ARGS(eth_addr.addr_bytes));
 
-    memcpy(dev->hwaddr, eth_addr.addr_bytes, ETH_ADDR_LEN);
+    memcpy(dev->hwaddr.ea, eth_addr.addr_bytes, ETH_ADDR_LEN);
     rte_eth_link_get_nowait(dev->port_id, &dev->link);
 
     mbp_priv = rte_mempool_get_priv(dev->dpdk_mp->mp);

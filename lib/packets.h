@@ -307,8 +307,9 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
  */
 #define ETH_ADDR_FMT                                                    \
     "%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8
-#define ETH_ADDR_ARGS(EA)                                               \
-    (EA).ea[0], (EA).ea[1], (EA).ea[2], (EA).ea[3], (EA).ea[4], (EA).ea[5]
+#define ETH_ADDR_ARGS(EA) ETH_ADDR_BYTES_ARGS((EA).ea)
+#define ETH_ADDR_BYTES_ARGS(EAB) \
+         (EAB)[0], (EAB)[1], (EAB)[2], (EAB)[3], (EAB)[4], (EAB)[5]
 
 /* Example:
  *
