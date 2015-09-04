@@ -230,8 +230,8 @@ static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
 static inline void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
 {
     ea->be16[0] = htons(x >> 32);
-    ea->be16[1] = htons(x >> 16);
-    ea->be16[2] = htons(x);
+    ea->be16[1] = htons((x & 0xFFFF0000) >> 16);
+    ea->be16[2] = htons(x & 0xFFFF);
 }
 
 static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
