@@ -70,6 +70,8 @@ void nl_msg_put_be16(struct ofpbuf *, uint16_t type, ovs_be16 value);
 void nl_msg_put_be32(struct ofpbuf *, uint16_t type, ovs_be32 value);
 void nl_msg_put_be64(struct ofpbuf *, uint16_t type, ovs_be64 value);
 void nl_msg_put_odp_port(struct ofpbuf *, uint16_t type, odp_port_t value);
+void nl_msg_put_string__(struct ofpbuf *, uint16_t type, const char *value,
+                         size_t len);
 void nl_msg_put_string(struct ofpbuf *, uint16_t type, const char *value);
 
 size_t nl_msg_start_nested(struct ofpbuf *, uint16_t type);

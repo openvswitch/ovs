@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <netinet/in.h>
 
 #include "byte-order.h"
 #include "dynamic-string.h"
@@ -166,6 +167,20 @@ str_to_ip(const char *str, ovs_be32 *ip)
     }
     *ip = in_addr.s_addr;
     return NULL;
+}
+
+/* Parses 'str' as a conntrack helper into 'alg'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * OVS_WARN_UNUSED_RESULT
+str_to_connhelper(const char *str, uint16_t *alg)
+{
+    if (!strcmp(str, "ftp")) {
+        *alg = IPPORT_FTP;
+        return NULL;
+    }
+    return xasprintf("invalid conntrack helper \"%s\"", str);
 }
 
 struct protocol {

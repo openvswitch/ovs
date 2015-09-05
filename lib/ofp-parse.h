@@ -99,5 +99,6 @@ char *str_to_u64(const char *str, uint64_t *valuep) OVS_WARN_UNUSED_RESULT;
 char *str_to_be64(const char *str, ovs_be64 *valuep) OVS_WARN_UNUSED_RESULT;
 char *str_to_mac(const char *str, struct eth_addr *mac) OVS_WARN_UNUSED_RESULT;
 char *str_to_ip(const char *str, ovs_be32 *ip) OVS_WARN_UNUSED_RESULT;
+char *str_to_connhelper(const char *str, uint16_t *alg) OVS_WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */

@@ -316,6 +316,17 @@ nl_msg_put_odp_port(struct ofpbuf *msg, uint16_t type, odp_port_t value)
     nl_msg_put_u32(msg, type, odp_to_u32(value));
 }
 
+/* Appends a Netlink attribute of the given 'type' with the 'len' characters
+ * of 'value', followed by the null byte to 'msg'. */
+void
+nl_msg_put_string__(struct ofpbuf *msg, uint16_t type, const char *value,
+                    size_t len)
+{
+    char *data = nl_msg_put_unspec_uninit(msg, type, len + 1);
+
+    memcpy(data, value, len);
+    data[len] = '\0';
+}
 
 /* Appends a Netlink attribute of the given 'type' and the given
  * null-terminated string 'value' to 'msg'. */

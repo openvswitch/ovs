@@ -15,6 +15,8 @@
  */
 
 #include <config.h>
+#include <netinet/in.h>
+
 #include "ofp-actions.h"
 #include "bundle.h"
 #include "byte-order.h"
@@ -4632,6 +4634,8 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
                     return error;
                 }
             }
+        } else if (!strcmp(key, "alg")) {
+            error = str_to_connhelper(value, &oc->alg);
         } else if (!strcmp(key, "exec")) {
             /* Hide existing actions from ofpacts_parse_actions(), so the
              * nesting can be handled transparently. */
@@ -4665,6 +4669,18 @@ append_comma(struct ds *s, bool *first)
 }
 
 static void
+format_alg(int port, struct ds *s, bool *first)
+{
+    if (port == IPPORT_FTP) {
+        append_comma(s, first);
+        ds_put_format(s, "alg=ftp,");
+    } else if (port) {
+        append_comma(s, first);
+        ds_put_format(s, "alg=%d,", port);
+    }
+}
+
+static void
 format_CT(const struct ofpact_conntrack *a, struct ds *s)
 {
     bool first = true;
@@ -4678,6 +4694,7 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
         append_comma(s, &first);
         ds_put_format(s, "table=%"PRIu8, a->recirc_table);
     }
+    format_alg(a->alg, s, &first);
     if (a->zone_src.field) {
         append_comma(s, &first);
         ds_put_format(s, "zone=");
@@ -4686,6 +4703,7 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
         append_comma(s, &first);
         ds_put_format(s, "zone=%"PRIu16, a->zone_imm);
     }
+    format_alg(a->alg, s, &first);
     if (ofpact_ct_get_action_len(a)) {
         append_comma(s, &first);
         ds_put_cstr(s, "exec(");

@@ -52,6 +52,7 @@ VLOG_DEFINE_THIS_MODULE(odp_util);
 /* The set of characters that may separate one action or one key attribute
  * from another. */
 static const char *delimiters = ", \t\r\n";
+static const char *delimiters_end = ", \t\r\n)";
 
 struct attr_len_tbl {
     int len;
@@ -546,6 +547,8 @@ static const struct nl_policy ovs_conntrack_policy[] = {
                            .min_len = sizeof(uint32_t) * 2 },
     [OVS_CT_ATTR_LABEL] = { .type = NL_A_UNSPEC, .optional = true,
                             .min_len = sizeof(ovs_u128) * 2 },
+    [OVS_CT_ATTR_HELPER] = { .type = NL_A_STRING, .optional = true,
+                             .min_len = 1, .max_len = 16 },
 };
 
 static void
@@ -554,6 +557,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     struct nlattr *a[ARRAY_SIZE(ovs_conntrack_policy)];
     const ovs_u128 *label;
     const uint32_t *mark;
+    const char *helper;
     uint32_t flags;
     uint16_t zone;
 
@@ -566,9 +570,10 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     zone = a[OVS_CT_ATTR_ZONE] ? nl_attr_get_u16(a[OVS_CT_ATTR_ZONE]) : 0;
     mark = a[OVS_CT_ATTR_MARK] ? nl_attr_get(a[OVS_CT_ATTR_MARK]) : NULL;
     label = a[OVS_CT_ATTR_LABEL] ? nl_attr_get(a[OVS_CT_ATTR_LABEL]): NULL;
+    helper = a[OVS_CT_ATTR_HELPER] ? nl_attr_get(a[OVS_CT_ATTR_HELPER]) : NULL;
 
     ds_put_format(ds, "ct");
-    if (flags || zone || mark || label) {
+    if (flags || zone || mark || label || helper) {
         ds_put_cstr(ds, "(");
         if (flags & OVS_CT_F_COMMIT) {
             ds_put_format(ds, "commit");
@@ -594,6 +599,12 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
             ds_put_hex(ds, label, sizeof(*label));
             ds_put_char(ds, '/');
             ds_put_hex(ds, (label + 1), sizeof(*label));
+        }
+        if (helper) {
+            if (ds_last(ds) != '(') {
+                ds_put_char(ds, ',');
+            }
+            ds_put_format(ds, "helper=%s", helper);
         }
         ds_put_cstr(ds, ")");
     }
@@ -1053,6 +1064,7 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
     const char *s = s_;
 
     if (ovs_scan(s, "ct")) {
+        const char *helper = NULL;
         uint32_t flags = 0;
         uint16_t zone = 0;
         struct {
@@ -1063,6 +1075,7 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
             struct ovs_key_ct_label value;
             struct ovs_key_ct_label mask;
         } ct_label;
+        size_t helper_len;
         size_t start;
         char *end;
 
@@ -1112,6 +1125,15 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
                     s = tail;
                     continue;
                 }
+                if (ovs_scan(s, "helper=%n", &n)) {
+                    s += n;
+                    helper_len = strcspn(s, delimiters_end);
+                    if (helper_len > 15) {
+                        return -EINVAL;
+                    }
+                    helper = s;
+                    s += helper_len;
+                }
 
                 if (n < 0) {
                     return -EINVAL;
@@ -1134,6 +1156,10 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
         if (!is_all_zeros(&ct_label.mask, sizeof(ct_label.mask))) {
             nl_msg_put_unspec(actions, OVS_CT_ATTR_LABEL, &ct_label,
                               sizeof(ct_label));
+        }
+        if (helper) {
+            nl_msg_put_string__(actions, OVS_CT_ATTR_HELPER, helper,
+                                helper_len);
         }
         nl_msg_end_nested(actions, start);
     }

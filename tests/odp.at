@@ -309,6 +309,7 @@ tnl_push(tnl_port(6),header(size=50,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:1
 ct
 ct(commit)
 ct(commit,zone=5)
+ct(commit,helper=ftp)
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

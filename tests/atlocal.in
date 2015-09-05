@@ -117,3 +117,10 @@ if test x`which conntrack` != x; then
 else
     HAVE_CONNTRACK="no"
 fi
+
+if test "$HAVE_PYTHON" = "yes" \
+   && test "x`$PYTHON $abs_top_srcdir/tests/test-l7.py --help | grep 'ftp'`" != x; then
+    HAVE_PYFTPDLIB="yes"
+else
+    HAVE_PYFTPDLIB="no"
+fi

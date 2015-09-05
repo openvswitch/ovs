@@ -1638,6 +1638,17 @@ specified in the \fBct\fR action.
 Store a 128-bit metadata value (masked by \fImask\fR) with the connection.
 This will populate the \fBct_label\fR flow field if the \fBtable\fR is
 specified in the \fBct\fR action.
+.IP \fBalg=\fR\fIalg\fR
+Specify application layer gateway \fIalg\fR to track specific connection
+types. Supported types include:
+.
+.RS
+.IP \fBftp\fR
+Look for negotiation of FTP data connections. If a subsequent FTP data
+connection arrives which is related, the \fBct\fR action will mark such
+packets with the \fBrel\fR flag in the \fBct_state\fR field.
+.RE
+.
 .RE
 .IP
 Currently, connection tracking is only available on Linux kernels with the
