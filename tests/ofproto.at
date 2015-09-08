@@ -1315,6 +1315,120 @@ OFPST_FLOW reply (OF1.2):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - flow_mod with out_port matching (OpenFlow 1.0)])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=output:2
+ in_port=2 actions=output:1,output:2,output:3
+ in_port=3 actions=output:3,output:1,output:2
+ in_port=4 actions=drop
+ in_port=5 actions=output:3
+ in_port=6 actions=output:1
+])
+AT_CHECK([ovs-ofctl -F openflow10 add-flows br0 flows.txt])
+(cat flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:2' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 out_port=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0 out_port=2])
+(grep -v 'output:2' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0 out_port=3])
+(grep -v 'output:[[23]]' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0 out_port=1])
+(grep -v 'output:[[123]]' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - flow_mod with out_port matching (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=output:2
+ in_port=2 actions=output:1,write_actions(output:2,output:3)
+ in_port=3 actions=output:3,output:1,write_actions(output:2)
+ in_port=4 actions=drop
+ in_port=5 actions=write_actions(output:3)
+ in_port=6 actions=output:1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flows br0 flows.txt])
+(cat flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:2' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 out_port=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_port=2])
+(grep -v 'output:2' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_port=3])
+(grep -v 'output:[[23]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_port=1])
+(grep -v 'output:[[123]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - flow_mod with out_group matching (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1,type=all,bucket=output:10
+group_id=2,type=all,bucket=output:10
+group_id=3,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-groups br0 groups.txt])
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=group:2,output:5
+ in_port=2 actions=group:1,write_actions(group:2,group:3,output:6)
+ in_port=3 actions=group:3,group:1,write_actions(group:2,output:3)
+ in_port=4 actions=output:4
+ in_port=5 actions=write_actions(output:4,group:3)
+ in_port=6 actions=group:1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flows br0 flows.txt])
+(cat flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:3' flows.txt | grep 'group:2'; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 out_port=3,out_group=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=2])
+(grep -v 'group:2' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=3])
+(grep -v 'group:[[23]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=1])
+(grep -v 'group:[[123]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Check the default configuration.
