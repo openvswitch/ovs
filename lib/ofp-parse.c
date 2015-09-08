@@ -403,6 +403,12 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                     error = xasprintf("%s is not a valid OpenFlow port",
                                       value);
                 }
+            } else if (fields & F_OUT_PORT && !strcmp(name, "out_group")) {
+                *usable_protocols &= OFPUTIL_P_OF11_UP;
+                if (!ofputil_group_from_string(value, &fm->out_group)) {
+                    error = xasprintf("%s is not a valid OpenFlow group",
+                                      value);
+                }
             } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
                 uint16_t priority = 0;
 
