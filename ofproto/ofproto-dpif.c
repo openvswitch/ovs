@@ -4787,7 +4787,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     ofpbuf_init(&ofpacts, 0);
 
     /* Parse actions. */
-    error = ofpacts_parse_actions(argv[--argc], &ofpacts, &usable_protocols);
+    error = ofpacts_parse_actions(argv[--argc], &ofpacts, &usable_protocols, 0);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);

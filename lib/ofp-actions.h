@@ -777,7 +777,8 @@ uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 /* Formatting and parsing ofpacts. */
 void ofpacts_format(const struct ofpact[], size_t ofpacts_len, struct ds *);
 char *ofpacts_parse_actions(const char *, struct ofpbuf *ofpacts,
-                            enum ofputil_protocol *usable_protocols)
+                            enum ofputil_protocol *usable_protocols,
+                            enum ofpact_type outer_action)
     OVS_WARN_UNUSED_RESULT;
 char *ofpacts_parse_instructions(const char *, struct ofpbuf *ofpacts,
                                  enum ofputil_protocol *usable_protocols)

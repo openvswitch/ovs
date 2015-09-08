@@ -1838,7 +1838,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
     enum ofputil_protocol usable_protocols; /* XXX: Use in proto selection */
 
     ofpbuf_init(&ofpacts, 64);
-    error = ofpacts_parse_actions(ctx->argv[3], &ofpacts, &usable_protocols);
+    error = ofpacts_parse_actions(ctx->argv[3], &ofpacts, &usable_protocols, 0);
     if (error) {
         ovs_fatal(0, "%s", error);
     }

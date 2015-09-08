@@ -1197,7 +1197,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_, uint8_t group_type,
 
     ofpbuf_init(&ofpacts, 0);
     error = ofpacts_parse_actions(ds_cstr(&actions), &ofpacts,
-                                  usable_protocols);
+                                  usable_protocols, 0);
     ds_destroy(&actions);
     if (error) {
         ofpbuf_uninit(&ofpacts);
