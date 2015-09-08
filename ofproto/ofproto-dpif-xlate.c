@@ -4611,7 +4611,7 @@ netdev_max_backlog(void)
 
         stream = fopen(filename, "r");
         if (!stream) {
-            VLOG_WARN("%s: open failed (%s)", filename, ovs_strerror(errno));
+            VLOG_INFO("%s: open failed (%s)", filename, ovs_strerror(errno));
         } else {
             if (fscanf(stream, "%d", &n) != 1) {
                 VLOG_WARN("%s: read error", filename);
