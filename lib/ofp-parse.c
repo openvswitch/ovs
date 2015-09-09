@@ -221,6 +221,12 @@ parse_field(const struct mf_field *mf, const char *s, struct match *match,
     union mf_value value, mask;
     char *error;
 
+    if (!*s) {
+        /* If there's no string, we're just trying to match on the
+         * existence of the field, so use a no-op value. */
+        s = "0/0";
+    }
+
     error = mf_parse(mf, s, &value, &mask);
     if (!error) {
         *usable_protocols &= mf_set(mf, &value, &mask, match);
@@ -365,11 +371,6 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                    || !strcmp(name, "allow_hidden_fields")) {
              /* ignore these fields. */
         } else if (mf_from_name(name)) {
-            if (!*value) {
-                /* If there's no value, we're just trying to match on the
-                 * existence of the field, so use a no-op value. */
-                value = "0/0";
-            }
             error = parse_field(mf_from_name(name), value, &fm->match,
                                 usable_protocols);
         } else {
@@ -777,6 +778,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
 
     while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct protocol *p;
+        char *error = NULL;
 
         if (!strcmp(name, "!initial")) {
             fmr->flags &= ~NXFMF_INITIAL;
@@ -795,29 +797,25 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
             if (p->nw_proto) {
                 match_set_nw_proto(&fmr->match, p->nw_proto);
             }
+        } else if (mf_from_name(name)) {
+            error = parse_field(mf_from_name(name), value, &fmr->match,
+                                usable_protocols);
         } else {
             if (!*value) {
                 return xasprintf("%s: field %s missing value", str_, name);
             }
 
             if (!strcmp(name, "table")) {
-                char *error = str_to_u8(value, "table", &fmr->table_id);
-                if (error) {
-                    return error;
-                }
+                error = str_to_u8(value, "table", &fmr->table_id);
             } else if (!strcmp(name, "out_port")) {
                 fmr->out_port = u16_to_ofp(atoi(value));
-            } else if (mf_from_name(name)) {
-                char *error;
-
-                error = parse_field(mf_from_name(name), value, &fmr->match,
-                                    usable_protocols);
-                if (error) {
-                    return error;
-                }
             } else {
                 return xasprintf("%s: unknown keyword %s", str_, name);
             }
+        }
+
+        if (error) {
+            return error;
         }
     }
     return NULL;
