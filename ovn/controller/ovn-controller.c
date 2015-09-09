@@ -95,10 +95,8 @@ create_br_int(struct controller_ctx *ctx,
     bridge = ovsrec_bridge_insert(ctx->ovs_idl_txn);
     ovsrec_bridge_set_name(bridge, bridge_name);
     ovsrec_bridge_set_fail_mode(bridge, "secure");
-    struct smap other_config = SMAP_INITIALIZER(&other_config);
-    smap_add(&other_config, "disable-in-band", "true");
-    ovsrec_bridge_set_other_config(bridge, &other_config);
-    smap_destroy(&other_config);
+    const struct smap oc = SMAP_CONST1(&oc, "disable-in-band", "true");
+    ovsrec_bridge_set_other_config(bridge, &oc);
     ovsrec_bridge_set_ports(bridge, &port, 1);
 
     struct ovsrec_bridge **bridges;
@@ -201,19 +199,15 @@ create_patch_port(struct controller_ctx *ctx,
     iface = ovsrec_interface_insert(ctx->ovs_idl_txn);
     ovsrec_interface_set_name(iface, port_name);
     ovsrec_interface_set_type(iface, "patch");
-    struct smap options = SMAP_INITIALIZER(&options);
-    smap_add(&options, "peer", peer_port_name);
+    const struct smap options = SMAP_CONST1(&options, "peer", peer_port_name);
     ovsrec_interface_set_options(iface, &options);
-    smap_destroy(&options);
 
     struct ovsrec_port *port;
     port = ovsrec_port_insert(ctx->ovs_idl_txn);
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
-    struct smap ext_ids = SMAP_INITIALIZER(&ext_ids);
-    smap_add(&ext_ids, "ovn-patch-port", network);
-    ovsrec_port_set_external_ids(port, &ext_ids);
-    smap_destroy(&ext_ids);
+    const struct smap ids = SMAP_CONST1(&ids, "ovn-patch-port", network);
+    ovsrec_port_set_external_ids(port, &ids);
 
     struct ovsrec_port **ports;
     ports = xmalloc(sizeof *ports * (b1->n_ports + 1));

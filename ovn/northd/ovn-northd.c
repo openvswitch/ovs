@@ -309,12 +309,10 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
 
             od->sb = sbrec_datapath_binding_insert(ctx->ovnsb_txn);
 
-            struct smap external_ids = SMAP_INITIALIZER(&external_ids);
             char uuid_s[UUID_LEN + 1];
             sprintf(uuid_s, UUID_FMT, UUID_ARGS(&od->nb->header_.uuid));
-            smap_add(&external_ids, "logical-switch", uuid_s);
-            sbrec_datapath_binding_set_external_ids(od->sb, &external_ids);
-            smap_destroy(&external_ids);
+            const struct smap id = SMAP_CONST1(&id, "logical-switch", uuid_s);
+            sbrec_datapath_binding_set_external_ids(od->sb, &id);
 
             sbrec_datapath_binding_set_tunnel_key(od->sb, tunnel_key);
         }
@@ -888,13 +886,12 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         sbrec_logical_flow_set_match(sbflow, lflow->match);
         sbrec_logical_flow_set_actions(sbflow, lflow->actions);
 
-        struct smap external_ids = SMAP_INITIALIZER(&external_ids);
-        smap_add(&external_ids, "stage-name",
-                 lflow->pipeline == P_IN ?
-                  ingress_stage_to_str(lflow->table_id) :
-                  egress_stage_to_str(lflow->table_id));
-        sbrec_logical_flow_set_external_ids(sbflow, &external_ids);
-        smap_destroy(&external_ids);
+        const struct smap ids = SMAP_CONST1(
+            &ids, "stage-name",
+            (lflow->pipeline == P_IN
+             ? ingress_stage_to_str(lflow->table_id)
+             : egress_stage_to_str(lflow->table_id)));
+        sbrec_logical_flow_set_external_ids(sbflow, &ids);
 
         ovn_lflow_destroy(&lflows, lflow);
     }
