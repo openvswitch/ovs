@@ -19,6 +19,18 @@ rpl_udp_tunnel_handle_offloads(struct sk_buff *skb, bool udp_csum,
 }
 #define udp_tunnel_handle_offloads rpl_udp_tunnel_handle_offloads
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
+static inline int rpl_udp_tunnel_xmit_skb(struct rtable *rt,
+					  struct sock *sk, struct sk_buff *skb,
+					  __be32 src, __be32 dst, __u8 tos, __u8 ttl,
+					  __be16 df, __be16 src_port, __be16 dst_port,
+					  bool xnet, bool nocheck)
+{
+	return udp_tunnel_xmit_skb(rt, skb, src, dst, tos, ttl, df, src_port,
+				   dst_port, xnet, nocheck);
+}
+#define udp_tunnel_xmit_skb rpl_udp_tunnel_xmit_skb
+#endif
 #else
 
 #include <net/ip_tunnels.h>
@@ -71,7 +83,8 @@ void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 
 /* Transmit the skb using UDP encapsulation. */
 #define udp_tunnel_xmit_skb rpl_udp_tunnel_xmit_skb
-int rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sk_buff *skb,
+int rpl_udp_tunnel_xmit_skb(struct rtable *rt,
+			    struct sock *sk, struct sk_buff *skb,
 			    __be32 src, __be32 dst, __u8 tos, __u8 ttl,
 			    __be16 df, __be16 src_port, __be16 dst_port,
 			    bool xnet, bool nocheck);

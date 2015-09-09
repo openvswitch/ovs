@@ -260,7 +260,7 @@ static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 	vxflags = vxlan_port->exts |
 		      (tun_key->tun_flags & TUNNEL_CSUM ? VXLAN_F_UDP_CSUM : 0);
 
-	err = vxlan_xmit_skb(vxlan_port->vs, rt, skb,
+	err = vxlan_xmit_skb(rt, vxlan_port->vs->sock->sk, skb,
 			     saddr, tun_key->ipv4_dst,
 			     tun_key->ipv4_tos,
 			     tun_key->ipv4_ttl, df,

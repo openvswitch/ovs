@@ -1320,16 +1320,18 @@ static void clean_percpu(struct work_struct *work)
 }
 
 #ifdef HAVE_NF_HOOKFN_ARG_OPS
-#define FIRST_PARAM const struct nf_hook_ops *ops,
+#define FIRST_PARAM const struct nf_hook_ops *ops
 #else
-#define FIRST_PARAM unsigned int hooknum,
+#define FIRST_PARAM unsigned int hooknum
 #endif
 
-static unsigned int nf_ip_hook(FIRST_PARAM
-			       struct sk_buff *skb,
-			       const struct net_device *in,
-			       const struct net_device *out,
-			       int (*okfn)(struct sk_buff *))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+#define LAST_PARAM const struct nf_hook_state *state
+#else
+#define LAST_PARAM const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *)
+#endif
+
+static unsigned int nf_ip_hook(FIRST_PARAM, struct sk_buff *skb, LAST_PARAM)
 {
 	struct stt_sock *stt_sock;
 	int ip_hdr_len;

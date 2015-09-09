@@ -117,7 +117,7 @@ int rpl_geneve_xmit_skb(struct geneve_sock *gs, struct rtable *rt,
 
 	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
 
-	return udp_tunnel_xmit_skb(rt, skb, src, dst,
+	return udp_tunnel_xmit_skb(rt, gs->sock->sk, skb, src, dst,
 				   tos, ttl, df, src_port, dst_port, xnet,
 				   !csum);
 }

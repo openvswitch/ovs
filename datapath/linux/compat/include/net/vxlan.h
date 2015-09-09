@@ -88,10 +88,9 @@ struct vxlanhdr_gbp {
 #endif
 
 #ifdef USE_UPSTREAM_VXLAN
-static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
-                   struct rtable *rt, struct sk_buff *skb,
-                   __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
-                   __be16 src_port, __be16 dst_port,
+static inline int rpl_vxlan_xmit_skb(struct rtable *rt, struct sock *sk,
+		   struct sk_buff *skb, __be32 src, __be32 dst, __u8 tos,
+		   __u8 ttl, __be16 df, __be16 src_port, __be16 dst_port,
 		   struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
 	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
@@ -99,7 +98,11 @@ static inline int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
 		return -ENOSYS;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 	return vxlan_xmit_skb(rt, skb, src, dst, tos, ttl, df,
+#else
+	return vxlan_xmit_skb(rt, sk, skb, src, dst, tos, ttl, df,
+#endif
 			      src_port, dst_port, md, xnet, vxflags);
 }
 
@@ -138,8 +141,7 @@ struct vxlan_sock *rpl_vxlan_sock_add(struct net *net, __be16 port,
 void rpl_vxlan_sock_release(struct vxlan_sock *vs);
 
 #define vxlan_xmit_skb rpl_vxlan_xmit_skb
-int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
-		       struct rtable *rt, struct sk_buff *skb,
+int rpl_vxlan_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *skb,
 		       __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		       __be16 src_port, __be16 dst_port,
 		       struct vxlan_metadata *md, bool xnet, u32 vxflags);
