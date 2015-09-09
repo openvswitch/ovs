@@ -2,12 +2,7 @@ AT_BANNER([ovn-sbctl])
 
 # OVN_SBCTL_TEST_START
 m4_define([OVN_SBCTL_TEST_START],
-  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-   OVS_DBDIR=`pwd`; export OVS_DBDIR
-   OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-
-   dnl Create databases (ovn-nb, ovn-sb).
+  [dnl Create databases (ovn-nb, ovn-sb).
    for daemon in ovn-nb ovn-sb; do
       AT_CHECK([ovsdb-tool create $daemon.db $abs_top_srcdir/${daemon%%-*}/${daemon}.ovsschema])
    done

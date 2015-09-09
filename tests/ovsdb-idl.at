@@ -1,6 +1,5 @@
 AT_BANNER([OVSDB -- interface description language (IDL)])
 
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 # OVSDB_CHECK_IDL_C(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS],
 #                   [FILTER])
 #
@@ -20,7 +19,6 @@ OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 m4_define([OVSDB_CHECK_IDL_C],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl positive $5])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
@@ -38,7 +36,6 @@ m4_define([OVSDB_CHECK_IDL_PY],
   [AT_SETUP([$1 - Python])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python $5])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
@@ -56,8 +53,6 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
   [AT_SETUP([$1 - Python tcp])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
@@ -78,8 +73,6 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PY],
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:0:[[::1]] --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
@@ -517,7 +510,6 @@ OVSDB_CHECK_IDL_PY([row-from-json idl, whats this],
 
 AT_SETUP([idl handling of missing tables and columns - C])
 AT_KEYWORDS([ovsdb server idl positive])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 
 # idltest2.ovsschema is the same as idltest.ovsschema, except that
 # table link2 and column l2 have been deleted.  But the IDL still

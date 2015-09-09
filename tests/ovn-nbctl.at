@@ -2,12 +2,7 @@ AT_BANNER([ovn-nbctl])
 
 # OVN_NBCTL_TEST_START
 m4_define([OVN_NBCTL_TEST_START],
-  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-   OVS_DBDIR=`pwd`; export OVS_DBDIR
-   OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-
-   dnl Create ovn-nb database.
+  [dnl Create ovn-nb database.
    AT_CHECK([ovsdb-tool create ovn-nb.db $abs_top_srcdir/ovn/ovn-nb.ovsschema])
 
    dnl Start ovsdb-server.

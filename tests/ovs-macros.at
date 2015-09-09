@@ -4,8 +4,26 @@ AT_TESTED([perl])
 
 m4_include([m4/compat.at])
 
+dnl Make AT_SETUP automatically run the ovs_init() shell function
+dnl as the first step in every test.
+m4_rename([AT_SETUP], [OVS_AT_SETUP])
+m4_define([AT_SETUP], [OVS_AT_SETUP($@)
+ovs_init
+])
 m4_divert_push([PREPARE_TESTS])
 [
+# Set ovs_base to the base directory in which the test is running and
+# initialize the OVS_*DIR environment variables to point to this
+# directory.
+ovs_init() {
+    ovs_base=`pwd`
+    OVS_RUNDIR=$ovs_base; export OVS_RUNDIR
+    OVS_LOGDIR=$ovs_base; export OVS_LOGDIR
+    OVS_DBDIR=$ovs_base; export OVS_DBDIR
+    OVS_SYSCONFDIR=$ovs_base; export OVS_SYSCONFDIR
+    OVS_PKGDATADIR=$ovs_base; export OVS_PKGDATADIR
+}
+
 ovs_wait () {
     # First try a quick sleep, so that the test completes very quickly
     # in the normal case.  POSIX doesn't require fractional times to

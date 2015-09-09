@@ -143,8 +143,6 @@ dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests])
 
 AT_SETUP([ovs-vsctl connection retry])
-OVS_RUNDIR=$PWD; export OVS_RUNDIR
-
 dnl Without --retry, there should be no retry for active connections.
 AT_CHECK([ovs-vsctl --db=unix:foo --timeout=10 -vreconnect:emer -- init],
   [1], [], [stderr])
