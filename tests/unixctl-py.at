@@ -88,7 +88,7 @@ AT_CLEANUP
 
 AT_SETUP([unixctl server - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-ON_EXIT([kill `cat test-unixctl.py.pid`])
+on_exit 'kill `cat test-unixctl.py.pid`'
 AT_CAPTURE_FILE([`pwd`/test-unixctl.py.log])
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file --pidfile --detach])
 

@@ -165,7 +165,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db and remove-db])
 AT_KEYWORDS([ovsdb server positive])
-ON_EXIT([kill `cat ovsdb-server.pid`])
+on_exit 'kill `cat ovsdb-server.pid`'
 ordinal_schema > schema1
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
@@ -252,7 +252,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with one db.
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
-ON_EXIT([kill `cat *.pid`])
+on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db1])
 
 # Add the second database.
@@ -285,7 +285,7 @@ ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
-ON_EXIT([kill `cat *.pid`])
+on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db1 db2])
 
 # Remove the second database.
@@ -346,7 +346,7 @@ AT_CHECK(
         "table": "Manager",
         "uuid-name": "x",
         "row": {"target": "punix:socket2"}}]']], [0], [ignore], [ignore])
-ON_EXIT([kill `cat ovsdb-server.pid`])
+on_exit 'kill `cat ovsdb-server.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options --log-file db], [0], [ignore], [ignore])
 ovs-appctl -t ovsdb-server time/warp 6000 1000
 AT_CHECK(
@@ -373,7 +373,7 @@ AT_SETUP([ovsdb-server/add-remote and remove-remote])
 AT_KEYWORDS([ovsdb server positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-ON_EXIT([kill `cat *.pid`])
+on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
 
 AT_CHECK([test ! -e socket1])
@@ -427,7 +427,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with no remotes.
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-ON_EXIT([kill `cat *.pid`])
+on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
 
 # Add a remote.
@@ -456,7 +456,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # Start ovsdb-server, initially with no remotes.
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-ON_EXIT([kill `cat *.pid`])
+on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
 
 # Add a remote.
@@ -672,7 +672,7 @@ OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server combines updates on backlogged connections])
-ON_EXIT([kill `cat *.pid`])
+on_exit 'kill `cat *.pid`'
 
 # The maximum socket receive buffer size is important for this test, which
 # tests behavior when the receive buffer overflows.

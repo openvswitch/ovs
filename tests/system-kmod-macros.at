@@ -17,11 +17,11 @@ m4_define([_ADD_BR], [[add-br $1]])
 #
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [AT_CHECK([modprobe openvswitch])
-   ON_EXIT([modprobe -r openvswitch])
+   on_exit 'modprobe -r openvswitch'
    m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_lisp], [vport_stt], [vport_vxlan]],
               [modprobe -q mod || echo "Module mod not loaded."
-               ON_EXIT([modprobe -q -r mod])])
-   ON_EXIT([ovs-dpctl del-dp ovs-system])
+               on_exit 'modprobe -q -r mod'])
+   on_exit 'ovs-dpctl del-dp ovs-system'
    _OVS_VSWITCHD_START([])
    dnl Add bridges, ports, etc.
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- set bridge br0 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])

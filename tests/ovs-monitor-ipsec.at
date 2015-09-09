@@ -6,7 +6,7 @@ AT_SKIP_IF([$non_ascii_cwd])
 
 cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
 
-ON_EXIT([kill `cat pid ovs-monitor-ipsec.pid`])
+on_exit 'kill `cat pid ovs-monitor-ipsec.pid`'
 
 mkdir etc etc/init.d etc/racoon etc/racoon/certs
 mkdir usr usr/sbin

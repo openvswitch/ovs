@@ -5,7 +5,7 @@ dnl Open_vSwitch record) visible to ovs-vswitchd, but hand-rolled scripts
 dnl sometimes do.  At one point, "ovs-vswitchd --detach" would never detach
 dnl and use 100% CPU if this happened, so this test checks for regression.
 AT_SETUP([ovs-vswitchd detaches correctly with empty db])
-ON_EXIT([kill `cat ovsdb-server.pid ovs-vswitchd.pid`])
+on_exit 'kill `cat ovsdb-server.pid ovs-vswitchd.pid`'
 
 dnl Create database.
 touch .conf.db.~lock~

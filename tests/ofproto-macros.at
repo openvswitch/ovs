@@ -67,7 +67,7 @@ m4_define([_OVS_VSWITCHD_START],
 
    dnl Start ovsdb-server.
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
-    ON_EXIT_UNQUOTED([kill `cat ovsdb-server.pid`])
+   on_exit "kill `cat ovsdb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
 /ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
@@ -79,7 +79,7 @@ m4_define([_OVS_VSWITCHD_START],
    dnl Start ovs-vswitchd.
    AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
-   ON_EXIT_UNQUOTED([kill `cat ovs-vswitchd.pid`])
+   on_exit "kill `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '
 /ovs_numa|INFO|Discovered /d
 /vlog|INFO|opened log file/d

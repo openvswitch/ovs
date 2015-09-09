@@ -16,7 +16,7 @@ m4_define([ADD_NAMESPACES],
    [m4_foreach([ns], [$@],
                [DEL_NAMESPACES(ns)
                 AT_CHECK([ip netns add ns])
-                ON_EXIT(DEL_NAMESPACES(ns))
+		on_exit 'DEL_NAMESPACES(ns)'
                ])
    ]
 )
@@ -60,7 +60,7 @@ m4_define([ADD_VETH],
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1])
       NS_CHECK_EXEC([$2], [ip addr add $4 dev $1])
       NS_CHECK_EXEC([$2], [ip link set dev $1 up])
-      ON_EXIT([ip link del ovs-$1])
+      on_exit 'ip link del ovs-$1'
     ]
 )
 
@@ -89,7 +89,7 @@ m4_define([ADD_OVS_TUNNEL],
     AT_CHECK([ip addr add dev $2 $5])
     AT_CHECK([ip link set dev $2 up])
     AT_CHECK([ip link set dev $2 mtu 1450])
-    ON_EXIT([ip addr del dev $2 $5])
+    on_exit 'ip addr del dev $2 $5'
    ]
 )
 

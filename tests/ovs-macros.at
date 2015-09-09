@@ -17,6 +17,8 @@ m4_divert_push([PREPARE_TESTS])
 # directory.
 ovs_init() {
     ovs_base=`pwd`
+    trap '. "$ovs_base/cleanup"' 0
+    : > cleanup
     OVS_RUNDIR=$ovs_base; export OVS_RUNDIR
     OVS_LOGDIR=$ovs_base; export OVS_LOGDIR
     OVS_DBDIR=$ovs_base; export OVS_DBDIR
@@ -102,28 +104,18 @@ m4_define([OVS_APP_EXIT_AND_WAIT],
   [ovs-appctl -t $1 exit
    OVS_WAIT_WHILE([test -e $1.pid])])
 
-m4_define([ON_EXIT__], [trap '. ./cleanup' 0; cat - cleanup << $2 > __cleanup
-$1
-EOF
-mv __cleanup cleanup
-])
-
-dnl ON_EXIT([COMMANDS])
-dnl ON_EXIT_UNQUOTED([COMMANDS])
+dnl on_exit "COMMAND"
 dnl
-dnl Add the shell COMMANDS to a collection executed when the current test
+dnl Add the shell COMMAND to a collection executed when the current test
 dnl completes, as a cleanup action.  (The most common use is to kill a
 dnl daemon started by the test.  This is important to prevent tests that
 dnl start daemons from hanging at exit.)
 dnl
-dnl The only difference between ON_EXIT and ON_EXIT_UNQUOTED is that only the
-dnl latter performs shell variable (e.g. $var) substitution, command
-dnl substitution (e.g. `command`), and backslash escaping (e.g. \\ becomes \)
-dnl in COMMANDS at the time that ON_EXIT_UNQUOTED is encountered.  ON_EXIT,
-dnl in contrast, copies the literal COMMANDS and only executes shell expansion
-dnl at cleanup time.
-dnl
-dnl Cleanup commands are executed in the reverse order of execution of
-dnl these macros.
-m4_define([ON_EXIT], [ON_EXIT__([$1], ['EOF'])])
-m4_define([ON_EXIT_UNQUOTED], [ON_EXIT__([$1], [EOF])])
+dnl Cleanup commands are executed in the reverse order of calls to this
+dnl function.
+m4_divert_text([PREPARE_TESTS], [dnl
+on_exit () {
+    (echo "$1"; cat cleanup) > cleanup.tmp
+    mv cleanup.tmp cleanup
+}
+])

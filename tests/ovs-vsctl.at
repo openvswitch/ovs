@@ -869,7 +869,7 @@ AT_CLEANUP
 
 AT_SETUP([database commands -- conditions])
 AT_KEYWORDS([ovs-vsctl])
-ON_EXIT([kill `cat pid`])
+on_exit 'kill `cat pid`'
 OVS_VSCTL_SETUP
 AT_CHECK(
   [RUN_OVS_VSCTL_TOGETHER(
@@ -1321,7 +1321,7 @@ dnl Create database.
 touch .conf.db.~lock~
 AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --peer-ca-cert=$PKIDIR/ovsdbserver-cert.pem --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
-ON_EXIT_UNQUOTED([kill `cat pid`])
+on_exit "kill `cat pid`"
 SSL_PORT=`parse_listening_port < ovsdb-server.log`
 
 # During bootstrap, the connection gets torn down. So the o/p of ovs-vsctl is error.

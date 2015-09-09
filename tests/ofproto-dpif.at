@@ -891,7 +891,7 @@ AT_SETUP([ofproto-dpif - Default Table Miss - OF1.0 (OFPTC_TABLE_MISS_CONTROLLER
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 
@@ -925,7 +925,7 @@ AT_SETUP([ofproto-dpif - Default Table Miss - OF1.3 (OFPTC_TABLE_MISS_DROP)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl del-flows br0])
@@ -953,7 +953,7 @@ AT_SETUP([ofproto-dpif - Table Miss - goto table and OFPTC_TABLE_MISS_CONTROLLER
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl -OOpenFlow12 add-flow br0 'table=0 actions=goto_table(1)'])
@@ -989,7 +989,7 @@ AT_SETUP([ofproto-dpif - Table Miss - resubmit and OFPTC_TABLE_MISS_CONTROLLER])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl -OOpenFlow12 add-flow br0 'table=0 actions=resubmit(1,1)'])
@@ -1017,7 +1017,7 @@ AT_SETUP([ofproto-dpif - Table Miss - OFPTC_TABLE_MISS_CONTINUE])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl add-flow br0 'table=1 dl_src=10:11:11:11:11:11 actions=controller'])
@@ -1076,7 +1076,7 @@ AT_SETUP([ofproto-dpif - Table Miss - goto table and OFPTC_TABLE_MISS_CONTINUE])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -1140,7 +1140,7 @@ AT_SETUP([ofproto-dpif - Table Miss - resubmit and OFPTC_TABLE_MISS_CONTINUE])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -1186,7 +1186,7 @@ AT_SETUP([ofproto-dpif - Table Miss - OFPTC_TABLE_MISS_DROP])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
@@ -1214,7 +1214,7 @@ AT_SETUP([ofproto-dpif - Table Miss - goto table and OFPTC_TABLE_MISS_DROP])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl del-flows br0])
@@ -1245,7 +1245,7 @@ AT_SETUP([ofproto-dpif - Table Miss - resubmit and OFPTC_TABLE_MISS_DROP])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl del-flows br0])
@@ -1276,7 +1276,7 @@ AT_SETUP([ofproto-dpif - controller])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -1546,7 +1546,7 @@ AT_SETUP([ofproto-dpif - MPLS handling])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -2596,7 +2596,7 @@ AT_SETUP([ofproto-dpif - MPLS handling with goto_table])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -2644,7 +2644,7 @@ AT_SETUP([ofproto-dpif - MPLS handling with write_actions])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 dnl N.B: The first (and only) action that accesses L3 data after the
 dnl pop_mpls action is present in write_actions. This exercises recirculation
@@ -2692,7 +2692,7 @@ AT_SETUP([ofproto-dpif - table-miss flow (OpenFlow 1.0)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 # A table-miss flow has priority 0 and no match
@@ -2732,7 +2732,7 @@ AT_SETUP([ofproto-dpif - table-miss flow (OpenFlow 1.3)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 # A table-miss flow has priority 0 and no match
@@ -2773,7 +2773,7 @@ AT_SETUP([ofproto-dpif - table-miss flow with async config (OpenFlow 1.3)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 ovs-appctl time/stop
 
@@ -2841,7 +2841,7 @@ AT_SETUP([ofproto-dpif - table-miss flow (OpenFlow 1.4)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 # A table-miss flow has priority 0 and no match
@@ -2883,7 +2883,7 @@ AT_SETUP([ofproto-dpif - packet-in reasons (Openflow 1.3)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -2951,7 +2951,7 @@ AT_SETUP([ofproto-dpif - packet-in reasons (Openflow 1.4)])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -3182,7 +3182,7 @@ AT_SETUP([ofproto-dpif - MPLS handling])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -3299,7 +3299,7 @@ AT_SETUP([ofproto-dpif - VLAN+MPLS handling])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -4733,7 +4733,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   [AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
   OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
-  ON_EXIT([kill `cat test-sflow.pid`])
+  on_exit 'kill `cat test-sflow.pid`'
   AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:$1 > sflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([sflow.log])
   SFLOW_PORT=`parse_listening_port < test-sflow.log`
@@ -5076,7 +5076,7 @@ OVS_VSWITCHD_START([dnl
 		    other_config:lacp-port-priority=222			\
 		    other_config:lacp-aggregation-key=3333 ])
 
-ON_EXIT([kill `cat test-sflow.pid`])
+on_exit 'kill `cat test-sflow.pid`'
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 SFLOW_PORT=`parse_listening_port < test-sflow.log`
@@ -5121,7 +5121,6 @@ AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
 dnl set up sFlow logging
-dnl ON_EXIT([kill `cat test-sflow.pid`])
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 SFLOW_PORT=`parse_listening_port < test-sflow.log`
@@ -5192,7 +5191,6 @@ AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 options:ifindex=1010])
 
 dnl set up sFlow logging
-dnl ON_EXIT([kill `cat test-sflow.pid`])
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 SFLOW_PORT=`parse_listening_port < test-sflow.log`
@@ -5297,7 +5295,6 @@ table=0 dl_src=50:54:00:00:00:0b actions=pop_mpls:0x0800,2
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 dnl set up sFlow logging
-dnl ON_EXIT([kill `cat test-sflow.pid`])
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 SFLOW_PORT=`parse_listening_port < test-sflow.log`
@@ -5391,7 +5388,7 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
   ADD_OF_PORTS([br0], 1, 2)
 
   ovs-appctl time/stop
-  ON_EXIT([kill `cat test-netflow.pid`])
+  on_exit 'kill `cat test-netflow.pid`'
   AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   NETFLOW_PORT=`parse_listening_port < test-netflow.log`
@@ -5438,7 +5435,7 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
   [OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
   ADD_OF_PORTS([br0], 1, 2)
 
-  ON_EXIT([kill `cat test-netflow.pid`])
+  on_exit 'kill `cat test-netflow.pid`'
   AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   NETFLOW_PORT=`parse_listening_port < test-netflow.log`
@@ -5770,7 +5767,7 @@ OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -5806,7 +5803,7 @@ OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
 ])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
@@ -6116,7 +6113,7 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
   ADD_OF_PORTS([br0], [1], [2])
 
   dnl NetFlow configuration disables wildcarding relevant fields
-  ON_EXIT([kill `cat test-netflow.pid`])
+  on_exit 'kill `cat test-netflow.pid`'
   AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
   NETFLOW_PORT=`parse_listening_port < test-netflow.log`
