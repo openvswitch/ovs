@@ -355,6 +355,12 @@ struct ofp14_role_prop_experimenter {
 };
 OFP_ASSERT(sizeof(struct ofp14_role_prop_experimenter) == 12);
 
+/* Group/Meter request forwarding. */
+struct ofp14_requestforward {
+    struct ofp_header request;  /* Request being forwarded. */
+};
+OFP_ASSERT(sizeof(struct ofp14_requestforward) == 8);
+
 /* Bundle control message types */
 enum ofp14_bundle_ctrl_type {
     OFPBCT_OPEN_REQUEST    = 0,

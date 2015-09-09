@@ -168,6 +168,9 @@ void connmgr_send_packet_in(struct connmgr *,
 void ofconn_send_role_status(struct ofconn *ofconn, uint32_t role,
                              uint8_t reason);
 
+void connmgr_send_requestforward(struct connmgr *, const struct ofconn *source,
+                                 const struct ofputil_requestforward *);
+
 /* Fail-open settings. */
 enum ofproto_fail_mode connmgr_get_fail_mode(const struct connmgr *);
 void connmgr_set_fail_mode(struct connmgr *, enum ofproto_fail_mode);

@@ -1185,21 +1185,9 @@ ofp_print_meter_config(struct ds *s, const struct ofputil_meter_config *mc)
 }
 
 static void
-ofp_print_meter_mod(struct ds *s, const struct ofp_header *oh)
+ofp_print_meter_mod__(struct ds *s, const struct ofputil_meter_mod *mm)
 {
-    struct ofputil_meter_mod mm;
-    struct ofpbuf bands;
-    enum ofperr error;
-
-    ofpbuf_init(&bands, 64);
-    error = ofputil_decode_meter_mod(oh, &mm, &bands);
-    if (error) {
-        ofpbuf_uninit(&bands);
-        ofp_print_error(s, error);
-        return;
-    }
-
-    switch (mm.command) {
+    switch (mm->command) {
     case OFPMC13_ADD:
         ds_put_cstr(s, " ADD ");
         break;
@@ -1210,10 +1198,26 @@ ofp_print_meter_mod(struct ds *s, const struct ofp_header *oh)
         ds_put_cstr(s, " DEL ");
         break;
     default:
-        ds_put_format(s, " cmd:%d ", mm.command);
+        ds_put_format(s, " cmd:%d ", mm->command);
     }
 
-    ofp_print_meter_config(s, &mm.meter);
+    ofp_print_meter_config(s, &mm->meter);
+}
+
+static void
+ofp_print_meter_mod(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofputil_meter_mod mm;
+    struct ofpbuf bands;
+    enum ofperr error;
+
+    ofpbuf_init(&bands, 64);
+    error = ofputil_decode_meter_mod(oh, &mm, &bands);
+    if (error) {
+        ofp_print_error(s, error);
+    } else {
+        ofp_print_meter_mod__(s, &mm);
+    }
     ofpbuf_uninit(&bands);
 }
 
@@ -2333,7 +2337,8 @@ ofp_print_bucket_id(struct ds *s, const char *label, uint32_t bucket_id,
 
 static void
 ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
-                struct ovs_list *p_buckets, struct ofputil_group_props *props,
+                const struct ovs_list *p_buckets,
+                const struct ofputil_group_props *props,
                 enum ofp_version ofp_version, bool suppress_type)
 {
     struct ofputil_bucket *bucket;
@@ -2529,22 +2534,15 @@ ofp_print_group_features(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
+ofp_print_group_mod__(struct ds *s, enum ofp_version ofp_version,
+                      const struct ofputil_group_mod *gm)
 {
-    struct ofputil_group_mod gm;
-    int error;
     bool bucket_command = false;
-
-    error = ofputil_decode_group_mod(oh, &gm);
-    if (error) {
-        ofp_print_error(s, error);
-        return;
-    }
 
     ds_put_char(s, '\n');
 
     ds_put_char(s, ' ');
-    switch (gm.command) {
+    switch (gm->command) {
     case OFPGC11_ADD:
         ds_put_cstr(s, "ADD");
         break;
@@ -2568,17 +2566,31 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
         break;
 
     default:
-        ds_put_format(s, "cmd:%"PRIu16"", gm.command);
+        ds_put_format(s, "cmd:%"PRIu16"", gm->command);
     }
     ds_put_char(s, ' ');
 
     if (bucket_command) {
         ofp_print_bucket_id(s, "command_bucket_id:",
-                            gm.command_bucket_id, oh->version);
+                            gm->command_bucket_id, ofp_version);
     }
 
-    ofp_print_group(s, gm.group_id, gm.type, &gm.buckets, &gm.props,
-                    oh->version, bucket_command);
+    ofp_print_group(s, gm->group_id, gm->type, &gm->buckets, &gm->props,
+                    ofp_version, bucket_command);
+}
+
+static void
+ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofputil_group_mod gm;
+    int error;
+
+    error = ofputil_decode_group_mod(oh, &gm);
+    if (error) {
+        ofp_print_error(s, error);
+        return;
+    }
+    ofp_print_group_mod__(s, oh->version, &gm);
     ofputil_bucket_list_destroy(&gm.buckets);
 }
 
@@ -3050,6 +3062,36 @@ ofp_print_geneve_table_reply(struct ds *s, const struct ofp_header *oh)
     ofputil_uninit_geneve_table(&gtr.mappings);
 }
 
+/* This function will print the request forward message. The reason for
+ * request forward is taken from rf.request.type */
+static void
+ofp_print_requestforward(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_requestforward rf;
+    enum ofperr error;
+
+    error = ofputil_decode_requestforward(oh, &rf);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ds_put_cstr(string, " reason=");
+
+    switch (rf.reason) {
+    case OFPRFR_GROUP_MOD:
+        ds_put_cstr(string, "group_mod");
+        ofp_print_group_mod__(string, oh->version, rf.group_mod);
+        break;
+
+    case OFPRFR_METER_MOD:
+        ds_put_cstr(string, "meter_mod");
+        ofp_print_meter_mod__(string, rf.meter_mod);
+        break;
+    }
+    ofputil_destroy_requestforward(&rf);
+}
+
 static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
                 struct ds *string, int verbosity)
@@ -3177,6 +3219,10 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
     case OFPTYPE_ROLE_STATUS:
         ofp_print_role_status_message(string, oh);
+        break;
+
+    case OFPTYPE_REQUESTFORWARD:
+        ofp_print_requestforward(string, oh);
         break;
 
     case OFPTYPE_METER_STATS_REQUEST:

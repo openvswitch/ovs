@@ -1239,4 +1239,25 @@ struct ofpbuf *ofputil_encode_get_async_config(const struct ofp_header *,
                                                uint32_t master[OAM_N_TYPES],
                                                uint32_t slave[OAM_N_TYPES]);
 
+struct ofputil_requestforward {
+    ovs_be32 xid;
+    enum ofp14_requestforward_reason reason;
+    union {
+        /* reason == OFPRFR_METER_MOD. */
+        struct ofputil_meter_mod *meter_mod;
+
+        /* reason == OFPRFR_GROUP_MOD. */
+        struct {
+            struct ofputil_group_mod *group_mod;
+            struct ofpbuf bands;
+        };
+    };
+};
+
+struct ofpbuf *ofputil_encode_requestforward(
+    const struct ofputil_requestforward *, enum ofputil_protocol);
+enum ofperr ofputil_decode_requestforward(const struct ofp_header *,
+                                          struct ofputil_requestforward *);
+void ofputil_destroy_requestforward(struct ofputil_requestforward *);
+
 #endif /* ofp-util.h */
