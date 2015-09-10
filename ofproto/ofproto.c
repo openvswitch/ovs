@@ -6369,7 +6369,7 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
     ofputil_bucket_clone_list(&new_ofgroup->buckets, &ofgroup->buckets, NULL);
 
     if (ofputil_bucket_check_duplicate_id(&ofgroup->buckets)) {
-            VLOG_WARN_RL(&rl, "Duplicate bucket id");
+            VLOG_INFO_RL(&rl, "Duplicate bucket id");
             return OFPERR_OFPGMFC_BUCKET_EXISTS;
     }
 
@@ -6605,7 +6605,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     default:
         if (gm.command > OFPGC11_DELETE) {
-            VLOG_WARN_RL(&rl, "%s: Invalid group_mod command type %d",
+            VLOG_INFO_RL(&rl, "%s: Invalid group_mod command type %d",
                          ofproto->name, gm.command);
         }
         return OFPERR_OFPGMFC_BAD_COMMAND;
