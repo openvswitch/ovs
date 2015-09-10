@@ -311,6 +311,7 @@ struct xlate_ctx {
 };
 
 static void xlate_action_set(struct xlate_ctx *ctx);
+static void xlate_commit_actions(struct xlate_ctx *ctx);
 
 static void
 ctx_trigger_recirculation(struct xlate_ctx *ctx)
@@ -2787,6 +2788,16 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
 }
 
 static void
+xlate_commit_actions(struct xlate_ctx *ctx)
+{
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+}
+
+static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp)
 {
@@ -2998,11 +3009,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (out_port != ODPP_NONE) {
-        bool use_masked = ctx->xbridge->support.masked_set_action;
-
-        ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
-                                              ctx->odp_actions,
-                                              wc, use_masked);
+        xlate_commit_actions(ctx);
 
         if (xr) {
             struct ovs_action_hash *act_hash;
@@ -3458,7 +3465,6 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 {
     struct ofproto_packet_in *pin;
     struct dp_packet *packet;
-    bool use_masked;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
     if (!ctx->xin->packet) {
@@ -3467,10 +3473,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 
     packet = dp_packet_clone(ctx->xin->packet);
 
-    use_masked = ctx->xbridge->support.masked_set_action;
-    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                                          ctx->odp_actions,
-                                          ctx->wc, use_masked);
+    xlate_commit_actions(ctx);
 
     odp_execute_actions(NULL, &packet, 1, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
@@ -3511,14 +3514,9 @@ static void
 compose_recirculate_action(struct xlate_ctx *ctx)
 {
     struct recirc_metadata md;
-    bool use_masked;
     uint32_t id;
 
-    use_masked = ctx->xbridge->support.masked_set_action;
-    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                                          ctx->odp_actions,
-                                          ctx->wc, use_masked);
-
+    xlate_commit_actions(ctx);
     recirc_metadata_from_flow(&md, &ctx->xin->flow);
 
     ovs_assert(ctx->recirc_action_offset >= 0);
@@ -3575,11 +3573,7 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
 
     n = flow_count_mpls_labels(flow, ctx->wc);
     if (!n) {
-        bool use_masked = ctx->xbridge->support.masked_set_action;
-
-        ctx->xout->slow |= commit_odp_actions(flow, &ctx->base_flow,
-                                              ctx->odp_actions,
-                                              ctx->wc, use_masked);
+        xlate_commit_actions(ctx);
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
         if (ctx->xin->packet != NULL) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -3921,7 +3915,6 @@ xlate_sample_action(struct xlate_ctx *ctx,
     /* Scale the probability from 16-bit to 32-bit while representing
      * the same percentage. */
     uint32_t probability = (os->probability << 16) | os->probability;
-    bool use_masked;
 
     if (!ctx->xbridge->support.variable_length_userdata) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -3932,10 +3925,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
         return;
     }
 
-    use_masked = ctx->xbridge->support.masked_set_action;
-    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                                          ctx->odp_actions,
-                                          ctx->wc, use_masked);
+    xlate_commit_actions(ctx);
 
     union user_action_cookie cookie = {
         .flow_sample = {
