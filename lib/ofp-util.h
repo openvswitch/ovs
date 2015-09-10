@@ -1244,13 +1244,13 @@ struct ofputil_requestforward {
     enum ofp14_requestforward_reason reason;
     union {
         /* reason == OFPRFR_METER_MOD. */
-        struct ofputil_meter_mod *meter_mod;
-
-        /* reason == OFPRFR_GROUP_MOD. */
         struct {
-            struct ofputil_group_mod *group_mod;
+            struct ofputil_meter_mod *meter_mod;
             struct ofpbuf bands;
         };
+
+        /* reason == OFPRFR_GROUP_MOD. */
+        struct ofputil_group_mod *group_mod;
     };
 };
 
