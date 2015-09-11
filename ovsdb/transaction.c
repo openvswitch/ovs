@@ -746,8 +746,8 @@ check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
     return NULL;
 }
 
-static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-update_version(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
+static struct ovsdb_error * WARN_UNUSED_RESULT
+update_version(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *txn_row)
 {
     struct ovsdb_table *table = txn_row->table;
     size_t n_columns = shash_count(&table->schema->columns);
