@@ -863,20 +863,28 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                       "output;");
     }
 
-    /* Egress table 1: Egress port security (priority 50). */
+    /* Egress table 1: Egress port security (priorities 50 and 150).
+     *
+     * Priority 50 rules implement port security for enabled logical port.
+     *
+     * Priority 150 rules drop packets to disabled logical ports, so that they
+     * don't even receive multicast or broadcast packets. */
     HMAP_FOR_EACH (op, key_node, ports) {
         struct ds match;
 
         ds_init(&match);
         ds_put_cstr(&match, "outport == ");
         json_string_escape(op->key, &match);
-        build_port_security("eth.dst",
-                            op->nb->port_security, op->nb->n_port_security,
-                            &match);
-
-        ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 50,
-                      ds_cstr(&match),
-                      lport_is_enabled(op->nb) ? "output;" : "drop;");
+        if (lport_is_enabled(op->nb)) {
+            build_port_security("eth.dst",
+                                op->nb->port_security, op->nb->n_port_security,
+                                &match);
+            ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 50,
+                          ds_cstr(&match), "output;");
+        } else {
+            ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 150,
+                          ds_cstr(&match), "drop;");
+        }
 
         ds_destroy(&match);
     }
