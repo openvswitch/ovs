@@ -1702,6 +1702,10 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
     struct dpif_ipfix_port * tunnel_port = NULL;
 
     ovs_mutex_lock(&mutex);
+    if (!bridge_exporter_enabled(di)) {
+        ovs_mutex_unlock(&mutex);
+        return;
+    }
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
     packet_delta_count = UINT32_MAX / di->bridge_exporter.probability;
