@@ -23,6 +23,7 @@ Post-v2.4.0
    - Dropped support for GRE64 tunnel.
    - Mark --syslog-target argument as deprecated.  It will be removed in
      the next OVS release.
+   - Added --user option to all daemons
 
 
 v2.4.0 - 20 Aug 2015

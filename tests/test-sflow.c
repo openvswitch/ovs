@@ -683,7 +683,7 @@ test_sflow_main(int argc, char *argv[])
     }
 
     daemon_save_fd(STDOUT_FILENO);
-    daemonize_start();
+    daemonize_start(false);
 
     error = unixctl_server_create(NULL, &server);
     if (error) {

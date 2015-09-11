@@ -130,6 +130,8 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     ctx.argc = argc - optind;
     ctx.argv = argv + optind;
+
+    daemon_become_new_user(false);
     ovs_cmdl_run_command(&ctx, get_all_commands());
     return 0;
 }
@@ -1611,7 +1613,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
     int error;
 
     daemon_save_fd(STDERR_FILENO);
-    daemonize_start();
+    daemonize_start(false);
     error = unixctl_server_create(unixctl_path, &server);
     if (error) {
         ovs_fatal(error, "failed to create unixctl server");

@@ -64,7 +64,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
-    daemonize_start();
+    daemonize_start(false);
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {

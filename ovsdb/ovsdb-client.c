@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
+    daemon_become_new_user(false);
     if (optind >= argc) {
         ovs_fatal(0, "missing command name; use --help for help");
     }
@@ -791,7 +792,7 @@ do_monitor(struct jsonrpc *rpc, const char *database,
     size_t n_mts, allocated_mts;
 
     daemon_save_fd(STDOUT_FILENO);
-    daemonize_start();
+    daemonize_start(false);
     if (get_detach()) {
         int error;
 

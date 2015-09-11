@@ -221,6 +221,7 @@ main(int argc, char *argv[])
     process_init();
 
     parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command);
+    daemon_become_new_user(false);
 
     /* Create and initialize 'config_tmpfile' as a temporary file to hold
      * ovsdb-server's most basic configuration, and then save our initial
@@ -248,7 +249,7 @@ main(int argc, char *argv[])
 
     save_config__(config_tmpfile, &remotes, &db_filenames);
 
-    daemonize_start();
+    daemonize_start(false);
 
     /* Load the saved config. */
     load_config(config_tmpfile, &remotes, &db_filenames);
