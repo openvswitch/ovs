@@ -1684,6 +1684,12 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
     ipfix_cache_update(exporter, entry);
 }
 
+static bool
+bridge_exporter_enabled(struct dpif_ipfix *di)
+{
+    return di->bridge_exporter.probability > 0;
+}
+
 void
 dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                          const struct flow *flow,
@@ -1832,7 +1838,7 @@ dpif_ipfix_run(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
 
     ovs_mutex_lock(&mutex);
     get_export_time_now(&export_time_usec, &export_time_sec);
-    if (di->bridge_exporter.probability > 0) {  /* Bridge exporter enabled. */
+    if (bridge_exporter_enabled(di)) {
       dpif_ipfix_cache_expire(
           &di->bridge_exporter.exporter, false, export_time_usec,
           export_time_sec);
@@ -1852,7 +1858,7 @@ dpif_ipfix_wait(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
     struct dpif_ipfix_flow_exporter_map_node *flow_exporter_node;
 
     ovs_mutex_lock(&mutex);
-    if (di->bridge_exporter.probability > 0) {  /* Bridge exporter enabled. */
+    if (bridge_exporter_enabled(di)) {
         if (ipfix_cache_next_timeout_msec(
                 &di->bridge_exporter.exporter, &next_timeout_msec)) {
             poll_timer_wait_until(next_timeout_msec);
