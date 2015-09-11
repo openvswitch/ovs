@@ -2475,6 +2475,228 @@ f5 f6 f7 f8 f9 fa fb fc fd 00 00 00 00 00 00 00 \
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_TABLE_FEATURES request - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 13 09 40 00 00 00 d5 00 0c 00 01 00 00 00 00 \
+09 30 00 00 00 00 00 00 74 61 62 6c 65 30 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 ff ff ff ff ff ff ff ff \
+ff ff ff ff ff ff ff ff 00 00 00 03 00 0f 42 40 \
+00 00 00 2c 00 01 00 08 00 00 00 00 00 02 00 08 \
+00 00 00 00 00 03 00 08 00 00 00 00 00 04 00 08 \
+00 00 00 00 00 05 00 08 00 00 00 00 00 00 00 00 \
+00 01 00 2c 00 01 00 08 00 00 00 00 00 02 00 08 \
+00 00 00 00 00 03 00 08 00 00 00 00 00 04 00 08 \
+00 00 00 00 00 05 00 08 00 00 00 00 00 00 00 00 \
+00 02 01 01 01 02 03 04 05 06 07 08 09 0a 0b 0c \
+0d 0e 0f 10 11 12 13 14 15 16 17 18 19 1a 1b 1c \
+1d 1e 1f 20 21 22 23 24 25 26 27 28 29 2a 2b 2c \
+2d 2e 2f 30 31 32 33 34 35 36 37 38 39 3a 3b 3c \
+3d 3e 3f 40 41 42 43 44 45 46 47 48 49 4a 4b 4c \
+4d 4e 4f 50 51 52 53 54 55 56 57 58 59 5a 5b 5c \
+5d 5e 5f 60 61 62 63 64 65 66 67 68 69 6a 6b 6c \
+6d 6e 6f 70 71 72 73 74 75 76 77 78 79 7a 7b 7c \
+7d 7e 7f 80 81 82 83 84 85 86 87 88 89 8a 8b 8c \
+8d 8e 8f 90 91 92 93 94 95 96 97 98 99 9a 9b 9c \
+9d 9e 9f a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac \
+ad ae af b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 ba bb bc \
+bd be bf c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 ca cb cc \
+cd ce cf d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 da db dc \
+dd de df e0 e1 e2 e3 e4 e5 e6 e7 e8 e9 ea eb ec \
+ed ee ef f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa fb fc \
+fd 00 00 00 00 00 00 00 00 03 01 01 01 02 03 04 \
+05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 \
+15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 \
+25 26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 \
+35 36 37 38 39 3a 3b 3c 3d 3e 3f 40 41 42 43 44 \
+45 46 47 48 49 4a 4b 4c 4d 4e 4f 50 51 52 53 54 \
+55 56 57 58 59 5a 5b 5c 5d 5e 5f 60 61 62 63 64 \
+65 66 67 68 69 6a 6b 6c 6d 6e 6f 70 71 72 73 74 \
+75 76 77 78 79 7a 7b 7c 7d 7e 7f 80 81 82 83 84 \
+85 86 87 88 89 8a 8b 8c 8d 8e 8f 90 91 92 93 94 \
+95 96 97 98 99 9a 9b 9c 9d 9e 9f a0 a1 a2 a3 a4 \
+a5 a6 a7 a8 a9 aa ab ac ad ae af b0 b1 b2 b3 b4 \
+b5 b6 b7 b8 b9 ba bb bc bd be bf c0 c1 c2 c3 c4 \
+c5 c6 c7 c8 c9 ca cb cc cd ce cf d0 d1 d2 d3 d4 \
+d5 d6 d7 d8 d9 da db dc dd de df e0 e1 e2 e3 e4 \
+e5 e6 e7 e8 e9 ea eb ec ed ee ef f0 f1 f2 f3 f4 \
+f5 f6 f7 f8 f9 fa fb fc fd 00 00 00 00 00 00 00 \
+00 04 00 84 00 00 00 08 00 00 00 00 00 0b 00 08 \
+00 00 00 00 00 0c 00 08 00 00 00 00 00 0f 00 08 \
+00 00 00 00 00 10 00 08 00 00 00 00 00 11 00 08 \
+00 00 00 00 00 12 00 08 00 00 00 00 00 13 00 08 \
+00 00 00 00 00 14 00 08 00 00 00 00 00 15 00 08 \
+00 00 00 00 00 16 00 08 00 00 00 00 00 17 00 08 \
+00 00 00 00 00 18 00 08 00 00 00 00 00 19 00 08 \
+00 00 00 00 00 1a 00 08 00 00 00 00 00 1b 00 08 \
+00 00 00 00 00 00 00 00 00 05 00 84 00 00 00 08 \
+00 00 00 00 00 0b 00 08 00 00 00 00 00 0c 00 08 \
+00 00 00 00 00 0f 00 08 00 00 00 00 00 10 00 08 \
+00 00 00 00 00 11 00 08 00 00 00 00 00 12 00 08 \
+00 00 00 00 00 13 00 08 00 00 00 00 00 14 00 08 \
+00 00 00 00 00 15 00 08 00 00 00 00 00 16 00 08 \
+00 00 00 00 00 17 00 08 00 00 00 00 00 18 00 08 \
+00 00 00 00 00 19 00 08 00 00 00 00 00 1a 00 08 \
+00 00 00 00 00 1b 00 08 00 00 00 00 00 00 00 00 \
+00 06 00 84 00 00 00 08 00 00 00 00 00 0b 00 08 \
+00 00 00 00 00 0c 00 08 00 00 00 00 00 0f 00 08 \
+00 00 00 00 00 10 00 08 00 00 00 00 00 11 00 08 \
+00 00 00 00 00 12 00 08 00 00 00 00 00 13 00 08 \
+00 00 00 00 00 14 00 08 00 00 00 00 00 15 00 08 \
+00 00 00 00 00 16 00 08 00 00 00 00 00 17 00 08 \
+00 00 00 00 00 18 00 08 00 00 00 00 00 19 00 08 \
+00 00 00 00 00 1a 00 08 00 00 00 00 00 1b 00 08 \
+00 00 00 00 00 00 00 00 00 07 00 84 00 00 00 08 \
+00 00 00 00 00 0b 00 08 00 00 00 00 00 0c 00 08 \
+00 00 00 00 00 0f 00 08 00 00 00 00 00 10 00 08 \
+00 00 00 00 00 11 00 08 00 00 00 00 00 12 00 08 \
+00 00 00 00 00 13 00 08 00 00 00 00 00 14 00 08 \
+00 00 00 00 00 15 00 08 00 00 00 00 00 16 00 08 \
+00 00 00 00 00 17 00 08 00 00 00 00 00 18 00 08 \
+00 00 00 00 00 19 00 08 00 00 00 00 00 1a 00 08 \
+00 00 00 00 00 1b 00 08 00 00 00 00 00 00 00 00 \
+00 08 00 dc 80 00 4c 08 00 01 3e 04 00 01 40 04 \
+80 00 04 08 00 00 00 02 80 00 00 04 00 01 42 04 \
+00 01 00 04 00 01 02 04 00 01 04 04 00 01 06 04 \
+00 01 08 04 00 01 0a 04 00 01 0c 04 00 01 0e 04 \
+80 00 08 06 80 00 06 06 80 00 0a 02 00 00 08 02 \
+80 00 0c 02 80 00 0e 01 80 00 44 04 80 00 46 01 \
+80 00 48 01 80 00 16 04 80 00 18 04 80 00 34 10 \
+80 00 36 10 80 00 38 04 80 00 14 01 00 00 0a 01 \
+80 00 10 01 80 00 12 01 00 01 3a 01 00 01 34 01 \
+80 00 2a 02 80 00 2c 04 80 00 2e 04 80 00 30 06 \
+80 00 32 06 80 00 1a 02 80 00 1c 02 00 01 44 02 \
+80 00 1e 02 80 00 20 02 80 00 22 02 80 00 24 02 \
+80 00 26 01 80 00 28 01 80 00 3a 01 80 00 3c 01 \
+80 00 3e 10 80 00 40 06 80 00 42 06 00 00 00 00 \
+00 0a 00 dc 80 00 4c 08 00 01 3e 04 00 01 40 04 \
+80 00 04 08 00 00 00 02 80 00 00 04 00 01 42 04 \
+00 01 00 04 00 01 02 04 00 01 04 04 00 01 06 04 \
+00 01 08 04 00 01 0a 04 00 01 0c 04 00 01 0e 04 \
+80 00 08 06 80 00 06 06 80 00 0a 02 00 00 08 02 \
+80 00 0c 02 80 00 0e 01 80 00 44 04 80 00 46 01 \
+80 00 48 01 80 00 16 04 80 00 18 04 80 00 34 10 \
+80 00 36 10 80 00 38 04 80 00 14 01 00 00 0a 01 \
+80 00 10 01 80 00 12 01 00 01 3a 01 00 01 34 01 \
+80 00 2a 02 80 00 2c 04 80 00 2e 04 80 00 30 06 \
+80 00 32 06 80 00 1a 02 80 00 1c 02 00 01 44 02 \
+80 00 1e 02 80 00 20 02 80 00 22 02 80 00 24 02 \
+80 00 26 01 80 00 28 01 80 00 3a 01 80 00 3c 01 \
+80 00 3e 10 80 00 40 06 80 00 42 06 00 00 00 00 \
+00 0c 00 a8 80 00 4c 08 00 01 3e 04 00 01 40 04 \
+80 00 04 08 00 00 00 02 80 00 00 04 00 01 42 04 \
+00 01 00 04 00 01 02 04 00 01 04 04 00 01 06 04 \
+00 01 08 04 00 01 0a 04 00 01 0c 04 00 01 0e 04 \
+80 00 08 06 80 00 06 06 00 00 08 02 80 00 0c 02 \
+80 00 0e 01 80 00 44 04 80 00 46 01 80 00 16 04 \
+80 00 18 04 80 00 34 10 80 00 36 10 00 00 0a 01 \
+80 00 10 01 80 00 12 01 00 01 3a 01 80 00 2a 02 \
+80 00 2c 04 80 00 2e 04 80 00 30 06 80 00 32 06 \
+80 00 1a 02 80 00 1c 02 80 00 1e 02 80 00 20 02 \
+80 00 22 02 80 00 24 02 00 0d 00 a8 80 00 4c 08 \
+00 01 3e 04 00 01 40 04 80 00 04 08 00 00 00 02 \
+80 00 00 04 00 01 42 04 00 01 00 04 00 01 02 04 \
+00 01 04 04 00 01 06 04 00 01 08 04 00 01 0a 04 \
+00 01 0c 04 00 01 0e 04 80 00 08 06 80 00 06 06 \
+00 00 08 02 80 00 0c 02 80 00 0e 01 80 00 44 04 \
+80 00 46 01 80 00 16 04 80 00 18 04 80 00 34 10 \
+80 00 36 10 00 00 0a 01 80 00 10 01 80 00 12 01 \
+00 01 3a 01 80 00 2a 02 80 00 2c 04 80 00 2e 04 \
+80 00 30 06 80 00 32 06 80 00 1a 02 80 00 1c 02 \
+80 00 1e 02 80 00 20 02 80 00 22 02 80 00 24 02 \
+00 0e 00 a8 80 00 4c 08 00 01 3e 04 00 01 40 04 \
+80 00 04 08 00 00 00 02 80 00 00 04 00 01 42 04 \
+00 01 00 04 00 01 02 04 00 01 04 04 00 01 06 04 \
+00 01 08 04 00 01 0a 04 00 01 0c 04 00 01 0e 04 \
+80 00 08 06 80 00 06 06 00 00 08 02 80 00 0c 02 \
+80 00 0e 01 80 00 44 04 80 00 46 01 80 00 16 04 \
+80 00 18 04 80 00 34 10 80 00 36 10 00 00 0a 01 \
+80 00 10 01 80 00 12 01 00 01 3a 01 80 00 2a 02 \
+80 00 2c 04 80 00 2e 04 80 00 30 06 80 00 32 06 \
+80 00 1a 02 80 00 1c 02 80 00 1e 02 80 00 20 02 \
+80 00 22 02 80 00 24 02 00 0f 00 a8 80 00 4c 08 \
+00 01 3e 04 00 01 40 04 80 00 04 08 00 00 00 02 \
+80 00 00 04 00 01 42 04 00 01 00 04 00 01 02 04 \
+00 01 04 04 00 01 06 04 00 01 08 04 00 01 0a 04 \
+00 01 0c 04 00 01 0e 04 80 00 08 06 80 00 06 06 \
+00 00 08 02 80 00 0c 02 80 00 0e 01 80 00 44 04 \
+80 00 46 01 80 00 16 04 80 00 18 04 80 00 34 10 \
+80 00 36 10 00 00 0a 01 80 00 10 01 80 00 12 01 \
+00 01 3a 01 80 00 2a 02 80 00 2c 04 80 00 2e 04 \
+80 00 30 06 80 00 32 06 80 00 1a 02 80 00 1c 02 \
+80 00 1e 02 80 00 20 02 80 00 22 02 80 00 24 02 \
+"], [0], [OFPST_TABLE_FEATURES reply (OF1.5) (xid=0xd5):
+  table 0 ("table0"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    eviction: not supported
+    vacancy events: not supported
+    features: none
+    max_entries=1000000
+    instructions (table miss and others):
+      next tables: 1-253
+      instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      Write-Actions and Apply-Actions features:
+        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+        supported on Set-Field: tun_id tun_src tun_dst metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst
+    matching:
+      tun_id: exact match or wildcard
+      tun_src: exact match or wildcard
+      tun_dst: exact match or wildcard
+      metadata: exact match or wildcard
+      in_port: exact match or wildcard
+      in_port_oxm: exact match or wildcard
+      pkt_mark: exact match or wildcard
+      reg0: exact match or wildcard
+      reg1: exact match or wildcard
+      reg2: exact match or wildcard
+      reg3: exact match or wildcard
+      reg4: exact match or wildcard
+      reg5: exact match or wildcard
+      reg6: exact match or wildcard
+      reg7: exact match or wildcard
+      eth_src: exact match or wildcard
+      eth_dst: exact match or wildcard
+      eth_type: exact match or wildcard
+      vlan_tci: exact match or wildcard
+      vlan_vid: exact match or wildcard
+      vlan_pcp: exact match or wildcard
+      mpls_label: exact match or wildcard
+      mpls_tc: exact match or wildcard
+      mpls_bos: exact match or wildcard
+      ip_src: exact match or wildcard
+      ip_dst: exact match or wildcard
+      ipv6_src: exact match or wildcard
+      ipv6_dst: exact match or wildcard
+      ipv6_label: exact match or wildcard
+      nw_proto: exact match or wildcard
+      nw_tos: exact match or wildcard
+      ip_dscp: exact match or wildcard
+      nw_ecn: exact match or wildcard
+      nw_ttl: exact match or wildcard
+      ip_frag: exact match or wildcard
+      arp_op: exact match or wildcard
+      arp_spa: exact match or wildcard
+      arp_tpa: exact match or wildcard
+      arp_sha: exact match or wildcard
+      arp_tha: exact match or wildcard
+      tcp_src: exact match or wildcard
+      tcp_dst: exact match or wildcard
+      tcp_flags: exact match or wildcard
+      udp_src: exact match or wildcard
+      udp_dst: exact match or wildcard
+      sctp_src: exact match or wildcard
+      sctp_dst: exact match or wildcard
+      icmp_type: exact match or wildcard
+      icmp_code: exact match or wildcard
+      icmpv6_type: exact match or wildcard
+      icmpv6_code: exact match or wildcard
+      nd_target: exact match or wildcard
+      nd_sll: exact match or wildcard
+      nd_tll: exact match or wildcard
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_BARRIER_REQUEST - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print '01 12 00 08 00 00 00 01'], [0], [dnl
