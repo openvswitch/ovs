@@ -26,7 +26,7 @@ PWD = os.getcwd()
 OVS_SRC = HOME + "/ovs"
 if os.path.exists(PWD + "/WHY-OVS.md"):
     OVS_SRC = PWD  # Use current directory as OVS source tree
-ROOT = HOME + "/root"
+RUNDIR = OVS_SRC + "/_run"
 BUILD_GCC = OVS_SRC + "/_build-gcc"
 BUILD_CLANG = OVS_SRC + "/_build-clang"
 
@@ -63,9 +63,11 @@ def conf():
     except OSError:
         pass
 
-    configure = ["../configure", "--prefix=" + ROOT, "--localstatedir=" + ROOT,
-                 "--with-logdir=%s/log" % ROOT, "--with-rundir=%s/run" % ROOT,
-                 "--enable-silent-rules", "--with-dbdir=" + ROOT, "--silent"]
+    configure = ["../configure",
+                 "--prefix=" + RUNDIR, "--localstatedir=" + RUNDIR,
+                 "--with-logdir=%s/log" % RUNDIR,
+                 "--with-rundir=%s/run" % RUNDIR,
+                 "--enable-silent-rules", "--with-dbdir=" + RUNDIR, "--silent"]
 
     cflags = "-g -fno-omit-frame-pointer"
 
@@ -185,7 +187,7 @@ commands.append(tag)
 
 def kill():
     for proc in ["ovs-vswitchd", "ovsdb-server"]:
-        if os.path.exists("%s/run/openvswitch/%s.pid" % (ROOT, proc)):
+        if os.path.exists("%s/run/openvswitch/%s.pid" % (RUNDIR, proc)):
             _sh("ovs-appctl", "-t", proc, "exit", check=False)
             time.sleep(.1)
         _sh("sudo", "killall", "-q", "-2", proc, check=False)
@@ -194,8 +196,8 @@ commands.append(kill)
 
 def reset():
     kill()
-    if os.path.exists(ROOT):
-        shutil.rmtree(ROOT)
+    if os.path.exists(RUNDIR):
+        shutil.rmtree(RUNDIR)
     for dp in _sh("ovs-dpctl dump-dps", capture=True):
         _sh("ovs-dpctl", "del-dp", dp.strip())
 commands.append(reset)
@@ -204,11 +206,11 @@ commands.append(reset)
 def run():
     kill()
     for d in ["log", "run"]:
-        d = "%s/%s" % (ROOT, d)
+        d = "%s/%s" % (RUNDIR, d)
         shutil.rmtree(d, ignore_errors=True)
         os.makedirs(d)
 
-    pki_dir = ROOT + "/pki"
+    pki_dir = RUNDIR + "/pki"
     if not os.path.exists(pki_dir):
         os.mkdir(pki_dir)
         os.chdir(pki_dir)
@@ -216,14 +218,14 @@ def run():
         _sh("ovs-pki req+sign ovsclient")
         os.chdir(OVS_SRC)
 
-    if not os.path.exists(ROOT + "/conf.db"):
-        _sh("ovsdb-tool", "create", ROOT + "/conf.db",
+    if not os.path.exists(RUNDIR + "/conf.db"):
+        _sh("ovsdb-tool", "create", RUNDIR + "/conf.db",
             OVS_SRC + "/vswitchd/vswitch.ovsschema")
 
     opts = ["--pidfile", "--log-file"]
 
     _sh(*(["ovsdb-server",
-           "--remote=punix:%s/run/db.sock" % ROOT,
+           "--remote=punix:%s/run/db.sock" % RUNDIR,
            "--remote=db:Open_vSwitch,Open_vSwitch,manager_options",
            "--private-key=db:Open_vSwitch,SSL,private_key",
            "--certificate=db:Open_vSwitch,SSL,certificate",
@@ -339,7 +341,7 @@ Commands:
     modinst - Build ovs and install the kernel module.
     env     - Print the required path environment variable.
     doc     - Print this message.
-""" % {"ovs": OVS_SRC, "v": sys.argv[0], "run": ROOT}
+""" % {"ovs": OVS_SRC, "v": sys.argv[0], "run": RUNDIR}
     sys.exit(0)
 commands.append(doc)
 
