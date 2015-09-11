@@ -55,6 +55,11 @@ def uname():
     return _sh("uname", "-r", capture=True)[0].strip()
 
 
+def sudo():
+    if os.geteuid() != 0:
+        _sh(" ".join(["sudo"] + sys.argv), check=True)
+        sys.exit(0)
+
 def conf():
     tag()
 
@@ -186,15 +191,17 @@ commands.append(tag)
 
 
 def kill():
+    sudo()
     for proc in ["ovs-vswitchd", "ovsdb-server"]:
         if os.path.exists("%s/run/openvswitch/%s.pid" % (RUNDIR, proc)):
             _sh("ovs-appctl", "-t", proc, "exit", check=False)
             time.sleep(.1)
-        _sh("sudo", "killall", "-q", "-2", proc, check=False)
+        _sh("killall", "-q", "-2", proc, check=False)
 commands.append(kill)
 
 
 def reset():
+    sudo()
     kill()
     if os.path.exists(RUNDIR):
         shutil.rmtree(RUNDIR)
@@ -204,6 +211,7 @@ commands.append(reset)
 
 
 def run():
+    sudo()
     kill()
     for d in ["log", "run"]:
         d = "%s/%s" % (RUNDIR, d)
@@ -257,7 +265,6 @@ def run():
                "--suppressions=%s/tests/glibc.supp" % OVS_SRC,
                "--suppressions=%s/tests/openssl.supp" % OVS_SRC] + cmd
     else:
-        cmd = ["sudo"] + cmd
         opts = opts + ["-vconsole:off", "--detach", "--enable-dummy"]
     _sh(*(cmd + opts))
 commands.append(run)
@@ -268,6 +275,7 @@ def modinst():
         print "Missing modules directory.  Is this a Linux system?"
         sys.exit(1)
 
+    sudo()
     try:
         _sh("rmmod", "openvswitch")
     except subprocess.CalledProcessError, e:
@@ -341,6 +349,10 @@ Commands:
     modinst - Build ovs and install the kernel module.
     env     - Print the required path environment variable.
     doc     - Print this message.
+
+Note:
+    If running as non-root user, "kill", "reset", "run" and "modinst"
+    will always run as the root user, by rerun the commands with "sudo".
 """ % {"ovs": OVS_SRC, "v": sys.argv[0], "run": RUNDIR}
     sys.exit(0)
 commands.append(doc)
