@@ -100,4 +100,110 @@
       </dl>
     </p>
 
+    <h1>Logical Flow Table Structure</h1>
+
+    <p>
+      One of the main purposes of <code>ovn-northd</code> is to populate the
+      <code>Logical_Flow</code> table in the <code>OVN_Southbound</code>
+      database.  This section describes how <code>ovn-northd</code> does this
+      for logical datapaths.
+    </p>
+
+    <h2>Ingress Table 0: Admission Control and Ingress Port Security</h2>
+
+    <p>
+      Ingress table 0 contains these logical flows:
+    </p>
+
+    <ul>
+      <li>
+        Priority 100 flows to drop packets with VLAN tags or multicast Ethernet
+        source addresses.
+      </li>
+
+      <li>
+        Priority 50 flows that implement ingress port security for each enabled
+        logical port.  For logical ports on which port security is enabled,
+        these match the <code>inport</code> and the valid <code>eth.src</code>
+        address(es) and advance only those packets to the next flow table.  For
+        logical ports on which port security is not enabled, these advance all
+        packets that match the <code>inport</code>.
+      </li>
+    </ul>
+
+    <p>
+      There are no flows for disabled logical ports because the default-drop
+      behavior of logical flow tables causes packets that ingress from them to
+      be dropped.
+    </p>
+
+    <h2>Ingress table 1: <code>from-lport</code> ACLs</h2>
+
+    <p>
+      Logical flows in this table closely reproduce those in the
+      <code>ACL</code> table in the <code>OVN_Northbound</code> database for
+      the <code>from-lport</code> direction.  <code>allow</code> and
+      <code>allow-related</code> ACLs translate into logical flows with the
+      <code>next;</code> action, others to <code>drop;</code>.  The
+      <code>priority</code> values from the <code>ACL</code> table are used
+      directly.
+    </p>
+
+    <p>
+      Ingress table 1 also contains a priority 0 flow with action
+      <code>next;</code>, so that ACLs allow packets by default.
+    </p>
+
+    <h2>Ingress Table 2: Destination Lookup</h2>
+
+    <p>
+      This table implements switching behavior.  It contains these logical
+      flows:
+    </p>
+
+    <ul>
+      <li>
+        A priority-100 flow that outputs all packets with an Ethernet broadcast
+        or multicast <code>eth.dst</code> to the <code>MC_FLOOD</code>
+        multicast group, which <code>ovn-northd</code> populates with all
+        enabled logical ports.
+      </li>
+
+      <li>
+        One priority-50 flow that matches each known Ethernet address against
+        <code>eth.dst</code> and outputs the packet to the single associated
+        output port.
+      </li>
+
+      <li>
+        One priority-0 fallback flow that matches all packets and outputs them
+        to the <code>MC_UNKNOWN</code> multicast group, which
+        <code>ovn-northd</code> populates with all enabled logical ports that
+        accept unknown destination packets.  As a small optimization, if no
+        logical ports accept unknown destination packets,
+        <code>ovn-northd</code> omits this multicast group and logical flow.
+      </li>
+    </ul>
+
+    <h2>Egress Table 0: <code>to-lport</code> ACLs</h2>
+
+    <p>
+      This is similar to ingress table 1 except for <code>to-lport</code> ACLs.
+    </p>
+
+    <h2>Egress Table 1: Egress Port Security</h2>
+
+    <p>
+      This is similar to the ingress port security logic in ingress table 0,
+      but with important differences.  Most obviously, <code>outport</code> and
+      <code>eth.dst</code> are checked instead of <code>inport</code> and
+      <code>eth.src</code>.  Second, packets directed to broadcast or multicast
+      <code>eth.dst</code> are always accepted instead of being subject to the
+      port security rules; this is implemented through a priority-100 flow that
+      matches on <code>eth.dst[40]</code> with action <code>output;</code>.
+      Finally, to ensure that even broadcast and multicast packets are not
+      delivered to disabled logical ports, a priority-150 flow for each
+      disabled logical <code>outport</code> overrides the priority-100 flow
+      with a <code>drop;</code> action.
+    </p>
 </manpage>

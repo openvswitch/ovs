@@ -728,6 +728,9 @@ static void
 build_lflows(struct northd_context *ctx, struct hmap *datapaths,
              struct hmap *ports)
 {
+    /* This flow table structure is documented in ovn-northd(8), so please
+     * update ovn-northd.8.xml if you change anything. */
+
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
     struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
 
