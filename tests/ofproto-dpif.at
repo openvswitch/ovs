@@ -5512,6 +5512,43 @@ AT_SKIP_IF([test $HAVE_IPV6 = no])
 CHECK_NETFLOW_ACTIVE_EXPIRATION([[[::1]]])
 AT_CLEANUP
 
+dnl In the absence of an IPFIX collector to verify protocol correctness, simply
+dnl configure IPFIX and ensure that sample action generation works at the
+dnl datapath level.
+AT_SETUP([ofproto-dpif - Basic IPFIX sanity check])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2)
+
+dnl Sample every packet using bridge-based sampling
+AT_CHECK([ovs-vsctl -- set bridge br0 ipfix=@fix -- \
+                    --id=@fix create ipfix targets=\"127.0.0.1:4739\" \
+                              sampling=1], [0], [ignore])
+
+dnl Send some packets that should be sampled
+for i in `seq 1 3`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
+packets:2, bytes:120, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,ipfix(output_port=4294967295))))
+])
+
+dnl Remove the IPFIX configuration
+AT_CHECK([ovs-vsctl clear bridge br0 ipfix])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Send some more packets, to ensure that these are not sampled.
+for i in `seq 1 3`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
+packets:2, bytes:120, used:0.001s, actions:drop
+])
+
+OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - flow stats])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl add-flow br0 "ip,actions=NORMAL"])
