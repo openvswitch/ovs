@@ -22,7 +22,10 @@ import tempfile
 
 ENV = os.environ
 HOME = ENV["HOME"]
+PWD = os.getcwd()
 OVS_SRC = HOME + "/ovs"
+if os.path.exists(PWD + "/WHY-OVS.md"):
+    OVS_SRC = PWD  # Use current directory as OVS source tree
 ROOT = HOME + "/root"
 BUILD_GCC = OVS_SRC + "/_build-gcc"
 BUILD_CLANG = OVS_SRC + "/_build-clang"
