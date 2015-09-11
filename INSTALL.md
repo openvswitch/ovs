@@ -43,6 +43,11 @@ you will need the following software:
     libssl is installed, then Open vSwitch will automatically build
     with support for it.
 
+  - libcap-ng, written by Steve Grubb, is optional but recommended.  It
+    is required to run OVS daemons as a non-root user with dropped root
+    privileges.  If libcap-ng is installed, then Open vSwitch will
+    automatically build with support for it.
+
   - Python 2.7.
 
 On Linux, you may choose to compile the kernel module that comes with
