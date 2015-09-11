@@ -744,22 +744,25 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 
         /* Port security flows have priority 50 (see below) and will continue
          * to the next table if packet source is acceptable. */
-
-        /* Otherwise drop the packet. */
-        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 0, "1", "drop;");
     }
 
     /* Ingress table 0: Ingress port security (priority 50). */
     struct ovn_port *op;
     HMAP_FOR_EACH (op, key_node, ports) {
+        if (!lport_is_enabled(op->nb)) {
+            /* Drop packets from disabled logical ports (since logical flow
+             * tables are default-drop). */
+            continue;
+        }
+
         struct ds match = DS_EMPTY_INITIALIZER;
         ds_put_cstr(&match, "inport == ");
         json_string_escape(op->key, &match);
         build_port_security("eth.src",
                             op->nb->port_security, op->nb->n_port_security,
                             &match);
-        ovn_lflow_add(&lflows, op->od, P_IN, S_IN_PORT_SEC, 50, ds_cstr(&match),
-                      lport_is_enabled(op->nb) ? "next;" : "drop;");
+        ovn_lflow_add(&lflows, op->od, P_IN, S_IN_PORT_SEC, 50,
+                      ds_cstr(&match), "next;");
         ds_destroy(&match);
     }
 
@@ -816,8 +819,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                 ds_destroy(&actions);
                 ds_destroy(&match);
             } else if (!strcmp(op->nb->macs[i], "unknown")) {
-                ovn_multicast_add(&mcgroups, &mc_unknown, op);
-                op->od->has_unknown = true;
+                if (lport_is_enabled(op->nb)) {
+                    ovn_multicast_add(&mcgroups, &mc_unknown, op);
+                    op->od->has_unknown = true;
+                }
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
