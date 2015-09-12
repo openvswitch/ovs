@@ -357,11 +357,11 @@ delete_ipdev(struct ip_device *ip_dev)
 void
 tnl_port_map_insert_ipdev(const char dev_name[])
 {
-    struct ip_device *ip_dev;
+    struct ip_device *ip_dev, *next;
 
     ovs_mutex_lock(&mutex);
 
-    LIST_FOR_EACH(ip_dev, node, &addr_list) {
+    LIST_FOR_EACH_SAFE(ip_dev, next, node, &addr_list) {
         if (!strcmp(netdev_get_name(ip_dev->dev), dev_name)) {
             if (ip_dev->change_seq == netdev_get_change_seq(ip_dev->dev)) {
                 goto out;
@@ -394,10 +394,10 @@ tnl_port_map_delete_ipdev(const char dev_name[])
 void
 tnl_port_map_run(void)
 {
-    struct ip_device *ip_dev;
+    struct ip_device *ip_dev, *next;
 
     ovs_mutex_lock(&mutex);
-    LIST_FOR_EACH(ip_dev, node, &addr_list) {
+    LIST_FOR_EACH_SAFE(ip_dev, next, node, &addr_list) {
         char dev_name[IFNAMSIZ];
 
         if (ip_dev->change_seq == netdev_get_change_seq(ip_dev->dev)) {
