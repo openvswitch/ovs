@@ -105,7 +105,7 @@
       <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
       <dd>
         Creates on <var>lswitch</var> a logical port named <var>lport</var>
-        that is a child of <var>parent</var> that is identied with
+        that is a child of <var>parent</var> that is identifed with VLAN ID
         <var>tag</var>.  This is useful in cases such as virtualized
         container environments where Open vSwitch does not have a direct
         connection to the container's port and it must be shared with
