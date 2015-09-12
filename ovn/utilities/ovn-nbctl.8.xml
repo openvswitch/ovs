@@ -68,13 +68,13 @@
 
     <h1>ACL Commands</h1>
     <dl>
-      <dt><code>acl-add</code> <var>lswitch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>action</var> [<code>log</code>]</dt>
+      <dt>[<code>--log</code>] <code>acl-add</code> <var>lswitch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>action</var></dt>
       <dd>
         Adds the specified ACL to <var>lswitch</var>.
         <var>direction</var> must be either <code>from-lport</code> or
         <code>to-lport</code>.  <var>priority</var> must be between
         <code>1</code> and <code>65534</code>, inclusive.  If
-        <code>log</code> is supplied, packet logging is enabled for the
+        <code>--log</code> is specified, packet logging is enabled for the
         ACL.  A full description of the fields are in <code>ovn-nb</code>(5).
       </dd>
 

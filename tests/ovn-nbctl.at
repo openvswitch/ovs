@@ -119,8 +119,8 @@ AT_SETUP([ovn-nbctl - ACLs])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
-AT_CHECK([ovn-nbctl acl-add ls0 from-lport 600 udp drop log])
-AT_CHECK([ovn-nbctl acl-add ls0 to-lport 500 udp drop log])
+AT_CHECK([ovn-nbctl --log acl-add ls0 from-lport 600 udp drop])
+AT_CHECK([ovn-nbctl --log acl-add ls0 to-lport 500 udp drop])
 AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
 AT_CHECK([ovn-nbctl acl-add ls0 to-lport 300 tcp drop])
 AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
