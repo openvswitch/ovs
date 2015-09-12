@@ -232,6 +232,14 @@ def run():
 
     opts = ["--pidfile", "--log-file"]
 
+    if (options.user == "") or (options.user == "root:root"):
+        _sh("chown", "root:root", "-R", RUNDIR)
+        if '--user' in sys.argv:
+           sys.argv.remove("--user")
+    else:
+        _sh("chown", options.user, "-R", RUNDIR);
+        opts = ["--user", options.user] + opts
+
     _sh(*(["ovsdb-server",
            "--remote=punix:%s/run/db.sock" % RUNDIR,
            "--remote=db:Open_vSwitch,Open_vSwitch,manager_options",
@@ -316,7 +324,7 @@ Basic Configuration:
 
     # First install the basic requirements needed to build Open vSwitch.
     sudo apt-get install git build-essential libtool autoconf pkg-config \\
-            libssl-dev gdb linux-headers-`uname -r`
+            libssl-dev gdb libcap-ng linux-headers-`uname -r`
 
     # Next clone the Open vSwitch source.
     git clone https://github.com/openvswitch/ovs.git %(ovs)s
@@ -415,6 +423,8 @@ def main():
                      help="run ovs-vswitchd with dpdk subopts (ended by --)")
     group.add_option("--clang", dest="clang", action="store_true",
                      help="Use binaries built by clang")
+    group.add_option("--user", dest="user", action="store", default="",
+                     help="run all daemons as a non root user")
 
     parser.add_option_group(group)
 
