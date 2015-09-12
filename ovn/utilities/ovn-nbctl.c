@@ -177,7 +177,7 @@ print_lswitch(const struct nbrec_logical_switch *lswitch)
 }
 
 static void
-do_show(struct ovs_cmdl_context *ctx)
+nbctl_show(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const struct nbrec_logical_switch *lswitch;
@@ -195,7 +195,7 @@ do_show(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lswitch_add(struct ovs_cmdl_context *ctx)
+nbctl_lswitch_add(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     struct nbrec_logical_switch *lswitch;
@@ -207,7 +207,7 @@ do_lswitch_add(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lswitch_del(struct ovs_cmdl_context *ctx)
+nbctl_lswitch_del(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -222,7 +222,7 @@ do_lswitch_del(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lswitch_list(struct ovs_cmdl_context *ctx)
+nbctl_lswitch_list(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const struct nbrec_logical_switch *lswitch;
@@ -243,7 +243,7 @@ do_lswitch_list(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lswitch_set_external_id(struct ovs_cmdl_context *ctx)
+nbctl_lswitch_set_external_id(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -267,7 +267,7 @@ do_lswitch_set_external_id(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lswitch_get_external_id(struct ovs_cmdl_context *ctx)
+nbctl_lswitch_get_external_id(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -328,7 +328,7 @@ lport_by_name_or_uuid(struct nbctl_context *nb_ctx, const char *id)
 }
 
 static void
-do_lport_add(struct ovs_cmdl_context *ctx)
+nbctl_lport_add(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     struct nbrec_logical_port *lport;
@@ -395,7 +395,7 @@ remove_lport(const struct nbrec_logical_switch *lswitch, size_t idx)
 }
 
 static void
-do_lport_del(struct ovs_cmdl_context *ctx)
+nbctl_lport_del(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const struct nbrec_logical_port *lport;
@@ -421,7 +421,7 @@ do_lport_del(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_list(struct ovs_cmdl_context *ctx)
+nbctl_lport_list(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -450,7 +450,7 @@ do_lport_list(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_parent(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_parent(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const struct nbrec_logical_port *lport;
@@ -466,7 +466,7 @@ do_lport_get_parent(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_tag(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_tag(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const struct nbrec_logical_port *lport;
@@ -482,7 +482,7 @@ do_lport_get_tag(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_set_external_id(struct ovs_cmdl_context *ctx)
+nbctl_lport_set_external_id(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -506,7 +506,7 @@ do_lport_set_external_id(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_external_id(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_external_id(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -539,7 +539,7 @@ do_lport_get_external_id(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_set_macs(struct ovs_cmdl_context *ctx)
+nbctl_lport_set_macs(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -555,7 +555,7 @@ do_lport_set_macs(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_macs(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_macs(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -581,7 +581,7 @@ do_lport_get_macs(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_set_port_security(struct ovs_cmdl_context *ctx)
+nbctl_lport_set_port_security(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -597,7 +597,7 @@ do_lport_set_port_security(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_port_security(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_port_security(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -623,7 +623,7 @@ do_lport_get_port_security(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_up(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_up(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -638,7 +638,7 @@ do_lport_get_up(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_set_enabled(struct ovs_cmdl_context *ctx)
+nbctl_lport_set_enabled(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -662,7 +662,7 @@ do_lport_set_enabled(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_enabled(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_enabled(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -678,7 +678,7 @@ do_lport_get_enabled(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_set_type(struct ovs_cmdl_context *ctx)
+nbctl_lport_set_type(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -694,7 +694,7 @@ do_lport_set_type(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_type(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_type(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -709,7 +709,7 @@ do_lport_get_type(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_set_options(struct ovs_cmdl_context *ctx)
+nbctl_lport_set_options(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -738,7 +738,7 @@ do_lport_set_options(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_lport_get_options(struct ovs_cmdl_context *ctx)
+nbctl_lport_get_options(struct ovs_cmdl_context *ctx)
 {
     struct nbctl_context *nb_ctx = ctx->pvt;
     const char *id = ctx->argv[1];
@@ -793,7 +793,7 @@ acl_cmp(const void *acl1_, const void *acl2_)
 }
 
 static void
-do_acl_list(struct ovs_cmdl_context *ctx)
+nbctl_acl_list(struct ovs_cmdl_context *ctx)
 {
     const struct nbrec_logical_switch *lswitch;
     struct nbctl_context *nb_ctx = ctx->pvt;
@@ -822,7 +822,7 @@ do_acl_list(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_acl_add(struct ovs_cmdl_context *ctx)
+nbctl_acl_add(struct ovs_cmdl_context *ctx)
 {
     const struct nbrec_logical_switch *lswitch;
     struct nbctl_context *nb_ctx = ctx->pvt;
@@ -880,7 +880,7 @@ do_acl_add(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_acl_del(struct ovs_cmdl_context *ctx)
+nbctl_acl_del(struct ovs_cmdl_context *ctx)
 {
     const struct nbrec_logical_switch *lswitch;
     struct nbctl_context *nb_ctx = ctx->pvt;
@@ -1022,112 +1022,112 @@ static const struct ovs_cmdl_command all_commands[] = {
         .usage = "[LSWITCH]",
         .min_args = 0,
         .max_args = 1,
-        .handler = do_show,
+        .handler = nbctl_show,
     },
     {
         .name = "lswitch-add",
         .usage = "[LSWITCH]",
         .min_args = 0,
         .max_args = 1,
-        .handler = do_lswitch_add,
+        .handler = nbctl_lswitch_add,
     },
     {
         .name = "lswitch-del",
         .usage = "LSWITCH",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lswitch_del,
+        .handler = nbctl_lswitch_del,
     },
     {
         .name = "lswitch-list",
         .usage = "",
         .min_args = 0,
         .max_args = 0,
-        .handler = do_lswitch_list,
+        .handler = nbctl_lswitch_list,
     },
     {
         .name = "lswitch-set-external-id",
         .usage = "LSWITCH KEY [VALUE]",
         .min_args = 2,
         .max_args = 3,
-        .handler = do_lswitch_set_external_id,
+        .handler = nbctl_lswitch_set_external_id,
     },
     {
         .name = "lswitch-get-external-id",
         .usage = "LSWITCH [KEY]",
         .min_args = 1,
         .max_args = 2,
-        .handler = do_lswitch_get_external_id,
+        .handler = nbctl_lswitch_get_external_id,
     },
     {
         .name = "acl-add",
         .usage = "LSWITCH DIRECTION PRIORITY MATCH ACTION [log]",
         .min_args = 5,
         .max_args = 6,
-        .handler = do_acl_add,
+        .handler = nbctl_acl_add,
     },
     {
         .name = "acl-del",
         .usage = "LSWITCH [DIRECTION [PRIORITY MATCH]]",
         .min_args = 1,
         .max_args = 4,
-        .handler = do_acl_del,
+        .handler = nbctl_acl_del,
     },
     {
         .name = "acl-list",
         .usage = "LSWITCH",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_acl_list,
+        .handler = nbctl_acl_list,
     },
     {
         .name = "lport-add",
         .usage = "LSWITCH LPORT [PARENT] [TAG]",
         .min_args = 2,
         .max_args = 4,
-        .handler = do_lport_add,
+        .handler = nbctl_lport_add,
     },
     {
         .name = "lport-del",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_del,
+        .handler = nbctl_lport_del,
     },
     {
         .name = "lport-list",
         .usage = "LSWITCH",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_list,
+        .handler = nbctl_lport_list,
     },
     {
         .name = "lport-get-parent",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_parent,
+        .handler = nbctl_lport_get_parent,
     },
     {
         .name = "lport-get-tag",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_tag,
+        .handler = nbctl_lport_get_tag,
     },
     {
         .name = "lport-set-external-id",
         .usage = "LPORT KEY [VALUE]",
         .min_args = 2,
         .max_args = 3,
-        .handler = do_lport_set_external_id,
+        .handler = nbctl_lport_set_external_id,
     },
     {
         .name = "lport-get-external-id",
         .usage = "LPORT [KEY]",
         .min_args = 1,
         .max_args = 2,
-        .handler = do_lport_get_external_id,
+        .handler = nbctl_lport_get_external_id,
     },
     {
         .name = "lport-set-macs",
@@ -1135,14 +1135,14 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 1,
         /* Accept however many arguments the system will allow. */
         .max_args = INT_MAX,
-        .handler = do_lport_set_macs,
+        .handler = nbctl_lport_set_macs,
     },
     {
         .name = "lport-get-macs",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_macs,
+        .handler = nbctl_lport_get_macs,
     },
     {
         .name = "lport-set-port-security",
@@ -1150,63 +1150,63 @@ static const struct ovs_cmdl_command all_commands[] = {
         .min_args = 0,
         /* Accept however many arguments the system will allow. */
         .max_args = INT_MAX,
-        .handler = do_lport_set_port_security,
+        .handler = nbctl_lport_set_port_security,
     },
     {
         .name = "lport-get-port-security",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_port_security,
+        .handler = nbctl_lport_get_port_security,
     },
     {
         .name = "lport-get-up",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_up,
+        .handler = nbctl_lport_get_up,
     },
     {
         .name = "lport-set-enabled",
         .usage = "LPORT STATE",
         .min_args = 2,
         .max_args = 2,
-        .handler = do_lport_set_enabled,
+        .handler = nbctl_lport_set_enabled,
     },
     {
         .name = "lport-get-enabled",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_enabled,
+        .handler = nbctl_lport_get_enabled,
     },
     {
         .name = "lport-set-type",
         .usage = "LPORT TYPE",
         .min_args = 2,
         .max_args = 2,
-        .handler = do_lport_set_type,
+        .handler = nbctl_lport_set_type,
     },
     {
         .name = "lport-get-type",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_type,
+        .handler = nbctl_lport_get_type,
     },
     {
         .name = "lport-set-options",
         .usage = "LPORT KEY=VALUE [KEY=VALUE]...",
         .min_args = 1,
         .max_args = INT_MAX,
-        .handler = do_lport_set_options
+        .handler = nbctl_lport_set_options
     },
     {
         .name = "lport-get-options",
         .usage = "LPORT",
         .min_args = 1,
         .max_args = 1,
-        .handler = do_lport_get_options,
+        .handler = nbctl_lport_get_options,
     },
 
     {
