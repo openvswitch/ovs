@@ -5388,7 +5388,7 @@ handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
     uint32_t master[OAM_N_TYPES] = {0};
     uint32_t slave[OAM_N_TYPES] = {0};
 
-    ofputil_decode_set_async_config(oh, master, slave, false);
+    ofputil_decode_set_async_config(oh, master,  slave, false);
 
     ofconn_set_async_config(ofconn, master, slave);
     if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&
