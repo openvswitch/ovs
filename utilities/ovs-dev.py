@@ -240,6 +240,9 @@ def run():
         _sh("chown", options.user, "-R", RUNDIR);
         opts = ["--user", options.user] + opts
 
+    if (options.monitor):
+        opts = ["--monitor"] + opts
+
     _sh(*(["ovsdb-server",
            "--remote=punix:%s/run/db.sock" % RUNDIR,
            "--remote=db:Open_vSwitch,Open_vSwitch,manager_options",
@@ -425,6 +428,9 @@ def main():
                      help="Use binaries built by clang")
     group.add_option("--user", dest="user", action="store", default="",
                      help="run all daemons as a non root user")
+    group.add_option("--monitor", dest="monitor", action="store_true",
+                     help="run daemons with --monitor option")
+
 
     parser.add_option_group(group)
 
