@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1068,23 +1068,24 @@ choose_entry_to_migrate(const struct bond_slave *from, uint64_t to_tx_bytes)
     }
 
     LIST_FOR_EACH (e, list_node, &from->entries) {
-        double old_ratio, new_ratio;
-        uint64_t delta;
+        uint64_t delta = e->tx_bytes;  /* The amount to rebalance.  */
+        uint64_t ideal_tx_bytes = (from->tx_bytes + to_tx_bytes)/2;
+                             /* Note, the ideal traffic is the mid point
+                              * between 'from' and 'to'. This value does
+                              * not change by rebalancing.  */
+        uint64_t new_low;    /* The lower bandwidth between 'to' and 'from'
+                                after rebalancing. */
 
-        if (to_tx_bytes == 0) {
-            /* Nothing on the new slave, move it. */
-            return e;
-        }
+        new_low = MIN(from->tx_bytes - delta, to_tx_bytes + delta);
 
-        delta = e->tx_bytes;
-        old_ratio = (double)from->tx_bytes / to_tx_bytes;
-        new_ratio = (double)(from->tx_bytes - delta) / (to_tx_bytes + delta);
-        if (old_ratio - new_ratio > 0.1
-            && fabs(new_ratio - 1.0) < fabs(old_ratio - 1.0)) {
-            /* We're aiming for an ideal ratio of 1, meaning both the 'from'
-               and 'to' slave have the same load.  Therefore, we only move an
-               entry if it decreases the load on 'from', and brings us closer
-               to equal traffic load. */
+        if ((new_low > to_tx_bytes) &&
+            (new_low - to_tx_bytes >= (ideal_tx_bytes - to_tx_bytes) / 10)) {
+            /* Only rebalance if the new 'low' is closer to to the mid point,
+             * and the improvement exceeds 10% of current traffic
+             * deviation from the ideal split.
+             *
+             * The improvement on the 'high' side is always the same as the
+             * 'low' side. Thus consider 'low' side is sufficient.  */
             return e;
         }
     }
