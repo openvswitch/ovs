@@ -103,11 +103,7 @@ AT_CLEANUP
 
 AT_SETUP([vlog - vlog/reopen - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-ON_EXIT([kill `cat test-unixctl.py.pid`])
+on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
@@ -132,11 +128,7 @@ AT_CLEANUP
 
 AT_SETUP([vlog - vlog/reopen without log file - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-ON_EXIT([kill `cat test-unixctl.py.pid`])
+on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --pidfile --detach])
 
@@ -155,11 +147,7 @@ AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_SKIP_IF([test ! -c /dev/full])
 AT_SKIP_IF([echo > /dev/full])
 
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-ON_EXIT([kill `cat test-unixctl.py.pid`])
+on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
 AT_CHECK([APPCTL -t test-unixctl.py log message])
@@ -182,11 +170,7 @@ AT_CLEANUP
 
 AT_SETUP([vlog - vlog/set and vlog/list - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-ON_EXIT([kill `cat test-unixctl.py.pid`])
+on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
@@ -236,11 +220,7 @@ AT_CHECK([grep -q 'I<3OVS' log])
 AT_CLEANUP
 
 AT_SETUP([vlog - RFC5424 facility])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-ON_EXIT([kill `cat ovsdb-server.pid`])
+on_exit 'kill `cat ovsdb-server.pid`'
 
 dnl Create database.
 touch .conf.db.~lock~
@@ -278,11 +258,7 @@ AT_CLEANUP
 
 AT_SETUP([vlog - RFC5424 facility - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-ON_EXIT([kill `cat test-unixctl.py.pid`])
+on_exit 'kill `cat test-unixctl.py.pid`'
 
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
 -vFACILITY:invalid --detach], [1], [], [test-unixctl.py: processing "FACILITY:invalid": Facility invalid is invalid

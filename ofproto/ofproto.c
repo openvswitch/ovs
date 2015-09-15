@@ -5908,6 +5908,14 @@ handle_meter_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         break;
     }
 
+    if (!error) {
+        struct ofputil_requestforward rf;
+        rf.xid = oh->xid;
+        rf.reason = OFPRFR_METER_MOD;
+        rf.meter_mod = &mm;
+        connmgr_send_requestforward(ofproto->connmgr, ofconn, &rf);
+    }
+
 exit_free_bands:
     ofpbuf_uninit(&bands);
     return error;
@@ -6575,20 +6583,25 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     switch (gm.command) {
     case OFPGC11_ADD:
-        return add_group(ofproto, &gm);
+        error = add_group(ofproto, &gm);
+        break;
 
     case OFPGC11_MODIFY:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     case OFPGC11_DELETE:
         delete_group(ofproto, gm.group_id);
-        return 0;
+        error = 0;
+        break;
 
     case OFPGC15_INSERT_BUCKET:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     case OFPGC15_REMOVE_BUCKET:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     default:
         if (gm.command > OFPGC11_DELETE) {
@@ -6597,6 +6610,15 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         }
         return OFPERR_OFPGMFC_BAD_COMMAND;
     }
+
+    if (!error) {
+        struct ofputil_requestforward rf;
+        rf.xid = oh->xid;
+        rf.reason = OFPRFR_GROUP_MOD;
+        rf.group_mod = &gm;
+        connmgr_send_requestforward(ofproto->connmgr, ofconn, &rf);
+    }
+    return error;
 }
 
 enum ofputil_table_miss
@@ -7211,6 +7233,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
+    case OFPTYPE_REQUESTFORWARD:
     case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {

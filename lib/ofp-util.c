@@ -5376,6 +5376,125 @@ ofputil_decode_role_status(const struct ofp_header *oh,
     return 0;
 }
 
+/* Encodes 'rf' according to 'protocol', and returns the encoded message.
+ * 'protocol' must be for OpenFlow 1.4 or later. */
+struct ofpbuf *
+ofputil_encode_requestforward(const struct ofputil_requestforward *rf,
+                              enum ofputil_protocol protocol)
+{
+    enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
+    struct ofpbuf *inner;
+
+    switch (rf->reason) {
+    case OFPRFR_GROUP_MOD:
+        inner = ofputil_encode_group_mod(ofp_version, rf->group_mod);
+        break;
+
+    case OFPRFR_METER_MOD:
+        inner = ofputil_encode_meter_mod(ofp_version, rf->meter_mod);
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    struct ofp_header *inner_oh = inner->data;
+    inner_oh->xid = rf->xid;
+    inner_oh->length = htons(inner->size);
+
+    struct ofpbuf *outer = ofpraw_alloc_xid(OFPRAW_OFPT14_REQUESTFORWARD,
+                                            ofp_version, htonl(0),
+                                            inner->size);
+    ofpbuf_put(outer, inner->data, inner->size);
+    ofpbuf_delete(inner);
+
+    return outer;
+}
+
+/* Decodes OFPT_REQUESTFORWARD message 'outer'.  On success, puts the decoded
+ * form into '*rf' and returns 0, and the caller is later responsible for
+ * freeing the content of 'rf', with ofputil_destroy_requestforward(rf).  On
+ * failure, returns an ofperr and '*rf' is indeterminate. */
+enum ofperr
+ofputil_decode_requestforward(const struct ofp_header *outer,
+                              struct ofputil_requestforward *rf)
+{
+    struct ofpbuf b;
+    enum ofperr error;
+
+    ofpbuf_use_const(&b, outer, ntohs(outer->length));
+
+    /* Skip past outer message. */
+    enum ofpraw outer_raw = ofpraw_pull_assert(&b);
+    ovs_assert(outer_raw == OFPRAW_OFPT14_REQUESTFORWARD);
+
+    /* Validate inner message. */
+    if (b.size < sizeof(struct ofp_header)) {
+        return OFPERR_OFPBFC_MSG_BAD_LEN;
+    }
+    const struct ofp_header *inner = b.data;
+    unsigned int inner_len = ntohs(inner->length);
+    if (inner_len < sizeof(struct ofp_header) || inner_len > b.size) {
+        return OFPERR_OFPBFC_MSG_BAD_LEN;
+    }
+    if (inner->version != outer->version) {
+        return OFPERR_OFPBRC_BAD_VERSION;
+    }
+
+    /* Parse inner message. */
+    enum ofptype type;
+    error = ofptype_decode(&type, inner);
+    if (error) {
+        return error;
+    }
+
+    rf->xid = inner->xid;
+    if (type == OFPTYPE_GROUP_MOD) {
+        rf->reason = OFPRFR_GROUP_MOD;
+        rf->group_mod = xmalloc(sizeof *rf->group_mod);
+        error = ofputil_decode_group_mod(inner, rf->group_mod);
+        if (error) {
+            free(rf->group_mod);
+            return error;
+        }
+    } else if (type == OFPTYPE_METER_MOD) {
+        rf->reason = OFPRFR_METER_MOD;
+        rf->meter_mod = xmalloc(sizeof *rf->meter_mod);
+        ofpbuf_init(&rf->bands, 64);
+        error = ofputil_decode_meter_mod(inner, rf->meter_mod, &rf->bands);
+        if (error) {
+            free(rf->meter_mod);
+            ofpbuf_uninit(&rf->bands);
+            return error;
+        }
+    } else {
+        return OFPERR_OFPBFC_MSG_UNSUP;
+    }
+
+    return 0;
+}
+
+/* Frees the content of 'rf', which should have been initialized through a
+ * successful call to ofputil_decode_requestforward(). */
+void
+ofputil_destroy_requestforward(struct ofputil_requestforward *rf)
+{
+    if (!rf) {
+        return;
+    }
+
+    switch (rf->reason) {
+    case OFPRFR_GROUP_MOD:
+        ofputil_uninit_group_mod(rf->group_mod);
+        free(rf->group_mod);
+        break;
+
+    case OFPRFR_METER_MOD:
+        ofpbuf_uninit(&rf->bands);
+        free(rf->meter_mod);
+    }
+}
+
 /* Table stats. */
 
 /* OpenFlow 1.0 and 1.1 don't distinguish between a field that cannot be
@@ -9057,6 +9176,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
+    case OFPTYPE_REQUESTFORWARD:
     case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
     case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
         break;

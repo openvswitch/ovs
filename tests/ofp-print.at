@@ -2675,6 +2675,52 @@ OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master generation_id=16 reason=configur
 ])
 AT_CLEANUP
 
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 0f 00 10 02 00 00 00 \
+00 00 00 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=group_mod
+ ADD group_id=1,type=all
+])
+AT_CLEANUP
+
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 0f 00 10 02 00 00 00 \
+00 01 01 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=group_mod
+ MOD group_id=1,type=select
+])
+AT_CLEANUP
+
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 1d 00 10 02 00 00 00 \
+00 00 00 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=meter_mod ADD meter=1 bands=
+])
+AT_CLEANUP
+
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 1d 00 10 02 00 00 00 \
+00 01 01 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=meter_mod MOD meter=1 flags:0x100 bands=
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_PACKET_IN])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

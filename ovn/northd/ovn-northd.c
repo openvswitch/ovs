@@ -60,6 +60,7 @@ static const char *default_db(void);
  * These must be listed in the order that the stages will be executed. */
 #define INGRESS_STAGES                         \
     INGRESS_STAGE(PORT_SEC, port_sec)          \
+    INGRESS_STAGE(ACL, acl)                    \
     INGRESS_STAGE(L2_LKUP, l2_lkup)
 
 enum ingress_stage {
@@ -309,12 +310,10 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
 
             od->sb = sbrec_datapath_binding_insert(ctx->ovnsb_txn);
 
-            struct smap external_ids = SMAP_INITIALIZER(&external_ids);
             char uuid_s[UUID_LEN + 1];
             sprintf(uuid_s, UUID_FMT, UUID_ARGS(&od->nb->header_.uuid));
-            smap_add(&external_ids, "logical-switch", uuid_s);
-            sbrec_datapath_binding_set_external_ids(od->sb, &external_ids);
-            smap_destroy(&external_ids);
+            const struct smap id = SMAP_CONST1(&id, "logical-switch", uuid_s);
+            sbrec_datapath_binding_set_external_ids(od->sb, &id);
 
             sbrec_datapath_binding_set_tunnel_key(od->sb, tunnel_key);
         }
@@ -729,6 +728,9 @@ static void
 build_lflows(struct northd_context *ctx, struct hmap *datapaths,
              struct hmap *ports)
 {
+    /* This flow table structure is documented in ovn-northd(8), so please
+     * update ovn-northd.8.xml if you change anything. */
+
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
     struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
 
@@ -745,26 +747,50 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 
         /* Port security flows have priority 50 (see below) and will continue
          * to the next table if packet source is acceptable. */
-
-        /* Otherwise drop the packet. */
-        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 0, "1", "drop;");
     }
 
     /* Ingress table 0: Ingress port security (priority 50). */
     struct ovn_port *op;
     HMAP_FOR_EACH (op, key_node, ports) {
+        if (!lport_is_enabled(op->nb)) {
+            /* Drop packets from disabled logical ports (since logical flow
+             * tables are default-drop). */
+            continue;
+        }
+
         struct ds match = DS_EMPTY_INITIALIZER;
         ds_put_cstr(&match, "inport == ");
         json_string_escape(op->key, &match);
         build_port_security("eth.src",
                             op->nb->port_security, op->nb->n_port_security,
                             &match);
-        ovn_lflow_add(&lflows, op->od, P_IN, S_IN_PORT_SEC, 50, ds_cstr(&match),
-                      lport_is_enabled(op->nb) ? "next;" : "drop;");
+        ovn_lflow_add(&lflows, op->od, P_IN, S_IN_PORT_SEC, 50,
+                      ds_cstr(&match), "next;");
         ds_destroy(&match);
     }
 
-    /* Ingress table 1: Destination lookup, broadcast and multicast handling
+    /* Ingress table 1: ACLs (any priority). */
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        for (size_t i = 0; i < od->nb->n_acls; i++) {
+            const struct nbrec_acl *acl = od->nb->acls[i];
+            const char *action;
+
+            if (strcmp(acl->direction, "from-lport")) {
+                continue;
+            }
+
+            action = (!strcmp(acl->action, "allow") ||
+                      !strcmp(acl->action, "allow-related"))
+                ? "next;" : "drop;";
+            ovn_lflow_add(&lflows, od, P_IN, S_IN_ACL, acl->priority,
+                          acl->match, action);
+        }
+    }
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_ACL, 0, "1", "next;");
+    }
+
+    /* Ingress table 2: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (lport_is_enabled(op->nb)) {
@@ -776,7 +802,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
-    /* Ingress table 1: Destination lookup, unicast handling (priority 50), */
+    /* Ingress table 2: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         for (size_t i = 0; i < op->nb->n_macs; i++) {
             struct eth_addr mac;
@@ -796,8 +822,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                 ds_destroy(&actions);
                 ds_destroy(&match);
             } else if (!strcmp(op->nb->macs[i], "unknown")) {
-                ovn_multicast_add(&mcgroups, &mc_unknown, op);
-                op->od->has_unknown = true;
+                if (lport_is_enabled(op->nb)) {
+                    ovn_multicast_add(&mcgroups, &mc_unknown, op);
+                    op->od->has_unknown = true;
+                }
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
@@ -807,7 +835,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         }
     }
 
-    /* Ingress table 1: Destination lookup for unknown MACs (priority 0). */
+    /* Ingress table 2: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (od->has_unknown) {
             ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 0, "1",
@@ -820,6 +848,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         for (size_t i = 0; i < od->nb->n_acls; i++) {
             const struct nbrec_acl *acl = od->nb->acls[i];
             const char *action;
+
+            if (strcmp(acl->direction, "to-lport")) {
+                continue;
+            }
 
             action = (!strcmp(acl->action, "allow") ||
                       !strcmp(acl->action, "allow-related"))
@@ -839,20 +871,28 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                       "output;");
     }
 
-    /* Egress table 1: Egress port security (priority 50). */
+    /* Egress table 1: Egress port security (priorities 50 and 150).
+     *
+     * Priority 50 rules implement port security for enabled logical port.
+     *
+     * Priority 150 rules drop packets to disabled logical ports, so that they
+     * don't even receive multicast or broadcast packets. */
     HMAP_FOR_EACH (op, key_node, ports) {
         struct ds match;
 
         ds_init(&match);
         ds_put_cstr(&match, "outport == ");
         json_string_escape(op->key, &match);
-        build_port_security("eth.dst",
-                            op->nb->port_security, op->nb->n_port_security,
-                            &match);
-
-        ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 50,
-                      ds_cstr(&match),
-                      lport_is_enabled(op->nb) ? "output;" : "drop;");
+        if (lport_is_enabled(op->nb)) {
+            build_port_security("eth.dst",
+                                op->nb->port_security, op->nb->n_port_security,
+                                &match);
+            ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 50,
+                          ds_cstr(&match), "output;");
+        } else {
+            ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 150,
+                          ds_cstr(&match), "drop;");
+        }
 
         ds_destroy(&match);
     }
@@ -888,13 +928,12 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         sbrec_logical_flow_set_match(sbflow, lflow->match);
         sbrec_logical_flow_set_actions(sbflow, lflow->actions);
 
-        struct smap external_ids = SMAP_INITIALIZER(&external_ids);
-        smap_add(&external_ids, "stage-name",
-                 lflow->pipeline == P_IN ?
-                  ingress_stage_to_str(lflow->table_id) :
-                  egress_stage_to_str(lflow->table_id));
-        sbrec_logical_flow_set_external_ids(sbflow, &external_ids);
-        smap_destroy(&external_ids);
+        const struct smap ids = SMAP_CONST1(
+            &ids, "stage-name",
+            (lflow->pipeline == P_IN
+             ? ingress_stage_to_str(lflow->table_id)
+             : egress_stage_to_str(lflow->table_id)));
+        sbrec_logical_flow_set_external_ids(sbflow, &ids);
 
         ovn_lflow_destroy(&lflows, lflow);
     }

@@ -3,6 +3,7 @@
 
 #include <linux/version.h>
 #include_next <net/netlink.h>
+#include_next <linux/in6.h>
 
 #ifndef HAVE_NLA_GET_BE16
 /**
@@ -67,6 +68,33 @@ static inline struct nlattr *nla_find_nested(struct nlattr *nla, int attrtype)
 static inline bool nla_is_last(const struct nlattr *nla, int rem)
 {
 	return nla->nla_len == rem;
+}
+#endif
+
+#ifndef HAVE_NLA_PUT_IN_ADDR
+static inline int nla_put_in_addr(struct sk_buff *skb, int attrtype,
+				  __be32 addr)
+{
+	return nla_put_be32(skb, attrtype, addr);
+}
+
+static inline int nla_put_in6_addr(struct sk_buff *skb, int attrtype,
+				   const struct in6_addr *addr)
+{
+	return nla_put(skb, attrtype, sizeof(*addr), addr);
+}
+
+static inline __be32 nla_get_in_addr(const struct nlattr *nla)
+{
+	return *(__be32 *) nla_data(nla);
+}
+
+static inline struct in6_addr nla_get_in6_addr(const struct nlattr *nla)
+{
+	struct in6_addr tmp;
+
+	nla_memcpy(&tmp, nla, sizeof(tmp));
+	return tmp;
 }
 #endif
 

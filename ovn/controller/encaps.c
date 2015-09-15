@@ -149,7 +149,6 @@ tunnel_add(struct tunnel_ctx *tc, const char *new_chassis_id,
     }
 
     /* No such port, so add one. */
-    struct smap external_ids = SMAP_INITIALIZER(&external_ids);
     struct smap options = SMAP_INITIALIZER(&options);
     struct ovsrec_port *port, **ports;
     struct ovsrec_interface *iface;
@@ -174,9 +173,8 @@ tunnel_add(struct tunnel_ctx *tc, const char *new_chassis_id,
     port = ovsrec_port_insert(tc->ovs_txn);
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
-    smap_add(&external_ids, "ovn-chassis-id", new_chassis_id);
-    ovsrec_port_set_external_ids(port, &external_ids);
-    smap_destroy(&external_ids);
+    const struct smap id = SMAP_CONST1(&id, "ovn-chassis-id", new_chassis_id);
+    ovsrec_port_set_external_ids(port, &id);
 
     ports = xmalloc(sizeof *tc->br_int->ports * (tc->br_int->n_ports + 1));
     for (i = 0; i < tc->br_int->n_ports; i++) {

@@ -459,6 +459,14 @@ NXT_GENEVE_TABLE_MOD (xid=0x4):
  0xffff	0x3	124	tun_metadata3
 ])
 
+AT_CHECK([ovs-ofctl add-flow br0 "tun_metadata0,tun_metadata0,actions=drop"], [1], [ignore],
+[ovs-ofctl: field tun_metadata0 set multiple times
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 "tun_metadata0=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef,tun_metadata1=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef,tun_metadata2=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef,tun_metadata3=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef,tun_metadata4=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef,actions=drop"], [1], [ignore],
+[ovs-ofctl: field tun_metadata4 exceeds maximum size for tunnel metadata (used 320, max 256)
+])
+
 dnl Allocation and match with fragmented address space
 AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2"])
 AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])

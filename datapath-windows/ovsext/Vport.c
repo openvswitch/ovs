@@ -1267,7 +1267,8 @@ OvsRemoveTunnelVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_TUNFLT_INIT_CONTEXT tunnelContext = NULL;
     PIRP irp = NULL;
 
-    tunnelContext = OvsAllocateMemory(sizeof(*tunnelContext));
+    tunnelContext = OvsAllocateMemoryWithTag(sizeof(*tunnelContext),
+                                             OVS_VPORT_POOL_TAG);
     if (tunnelContext == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -2177,10 +2178,12 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 break;
             }
 
-            PNL_ATTR attr = NlAttrFindNested(vportAttrs[OVS_VPORT_ATTR_OPTIONS],
-                                             OVS_TUNNEL_ATTR_DST_PORT);
-            if (attr) {
-                transportPortDest = NlAttrGetU16(attr);
+            if (vportAttrs[OVS_VPORT_ATTR_OPTIONS]) {
+                PNL_ATTR attr = NlAttrFindNested(vportAttrs[OVS_VPORT_ATTR_OPTIONS],
+                                                 OVS_TUNNEL_ATTR_DST_PORT);
+                if (attr) {
+                    transportPortDest = NlAttrGetU16(attr);
+                }
             }
 
             status = OvsInitTunnelVport(usrParamsCtx,

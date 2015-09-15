@@ -37,6 +37,7 @@
 #include "ovs-router.h"
 #include "ovs-thread.h"
 #include "route-table.h"
+#include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
 
@@ -126,6 +127,7 @@ ovs_router_insert__(uint8_t priority, ovs_be32 ip_dst, uint8_t plen,
         /* An old rule with the same match was displaced. */
         ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
     }
+    tnl_port_map_insert_ipdev(output_bridge);
     seq_change(tnl_conf_seq);
 }
 
@@ -136,12 +138,29 @@ ovs_router_insert(ovs_be32 ip_dst, uint8_t plen, const char output_bridge[],
     ovs_router_insert__(plen, ip_dst, plen, output_bridge, gw);
 }
 
+
+static bool
+__rt_entry_delete(const struct cls_rule *cr)
+{
+    struct ovs_router_entry *p = ovs_router_entry_cast(cr);
+
+    tnl_port_map_delete_ipdev(p->output_bridge);
+    /* Remove it. */
+    cr = classifier_remove(&cls, cr);
+    if (cr) {
+        ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
+        return true;
+    }
+    return false;
+}
+
 static bool
 rt_entry_delete(uint8_t priority, ovs_be32 ip_dst, uint8_t plen)
 {
     const struct cls_rule *cr;
     struct cls_rule rule;
     struct match match;
+    bool res = false;
 
     rt_init_match(&match, ip_dst, plen);
 
@@ -150,17 +169,11 @@ rt_entry_delete(uint8_t priority, ovs_be32 ip_dst, uint8_t plen)
     /* Find the exact rule. */
     cr = classifier_find_rule_exactly(&cls, &rule, CLS_MAX_VERSION);
     if (cr) {
-        /* Remove it. */
         ovs_mutex_lock(&mutex);
-        cr = classifier_remove(&cls, cr);
+        res = __rt_entry_delete(cr);
         ovs_mutex_unlock(&mutex);
-
-        if (cr) {
-            ovsrcu_postpone(rt_entry_free, ovs_router_entry_cast(cr));
-            return true;
-        }
     }
-    return false;
+    return res;
 }
 
 static bool
@@ -295,9 +308,7 @@ ovs_router_flush(void)
     classifier_defer(&cls);
     CLS_FOR_EACH(rt, cr, &cls) {
         if (rt->priority == rt->plen) {
-            if (classifier_remove(&cls, &rt->cr)) {
-                ovsrcu_postpone(rt_entry_free, rt);
-            }
+            __rt_entry_delete(&rt->cr);
         }
     }
     classifier_publish(&cls);

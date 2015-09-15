@@ -65,6 +65,7 @@
 #include "sset.h"
 #include "timeval.h"
 #include "tnl-arp-cache.h"
+#include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -2549,6 +2550,7 @@ dpif_netdev_run(struct dpif *dpif)
     dp_netdev_pmd_unref(non_pmd);
 
     tnl_arp_cache_run();
+    tnl_port_map_run();
     new_tnl_seq = seq_read(tnl_conf_seq);
 
     if (dp->last_tnl_conf_seq != new_tnl_seq) {
@@ -3098,8 +3100,9 @@ dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
 {
     uint32_t hash, recirc_depth;
 
-    hash = dp_packet_get_rss_hash(packet);
-    if (OVS_UNLIKELY(!hash)) {
+    if (OVS_LIKELY(dp_packet_rss_valid(packet))) {
+        hash = dp_packet_get_rss_hash(packet);
+    } else {
         hash = miniflow_hash_5tuple(mf, 0);
         dp_packet_set_rss_hash(packet, hash);
     }

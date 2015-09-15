@@ -230,8 +230,8 @@ static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
 static inline void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
 {
     ea->be16[0] = htons(x >> 32);
-    ea->be16[1] = htons(x >> 16);
-    ea->be16[2] = htons(x);
+    ea->be16[1] = htons((x & 0xFFFF0000) >> 16);
+    ea->be16[2] = htons(x & 0xFFFF);
 }
 
 static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
@@ -307,8 +307,9 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
  */
 #define ETH_ADDR_FMT                                                    \
     "%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8
-#define ETH_ADDR_ARGS(EA)                                               \
-    (EA).ea[0], (EA).ea[1], (EA).ea[2], (EA).ea[3], (EA).ea[4], (EA).ea[5]
+#define ETH_ADDR_ARGS(EA) ETH_ADDR_BYTES_ARGS((EA).ea)
+#define ETH_ADDR_BYTES_ARGS(EAB) \
+         (EAB)[0], (EAB)[1], (EAB)[2], (EAB)[3], (EAB)[4], (EAB)[5]
 
 /* Example:
  *

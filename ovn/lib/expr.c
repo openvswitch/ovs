@@ -23,6 +23,7 @@
 #include "ofp-actions.h"
 #include "shash.h"
 #include "simap.h"
+#include "sset.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(expr);
@@ -1643,9 +1644,119 @@ compare_expr_sort(const void *a_, const void *b_)
 
 static struct expr *crush_cmps(struct expr *, const struct expr_symbol *);
 
-/* Implementation of crush_cmps() for expr->type == EXPR_T_AND. */
+static bool
+disjunction_matches_string(const struct expr *or, const char *s)
+{
+    const struct expr *sub;
+
+    LIST_FOR_EACH (sub, node, &or->andor) {
+        if (!strcmp(sub->cmp.string, s)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Implementation of crush_cmps() for expr->type == EXPR_T_AND and a
+ * string-typed 'symbol'. */
 static struct expr *
-crush_and(struct expr *expr, const struct expr_symbol *symbol)
+crush_and_string(struct expr *expr, const struct expr_symbol *symbol)
+{
+    ovs_assert(!list_is_short(&expr->andor));
+
+    struct expr *singleton = NULL;
+
+    /* First crush each subexpression into either a single EXPR_T_CMP or an
+     * EXPR_T_OR with EXPR_T_CMP subexpressions. */
+    struct expr *sub, *next = NULL;
+    LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
+        list_remove(&sub->node);
+        struct expr *new = crush_cmps(sub, symbol);
+        switch (new->type) {
+        case EXPR_T_CMP:
+            if (!singleton) {
+                list_insert(&next->node, &new->node);
+                singleton = new;
+            } else {
+                bool match = !strcmp(new->cmp.string, singleton->cmp.string);
+                expr_destroy(new);
+                if (!match) {
+                    expr_destroy(expr);
+                    return expr_create_boolean(false);
+                }
+            }
+            break;
+        case EXPR_T_AND:
+            OVS_NOT_REACHED();
+        case EXPR_T_OR:
+            list_insert(&next->node, &new->node);
+            break;
+        case EXPR_T_BOOLEAN:
+            if (!new->boolean) {
+                expr_destroy(expr);
+                return new;
+            }
+            free(new);
+            break;
+        }
+    }
+
+    /* If we have a singleton, then the result is either the singleton itself
+     * (if the ORs allow the singleton) or false. */
+    if (singleton) {
+        LIST_FOR_EACH (sub, node, &expr->andor) {
+            if (sub->type == EXPR_T_OR
+                && !disjunction_matches_string(sub, singleton->cmp.string)) {
+                expr_destroy(expr);
+                return expr_create_boolean(false);
+            }
+        }
+        list_remove(&singleton->node);
+        expr_destroy(expr);
+        return singleton;
+    }
+
+    /* Otherwise the result is the intersection of all of the ORs. */
+    struct sset result = SSET_INITIALIZER(&result);
+    LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
+        struct sset strings = SSET_INITIALIZER(&strings);
+        const struct expr *s;
+        LIST_FOR_EACH (s, node, &sub->andor) {
+            sset_add(&strings, s->cmp.string);
+        }
+        if (sset_is_empty(&result)) {
+            sset_swap(&result, &strings);
+        } else {
+            sset_intersect(&result, &strings);
+        }
+        sset_destroy(&strings);
+
+        if (sset_is_empty(&result)) {
+            expr_destroy(expr);
+            sset_destroy(&result);
+            return expr_create_boolean(false);
+        }
+    }
+
+    expr_destroy(expr);
+    expr = expr_create_andor(EXPR_T_OR);
+
+    const char *string;
+    SSET_FOR_EACH (string, &result) {
+        sub = xmalloc(sizeof *sub);
+        sub->type = EXPR_T_CMP;
+        sub->cmp.symbol = symbol;
+        sub->cmp.string = xstrdup(string);
+        list_push_back(&expr->andor, &sub->node);
+    }
+    return expr_fix(expr);
+}
+
+/* Implementation of crush_cmps() for expr->type == EXPR_T_AND and a
+ * numeric-typed 'symbol'. */
+static struct expr *
+crush_and_numeric(struct expr *expr, const struct expr_symbol *symbol)
 {
     ovs_assert(!list_is_short(&expr->andor));
 
@@ -1800,17 +1911,28 @@ crush_and(struct expr *expr, const struct expr_symbol *symbol)
 }
 
 static int
-compare_expr(const void *a_, const void *b_)
+compare_cmps_3way(const struct expr *a, const struct expr *b)
+{
+    ovs_assert(a->cmp.symbol == b->cmp.symbol);
+    if (!a->cmp.symbol->width) {
+        return strcmp(a->cmp.string, b->cmp.string);
+    } else {
+        int d = memcmp(&a->cmp.value, &b->cmp.value, sizeof a->cmp.value);
+        if (!d) {
+            d = memcmp(&a->cmp.mask, &b->cmp.mask, sizeof a->cmp.mask);
+        }
+        return d;
+    }
+}
+
+static int
+compare_cmps_cb(const void *a_, const void *b_)
 {
     const struct expr *const *ap = a_;
     const struct expr *const *bp = b_;
     const struct expr *a = *ap;
     const struct expr *b = *bp;
-    int d = memcmp(&a->cmp.value, &b->cmp.value, sizeof a->cmp.value);
-    if (!d) {
-        d = memcmp(&a->cmp.mask, &b->cmp.mask, sizeof a->cmp.mask);
-    }
-    return d;
+    return compare_cmps_3way(a, b);
 }
 
 /* Implementation of crush_cmps() for expr->type == EXPR_T_OR. */
@@ -1841,15 +1963,15 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
     }
     ovs_assert(i == n);
 
-    qsort(subs, n, sizeof *subs, compare_expr);
+    qsort(subs, n, sizeof *subs, compare_cmps_cb);
 
+    /* Eliminate duplicates. */
     list_init(&expr->andor);
     list_push_back(&expr->andor, &subs[0]->node);
     for (i = 1; i < n; i++) {
         struct expr *a = expr_from_node(list_back(&expr->andor));
         struct expr *b = subs[i];
-        if (memcmp(&a->cmp.value, &b->cmp.value, sizeof a->cmp.value)
-            || memcmp(&a->cmp.mask, &b->cmp.mask, sizeof a->cmp.mask)) {
+        if (compare_cmps_3way(a, b)) {
             list_push_back(&expr->andor, &b->node);
         } else {
             free(b);
@@ -1871,7 +1993,9 @@ crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
         return crush_or(expr, symbol);
 
     case EXPR_T_AND:
-        return crush_and(expr, symbol);
+        return (symbol->width
+                ? crush_and_numeric(expr, symbol)
+                : crush_and_string(expr, symbol));
 
     case EXPR_T_CMP:
         return expr;
@@ -1967,12 +2091,14 @@ expr_normalize_and(struct expr *expr)
     struct expr *a, *b;
     LIST_FOR_EACH_SAFE (a, b, node, &expr->andor) {
         if (&b->node == &expr->andor
-            || a->type != EXPR_T_CMP || b->type != EXPR_T_CMP) {
-        } else if (a->cmp.symbol != b->cmp.symbol) {
+            || a->type != EXPR_T_CMP || b->type != EXPR_T_CMP
+            || a->cmp.symbol != b->cmp.symbol) {
             continue;
-        } else if (mf_subvalue_intersect(&a->cmp.value, &a->cmp.mask,
-                                         &b->cmp.value, &b->cmp.mask,
-                                         &b->cmp.value, &b->cmp.mask)) {
+        } else if (a->cmp.symbol->width
+                   ? mf_subvalue_intersect(&a->cmp.value, &a->cmp.mask,
+                                           &b->cmp.value, &b->cmp.mask,
+                                           &b->cmp.value, &b->cmp.mask)
+                   : !strcmp(a->cmp.string, b->cmp.string)) {
             list_remove(&a->node);
             expr_destroy(a);
         } else {

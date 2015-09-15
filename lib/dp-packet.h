@@ -48,6 +48,7 @@ struct dp_packet {
     uint16_t data_ofs;          /* First byte actually in use. */
     uint32_t size_;             /* Number of bytes in use. */
     uint32_t rss_hash;          /* Packet hash. */
+    bool rss_hash_valid;        /* Is the 'rss_hash' valid? */
 #endif
     enum dp_packet_source source;  /* Source of memory allocated as 'base'. */
     uint8_t l2_pad_size;           /* Detected l2 padding size.
@@ -514,6 +515,8 @@ dp_packet_reset_packet(struct dp_packet *b, int off)
     b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
 }
 
+/* Returns the RSS hash of the packet 'p'.  Note that the returned value is
+ * correct only if 'dp_packet_rss_valid(p)' returns true */
 static inline uint32_t
 dp_packet_get_rss_hash(struct dp_packet *p)
 {
@@ -529,8 +532,30 @@ dp_packet_set_rss_hash(struct dp_packet *p, uint32_t hash)
 {
 #ifdef DPDK_NETDEV
     p->mbuf.hash.rss = hash;
+    p->mbuf.ol_flags |= PKT_RX_RSS_HASH;
 #else
     p->rss_hash = hash;
+    p->rss_hash_valid = true;
+#endif
+}
+
+static inline bool
+dp_packet_rss_valid(struct dp_packet *p)
+{
+#ifdef DPDK_NETDEV
+    return p->mbuf.ol_flags & PKT_RX_RSS_HASH;
+#else
+    return p->rss_hash_valid;
+#endif
+}
+
+static inline void
+dp_packet_rss_invalidate(struct dp_packet *p)
+{
+#ifdef DPDK_NETDEV
+    p->mbuf.ol_flags &= ~PKT_RX_RSS_HASH;
+#else
+    p->rss_hash_valid = false;
 #endif
 }
 

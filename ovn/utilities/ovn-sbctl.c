@@ -40,6 +40,8 @@
 #include "process.h"
 #include "sset.h"
 #include "shash.h"
+#include "stream-ssl.h"
+#include "stream.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
@@ -171,6 +173,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"options", no_argument, NULL, OPT_OPTIONS},
         {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
+        STREAM_SSL_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
@@ -249,13 +252,13 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout < 0) {
-                ctl_fatal("value %s on -t or --timeout is invalid",
-                            optarg);
+                ctl_fatal("value %s on -t or --timeout is invalid", optarg);
             }
             break;
 
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
+        STREAM_SSL_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);
@@ -280,13 +283,13 @@ static void
 usage(void)
 {
     printf("\
-%s: ovs-vswitchd management utility\n\
+%s: OVN southbound DB management utility\n\
 \n\
-for debugging and testing only, never use it in production\n\
+For debugging and testing only, not for use in production.\n\
 \n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
-SouthBound DB commands:\n\
+General commands:\n\
   show                        print overview of database contents\n\
 \n\
 Chassis commands:\n\
@@ -309,7 +312,7 @@ Logical flow commands:\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
-  -t, --timeout=SECS          wait at most SECS seconds for ovs-vswitchd\n\
+  -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, ctl_get_db_cmd_usage(), ctl_default_db());
@@ -320,6 +323,7 @@ Options:\n\
 Other options:\n\
   -h, --help                  display this help message\n\
   -V, --version               display version information\n");
+    stream_usage("database", true, true, false);
     exit(EXIT_SUCCESS);
 }
 
@@ -342,7 +346,7 @@ struct sbctl_context {
     struct shash port_bindings;
 };
 
-/* Casts 'base' into 'strcut sbctl_context'. */
+/* Casts 'base' into 'struct sbctl_context'. */
 static struct sbctl_context *
 sbctl_context_cast(struct ctl_context *base)
 {
@@ -698,7 +702,7 @@ cmd_lflow_list(struct ctl_context *ctx)
         }
 
         const char *table_name = smap_get(&lflow->external_ids, "stage-name");
-        printf("  table=%" PRId64 "(%8s), priority=%3" PRId64
+        printf("  table=%" PRId64 "(%8s), priority=%5" PRId64
                ", match=(%s), action=(%s)\n",
                lflow->table_id, table_name ? table_name : "",
                lflow->priority, lflow->match, lflow->actions);
@@ -836,8 +840,8 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         struct ovsdb_symbol *symbol = node->data;
         if (!symbol->created) {
             ctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                        "with \"-- --id=%s create ...\")",
-                        node->name, node->name);
+                      "with \"-- --id=%s create ...\")",
+                      node->name, node->name);
         }
         if (!symbol->strong_ref) {
             if (!symbol->weak_ref) {

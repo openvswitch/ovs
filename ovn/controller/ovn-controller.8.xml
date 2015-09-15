@@ -84,7 +84,10 @@
           <p>
             <code>external_ids:ovn-bridge</code> specifies the
             integration bridge to which logical ports are attached.
-            The default is <code>br-int</code>.
+            The default is <code>br-int</code>.  If this bridge does
+            not exist when ovn-controller starts, it will be created
+            automatically with the default configuration suggested in
+            <code>ovn-architecture</code>(7).
           </p>
         </li>
         <li>

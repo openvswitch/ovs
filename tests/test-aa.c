@@ -153,7 +153,7 @@ test_aa_send(void)
     hardware.h_lport.p_element.type =
         LLDP_TLV_AA_ELEM_TYPE_CLIENT_VIRTUAL_SWITCH;
     hardware.h_lport.p_element.mgmt_vlan = 0xCDC;
-    eth_addr_from_uint64(0x010203040506,
+    eth_addr_from_uint64(0x010203040506ULL,
                          &hardware.h_lport.p_element.system_id.system_mac);
 
     hardware.h_lport.p_element.system_id.conn_type = 0x5;

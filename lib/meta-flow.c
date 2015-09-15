@@ -796,11 +796,19 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
 /* Makes 'match' match field 'mf' exactly, with the value matched taken from
  * 'value'.  The caller is responsible for ensuring that 'match' meets 'mf''s
- * prerequisites. */
+ * prerequisites.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string. */
 void
 mf_set_value(const struct mf_field *mf,
-             const union mf_value *value, struct match *match)
+             const union mf_value *value, struct match *match, char **err_str)
 {
+    if (err_str) {
+        *err_str = NULL;
+    }
+
     switch (mf->id) {
     case MFF_DP_HASH:
         match_set_dp_hash(match, ntohl(value->be32));
@@ -836,7 +844,7 @@ mf_set_value(const struct mf_field *mf,
         match_set_tun_ttl(match, value->u8);
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_set_match(mf, value, NULL, match);
+        tun_metadata_set_match(mf, value, NULL, match, err_str);
         break;
 
     case MFF_METADATA:
@@ -1364,10 +1372,18 @@ mf_is_set(const struct mf_field *mf, const struct flow *flow)
 /* Makes 'match' wildcard field 'mf'.
  *
  * The caller is responsible for ensuring that 'match' meets 'mf''s
- * prerequisites. */
+ * prerequisites.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string. */
 void
-mf_set_wild(const struct mf_field *mf, struct match *match)
+mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
 {
+    if (err_str) {
+        *err_str = NULL;
+    }
+
     switch (mf->id) {
     case MFF_DP_HASH:
         match->flow.dp_hash = 0;
@@ -1406,7 +1422,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match_set_tun_ttl_masked(match, 0, 0);
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_set_match(mf, NULL, NULL, match);
+        tun_metadata_set_match(mf, NULL, NULL, match, err_str);
         break;
 
     case MFF_METADATA:
@@ -1595,20 +1611,28 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
  * call is equivalent to mf_set_wild(mf, match).
  *
  * 'mask' must be a valid mask for 'mf' (see mf_is_mask_valid()).  The caller
- * is responsible for ensuring that 'match' meets 'mf''s prerequisites. */
+ * is responsible for ensuring that 'match' meets 'mf''s prerequisites.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string.*/
 enum ofputil_protocol
 mf_set(const struct mf_field *mf,
        const union mf_value *value, const union mf_value *mask,
-       struct match *match)
+       struct match *match, char **err_str)
 {
     if (!mask || is_all_ones(mask, mf->n_bytes)) {
-        mf_set_value(mf, value, match);
+        mf_set_value(mf, value, match, err_str);
         return mf->usable_protocols_exact;
     } else if (is_all_zeros(mask, mf->n_bytes) && !mf_is_tun_metadata(mf)) {
         /* Tunnel metadata matches on the existence of the field itself, so
          * it still needs to be encoded even if the value is wildcarded. */
-        mf_set_wild(mf, match);
+        mf_set_wild(mf, match, err_str);
         return OFPUTIL_P_ANY;
+    }
+
+    if (err_str) {
+        *err_str = NULL;
     }
 
     switch (mf->id) {
@@ -1665,7 +1689,7 @@ mf_set(const struct mf_field *mf,
         match_set_tun_tos_masked(match, value->u8, mask->u8);
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_set_match(mf, value, mask, match);
+        tun_metadata_set_match(mf, value, mask, match, err_str);
         break;
 
     case MFF_METADATA:
@@ -1731,7 +1755,7 @@ mf_set(const struct mf_field *mf,
 
     case MFF_IPV6_LABEL:
         if ((mask->be32 & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK)) {
-            mf_set_value(mf, value, match);
+            mf_set_value(mf, value, match, err_str);
         } else {
             match_set_ipv6_label_masked(match, value->be32, mask->be32);
         }
@@ -2316,7 +2340,7 @@ mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
     mf_get(field, match, &value, &mask);
     bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
     bitwise_one (                 &mask,  field->n_bytes, sf->ofs, sf->n_bits);
-    mf_set(field, &value, &mask, match);
+    mf_set(field, &value, &mask, match, NULL);
 }
 
 /* 'v' and 'm' correspond to values of 'field'.  This function copies them into
@@ -2332,7 +2356,7 @@ mf_mask_subfield(const struct mf_field *field,
     mf_get(field, match, &value, &mask);
     bitwise_copy(v, sizeof *v, 0, &value, field->n_bytes, 0, field->n_bits);
     bitwise_copy(m, sizeof *m, 0, &mask,  field->n_bytes, 0, field->n_bits);
-    mf_set(field, &value, &mask, match);
+    mf_set(field, &value, &mask, match, NULL);
 }
 
 /* Initializes 'x' to the value of 'sf' within 'flow'.  'sf' must be valid for

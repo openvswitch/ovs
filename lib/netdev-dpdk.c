@@ -65,11 +65,17 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 /*
  * need to reserve tons of extra space in the mbufs so we can align the
  * DMA addresses to 4KB.
+ * The minimum mbuf size is limited to avoid scatter behaviour and drop in
+ * performance for standard Ethernet MTU.
  */
-
 #define MTU_TO_MAX_LEN(mtu)  ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
-#define MBUF_SIZE(mtu)       (MTU_TO_MAX_LEN(mtu) + (512) + \
-                             sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
+#define MBUF_SIZE_MTU(mtu)   (MTU_TO_MAX_LEN(mtu)        \
+                              + sizeof(struct dp_packet) \
+                              + RTE_PKTMBUF_HEADROOM)
+#define MBUF_SIZE_DRIVER     (2048                       \
+                              + sizeof (struct rte_mbuf) \
+                              + RTE_PKTMBUF_HEADROOM)
+#define MBUF_SIZE(mtu)       MAX(MBUF_SIZE_MTU(mtu), MBUF_SIZE_DRIVER)
 
 /* Max and min number of packets in the mempool.  OVS tries to allocate a
  * mempool with MAX_NB_MBUF: if this fails (because the system doesn't have
@@ -524,9 +530,9 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     memset(&eth_addr, 0x0, sizeof(eth_addr));
     rte_eth_macaddr_get(dev->port_id, &eth_addr);
     VLOG_INFO_RL(&rl, "Port %d: "ETH_ADDR_FMT"",
-                    dev->port_id, ETH_ADDR_ARGS(eth_addr.addr_bytes));
+                    dev->port_id, ETH_ADDR_BYTES_ARGS(eth_addr.addr_bytes));
 
-    memcpy(dev->hwaddr, eth_addr.addr_bytes, ETH_ADDR_LEN);
+    memcpy(dev->hwaddr.ea, eth_addr.addr_bytes, ETH_ADDR_LEN);
     rte_eth_link_get_nowait(dev->port_id, &dev->link);
 
     mbp_priv = rte_mempool_get_priv(dev->dpdk_mp->mp);
@@ -939,6 +945,35 @@ is_vhost_running(struct virtio_net *dev)
     return (dev != NULL && (dev->flags & VIRTIO_DEV_RUNNING));
 }
 
+static inline void
+netdev_dpdk_vhost_update_rx_counters(struct netdev_stats *stats,
+                                     struct dp_packet **packets, int count)
+{
+    int i;
+    struct dp_packet *packet;
+
+    stats->rx_packets += count;
+    for (i = 0; i < count; i++) {
+        packet = packets[i];
+
+        if (OVS_UNLIKELY(dp_packet_size(packet) < ETH_HEADER_LEN)) {
+            /* This only protects the following multicast counting from
+             * too short packets, but it does not stop the packet from
+             * further processing. */
+            stats->rx_errors++;
+            stats->rx_length_errors++;
+            continue;
+        }
+
+        struct eth_header *eh = (struct eth_header *) dp_packet_data(packet);
+        if (OVS_UNLIKELY(eth_addr_is_multicast(eh->eth_dst))) {
+            stats->multicast++;
+        }
+
+        stats->rx_bytes += dp_packet_size(packet);
+    }
+}
+
 /*
  * The receive path for the vhost port is the TX path out from guest.
  */
@@ -966,7 +1001,7 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq_,
     }
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
-    vhost_dev->stats.rx_packets += (uint64_t)nb_rx;
+    netdev_dpdk_vhost_update_rx_counters(&vhost_dev->stats, packets, nb_rx);
     rte_spinlock_unlock(&vhost_dev->stats_lock);
 
     *c = (int) nb_rx;
@@ -1001,6 +1036,23 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
     *c = nb_rx;
 
     return 0;
+}
+
+static inline void
+netdev_dpdk_vhost_update_tx_counters(struct netdev_stats *stats,
+                                     struct dp_packet **packets,
+                                     int attempted,
+                                     int dropped)
+{
+    int i;
+    int sent = attempted - dropped;
+
+    stats->tx_packets += sent;
+    stats->tx_dropped += dropped;
+
+    for (i = 0; i < sent; i++) {
+        stats->tx_bytes += dp_packet_size(packets[i]);
+    }
 }
 
 static void
@@ -1060,8 +1112,8 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
     rte_spinlock_unlock(&vhost_dev->vhost_tx_lock);
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
-    vhost_dev->stats.tx_packets += (total_pkts - cnt);
-    vhost_dev->stats.tx_dropped += cnt;
+    netdev_dpdk_vhost_update_tx_counters(&vhost_dev->stats, pkts, total_pkts,
+                                         cnt);
     rte_spinlock_unlock(&vhost_dev->stats_lock);
 
 out:
@@ -1362,14 +1414,10 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
     ovs_mutex_lock(&dev->mutex);
     memset(stats, 0, sizeof(*stats));
     /* Unsupported Stats */
-    stats->rx_errors = UINT64_MAX;
-    stats->tx_errors = UINT64_MAX;
-    stats->multicast = UINT64_MAX;
     stats->collisions = UINT64_MAX;
     stats->rx_crc_errors = UINT64_MAX;
     stats->rx_fifo_errors = UINT64_MAX;
     stats->rx_frame_errors = UINT64_MAX;
-    stats->rx_length_errors = UINT64_MAX;
     stats->rx_missed_errors = UINT64_MAX;
     stats->rx_over_errors = UINT64_MAX;
     stats->tx_aborted_errors = UINT64_MAX;
@@ -1378,16 +1426,20 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
     stats->tx_fifo_errors = UINT64_MAX;
     stats->tx_heartbeat_errors = UINT64_MAX;
     stats->tx_window_errors = UINT64_MAX;
-    stats->rx_bytes += UINT64_MAX;
     stats->rx_dropped += UINT64_MAX;
-    stats->tx_bytes += UINT64_MAX;
 
     rte_spinlock_lock(&dev->stats_lock);
     /* Supported Stats */
     stats->rx_packets += dev->stats.rx_packets;
     stats->tx_packets += dev->stats.tx_packets;
     stats->tx_dropped += dev->stats.tx_dropped;
+    stats->multicast = dev->stats.multicast;
+    stats->rx_bytes = dev->stats.rx_bytes;
+    stats->tx_bytes = dev->stats.tx_bytes;
+    stats->rx_errors = dev->stats.rx_errors;
+    stats->rx_length_errors = dev->stats.rx_length_errors;
     rte_spinlock_unlock(&dev->stats_lock);
+
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1410,13 +1462,33 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     stats->tx_packets = rte_stats.opackets;
     stats->rx_bytes = rte_stats.ibytes;
     stats->tx_bytes = rte_stats.obytes;
-    stats->rx_errors = rte_stats.ierrors;
+    /* DPDK counts imissed as errors, but count them here as dropped instead */
+    stats->rx_errors = rte_stats.ierrors - rte_stats.imissed;
     stats->tx_errors = rte_stats.oerrors;
     stats->multicast = rte_stats.imcasts;
 
     rte_spinlock_lock(&dev->stats_lock);
     stats->tx_dropped = dev->stats.tx_dropped;
     rte_spinlock_unlock(&dev->stats_lock);
+
+    /* These are the available DPDK counters for packets not received due to
+     * local resource constraints in DPDK and NIC respectively. */
+    stats->rx_dropped = rte_stats.rx_nombuf + rte_stats.imissed;
+    stats->collisions = UINT64_MAX;
+
+    stats->rx_length_errors = rte_stats.ibadlen;
+    stats->rx_over_errors = UINT64_MAX;
+    stats->rx_crc_errors = rte_stats.ibadcrc;
+    stats->rx_frame_errors = UINT64_MAX;
+    stats->rx_fifo_errors = UINT64_MAX;
+    stats->rx_missed_errors = rte_stats.imissed;
+
+    stats->tx_aborted_errors = UINT64_MAX;
+    stats->tx_carrier_errors = UINT64_MAX;
+    stats->tx_fifo_errors = UINT64_MAX;
+    stats->tx_heartbeat_errors = UINT64_MAX;
+    stats->tx_window_errors = UINT64_MAX;
+
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1929,7 +2001,7 @@ netdev_dpdk_ring_send(struct netdev *netdev_, int qid,
      * the consumer of the ring and return into the datapath without recalculating
      * the RSS hash. */
     for (i = 0; i < cnt; i++) {
-        dp_packet_set_rss_hash(pkts[i], 0);
+        dp_packet_rss_invalidate(pkts[i]);
     }
 
     netdev_dpdk_send__(netdev, qid, pkts, cnt, may_steal);

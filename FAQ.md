@@ -944,7 +944,22 @@ A: The short answer is that this is a misuse of a "tap" device.  Use
 Quality of Service (QoS)
 ------------------------
 
-### Q: How do I configure Quality of Service (QoS)?
+### Q: Does OVS support Quality of Service (QoS)?
+
+A: Yes.  For traffic that egresses from a switch, OVS supports traffic
+   shaping; for traffic that ingresses into a switch, OVS support
+   policing.  Policing is a simple form of quality-of-service that
+   simply drops packets received in excess of the configured rate.  Due
+   to its simplicity, policing is usually less accurate and less
+   effective than egress traffic shaping, which queues packets.
+
+   Keep in mind that ingress and egress are from the perspective of the
+   switch.  That means that egress shaping limits the rate at which
+   traffic is allowed to transmit from a physical interface, but the
+   rate at which traffic will be received on a virtual machine's VIF.
+   For ingress policing, the behavior is the opposite.
+
+### Q: How do I configure egress traffic shaping?
 
 A: Suppose that you want to set up bridge br0 connected to physical
    Ethernet port eth0 (a 1 Gbps device) and virtual machine interfaces
@@ -1005,6 +1020,20 @@ A: Suppose that you want to set up bridge br0 connected to physical
    vSwitch you are using is older than version 1.8 (which added the
    --all option), then you will have to destroy QoS and Queue records
    individually.
+
+### Q: How do I configure ingress policing?
+
+A: A policing policy can be configured on an interface to drop packets
+   that arrive at a higher rate than the configured value.  For example,
+   the following commands will rate-limit traffic that vif1.0 may
+   generate to 10Mbps:
+
+       ovs-vsctl set interface vif1.0 ingress_policing_rate=10000
+       ovs-vsctl set interface vif1.0 ingress_policing_burst=1000
+
+   Traffic policing can interact poorly with some network protocols and
+   can have surprising results.  The "Ingress Policing" section of
+   ovs-vswitchd.conf.db(5) discusses the issues in greater detail.
 
 ### Q: I configured Quality of Service (QoS) in my OpenFlow network by
    adding records to the QoS and Queue table, but the results aren't
@@ -1622,6 +1651,9 @@ A: To debug network behavior problems, trace the path of a packet,
    hop-by-hop, from its origin in one host to a remote host.  If
    that's correct, then trace the path of the response packet back to
    the origin.
+
+   The open source tool called "plotnetcfg" can help to understand the
+   relationship between the networking devices on a single host.
 
    Usually a simple ICMP echo request and reply ("ping") packet is
    good enough.  Start by initiating an ongoing "ping" from the origin

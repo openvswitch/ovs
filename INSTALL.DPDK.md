@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 2.0
+Required: DPDK 2.1
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -24,7 +24,7 @@ on Debian/Ubuntu)
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-2.0
+     export DPDK_DIR=/usr/src/dpdk-2.1
      cd $DPDK_DIR
      ```
 
@@ -32,11 +32,6 @@ on Debian/Ubuntu)
      (modification also required for IVSHMEM build)
 
      `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
-
-     Update `config/common_linuxapp` so that DPDK is built with vhost
-     libraries.
-
-     `CONFIG_RTE_LIBRTE_VHOST=y`
 
      Then run `make install` to build and install the library.
      For default install without IVSHMEM:
@@ -112,7 +107,7 @@ Using the DPDK with ovs-vswitchd:
      3. Bind network device to vfio-pci:
         `$DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1`
 
-3. Mount the hugetable filsystem
+3. Mount the hugetable filesystem
 
    `mount -t hugetlbfs -o pagesize=1G none /dev/hugepages`
 
@@ -173,9 +168,9 @@ Using the DPDK with ovs-vswitchd:
 
    `ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev`
 
-   Now you can add dpdk devices. OVS expect DPDK device name start with dpdk
-   and end with portid. vswitchd should print (in the log file) the number
-   of dpdk devices found.
+   Now you can add dpdk devices. OVS expects DPDK device names to start with
+   "dpdk" and end with a portid. vswitchd should print (in the log file) the
+   number of dpdk devices found.
 
    ```
    ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
@@ -315,7 +310,7 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-DPDK 2.0 supports two types of vhost:
+DPDK 2.1 supports two types of vhost:
 
 1. vhost-user
 2. vhost-cuse
@@ -336,7 +331,7 @@ with OVS.
 DPDK vhost-user Prerequisites:
 -------------------------
 
-1. DPDK 2.0 with vhost support enabled as documented in the "Building and
+1. DPDK 2.1 with vhost support enabled as documented in the "Building and
    Installing section"
 
 2. QEMU version v2.1.0+
@@ -418,7 +413,7 @@ with OVS.
 DPDK vhost-cuse Prerequisites:
 -------------------------
 
-1. DPDK 2.0 with vhost support enabled as documented in the "Building and
+1. DPDK 2.1 with vhost support enabled as documented in the "Building and
    Installing section"
    As an additional step, you must enable vhost-cuse in DPDK by setting the
    following additional flag in `config/common_linuxapp`:

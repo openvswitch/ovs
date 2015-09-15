@@ -16,7 +16,6 @@ AT_BANNER([OVSDB -- ovsdb-tool])
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb file positive $5])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    $2 > schema
    touch .db.~lock~
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
@@ -49,7 +48,6 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool compact])
 AT_KEYWORDS([ovsdb file positive])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 dnl Make sure that "ovsdb-tool create" works with a dangling symlink,
 dnl creating the target of the symlink rather than replacing the symlink
@@ -157,7 +155,6 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool convert -- removing a column])
 AT_KEYWORDS([ovsdb file positive])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 AT_DATA([new-schema], 
   [[{"name": "ordinals",
@@ -225,7 +222,6 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool convert -- adding a column])
 AT_KEYWORDS([ovsdb file positive])
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 AT_DATA([schema], 
   [[{"name": "ordinals",
      "tables": {

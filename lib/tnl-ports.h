@@ -30,6 +30,9 @@ void tnl_port_map_insert(odp_port_t port, ovs_be16 udp_port,
                          const char dev_name[]);
 
 void tnl_port_map_delete(ovs_be16 udp_port);
+void tnl_port_map_insert_ipdev(const char dev[]);
+void tnl_port_map_delete_ipdev(const char dev[]);
+void tnl_port_map_run(void);
 
 void tnl_port_map_init(void);
 

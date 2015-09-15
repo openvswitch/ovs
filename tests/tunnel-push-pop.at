@@ -2,7 +2,7 @@ AT_BANNER([tunnel_push_pop])
 
 AT_SETUP([tunnel_push_pop - action])
 
-OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1])
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
 AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy], [0])
 AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                        options:remote_ip=1.1.2.92 options:key=123 ofport_request=2\
@@ -27,9 +27,11 @@ dummy@ovs-dummy: hit:0 missed:0
 		t4 5/6081: (geneve: key=123, remote_ip=flow)
 ])
 
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
-])
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
@@ -47,25 +49,25 @@ IP               MAC                 Bridge
 
 AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
-genev_sys_6081 (6081) : eth_type(0x0800),ipv4(proto=17,frag=no),udp(dst=6081)
-gre_sys (3) : eth_type(0x0800),ipv4(proto=47,frag=no)
-vxlan_sys_4789 (4789) : eth_type(0x0800),ipv4(proto=17,frag=no),udp(dst=4789)
+genev_sys_6081 (6081)
+gre_sys (3)
+vxlan_sys_4789 (4789)
 ])
 
 dnl Check VXLAN tunnel pop
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=17,tos=0,ttl=64,frag=no),udp(src=51283,dst=4789)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=17,tos=0,ttl=64,frag=no),udp(src=51283,dst=4789)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_pop(4789)
 ])
 
 dnl Check GRE tunnel pop
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_pop(3)
 ])
 
 dnl Check Geneve tunnel pop
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=17,tos=0,ttl=64,frag=no),udp(src=51283,dst=6081)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=17,tos=0,ttl=64,frag=no),udp(src=51283,dst=6081)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_pop(6081)
 ])
@@ -107,7 +109,7 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 
 dnl Check decapsulation of GRE packet
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 '001b213cac30001b213cab6408004500007e79464000402f99080101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
@@ -115,7 +117,7 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
 ])
 
 dnl Check GRE only accepts encapsulated Ethernet frames
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 '001b213cac30001b213cab6408004500007e79464000402f99080101025c0101025820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
@@ -128,7 +130,7 @@ AT_CHECK([ovs-ofctl monitor int-br 65534 --detach --no-chdir --pidfile 2> ofctl_
 
 AT_CHECK([ovs-ofctl del-flows int-br])
 AT_CHECK([ovs-ofctl add-flow int-br "tun_metadata0=0xa/0xf,actions=5,controller"])
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 '001b213cac30001b213cab64080045000096794640004011ba630101025c01010258308817c1008200000400655800007b00ffff80010000000affff00010000000bfe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab64080045000096794640004011ba5b0101025c01010258308817c1008200000400655800007b00ffff80010000000affff00010000000bfe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)

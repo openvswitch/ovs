@@ -37,8 +37,11 @@
 /* --relops: Bitmap of the relational operators to test, in exhaustive test. */
 static unsigned int test_relops;
 
-/* --vars: Number of variables to test, in exhaustive test. */
-static int test_vars = 2;
+/* --nvars: Number of numeric variables to test, in exhaustive test. */
+static int test_nvars = 2;
+
+/* --svars: Number of string variables to test, in exhaustive test. */
+static int test_svars = 2;
 
 /* --bits: Number of bits per variable, in exhaustive test. */
 static int test_bits = 3;
@@ -343,37 +346,45 @@ evaluate_andor_expr(const struct expr *expr, unsigned int subst, int n_bits,
 static bool
 evaluate_cmp_expr(const struct expr *expr, unsigned int subst, int n_bits)
 {
-    int var_idx = expr->cmp.symbol->name[0] - 'a';
-    unsigned var_mask = (1u << n_bits) - 1;
-    unsigned int arg1 = (subst >> (var_idx * n_bits)) & var_mask;
-    unsigned int arg2 = ntohll(expr->cmp.value.integer);
-    unsigned int mask = ntohll(expr->cmp.mask.integer);
+    int var_idx = atoi(expr->cmp.symbol->name + 1);
+    if (expr->cmp.symbol->name[0] == 'n') {
+        unsigned var_mask = (1u << n_bits) - 1;
+        unsigned int arg1 = (subst >> (var_idx * n_bits)) & var_mask;
+        unsigned int arg2 = ntohll(expr->cmp.value.integer);
+        unsigned int mask = ntohll(expr->cmp.mask.integer);
 
-    ovs_assert(!(mask & ~var_mask));
-    ovs_assert(!(arg2 & ~var_mask));
-    ovs_assert(!(arg2 & ~mask));
+        ovs_assert(!(mask & ~var_mask));
+        ovs_assert(!(arg2 & ~var_mask));
+        ovs_assert(!(arg2 & ~mask));
 
-    arg1 &= mask;
-    switch (expr->cmp.relop) {
-    case EXPR_R_EQ:
+        arg1 &= mask;
+        switch (expr->cmp.relop) {
+        case EXPR_R_EQ:
+            return arg1 == arg2;
+
+        case EXPR_R_NE:
+            return arg1 != arg2;
+
+        case EXPR_R_LT:
+            return arg1 < arg2;
+
+        case EXPR_R_LE:
+            return arg1 <= arg2;
+
+        case EXPR_R_GT:
+            return arg1 > arg2;
+
+        case EXPR_R_GE:
+            return arg1 >= arg2;
+
+        default:
+            OVS_NOT_REACHED();
+        }
+    } else if (expr->cmp.symbol->name[0] == 's') {
+        unsigned int arg1 = (subst >> (test_nvars * n_bits + var_idx)) & 1;
+        unsigned int arg2 = atoi(expr->cmp.string);
         return arg1 == arg2;
-
-    case EXPR_R_NE:
-        return arg1 != arg2;
-
-    case EXPR_R_LT:
-        return arg1 < arg2;
-
-    case EXPR_R_LE:
-        return arg1 <= arg2;
-
-    case EXPR_R_GT:
-        return arg1 > arg2;
-
-    case EXPR_R_GE:
-        return arg1 >= arg2;
-
-    default:
+    } else {
         OVS_NOT_REACHED();
     }
 }
@@ -678,15 +689,31 @@ test_tree_shape(struct ovs_cmdl_context *ctx)
 /* Sets 'expr' to the first possible terminal expression.  'var' should be the
  * first variable in the ones to be tested. */
 static void
-init_terminal(struct expr *expr, const struct expr_symbol *var)
+init_terminal(struct expr *expr, int phase,
+              const struct expr_symbol *nvars[], int n_nvars,
+              const struct expr_symbol *svars[], int n_svars)
 {
-    expr->type = EXPR_T_CMP;
-    expr->cmp.symbol = var;
-    expr->cmp.relop = rightmost_1bit_idx(test_relops);
-    memset(&expr->cmp.value, 0, sizeof expr->cmp.value);
-    memset(&expr->cmp.mask, 0, sizeof expr->cmp.mask);
-    expr->cmp.value.integer = htonll(0);
-    expr->cmp.mask.integer = htonll(1);
+    if (phase < 1 && n_nvars) {
+        expr->type = EXPR_T_CMP;
+        expr->cmp.symbol = nvars[0];
+        expr->cmp.relop = rightmost_1bit_idx(test_relops);
+        memset(&expr->cmp.value, 0, sizeof expr->cmp.value);
+        memset(&expr->cmp.mask, 0, sizeof expr->cmp.mask);
+        expr->cmp.value.integer = htonll(0);
+        expr->cmp.mask.integer = htonll(1);
+        return;
+    }
+
+    if (phase < 2 && n_svars) {
+        expr->type = EXPR_T_CMP;
+        expr->cmp.symbol = svars[0];
+        expr->cmp.relop = EXPR_R_EQ;
+        expr->cmp.string = xstrdup("0");
+        return;
+    }
+
+    expr->type = EXPR_T_BOOLEAN;
+    expr->boolean = false;
 }
 
 /* Returns 'x' with the rightmost contiguous string of 1s changed to 0s,
@@ -722,8 +749,9 @@ next_relop(enum expr_relop relop)
 /* Advances 'expr' to the next possible terminal expression within the 'n_vars'
  * variables of 'n_bits' bits each in 'vars[]'. */
 static bool
-next_terminal(struct expr *expr, const struct expr_symbol *vars[], int n_vars,
-              int n_bits)
+next_terminal(struct expr *expr,
+              const struct expr_symbol *nvars[], int n_nvars, int n_bits,
+              const struct expr_symbol *svars[], int n_svars)
 {
     if (expr->type == EXPR_T_BOOLEAN) {
         if (expr->boolean) {
@@ -732,6 +760,21 @@ next_terminal(struct expr *expr, const struct expr_symbol *vars[], int n_vars,
             expr->boolean = true;
             return true;
         }
+    }
+
+    if (!expr->cmp.symbol->width) {
+        int next_value = atoi(expr->cmp.string) + 1;
+        free(expr->cmp.string);
+        if (next_value > 1) {
+            expr->cmp.symbol = next_var(expr->cmp.symbol, svars, n_svars);
+            if (!expr->cmp.symbol) {
+                init_terminal(expr, 2, nvars, n_nvars, svars, n_svars);
+                return true;
+            }
+            next_value = 0;
+        }
+        expr->cmp.string = xasprintf("%d", next_value);
+        return true;
     }
 
     unsigned int next;
@@ -746,10 +789,9 @@ next_terminal(struct expr *expr, const struct expr_symbol *vars[], int n_vars,
             enum expr_relop old_relop = expr->cmp.relop;
             expr->cmp.relop = next_relop(old_relop);
             if (expr->cmp.relop <= old_relop) {
-                expr->cmp.symbol = next_var(expr->cmp.symbol,vars, n_vars);
+                expr->cmp.symbol = next_var(expr->cmp.symbol, nvars, n_nvars);
                 if (!expr->cmp.symbol) {
-                    expr->type = EXPR_T_BOOLEAN;
-                    expr->boolean = false;
+                    init_terminal(expr, 1, nvars, n_nvars, svars, n_svars);
                     return true;
                 }
             }
@@ -828,14 +870,19 @@ free_rule(struct test_rule *test_rule)
 static int
 test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
                              struct expr *terminals[], int n_terminals,
-                             const struct expr_symbol *vars[], int n_vars,
-                             int n_bits)
+                             const struct expr_symbol *nvars[], int n_nvars,
+                             int n_bits,
+                             const struct expr_symbol *svars[], int n_svars)
 {
+    struct simap string_map = SIMAP_INITIALIZER(&string_map);
+    simap_put(&string_map, "0", 0);
+    simap_put(&string_map, "1", 1);
+
     int n_tested = 0;
 
     const unsigned int var_mask = (1u << n_bits) - 1;
     for (int i = 0; i < n_terminals; i++) {
-        init_terminal(terminals[i], vars[0]);
+        init_terminal(terminals[i], 0, nvars, n_nvars, svars, n_svars);
     }
 
     struct ds s = DS_EMPTY_INITIALIZER;
@@ -845,12 +892,14 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
         for (int i = n_terminals - 1; ; i--) {
             if (!i) {
                 ds_destroy(&s);
+                simap_destroy(&string_map);
                 return n_tested;
             }
-            if (next_terminal(terminals[i], vars, n_vars, n_bits)) {
+            if (next_terminal(terminals[i], nvars, n_nvars, n_bits,
+                              svars, n_svars)) {
                 break;
             }
-            init_terminal(terminals[i], vars[0]);
+            init_terminal(terminals[i], 0, nvars, n_nvars, svars, n_svars);
         }
         ovs_assert(expr_honors_invariants(expr));
 
@@ -884,7 +933,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             struct expr_match *m;
             struct test_rule *test_rule;
 
-            expr_to_matches(modified, NULL, &matches);
+            expr_to_matches(modified, &string_map, &matches);
 
             classifier_init(&cls, NULL);
             HMAP_FOR_EACH (m, hmap_node, &matches) {
@@ -894,7 +943,8 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
                                   m->conjunctions, m->n);
             }
         }
-        for (int subst = 0; subst < 1 << (n_bits * n_vars); subst++) {
+        for (int subst = 0; subst < 1 << (n_bits * n_nvars + n_svars);
+             subst++) {
             bool expected = evaluate_expr(expr, subst, n_bits);
             bool actual = evaluate_expr(modified, subst, n_bits);
             if (actual != expected) {
@@ -910,20 +960,28 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
                         "%s evaluates to %d, but %s evaluates to %d, for",
                         ds_cstr(&expr_s), expected,
                         ds_cstr(&modified_s), actual);
-                for (int i = 0; i < n_vars; i++) {
+                for (int i = 0; i < n_nvars; i++) {
                     if (i > 0) {
                         fputs(",", stderr);
                     }
-                    fprintf(stderr, " %c = 0x%x", 'a' + i,
+                    fprintf(stderr, " n%d = 0x%x", i,
                             (subst >> (n_bits * i)) & var_mask);
+                }
+                for (int i = 0; i < n_svars; i++) {
+                    fprintf(stderr, ", s%d = \"%d\"", i,
+                            (subst >> (n_bits * n_nvars + i)) & 1);
                 }
                 putc('\n', stderr);
                 exit(EXIT_FAILURE);
             }
 
             if (operation >= OP_FLOW) {
-                for (int i = 0; i < n_vars; i++) {
+                for (int i = 0; i < n_nvars; i++) {
                     f.regs[i] = (subst >> (i * n_bits)) & var_mask;
+                }
+                for (int i = 0; i < n_svars; i++) {
+                    f.regs[n_nvars + i] = ((subst >> (n_nvars * n_bits + i))
+                                           & 1);
                 }
                 bool found = classifier_lookup(&cls, CLS_MIN_VERSION,
                                                &f, NULL) != NULL;
@@ -939,12 +997,16 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
                     fprintf(stderr,
                             "%s and %s evaluate to %d, for",
                             ds_cstr(&expr_s), ds_cstr(&modified_s), expected);
-                    for (int i = 0; i < n_vars; i++) {
+                    for (int i = 0; i < n_nvars; i++) {
                         if (i > 0) {
                             fputs(",", stderr);
                         }
-                        fprintf(stderr, " %c = 0x%x", 'a' + i,
+                        fprintf(stderr, " n%d = 0x%x", i,
                                 (subst >> (n_bits * i)) & var_mask);
+                    }
+                    for (int i = 0; i < n_svars; i++) {
+                        fprintf(stderr, ", s%d = \"%d\"", i,
+                                (subst >> (n_bits * n_nvars + i)) & 1);
                     }
                     fputs(".\n", stderr);
 
@@ -1012,16 +1074,25 @@ test_exhaustive(struct ovs_cmdl_context *ctx OVS_UNUSED)
     int n_tses;
 
     struct shash symtab;
-    const struct expr_symbol *vars[4];
+    const struct expr_symbol *nvars[4];
+    const struct expr_symbol *svars[4];
 
-    ovs_assert(test_vars <= ARRAY_SIZE(vars));
+    ovs_assert(test_nvars <= ARRAY_SIZE(nvars));
+    ovs_assert(test_svars <= ARRAY_SIZE(svars));
+    ovs_assert(test_nvars + test_svars <= FLOW_N_REGS);
 
     shash_init(&symtab);
-    for (int i = 0; i < test_vars; i++) {
-        char name[2] = { 'a' + i, '\0' };
-
-        vars[i] = expr_symtab_add_field(&symtab, name, MFF_REG0 + i, NULL,
-                                       false);
+    for (int i = 0; i < test_nvars; i++) {
+        char *name = xasprintf("n%d", i);
+        nvars[i] = expr_symtab_add_field(&symtab, name, MFF_REG0 + i, NULL,
+                                         false);
+        free(name);
+    }
+    for (int i = 0; i < test_svars; i++) {
+        char *name = xasprintf("s%d", i);
+        svars[i] = expr_symtab_add_string(&symtab, name,
+                                          MFF_REG0 + test_nvars + i, NULL);
+        free(name);
     }
 
 #ifndef _WIN32
@@ -1056,7 +1127,8 @@ test_exhaustive(struct ovs_cmdl_context *ctx OVS_UNUSED)
                 if (!pid) {
                     test_tree_shape_exhaustively(expr, &symtab,
                                                  terminals, n_terminals,
-                                                 vars, test_vars, test_bits);
+                                                 nvars, test_nvars, test_bits,
+                                                 svars, test_svars);
                     expr_destroy(expr);
                     exit(0);
                 } else {
@@ -1070,7 +1142,8 @@ test_exhaustive(struct ovs_cmdl_context *ctx OVS_UNUSED)
             {
                 n_tested += test_tree_shape_exhaustively(
                     expr, &symtab, terminals, n_terminals,
-                    vars, test_vars, test_bits);
+                    nvars, test_nvars, test_bits,
+                    svars, test_svars);
             }
             expr_destroy(expr);
         }
@@ -1102,12 +1175,25 @@ test_exhaustive(struct ovs_cmdl_context *ctx OVS_UNUSED)
     } else {
         printf(" all %d-terminal expressions", n_terminals);
     }
-    printf(" with %d vars each of %d bits in terms of operators",
-           test_vars, test_bits);
-    for (unsigned int relops = test_relops; relops;
-         relops = zero_rightmost_1bit(relops)) {
-        enum expr_relop r = rightmost_1bit_idx(relops);
-        printf(" %s", expr_relop_to_string(r));
+    if (test_nvars || test_svars) {
+        printf(" with");
+        if (test_nvars) {
+            printf(" %d numeric vars (each %d bits) in terms of operators",
+                   test_nvars, test_bits);
+            for (unsigned int relops = test_relops; relops;
+                 relops = zero_rightmost_1bit(relops)) {
+                enum expr_relop r = rightmost_1bit_idx(relops);
+                printf(" %s", expr_relop_to_string(r));
+            }
+        }
+        if (test_nvars && test_svars) {
+            printf (" and");
+        }
+        if (test_svars) {
+            printf(" %d string vars", test_svars);
+        }
+    } else {
+        printf(" in terms of Boolean constants only");
     }
     printf(".\n");
 
@@ -1227,15 +1313,19 @@ tree-shape N\n\
 exhaustive N\n\
   Tests that all possible Boolean expressions with N terminals are properly\n\
   simplified, normalized, and converted to flows.  Available options:\n\
+   Overall options:\n\
+    --operation=OPERATION  Operation to test, one of: convert, simplify,\n\
+        normalize, flow.  Default: flow.  'normalize' includes 'simplify',\n\
+        'flow' includes 'simplify' and 'normalize'.\n\
+    --parallel=N  Number of processes to use in parallel, default 1.\n\
+   Numeric vars:\n\
+    --nvars=N  Number of numeric vars to test, in range 0...4, default 2.\n\
+    --bits=N  Number of bits per variable, in range 1...3, default 3.\n\
     --relops=OPERATORS   Test only the specified Boolean operators.\n\
                          OPERATORS may include == != < <= > >=, space or\n\
                          comma separated.  Default is all operators.\n\
-    --vars=N  Number of variables to test, in range 1...4, default 2.\n\
-    --bits=N  Number of bits per variable, in range 1...3, default 3.\n\
-    --operation=OPERATION  Operation to test, one of: convert, simplify,\n\
-        normalize, flow.  Default: flow.  'normalize' includes 'simplify',\n\
-        'flow' includes 'simplify' and 'normaize'.\n\
-    --parallel=N  Number of processes to use in parallel, default 1.\n\
+   String vars:\n\
+    --svars=N  Number of string vars to test, in range 0...4, default 2.\n\
 ",
            program_name, program_name);
     exit(EXIT_SUCCESS);
@@ -1244,30 +1334,34 @@ exhaustive N\n\
 static void
 test_ovn_main(int argc, char *argv[])
 {
+    enum {
+        OPT_RELOPS = UCHAR_MAX + 1,
+        OPT_NVARS,
+        OPT_SVARS,
+        OPT_BITS,
+        OPT_OPERATION,
+        OPT_PARALLEL
+    };
+    static const struct option long_options[] = {
+        {"relops", required_argument, NULL, OPT_RELOPS},
+        {"nvars", required_argument, NULL, OPT_NVARS},
+        {"svars", required_argument, NULL, OPT_SVARS},
+        {"bits", required_argument, NULL, OPT_BITS},
+        {"operation", required_argument, NULL, OPT_OPERATION},
+        {"parallel", required_argument, NULL, OPT_PARALLEL},
+        {"more", no_argument, NULL, 'm'},
+        {"help", no_argument, NULL, 'h'},
+        {NULL, 0, NULL, 0},
+    };
+    char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
+
     set_program_name(argv[0]);
 
     test_relops = parse_relops("== != < <= > >=");
     for (;;) {
-        enum {
-            OPT_RELOPS = UCHAR_MAX + 1,
-            OPT_VARS,
-            OPT_BITS,
-            OPT_OPERATION,
-            OPT_PARALLEL
-        };
-
-        static const struct option options[] = {
-            {"relops", required_argument, NULL, OPT_RELOPS},
-            {"vars", required_argument, NULL, OPT_VARS},
-            {"bits", required_argument, NULL, OPT_BITS},
-            {"operation", required_argument, NULL, OPT_OPERATION},
-            {"parallel", required_argument, NULL, OPT_PARALLEL},
-            {"more", no_argument, NULL, 'm'},
-            {"help", no_argument, NULL, 'h'},
-            {NULL, 0, NULL, 0},
-        };
         int option_index = 0;
-        int c = getopt_long (argc, argv, "", options, &option_index);
+        int c = getopt_long (argc, argv, short_options, long_options,
+                             &option_index);
 
         if (c == -1) {
             break;
@@ -1277,10 +1371,19 @@ test_ovn_main(int argc, char *argv[])
             test_relops = parse_relops(optarg);
             break;
 
-        case OPT_VARS:
-            test_vars = atoi(optarg);
-            if (test_vars < 1 || test_vars > 4) {
-                ovs_fatal(0, "number of variables must be between 1 and 4");
+        case OPT_NVARS:
+            test_nvars = atoi(optarg);
+            if (test_nvars < 0 || test_nvars > 4) {
+                ovs_fatal(0, "number of numeric variables must be "
+                          "between 0 and 4");
+            }
+            break;
+
+        case OPT_SVARS:
+            test_svars = atoi(optarg);
+            if (test_svars < 0 || test_svars > 4) {
+                ovs_fatal(0, "number of string variables must be "
+                          "between 0 and 4");
             }
             break;
 

@@ -483,7 +483,7 @@ struct vsctl_iface {
     struct vsctl_port *port;
 };
 
-/* Casts 'base' into 'strcut vsctl_context'. */
+/* Casts 'base' into 'struct vsctl_context'. */
 static struct vsctl_context *
 vsctl_context_cast(struct ctl_context *base)
 {
@@ -1091,10 +1091,8 @@ cmd_emer_reset(struct ctl_context *ctx)
         /* We only want to save the "hwaddr" key from other_config. */
         hwaddr = smap_get(&br->other_config, "hwaddr");
         if (hwaddr) {
-            struct smap smap = SMAP_INITIALIZER(&smap);
-            smap_add(&smap, "hwaddr", hwaddr);
+            const struct smap smap = SMAP_CONST1(&smap, "hwaddr", hwaddr);
             ovsrec_bridge_set_other_config(br, &smap);
-            smap_destroy(&smap);
         } else {
             ovsrec_bridge_set_other_config(br, NULL);
         }

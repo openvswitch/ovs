@@ -511,7 +511,15 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
         } else if (!mf_is_all_wild(field, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
         } else {
-            mf_set(field, &value, &mask, match);
+            char *err_str;
+
+            mf_set(field, &value, &mask, match, &err_str);
+            if (err_str) {
+                VLOG_DBG_RL(&rl, "error parsing OXM at offset %"PRIdPTR" "
+                           "within match (%s)", pos - p, err_str);
+                free(err_str);
+                return OFPERR_OFPBMC_BAD_VALUE;
+            }
         }
 
         if (error) {

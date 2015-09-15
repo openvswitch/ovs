@@ -1,9 +1,10 @@
 #
 # You may override the following variables to customize ovn-controller behavior:
 #
-#   OVN_DB - Set this variable to the location of the ovsdb server that is
-#            serving the OVN_Southbound database.  See the manpage for
-#            ovn-controller for more details on the format for the db location.
+#   OVS_DB - Set this variable to the location of the ovsdb server that is
+#            serving the Open_vSwitch database for the local ovs-vswitchd.
+#            See the manpage for ovn-controller for more details on the
+#            format for the db location.
 #
 
 [Unit]
@@ -15,7 +16,7 @@ After=openvswitch.service
 [Service]
 Type=simple
 Environment=OVS_RUNDIR=%t/openvswitch
-Environment=OVN_DB=unix:%t/openvswitch/db.sock
+Environment=OVS_DB=unix:%t/openvswitch/db.sock
 ExecStart=/usr/bin/ovn-controller -vconsole:emer -vsyslog:err -vfile:info \
           --log-file=/var/log/openvswitch/ovn-controller.log \
-          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller.pid ${OVN_DB}
+          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller.pid ${OVS_DB}

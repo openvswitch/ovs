@@ -10,8 +10,8 @@
     The OVN Southbound database sits at the center of the OVN
     architecture.  It is the one component that speaks both southbound
     directly to all the hypervisors and gateways, via
-    <code>ovn-controller</code>, and northbound to the Cloud Management
-    System, via <code>ovn-northd</code>:
+    <code>ovn-controller</code>/<code>ovn-controller-vtep</code>, and
+    northbound to the Cloud Management System, via <code>ovn-northd</code>:
   </p>
 
   <h2>Database Structure</h2>
@@ -115,13 +115,14 @@
     <dt><code>external_ids</code>: map of string-string pairs</dt>
     <dd>
       Key-value pairs for use by the software that manages the OVN Southbound
-      database rather than by <code>ovn-controller</code>.  In particular,
-      <code>ovn-northd</code> can use key-value pairs in this column to relate
-      entities in the southbound database to higher-level entities (such as
-      entities in the OVN Northbound database).  Individual key-value pairs in
-      this column may be documented in some cases to aid in understanding and
-      troubleshooting, but the reader should not mistake such documentation as
-      comprehensive.
+      database rather than by
+      <code>ovn-controller</code>/<code>ovn-controller-vtep</code>.  In
+      particular, <code>ovn-northd</code> can use key-value pairs in this
+      column to relate entities in the southbound database to higher-level
+      entities (such as entities in the OVN Northbound database).  Individual
+      key-value pairs in this column may be documented in some cases to aid
+      in understanding and troubleshooting, but the reader should not mistake
+      such documentation as comprehensive.
     </dd>
   </dl>
 
@@ -129,8 +130,9 @@
     <p>
       Each row in this table represents a hypervisor or gateway (a chassis) in
       the physical network (PN).  Each chassis, via
-      <code>ovn-controller</code>, adds and updates its own row, and keeps a
-      copy of the remaining rows to determine how to reach other hypervisors.
+      <code>ovn-controller</code>/<code>ovn-controller-vtep</code>, adds
+      and updates its own row, and keeps a copy of the remaining rows to
+      determine how to reach other hypervisors.
     </p>
 
     <p>
@@ -167,12 +169,19 @@
         A <dfn>gateway</dfn> is a chassis that forwards traffic between the
         OVN-managed part of a logical network and a physical VLAN, extending a
         tunnel-based logical network into a physical network.  Gateways are
-        typically dedicated nodes that do not host VMs.
+        typically dedicated nodes that do not host VMs and will be controlled
+        by <code>ovn-controller-vtep</code>.
       </p>
 
       <column name="vtep_logical_switches">
-        Stores all vtep logical switch names connected by this gateway
-        chassis.
+        Stores all VTEP logical switch names connected by this gateway
+        chassis.  The <ref table="Port_Binding"/> table entry with
+        <ref column="options" table="Port_Binding"/>:<code>vtep-physical-switch</code>
+        equal <ref table="Chassis"/> <ref column="name" table="Chassis"/>, and
+        <ref column="options" table="Port_Binding"/>:<code>vtep-logical-switch</code>
+        value in <ref table="Chassis"/>
+        <ref column="vtep_logical_switches" table="Chassis"/>, will be
+        associated with this <ref table="Chassis"/>.
       </column>
      </group>
   </table>
@@ -182,9 +191,10 @@
       The <ref column="encaps" table="Chassis"/> column in the <ref
       table="Chassis"/> table refers to rows in this table to identify
       how OVN may transmit logical dataplane packets to this chassis.
-      Each chassis, via <code>ovn-controller</code>(8), adds and updates
-      its own rows and keeps a copy of the remaining rows to determine
-      how to reach other chassis.
+      Each chassis, via <code>ovn-controller</code>(8) or
+      <code>ovn-controller-vtep</code>(8), adds and updates its own rows
+      and keeps a copy of the remaining rows to determine how to reach
+      other chassis.
     </p>
 
     <column name="type">
@@ -690,6 +700,27 @@
         <li><code>nd.target</code> <code>nd.sll</code> <code>nd.tll</code></li>
       </ul>
 
+      <p>
+        The following predicates are supported:
+      </p>
+
+      <ul>
+        <li><code>vlan.present</code> expands to <code>vlan.tci[12]</code></li>
+        <li><code>ip4</code> expands to <code>eth.type == 0x800</code></li>
+        <li><code>ip6</code> expands to <code>eth.type == 0x86dd</code></li>
+        <li><code>ip</code> expands to <code>ip4 || ip6</code></li>
+        <li><code>icmp4</code> expands to <code>ip4 &amp;&amp; ip.proto == 1</code></li>
+        <li><code>icmp6</code> expands to <code>ip6 &amp;&amp; ip.proto == 58</code></li>
+        <li><code>icmp</code> expands to <code>icmp4 || icmp6</code></li>
+        <li><code>ip.is_frag</code> expands to <code>ip.frag[0]</code></li>
+        <li><code>ip.later_frag</code> expands to <code>ip.frag[1]</code></li>
+        <li><code>ip.first_frag</code> expands to <code>ip.is_frag &amp;&amp; !ip.later_frag</code></li>
+        <li><code>arp</code> expands to <code>eth.type == 0x806</code></li>
+        <li><code>nd</code> expands to <code>icmp6.type == {135, 136} &amp;&amp; icmp6.code == 0</code></li>
+        <li><code>tcp</code> expands to <code>ip.proto == 6</code></li>
+        <li><code>udp</code> expands to <code>ip.proto == 17</code></li>
+        <li><code>sctp</code> expands to <code>ip.proto == 132</code></li>
+      </ul>
     </column>
 
     <column name="actions">
@@ -906,12 +937,13 @@
     </p>
 
     <p>
-      <code>ovn-controller</code> populates the <code>chassis</code> column
-      for the records that identify the logical ports that are located on its
-      hypervisor, which <code>ovn-controller</code> in turn finds out by
-      monitoring the local hypervisor's Open_vSwitch database, which
-      identifies logical ports via the conventions described in
-      <code>IntegrationGuide.md</code>.
+      <code>ovn-controller</code>/<code>ovn-controller-vtep</code>
+      populates the <code>chassis</code> column for the records that
+      identify the logical ports that are located on its hypervisor/gateway,
+      which <code>ovn-controller</code>/<code>ovn-controller-vtep</code> in
+      turn finds out by monitoring the local hypervisor's Open_vSwitch
+      database, which identifies logical ports via the conventions described
+      in <code>IntegrationGuide.md</code>.
     </p>
 
     <p>
@@ -920,8 +952,9 @@
       (This is not critical because resources hosted on the chassis are equally
       unreachable regardless of whether their rows are present.)  To handle the
       case where a VM is shut down abruptly on one chassis, then brought up
-      again on a different one, <code>ovn-controller</code> must overwrite the
-      <code>chassis</code> column with new information.
+      again on a different one,
+      <code>ovn-controller</code>/<code>ovn-controller-vtep</code> must
+      overwrite the <code>chassis</code> column with new information.
     </p>
 
     <column name="datapath">
@@ -938,18 +971,78 @@
     <column name="type">
       <p>
       A type for this logical port.  Logical ports can be used to model
-      other types of connectivity into an OVN logical switch.  Leaving this column
-      blank maintains the default logical port behavior.
+      other types of connectivity into an OVN logical switch.  Leaving this
+      column blank maintains the default logical port behavior, which
+      is for a VM (or VIF) interface.  The following other types are defined:
       </p>
 
-      <p>
-      There are no other logical port types implemented yet.
-      </p>
+      <dl>
+        <dt><code>localnet</code></dt>
+        <dd>A connection to a locally accessible network from each
+        <code>ovn-controller</code> instance.  A logical switch can only
+        have a single <code>localnet</code> port attached and at most one
+        regular logical port.  This is used to model direct connectivity
+        to an existing network.</dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep</code></dt>
+        <dd>A port to a logical switch on a VTEP gateway chassis.  In order
+        to get this port correctly recognized by the OVN controller, the
+        <ref column="options" table="Port_Binding"/>:<code>vtep-physical-switch</code>
+        and <ref column="options" table="Port_Binding"/>:<code>vtep-logical-switch</code>
+        must also be defined.</dd>
+      </dl>
     </column>
 
     <column name="options">
+      <p>
         This column provides key/value settings specific to the logical port
-        <ref column="type"/>.
+        <ref column="type"/>.  The following options are defined:
+      </p>
+
+      <dl>
+        <dt><code>network_name</code></dt>
+        <dd>
+          Must be set when <ref column="type"/> is <code>localnet</code>.
+          <code>ovn-controller</code> uses the configuration entry
+          <code>ovn-bridge-mappings</code> to determine how to connect to
+          this network.  <code>ovn-bridge-mappings</code> is a list of
+          network names mapped to a local OVS bridge that provides access
+          to that network.  An example of configuring
+          <code>ovn-bridge-mappings</code> would be:
+
+          <p>
+            <code>$ ovs-vsctl set open
+            . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1</code>
+          </p>
+
+          <p>
+            Also note that when a logical switch has a <code>localnet</code>
+            port attached, every chassis that may have a local vif attached
+            to that logical switch must have a bridge mapping configured to
+            reach that <code>localnet</code>.  Traffic that arrives on a
+            <code>localnet</code> port is never forwarded over a tunnel to
+            another chassis.
+          </p>
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep-physical-switch</code></dt>
+        <dd>
+          The name of the VTEP gateway.  Must be set when
+          <ref column="type"/> is <code>vtep</code>.
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep-logical-switch</code></dt>
+        <dd>
+          A logical switch name connected by the VTEP gateway.  Must be
+          set when <ref column="type"/> is <code>vtep</code>.
+        </dd>
+      </dl>
     </column>
 
     <column name="tunnel_key">
@@ -983,7 +1076,7 @@
     <column name="chassis">
       The physical location of the logical port.  To successfully identify a
       chassis, this column must be a <ref table="Chassis"/> record.  This is
-      populated by <code>ovn-controller</code>.
+      populated by <code>ovn-controller</code>/<code>ovn-controller-vtep</code>.
     </column>
 
     <column name="mac">

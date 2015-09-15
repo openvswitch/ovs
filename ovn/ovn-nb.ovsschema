@@ -54,7 +54,9 @@
             "columns": {
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 1,
-                                              "maxInteger": 65535}}},
+                                              "maxInteger": 65534}}},
+                "direction": {"type": {"key": {"type": "string",
+                                            "enum": ["set", ["from-lport", "to-lport"]]}}},
                 "match": {"type": "string"},
                 "action": {"type": {"key": {"type": "string",
                                             "enum": ["set", ["allow", "allow-related", "drop", "reject"]]}}},

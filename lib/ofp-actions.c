@@ -332,7 +332,8 @@ static void ofpacts_update_instruction_actions(struct ofpbuf *openflow,
 static void pad_ofpat(struct ofpbuf *openflow, size_t start_ofs);
 
 static enum ofperr ofpacts_verify(const struct ofpact[], size_t ofpacts_len,
-                                  uint32_t allowed_ovsinsts);
+                                  uint32_t allowed_ovsinsts,
+                                  enum ofpact_type outer_action);
 
 static void ofpact_put_set_field(struct ofpbuf *openflow, enum ofp_version,
                                  enum mf_field_id, uint64_t value);
@@ -344,7 +345,28 @@ static void *ofpact_put_raw(struct ofpbuf *, enum ofp_version,
 
 static char *OVS_WARN_UNUSED_RESULT ofpacts_parse(
     char *str, struct ofpbuf *ofpacts, enum ofputil_protocol *usable_protocols,
-    bool allow_instructions);
+    bool allow_instructions, enum ofpact_type outer_action);
+
+/* Pull off existing actions or instructions. Used by nesting actions to keep
+ * ofpacts_parse() oblivious of actions nesting.
+ *
+ * Push the actions back on after nested parsing, e.g.:
+ *
+ *     size_t ofs = ofpacts_pull(ofpacts);
+ *     ...nested parsing...
+ *     ofpbuf_push_uninit(ofpacts, ofs);
+ */
+static size_t
+ofpacts_pull(struct ofpbuf *ofpacts)
+{
+    size_t ofs;
+
+    ofpact_pad(ofpacts);
+    ofs = ofpacts->size;
+    ofpbuf_pull(ofpacts, ofs);
+
+    return ofs;
+}
 
 #include "ofp-actions.inc1"
 
@@ -4506,14 +4528,9 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_WRITE_ACTIONS(char *arg, struct ofpbuf *ofpacts,
                     enum ofputil_protocol *usable_protocols)
 {
+    size_t ofs = ofpacts_pull(ofpacts);
     struct ofpact_nest *on;
     char *error;
-    size_t ofs;
-
-    /* Pull off existing actions or instructions. */
-    ofpact_pad(ofpacts);
-    ofs = ofpacts->size;
-    ofpbuf_pull(ofpacts, ofs);
 
     /* Add a Write-Actions instruction and then pull it off. */
     ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS, sizeof *on);
@@ -4526,7 +4543,8 @@ parse_WRITE_ACTIONS(char *arg, struct ofpbuf *ofpacts,
      * that it doesn't actually include the nested actions.  That means that
      * ofpacts_parse() would reject them as being part of an Apply-Actions that
      * follows a Write-Actions, which is an invalid order.  */
-    error = ofpacts_parse(arg, ofpacts, usable_protocols, false);
+    error = ofpacts_parse(arg, ofpacts, usable_protocols, false,
+                          OFPACT_WRITE_ACTIONS);
 
     /* Put the Write-Actions back on and update its length. */
     on = ofpbuf_push_uninit(ofpacts, sizeof *on);
@@ -4718,12 +4736,15 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
                                 unsigned int actions_len,
                                 enum ofp_version version,
                                 uint32_t allowed_ovsinsts,
-                                struct ofpbuf *ofpacts)
+                                struct ofpbuf *ofpacts,
+                                enum ofpact_type outer_action)
 {
     const struct ofp_action_header *actions;
     enum ofperr error;
 
-    ofpbuf_clear(ofpacts);
+    if (!outer_action) {
+        ofpbuf_clear(ofpacts);
+    }
 
     if (actions_len % OFP_ACTION_ALIGN != 0) {
         VLOG_WARN_RL(&rl, "OpenFlow message actions length %u is not a "
@@ -4745,8 +4766,8 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
         return error;
     }
 
-    error = ofpacts_verify(ofpacts->data, ofpacts->size,
-                           allowed_ovsinsts);
+    error = ofpacts_verify(ofpacts->data, ofpacts->size, allowed_ovsinsts,
+                           outer_action);
     if (error) {
         ofpbuf_clear(ofpacts);
     }
@@ -4778,7 +4799,7 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
 {
     return ofpacts_pull_openflow_actions__(openflow, actions_len, version,
                                            1u << OVSINST_OFPIT11_APPLY_ACTIONS,
-                                           ofpacts);
+                                           ofpacts, 0);
 }
 
 /* OpenFlow 1.1 actions. */
@@ -5315,7 +5336,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
         return ofpacts_pull_openflow_actions__(openflow, instructions_len,
                                                version,
                                                (1u << N_OVS_INSTRUCTIONS) - 1,
-                                               ofpacts);
+                                               ofpacts, 0);
     }
 
     ofpbuf_clear(ofpacts);
@@ -5412,7 +5433,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
     }
 
     error = ofpacts_verify(ofpacts->data, ofpacts->size,
-                           (1u << N_OVS_INSTRUCTIONS) - 1);
+                           (1u << N_OVS_INSTRUCTIONS) - 1, 0);
 exit:
     if (error) {
         ofpbuf_clear(ofpacts);
@@ -5776,15 +5797,30 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
             : 0);
 }
 
+static enum ofperr
+ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
+{
+    if (outer_action != OFPACT_WRITE_ACTIONS) {
+        VLOG_WARN("\"%s\" action doesn't support nested action \"%s\"",
+                  ofpact_name(outer_action), ofpact_name(a->type));
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return 0;
+}
+
 /* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are in the
  * appropriate order as defined by the OpenFlow spec and as required by Open
  * vSwitch.
  *
  * 'allowed_ovsinsts' is a bitmap of OVSINST_* values, in which 1-bits indicate
- * instructions that are allowed within 'ofpacts[]'. */
+ * instructions that are allowed within 'ofpacts[]'.
+ *
+ * If 'outer_action' is not zero, it specifies that the actions are nested
+ * within another action of type 'outer_action'. */
 static enum ofperr
 ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
-               uint32_t allowed_ovsinsts)
+               uint32_t allowed_ovsinsts, enum ofpact_type outer_action)
 {
     const struct ofpact *a;
     enum ovs_instruction_type inst;
@@ -5804,6 +5840,14 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
                 }
             }
             return 0;
+        }
+
+        if (outer_action) {
+            enum ofperr error = ofpacts_verify_nested(a, outer_action);
+
+            if (error) {
+                return error;
+            }
         }
 
         next = ovs_instruction_type_from_ofpact_type(a->type);
@@ -6318,11 +6362,14 @@ ofpact_type_from_name(const char *name, enum ofpact_type *type)
 /* Parses 'str' as a series of instructions, and appends them to 'ofpacts'.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
+ * error.  The caller is responsible for freeing the returned string.
+ *
+ * If 'outer_action' is specified, indicates that the actions being parsed
+ * are nested within another action of the type specified in 'outer_action'. */
 static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse__(char *str, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols,
-                bool allow_instructions)
+                bool allow_instructions, enum ofpact_type outer_action)
 {
     int prev_inst = -1;
     enum ofperr retval;
@@ -6396,7 +6443,8 @@ ofpacts_parse__(char *str, struct ofpbuf *ofpacts,
     retval = ofpacts_verify(ofpacts->data, ofpacts->size,
                             (allow_instructions
                              ? (1u << N_OVS_INSTRUCTIONS) - 1
-                             : 1u << OVSINST_OFPIT11_APPLY_ACTIONS));
+                             : 1u << OVSINST_OFPIT11_APPLY_ACTIONS),
+                            outer_action);
     if (retval) {
         return xstrdup("Incorrect instruction ordering");
     }
@@ -6406,11 +6454,12 @@ ofpacts_parse__(char *str, struct ofpbuf *ofpacts,
 
 static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse(char *str, struct ofpbuf *ofpacts,
-              enum ofputil_protocol *usable_protocols, bool allow_instructions)
+              enum ofputil_protocol *usable_protocols, bool allow_instructions,
+              enum ofpact_type outer_action)
 {
     uint32_t orig_size = ofpacts->size;
     char *error = ofpacts_parse__(str, ofpacts, usable_protocols,
-                                  allow_instructions);
+                                  allow_instructions, outer_action);
     if (error) {
         ofpacts->size = orig_size;
     }
@@ -6420,21 +6469,23 @@ ofpacts_parse(char *str, struct ofpbuf *ofpacts,
 static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse_copy(const char *s_, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols,
-                   bool allow_instructions)
+                   bool allow_instructions, enum ofpact_type outer_action)
 {
     char *error, *s;
 
     *usable_protocols = OFPUTIL_P_ANY;
 
     s = xstrdup(s_);
-    error = ofpacts_parse(s, ofpacts, usable_protocols, allow_instructions);
+    error = ofpacts_parse(s, ofpacts, usable_protocols, allow_instructions,
+                          outer_action);
     free(s);
 
     return error;
 }
 
 /* Parses 's' as a set of OpenFlow actions and appends the actions to
- * 'ofpacts'.
+ * 'ofpacts'. 'outer_action', if nonzero, specifies that 's' contains actions
+ * that are nested within the action of type 'outer_action'.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
@@ -6442,7 +6493,7 @@ char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse_actions(const char *s, struct ofpbuf *ofpacts,
                       enum ofputil_protocol *usable_protocols)
 {
-    return ofpacts_parse_copy(s, ofpacts, usable_protocols, false);
+    return ofpacts_parse_copy(s, ofpacts, usable_protocols, false, 0);
 }
 
 /* Parses 's' as a set of OpenFlow instructions and appends the instructions to
@@ -6454,7 +6505,7 @@ char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse_instructions(const char *s, struct ofpbuf *ofpacts,
                            enum ofputil_protocol *usable_protocols)
 {
-    return ofpacts_parse_copy(s, ofpacts, usable_protocols, true);
+    return ofpacts_parse_copy(s, ofpacts, usable_protocols, true, 0);
 }
 
 const char *

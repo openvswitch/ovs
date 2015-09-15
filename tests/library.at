@@ -174,7 +174,6 @@ AT_CHECK([$PYTHON $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
 AT_CLEANUP
 
 AT_SETUP([ovs_assert])
-OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 if test "$IS_WIN32" = "yes"; then
   exit_status=9
 else

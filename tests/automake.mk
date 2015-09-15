@@ -87,6 +87,7 @@ TESTSUITE_AT = \
 	tests/vtep-ctl.at \
 	tests/auto-attach.at \
 	tests/ovn.at \
+	tests/ovn-nbctl.at \
 	tests/ovn-sbctl.at \
 	tests/ovn-controller-vtep.at
 

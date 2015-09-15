@@ -226,7 +226,8 @@ binding_run(struct controller_vtep_ctx *ctx)
 }
 
 /* Removes all port binding association with vtep gateway chassis.
- * Returns true when all done. */
+ * Returns true when done (i.e. there is no change made to 'ctx->ovnsb_idl'),
+ * otherwise returns false. */
 bool
 binding_cleanup(struct controller_vtep_ctx *ctx)
 {

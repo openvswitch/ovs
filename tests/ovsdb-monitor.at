@@ -19,7 +19,6 @@ AT_BANNER([OVSDB -- ovsdb-server monitors])
 m4_define([OVSDB_CHECK_MONITOR], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server monitor positive $9])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    $2 > schema
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3],

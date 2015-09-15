@@ -18,6 +18,10 @@ Delete ipv4_address/plen route from OVS routing table.
 OVS builds ARP cache by snooping are messages. This command shows
 ARP cache table.
 .
+.IP "\fBtnl/arp/set \fIbridge ip mac\fR"
+Adds or modifies an ARP cache entry in \fIbridge\fR, mapping \fIip\fR
+to \fImac\fR.
+.
 .IP "\fBtnl/arp/flush\fR"
 Flush ARP table.
 .

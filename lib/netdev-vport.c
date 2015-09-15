@@ -844,11 +844,38 @@ ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl)
 {
     struct ip_header *nh;
     void *l4;
+    int l3_size;
 
     nh = dp_packet_l3(packet);
     l4 = dp_packet_l4(packet);
 
     if (!nh || !l4) {
+        return NULL;
+    }
+
+    if (csum(nh, IP_IHL(nh->ip_ihl_ver) * 4)) {
+        VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
+        return NULL;
+    }
+
+    if (IP_VER(nh->ip_ihl_ver) != 4) {
+        VLOG_WARN_RL(&err_rl, "ipv4 packet has invalid version (%d)",
+                     IP_VER(nh->ip_ihl_ver));
+        return NULL;
+    }
+
+    l3_size = dp_packet_size(packet) -
+              ((char *)nh - (char *)dp_packet_data(packet));
+
+    if (ntohs(nh->ip_tot_len) > l3_size) {
+        VLOG_WARN_RL(&err_rl, "ip packet is truncated (IP length %d, actual %d)",
+                     ntohs(nh->ip_tot_len), l3_size);
+        return NULL;
+    }
+
+    if (IP_IHL(nh->ip_ihl_ver) * 4 > sizeof(struct ip_header)) {
+        VLOG_WARN_RL(&err_rl, "ip options not supported on tunnel packets "
+                     "(%d bytes)", IP_IHL(nh->ip_ihl_ver) * 4);
         return NULL;
     }
 

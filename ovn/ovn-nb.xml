@@ -111,18 +111,60 @@
     <column name="type">
       <p>
       Specify a type for this logical port.  Logical ports can be used to model
-      other types of connectivity into an OVN logical switch.  Leaving this column
-      blank maintains the default logical port behavior.
+      other types of connectivity into an OVN logical switch.  Leaving this
+      column blank maintains the default logical port behavior, which is
+      for a VM (or VIF) interface.  The following other types are defined:
       </p>
 
-      <p>
-      There are no other logical port types implemented yet.
-      </p>
+      <dl>
+        <dt><code>localnet</code></dt>
+        <dd>A connection to a locally accessible network from each
+        <code>ovn-controller</code> instance.  A logical switch can only
+        have a single <code>localnet</code> port attached and at most one
+        regular logical port.  This is used to model direct connectivity
+        to an existing network.</dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep</code></dt>
+        <dd>A port to a logical switch on a VTEP gateway.  In order
+        to get this port correctly recognized by the OVN controller, the
+        <ref column="options" table="Logical_Port"/>:<code>vtep-physical-switch</code>
+        and <ref column="options" table="Logical_Port"/>:<code>vtep-logical-switch</code>
+        must also be defined.</dd>
+      </dl>
     </column>
 
     <column name="options">
+      <p>
         This column provides key/value settings specific to the logical port
-        <ref column="type"/>.
+        <ref column="type"/>.  The following options are defined:
+      </p>
+
+      <dl>
+        <dt><code>network_name</code></dt>
+        <dd>
+          Must be set when <ref column="type"/> is <code>localnet</code>.
+          <code>ovn-controller</code> uses local configuration to determine
+          exactly how to connect to this locally accessible network.
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep-physical-switch</code></dt>
+        <dd>
+          The name of the VTEP gateway.  Must be set when
+          <ref column="type"/> is <code>vtep</code>.
+        </dd>
+      </dl>
+
+      <dl>
+        <dt><code>vtep-logical-switch</code></dt>
+        <dd>
+          A logical switch name connected by the VTEP gateway.  Must be
+          set when <ref column="type"/> is <code>vtep</code>.
+        </dd>
+      </dl>
     </column>
 
     <column name="parent_name">
@@ -211,27 +253,60 @@
     </p>
 
     <column name="priority">
-      The ACL rule's priority.  Rules with numerically higher priority take
-      precedence over those with lower.  If two ACL rules with the same
-      priority both match, then the one actually applied to a packet is
-      undefined.
+      <p>
+        The ACL rule's priority.  Rules with numerically higher priority
+        take precedence over those with lower.  If two ACL rules with
+        the same priority both match, then the one actually applied to a
+        packet is undefined.
+      </p>
+
+      <p>
+        Return traffic from an <code>allow-related</code> flow is always
+        allowed and cannot be changed through an ACL.
+      </p>
+    </column>
+
+    <column name="direction">
+      <p>Direction of the traffic to which this rule should apply:</p>
+      <ul>
+        <li>
+          <code>from-lport</code>: Used to implement filters on traffic
+          arriving from a logical port.  These rules are applied to the
+          logical switch's ingress pipeline.
+        </li>
+        <li>
+          <code>to-lport</code>: Used to implement filters on traffic
+          forwarded to a logical port.  These rules are applied to the
+          logical switch's egress pipeline.
+        </li>
+      </ul>
     </column>
 
     <column name="match">
-      The packets that the ACL should match, in the same expression language
-      used for the <ref column="match" table="Logical_Flow"
-      db="OVN_Southbound"/> column in the OVN Southbound database's <ref
-      table="Logical_Flow" db="OVN_Southbound"/> table.  Match
-      <code>inport</code> and <code>outport</code> against names of logical
-      ports within <ref column="lswitch"/> to implement ingress and egress
-      ACLs, respectively.  In logical switches connected to logical routers,
-      the special port name <code>ROUTER</code> refers to the logical router
-      port.
+      <p>
+        The packets that the ACL should match, in the same expression
+        language used for the <ref column="match" table="Logical_Flow"
+        db="OVN_Southbound"/> column in the OVN Southbound database's
+        <ref table="Logical_Flow" db="OVN_Southbound"/> table.  The
+        <code>outport</code> logical port is only available in the
+        <code>to-lport</code> direction (the <code>inport</code> is
+        available in both directions).
+      </p>
+
+      <p>
+        By default all traffic is allowed.  When writing a more
+        restrictive policy, it is important to remember to allow flows
+        such as ARP and IPv6 neighbor discovery packets.
+      </p>
+
+      <p>
+        In logical switches connected to logical routers, the special
+        port name <code>ROUTER</code> refers to the logical router port.
+      </p>
     </column>
 
     <column name="action">
       <p>The action to take when the ACL rule matches:</p>
-      
       <ul>
         <li>
           <code>allow</code>: Forward the packet.
@@ -249,14 +324,9 @@
         <li>
           <code>reject</code>: Drop the packet, replying with a RST for TCP or
           ICMP unreachable message for other IP-based protocols.
+          <code>Not implemented--currently treated as drop</code>
         </li>
       </ul>
-
-      <p>
-	Only <code>allow</code> and <code>drop</code> are implemented:
-	<code>allow-related</code> is currently treated as <code>allow</code>,
-	and <code>reject</code> as <code>drop</code>.
-      </p>
     </column>
 
     <column name="log">

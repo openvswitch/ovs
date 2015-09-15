@@ -258,7 +258,7 @@ if $built; then
         echo >&2 'build not found, please change set $builddir or change directory'
         exit 1
     fi
-    PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
+    PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$builddir/vtep:$PATH
     if $ovn; then
         PATH=$builddir/ovn:$builddir/ovn/controller:$builddir/ovn/controller-vtep:$builddir/ovn/northd:$builddir/ovn/utilities:$PATH
     fi
@@ -347,8 +347,6 @@ if $ovn; then
     ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/db.sock
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
-    ovs-vsctl add-br br-int \
-        -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
 
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
