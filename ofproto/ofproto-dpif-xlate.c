@@ -4185,6 +4185,18 @@ put_ct_label(const struct flow *flow, struct flow *base_flow,
 }
 
 static void
+put_ct_helper(struct ofpbuf *odp_actions, struct ofpact_conntrack *ofc)
+{
+    if (ofc->alg) {
+        if (ofc->alg == IPPORT_FTP) {
+            nl_msg_put_string(odp_actions, OVS_CT_ATTR_HELPER, "ftp");
+        } else {
+            VLOG_WARN("Cannot serialize ct_helper %d\n", ofc->alg);
+        }
+    }
+}
+
+static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
     ovs_u128 old_ct_label = ctx->base_flow.ct_label;
@@ -4212,6 +4224,7 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
     put_ct_mark(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
     put_ct_label(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
+    put_ct_helper(ctx->odp_actions, ofc);
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
 
     /* Restore the original ct fields in the key. These should only be exposed

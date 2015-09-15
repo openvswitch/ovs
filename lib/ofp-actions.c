@@ -15,6 +15,8 @@
  */
 
 #include <config.h>
+#include <netinet/in.h>
+
 #include "ofp-actions.h"
 #include "bundle.h"
 #include "byte-order.h"
@@ -4662,6 +4664,26 @@ format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
  *      It is strongly recommended that this table is later than the current
  *      table, to prevent loops.
  *
+ * The "alg" attaches protocol-specific behaviour to this action:
+ *
+ *      The ALG is a 16-bit number which specifies that additional
+ *      processing should be applied to this traffic.
+ *
+ *      Protocol | Value | Meaning
+ *      --------------------------------------------------------------------
+ *      None     |     0 | No protocol-specific behaviour.
+ *      FTP      |    21 | Parse FTP control connections and observe the
+ *               |       | negotiation of related data connections.
+ *      Other    | Other | Unsupported protocols.
+ *
+ *      By way of example, if FTP control connections have this action applied
+ *      with the ALG set to FTP (21), then the connection tracker will observe
+ *      the negotiation of data connections. This allows the connection
+ *      tracker to identify subsequent data connections as "related" to this
+ *      existing connection. The "related" flag will be populated in the
+ *      NXM_NX_CT_STATE field for such connections if the 'recirc_table' is
+ *      specified.
+ *
  * Zero or more actions may immediately follow this action. These actions will
  * be executed within the context of the connection tracker, and they require
  * the NX_CT_F_COMMIT flag to be set.
@@ -4680,7 +4702,9 @@ struct nx_action_conntrack {
     };
     uint8_t recirc_table;       /* Recirculate to a specific table, or
                                    NX_CT_RECIRC_NONE for no recirculation. */
-    uint8_t pad[5];             /* Zeroes */
+    uint8_t pad[3];             /* Zeroes */
+    ovs_be16 alg;               /* Well-known port number for the protocol.
+                                 * 0 indicates no ALG is required. */
     /* Followed by a sequence of zero or more OpenFlow actions. The length of
      * these is included in 'len'. */
 };
@@ -4730,6 +4754,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
         goto out;
     }
     conntrack->recirc_table = nac->recirc_table;
+    conntrack->alg = ntohs(nac->alg);
 
     ofpbuf_pull(out, sizeof(*conntrack));
 
@@ -4777,6 +4802,7 @@ encode_CT(const struct ofpact_conntrack *conntrack,
         nac->zone_imm = htons(conntrack->zone_imm);
     }
     nac->recirc_table = conntrack->recirc_table;
+    nac->alg = htons(conntrack->alg);
 
     len = ofpacts_put_openflow_actions(conntrack->actions,
                                        ofpact_ct_get_action_len(conntrack),
@@ -4821,6 +4847,8 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
                     return error;
                 }
             }
+        } else if (!strcmp(key, "alg")) {
+            error = str_to_connhelper(value, &oc->alg);
         } else if (!strcmp(key, "exec")) {
             /* Hide existing actions from ofpacts_parse_copy(), so the
              * nesting can be handled transparently. */
@@ -4841,6 +4869,16 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
     ofpact_update_len(ofpacts, &oc->ofpact);
     ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
+}
+
+static void
+format_alg(int port, struct ds *s)
+{
+    if (port == IPPORT_FTP) {
+        ds_put_format(s, "alg=ftp,");
+    } else if (port) {
+        ds_put_format(s, "alg=%d,", port);
+    }
 }
 
 static void
@@ -4865,6 +4903,7 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
         ofpacts_format(a->actions, ofpact_ct_get_action_len(a), s);
         ds_put_format(s, "),");
     }
+    format_alg(a->alg, s);
     ds_chomp(s, ',');
     ds_put_char(s, ')');
 }

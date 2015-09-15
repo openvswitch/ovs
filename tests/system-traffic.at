@@ -782,3 +782,148 @@ icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=17
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([conntrack - FTP])
+AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows1.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,action=ct(alg=ftp,commit),2
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,tcp,ct_state=+trk+est,action=1
+priority=100,in_port=2,tcp,ct_state=+trk+rel,action=1
+])
+
+dnl Similar policy but without allowing all traffic from ns0->ns1.
+AT_DATA([flows2.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=1,tcp,ct_state=+trk+new,action=ct(commit,alg=ftp),2
+priority=100,in_port=1,tcp,ct_state=+trk+est,action=2
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,tcp,ct_state=+trk+new+rel,action=ct(commit),1
+priority=100,in_port=2,tcp,ct_state=+trk+est,action=1
+priority=100,in_port=2,tcp,ct_state=+trk-new+rel,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows1.txt])
+
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+
+dnl FTP requests from p1->p0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 helper=ftp use=1
+])
+
+dnl Try the second set of flows.
+conntrack -F
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
+
+dnl FTP requests from p1->p0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl Active FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 helper=ftp use=2
+TIME_WAIT src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 use=1
+])
+
+AT_CHECK([conntrack -F 2>/dev/null])
+
+dnl Passive FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 helper=ftp use=2
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - FTP with multiple expectations])
+AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 standalone -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Dual-firewall, allow all from ns1->ns2, allow established and ftp ns2->ns1.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(table=0,zone=1)
+priority=100,in_port=1,tcp,ct_zone=1,ct_state=+trk+new,action=ct(commit,alg=ftp,zone=1),ct(commit,alg=ftp,zone=2),2
+priority=100,in_port=1,tcp,ct_zone=1,ct_state=+trk+est,action=ct(table=0,zone=2)
+priority=100,in_port=1,tcp,ct_zone=2,ct_state=+trk+new,action=ct(commit,alg=ftp,zone=2)
+priority=100,in_port=1,tcp,ct_zone=2,ct_state=+trk+est,action=2
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0,zone=2)
+priority=100,in_port=2,tcp,ct_zone=2,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
+priority=100,in_port=2,tcp,ct_zone=2,ct_state=+trk+est,action=ct(table=0,zone=1)
+priority=100,in_port=2,tcp,ct_zone=1,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
+priority=100,in_port=2,tcp,ct_zone=1,ct_state=+trk+est,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+
+dnl FTP requests from p1->p0 should fail due to network failure.
+dnl Try 3 times, in 1 second intervals.
+NS_CHECK_EXEC([at_ns1], [wget ftp://10.1.1.1 --no-passive-ftp  -t 3 -T 1 -v -o wget1.log], [4])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl Active FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 helper=ftp use=2
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=2 helper=ftp use=2
+TIME_WAIT src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+TIME_WAIT src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=2 use=1
+])
+
+AT_CHECK([conntrack -F 2>/dev/null])
+
+dnl Passive FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 helper=ftp use=2
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=2 helper=ftp use=2
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=2 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

@@ -1692,6 +1692,16 @@ connection tracker with the \fBtable\fR specified.
 .IP
 The \fBcommit\fR parameter must be specified to use \fBexec(...)\fR.
 .
+.IP \fBalg=\fIalg\fR
+Specify application layer gateway \fIalg\fR to track specific connection
+types. Supported types include:
+.RS
+.IP \fBftp\fR
+Look for negotiation of FTP data connections. If a subsequent FTP data
+connection arrives which is related, the \fBct\fR action will set the
+\fBrel\fR flag in the \fBct_state\fR field for packets sent through \fBct\fR.
+.RE
+.
 .RE
 .IP
 The \fBct\fR action may be used as a primitive to construct stateful firewalls

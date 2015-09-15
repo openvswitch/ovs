@@ -495,6 +495,7 @@ struct {                                \
     uint16_t flags;                     \
     uint16_t zone_imm;                  \
     struct mf_subfield zone_src;        \
+    uint16_t alg;                       \
     uint8_t recirc_table;               \
 }
 
