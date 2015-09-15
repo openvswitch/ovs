@@ -48,6 +48,10 @@ override %{oname} * extra/%{oname}
 override %{oname} * weak-updates/%{oname}
 EOF
 
+%files
+%defattr(-,root,root,-)
+%{_sysconfdir}/depmod.d/
+
 %build
 for flavor in %flavors_to_build; do
 	mkdir _$flavor
