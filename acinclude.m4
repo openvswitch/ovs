@@ -174,9 +174,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_LIB_DIR=$RTE_SDK/lib
     DPDK_LIB="-ldpdk"
     DPDK_EXTRA_LIB=""
+    RTE_SDK_FULL=`readlink -f $RTE_SDK`
 
     AC_COMPILE_IFELSE(
-      [AC_LANG_PROGRAM([#include <$RTE_SDK/include/rte_config.h>
+      [AC_LANG_PROGRAM([#include <$RTE_SDK_FULL/include/rte_config.h>
 #if !RTE_LIBRTE_VHOST_USER
 #error
 #endif], [])],
