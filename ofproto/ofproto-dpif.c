@@ -3636,14 +3636,13 @@ rule_expire(struct rule_dpif *rule)
     }
 }
 
-/* Executes, within 'ofproto', the actions in 'rule' or 'ofpacts' on 'packet'.
- * 'flow' must reflect the data in 'packet'. */
 int
-ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
-                             const struct flow *flow,
-                             struct rule_dpif *rule,
-                             const struct ofpact *ofpacts, size_t ofpacts_len,
-                             struct dp_packet *packet)
+ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
+                               const struct flow *flow,
+                               struct rule_dpif *rule,
+                               const struct ofpact *ofpacts, size_t ofpacts_len,
+                               int recurse, int resubmits,
+                               struct dp_packet *packet)
 {
     struct dpif_flow_stats stats;
     struct xlate_out xout;
@@ -3667,6 +3666,8 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
+    xin.recurse = recurse;
+    xin.resubmits = resubmits;
     xlate_actions(&xin, &xout);
 
     execute.actions = odp_actions.data;
@@ -3690,6 +3691,19 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     ofpbuf_uninit(&odp_actions);
 
     return error;
+}
+
+/* Executes, within 'ofproto', the actions in 'rule' or 'ofpacts' on 'packet'.
+ * 'flow' must reflect the data in 'packet'. */
+int
+ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
+                             const struct flow *flow,
+                             struct rule_dpif *rule,
+                             const struct ofpact *ofpacts, size_t ofpacts_len,
+                             struct dp_packet *packet)
+{
+    return ofproto_dpif_execute_actions__(ofproto, flow, rule, ofpacts,
+                                          ofpacts_len, 0, 0, packet);
 }
 
 void

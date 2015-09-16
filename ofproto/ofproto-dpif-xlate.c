@@ -2690,36 +2690,36 @@ tnl_route_lookup_flow(const struct flow *oflow,
 }
 
 static int
-xlate_flood_packet(struct xbridge *xbridge, struct dp_packet *packet)
+compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
+                    struct dp_packet *packet)
 {
+    struct xbridge *xbridge = out_dev->xbridge;
     struct ofpact_output output;
     struct flow flow;
 
     ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
-    /* Use OFPP_NONE as the in_port to avoid special packet processing. */
     flow_extract(packet, &flow);
-    flow.in_port.ofp_port = OFPP_NONE;
-    output.port = OFPP_FLOOD;
+    flow.in_port.ofp_port = out_dev->ofp_port;
+    output.port = OFPP_TABLE;
     output.max_len = 0;
 
-    return ofproto_dpif_execute_actions(xbridge->ofproto, &flow, NULL,
-                                        &output.ofpact, sizeof output,
-                                        packet);
+    return ofproto_dpif_execute_actions__(xbridge->ofproto, &flow, NULL,
+                                          &output.ofpact, sizeof output,
+                                          ctx->recurse, ctx->resubmits, packet);
 }
 
 static void
-tnl_send_arp_request(const struct xport *out_dev,
+tnl_send_arp_request(struct xlate_ctx *ctx, const struct xport *out_dev,
                      const struct eth_addr eth_src,
                      ovs_be32 ip_src, ovs_be32 ip_dst)
 {
-    struct xbridge *xbridge = out_dev->xbridge;
     struct dp_packet packet;
 
     dp_packet_init(&packet, 0);
     compose_arp(&packet, ARP_OP_REQUEST,
                 eth_src, eth_addr_zero, true, ip_src, ip_dst);
 
-    xlate_flood_packet(xbridge, &packet);
+    compose_table_xlate(ctx, out_dev, &packet);
     dp_packet_uninit(&packet);
 }
 
@@ -2760,7 +2760,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
         xlate_report(ctx, "ARP cache miss for "IP_FMT" on bridge %s, "
                      "sending ARP request",
                      IP_ARGS(d_ip), out_dev->xbridge->name);
-        tnl_send_arp_request(out_dev, smac, s_ip, d_ip);
+        tnl_send_arp_request(ctx, out_dev, smac, s_ip, d_ip);
         return err;
     }
     if (ctx->xin->xcache) {
@@ -4521,6 +4521,8 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->resubmit_hook = NULL;
     xin->report_hook = NULL;
     xin->resubmit_stats = NULL;
+    xin->recurse = 0;
+    xin->resubmits = 0;
     xin->wc = wc;
     xin->odp_actions = odp_actions;
 
@@ -4768,8 +4770,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .wc = xin->wc ? xin->wc : &scratch_wc,
         .odp_actions = xin->odp_actions ? xin->odp_actions : &scratch_actions,
 
-        .recurse = 0,
-        .resubmits = 0,
+        .recurse = xin->recurse,
+        .resubmits = xin->resubmits,
         .in_group = false,
         .in_action_set = false,
 

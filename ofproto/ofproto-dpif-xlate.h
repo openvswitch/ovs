@@ -163,6 +163,20 @@ struct xlate_in {
      * calling xlate_in_init(). */
     const struct dpif_flow_stats *resubmit_stats;
 
+    /* Recursion and resubmission levels carried over from a pre-existing
+     * translation of a related flow. An example of when this can occur is
+     * the translation of an ARP packet that was generated as the result of
+     * outputting to a tunnel port. In this case, the original flow going to
+     * the tunnel is the related flow. Since the two flows are different, they
+     * should not use the same xlate_ctx structure. However, we still need
+     * limit the maximum recursion across the entire translation.
+     *
+     * These fields are normally set to zero, so the client has to set them
+     * manually after calling xlate_in_init(). In that case, they should be
+     * copied from the same-named fields in the related flow's xlate_ctx. */
+    int recurse;
+    int resubmits;
+
     /* If nonnull, flow translation populates this cache with references to all
      * modules that are affected by translation. This 'xlate_cache' may be
      * passed to xlate_push_stats() to perform the same function as
