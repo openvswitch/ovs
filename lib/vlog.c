@@ -706,6 +706,7 @@ vlog_init(void)
     if (ovsthread_once_start(&once)) {
         long long int now;
         int facility;
+        bool print_syslog_target_deprecation;
 
         /* Do initialization work that needs to be done before any logging
          * occurs.  We want to keep this really minimal because any attempt to
@@ -740,6 +741,15 @@ vlog_init(void)
                                  0, INT_MAX, vlog_disable_rate_limit, NULL);
         unixctl_command_register("vlog/reopen", "", 0, 0,
                                  vlog_unixctl_reopen, NULL);
+
+        ovs_rwlock_rdlock(&pattern_rwlock);
+        print_syslog_target_deprecation = syslog_fd >= 0;
+        ovs_rwlock_unlock(&pattern_rwlock);
+
+        if (print_syslog_target_deprecation) {
+            VLOG_WARN("--syslog-target flag is deprecated, use "
+                      "--syslog-method instead");
+        }
     }
 }
 

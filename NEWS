@@ -21,6 +21,8 @@ Post-v2.4.0
      targets to run a new system testsuite.  These tests can be run inside
      a Vagrant box.  See INSTALL.md for details
    - Dropped support for GRE64 tunnel.
+   - Mark --syslog-target argument as deprecated.  It will be removed in
+     the next OVS release.
 
 
 v2.4.0 - 20 Aug 2015
