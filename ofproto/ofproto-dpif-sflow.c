@@ -114,7 +114,7 @@ static void *
 sflow_agent_alloc_cb(void *magic OVS_UNUSED, SFLAgent *agent OVS_UNUSED,
                      size_t bytes)
 {
-    return calloc(1, bytes);
+    return xzalloc(bytes);
 }
 
 /* sFlow library callback to free memory. */
