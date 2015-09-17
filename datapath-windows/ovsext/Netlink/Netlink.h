@@ -203,8 +203,8 @@ BOOLEAN NlMsgPutHeadU64(PNL_BUFFER buf, UINT16 type, UINT64 value);
 BOOLEAN NlMsgPutHeadString(PNL_BUFFER buf, UINT16 type, PCHAR value);
 UINT32 NlMsgStartNested(PNL_BUFFER buf, UINT16 type);
 VOID NlMsgEndNested(PNL_BUFFER buf, UINT32 offset);
-VOID NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
-                    const PVOID data, UINT32 size);
+BOOLEAN NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
+                       const PVOID data, UINT32 size);
 
 /* These variants are convenient for iterating nested attributes. */
 #define NL_NESTED_FOR_EACH(ITER, LEFT, A)                               \

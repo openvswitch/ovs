@@ -560,7 +560,7 @@ NlMsgEndNested(PNL_BUFFER buf, UINT32 offset)
  * Refer nl_msg_put_nested for more details.
  * --------------------------------------------------------------------------
  */
-VOID
+BOOLEAN
 NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
                const PVOID data, UINT32 size)
 {
@@ -574,6 +574,8 @@ NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
     ASSERT(ret);
 
     NlMsgEndNested(buf, offset);
+
+    return ret;
 }
 
 /* Accessing netlink message payload */

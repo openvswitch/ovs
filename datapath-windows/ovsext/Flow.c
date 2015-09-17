@@ -312,7 +312,6 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     if (flowAttrs[OVS_FLOW_ATTR_PROBE]) {
         OVS_LOG_ERROR("Attribute OVS_FLOW_ATTR_PROBE not supported");
-        nlError = NL_ERROR_NOENT;
         goto done;
     }
 
@@ -328,6 +327,11 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                          &stats);
     if (rc != STATUS_SUCCESS) {
         OVS_LOG_ERROR("OvsPutFlowIoctl failed.");
+        /*
+         * Report back to the userspace the flow could not be modified,
+         * created or deleted
+         */
+        nlError = NL_ERROR_NOENT;
         goto done;
     }
 
@@ -348,6 +352,15 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     } else {
         rc = STATUS_SUCCESS;
+    }
+
+    /* Append OVS_FLOW_ATTR_KEY attribute. This is need i.e. for flow delete*/
+    if (!NlMsgPutNested(&nlBuf, OVS_FLOW_ATTR_KEY,
+                        NlAttrData(flowAttrs[OVS_FLOW_ATTR_KEY]),
+                        NlAttrGetSize(flowAttrs[OVS_FLOW_ATTR_KEY]))) {
+        OVS_LOG_ERROR("Adding OVS_FLOW_ATTR_KEY attribute failed.");
+        rc = STATUS_INVALID_BUFFER_SIZE;
+        goto done;
     }
 
     /* Append OVS_FLOW_ATTR_STATS attribute */
@@ -385,29 +398,13 @@ OvsFlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
     NTSTATUS status = STATUS_SUCCESS;
-    NL_ERROR nlError = NL_ERROR_SUCCESS;
-    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
 
     if (usrParamsCtx->devOp == OVS_TRANSACTION_DEV_OP) {
         status = _FlowNlGetCmdHandler(usrParamsCtx, replyLen);
-
-        /* No trasanctional errors as of now.
-         * If we have something then we need to convert rc to
-         * nlError. */
-        if ((nlError != NL_ERROR_SUCCESS) &&
-            (usrParamsCtx->outputBuffer)) {
-            POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
-                                           usrParamsCtx->outputBuffer;
-            NlBuildErrorMsg(msgIn, msgError, nlError);
-            *replyLen = msgError->nlMsg.nlmsgLen;
-            status = STATUS_SUCCESS;
-            goto done;
-        }
     } else {
         status = _FlowNlDumpCmdHandler(usrParamsCtx, replyLen);
     }
 
-done:
     return status;
 }
 
@@ -442,6 +439,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     UINT32 keyAttrOffset = 0;
     UINT32 tunnelKeyAttrOffset = 0;
     BOOLEAN ok;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
 
     if (usrParamsCtx->inputLength > usrParamsCtx->outputLength) {
         /* Should not be the case.
@@ -510,6 +508,10 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     rc = OvsGetFlowIoctl(&getInput, &getOutput);
     if (rc != STATUS_SUCCESS) {
         OVS_LOG_ERROR("OvsGetFlowIoctl failed.");
+        /*
+         * Report back to the userspace the flow could not be found
+         */
+        nlError = NL_ERROR_NOENT;
         goto done;
     }
 
@@ -543,6 +545,14 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     *replyLen += NlMsgSize(nlMsgOutHdr);
 
 done:
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                      usrParamsCtx->outputBuffer;
+        NlBuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+        rc = STATUS_SUCCESS;
+    }
+
     return rc;
 }
 
@@ -558,9 +568,10 @@ _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 {
     NTSTATUS rc = STATUS_SUCCESS;
     UINT32  temp = 0;   /* To keep compiler happy for calling OvsDoDumpFlows */
-
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)
                                   (usrParamsCtx->ovsInstance);
+    POVS_MESSAGE msgIn = instance->dumpState.ovsMsg;
 
     if (usrParamsCtx->devOp == OVS_WRITE_DEV_OP) {
         /* Dump Start */
@@ -568,7 +579,6 @@ _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
-    POVS_MESSAGE msgIn = instance->dumpState.ovsMsg;
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
     PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
     POVS_HDR ovsHdr = &(msgIn->ovsHdr);
@@ -600,6 +610,10 @@ _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         rc = OvsDoDumpFlows(&dumpInput, &dumpOutput, &temp);
         if (rc != STATUS_SUCCESS) {
             OVS_LOG_ERROR("OvsDoDumpFlows failed with rc: %d", rc);
+            /*
+             * Report back to the userspace the flows could not be found
+             */
+            nlError = NL_ERROR_NOENT;
             break;
         }
 
@@ -669,6 +683,14 @@ _FlowNlDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     } while(TRUE);
 
 done:
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                      usrParamsCtx->outputBuffer;
+        NlBuildErrorMsg(msgIn, msgError, nlError);
+        *replyLen = msgError->nlMsg.nlmsgLen;
+        rc = STATUS_SUCCESS;
+    }
+
     return rc;
 }
 
