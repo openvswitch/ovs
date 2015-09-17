@@ -66,7 +66,7 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
             s = text_to_nroff(node.data, font)
         return s.replace('\n', newline)
     elif node.nodeType == node.ELEMENT_NODE:
-        if node.tagName in ['code', 'em', 'option', 'env']:
+        if node.tagName in ['code', 'em', 'option', 'env', 'b']:
             s = r'\fB'
             for child in node.childNodes:
                 s += inline_xml_to_nroff(child, r'\fB', to_upper, newline)
@@ -86,7 +86,7 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
             else:
                 raise error.Error("'ref' lacks required attributes: %s" % node.attributes.keys())
             return s + font
-        elif node.tagName == 'var' or node.tagName == 'dfn':
+        elif node.tagName in ['var', 'dfn', 'i']:
             s = r'\fI'
             for child in node.childNodes:
                 s += inline_xml_to_nroff(child, r'\fI', to_upper, newline)
