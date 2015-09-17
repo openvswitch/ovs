@@ -947,7 +947,6 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
 {
     PNET_BUFFER_LIST newNbl;
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
-    PNET_BUFFER nb;
 
     /*
      * Create a copy and work on the copy after this point. The original NBL is
@@ -967,14 +966,14 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
      * XXX Head room needs to include the additional encap.
      * XXX copySize check is not considering multiple NBs.
      */
-    nb = NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl);
     newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                                0, 0, TRUE /*copy NBL info*/);
 
     ASSERT(ovsFwdCtx->destPortsSizeOut > 0 ||
            ovsFwdCtx->tunnelTxNic != NULL || ovsFwdCtx->tunnelRxNic != NULL);
 
-    /* Send the original packet out */
+    /* Send the original packet out and save the original source port number */
+    UINT32 tempVportNo = ovsFwdCtx->srcVportNo;
     status = OvsOutputForwardingCtx(ovsFwdCtx);
     ASSERT(ovsFwdCtx->curNbl == NULL);
     ASSERT(ovsFwdCtx->destPortsSizeOut == 0);
@@ -992,7 +991,7 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
         OvsCompleteNBL(ovsFwdCtx->switchContext, newNbl, TRUE);
     } else {
         status = OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
-                                      newNbl, ovsFwdCtx->srcVportNo, 0,
+                                      newNbl, tempVportNo, 0,
                                       NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
                                       ovsFwdCtx->completionList,
                                       &ovsFwdCtx->layers, FALSE);
