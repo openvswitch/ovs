@@ -506,25 +506,20 @@ zero_rightmost_1bit(uintmax_t x)
     return x & (x - 1);
 }
 
-/* Returns the index of the rightmost 1-bit in 'x' (e.g. 01011000 => 3), or 32
- * if 'x' is 0.
- *
- * Unlike the other functions for rightmost 1-bits, this function only works
- * with 32-bit integers. */
+/* Returns the index of the rightmost 1-bit in 'x' (e.g. 01011000 => 3), or an
+ * undefined value if 'x' is 0. */
 static inline int
-rightmost_1bit_idx(uint32_t x)
+rightmost_1bit_idx(uint64_t x)
 {
-    return ctz32(x);
+    return ctz64(x);
 }
 
-/* Returns the index of the leftmost 1-bit in 'x' (e.g. 01011000 => 6), or 32
- * if 'x' is 0.
- *
- * This function only works with 32-bit integers. */
+/* Returns the index of the leftmost 1-bit in 'x' (e.g. 01011000 => 6), or an
+ * undefined value if 'x' is 0. */
 static inline uint32_t
-leftmost_1bit_idx(uint32_t x)
+leftmost_1bit_idx(uint64_t x)
 {
-    return x ? log_2_floor(x) : 32;
+    return log_2_floor(x);
 }
 
 /* Return a ovs_be32 prefix in network byte order with 'plen' highest bits set.
