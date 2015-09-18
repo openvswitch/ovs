@@ -107,6 +107,8 @@ Mark of the packet.
 Connection state of the packet.
 .IP \fIct_zone\fR
 Connection tracking zone for packet.
+.IP \fIct_mark\fR
+Connection mark of the packet.
 .IP \fItun_id\fR
 The tunnel ID on which the packet arrived.
 .IP \fIin_port\fR

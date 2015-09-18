@@ -353,6 +353,10 @@ static enum ofperr ofpacts_pull_openflow_actions__(
     struct ofpbuf *openflow, unsigned int actions_len,
     enum ofp_version version, uint32_t allowed_ovsinsts,
     struct ofpbuf *ofpacts, enum ofpact_type outer_action);
+static char * OVS_WARN_UNUSED_RESULT ofpacts_parse_copy(
+    const char *s_, struct ofpbuf *ofpacts,
+    enum ofputil_protocol *usable_protocols,
+    bool allow_instructions, enum ofpact_type outer_action);
 
 /* Pull off existing actions or instructions. Used by nesting actions to keep
  * ofpacts_parse() oblivious of actions nesting.
@@ -4657,6 +4661,10 @@ format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
  *
  *      It is strongly recommended that this table is later than the current
  *      table, to prevent loops.
+ *
+ * Zero or more actions may immediately follow this action. These actions will
+ * be executed within the context of the connection tracker, and they require
+ * the NX_CT_F_COMMIT flag to be set.
  */
 struct nx_action_conntrack {
     ovs_be16 type;              /* OFPAT_VENDOR. */
@@ -4708,10 +4716,11 @@ decode_ct_zone(const struct nx_action_conntrack *nac,
 
 static enum ofperr
 decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
-                    enum ofp_version ofp_version OVS_UNUSED,
-                    struct ofpbuf *out)
+                    enum ofp_version ofp_version, struct ofpbuf *out)
 {
+    const size_t ct_offset = ofpacts_pull(out);
     struct ofpact_conntrack *conntrack;
+    struct ofpbuf openflow;
     int error = 0;
 
     conntrack = ofpact_put_CT(out);
@@ -4722,15 +4731,40 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
     }
     conntrack->recirc_table = nac->recirc_table;
 
+    ofpbuf_pull(out, sizeof(*conntrack));
+
+    ofpbuf_use_const(&openflow, nac + 1, ntohs(nac->len) - sizeof(*nac));
+    error = ofpacts_pull_openflow_actions__(&openflow, openflow.size,
+                                            ofp_version,
+                                            1u << OVSINST_OFPIT11_APPLY_ACTIONS,
+                                            out, OFPACT_CT);
+    if (error) {
+        goto out;
+    }
+
+    conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
+    out->header = &conntrack->ofpact;
+    ofpact_update_len(out, &conntrack->ofpact);
+
+    if (conntrack->ofpact.len > sizeof(*conntrack)
+        && !(conntrack->flags & NX_CT_F_COMMIT)) {
+        VLOG_WARN_RL(&rl, "CT action requires commit flag if actions are "
+                     "specified.");
+        error = OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
 out:
+    ofpbuf_push_uninit(out, ct_offset);
     return error;
 }
 
 static void
 encode_CT(const struct ofpact_conntrack *conntrack,
-          enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+          enum ofp_version ofp_version, struct ofpbuf *out)
 {
     struct nx_action_conntrack *nac;
+    const size_t ofs = out->size;
+    size_t len;
 
     nac = put_NXAST_CT(out);
     nac->flags = htons(conntrack->flags);
@@ -4743,6 +4777,13 @@ encode_CT(const struct ofpact_conntrack *conntrack,
         nac->zone_imm = htons(conntrack->zone_imm);
     }
     nac->recirc_table = conntrack->recirc_table;
+
+    len = ofpacts_put_openflow_actions(conntrack->actions,
+                                       ofpact_ct_get_action_len(conntrack),
+                                       out, ofp_version);
+    len += sizeof(*nac);
+    nac = ofpbuf_at(out, ofs, sizeof(*nac));
+    nac->len = htons(len);
 }
 
 /* Parses 'arg' as the argument to a "ct" action, and appends such an
@@ -4752,8 +4793,9 @@ encode_CT(const struct ofpact_conntrack *conntrack,
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
 parse_CT(char *arg, struct ofpbuf *ofpacts,
-         enum ofputil_protocol *usable_protocols OVS_UNUSED)
+         enum ofputil_protocol *usable_protocols)
 {
+    const size_t ct_offset = ofpacts_pull(ofpacts);
     struct ofpact_conntrack *oc;
     char *error = NULL;
     char *key, *value;
@@ -4779,6 +4821,15 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
                     return error;
                 }
             }
+        } else if (!strcmp(key, "exec")) {
+            /* Hide existing actions from ofpacts_parse_copy(), so the
+             * nesting can be handled transparently. */
+            ofpbuf_pull(ofpacts, sizeof(*oc));
+            error = ofpacts_parse_copy(value, ofpacts, usable_protocols, false,
+                                       OFPACT_CT);
+            ofpact_pad(ofpacts);
+            ofpacts->header = ofpbuf_push_uninit(ofpacts, sizeof(*oc));
+            oc = ofpacts->header;
         } else {
             error = xasprintf("invalid argument to \"ct\" action: `%s'", key);
         }
@@ -4787,6 +4838,8 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
         }
     }
 
+    ofpact_update_len(ofpacts, &oc->ofpact);
+    ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
 }
 
@@ -4806,6 +4859,11 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
         ds_put_char(s, ',');
     } else if (a->zone_imm) {
         ds_put_format(s, "zone=%"PRIu16",", a->zone_imm);
+    }
+    if (ofpact_ct_get_action_len(a)) {
+        ds_put_cstr(s, "exec(");
+        ofpacts_format(a->actions, ofpact_ct_get_action_len(a), s);
+        ds_put_format(s, "),");
     }
     ds_chomp(s, ',');
     ds_put_char(s, ')');
@@ -6054,6 +6112,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 
     case OFPACT_CT: {
         struct ofpact_conntrack *oc = ofpact_get_CT(a);
+        enum ofputil_protocol p = *usable_protocols;
 
         if (!dl_type_is_ip_any(flow->dl_type)
             || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)) {
@@ -6063,7 +6122,9 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         if (oc->zone_src.field) {
             return mf_check_src(&oc->zone_src, flow);
         }
-        return 0;
+
+        return ofpacts_check(oc->actions, ofpact_ct_get_action_len(oc),
+                             flow, max_ports, table_id, n_tables, &p);
     }
 
     case OFPACT_CLEAR_ACTIONS:
@@ -6170,13 +6231,60 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
             : 0);
 }
 
+static const struct mf_field *
+ofpact_get_mf_field(enum ofpact_type type, const void *ofpact)
+{
+    if (type == OFPACT_SET_FIELD) {
+        const struct ofpact_set_field *orl = ofpact;
+
+        return orl->field;
+    } else if (type == OFPACT_REG_MOVE) {
+        const struct ofpact_reg_move *orm = ofpact;
+
+        return orm->dst.field;
+    }
+
+    return NULL;
+}
+
+static enum ofperr
+unsupported_nesting(enum ofpact_type action, enum ofpact_type outer_action)
+{
+    VLOG_WARN("%s action doesn't support nested action %s",
+              ofpact_name(outer_action), ofpact_name(action));
+    return OFPERR_OFPBAC_BAD_ARGUMENT;
+}
+
+static bool
+field_requires_ct(enum mf_field_id field)
+{
+    return field == MFF_CT_MARK;
+}
+
+/* Apply nesting constraints for actions */
 static enum ofperr
 ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 {
-    if (outer_action != OFPACT_WRITE_ACTIONS) {
-        VLOG_WARN("\"%s\" action doesn't support nested action \"%s\"",
-                  ofpact_name(outer_action), ofpact_name(a->type));
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    const struct mf_field *field = ofpact_get_mf_field(a->type, a);
+
+    if (field && field_requires_ct(field->id) && outer_action != OFPACT_CT) {
+        VLOG_WARN("cannot set CT fields outside of ct action");
+        return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+    }
+
+    if (outer_action) {
+        ovs_assert(outer_action == OFPACT_WRITE_ACTIONS
+                   || outer_action == OFPACT_CT);
+
+        if (outer_action == OFPACT_CT) {
+            if (!field) {
+                return unsupported_nesting(a->type, outer_action);
+            } else if (!field_requires_ct(field->id)) {
+                VLOG_WARN("%s action doesn't support nested modification "
+                          "of %s", ofpact_name(outer_action), field->name);
+                return OFPERR_OFPBAC_BAD_ARGUMENT;
+            }
+        }
     }
 
     return 0;
@@ -6201,6 +6309,7 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
     inst = OVSINST_OFPIT13_METER;
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         enum ovs_instruction_type next;
+        enum ofperr error;
 
         if (a->type == OFPACT_CONJUNCTION) {
             OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
@@ -6215,12 +6324,9 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
             return 0;
         }
 
-        if (outer_action) {
-            enum ofperr error = ofpacts_verify_nested(a, outer_action);
-
-            if (error) {
-                return error;
-            }
+        error = ofpacts_verify_nested(a, outer_action);
+        if (error) {
+            return error;
         }
 
         next = ovs_instruction_type_from_ofpact_type(a->type);

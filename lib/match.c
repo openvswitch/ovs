@@ -305,6 +305,20 @@ match_set_ct_zone(struct match *match, uint16_t ct_zone)
 }
 
 void
+match_set_ct_mark(struct match *match, uint32_t ct_mark)
+{
+    match_set_ct_mark_masked(match, ct_mark, UINT32_MAX);
+}
+
+void
+match_set_ct_mark_masked(struct match *match, uint32_t ct_mark,
+                           uint32_t mask)
+{
+    match->flow.ct_mark = ct_mark & mask;
+    match->wc.masks.ct_mark = mask;
+}
+
+void
 match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
     match->wc.masks.dl_type = OVS_BE16_MAX;
@@ -1005,6 +1019,10 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     if (wc->masks.ct_zone) {
         format_uint16_masked(s, "ct_zone", f->ct_zone, wc->masks.ct_zone);
+    }
+
+    if (wc->masks.ct_mark) {
+        format_uint32_masked(s, "ct_mark", f->ct_mark, wc->masks.ct_mark);
     }
 
     if (wc->masks.dl_type) {

@@ -129,6 +129,7 @@ struct pkt_metadata {
     uint32_t pkt_mark;          /* Packet mark. */
     uint16_t ct_state;          /* Connection state. */
     uint16_t ct_zone;           /* Connection zone. */
+    uint32_t ct_mark;           /* Connection mark. */
     union flow_in_port in_port; /* Input port. */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. Note that
                                  * if 'ip_dst' == 0, the rest of the fields may

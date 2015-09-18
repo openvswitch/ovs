@@ -1391,6 +1391,11 @@ zone is an independent connection tracking context, so if you wish to track
 the same packet in multiple contexts then you must use the \fBct\fR action
 multiple times. Introduced in Open vSwitch 2.5.
 .
+.IP \fBct_mark=\fIvalue\fR[\fB/\fImask\fR]
+Matches the given 32-bit connection mark \fIvalue\fR either exactly or with
+optional \fImask\fR. This represents metadata associated with the connection
+that the current packet is part of. Introduced in Open vSwitch 2.5.
+.
 .PP
 Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
 support for NXM.  The following shorthand notations are available for
@@ -1657,8 +1662,26 @@ A 16-bit context id that can be used to isolate connections into separate
 domains, allowing overlapping network addresses in different zones. If a zone
 is not provided, then the default is to use zone zero. The \fBzone\fR may be
 specified either as an immediate 16-bit \fIvalue\fR, or may be provided from an
-OpenFlow field \fIsrc\fR. The \fIstart\fR and \fIend\fR pair are inclusive, and
-must specify a 16-bit range within the field.
+NXM field \fIsrc\fR. The \fIstart\fR and \fIend\fR pair are inclusive, and must
+specify a 16-bit range within the field.
+.IP \fBexec\fB(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)\fR
+Perform actions within the context of connection tracking. These actions
+are in the same format as the actions accepted as part of a flow, however
+there are additional restrictions applied. For instance, only actions which
+modify the ct fields are accepted within the \fBexec\fR action. Furthermore,
+some actions may only be performed in this context, for instance modifying the
+ct_mark field:
+.
+.RS
+.IP \fBset_field:\fIvalue\fR->ct_mark\fR
+Store a 32-bit metadata value with the connection. If the connection is
+committed, then subsequent lookups for packets in this connection will
+populate the \fBct_mark\fR flow field when the packet is sent to the
+connection tracker with the \fBtable\fR specified.
+.RE
+.IP
+The \fBcommit\fR parameter must be specified to use \fBexec(...)\fR.
+.
 .RE
 .IP
 The \fBct\fR action may be used as a primitive to construct stateful firewalls
@@ -1689,6 +1712,8 @@ same IP message.
 .IP
 Currently, connection tracking is only available on Linux kernels with the
 nf_conntrack module loaded.
+.
+.RE
 .
 .IP \fBdec_ttl\fR
 .IQ \fBdec_ttl\fB[\fR(\fIid1,id2\fI)\fR]\fR

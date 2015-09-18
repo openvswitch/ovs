@@ -768,6 +768,25 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_CT_ZONE,
 
+    /* "ct_mark".
+     *
+     * Connection tracking mark.  The mark is carried with the
+     * connection tracking state.  On Linux this corresponds to the
+     * nf_conn's "mark" member but the exact implementation is
+     * platform-dependent.
+     *
+     * Writable only from nested actions within the NXAST_CT action.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_CT_MARK(107) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_MARK,
+
 #if FLOW_N_REGS == 8
     /* "reg<N>".
      *

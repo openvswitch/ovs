@@ -161,6 +161,29 @@ dnl Can't read 32 bits from register into 16-bit zone.
 # bad OpenFlow10 actions: OFPBAC_BAD_SET_LEN
 ffff 0018 00002320 0023 0000 00010004 001F FF 000000 0000
 
+# actions=ct(commit,exec(load:0xf009->NXM_NX_CT_MARK[]))
+ffff 0030 00002320 0023 0001 00000000 0000 FF 000000 0000 dnl
+ffff 0018 00002320 0007 001f 0001d604 000000000000f009
+
+# bad OpenFlow10 actions: OFPBAC_BAD_SET_ARGUMENT
+& ofp_actions|WARN|cannot set CT fields outside of ct action
+ffff 0018 00002320 0007 001f 0001d604 000000000000f009
+
+# bad OpenFlow10 actions: OFPBAC_BAD_SET_ARGUMENT
+& meta_flow|WARN|destination field ct_zone is not writable
+ffff 0030 00002320 0023 0001 00000000 0000 FF 000000 0000 dnl
+ffff 0018 00002320 0007 000f 0001d504 000000000000f009
+
+# bad OpenFlow10 actions: OFPBAC_BAD_ARGUMENT
+& ofp_actions|WARN|ct action doesn't support nested action ct
+ffff 0030 00002320 0023 0001 00000000 0000 FF 000000 0000 dnl
+ffff 0018 00002320 0023 0000 00000000 0000 FF 000000 0000
+
+# bad OpenFlow10 actions: OFPBAC_BAD_ARGUMENT
+& ofp_actions|WARN|ct action doesn't support nested modification of reg0
+ffff 0030 00002320 0023 0001 00000000 0000 FF 000000 0000 dnl
+ffff 0018 00002320 0007 001f 00010004 000000000000f009
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout

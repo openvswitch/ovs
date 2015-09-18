@@ -60,6 +60,7 @@ parse_keys(bool wc_keys)
                     .recirc = true,
                     .ct_state = true,
                     .ct_zone = true,
+                    .ct_mark = true,
                 },
             };
 

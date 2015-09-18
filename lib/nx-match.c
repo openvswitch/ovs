@@ -1032,7 +1032,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
         }
     }
 
-    /* Mark. */
+    /* Packet mark. */
     nxm_put_32m(b, MFF_PKT_MARK, oxm, htonl(flow->pkt_mark),
                 htonl(match->wc.masks.pkt_mark));
 
@@ -1041,6 +1041,8 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 htonl(match->wc.masks.ct_state));
     nxm_put_16m(b, MFF_CT_ZONE, oxm, htons(flow->ct_zone),
                 htons(match->wc.masks.ct_zone));
+    nxm_put_32m(b, MFF_CT_MARK, oxm, htonl(flow->ct_mark),
+                htonl(match->wc.masks.ct_mark));
 
     /* OpenFlow 1.1+ Metadata. */
     nxm_put_64m(b, MFF_METADATA, oxm,
