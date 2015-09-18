@@ -56,7 +56,7 @@ rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
 rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
 
 # Get rid of stuff we don't want to make RPM happy.
-rm \
+rm -rf \
     $RPM_BUILD_ROOT/usr/bin/ovs-testcontroller \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-testcontroller.8 \
     $RPM_BUILD_ROOT/usr/bin/ovs-test \
@@ -129,19 +129,19 @@ exit 0
 /usr/bin/ovs-appctl
 /usr/bin/ovs-benchmark
 /usr/bin/ovs-dpctl
-/usr/bin/ovs-dpctl-top
+# /usr/bin/ovs-dpctl-top
 /usr/bin/ovs-docker
 /usr/bin/ovs-ofctl
-/usr/bin/ovs-parse-backtrace
-/usr/bin/ovs-pcap
+# /usr/bin/ovs-parse-backtrace
+# /usr/bin/ovs-pcap
 /usr/bin/ovs-pki
-/usr/bin/ovs-tcpundump
-/usr/bin/ovs-vlan-test
+# /usr/bin/ovs-tcpundump
+# /usr/bin/ovs-vlan-test
 /usr/bin/ovs-vsctl
 /usr/bin/ovsdb-client
 /usr/bin/ovsdb-tool
 /usr/bin/vtep-ctl
-/usr/sbin/ovs-bugtool
+# /usr/sbin/ovs-bugtool
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
 /usr/share/man/man1/ovs-benchmark.1.gz
@@ -153,7 +153,7 @@ exit 0
 /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 /usr/share/man/man5/vtep.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
-/usr/share/man/man8/ovs-bugtool.8.gz
+# /usr/share/man/man8/ovs-bugtool.8.gz
 /usr/share/man/man8/ovs-ctl.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-dpctl-top.8.gz
@@ -164,9 +164,9 @@ exit 0
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /usr/share/man/man8/vtep-ctl.8.gz
-/usr/share/openvswitch/bugtool-plugins/
-/usr/share/openvswitch/python/
-/usr/share/openvswitch/scripts/ovs-bugtool-*
+# /usr/share/openvswitch/bugtool-plugins/
+# /usr/share/openvswitch/python/
+# /usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-check-dead-ifs
 /usr/share/openvswitch/scripts/ovs-ctl
 /usr/share/openvswitch/scripts/ovs-lib
@@ -180,7 +180,7 @@ exit 0
 /var/lib/openvswitch
 /var/log/openvswitch
 %exclude /usr/bin/ovn-*
-%exclude /usr/share/man/man1/ovs-sim.1.gz
+# %exclude /usr/share/man/man1/ovs-sim.1.gz
 %exclude /usr/share/man/man5/ovn-*
 %exclude /usr/share/man/man7/ovn-*
 %exclude /usr/share/man/man8/ovn-*
