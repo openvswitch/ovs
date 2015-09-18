@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 1; then
+       if test "$version" = 4 && test "$patchlevel" -le 2; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.1.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.2.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3; then
        : # Linux 3.x
@@ -333,6 +333,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
 
+  OVS_GREP_IFELSE([$KSRC/include/linux/net.h], [sock_create_kern.*net],
+                  [OVS_DEFINE([HAVE_SOCK_CREATE_KERN_NET])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_by_index_rcu])
@@ -417,6 +419,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h],
                         [genl_multicast_group], [id])
+  OVS_GREP_IFELSE([$KSRC/include/net/geneve.h], [geneve_hdr])
 
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_cisco_register])
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6.h], [IP6_FH_F_SKIP_RH])

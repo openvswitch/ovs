@@ -56,11 +56,6 @@
 #include "compat.h"
 #include "gso.h"
 
-static inline struct genevehdr *geneve_hdr(const struct sk_buff *skb)
-{
-	return (struct genevehdr *)(udp_hdr(skb) + 1);
-}
-
 static void geneve_build_header(struct genevehdr *geneveh,
 				__be16 tun_flags, u8 vni[3],
 				u8 options_len, u8 *options)

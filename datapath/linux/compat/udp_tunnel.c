@@ -23,11 +23,9 @@ int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
 	if (cfg->family == AF_INET6) {
 		struct sockaddr_in6 udp6_addr;
 
-		err = sock_create_kern(AF_INET6, SOCK_DGRAM, 0, &sock);
+		err = sock_create_kern(net, AF_INET6, SOCK_DGRAM, 0, &sock);
 		if (err < 0)
 			goto error;
-
-		sk_change_net(sock->sk, net);
 
 		udp6_addr.sin6_family = AF_INET6;
 		memcpy(&udp6_addr.sin6_addr, &cfg->local_ip6,
@@ -54,11 +52,9 @@ int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
 	if (cfg->family == AF_INET) {
 		struct sockaddr_in udp_addr;
 
-		err = sock_create_kern(AF_INET, SOCK_DGRAM, 0, &sock);
+		err = sock_create_kern(net, AF_INET, SOCK_DGRAM, 0, &sock);
 		if (err < 0)
 			goto error;
-
-		sk_change_net(sock->sk, net);
 
 		udp_addr.sin_family = AF_INET;
 		udp_addr.sin_addr = cfg->local_ip;
@@ -90,7 +86,7 @@ int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
 error:
 	if (sock) {
 		kernel_sock_shutdown(sock, SHUT_RDWR);
-		sk_release_kernel(sock->sk);
+		sock_release(sock);
 	}
 	*sockp = NULL;
 	return err;
@@ -168,7 +164,7 @@ void rpl_udp_tunnel_sock_release(struct socket *sock)
 {
 	rcu_assign_sk_user_data(sock->sk, NULL);
 	kernel_sock_shutdown(sock, SHUT_RDWR);
-	sk_release_kernel(sock->sk);
+	sock_release(sock);
 }
 EXPORT_SYMBOL_GPL(rpl_udp_tunnel_sock_release);
 

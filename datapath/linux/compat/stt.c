@@ -21,6 +21,7 @@
 #include <linux/list.h>
 #include <linux/log2.h>
 #include <linux/module.h>
+#include <linux/net.h>
 #include <linux/netfilter.h>
 #include <linux/percpu.h>
 #include <linux/skbuff.h>
@@ -1251,7 +1252,7 @@ drop:
 static void tcp_sock_release(struct socket *sock)
 {
 	kernel_sock_shutdown(sock, SHUT_RDWR);
-	sk_release_kernel(sock->sk);
+	sock_release(sock);
 }
 
 static int tcp_sock_create4(struct net *net, __be16 port,
@@ -1261,11 +1262,9 @@ static int tcp_sock_create4(struct net *net, __be16 port,
 	struct socket *sock = NULL;
 	int err;
 
-	err = sock_create_kern(AF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
+	err = sock_create_kern(net, AF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
 	if (err < 0)
 		goto error;
-
-	sk_change_net(sock->sk, net);
 
 	memset(&tcp_addr, 0, sizeof(tcp_addr));
 	tcp_addr.sin_family = AF_INET;

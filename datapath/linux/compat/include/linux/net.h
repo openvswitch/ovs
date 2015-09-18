@@ -52,4 +52,11 @@ bool rpl___net_get_random_once(void *buf, int nbytes, bool *done,
 })
 #endif
 
+#ifndef HAVE_SOCK_CREATE_KERN_NET
+int ovs_sock_create_kern(struct net *net, int family, int type, int protocol, struct socket **res);
+void ovs_sock_release(struct socket *sock);
+#define sock_create_kern ovs_sock_create_kern
+#define sock_release ovs_sock_release
+#endif
+
 #endif

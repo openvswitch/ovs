@@ -101,4 +101,11 @@ int rpl_geneve_xmit_skb(struct geneve_sock *gs, struct rtable *rt,
 
 #endif /* kernel < 4.0 */
 
+#ifndef HAVE_GENEVE_HDR
+static inline struct genevehdr *geneve_hdr(const struct sk_buff *skb)
+{
+	return (struct genevehdr *)(udp_hdr(skb) + 1);
+}
+#endif
+
 #endif /*ifdef__NET_GENEVE_WRAPPER_H */
