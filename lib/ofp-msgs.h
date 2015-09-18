@@ -378,10 +378,10 @@ enum ofpraw {
     /* OFPST 1.3+ (12): struct ofp13_table_features, uint8_t[8][]. */
     OFPRAW_OFPST13_TABLE_FEATURES_REPLY,
 
-    /* OFPST 1.4+ (15): void. */
+    /* OFPST 1.4+ (14): void. */
     OFPRAW_OFPST14_TABLE_DESC_REQUEST,
 
-    /* OFPST 1.4+ (15): struct ofp14_table_desc, uint8_t[8][]. */
+    /* OFPST 1.4+ (14): struct ofp14_table_desc, uint8_t[8][]. */
     OFPRAW_OFPST14_TABLE_DESC_REPLY,
 
     /* OFPST 1.0-1.4 (13): void. */
