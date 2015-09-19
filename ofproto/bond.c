@@ -1074,8 +1074,18 @@ choose_entry_to_migrate(const struct bond_slave *from, uint64_t to_tx_bytes)
         }
 
         delta = e->tx_bytes;
+        if (from->tx_bytes <= delta) {
+            /* All of the load on 'from' comes from a single MAC hash, so
+             * shifting load away would be pointless. */
+            return NULL;
+        }
         old_ratio = (double)from->tx_bytes / to_tx_bytes;
         new_ratio = (double)(from->tx_bytes - delta) / (to_tx_bytes + delta);
+        if (new_ratio < 1.0) {
+            /* Normalize the new ratio, such that the most heavily loaded slave
+             * is the numerator, in order to assess the improvement. */
+            new_ratio = 1.0 / new_ratio;
+        }
         if (old_ratio - new_ratio > 0.1
             && fabs(new_ratio - 1.0) < fabs(old_ratio - 1.0)) {
             /* We're aiming for an ideal ratio of 1, meaning both the 'from'
