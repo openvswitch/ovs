@@ -4193,6 +4193,7 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
                                   expected_attrs, flow, key, key_len, src_flow);
     }
     if (is_mask) {
+        /* A missing VLAN mask means exact match on vlan_tci 0 (== no VLAN). */
         flow->vlan_tci = htons(0xffff);
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN)) {
             flow->vlan_tci = nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN]);

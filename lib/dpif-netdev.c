@@ -3309,6 +3309,16 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
 
+            /* The Netlink encoding of datapath flow keys cannot express
+             * wildcarding the presence of a VLAN tag. Instead, a missing VLAN
+             * tag is interpreted as exact match on the fact that there is no
+             * VLAN.  Unless we refactor a lot of code that translates between
+             * Netlink and struct flow representations, we have to do the same
+             * here. */
+            if (!match.wc.masks.vlan_tci) {
+                match.wc.masks.vlan_tci = htons(0xffff);
+            }
+
             /* We can't allow the packet batching in the next loop to execute
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
