@@ -399,6 +399,7 @@ OFP_ASSERT(sizeof(struct ofp11_action_output) == 16);
 
 static enum ofperr
 decode_OFPAT_RAW10_OUTPUT(const struct ofp10_action_output *oao,
+                          enum ofp_version ofp_version OVS_UNUSED,
                           struct ofpbuf *out)
 {
     struct ofpact_output *output;
@@ -412,7 +413,8 @@ decode_OFPAT_RAW10_OUTPUT(const struct ofp10_action_output *oao,
 
 static enum ofperr
 decode_OFPAT_RAW11_OUTPUT(const struct ofp11_action_output *oao,
-                       struct ofpbuf *out)
+                          enum ofp_version ofp_version OVS_UNUSED,
+                          struct ofpbuf *out)
 {
     struct ofpact_output *output;
     enum ofperr error;
@@ -485,7 +487,9 @@ format_OUTPUT(const struct ofpact_output *a, struct ds *s)
 /* Group actions. */
 
 static enum ofperr
-decode_OFPAT_RAW11_GROUP(uint32_t group_id, struct ofpbuf *out)
+decode_OFPAT_RAW11_GROUP(uint32_t group_id,
+                         enum ofp_version ofp_version OVS_UNUSED,
+                         struct ofpbuf *out)
 {
     ofpact_put_GROUP(out)->group_id = group_id;
     return 0;
@@ -541,6 +545,7 @@ OFP_ASSERT(sizeof(struct nx_action_controller) == 16);
 
 static enum ofperr
 decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
+                            enum ofp_version ofp_version OVS_UNUSED,
                             struct ofpbuf *out)
 {
     struct ofpact_controller *oc;
@@ -664,6 +669,7 @@ OFP_ASSERT(sizeof(struct ofp10_action_enqueue) == 16);
 
 static enum ofperr
 decode_OFPAT_RAW10_ENQUEUE(const struct ofp10_action_enqueue *oae,
+                           enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *out)
 {
     struct ofpact_enqueue *enqueue;
@@ -776,6 +782,7 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg2) == 24);
 
 static enum ofperr
 decode_NXAST_RAW_OUTPUT_REG(const struct nx_action_output_reg *naor,
+                            enum ofp_version ofp_version OVS_UNUSED,
                             struct ofpbuf *out)
 {
     struct ofpact_output_reg *output_reg;
@@ -796,7 +803,8 @@ decode_NXAST_RAW_OUTPUT_REG(const struct nx_action_output_reg *naor,
 
 static enum ofperr
 decode_NXAST_RAW_OUTPUT_REG2(const struct nx_action_output_reg2 *naor,
-                            struct ofpbuf *out)
+                             enum ofp_version ofp_version OVS_UNUSED,
+                             struct ofpbuf *out)
 {
     struct ofpact_output_reg *output_reg;
     enum ofperr error;
@@ -1012,13 +1020,16 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
 }
 
 static enum ofperr
-decode_NXAST_RAW_BUNDLE(const struct nx_action_bundle *nab, struct ofpbuf *out)
+decode_NXAST_RAW_BUNDLE(const struct nx_action_bundle *nab,
+                        enum ofp_version ofp_version OVS_UNUSED,
+                        struct ofpbuf *out)
 {
     return decode_bundle(false, nab, out);
 }
 
 static enum ofperr
 decode_NXAST_RAW_BUNDLE_LOAD(const struct nx_action_bundle *nab,
+                             enum ofp_version ofp_version OVS_UNUSED,
                              struct ofpbuf *out)
 {
     return decode_bundle(true, nab, out);
@@ -1090,13 +1101,17 @@ decode_set_vlan_vid(uint16_t vid, bool push_vlan_if_needed, struct ofpbuf *out)
 }
 
 static enum ofperr
-decode_OFPAT_RAW10_SET_VLAN_VID(uint16_t vid, struct ofpbuf *out)
+decode_OFPAT_RAW10_SET_VLAN_VID(uint16_t vid,
+                                enum ofp_version ofp_version OVS_UNUSED,
+                                struct ofpbuf *out)
 {
     return decode_set_vlan_vid(vid, true, out);
 }
 
 static enum ofperr
-decode_OFPAT_RAW11_SET_VLAN_VID(uint16_t vid, struct ofpbuf *out)
+decode_OFPAT_RAW11_SET_VLAN_VID(uint16_t vid,
+                                enum ofp_version ofp_version OVS_UNUSED,
+                                struct ofpbuf *out)
 {
     return decode_set_vlan_vid(vid, false, out);
 }
@@ -1177,13 +1192,17 @@ decode_set_vlan_pcp(uint8_t pcp, bool push_vlan_if_needed, struct ofpbuf *out)
 }
 
 static enum ofperr
-decode_OFPAT_RAW10_SET_VLAN_PCP(uint8_t pcp, struct ofpbuf *out)
+decode_OFPAT_RAW10_SET_VLAN_PCP(uint8_t pcp,
+                                enum ofp_version ofp_version OVS_UNUSED,
+                                struct ofpbuf *out)
 {
     return decode_set_vlan_pcp(pcp, true, out);
 }
 
 static enum ofperr
-decode_OFPAT_RAW11_SET_VLAN_PCP(uint8_t pcp, struct ofpbuf *out)
+decode_OFPAT_RAW11_SET_VLAN_PCP(uint8_t pcp,
+                                enum ofp_version ofp_version OVS_UNUSED,
+                                struct ofpbuf *out)
 {
     return decode_set_vlan_pcp(pcp, false, out);
 }
@@ -1300,7 +1319,9 @@ format_STRIP_VLAN(const struct ofpact_null *a, struct ds *s)
 /* Push VLAN action. */
 
 static enum ofperr
-decode_OFPAT_RAW11_PUSH_VLAN(ovs_be16 eth_type, struct ofpbuf *out)
+decode_OFPAT_RAW11_PUSH_VLAN(ovs_be16 eth_type,
+                             enum ofp_version ofp_version OVS_UNUSED,
+                             struct ofpbuf *out)
 {
     if (eth_type != htons(ETH_TYPE_VLAN_8021Q)) {
         /* XXX 802.1AD(QinQ) isn't supported at the moment */
@@ -1363,6 +1384,7 @@ OFP_ASSERT(sizeof(struct ofp_action_dl_addr) == 16);
 
 static enum ofperr
 decode_OFPAT_RAW_SET_DL_SRC(const struct ofp_action_dl_addr *a,
+                            enum ofp_version ofp_version OVS_UNUSED,
                             struct ofpbuf *out)
 {
     ofpact_put_SET_ETH_SRC(out)->mac = a->dl_addr;
@@ -1371,6 +1393,7 @@ decode_OFPAT_RAW_SET_DL_SRC(const struct ofp_action_dl_addr *a,
 
 static enum ofperr
 decode_OFPAT_RAW_SET_DL_DST(const struct ofp_action_dl_addr *a,
+                            enum ofp_version ofp_version OVS_UNUSED,
                             struct ofpbuf *out)
 {
     ofpact_put_SET_ETH_DST(out)->mac = a->dl_addr;
@@ -1441,14 +1464,18 @@ format_SET_ETH_DST(const struct ofpact_mac *a, struct ds *s)
 /* Set IPv4 address actions. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_NW_SRC(ovs_be32 ipv4, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_NW_SRC(ovs_be32 ipv4,
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *out)
 {
     ofpact_put_SET_IPV4_SRC(out)->ipv4 = ipv4;
     return 0;
 }
 
 static enum ofperr
-decode_OFPAT_RAW_SET_NW_DST(ovs_be32 ipv4, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_NW_DST(ovs_be32 ipv4,
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *out)
 {
     ofpact_put_SET_IPV4_DST(out)->ipv4 = ipv4;
     return 0;
@@ -1513,7 +1540,9 @@ format_SET_IPV4_DST(const struct ofpact_ipv4 *a, struct ds *s)
 /* Set IPv4/v6 TOS actions. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_NW_TOS(uint8_t dscp, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_NW_TOS(uint8_t dscp,
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *out)
 {
     if (dscp & ~IP_DSCP_MASK) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -1563,7 +1592,9 @@ format_SET_IP_DSCP(const struct ofpact_dscp *a, struct ds *s)
 /* Set IPv4/v6 ECN actions. */
 
 static enum ofperr
-decode_OFPAT_RAW11_SET_NW_ECN(uint8_t ecn, struct ofpbuf *out)
+decode_OFPAT_RAW11_SET_NW_ECN(uint8_t ecn,
+                              enum ofp_version ofp_version OVS_UNUSED,
+                              struct ofpbuf *out)
 {
     if (ecn & ~IP_ECN_MASK) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -1615,7 +1646,9 @@ format_SET_IP_ECN(const struct ofpact_ecn *a, struct ds *s)
 /* Set IPv4/v6 TTL actions. */
 
 static enum ofperr
-decode_OFPAT_RAW11_SET_NW_TTL(uint8_t ttl, struct ofpbuf *out)
+decode_OFPAT_RAW11_SET_NW_TTL(uint8_t ttl,
+                              enum ofp_version ofp_version OVS_UNUSED,
+                              struct ofpbuf *out)
 {
     ofpact_put_SET_IP_TTL(out)->ttl = ttl;
     return 0;
@@ -1657,14 +1690,18 @@ format_SET_IP_TTL(const struct ofpact_ip_ttl *a, struct ds *s)
 /* Set TCP/UDP/SCTP port actions. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_TP_SRC(ovs_be16 port, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_TP_SRC(ovs_be16 port,
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *out)
 {
     ofpact_put_SET_L4_SRC_PORT(out)->port = ntohs(port);
     return 0;
 }
 
 static enum ofperr
-decode_OFPAT_RAW_SET_TP_DST(ovs_be16 port, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_TP_DST(ovs_be16 port,
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *out)
 {
     ofpact_put_SET_L4_DST_PORT(out)->port = ntohs(port);
     return 0;
@@ -1919,6 +1956,7 @@ decode_copy_field__(ovs_be16 src_offset, ovs_be16 dst_offset, ovs_be16 n_bits,
 
 static enum ofperr
 decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
+                              enum ofp_version ofp_version OVS_UNUSED,
                               struct ofpbuf *ofpacts)
 {
     return decode_copy_field__(oacf->src_offset, oacf->dst_offset,
@@ -1928,6 +1966,7 @@ decode_OFPAT_RAW15_COPY_FIELD(const struct ofp15_action_copy_field *oacf,
 
 static enum ofperr
 decode_ONFACT_RAW13_COPY_FIELD(const struct onf_action_copy_field *oacf,
+                               enum ofp_version ofp_version OVS_UNUSED,
                                struct ofpbuf *ofpacts)
 {
     return decode_copy_field__(oacf->src_offset, oacf->dst_offset,
@@ -1937,6 +1976,7 @@ decode_ONFACT_RAW13_COPY_FIELD(const struct onf_action_copy_field *oacf,
 
 static enum ofperr
 decode_NXAST_RAW_REG_MOVE(const struct nx_action_reg_move *narm,
+                          enum ofp_version ofp_version OVS_UNUSED,
                           struct ofpbuf *ofpacts)
 {
     struct ofpact_reg_move *move;
@@ -2172,6 +2212,7 @@ decode_ofpat_set_field(const struct ofp12_action_set_field *oasf,
 
 static enum ofperr
 decode_OFPAT_RAW12_SET_FIELD(const struct ofp12_action_set_field *oasf,
+                             enum ofp_version ofp_version OVS_UNUSED,
                              struct ofpbuf *ofpacts)
 {
     return decode_ofpat_set_field(oasf, false, ofpacts);
@@ -2179,6 +2220,7 @@ decode_OFPAT_RAW12_SET_FIELD(const struct ofp12_action_set_field *oasf,
 
 static enum ofperr
 decode_OFPAT_RAW15_SET_FIELD(const struct ofp12_action_set_field *oasf,
+                             enum ofp_version ofp_version OVS_UNUSED,
                              struct ofpbuf *ofpacts)
 {
     return decode_ofpat_set_field(oasf, true, ofpacts);
@@ -2186,6 +2228,7 @@ decode_OFPAT_RAW15_SET_FIELD(const struct ofp12_action_set_field *oasf,
 
 static enum ofperr
 decode_NXAST_RAW_REG_LOAD(const struct nx_action_reg_load *narl,
+                          enum ofp_version ofp_version OVS_UNUSED,
                           struct ofpbuf *out)
 {
     struct ofpact_set_field *sf = ofpact_put_reg_load(out);
@@ -2221,6 +2264,7 @@ decode_NXAST_RAW_REG_LOAD(const struct nx_action_reg_load *narl,
 
 static enum ofperr
 decode_NXAST_RAW_REG_LOAD2(const struct nx_action_reg_load2 *narl,
+                           enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *out)
 {
     struct ofpact_set_field *sf;
@@ -2691,7 +2735,8 @@ decode_stack_action(const struct nx_action_stack *nasp,
 
 static enum ofperr
 decode_NXAST_RAW_STACK_PUSH(const struct nx_action_stack *nasp,
-                             struct ofpbuf *ofpacts)
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *ofpacts)
 {
     struct ofpact_stack *push = ofpact_put_STACK_PUSH(ofpacts);
     enum ofperr error = decode_stack_action(nasp, push);
@@ -2700,6 +2745,7 @@ decode_NXAST_RAW_STACK_PUSH(const struct nx_action_stack *nasp,
 
 static enum ofperr
 decode_NXAST_RAW_STACK_POP(const struct nx_action_stack *nasp,
+                           enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *ofpacts)
 {
     struct ofpact_stack *pop = ofpact_put_STACK_POP(ofpacts);
@@ -2807,6 +2853,7 @@ decode_OFPAT_RAW_DEC_NW_TTL(struct ofpbuf *out)
 
 static enum ofperr
 decode_NXAST_RAW_DEC_TTL_CNT_IDS(const struct nx_action_cnt_ids *nac_ids,
+                                 enum ofp_version ofp_version OVS_UNUSED,
                                  struct ofpbuf *out)
 {
     struct ofpact_cnt_ids *ids;
@@ -2929,7 +2976,9 @@ format_DEC_TTL(const struct ofpact_cnt_ids *a, struct ds *s)
 /* Set MPLS label actions. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_MPLS_LABEL(ovs_be32 label, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_MPLS_LABEL(ovs_be32 label,
+                                enum ofp_version ofp_version OVS_UNUSED,
+                                struct ofpbuf *out)
 {
     ofpact_put_SET_MPLS_LABEL(out)->label = label;
     return 0;
@@ -2970,7 +3019,9 @@ format_SET_MPLS_LABEL(const struct ofpact_mpls_label *a, struct ds *s)
 /* Set MPLS TC actions. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_MPLS_TC(uint8_t tc, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_MPLS_TC(uint8_t tc,
+                             enum ofp_version ofp_version OVS_UNUSED,
+                             struct ofpbuf *out)
 {
     ofpact_put_SET_MPLS_TC(out)->tc = tc;
     return 0;
@@ -3010,7 +3061,9 @@ format_SET_MPLS_TC(const struct ofpact_mpls_tc *a, struct ds *s)
 /* Set MPLS TTL actions. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_MPLS_TTL(uint8_t ttl, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_MPLS_TTL(uint8_t ttl,
+                              enum ofp_version ofp_version OVS_UNUSED,
+                              struct ofpbuf *out)
 {
     ofpact_put_SET_MPLS_TTL(out)->ttl = ttl;
     return 0;
@@ -3081,7 +3134,9 @@ format_DEC_MPLS_TTL(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 /* Push MPLS label action. */
 
 static enum ofperr
-decode_OFPAT_RAW_PUSH_MPLS(ovs_be16 ethertype, struct ofpbuf *out)
+decode_OFPAT_RAW_PUSH_MPLS(ovs_be16 ethertype,
+                           enum ofp_version ofp_version OVS_UNUSED,
+                           struct ofpbuf *out)
 {
     struct ofpact_push_mpls *oam;
 
@@ -3124,7 +3179,9 @@ format_PUSH_MPLS(const struct ofpact_push_mpls *a, struct ds *s)
 /* Pop MPLS label action. */
 
 static enum ofperr
-decode_OFPAT_RAW_POP_MPLS(ovs_be16 ethertype, struct ofpbuf *out)
+decode_OFPAT_RAW_POP_MPLS(ovs_be16 ethertype,
+                          enum ofp_version ofp_version OVS_UNUSED,
+                          struct ofpbuf *out)
 {
     ofpact_put_POP_MPLS(out)->ethertype = ethertype;
     return 0;
@@ -3160,7 +3217,9 @@ format_POP_MPLS(const struct ofpact_pop_mpls *a, struct ds *s)
 /* Set tunnel ID actions. */
 
 static enum ofperr
-decode_NXAST_RAW_SET_TUNNEL(uint32_t tun_id, struct ofpbuf *out)
+decode_NXAST_RAW_SET_TUNNEL(uint32_t tun_id,
+                            enum ofp_version ofp_version OVS_UNUSED,
+                            struct ofpbuf *out)
 {
     struct ofpact_tunnel *tunnel = ofpact_put_SET_TUNNEL(out);
     tunnel->ofpact.raw = NXAST_RAW_SET_TUNNEL;
@@ -3169,7 +3228,9 @@ decode_NXAST_RAW_SET_TUNNEL(uint32_t tun_id, struct ofpbuf *out)
 }
 
 static enum ofperr
-decode_NXAST_RAW_SET_TUNNEL64(uint64_t tun_id, struct ofpbuf *out)
+decode_NXAST_RAW_SET_TUNNEL64(uint64_t tun_id,
+                              enum ofp_version ofp_version OVS_UNUSED,
+                              struct ofpbuf *out)
 {
     struct ofpact_tunnel *tunnel = ofpact_put_SET_TUNNEL(out);
     tunnel->ofpact.raw = NXAST_RAW_SET_TUNNEL64;
@@ -3225,7 +3286,9 @@ format_SET_TUNNEL(const struct ofpact_tunnel *a, struct ds *s)
 /* Set queue action. */
 
 static enum ofperr
-decode_OFPAT_RAW_SET_QUEUE(uint32_t queue_id, struct ofpbuf *out)
+decode_OFPAT_RAW_SET_QUEUE(uint32_t queue_id,
+                           enum ofp_version ofp_version OVS_UNUSED,
+                           struct ofpbuf *out)
 {
     ofpact_put_SET_QUEUE(out)->queue_id = queue_id;
     return 0;
@@ -3317,6 +3380,7 @@ OFP_ASSERT(sizeof(struct nx_action_fin_timeout) == 16);
 
 static enum ofperr
 decode_NXAST_RAW_FIN_TIMEOUT(const struct nx_action_fin_timeout *naft,
+                             enum ofp_version ofp_version OVS_UNUSED,
                              struct ofpbuf *out)
 {
     struct ofpact_fin_timeout *oft;
@@ -3435,7 +3499,9 @@ struct nx_action_resubmit {
 OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
 
 static enum ofperr
-decode_NXAST_RAW_RESUBMIT(uint16_t port, struct ofpbuf *out)
+decode_NXAST_RAW_RESUBMIT(uint16_t port,
+                          enum ofp_version ofp_version OVS_UNUSED,
+                          struct ofpbuf *out)
 {
     struct ofpact_resubmit *resubmit;
 
@@ -3448,6 +3514,7 @@ decode_NXAST_RAW_RESUBMIT(uint16_t port, struct ofpbuf *out)
 
 static enum ofperr
 decode_NXAST_RAW_RESUBMIT_TABLE(const struct nx_action_resubmit *nar,
+                                enum ofp_version ofp_version OVS_UNUSED,
                                 struct ofpbuf *out)
 {
     struct ofpact_resubmit *resubmit;
@@ -3821,6 +3888,7 @@ learn_min_len(uint16_t header)
  * 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*. */
 static enum ofperr
 decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
+                       enum ofp_version ofp_version OVS_UNUSED,
                        struct ofpbuf *ofpacts)
 {
     struct ofpact_learn *learn;
@@ -4015,6 +4083,7 @@ add_conjunction(struct ofpbuf *out,
 
 static enum ofperr
 decode_NXAST_RAW_CONJUNCTION(const struct nx_action_conjunction *nac,
+                             enum ofp_version ofp_version OVS_UNUSED,
                              struct ofpbuf *out)
 {
     if (nac->n_clauses < 2 || nac->n_clauses > 64
@@ -4130,6 +4199,7 @@ OFP_ASSERT(sizeof(struct nx_action_multipath) == 32);
 
 static enum ofperr
 decode_NXAST_RAW_MULTIPATH(const struct nx_action_multipath *nam,
+                           enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *out)
 {
     uint32_t n_links = ntohs(nam->max_link) + 1;
@@ -4211,7 +4281,9 @@ struct nx_action_note {
 OFP_ASSERT(sizeof(struct nx_action_note) == 16);
 
 static enum ofperr
-decode_NXAST_RAW_NOTE(const struct nx_action_note *nan, struct ofpbuf *out)
+decode_NXAST_RAW_NOTE(const struct nx_action_note *nan,
+                      enum ofp_version ofp_version OVS_UNUSED,
+                      struct ofpbuf *out)
 {
     struct ofpact_note *note;
     unsigned int length;
@@ -4376,7 +4448,9 @@ struct nx_action_sample {
 OFP_ASSERT(sizeof(struct nx_action_sample) == 24);
 
 static enum ofperr
-decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas, struct ofpbuf *out)
+decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas,
+                        enum ofp_version ofp_version OVS_UNUSED,
+                        struct ofpbuf *out)
 {
     struct ofpact_sample *sample;
 
@@ -4622,6 +4696,7 @@ OFP_ASSERT(sizeof(struct nx_action_write_metadata) == 32);
 
 static enum ofperr
 decode_NXAST_RAW_WRITE_METADATA(const struct nx_action_write_metadata *nawm,
+                                enum ofp_version ofp_version OVS_UNUSED,
                                 struct ofpbuf *out)
 {
     struct ofpact_metadata *om;
@@ -4760,7 +4835,7 @@ ofpacts_decode(const void *actions, size_t actions_len,
 
         error = ofpact_pull_raw(&openflow, ofp_version, &raw, &arg);
         if (!error) {
-            error = ofpact_decode(action, raw, arg, ofpacts);
+            error = ofpact_decode(action, raw, ofp_version, arg, ofpacts);
         }
 
         if (error) {
