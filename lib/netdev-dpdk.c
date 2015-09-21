@@ -2142,6 +2142,14 @@ dpdk_init(int argc, char **argv)
     argc--;
     argv++;
 
+    /* Reject --user option */
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--user")) {
+            VLOG_ERR("Can not mix --dpdk and --user options, aborting.");
+        }
+    }
+
 #ifdef VHOST_CUSE
     if (process_vhost_flags("-cuse_dev_name", strdup("vhost-net"),
                             PATH_MAX, argv, &cuse_dev_name)) {
