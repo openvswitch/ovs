@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1785,14 +1785,14 @@ new_device(struct virtio_net *dev)
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (!exists) {
-        VLOG_INFO("vHost Device '%s' (%ld) can't be added - name not found",
-                   dev->ifname, dev->device_fh);
+        VLOG_INFO("vHost Device '%s' %"PRIu64" can't be added - name not "
+                  "found", dev->ifname, dev->device_fh);
 
         return -1;
     }
 
-    VLOG_INFO("vHost Device '%s' (%ld) has been added",
-               dev->ifname, dev->device_fh);
+    VLOG_INFO("vHost Device '%s' %"PRIu64" has been added", dev->ifname,
+              dev->device_fh);
     return 0;
 }
 
@@ -1830,8 +1830,8 @@ destroy_device(volatile struct virtio_net *dev)
     }
     ovs_mutex_unlock(&dpdk_mutex);
 
-    VLOG_INFO("vHost Device '%s' (%ld) has been removed",
-               dev->ifname, dev->device_fh);
+    VLOG_INFO("vHost Device '%s' %"PRIu64" has been removed", dev->ifname,
+              dev->device_fh);
 }
 
 struct virtio_net *
