@@ -146,10 +146,16 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     POVS_STT_VPORT vportStt;
     UINT32 headRoom = OvsGetSttTunHdrSize();
     UINT32 tcpChksumLen;
+    PUINT8 bufferStart;
 
     UNREFERENCED_PARAMETER(layers);
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
+
+    /* Verify if inner checksum is verified */
+    BOOLEAN innerChecksumVerified = FALSE;
+    BOOLEAN innerPartialChecksum = FALSE;
+
     if (layers->isTcp) {
         NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
 
@@ -165,11 +171,38 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     vportStt = (POVS_STT_VPORT) GetOvsVportPriv(vport);
     ASSERT(vportStt);
 
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
     *newNbl = OvsPartialCopyNBL(switchContext, curNbl, 0, headRoom,
                                 FALSE /*copy NblInfo*/);
     if (*newNbl == NULL) {
         OVS_LOG_ERROR("Unable to copy NBL");
         return NDIS_STATUS_FAILURE;
+    }
+
+    curNb = NET_BUFFER_LIST_FIRST_NB(*newNbl);
+    curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+    bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
+                                                       LowPagePriority);
+    bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+
+    if (layers->isIPv4 && csumInfo.Transmit.IpHeaderChecksum) {
+        IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
+        ip->check = IPChecksum((UINT8 *)ip, ip->ihl * 4, 0);
+    }
+    if (layers->isTcp) {
+        if(!csumInfo.Transmit.TcpChecksum) {
+            innerChecksumVerified = TRUE;
+        } else {
+            innerPartialChecksum = TRUE;
+        }
+    } else if (layers->isUdp) {
+        if(!csumInfo.Transmit.UdpChecksum) {
+            innerChecksumVerified = TRUE;
+        } else {
+            innerPartialChecksum = TRUE;
+        }
     }
 
     curNbl = *newNbl;
@@ -243,7 +276,6 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     outerIpHdr->check = 0;
     outerIpHdr->saddr = fwdInfo->srcIpAddr;
     outerIpHdr->daddr = tunKey->dst;
-    outerIpHdr->check = IPChecksum((uint8 *)outerIpHdr, sizeof *outerIpHdr, 0);
 
     /* L4 header */
     RtlZeroMemory(outerTcpHdr, sizeof *outerTcpHdr);
@@ -266,6 +298,11 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
 
     /* XXX need to peek into the inner packet, hard code for now */
     sttHdr->flags = STT_PROTO_IPV4;
+    if (innerChecksumVerified) {
+        sttHdr->flags |= STT_CSUM_VERIFIED;
+    } else if (innerPartialChecksum) {
+        sttHdr->flags |= STT_CSUM_PARTIAL;
+    }
     sttHdr->l4Offset = 0;
 
     sttHdr->reserved = 0;
@@ -276,13 +313,15 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     /* Zero out stt padding */
     *(uint16 *)(sttHdr + 1) = 0;
 
-    /* Calculate software tcp checksum */
-    outerTcpHdr->check = CalculateChecksumNB(curNb, (uint16) tcpChksumLen,
-                                             sizeof(EthHdr) + sizeof(IPHdr));
-    if (outerTcpHdr->check == 0) {
-        status = NDIS_STATUS_FAILURE;
-        goto ret_error;
-    }
+    /* Offload IP and TCP checksum */
+    csumInfo.Value = 0;
+    csumInfo.Transmit.IpHeaderChecksum = 1;
+    csumInfo.Transmit.TcpChecksum = 1;
+    csumInfo.Transmit.IsIPv4 = 1;
+    csumInfo.Transmit.TcpHeaderOffset = sizeof *outerEthHdr +
+                                        outerIpHdr->ihl * 4;
+    NET_BUFFER_LIST_INFO(curNbl,
+                         TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
 
     return STATUS_SUCCESS;
 
@@ -290,6 +329,53 @@ ret_error:
     OvsCompleteNBL(switchContext, *newNbl, TRUE);
     *newNbl = NULL;
     return status;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * OvsCalculateTCPChecksum
+ *     Calculate TCP checksum
+ *----------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsCalculateTCPChecksum(PNET_BUFFER_LIST curNbl, PNET_BUFFER curNb)
+{
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
+    UINT16 checkSum;
+
+    /* Check if TCP Checksum has been calculated by NIC */
+    if (csumInfo.Receive.TcpChecksumSucceeded) {
+        return NDIS_STATUS_SUCCESS;
+    }
+        
+    EthHdr *eth = (EthHdr *)NdisGetDataBuffer(curNb, sizeof(EthHdr),
+                                              NULL, 1, 0);
+
+    if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV4)) {
+        IPHdr *ip = (IPHdr *)((PCHAR)eth + sizeof *eth);
+        UINT32 l4Payload = ntohs(ip->tot_len) - ip->ihl * 4;
+        TCPHdr *tcp = (TCPHdr *)((PCHAR)ip + ip->ihl * 4);
+        checkSum = tcp->check;
+
+        tcp->check = 0;
+        tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                      IPPROTO_TCP, (UINT16)l4Payload);
+        tcp->check = CalculateChecksumNB(curNb, (UINT16)(l4Payload),
+                                         sizeof(EthHdr) + ip->ihl * 4);
+        if (checkSum != tcp->check) {
+            return NDIS_STATUS_INVALID_PACKET;
+        }
+    } else {
+        OVS_LOG_ERROR("IPv6 on STT is not supported");
+        return NDIS_STATUS_INVALID_PACKET;
+    }
+
+    csumInfo.Receive.TcpChecksumSucceeded = 1;
+    NET_BUFFER_LIST_INFO(curNbl,
+                         TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
+    return NDIS_STATUS_SUCCESS;
 }
 
 /*
@@ -311,6 +397,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     SttHdr *sttHdr;
     char *sttBuf[STT_HDR_LEN];
     UINT32 advanceCnt, hdrLen;
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
@@ -319,6 +406,21 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
         OVS_LOG_ERROR("Packet length received is less than the tunnel header:"
             " %d<%d\n", NET_BUFFER_DATA_LENGTH(curNb), OvsGetSttTunHdrSize());
         return NDIS_STATUS_INVALID_LENGTH;
+    }
+
+    /* Verify outer TCP Checksum */
+    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
+
+    /* Check if NIC has indicated TCP checksum failure */
+    if (csumInfo.Receive.TcpChecksumFailed) {
+        return NDIS_STATUS_INVALID_PACKET;
+    }
+    
+    /* Calculate the TCP Checksum */
+    status = OvsCalculateTCPChecksum(curNbl, curNb);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return status;
     }
 
     /* Skip Eth header */
@@ -353,6 +455,61 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     hdrLen = STT_HDR_LEN;
     NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
     advanceCnt += hdrLen;
+    
+    /* Verify checksum for inner packet if it's required */
+    if (!(sttHdr->flags & STT_CSUM_VERIFIED)) {
+        BOOLEAN innerChecksumPartial = sttHdr->flags & STT_CSUM_PARTIAL;
+        EthHdr *eth = (EthHdr *)NdisGetDataBuffer(curNb, sizeof(EthHdr),
+                                                  NULL, 1, 0);
+
+        /* XXX Figure out a way to offload checksum receives */
+        if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV4)) {
+            IPHdr *ip = (IPHdr *)((PCHAR)eth + sizeof *eth);
+            UINT16 l4Payload = (UINT16)ntohs(ip->tot_len) - ip->ihl * 4;
+            UINT32 offset = sizeof(EthHdr) + ip->ihl * 4;
+
+            if (ip->protocol == IPPROTO_TCP) {
+                TCPHdr *tcp = (TCPHdr *)((PCHAR)ip + ip->ihl * 4);
+                if (!innerChecksumPartial){
+                    tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                                  IPPROTO_TCP,
+                                                  (UINT16)l4Payload);
+                }
+                tcp->check = CalculateChecksumNB(curNb, l4Payload, offset);
+            } else if (ip->protocol == IPPROTO_UDP) {
+                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+                if (!innerChecksumPartial){
+                    udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                                  IPPROTO_UDP, l4Payload);
+                }
+                udp->check = CalculateChecksumNB(curNb, l4Payload, offset);
+            }
+        } else if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV6)) {
+            IPv6Hdr *ip = (IPv6Hdr *)((PCHAR)eth + sizeof *eth);
+            UINT32 offset = (UINT32)(sizeof *eth + sizeof *ip);
+            UINT16 totalLength = (UINT16)ntohs(ip->payload_len);
+            if (ip->nexthdr == IPPROTO_TCP) {
+                TCPHdr *tcp = (TCPHdr *)((PCHAR)ip + sizeof *ip);
+                if (!innerChecksumPartial){
+                    tcp->check = IPv6PseudoChecksum((UINT32 *)&ip->saddr,
+                                                    (UINT32 *)&ip->daddr,
+                                                    IPPROTO_TCP, totalLength);
+                }
+                tcp->check = CalculateChecksumNB(curNb, totalLength, offset);
+            }
+            else if (ip->nexthdr == IPPROTO_UDP) {
+                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+                if (!innerChecksumPartial) {
+                    udp->check = IPv6PseudoChecksum((UINT32 *)&ip->saddr,
+                                                    (UINT32 *)&ip->daddr,
+                                                    IPPROTO_UDP, totalLength);
+                }
+                udp->check = CalculateChecksumNB(curNb, totalLength, offset);
+            }
+        }
+
+        NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) = 0;
+    }
 
     *newNbl = OvsPartialCopyNBL(switchContext, curNbl, OVS_DEFAULT_COPY_SIZE,
                                 0, FALSE /*copy NBL info*/);
