@@ -104,7 +104,7 @@ poll_create_node(int fd, HANDLE wevent, short int events, const char *where)
     COVERAGE_INC(poll_create_node);
 
     /* Both 'fd' and 'wevent' cannot be set. */
-    ovs_assert(!fd != !wevent);
+    ovs_assert(fd == -1 || !wevent);
 
     /* Check for duplicate.  If found, "or" the events. */
     node = find_poll_node(loop, fd, wevent);
@@ -159,7 +159,7 @@ poll_fd_wait_at(int fd, short int events, const char *where)
 void
 poll_wevent_wait_at(HANDLE wevent, const char *where)
 {
-    poll_create_node(0, wevent, 0, where);
+    poll_create_node(-1, wevent, 0, where);
 }
 #endif /* _WIN32 */
 
