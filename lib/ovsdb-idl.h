@@ -110,14 +110,6 @@ void ovsdb_idl_add_table(struct ovsdb_idl *,
 void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 void ovsdb_idl_omit_alert(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 
-/* Row, table sequence numbers */
-unsigned int ovsdb_idl_table_get_seqno(
-    const struct ovsdb_idl *idl,
-    const struct ovsdb_idl_table_class *table_class);
-unsigned int ovsdb_idl_row_get_seqno(
-    const struct ovsdb_idl_row *row,
-    unsigned int track_flags);
-
 /* Change tracking. */
 enum ovsdb_idl_change {
     OVSDB_IDL_CHANGE_INSERT,
@@ -125,6 +117,15 @@ enum ovsdb_idl_change {
     OVSDB_IDL_CHANGE_DELETE,
     OVSDB_IDL_CHANGE_MAX
 };
+
+/* Row, table sequence numbers */
+unsigned int ovsdb_idl_table_get_seqno(
+    const struct ovsdb_idl *idl,
+    const struct ovsdb_idl_table_class *table_class);
+unsigned int ovsdb_idl_row_get_seqno(
+    const struct ovsdb_idl_row *row,
+    enum ovsdb_idl_change change);
+
 void ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
                                 const struct ovsdb_idl_column *column);
 void ovsdb_idl_track_add_all(struct ovsdb_idl *idl);
