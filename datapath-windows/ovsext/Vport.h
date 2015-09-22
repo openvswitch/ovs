@@ -34,11 +34,6 @@
  */
 #define OVS_DPPORT_NUMBER_LOCAL    0
 
-#define OVS_DPPORT_INTERNAL_NAME_A  "internal"
-#define OVS_DPPORT_INTERNAL_NAME_W  L"internal"
-#define OVS_DPPORT_EXTERNAL_NAME_A   "external"
-#define OVS_DPPORT_EXTERNAL_NAME_W  L"external"
-
 /*
  * A Vport, or Virtual Port, is a port on the OVS. It can be one of the
  * following types. Some of the Vports are "real" ports on the hyper-v switch,
