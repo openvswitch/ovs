@@ -254,7 +254,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
     PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
     POVS_HDR ovsHdr = &(msgIn->ovsHdr);
-    PNL_ATTR nlAttrs[__OVS_FLOW_ATTR_MAX];
+    PNL_ATTR flowAttrs[__OVS_FLOW_ATTR_MAX];
     UINT32 attrOffset = NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN;
     OvsFlowPut mappedFlow;
     OvsFlowStats stats;
@@ -275,7 +275,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* Get all the top level Flow attributes */
     if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
                      nlFlowPolicy, ARRAY_SIZE(nlFlowPolicy),
-                     nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     flowAttrs, ARRAY_SIZE(flowAttrs)))
                      != TRUE) {
         OVS_LOG_ERROR("Attr Parsing failed for msg: %p",
                        nlMsgHdr);
@@ -285,7 +285,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     /* FLOW_DEL command w/o any key input is a flush case. */
     if ((genlMsgHdr->cmd == OVS_FLOW_CMD_DEL) &&
-        (!(nlAttrs[OVS_FLOW_ATTR_KEY]))) {
+        (!(flowAttrs[OVS_FLOW_ATTR_KEY]))) {
 
         rc = OvsFlushFlowIoctl(ovsHdr->dp_ifindex);
 
@@ -315,8 +315,8 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
-    if ((rc = _MapNlToFlowPut(msgIn, nlAttrs[OVS_FLOW_ATTR_KEY],
-         nlAttrs[OVS_FLOW_ATTR_ACTIONS], nlAttrs[OVS_FLOW_ATTR_CLEAR],
+    if ((rc = _MapNlToFlowPut(msgIn, flowAttrs[OVS_FLOW_ATTR_KEY],
+         flowAttrs[OVS_FLOW_ATTR_ACTIONS], flowAttrs[OVS_FLOW_ATTR_CLEAR],
          &mappedFlow))
         != STATUS_SUCCESS) {
         OVS_LOG_ERROR("Conversion to OvsFlowPut failed");
