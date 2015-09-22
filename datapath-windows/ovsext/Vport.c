@@ -95,7 +95,7 @@ static VOID OvsTunnelVportPendingInit(PVOID context,
 static VOID OvsTunnelVportPendingRemove(PVOID context,
                                         NTSTATUS status,
                                         UINT32 *replyLen);
-
+static VOID AssignNicNameSpecial(POVS_VPORT_ENTRY vport);
 
 /*
  * Functions implemented in relaton to NDIS port manipulation.
@@ -191,10 +191,8 @@ HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
                                             portParam->PortId, 0);
     /*
      * Update properties only for NETDEV ports for supprting PS script
-     * We don't allow changing the names of the internal or external ports
      */
-    if (vport == NULL || (( vport->portType != NdisSwitchPortTypeSynthetic) &&
-        ( vport->portType != NdisSwitchPortTypeEmulated))) {
+    if (vport == NULL) {
         goto update_port_done;
     }
 
@@ -439,6 +437,7 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     case NdisSwitchNicTypeInternal:
         RtlCopyMemory(&vport->netCfgInstanceId, &nicParam->NetCfgInstanceId,
                       sizeof (GUID));
+        AssignNicNameSpecial(vport);
         break;
     case NdisSwitchNicTypeSynthetic:
     case NdisSwitchNicTypeEmulated:
@@ -968,36 +967,47 @@ OvsInitBridgeInternalVport(POVS_VPORT_ENTRY vport)
 
 /*
  * --------------------------------------------------------------------------
- * For external vports 'portFriendlyName' provided by Hyper-V is over-written
- * by synthetic names.
+ * For external and internal vports 'portFriendlyName' parameter, provided by
+ * Hyper-V, is overwritten with the interface alias name.
  * --------------------------------------------------------------------------
  */
 static VOID
 AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
 {
-    size_t len;
+    NTSTATUS status = STATUS_SUCCESS;
+    WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
+    NET_LUID interfaceLuid = { 0 };
+    size_t len = 0;
 
-    if (vport->portType == NdisSwitchPortTypeExternal) {
-        if (vport->nicIndex == 0) {
-            ASSERT(vport->nicIndex == 0);
-            RtlStringCbPrintfW(vport->portFriendlyName.String,
-                               IF_MAX_STRING_SIZE,
-                               L"%s.virtualAdapter", OVS_DPPORT_EXTERNAL_NAME_W);
+    ASSERT(vport->portType == NdisSwitchPortTypeExternal || 
+           vport->portType == NdisSwitchPortTypeInternal);
+
+    status = ConvertInterfaceGuidToLuid(&vport->netCfgInstanceId,
+                                        &interfaceLuid);
+    if (status == STATUS_SUCCESS) {
+        status = ConvertInterfaceLuidToAlias(&interfaceLuid, interfaceName,
+                                             IF_MAX_STRING_SIZE + 1);
+        if (status == STATUS_SUCCESS) {
+            if (vport->portType == NdisSwitchPortTypeExternal &&
+                vport->nicIndex == 0) {
+                RtlStringCbPrintfW(vport->portFriendlyName.String, IF_MAX_STRING_SIZE,
+                                   L"%s.virtualAdapter", interfaceName);
+            } else {
+                RtlStringCbPrintfW(vport->portFriendlyName.String,
+                                   IF_MAX_STRING_SIZE, L"%s", interfaceName);
+            }
+
+            RtlStringCbLengthW(vport->portFriendlyName.String, IF_MAX_STRING_SIZE,
+                               &len);
+            vport->portFriendlyName.Length = (USHORT)len;
         } else {
-            RtlStringCbPrintfW(vport->portFriendlyName.String,
-                               IF_MAX_STRING_SIZE,
-                               L"%s.%lu", OVS_DPPORT_EXTERNAL_NAME_W,
-                               (UINT32)vport->nicIndex);
+            OVS_LOG_INFO("Fail to convert interface LUID to alias, status: %x",
+                status);
         }
     } else {
-        RtlStringCbPrintfW(vport->portFriendlyName.String,
-                           IF_MAX_STRING_SIZE,
-                           L"%s", OVS_DPPORT_INTERNAL_NAME_W);
+        OVS_LOG_INFO("Fail to convert interface GUID to LUID, status: %x",
+                      status);
     }
-
-    RtlStringCbLengthW(vport->portFriendlyName.String, IF_MAX_STRING_SIZE,
-                       &len);
-    vport->portFriendlyName.Length = (USHORT)len;
 }
 
 
@@ -1382,23 +1392,40 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
             if (vport) {
                 OvsInitPhysNicVport(vport, virtExtVport,
                                     nicParam->NicIndex);
+                OvsInitVportWithNicParam(switchContext, vport, nicParam);
                 status = InitHvVportCommon(switchContext, vport, TRUE);
                 if (status != NDIS_STATUS_SUCCESS) {
                     OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
                     vport = NULL;
                 }
+            } else {
+                OVS_LOG_ERROR("Fail to allocate vport.");
+                continue;
             }
         } else {
             vport = OvsFindVportByPortIdAndNicIndex(switchContext,
                                                     nicParam->PortId,
                                                     nicParam->NicIndex);
+            if (vport == NULL) {
+                OVS_LOG_ERROR(
+                    "Could not found vport with portId: %d and nicIndex: %d.",
+                    nicParam->PortId, nicParam->NicIndex);
+                continue;
+            }
+            OvsInitVportWithNicParam(switchContext, vport, nicParam);
         }
-        if (vport == NULL) {
-            OVS_LOG_ERROR("Fail to allocate vport");
-            continue;
-        }
-        OvsInitVportWithNicParam(switchContext, vport, nicParam);
+
         if (nicParam->NicType == NdisSwitchNicTypeInternal) {
+            /*
+             * Overwrite the 'portFriendlyName' of the internal vport. 
+             * Note:
+             * The call to AssignNicNameSpecial() is needed here, because the
+             * necessary 'netCfgInstanceId' of the vport is available.
+             * On port creation the latter information is missing and the
+             * 'portFriendlyName' of the vport fails to be overwritten with the
+             * correct information.
+             */
+            AssignNicNameSpecial(vport);
             OvsInternalAdapterUp(vport->portNo, &nicParam->NetCfgInstanceId);
         }
     }
@@ -2093,9 +2120,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     PCHAR portName;
     ULONG portNameLen;
     UINT32 portType;
-    BOOLEAN isBridgeInternal = FALSE;
     BOOLEAN vportAllocated = FALSE, vportInitialized = FALSE;
-    BOOLEAN addInternalPortAsNetdev = FALSE;
 
     static const NL_POLICY ovsVportPolicy[] = {
         [OVS_VPORT_ATTR_PORT_NO] = { .type = NL_A_U32, .optional = TRUE },
@@ -2138,24 +2163,12 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto Cleanup;
     }
 
-    if (portName && portType == OVS_VPORT_TYPE_NETDEV &&
-        !strcmp(OVS_DPPORT_INTERNAL_NAME_A, portName)) {
-        addInternalPortAsNetdev = TRUE;
-    }
-
-    if (portName && portType == OVS_VPORT_TYPE_INTERNAL &&
-        strcmp(OVS_DPPORT_INTERNAL_NAME_A, portName)) {
-        isBridgeInternal = TRUE;
-    }
-
-    if (portType == OVS_VPORT_TYPE_INTERNAL && !isBridgeInternal) {
-        vport = gOvsSwitchContext->internalVport;
-    } else if (portType == OVS_VPORT_TYPE_NETDEV) {
+    if (portType == OVS_VPORT_TYPE_NETDEV) {
         /* External ports can also be looked up like VIF ports. */
         vport = OvsFindVportByHvNameA(gOvsSwitchContext, portName);
     } else {
         ASSERT(OvsIsTunnelVportType(portType) ||
-               (portType == OVS_VPORT_TYPE_INTERNAL && isBridgeInternal));
+               portType == OVS_VPORT_TYPE_INTERNAL);
 
         vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
         if (vport == NULL) {
@@ -2221,10 +2234,6 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto Cleanup;
     }
 
-    /* Initialize the vport with OVS specific properties. */
-    if (addInternalPortAsNetdev != TRUE) {
-        vport->ovsType = portType;
-    }
     if (vportAttrs[OVS_VPORT_ATTR_PORT_NO] != NULL) {
         /*
          * XXX: when we implement the limit for ovs port number to be
