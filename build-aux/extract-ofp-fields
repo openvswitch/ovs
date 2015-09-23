@@ -19,7 +19,7 @@ TYPES = {"u8":       (1,   False),
          "be32":     (4,   False),
          "MAC":      (6,   False),
          "be64":     (8,   False),
-         "IPv6":     (16,  False),
+         "be128":    (16,  False),
          "tunnelMD": (124, True)}
 
 FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),

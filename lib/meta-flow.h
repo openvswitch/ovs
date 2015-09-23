@@ -1059,7 +1059,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * The source address in the IPv6 header.
      *
-     * Type: IPv6.
+     * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
      * Prerequisites: IPv6.
@@ -1074,7 +1074,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * The destination address in the IPv6 header.
      *
-     * Type: IPv6.
+     * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
      * Prerequisites: IPv6.
@@ -1528,7 +1528,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * Before Open vSwitch 1.8, only CIDR masks were supported.
      *
-     * Type: IPv6.
+     * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
      * Prerequisites: ND.
