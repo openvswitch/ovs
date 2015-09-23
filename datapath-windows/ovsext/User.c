@@ -772,7 +772,7 @@ NTSTATUS
 OvsCreateAndAddPackets(PVOID userData,
                        UINT32 userDataLen,
                        UINT32 cmd,
-                       UINT32 inPort,
+                       POVS_VPORT_ENTRY vport,
                        OvsFlowKey *key,
                        PNET_BUFFER_LIST nbl,
                        BOOLEAN isRecv,
@@ -809,7 +809,7 @@ OvsCreateAndAddPackets(PVOID userData,
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
     while (nb) {
         elem = OvsCreateQueueNlPacket(userData, userDataLen,
-                                    cmd, inPort, key, nbl, nb,
+                                    cmd, vport, key, nbl, nb,
                                     isRecv, hdrInfo);
         if (elem) {
             InsertTailList(list, &elem->link);
@@ -988,7 +988,7 @@ POVS_PACKET_QUEUE_ELEM
 OvsCreateQueueNlPacket(PVOID userData,
                        UINT32 userDataLen,
                        UINT32 cmd,
-                       UINT32 inPort,
+                       POVS_VPORT_ENTRY vport,
                        OvsFlowKey *key,
                        PNET_BUFFER_LIST nbl,
                        PNET_BUFFER nb,
@@ -1006,10 +1006,6 @@ OvsCreateQueueNlPacket(PVOID userData,
     UINT32 nlMsgSize;
     NL_BUFFER nlBuf;
     PNL_MSG_HDR nlMsg;
-
-    /* XXX pass vport in the stack rather than portNo */
-    POVS_VPORT_ENTRY vport =
-        OvsFindVportByPortNo(gOvsSwitchContext, inPort);
 
     if (vport == NULL){
         /* No vport is not fatal. */
@@ -1062,7 +1058,7 @@ OvsCreateQueueNlPacket(PVOID userData,
     elem->packet.queue = 0;
     /* XXX  no need as the length is already in the NL attrib */
     elem->packet.userDataLen = userDataLen;
-    elem->packet.inPort = inPort;
+    elem->packet.inPort = vport->portNo;
     elem->packet.cmd = cmd;
     if (cmd == (UINT32)OVS_PACKET_CMD_MISS) {
         ovsUserStats.miss++;

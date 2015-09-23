@@ -333,8 +333,8 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                  * Otherwise, it adds it to the completionList. No need to
                  * check the return value. */
                 OvsActionsExecute(switchContext, &completionList, curNbl,
-                                portNo, SendFlags, &key, &hash, &layers,
-                                flow->actions, flow->actionsLen);
+                                  portNo, SendFlags, &key, &hash, &layers,
+                                  flow->actions, flow->actionsLen);
                 OvsReleaseDatapath(datapath, &dpLockState);
                 NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
                 continue;
@@ -343,7 +343,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
 
                 datapath->misses++;
                 status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
-                             portNo, &key, curNbl,
+                             vport, &key, curNbl,
                              sourcePort == switchContext->virtualExternalPortId,
                              &layers, switchContext, &missedPackets, &num);
                 if (status == NDIS_STATUS_SUCCESS) {

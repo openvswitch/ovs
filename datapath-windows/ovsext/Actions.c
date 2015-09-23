@@ -566,9 +566,10 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
 
     /* Assert that in the Rx direction, key is always setup. */
     ASSERT(ovsFwdCtx->tunnelRxNic == NULL || ovsFwdCtx->tunKey.dst != 0);
-    status = OvsExtractFlow(ovsFwdCtx->curNbl, ovsFwdCtx->srcVportNo,
-                          &key, &ovsFwdCtx->layers, ovsFwdCtx->tunKey.dst != 0 ?
-                                         &ovsFwdCtx->tunKey : NULL);
+    status =
+        OvsExtractFlow(ovsFwdCtx->curNbl, ovsFwdCtx->srcVportNo,
+                       &key, &ovsFwdCtx->layers,
+                       ovsFwdCtx->tunKey.dst != 0 ? &ovsFwdCtx->tunKey : NULL);
     if (status != NDIS_STATUS_SUCCESS) {
         OvsCompleteNBLForwardingCtx(ovsFwdCtx,
                                     L"OVS-Flow extract failed");
@@ -581,18 +582,17 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
         OvsFlowUsed(flow, ovsFwdCtx->curNbl, &ovsFwdCtx->layers);
         ovsFwdCtx->switchContext->datapath.hits++;
         status = OvsActionsExecute(ovsFwdCtx->switchContext,
-                                 ovsFwdCtx->completionList, ovsFwdCtx->curNbl,
-                                 ovsFwdCtx->srcVportNo, ovsFwdCtx->sendFlags,
-                                 &key, &hash, &ovsFwdCtx->layers,
-                                 flow->actions, flow->actionsLen);
+                                   ovsFwdCtx->completionList, ovsFwdCtx->curNbl,
+                                   ovsFwdCtx->srcVportNo, ovsFwdCtx->sendFlags,
+                                   &key, &hash, &ovsFwdCtx->layers,
+                                   flow->actions, flow->actionsLen);
         ovsFwdCtx->curNbl = NULL;
     } else {
         LIST_ENTRY missedPackets;
         UINT32 num = 0;
         ovsFwdCtx->switchContext->datapath.misses++;
         InitializeListHead(&missedPackets);
-        status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
-                          ovsFwdCtx->srcVportNo,
+        status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS, vport,
                           &key,ovsFwdCtx->curNbl,
                           ovsFwdCtx->tunnelRxNic != NULL, &ovsFwdCtx->layers,
                           ovsFwdCtx->switchContext, &missedPackets, &num);
@@ -1530,7 +1530,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             elem = OvsCreateQueueNlPacket((PVOID)userdataAttr,
                                     userdataAttr->nlaLen,
                                     OVS_PACKET_CMD_ACTION,
-                                    portNo, key,ovsFwdCtx.curNbl,
+                                    vport, key, ovsFwdCtx.curNbl,
                                     NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx.curNbl),
                                     isRecv,
                                     layers);
