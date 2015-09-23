@@ -698,7 +698,6 @@ OvsQueuePackets(PLIST_ENTRY packetList,
 {
     POVS_USER_PACKET_QUEUE upcallQueue = NULL;
     POVS_PACKET_QUEUE_ELEM elem;
-    PIRP irp = NULL;
     PLIST_ENTRY  link;
     UINT32 num = 0;
     LIST_ENTRY dropPackets;
@@ -728,23 +727,17 @@ OvsQueuePackets(PLIST_ENTRY packetList,
                 InsertTailList(&upcallQueue->packetList, &elem->link);
                 upcallQueue->numPackets++;
                 if (upcallQueue->pendingIrp) {
+                    PIRP irp = upcallQueue->pendingIrp;
                     PDRIVER_CANCEL cancelRoutine;
-                    irp = upcallQueue->pendingIrp;
                     upcallQueue->pendingIrp = NULL;
                     cancelRoutine = IoSetCancelRoutine(irp, NULL);
-                    if (cancelRoutine == NULL) {
-                        irp = NULL;
+                    if (cancelRoutine != NULL) {
+                        OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
                     }
                 }
             }
-
-            if (irp) {
-                OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
-            }
-
             NdisReleaseSpinLock(&upcallQueue->queueLock);
         }
-
         OvsReleasePidHashLock();
     }
 
