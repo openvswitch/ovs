@@ -119,4 +119,11 @@ OvsAddPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid,
 VOID
 OvsDelPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid);
 
+NTSTATUS OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                 UINT32 *replyLen);
+NTSTATUS OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                      UINT32 *replyLen);
+NTSTATUS OvsPendPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                 UINT32 *replyLen);
+
 #endif /* __USER_H_ */
