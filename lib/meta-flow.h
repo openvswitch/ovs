@@ -1742,6 +1742,7 @@ union mf_value {
     uint8_t tun_metadata[128];
     struct in6_addr ipv6;
     struct eth_addr mac;
+    ovs_be128 be128;
     ovs_be64 be64;
     ovs_be32 be32;
     ovs_be16 be16;
