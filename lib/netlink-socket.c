@@ -1237,6 +1237,7 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 #endif
 }
 
+#ifndef _WIN32
 /* Returns the underlying fd for 'sock', for use in "poll()"-like operations
  * that can't use nl_sock_wait().
  *
@@ -1247,13 +1248,9 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 int
 nl_sock_fd(const struct nl_sock *sock)
 {
-#ifdef _WIN32
-    BUILD_ASSERT_DECL(sizeof sock->handle == sizeof(int));
-    return (int)sock->handle;
-#else
     return sock->fd;
-#endif
 }
+#endif
 
 /* Returns the PID associated with this socket. */
 uint32_t

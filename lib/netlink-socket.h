@@ -226,7 +226,9 @@ int nl_sock_recv(struct nl_sock *, struct ofpbuf *, bool wait);
 int nl_sock_drain(struct nl_sock *);
 
 void nl_sock_wait(const struct nl_sock *, short int events);
+#ifndef _WIN32
 int nl_sock_fd(const struct nl_sock *);
+#endif
 
 uint32_t nl_sock_pid(const struct nl_sock *);
 
