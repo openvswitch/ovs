@@ -1020,10 +1020,24 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (status != STATUS_SUCCESS && status != STATUS_PENDING) {
         if (usrParamsCtx->devOp != OVS_WRITE_DEV_OP && *replyLen == 0) {
             NL_ERROR nlError = NlMapStatusToNlErr(status);
-            POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+            OVS_MESSAGE msgInTmp = { 0 };
+            POVS_MESSAGE msgIn = NULL;
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                 usrParamsCtx->outputBuffer;
 
+            if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
+                usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY) {
+                /* There's no input buffer associated with such requests. */
+                NL_BUFFER nlBuffer;
+                msgIn = &msgInTmp;
+                NlBufInit(&nlBuffer, (PCHAR)msgIn, sizeof *msgIn);
+                NlFillNlHdr(&nlBuffer, nlFamilyOps->id, 0, 0,
+                            usrParamsCtx->ovsInstance->pid);
+            } else {
+                msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+            }
+
+            ASSERT(msgIn);
             ASSERT(msgError);
             NlBuildErrorMsg(msgIn, msgError, nlError);
             *replyLen = msgError->nlMsg.nlmsgLen;
