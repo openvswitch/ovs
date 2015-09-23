@@ -566,6 +566,124 @@ TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - multiple zones, local])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 secure -- ])
+
+ADD_NAMESPACES(at_ns0)
+
+AT_CHECK([ip addr add dev br0 "10.1.1.1/24"])
+AT_CHECK([ip link set dev br0 up])
+on_exit 'ip addr del dev br0 "10.1.1.1/24"'
+ADD_VETH(p0, at_ns0, br0, "10.1.1.2/24")
+
+dnl Allow traffic from local stack to ns0. Only allow neighbour discovery,
+dnl return traffic from ns0 back to the local stack.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=LOCAL,ip,ct_state=-trk,action=drop
+priority=100,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=1),ct(commit,zone=2),1
+priority=100,in_port=LOCAL,ip,ct_state=+trk+est,action=ct(commit,zone=1),ct(commit,zone=2),1
+priority=100,in_port=1,ip,ct_state=-trk,action=ct(table=1,zone=1)
+table=1,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=1,action=ct(table=2,zone=2)
+table=2,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl HTTP requests from root namespace to p0 should work fine.
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl (again) HTTP requests from root namespace to  p0 should work fine.
+AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep "zone"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=2 use=1
+src=10.1.1.1 dst=10.1.1.2 type=8 code=0 id=<cleared> src=10.1.1.2 dst=10.1.1.1 type=0 code=0 id=<cleared> mark=0 zone=1 use=1
+src=10.1.1.1 dst=10.1.1.2 type=8 code=0 id=<cleared> src=10.1.1.2 dst=10.1.1.1 type=0 code=0 id=<cleared> mark=0 zone=2 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - multi-stage pipeline, local])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 secure -- ])
+
+ADD_NAMESPACES(at_ns0)
+
+AT_CHECK([ip addr add dev br0 "10.1.1.1/24"])
+AT_CHECK([ip link set dev br0 up])
+on_exit 'ip addr del dev br0 "10.1.1.1/24"'
+ADD_VETH(p0, at_ns0, br0, "10.1.1.2/24")
+
+dnl Allow traffic from local stack to ns0. Only allow neighbour discovery,
+dnl return traffic from ns0 back to the local stack.
+AT_DATA([flows.txt], [dnl
+dnl default
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+
+dnl Load the output port to REG0
+table=0,priority=100,ip,in_port=LOCAL,action=load:1->NXM_NX_REG0[[0..15]],goto_table:1
+table=0,priority=100,ip,in_port=1,action=load:65534->NXM_NX_REG0[[0..15]],goto_table:1
+
+dnl Ingress pipeline
+dnl - Allow all connections from LOCAL port (commit and proceed to egress)
+dnl - All other connections go through conntracker using the input port as
+dnl   a connection tracking zone.
+table=1,priority=150,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=OXM_OF_IN_PORT[[0..15]]),goto_table:2
+table=1,priority=100,ip,action=ct(table=2,zone=OXM_OF_IN_PORT[[0..15]])
+table=1,priority=1,action=drop
+
+dnl Egress pipeline
+dnl - Allow all connections from LOCAL port (commit and skip to output)
+dnl - Allow other established connections to go through conntracker using
+dnl   output port as a connection tracking zone.
+table=2,priority=150,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=NXM_NX_REG0[[0..15]]),goto_table:4
+table=2,priority=100,ip,ct_state=+trk+est,action=ct(table=3,zone=NXM_NX_REG0[[0..15]])
+table=2,priority=1,action=drop
+
+dnl Only allow established traffic from egress ct lookup
+table=3,priority=100,ip,ct_state=+trk+est,action=goto_table:4
+table=3,priority=1,action=drop
+
+dnl output table
+table=4,priority=100,ip,action=output:NXM_NX_REG0[[]]
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl HTTP requests from root namespace to p0 should work fine.
+NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl (again) HTTP requests from root namespace to p0 should work fine.
+AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep "zone"], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=65534 use=1
+src=10.1.1.1 dst=10.1.1.2 type=8 code=0 id=<cleared> src=10.1.1.2 dst=10.1.1.1 type=0 code=0 id=<cleared> mark=0 zone=1 use=1
+src=10.1.1.1 dst=10.1.1.2 type=8 code=0 id=<cleared> src=10.1.1.2 dst=10.1.1.1 type=0 code=0 id=<cleared> mark=0 zone=65534 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ct_mark])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START(
