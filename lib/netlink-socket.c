@@ -1178,10 +1178,17 @@ pend_io_request(struct nl_sock *sock)
     struct ovs_header *ovs_header;
     struct nlmsghdr *nlmsg;
     uint32_t seq;
-    int retval;
+    int retval = 0;
     int error;
     DWORD bytes;
     OVERLAPPED *overlapped = CONST_CAST(OVERLAPPED *, &sock->overlapped);
+    uint16_t cmd = OVS_CTRL_CMD_WIN_PEND_PACKET_REQ;
+
+    ovs_assert(sock->read_ioctl == OVS_IOCTL_READ_PACKET ||
+               sock->read_ioctl  == OVS_IOCTL_READ_EVENT);
+    if (sock->read_ioctl == OVS_IOCTL_READ_EVENT) {
+        cmd = OVS_CTRL_CMD_WIN_PEND_REQ;
+    }
 
     int ovs_msg_size = sizeof (struct nlmsghdr) + sizeof (struct genlmsghdr) +
                                sizeof (struct ovs_header);
@@ -1190,7 +1197,7 @@ pend_io_request(struct nl_sock *sock)
 
     seq = nl_sock_allocate_seq(sock, 1);
     nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
-                          OVS_CTRL_CMD_WIN_PEND_REQ, OVS_WIN_CONTROL_VERSION);
+                          cmd, OVS_WIN_CONTROL_VERSION);
     nlmsg = nl_msg_nlmsghdr(&request);
     nlmsg->nlmsg_seq = seq;
     nlmsg->nlmsg_pid = sock->pid;
@@ -1206,13 +1213,10 @@ pend_io_request(struct nl_sock *sock)
         if (error != ERROR_IO_INCOMPLETE && error != ERROR_IO_PENDING) {
             VLOG_ERR("nl_sock_wait failed - %s\n", ovs_format_message(error));
             retval = EINVAL;
-            goto done;
         }
     } else {
-        /* The I/O was completed synchronously */
-        poll_immediate_wake();
+        retval = EAGAIN;
     }
-    retval = 0;
 
 done:
     ofpbuf_uninit(&request);
@@ -1228,10 +1232,15 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
 {
 #ifdef _WIN32
     if (sock->overlapped.Internal != STATUS_PENDING) {
-        pend_io_request(CONST_CAST(struct nl_sock *, sock));
-       /* XXX: poll_wevent_wait(sock->overlapped.hEvent); */
+        int ret = pend_io_request(CONST_CAST(struct nl_sock *, sock));
+        if (ret == 0) {
+            poll_wevent_wait(sock->overlapped.hEvent);
+        } else {
+            poll_immediate_wake();
+        }
+    } else {
+        poll_wevent_wait(sock->overlapped.hEvent);
     }
-    poll_immediate_wake(); /* XXX: temporary. */
 #else
     poll_fd_wait(sock->fd, events);
 #endif
