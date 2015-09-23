@@ -3,7 +3,19 @@ compiler:
   - gcc
   - clang
 
+addons:
+  apt:
+    packages:
+      - libssl-dev
+      - llvm-dev
+      - gcc-multilib
+      - libfuse-dev
+
 before_install: ./.travis/prepare.sh
+
+before_script: export PATH=$PATH:$HOME/bin
+
+sudo: false
 
 env:
   - OPTS="--disable-ssl"
