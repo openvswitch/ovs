@@ -1152,3 +1152,111 @@ fail:
     OvsFreeMemoryWithTag(elem, OVS_USER_POOL_TAG);
     return NULL;
 }
+
+/*
+ * --------------------------------------------------------------------------
+ *  Handler for the subscription for a packet queue
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                            UINT32 *replyLen)
+{
+    NDIS_STATUS status;
+    BOOLEAN rc;
+    UINT8 join;
+    UINT32 pid;
+    const NL_POLICY policy[] =  {
+        [OVS_NL_ATTR_PACKET_PID] = {.type = NL_A_U32 },
+        [OVS_NL_ATTR_PACKET_SUBSCRIBE] = {.type = NL_A_U8 }
+        };
+    PNL_ATTR attrs[ARRAY_SIZE(policy)];
+
+    UNREFERENCED_PARAMETER(replyLen);
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+
+    rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, ARRAY_SIZE(policy),
+                       attrs, ARRAY_SIZE(attrs));
+    if (!rc) {
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
+
+    join = NlAttrGetU8(attrs[OVS_NL_ATTR_PACKET_PID]);
+    pid = NlAttrGetU32(attrs[OVS_NL_ATTR_PACKET_PID]);
+
+    /* The socket subscribed with must be the same socket we perform receive*/
+    ASSERT(pid == instance->pid);
+
+    status = OvsSubscribeDpIoctl(instance, pid, join);
+
+    /*
+     * XXX Need to add this instance to a global data structure
+     * which hold all packet based instances. The data structure (hash)
+     * should be searched through the pid field of the instance for
+     * placing the missed packet into the correct queue
+     */
+done:
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * Handler for queueing an IRP used for missed packet notification. The IRP is
+ * completed when a packet received and mismatched. STATUS_PENDING is returned
+ * on success. User mode keep a pending IRP at all times.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsPendPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+    UNREFERENCED_PARAMETER(replyLen);
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+
+    /*
+     * XXX access to packet queue must be through acquiring a lock as user mode
+     * could unsubscribe and the instnace will be freed.
+     */
+    return OvsWaitDpIoctl(usrParamsCtx->irp, instance->fileObject);
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * Handler for reading missed pacckets from the driver event queue. This
+ * handler is executed when user modes issues a socket receive on a socket
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                       UINT32 *replyLen)
+{
+#ifdef DBG
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+#endif
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    NTSTATUS status;
+
+    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+
+    /* Should never read events with a dump socket */
+    ASSERT(instance->dumpState.ovsMsg == NULL);
+
+    /* Must have an packet queue */
+    ASSERT(instance->packetQueue != NULL);
+
+    /* Output buffer has been validated while validating read dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
+
+    /* Read a packet from the instance queue */
+    status = OvsReadDpIoctl(instance->fileObject, usrParamsCtx->outputBuffer,
+                            usrParamsCtx->outputLength, replyLen);
+    return status;
+}
