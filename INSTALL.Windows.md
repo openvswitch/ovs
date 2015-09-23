@@ -33,10 +33,19 @@ binaries.  In addition to that, if you want to compile the kernel module you
 will also need to install Windows Driver Kit (WDK) 8.1 Update.
 
 It is important to get the Visual Studio related environment variables and to
-have the $PATH inside the bash to point to the proper compiler and linker. One
-easy way to achieve this is to get into the "Developer Command prompt for visual
-studio" and through it enter into the bash shell available from msys by typing
+have the $PATH inside the bash to point to the proper compiler and linker.  One
+easy way to achieve this for VS2013 is to get into the "VS2013 x86 Native
+Tools Command Prompt" (in a default installation of Visual Studio 2013 this can
+be found under the following location:
+C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts)
+and through it enter into the bash shell available from msys by typing
 'bash --login'.
+
+There is support for generating 64 bit binaries too.  To compile under x64,
+open the "VS2013 x64 Native Tools Command Prompt" (if your current running OS
+is 64 bit) or "VS2013 x64 Cross Tools Command Prompt" (if your current running
+OS is not 64 bit) instead of opening its x86 variant.  This will point the
+compiler and the linker to their 64 bit equivalent.
 
 If after the above step, a 'which link' inside MSYS's bash says,
 "/bin/link.exe", rename /bin/link.exe to something else so that the

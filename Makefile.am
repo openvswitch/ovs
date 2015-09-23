@@ -19,6 +19,7 @@ AM_CPPFLAGS += -I $(top_srcdir)/datapath-windows/include
 AM_CPPFLAGS += $(PTHREAD_INCLUDES)
 AM_CPPFLAGS += $(MSVC_CFLAGS)
 AM_LDFLAGS += $(PTHREAD_LDFLAGS)
+AM_LDFLAGS += $(MSVC64_LDFLAGS)
 endif
 
 AM_CPPFLAGS += -I $(top_srcdir)/include
