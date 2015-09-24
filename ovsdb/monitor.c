@@ -545,6 +545,21 @@ ovsdb_monitor_compose_row_update(
     return row_json;
 }
 
+static size_t
+ovsdb_monitor_max_columns(struct ovsdb_monitor *dbmon)
+{
+    struct shash_node *node;
+    size_t max_columns = 0;
+
+    SHASH_FOR_EACH (node, &dbmon->tables) {
+        struct ovsdb_monitor_table *mt = node->data;
+
+        max_columns = MAX(max_columns, mt->n_columns);
+    }
+
+    return max_columns;
+}
+
 /* Constructs and returns JSON for a <table-updates> object (as described in
  * RFC 7047) for all the outstanding changes within 'monitor', starting from
  * 'transaction'.  */
@@ -553,17 +568,9 @@ ovsdb_monitor_compose_update(struct ovsdb_monitor *dbmon,
                              bool initial, uint64_t transaction)
 {
     struct shash_node *node;
-    unsigned long int *changed;
     struct json *json;
-    size_t max_columns;
-
-    max_columns = 0;
-    SHASH_FOR_EACH (node, &dbmon->tables) {
-        struct ovsdb_monitor_table *mt = node->data;
-
-        max_columns = MAX(max_columns, mt->n_columns);
-    }
-    changed = xmalloc(bitmap_n_bytes(max_columns));
+    size_t max_columns = ovsdb_monitor_max_columns(dbmon);
+    unsigned long int *changed = xmalloc(bitmap_n_bytes(max_columns));
 
     json = NULL;
     SHASH_FOR_EACH (node, &dbmon->tables) {
