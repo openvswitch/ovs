@@ -2571,10 +2571,9 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_reg_load(char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_set_field *sf = ofpact_put_reg_load(ofpacts);
-    const char *full_arg = arg;
-    uint64_t value = strtoull(arg, (char **) &arg, 0);
     struct mf_subfield dst;
     char *key, *value_str;
+    union mf_value value;
     char *error;
 
     error = set_field_split_str(arg, &key, &value_str, NULL);
@@ -2587,16 +2586,29 @@ parse_reg_load(char *arg, struct ofpbuf *ofpacts)
         return error;
     }
 
-    if (dst.n_bits < 64 && (value >> dst.n_bits) != 0) {
-        return xasprintf("%s: value %"PRIu64" does not fit into %d bits",
-                         full_arg, value, dst.n_bits);
+    if (parse_int_string(value_str, (uint8_t *)&value, dst.field->n_bytes,
+                         &key)) {
+        return xasprintf("%s: cannot parse integer value", arg);
+    }
+
+    if (!bitwise_is_all_zeros(&value, dst.field->n_bytes, dst.n_bits,
+                              dst.field->n_bytes * 8 - dst.n_bits)) {
+        struct ds ds;
+
+        ds_init(&ds);
+        mf_format(dst.field, &value, NULL, &ds);
+        error = xasprintf("%s: value %s does not fit into %d bits",
+                          arg, ds_cstr(&ds), dst.n_bits);
+        ds_destroy(&ds);
+        return error;
     }
 
     sf->field = dst.field;
     memset(&sf->value, 0, sizeof sf->value);
-    bitwise_put(value, &sf->value, dst.field->n_bytes, dst.ofs, dst.n_bits);
-    bitwise_put(UINT64_MAX, &sf->mask,
-                dst.field->n_bytes, dst.ofs, dst.n_bits);
+    bitwise_copy(&value, dst.field->n_bytes, 0, &sf->value,
+                 dst.field->n_bytes, dst.ofs, dst.n_bits);
+    bitwise_one(&sf->mask, dst.field->n_bytes, dst.ofs, dst.n_bits);
+
     return NULL;
 }
 
