@@ -372,4 +372,28 @@ int rpl_skb_vlan_push(struct sk_buff *skb, __be16 vlan_proto, u16 vlan_tci);
 void rpl_kfree_skb_list(struct sk_buff *segs);
 #define kfree_skb_list rpl_kfree_skb_list
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#define skb_postpull_rcsum rpl_skb_postpull_rcsum
+static inline void skb_postpull_rcsum(struct sk_buff *skb,
+				      const void *start, unsigned int len)
+{
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
+		skb->csum = csum_sub(skb->csum, csum_partial(start, len, 0));
+	else if (skb->ip_summed == CHECKSUM_PARTIAL &&
+			skb_checksum_start_offset(skb) <= len)
+		skb->ip_summed = CHECKSUM_NONE;
+}
+
+#define skb_pull_rcsum rpl_skb_pull_rcsum
+static inline unsigned char *skb_pull_rcsum(struct sk_buff *skb, unsigned int len)
+{
+	BUG_ON(len > skb->len);
+	skb->len -= len;
+	BUG_ON(skb->len < skb->data_len);
+	skb_postpull_rcsum(skb, skb->data, len);
+	return skb->data += len;
+}
+
+#endif
 #endif
