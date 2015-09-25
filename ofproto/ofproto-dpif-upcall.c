@@ -522,8 +522,10 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
 static void
 udpif_pause_revalidators(struct udpif *udpif)
 {
-    latch_set(&udpif->pause_latch);
-    ovs_barrier_block(&udpif->pause_barrier);
+    if (ofproto_dpif_backer_enabled(udpif->backer)) {
+        latch_set(&udpif->pause_latch);
+        ovs_barrier_block(&udpif->pause_barrier);
+    }
 }
 
 /* Resumes the pausing of revalidators.  Should only be called by the
@@ -531,8 +533,10 @@ udpif_pause_revalidators(struct udpif *udpif)
 static void
 udpif_resume_revalidators(struct udpif *udpif)
 {
-    latch_poll(&udpif->pause_latch);
-    ovs_barrier_block(&udpif->pause_barrier);
+    if (ofproto_dpif_backer_enabled(udpif->backer)) {
+        latch_poll(&udpif->pause_latch);
+        ovs_barrier_block(&udpif->pause_barrier);
+    }
 }
 
 /* Tells 'udpif' how many threads it should use to handle upcalls.

@@ -515,6 +515,12 @@ lookup_ofproto_dpif_by_port_name(const char *name)
     return NULL;
 }
 
+bool
+ofproto_dpif_backer_enabled(struct dpif_backer* backer)
+{
+    return backer->recv_set_enable;
+}
+
 static int
 type_run(const char *type)
 {

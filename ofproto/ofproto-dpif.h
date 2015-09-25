@@ -169,6 +169,8 @@ struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 struct ofport_dpif *ofp_port_to_ofport(const struct ofproto_dpif *,
                                        ofp_port_t);
 
+bool ofproto_dpif_backer_enabled(struct dpif_backer* backer);
+
 int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
                                    const struct match *, int priority,
                                    uint16_t idle_timeout,
