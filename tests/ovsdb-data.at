@@ -783,3 +783,83 @@ OVSDB_CHECK_NEGATIVE([duplicate integer key not allowed in string map],
   [[parse-data-strings '{"key": "integer", "value": "boolean", "max": 5}' \
     '1=true 2=false 1=false']],
   [map contains duplicate key])
+
+OVSDB_CHECK_POSITIVE([generate and apply diff -- integer],
+  [[diff-data '["integer"]' '[0]' '[2]']],
+  [[diff: 2
+apply diff: 2
+OK]])
+
+OVSDB_CHECK_POSITIVE([generate and apply diff -- boolean],
+  [[diff-data '["boolean"]' '[true]' '[false]']],
+  [[diff: false
+apply diff: false
+OK]])
+
+OVSDB_CHECK_POSITIVE([generate and apply diff -- string],
+  [[diff-data '["string"]' '["AAA"]' '["BBB"]']],
+  [[diff: "BBB"
+apply diff: "BBB"
+OK]])
+
+dnl Test set modifications.
+OVSDB_CHECK_POSITIVE([generate and apply diff -- set],
+  [[diff-data '{"key": "integer", "min":0, "max": 3}' \
+  '["set", [0, 1]]'  '["set", [1,2]]' \
+  '["set", [0, 1]]'  '["set", [1]]' \
+  '["set", []]'  '["set", [0, 1]]' \
+  '["set", [0, 1]]'  '["set", []]'
+  ]],
+  [[diff: ["set",[0,2]]
+apply diff: ["set",[1,2]]
+OK
+diff: 0
+apply diff: 1
+OK
+diff: ["set",[0,1]]
+apply diff: ["set",[0,1]]
+OK
+diff: ["set",[0,1]]
+apply diff: ["set",[]]
+OK]])
+
+dnl Test set modifications causes data to violate set size constrain.
+OVSDB_CHECK_NEGATIVE([generate and apply diff -- set -- size error],
+  [[diff-data '{"key": "integer", "min":0, "max": 3}' \
+  '["set", [0, 1]]'  '["set", [1, 2, 3, 4]]']],
+  [[ovsdb error: Datum crated by diff has size error]])
+
+dnl Test set modifications.
+OVSDB_CHECK_POSITIVE([generate and apply diff -- map],
+  [[diff-data '{"key": "string", "value": "string", "min":0, "max": 3}' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", [["2 pints", "1 quart"]]]' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", [["2 gills", "1 chopin"]]]' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", []]' \
+  '["map", []]'  '["map", [["2 pints", "1 quart"]]]' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", [["2 gills", "1 gallon"]]]' \
+  ]],
+  [[diff: ["map",[["2 gills","1 chopin"],["2 pints","1 quart"]]]
+apply diff: ["map",[["2 pints","1 quart"]]]
+OK
+diff: ["map",[]]
+apply diff: ["map",[["2 gills","1 chopin"]]]
+OK
+diff: ["map",[["2 gills","1 chopin"]]]
+apply diff: ["map",[]]
+OK
+diff: ["map",[["2 pints","1 quart"]]]
+apply diff: ["map",[["2 pints","1 quart"]]]
+OK
+diff: ["map",[["2 gills","1 gallon"]]]
+apply diff: ["map",[["2 gills","1 gallon"]]]
+OK]])
+
+OVSDB_CHECK_NEGATIVE([generate and apply diff with map -- size error],
+  [[diff-data '{"key": "string", "value": "string", "min":0, "max": 3}' \
+  '["map", [["2 gills", "1 chopin"]]]' \
+  '["map", [["2 gills", "1 gallon"],
+            ["2 pints", "1 quart"],
+            ["2 quarts", "1 pottle"],
+            ["2 gallons", "1 peck"]]]' \
+  ]],
+  [[ovsdb error: Datum crated by diff has size error]])
