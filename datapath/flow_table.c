@@ -505,7 +505,7 @@ static struct sw_flow *masked_flow_lookup(struct table_instance *ti,
 	struct sw_flow_key masked_key;
 
 	ovs_flow_mask_key(&masked_key, unmasked, false, mask);
-	hash = flow_hash(&masked_key, &mask->range);
+	hash = flow_hash(&masked_key, key_start, key_end);
 	head = find_bucket(ti, hash);
 	(*n_mask_hit)++;
 	hlist_for_each_entry_rcu(flow, head, hash_node[ti->node_ver]) {
