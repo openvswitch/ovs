@@ -253,9 +253,12 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             }
             ofport = u16_to_ofp(simap_get(&localnet_to_ofport, network));
         } else if (binding->parent_port) {
+            if (!binding->tag || !*binding->tag) {
+                continue;
+            }
             ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
                                           binding->parent_port));
-            if (ofport && binding->tag) {
+            if (ofport) {
                 tag = *binding->tag;
             }
         } else {
