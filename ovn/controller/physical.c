@@ -138,7 +138,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
              struct hmap *flow_table)
 {
-    struct simap lport_to_ofport = SIMAP_INITIALIZER(&lport_to_ofport);
+    struct simap localvif_to_ofport = SIMAP_INITIALIZER(&localvif_to_ofport);
     struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
     struct simap localnet_to_ofport = SIMAP_INITIALIZER(&localnet_to_ofport);
 
@@ -197,7 +197,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 const char *iface_id = smap_get(&iface_rec->external_ids,
                                                 "iface-id");
                 if (iface_id) {
-                    simap_put(&lport_to_ofport, iface_id, ofport);
+                    simap_put(&localvif_to_ofport, iface_id, ofport);
                 }
             }
         }
@@ -253,13 +253,13 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             }
             ofport = u16_to_ofp(simap_get(&localnet_to_ofport, network));
         } else if (binding->parent_port) {
-            ofport = u16_to_ofp(simap_get(&lport_to_ofport,
+            ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
                                           binding->parent_port));
             if (ofport && binding->tag) {
                 tag = *binding->tag;
             }
         } else {
-            ofport = u16_to_ofp(simap_get(&lport_to_ofport,
+            ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
                                           binding->logical_port));
         }
 
@@ -471,7 +471,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 continue;
             }
 
-            if (simap_contains(&lport_to_ofport, port->logical_port)) {
+            if (simap_contains(&localvif_to_ofport, port->logical_port)) {
                 put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
                 put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
             } else if (port->chassis) {
@@ -594,7 +594,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     ofctrl_add_flow(flow_table, OFTABLE_DROP_LOOPBACK, 0, &match, &ofpacts);
 
     ofpbuf_uninit(&ofpacts);
-    simap_destroy(&lport_to_ofport);
+    simap_destroy(&localvif_to_ofport);
     struct chassis_tunnel *tun_next;
     HMAP_FOR_EACH_SAFE (tun, tun_next, hmap_node, &tunnels) {
         hmap_remove(&tunnels, &tun->hmap_node);
