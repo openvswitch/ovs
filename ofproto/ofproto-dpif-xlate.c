@@ -2661,7 +2661,7 @@ tnl_route_lookup_flow(const struct flow *oflow,
     struct xlate_cfg *xcfg;
     ovs_be32 gw;
 
-    if (!ovs_router_lookup(oflow->tunnel.ip_dst, out_dev, &gw)) {
+    if (!ovs_router_lookup4(oflow->tunnel.ip_dst, out_dev, &gw)) {
         return -ENOENT;
     }
 

@@ -455,7 +455,7 @@ sflow_choose_agent_address(const char *agent_device,
             && sa.ss.ss_family == AF_INET) {
             ovs_be32 gw;
 
-            if (ovs_router_lookup(sa.sin.sin_addr.s_addr, name, &gw)
+            if (ovs_router_lookup4(sa.sin.sin_addr.s_addr, name, &gw)
                 && !netdev_get_in4_by_name(name, &in4)) {
                 goto success;
             }
