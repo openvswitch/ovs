@@ -372,11 +372,17 @@ enum ofpraw {
     /* OFPST 1.3+ (11): struct ofp13_meter_features. */
     OFPRAW_OFPST13_METER_FEATURES_REPLY,
 
-    /* OFPST 1.3+ (12): void. */
+    /* OFPST 1.3-1.4 (12): void. */
     OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
 
-    /* OFPST 1.3+ (12): struct ofp13_table_features, uint8_t[8][]. */
+    /* OFPST 1.5+ (12): struct ofp15_table_features[]. */
+    OFPRAW_OFPST15_TABLE_FEATURES_REQUEST,
+
+    /* OFPST 1.3-1.4 (12): struct ofp13_table_features, uint8_t[8][]. */
     OFPRAW_OFPST13_TABLE_FEATURES_REPLY,
+
+    /* OFPST 1.5+ (12): struct ofp15_table_features, uint8_t[8][]. */
+    OFPRAW_OFPST15_TABLE_FEATURES_REPLY,
 
     /* OFPST 1.4+ (15): void. */
     OFPRAW_OFPST14_TABLE_DESC_REQUEST,
@@ -628,9 +634,11 @@ enum ofptype {
 
     OFPTYPE_METER_FEATURES_STATS_REPLY, /* OFPRAW_OFPST13_METER_FEATURES_REPLY. */
 
-    OFPTYPE_TABLE_FEATURES_STATS_REQUEST, /* OFPRAW_OFPST13_TABLE_FEATURES_REQUEST. */
+    OFPTYPE_TABLE_FEATURES_STATS_REQUEST, /* OFPRAW_OFPST13_TABLE_FEATURES_REQUEST.
+                                           * OFPRAW_OFPST15_TABLE_FEATURES_REQUEST. */
 
-    OFPTYPE_TABLE_FEATURES_STATS_REPLY, /* OFPRAW_OFPST13_TABLE_FEATURES_REPLY. */
+    OFPTYPE_TABLE_FEATURES_STATS_REPLY, /* OFPRAW_OFPST13_TABLE_FEATURES_REPLY.
+                                         * OFPRAW_OFPST15_TABLE_FEATURES_REPLY. */
 
     OFPTYPE_TABLE_DESC_REQUEST,      /* OFPRAW_OFPST14_TABLE_DESC_REQUEST. */
 

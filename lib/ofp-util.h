@@ -682,6 +682,15 @@ struct ofputil_table_features {
     int supports_eviction;               /* OF1.4+ only. */
     int supports_vacancy_events;         /* OF1.4+ only. */
 
+    /* The features field is a bitmap of OFPTFF_* values that defines how the
+     * flow table can be used and what are its basic features.
+     *
+     * 'features' is relevant only for Openflow 1.5 and later only. For 1.5,
+     * it will be OFPTFF_FIRST_EGRESS if first egress table is set, otherwise
+     * 0. For other versions, they are decoded as -1 and ignored for encoding.
+     */
+    int features;                  /* OF1.5+ only. */
+
     /* Table features related to instructions.  There are two instances:
      *
      *   - 'miss' reports features available in the table miss flow.
@@ -738,7 +747,9 @@ int ofputil_decode_table_desc(struct ofpbuf *,
                               struct ofputil_table_desc *,
                               enum ofp_version);
 
-struct ofpbuf *ofputil_encode_table_features_request(enum ofp_version);
+struct ofpbuf *
+ofputil_encode_table_features_request(const struct ofputil_table_features *,
+                                      enum ofp_version);
 
 struct ofpbuf *ofputil_encode_table_desc_request(enum ofp_version);
 

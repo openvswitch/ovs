@@ -3163,6 +3163,9 @@ query_tables(struct ofproto *ofproto,
         f->match = match;
         f->mask = mask;
         f->wildcard = match;
+        if (ofproto->tables[i].is_first_egress) {
+            f->features = OFPTFF_FIRST_EGRESS;
+        }
     }
 
     if (statsp) {
@@ -3553,12 +3556,34 @@ handle_table_features_request(struct ofconn *ofconn,
     struct ofputil_table_features *features;
     struct ovs_list replies;
     struct ofpbuf msg;
+    enum ofperr error = 0;
     size_t i;
 
     ofpbuf_use_const(&msg, request, ntohs(request->length));
     ofpraw_pull_assert(&msg);
-    if (msg.size || ofpmp_more(request)) {
-        return OFPERR_OFPTFFC_EPERM;
+
+    if (request->version < OFP15_VERSION) {
+        if (msg.size || ofpmp_more(request)) {
+            return OFPERR_OFPTFFC_EPERM;
+        }
+    } else {
+        if (msg.size) {
+            struct ofputil_table_features tf;
+            error = ofputil_decode_table_features(&msg, &tf, false);
+            if (error) {
+                return error;
+            }
+            if ((tf.features & OFPTFF_FIRST_EGRESS) != 0) {
+                for (i = 0; i < ofproto->n_tables; i++) {
+                    if (ofproto->tables[i].is_first_egress) {
+                        ofproto->tables[i].is_first_egress = false;
+                        break;
+                    }
+                }
+                ofproto->tables[tf.table_id].is_first_egress = true;
+            }
+            return 0;
+        }
     }
 
     query_tables(ofproto, &features, NULL);

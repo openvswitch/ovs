@@ -1723,6 +1723,233 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - table features (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+head_table () {
+    printf '  table 0 ("%s"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    eviction: not supported
+    vacancy events: not supported
+    features: none
+    max_entries=1000000
+    instructions (table miss and others):
+      next tables: 1-253
+      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata,goto_table
+      Write-Actions and Apply-Actions features:
+        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+        supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+    matching:
+      dp_hash: arbitrary mask
+      recirc_id: exact match or wildcard
+      conj_id: exact match or wildcard
+      tun_id: arbitrary mask
+      tun_src: arbitrary mask
+      tun_dst: arbitrary mask
+      tun_flags: arbitrary mask
+      tun_gbp_id: arbitrary mask
+      tun_gbp_flags: arbitrary mask
+      tun_metadata0: arbitrary mask
+      tun_metadata1: arbitrary mask
+      tun_metadata2: arbitrary mask
+      tun_metadata3: arbitrary mask
+      tun_metadata4: arbitrary mask
+      tun_metadata5: arbitrary mask
+      tun_metadata6: arbitrary mask
+      tun_metadata7: arbitrary mask
+      tun_metadata8: arbitrary mask
+      tun_metadata9: arbitrary mask
+      tun_metadata10: arbitrary mask
+      tun_metadata11: arbitrary mask
+      tun_metadata12: arbitrary mask
+      tun_metadata13: arbitrary mask
+      tun_metadata14: arbitrary mask
+      tun_metadata15: arbitrary mask
+      tun_metadata16: arbitrary mask
+      tun_metadata17: arbitrary mask
+      tun_metadata18: arbitrary mask
+      tun_metadata19: arbitrary mask
+      tun_metadata20: arbitrary mask
+      tun_metadata21: arbitrary mask
+      tun_metadata22: arbitrary mask
+      tun_metadata23: arbitrary mask
+      tun_metadata24: arbitrary mask
+      tun_metadata25: arbitrary mask
+      tun_metadata26: arbitrary mask
+      tun_metadata27: arbitrary mask
+      tun_metadata28: arbitrary mask
+      tun_metadata29: arbitrary mask
+      tun_metadata30: arbitrary mask
+      tun_metadata31: arbitrary mask
+      tun_metadata32: arbitrary mask
+      tun_metadata33: arbitrary mask
+      tun_metadata34: arbitrary mask
+      tun_metadata35: arbitrary mask
+      tun_metadata36: arbitrary mask
+      tun_metadata37: arbitrary mask
+      tun_metadata38: arbitrary mask
+      tun_metadata39: arbitrary mask
+      tun_metadata40: arbitrary mask
+      tun_metadata41: arbitrary mask
+      tun_metadata42: arbitrary mask
+      tun_metadata43: arbitrary mask
+      tun_metadata44: arbitrary mask
+      tun_metadata45: arbitrary mask
+      tun_metadata46: arbitrary mask
+      tun_metadata47: arbitrary mask
+      tun_metadata48: arbitrary mask
+      tun_metadata49: arbitrary mask
+      tun_metadata50: arbitrary mask
+      tun_metadata51: arbitrary mask
+      tun_metadata52: arbitrary mask
+      tun_metadata53: arbitrary mask
+      tun_metadata54: arbitrary mask
+      tun_metadata55: arbitrary mask
+      tun_metadata56: arbitrary mask
+      tun_metadata57: arbitrary mask
+      tun_metadata58: arbitrary mask
+      tun_metadata59: arbitrary mask
+      tun_metadata60: arbitrary mask
+      tun_metadata61: arbitrary mask
+      tun_metadata62: arbitrary mask
+      tun_metadata63: arbitrary mask
+      metadata: arbitrary mask
+      in_port: exact match or wildcard
+      in_port_oxm: exact match or wildcard
+      actset_output: exact match or wildcard
+      pkt_mark: arbitrary mask
+      reg0: arbitrary mask
+      reg1: arbitrary mask
+      reg2: arbitrary mask
+      reg3: arbitrary mask
+      reg4: arbitrary mask
+      reg5: arbitrary mask
+      reg6: arbitrary mask
+      reg7: arbitrary mask
+      xreg0: arbitrary mask
+      xreg1: arbitrary mask
+      xreg2: arbitrary mask
+      xreg3: arbitrary mask
+      eth_src: arbitrary mask
+      eth_dst: arbitrary mask
+      eth_type: exact match or wildcard
+      vlan_tci: arbitrary mask
+      vlan_vid: arbitrary mask
+      vlan_pcp: exact match or wildcard
+      mpls_label: exact match or wildcard
+      mpls_tc: exact match or wildcard
+      mpls_bos: exact match or wildcard
+      ip_src: arbitrary mask
+      ip_dst: arbitrary mask
+      ipv6_src: arbitrary mask
+      ipv6_dst: arbitrary mask
+      ipv6_label: arbitrary mask
+      nw_proto: exact match or wildcard
+      nw_tos: exact match or wildcard
+      ip_dscp: exact match or wildcard
+      nw_ecn: exact match or wildcard
+      nw_ttl: exact match or wildcard
+      ip_frag: arbitrary mask
+      arp_op: exact match or wildcard
+      arp_spa: arbitrary mask
+      arp_tpa: arbitrary mask
+      arp_sha: arbitrary mask
+      arp_tha: arbitrary mask
+      tcp_src: arbitrary mask
+      tcp_dst: arbitrary mask
+      tcp_flags: arbitrary mask
+      udp_src: arbitrary mask
+      udp_dst: arbitrary mask
+      sctp_src: arbitrary mask
+      sctp_dst: arbitrary mask
+      icmp_type: exact match or wildcard
+      icmp_code: exact match or wildcard
+      icmpv6_type: exact match or wildcard
+      icmpv6_code: exact match or wildcard
+      nd_target: arbitrary mask
+      nd_sll: arbitrary mask
+      nd_tll: arbitrary mask
+
+' $1
+}
+ditto() {
+    printf '  table %d ("%s"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    eviction: not supported
+    vacancy events: not supported
+    features: none
+    max_entries=%d
+    instructions (table miss and others):
+      next tables: %d-253
+      (same instructions)
+      (same actions)
+    (same matching)
+
+' $1 $2 $3 `expr $1 + 1`
+}
+tail_tables() {
+echo '  table 252 ("table252"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    eviction: not supported
+    vacancy events: not supported
+    features: none
+    max_entries=1000000
+    instructions (table miss and others):
+      next tables: 253
+      (same instructions)
+      (same actions)
+    (same matching)
+
+  table 253 ("table253"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    eviction: not supported
+    vacancy events: not supported
+    features: none
+    max_entries=1000000
+    instructions (table miss and others):
+      instructions: meter,apply_actions,clear_actions,write_actions,write_metadata
+      (same actions)
+    (same matching)
+'
+}
+first_egress_table() {
+echo '  table 251 ("table251"):
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    eviction: not supported
+    vacancy events: not supported
+    features: first egress table
+    max_entries=1000000
+    instructions (table miss and others):
+      next tables: 252-253
+      (same instructions)
+      Write-Actions features:
+        actions: set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+        supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+      Apply-Actions features:
+        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+        supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+    (same matching)
+'
+}
+(head_table classifier
+ for i in `seq 1 251`; do
+     ditto $i table$i 1000000
+ done
+ tail_tables) > expout
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0], [0], [expout])
+# Set first egress table.
+ovs-ofctl -O Openflow15 set-first-egress-table br0 251
+
+# Check that the configuration was updated.
+(head_table classifier
+ for i in `seq 1 250`; do
+     ditto $i table$i 1000000
+ done
+ first_egress_table
+ tail_tables) > expout
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0], [0], [expout])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - table description (OpenFlow 1.4)])
 OVS_VSWITCHD_START
 (x=0
