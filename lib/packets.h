@@ -28,6 +28,7 @@
 #include "random.h"
 #include "hash.h"
 #include "tun-metadata.h"
+#include "unaligned.h"
 #include "util.h"
 
 struct dp_packet;
@@ -868,6 +869,26 @@ static inline bool ipv6_mask_is_exact(const struct in6_addr *mask) {
 
 static inline bool ipv6_is_all_hosts(const struct in6_addr *addr) {
     return ipv6_addr_equals(addr, &in6addr_all_hosts);
+}
+
+static inline void
+in6_addr_set_mapped_ipv4(struct in6_addr *addr, ovs_be32 ip4)
+{
+    union ovs_16aligned_in6_addr *taddr = (void *) addr;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[5] = OVS_BE16_MAX;
+    put_16aligned_be32(&taddr->be32[3], ip4);
+}
+
+static inline ovs_be32
+in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
+{
+    union ovs_16aligned_in6_addr *taddr = (void *) addr;
+    if (IN6_IS_ADDR_V4MAPPED(addr)) {
+        return get_16aligned_be32(&taddr->be32[3]);
+    } else {
+        return INADDR_ANY;
+    }
 }
 
 static inline bool dl_type_is_ip_any(ovs_be16 dl_type)

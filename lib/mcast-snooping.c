@@ -125,15 +125,6 @@ mcast_snooping_lookup(const struct mcast_snooping *ms,
     return NULL;
 }
 
-static inline void
-in6_addr_set_mapped_ipv4(struct in6_addr *addr, ovs_be32 ip4)
-{
-    union ovs_16aligned_in6_addr *taddr = (void *) addr;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[5] = OVS_BE16_MAX;
-    put_16aligned_be32(&taddr->be32[3], ip4);
-}
-
 struct mcast_group *
 mcast_snooping_lookup4(const struct mcast_snooping *ms, ovs_be32 ip4,
                       uint16_t vlan)
