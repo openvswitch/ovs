@@ -6,9 +6,10 @@ compiler:
 addons:
   apt:
     packages:
+      - bc
+      - gcc-multilib
       - libssl-dev
       - llvm-dev
-      - gcc-multilib
 
 before_install: ./.travis/prepare.sh
 
