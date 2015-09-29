@@ -871,6 +871,14 @@ static inline bool ipv6_is_all_hosts(const struct in6_addr *addr) {
     return ipv6_addr_equals(addr, &in6addr_all_hosts);
 }
 
+static inline bool ipv6_addr_is_set(const struct in6_addr *addr) {
+    return !ipv6_addr_equals(addr, &in6addr_any);
+}
+
+static inline bool ipv6_addr_is_multicast(const struct in6_addr *ip) {
+    return ip->s6_addr[0] == 0xff;
+}
+
 static inline void
 in6_addr_set_mapped_ipv4(struct in6_addr *addr, ovs_be32 ip4)
 {
