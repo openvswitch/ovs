@@ -15,6 +15,9 @@
  */
 
 #include <config.h>
+
+#include "tnl-ports.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -26,7 +29,6 @@
 #include "ovs-thread.h"
 #include "odp-util.h"
 #include "tnl-arp-cache.h"
-#include "tnl-ports.h"
 #include "ovs-thread.h"
 #include "unixctl.h"
 #include "util.h"
