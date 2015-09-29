@@ -308,6 +308,15 @@ nl_msg_put_be64(struct ofpbuf *msg, uint16_t type, ovs_be64 value)
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
 
+/* Appends a Netlink attribute of the given 'type' and the given IPv6
+ * address order 'value' to 'msg'. */
+void
+nl_msg_put_in6_addr(struct ofpbuf *msg, uint16_t type,
+                    const struct in6_addr *value)
+{
+    nl_msg_put_unspec(msg, type, value, sizeof *value);
+}
+
 /* Appends a Netlink attribute of the given 'type' and the given odp_port_t
  * 'value' to 'msg'. */
 void
@@ -603,6 +612,15 @@ nl_attr_get_be64(const struct nlattr *nla)
     return get_32aligned_be64(x);
 }
 
+/* Returns the IPv6 address value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 16 bytes long. */
+struct in6_addr
+nl_attr_get_in6_addr(const struct nlattr *nla)
+{
+    return NL_ATTR_GET_AS(nla, struct in6_addr);
+}
+
 /* Returns the 32-bit odp_port_t value in 'nla''s payload.
  *
  * Asserts that 'nla''s payload is at least 4 bytes long. */
@@ -643,6 +661,7 @@ min_attr_len(enum nl_attr_type type)
     case NL_A_U64: return 8;
     case NL_A_STRING: return 1;
     case NL_A_FLAG: return 0;
+    case NL_A_IPV6: return 16;
     case NL_A_NESTED: return 0;
     case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
@@ -661,6 +680,7 @@ max_attr_len(enum nl_attr_type type)
     case NL_A_U64: return 8;
     case NL_A_STRING: return SIZE_MAX;
     case NL_A_FLAG: return SIZE_MAX;
+    case NL_A_IPV6: return 16;
     case NL_A_NESTED: return SIZE_MAX;
     case N_NL_ATTR_TYPES: default: OVS_NOT_REACHED();
     }
