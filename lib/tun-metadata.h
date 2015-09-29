@@ -63,12 +63,17 @@ struct tun_metadata {
         uint8_t len;                       /* Length of data in 'opts'. */
     } present;
     struct tun_table *tab;      /* Types & lengths for 'opts' and 'opt_map'. */
-    uint8_t pad[sizeof(uint64_t) - sizeof(struct tun_table *)]; /* Make 8 bytes */
+
+#if UINTPTR_MAX == UINT32_MAX
+    uint8_t pad[4];             /* Pad to 64-bit boundary. */
+#endif
+
     union {
         uint8_t u8[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
         struct geneve_opt gnv[GENEVE_TOT_OPT_SIZE / sizeof(struct geneve_opt)];
     } opts;
 };
+BUILD_ASSERT_DECL(offsetof(struct tun_metadata, opts) % 8 == 0);
 BUILD_ASSERT_DECL(sizeof(((struct tun_metadata *)0)->present.map) * 8 >=
                   TUN_METADATA_NUM_OPTS);
 
