@@ -19,11 +19,22 @@ ovs_init() {
     ovs_base=`pwd`
     trap '. "$ovs_base/cleanup"' 0
     : > cleanup
-    OVS_RUNDIR=$ovs_base; export OVS_RUNDIR
-    OVS_LOGDIR=$ovs_base; export OVS_LOGDIR
-    OVS_DBDIR=$ovs_base; export OVS_DBDIR
-    OVS_SYSCONFDIR=$ovs_base; export OVS_SYSCONFDIR
-    OVS_PKGDATADIR=$ovs_base; export OVS_PKGDATADIR
+    ovs_setenv
+}
+
+# With no parameter or an empty parameter, sets the OVS_*DIR
+# environment variables to point to $ovs_base, the base directory in
+# which the test is running.
+#
+# With a parameter, sets them to $ovs_base/$1.
+ovs_setenv() {
+    sandbox=$1
+    ovs_dir=$ovs_base${1:+/$1}
+    OVS_RUNDIR=$ovs_dir; export OVS_RUNDIR
+    OVS_LOGDIR=$ovs_dir; export OVS_LOGDIR
+    OVS_DBDIR=$ovs_dir; export OVS_DBDIR
+    OVS_SYSCONFDIR=$ovs_dir; export OVS_SYSCONFDIR
+    OVS_PKGDATADIR=$ovs_dir; export OVS_PKGDATADIR
 }
 
 ovs_wait () {
