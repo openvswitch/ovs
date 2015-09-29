@@ -39,7 +39,8 @@ static struct classifier cls;   /* Tunnel ports. */
 struct ip_device {
     struct netdev *dev;
     struct eth_addr mac;
-    ovs_be32 addr;
+    ovs_be32 addr4;
+    struct in6_addr addr6;
     uint64_t change_seq;
     struct ovs_list node;
     char dev_name[IFNAMSIZ];
@@ -80,13 +81,18 @@ tnl_port_free(struct tnl_port_in *p)
 
 static void
 tnl_port_init_flow(struct flow *flow, struct eth_addr mac,
-                   ovs_be32 addr, ovs_be16 udp_port)
+                   struct in6_addr *addr, ovs_be16 udp_port)
 {
     memset(flow, 0, sizeof *flow);
 
-    flow->dl_type = htons(ETH_TYPE_IP);
     flow->dl_dst = mac;
-    flow->nw_dst = addr;
+    if (IN6_IS_ADDR_V4MAPPED(addr)) {
+        flow->dl_type = htons(ETH_TYPE_IP);
+        flow->nw_dst = in6_addr_get_mapped_ipv4(addr);
+    } else {
+        flow->dl_type = htons(ETH_TYPE_IPV6);
+        flow->ipv6_dst = *addr;
+    }
 
     if (udp_port) {
         flow->nw_proto = IPPROTO_UDP;
@@ -97,7 +103,7 @@ tnl_port_init_flow(struct flow *flow, struct eth_addr mac,
 }
 
 static void
-map_insert(odp_port_t port, struct eth_addr mac, ovs_be32 addr,
+map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
            ovs_be16 udp_port, const char dev_name[])
 {
     const struct cls_rule *cr;
@@ -121,7 +127,11 @@ map_insert(odp_port_t port, struct eth_addr mac, ovs_be32 addr,
         match.wc.masks.nw_proto = 0xff;
         match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
         match.wc.masks.tp_dst = OVS_BE16_MAX;
-        match.wc.masks.nw_dst = OVS_BE32_MAX;
+        if (IN6_IS_ADDR_V4MAPPED(addr)) {
+            match.wc.masks.nw_dst = OVS_BE32_MAX;
+        } else {
+            match.wc.masks.ipv6_dst = in6addr_exact;
+        }
         match.wc.masks.vlan_tci = OVS_BE16_MAX;
         memset(&match.wc.masks.dl_dst, 0xff, sizeof (struct eth_addr));
 
@@ -154,8 +164,16 @@ tnl_port_map_insert(odp_port_t port,
     list_insert(&port_list, &p->node);
 
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        map_insert(p->port, ip_dev->mac, ip_dev->addr,
-                   p->udp_port, p->dev_name);
+        if (ip_dev->addr4 != INADDR_ANY) {
+            struct in6_addr addr4;
+            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            map_insert(p->port, ip_dev->mac, &addr4,
+                       p->udp_port, p->dev_name);
+        }
+        if (ipv6_addr_is_set(&ip_dev->addr6)) {
+            map_insert(p->port, ip_dev->mac, &ip_dev->addr6,
+                       p->udp_port, p->dev_name);
+        }
     }
 
 out:
@@ -175,7 +193,7 @@ tnl_port_unref(const struct cls_rule *cr)
 }
 
 static void
-map_delete(struct eth_addr mac, ovs_be32 addr, ovs_be16 udp_port)
+map_delete(struct eth_addr mac, struct in6_addr *addr, ovs_be16 udp_port)
 {
     const struct cls_rule *cr;
     struct flow flow;
@@ -206,7 +224,14 @@ tnl_port_map_delete(ovs_be16 udp_port)
         goto out;
     }
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        map_delete(ip_dev->mac, ip_dev->addr, udp_port);
+        if (ip_dev->addr4 != INADDR_ANY) {
+            struct in6_addr addr4;
+            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            map_delete(ip_dev->mac, &addr4, udp_port);
+        }
+        if (ipv6_addr_is_set(&ip_dev->addr6)) {
+            map_delete(ip_dev->mac, &ip_dev->addr6, udp_port);
+        }
     }
 
     free(p);
@@ -301,8 +326,16 @@ map_insert_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        map_insert(p->port, ip_dev->mac, ip_dev->addr,
-                   p->udp_port, p->dev_name);
+        if (ip_dev->addr4 != INADDR_ANY) {
+            struct in6_addr addr4;
+            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            map_insert(p->port, ip_dev->mac, &addr4,
+                       p->udp_port, p->dev_name);
+        }
+        if (ipv6_addr_is_set(&ip_dev->addr6)) {
+            map_insert(p->port, ip_dev->mac, &ip_dev->addr6,
+                       p->udp_port, p->dev_name);
+        }
     }
 }
 
@@ -313,6 +346,7 @@ insert_ipdev(const char dev_name[])
     enum netdev_flags flags;
     struct netdev *dev;
     int error;
+    int error4, error6;
 
     error = netdev_open(dev_name, NULL, &dev);
     if (error) {
@@ -332,8 +366,9 @@ insert_ipdev(const char dev_name[])
     if (error) {
         return;
     }
-    error = netdev_get_in4(ip_dev->dev, (struct in_addr *)&ip_dev->addr, NULL);
-    if (error) {
+    error4 = netdev_get_in4(ip_dev->dev, (struct in_addr *)&ip_dev->addr4, NULL);
+    error6 = netdev_get_in6(ip_dev->dev, &ip_dev->addr6);
+    if (error4 && error6) {
         return;
     }
     ovs_strlcpy(ip_dev->dev_name, netdev_get_name(dev), sizeof ip_dev->dev_name);
@@ -348,7 +383,14 @@ delete_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        map_delete(ip_dev->mac, ip_dev->addr, p->udp_port);
+        if (ip_dev->addr4 != INADDR_ANY) {
+            struct in6_addr addr4;
+            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            map_delete(ip_dev->mac, &addr4, p->udp_port);
+        }
+        if (ipv6_addr_is_set(&ip_dev->addr6)) {
+            map_delete(ip_dev->mac, &ip_dev->addr6, p->udp_port);
+        }
     }
 
     list_remove(&ip_dev->node);
