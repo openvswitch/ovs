@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include <inttypes.h>
+#include <netinet/icmp6.h>
 #include <stdlib.h>
 
 #include "bitmap.h"
@@ -44,7 +45,7 @@
 
 struct tnl_arp_entry {
     struct cmap_node cmap_node;
-    ovs_be32 ip;
+    struct in6_addr ip;
     struct eth_addr mac;
     time_t expires;             /* Expiration time. */
     char br_name[IFNAMSIZ];
@@ -53,13 +54,21 @@ struct tnl_arp_entry {
 static struct cmap table;
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
+static uint32_t
+tnl_arp_hash(const struct in6_addr *ip)
+{
+    return hash_bytes(ip->s6_addr, 16, 0);
+}
+
 static struct tnl_arp_entry *
-tnl_arp_lookup__(const char br_name[IFNAMSIZ], ovs_be32 dst)
+tnl_arp_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
 {
     struct tnl_arp_entry *arp;
+    uint32_t hash;
 
-    CMAP_FOR_EACH_WITH_HASH (arp, cmap_node, (OVS_FORCE uint32_t) dst, &table) {
-        if (arp->ip == dst && !strcmp(arp->br_name, br_name)) {
+    hash = tnl_arp_hash(dst);
+    CMAP_FOR_EACH_WITH_HASH (arp, cmap_node, hash, &table) {
+        if (ipv6_addr_equals(&arp->ip, dst) && !strcmp(arp->br_name, br_name)) {
             arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
             return arp;
         }
@@ -73,13 +82,31 @@ tnl_arp_lookup(const char br_name[IFNAMSIZ], ovs_be32 dst,
 {
     struct tnl_arp_entry *arp;
     int res = ENOENT;
+    struct in6_addr dst6;
+
+    in6_addr_set_mapped_ipv4(&dst6, dst);
+
+    arp = tnl_arp_lookup__(br_name, &dst6);
+    if (arp) {
+        *mac = arp->mac;
+        res = 0;
+    }
+
+    return res;
+}
+
+int
+tnl_nd_lookup(const char br_name[IFNAMSIZ], const struct in6_addr *dst,
+              struct eth_addr *mac)
+{
+    struct tnl_arp_entry *arp;
+    int res = ENOENT;
 
     arp = tnl_arp_lookup__(br_name, dst);
     if (arp) {
         *mac = arp->mac;
         res = 0;
     }
-
     return res;
 }
 
@@ -92,12 +119,14 @@ arp_entry_free(struct tnl_arp_entry *arp)
 static void
 tnl_arp_delete(struct tnl_arp_entry *arp)
 {
-    cmap_remove(&table, &arp->cmap_node, (OVS_FORCE uint32_t) arp->ip);
+    uint32_t hash = tnl_arp_hash(&arp->ip);
+    cmap_remove(&table, &arp->cmap_node, hash);
     ovsrcu_postpone(arp_entry_free, arp);
 }
 
 static void
-tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst, const struct eth_addr mac)
+tnl_arp_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
+              const struct eth_addr mac)
 {
     ovs_mutex_lock(&mutex);
     struct tnl_arp_entry *arp = tnl_arp_lookup__(name, dst);
@@ -113,12 +142,22 @@ tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst, const struct eth_addr mac)
 
     arp = xmalloc(sizeof *arp);
 
-    arp->ip = dst;
+    arp->ip = *dst;
     arp->mac = mac;
     arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
     ovs_strlcpy(arp->br_name, name, sizeof arp->br_name);
-    cmap_insert(&table, &arp->cmap_node, (OVS_FORCE uint32_t) arp->ip);
+    cmap_insert(&table, &arp->cmap_node, tnl_arp_hash(&arp->ip));
     ovs_mutex_unlock(&mutex);
+}
+
+static void
+tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst,
+            const struct eth_addr mac)
+{
+    struct in6_addr dst6;
+
+    in6_addr_set_mapped_ipv4(&dst6, dst);
+    tnl_arp_set__(name, &dst6, mac);
 }
 
 int
@@ -135,7 +174,26 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
     memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
 
     tnl_arp_set(name, flow->nw_src, flow->arp_sha);
+    return 0;
+}
 
+int
+tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
+              const char name[IFNAMSIZ])
+{
+    if (flow->dl_type != htons(ETH_TYPE_IPV6) ||
+        flow->nw_proto != IPPROTO_ICMPV6 ||
+        flow->tp_dst != htons(0) ||
+        flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+        return EINVAL;
+    }
+
+    memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
+    memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+    memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
+    memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
+
+    tnl_arp_set__(name, &flow->nd_target, flow->arp_tha);
     return 0;
 }
 
@@ -185,8 +243,11 @@ tnl_arp_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
     const char *br_name = argv[1];
     struct eth_addr mac;
     struct in_addr ip;
+    struct in6_addr ip6;
 
-    if (lookup_ip(argv[2], &ip)) {
+    if (lookup_ip(argv[2], &ip) == 0) {
+        in6_addr_set_mapped_ipv4(&ip6, ip.s_addr);
+    } else if (lookup_ipv6(argv[2], &ip6) != 0) {
         unixctl_command_reply_error(conn, "bad IP address");
         return;
     }
@@ -196,11 +257,9 @@ tnl_arp_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    tnl_arp_set(br_name, ip.s_addr, mac);
+    tnl_arp_set__(br_name, &ip6, mac);
     unixctl_command_reply(conn, "OK");
 }
-
-#define MAX_IP_ADDR_LEN 17
 
 static void
 tnl_arp_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
@@ -209,16 +268,16 @@ tnl_arp_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct tnl_arp_entry *arp;
 
-    ds_put_cstr(&ds, "IP               MAC                 Bridge\n");
-    ds_put_cstr(&ds, "=============================================\n");
+    ds_put_cstr(&ds, "IP                                            MAC                 Bridge\n");
+    ds_put_cstr(&ds, "==========================================================================\n");
     ovs_mutex_lock(&mutex);
     CMAP_FOR_EACH(arp, cmap_node, &table) {
         int start_len, need_ws;
 
         start_len = ds.length;
-        ds_put_format(&ds, IP_FMT, IP_ARGS(arp->ip));
+        print_ipv6_mapped(&ds, &arp->ip);
 
-        need_ws = MAX_IP_ADDR_LEN - (ds.length - start_len);
+        need_ws = INET6_ADDRSTRLEN - (ds.length - start_len);
         ds_put_char_multiple(&ds, ' ', need_ws);
 
         ds_put_format(&ds, ETH_ADDR_FMT"   %s\n",

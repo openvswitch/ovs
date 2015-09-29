@@ -41,10 +41,10 @@ AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src
 AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b7,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.93,tip=1.1.2.88,op=1,sha=f8:bc:12:44:34:b7,tha=00:00:00:00:00:00)'])
 
 AT_CHECK([ovs-appctl tnl/arp/show], [0], [dnl
-IP               MAC                 Bridge
-=============================================
-1.1.2.92         f8:bc:12:44:34:b6   br0
-1.1.2.93         f8:bc:12:44:34:b7   br0
+IP                                            MAC                 Bridge
+==========================================================================
+1.1.2.92                                      f8:bc:12:44:34:b6   br0
+1.1.2.93                                      f8:bc:12:44:34:b7   br0
 ])
 
 AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl

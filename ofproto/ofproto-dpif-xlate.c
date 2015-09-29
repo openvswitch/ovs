@@ -4128,6 +4128,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
     if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
         tnl_arp_snoop(flow, wc, ctx->xbridge->name);
+        tnl_nd_snoop(flow, wc, ctx->xbridge->name);
     }
     /* dl_type already in the mask, not set below. */
 
