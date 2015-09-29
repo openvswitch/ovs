@@ -474,7 +474,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 continue;
             }
 
-            if (simap_contains(&localvif_to_ofport, port->logical_port)) {
+            if (simap_contains(&localvif_to_ofport,
+                               port->parent_port
+                               ? port->parent_port : port->logical_port)) {
                 put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
                 put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
             } else if (port->chassis) {
