@@ -2543,8 +2543,11 @@ set_rstp_port(struct ofport *ofport_,
 
     if (!s || !s->enable) {
         if (rp) {
-            rstp_port_unref(rp);
+            rstp_port_set_aux(rp, NULL);
+            rstp_port_set_state(rp, RSTP_DISABLED);
+            rstp_port_set_mac_operational(rp, false);
             ofport->rstp_port = NULL;
+            rstp_port_unref(rp);
             update_rstp_port_state(ofport);
         }
         return;
