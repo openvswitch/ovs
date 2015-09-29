@@ -58,17 +58,18 @@ def text_to_nroff(s, font=r'\fR'):
 def escape_nroff_literal(s, font=r'\fB'):
     return font + r'%s\fR' % text_to_nroff(s, font)
 
-def inline_xml_to_nroff(node, font, to_upper=False):
+def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
     if node.nodeType == node.TEXT_NODE:
         if to_upper:
-            return text_to_nroff(node.data.upper(), font)
+            s = text_to_nroff(node.data.upper(), font)
         else:
-            return text_to_nroff(node.data, font)
+            s = text_to_nroff(node.data, font)
+        return s.replace('\n', newline)
     elif node.nodeType == node.ELEMENT_NODE:
         if node.tagName in ['code', 'em', 'option', 'env']:
             s = r'\fB'
             for child in node.childNodes:
-                s += inline_xml_to_nroff(child, r'\fB')
+                s += inline_xml_to_nroff(child, r'\fB', to_upper, newline)
             return s + font
         elif node.tagName == 'ref':
             s = r'\fB'
@@ -88,22 +89,23 @@ def inline_xml_to_nroff(node, font, to_upper=False):
         elif node.tagName == 'var' or node.tagName == 'dfn':
             s = r'\fI'
             for child in node.childNodes:
-                s += inline_xml_to_nroff(child, r'\fI')
+                s += inline_xml_to_nroff(child, r'\fI', to_upper, newline)
             return s + font
         else:
             raise error.Error("element <%s> unknown or invalid here" % node.tagName)
+    elif node.nodeType == node.COMMENT_NODE:
+        return ''
     else:
         raise error.Error("unknown node %s in inline xml" % node)
 
 def pre_to_nroff(nodes, para, font):
-    s = para + '\n.nf\n'
+    # This puts 'font' at the beginning of each line so that leading and
+    # trailing whitespace stripping later doesn't removed leading spaces
+    # from preformatted text.
+    s = para + '\n.nf\n' + font
     for node in nodes:
-        if node.nodeType == node.TEXT_NODE:
-            for line in node.data.split('\n'):
-                s += escape_nroff_literal(line, font) + '\n.br\n'
-        elif node.nodeType != node.COMMENT_NODE:
-            fatal("<pre> element may only have text children")
-    s += '.fi\n'
+        s += inline_xml_to_nroff(node, font, False, '\n.br\n' + font)
+    s += '\n.fi\n'
     return s
 
 def diagram_header_to_nroff(header_node):
