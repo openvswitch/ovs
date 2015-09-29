@@ -1773,15 +1773,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     struct netflow *netflow;
     struct ofproto_dpif *ofproto;
     struct dpif_flow_stats push;
-    struct flow flow, dp_mask;
-    struct flow_wildcards wc;
+    struct flow flow;
+    struct flow_wildcards dp_mask, wc;
     enum reval_result result;
-    uint64_t *dp64, *xout64;
     ofp_port_t ofp_in_port;
     struct xlate_in xin;
     long long int last_used;
     int error;
-    size_t i;
     bool need_revalidate;
 
     result = UKEY_DELETE;
@@ -1858,21 +1856,18 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, ukey->key,
-                             ukey->key_len, &dp_mask, &flow) == ODP_FIT_ERROR) {
+                             ukey->key_len, &dp_mask.masks, &flow)
+        == ODP_FIT_ERROR) {
         goto exit;
     }
 
-    /* Since the kernel is free to ignore wildcarded bits in the mask, we can't
-     * directly check that the masks are the same.  Instead we check that the
-     * mask in the kernel is more specific i.e. less wildcarded, than what
-     * we've calculated here.  This guarantees we don't catch any packets we
-     * shouldn't with the megaflow. */
-    dp64 = (uint64_t *) &dp_mask;
-    xout64 = (uint64_t *) &wc.masks;
-    for (i = 0; i < FLOW_U64S; i++) {
-        if ((dp64[i] | xout64[i]) != dp64[i]) {
-            goto exit;
-        }
+    /* Do not modify if any bit is wildcarded by the installed datapath flow,
+     * but not the newly revalidated wildcard mask (wc), i.e., if revalidation
+     * tells that the datapath flow is now too generic and must be narrowed
+     * down.  Note that we do not know if the datapath has ignored any of the
+     * wildcarded bits, so we may be overtly conservative here. */
+    if (flow_wildcards_has_extra(&dp_mask, &wc)) {
+        goto exit;
     }
 
     if (!ofpbuf_equal(odp_actions,
