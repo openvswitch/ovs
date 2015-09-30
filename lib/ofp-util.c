@@ -8191,6 +8191,7 @@ parse_ofp15_group_prop_exp(struct ofpbuf *payload,
 
     switch (experimenter) {
     case NTR_VENDOR_ID:
+    case NTR_COMPAT_VENDOR_ID:
         error = parse_group_prop_ntr(payload, exp_type, group_type,
                                      group_cmd, gp);
         break;
