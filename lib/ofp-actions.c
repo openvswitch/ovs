@@ -2476,6 +2476,39 @@ encode_SET_FIELD(const struct ofpact_set_field *sf,
     }
 }
 
+/* Parses the input argument 'arg' into the key, value, and delimiter
+ * components that are common across the reg_load and set_field action format.
+ *
+ * With an argument like "1->metadata", sets the following pointers to
+ * point within 'arg':
+ * key: "metadata"
+ * value: "1"
+ * delim: "->"
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * OVS_WARN_UNUSED_RESULT
+set_field_split_str(char *arg, char **key, char **value, char **delim)
+{
+    char *value_end;
+
+    *value = arg;
+    value_end = strstr(arg, "->");
+    *key = value_end + strlen("->");
+    if (delim) {
+        *delim = value_end;
+    }
+
+    if (!value_end) {
+        return xasprintf("%s: missing `->'", arg);
+    }
+    if (strlen(value_end) <= strlen("->")) {
+        return xasprintf("%s: missing field name following `->'", arg);
+    }
+
+    return NULL;
+}
+
 /* Parses a "set_field" action with argument 'arg', appending the parsed
  * action to 'ofpacts'.
  *
@@ -2492,16 +2525,11 @@ set_field_parse__(char *arg, struct ofpbuf *ofpacts,
     const struct mf_field *mf;
     char *error;
 
-    value = arg;
-    delim = strstr(arg, "->");
-    if (!delim) {
-        return xasprintf("%s: missing `->'", arg);
-    }
-    if (strlen(delim) <= strlen("->")) {
-        return xasprintf("%s: missing field name following `->'", arg);
+    error = set_field_split_str(arg, &key, &value, &delim);
+    if (error) {
+        return error;
     }
 
-    key = delim + strlen("->");
     mf = mf_from_name(key);
     if (!mf) {
         return xasprintf("%s is not a valid OXM field name", key);
@@ -2546,13 +2574,15 @@ parse_reg_load(char *arg, struct ofpbuf *ofpacts)
     const char *full_arg = arg;
     uint64_t value = strtoull(arg, (char **) &arg, 0);
     struct mf_subfield dst;
+    char *key, *value_str;
     char *error;
 
-    if (strncmp(arg, "->", 2)) {
-        return xasprintf("%s: missing `->' following value", full_arg);
+    error = set_field_split_str(arg, &key, &value_str, NULL);
+    if (error) {
+        return error;
     }
-    arg += 2;
-    error = mf_parse_subfield(&dst, arg);
+
+    error = mf_parse_subfield(&dst, key);
     if (error) {
         return error;
     }
