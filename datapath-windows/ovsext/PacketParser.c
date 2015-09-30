@@ -108,7 +108,7 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
         ((nh->flow_lbl[0] & 0x0F) << 16) | (nh->flow_lbl[1] << 8) | nh->flow_lbl[2];
     flow->nwTtl = nh->hop_limit;
     flow->nwProto = SOCKET_IPPROTO_NONE;
-    flow->nwFrag = 0;
+    flow->nwFrag = OVS_FRAG_TYPE_NONE;
 
     // Parse extended headers and compute L4 offset
     ofs += sizeof(IPv6Hdr);
@@ -161,9 +161,9 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
             /* We only process the first fragment. */
             if (fragHdr->offlg != htons(0)) {
                 if ((fragHdr->offlg & IP6F_OFF_HOST_ORDER_MASK) == htons(0)) {
-                    flow->nwFrag = OVSWIN_NW_FRAG_ANY;
+                    flow->nwFrag = OVS_FRAG_TYPE_FIRST;
                 } else {
-                    flow->nwFrag |= OVSWIN_NW_FRAG_LATER;
+                    flow->nwFrag = OVS_FRAG_TYPE_LATER;
                     nextHdr = SOCKET_IPPROTO_FRAGMENT;
                     break;
                 }

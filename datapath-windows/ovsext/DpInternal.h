@@ -62,12 +62,6 @@ typedef struct _OVS_VPORT_EXT_INFO {
  * that is, pure 802.2 frames. */
 #define OVSWIN_DL_TYPE_NONE 0x5ff
 
-/* Fragment bits, used for IPv4 and IPv6, always zero for non-IP flows. */
-#define OVSWIN_NW_FRAG_ANY   (1 << 0)   /* Set for any IP frag. */
-#define OVSWIN_NW_FRAG_LATER (1 << 1)   /* Set for IP frag with nonzero
-                                         * offset. */
-#define OVSWIN_NW_FRAG_MASK  (OVSWIN_NW_FRAG_ANY | OVSWIN_NW_FRAG_LATER)
-
 typedef struct L4Key {
     ovs_be16 tpSrc;              /* TCP/UDP/SCTP source port. */
     ovs_be16 tpDst;              /* TCP/UDP/SCTP destination port. */

@@ -1785,12 +1785,12 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
 
             ipKey->nwTos = nh->tos;
             if (nh->frag_off & htons(IP_MF | IP_OFFSET)) {
-                ipKey->nwFrag = OVSWIN_NW_FRAG_ANY;
+                ipKey->nwFrag = OVS_FRAG_TYPE_FIRST;
                 if (nh->frag_off & htons(IP_OFFSET)) {
-                    ipKey->nwFrag |= OVSWIN_NW_FRAG_LATER;
+                    ipKey->nwFrag = OVS_FRAG_TYPE_LATER;
                 }
             } else {
-                ipKey->nwFrag = 0;
+                ipKey->nwFrag = OVS_FRAG_TYPE_NONE;
             }
 
             ipKey->nwTtl = nh->ttl;
