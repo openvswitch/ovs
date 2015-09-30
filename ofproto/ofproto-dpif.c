@@ -2296,9 +2296,14 @@ rstp_run(struct ofproto_dpif *ofproto)
         }
 
         if (rstp_shift_root_learned_address(ofproto->rstp)) {
-            bundle_move(((struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp))->bundle,
-                        ((struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp))->bundle);
-            rstp_reset_root_changed(ofproto->rstp);
+            struct ofport_dpif *old_root_aux =
+                (struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp);
+            struct ofport_dpif *new_root_aux =
+                (struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp);
+            if (old_root_aux != NULL && new_root_aux != NULL) {
+                bundle_move(old_root_aux->bundle, new_root_aux->bundle);
+                rstp_reset_root_changed(ofproto->rstp);
+            }
         }
     }
 }
