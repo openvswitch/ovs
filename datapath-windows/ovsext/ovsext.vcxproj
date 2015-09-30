@@ -76,6 +76,7 @@
     <ClInclude Include="Checksum.h" />
     <ClInclude Include="Datapath.h" />
     <ClInclude Include="Debug.h" />
+    <ClInclude Include="DpInternal.h" />
     <ClInclude Include="Ethernet.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="Flow.h" />
