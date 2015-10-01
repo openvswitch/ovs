@@ -75,6 +75,34 @@ EXTRA_DIST += \
 	ovn/CONTAINERS.OpenStack.md \
 	ovn/OVN-GW-HA.md
 
+# Version checking for ovn-nb.ovsschema.
+ALL_LOCAL += ovn/ovn-nb.ovsschema.stamp
+ovn/ovn-nb.ovsschema.stamp: ovn/ovn-nb.ovsschema
+	@sum=`sed '/cksum/d' $? | cksum`; \
+	expected=`sed -n 's/.*"cksum": "\(.*\)".*/\1/p' $?`; \
+	if test "X$$sum" = "X$$expected"; then \
+		touch $@; \
+	else \
+		ln=`sed -n '/"cksum":/=' $?`; \
+		echo >&2 "$?:$$ln: The checksum \"$$sum\" was calculated from the schema file and does not match cksum field in the schema file - you should probably update the version number and the checksum in the schema file with the value listed here."; \
+		exit 1; \
+	fi
+CLEANFILES += ovn/ovn-nb.ovsschema.stamp
+
+# Version checking for ovn-sb.ovsschema.
+ALL_LOCAL += ovn/ovn-sb.ovsschema.stamp
+ovn/ovn-sb.ovsschema.stamp: ovn/ovn-sb.ovsschema
+	@sum=`sed '/cksum/d' $? | cksum`; \
+	expected=`sed -n 's/.*"cksum": "\(.*\)".*/\1/p' $?`; \
+	if test "X$$sum" = "X$$expected"; then \
+		touch $@; \
+	else \
+		ln=`sed -n '/"cksum":/=' $?`; \
+		echo >&2 "$?:$$ln: The checksum \"$$sum\" was calculated from the schema file and does not match cksum field in the schema file - you should probably update the version number and the checksum in the schema file with the value listed here."; \
+		exit 1; \
+	fi
+CLEANFILES += ovn/ovn-sb.ovsschema.stamp
+
 include ovn/controller/automake.mk
 include ovn/controller-vtep/automake.mk
 include ovn/lib/automake.mk

@@ -1,5 +1,7 @@
 {
     "name": "OVN_Southbound",
+    "version": "1.0.0",
+    "cksum": "4202564645 5078",
     "tables": {
         "Chassis": {
             "columns": {

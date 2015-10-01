@@ -1,5 +1,7 @@
 {
     "name": "OVN_Northbound",
+    "version": "1.0.0",
+    "cksum": "3052542625 4535",
     "tables": {
         "Logical_Switch": {
             "columns": {
