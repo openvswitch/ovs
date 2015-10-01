@@ -142,7 +142,7 @@ nbctl_default_db(void)
     if (!def) {
         def = getenv("OVN_NB_DB");
         if (!def) {
-            def = xasprintf("unix:%s/db.sock", ovs_rundir());
+            def = ctl_default_db();
         }
     }
     return def;
