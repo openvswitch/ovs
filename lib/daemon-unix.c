@@ -804,10 +804,10 @@ daemon_become_new_user_unix(void)
 
 /* Linux specific implementation of daemon_become_new_user()
  * using libcap-ng.   */
-#if defined __linux__ &&  HAVE_LIBCAPNG
 static void
-daemon_become_new_user_linux(bool access_datapath)
+daemon_become_new_user_linux(bool access_datapath OVS_UNUSED)
 {
+#if defined __linux__ &&  HAVE_LIBCAPNG
     int ret;
 
     ret = capng_get_caps_process();
@@ -847,8 +847,8 @@ daemon_become_new_user_linux(bool access_datapath)
         VLOG_FATAL("%s: libcap-ng fail to switch to user and group "
                    "%d:%d, aborting", pidfile, uid, gid);
     }
-}
 #endif
+}
 
 static void
 daemon_become_new_user__(bool access_datapath)
