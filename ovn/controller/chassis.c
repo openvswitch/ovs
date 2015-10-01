@@ -43,7 +43,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     struct sbrec_encap *encap_rec;
     static bool inited = false;
 
-    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
+    chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
 
     /* xxx Need to support more than one encap.  Also need to support
      * xxx encap options. */
@@ -110,7 +110,7 @@ chassis_cleanup(struct controller_ctx *ctx, const char *chassis_id)
 
     /* Delete Chassis row. */
     const struct sbrec_chassis *chassis_rec
-        = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
+        = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }

@@ -84,7 +84,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         return;
     }
 
-    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
+    chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return;
     }
@@ -142,7 +142,7 @@ binding_cleanup(struct controller_ctx *ctx, const char *chassis_id)
         return true;
     }
     const struct sbrec_chassis *chassis_rec
-        = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
+        = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }

@@ -27,18 +27,7 @@ struct controller_ctx {
     struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
-static inline const struct sbrec_chassis *
-get_chassis_by_name(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
-{
-    const struct sbrec_chassis *chassis_rec;
-
-    SBREC_CHASSIS_FOR_EACH(chassis_rec, ovnsb_idl) {
-        if (!strcmp(chassis_rec->name, chassis_id)) {
-            break;
-        }
-    }
-
-    return chassis_rec;
-}
+const struct sbrec_chassis *get_chassis(struct ovsdb_idl *,
+                                        const char *chassis_id);
 
 #endif /* ovn/ovn-controller.h */

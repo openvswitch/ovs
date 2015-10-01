@@ -57,6 +57,20 @@ OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
 
+const struct sbrec_chassis *
+get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
+{
+    const struct sbrec_chassis *chassis_rec;
+
+    SBREC_CHASSIS_FOR_EACH(chassis_rec, ovnsb_idl) {
+        if (!strcmp(chassis_rec->name, chassis_id)) {
+            break;
+        }
+    }
+
+    return chassis_rec;
+}
+
 static const struct ovsrec_bridge *
 get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
 {
