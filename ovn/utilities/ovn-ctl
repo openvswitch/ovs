@@ -30,12 +30,6 @@ done
 ## start ##
 ## ----- ##
 
-create_db () {
-    DB_FILE=$1
-    DB_SCHEMA=$2
-    action "Creating empty database $DB_FILE" ovsdb-tool create "$DB_FILE" "$DB_SCHEMA"
-}
-
 check_ovn_dbs () {
     if test ! -e "$DB_NB_FILE"; then
         create_db "$DB_NB_FILE" "$DB_NB_SCHEMA"

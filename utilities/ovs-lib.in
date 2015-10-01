@@ -325,3 +325,13 @@ move_ip_routes () {
         echo "ip route add $route dev $dst"
     done
 }
+
+ovsdb_tool () {
+    ovsdb-tool -vconsole:off "$@"
+}
+
+create_db () {
+    DB_FILE="$1"
+    DB_SCHEMA="$2"
+    action "Creating empty database $DB_FILE" ovsdb_tool create "$DB_FILE" "$DB_SCHEMA"
+}

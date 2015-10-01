@@ -76,20 +76,12 @@ ovs_vsctl () {
     ovs-vsctl --no-wait "$@"
 }
 
-ovsdb_tool () {
-    ovsdb-tool -vconsole:off "$@"
-}
-
-create_db () {
-    action "Creating empty database $DB_FILE" ovsdb_tool create "$DB_FILE" "$DB_SCHEMA"
-}
-
 upgrade_db () {
     schemaver=`ovsdb_tool schema-version "$DB_SCHEMA"`
     if test ! -e "$DB_FILE"; then
         log_warning_msg "$DB_FILE does not exist"
         install -d -m 755 -o root -g root `dirname $DB_FILE`
-        create_db
+        create_db "$DB_FILE" "$DB_SCHEMA"
     elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" != Xno; then
         # Back up the old version.
         version=`ovsdb_tool db-version "$DB_FILE"`
@@ -118,7 +110,7 @@ upgrade_db () {
         else
             log_warning_msg "Schema conversion failed, using empty database instead"
             rm -f "$DB_FILE"
-            create_db
+            create_db "$DB_FILE" "$DB_SCHEMA"
         fi
     fi
 }
