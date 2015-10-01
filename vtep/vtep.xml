@@ -537,6 +537,22 @@
       logical switch.
     </column>
 
+    <column name="acl_bindings">
+      <p>
+        Attach Access Control Lists (ACLs) to the physical port. The
+        column consists of a map of VLAN tags to <ref table="ACL"/>s. If the value of
+        the VLAN tag in the map is 0, this means that the ACL is
+        associated with the entire physical port. Non-zero values mean
+        that the ACL is to be applied only on packets carrying that VLAN
+        tag value. Switches will not necessarily support matching on the
+        VLAN tag for all ACLs, and unsupported ACL bindings will cause
+        errors to be reported. The binding of an ACL to a specific
+        VLAN and the binding of an ACL to the entire physical port
+        should not be combined on a single physical port. That is, a
+        mix of zero and non-zero keys in the map is not recommended.
+      </p>
+    </column>
+
     <column name="vlan_stats">
       Statistics for VLANs bound to logical switches on the physical port.  An
       implementation that fully supports such statistics would populate this
@@ -569,6 +585,12 @@
           Indicates that a VLAN-to-logical-switch mapping requested by
           the controller could not be instantiated by the switch
           because of a conflict with local configuration.
+        </p>
+      </column>
+      <column name="port_fault_status" key="invalid_ACL_binding">
+        <p>
+          Indicates that an error has occurred in associating an ACL
+          with a port.
         </p>
       </column>
       <column name="port_fault_status" key="unspecified_fault">
@@ -854,6 +876,15 @@
       One or more static routes, mapping IP prefixes to next hop IP addresses.
     </column>
 
+    <column name="acl_binding">
+      Maps ACLs to logical router interfaces. The router interfaces
+      are indicated using IP address notation, and must be the same
+      interfaces created in the <ref column="switch_binding"/>
+      column. For example, an ACL could be associated with the logical
+      router interface with an address of 192.68.1.1 as defined in the
+      example above.
+    </column>
+
     <group title="Identification">
       <column name="name">
         Symbolic name for the logical router.
@@ -863,6 +894,28 @@
         An extended description for the logical router.
       </column>
     </group>
+
+    <group title="Error Notification">
+      <p>
+        An entry in this column indicates to the NVC that the HSC has
+        encountered a fault in configuring state related to the
+        logical router.
+      </p>
+      <column name="LR_fault_status" key="invalid_ACL_binding">
+        <p>
+          Indicates that an error has occurred in associating an ACL
+          with a logical router port.
+        </p>
+      </column>
+      <column name="LR_fault_status" key="unspecified_fault">
+        <p>
+          Indicates that an error has occurred in configuring the
+          logical router but that no
+          more specific information is available.
+        </p>
+      </column>
+    </group>
+
   </table>
 
   <table name="Arp_Sources_Local" title="ARP source addresses for logical routers">
@@ -975,5 +1028,212 @@
     </column>
 
   </table>
-
+  <table name="ACL_entry">
+    <p>
+      Describes the individual entries that comprise an Access Control List.
+    </p>
+    <p>
+      Each entry in the table is a single rule to match on certain
+      header fields. While there are a large number of fields that can
+      be matched on, most hardware cannot match on arbitrary
+      combinations of fields. It is common to match on either L2
+      fields (described below in the L2 group of columns) or L3/L4 fields
+      (the L3/L4 group of columns) but not both. The hardware switch
+      controller may log an error if an ACL entry requires it to match
+      on an incompatible mixture of fields.
+    </p>
+    <column name="sequence">
+      <p>
+        The sequence number for the ACL entry for the purpose of
+        ordering entries in an ACL. Lower numbered entries are matched
+        before higher numbered entries.
+      </p>
+    </column>
+    <group title="L2 fields">
+      <column name="source_mac">
+        <p>
+          Source MAC address, in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+        </p>
+      </column>
+      <column name="dest_mac">
+        <p>
+          Destination MAC address, in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+        </p>
+      </column>
+            <column name="ethertype">
+        <p>
+          Ethertype in hexadecimal, in the form
+          <var>0xAAAA</var>
+        </p>
+      </column>
+    </group>
+    <group title="L3/L4 fields">
+      <column name="source_ip">
+        <p>
+          Source IP address, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="source_mask">
+        <p>
+          Mask that determines which bits of source_ip to match on, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="dest_ip">
+        <p>
+          Destination IP address, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="dest_mask">
+        <p>
+          Mask that determines which bits of dest_ip to match on, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="protocol">
+        <p>
+          Protocol number in the IPv4 header, or value of the "next
+          header" field in the IPv6 header.
+        </p>
+      </column>
+      <column name="source_port_min">
+        <p>
+          Lower end of the range of source port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="source_port_max">
+        <p>
+          Upper end of the range of source port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="dest_port_min">
+        <p>
+          Lower end of the range of destination port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="dest_port_max">
+        <p>
+          Upper end of the range of destination port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="tcp_flags">
+        <p>
+          Integer representing the value of TCP flags to match. For
+          example, the SYN flag is the second least significant bit in
+          the TCP flags. Hence a value of 2 would indicate that the "SYN"
+          flag should be set (assuming an appropriate mask).
+        </p>
+      </column>
+      <column name="tcp_flags_mask">
+        <p>
+          Integer representing the mask to apply when matching TCP
+          flags. For example, a value of 2 would imply that the "SYN"
+          flag should be matched and all other flags ignored.
+        </p>
+      </column>
+      <column name="icmp_type">
+        <p>
+          ICMP type to be matched.
+        </p>
+      </column>
+      <column name="icmp_code">
+        <p>
+          ICMP code to be matched.
+        </p>
+      </column>
+    </group>
+    <column name="direction">
+      <p>
+        Direction of traffic to match on the specified port, either
+        "ingress" (toward the logical switch or router) or "egress"
+        (leaving the logical switch or router).
+      </p>
+    </column>
+    <column name="action">
+      <p>
+        Action to take for this rule, either "permit" or "deny".
+      </p>
+    </column>
+    <group title="Error Notification">
+      <p>
+        An entry in this column indicates to the NVC that the ACL
+        could not be configured as requested. The switch must clear this column when the error
+        has been cleared.
+      </p>
+      <column name="acle_fault_status" key="invalid_acl_entry">
+        <p>
+          Indicates that an ACL entry requested by
+          the controller could not be instantiated by the switch,
+          e.g. because it requires an unsupported combination of
+          fields to be matched.
+        </p>
+      </column>
+      <column name="acle_fault_status" key="unspecified_fault">
+        <p>
+          Indicates that an error has occurred in configuring the ACL
+          entry but no
+          more specific information is available.
+        </p>
+      </column>
+    </group>
+  </table>
+  <table name="ACL">
+    <p>
+      Access Control List table. Each ACL is constructed as a set of
+      entries from the <ref table="ACL_entry"/> table. Packets that
+      are not matched by any entry in the ACL are allowed by default.
+    </p>
+    <column name="acl_entries">
+      <p>
+        A set of references to entries in the <ref table="ACL_entry"/> table.
+      </p>
+    </column>
+    <column name="acl_name">
+      <p>
+        A human readable name for the ACL, which may (for example) be displayed on
+        the switch CLI.
+      </p>
+    </column>
+    <group title="Error Notification">
+      <p>
+        An entry in this column indicates to the NVC that the ACL
+        could not be configured as requested. The switch must clear this column when the error
+        has been cleared.
+      </p>
+      <column name="acl_fault_status" key="invalid_acl">
+        <p>
+          Indicates that an ACL requested by
+          the controller could not be instantiated by the switch,
+          e.g., because it requires an unsupported combination of
+          fields to be matched.
+        </p>
+      </column>
+      <column name="acl_fault_status" key="resource_shortage">
+        <p>
+          Indicates that an ACL requested by
+          the controller could not be instantiated by the switch due
+          to a shortage of resources (e.g. TCAM space).
+        </p>
+      </column>
+      <column name="acl_fault_status" key="unspecified_fault">
+        <p>
+          Indicates that an error has occurred in configuring the ACL
+          but no
+          more specific information is available.
+        </p>
+      </column>
+    </group>
+  </table>
 </database>
