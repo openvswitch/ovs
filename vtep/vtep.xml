@@ -367,7 +367,7 @@
       <group title="BFD Local Configuration">
         <p>
           The HSC writes the key-value pairs in the
-          <ref column="bfd_config_local"/> column to specifiy the local
+          <ref column="bfd_config_local"/> column to specify the local
           configurations to be used for BFD sessions on this tunnel.
         </p>
 
@@ -454,7 +454,7 @@
 
         <column name="bfd_params" key="cpath_down" type='{"type": "boolean"}'>
           Set to true to notify the remote endpoint that traffic should not be
-          forwarded to this system for some reason other than a connectivty
+          forwarded to this system for some reason other than a connectivity
           failure on the interface being monitored.  The typical underlying
           reason is ``concatenated path down,'' that is, that connectivity
           beyond the local system is down.  Defaults to false.
@@ -558,7 +558,7 @@
     <group title="Error Notification">
       <p>
         An entry in this column indicates to the NVC that the physical port has
-        encountered a fault. The switch must clear this column when the errror
+        encountered a fault. The switch must clear this column when the error
         has been cleared.
       </p>
       <column name="port_fault_status" key="invalid_vlan_map">
@@ -795,7 +795,7 @@
       in which case the physical locators will be IP addresses of
       service nodes. If the VTEP supports replication onto multiple
       tunnels, then this may be used to replicate directly onto
-      VTEP-hyperisor tunnels.
+      VTEP-hypervisor tunnels.
     </p>
 
     <column name="MAC">
