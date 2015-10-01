@@ -243,7 +243,6 @@
     <h1>Options</h1>
 
     <dl>
-    <dt><code>-d</code> <var>database</var></dt>
     <dt><code>--db</code> <var>database</var></dt>
     <dd>
       The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>
