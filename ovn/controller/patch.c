@@ -69,10 +69,6 @@ create_patch_port(struct controller_ctx *ctx,
                   const struct ovsrec_bridge *b1,
                   const struct ovsrec_bridge *b2)
 {
-    if (!ctx->ovs_idl_txn) {
-        return;
-    }
-
     char *port_name = patch_port_name(b1, b2);
     char *peer_port_name = patch_port_name(b2, b1);
 
@@ -218,6 +214,10 @@ parse_bridge_mappings(struct controller_ctx *ctx,
 void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
 {
+    if (!ctx->ovs_idl_txn) {
+        return;
+    }
+
     const char *mappings_cfg = "";
     const struct ovsrec_open_vswitch *cfg;
 
