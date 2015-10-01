@@ -229,7 +229,7 @@ case $command in
         stop_controller
         ;;
     restart_northd)
-        restart_northda
+        restart_northd
         ;;
     restart_controller)
         restart_controller
