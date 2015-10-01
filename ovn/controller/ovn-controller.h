@@ -31,6 +31,9 @@ struct controller_ctx {
     struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
+const struct ovsrec_bridge *get_bridge(struct ovsdb_idl *,
+                                       const char *br_name);
+
 const struct sbrec_chassis *get_chassis(struct ovsdb_idl *,
                                         const char *chassis_id);
 
