@@ -108,19 +108,28 @@ as() {
     fi
 }
 
+# ovn_init_db DATABASE
+#
+# Creates and initializes the given DATABASE (one of "ovn-sb" or "ovn-nb")
+# and starts its ovsdb-server instance.
+#
+# Usually invoked from ovn_start.
+ovn_init_db () {
+    echo "creating $1 database"
+    local d=$ovs_base/$1
+    mkdir "$d" || return 1
+    : > "$d"/.$1.db.~lock~
+    as $1 ovsdb-tool create "$d"/$1.db "$abs_top_srcdir"/ovn/$1.ovsschema
+    as $1 start_daemon ovsdb-server --remote=punix:"$d"/$1.sock "$d"/$1.db
+}
+
 # ovn_start
 #
 # Creates and initializes ovn-sb and ovn-nb databases and starts their
 # ovsdb-server instance, and starts ovn-northd running against them.
 ovn_start () {
-    for db in ovn-sb ovn-nb; do
-        echo "creating $db database"
-        d=$ovs_base/$db
-        mkdir "$d" || return 1
-        : > "$d"/.$db.db.~lock~
-        as $db ovsdb-tool create "$d"/$db.db "$abs_top_srcdir"/ovn/$db.ovsschema
-        as $db start_daemon ovsdb-server --remote=punix:"$d"/$db.sock "$d"/$db.db
-    done
+    ovn_init_db ovn-sb
+    ovn_init_db ovn-nb
 
     OVN_NB_DB=unix:$ovs_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
 
