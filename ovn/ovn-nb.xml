@@ -180,12 +180,22 @@
     </column>
 
     <column name="tag">
-      When <ref column="name"/> identifies the interface of a container
-      spawned inside a tenant VM, this column identifies the VLAN tag in
-      the network traffic associated with that container's network interface.
-      When there are multiple container interfaces inside a VM, all of
-      them send their network traffic through a single VM network interface and
-      this value helps OVN identify the correct container interface.
+     <p>
+      When <ref column="type"/> is empty and <ref column="name"/> identifies
+      the interface of a container spawned inside a tenant VM, this column
+      identifies the VLAN tag in the network traffic associated with that
+      container's network interface. When there are multiple container
+      interfaces inside a VM, all of them send their network traffic through a
+      single VM network interface and this value helps OVN identify the correct
+      container interface.
+     </p>
+
+     <p>
+      When <ref column="type"/> is set to <code>localnet</code>, this can be
+      set to indicate that the port represents a connection to a specific
+      VLAN on a locally accessible network. The VLAN ID is used to match
+      incoming traffic and is also added to outgoing traffic.
+     </p>
     </column>
 
     <column name="up">

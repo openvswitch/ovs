@@ -210,9 +210,16 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         struct ovs_list list_elem;
         const struct sbrec_port_binding *binding;
     };
+    /* The bindings for a given VLAN on a localnet port. */
+    struct localnet_vlan {
+        struct hmap_node node;
+        int tag;
+        struct ovs_list bindings;
+    };
+    /* A hash of localnet_vlans, hashed on VLAN ID, for a localnet port */
     struct localnet_bindings {
         ofp_port_t ofport;
-        struct ovs_list bindings;
+        struct hmap vlans;
     };
     /* Maps from network name to "struct localnet_bindings". */
     struct shash localnet_inputs = SHASH_INITIALIZER(&localnet_inputs);
@@ -242,6 +249,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          *     - If the port is a "localnet" port for a network that is
          *       attached to the chassis we're managing, the OpenFlow port for
          *       the localnet port (a patch port).
+         *
+         *       The "localnet" port may be configured with a VLAN ID.  If so,
+         *       'tag' will be set to that VLAN ID; otherwise 'tag' is 0.
          */
 
         int tag = 0;
@@ -252,6 +262,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 continue;
             }
             ofport = u16_to_ofp(simap_get(&localnet_to_ofport, network));
+            if (ofport && binding->tag) {
+                tag = *binding->tag;
+            }
         } else if (binding->parent_port) {
             if (!binding->tag) {
                 continue;
@@ -288,10 +301,12 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             /* Table 0, Priority 150 and 100.
              * ==============================
              *
-             * Priority 150 is for traffic belonging to containers. For such
-             * traffic, match on the tags and then strip the tag.
-             * Priority 100 is for traffic belonging to VMs or locally connected
-             * networks.
+             * Priority 150 is for tagged traffic. This may be containers in a
+             * VM or a VLAN on a local network. For such traffic, match on the
+             * tags and then strip the tag.
+             *
+             * Priority 100 is for traffic belonging to VMs or untagged locally
+             * connected networks.
              *
              * For both types of traffic: set MFF_LOG_INPORT to the logical
              * input port, MFF_LOG_DATAPATH to the logical datapath, and
@@ -305,18 +320,29 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 const char *network
                     = smap_get(&binding->options, "network_name");
                 struct localnet_bindings *ln_bindings;
+                struct hmap_node *node;
+                struct localnet_vlan *ln_vlan;
 
                 ln_bindings = shash_find_data(&localnet_inputs, network);
                 if (!ln_bindings) {
                     ln_bindings = xmalloc(sizeof *ln_bindings);
                     ln_bindings->ofport = ofport;
-                    list_init(&ln_bindings->bindings);
+                    hmap_init(&ln_bindings->vlans);
                     shash_add(&localnet_inputs, network, ln_bindings);
+                }
+                node = hmap_first_with_hash(&ln_bindings->vlans, tag);
+                if (node) {
+                    ASSIGN_CONTAINER(ln_vlan, node, node);
+                } else {
+                    ln_vlan = xmalloc(sizeof *ln_vlan);
+                    ln_vlan->tag = tag;
+                    list_init(&ln_vlan->bindings);
+                    hmap_insert(&ln_bindings->vlans, &ln_vlan->node, tag);
                 }
 
                 struct binding_elem *b = xmalloc(sizeof *b);
                 b->binding = binding;
-                list_insert(&ln_bindings->bindings, &b->list_elem);
+                list_insert(&ln_vlan->bindings, &b->list_elem);
             } else {
                 struct hmap_node *ld;
                 ld = hmap_first_with_hash(&local_datapaths,
@@ -607,49 +633,66 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     }
     hmap_destroy(&tunnels);
 
-    /* Table 0, Priority 100
-     * =====================
+    /* Table 0, Priority 150 and 100.
+     * ==============================
      *
      * We have now determined the full set of port bindings associated with
      * each "localnet" network.  Only create flows for datapaths that have
      * another local binding.  Otherwise, we know it would just be dropped.
+     *
+     * Use priority 150 for inputs that match both the network and a VLAN tag.
+     * Use priority 100 for matching untagged traffic from the local network.
      */
     struct shash_node *ln_bindings_node, *ln_bindings_node_next;
     SHASH_FOR_EACH_SAFE (ln_bindings_node, ln_bindings_node_next,
                          &localnet_inputs) {
         struct localnet_bindings *ln_bindings = ln_bindings_node->data;
-
-        struct match match;
-        match_init_catchall(&match);
-        match_set_in_port(&match, ln_bindings->ofport);
-
-        struct ofpbuf ofpacts;
-        ofpbuf_init(&ofpacts, 0);
-
-        struct binding_elem *b;
-        LIST_FOR_EACH_POP (b, list_elem, &ln_bindings->bindings) {
-            struct hmap_node *ld;
-            ld = hmap_first_with_hash(&local_datapaths,
-                                      b->binding->datapath->tunnel_key);
-            if (ld) {
-                /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
-                put_load(b->binding->datapath->tunnel_key, MFF_LOG_DATAPATH,
-                         0, 64, &ofpacts);
-                put_load(b->binding->tunnel_key, MFF_LOG_INPORT, 0, 32,
-                         &ofpacts);
-                put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
+        struct localnet_vlan *ln_vlan, *ln_vlan_next;
+        HMAP_FOR_EACH_SAFE (ln_vlan, ln_vlan_next, node, &ln_bindings->vlans) {
+            struct match match;
+            match_init_catchall(&match);
+            match_set_in_port(&match, ln_bindings->ofport);
+            if (ln_vlan->tag) {
+                match_set_dl_vlan(&match, htons(ln_vlan->tag));
             }
 
-            free(b);
+            struct ofpbuf ofpacts;
+            ofpbuf_init(&ofpacts, 0);
+
+            if (ln_vlan->tag) {
+                ofpact_put_STRIP_VLAN(&ofpacts);
+            }
+            uint32_t ofpacts_orig_size = ofpacts.size;
+
+            struct binding_elem *b;
+            LIST_FOR_EACH_POP (b, list_elem, &ln_vlan->bindings) {
+                struct hmap_node *ld;
+                ld = hmap_first_with_hash(&local_datapaths,
+                                          b->binding->datapath->tunnel_key);
+                if (ld) {
+                    /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
+                    put_load(b->binding->datapath->tunnel_key, MFF_LOG_DATAPATH,
+                             0, 64, &ofpacts);
+                    put_load(b->binding->tunnel_key, MFF_LOG_INPORT, 0, 32,
+                             &ofpacts);
+                    put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
+                }
+
+                free(b);
+            }
+
+            if (ofpacts.size > ofpacts_orig_size) {
+                ofctrl_add_flow(flow_table, 0, ln_vlan->tag ? 150 : 100,
+                        &match, &ofpacts);
+            }
+
+            ofpbuf_uninit(&ofpacts);
+
+            hmap_remove(&ln_bindings->vlans, &ln_vlan->node);
+            free(ln_vlan);
         }
-
-        if (ofpacts.size) {
-            ofctrl_add_flow(flow_table, 0, 100, &match, &ofpacts);
-        }
-
-        ofpbuf_uninit(&ofpacts);
-
         shash_delete(&localnet_inputs, ln_bindings_node);
+        hmap_destroy(&ln_bindings->vlans);
         free(ln_bindings);
     }
     shash_destroy(&localnet_inputs);
