@@ -49,6 +49,7 @@
 /configure-stamp
 /depcomp
 /distfiles
+/dist-docs
 /install-sh
 /libtool
 /manpage-check
