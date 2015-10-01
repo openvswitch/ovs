@@ -234,9 +234,6 @@ case $command in
     restart_controller)
         restart_controller
         ;;
-    create_ovn_dbs)
-        create_ovn_dbs
-        ;;
     help)
         usage
         ;;
