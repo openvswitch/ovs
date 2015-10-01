@@ -90,8 +90,8 @@ pid_t read_pidfile(const char *name);
     OPT_PIDFILE,                               \
     OPT_PIPE_HANDLE,                           \
     OPT_SERVICE,                               \
-    OPT_SERVICE_MONITOR                        \
-    OPT_USER_GROUP                             \
+    OPT_SERVICE_MONITOR,                       \
+    OPT_USER_GROUP
 
 #define DAEMON_LONG_OPTIONS                                               \
         {"detach",             no_argument, NULL, OPT_DETACH},            \
@@ -99,7 +99,7 @@ pid_t read_pidfile(const char *name);
         {"pidfile",            optional_argument, NULL, OPT_PIDFILE},     \
         {"pipe-handle",        required_argument, NULL, OPT_PIPE_HANDLE}, \
         {"service",            no_argument, NULL, OPT_SERVICE},           \
-        {"service-monitor",    no_argument, NULL, OPT_SERVICE_MONITOR}    \
+        {"service-monitor",    no_argument, NULL, OPT_SERVICE_MONITOR},   \
         {"user",               required_argument, NULL, OPT_USER_GROUP}
 
 #define DAEMON_OPTION_HANDLERS                  \
@@ -124,7 +124,7 @@ pid_t read_pidfile(const char *name);
             break;                              \
                                                 \
         case OPT_USER_GROUP:                    \
-            daemon_set_new_user(optarg);        \
+            daemon_set_new_user(optarg);
 
 void control_handler(DWORD request);
 void set_pipe_handle(const char *pipe_handle);
