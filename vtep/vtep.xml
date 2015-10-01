@@ -532,7 +532,9 @@
       Identifies how VLANs on the physical port are bound to logical switches.
       If, for example, the map contains a (VLAN, logical switch) pair, a packet
       that arrives on the port in the VLAN is considered to belong to the
-      paired logical switch.
+      paired logical switch. A value of zero in the VLAN field means
+      that untagged traffic on the physical port is mapped to the
+      logical switch.
     </column>
 
     <column name="vlan_stats">
@@ -541,7 +543,8 @@
       column with a mapping for every VLAN that is bound in <ref
       column="vlan_bindings"/>.  An implementation that does not support such
       statistics or only partially supports them would not populate this column
-      or partially populate it, respectively.
+      or partially populate it, respectively. A value of zero in the
+      VLAN field refers to untagged traffic on the physical port.
     </column>
 
     <group title="Identification">
