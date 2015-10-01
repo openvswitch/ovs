@@ -13,6 +13,10 @@
 
 #%define kernel 2.6.40.4-5.fc15.x86_64
 
+# If libcap-ng isn't available and there is no need for running OVS
+# as regular user, specify the '--without libcapng'
+%bcond_without libcapng
+
 # Enable PIE, bz#955181
 %global _hardened_build 1
 
@@ -42,6 +46,9 @@ BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
 # make check dependencies
 BuildRequires: procps-ng
+%if %{with libcapng}
+BuildRequires: libcap-ng libcap-ng-devel
+%endif
 
 Requires: openssl iproute module-init-tools
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
@@ -104,7 +111,15 @@ overlays and security groups.
 %setup -q
 
 %build
-%configure --enable-ssl --with-pkidir=%{_sharedstatedir}/openvswitch/pki
+%configure \
+%if %{with libcapng}
+	--enable-libcapng \
+%else
+	--disable-libcapng \
+%endif
+	--enable-ssl \
+	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
+
 make %{?_smp_mflags}
 
 %install
