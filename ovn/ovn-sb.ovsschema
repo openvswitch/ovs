@@ -86,7 +86,7 @@
                 "parent_port": {"type": {"key": "string", "min": 0, "max": 1}},
                 "tag": {
                      "type": {"key": {"type": "integer",
-                                      "minInteger": 0,
+                                      "minInteger": 1,
                                       "maxInteger": 4095},
                               "min": 0, "max": 1}},
                 "chassis": {"type": {"key": {"type": "uuid",
