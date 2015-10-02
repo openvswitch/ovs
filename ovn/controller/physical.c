@@ -527,6 +527,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          * any. */
         bool local_ports = ofpacts.size > 0;
         if (local_ports) {
+            /* Following delivery to local logical ports, restore the multicast
+             * group as the logical output port. */
+            put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
+
             ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100,
                             &match, &ofpacts);
         }
