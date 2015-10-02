@@ -102,6 +102,7 @@ EXTRA_DIST = \
 	.travis/prepare.sh \
 	boot.sh \
 	build-aux/cccl \
+	build-aux/cksum-schema-check \
 	build-aux/dist-docs \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
