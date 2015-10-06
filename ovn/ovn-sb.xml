@@ -957,152 +957,160 @@
       overwrite the <code>chassis</code> column with new information.
     </p>
 
-    <column name="datapath">
-      The logical datapath to which the logical port belongs.
-    </column>
+    <group title="Core Features">
+      <column name="datapath">
+        The logical datapath to which the logical port belongs.
+      </column>
 
-    <column name="logical_port">
-      A logical port, taken from <ref table="Logical_Port" column="name"
-      db="OVN_Northbound"/> in the OVN_Northbound database's
-      <ref table="Logical_Port" db="OVN_Northbound"/> table.  OVN does not
-      prescribe a particular format for the logical port ID.
-    </column>
+      <column name="logical_port">
+        A logical port, taken from <ref table="Logical_Port" column="name"
+        db="OVN_Northbound"/> in the OVN_Northbound database's <ref
+        table="Logical_Port" db="OVN_Northbound"/> table.  OVN does not
+        prescribe a particular format for the logical port ID.
+      </column>
 
-    <column name="type">
+      <column name="chassis">
+        The physical location of the logical port.  To successfully identify a
+        chassis, this column must be a <ref table="Chassis"/> record.  This is
+        populated by
+        <code>ovn-controller</code>/<code>ovn-controller-vtep</code>.
+      </column>
+
+      <column name="tunnel_key">
+        <p>
+          A number that represents the logical port in the key (e.g. STT key or
+          Geneve TLV) field carried within tunnel protocol packets.
+        </p>
+
+        <p>
+          The tunnel ID must be unique within the scope of a logical datapath.
+        </p>
+      </column>
+
+      <column name="mac">
+        <p>
+          The Ethernet address or addresses used as a source address on the
+          logical port, each in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+          The string <code>unknown</code> is also allowed to indicate that the
+          logical port has an unknown set of (additional) source addresses.
+        </p>
+
+        <p>
+          A VM interface would ordinarily have a single Ethernet address.  A
+          gateway port might initially only have <code>unknown</code>, and then
+          add MAC addresses to the set as it learns new source addresses.
+        </p>
+      </column>
+
+      <column name="type">
+        <p>
+          A type for this logical port.  Logical ports can be used to model other
+          types of connectivity into an OVN logical switch.  The following types
+          are defined:
+        </p>
+
+        <dl>
+          <dt>(empty string)</dt>
+          <dd>VM (or VIF) interface.</dd>
+          <dt><code>localnet</code></dt>
+          <dd>
+            A connection to a locally accessible network from each
+            <code>ovn-controller</code> instance.  A logical switch can only
+            have a single <code>localnet</code> port attached and at most one
+            regular logical port.  This is used to model direct connectivity to
+            an existing network.
+          </dd>
+
+          <dt><code>vtep</code></dt>
+          <dd>
+            A port to a logical switch on a VTEP gateway chassis.  In order to
+            get this port correctly recognized by the OVN controller, the <ref
+            column="options"
+            table="Port_Binding"/>:<code>vtep-physical-switch</code> and <ref
+            column="options"
+            table="Port_Binding"/>:<code>vtep-logical-switch</code> must also
+            be defined.
+          </dd>
+        </dl>
+      </column>
+    </group>
+
+    <group title="Localnet Options">
       <p>
-      A type for this logical port.  Logical ports can be used to model
-      other types of connectivity into an OVN logical switch.  Leaving this
-      column blank maintains the default logical port behavior, which
-      is for a VM (or VIF) interface.  The following other types are defined:
+        These options apply to logical ports with <ref column="type"/> of
+        <code>localnet</code>.
       </p>
 
-      <dl>
-        <dt><code>localnet</code></dt>
-        <dd>A connection to a locally accessible network from each
-        <code>ovn-controller</code> instance.  A logical switch can only
-        have a single <code>localnet</code> port attached and at most one
-        regular logical port.  This is used to model direct connectivity
-        to an existing network.</dd>
-      </dl>
+      <column name="options" key="network_name">
+        Required.  <code>ovn-controller</code> uses the configuration entry
+        <code>ovn-bridge-mappings</code> to determine how to connect to this
+        network.  <code>ovn-bridge-mappings</code> is a list of network names
+        mapped to a local OVS bridge that provides access to that network.  An
+        example of configuring <code>ovn-bridge-mappings</code> would be:
 
-      <dl>
-        <dt><code>vtep</code></dt>
-        <dd>A port to a logical switch on a VTEP gateway chassis.  In order
-        to get this port correctly recognized by the OVN controller, the
-        <ref column="options" table="Port_Binding"/>:<code>vtep-physical-switch</code>
-        and <ref column="options" table="Port_Binding"/>:<code>vtep-logical-switch</code>
-        must also be defined.</dd>
-      </dl>
-    </column>
+        <pre>$ ovs-vsctl set open . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1</pre>
 
-    <column name="options">
+        <p>
+          When a logical switch has a <code>localnet</code> port attached,
+          every chassis that may have a local vif attached to that logical
+          switch must have a bridge mapping configured to reach that
+          <code>localnet</code>.  Traffic that arrives on a
+          <code>localnet</code> port is never forwarded over a tunnel to
+          another chassis.
+        </p>
+      </column>
+
+      <column name="tag">
+        If set, indicates that the port represents a connection to a specific
+        VLAN on a locally accessible network. The VLAN ID is used to match
+        incoming traffic and is also added to outgoing traffic.
+      </column>
+    </group>
+
+    <group title="VTEP Options">
       <p>
-        This column provides key/value settings specific to the logical port
-        <ref column="type"/>.  The following options are defined:
+        These options apply to logical ports with <ref column="type"/> of
+        <code>vtep</code>.
       </p>
 
-      <dl>
-        <dt><code>network_name</code></dt>
-        <dd>
-          Must be set when <ref column="type"/> is <code>localnet</code>.
-          <code>ovn-controller</code> uses the configuration entry
-          <code>ovn-bridge-mappings</code> to determine how to connect to
-          this network.  <code>ovn-bridge-mappings</code> is a list of
-          network names mapped to a local OVS bridge that provides access
-          to that network.  An example of configuring
-          <code>ovn-bridge-mappings</code> would be:
+      <column name="options" key="vtep-physical-switch">
+        Required. The name of the VTEP gateway.
+      </column>
 
-          <p>
-            <code>$ ovs-vsctl set open
-            . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1</code>
-          </p>
+      <column name="options" key="vtep-logical-switch">
+        Required.  A logical switch name connected by the VTEP gateway.  Must
+        be set when <ref column="type"/> is <code>vtep</code>.
+      </column>
+    </group>
 
-          <p>
-            Also note that when a logical switch has a <code>localnet</code>
-            port attached, every chassis that may have a local vif attached
-            to that logical switch must have a bridge mapping configured to
-            reach that <code>localnet</code>.  Traffic that arrives on a
-            <code>localnet</code> port is never forwarded over a tunnel to
-            another chassis.
-          </p>
-        </dd>
-      </dl>
-
-      <dl>
-        <dt><code>vtep-physical-switch</code></dt>
-        <dd>
-          The name of the VTEP gateway.  Must be set when
-          <ref column="type"/> is <code>vtep</code>.
-        </dd>
-      </dl>
-
-      <dl>
-        <dt><code>vtep-logical-switch</code></dt>
-        <dd>
-          A logical switch name connected by the VTEP gateway.  Must be
-          set when <ref column="type"/> is <code>vtep</code>.
-        </dd>
-      </dl>
-    </column>
-
-    <column name="tunnel_key">
+    <group title="Nested Containers">
       <p>
-        A number that represents the logical port in the key (e.g. STT key or
-        Geneve TLV) field carried within tunnel protocol packets.
+        These columns support containers nested within a VM.  Specifically,
+        they are used when <ref column="type"/> is empty and <ref
+        column="logical_port"/> identifies the interface of a container spawned
+        inside a VM.  They are empty for containers or VMs that run directly on
+        a hypervisor.
       </p>
 
-      <p>
-        The tunnel ID must be unique within the scope of a logical datapath.
-      </p>
-    </column>
+      <column name="parent_port">
+        This is taken from
+        <ref table="Logical_Port" column="parent_name" db="OVN_Northbound"/>
+        in the OVN_Northbound database's <ref table="Logical_Port"
+        db="OVN_Northbound"/> table.
+      </column>
 
-    <column name="parent_port">
-      For containers created inside a VM, this is taken from
-      <ref table="Logical_Port" column="parent_name" db="OVN_Northbound"/>
-      in the OVN_Northbound database's <ref table="Logical_Port"
-      db="OVN_Northbound"/> table.  It is left empty if
-      <ref column="logical_port"/> belongs to a VM or a container created
-      in the hypervisor.
-    </column>
+      <column name="tag">
+        <p>
+          Identifies the VLAN tag in the network traffic associated with that
+          container's network interface.
+        </p>
 
-    <column name="tag">
-     <p>
-      When <ref column="type"/> is empty and <ref column="logical_port"/>
-      identifies the interface of a container spawned inside a VM, this column
-      identifies the VLAN tag in the network traffic associated with that
-      container's network interface. It is left empty if
-      <ref column="logical_port"/> belongs to a VM or a container created in the
-      hypervisor.
-     </p>
-
-     <p>
-      When <ref column="type"/> is set to <code>localnet</code>, this can be
-      set to indicate that the port represents a connection to a specific
-      VLAN on a locally accessible network. The VLAN ID is used to match
-      incoming traffic and is also added to outgoing traffic.
-     </p>
-    </column>
-
-    <column name="chassis">
-      The physical location of the logical port.  To successfully identify a
-      chassis, this column must be a <ref table="Chassis"/> record.  This is
-      populated by <code>ovn-controller</code>/<code>ovn-controller-vtep</code>.
-    </column>
-
-    <column name="mac">
-      <p>
-        The Ethernet address or addresses used as a source address on the
-        logical port, each in the form
-        <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
-        The string <code>unknown</code> is also allowed to indicate that the
-        logical port has an unknown set of (additional) source addresses.
-      </p>
-
-      <p>
-        A VM interface would ordinarily have a single Ethernet address.  A
-        gateway port might initially only have <code>unknown</code>, and then
-        add MAC addresses to the set as it learns new source addresses.
-      </p>
-    </column>
+        <p>
+          This column is used for a different purpose when <ref column="type"/>
+          is <code>localnet</code> (see <code>Localnet Options</code>, above).
+        </p>
+      </column>
+    </group>
   </table>
 </database>
