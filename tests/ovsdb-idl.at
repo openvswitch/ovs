@@ -581,3 +581,123 @@ AT_CHECK([grep '"monitor"' stderr | grep -c '"ua"'], [0], [1
 ])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
+
+m4_define([OVSDB_CHECK_IDL_TRACK_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl tracking positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_TRACK],
+  [OVSDB_CHECK_IDL_TRACK_C($@)])
+
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": true}}]']],
+  [[000: i=1 r=2 b=true s=mystring u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<1> <2>] uuid=<3>
+001: {"error":null,"result":[{"count":2}]}
+002: i=0 r=0 b=true s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<5>
+002: i=1 r=2 b=true s=mystring u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<1> <2>] uuid=<3>
+003: done
+]])
+
+OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": true}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"r": 123.5}}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": -1,
+               "r": 125,
+               "b": false,
+               "s": "",
+               "ia": ["set", [1]],
+               "ra": ["set", [1.5]],
+               "ba": ["set", [false]],
+               "sa": ["set", []],
+               "ua": ["set", []]}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [["i", "<", 1]],
+       "row": {"s": "newstring"}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["i", "==", 0]]}]' \
+    'reconnect']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
+003: {"error":null,"result":[{"count":2}]}
+004: i=0 r=0 b=true s= u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+005: {"error":null,"result":[{"count":2}]}
+006: i=0 r=123.5 b=true s= u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
+007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
+008: i=-1 r=125 b=false s= u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+009: {"error":null,"result":[{"count":2}]}
+010: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: i=0 r=123.5 b=true s=newstring u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+011: {"error":null,"result":[{"count":1}]}
+012: i=0 r=123.5 b=true s=newstring u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+013: reconnect
+014: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+014: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
+015: done
+]])
