@@ -73,64 +73,55 @@
       <code>ovn-controller</code> assumes it gets configuration
       information from the following keys in the <code>Open_vSwitch</code>
       table of the local OVS instance:
-      <ul>
-        <li>
-          <p>
-            <code>external_ids:system-id</code> specifies the chassis
-            name to use in the Chassis table.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-bridge</code> specifies the
-            integration bridge to which logical ports are attached.
-            The default is <code>br-int</code>.  If this bridge does
-            not exist when ovn-controller starts, it will be created
-            automatically with the default configuration suggested in
-            <code>ovn-architecture</code>(7).
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-remote</code> specifies the OVN
-            database that this system should connect to for its
-            configuration.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-encap-type</code> specifies the
-            encapsulation type that a chassis should use to connect to
-            this node.  Supported tunnel types for connecting
-            hypervisors are <code>geneve</code> and <code>stt</code>.
-            Gateways may use <code>geneve</code>, <code>vxlan</code>,
-            or <code>stt</code>.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-encap-ip</code> specifies the IP
-            address that a chassis should use to connect to this node
-            using encapsulation type specified by
-            <code>external_ids:ovn-encap-ip</code>.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-bridge-mappings</code> specifies a list
-            of key-value pairs that map a physical network name to a local
-            ovs bridge that provides connectivity to that network.
-            An example value mapping two physical network names to two ovs
-            bridges would be: <code>physnet1:br-eth0,physnet2:br-eth1</code>.
-          </p>
-        </li>
-      </ul>
-      <p>
-        Currently, <code>ovn-controller</code> does not support changing
-        the OVN database mid-run.  If the value needs to change, the
-        daemon must be restarted.  This behavior should be improved.
-      </p>
     </p>
+    <dl>
+      <dt><code>external_ids:system-id</code></dt>
+      <dd>The chassis name to use in the Chassis table.</dd>
+
+      <dt><code>external_ids:ovn-bridge</code></dt>
+      <dd>
+        The integration bridge to which logical ports are attached.  The
+        default is <code>br-int</code>.  If this bridge does not exist when
+        ovn-controller starts, it will be created automatically with the
+        default configuration suggested in <code>ovn-architecture</code>(7).
+      </dd>
+
+      <dt><code>external_ids:ovn-remote</code></dt>
+      <dd>
+        <p>
+          The OVN database that this system should connect to for its
+          configuration.
+        </p>
+
+        <p>
+          Currently, <code>ovn-controller</code> does not support changing this
+          setting mid-run.  If the value needs to change, the daemon must be
+          restarted.  (This behavior should be improved.)
+        </p>
+      </dd>
+
+      <dt><code>external_ids:ovn-encap-type</code></dt>
+      <dd>
+        The encapsulation type that a chassis should use to connect to this
+        node.  Supported tunnel types for connecting hypervisors are
+        <code>geneve</code> and <code>stt</code>.  Gateways may use
+        <code>geneve</code>, <code>vxlan</code>, or <code>stt</code>.
+      </dd>
+
+      <dt><code>external_ids:ovn-encap-ip</code></dt>
+      <dd>
+        The IP address that a chassis should use to connect to this node using
+        encapsulation type specified by <code>external_ids:ovn-encap-ip</code>.
+      </dd>
+
+      <dt><code>external_ids:ovn-bridge-mappings</code></dt>
+      <dd>
+        A list of key-value pairs that map a physical network name to a local
+        ovs bridge that provides connectivity to that network.  An example
+        value mapping two physical network names to two ovs bridges would be:
+        <code>physnet1:br-eth0,physnet2:br-eth1</code>.
+      </dd>
+    </dl>
 
     <h1>RUNTIME MANAGEMENT COMMANDS</h1>
     <p>
