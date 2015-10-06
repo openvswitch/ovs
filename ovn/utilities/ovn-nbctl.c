@@ -404,9 +404,11 @@ print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
         const struct nbrec_logical_port *lport = lswitch->ports[i];
 
         ds_put_format(s, "        lport %s\n", lport->name);
-        if (lport->parent_name && lport->n_tag) {
-            ds_put_format(s, "            parent: %s, tag:%"PRIu64"\n",
-                          lport->parent_name, lport->tag[0]);
+        if (lport->parent_name) {
+            ds_put_format(s, "            parent: %s\n", lport->parent_name);
+        }
+        if (lport->n_tag) {
+            ds_put_format(s, "            tag: %"PRIu64"\n", lport->tag[0]);
         }
         if (lport->n_macs) {
             ds_put_cstr(s, "            macs:");
