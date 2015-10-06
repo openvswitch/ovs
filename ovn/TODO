@@ -4,12 +4,6 @@
 
 ** OVN_Northbound schema
 
-*** Needs to support interconnected routers
-
-It should be possible to connect one router to another, e.g. to
-represent a provider/tenant router relationship.  This requires
-an OVN_Northbound schema change.
-
 *** Needs to support extra routes
 
 Currently a router port has a single route associated with it, but

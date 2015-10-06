@@ -373,9 +373,7 @@
     </column>
 
     <column name="ports">
-      The router's ports.  This is a set of weak references, so a <ref
-      table="Logical_Switch"/> must also refer to any given <ref
-      table="Logical_Router_Port"/> or it will automatically be deleted.
+      The router's ports.
     </column>
 
     <column name="default_gw">
@@ -395,14 +393,8 @@
     </p>
 
     <p>
-      A router port is always attached to a logical switch and to a logical
-      router.  The former attachment, which is enforced by the database schema,
-      can be identified by finding the <ref table="Logical_Switch"/> row whose
-      <ref column="router_port" table="Logical_Switch"/> column points to the
-      router port.  The latter attachment, which the database schema does not
-      enforce, can be identified by finding the <ref table="Logical_Router"/>
-      row whose <ref column="ports" table="Logical_Router"/> column includes
-      the router port.
+      Exactly one <ref table="Logical_Router"/> row must reference a given
+      logical router port.
     </p>
 
     <column name="name">
@@ -424,6 +416,41 @@
     <column name="mac">
       The Ethernet address that belongs to this router port.
     </column>
+
+    <group title="Attachment">
+      <p>
+        A given router port serves one of two purposes:
+      </p>
+
+      <ul>
+        <li>
+          To attach a logical switch to a logical router.  A logical router
+          port of this type is referenced by exactly the <ref
+          column="router_port" table="Logical_Switch"/> column in exactly one
+          <ref table="Logical_Switch"/> row.  The <ref column="peer"/> column
+          is empty.
+        </li>
+
+        <li>
+          To connect one logical router to another.  This requires a pair of
+          logical router ports, each connected to a different router.  Each
+          router port in the pair specifies the other in its <ref
+          column="peer"/> column.  No <ref table="Logical_Switch"/> refers to
+          the router port.
+        </li>
+      </ul>
+
+      <column name="peer">
+        <p>
+          For a router port used to connect two logical routers, this
+          identifies the other router port in the pair.
+        </p>
+
+        <p>
+          For a router port attached to a logical switch, this column is empty.
+        </p>
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">
