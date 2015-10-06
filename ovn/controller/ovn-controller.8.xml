@@ -123,6 +123,46 @@
       </dd>
     </dl>
 
+    <h1>Open vSwitch Database Usage</h1>
+
+    <p>
+      <code>ovn-controller</code> uses a number of <code>external-ids</code>
+      keys in the Open vSwitch database to keep track of ports and interfaces.
+      For proper operation, users should not change or clear these keys:
+    </p>
+
+    <dl>
+      <dt>
+        <code>external_ids:ovn-chassis-id</code> in the <code>Port</code> table
+      </dt>
+      <dd>
+        The presence of this key identifies a tunnel port within the
+        integration bridge as one created by <code>ovn-controller</code> to
+        reach a remote chassis.  Its value is the chassis ID of the remote
+        chassis.
+      </dd>
+
+      <dt>
+        <code>external-ids:ovn-patch-port</code> in the <code>Port</code> table
+      </dt>
+      <dd>
+        <p>
+          The presence of this key identifies a patch port as one created by
+          <code>ovn-controller</code> to connect the integration bridge and
+          another bridge to implement a <code>localnet</code> logical port.
+          Its value is the name of the physical network that the port
+          implements.  See <code>external_ids:ovn-bridge-mappings</code>,
+          above, for more information.
+        </p>
+
+        <p>
+          Each <code>localnet</code> logical port is implemented as a pair of
+          patch ports, one in the integration bridge, one in a different
+          bridge, with the same <code>external-ids:ovn-patch-port</code> value.
+        </p>
+      </dd>
+    </dl>
+
     <h1>RUNTIME MANAGEMENT COMMANDS</h1>
     <p>
       <code>ovs-appctl</code> can send commands to a running
