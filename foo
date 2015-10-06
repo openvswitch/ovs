@@ -1,0 +1,847 @@
+diff --git a/lib/ovsdb-idl-provider.h b/lib/ovsdb-idl-provider.h
+index 2ed78a7..3dddf69 100644
+--- a/lib/ovsdb-idl-provider.h
++++ b/lib/ovsdb-idl-provider.h
+@@ -36,6 +36,9 @@ struct ovsdb_idl_row {
+     unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
+     unsigned long int *written; /* Bitmap of columns from "new" to write. */
+     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
++
++    unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
++    struct ovs_list track_node;
+ };
+ 
+ struct ovsdb_idl_column {
+@@ -62,6 +65,8 @@ struct ovsdb_idl_table {
+     struct shash columns;    /* Contains "const struct ovsdb_idl_column *"s. */
+     struct hmap rows;        /* Contains "struct ovsdb_idl_row"s. */
+     struct ovsdb_idl *idl;   /* Containing idl. */
++    unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
++    struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
+ };
+ 
+ struct ovsdb_idl_class {
+diff --git a/lib/ovsdb-idl.c b/lib/ovsdb-idl.c
+index 00b900d..7689fec 100644
+--- a/lib/ovsdb-idl.c
++++ b/lib/ovsdb-idl.c
+@@ -156,7 +156,7 @@ static struct ovsdb_idl_row *ovsdb_idl_row_create__(
+     const struct ovsdb_idl_table_class *);
+ static struct ovsdb_idl_row *ovsdb_idl_row_create(struct ovsdb_idl_table *,
+                                                   const struct uuid *);
+-static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *);
++static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *, bool track);
+ 
+ static void ovsdb_idl_row_parse(struct ovsdb_idl_row *);
+ static void ovsdb_idl_row_unparse(struct ovsdb_idl_row *);
+@@ -174,6 +174,10 @@ static void ovsdb_idl_parse_lock_reply(struct ovsdb_idl *,
+ static void ovsdb_idl_parse_lock_notify(struct ovsdb_idl *,
+                                         const struct json *params,
+                                         bool new_has_lock);
++static struct ovsdb_idl_table *
++ovsdb_idl_table_from_class(const struct ovsdb_idl *,
++                           const struct ovsdb_idl_table_class *);
++static bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
+ 
+ /* Creates and returns a connection to database 'remote', which should be in a
+  * form acceptable to jsonrpc_session_open().  The connection will maintain an
+@@ -227,6 +231,10 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
+             shash_add_assert(&table->columns, column->name, column);
+         }
+         hmap_init(&table->rows);
++        list_init(&table->track_list);
++        table->change_seqno[OVSDB_IDL_CHANGE_INSERT]
++            = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
++            = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
+         table->idl = idl;
+     }
+ 
+@@ -292,10 +300,16 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
+             /* No need to do anything with dst_arcs: some node has those arcs
+              * as forward arcs and will destroy them itself. */
+ 
+-            ovsdb_idl_row_destroy(row);
++            if (!list_is_empty(&row->track_node)) {
++                list_remove(&row->track_node);
++            }
++
++            ovsdb_idl_row_destroy(row, false);
+         }
+     }
+ 
++    ovsdb_idl_track_clear(idl);
++
+     if (changed) {
+         idl->change_seqno++;
+     }
+@@ -591,6 +605,140 @@ ovsdb_idl_omit(struct ovsdb_idl *idl, const struct ovsdb_idl_column *column)
+ {
+     *ovsdb_idl_get_mode(idl, column) = 0;
+ }
++
++/* Returns the most recent IDL change sequence number that caused a
++ * insert, modify or delete update to the table with class 'table_class'.
++ */
++unsigned int
++ovsdb_idl_table_get_seqno(const struct ovsdb_idl *idl,
++                          const struct ovsdb_idl_table_class *table_class)
++{
++    struct ovsdb_idl_table *table
++        = ovsdb_idl_table_from_class(idl, table_class);
++    unsigned int max_seqno = table->change_seqno[OVSDB_IDL_CHANGE_INSERT];
++
++    if (max_seqno < table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]) {
++        max_seqno = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY];
++    }
++    if (max_seqno < table->change_seqno[OVSDB_IDL_CHANGE_DELETE]) {
++        max_seqno = table->change_seqno[OVSDB_IDL_CHANGE_DELETE];
++    }
++    return max_seqno;
++}
++
++/* For each row that contains tracked columns, IDL stores the most
++ * recent IDL change sequence numbers associateed with insert, modify
++ * and delete updates to the table.
++ */
++unsigned int
++ovsdb_idl_row_get_seqno(const struct ovsdb_idl_row *row,
++                        enum ovsdb_idl_change change)
++{
++    return row->change_seqno[change];
++}
++
++/* Turns on OVSDB_IDL_TRACK for 'column' in 'idl', ensuring that
++ * all rows whose 'column' is modified are traced. Similarly, insert
++ * or delete of rows having 'column' are tracked. Clients are able
++ * to retrive the tracked rows with the ovsdb_idl_track_get_*()
++ * functions.
++ *
++ * This function should be called between ovsdb_idl_create() and
++ * the first call to ovsdb_idl_run(). The column to be tracked
++ * should have OVSDB_IDL_ALERT turned on.
++ */
++void
++ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
++                           const struct ovsdb_idl_column *column)
++{
++    if (*ovsdb_idl_get_mode(idl, column) & OVSDB_IDL_ALERT) {
++        *ovsdb_idl_get_mode(idl, column) |= OVSDB_IDL_TRACK;
++    }
++}
++
++void
++ovsdb_idl_track_add_all(struct ovsdb_idl *idl)
++{
++    size_t i, j;
++
++    for (i = 0; i < idl->class->n_tables; i++) {
++        const struct ovsdb_idl_table_class *tc = &idl->class->tables[i];
++
++        for (j = 0; j < tc->n_columns; j++) {
++            const struct ovsdb_idl_column *column = &tc->columns[j];
++            ovsdb_idl_track_add_column(idl, column);
++        }
++    }
++}
++
++/* Returns true if 'table' has any tracked column. */
++static bool
++ovsdb_idl_track_is_set(struct ovsdb_idl_table *table) {
++    size_t i;
++
++    for (i = 0; i < table->class->n_columns; i++) {
++        if (table->modes[i] & OVSDB_IDL_TRACK) {
++            return true;
++        }
++    }
++   return false;
++}
++
++/* Returns the first tracked row in table with class 'table_class'
++ * for the specified 'idl'. Returns NULL if there are no tracked rows */
++const struct ovsdb_idl_row *
++ovsdb_idl_track_get_first(const struct ovsdb_idl *idl,
++                          const struct ovsdb_idl_table_class *table_class)
++{
++    struct ovsdb_idl_table *table
++        = ovsdb_idl_table_from_class(idl, table_class);
++
++    if (!list_is_empty(&table->track_list)) {
++        return CONTAINER_OF(list_front(&table->track_list), struct ovsdb_idl_row, track_node);
++    }
++    return NULL;
++}
++
++/* Returns the next tracked row in table after the specified 'row'
++ * (in no particular order). Returns NULL if there are no tracked rows */
++const struct ovsdb_idl_row *
++ovsdb_idl_track_get_next(const struct ovsdb_idl_row *row)
++{
++    if (row->track_node.next != &row->table->track_list) {
++        return CONTAINER_OF(row->track_node.next, struct ovsdb_idl_row, track_node);
++    }
++
++    return NULL;
++}
++
++/* Flushes the tracked rows. Client calls this function after calling
++ * ovsdb_idl_run() and read all tracked rows with the ovsdb_idl_track_get_*()
++ * functions. This is usually done at the end of the client's processing
++ * loop when it is ready to do ovsdb_idl_run() again.
++ */
++void
++ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
++{
++    size_t i;
++
++    for (i = 0; i < idl->class->n_tables; i++) {
++        struct ovsdb_idl_table *table = &idl->tables[i];
++
++        if (!list_is_empty(&table->track_list)) {
++            struct ovsdb_idl_row *row, *next;
++
++            LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
++                list_remove(&row->track_node);
++                list_init(&row->track_node);
++                if (ovsdb_idl_row_is_orphan(row)) {
++                    ovsdb_idl_row_clear_old(row);
++                    free(row);
++                }
++            }
++        }
++    }
++}
++
+ 
+ static void
+ ovsdb_idl_send_schema_request(struct ovsdb_idl *idl)
+@@ -916,7 +1064,8 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
+ /* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
+  * otherwise. */
+ static bool
+-ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
++ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json,
++                     enum ovsdb_idl_change change)
+ {
+     struct ovsdb_idl_table *table = row->table;
+     struct shash_node *node;
+@@ -944,6 +1093,14 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
+                 ovsdb_datum_swap(old, &datum);
+                 if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
+                     changed = true;
++                    row->change_seqno[change] = row->table->change_seqno[change]
++                        = row->table->idl->change_seqno + 1;
++                    if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
++                        if (list_is_empty(&row->track_node)) {
++                            list_push_front(&row->table->track_list,
++                                            &row->track_node);
++                        }
++                    }
+                 }
+             } else {
+                 /* Didn't really change but the OVSDB monitor protocol always
+@@ -1067,13 +1224,15 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
+     struct ovsdb_idl_arc *arc, *next;
+ 
+     /* Delete all forward arcs.  If 'destroy_dsts', destroy any orphaned rows
+-     * that this causes to be unreferenced. */
++     * that this causes to be unreferenced, if tracking is not enabled.
++     * If tracking is enabled, orphaned nodes are removed from hmap but not freed.
++     */
+     LIST_FOR_EACH_SAFE (arc, next, src_node, &row->src_arcs) {
+         list_remove(&arc->dst_node);
+         if (destroy_dsts
+             && ovsdb_idl_row_is_orphan(arc->dst)
+             && list_is_empty(&arc->dst->dst_arcs)) {
+-            ovsdb_idl_row_destroy(arc->dst);
++            ovsdb_idl_row_destroy(arc->dst, ovsdb_idl_track_is_set(row->table));
+         }
+         free(arc);
+     }
+@@ -1113,6 +1272,7 @@ ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
+     list_init(&row->src_arcs);
+     list_init(&row->dst_arcs);
+     hmap_node_nullify(&row->txn_node);
++    list_init(&row->track_node);
+     return row;
+ }
+ 
+@@ -1127,12 +1287,21 @@ ovsdb_idl_row_create(struct ovsdb_idl_table *table, const struct uuid *uuid)
+ }
+ 
+ static void
+-ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
++ovsdb_idl_row_destroy(struct ovsdb_idl_row *row, bool track)
+ {
+     if (row) {
+-        ovsdb_idl_row_clear_old(row);
+         hmap_remove(&row->table->rows, &row->hmap_node);
+-        free(row);
++        if (!track) {
++            ovsdb_idl_row_clear_old(row);
++            free(row);
++        } else {
++           row->change_seqno[OVSDB_IDL_CHANGE_DELETE]
++               = row->table->change_seqno[OVSDB_IDL_CHANGE_DELETE]
++               = row->table->idl->change_seqno + 1;
++           if (list_is_empty(&row->track_node)) {
++               list_push_front(&row->table->track_list, &row->track_node);
++           }
++        }
+     }
+ }
+ 
+@@ -1147,7 +1316,7 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
+     for (i = 0; i < class->n_columns; i++) {
+         ovsdb_datum_init_default(&row->old[i], &class->columns[i].type);
+     }
+-    ovsdb_idl_row_update(row, row_json);
++    ovsdb_idl_row_update(row, row_json, OVSDB_IDL_CHANGE_INSERT);
+     ovsdb_idl_row_parse(row);
+ 
+     ovsdb_idl_row_reparse_backrefs(row);
+@@ -1156,11 +1325,13 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
+ static void
+ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
+ {
+-    ovsdb_idl_row_unparse(row);
++    if (!ovsdb_idl_track_is_set(row->table)) {
++        ovsdb_idl_row_unparse(row);
++        ovsdb_idl_row_clear_old(row);
++    }
+     ovsdb_idl_row_clear_arcs(row, true);
+-    ovsdb_idl_row_clear_old(row);
+     if (list_is_empty(&row->dst_arcs)) {
+-        ovsdb_idl_row_destroy(row);
++        ovsdb_idl_row_destroy(row, ovsdb_idl_track_is_set(row->table));
+     } else {
+         ovsdb_idl_row_reparse_backrefs(row);
+     }
+@@ -1175,7 +1346,7 @@ ovsdb_idl_modify_row(struct ovsdb_idl_row *row, const struct json *row_json)
+ 
+     ovsdb_idl_row_unparse(row);
+     ovsdb_idl_row_clear_arcs(row, true);
+-    changed = ovsdb_idl_row_update(row, row_json);
++    changed = ovsdb_idl_row_update(row, row_json, OVSDB_IDL_CHANGE_MODIFY);
+     ovsdb_idl_row_parse(row);
+ 
+     return changed;
+diff --git a/lib/ovsdb-idl.h b/lib/ovsdb-idl.h
+index ac63ec9..4c66ae0 100644
+--- a/lib/ovsdb-idl.h
++++ b/lib/ovsdb-idl.h
+@@ -42,6 +42,7 @@
+ struct json;
+ struct ovsdb_datum;
+ struct ovsdb_idl_class;
++struct ovsdb_idl_row;
+ struct ovsdb_idl_column;
+ struct ovsdb_idl_table_class;
+ struct uuid;
+@@ -93,9 +94,14 @@ int ovsdb_idl_get_last_error(const struct ovsdb_idl *);
+  *     is suitable only for use by a client that "owns" a particular column.
+  *
+  *   - OVDSB_IDL_ALERT without OVSDB_IDL_MONITOR is not valid.
++ *
++ *   - (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT | OVSDB_IDL_TRACK), for a column
++ *     that a client wants to track using the change tracking
++ *     ovsdb_idl_track_get_*() functions.
+  */
+ #define OVSDB_IDL_MONITOR (1 << 0) /* Monitor this column? */
+ #define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column updated? */
++#define OVSDB_IDL_TRACK   (1 << 2)
+ 
+ void ovsdb_idl_add_column(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+ void ovsdb_idl_add_table(struct ovsdb_idl *,
+@@ -103,6 +109,31 @@ void ovsdb_idl_add_table(struct ovsdb_idl *,
+ 
+ void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+ void ovsdb_idl_omit_alert(struct ovsdb_idl *, const struct ovsdb_idl_column *);
++
++/* Change tracking. */
++enum ovsdb_idl_change {
++    OVSDB_IDL_CHANGE_INSERT,
++    OVSDB_IDL_CHANGE_MODIFY,
++    OVSDB_IDL_CHANGE_DELETE,
++    OVSDB_IDL_CHANGE_MAX
++};
++
++/* Row, table sequence numbers */
++unsigned int ovsdb_idl_table_get_seqno(
++    const struct ovsdb_idl *idl,
++    const struct ovsdb_idl_table_class *table_class);
++unsigned int ovsdb_idl_row_get_seqno(
++    const struct ovsdb_idl_row *row,
++    enum ovsdb_idl_change change);
++
++void ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
++                                const struct ovsdb_idl_column *column);
++void ovsdb_idl_track_add_all(struct ovsdb_idl *idl);
++const struct ovsdb_idl_row *ovsdb_idl_track_get_first(
++    const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
++const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row *);
++void ovsdb_idl_track_clear(const struct ovsdb_idl *);
++
+ 
+ /* Reading the database replica. */
+ 
+diff --git a/ovsdb/ovsdb-idlc.in b/ovsdb/ovsdb-idlc.in
+index 555efca..282feb2 100755
+--- a/ovsdb/ovsdb-idlc.in
++++ b/ovsdb/ovsdb-idlc.in
+@@ -177,6 +177,15 @@ const struct %(s)s *%(s)s_next(const struct %(s)s *);
+              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
+              (ROW) = (NEXT))
+ 
++unsigned int %(s)s_get_seqno(const struct ovsdb_idl *);
++unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change);
++const struct %(s)s *%(s)s_track_get_first(const struct ovsdb_idl *);
++const struct %(s)s *%(s)s_track_get_next(const struct %(s)s *);
++#define %(S)s_FOR_EACH_TRACKED(ROW, IDL) \\
++        for ((ROW) = %(s)s_track_get_first(IDL); \\
++             (ROW); \\
++             (ROW) = %(s)s_track_get_next(ROW))
++
+ void %(s)s_init(struct %(s)s *);
+ void %(s)s_delete(const struct %(s)s *);
+ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
+@@ -462,6 +471,28 @@ const struct %(s)s *
+ %(s)s_next(const struct %(s)s *row)
+ {
+     return %(s)s_cast(ovsdb_idl_next_row(&row->header_));
++}
++
++unsigned int %(s)s_get_seqno(const struct ovsdb_idl *idl)
++{
++    return ovsdb_idl_table_get_seqno(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
++}
++
++unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change)
++{
++    return ovsdb_idl_row_get_seqno(&row->header_, change);
++}
++
++const struct %(s)s *
++%(s)s_track_get_first(const struct ovsdb_idl *idl)
++{
++    return %(s)s_cast(ovsdb_idl_track_get_first(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
++}
++
++const struct %(s)s
++*%(s)s_track_get_next(const struct %(s)s *row)
++{
++    return %(s)s_cast(ovsdb_idl_track_get_next(&row->header_));
+ }''' % {'s': structName,
+         'p': prefix,
+         'P': prefix.upper(),
+@@ -469,6 +500,7 @@ const struct %(s)s *
+         'T': tableName.upper()}
+ 
+         print '''
++
+ /* Deletes 'row' from table "%(t)s".  'row' may be freed, so it must not be
+  * accessed afterward.
+  *
+diff --git a/tests/ovsdb-idl.at b/tests/ovsdb-idl.at
+index f4d03f8..b5a2e84 100644
+--- a/tests/ovsdb-idl.at
++++ b/tests/ovsdb-idl.at
+@@ -581,3 +581,123 @@ AT_CHECK([grep '"monitor"' stderr | grep -c '"ua"'], [0], [1
+ ])
+ OVSDB_SERVER_SHUTDOWN
+ AT_CLEANUP
++
++m4_define([OVSDB_CHECK_IDL_TRACK_C],
++  [AT_SETUP([$1 - C])
++   AT_KEYWORDS([ovsdb server idl tracking positive $5])
++   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
++                  [0], [stdout], [ignore])
++   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
++   m4_if([$2], [], [],
++     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
++   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl unix:socket $3],
++            [0], [stdout], [ignore], [kill `cat pid`])
++   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
++            [0], [$4], [], [kill `cat pid`])
++   OVSDB_SERVER_SHUTDOWN
++   AT_CLEANUP])
++
++m4_define([OVSDB_CHECK_IDL_TRACK],
++  [OVSDB_CHECK_IDL_TRACK_C($@)])
++
++OVSDB_CHECK_IDL_TRACK([track, simple idl, initially populated],
++  [['["idltest",
++      {"op": "insert",
++       "table": "simple",
++       "row": {"i": 1,
++               "r": 2.0,
++               "b": true,
++               "s": "mystring",
++               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
++               "ia": ["set", [1, 2, 3]],
++               "ra": ["set", [-0.5]],
++               "ba": ["set", [true]],
++               "sa": ["set", ["abc", "def"]],
++               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
++                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
++      {"op": "insert",
++       "table": "simple",
++       "row": {}}]']],
++  [['["idltest",
++      {"op": "update",
++       "table": "simple",
++       "where": [],
++       "row": {"b": true}}]']],
++  [[000: i=1 r=2 b=true s=mystring u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<1> <2>] uuid=<3>
++001: {"error":null,"result":[{"count":2}]}
++002: i=0 r=0 b=true s= u=<4> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<5>
++002: i=1 r=2 b=true s=mystring u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<1> <2>] uuid=<3>
++003: done
++]])
++
++OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
++  [],
++  [['["idltest",
++      {"op": "insert",
++       "table": "simple",
++       "row": {"i": 1,
++               "r": 2.0,
++               "b": true,
++               "s": "mystring",
++               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
++               "ia": ["set", [1, 2, 3]],
++               "ra": ["set", [-0.5]],
++               "ba": ["set", [true]],
++               "sa": ["set", ["abc", "def"]],
++               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
++                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
++      {"op": "insert",
++       "table": "simple",
++       "row": {}}]' \
++    '["idltest",
++      {"op": "update",
++       "table": "simple",
++       "where": [],
++       "row": {"b": true}}]' \
++    '["idltest",
++      {"op": "update",
++       "table": "simple",
++       "where": [],
++       "row": {"r": 123.5}}]' \
++    '["idltest",
++      {"op": "insert",
++       "table": "simple",
++       "row": {"i": -1,
++               "r": 125,
++               "b": false,
++               "s": "",
++               "ia": ["set", [1]],
++               "ra": ["set", [1.5]],
++               "ba": ["set", [false]],
++               "sa": ["set", []],
++               "ua": ["set", []]}}]' \
++    '["idltest",
++      {"op": "update",
++       "table": "simple",
++       "where": [["i", "<", 1]],
++       "row": {"s": "newstring"}}]' \
++    '["idltest",
++      {"op": "delete",
++       "table": "simple",
++       "where": [["i", "==", 0]]}]' \
++    'reconnect']],
++  [[000: empty
++001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
++002: i=1 r=2 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
++003: {"error":null,"result":[{"count":2}]}
++004: i=0 r=0 b=true s= u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
++005: {"error":null,"result":[{"count":2}]}
++006: i=0 r=123.5 b=true s= u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
++006: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
++007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
++008: i=-1 r=125 b=false s= u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
++009: {"error":null,"result":[{"count":2}]}
++010: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
++010: i=0 r=123.5 b=true s=newstring u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
++011: {"error":null,"result":[{"count":1}]}
++012: i=0 r=123.5 b=true s=newstring u=<5> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
++013: reconnect
++014: i=-1 r=125 b=false s=newstring u=<5> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
++014: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
++015: done
++]])
+diff --git a/tests/test-ovsdb.c b/tests/test-ovsdb.c
+index 7913763..70c1e86 100644
+--- a/tests/test-ovsdb.c
++++ b/tests/test-ovsdb.c
+@@ -51,16 +51,22 @@
+ #include "util.h"
+ #include "openvswitch/vlog.h"
+ 
++struct test_ovsdb_pvt_context {
++    bool track;
++};
++
+ OVS_NO_RETURN static void usage(void);
+-static void parse_options(int argc, char *argv[]);
++static void parse_options(int argc, char *argv[],
++    struct test_ovsdb_pvt_context *pvt);
+ static struct ovs_cmdl_command *get_all_commands(void);
+ 
+ int
+ main(int argc, char *argv[])
+ {
+-    struct ovs_cmdl_context ctx = { .argc = 0, };
++    struct test_ovsdb_pvt_context pvt = {.track = false};
++    struct ovs_cmdl_context ctx = { .argc = 0, .pvt = &pvt};
+     set_program_name(argv[0]);
+-    parse_options(argc, argv);
++    parse_options(argc, argv, &pvt);
+     ctx.argc = argc - optind;
+     ctx.argv = argv + optind;
+     ovs_cmdl_run_command(&ctx, get_all_commands());
+@@ -68,11 +74,12 @@ main(int argc, char *argv[])
+ }
+ 
+ static void
+-parse_options(int argc, char *argv[])
++parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
+ {
+     static const struct option long_options[] = {
+         {"timeout", required_argument, NULL, 't'},
+         {"verbose", optional_argument, NULL, 'v'},
++        {"change-track", optional_argument, NULL, 'c'},
+         {"help", no_argument, NULL, 'h'},
+         {NULL, 0, NULL, 0},
+     };
+@@ -105,6 +112,10 @@ parse_options(int argc, char *argv[])
+             vlog_set_verbosity(optarg);
+             break;
+ 
++        case 'c':
++            pvt->track = true;
++            break;
++
+         case '?':
+             exit(EXIT_FAILURE);
+ 
+@@ -191,7 +202,9 @@ usage(void)
+     vlog_usage();
+     printf("\nOther options:\n"
+            "  -t, --timeout=SECS          give up after SECS seconds\n"
+-           "  -h, --help                  display this help message\n");
++           "  -h, --help                  display this help message\n"
++           "  -c, --change-track          used with the 'idl' command to\n"
++           "                              enable tracking of IDL changes\n");
+     exit(EXIT_SUCCESS);
+ }
+ 
+@@ -1600,6 +1613,70 @@ compare_link1(const void *a_, const void *b_)
+ }
+ 
+ static void
++print_idl_row_simple(const struct idltest_simple *s, int step)
++{
++    size_t i;
++
++    printf("%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
++           step, s->i, s->r, s->b ? "true" : "false",
++           s->s, UUID_ARGS(&s->u));
++    for (i = 0; i < s->n_ia; i++) {
++        printf("%s%"PRId64, i ? " " : "", s->ia[i]);
++    }
++    printf("] ra=[");
++    for (i = 0; i < s->n_ra; i++) {
++        printf("%s%g", i ? " " : "", s->ra[i]);
++    }
++    printf("] ba=[");
++    for (i = 0; i < s->n_ba; i++) {
++        printf("%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
++    }
++    printf("] sa=[");
++    for (i = 0; i < s->n_sa; i++) {
++        printf("%s%s", i ? " " : "", s->sa[i]);
++    }
++    printf("] ua=[");
++    for (i = 0; i < s->n_ua; i++) {
++        printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
++    }
++    printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
++}
++
++static void
++print_idl_row_link1(const struct idltest_link1 *l1, int step)
++{
++    struct idltest_link1 **links;
++    size_t i;
++
++    printf("%03d: i=%"PRId64" k=", step, l1->i);
++    if (l1->k) {
++        printf("%"PRId64, l1->k->i);
++    }
++    printf(" ka=[");
++    links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
++    qsort(links, l1->n_ka, sizeof *links, compare_link1);
++    for (i = 0; i < l1->n_ka; i++) {
++        printf("%s%"PRId64, i ? " " : "", links[i]->i);
++    }
++    free(links);
++    printf("] l2=");
++    if (l1->l2) {
++        printf("%"PRId64, l1->l2->i);
++    }
++    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
++}
++
++static void
++print_idl_row_link2(const struct idltest_link2 *l2, int step)
++{
++    printf("%03d: i=%"PRId64" l1=", step, l2->i);
++    if (l2->l1) {
++        printf("%"PRId64, l2->l1->i);
++    }
++    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
++}
++
++static void
+ print_idl(struct ovsdb_idl *idl, int step)
+ {
+     const struct idltest_simple *s;
+@@ -1608,61 +1685,40 @@ print_idl(struct ovsdb_idl *idl, int step)
+     int n = 0;
+ 
+     IDLTEST_SIMPLE_FOR_EACH (s, idl) {
+-        size_t i;
+-
+-        printf("%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
+-               step, s->i, s->r, s->b ? "true" : "false",
+-               s->s, UUID_ARGS(&s->u));
+-        for (i = 0; i < s->n_ia; i++) {
+-            printf("%s%"PRId64, i ? " " : "", s->ia[i]);
+-        }
+-        printf("] ra=[");
+-        for (i = 0; i < s->n_ra; i++) {
+-            printf("%s%g", i ? " " : "", s->ra[i]);
+-        }
+-        printf("] ba=[");
+-        for (i = 0; i < s->n_ba; i++) {
+-            printf("%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
+-        }
+-        printf("] sa=[");
+-        for (i = 0; i < s->n_sa; i++) {
+-            printf("%s%s", i ? " " : "", s->sa[i]);
+-        }
+-        printf("] ua=[");
+-        for (i = 0; i < s->n_ua; i++) {
+-            printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
+-        }
+-        printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
++        print_idl_row_simple(s, step);
+         n++;
+     }
+     IDLTEST_LINK1_FOR_EACH (l1, idl) {
+-        struct idltest_link1 **links;
+-        size_t i;
+-
+-        printf("%03d: i=%"PRId64" k=", step, l1->i);
+-        if (l1->k) {
+-            printf("%"PRId64, l1->k->i);
+-        }
+-        printf(" ka=[");
+-        links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
+-        qsort(links, l1->n_ka, sizeof *links, compare_link1);
+-        for (i = 0; i < l1->n_ka; i++) {
+-            printf("%s%"PRId64, i ? " " : "", links[i]->i);
+-        }
+-        free(links);
+-        printf("] l2=");
+-        if (l1->l2) {
+-            printf("%"PRId64, l1->l2->i);
+-        }
+-        printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
++        print_idl_row_link1(l1, step);
+         n++;
+     }
+     IDLTEST_LINK2_FOR_EACH (l2, idl) {
+-        printf("%03d: i=%"PRId64" l1=", step, l2->i);
+-        if (l2->l1) {
+-            printf("%"PRId64, l2->l1->i);
+-        }
+-        printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
++        print_idl_row_link2(l2, step);
++        n++;
++    }
++    if (!n) {
++        printf("%03d: empty\n", step);
++    }
++}
++
++static void
++print_idl_track(struct ovsdb_idl *idl, int step)
++{
++    const struct idltest_simple *s;
++    const struct idltest_link1 *l1;
++    const struct idltest_link2 *l2;
++    int n = 0;
++
++    IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
++        print_idl_row_simple(s, step);
++        n++;
++    }
++    IDLTEST_LINK1_FOR_EACH_TRACKED (l1, idl) {
++        print_idl_row_link1(l1, step);
++        n++;
++    }
++    IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
++        print_idl_row_link2(l2, step);
+         n++;
+     }
+     if (!n) {
+@@ -1882,9 +1938,12 @@ do_idl(struct ovs_cmdl_context *ctx)
+     int step = 0;
+     int error;
+     int i;
++    bool track;
+ 
+     idltest_init();
+ 
++    track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
++
+     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+     if (ctx->argc > 2) {
+         struct stream *stream;
+@@ -1899,6 +1958,10 @@ do_idl(struct ovs_cmdl_context *ctx)
+         rpc = NULL;
+     }
+ 
++    if (track) {
++        ovsdb_idl_track_add_all(idl);
++    }
++
+     setvbuf(stdout, NULL, _IONBF, 0);
+ 
+     symtab = ovsdb_symbol_table_create();
+@@ -1924,7 +1987,12 @@ do_idl(struct ovs_cmdl_context *ctx)
+             }
+ 
+             /* Print update. */
+-            print_idl(idl, step++);
++            if (track) {
++                print_idl_track(idl, step++);
++                ovsdb_idl_track_clear(idl);
++            } else {
++                print_idl(idl, step++);
++            }
+         }
+         seqno = ovsdb_idl_get_seqno(idl);
+ 
+@@ -1964,6 +2032,9 @@ do_idl(struct ovs_cmdl_context *ctx)
+         poll_block();
+     }
+     print_idl(idl, step++);
++    if (track) {
++        ovsdb_idl_track_clear(idl);
++    }
+     ovsdb_idl_destroy(idl);
+     printf("%03d: done\n", step);
+ }
