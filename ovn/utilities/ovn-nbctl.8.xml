@@ -38,32 +38,6 @@
       <dd>
         Lists all existing switches on standard output, one per line.
       </dd>
-
-      <dt><code>lswitch-set-external-id</code> <var>lswitch</var> <var>key</var> [<var>value</var>]</dt>
-      <dd>
-        <p>Sets or clears an ``external ID'' value on <var>lswitch</var>.
-        These values are intended to identify entities external to OVN
-        with which <var>lswitch</var> is associated.  The OVN Northbound
-        database schema may specify well-known <var>key</var> values,
-        but <var>key</var> and <var>value</var> are otherwise arbitrary
-        strings.</p>
-
-        <p>If <var>value</var> is specified, then <var>key</var> is set to
-        <var>value</var> for <var>lswitch</var>, overwriting any
-        previous value.  If <var>value</var> is omitted, then
-        <var>key</var> is removed from <var>lswitch</var>'s set of
-        external IDs (if it was present.</p>
-       </dd>
-
-      <dt><code>lswitch-get-external-id</code> <var>lswitch</var> [<var>key</var>]</dt>
-      <dd>
-        Queries the external IDs on <var>lswitch</var>.  If
-        <var>key</var> is specified, the output is the value for that
-        <var>key</var> or the empty string if <var>key</var> is unset.
-        If <var>key</var> is omitted, the output is
-        <var>key</var><code>=</code><var>value</var>, one per line, for
-        each key-value pair.
-      </dd>
     </dl>
 
     <h1>ACL Commands</h1>
@@ -133,32 +107,6 @@
       <dd>
         If set, get the tag for <var>lport</var> traffic.  If not set, print
         nothing.
-      </dd>
-
-      <dt><code>lport-set-external-id</code> <var>lport</var> <var>key</var> [<var>value</var>]</dt>
-      <dd>
-        <p>Sets or clears an ``external ID'' value on <var>lport</var>.
-        These values are intended to identify entities external to OVN
-        with which <var>lport</var> is associated.  The OVN Northbound
-        database schema may specify well-known <var>key</var> values,
-        but <var>key</var> and <var>value</var> are otherwise arbitrary
-        strings.</p>
-
-        <p>If <var>value</var> is specified, then <var>key</var> is set to
-        <var>value</var> for <var>lport</var>, overwriting any
-        previous value.  If <var>value</var> is omitted, then
-        <var>key</var> is removed from <var>lport</var>'s set of
-        external IDs (if it was present.</p>
-      </dd>
-
-      <dt><code>lport-get-external-id</code> <var>lport</var> [<var>key</var>]</dt>
-      <dd>
-        Queries the external IDs on <var>lport</var>.  If
-        <var>key</var> is specified, the output is the value for that
-        <var>key</var> or the empty string if <var>key</var> is unset.
-        If <var>key</var> is omitted, the output is
-        <var>key</var><code>=</code><var>value</var>, one per line, for
-        each key-value pair.
       </dd>
 
       <dt><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>]...</dt>
