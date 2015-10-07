@@ -163,7 +163,7 @@
       </dd>
     </dl>
 
-    <h1>RUNTIME MANAGEMENT COMMANDS</h1>
+    <h1>Runtime Management Commands</h1>
     <p>
       <code>ovs-appctl</code> can send commands to a running
       <code>ovn-controller</code> process.  The currently supported
