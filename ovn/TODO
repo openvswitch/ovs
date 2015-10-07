@@ -12,20 +12,6 @@ one router to another, this doesn't seem to matter (just put more than
 one connection between them), but for connections between a router and
 a switch it might matter because a switch has only one router port.
 
-*** Logical router port names in ACLs
-
-Currently the ACL table documents that the logical router port is
-always named "ROUTER".  This can't work directly using logical patch
-ports to connect a logical switch to its logical router, because every
-row in the Logical_Port table must have a unique name.  This probably
-means that we should change the convention for the ACL table so that
-the logical router port name is unique; for example, we could change
-the Logical_Router_Port table to require the 'name' column to be
-unique, and then use that name in the ACL table.
-
-Another alternative would be to add a way to have aliases for logical
-ports, but I'm not sure that's a rathole we really want to go down.
-
 ** OVN_SB schema
 
 *** Allow output to ingress port

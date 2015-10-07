@@ -55,21 +55,6 @@
       </p>
     </column>
 
-    <column name="router_port">
-      <p>
-        The router port to which this logical switch is connected, or empty if
-        this logical switch is not connected to any router.  A switch may be
-        connected to at most one logical router, but this is not a significant
-        restriction because logical routers may be connected into arbitrary
-        topologies.
-      </p>
-
-      <p>
-        It is an error for multiple logical switches to refer to the same
-        router port.
-      </p>
-    </column>
-
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
@@ -122,6 +107,11 @@
             A VM (or VIF) interface.
           </dd>
 
+          <dt><code>router</code></dt>
+          <dd>
+            A connection to a logical router.
+          </dd>
+
           <dt><code>localnet</code></dt>
           <dd>
             A connection to a locally accessible network from each
@@ -145,6 +135,23 @@
         <ref column="type"/>.  The type-specific options are described
         individually below.
       </column>
+
+      <group title="Options for router ports">
+        <p>
+          These options apply when <ref column="type"/> is <code>router</code>.
+        </p>
+
+        <p>
+          A given logical switch may have at most one logical port of type
+          <code>router</code>.  (This is not a significant restriction because
+          logical routers may be connected into arbitrary topologies.)
+        </p>
+
+        <column name="options" key="router-port" type='{"type": "uuid"}'>
+          Required.  The UUID of the <ref table="Logical_Router_Port"/> to
+          which this logical switch port is connected.
+        </column>
+      </group>
 
       <group title="Options for localnet ports">
         <p>
@@ -374,11 +381,6 @@
         restrictive policy, it is important to remember to allow flows
         such as ARP and IPv6 neighbor discovery packets.
       </p>
-
-      <p>
-        In logical switches connected to logical routers, the special
-        port name <code>ROUTER</code> refers to the logical router port.
-      </p>
     </column>
 
     <column name="action">
@@ -491,10 +493,9 @@
       <ul>
         <li>
           To attach a logical switch to a logical router.  A logical router
-          port of this type is referenced by exactly the <ref
-          column="router_port" table="Logical_Switch"/> column in exactly one
-          <ref table="Logical_Switch"/> row.  The <ref column="peer"/> column
-          is empty.
+          port of this type is referenced by exactly one <ref
+          table="Logical_Port"/> of type <code>router</code>.  The <ref
+          column="peer"/> column is empty.
         </li>
 
         <li>
