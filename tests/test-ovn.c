@@ -235,6 +235,7 @@ create_symtab(struct shash *symtab)
                           "mutual_recurse_2 != 0", false);
     expr_symtab_add_field(symtab, "mutual_recurse_2", MFF_XREG0,
                           "mutual_recurse_1 != 0", false);
+    expr_symtab_add_string(symtab, "big_string", MFF_XREG0, NULL);
 }
 
 static void

@@ -2619,113 +2619,165 @@ expr_is_normalized(const struct expr *expr)
 
 /* Action parsing helper. */
 
-static struct expr *
-parse_assignment(struct expr_context *ctx, const struct simap *ports,
-                 struct ofpbuf *ofpacts)
+static bool
+expand_symbol(struct expr_context *ctx, struct expr_field *f,
+              struct expr **prereqsp)
 {
-    struct expr *prereqs = NULL;
-
-    struct expr_field f;
-    if (!parse_field(ctx, &f)) {
-        goto exit;
-    }
-    if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
-        expr_syntax_error(ctx, "expecting `='.");
-        goto exit;
+    if (f->symbol->expansion && f->symbol->level != EXPR_L_ORDINAL) {
+        expr_error(ctx, "Predicate symbol %s cannot be used in assignment.",
+                   f->symbol->name);
+        return false;
     }
 
-    if (f.symbol->expansion && f.symbol->level != EXPR_L_ORDINAL) {
-        expr_error(ctx, "Can't assign to predicate symbol %s.",
-                   f.symbol->name);
-        goto exit;
-    }
-
-    struct expr_constant_set cs;
-    if (!parse_constant_set(ctx, &cs)) {
-        goto exit;
-    }
-
-    if (!type_check(ctx, &f, &cs)) {
-        goto exit_destroy_cs;
-    }
-    if (cs.in_curlies) {
-        expr_error(ctx, "Assignments require a single value.");
-        goto exit_destroy_cs;
-    }
-
-    const struct expr_symbol *orig_symbol = f.symbol;
-    union expr_constant *c = cs.values;
     for (;;) {
         /* Accumulate prerequisites. */
-        if (f.symbol->prereqs) {
+        if (f->symbol->prereqs) {
             struct ovs_list nesting = OVS_LIST_INITIALIZER(&nesting);
             char *error;
             struct expr *e;
-            e = parse_and_annotate(f.symbol->prereqs, ctx->symtab, &nesting,
+            e = parse_and_annotate(f->symbol->prereqs, ctx->symtab, &nesting,
                                    &error);
             if (error) {
                 expr_error(ctx, "%s", error);
                 free(error);
-                goto exit_destroy_cs;
+                return false;
             }
-            prereqs = expr_combine(EXPR_T_AND, prereqs, e);
+            *prereqsp = expr_combine(EXPR_T_AND, *prereqsp, e);
         }
 
         /* If there's no expansion, we're done. */
-        if (!f.symbol->expansion) {
+        if (!f->symbol->expansion) {
             break;
         }
 
         /* Expand. */
         struct expr_field expansion;
         char *error;
-        if (!parse_field_from_string(f.symbol->expansion, ctx->symtab,
+        if (!parse_field_from_string(f->symbol->expansion, ctx->symtab,
                                      &expansion, &error)) {
             expr_error(ctx, "%s", error);
             free(error);
+            return false;
+        }
+        f->symbol = expansion.symbol;
+        f->ofs += expansion.ofs;
+    }
+
+    return true;
+}
+
+static struct expr *
+parse_assignment(struct expr_context *ctx, const struct simap *ports,
+                 struct ofpbuf *ofpacts)
+{
+    struct expr *prereqs = NULL;
+
+    /* Parse destination and do basic checking. */
+    struct expr_field dst;
+    if (!parse_field(ctx, &dst)) {
+        goto exit;
+    }
+    if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+        expr_syntax_error(ctx, "expecting `='.");
+        goto exit;
+    }
+    const struct expr_symbol *orig_dst = dst.symbol;
+    if (!expand_symbol(ctx, &dst, &prereqs)) {
+        goto exit;
+    }
+    if (!dst.symbol->field->writable) {
+        expr_error(ctx, "Field %s is not modifiable.", orig_dst->name);
+        goto exit;
+    }
+
+    if (ctx->lexer->token.type == LEX_T_ID) {
+        struct expr_field src;
+        if (!parse_field(ctx, &src)) {
+            goto exit;
+        }
+        const struct expr_symbol *orig_src = src.symbol;
+        if (!expand_symbol(ctx, &src, &prereqs)) {
+            goto exit;
+        }
+
+        if ((dst.symbol->width != 0) != (src.symbol->width != 0)) {
+            expr_error(ctx, "Can't assign %s field (%s) to %s field (%s).",
+                       orig_src->width ? "integer" : "string",
+                       orig_src->name,
+                       orig_dst->width ? "integer" : "string",
+                       orig_dst->name);
+            goto exit;
+        }
+
+        if (dst.n_bits != src.n_bits) {
+            expr_error(ctx, "Can't assign %d-bit value to %d-bit destination.",
+                       src.n_bits, dst.n_bits);
+            goto exit;
+        } else if (!dst.n_bits
+                   && dst.symbol->field->n_bits != src.symbol->field->n_bits) {
+            expr_error(ctx, "String fields %s and %s are incompatible for "
+                       "assignment.", orig_dst->name, orig_src->name);
+            goto exit;
+        }
+
+        struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
+        move->src.field = src.symbol->field;
+        move->src.ofs = src.ofs;
+        move->src.n_bits = src.n_bits ? src.n_bits : src.symbol->field->n_bits;
+        move->dst.field = dst.symbol->field;
+        move->dst.ofs = dst.ofs;
+        move->dst.n_bits = dst.n_bits ? dst.n_bits : dst.symbol->field->n_bits;
+    } else {
+        struct expr_constant_set cs;
+        if (!parse_constant_set(ctx, &cs)) {
+            goto exit;
+        }
+
+        if (!type_check(ctx, &dst, &cs)) {
             goto exit_destroy_cs;
         }
-        f.symbol = expansion.symbol;
-        f.ofs += expansion.ofs;
-    }
-
-    if (!f.symbol->field->writable) {
-        expr_error(ctx, "Field %s is not modifiable.", orig_symbol->name);
-        goto exit_destroy_cs;
-    }
-
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = f.symbol->field;
-    if (f.symbol->width) {
-        mf_subvalue_shift(&c->value, f.ofs);
-        if (!c->masked) {
-            memset(&c->mask, 0, sizeof c->mask);
-            bitwise_one(&c->mask, sizeof c->mask, f.ofs, f.n_bits);
-        } else {
-            mf_subvalue_shift(&c->mask, f.ofs);
+        if (cs.in_curlies) {
+            expr_error(ctx, "Assignments require a single value.");
+            goto exit_destroy_cs;
         }
 
-        memcpy(&sf->value, &c->value.u8[sizeof c->value - sf->field->n_bytes],
-               sf->field->n_bytes);
-        memcpy(&sf->mask, &c->mask.u8[sizeof c->mask - sf->field->n_bytes],
-               sf->field->n_bytes);
-    } else {
-        uint32_t port = simap_get(ports, c->string);
-        bitwise_put(port, &sf->value,
-                    sf->field->n_bytes, 0, sf->field->n_bits);
-        bitwise_put(UINT64_MAX, &sf->mask,
-                    sf->field->n_bytes, 0, sf->field->n_bits);
+        union expr_constant *c = cs.values;
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+        sf->field = dst.symbol->field;
+        if (dst.symbol->width) {
+            mf_subvalue_shift(&c->value, dst.ofs);
+            if (!c->masked) {
+                memset(&c->mask, 0, sizeof c->mask);
+                bitwise_one(&c->mask, sizeof c->mask, dst.ofs, dst.n_bits);
+            } else {
+                mf_subvalue_shift(&c->mask, dst.ofs);
+            }
+
+            memcpy(&sf->value,
+                   &c->value.u8[sizeof c->value - sf->field->n_bytes],
+                   sf->field->n_bytes);
+            memcpy(&sf->mask,
+                   &c->mask.u8[sizeof c->mask - sf->field->n_bytes],
+                   sf->field->n_bytes);
+        } else {
+            uint32_t port = simap_get(ports, c->string);
+            bitwise_put(port, &sf->value,
+                        sf->field->n_bytes, 0, sf->field->n_bits);
+            bitwise_put(UINT64_MAX, &sf->mask,
+                        sf->field->n_bytes, 0, sf->field->n_bits);
+        }
+
+    exit_destroy_cs:
+        expr_constant_set_destroy(&cs);
     }
 
-exit_destroy_cs:
-    expr_constant_set_destroy(&cs);
 exit:
     return prereqs;
 }
 
 /* A helper for actions_parse(), to parse an OVN assignment action in the form
- * "field = value" into 'ofpacts'.  The parameters and return value match those
- * for actions_parse(). */
+ * "field = value" or "field1 = field2" into 'ofpacts'.  The parameters and
+ * return value match those for actions_parse(). */
 char *
 expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
                       const struct simap *ports,

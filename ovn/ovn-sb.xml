@@ -774,13 +774,13 @@
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>
         <dd>
           <p>
-	    Sets data or metadata field <var>field</var> to constant value
-	    <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
-	    logical output port.  To set only a subset of bits in a field,
-	    specify a subfield for <var>field</var> or a masked
-	    <var>constant</var>, e.g. one may use <code>vlan.pcp[2] = 1;</code>
-	    or <code>vlan.pcp = 4/4;</code> to set the most sigificant bit of
-	    the VLAN PCP.
+            Sets data or metadata field <var>field</var> to constant value
+            <var>constant</var>, e.g. <code>outport = "vif0";</code> to set the
+            logical output port.  To set only a subset of bits in a field,
+            specify a subfield for <var>field</var> or a masked
+            <var>constant</var>, e.g. one may use <code>vlan.pcp[2] = 1;</code>
+            or <code>vlan.pcp = 4/4;</code> to set the most sigificant bit of
+            the VLAN PCP.
           </p>
 
           <p>
@@ -800,6 +800,33 @@
             pipeline.
           </p>
 	</dd>
+
+        <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
+        <dd>
+          <p>
+            Sets data or metadata field <var>field1</var> to the value of data
+            or metadata field <var>field2</var>, e.g. <code>reg0 =
+            ip4.src;</code> copies <code>ip4.src</code> into <code>reg0</code>.
+            To modify only a subset of a field's bits, specify a subfield for
+            <var>field1</var> or <var>field2</var> or both, e.g. <code>vlan.pcp
+            = reg0[0..2];</code> copies the least-significant bits of
+            <code>reg0</code> into the VLAN PCP.
+          </p>
+
+          <p>
+            <var>field1</var> and <var>field2</var> must be the same type,
+            either both string or both integer fields.  If they are both
+            integer fields, they must have the same width.
+          </p>
+
+          <p>
+            If <var>field1</var> or <var>field2</var> has prerequisites, they
+            are added implicitly to <ref column="match"/>.  It is possible to
+            write an assignment with contradictory prerequisites, such as
+            <code>ip4.src = ip6.src[0..31];</code>, but the contradiction means
+            that a logical flow with such an assignment will never be matched.
+          </p>
+        </dd>
       </dl>
 
       <p>
@@ -808,11 +835,6 @@
       </p>
 
       <dl>
-        <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
-        <dd>
-          Extends the assignment action to allow copying between fields.
-        </dd>
-
         <dt><code>learn</code></dt>
 
         <dt><code>conntrack</code></dt>
