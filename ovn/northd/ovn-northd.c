@@ -53,39 +53,99 @@ static const char *ovnnb_db;
 static const char *ovnsb_db;
 
 static const char *default_db(void);
+
+/* Pipeline stages. */
 
-
-/* Ingress pipeline stages.
- *
- * These must be listed in the order that the stages will be executed. */
-#define INGRESS_STAGES                         \
-    INGRESS_STAGE(PORT_SEC, port_sec)          \
-    INGRESS_STAGE(PRE_ACL, pre_acl)            \
-    INGRESS_STAGE(ACL, acl)                    \
-    INGRESS_STAGE(L2_LKUP, l2_lkup)
-
-enum ingress_stage {
-#define INGRESS_STAGE(NAME, STR) S_IN_##NAME,
-    INGRESS_STAGES
-#undef INGRESS_STAGE
-    INGRESS_N_STAGES
+/* The two pipelines in an OVN logical flow table. */
+enum ovn_pipeline {
+    P_IN,                       /* Ingress pipeline. */
+    P_OUT                       /* Egress pipeline. */
 };
 
-/* Egress pipeline stages.
- *
- * These must be listed in the order that the stages will be executed. */
-#define EGRESS_STAGES                          \
-    EGRESS_STAGE(PRE_ACL, pre_acl)             \
-    EGRESS_STAGE(ACL, acl)                     \
-    EGRESS_STAGE(PORT_SEC, port_sec)
-
-enum egress_stage {
-#define EGRESS_STAGE(NAME, STR) S_OUT_##NAME,
-    EGRESS_STAGES
-#undef EGRESS_STAGE
-    EGRESS_N_STAGES
+/* The two purposes for which ovn-northd uses OVN logical datapaths. */
+enum ovn_datapath_type {
+    DP_SWITCH,                  /* OVN logical switch. */
+    DP_ROUTER                   /* OVN logical router. */
 };
 
+/* Returns an "enum ovn_stage" built from the arguments.
+ *
+ * (It's better to use ovn_stage_build() for type-safety reasons, but inline
+ * functions can't be used in enums or switch cases.) */
+#define OVN_STAGE_BUILD(DP_TYPE, PIPELINE, TABLE) \
+    (((DP_TYPE) << 9) | ((PIPELINE) << 8) | (TABLE))
+
+/* A stage within an OVN logical switch or router.
+ *
+ * An "enum ovn_stage" indicates whether the stage is part of a logical switch
+ * or router, whether the stage is part of the ingress or egress pipeline, and
+ * the table within that pipeline.  The first three components are combined to
+ * form the stage's full name, e.g. S_SWITCH_IN_PORT_SEC,
+ * S_ROUTER_OUT_DELIVERY. */
+enum ovn_stage {
+#define PIPELINE_STAGES                                                 \
+    /* Logical switch ingress stages. */                                \
+    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC,    0, "switch_in_port_sec")   \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,     1, "switch_in_pre_acl")        \
+    PIPELINE_STAGE(SWITCH, IN,  ACL,         2, "switch_in_acl")        \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,     3, "switch_in_l2_lkup")    \
+                                                                        \
+    /* Logical switch egress stages. */                                 \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "switch_out_pre_acl")       \
+    PIPELINE_STAGE(SWITCH, OUT, ACL,         1, "switch_out_acl")       \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC,    2, "switch_out_port_sec")  \
+                                                                        \
+    /* Logical router ingress stages. */                                \
+    PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "router_in_admission")  \
+    PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,    1, "router_in_ip_input")   \
+    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  2, "router_in_ip_routing") \
+    PIPELINE_STAGE(ROUTER, IN,  ARP,         3, "router_in_arp")        \
+                                                                        \
+    /* Logical router egress stages. */                                 \
+    PIPELINE_STAGE(ROUTER, OUT, DELIVERY,    0, "router_out_delivery")
+
+#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)   \
+    S_##DP_TYPE##_##PIPELINE##_##STAGE                          \
+        = OVN_STAGE_BUILD(DP_##DP_TYPE, P_##PIPELINE, TABLE),
+    PIPELINE_STAGES
+#undef PIPELINE_STAGE
+};
+
+/* Returns an "enum ovn_stage" built from the arguments. */
+static enum ovn_stage
+ovn_stage_build(enum ovn_datapath_type dp_type, enum ovn_pipeline pipeline,
+                uint8_t table)
+{
+    return OVN_STAGE_BUILD(dp_type, pipeline, table);
+}
+
+/* Returns the pipeline to which 'stage' belongs. */
+static enum ovn_pipeline
+ovn_stage_get_pipeline(enum ovn_stage stage)
+{
+    return (stage >> 8) & 1;
+}
+
+/* Returns the table to which 'stage' belongs. */
+static uint8_t
+ovn_stage_get_table(enum ovn_stage stage)
+{
+    return stage & 0xff;
+}
+
+/* Returns a string name for 'stage'. */
+static const char *
+ovn_stage_to_str(enum ovn_stage stage)
+{
+    switch (stage) {
+#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)       \
+        case S_##DP_TYPE##_##PIPELINE##_##STAGE: return NAME;
+    PIPELINE_STAGES
+#undef PIPELINE_STAGE
+        default: return "<unknown>";
+    }
+}
+
 static void
 usage(void)
 {
@@ -586,8 +646,7 @@ struct ovn_lflow {
     struct hmap_node hmap_node;
 
     struct ovn_datapath *od;
-    enum ovn_pipeline { P_IN, P_OUT } pipeline;
-    uint8_t table_id;
+    enum ovn_stage stage;
     uint16_t priority;
     char *match;
     char *actions;
@@ -597,7 +656,7 @@ static size_t
 ovn_lflow_hash(const struct ovn_lflow *lflow)
 {
     size_t hash = uuid_hash(&lflow->od->key);
-    hash = hash_2words((lflow->table_id << 16) | lflow->priority, hash);
+    hash = hash_2words((lflow->stage << 16) | lflow->priority, hash);
     hash = hash_string(lflow->match, hash);
     return hash_string(lflow->actions, hash);
 }
@@ -606,8 +665,7 @@ static bool
 ovn_lflow_equal(const struct ovn_lflow *a, const struct ovn_lflow *b)
 {
     return (a->od == b->od
-            && a->pipeline == b->pipeline
-            && a->table_id == b->table_id
+            && a->stage == b->stage
             && a->priority == b->priority
             && !strcmp(a->match, b->match)
             && !strcmp(a->actions, b->actions));
@@ -615,56 +673,35 @@ ovn_lflow_equal(const struct ovn_lflow *a, const struct ovn_lflow *b)
 
 static void
 ovn_lflow_init(struct ovn_lflow *lflow, struct ovn_datapath *od,
-              enum ovn_pipeline pipeline, uint8_t table_id, uint16_t priority,
+              enum ovn_stage stage, uint16_t priority,
               char *match, char *actions)
 {
     lflow->od = od;
-    lflow->pipeline = pipeline;
-    lflow->table_id = table_id;
+    lflow->stage = stage;
     lflow->priority = priority;
     lflow->match = match;
     lflow->actions = actions;
 }
 
-static const char *
-ingress_stage_to_str(int stage) {
-    switch (stage) {
-#define INGRESS_STAGE(NAME, STR) case S_IN_##NAME: return #STR;
-    INGRESS_STAGES
-#undef INGRESS_STAGE
-        default: return "<unknown>";
-    }
-}
-
-static const char *
-egress_stage_to_str(int stage) {
-    switch (stage) {
-#define EGRESS_STAGE(NAME, STR) case S_OUT_##NAME: return #STR;
-    EGRESS_STAGES
-#undef EGRESS_STAGE
-        default: return "<unknown>";
-    }
-}
-
 /* Adds a row with the specified contents to the Logical_Flow table. */
 static void
 ovn_lflow_add(struct hmap *lflow_map, struct ovn_datapath *od,
-              enum ovn_pipeline pipeline, uint8_t table_id, uint16_t priority,
+              enum ovn_stage stage, uint16_t priority,
               const char *match, const char *actions)
 {
     struct ovn_lflow *lflow = xmalloc(sizeof *lflow);
-    ovn_lflow_init(lflow, od, pipeline, table_id, priority,
+    ovn_lflow_init(lflow, od, stage, priority,
                    xstrdup(match), xstrdup(actions));
     hmap_insert(lflow_map, &lflow->hmap_node, ovn_lflow_hash(lflow));
 }
 
 static struct ovn_lflow *
 ovn_lflow_find(struct hmap *lflows, struct ovn_datapath *od,
-               enum ovn_pipeline pipeline, uint8_t table_id, uint16_t priority,
+               enum ovn_stage stage, uint16_t priority,
                const char *match, const char *actions)
 {
     struct ovn_lflow target;
-    ovn_lflow_init(&target, od, pipeline, table_id, priority,
+    ovn_lflow_init(&target, od, stage, priority,
                    CONST_CAST(char *, match), CONST_CAST(char *, actions));
 
     struct ovn_lflow *lflow;
@@ -744,14 +781,14 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
-    ovn_lflow_add(lflows, od, P_IN, S_IN_PRE_ACL, 0, "1", "next;");
-    ovn_lflow_add(lflows, od, P_OUT, S_OUT_PRE_ACL, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 0, "1", "next;");
 
     /* Ingress and Egress ACL Table (Priority 0): Packets are allowed by
      * default.  A related rule at priority 1 is added below if there
      * are any stateful ACLs in this datapath. */
-    ovn_lflow_add(lflows, od, P_IN, S_IN_ACL, 0, "1", "next;");
-    ovn_lflow_add(lflows, od, P_OUT, S_OUT_ACL, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_ACL, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, 0, "1", "next;");
 
     /* If there are any stateful ACL rules in this dapapath, we must
      * send all IP packets through the conntrack action, which handles
@@ -762,10 +799,8 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
          * Regardless of whether the ACL is "from-lport" or "to-lport",
          * we need rules in both the ingress and egress table, because
          * the return traffic needs to be followed. */
-        ovn_lflow_add(lflows, od, P_IN, S_IN_PRE_ACL, 100,
-                      "ip", "ct_next;");
-        ovn_lflow_add(lflows, od, P_OUT, S_OUT_PRE_ACL, 100,
-                      "ip", "ct_next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 100, "ip", "ct_next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 100, "ip", "ct_next;");
 
         /* Ingress and Egress ACL Table (Priority 1).
          *
@@ -775,18 +810,18 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
          * direction may not have any stateful rules, the server's may
          * and then its return traffic would not have an associated
          * conntrack entry and would return "+invalid". */
-        ovn_lflow_add(lflows, od, P_IN, S_IN_ACL, 1, "ip",
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ACL, 1, "ip",
                       "ct_commit; next;");
-        ovn_lflow_add(lflows, od, P_OUT, S_OUT_ACL, 1, "ip",
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, 1, "ip",
                       "ct_commit; next;");
 
         /* Ingress and Egress ACL Table (Priority 65535).
          *
          * Always drop traffic that's in an invalid state.  This is
          * enforced at a higher priority than ACLs can be defined. */
-        ovn_lflow_add(lflows, od, P_IN, S_IN_ACL, UINT16_MAX,
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ACL, UINT16_MAX,
                       "ct.inv", "drop;");
-        ovn_lflow_add(lflows, od, P_OUT, S_OUT_ACL, UINT16_MAX,
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, UINT16_MAX,
                       "ct.inv", "drop;");
 
         /* Ingress and Egress ACL Table (Priority 65535).
@@ -794,10 +829,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
          * Always allow traffic that is established to a committed
          * conntrack entry.  This is enforced at a higher priority than
          * ACLs can be defined. */
-        ovn_lflow_add(lflows, od, P_IN, S_IN_ACL, UINT16_MAX,
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ACL, UINT16_MAX,
                       "ct.est && !ct.rel && !ct.new && !ct.inv",
                       "next;");
-        ovn_lflow_add(lflows, od, P_OUT, S_OUT_ACL, UINT16_MAX,
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, UINT16_MAX,
                       "ct.est && !ct.rel && !ct.new && !ct.inv",
                       "next;");
 
@@ -811,10 +846,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
          * a dynamically negotiated FTP data channel), but will allow
          * related traffic such as an ICMP Port Unreachable through
          * that's generated from a non-listening UDP port.  */
-        ovn_lflow_add(lflows, od, P_IN, S_IN_ACL, UINT16_MAX,
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ACL, UINT16_MAX,
                       "!ct.est && ct.rel && !ct.new && !ct.inv",
                       "next;");
-        ovn_lflow_add(lflows, od, P_OUT, S_OUT_ACL, UINT16_MAX,
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, UINT16_MAX,
                       "!ct.est && ct.rel && !ct.new && !ct.inv",
                       "next;");
     }
@@ -823,8 +858,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
     for (size_t i = 0; i < od->nb->n_acls; i++) {
         struct nbrec_acl *acl = od->nb->acls[i];
         bool ingress = !strcmp(acl->direction, "from-lport") ? true :false;
-        enum ovn_pipeline pipeline = ingress ? P_IN : P_OUT;
-        uint8_t stage = ingress ? S_IN_ACL : S_OUT_ACL;
+        enum ovn_stage stage = ingress ? S_SWITCH_IN_ACL : S_SWITCH_OUT_ACL;
 
         if (!strcmp(acl->action, "allow")) {
             /* If there are any stateful flows, we must even commit "allow"
@@ -833,7 +867,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
              * may and then its return traffic would not have an
              * associated conntrack entry and would return "+invalid". */
             const char *actions = has_stateful ? "ct_commit; next;" : "next;";
-            ovn_lflow_add(lflows, od, pipeline, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage, acl->priority,
                           acl->match, actions);
         } else if (!strcmp(acl->action, "allow-related")) {
             struct ds match = DS_EMPTY_INITIALIZER;
@@ -842,17 +876,17 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
              * other traffic related to this entry to flow due to the
              * 65535 priority flow defined earlier. */
             ds_put_format(&match, "ct.new && (%s)", acl->match);
-            ovn_lflow_add(lflows, od, pipeline, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage, acl->priority,
                           ds_cstr(&match), "ct_commit; next;");
 
             ds_destroy(&match);
         } else if (!strcmp(acl->action, "drop")) {
-            ovn_lflow_add(lflows, od, pipeline, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage, acl->priority,
                           acl->match, "drop;");
         } else if (!strcmp(acl->action, "reject")) {
             /* xxx Need to support "reject". */
             VLOG_INFO("reject is not a supported action");
-            ovn_lflow_add(lflows, od, pipeline, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage, acl->priority,
                           acl->match, "drop;");
         }
     }
@@ -874,11 +908,11 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
         /* Logical VLANs not supported. */
-        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 100, "vlan.present",
+        ovn_lflow_add(&lflows, od, S_SWITCH_IN_PORT_SEC, 100, "vlan.present",
                       "drop;");
 
         /* Broadcast/multicast source address is invalid. */
-        ovn_lflow_add(&lflows, od, P_IN, S_IN_PORT_SEC, 100, "eth.src[40]",
+        ovn_lflow_add(&lflows, od, S_SWITCH_IN_PORT_SEC, 100, "eth.src[40]",
                       "drop;");
 
         /* Port security flows have priority 50 (see below) and will continue
@@ -900,7 +934,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         build_port_security("eth.src",
                             op->nb->port_security, op->nb->n_port_security,
                             &match);
-        ovn_lflow_add(&lflows, op->od, P_IN, S_IN_PORT_SEC, 50,
+        ovn_lflow_add(&lflows, op->od, S_SWITCH_IN_PORT_SEC, 50,
                       ds_cstr(&match), "next;");
         ds_destroy(&match);
     }
@@ -913,7 +947,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         }
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 100, "eth.mcast",
+        ovn_lflow_add(&lflows, od, S_SWITCH_IN_L2_LKUP, 100, "eth.mcast",
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
@@ -932,7 +966,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                 ds_put_cstr(&actions, "outport = ");
                 json_string_escape(op->nb->name, &actions);
                 ds_put_cstr(&actions, "; output;");
-                ovn_lflow_add(&lflows, op->od, P_IN, S_IN_L2_LKUP, 50,
+                ovn_lflow_add(&lflows, op->od, S_SWITCH_IN_L2_LKUP, 50,
                               ds_cstr(&match), ds_cstr(&actions));
                 ds_destroy(&actions);
                 ds_destroy(&match);
@@ -954,7 +988,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     /* Ingress table 3: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (od->has_unknown) {
-            ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 0, "1",
+            ovn_lflow_add(&lflows, od, S_SWITCH_IN_L2_LKUP, 0, "1",
                           "outport = \""MC_UNKNOWN"\"; output;");
         }
     }
@@ -962,7 +996,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     /* Egress table 2: Egress port security multicast/broadcast (priority
      * 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_OUT, S_OUT_PORT_SEC, 100, "eth.mcast",
+        ovn_lflow_add(&lflows, od, S_SWITCH_OUT_PORT_SEC, 100, "eth.mcast",
                       "output;");
     }
 
@@ -982,10 +1016,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
             build_port_security("eth.dst",
                                 op->nb->port_security, op->nb->n_port_security,
                                 &match);
-            ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 50,
+            ovn_lflow_add(&lflows, op->od, S_SWITCH_OUT_PORT_SEC, 50,
                           ds_cstr(&match), "output;");
         } else {
-            ovn_lflow_add(&lflows, op->od, P_OUT, S_OUT_PORT_SEC, 150,
+            ovn_lflow_add(&lflows, op->od, S_SWITCH_OUT_PORT_SEC, 150,
                           ds_cstr(&match), "drop;");
         }
 
@@ -1008,10 +1042,12 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
             continue;
         }
 
+        enum ovn_datapath_type dp_type = DP_SWITCH; /* XXX no routers yet. */
+        enum ovn_pipeline pipeline
+            = !strcmp(sbflow->pipeline, "ingress") ? P_IN : P_OUT;
         struct ovn_lflow *lflow = ovn_lflow_find(
-            &lflows, od, (!strcmp(sbflow->pipeline, "ingress") ? P_IN : P_OUT),
-            sbflow->table_id, sbflow->priority,
-            sbflow->match, sbflow->actions);
+            &lflows, od, ovn_stage_build(dp_type, pipeline, sbflow->table_id),
+            sbflow->priority, sbflow->match, sbflow->actions);
         if (lflow) {
             ovn_lflow_destroy(&lflows, lflow);
         } else {
@@ -1020,20 +1056,20 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     }
     struct ovn_lflow *lflow, *next_lflow;
     HMAP_FOR_EACH_SAFE (lflow, next_lflow, hmap_node, &lflows) {
+        enum ovn_pipeline pipeline = ovn_stage_get_pipeline(lflow->stage);
+        uint8_t table = ovn_stage_get_table(lflow->stage);
+
         sbflow = sbrec_logical_flow_insert(ctx->ovnsb_txn);
         sbrec_logical_flow_set_logical_datapath(sbflow, lflow->od->sb);
-        sbrec_logical_flow_set_pipeline(
-            sbflow, lflow->pipeline == P_IN ? "ingress" : "egress");
-        sbrec_logical_flow_set_table_id(sbflow, lflow->table_id);
+        sbrec_logical_flow_set_pipeline(sbflow,
+                                        pipeline ? "ingress" : "egress");
+        sbrec_logical_flow_set_table_id(sbflow, table);
         sbrec_logical_flow_set_priority(sbflow, lflow->priority);
         sbrec_logical_flow_set_match(sbflow, lflow->match);
         sbrec_logical_flow_set_actions(sbflow, lflow->actions);
 
-        const struct smap ids = SMAP_CONST1(
-            &ids, "stage-name",
-            (lflow->pipeline == P_IN
-             ? ingress_stage_to_str(lflow->table_id)
-             : egress_stage_to_str(lflow->table_id)));
+        const struct smap ids = SMAP_CONST1(&ids, "stage-name",
+                                            ovn_stage_to_str(lflow->stage));
         sbrec_logical_flow_set_external_ids(sbflow, &ids);
 
         ovn_lflow_destroy(&lflows, lflow);
