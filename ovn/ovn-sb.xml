@@ -827,6 +827,15 @@
             that a logical flow with such an assignment will never be matched.
           </p>
         </dd>
+
+        <dt><code><var>field1</var> &lt;-&gt; <var>field2</var>;</code></dt>
+        <dd>
+          <p>
+            Similar to <code><var>field1</var> = <var>field2</var>;</code>
+            except that the two values are exchanged instead of copied.  Both
+            <var>field1</var> and <var>field2</var> must modifiable.
+          </p>
+        </dd>
       </dl>
 
       <p>

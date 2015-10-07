@@ -102,7 +102,7 @@ test_lex(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
     ds_init(&input);
     ds_init(&output);
-    while (!ds_get_line(&input, stdin)) {
+    while (!ds_get_test_line(&input, stdin)) {
         struct lexer lexer;
 
         lexer_init(&lexer, ds_cstr(&input));

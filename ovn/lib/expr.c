@@ -2619,13 +2619,26 @@ expr_is_normalized(const struct expr *expr)
 
 /* Action parsing helper. */
 
+/* Expands 'f' repeatedly as long as it has an expansion, that is, as long as
+ * it is a subfield or a predicate.  Adds any prerequisites for 'f' to
+ * '*prereqs'.
+ *
+ * If 'rw', verifies that 'f' is a read/write field.
+ *
+ * 'exchange' should be true if an exchange action is being parsed.  This is
+ * only used to improve error message phrasing.
+ *
+ * Returns true if successful, false if an error was encountered (in which case
+ * 'ctx->error' reports the particular error). */
 static bool
-expand_symbol(struct expr_context *ctx, struct expr_field *f,
-              struct expr **prereqsp)
+expand_symbol(struct expr_context *ctx, bool rw, bool exchange,
+              struct expr_field *f, struct expr **prereqsp)
 {
+    const struct expr_symbol *orig_symbol = f->symbol;
+
     if (f->symbol->expansion && f->symbol->level != EXPR_L_ORDINAL) {
-        expr_error(ctx, "Predicate symbol %s cannot be used in assignment.",
-                   f->symbol->name);
+        expr_error(ctx, "Predicate symbol %s cannot be used in %s.",
+                   f->symbol->name, exchange ? "exchange" : "assignment");
         return false;
     }
 
@@ -2663,7 +2676,26 @@ expand_symbol(struct expr_context *ctx, struct expr_field *f,
         f->ofs += expansion.ofs;
     }
 
+    if (rw && !f->symbol->field->writable) {
+        expr_error(ctx, "Field %s is not modifiable.", orig_symbol->name);
+        return false;
+    }
+
     return true;
+}
+
+static void
+mf_subfield_from_expr_field(const struct expr_field *f, struct mf_subfield *sf)
+{
+    sf->field = f->symbol->field;
+    sf->ofs = f->ofs;
+    sf->n_bits = f->n_bits ? f->n_bits : f->symbol->field->n_bits;
+}
+
+static void
+init_stack_action(const struct expr_field *f, struct ofpact_stack *stack)
+{
+    mf_subfield_from_expr_field(f, &stack->subfield);
 }
 
 static struct expr *
@@ -2677,56 +2709,73 @@ parse_assignment(struct expr_context *ctx, const struct simap *ports,
     if (!parse_field(ctx, &dst)) {
         goto exit;
     }
-    if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+    bool exchange = lexer_match(ctx->lexer, LEX_T_EXCHANGE);
+    if (!exchange && !lexer_match(ctx->lexer, LEX_T_EQUALS)) {
         expr_syntax_error(ctx, "expecting `='.");
         goto exit;
     }
     const struct expr_symbol *orig_dst = dst.symbol;
-    if (!expand_symbol(ctx, &dst, &prereqs)) {
-        goto exit;
-    }
-    if (!dst.symbol->field->writable) {
-        expr_error(ctx, "Field %s is not modifiable.", orig_dst->name);
+    if (!expand_symbol(ctx, true, exchange, &dst, &prereqs)) {
         goto exit;
     }
 
-    if (ctx->lexer->token.type == LEX_T_ID) {
+    if (exchange || ctx->lexer->token.type == LEX_T_ID) {
         struct expr_field src;
         if (!parse_field(ctx, &src)) {
             goto exit;
         }
         const struct expr_symbol *orig_src = src.symbol;
-        if (!expand_symbol(ctx, &src, &prereqs)) {
+        if (!expand_symbol(ctx, exchange, exchange, &src, &prereqs)) {
             goto exit;
         }
 
         if ((dst.symbol->width != 0) != (src.symbol->width != 0)) {
-            expr_error(ctx, "Can't assign %s field (%s) to %s field (%s).",
-                       orig_src->width ? "integer" : "string",
-                       orig_src->name,
-                       orig_dst->width ? "integer" : "string",
-                       orig_dst->name);
+            if (exchange) {
+                expr_error(ctx,
+                           "Can't exchange %s field (%s) with %s field (%s).",
+                           orig_dst->width ? "integer" : "string",
+                           orig_dst->name,
+                           orig_src->width ? "integer" : "string",
+                           orig_src->name);
+            } else {
+                expr_error(ctx, "Can't assign %s field (%s) to %s field (%s).",
+                           orig_src->width ? "integer" : "string",
+                           orig_src->name,
+                           orig_dst->width ? "integer" : "string",
+                           orig_dst->name);
+            }
             goto exit;
         }
 
         if (dst.n_bits != src.n_bits) {
-            expr_error(ctx, "Can't assign %d-bit value to %d-bit destination.",
-                       src.n_bits, dst.n_bits);
+            if (exchange) {
+                expr_error(ctx,
+                           "Can't exchange %d-bit field with %d-bit field.",
+                           dst.n_bits, src.n_bits);
+            } else {
+                expr_error(ctx,
+                           "Can't assign %d-bit value to %d-bit destination.",
+                           src.n_bits, dst.n_bits);
+            }
             goto exit;
         } else if (!dst.n_bits
                    && dst.symbol->field->n_bits != src.symbol->field->n_bits) {
             expr_error(ctx, "String fields %s and %s are incompatible for "
-                       "assignment.", orig_dst->name, orig_src->name);
+                       "%s.", orig_dst->name, orig_src->name,
+                       exchange ? "exchange" : "assignment");
             goto exit;
         }
 
-        struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
-        move->src.field = src.symbol->field;
-        move->src.ofs = src.ofs;
-        move->src.n_bits = src.n_bits ? src.n_bits : src.symbol->field->n_bits;
-        move->dst.field = dst.symbol->field;
-        move->dst.ofs = dst.ofs;
-        move->dst.n_bits = dst.n_bits ? dst.n_bits : dst.symbol->field->n_bits;
+        if (exchange) {
+            init_stack_action(&src, ofpact_put_STACK_PUSH(ofpacts));
+            init_stack_action(&dst, ofpact_put_STACK_PUSH(ofpacts));
+            init_stack_action(&src, ofpact_put_STACK_POP(ofpacts));
+            init_stack_action(&dst, ofpact_put_STACK_POP(ofpacts));
+        } else {
+            struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
+            mf_subfield_from_expr_field(&src, &move->src);
+            mf_subfield_from_expr_field(&dst, &move->dst);
+        }
     } else {
         struct expr_constant_set cs;
         if (!parse_constant_set(ctx, &cs)) {
@@ -2776,8 +2825,9 @@ exit:
 }
 
 /* A helper for actions_parse(), to parse an OVN assignment action in the form
- * "field = value" or "field1 = field2" into 'ofpacts'.  The parameters and
- * return value match those for actions_parse(). */
+ * "field = value" or "field1 = field2", or a "exchange" action in the form
+ * "field1 <-> field2", into 'ofpacts'.  The parameters and return value match
+ * those for actions_parse(). */
 char *
 expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
                       const struct simap *ports,

@@ -238,6 +238,9 @@ lex_token_format(const struct lex_token *token, struct ds *s)
     case LEX_T_EQUALS:
         ds_put_cstr(s, "=");
         break;
+    case LEX_T_EXCHANGE:
+        ds_put_cstr(s, "<->");
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -599,6 +602,9 @@ next:
         if (*p == '=') {
             token->type = LEX_T_LE;
             p++;
+        } else if (*p == '-' && p[1] == '>') {
+            token->type = LEX_T_EXCHANGE;
+            p += 2;
         } else {
             token->type = LEX_T_LT;
         }

@@ -105,6 +105,7 @@ action_syntax_error(struct action_context *ctx, const char *message, ...)
     ctx->error = ds_steal_cstr(&s);
 }
 
+/* Parses an assignment or exchange action. */
 static void
 parse_set_action(struct action_context *ctx)
 {
@@ -153,7 +154,8 @@ parse_actions(struct action_context *ctx)
         }
 
         enum lex_type lookahead = lexer_lookahead(ctx->lexer);
-        if (lookahead == LEX_T_EQUALS || lookahead == LEX_T_LSQUARE) {
+        if (lookahead == LEX_T_EQUALS || lookahead == LEX_T_EXCHANGE
+            || lookahead == LEX_T_LSQUARE) {
             parse_set_action(ctx);
         } else if (lexer_match_id(ctx->lexer, "next")) {
             if (ctx->next_table_id) {

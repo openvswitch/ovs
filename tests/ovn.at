@@ -81,7 +81,8 @@ ff:ff:ff:ff:ff:ff/fe:ff:ff:ff:ff:ff => error("Value contains unmasked 1-bits.")
 fe:x => error("Invalid numeric constant.")
 00:01:02:03:04:x => error("Invalid numeric constant.")
 
-(){}[[]]==!=<<=>>=!&&||..,;= => ( ) { } [[ ]] == != < <= > >= ! && || .. , ; =
+# Test that operators are tokenized as expected, even without white space.
+(){}[[]]==!=<<=>>=!&&||..,;=<-> => ( ) { } [[ ]] == != < <= > >= ! && || .. , ; = <->
 & => error("`&' is only valid as part of `&&'.")
 | => error("`|' is only valid as part of `||'.")
 
@@ -448,8 +449,13 @@ reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], pr
 vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
 reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
 outport = inport; => actions=move:NXM_NX_REG6[]->NXM_NX_REG7[], prereqs=1
+reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
+vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
+reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
+outport <-> inport; => actions=push:NXM_NX_REG6[],push:NXM_NX_REG7[],pop:NXM_NX_REG6[],pop:NXM_NX_REG7[], prereqs=1
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
+ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
 
 ## Negative tests.
 
@@ -480,6 +486,12 @@ reg0 = reg1[0..10]; => Can't assign 11-bit value to 32-bit destination.
 inport = reg0; => Can't assign integer field (reg0) to string field (inport).
 inport = big_string; => String fields inport and big_string are incompatible for assignment.
 ip.proto = reg0[0..7]; => Field ip.proto is not modifiable.
+reg0[0] <-> vlan.present; => Predicate symbol vlan.present cannot be used in exchange.
+reg0 <-> reg1[0..10]; => Can't exchange 32-bit field with 11-bit field.
+inport <-> reg0; => Can't exchange string field (inport) with integer field (reg0).
+inport <-> big_string; => String fields inport and big_string are incompatible for exchange.
+ip.proto <-> reg0[0..7]; => Field ip.proto is not modifiable.
+reg0[0..7] <-> ip.proto; => Field ip.proto is not modifiable.
 ]])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout

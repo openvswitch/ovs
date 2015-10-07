@@ -58,6 +58,7 @@ enum lex_type {
     LEX_T_COMMA,                /* , */
     LEX_T_SEMICOLON,            /* ; */
     LEX_T_EQUALS,               /* = */
+    LEX_T_EXCHANGE,             /* <-> */
 };
 
 /* Subtype for LEX_T_INTEGER and LEX_T_MASKED_INTEGER tokens.
