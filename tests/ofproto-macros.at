@@ -110,8 +110,10 @@ as() {
 
 # ovn_init_db DATABASE
 #
-# Creates and initializes the given DATABASE (one of "ovn-sb" or "ovn-nb")
-# and starts its ovsdb-server instance.
+# Creates and initializes the given DATABASE (one of "ovn-sb" or "ovn-nb"),
+# starts its ovsdb-server instance, and sets the appropriate environment
+# variable (OVN_SB_DB or OVN_NB_DB) so that ovn-sbctl or ovn-nbctl uses the
+# database by default.
 #
 # Usually invoked from ovn_start.
 ovn_init_db () {
@@ -121,17 +123,19 @@ ovn_init_db () {
     : > "$d"/.$1.db.~lock~
     as $1 ovsdb-tool create "$d"/$1.db "$abs_top_srcdir"/ovn/$1.ovsschema
     as $1 start_daemon ovsdb-server --remote=punix:"$d"/$1.sock "$d"/$1.db
+    local var=`echo $1_db | tr a-z- A-Z_`
+    AS_VAR_SET([$var], [unix:$ovs_base/$1/$1.sock]); export $var
 }
 
 # ovn_start
 #
 # Creates and initializes ovn-sb and ovn-nb databases and starts their
-# ovsdb-server instance, and starts ovn-northd running against them.
+# ovsdb-server instance, sets appropriate environment variables so that
+# ovn-sbctl and ovn-nbctl use them by default, and starts ovn-northd running
+# against them.
 ovn_start () {
     ovn_init_db ovn-sb
     ovn_init_db ovn-nb
-
-    OVN_NB_DB=unix:$ovs_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
 
     echo "starting ovn-northd"
     mkdir "$ovs_base"/northd

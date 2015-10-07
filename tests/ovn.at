@@ -541,7 +541,7 @@ ovn_populate_arp
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
 sleep 1
-ovn-sbctl --db=unix:`pwd`/ovn-sb/ovn-sb.sock dump-flows -- list multicast_group
+ovn-sbctl dump-flows -- list multicast_group
 
 # test_packet INPORT DST SRC ETHTYPE OUTPORT...
 #

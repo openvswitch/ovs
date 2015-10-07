@@ -77,6 +77,7 @@ OVS_NO_RETURN static void sbctl_exit(int status);
 static void sbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
+static const char *sbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static void do_sbctl(const char *args, struct ctl_command *, size_t n,
@@ -145,6 +146,19 @@ main(int argc, char *argv[])
             poll_block();
         }
     }
+}
+
+static const char *
+sbctl_default_db(void)
+{
+    static char *def;
+    if (!def) {
+        def = getenv("OVN_SB_DB");
+        if (!def) {
+            def = ctl_default_db();
+        }
+    }
+    return def;
 }
 
 static void
@@ -270,7 +284,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(short_options);
 
     if (!db) {
-        db = ctl_default_db();
+        db = sbctl_default_db();
     }
 
     for (i = n_global_long_options; options[i].name; i++) {

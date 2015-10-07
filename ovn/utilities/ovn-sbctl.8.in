@@ -56,10 +56,13 @@ command line has options, then those options must be separated from
 the global options by \fB\-\-\fR.
 .
 .IP "\fB\-\-db=\fIserver\fR"
-Sets \fIserver\fR as the database server that \fBovn\-sbctl\fR
-contacts to query or modify configuration.  The default is
-\fBunix:@RUNDIR@/db.sock\fR.  \fIserver\fR must take one of the
-following forms:
+The OVSDB database remote to contact.  If the \fBOVN_SB_DB\fR
+environment variable is set, its value is used as the default.
+Otherwise, the default is \fBunix:@RUNDIR@/db.sock\fR, but this
+default is unlikely to be useful outside of single-machine OVN test
+environments.
+.IP
+\fIserver\fR must take one of the following forms:
 .RS
 .so ovsdb/remote-active.man
 .so ovsdb/remote-passive.man
