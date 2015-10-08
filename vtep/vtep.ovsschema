@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "262972511 10369",
+  "cksum": "2177247725 10499",
   "tables": {
     "Global": {
       "columns": {
@@ -52,7 +52,8 @@
                            "minInteger": 0, "maxInteger": 4095},
                    "value": {"type": "uuid",
                              "refTable": "Logical_Binding_Stats"},
-                   "min": 0, "max": "unlimited"}},
+                   "min": 0, "max": "unlimited"},
+          "ephemeral": true},
         "port_fault_status": {
           "type": {
             "key": "string", "min": 0, "max": "unlimited"},
@@ -76,13 +77,14 @@
               "min": 0, "max": "unlimited"}},
         "bfd_status": {
           "type": {"key": "string", "value": "string",
-              "min": 0, "max": "unlimited"}}}},
+              "min": 0, "max": "unlimited"},
+          "ephemeral": true}}},
     "Logical_Binding_Stats": {
       "columns": {
-        "bytes_from_local": {"type": "integer"},
-        "packets_from_local": {"type": "integer"},
-        "bytes_to_local": {"type": "integer"},
-        "packets_to_local": {"type": "integer"}}},
+        "bytes_from_local": {"type": "integer", "ephemeral": true},
+        "packets_from_local": {"type": "integer", "ephemeral": true},
+        "bytes_to_local": {"type": "integer", "ephemeral": true},
+        "packets_to_local": {"type": "integer", "ephemeral": true}}},
     "Logical_Switch": {
       "columns": {
         "name": {"type": "string"},
@@ -248,7 +250,7 @@
         "acle_fault_status": {
           "type": {
             "key": "string", "min": 0, "max": "unlimited"},
-            "ephemeral": true}},
+          "ephemeral": true}},
        "isRoot": true},
     "ACL": {
       "columns": {
@@ -259,7 +261,7 @@
         "acl_fault_status": {
           "type": {
             "key": "string", "min": 0, "max": "unlimited"},
-            "ephemeral": true}},
+          "ephemeral": true}},
       "indexes": [["acl_name"]],
       "isRoot": true},
     "Manager": {
@@ -281,4 +283,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.4.0"}
+  "version": "1.4.1"}
