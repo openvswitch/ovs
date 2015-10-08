@@ -54,7 +54,7 @@ struct chassis_tunnel {
     struct hmap_node hmap_node;
     const char *chassis_id;
     ofp_port_t ofport;
-    enum chassis_tunnel_type { GENEVE, STT } type;
+    enum chassis_tunnel_type { GENEVE, STT, VXLAN } type;
 };
 
 static struct chassis_tunnel *
@@ -120,6 +120,8 @@ put_encapsulation(enum mf_field_id mff_ovn_geneve,
         put_load(datapath->tunnel_key | (outport << 24), MFF_TUN_ID, 0, 64,
                  ofpacts);
         put_move(MFF_LOG_INPORT, 0, MFF_TUN_ID, 40, 15, ofpacts);
+    } else if (tun->type == VXLAN) {
+        put_load(datapath->tunnel_key, MFF_TUN_ID, 0, 24, ofpacts);
     } else {
         OVS_NOT_REACHED();
     }
@@ -182,6 +184,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                     }
                 } else if (!strcmp(iface_rec->type, "stt")) {
                     tunnel_type = STT;
+                } else if (!strcmp(iface_rec->type, "vxlan")) {
+                    tunnel_type = VXLAN;
                 } else {
                     continue;
                 }
@@ -588,11 +592,14 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     /* Table 0, priority 100.
      * ======================
      *
-     * For packets that arrive from a remote hypervisor (by matching a tunnel
-     * in_port), set MFF_LOG_DATAPATH, MFF_LOG_INPORT, and MFF_LOG_OUTPORT from
-     * the tunnel key data, then resubmit to table 33 to handle packets to the
-     * local hypervisor. */
+     * Process packets that arrive from a remote hypervisor (by matching
+     * on tunnel in_port). */
 
+    /* Add flows for Geneve and STT encapsulations.  These
+     * encapsulations have metadata about the ingress and egress logical
+     * ports.  We set MFF_LOG_DATAPATH, MFF_LOG_INPORT, and
+     * MFF_LOG_OUTPORT from the tunnel key data, then resubmit to table
+     * 33 to handle packets to the local hypervisor. */
     struct chassis_tunnel *tun;
     HMAP_FOR_EACH (tun, hmap_node, &tunnels) {
         struct match match = MATCH_CATCHALL_INITIALIZER;
@@ -609,12 +616,51 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             put_move(MFF_TUN_ID, 40, MFF_LOG_INPORT,   0, 15, &ofpacts);
             put_move(MFF_TUN_ID, 24, MFF_LOG_OUTPORT,  0, 16, &ofpacts);
             put_move(MFF_TUN_ID,  0, MFF_LOG_DATAPATH, 0, 24, &ofpacts);
+        } else if (tun->type == VXLAN) {
+            /* We'll handle VXLAN later. */
+            continue;
         } else {
             OVS_NOT_REACHED();
         }
+
         put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
 
         ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, 100, &match, &ofpacts);
+    }
+
+    /* Add flows for VXLAN encapsulations.  Due to the limited amount of
+     * metadata, we only support VXLAN for connections to gateways.  The
+     * VNI is used to populate MFF_LOG_DATAPATH.  The gateway's logical
+     * port is set to MFF_LOG_INPORT.  Then the packet is resubmitted to
+     * table 16 to determine the logical egress port.
+     *
+     * xxx Due to resubmitting to table 16, broadcasts will be re-sent to
+     * xxx all logical ports, including non-local ones which could cause
+     * xxx duplicate packets to be received by multiply-connected gateways. */
+    HMAP_FOR_EACH (tun, hmap_node, &tunnels) {
+        if (tun->type != VXLAN) {
+            continue;
+        }
+
+        SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+            struct match match = MATCH_CATCHALL_INITIALIZER;
+
+            if (!binding->chassis ||
+                strcmp(tun->chassis_id, binding->chassis->name)) {
+                continue;
+            }
+
+            match_set_in_port(&match, tun->ofport);
+            match_set_tun_id(&match, htonll(binding->datapath->tunnel_key));
+
+            ofpbuf_clear(&ofpacts);
+            put_move(MFF_TUN_ID, 0,  MFF_LOG_DATAPATH, 0, 24, &ofpacts);
+            put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 15, &ofpacts);
+            put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
+
+            ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, 100, &match,
+                    &ofpacts);
+        }
     }
 
     /* Table 32, Priority 0.

@@ -214,10 +214,11 @@ preferred_encap(const struct sbrec_chassis *chassis_rec)
 
     /* For hypervisors, we only support Geneve and STT encapsulations.
      * Sets are returned alphabetically, so "geneve" will be preferred
-     * over "stt". */
+     * over "stt".  For gateways, we only support VXLAN encapsulation. */
     for (i = 0; i < chassis_rec->n_encaps; i++) {
         if (!strcmp(chassis_rec->encaps[i]->type, "geneve")
-                || !strcmp(chassis_rec->encaps[i]->type, "stt")) {
+                || !strcmp(chassis_rec->encaps[i]->type, "stt")
+                || !strcmp(chassis_rec->encaps[i]->type, "vxlan")) {
             return chassis_rec->encaps[i];
         }
     }
