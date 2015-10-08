@@ -241,6 +241,9 @@ lex_token_format(const struct lex_token *token, struct ds *s)
     case LEX_T_EXCHANGE:
         ds_put_cstr(s, "<->");
         break;
+    case LEX_T_DECREMENT:
+        ds_put_cstr(s, "--");
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -638,6 +641,16 @@ next:
     case ';':
         p++;
         token->type = LEX_T_SEMICOLON;
+        break;
+
+    case '-':
+        p++;
+        if (*p == '-') {
+            token->type = LEX_T_DECREMENT;
+            p++;
+        } else {
+            lex_error(token, "`-' is only valid as part of `--'.");
+        }
         break;
 
     case '0': case '1': case '2': case '3': case '4':

@@ -210,6 +210,15 @@ parse_actions(struct action_context *ctx)
             parse_next_action(ctx);
         } else if (lexer_match_id(ctx->lexer, "output")) {
             emit_resubmit(ctx, ctx->output_ptable);
+        } else if (lexer_match_id(ctx->lexer, "ip4.ttl")) {
+            if (lexer_match(ctx->lexer, LEX_T_DECREMENT)) {
+                struct expr *e = expr_parse_string("ip4", ctx->symtab,
+                                                   &ctx->error);
+                ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, e);
+                ofpact_put_DEC_TTL(ctx->ofpacts);
+            } else {
+                action_syntax_error(ctx, "expecting `--'");
+            }
         } else {
             action_syntax_error(ctx, "expecting action");
         }
