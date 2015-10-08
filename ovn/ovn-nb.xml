@@ -485,6 +485,13 @@
       The Ethernet address that belongs to this router port.
     </column>
 
+    <column name="enabled">
+      This column is used to administratively set port state.  If this column
+      is empty or is set to <code>true</code>, the port is enabled.  If this
+      column is set to <code>false</code>, the port is disabled.  A disabled
+      port has all ingress and egress traffic dropped.
+    </column>
+
     <group title="Attachment">
       <p>
         A given router port serves one of two purposes:
