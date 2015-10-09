@@ -320,6 +320,13 @@ static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 }
 #endif
 
+#ifndef HAVE_SKB_CHECKSUM_START_OFFSET
+static inline int skb_checksum_start_offset(const struct sk_buff *skb)
+{
+	return skb->csum_start - skb_headroom(skb);
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #define skb_postpull_rcsum rpl_skb_postpull_rcsum
 static inline void skb_postpull_rcsum(struct sk_buff *skb,
