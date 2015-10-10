@@ -1861,10 +1861,8 @@ void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);
 
 /* Returns the set of usable protocols. */
-enum ofputil_protocol mf_set(const struct mf_field *,
-                             const union mf_value *value,
-                             const union mf_value *mask,
-                             struct match *, char **err_str);
+uint32_t mf_set(const struct mf_field *, const union mf_value *value,
+                const union mf_value *mask, struct match *, char **err_str);
 
 void mf_set_wild(const struct mf_field *, struct match *, char **err_str);
 

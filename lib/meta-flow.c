@@ -1615,8 +1615,12 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
  *
  * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
  * with the request or NULL if there is no error. The caller is reponsible
- * for freeing the string.*/
-enum ofputil_protocol
+ * for freeing the string.
+ *
+ * Return a set of enum ofputil_protocol bits (as an uint32_t to avoid circular
+ * dependency on enum ofputil_protocol definition) indicating which OpenFlow
+ * protocol versions can support this functionality. */
+uint32_t
 mf_set(const struct mf_field *mf,
        const union mf_value *value, const union mf_value *mask,
        struct match *match, char **err_str)
