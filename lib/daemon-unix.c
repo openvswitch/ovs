@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,6 @@ static bool monitor;
 /* --user: Only root can use this option. Switch to new uid:gid after
  * initially running as root.  */
 static bool switch_user = false;
-static bool non_root_user = false;
 static uid_t uid;
 static gid_t gid;
 static char *user = NULL;
@@ -443,11 +442,6 @@ daemonize_start(bool access_datapath)
     if (switch_user) {
         daemon_become_new_user__(access_datapath);
         switch_user = false;
-    }
-
-    /* If --user is specified, make sure user switch has completed by now.  */
-    if (non_root_user) {
-        ovs_assert(geteuid() && getuid());
     }
 
     if (detach) {
@@ -875,9 +869,7 @@ daemon_become_new_user(bool access_datapath)
     assert_single_threaded();
     if (switch_user) {
         daemon_become_new_user__(access_datapath);
-
-        /* Make sure daemonize_start() will not switch
-         * user again. */
+        /* daemonize_start() should not switch user again. */
         switch_user = false;
     }
 }
@@ -1041,5 +1033,5 @@ daemon_set_new_user(const char *user_spec)
         }
     }
 
-    switch_user = non_root_user = true;
+    switch_user = true;
 }
