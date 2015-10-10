@@ -259,10 +259,10 @@ free_sockaddr_un(int dirfd, const char *linkname)
 }
 
 /* Binds Unix domain socket 'fd' to a file with permissions 0700. */
-static int
-bind_unix_socket(int fd, struct sockaddr *sun, socklen_t sun_len)
+static int bind_unix_socket(int fd, struct sockaddr *sun, socklen_t sun_len)
 {
-    const mode_t mode = 0700;
+    const mode_t mode = 0770;    /* Allow both user and group access. */
+
     if (LINUX) {
         /* On Linux, the fd's permissions become the file's permissions.
          * fchmod() does not affect other files, like umask() does. */
