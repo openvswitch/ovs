@@ -105,7 +105,7 @@ DEFINE_STATIC_PER_THREAD_DATA(unsigned int, msg_num, 0);
  * All of the following is protected by 'log_file_mutex', which nests inside
  * pattern_rwlock. */
 static struct ovs_mutex log_file_mutex = OVS_MUTEX_INITIALIZER;
-static char *log_file_name OVS_GUARDED_BY(log_file_mutex);
+static char *log_file_name = NULL OVS_GUARDED_BY(log_file_mutex);
 static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 static bool log_async OVS_GUARDED_BY(log_file_mutex);
@@ -427,6 +427,27 @@ vlog_reopen_log_file(void)
         return error;
     } else {
         return 0;
+    }
+}
+
+/* In case a log file exists, change its owner to new 'user' and 'group'.
+ *
+ * This is useful for handling cases where the --log-file option is
+ * specified ahead of the --user option.  */
+void
+vlog_change_owner(uid_t user, gid_t group)
+{
+    if (!log_file_name) {
+        return;
+    }
+
+    ovs_mutex_lock(&log_file_mutex);
+    int error = chown(log_file_name, user, group);
+    ovs_mutex_unlock(&log_file_mutex);
+
+    if (error) {
+        VLOG_FATAL("Failed to change %s ownership: %s.",
+                   log_file_name, ovs_strerror(errno));
     }
 }
 

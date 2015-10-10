@@ -739,7 +739,7 @@ daemon_switch_group(gid_t real, gid_t effective,
 {
     if ((setresgid(real, effective, saved) == -1) ||
         !gid_verify(real, effective, saved)) {
-        VLOG_FATAL("%s: fail to switch group to gid as %d, aborting",
+        VLOG_FATAL("%s: failed to switch group to gid as %d, aborting",
                    pidfile, gid);
     }
 }
@@ -847,6 +847,10 @@ daemon_become_new_user_linux(bool access_datapath OVS_UNUSED)
 static void
 daemon_become_new_user__(bool access_datapath)
 {
+    /* If vlog file has been created, change its owner to the non-root user
+     * as specifed by the --user option.  */
+    vlog_change_owner(uid, gid);
+
     if (LINUX) {
         if (LIBCAPNG) {
             daemon_become_new_user_linux(access_datapath);

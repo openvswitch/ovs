@@ -143,6 +143,7 @@ void vlog_set_verbosity(const char *arg);
 void vlog_set_pattern(enum vlog_destination, const char *pattern);
 int vlog_set_log_file(const char *file_name);
 int vlog_reopen_log_file(void);
+void vlog_change_owner(uid_t, gid_t);
 
 /* Configure method how vlog should send messages to syslog server. */
 void vlog_set_syslog_method(const char *method);
