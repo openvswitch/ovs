@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -533,7 +533,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                   flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!oxm && match->wc.masks.nw_ttl) {
+    if (match->wc.masks.nw_ttl) {
         nxm_put_8(b, mf_oxm_header(MFF_IP_TTL, oxm), flow->nw_ttl);
     }
 
