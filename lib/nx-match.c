@@ -829,7 +829,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                   flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!oxm && match->wc.masks.nw_ttl) {
+    if (match->wc.masks.nw_ttl) {
         nxm_put_8(b, MFF_IP_TTL, oxm, flow->nw_ttl);
     }
 
