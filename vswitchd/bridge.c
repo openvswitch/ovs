@@ -1046,8 +1046,9 @@ bridge_configure_datapath_id(struct bridge *br)
 static uint32_t
 bridge_get_allowed_versions(struct bridge *br)
 {
-    if (!br->cfg->n_protocols)
+    if (!br->cfg->n_protocols) {
         return 0;
+    }
 
     return ofputil_versions_from_strings(br->cfg->protocols,
                                          br->cfg->n_protocols);
