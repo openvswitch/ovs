@@ -8679,7 +8679,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     case OFPGT11_FF:
         break;
     default:
-        OVS_NOT_REACHED();
+        return OFPERR_OFPGMFC_BAD_TYPE;
     }
 
     switch (gm->command) {
@@ -8694,7 +8694,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         }
         break;
     default:
-        OVS_NOT_REACHED();
+        return OFPERR_OFPGMFC_BAD_COMMAND;
     }
 
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
