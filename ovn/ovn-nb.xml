@@ -240,7 +240,7 @@
       </p>
 
       <p>
-	This specification will be extended to support L3 port security.
+        This specification will be extended to support L3 port security.
       </p>
     </column>
 
@@ -341,13 +341,13 @@
 
     <column name="log">
       <p>
-	If set to <code>true</code>, packets that match the ACL will trigger a
-	log message on the transport node or nodes that perform ACL processing.
-	Logging may be combined with any <ref column="action"/>.
+        If set to <code>true</code>, packets that match the ACL will trigger a
+        log message on the transport node or nodes that perform ACL processing.
+        Logging may be combined with any <ref column="action"/>.
       </p>
 
       <p>
-	Logging is not yet implemented.
+        Logging is not yet implemented.
       </p>
     </column>
 

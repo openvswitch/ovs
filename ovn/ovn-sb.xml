@@ -739,18 +739,18 @@
       </p>
 
       <p>
-	The following actions are defined:
+        The following actions are defined:
       </p>
 
       <dl>
         <dt><code>output;</code></dt>
         <dd>
           <p>
-	    In the ingress pipeline, this action executes the
-	    <code>egress</code> pipeline as a subroutine.  If
-	    <code>outport</code> names a logical port, the egress pipeline
-	    executes once; if it is a multicast group, the egress pipeline runs
-	    once for each logical port in the group.
+            In the ingress pipeline, this action executes the
+            <code>egress</code> pipeline as a subroutine.  If
+            <code>outport</code> names a logical port, the egress pipeline
+            executes once; if it is a multicast group, the egress pipeline runs
+            once for each logical port in the group.
           </p>
 
           <p>
@@ -764,7 +764,7 @@
             <code>output</code> becomes a no-op if <code>outport</code> ==
             <code>inport</code>.
           </p>
-	</dd>
+        </dd>
 
         <dt><code>next;</code></dt>
         <dd>
@@ -799,7 +799,7 @@
             <code>ingress</code> pipeline but not in the <code>egress</code>
             pipeline.
           </p>
-	</dd>
+        </dd>
 
         <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
         <dd>
