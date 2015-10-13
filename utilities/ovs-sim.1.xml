@@ -299,7 +299,7 @@ for i in `seq $n`; do
     ovn_attach n1 br-phys 192.168.$y.$x
     ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i) &amp;
     case $i in
-    	 *50|*00) echo $i; wait ;;
+        *50|*00) echo $i; wait ;;
     esac
 done
 wait
