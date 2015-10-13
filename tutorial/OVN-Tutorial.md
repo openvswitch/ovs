@@ -4,7 +4,7 @@ OVN Tutorial
 This tutorial is intended to give you a tour of the basic OVN features using
 `ovs-sandbox` as a simulated test environment.  It’s assumed that you have an
 understanding of OVS before going through this tutorial. Detail about OVN is
-covered in `ovn-architecture(7)`, but this tutorial lets you quickly see it in
+covered in [ovn-architecture(7)], but this tutorial lets you quickly see it in
 action.
 
 Getting Started
@@ -23,14 +23,15 @@ Running the sandbox with OVN enabled does the following additional steps to the
 environment:
 
   1. Creates the `OVN_Northbound` and `OVN_Southbound` databases as described in
-     `ovn-nb(5)` and `ovn-sb(5)`.
+     [ovn-nb(5)] and [ovn-sb(5)].
 
-  2. Creates the `hardware_vtep` database as described in `vtep(5)`.
+  2. Creates the `hardware_vtep` database as described in [vtep(5)].
 
-  3. Runs the `ovn-northd`, `ovn-controller`, and `ovn-controller-vtep` daemons.
+  3. Runs the [ovn-northd(8)], [ovn-controller(8)], and [ovn-controller-vtep(8)]
+     daemons.
 
   4. Makes OVN and VTEP utilities available for use in the environment,
-     including `vtep-ctl`, `ovn-nbctl`, and `ovn-sbctl`.
+     including [vtep-ctl(8)], [ovn-nbctl(8)], and [ovn-sbctl(8)].
 
 Note that each of these demos assumes you start with a fresh sandbox
 environment.  Re-run `ovs-sandbox` before starting each section.
@@ -146,7 +147,7 @@ fields have been omitted for brevity.
      table=64, priority=100,reg7=0x1,metadata=0x1 actions=output:1
      table=64, priority=100,reg7=0x2,metadata=0x1 actions=output:2
 
-The `ovs-appctl` command can be used to generate and OpenFlow trace of how a
+The `ovs-appctl` command can be used to generate an OpenFlow trace of how a
 packet would be processed in this configuration.  This first trace shows a
 packet from `sw0-port1` to `sw0-port2`.  The packet arrives from port `1` and
 should be output to port `2`.
@@ -627,7 +628,17 @@ see it output to OpenFlow ports 5 and 6 only.
     $ ovn/env5/packet2.sh
 
 
+[ovn-architecture(7)]:http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
 [Tutorial.md]:./Tutorial.md
+[ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
+[ovn-sb(5)]:http://openvswitch.org/support/dist-docs/ovn-sb.5.html
+[vtep(5)]:http://openvswitch.org/support/dist-docs/vtep.5.html
+[ovn-northd(8)]:http://openvswitch.org/support/dist-docs/ovn-northd
+[ovn-controller(8)]:http://openvswitch.org/support/dist-docs/ovn-controller.8.html
+[ovn-controller-vtep(8)]:http://openvswitch.org/support/dist-docs/ovn-controller-vtep.8.html
+[vtep-ctl(8)]:http://openvswitch.org/support/dist-docs/vtep-ctl.8.html
+[ovn-nbctl(8)]:http://openvswitch.org/support/dist-docs/ovn-nbctl.8.html
+[ovn-sbctl(8)]:http://openvswitch.org/support/dist-docs/ovn-sbctl.8.html
 [env1setup]:./ovn/env1/setup.sh
 [env1packet1]:./ovn/env1/packet1.sh
 [env1packet2]:./ovn/env1/packet2.sh
