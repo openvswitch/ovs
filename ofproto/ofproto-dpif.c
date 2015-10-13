@@ -1270,6 +1270,7 @@ check_##NAME(struct dpif_backer *backer)                                    \
 CHECK_FEATURE(ct_state)
 CHECK_FEATURE(ct_zone)
 CHECK_FEATURE(ct_mark)
+CHECK_FEATURE__(ct_label, ct_label.u64.lo)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
@@ -1289,6 +1290,7 @@ check_support(struct dpif_backer *backer)
     backer->support.odp.ct_state = check_ct_state(backer);
     backer->support.odp.ct_zone = check_ct_zone(backer);
     backer->support.odp.ct_mark = check_ct_mark(backer);
+    backer->support.odp.ct_label = check_ct_label(backer);
 }
 
 static int
@@ -4010,19 +4012,27 @@ static enum ofperr
 rule_check(struct rule *rule)
 {
     uint16_t ct_state, ct_zone;
+    const ovs_u128 *labelp;
+    ovs_u128 ct_label = { { 0, 0 } };
     uint32_t ct_mark;
 
     ct_state = MINIFLOW_GET_U16(rule->cr.match.flow, ct_state);
     ct_zone = MINIFLOW_GET_U16(rule->cr.match.flow, ct_zone);
     ct_mark = MINIFLOW_GET_U32(rule->cr.match.flow, ct_mark);
+    labelp = MINIFLOW_GET_U128_PTR(rule->cr.match.flow, ct_label);
+    if (labelp) {
+        ct_label = *labelp;
+    }
 
-    if (ct_state || ct_zone || ct_mark) {
+    if (ct_state || ct_zone || ct_mark
+        || !ovs_u128_is_zero(&ct_label)) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
         const struct odp_support *support = &ofproto_dpif_get_support(ofproto)->odp;
 
         if ((ct_state && !support->ct_state)
             || (ct_zone && !support->ct_zone)
-            || (ct_mark && !support->ct_mark)) {
+            || (ct_mark && !support->ct_mark)
+            || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
             return OFPERR_OFPBMC_BAD_FIELD;
         }
         if (ct_state & CS_UNSUPPORTED_MASK) {

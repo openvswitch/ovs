@@ -220,6 +220,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.ct_zone;
     case MFF_CT_MARK:
         return !wc->masks.ct_mark;
+    case MFF_CT_LABEL:
+        return ovs_u128_is_zero(&wc->masks.ct_label);
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
@@ -505,6 +507,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_PKT_MARK:
     case MFF_CT_ZONE:
     case MFF_CT_MARK:
+    case MFF_CT_LABEL:
     CASE_MFF_REGS:
     CASE_MFF_XREGS:
     case MFF_ETH_SRC:
@@ -665,6 +668,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_CT_MARK:
         value->be32 = htonl(flow->ct_mark);
+        break;
+
+    case MFF_CT_LABEL:
+        hton128(&flow->ct_label, &value->be128);
         break;
 
     CASE_MFF_REGS:
@@ -910,6 +917,14 @@ mf_set_value(const struct mf_field *mf,
     case MFF_CT_MARK:
         match_set_ct_mark(match, ntohl(value->be32));
         break;
+
+    case MFF_CT_LABEL: {
+        ovs_u128 label;
+
+        ntoh128(&value->be128, &label);
+        match_set_ct_label(match, label);
+        break;
+    }
 
     CASE_MFF_REGS:
         match_set_reg(match, mf->id - MFF_REG0, ntohl(value->be32));
@@ -1205,6 +1220,10 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_CT_MARK:
         flow->ct_mark = ntohl(value->be32);
+        break;
+
+    case MFF_CT_LABEL:
+        ntoh128(&value->be128, &flow->ct_label);
         break;
 
     CASE_MFF_REGS:
@@ -1511,6 +1530,11 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         match->wc.masks.ct_mark = 0;
         break;
 
+    case MFF_CT_LABEL:
+        memset(&match->flow.ct_label, 0, sizeof(match->flow.ct_label));
+        memset(&match->wc.masks.ct_label, 0, sizeof(match->wc.masks.ct_label));
+        break;
+
     CASE_MFF_REGS:
         match_set_reg_masked(match, mf->id - MFF_REG0, 0, 0);
         break;
@@ -1785,6 +1809,19 @@ mf_set(const struct mf_field *mf,
     case MFF_CT_MARK:
         match_set_ct_mark_masked(match, ntohl(value->be32), ntohl(mask->be32));
         break;
+
+    case MFF_CT_LABEL: {
+        ovs_u128 hlabel, hmask;
+
+        ntoh128(&value->be128, &hlabel);
+        if (mask) {
+            ntoh128(&mask->be128, &hmask);
+        } else {
+            hmask.u64.lo = hmask.u64.hi = UINT64_MAX;
+        }
+        match_set_ct_label_masked(match, hlabel, hmask);
+        break;
+    }
 
     case MFF_ETH_DST:
         match_set_dl_dst_masked(match, value->mac, mask->mac);

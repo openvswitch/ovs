@@ -346,6 +346,7 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_CT_STATE,	/* u32 bitmask of OVS_CS_F_* */
 	OVS_KEY_ATTR_CT_ZONE,	/* u16 connection tracking zone. */
 	OVS_KEY_ATTR_CT_MARK,	/* u32 connection tracking mark */
+	OVS_KEY_ATTR_CT_LABELS,	/* 16-octet connection tracking labels */
 
 #ifdef __KERNEL__
 	/* Only used within kernel data path. */
@@ -457,6 +458,11 @@ struct ovs_key_nd {
 	__be32	nd_target[4];
 	__u8	nd_sll[ETH_ALEN];
 	__u8	nd_tll[ETH_ALEN];
+};
+
+#define OVS_CT_LABELS_LEN	16
+struct ovs_key_ct_labels {
+	__u8	ct_labels[OVS_CT_LABELS_LEN];
 };
 
 /* OVS_KEY_ATTR_CT_STATE flags */
@@ -662,12 +668,16 @@ struct ovs_action_push_tnl {
  * @OVS_CT_ATTR_MARK: u32 value followed by u32 mask. For each bit set in the
  * mask, the corresponding bit in the value is copied to the connection
  * tracking mark field in the connection.
+ * @OVS_CT_ATTR_LABELS: %OVS_CT_LABELS_LEN value followed by %OVS_CT_LABELS_LEN
+ * mask. For each bit set in the mask, the corresponding bit in the value is
+ * copied to the connection tracking label field in the connection.
  */
 enum ovs_ct_attr {
 	OVS_CT_ATTR_UNSPEC,
 	OVS_CT_ATTR_COMMIT,     /* No argument, commits connection. */
 	OVS_CT_ATTR_ZONE,       /* u16 zone id. */
 	OVS_CT_ATTR_MARK,       /* mark to associate with this connection. */
+	OVS_CT_ATTR_LABELS,     /* label to associate with this connection. */
 	__OVS_CT_ATTR_MAX
 };
 

@@ -83,6 +83,10 @@ static void format_geneve_opts(const struct geneve_opt *opt,
 static struct nlattr *generate_all_wildcard_mask(const struct attr_len_tbl tbl[],
                                                  int max, struct ofpbuf *,
                                                  const struct nlattr *key);
+static void format_u128(struct ds *ds, const ovs_u128 *value,
+                        const ovs_u128 *mask, bool verbose);
+static int scan_u128(const char *s, ovs_u128 *value, ovs_u128 *mask);
+
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
  * 'type':
  *
@@ -138,6 +142,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_CT_STATE: return "ct_state";
     case OVS_KEY_ATTR_CT_ZONE: return "ct_zone";
     case OVS_KEY_ATTR_CT_MARK: return "ct_mark";
+    case OVS_KEY_ATTR_CT_LABELS: return "ct_label";
     case OVS_KEY_ATTR_TUNNEL: return "tunnel";
     case OVS_KEY_ATTR_IN_PORT: return "in_port";
     case OVS_KEY_ATTR_ETHERNET: return "eth";
@@ -541,12 +546,15 @@ static const struct nl_policy ovs_conntrack_policy[] = {
     [OVS_CT_ATTR_ZONE] = { .type = NL_A_U16, .optional = true, },
     [OVS_CT_ATTR_MARK] = { .type = NL_A_UNSPEC, .optional = true,
                            .min_len = sizeof(uint32_t) * 2 },
+    [OVS_CT_ATTR_LABELS] = { .type = NL_A_UNSPEC, .optional = true,
+                             .min_len = sizeof(struct ovs_key_ct_labels) * 2 },
 };
 
 static void
 format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
 {
     struct nlattr *a[ARRAY_SIZE(ovs_conntrack_policy)];
+    const ovs_u128 *label;
     const uint32_t *mark;
     uint16_t zone;
     bool commit;
@@ -559,9 +567,10 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     commit = a[OVS_CT_ATTR_COMMIT] ? true : false;
     zone = a[OVS_CT_ATTR_ZONE] ? nl_attr_get_u16(a[OVS_CT_ATTR_ZONE]) : 0;
     mark = a[OVS_CT_ATTR_MARK] ? nl_attr_get(a[OVS_CT_ATTR_MARK]) : NULL;
+    label = a[OVS_CT_ATTR_LABELS] ? nl_attr_get(a[OVS_CT_ATTR_LABELS]): NULL;
 
     ds_put_format(ds, "ct");
-    if (commit || zone || mark) {
+    if (commit || zone || mark || label) {
         ds_put_cstr(ds, "(");
         if (commit) {
             ds_put_format(ds, "commit,");
@@ -572,6 +581,10 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
         if (mark) {
             ds_put_format(ds, "mark=%#"PRIx32"/%#"PRIx32",", *mark,
                           *(mark + 1));
+        }
+        if (label) {
+            ds_put_format(ds, "label=");
+            format_u128(ds, label, label + 1, true);
         }
         ds_chomp(ds, ',');
         ds_put_cstr(ds, ")");
@@ -1020,8 +1033,14 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
             uint32_t value;
             uint32_t mask;
         } ct_mark = { 0, 0 };
+        struct {
+            ovs_u128 value;
+            ovs_u128 mask;
+        } ct_label;
         size_t start;
         char *end;
+
+        memset(&ct_label, 0, sizeof(ct_label));
 
         s += 2;
         if (ovs_scan(s, "(")) {
@@ -1054,6 +1073,17 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
                     }
                     continue;
                 }
+                if (ovs_scan(s, "label=%n", &n)) {
+                    int retval;
+
+                    s += n;
+                    retval = scan_u128(s, &ct_label.value, &ct_label.mask);
+                    if (retval < 0) {
+                        return retval;
+                    }
+                    s += retval;
+                    continue;
+                }
 
                 return -EINVAL;
             }
@@ -1070,6 +1100,10 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
         if (ct_mark.mask) {
             nl_msg_put_unspec(actions, OVS_CT_ATTR_MARK, &ct_mark,
                               sizeof(ct_mark));
+        }
+        if (!ovs_u128_is_zero(&ct_label.mask)) {
+            nl_msg_put_unspec(actions, OVS_CT_ATTR_LABELS, &ct_label,
+                              sizeof ct_label);
         }
         nl_msg_end_nested(actions, start);
     }
@@ -1341,6 +1375,7 @@ static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = 
     [OVS_KEY_ATTR_CT_STATE]  = { .len = 4 },
     [OVS_KEY_ATTR_CT_ZONE]   = { .len = 2 },
     [OVS_KEY_ATTR_CT_MARK]   = { .len = 4 },
+    [OVS_KEY_ATTR_CT_LABELS] = { .len = sizeof(struct ovs_key_ct_labels) },
 };
 
 /* Returns the correct length of the payload for a flow key attribute of the
@@ -2258,6 +2293,13 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         }
         break;
 
+    case OVS_KEY_ATTR_CT_LABELS: {
+        const ovs_u128 *value = nl_attr_get(a);
+        const ovs_u128 *mask = ma ? nl_attr_get(ma) : NULL;
+
+        format_u128(ds, value, mask, verbose);
+        break;
+    }
 
     case OVS_KEY_ATTR_TUNNEL:
         format_odp_tun_attr(a, ma, ds, verbose);
@@ -2464,6 +2506,56 @@ generate_all_wildcard_mask(const struct attr_len_tbl tbl[], int max,
     }
 
     return ofp->base;
+}
+
+static void
+format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
+            bool verbose)
+{
+    if (verbose || (mask && !ovs_u128_is_zero(mask))) {
+        ovs_be128 value;
+
+        hton128(key, &value);
+        ds_put_hex(ds, &value, sizeof value);
+        if (mask && !(ovs_u128_is_ones(mask))) {
+            hton128(mask, &value);
+            ds_put_char(ds, '/');
+            ds_put_hex(ds, &value, sizeof value);
+        }
+    }
+}
+
+static int
+scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
+{
+    char *s = CONST_CAST(char *, s_);
+    ovs_be128 be_value;
+    ovs_be128 be_mask;
+
+    if (!parse_int_string(s, (uint8_t *)&be_value, sizeof be_value, &s)) {
+        ntoh128(&be_value, value);
+
+        if (mask) {
+            int n;
+
+            if (ovs_scan(s, "/%n", &n)) {
+                int error;
+
+                s += n;
+                error = parse_int_string(s, (uint8_t *)&be_mask,
+                                         sizeof be_mask, &s);
+                if (error) {
+                    return error;
+                }
+                ntoh128(&be_mask, mask);
+            } else {
+                *mask = OVS_U128_MAX;
+            }
+        }
+        return s - s_;
+    }
+
+    return 0;
 }
 
 int
@@ -3426,6 +3518,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     SCAN_SINGLE("ct_state(", uint32_t, ct_state, OVS_KEY_ATTR_CT_STATE);
     SCAN_SINGLE("ct_zone(", uint16_t, u16, OVS_KEY_ATTR_CT_ZONE);
     SCAN_SINGLE("ct_mark(", uint32_t, u32, OVS_KEY_ATTR_CT_MARK);
+    SCAN_SINGLE("ct_label(", ovs_u128, u128, OVS_KEY_ATTR_CT_LABELS);
 
     SCAN_BEGIN_NESTED("tunnel(", OVS_KEY_ATTR_TUNNEL) {
         SCAN_FIELD_NESTED("tun_id=", ovs_be64, be64, OVS_TUNNEL_KEY_ATTR_ID);
@@ -3671,6 +3764,10 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
     if (parms->support.ct_mark) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_CT_MARK, data->ct_mark);
     }
+    if (parms->support.ct_label) {
+        nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &data->ct_label,
+                          sizeof(data->ct_label));
+    }
     if (parms->support.recirc) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
@@ -3862,6 +3959,10 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
         if (md->ct_mark) {
             nl_msg_put_u32(buf, OVS_KEY_ATTR_CT_MARK, md->ct_mark);
         }
+        if (!ovs_u128_is_zero(&md->ct_label)) {
+            nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &md->ct_label,
+                              sizeof(md->ct_label));
+        }
     }
 
     /* Add an ingress port attribute if 'odp_in_port' is not the magical
@@ -3923,6 +4024,13 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
             md->ct_mark = nl_attr_get_u32(nla);
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_MARK);
             break;
+        case OVS_KEY_ATTR_CT_LABELS: {
+            const ovs_u128 *cl = nl_attr_get(nla);
+
+            md->ct_label = *cl;
+            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_LABELS);
+            break;
+        }
         case OVS_KEY_ATTR_TUNNEL: {
             enum odp_key_fitness res;
 
@@ -4490,6 +4598,12 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_CT_MARK)) {
         flow->ct_mark = nl_attr_get_u32(attrs[OVS_KEY_ATTR_CT_MARK]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_MARK;
+    }
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_CT_LABELS)) {
+        const ovs_u128 *cl = nl_attr_get(attrs[OVS_KEY_ATTR_CT_LABELS]);
+
+        flow->ct_label = *cl;
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_LABELS;
     }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {

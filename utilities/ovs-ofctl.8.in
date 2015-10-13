@@ -1396,6 +1396,11 @@ Matches the given 32-bit connection mark \fIvalue\fR either exactly or with
 optional \fImask\fR. This represents metadata associated with the connection
 that the current packet is part of. Introduced in Open vSwitch 2.5.
 .
+.IP \fBct_label=\fIvalue\fR[\fB/\fImask\fR]
+Matches the given 128-bit connection labels \fIvalue\fR either exactly or with
+optional \fImask\fR. This represents metadata associated with the connection
+that the current packet is part of. Introduced in Open vSwitch 2.5.
+.
 .PP
 Defining IPv6 flows (those with \fBdl_type\fR equal to 0x86dd) requires
 support for NXM.  The following shorthand notations are available for
@@ -1677,6 +1682,11 @@ ct_mark field:
 Store a 32-bit metadata value with the connection. If the connection is
 committed, then subsequent lookups for packets in this connection will
 populate the \fBct_mark\fR flow field when the packet is sent to the
+connection tracker with the \fBtable\fR specified.
+.IP \fBset_field:\fIvalue\fR->ct_label\fR
+Store a 128-bit metadata value with the connection.  If the connection is
+committed, then subsequent lookups for packets in this connection will
+populate the \fBct_label\fR flow field when the packet is sent to the
 connection tracker with the \fBtable\fR specified.
 .RE
 .IP

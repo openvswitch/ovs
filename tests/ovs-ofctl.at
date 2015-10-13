@@ -124,7 +124,9 @@ for test_case in \
     'icmp6,icmpv6_code=2                         NXM,OXM' \
     'ct_state=+trk                               NXM,OXM' \
     'ct_zone=0                                   NXM,OXM' \
-    'ct_mark=0                                   NXM,OXM'
+    'ct_mark=0                                   NXM,OXM' \
+    'ct_label=0                                  NXM,OXM' \
+    'ct_label=0x1234567890ABCDEF12345678         NXM,OXM'
 do
     set $test_case
     echo
@@ -353,6 +355,10 @@ actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
+ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
+ip,actions=ct(commit,exec(load(0x1234567890ABCDEF->NXM_NX_CT_LABEL[32..95])))
+ip,actions=ct(commit,exec(set_field(0x1->ct_label)))
+ip,ct_state=+trk,ct_label=0x1234567890abcdef12345678,actions=ct(commit)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -391,6 +397,10 @@ NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1234567890abcdef->NXM_NX_CT_LABEL[32..95]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD table:255 ct_state=+trk,ct_label=0x1234567890abcdef12345678,ip actions=ct(commit)
 ]])
 AT_CLEANUP
 
@@ -427,6 +437,7 @@ dl_dst=aa:bb:cc:dd:ee:ff/00:00:00:00:00:00,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[[]])))
+ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[[]])))
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
@@ -462,6 +473,7 @@ NXT_FLOW_MOD: ADD actions=drop
 NXT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[[]]))
+NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[[0..63]],load:0->NXM_NX_CT_LABEL[[64..127]]))
 ])
 AT_CLEANUP
 
@@ -497,6 +509,8 @@ vlan_tci=0x1123/0x1fff,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
+ip,actions=ct(commit,exec(load(1->NXM_NX_CT_LABEL[])))
+ip,actions=ct(commit,exec(set_field(1->ct_label)))
 ]])
 AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout], [stderr])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
@@ -531,6 +545,8 @@ NXT_FLOW_MOD: ADD NXM_OF_VLAN_TCI_W(1123/1fff) actions=drop
 NXT_FLOW_MOD: ADD <any> actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 ]])
 AT_CLEANUP
 
@@ -815,6 +831,8 @@ NXM_OF_ETH_TYPE(0800) NXM_NX_CT_STATE_W(00000080/000000F0)
 NXM_OF_ETH_TYPE(0800) NXM_NX_CT_ZONE(5a5a)
 NXM_OF_ETH_TYPE(0800) NXM_NX_CT_MARK(5a5a5a5a)
 NXM_OF_ETH_TYPE(0800) NXM_NX_CT_MARK_W(5a5a5a5a/fefefefe)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_LABEL(1234567890abcdef1234567890abcdef)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_LABEL_W(10203040506070809000a0b0c0d0e0f0/f1f2f3f4f5f6f7f8f9f0fafbfcfdfeff)
 
 # dp_hash (testing experimenter OXM).
 NXM_NX_DP_HASH(01234567)
@@ -1118,6 +1136,8 @@ NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000080/000000f0)
 NXM_OF_ETH_TYPE(0800), NXM_NX_CT_ZONE(5a5a)
 NXM_OF_ETH_TYPE(0800), NXM_NX_CT_MARK(5a5a5a5a)
 NXM_OF_ETH_TYPE(0800), NXM_NX_CT_MARK_W(5a5a5a5a/fefefefe)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_LABEL(1234567890abcdef1234567890abcdef)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_LABEL_W(10203040506070809000a0b0c0d0e0f0/f1f2f3f4f5f6f7f8f9f0fafbfcfdfeff)
 
 # dp_hash (testing experimenter OXM).
 NXM_NX_DP_HASH(01234567)

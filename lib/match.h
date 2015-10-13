@@ -88,6 +88,8 @@ void match_set_ct_state_masked(struct match *, uint32_t ct_state, uint32_t mask)
 void match_set_ct_zone(struct match *, uint16_t ct_zone);
 void match_set_ct_mark(struct match *, uint32_t ct_mark);
 void match_set_ct_mark_masked(struct match *, uint32_t ct_mark, uint32_t mask);
+void match_set_ct_label(struct match *, ovs_u128 ct_label);
+void match_set_ct_label_masked(struct match *, ovs_u128 ct_label, ovs_u128 mask);
 void match_set_skb_priority(struct match *, uint32_t skb_priority);
 void match_set_dl_type(struct match *, ovs_be16);
 void match_set_dl_src(struct match *, const struct eth_addr );

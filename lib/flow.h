@@ -106,6 +106,7 @@ struct flow {
     uint16_t ct_zone;           /* Connection tracking zone. */
     uint32_t ct_mark;           /* Connection mark.*/
     uint8_t pad1[4];            /* Pad to 64 bits. */
+    ovs_u128 ct_label;          /* Connection label. */
     uint32_t conj_id;           /* Conjunction ID. */
     ofp_port_t actset_output;   /* Output port in action set. */
     uint8_t pad2[2];            /* Pad to 64 bits. */
@@ -157,7 +158,7 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 200
+                  == sizeof(struct flow_tnl) + 216
                   && FLOW_WC_SEQ == 34);
 
 /* Incremental points at which flow classification may be performed in
@@ -787,6 +788,15 @@ miniflow_get__(const struct miniflow *mf, size_t idx)
      [FLOW_U64_OFFREM(FIELD) / sizeof(TYPE)]                            \
      : 0)
 
+/* Get a pointer to the ovs_u128 value of struct flow 'FIELD' from miniflow
+ * 'FLOW'. */
+#define MINIFLOW_GET_U128_PTR(FLOW, FIELD)                              \
+    ((MINIFLOW_IN_MAP(FLOW, FLOW_U64_OFFSET(FIELD))                     \
+      && (MINIFLOW_IN_MAP(FLOW, FLOW_U64_OFFSET(FIELD) + 1)))           \
+     ? &((OVS_FORCE const ovs_u128 *)miniflow_get__(FLOW, FLOW_U64_OFFSET(FIELD))) \
+     [FLOW_U64_OFFREM(FIELD) / sizeof(ovs_u128)]                        \
+     : NULL)
+
 #define MINIFLOW_GET_U8(FLOW, FIELD)            \
     MINIFLOW_GET_TYPE(FLOW, uint8_t, FIELD)
 #define MINIFLOW_GET_U16(FLOW, FIELD)           \
@@ -988,6 +998,7 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_state = flow->ct_state;
     md->ct_zone = flow->ct_zone;
     md->ct_mark = flow->ct_mark;
+    md->ct_label = flow->ct_label;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

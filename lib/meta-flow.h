@@ -787,6 +787,25 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_CT_MARK,
 
+    /* "ct_label".
+     *
+     * Connection tracking label.  The label is carried with the
+     * connection tracking state.  On Linux this is held in the
+     * conntrack label extension but the exact implementation is
+     * platform-dependent.
+     *
+     * Writable only from nested actions within the NXAST_CT action.
+     *
+     * Type: be128.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_CT_LABEL(108) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_LABEL,
+
 #if FLOW_N_REGS == 8
     /* "reg<N>".
      *

@@ -6258,7 +6258,7 @@ unsupported_nesting(enum ofpact_type action, enum ofpact_type outer_action)
 static bool
 field_requires_ct(enum mf_field_id field)
 {
-    return field == MFF_CT_MARK;
+    return field == MFF_CT_MARK || field == MFF_CT_LABEL;
 }
 
 /* Apply nesting constraints for actions */

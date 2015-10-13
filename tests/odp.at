@@ -71,7 +71,7 @@ s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with conntrack fields.'
- sed 's/^/skb_priority(0),skb_mark(0),ct_mark(0x12345678),recirc_id(0),dp_hash(0),/' odp-base.txt
+ sed 's/^/skb_priority(0),skb_mark(0),ct_mark(0x12345678),ct_label(0x1234567890abcdef1234567890abcdef),recirc_id(0),dp_hash(0),/' odp-base.txt
 
  echo
  echo '# Valid forms with IP first fragment.'
@@ -93,7 +93,7 @@ s/^/ODP_FIT_TOO_LITTLE: /
 dnl Some fields are always printed for this test, because wildcards aren't
 dnl specified. We can skip these.
 sed -i 's/\(skb_mark(0)\),\(ct\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
-sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),\2/' odp-out.txt
+sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),\2/' odp-out.txt
 
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
@@ -163,7 +163,7 @@ s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with conntrack fields.'
- sed 's/\(eth([[^)]]*)\),/\1,ct_state(+trk),ct_zone(0x5\/0xff),ct_mark(0x10305070\/0xf0f0f0f0),/' odp-base.txt
+ sed 's/\(eth([[^)]]*)\),/\1,ct_state(+trk),ct_zone(0x5\/0xff),ct_mark(0x10305070\/0xf0f0f0f0),ct_label(0x1234567890abcdef1234567890abcdef\/0x102030405060708090a0b0c0d0e0f0),/' odp-base.txt
 
  echo
  echo '# Valid forms with IP first fragment.'
@@ -310,6 +310,7 @@ ct
 ct(commit)
 ct(commit,zone=5)
 ct(commit,mark=0xa0a0a0a0/0xfefefefe)
+ct(commit,label=0x1234567890abcdef1234567890abcdef/0xf1f2f3f4f5f6f7f8f9f0fafbfcfdfeff)
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`
