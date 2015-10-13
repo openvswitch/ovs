@@ -1480,7 +1480,10 @@ expr_annotate__(struct expr *expr, const struct shash *symtab,
  *     - Expands references to predicate symbols, by replacing them by the
  *       expressions that they expand to.
  *
- * In each case, annotation occurs recursively as necessary. */
+ * In each case, annotation occurs recursively as necessary.
+ *
+ * On failure, returns NULL and sets '*errorp' to an explanatory error
+ * message, which the caller must free. */
 struct expr *
 expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 {
