@@ -121,7 +121,7 @@ as destination ip.
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a chassis that
 exists is an error.  With \fB\-\-may\-exist\fR, this command does
-nothing if \fIchassis\fR already exists as a real bridge.
+nothing if \fIchassis\fR already exists.
 .
 .IP "[\fB\-\-if\-exists\fR] \fBchassis\-del \fIchassis\fR"
 Deletes \fIchassis\fR and its \fIencaps\fR and \fIgateway_ports\fR.
@@ -164,9 +164,6 @@ Alias for \fBlflow\-list\fB.
 Successful program execution.
 .IP "1"
 Usage, syntax, or configuration file error.
-.IP "2"
-The \fIbridge\fR argument to \fBbr\-exists\fR specified the name of a
-bridge that does not exist.
 .SH "SEE ALSO"
 .
 .BR ovn\-sb (5).
