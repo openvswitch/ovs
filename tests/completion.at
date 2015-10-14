@@ -341,7 +341,8 @@ echo "$@" | tr ' ' '\n' | sed -e '/^$/d' | sed -e 's/$/ /g' | sort -u
 ])
 
 AT_SETUP([vsctl-bashcomp - basic verification])
-AT_SKIP_IF([test -z ${BASH_VERSION+x} || test ${BASH_VERSINFO[[0]]} -lt 4])
+AT_SKIP_IF([test -z ${BASH_VERSION+x}])
+AT_SKIP_IF([eval 'test ${BASH_VERSINFO[[0]]} -lt 4'])
 OVS_VSWITCHD_START
 
 # complete ovs-vsctl --db=* [TAB]
@@ -422,7 +423,8 @@ AT_CLEANUP
 
 
 AT_SETUP([vsctl-bashcomp - argument completion])
-AT_SKIP_IF([test -z ${BASH_VERSION+x} || test ${BASH_VERSINFO[[0]]} -lt 4])
+AT_SKIP_IF([test -z ${BASH_VERSION+x}])
+AT_SKIP_IF([eval 'test ${BASH_VERSINFO[[0]]} -lt 4'])
 OVS_VSWITCHD_START(
    [add-br br1 -- \
        set bridge br1 datapath-type=dummy -- \
@@ -748,7 +750,8 @@ AT_CLEANUP
 
 
 AT_SETUP([vsctl-bashcomp - negative test])
-AT_SKIP_IF([test -z ${BASH_VERSION+x} || test ${BASH_VERSINFO[[0]]} -lt 4])
+AT_SKIP_IF([test -z ${BASH_VERSION+x}])
+AT_SKIP_IF([eval 'test ${BASH_VERSINFO[[0]]} -lt 4'])
 OVS_VSWITCHD_START
 
 # complete non-matching command.
