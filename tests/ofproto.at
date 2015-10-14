@@ -3650,8 +3650,8 @@ set_and_check_poorly_specified_ofports () {
 	AT_CHECK([test "$p1" = "$1" || test "$p2" = "$1"])
 	# The other port number must be different (already tested above).
     else
-        AT_CHECK([test "$1" = '[[]]' || test "$p1" == "$1"])
-        AT_CHECK([test "$2" = '[[]]' || test "$p2" == "$2"])
+        AT_CHECK([test "$1" = '[[]]' || test "$p1" = "$1"])
+        AT_CHECK([test "$2" = '[[]]' || test "$p2" = "$2"])
     fi
 }
 for pre in      '1 2' '[[]] 2' '1 [[]]' '[[]] [[]]' '2 1' '[[]] 1' '2 [[]]' \
