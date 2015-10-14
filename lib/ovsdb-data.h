@@ -161,6 +161,11 @@ struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
                                           const struct json *,
                                           struct ovsdb_symbol_table *)
     OVS_WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_transient_datum_from_json(
+                                          struct ovsdb_datum *,
+                                          const struct ovsdb_type *,
+                                          const struct json *)
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
 

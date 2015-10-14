@@ -1268,6 +1268,25 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
     return error;
 }
 
+/* Parses 'json' as a datum of the type described by 'type' for internal
+ * use. This function is similar to 'ovsdb_datum_from_json', except the
+ * member size of set or map is not checked.
+ *
+ * The datum generated should be used then discard. It is not suitable
+ * for storing into IDL because of the possible member size violation.  */
+struct ovsdb_error *
+ovsdb_transient_datum_from_json(struct ovsdb_datum *datum,
+                                const struct ovsdb_type *type,
+                                const struct json *json)
+{
+    struct ovsdb_type relaxed_type = *type;
+
+    relaxed_type.n_min = 0;
+    relaxed_type.n_max = UINT_MAX;
+
+    return ovsdb_datum_from_json(datum, &relaxed_type, json, NULL);
+}
+
 /* Converts 'datum', of the specified 'type', to JSON format, and returns the
  * JSON.  The caller is responsible for freeing the returned JSON.
  *
