@@ -152,6 +152,20 @@
         </p>
       </column>
 
+      <column name="other_config" key="max-idle"
+              type='{"type": "integer", "minInteger": 500}'>
+        <p>
+          The maximum time (in ms) that idle flows will remain cached in the
+          datapath. Internally OVS will check the validity and activity for
+          datapath flows regularly and may expire flows quicker than this
+          number, based on real time network conditions. Tweaking this
+          value is discouraged unless you know exactly what you're doing.
+        </p>
+        <p>
+          The default is 10000.
+        </p>
+      </column>
+
       <column name="other_config" key="n-dpdk-rxqs"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
