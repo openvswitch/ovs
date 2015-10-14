@@ -18,7 +18,7 @@ s/recirc_id=0x[0-9a-f]*,/recirc_id=0x0,/
 }
 
 # Filter (multiline) vconn debug messages from ovs-vswitchd.log.
-# Use with vconn_windows_sub() and ofctl_strip()
+# Use with vconn_sub() and ofctl_strip()
 print_vconn_debug () { awk -F\| < ovs-vswitchd.log '
 BEGIN { prt=0 }
 /\|vconn\|DBG\|/ { sub(/[ \t]*$/, ""); print $3 "|" $4 "|" $5; prt=1; next }
@@ -27,7 +27,7 @@ prt==1 { sub(/[ \t]*$/, ""); print $0 }
 '
 }
 
-vconn_windows_sub() {
+vconn_sub() {
     sed '
 s/tcp:127.0.0.1:[0-9][0-9]*:/unix:/
 s/No error/Success/
