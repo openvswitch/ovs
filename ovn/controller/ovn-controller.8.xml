@@ -110,8 +110,9 @@
 
       <dt><code>external_ids:ovn-encap-ip</code></dt>
       <dd>
-        The IP address that a chassis should use to connect to this node using
-        encapsulation type specified by <code>external_ids:ovn-encap-ip</code>.
+        The IP address that a chassis should use to connect to this node
+        using encapsulation type specified by
+        <code>external_ids:ovn-encap-type</code>.
       </dd>
 
       <dt><code>external_ids:ovn-bridge-mappings</code></dt>
