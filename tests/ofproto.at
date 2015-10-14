@@ -2438,8 +2438,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
     fi
     AT_FAIL_IF([test X"$1" != X])
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "OFPT_BARRIER_REPLY (OF1.2):"
+    sleep 1
 
     AT_CHECK(
       [[sed '
