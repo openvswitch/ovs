@@ -1753,7 +1753,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     if (error) {
         return error;
     }
-    if (!memcmp(&sdl->sdl_data[sdl->sdl_nlen], mac, hwaddr_len)) {
+    if (!memcmp(&sdl->sdl_data[sdl->sdl_nlen], &mac, hwaddr_len)) {
         return 0;
     }
     oldaddr = req.addr;
@@ -1765,7 +1765,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     sdl->sdl_len = offsetof(struct sockaddr_dl, sdl_data) + hwaddr_len;
     sdl->sdl_alen = hwaddr_len;
     sdl->sdl_family = hwaddr_family;
-    memcpy(sdl->sdl_data, mac, hwaddr_len);
+    memcpy(sdl->sdl_data, &mac, hwaddr_len);
     error = af_link_ioctl(SIOCALIFADDR, &req);
     if (error) {
         return error;
