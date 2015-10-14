@@ -500,6 +500,10 @@ struct {                                \
     uint8_t recirc_table;               \
 }
 
+#if !defined(IPPORT_FTP)
+#define	IPPORT_FTP  21
+#endif
+
 /* OFPACT_CT.
  *
  * Used for NXAST_CT. */
