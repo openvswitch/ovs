@@ -113,6 +113,7 @@ AT_SETUP([ovn-controller-vtep - test chassis])
 OVN_CONTROLLER_VTEP_START
 
 # verifies the initial ovn-sb db configuration.
+OVS_WAIT_UNTIL([test -n "`ovn-sbctl show | grep Chassis`"])
 AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis br-vtep
     Encap vxlan
