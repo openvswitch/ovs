@@ -308,9 +308,9 @@ General commands:\n\
 \n\
 Chassis commands:\n\
   chassis-add CHASSIS ENCAP-TYPE ENCAP-IP  create a new chassis named\n\
-                                           CHASSIS with one encapsulation\n\
-                                           entry of ENCAP-TYPE and ENCAP-IP\n\
-  chassis-del CHASSIS         delete CHASSIS and all of its encaps,\n\
+                                           CHASSIS with ENCAP-TYPE tunnels\n\
+                                           and ENCAP-IP\n\
+  chassis-del CHASSIS         delete CHASSIS and all of its encaps\n\
                               and gateway_ports\n\
 \n\
 Port binding commands:\n\
@@ -526,13 +526,11 @@ static void
 cmd_chassis_add(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
-    struct sbrec_chassis *ch;
-    struct sbrec_encap *encap;
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
-    const char *ch_name, *encap_type, *encap_ip;
+    const char *ch_name, *encap_types, *encap_ip;
 
     ch_name = ctx->argv[1];
-    encap_type = ctx->argv[2];
+    encap_types = ctx->argv[2];
     encap_ip = ctx->argv[3];
 
     sbctl_context_populate_cache(ctx);
@@ -546,12 +544,34 @@ cmd_chassis_add(struct ctl_context *ctx)
     }
     check_conflicts(sbctl_ctx, ch_name,
                     xasprintf("cannot create a chassis named %s", ch_name));
-    ch = sbrec_chassis_insert(ctx->txn);
+
+    char *tokstr = xstrdup(encap_types);
+    char *token, *save_ptr = NULL;
+    struct sset encap_set = SSET_INITIALIZER(&encap_set);
+    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
+         token = strtok_r(NULL, ",", &save_ptr)) {
+        sset_add(&encap_set, token);
+    }
+    free(tokstr);
+
+    size_t n_encaps = sset_count(&encap_set);
+    struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
+    const char *encap_type;
+    int i = 0;
+    SSET_FOR_EACH (encap_type, &encap_set){
+        encaps[i] = sbrec_encap_insert(ctx->txn);
+
+        sbrec_encap_set_type(encaps[i], encap_type);
+        sbrec_encap_set_ip(encaps[i], encap_ip);
+        i++;
+    }
+    sset_destroy(&encap_set);
+
+    struct sbrec_chassis *ch = sbrec_chassis_insert(ctx->txn);
     sbrec_chassis_set_name(ch, ch_name);
-    encap = sbrec_encap_insert(ctx->txn);
-    sbrec_encap_set_type(encap, encap_type);
-    sbrec_encap_set_ip(encap, encap_ip);
-    sbrec_chassis_set_encaps(ch, &encap, 1);
+    sbrec_chassis_set_encaps(ch, encaps, n_encaps);
+    free(encaps);
+
     sbctl_context_invalidate_cache(ctx);
 }
 

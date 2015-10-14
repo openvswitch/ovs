@@ -114,10 +114,11 @@ Prints a brief overview of the database contents.
 .SS "Chassis Commands"
 These commands manipulate \fBOVN_Southbound\fR chassis.
 .
-.IP "[\fB\-\-may\-exist\fR] \fBchassis\-add \fIchassis\fR \fIencap-type\fR \fIencap-ip\fR"
-Creates a new chassis named \fIchassis\fR.  The chassis will have
-one encap entry with \fIencap-type\fR as tunnel type and \fIencap-ip\fR
-as destination ip.
+.IP "[\fB\-\-may\-exist\fR] \fBchassis\-add \fIchassis\fR \fIencap\-type\fR \fIencap-ip\fR"
+Creates a new chassis named \fIchassis\fR.  \fIencap\-type\fR is a
+comma-separated list of tunnel types.  The chassis will have
+one encap entry for each specified tunnel type with \fIencap-ip\fR
+as the destination IP for each.
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a chassis that
 exists is an error.  With \fB\-\-may\-exist\fR, this command does
