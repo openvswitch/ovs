@@ -723,23 +723,21 @@ gid_matches(gid_t expected, gid_t value)
 }
 
 static bool
-gid_verify(gid_t real, gid_t effective, gid_t saved)
+gid_verify(gid_t gid)
 {
-    gid_t r, e, s;
+    gid_t r, e;
 
-    return (getresgid(&r, &e, &s) == 0 &&
-            gid_matches(real, r) &&
-            gid_matches(effective, e) &&
-            gid_matches(saved, s));
+    r = getgid();
+    e = getegid();
+    return (gid_matches(gid, r) &&
+            gid_matches(gid, e));
 }
 
 static void
-daemon_switch_group(gid_t real, gid_t effective,
-                    gid_t saved)
+daemon_switch_group(gid_t gid)
 {
-    if ((setresgid(real, effective, saved) == -1) ||
-        !gid_verify(real, effective, saved)) {
-        VLOG_FATAL("%s: failed to switch group to gid as %d, aborting",
+    if ((setgid(gid) == -1) || !gid_verify(gid)) {
+        VLOG_FATAL("%s: fail to switch group to gid as %d, aborting",
                    pidfile, gid);
     }
 }
@@ -751,22 +749,20 @@ uid_matches(uid_t expected, uid_t value)
 }
 
 static bool
-uid_verify(const uid_t real, const uid_t effective, const uid_t saved)
+uid_verify(const uid_t uid)
 {
-    uid_t r, e, s;
+    uid_t r, e;
 
-    return (getresuid(&r, &e, &s) == 0 &&
-            uid_matches(real, r) &&
-            uid_matches(effective, e) &&
-            uid_matches(saved, s));
+    r = getuid();
+    e = geteuid();
+    return (uid_matches(uid, r) &&
+            uid_matches(uid, e));
 }
 
 static void
-daemon_switch_user(const uid_t real, const uid_t effective, const uid_t saved,
-                   const char *user)
+daemon_switch_user(const uid_t uid, const char *user)
 {
-    if ((setresuid(real, effective, saved) == -1) ||
-        !uid_verify(real, effective, saved)) {
+    if ((setuid(uid) == -1) || !uid_verify(uid)) {
         VLOG_FATAL("%s: fail to switch user to %s, aborting",
                    pidfile, user);
     }
@@ -788,12 +784,12 @@ daemon_become_new_user_unix(void)
      * that calling getuid() after each setuid() call to verify they
      * are actually set, because checking return code alone is not
      * sufficient.  */
-    daemon_switch_group(gid, gid, gid);
+    daemon_switch_group(gid);
     if (user && initgroups(user, gid) == -1) {
         VLOG_FATAL("%s: fail to add supplementary group gid %d, "
                    "aborting", pidfile, gid);
     }
-    daemon_switch_user(uid, uid, uid, user);
+    daemon_switch_user(uid, user);
 }
 
 /* Linux specific implementation of daemon_become_new_user()
