@@ -34,4 +34,15 @@ struct controller_ctx {
 const struct sbrec_chassis *get_chassis(struct ovsdb_idl *,
                                         const char *chassis_id);
 
+/* Must be a bit-field ordered from most-preferred (higher number) to
+ * least-preferred (lower number). */
+enum chassis_tunnel_type {
+    GENEVE = 1 << 2,
+    STT    = 1 << 1,
+    VXLAN  = 1 << 0
+};
+
+uint32_t get_tunnel_type(const char *name);
+
+
 #endif /* ovn/ovn-controller.h */

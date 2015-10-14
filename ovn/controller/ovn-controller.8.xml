@@ -104,7 +104,13 @@
       <dd>
         <p>
           The encapsulation type that a chassis should use to connect to
-          this node.  Supported tunnel types for connecting hypervisors
+          this node.  Multiple encapsulation types may be specified with
+          a comma-separated list.  Each listed encapsulation type will
+          be paired with <code>ovn-encap-ip</code>.
+        </p>
+
+        <p>
+          Supported tunnel types for connecting hypervisors
           are <code>geneve</code> and <code>stt</code>.  Gateways may
           use <code>geneve</code>, <code>vxlan</code>, or
           <code>stt</code>.
@@ -120,7 +126,7 @@
       <dt><code>external_ids:ovn-encap-ip</code></dt>
       <dd>
         The IP address that a chassis should use to connect to this node
-        using encapsulation type specified by
+        using encapsulation types specified by
         <code>external_ids:ovn-encap-type</code>.
       </dd>
 

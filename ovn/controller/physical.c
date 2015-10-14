@@ -54,7 +54,7 @@ struct chassis_tunnel {
     struct hmap_node hmap_node;
     const char *chassis_id;
     ofp_port_t ofport;
-    enum chassis_tunnel_type { GENEVE, STT, VXLAN } type;
+    enum chassis_tunnel_type type;
 };
 
 static struct chassis_tunnel *

@@ -210,20 +210,18 @@ bridge_delete_port(const struct ovsrec_bridge *br,
 static struct sbrec_encap *
 preferred_encap(const struct sbrec_chassis *chassis_rec)
 {
-    size_t i;
+    struct sbrec_encap *best_encap = NULL;
+    uint32_t best_type = 0;
 
-    /* For hypervisors, we only support Geneve and STT encapsulations.
-     * Sets are returned alphabetically, so "geneve" will be preferred
-     * over "stt".  For gateways, we only support VXLAN encapsulation. */
-    for (i = 0; i < chassis_rec->n_encaps; i++) {
-        if (!strcmp(chassis_rec->encaps[i]->type, "geneve")
-                || !strcmp(chassis_rec->encaps[i]->type, "stt")
-                || !strcmp(chassis_rec->encaps[i]->type, "vxlan")) {
-            return chassis_rec->encaps[i];
+    for (int i = 0; i < chassis_rec->n_encaps; i++) {
+        uint32_t tun_type = get_tunnel_type(chassis_rec->encaps[i]->type);
+        if (tun_type > best_type) {
+            best_type = tun_type;
+            best_encap = chassis_rec->encaps[i];
         }
     }
 
-    return NULL;
+    return best_encap;
 }
 
 void

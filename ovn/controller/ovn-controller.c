@@ -73,6 +73,20 @@ get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
     return chassis_rec;
 }
 
+uint32_t
+get_tunnel_type(const char *name)
+{
+    if (!strcmp(name, "geneve")) {
+        return GENEVE;
+    } else if (!strcmp(name, "stt")) {
+        return STT;
+    } else if (!strcmp(name, "vxlan")) {
+        return VXLAN;
+    }
+
+    return 0;
+}
+
 static const struct ovsrec_bridge *
 get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
 {
