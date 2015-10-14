@@ -1635,8 +1635,6 @@ wait(struct ofproto *ofproto_)
     mcast_snooping_wait(ofproto->ms);
     stp_wait(ofproto);
     if (ofproto->backer->need_revalidate) {
-        /* Shouldn't happen, but if it does just go around again. */
-        VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
         poll_immediate_wake();
     }
 
