@@ -3786,7 +3786,14 @@ dpif_dummy_register__(const char *type)
 static void
 dpif_dummy_override(const char *type)
 {
-    if (!dp_unregister_provider(type)) {
+    int error;
+
+    /*
+     * Ignore EAFNOSUPPORT to allow --enable-dummy=system with
+     * a userland-only build.  It's useful for testsuite.
+     */
+    error = dp_unregister_provider(type);
+    if (error == 0 || error == EAFNOSUPPORT) {
         dpif_dummy_register__(type);
     }
 }
