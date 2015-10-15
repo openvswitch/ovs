@@ -420,21 +420,44 @@ dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
 AT_SETUP([ofproto - insert buckets])
 OVS_VSWITCHD_START
+# Add group with no buckets.
 AT_DATA([groups.txt], [dnl
-group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+group_id=1234,type=all
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all
+])
+
+# Add two buckets, using "last".
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
+
+# Start over again, then add two buckets using "first".
+AT_CHECK([ovs-ofctl -O OpenFlow15 --strict del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 group_id=1234,type=all])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+])
+
+# Add two more buckets before the existing ones.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
+
+# Add another bucket at the end.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
@@ -449,12 +472,17 @@ OFPT_ERROR (OF1.5): OFPGMFC_BUCKET_EXISTS
 OFPT_GROUP_MOD (OF1.5):
 ])
 
+
+# Add another bucket just before bucket 15.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
+
+# Add two more buckets just before bucket 11,
+# getting the command from a file.
 AT_DATA([buckets.txt], [dnl
 group_id=1234,command_bucket_id=11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13
 ])
@@ -464,6 +492,8 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
+
+# Add yet two more buckets.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
