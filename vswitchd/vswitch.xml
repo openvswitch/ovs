@@ -145,7 +145,8 @@
           The maximum
           number of flows allowed in the datapath flow table.  Internally OVS
           will choose a flow limit which will likely be lower than this number,
-          based on real time network conditions.
+          based on real time network conditions. Tweaking this value is
+          discouraged unless you know exactly what you're doing.
         </p>
         <p>
           The default is 200000.
