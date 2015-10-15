@@ -2044,7 +2044,7 @@ ff ff 00 3b 00 00 15 40 00 00 00 01 00 00 00 00 \
 14 01 ff 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5) (xid=0x2):
- group_id=8192,type=select,selection_method=hash,fields=ip_dst=255.255.255.0,nw_proto,tcp_src,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+ group_id=8192,type=select,selection_method=hash,fields(ip_dst=255.255.255.0,nw_proto,tcp_src),bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 
