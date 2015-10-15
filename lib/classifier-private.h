@@ -75,7 +75,7 @@ struct cls_match {
     /* Rule versioning.
      *
      * CLS_NOT_REMOVED_VERSION has a special meaning for 'remove_version',
-     * meaningthat the rule has been added but not yet removed.
+     * meaning that the rule has been added but not yet removed.
      */
     const cls_version_t add_version;        /* Version rule was added in. */
     ATOMIC(cls_version_t) remove_version;   /* Version rule is removed in. */
