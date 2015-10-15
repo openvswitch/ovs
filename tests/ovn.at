@@ -521,7 +521,7 @@ for i in 1 2 3; do
     for j in 1 2 3; do
         ovs-vsctl add-port br-int vif$i$j -- set Interface vif$i$j external-ids:iface-id=lp$i$j options:tx_pcap=hv$i/vif$i$j-tx.pcap options:rxq_pcap=hv$i/vif$i$j-rx.pcap ofport-request=$i$j
         ovn-nbctl lport-add lsw0 lp$i$j
-	if test $j = 1; then
+        if test $j = 1; then
             ovn-nbctl lport-set-macs lp$i$j f0:00:00:00:00:$i$j unknown
         else
             ovn-nbctl lport-set-macs lp$i$j f0:00:00:00:00:$i$j
@@ -594,9 +594,9 @@ for is in 1 2 3; do
     for js in 1 2 3; do
         s=$is$js
         bcast=
-	unknown=
-	bacl2=
-	bacl3=
+        unknown=
+        bacl2=
+        bacl3=
         for id in 1 2 3; do
             for jd in 1 2 3; do
                 d=$id$jd
@@ -605,14 +605,14 @@ for is in 1 2 3; do
                 test_packet $s f000000000$d f000000000$s $s$d $unicast     #1
 
                 if test $d != $s && test $js = 1; then
-		    impersonate=$d
-		else
-		    impersonate=
-		fi
+                    impersonate=$d
+                else
+                    impersonate=
+                fi
                 test_packet $s f000000000$d f00000000055 55$d $impersonate #3
 
-		if test $d != $s && test $s != 11; then acl2=$d; else acl2=; fi
-		if test $d != $s && test $d != 33; then acl3=$d; else acl3=; fi
+                if test $d != $s && test $s != 11; then acl2=$d; else acl2=; fi
+                if test $d != $s && test $d != 33; then acl3=$d; else acl3=; fi
                 test_packet $s f000000000$d f000000000$s 1234        #7, acl1
                 test_packet $s f000000000$d f000000000$s 1235 $acl2  #7, acl2
                 test_packet $s f000000000$d f000000000$s 1236 $acl3  #7, acl3
@@ -620,23 +620,23 @@ for is in 1 2 3; do
                 test_packet $s f000000000$d f00000000055 810000091234      #4
                 test_packet $s f000000000$d 0100000000$s $s$d              #5
 
-		if test $d != $s && test $jd = 1; then
-		    unknown="$unknown $d"
-		fi
+                if test $d != $s && test $jd = 1; then
+                    unknown="$unknown $d"
+                fi
                 bcast="$bcast $unicast"
                 bacl2="$bacl2 $acl2"
                 bacl3="$bacl3 $acl3"
             done
         done
 
-	# Broadcast and multicast.
+        # Broadcast and multicast.
         test_packet $s ffffffffffff f000000000$s ${s}ff $bcast             #2
         test_packet $s 010000000000 f000000000$s ${s}ff $bcast             #2
-	if test $js = 1; then
+        if test $js = 1; then
             bcast_impersonate=$bcast
         else
-	    bcast_impersonate=
-	fi
+            bcast_impersonate=
+        fi
         test_packet $s 010000000000 f00000000044 44ff $bcast_impersonate   #3
 
         test_packet $s f0000000ffff f000000000$s ${s}66 $unknown           #6
