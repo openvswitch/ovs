@@ -2352,22 +2352,20 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
     }
 
     if (props->selection_method[0]) {
-        size_t mark, start;
-
-        ds_put_format(s, ",selection_method=%s,", props->selection_method);
+        ds_put_format(s, ",selection_method=%s", props->selection_method);
         if (props->selection_method_param) {
-            ds_put_format(s, "selection_method_param=%"PRIu64",",
+            ds_put_format(s, ",selection_method_param=%"PRIu64,
                           props->selection_method_param);
         }
 
-        /* Allow rewinding to immediately before the trailing ',' */
-        mark = s->length - 1;
-
-        ds_put_cstr(s, "fields=");
-        start = s->length;
-        oxm_format_field_array(s, &props->fields);
-        if (s->length == start) {
-            ds_truncate(s, mark);
+        size_t n = bitmap_count1(props->fields.used.bm, MFF_N_IDS);
+        if (n == 1) {
+            ds_put_cstr(s, ",fields=");
+            oxm_format_field_array(s, &props->fields);
+        } else if (n > 1) {
+            ds_put_cstr(s, ",fields(");
+            oxm_format_field_array(s, &props->fields);
+            ds_put_char(s, ')');
         }
     }
 

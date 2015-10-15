@@ -1228,24 +1228,20 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_select_group_field(char *s, struct field_array *fa,
                          enum ofputil_protocol *usable_protocols)
 {
-    char *save_ptr = NULL;
-    char *name;
+    char *name, *value_str;
 
-    for (name = strtok_r(s, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+    while (ofputil_parse_key_value(&s, &name, &value_str)) {
         const struct mf_field *mf = mf_from_name(name);
 
         if (mf) {
             char *error;
-            const char *value_str;
             union mf_value value;
 
             if (bitmap_is_set(fa->used.bm, mf->id)) {
                 return xasprintf("%s: duplicate field", name);
             }
 
-            value_str = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (value_str) {
+            if (*value_str) {
                 error = mf_parse_value(mf, value_str, &value);
                 if (error) {
                     return error;
@@ -1297,10 +1293,8 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         F_COMMAND_BUCKET_ID     = 1 << 2,
         F_COMMAND_BUCKET_ID_ALL = 1 << 3,
     } fields;
-    char *save_ptr = NULL;
     bool had_type = false;
     bool had_command_bucket_id = false;
-    char *name;
     struct ofputil_bucket *bucket;
     char *error = NULL;
 
@@ -1358,16 +1352,9 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     }
 
     /* Parse everything before the buckets. */
-    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
-        char *value;
-
-        value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-        if (!value) {
-            error = xasprintf("field %s missing value", name);
-            goto out;
-        }
-
+    char *pos = string;
+    char *name, *value;
+    while (ofputil_parse_key_value(&pos, &name, &value)) {
         if (!strcmp(name, "command_bucket_id")) {
             if (!(fields & F_COMMAND_BUCKET_ID)) {
                 error = xstrdup("command bucket id is not needed");

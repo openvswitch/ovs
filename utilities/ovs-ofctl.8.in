@@ -2596,6 +2596,9 @@ This field is optional for \fBadd\-group\fR, \fBadd\-groups\fR and
 \fBmod\-group\fR commands on groups of type \fBselect\fR. Prohibited
 otherwise. The default value is the empty string.
 .IP
+Other than the empty string, \fBhash\fR is currently the only defined
+selection method.
+.IP
 This option will use a Netronome OpenFlow extension which is only supported
 when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
 
@@ -2609,7 +2612,8 @@ Prohibited otherwise. The default value is zero.
 This option will use a Netronome OpenFlow extension which is only supported
 when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
 
-.IP \fBfields\fR=\fIparam\fR
+.IP \fBfields\fR=\fIfield\fR
+.IQ \fBfields(\fIfield\fR[\fB=\fImask\fR]\fR...\fB)\fR
 The field parameters to selection method selected by the
 \fBselection_method\fR field.  The syntax is described in \fBFlow Syntax\fR
 with the additional restrictions that if a value is provided it is
