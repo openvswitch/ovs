@@ -6324,15 +6324,17 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
 
     /* Rearrange list according to command_bucket_id */
     if (command_bucket_id == OFPG15_BUCKET_LAST) {
-        struct ofputil_bucket *new_first;
-        const struct ofputil_bucket *first;
+        if (!list_is_empty(&ofgroup->buckets)) {
+            struct ofputil_bucket *new_first;
+            const struct ofputil_bucket *first;
 
-        first = ofputil_bucket_list_front(&ofgroup->buckets);
-        new_first = ofputil_bucket_find(&new_ofgroup->buckets,
-                                        first->bucket_id);
+            first = ofputil_bucket_list_front(&ofgroup->buckets);
+            new_first = ofputil_bucket_find(&new_ofgroup->buckets,
+                                            first->bucket_id);
 
-        list_splice(new_ofgroup->buckets.next, &new_first->list_node,
-                    &new_ofgroup->buckets);
+            list_splice(new_ofgroup->buckets.next, &new_first->list_node,
+                        &new_ofgroup->buckets);
+        }
     } else if (command_bucket_id <= OFPG15_BUCKET_MAX && last) {
         struct ofputil_bucket *after;
 
