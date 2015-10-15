@@ -2835,7 +2835,7 @@ AT_CLEANUP
 
 dnl Check importance parameter added in OF1.4.
 dnl It validates whether importance set via add-flow via OpenFlow1.4+ gets
-dnl set or not by validating it againt the dump-flows output via OpenFlow1.4+
+dnl set or not by validating it against the dump-flows output via OpenFlow1.4+
 dnl If add-flow or dump-flows is used with later version of OpenFlow prior to 1.4+
 dnl then the importance will be considered zero whether provided as an argument.
 
