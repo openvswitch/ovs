@@ -678,3 +678,160 @@ for i in 1 2 3; do
     done
 done
 AT_CLEANUP
+
+
+AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 gateway, 1 logical switch])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Configure the Northbound database
+ovn-nbctl lswitch-add lsw0
+
+ovn-nbctl lport-add lsw0 lp1
+ovn-nbctl lport-set-macs lp1 f0:00:00:00:00:01
+
+ovn-nbctl lport-add lsw0 lp2
+ovn-nbctl lport-set-macs lp2 f0:00:00:00:00:02
+
+ovn-nbctl lport-add lsw0 lp-vtep
+ovn-nbctl lport-set-type lp-vtep vtep
+ovn-nbctl lport-set-options lp-vtep vtep-physical-switch=br-vtep vtep-logical-switch=lsw0
+ovn-nbctl lport-set-macs lp-vtep unknown
+
+net_add n1               # Network to connect hv1, hv2, and vtep
+net_add n2               # Network to connect vtep and hv3
+
+# Create hypervisor hv1 connected to n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1 options:tx_pcap=hv1/vif1-tx.pcap options:rxq_pcap=hv1/vif1-rx.pcap ofport-request=1
+
+# Create hypervisor hv2 connected to n1
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl add-port br-int vif2 -- set Interface vif2 external-ids:iface-id=lp2 options:tx_pcap=hv2/vif2-tx.pcap options:rxq_pcap=hv2/vif2-rx.pcap ofport-request=1
+
+
+# Start the vtep emulator with a leg in both networks
+sim_add vtep
+as vtep
+
+ovsdb-tool create "$ovs_base"/vtep/vtep.db "$abs_top_srcdir"/vtep/vtep.ovsschema || return 1
+ovs-appctl -t ovsdb-server ovsdb-server/add-db "$ovs_base"/vtep/vtep.db
+
+ovs-vsctl add-br br-phys
+net_attach n1 br-phys
+
+mac=`ovs-vsctl get Interface br-phys mac_in_use | sed s/\"//g`
+arp_table="$arp_table $sandbox,br-phys,192.168.0.3,$mac"
+ovs-appctl netdev-dummy/ip4addr br-phys 192.168.0.3/24 >/dev/null || return 1
+ovs-appctl ovs/route/add 192.168.0.3/24 br-phys >/dev/null || return 1
+
+ovs-vsctl add-br br-vtep
+net_attach n2 br-vtep
+
+vtep-ctl add-ps br-vtep
+vtep-ctl set Physical_Switch br-vtep tunnel_ips=192.168.0.3
+vtep-ctl add-ls lsw0
+
+start_daemon ovs-vtep br-vtep
+start_daemon ovn-controller-vtep --vtep-db=unix:"$ovs_base"/vtep/db.sock --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+
+sleep 1
+
+vtep-ctl bind-ls br-vtep br-vtep_n2 0 lsw0
+
+sleep 1
+
+# Add hv3 on the other side of the vtep
+sim_add hv3
+as hv3
+ovs-vsctl add-br br-phys
+net_attach n2 br-phys
+
+ovs-vsctl add-port br-phys vif3 -- set Interface vif3 options:tx_pcap=hv3/vif3-tx.pcap options:rxq_pcap=hv3/vif3-rx.pcap ofport-request=1
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+ovn-sbctl show
+
+# test_packet INPORT DST SRC ETHTYPE OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as lport numbers, e.g. 1 for vif1.
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2 3; do
+    : > $i.expected
+done
+test_packet() {
+    local inport=$1 packet=$2$3$4; shift; shift; shift; shift
+    #hv=hv`echo $inport | sed 's/^\(.\).*/\1/'`
+    hv=hv$inport
+    vif=vif$inport
+    as $hv ovs-appctl netdev-dummy/receive $vif $packet
+    for outport; do
+        echo $packet | trim_zeros >> $outport.expected
+    done
+}
+
+# Send packets between all pairs of source and destination ports:
+#
+# 1. Unicast packets are delivered to exactly one lport (except that packets
+#    destined to their input ports are dropped).
+#
+# 2. Broadcast and multicast are delivered to all lports except the input port.
+#
+# 3. The lswitch delivers packets with an unknown destination to lports with
+#    "unknown" among their MAC addresses (and port security disabled).
+for s in 1 2 3; do
+    bcast=
+    unknown=
+    for d in 1 2 3; do
+        if test $d != $s; then unicast=$d; else unicast=; fi
+        test_packet $s f0000000000$d f0000000000$s 00$s$d $unicast       #1
+
+        # The vtep (vif3) is the only one configured for "unknown"
+        if test $d != $s && test $d = 3; then
+            unknown="$unknown $d"
+        fi
+        bcast="$bcast $unicast"
+    done
+
+    # Broadcast and multicast.
+    # xxx ovn-controller-vtep doesn't handle multicast traffic that is
+    # xxx sourced from the gateway properly.
+    #test_packet $s ffffffffffff f0000000000$s 0${s}ff $bcast             #2
+    #test_packet $s 010000000000 f0000000000$s 0${s}ff $bcast             #2
+
+    test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #3
+done
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 1
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2 3; do
+    file=hv$i/vif$i-tx.pcap
+    echo $file
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
+    cp $i.expected expout
+    AT_CHECK([cat $i.packets], [0], [expout])
+    echo
+done
+AT_CLEANUP
