@@ -22,6 +22,7 @@
 #include "bitmap.h"
 #include "column.h"
 #include "dynamic-string.h"
+#include "monitor.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-error.h"
@@ -1294,7 +1295,8 @@ static struct json *
 ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
                                      bool initial)
 {
-    return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed);
+    return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed,
+                                    OVSDB_MONITOR_V1);
 }
 
 static bool
