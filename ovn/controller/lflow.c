@@ -71,6 +71,9 @@ symtab_init(void)
     expr_symtab_add_field(&symtab, "eth.src", MFF_ETH_SRC, NULL, false);
     expr_symtab_add_field(&symtab, "eth.dst", MFF_ETH_DST, NULL, false);
     expr_symtab_add_field(&symtab, "eth.type", MFF_ETH_TYPE, NULL, true);
+    expr_symtab_add_predicate(&symtab, "eth.bcast",
+                              "eth.dst == ff:ff:ff:ff:ff:ff");
+    expr_symtab_add_subfield(&symtab, "eth.mcast", NULL, "eth.dst[40]");
 
     expr_symtab_add_field(&symtab, "vlan.tci", MFF_VLAN_TCI, NULL, false);
     expr_symtab_add_predicate(&symtab, "vlan.present", "vlan.tci[12]");
@@ -89,6 +92,7 @@ symtab_init(void)
 
     expr_symtab_add_field(&symtab, "ip4.src", MFF_IPV4_SRC, "ip4", false);
     expr_symtab_add_field(&symtab, "ip4.dst", MFF_IPV4_DST, "ip4", false);
+    expr_symtab_add_predicate(&symtab, "ip4.mcast", "ip4.dst[28..31] == 0xe");
 
     expr_symtab_add_predicate(&symtab, "icmp4", "ip4 && ip.proto == 1");
     expr_symtab_add_field(&symtab, "icmp4.type", MFF_ICMPV4_TYPE, "icmp4",

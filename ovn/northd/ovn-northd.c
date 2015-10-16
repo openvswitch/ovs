@@ -913,7 +913,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         }
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 100, "eth.dst[40]",
+        ovn_lflow_add(&lflows, od, P_IN, S_IN_L2_LKUP, 100, "eth.mcast",
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
@@ -961,7 +961,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     /* Egress table 2: Egress port security multicast/broadcast (priority
      * 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        ovn_lflow_add(&lflows, od, P_OUT, S_OUT_PORT_SEC, 100, "eth.dst[40]",
+        ovn_lflow_add(&lflows, od, P_OUT, S_OUT_PORT_SEC, 100, "eth.mcast",
                       "output;");
     }
 

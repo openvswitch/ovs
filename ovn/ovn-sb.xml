@@ -722,8 +722,11 @@
       </p>
 
       <ul>
+        <li><code>eth.bcast</code> expands to <code>eth.dst == ff:ff:ff:ff:ff:ff</code></li>
+        <li><code>eth.mcast</code> expands to <code>eth.dst[40]</code></li>
         <li><code>vlan.present</code> expands to <code>vlan.tci[12]</code></li>
         <li><code>ip4</code> expands to <code>eth.type == 0x800</code></li>
+        <li><code>ip4.mcast</code> expands to <code>ip4.dst[28..31] == 0xe</code></li>
         <li><code>ip6</code> expands to <code>eth.type == 0x86dd</code></li>
         <li><code>ip</code> expands to <code>ip4 || ip6</code></li>
         <li><code>icmp4</code> expands to <code>ip4 &amp;&amp; ip.proto == 1</code></li>
