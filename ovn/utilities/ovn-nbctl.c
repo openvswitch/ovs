@@ -312,7 +312,7 @@ Logical port commands:\n\
   lport-get-parent LPORT    get the parent of LPORT if set\n\
   lport-get-tag LPORT       get the LPORT's tag if set\n\
   lport-set-addresses LPORT [ADDRESS]...\n\
-                            set addresses for LPORT.\n\
+                            set MAC or MAC+IP addresses for LPORT.\n\
   lport-get-addresses LPORT      get a list of MAC addresses on LPORT\n\
   lport-set-port-security LPORT [ADDRS]...\n\
                             set port security addresses for LPORT.\n\

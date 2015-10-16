@@ -217,12 +217,56 @@
     </column>
 
     <column name="addresses">
-      The logical port's own Ethernet address or addresses, each in the form
-      <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
-      Like a physical Ethernet NIC, a logical port ordinarily has a single
-      fixed Ethernet address.  The string <code>unknown</code> is also allowed
-      to indicate that the logical port has an unknown set of (additional)
-      source addresses.
+      <p>
+        Addresses owned by the logical port.
+      </p>
+
+      <p>
+        Each element in the set must take one of the following forms:
+      </p>
+
+      <dl>
+        <dt><code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code></dt>
+        <dd>
+          <p>
+            An Ethernet address owned by the logical port.  Like a physical
+            Ethernet NIC, a logical port ordinarily has a single fixed Ethernet
+            address.
+          </p>
+
+          <p>
+            When a OVN logical switch processes a unicast Ethernet frame whose
+            destination MAC address is in a logical port's <ref
+            column="addresses"/> column, it delivers it only to that port, as
+            if a MAC learning process had learned that MAC address on the port.
+          </p>
+        </dd>
+
+        <dt><code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var> <var>a</var>.<var>b</var>.<var>c</var>.<var>d</var></code></dt>
+        <dd>
+          <p>
+            This form has all the effects of the previous form.  It also
+            indicates that the logical port owns the given IPv4 address.
+          </p>
+
+          <p>
+            The OVN logical switch uses this information to synthesize
+            responses to ARP requests without traversing the physical network.
+            The OVN logical router connected to the logical switch, if any,
+            uses this information to avoid issuing ARP requests for logical
+            switch ports.
+          </p>
+        </dd>
+
+        <dt><code>unknown</code></dt>
+        <dd>
+          This indicates that the logical port has an unknown set of Ethernet
+          addresses.  When an OVN logical switch processes a unicast Ethernet
+          frame whose destination MAC address is not in any logical port's <ref
+          column="addresses"/> column, it delivers it to the port (or ports)
+          whose <ref column="addresses"/> columns include <code>unknown</code>.
+        </dd>
+      </dl>
     </column>
 
     <column name="port_security">

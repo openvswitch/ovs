@@ -186,15 +186,6 @@ Somehow it has to be possible for an L3 logical router to map from an
 IP address to an Ethernet address.  This can happen statically or
 dynamically.  Probably both cases need to be supported eventually.
 
-*** Static IP to MAC binding
-
-Commonly, for a VM, the binding of an IP address to a MAC is known
-statically.  The Logical_Port table in the OVN_Northbound schema can
-be revised to make these bindings known.  Then ovn-northd can
-integrate the bindings into the logical router flow table.
-(ovn-northd can also integrate them into the logical switch flow table
-to terminate ARP requests from VIFs.)
-
 *** Dynamic IP to MAC bindings
 
 Some bindings from IP address to MAC will undoubtedly need to be
