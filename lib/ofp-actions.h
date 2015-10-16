@@ -507,7 +507,7 @@ struct ofpact_conntrack {
         CT_MEMBERS;
         uint8_t pad[OFPACT_ALIGN(sizeof(CT_MEMBERS))];
     };
-    struct ofpact actions[];
+    struct ofpact actions[0];
 };
 BUILD_ASSERT_DECL(offsetof(struct ofpact_conntrack, actions)
                   % OFPACT_ALIGNTO == 0);
