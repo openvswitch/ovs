@@ -276,7 +276,7 @@ for i in 0 1; do
     ovn_attach n1 br-phys 192.168.0.`expr $i + 1`
     ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i
     ovn-nbctl lport-add lsw0 lp$i
-    ovn-nbctl lport-set-macs lp$i f0:00:00:00:00:0$i
+    ovn-nbctl lport-set-addresses lp$i f0:00:00:00:00:0$i
 done
     </pre>
     
@@ -307,7 +307,7 @@ for i in `seq $n`; do
     yy=$(printf %02x $(expr $i / 256))
     xx=$(printf $02x $(expr $i % 256))
     ovn-nbctl lport-add br0 lp$i
-    ovn-nbctl lport-set-macs lp$i f0:00:00:00:$yy:$xx
+    ovn-nbctl lport-set-addresses lp$i f0:00:00:00:$yy:$xx
 done
     </pre>
 

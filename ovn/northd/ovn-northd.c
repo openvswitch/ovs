@@ -432,8 +432,8 @@ ovn_port_update_sbrec(const struct ovn_port *op)
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     sbrec_port_binding_set_parent_port(op->sb, op->nb->parent_name);
     sbrec_port_binding_set_tag(op->sb, op->nb->tag, op->nb->n_tag);
-    sbrec_port_binding_set_mac(op->sb, (const char **) op->nb->macs,
-                               op->nb->n_macs);
+    sbrec_port_binding_set_mac(op->sb, (const char **) op->nb->addresses,
+                               op->nb->n_addresses);
 }
 
 static void
@@ -919,14 +919,14 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 
     /* Ingress table 3: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
-        for (size_t i = 0; i < op->nb->n_macs; i++) {
+        for (size_t i = 0; i < op->nb->n_addresses; i++) {
             struct eth_addr mac;
 
-            if (eth_addr_from_string(op->nb->macs[i], &mac)) {
+            if (eth_addr_from_string(op->nb->addresses[i], &mac)) {
                 struct ds match, actions;
 
                 ds_init(&match);
-                ds_put_format(&match, "eth.dst == %s", op->nb->macs[i]);
+                ds_put_format(&match, "eth.dst == %s", op->nb->addresses[i]);
 
                 ds_init(&actions);
                 ds_put_cstr(&actions, "outport = ");
@@ -936,7 +936,7 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
                               ds_cstr(&match), ds_cstr(&actions));
                 ds_destroy(&actions);
                 ds_destroy(&match);
-            } else if (!strcmp(op->nb->macs[i], "unknown")) {
+            } else if (!strcmp(op->nb->addresses[i], "unknown")) {
                 if (lport_is_enabled(op->nb)) {
                     ovn_multicast_add(&mcgroups, &mc_unknown, op);
                     op->od->has_unknown = true;
@@ -944,8 +944,9 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
-                VLOG_INFO_RL(&rl, "%s: invalid syntax '%s' in macs column",
-                             op->nb->name, op->nb->macs[i]);
+                VLOG_INFO_RL(&rl,
+                             "%s: invalid syntax '%s' in addresses column",
+                             op->nb->name, op->nb->addresses[i]);
             }
         }
     }

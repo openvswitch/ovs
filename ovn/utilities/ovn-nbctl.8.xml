@@ -109,17 +109,17 @@
         nothing.
       </dd>
 
-      <dt><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>]...</dt>
+      <dt><code>lport-set-addresses</code> <var>lport</var> [<var>address</var>]...</dt>
       <dd>
-        Sets the MACs associated with <var>lport</var> to
-        <var>mac</var>.  Multiple MACs may be sets by using multiple
-        <var>mac</var> arguments.  If no <var>mac</var> argument is
-        given, <var>lport</var> will have no MACs associated with it.
+        Sets the addresses associated with <var>lport</var> to
+        <var>address</var>.  Multiple MACs may be sets by using multiple
+        <var>address</var> arguments.  If no <var>mac</var> argument is given,
+        <var>lport</var> will have no addresses associated with it.
       </dd>
 
-      <dt><code>lport-get-macs</code> <var>lport</var></dt>
+      <dt><code>lport-get-addresses</code> <var>lport</var></dt>
       <dd>
-        Lists all the MACs associated with <var>lport</var> on standard
+        Lists all the addresses associated with <var>lport</var> on standard
         output, one per line.
       </dd>
 

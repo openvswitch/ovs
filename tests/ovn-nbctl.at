@@ -69,22 +69,22 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - macs])
+AT_SETUP([ovn-nbctl - addresses])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
 AT_CHECK([ovn-nbctl lport-add ls0 lp0])
-AT_CHECK([ovn-nbctl lport-get-macs lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
 ])
 
-AT_CHECK([ovn-nbctl lport-set-macs lp0 00:11:22:33:44:55 unknown])
-AT_CHECK([ovn-nbctl lport-get-macs lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lport-set-addresses lp0 00:11:22:33:44:55 unknown])
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
 00:11:22:33:44:55
 unknown
 ])
 
-AT_CHECK([ovn-nbctl lport-set-macs lp0])
-AT_CHECK([ovn-nbctl lport-get-macs lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lport-set-addresses lp0])
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
 ])
 
 OVN_NBCTL_TEST_STOP
@@ -97,7 +97,7 @@ OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
 AT_CHECK([ovn-nbctl lport-add ls0 lp0])
-AT_CHECK([ovn-nbctl lport-get-macs lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
 ])
 
 AT_CHECK([ovn-nbctl lport-set-port-security lp0 aa:bb:cc:dd:ee:ff 00:11:22:33:44:55])

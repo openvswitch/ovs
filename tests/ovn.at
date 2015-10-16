@@ -534,9 +534,9 @@ for i in 1 2 3; do
         ovs-vsctl add-port br-int vif$i$j -- set Interface vif$i$j external-ids:iface-id=lp$i$j options:tx_pcap=hv$i/vif$i$j-tx.pcap options:rxq_pcap=hv$i/vif$i$j-rx.pcap ofport-request=$i$j
         ovn-nbctl lport-add lsw0 lp$i$j
         if test $j = 1; then
-            ovn-nbctl lport-set-macs lp$i$j f0:00:00:00:00:$i$j unknown
+            ovn-nbctl lport-set-addresses lp$i$j f0:00:00:00:00:$i$j unknown
         else
-            ovn-nbctl lport-set-macs lp$i$j f0:00:00:00:00:$i$j
+            ovn-nbctl lport-set-addresses lp$i$j f0:00:00:00:00:$i$j
             ovn-nbctl lport-set-port-security lp$i$j f0:00:00:00:00:$i$j
         fi
     done
@@ -688,15 +688,15 @@ ovn_start
 ovn-nbctl lswitch-add lsw0
 
 ovn-nbctl lport-add lsw0 lp1
-ovn-nbctl lport-set-macs lp1 f0:00:00:00:00:01
+ovn-nbctl lport-set-addresses lp1 f0:00:00:00:00:01
 
 ovn-nbctl lport-add lsw0 lp2
-ovn-nbctl lport-set-macs lp2 f0:00:00:00:00:02
+ovn-nbctl lport-set-addresses lp2 f0:00:00:00:00:02
 
 ovn-nbctl lport-add lsw0 lp-vtep
 ovn-nbctl lport-set-type lp-vtep vtep
 ovn-nbctl lport-set-options lp-vtep vtep-physical-switch=br-vtep vtep-logical-switch=lsw0
-ovn-nbctl lport-set-macs lp-vtep unknown
+ovn-nbctl lport-set-addresses lp-vtep unknown
 
 net_add n1               # Network to connect hv1, hv2, and vtep
 net_add n2               # Network to connect vtep and hv3

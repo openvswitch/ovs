@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
     "version": "1.0.0",
-    "cksum": "3156743511 4790",
+    "cksum": "1432579799 4805",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -39,9 +39,9 @@
                                       "minInteger": 1,
                                       "maxInteger": 4095},
                               "min": 0, "max": 1}},
-                "macs": {"type": {"key": "string",
-                                  "min": 0,
-                                  "max": "unlimited"}},
+                "addresses": {"type": {"key": "string",
+                                       "min": 0,
+                                       "max": "unlimited"}},
                 "port_security": {"type": {"key": "string",
                                            "min": 0,
                                            "max": "unlimited"}},

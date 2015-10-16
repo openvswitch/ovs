@@ -41,7 +41,7 @@ for n in 1 2 3 4 5 6 7 8; do
 
     lport_name="$lswitch_name-port1"
     ovn-nbctl lport-add $lswitch_name $lport_name
-    ovn-nbctl lport-set-macs $lport_name 00:00:00:00:00:0$n
+    ovn-nbctl lport-set-addresses $lport_name 00:00:00:00:00:0$n
     ovn-nbctl lport-set-port-security $lport_name 00:00:00:00:00:0$n
 
     if [ $n -gt 4 ] ; then
@@ -51,7 +51,7 @@ for n in 1 2 3 4 5 6 7 8; do
         lport_name="provnet1-$n-physnet1"
         ovn-nbctl lport-add $lswitch_name $lport_name
     fi
-    ovn-nbctl lport-set-macs $lport_name unknown
+    ovn-nbctl lport-set-addresses $lport_name unknown
     ovn-nbctl lport-set-type $lport_name localnet
     ovn-nbctl lport-set-options $lport_name network_name=physnet1
 done

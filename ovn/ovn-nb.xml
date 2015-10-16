@@ -216,7 +216,7 @@
       ingress and egress traffic dropped.
     </column>
 
-    <column name="macs">
+    <column name="addresses">
       The logical port's own Ethernet address or addresses, each in the form
       <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
       Like a physical Ethernet NIC, a logical port ordinarily has a single

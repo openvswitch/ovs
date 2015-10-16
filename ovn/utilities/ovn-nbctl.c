@@ -311,9 +311,9 @@ Logical port commands:\n\
   lport-list LSWITCH        print the names of all logical ports on LSWITCH\n\
   lport-get-parent LPORT    get the parent of LPORT if set\n\
   lport-get-tag LPORT       get the LPORT's tag if set\n\
-  lport-set-macs LPORT [MAC]...\n\
-                            set MAC addresses for LPORT.\n\
-  lport-get-macs LPORT      get a list of MAC addresses on LPORT\n\
+  lport-set-addresses LPORT [ADDRESS]...\n\
+                            set addresses for LPORT.\n\
+  lport-get-addresses LPORT      get a list of MAC addresses on LPORT\n\
   lport-set-port-security LPORT [ADDRS]...\n\
                             set port security addresses for LPORT.\n\
   lport-get-port-security LPORT    get LPORT's port security addresses\n\
@@ -402,10 +402,10 @@ print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
         if (lport->n_tag) {
             ds_put_format(s, "            tag: %"PRIu64"\n", lport->tag[0]);
         }
-        if (lport->n_macs) {
-            ds_put_cstr(s, "            macs:");
-            for (size_t j = 0; j < lport->n_macs; j++) {
-                ds_put_format(s, " %s", lport->macs[j]);
+        if (lport->n_addresses) {
+            ds_put_cstr(s, "            addresses:");
+            for (size_t j = 0; j < lport->n_addresses; j++) {
+                ds_put_format(s, " %s", lport->addresses[j]);
             }
             ds_put_char(s, '\n');
         }
@@ -652,7 +652,7 @@ nbctl_lport_get_tag(struct ctl_context *ctx)
 }
 
 static void
-nbctl_lport_set_macs(struct ctl_context *ctx)
+nbctl_lport_set_addresses(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
@@ -662,16 +662,16 @@ nbctl_lport_set_macs(struct ctl_context *ctx)
         return;
     }
 
-    nbrec_logical_port_set_macs(lport,
+    nbrec_logical_port_set_addresses(lport,
             (const char **) ctx->argv + 2, ctx->argc - 2);
 }
 
 static void
-nbctl_lport_get_macs(struct ctl_context *ctx)
+nbctl_lport_get_addresses(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
-    struct svec macs;
+    struct svec addresses;
     const char *mac;
     size_t i;
 
@@ -680,15 +680,15 @@ nbctl_lport_get_macs(struct ctl_context *ctx)
         return;
     }
 
-    svec_init(&macs);
-    for (i = 0; i < lport->n_macs; i++) {
-        svec_add(&macs, lport->macs[i]);
+    svec_init(&addresses);
+    for (i = 0; i < lport->n_addresses; i++) {
+        svec_add(&addresses, lport->addresses[i]);
     }
-    svec_sort(&macs);
-    SVEC_FOR_EACH(i, mac, &macs) {
+    svec_sort(&addresses);
+    SVEC_FOR_EACH(i, mac, &addresses) {
         ds_put_format(&ctx->output, "%s\n", mac);
     }
-    svec_destroy(&macs);
+    svec_destroy(&addresses);
 }
 
 static void
@@ -1308,9 +1308,10 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       "", RO },
     { "lport-get-tag", 1, 1, "LPORT", NULL, nbctl_lport_get_tag, NULL, "",
       RO },
-    { "lport-set-macs", 1, INT_MAX, "LPORT [MAC]...", NULL,
-      nbctl_lport_set_macs, NULL, "", RW },
-    { "lport-get-macs", 1, 1, "LPORT", NULL, nbctl_lport_get_macs, NULL,
+    { "lport-set-addresses", 1, INT_MAX, "LPORT [ADDRESS]...", NULL,
+      nbctl_lport_set_addresses, NULL, "", RW },
+    { "lport-get-addresses", 1, 1, "LPORT", NULL,
+      nbctl_lport_get_addresses, NULL,
       "", RO },
     { "lport-set-port-security", 0, INT_MAX, "LPORT [ADDRS]...", NULL,
       nbctl_lport_set_port_security, NULL, "", RW },
