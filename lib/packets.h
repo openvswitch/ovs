@@ -566,6 +566,8 @@ ip_is_local_multicast(ovs_be32 ip)
 }
 int ip_count_cidr_bits(ovs_be32 netmask);
 void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
+char *ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
+    OVS_WARN_UNUSED_RESULT;
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)

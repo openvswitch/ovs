@@ -2042,25 +2042,8 @@ static char *
 mf_from_ipv4_string(const struct mf_field *mf, const char *s,
                     ovs_be32 *ip, ovs_be32 *mask)
 {
-    int prefix;
-
     ovs_assert(mf->n_bytes == sizeof *ip);
-
-    if (ovs_scan(s, IP_SCAN_FMT"/"IP_SCAN_FMT,
-                 IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask))) {
-        /* OK. */
-    } else if (ovs_scan(s, IP_SCAN_FMT"/%d", IP_SCAN_ARGS(ip), &prefix)) {
-        if (prefix <= 0 || prefix > 32) {
-            return xasprintf("%s: network prefix bits not between 0 and "
-                             "32", s);
-        }
-        *mask = be32_prefix_mask(prefix);
-    } else if (ovs_scan(s, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
-        *mask = OVS_BE32_MAX;
-    } else {
-        return xasprintf("%s: invalid IP address", s);
-    }
-    return NULL;
+    return ip_parse_masked(s, ip, mask);
 }
 
 static char *
