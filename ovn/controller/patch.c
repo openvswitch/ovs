@@ -49,7 +49,7 @@ match_patch_port(const struct ovsrec_port *port, const char *peer)
 
 /* Creates a patch port in bridge 'src' named 'src_name', whose peer is
  * 'dst_name' in bridge 'dst'.  Initializes the patch port's
- * external-ids:ovn-patch-port to 'network'.
+ * external-ids:ovn-localnet-port to 'network'.
  *
  * If such a patch port already exists, removes it from 'existing_ports'. */
 static void
@@ -82,7 +82,7 @@ create_patch_port(struct controller_ctx *ctx,
     port = ovsrec_port_insert(ctx->ovs_idl_txn);
     ovsrec_port_set_name(port, src_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
-    const struct smap ids = SMAP_CONST1(&ids, "ovn-patch-port", network);
+    const struct smap ids = SMAP_CONST1(&ids, "ovn-localnet-port", network);
     ovsrec_port_set_external_ids(port, &ids);
 
     struct ovsrec_port **ports;
@@ -97,7 +97,7 @@ create_patch_port(struct controller_ctx *ctx,
 
 /* Creates a pair of patch ports that connect bridges 'b1' and 'b2', using a
  * port named 'name1' and 'name2' in each respective bridge.
- * external-ids:ovn-patch-port in each port is initialized to 'network'.
+ * external-ids:ovn-localnet-port in each port is initialized to 'network'.
  *
  * If one or both of the ports already exists, leaves it there and removes it
  * from 'existing_ports'. */
@@ -203,7 +203,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
     struct shash existing_ports = SHASH_INITIALIZER(&existing_ports);
     const struct ovsrec_port *port;
     OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
-        if (smap_get(&port->external_ids, "ovn-patch-port")) {
+        if (smap_get(&port->external_ids, "ovn-localnet-port")) {
             shash_add(&existing_ports, port->name, port);
         }
     }

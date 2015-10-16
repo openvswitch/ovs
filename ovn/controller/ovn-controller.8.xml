@@ -159,7 +159,8 @@
       </dd>
 
       <dt>
-        <code>external-ids:ovn-patch-port</code> in the <code>Port</code> table
+        <code>external-ids:ovn-localnet-port</code> in the <code>Port</code>
+        table
       </dt>
       <dd>
         <p>
@@ -174,7 +175,8 @@
         <p>
           Each <code>localnet</code> logical port is implemented as a pair of
           patch ports, one in the integration bridge, one in a different
-          bridge, with the same <code>external-ids:ovn-patch-port</code> value.
+          bridge, with the same <code>external-ids:ovn-localnet-port</code>
+          value.
         </p>
       </dd>
     </dl>

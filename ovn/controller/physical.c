@@ -157,7 +157,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         }
 
         const char *localnet = smap_get(&port_rec->external_ids,
-                                        "ovn-patch-port");
+                                        "ovn-localnet-port");
 
         for (int j = 0; j < port_rec->n_interfaces; j++) {
             const struct ovsrec_interface *iface_rec = port_rec->interfaces[j];
