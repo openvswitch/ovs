@@ -137,24 +137,63 @@
       be dropped.
     </p>
 
-    <h2>Ingress table 1: <code>from-lport</code> ACLs</h2>
+    <h2>Ingress Table 1: <code>from-lport</code> Pre-ACLs</h2>
+
+    <p>
+      Ingress table 1 prepares flows for possible stateful ACL processing
+      in table 2.  It contains a priority-0 flow that simply moves
+      traffic to table 2.  If stateful ACLs are used in the logical
+      datapath, a priority-100 flow is added that sends IP packets to
+      the connection tracker before advancing to table 2.
+    </p>
+
+    <h2>Ingress table 2: <code>from-lport</code> ACLs</h2>
 
     <p>
       Logical flows in this table closely reproduce those in the
-      <code>ACL</code> table in the <code>OVN_Northbound</code> database for
-      the <code>from-lport</code> direction.  <code>allow</code> and
-      <code>allow-related</code> ACLs translate into logical flows with the
-      <code>next;</code> action, others to <code>drop;</code>.  The
-      <code>priority</code> values from the <code>ACL</code> table are used
-      directly.
+      <code>ACL</code> table in the <code>OVN_Northbound</code> database
+      for the <code>from-lport</code> direction.  <code>allow</code>
+      ACLs translate into logical flows with the <code>next;</code>
+      action, <code>allow-related</code> ACLs translate into logical
+      flows with the <code>ct_next;</code> action, other ACLs translate
+      to <code>drop;</code>.  The <code>priority</code> values from the
+      <code>ACL</code> table are used directly.
     </p>
 
     <p>
-      Ingress table 1 also contains a priority 0 flow with action
-      <code>next;</code>, so that ACLs allow packets by default.
+      Ingress table 2 also contains a priority 0 flow with action
+      <code>next;</code>, so that ACLs allow packets by default.  If the
+      logical datapath has a statetful ACL, the following flows will
+      also be added:
     </p>
 
-    <h2>Ingress Table 2: Destination Lookup</h2>
+    <ul>
+      <li>
+        A priority-1 flow to commit IP traffic to the connection
+        tracker.  This is needed for the default allow policy because,
+        while the initiater's direction may not have any stateful rules,
+        the server's may and then its return traffic would not be known
+        and marked as invalid.
+      </li>
+
+      <li>
+        A priority-65535 flow that allows any traffic that has been
+        committed to the connection tracker (i.e., established flows).
+      </li>
+
+      <li>
+        A priority-65535 flow that allows any traffic that is considered
+        related to a committed flow in the connection tracker (e.g., an
+        ICMP Port Unreachable from a non-listening UDP port).
+      </li>
+
+      <li>
+        A priority-65535 flow that drops all traffic marked by the
+        connection tracker as invalid.
+      </li>
+    </ul>
+
+    <h2>Ingress Table 3: Destination Lookup</h2>
 
     <p>
       This table implements switching behavior.  It contains these logical
@@ -185,13 +224,20 @@
       </li>
     </ul>
 
-    <h2>Egress Table 0: <code>to-lport</code> ACLs</h2>
+    <h2>Egress Table 0: <code>to-lport</code> Pre-ACLs</h2>
 
     <p>
-      This is similar to ingress table 1 except for <code>to-lport</code> ACLs.
+      This is similar to ingress table 1 except for <code>to-lport</code>
+      traffic.
     </p>
 
-    <h2>Egress Table 1: Egress Port Security</h2>
+    <h2>Egress Table 1: <code>to-lport</code> ACLs</h2>
+
+    <p>
+      This is similar to ingress table 2 except for <code>to-lport</code> ACLs.
+    </p>
+
+    <h2>Egress Table 2: Egress Port Security</h2>
 
     <p>
       This is similar to the ingress port security logic in ingress table 0,

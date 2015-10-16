@@ -27,6 +27,7 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dynamic-string.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -49,6 +50,7 @@
 VLOG_DEFINE_THIS_MODULE(main);
 
 static unixctl_cb_func ovn_controller_exit;
+static unixctl_cb_func ct_zone_list;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
 
@@ -449,6 +451,13 @@ main(int argc, char *argv[])
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
+    /* Initialize connection tracking zones. */
+    struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
+    unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
+    bitmap_set1(ct_zone_bitmap, 0); /* Zone 0 is reserved. */
+    unixctl_command_register("ct-zone-list", "", 0, 0,
+                             ct_zone_list, &ct_zones);
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -470,17 +479,17 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id);
+            binding_run(&ctx, br_int, chassis_id, &ct_zones, ct_zone_bitmap);
         }
 
         if (br_int) {
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            lflow_run(&ctx, &flow_table);
+            lflow_run(&ctx, &flow_table, &ct_zones);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &flow_table);
+                             br_int, chassis_id, &ct_zones, &flow_table);
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
@@ -535,6 +544,8 @@ main(int argc, char *argv[])
     unixctl_server_destroy(unixctl);
     lflow_destroy();
     ofctrl_destroy();
+
+    simap_destroy(&ct_zones);
 
     ovsdb_idl_loop_destroy(&ovs_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
@@ -642,4 +653,20 @@ ovn_controller_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
     *exiting = true;
 
     unixctl_command_reply(conn, NULL);
+}
+
+static void
+ct_zone_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
+             const char *argv[] OVS_UNUSED, void *ct_zones_)
+{
+    struct simap *ct_zones = ct_zones_;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct simap_node *zone;
+
+    SIMAP_FOR_EACH(zone, ct_zones) {
+        ds_put_format(&ds, "%s %d\n", zone->name, zone->data);
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }

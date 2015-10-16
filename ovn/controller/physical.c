@@ -136,7 +136,7 @@ put_stack(enum mf_field_id field, struct ofpact_stack *stack)
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
-             struct hmap *flow_table)
+             const struct simap *ct_zones, struct hmap *flow_table)
 {
     struct simap localvif_to_ofport = SIMAP_INITIALIZER(&localvif_to_ofport);
     struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
@@ -293,6 +293,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         struct match match;
         if (!tun) {
+            int zone_id = simap_get(ct_zones, binding->logical_port);
             /* Packets that arrive from a vif can belong to a VM or
              * to a container located inside that VM. Packets that
              * arrive from containers have a tag (vlan) associated with them.
@@ -360,6 +361,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                     match_set_dl_vlan(&match, htons(tag));
                 }
 
+                if (zone_id) {
+                    put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
+                }
+
                 /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
                 put_load(binding->datapath->tunnel_key, MFF_LOG_DATAPATH, 0, 64,
                          &ofpacts);
@@ -392,6 +397,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
             match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
                           binding->tunnel_key);
+
+            if (zone_id) {
+                put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
+            }
 
             /* Resubmit to table 34. */
             put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
@@ -498,6 +507,11 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                              "in wrong datapath",
                              UUID_ARGS(&mc->header_.uuid));
                 continue;
+            }
+
+            int zone_id = simap_get(ct_zones, port->logical_port);
+            if (zone_id) {
+                put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
             }
 
             if (simap_contains(&localvif_to_ofport,

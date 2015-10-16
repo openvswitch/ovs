@@ -137,3 +137,11 @@
    Both ovn-controller and ovn-contorller-vtep should use BFD to
    monitor the tunnel liveness.  Both ovs-vswitchd schema and
    VTEP schema supports BFD.
+
+* ACL
+
+** Support FTP ALGs.
+
+** Support reject action.
+
+** Support log option.

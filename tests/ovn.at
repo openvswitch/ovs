@@ -442,6 +442,8 @@ drop; => actions=drop, prereqs=1
 next; => actions=resubmit(,27), prereqs=1
 next(0); => actions=resubmit(,16), prereqs=1
 next(15); => actions=resubmit(,31), prereqs=1
+ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
+ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
 output; => actions=resubmit(,64), prereqs=1
 outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,27),set_field:0xfffe->reg7,resubmit(,27), prereqs=1
 tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)

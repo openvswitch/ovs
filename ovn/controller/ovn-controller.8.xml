@@ -173,6 +173,11 @@
       <dd>
         Causes <code>ovn-controller</code> to gracefully terminate.
       </dd>
+
+      <dt><code>ct-zone-list</code></dt>
+      <dd>
+        Lists each local logical port and its connection tracking zone.
+      </dd>
       </dl>
     </p>
 

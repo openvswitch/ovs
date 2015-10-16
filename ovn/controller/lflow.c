@@ -58,6 +58,15 @@ symtab_init(void)
     MFF_LOG_REGS;
 #undef MFF_LOG_REG
 
+    /* Connection tracking state. */
+    expr_symtab_add_field(&symtab, "ct_state", MFF_CT_STATE, NULL, false);
+    expr_symtab_add_predicate(&symtab, "ct.trk", "ct_state[7]");
+    expr_symtab_add_subfield(&symtab, "ct.new", "ct.trk", "ct_state[0]");
+    expr_symtab_add_subfield(&symtab, "ct.est", "ct.trk", "ct_state[1]");
+    expr_symtab_add_subfield(&symtab, "ct.rel", "ct.trk", "ct_state[2]");
+    expr_symtab_add_subfield(&symtab, "ct.inv", "ct.trk", "ct_state[5]");
+    expr_symtab_add_subfield(&symtab, "ct.rpl", "ct.trk", "ct_state[6]");
+
     /* Data fields. */
     expr_symtab_add_field(&symtab, "eth.src", MFF_ETH_SRC, NULL, false);
     expr_symtab_add_field(&symtab, "eth.dst", MFF_ETH_DST, NULL, false);
@@ -245,7 +254,8 @@ lflow_init(void)
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
-lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
+lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
+          const struct simap *ct_zones)
 {
     struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
@@ -284,7 +294,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
         error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
-                                     first_ptable, LOG_PIPELINE_LEN,
+                                     ct_zones, first_ptable, LOG_PIPELINE_LEN,
                                      lflow->table_id, output_ptable,
                                      &ofpacts, &prereqs);
         if (error) {
