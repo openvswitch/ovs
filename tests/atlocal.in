@@ -112,7 +112,7 @@ if test "$IS_WIN32" = "yes"; then
 fi
 
 # Conntrack test requirements
-if test x`which conntrack` != x; then
+if test x`which conntrack 2>/dev/null` != x; then
     HAVE_CONNTRACK="yes"
 else
     HAVE_CONNTRACK="no"
