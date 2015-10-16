@@ -1092,8 +1092,9 @@ tcp.flags = RST;
 
   <table name="Port_Binding" title="Physical-Logical Port Bindings">
     <p>
-      Each row in this table identifies the physical location of a logical
-      port.
+      Most rows in this table identify the physical location of a logical port.
+      (The exceptions are logical patch ports, which do not have any physical
+      location.)
     </p>
 
     <p>
@@ -1180,6 +1181,14 @@ tcp.flags = RST;
         <dl>
           <dt>(empty string)</dt>
           <dd>VM (or VIF) interface.</dd>
+
+          <dt><code>patch</code></dt>
+          <dd>
+            One of a pair of logical ports that act as if connected by a patch
+            cable.  Useful for connecting two logical datapaths, e.g. to connect
+            a logical router to a logical switch or to another logical router.
+          </dd>
+
           <dt><code>localnet</code></dt>
           <dd>
             A connection to a locally accessible network from each
@@ -1200,6 +1209,22 @@ tcp.flags = RST;
             be defined.
           </dd>
         </dl>
+      </column>
+    </group>
+
+    <group title="Patch Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/> of
+        <code>patch</code>.
+      </p>
+
+      <column name="options" key="peer">
+        The <ref column="logical_port"/> in the <ref table="Port_Binding"/>
+        record for the other side of the patch.  The named <ref
+        column="logical_port"/> must specify this <ref column="logical_port"/>
+        in its own <code>peer</code> option.  That is, the two patch logical
+        ports must have reversed <ref column="logical_port"/> and
+        <code>peer</code> values.
       </column>
     </group>
 

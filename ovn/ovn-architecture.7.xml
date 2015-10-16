@@ -796,7 +796,9 @@
 
       <p>
         Flows in table 33 resemble those in table 32 but for logical ports that
-        reside locally rather than remotely.  For unicast logical output ports
+        reside locally rather than remotely.  (This includes logical patch
+        ports, which do not have a physical location and effectively reside on
+        every hypervisor.)  For unicast logical output ports
         on the local hypervisor, the actions just resubmit to table 34.  For
         multicast output ports that include one or more logical ports on the
         local hypervisor, for each such logical port <var>P</var>, the actions
@@ -836,6 +838,14 @@
         bridge that represents that logical port.  If the logical egress port
         is a container nested with a VM, then before sending the packet the
         actions push on a VLAN header with an appropriate VLAN ID.
+      </p>
+
+      <p>
+        If the logical egress port is a logical patch port, then table 64
+        outputs to an OVS patch port that represents the logical patch port.
+        The packet re-enters the OpenFlow flow table from the OVS patch port's
+        peer in table 0, which identifies the logical datapath and logical
+        input port based on the OVS patch port's OpenFlow port number.
       </p>
     </li>
   </ol>

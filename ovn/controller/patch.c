@@ -48,13 +48,13 @@ match_patch_port(const struct ovsrec_port *port, const char *peer)
 }
 
 /* Creates a patch port in bridge 'src' named 'src_name', whose peer is
- * 'dst_name' in bridge 'dst'.  Initializes the patch port's
- * external-ids:ovn-localnet-port to 'network'.
+ * 'dst_name' in bridge 'dst'.  Initializes the patch port's external-ids:'key'
+ * to 'key'.
  *
  * If such a patch port already exists, removes it from 'existing_ports'. */
 static void
 create_patch_port(struct controller_ctx *ctx,
-                  const char *network,
+                  const char *key, const char *value,
                   const struct ovsrec_bridge *src, const char *src_name,
                   const struct ovsrec_bridge *dst, const char *dst_name,
                   struct shash *existing_ports)
@@ -82,7 +82,7 @@ create_patch_port(struct controller_ctx *ctx,
     port = ovsrec_port_insert(ctx->ovs_idl_txn);
     ovsrec_port_set_name(port, src_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
-    const struct smap ids = SMAP_CONST1(&ids, "ovn-localnet-port", network);
+    const struct smap ids = SMAP_CONST1(&ids, key, value);
     ovsrec_port_set_external_ids(port, &ids);
 
     struct ovsrec_port **ports;
@@ -97,21 +97,21 @@ create_patch_port(struct controller_ctx *ctx,
 
 /* Creates a pair of patch ports that connect bridges 'b1' and 'b2', using a
  * port named 'name1' and 'name2' in each respective bridge.
- * external-ids:ovn-localnet-port in each port is initialized to 'network'.
+ * external-ids:'key' in each port is initialized to 'value'.
  *
  * If one or both of the ports already exists, leaves it there and removes it
  * from 'existing_ports'. */
 static void
 create_patch_ports(struct controller_ctx *ctx,
-                   const char *network,
+                   const char *key, const char *value,
                    const struct ovsrec_bridge *b1,
                    const struct ovsrec_bridge *b2,
                    struct shash *existing_ports)
 {
     char *name1 = patch_port_name(b1->name, b2->name);
     char *name2 = patch_port_name(b2->name, b1->name);
-    create_patch_port(ctx, network, b1, name1, b2, name2, existing_ports);
-    create_patch_port(ctx, network, b2, name2, b1, name1, existing_ports);
+    create_patch_port(ctx, key, value, b1, name1, b2, name2, existing_ports);
+    create_patch_port(ctx, key, value, b2, name2, b1, name1, existing_ports);
     free(name2);
     free(name1);
 }
@@ -187,9 +187,57 @@ add_bridge_mappings(struct controller_ctx *ctx,
             continue;
         }
 
-        create_patch_ports(ctx, network, br_int, ovs_bridge, existing_ports);
+        create_patch_ports(ctx, "ovn-localnet-port", network,
+                           br_int, ovs_bridge, existing_ports);
     }
     free(start);
+}
+
+/* Add one OVS patch port for each OVN logical patch port.
+ *
+ * This is suboptimal for several reasons.  First, it creates an OVS port for
+ * every OVN logical patch port, not just for the ones that are actually useful
+ * on this hypervisor.  Second, it's wasteful to create an OVS patch port per
+ * OVN logical patch port, when really there's no benefit to them beyond a way
+ * to identify how a packet ingressed into a logical datapath.
+ *
+ * There are two obvious ways to improve the situation here, by modifying
+ * OVS:
+ *
+ *     1. Add a way to configure in OVS which fields are preserved on a hop
+ *        across an OVS patch port.  If MFF_LOG_DATAPATH and MFF_LOG_INPORT
+ *        were preserved, then only a single pair of OVS patch ports would be
+ *        required regardless of the number of OVN logical patch ports.
+ *
+ *     2. Add a new OpenFlow extension action modeled on "resubmit" that also
+ *        saves and restores the packet data and metadata (the inability to do
+ *        this is the only reason that "resubmit" can't be used already).  Or
+ *        add OpenFlow extension actions to otherwise save and restore packet
+ *        data and metadata.
+ */
+static void
+add_logical_patch_ports(struct controller_ctx *ctx,
+                        const struct ovsrec_bridge *br_int,
+                        struct shash *existing_ports)
+{
+    const struct sbrec_port_binding *binding;
+    SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+        if (!strcmp(binding->type, "patch")) {
+            const char *local = binding->logical_port;
+            const char *peer = smap_get(&binding->options, "peer");
+            if (!peer) {
+                continue;
+            }
+
+            char *src_name = patch_port_name(local, peer);
+            char *dst_name = patch_port_name(peer, local);
+            create_patch_port(ctx, "ovn-logical-patch-port", local,
+                              br_int, src_name, br_int, dst_name,
+                              existing_ports);
+            free(dst_name);
+            free(src_name);
+        }
+    }
 }
 
 void
@@ -203,7 +251,8 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
     struct shash existing_ports = SHASH_INITIALIZER(&existing_ports);
     const struct ovsrec_port *port;
     OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
-        if (smap_get(&port->external_ids, "ovn-localnet-port")) {
+        if (smap_get(&port->external_ids, "ovn-localnet-port") ||
+            smap_get(&port->external_ids, "ovn-logical-patch-port")) {
             shash_add(&existing_ports, port->name, port);
         }
     }
@@ -212,6 +261,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
     add_bridge_mappings(ctx, br_int, &existing_ports);
+    add_logical_patch_ports(ctx, br_int, &existing_ports);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */

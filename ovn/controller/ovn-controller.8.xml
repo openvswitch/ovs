@@ -179,6 +179,20 @@
           value.
         </p>
       </dd>
+
+      <dt>
+        <code>external-ids:ovn-logical-patch-port</code> in the
+        <code>Port</code> table
+      </dt>
+
+      <dd>
+        <p>
+          This key identifies a patch port as one created by
+          <code>ovn-controller</code> to implement an OVN logical patch port
+          within the integration bridge.  Its value is the name of the OVN
+          logical patch port that it implements.
+        </p>
+      </dd>
     </dl>
 
     <h1>Runtime Management Commands</h1>
