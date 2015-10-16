@@ -264,16 +264,16 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
             continue;
         }
 
-        /* Translate logical table ID to physical table ID. */
+        /* Determine translation of logical table IDs to physical table IDs. */
         bool ingress = !strcmp(lflow->pipeline, "ingress");
-        uint8_t phys_table = lflow->table_id + (ingress
-                                                ? OFTABLE_LOG_INGRESS_PIPELINE
-                                                : OFTABLE_LOG_EGRESS_PIPELINE);
-        uint8_t next_phys_table
-            = lflow->table_id + 1 < LOG_PIPELINE_LEN ? phys_table + 1 : 0;
-        uint8_t output_phys_table = (ingress
-                                     ? OFTABLE_REMOTE_OUTPUT
-                                     : OFTABLE_LOG_TO_PHY);
+        uint8_t first_ptable = (ingress
+                                ? OFTABLE_LOG_INGRESS_PIPELINE
+                                : OFTABLE_LOG_EGRESS_PIPELINE);
+        uint8_t ptable = first_ptable + lflow->table_id;
+        uint8_t output_ptable = (ingress
+                                 ? OFTABLE_REMOTE_OUTPUT
+                                 : OFTABLE_LOG_TO_PHY);
+
         /* Translate OVN actions into OpenFlow actions.
          *
          * XXX Deny changes to 'outport' in egress pipeline. */
@@ -284,7 +284,8 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
         error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
-                                     next_phys_table, output_phys_table,
+                                     first_ptable, LOG_PIPELINE_LEN,
+                                     lflow->table_id, output_ptable,
                                      &ofpacts, &prereqs);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -329,7 +330,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
                 m->match.flow.conj_id += conj_id_ofs;
             }
             if (!m->n) {
-                ofctrl_add_flow(flow_table, phys_table, lflow->priority,
+                ofctrl_add_flow(flow_table, ptable, lflow->priority,
                                 &m->match, &ofpacts);
             } else {
                 uint64_t conj_stubs[64 / 8];
@@ -345,7 +346,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
                     dst->clause = src->clause;
                     dst->n_clauses = src->n_clauses;
                 }
-                ofctrl_add_flow(flow_table, phys_table, lflow->priority,
+                ofctrl_add_flow(flow_table, ptable, lflow->priority,
                                 &m->match, &conj);
                 ofpbuf_uninit(&conj);
             }

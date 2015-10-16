@@ -750,3 +750,24 @@ lexer_match_id(struct lexer *lexer, const char *id)
         return false;
     }
 }
+
+bool
+lexer_is_int(const struct lexer *lexer)
+{
+    return (lexer->token.type == LEX_T_INTEGER
+            && lexer->token.format == LEX_F_DECIMAL
+            && ntohll(lexer->token.value.integer) <= INT_MAX);
+}
+
+bool
+lexer_get_int(struct lexer *lexer, int *value)
+{
+    if (lexer_is_int(lexer)) {
+        *value = ntohll(lexer->token.value.integer);
+        lexer_get(lexer);
+        return true;
+    } else {
+        *value = 0;
+        return false;
+    }
+}

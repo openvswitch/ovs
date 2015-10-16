@@ -668,16 +668,11 @@ exit:
 static bool
 expr_get_int(struct expr_context *ctx, int *value)
 {
-    if (ctx->lexer->token.type == LEX_T_INTEGER
-        && ctx->lexer->token.format == LEX_F_DECIMAL
-        && ntohll(ctx->lexer->token.value.integer) <= INT_MAX) {
-        *value = ntohll(ctx->lexer->token.value.integer);
-        lexer_get(ctx->lexer);
-        return true;
-    } else {
+    bool ok = lexer_get_int(ctx->lexer, value);
+    if (!ok) {
         expr_syntax_error(ctx, "expecting small integer.");
-        return false;
     }
+    return ok;
 }
 
 static bool

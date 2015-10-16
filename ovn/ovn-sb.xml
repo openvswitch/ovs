@@ -767,8 +767,11 @@
         </dd>
 
         <dt><code>next;</code></dt>
+        <dt><code>next(<var>table</var>);</code></dt>
         <dd>
-          Executes the next logical datapath table as a subroutine.
+          Executes another logical datapath table as a subroutine.  By default,
+          the table after the current one is executed.  Specify
+          <var>table</var> to jump to a specific table in the same pipeline.
         </dd>
 
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>

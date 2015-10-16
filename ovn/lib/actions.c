@@ -27,17 +27,24 @@
 
 /* Context maintained during actions_parse(). */
 struct action_context {
-    /* Input. */
-    struct lexer *lexer;        /* Lexer for pulling more tokens. */
-    const struct shash *symtab; /* Symbol table. */
-    uint8_t next_table_id;      /* OpenFlow table for 'next' to resubmit. */
-    uint8_t output_table_id;    /* OpenFlow table for 'output' to resubmit. */
-    const struct simap *ports;  /* Map from port name to number. */
+/* Input. */
 
-    /* State. */
+    struct lexer *lexer;        /* Lexer for pulling more tokens. */
+    const struct simap *ports;  /* Map from port name to number. */
+    const struct shash *symtab; /* Symbol table. */
+
+    /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
+     * OpenFlow flow table (ptable).  These members describe the mapping and
+     * data related to flow tables. */
+    uint8_t n_tables;           /* Number of flow tables. */
+    uint8_t first_ptable;       /* First OpenFlow table. */
+    uint8_t cur_ltable;         /* 0 <= cur_ltable < n_tables. */
+    uint8_t output_ptable;      /* OpenFlow table for 'output' to resubmit. */
+
+/* State. */
     char *error;                /* Error, if any, otherwise NULL. */
 
-    /* Output. */
+/* Output. */
     struct ofpbuf *ofpacts;     /* Actions. */
     struct expr *prereqs;       /* Prerequisites to apply to match. */
 };
@@ -131,6 +138,48 @@ emit_resubmit(struct action_context *ctx, uint8_t table_id)
     resubmit->table_id = table_id;
 }
 
+static bool
+action_get_int(struct action_context *ctx, int *value)
+{
+    bool ok = lexer_get_int(ctx->lexer, value);
+    if (!ok) {
+        action_syntax_error(ctx, "expecting small integer");
+    }
+    return ok;
+}
+
+static void
+parse_next_action(struct action_context *ctx)
+{
+    if (!ctx->n_tables) {
+        action_error(ctx, "\"next\" action not allowed here.");
+    } else if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        int ltable;
+
+        if (!action_get_int(ctx, &ltable)) {
+            return;
+        }
+        if (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+            action_syntax_error(ctx, "expecting `)'");
+            return;
+        }
+
+        if (ltable >= ctx->n_tables) {
+            action_error(ctx, "\"next\" argument must be in range 0 to %d.",
+                         ctx->n_tables - 1);
+            return;
+        }
+
+        emit_resubmit(ctx, ctx->first_ptable + ltable);
+    } else {
+        if (ctx->cur_ltable < ctx->n_tables) {
+            emit_resubmit(ctx, ctx->first_ptable + ctx->cur_ltable + 1);
+        } else {
+            action_error(ctx, "\"next\" action not allowed in last table.");
+        }
+    }
+}
+
 static void
 parse_actions(struct action_context *ctx)
 {
@@ -158,13 +207,9 @@ parse_actions(struct action_context *ctx)
             || lookahead == LEX_T_LSQUARE) {
             parse_set_action(ctx);
         } else if (lexer_match_id(ctx->lexer, "next")) {
-            if (ctx->next_table_id) {
-                emit_resubmit(ctx, ctx->next_table_id);
-            } else {
-                action_error(ctx, "\"next\" action not allowed here.");
-            }
+            parse_next_action(ctx);
         } else if (lexer_match_id(ctx->lexer, "output")) {
-            emit_resubmit(ctx, ctx->output_table_id);
+            emit_resubmit(ctx, ctx->output_ptable);
         } else {
             action_syntax_error(ctx, "expecting action");
         }
@@ -188,11 +233,23 @@ parse_actions(struct action_context *ctx)
  * (as one would provide to expr_to_matches()).  Strings used in the actions
  * that are not in 'ports' are translated to zero.
  *
- * 'next_table_id' should be the OpenFlow table to which the "next" action will
- * resubmit, or 0 to disable "next".
+ * OVN maps each logical flow table (ltable), one-to-one, onto a physical
+ * OpenFlow flow table (ptable).  A number of parameters describe this mapping
+ * and data related to flow tables:
  *
- * 'output_table_id' should be the OpenFlow table to which the "output" action
- * will resubmit
+ *     - 'first_ptable' and 'n_tables' define the range of OpenFlow tables to
+ *       which the logical "next" action should be able to jump.  Logical table
+ *       0 maps to OpenFlow table 'first_ptable', logical table 1 to
+ *       'first_ptable + 1', and so on.  If 'n_tables' is 0 then "next" is
+ *       disallowed entirely.
+ *
+ *     - 'cur_ltable' is an offset from 'first_ptable' (e.g. 0 <= cur_ltable <
+ *       n_ptables) of the logical flow that contains the actions.  If
+ *       cur_ltable + 1 < n_tables, then this defines the default table that
+ *       "next" will jump to.
+ *
+ *     - 'output_ptable' should be the OpenFlow table to which the logical
+ *       "output" action will resubmit
  *
  * Some actions add extra requirements (prerequisites) to the flow's match.  If
  * so, this function sets '*prereqsp' to the actions' prerequisites; otherwise,
@@ -206,8 +263,9 @@ parse_actions(struct action_context *ctx)
   */
 char * OVS_WARN_UNUSED_RESULT
 actions_parse(struct lexer *lexer, const struct shash *symtab,
-              const struct simap *ports, uint8_t next_table_id,
-              uint8_t output_table_id, struct ofpbuf *ofpacts,
+              const struct simap *ports,
+              uint8_t first_ptable, uint8_t n_tables, uint8_t cur_ltable,
+              uint8_t output_ptable, struct ofpbuf *ofpacts,
               struct expr **prereqsp)
 {
     size_t ofpacts_start = ofpacts->size;
@@ -216,8 +274,10 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
     ctx.lexer = lexer;
     ctx.symtab = symtab;
     ctx.ports = ports;
-    ctx.next_table_id = next_table_id;
-    ctx.output_table_id = output_table_id;
+    ctx.first_ptable = first_ptable;
+    ctx.n_tables = n_tables;
+    ctx.cur_ltable = cur_ltable;
+    ctx.output_ptable = output_ptable;
     ctx.error = NULL;
     ctx.ofpacts = ofpacts;
     ctx.prereqs = NULL;
@@ -238,8 +298,9 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
 /* Like actions_parse(), but the actions are taken from 's'. */
 char * OVS_WARN_UNUSED_RESULT
 actions_parse_string(const char *s, const struct shash *symtab,
-                     const struct simap *ports, uint8_t next_table_id,
-                     uint8_t output_table_id, struct ofpbuf *ofpacts,
+                     const struct simap *ports, uint8_t first_table,
+                     uint8_t n_tables, uint8_t cur_table,
+                     uint8_t output_table, struct ofpbuf *ofpacts,
                      struct expr **prereqsp)
 {
     struct lexer lexer;
@@ -247,8 +308,8 @@ actions_parse_string(const char *s, const struct shash *symtab,
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    error = actions_parse(&lexer, symtab, ports, next_table_id,
-                          output_table_id, ofpacts, prereqsp);
+    error = actions_parse(&lexer, symtab, ports, first_table, n_tables,
+                          cur_table, output_table, ofpacts, prereqsp);
     lexer_destroy(&lexer);
 
     return error;

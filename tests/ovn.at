@@ -438,9 +438,11 @@ dnl Text before => is input, text after => is expected output.
 AT_DATA([test-cases.txt], [[
 # Positive tests.
 drop; => actions=drop, prereqs=1
-next; => actions=resubmit(,11), prereqs=1
+next; => actions=resubmit(,27), prereqs=1
+next(0); => actions=resubmit(,16), prereqs=1
+next(15); => actions=resubmit(,31), prereqs=1
 output; => actions=resubmit(,64), prereqs=1
-outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,11),set_field:0xfffe->reg7,resubmit(,11), prereqs=1
+outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,27),set_field:0xfffe->reg7,resubmit(,27), prereqs=1
 tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
 eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
 vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
@@ -470,6 +472,10 @@ next; drop; => Syntax error at `drop' expecting action.
 
 # Missing ";":
 next => Syntax error at end of input expecting ';'.
+
+next(); => Syntax error at `)' expecting small integer.
+next(10; => Syntax error at `;' expecting `)'.
+next(16); => "next" argument must be in range 0 to 15.
 
 inport[1] = 1; => Cannot select subfield of string field inport.
 ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
