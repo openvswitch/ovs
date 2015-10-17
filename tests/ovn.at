@@ -887,6 +887,11 @@ vif_to_hv() {
     esac
 }
 
+# Prints the first character of its argument, e.g. "vif_to_ls 12" yields 1.
+vif_to_ls() {
+    echo $1 | sed 's/^\(.\).*/\1/'
+}
+
 net_add n1
 for i in 1 2 3; do
     sim_add hv$i
@@ -915,7 +920,7 @@ ovn_populate_arp
 # XXX This should be more systematic.
 sleep 1
 
-# test_packet INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+# test_ip INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
 #
 # This shell function causes a packet to be received on INPORT.  The packet's
 # content has Ethernet destination DST and source SRC (each exactly 12 hex
@@ -930,7 +935,7 @@ for i in 1 2 3; do
         : > $i$j.expected
     done
 done
-test_packet() {
+test_ip() {
     # This packet has bad checksums but logical L3 routing doesn't check.
     local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
     local packet=$3$208004500001c0000000040110000$4$50035111100080000
@@ -939,8 +944,8 @@ test_packet() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        ins=`echo $inport | sed 's/^\(.\).*/\1/'`
-        outs=`echo $outport | sed 's/^\(.\).*/\1/'`
+        ins=`vif_to_ls $inport`
+        outs=`vif_to_ls $outport`
         if test $ins = $outs; then
             # Ports on the same logical switch receive exactly the same packet.
             echo $packet
@@ -952,10 +957,11 @@ test_packet() {
     done
 }
 
+as hv1 ovs-vsctl --columns=name,ofport list interface
 as hv1 ovn-sbctl dump-flows
 as hv1 ovs-ofctl dump-flows br-int
 
-# Send packets between all pairs of source and destination ports:
+# Send IP packets between all pairs of source and destination ports:
 #
 # 1. Unicast IP packets are delivered to exactly one lport (except
 #    that packets destined to their input ports are dropped).
@@ -974,12 +980,69 @@ for is in 1 2 3; do
                 if test $is = $id; then dmac=f000000000$d; else dmac=00000000ff0$is; fi
                 if test $d != $s; then unicast=$d; else unicast=; fi
 
-                test_packet $s $smac $dmac $sip $dip $unicast #1
+                test_ip $s $smac $dmac $sip $dip $unicast #1
 
                 if test $id = $is && test $jd != $js; then bcast="$bcast $d"; fi
             done
         done
-        test_packet $s $smac ffffffffffff $sip ffffffff $bcast #2
+        test_ip $s $smac ffffffffffff $sip ffffffff $bcast #2
+    done
+done
+
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an lport number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
+    local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+    hv=hv`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $request
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
+
+    # Expect to receive the broadcast ARP on the other logical switch ports.
+    # (OVN should probably suppress these.)
+    local i=`vif_to_ls $inport`
+    local j
+    for j in 1 2 3; do
+        if test $i$j != $inport; then
+            echo $request >> $i$j.expected
+        fi
+    done
+
+    # Expect to receive the reply, if any.
+    if test X$reply_ha != X; then
+        local reply=${sha}00000000ff0${i}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+        echo $reply >> $inport.expected
+    fi
+}
+
+# Test router replies to ARP requests from all source ports:
+#
+# 3. Router replies to query for its MAC address from port's own IP address.
+#
+# 4. Router replies to query for its MAC address from any random IP address
+#    in its subnet.
+#
+# 5. Router replies to query for its MAC address from another subnet.
+#
+# 6. No reply to query for IP address other than router IP.
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        smac=f000000000$i$j     # Source MAC
+        sip=c0a80${i}0${j}      # Source IP
+        rip=c0a80${i}fe         # Router IP
+        rmac=00000000ff0$i      # Router MAC
+        test_arp $i$j $smac $sip        $rip        $rmac #3
+        test_arp $i$j $smac c0a80${i}55 $rip        $rmac #4
+        test_arp $i$j $smac 0a123456    $rip        $rmac #5
+        test_arp $i$j $smac $sip        c0a80${i}aa       #6
     done
 done
 
