@@ -778,6 +778,18 @@
       </p>
 
       <p>
+        Logical patch ports are a special case.  Logical patch ports do not
+        have a physical location and effectively reside on every hypervisor.
+        Thus, flow table 33, for output to ports on the local hypervisor,
+        naturally implements output to unicast logical patch ports too.
+        However, applying the same logic to a logical patch port that is part
+        of a logical multicast group yields packet duplication, because each
+        hypervisor that contains a logical port in the multicast group will
+        also output the packet to the logical patch port.  Thus, multicast
+        groups implement output to logical patch ports in table 32.
+      </p>
+
+      <p>
         Each flow in table 32 matches on a logical output port for unicast or
         multicast logical ports that include a logical port on a remote
         hypervisor.  Each flow's actions implement sending a packet to the port
@@ -796,9 +808,7 @@
 
       <p>
         Flows in table 33 resemble those in table 32 but for logical ports that
-        reside locally rather than remotely.  (This includes logical patch
-        ports, which do not have a physical location and effectively reside on
-        every hypervisor.)  For unicast logical output ports
+        reside locally rather than remotely.  For unicast logical output ports
         on the local hypervisor, the actions just resubmit to table 34.  For
         multicast output ports that include one or more logical ports on the
         local hypervisor, for each such logical port <var>P</var>, the actions
