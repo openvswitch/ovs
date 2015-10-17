@@ -47,12 +47,6 @@ various ways to ensure it could be implemented, e.g. the same as for
 OpenFlow by allowing the logical inport to be zeroed, or by
 introducing a new action that ignores the inport.
 
-** ovn-northd
-
-*** What flows should it generate?
-
-See description in ovn-northd(8).
-
 ** New OVN logical actions
 
 *** arp
@@ -166,13 +160,7 @@ userspace-only and no one has complained yet.)
 
 *** ICMPv6
 
-** IP to MAC binding
-
-Somehow it has to be possible for an L3 logical router to map from an
-IP address to an Ethernet address.  This can happen statically or
-dynamically.  Probably both cases need to be supported eventually.
-
-*** Dynamic IP to MAC bindings
+** Dynamic IP to MAC bindings
 
 Some bindings from IP address to MAC will undoubtedly need to be
 discovered dynamically through ARP requests.  It's straightforward
@@ -193,32 +181,32 @@ place for this in the OVN_Southbound database.
 
 Details need to be worked out, including:
 
-**** OVN_Southbound schema changes.
+*** OVN_Southbound schema changes.
 
 Possibly bindings could be added to the Port_Binding table by adding
 or modifying columns.  Another possibility is that another table
 should be added.
 
-**** Logical_Flow representation
+*** Logical_Flow representation
 
 It would be really nice to maintain the general-purpose nature of
 logical flows, but these bindings might have to include some
 hard-coded special cases, especially when it comes to the relationship
 with populating the bindings into the OVN_Southbound table.
 
-**** Tracking queries
+*** Tracking queries
 
 It's probably best to only record in the database responses to queries
 actually issued by an L3 logical router, so somehow they have to be
 tracked, probably by putting a tentative binding without a MAC address
 into the database.
 
-**** Renewal and expiration.
+*** Renewal and expiration.
 
 Something needs to make sure that bindings remain valid and expire
 those that become stale.
 
-*** MTU handling (fragmentation on output)
+** MTU handling (fragmentation on output)
 
 ** Ratelimiting.
 

@@ -1078,12 +1078,28 @@ tcp.flags = RST;
       constructed for each supported encapsulation.
     </column>
 
-    <column name="external_ids" key="logical-switch" type='{"type": "uuid"}'>
-      Each row in <ref table="Datapath_Binding"/> is associated with some
-      logical datapath.  <code>ovn-northd</code> uses this key to store the
-      UUID of the logical datapath <ref table="Logical_Switch"
-      db="OVN_Northbound"/> row in the <ref db="OVN_Northbound"/> database.
-    </column>
+    <group title="OVN_Northbound Relationship">
+      <p>
+        Each row in <ref table="Datapath_Binding"/> is associated with some
+        logical datapath.  <code>ovn-northd</code> uses these keys to track the
+        association of a logical datapath with concepts in the <ref
+        db="OVN_Northbound"/> database.
+      </p>
+
+      <column name="external_ids" key="logical-switch" type='{"type": "uuid"}'>
+        For a logical datapath that represents a logical switch,
+        <code>ovn-northd</code> stores in this key the UUID of the
+        corresponding <ref table="Logical_Switch" db="OVN_Northbound"/> row in
+        the <ref db="OVN_Northbound"/> database.
+      </column>
+
+      <column name="external_ids" key="logical-router" type='{"type": "uuid"}'>
+        For a logical datapath that represents a logical router,
+        <code>ovn-northd</code> stores in this key the UUID of the
+        corresponding <ref table="Logical_Router" db="OVN_Northbound"/> row in
+        the <ref db="OVN_Northbound"/> database.
+      </column>
+    </group>
 
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common

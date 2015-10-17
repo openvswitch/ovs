@@ -512,12 +512,13 @@ AT_CLEANUP
 
 AT_BANNER([OVN end-to-end tests])
 
-AT_SETUP([ovn -- 3 HVs, 3 VIFs/HV, 1 logical switch])
+# 3 hypervisors, one logical switch, 3 logical ports per hypervisor
+AT_SETUP([ovn -- 3 HVs, 1 LS, 3 lports/HV])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
 # Create hypervisors hv[123].
-# Add vif1[123] to hv1, vif2[123] to hv2, vif3[123].
+# Add vif1[123] to hv1, vif2[123] to hv2, vif3[123] to hv3.
 # Add all of the vifs to a single logical switch lsw0.
 # Turn on port security on all the vifs except vif[123]1.
 # Make vif13, vif2[23], vif3[123] destinations for unknown MACs.
@@ -679,8 +680,7 @@ for i in 1 2 3; do
 done
 AT_CLEANUP
 
-
-AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 gateway, 1 logical switch])
+AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -833,5 +833,168 @@ for i in 1 2 3; do
     cp $i.expected expout
     AT_CHECK([cat $i.packets], [0], [expout])
     echo
+done
+AT_CLEANUP
+
+# 3 hypervisors, 3 logical switches with 3 logical ports each, 1 logical router
+AT_SETUP([ovn -- 3 HVs, 3 LS, 3 lports/LS, 1 LR])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+#
+# Three logical switches ls1, ls2, ls3.
+# Three VIFs on each: lp1[123], lp2[123], lp3[123].
+# One logical router lr connected to ls[123].
+ovn-nbctl \
+    -- create Logical_Router name=lr0 ports=@lrp1,@lrp2,@lrp3 \
+    -- --id=@lrp1 create Logical_Router_Port name=lrp1 \
+       network=192.168.1.254/24 mac='"00:00:00:00:ff:01"' \
+    -- --id=@lrp2 create Logical_Router_Port name=lrp2 \
+       network=192.168.2.254/24 mac='"00:00:00:00:ff:02"' \
+    -- --id=@lrp3 create Logical_Router_Port name=lrp3 \
+       network=192.168.3.254/24 mac='"00:00:00:00:ff:03"'
+for i in 1 2 3; do
+    lrp_uuid=`ovn-nbctl get Logical_Router_Port lrp$i _uuid`
+    ovn-nbctl \
+        -- lswitch-add ls$i \
+        -- lport-add ls$i lrp$i-attachment \
+        -- set Logical_Port lrp$i-attachment type=router \
+                                             options:router-port=$lrp_uuid \
+                                             addresses='"00:00:00:00:ff:0'$i'"'
+    for j in 1 2 3; do
+        ovn-nbctl \
+            -- lport-add ls$i lp$i$j \
+            -- lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.$i.$j"
+    done
+done
+
+# Physical network:
+#
+# Three hypervisors hv[123].
+# lp1[123] spread across hv[123]: lp11 on hv1, lp12 on hv2, lp13 on hv3.
+# lp2[123] spread across hv[23]: lp21 and lp22 on hv2, lp23 on hv3.
+# lp3[123] all on hv3.
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    case $1 in dnl (
+        11) echo 1 ;; dnl (
+        12 | 21 | 22) echo 2 ;; dnl (
+        13 | 23 | 3?) echo 3 ;;
+    esac
+}
+
+net_add n1
+for i in 1 2 3; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+done
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        hv=`vif_to_hv $i$j`
+        as hv$hv ovs-vsctl \
+            -- add-port br-int vif$i$j \
+            -- set Interface vif$i$j external-ids:iface-id=lp$i$j \
+                                     options:tx_pcap=hv$hv/vif$i$j-tx.pcap \
+                                     options:rxq_pcap=hv$hv/vif$i$j-rx.pcap \
+                                     ofport-request=$i$j
+    done
+done
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# test_packet INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as lport numbers, e.g. 11 for vif11.
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        : > $i$j.expected
+    done
+done
+test_packet() {
+    # This packet has bad checksums but logical L3 routing doesn't check.
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local packet=$3$208004500001c0000000040110000$4$50035111100080000
+    shift; shift; shift; shift; shift
+    hv=hv`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
+    for outport; do
+        ins=`echo $inport | sed 's/^\(.\).*/\1/'`
+        outs=`echo $outport | sed 's/^\(.\).*/\1/'`
+        if test $ins = $outs; then
+            # Ports on the same logical switch receive exactly the same packet.
+            echo $packet
+        else
+            # Routing decrements TTL and updates source and dest MAC
+            # (and checksum).
+            echo f000000000${outport}00000000ff0${outs}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
+        fi | trim_zeros >> $outport.expected
+    done
+}
+
+as hv1 ovn-sbctl dump-flows
+as hv1 ovs-ofctl dump-flows br-int
+
+# Send packets between all pairs of source and destination ports:
+#
+# 1. Unicast IP packets are delivered to exactly one lport (except
+#    that packets destined to their input ports are dropped).
+#
+# 2. Broadcast IP packets are delivered to all lports except the input port.
+for is in 1 2 3; do
+    for js in 1 2 3; do
+        bcast=
+        s=$is$js
+        smac=f000000000$s
+        sip=c0a80${is}0${js}
+        for id in 1 2 3; do
+            for jd in 1 2 3; do
+                d=$id$jd
+                dip=c0a80${id}0${jd}
+                if test $is = $id; then dmac=f000000000$d; else dmac=00000000ff0$is; fi
+                if test $d != $s; then unicast=$d; else unicast=; fi
+
+                test_packet $s $smac $dmac $sip $dip $unicast #1
+
+                if test $id = $is && test $jd != $js; then bcast="$bcast $d"; fi
+            done
+        done
+        test_packet $s $smac ffffffffffff $sip ffffffff $bcast #2
+    done
+done
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 1
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        file=hv`vif_to_hv $i$j`/vif$i$j-tx.pcap
+        echo $file
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
+        cp $i$j.expected expout
+        AT_CHECK([cat $i$j.packets], [0], [expout])
+        echo
+    done
 done
 AT_CLEANUP
