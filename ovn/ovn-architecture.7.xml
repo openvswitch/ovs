@@ -596,7 +596,7 @@
     </li>
   </ol>
 
-  <h2>Life Cycle of a Packet</h2>
+  <h2>Architectural Physical Life Cycle of a Packet</h2>
 
   <p>
     This section describes how a packet travels from one virtual machine or

@@ -240,12 +240,12 @@
       The default action when no flow matches is to drop packets.
     </p>
 
-    <p><em>Logical Life Cycle of a Packet</em></p>
+    <p><em>Architectural Logical Life Cycle of a Packet</em></p>
 
     <p>
       This following description focuses on the life cycle of a packet through
       a logical datapath, ignoring physical details of the implementation.
-      Please refer to <em>Life Cycle of a Packet</em> in
+      Please refer to <em>Architectural Physical Life Cycle of a Packet</em> in
       <code>ovn-architecture</code>(7) for the physical information.
     </p>
 
@@ -907,13 +907,94 @@
       </p>
 
       <dl>
-        <dt><code>learn</code></dt>
 
-        <dt><code>icmp_reply { <var>action</var>, </code>...<code> };</code></dt>
-        <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
+        <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>
+        <dd>
+          <p>
+            Temporarily replaces the IPv4 packet being processed by an ARP
+            packet and executes each nested <var>action</var> on the ARP
+            packet.  Actions following the <var>arp</var> action, if any, apply
+            to the original, unmodified packet.
+          </p>
 
-        <dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
-        <dd>generate ARP from packet, execute <var>action</var>s</dd>
+          <p>
+            The ARP packet that this action operates on is initialized based on
+            the IPv4 packet being processed, as follows.  These are default
+            values that the nested actions will probably want to change:
+          </p>
+
+          <ul>
+            <li><code>eth.src</code> unchanged</li>
+            <li><code>eth.dst</code> unchanged</li>
+            <li><code>eth.type = 0x0806</code></li>
+            <li><code>arp.op = 1</code> (ARP request)</li>
+            <li><code>arp.sha</code> copied from <code>eth.src</code></li>
+            <li><code>arp.spa</code> copied from <code>ip4.src</code></li>
+            <li><code>arp.tha = 00:00:00:00:00:00</code></li>
+            <li><code>arp.tpa</code> copied from <code>ip4.dst</code></li>
+          </ul>
+
+          <p><b>Prerequisite:</b> <code>ip4</code></p>
+        </dd>
+
+        <dt><code>icmp4 { <var>action</var>; </code>...<code> };</code></dt>
+        <dd>
+          <p>
+            Temporarily replaces the IPv4 packet being processed by an ICMPv4
+            packet and executes each nested <var>action</var> on the ICMPv4
+            packet.  Actions following the <var>icmp4</var> action, if any,
+            apply to the original, unmodified packet.
+          </p>
+
+          <p>
+            The ICMPv4 packet that this action operates on is initialized based
+            on the IPv4 packet being processed, as follows.  These are default
+            values that the nested actions will probably want to change.
+            Ethernet and IPv4 fields not listed here are not changed:
+          </p>
+
+          <ul>
+            <li><code>ip.proto = 1</code> (ICMPv4)</li>
+            <li><code>ip.frag = 0</code> (not a fragment)</li>
+            <li><code>icmp4.type = 3</code> (destination unreachable)</li>
+            <li><code>icmp4.code = 1</code> (host unreachable)</li>
+          </ul>
+
+          <p>
+            Details TBD.
+          </p>
+
+          <p><b>Prerequisite:</b> <code>ip4</code></p>
+        </dd>
+
+        <dt><code>tcp_reset;</code></dt>
+        <dd>
+          <p>
+            This action transforms the current TCP packet according to the
+            following pseudocode:
+          </p>
+
+          <pre>
+if (tcp.ack) {
+        tcp.seq = tcp.ack;
+} else {
+        tcp.ack = tcp.seq + length(tcp.payload);
+        tcp.seq = 0;
+}
+tcp.flags = RST;
+</pre>
+
+          <p>
+            Then, the action drops all TCP options and payload data, and
+            updates the TCP checksum.
+          </p>
+
+          <p>
+            Details TBD.
+          </p>
+
+          <p><b>Prerequisite:</b> <code>tcp</code></p>
+        </dd>
       </dl>
     </column>
 

@@ -1,3 +1,272 @@
+-*- outline -*-
+
+* L3 support
+
+** OVN_Northbound schema
+
+*** Needs to support interconnected routers
+
+It should be possible to connect one router to another, e.g. to
+represent a provider/tenant router relationship.  This requires
+an OVN_Northbound schema change.
+
+*** Needs to support extra routes
+
+Currently a router port has a single route associated with it, but
+presumably we should support multiple routes.  For connections from
+one router to another, this doesn't seem to matter (just put more than
+one connection between them), but for connections between a router and
+a switch it might matter because a switch has only one router port.
+
+** OVN_SB schema
+
+*** Logical datapath interconnection
+
+There needs to be a way in the OVN_Southbound database to express
+connections between logical datapaths, so that packets can pass from a
+logical switch to its logical router (and vice versa) and from one
+logical router to another.
+
+One way to do this would be to introduce logical patch ports, closely
+modeled on the "physical" patch ports that OVS has had for ages.  Each
+logical patch port would consist of two rows in the Port_Binding table
+(one in each logical datapath), with type "patch" and an option "peer"
+that names the other logical port in the pair.
+
+If we do it this way then we'll need to figure out one odd special
+case.  Currently the ACL table documents that the logical router port
+is always named "ROUTER".  This can't be done directly with this patch
+port technique, because every row in the Logical_Port table must have
+a unique name.  This probably means that we should change the
+convention for the ACL table so that the logical router port name is
+unique; for example, we could change the Logical_Router_Port table to
+require the 'name' column to be unique, and then use that name in the
+ACL table.
+
+*** Allow output to ingress port
+
+Sometimes when a packet ingresses into a router, it has to egress the
+same port.  One example is a "one-armed" router that has multiple
+routes on a single port (or in which a host is (mis)configured to send
+every IP packet to the router, e.g. due to a bad netmask).  Another is
+when a router needs to send an ICMP reply to an ingressing packet.
+
+To some degree this problem is layered, because there are two
+different notions of "ingress port".  The first is the OpenFlow
+ingress port, essentially a physical port identifier.  This is
+implemented as part of ovs-vswitchd's OpenFlow implementation.  It
+prevents a reply from being sent across the tunnel on which it
+arrived.  It is questionable whether this OpenFlow feature is useful
+to OVN.  (OVN already has to override it to allow a packet from one
+nested container to be forwarded to a different nested container.)
+OVS make it possible to disable this feature of OpenFlow by setting
+the OpenFlow input port field to 0.  (If one does this too early, of
+course, it means that there's no way to actually match on the input
+port in the OpenFlow flow tables, but one can work around that by
+instead setting the input port just before the output action, possibly
+wrapping these actions in push/pop pairs to preserve the input port
+for later.)
+
+The second is the OVN logical ingress port, which is implemented in
+ovn-controller as part of the logical abstraction, using an OVS
+register.  Dropping packets directed to the logical ingress port is
+implemented through an OpenFlow table not directly visible to the
+logical flow table.  Currently this behavior can't be disabled, but
+various ways to ensure it could be implemented, e.g. the same as for
+OpenFlow by allowing the logical inport to be zeroed, or by
+introducing a new action that ignores the inport.
+
+** ovn-northd
+
+*** What flows should it generate?
+
+See description in ovn-northd(8).
+
+** New OVN logical actions
+
+*** arp
+
+Generates an ARP packet based on the current IPv4 packet and allows it
+to be processed as part of the current pipeline (and then pop back to
+processing the original IPv4 packet).
+
+TCP/IP stacks typically limit the rate at which ARPs are sent, e.g. to
+one per second for a given target.  We might need to do this too.
+
+We probably need to buffer the packet that generated the ARP.  I don't
+know where to do that.
+
+*** icmp4 { action... }
+
+Generates an ICMPv4 packet based on the current IPv4 packet and
+processes it according to each nested action (and then pops back to
+processing the original IPv4 packet).  The intended use case is for
+generating "time exceeded" and "destination unreachable" errors.
+
+ovn-sb.xml includes a tentative specification for this action.
+
+Tentatively, the icmp4 action sets a default icmp_type and icmp_code
+and lets the nested actions override it.  This means that we'd have to
+make icmp_type and icmp_code writable.  Because changing icmp_type and
+icmp_code can change the interpretation of the rest of the data in the
+ICMP packet, we would want to think this through carefully.  If it
+seems like a bad idea then we could instead make the type and code a
+parameter to the action: icmp4(type, code) { action... }
+
+It is worth considering what should be considered the ingress port for
+the ICMPv4 packet.  It's quite likely that the ICMPv4 packet is going
+to go back out the ingress port.  Maybe the icmp4 action, therefore,
+should clear the inport, so that output to the original inport won't
+be discarded.
+
+*** tcp_reset
+
+Transforms the current TCP packet into a RST reply.
+
+ovn-sb.xml includes a tentative specification for this action.
+
+*** Other actions for IPv6.
+
+IPv6 will probably need an action or actions for ND that is similar to
+the "arp" action, and an action for generating
+
+*** ovn-controller translation to OpenFlow
+
+The following two translation strategies come to mind.  Some of the
+new actions we might want to implement one way, some of them the
+other, depending on the details.
+
+*** Implementation strategies
+
+One way to do this is to define new actions as Open vSwitch extensions
+to OpenFlow, emit those actions in ovn-controller, and implement them
+in ovs-vswitchd (possibly pushing the implementations into the Linux
+and DPDK datapaths as well).  This is the only acceptable way for
+actions that need high performance.  None of these actions obviously
+need high performance, but it might be necessary to have fairness in
+handling e.g. a flood of incoming packets that require these actions.
+The main disadvantage of this approach is that it ties ovs-vswitchd
+(and the Linux kernel module) to supporting these actions essentially
+forever, which means that we'd want to make sure that they are
+general-purpose, well designed, maintainable, and supportable.
+
+The other way to do this is to send the packets across an OpenFlow
+channel to ovn-controller and have ovn-controller process them.  This
+is acceptable for actions that don't need high performance, and it
+means that we don't add anything permanently to ovs-vswitchd or the
+kernel (so we can be more casual about the design).  The big
+disadvantage is that it becomes necessary to add a way to resume the
+OpenFlow pipeline when it is interrupted in the middle by sending a
+packet to the controller.  This is not as simple as doing a new flow
+table lookup and resuming from that point.  Instead, it is equivalent
+to the (very complicated) recirculation logic in ofproto-dpif-xlate.c.
+Much of this logic can be translated into OpenFlow actions (e.g. the
+call stack and data stack), but some of it is entirely outside
+OpenFlow (e.g. the state of mirrors).  To implement it properly, it
+seems that we'll have to introduce a new Open vSwitch extension to
+OpenFlow, a "send-to-controller" action that causes extra data to be
+sent to the controller, where the extra data packages up the state
+necessary to resume the pipeline.  Maybe the bits of the state that
+can be represented in OpenFlow can be embedded in this extra data in a
+controller-readable form, but other bits we might want to be opaque.
+It's also likely that we'll want to change and extend the form of this
+opaque data over time, so this should be allowed for, e.g. by
+including a nonce in the extra data that is newly generated every time
+ovs-vswitchd starts.
+
+*** OpenFlow action definitions
+
+Define OpenFlow wire structures for each new OpenFlow action and
+implement them in lib/ofp-actions.[ch].
+
+*** OVS implementation
+
+Add code for action translation.  Possibly add datapath code for
+action implementation.  However, none of these new actions should
+require high-bandwidth processing so we could at least start with them
+implemented in userspace only.  (ARP field modification is already
+userspace-only and no one has complained yet.)
+
+** IPv6
+
+*** ND versus ARP
+
+*** IPv6 routing
+
+*** ICMPv6
+
+** IP to MAC binding
+
+Somehow it has to be possible for an L3 logical router to map from an
+IP address to an Ethernet address.  This can happen statically or
+dynamically.  Probably both cases need to be supported eventually.
+
+*** Static IP to MAC binding
+
+Commonly, for a VM, the binding of an IP address to a MAC is known
+statically.  The Logical_Port table in the OVN_Northbound schema can
+be revised to make these bindings known.  Then ovn-northd can
+integrate the bindings into the logical router flow table.
+(ovn-northd can also integrate them into the logical switch flow table
+to terminate ARP requests from VIFs.)
+
+*** Dynamic IP to MAC bindings
+
+Some bindings from IP address to MAC will undoubtedly need to be
+discovered dynamically through ARP requests.  It's straightforward
+enough for a logical L3 router to generate ARP requests and forward
+them to the appropriate switch.
+
+It's more difficult to figure out where the reply should be processed
+and stored.  It might seem at first that a first-cut implementation
+could just keep track of the binding on the hypervisor that needs to
+know, but that can't happen easily because the VM that sends the reply
+might not be on the same HV as the VM that needs the answer (that is,
+the VM that sent the packet that needs the binding to be resolved) and
+there isn't an easy way for it to know which HV needs the answer.
+
+Thus, the HV that processes the ARP reply (which is unknown when the
+ARP is sent) has to tell all the HVs the binding.  The most obvious
+place for this in the OVN_Southbound database.
+
+Details need to be worked out, including:
+
+**** OVN_Southbound schema changes.
+
+Possibly bindings could be added to the Port_Binding table by adding
+or modifying columns.  Another possibility is that another table
+should be added.
+
+**** Logical_Flow representation
+
+It would be really nice to maintain the general-purpose nature of
+logical flows, but these bindings might have to include some
+hard-coded special cases, especially when it comes to the relationship
+with populating the bindings into the OVN_Southbound table.
+
+**** Tracking queries
+
+It's probably best to only record in the database responses to queries
+actually issued by an L3 logical router, so somehow they have to be
+tracked, probably by putting a tentative binding without a MAC address
+into the database.
+
+**** Renewal and expiration.
+
+Something needs to make sure that bindings remain valid and expire
+those that become stale.
+
+*** MTU handling (fragmentation on output)
+
+** Ratelimiting.
+
+*** ARP.
+
+*** ICMP error generation, TCP reset, UDP unreachable, protocol unreachable, ...
+
+As a point of comparison, Linux doesn't ratelimit TCP resets but I
+think it does everything else.
+
 * ovn-controller
 
 ** ovn-controller parameters and configuration.
