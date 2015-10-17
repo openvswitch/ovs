@@ -142,9 +142,10 @@
         </p>
 
         <p>
-          A given logical switch may have at most one logical port of type
-          <code>router</code>.  (This is not a significant restriction because
-          logical routers may be connected into arbitrary topologies.)
+          If a given logical switch has multiple <code>router</code> ports, the
+          <ref table="Logical_Router_Port"/> rows that they reference must be
+          all on the same <ref table="Logical_Router"/> (for different
+          subnets).
         </p>
 
         <column name="options" key="router-port" type='{"type": "uuid"}'>

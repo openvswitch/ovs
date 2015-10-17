@@ -2,16 +2,6 @@
 
 * L3 support
 
-** OVN_Northbound schema
-
-*** Needs to support extra routes
-
-Currently a router port has a single route associated with it, but
-presumably we should support multiple routes.  For connections from
-one router to another, this doesn't seem to matter (just put more than
-one connection between them), but for connections between a router and
-a switch it might matter because a switch has only one router port.
-
 ** New OVN logical actions
 
 *** arp

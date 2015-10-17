@@ -237,7 +237,8 @@ struct ovn_datapath {
     ovs_be32 gateway;
 
     /* Logical switch data. */
-    struct ovn_port *router_port;
+    struct ovn_port **router_ports;
+    size_t n_router_ports;
 
     struct hmap port_tnlids;
     uint32_t port_key_hint;
@@ -271,6 +272,7 @@ ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
          * use it. */
         hmap_remove(datapaths, &od->key_node);
         destroy_tnlids(&od->port_tnlids);
+        free(od->router_ports);
         free(od);
     }
 }
@@ -634,7 +636,10 @@ join_logical_ports(struct northd_context *ctx,
 
             peer->peer = op;
             op->peer = peer;
-            op->od->router_port = op;
+            op->od->router_ports = xrealloc(
+                op->od->router_ports,
+                sizeof *op->od->router_ports * (op->od->n_router_ports + 1));
+            op->od->router_ports[op->od->n_router_ports++] = op;
         } else if (op->nbr && op->nbr->peer) {
             char peer_name[UUID_LEN + 1];
             snprintf(peer_name, sizeof peer_name, UUID_FMT,
@@ -1431,18 +1436,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     HMAP_FOR_EACH (op, key_node, ports) {
         if (op->nbr) {
             /* XXX ARP for neighboring router */
-        } else if (op->od->router_port) {
-            const char *peer_name = smap_get(
-                &op->od->router_port->nbs->options, "router-port");
-            if (!peer_name) {
-                continue;
-            }
-
-            struct ovn_port *peer = ovn_port_find(ports, peer_name);
-            if (!peer || !peer->nbr) {
-                continue;
-            }
-
+        } else if (op->od->n_router_ports) {
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
                 struct eth_addr ea;
                 ovs_be32 ip;
@@ -1450,18 +1444,41 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 if (ovs_scan(op->nbs->addresses[i],
                              ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
                              ETH_ADDR_SCAN_ARGS(ea), IP_SCAN_ARGS(&ip))) {
-                    char *match = xasprintf("reg0 == "IP_FMT, IP_ARGS(ip));
-                    char *actions = xasprintf("eth.src = "ETH_ADDR_FMT"; "
-                                              "eth.dst = "ETH_ADDR_FMT"; "
-                                              "outport = %s; "
-                                              "output;",
-                                              ETH_ADDR_ARGS(peer->mac),
-                                              ETH_ADDR_ARGS(ea),
-                                              peer->json_key);
-                    ovn_lflow_add(lflows, peer->od,
-                                  S_ROUTER_IN_ARP, 200, match, actions);
-                    free(actions);
-                    free(match);
+                    for (size_t j = 0; j < op->od->n_router_ports; j++) {
+                        /* Get the Logical_Router_Port that the Logical_Port is
+                         * connected to, as 'peer'. */
+                        const char *peer_name = smap_get(
+                            &op->od->router_ports[j]->nbs->options,
+                            "router-port");
+                        if (!peer_name) {
+                            continue;
+                        }
+
+                        struct ovn_port *peer
+                            = ovn_port_find(ports, peer_name);
+                        if (!peer || !peer->nbr) {
+                            continue;
+                        }
+
+                        /* Make sure that 'ip' is in 'peer''s network. */
+                        if ((ip ^ peer->network) & peer->mask) {
+                            continue;
+                        }
+
+                        char *match = xasprintf("reg0 == "IP_FMT, IP_ARGS(ip));
+                        char *actions = xasprintf("eth.src = "ETH_ADDR_FMT"; "
+                                                  "eth.dst = "ETH_ADDR_FMT"; "
+                                                  "outport = %s; "
+                                                  "output;",
+                                                  ETH_ADDR_ARGS(peer->mac),
+                                                  ETH_ADDR_ARGS(ea),
+                                                  peer->json_key);
+                        ovn_lflow_add(lflows, peer->od,
+                                      S_ROUTER_IN_ARP, 200, match, actions);
+                        free(actions);
+                        free(match);
+                        break;
+                    }
                 }
             }
         }
