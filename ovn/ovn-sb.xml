@@ -857,6 +857,18 @@
           </p>
         </dd>
 
+        <dt><code>ip.ttl--;</code></dt>
+        <dd>
+          <p>
+            Decrements the IPv4 or IPv6 TTL.  If this would make the TTL zero
+            or negative, then processing of the packet halts; no further
+            actions are processed.  (To properly handle such cases, a
+            higher-priority flow should match on <code>ip.ttl &lt; 2</code>.)
+          </p>
+
+          <p><b>Prerequisite:</b> <code>ip</code></p>
+        </dd>
+
         <dt><code>ct_next;</code></dt>
         <dd>
           <p>
@@ -896,12 +908,6 @@
 
       <dl>
         <dt><code>learn</code></dt>
-
-        <dt><code>dec_ttl { <var>action</var>, </code>...<code> } { <var>action</var>; </code>...<code>};</code></dt>
-        <dd>
-          decrement TTL; execute first set of actions if
-          successful, second set if TTL decrement fails
-        </dd>
 
         <dt><code>icmp_reply { <var>action</var>, </code>...<code> };</code></dt>
         <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
