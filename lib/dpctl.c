@@ -1582,15 +1582,13 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
                       void *aux)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    struct dpctl_params dpctl_p;
     bool error = false;
 
-    dpctl_command_handler *handler = (dpctl_command_handler *) aux;
-
-    dpctl_p.print_statistics = false;
-    dpctl_p.zero_statistics = false;
-    dpctl_p.may_create = false;
-    dpctl_p.verbosity = 0;
+    struct dpctl_params dpctl_p = {
+        .is_appctl = true,
+        .output = dpctl_unixctl_print,
+        .aux = &ds,
+    };
 
     /* Parse options (like getopt). Unfortunately it does
      * not seem a good idea to call getopt_long() here, since it uses global
@@ -1643,10 +1641,7 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
     }
 
     if (!error) {
-        dpctl_p.is_appctl = true;
-        dpctl_p.output = dpctl_unixctl_print;
-        dpctl_p.aux = &ds;
-
+        dpctl_command_handler *handler = (dpctl_command_handler *) aux;
         error = handler(argc, argv, &dpctl_p) != 0;
     }
 
@@ -1665,9 +1660,11 @@ dpctl_unixctl_register(void)
     const struct dpctl_command *p;
 
     for (p = all_commands; p->name != NULL; p++) {
-        char *cmd_name = xasprintf("dpctl/%s", p->name);
-        unixctl_command_register(cmd_name, "", p->min_args, p->max_args,
-                                 dpctl_unixctl_handler, p->handler);
-        free(cmd_name);
+        if (strcmp(p->name, "help")) {
+            char *cmd_name = xasprintf("dpctl/%s", p->name);
+            unixctl_command_register(cmd_name, "", p->min_args, p->max_args,
+                                     dpctl_unixctl_handler, p->handler);
+            free(cmd_name);
+        }
     }
 }
