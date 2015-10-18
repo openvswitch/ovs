@@ -12,41 +12,6 @@ one router to another, this doesn't seem to matter (just put more than
 one connection between them), but for connections between a router and
 a switch it might matter because a switch has only one router port.
 
-** OVN_SB schema
-
-*** Allow output to ingress port
-
-Sometimes when a packet ingresses into a router, it has to egress the
-same port.  One example is a "one-armed" router that has multiple
-routes on a single port (or in which a host is (mis)configured to send
-every IP packet to the router, e.g. due to a bad netmask).  Another is
-when a router needs to send an ICMP reply to an ingressing packet.
-
-To some degree this problem is layered, because there are two
-different notions of "ingress port".  The first is the OpenFlow
-ingress port, essentially a physical port identifier.  This is
-implemented as part of ovs-vswitchd's OpenFlow implementation.  It
-prevents a reply from being sent across the tunnel on which it
-arrived.  It is questionable whether this OpenFlow feature is useful
-to OVN.  (OVN already has to override it to allow a packet from one
-nested container to be forwarded to a different nested container.)
-OVS make it possible to disable this feature of OpenFlow by setting
-the OpenFlow input port field to 0.  (If one does this too early, of
-course, it means that there's no way to actually match on the input
-port in the OpenFlow flow tables, but one can work around that by
-instead setting the input port just before the output action, possibly
-wrapping these actions in push/pop pairs to preserve the input port
-for later.)
-
-The second is the OVN logical ingress port, which is implemented in
-ovn-controller as part of the logical abstraction, using an OVS
-register.  Dropping packets directed to the logical ingress port is
-implemented through an OpenFlow table not directly visible to the
-logical flow table.  Currently this behavior can't be disabled, but
-various ways to ensure it could be implemented, e.g. the same as for
-OpenFlow by allowing the logical inport to be zeroed, or by
-introducing a new action that ignores the inport.
-
 ** New OVN logical actions
 
 *** arp

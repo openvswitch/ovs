@@ -454,6 +454,7 @@ reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], pr
 vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
 reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
 outport = inport; => actions=move:NXM_NX_REG6[]->NXM_NX_REG7[], prereqs=1
+inport = ""; => actions=set_field:0->reg6,set_field:0->in_port, prereqs=1
 reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
 vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
 reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]

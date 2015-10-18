@@ -782,7 +782,11 @@
           <p>
             Output to the input port is implicitly dropped, that is,
             <code>output</code> becomes a no-op if <code>outport</code> ==
-            <code>inport</code>.
+            <code>inport</code>.  Occasionally it may be useful to override
+            this behavior, e.g. to send an ARP reply to an ARP request; to do
+            so, use <code>inport = "";</code> to set the logical input port to
+            an empty string (which should not be used as the name of any
+            logical port).
           </p>
         </dd>
 
