@@ -22,6 +22,7 @@
 #include "dynamic-string.h"
 #include "expr.h"
 #include "lex.h"
+#include "logical-fields.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"
 #include "simap.h"
@@ -200,8 +201,7 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
         ct->recirc_table = NX_CT_RECIRC_NONE;
     }
 
-    /* xxx Should remove hard-coding reg5 if we refactor library. */
-    ct->zone_src.field = mf_from_id(MFF_REG5);
+    ct->zone_src.field = mf_from_id(MFF_LOG_CT_ZONE);
     ct->zone_src.ofs = 0;
     ct->zone_src.n_bits = 16;
 
