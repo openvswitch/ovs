@@ -2725,6 +2725,7 @@ read_flows_from_switch(struct vconn *vconn,
     fsr.aggregate = false;
     match_init_catchall(&fsr.match);
     fsr.out_port = OFPP_ANY;
+    fsr.out_group = OFPG_ANY;
     fsr.table_id = 0xff;
     fsr.cookie = fsr.cookie_mask = htonll(0);
     request = ofputil_encode_flow_stats_request(&fsr, protocol);
@@ -2773,6 +2774,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     fm.importance = version->importance;
     fm.buffer_id = UINT32_MAX;
     fm.out_port = OFPP_ANY;
+    fm.out_group = OFPG_ANY;
     fm.flags = version->flags;
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
         command == OFPFC_MODIFY_STRICT) {
