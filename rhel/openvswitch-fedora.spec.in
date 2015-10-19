@@ -346,6 +346,8 @@ rm -rf $RPM_BUILD_ROOT
 %files ovn
 %{_bindir}/ovn-controller
 %{_bindir}/ovn-controller-vtep
+%{_bindir}/ovn-docker-overlay-driver
+%{_bindir}/ovn-docker-underlay-driver
 %{_bindir}/ovn-nbctl
 %{_bindir}/ovn-northd
 %{_bindir}/ovn-sbctl
