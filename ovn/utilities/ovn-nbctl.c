@@ -947,8 +947,8 @@ nbctl_acl_add(struct ctl_context *ctx)
     }
 
     /* Validate priority. */
-    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 1
-        || priority > 65535) {
+    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 0
+        || priority > 32767) {
         VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
         return;
     }
@@ -1035,8 +1035,8 @@ nbctl_acl_del(struct ctl_context *ctx)
     }
 
     /* Validate priority. */
-    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 1
-        || priority > 65535) {
+    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 0
+        || priority > 32767) {
         VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
         return;
     }

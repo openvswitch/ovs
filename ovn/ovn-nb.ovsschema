@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
     "version": "2.0.0",
-    "cksum": "4186002454 4601",
+    "cksum": "3039293926 4601",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -51,8 +51,8 @@
         "ACL": {
             "columns": {
                 "priority": {"type": {"key": {"type": "integer",
-                                              "minInteger": 1,
-                                              "maxInteger": 65534}}},
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
                 "direction": {"type": {"key": {"type": "string",
                                             "enum": ["set", ["from-lport", "to-lport"]]}}},
                 "match": {"type": "string"},

@@ -111,6 +111,12 @@ enum ovn_stage {
 #undef PIPELINE_STAGE
 };
 
+/* Due to various hard-coded priorities need to implement ACLs, the
+ * northbound database supports a smaller range of ACL priorities than
+ * are available to logical flows.  This value is added to an ACL
+ * priority to determine the ACL's logical flow priority. */
+#define OVN_ACL_PRI_OFFSET 1000
+
 /* Returns an "enum ovn_stage" built from the arguments. */
 static enum ovn_stage
 ovn_stage_build(enum ovn_datapath_type dp_type, enum ovn_pipeline pipeline,
@@ -1056,7 +1062,8 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
              * may and then its return traffic would not have an
              * associated conntrack entry and would return "+invalid". */
             const char *actions = has_stateful ? "ct_commit; next;" : "next;";
-            ovn_lflow_add(lflows, od, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage,
+                          acl->priority + OVN_ACL_PRI_OFFSET,
                           acl->match, actions);
         } else if (!strcmp(acl->action, "allow-related")) {
             struct ds match = DS_EMPTY_INITIALIZER;
@@ -1065,17 +1072,20 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
              * other traffic related to this entry to flow due to the
              * 65535 priority flow defined earlier. */
             ds_put_format(&match, "ct.new && (%s)", acl->match);
-            ovn_lflow_add(lflows, od, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage,
+                          acl->priority + OVN_ACL_PRI_OFFSET,
                           ds_cstr(&match), "ct_commit; next;");
 
             ds_destroy(&match);
         } else if (!strcmp(acl->action, "drop")) {
-            ovn_lflow_add(lflows, od, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage,
+                          acl->priority + OVN_ACL_PRI_OFFSET,
                           acl->match, "drop;");
         } else if (!strcmp(acl->action, "reject")) {
             /* xxx Need to support "reject". */
             VLOG_INFO("reject is not a supported action");
-            ovn_lflow_add(lflows, od, stage, acl->priority,
+            ovn_lflow_add(lflows, od, stage,
+                          acl->priority + OVN_ACL_PRI_OFFSET,
                           acl->match, "drop;");
         }
     }
