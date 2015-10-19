@@ -312,6 +312,9 @@ parse_options(int argc, char *argv[])
         /* Add implicit allowance for OpenFlow 1.4. */
         add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                      OFPUTIL_P_OF14_OXM));
+        /* Remove all prior versions. */
+        mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF14_UP));
     }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
