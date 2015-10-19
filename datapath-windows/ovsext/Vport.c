@@ -1542,7 +1542,7 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
     if (vportGet->portNo == 0) {
         StringCbLengthA(vportGet->name, OVS_MAX_PORT_NAME_LENGTH - 1, &len);
         vport = OvsFindVportByHvNameA(gOvsSwitchContext, vportGet->name);
-        if (vport != NULL) {
+        if (vport == NULL) {
             /* If the port is not a Hyper-V port and it has been added earlier,
              * we'll find it in 'ovsPortNameHashArray'. */
             vport = OvsFindVportByOvsName(gOvsSwitchContext, vportGet->name);
