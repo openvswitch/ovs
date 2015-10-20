@@ -340,6 +340,7 @@ ip4.dst = ip4.src;
 ip4.src = <var>S</var>;
 ip.ttl = 255;
 icmp4.type = 0;
+inport = \"\"; /* Allow sending out inport. */
 next;
         </pre>
 
@@ -347,10 +348,6 @@ next;
           Similar flows match on <code>ip4.dst == 255.255.255.255</code> and
           each individual <code>inport</code>, and use the same actions in
           which <var>S</var> is a function of <code>inport</code>.
-        </p>
-
-        <p>
-          Not yet implemented.
         </p>
       </li>
 

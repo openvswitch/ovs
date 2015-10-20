@@ -1295,8 +1295,6 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
 
-    /* XXX ICMP echo reply */
-
     /* Logical router ingress table 0: Admission control framework. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
@@ -1384,12 +1382,31 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       match, "drop;");
         free(match);
 
+        /* ICMP echo reply.  These flows reply to ICMP echo requests
+         * received for the router's IP address. */
+        match = xasprintf(
+            "inport == %s && (ip4.dst == "IP_FMT" || ip4.dst == "IP_FMT") && "
+            "icmp4.type == 8 && icmp4.code == 0",
+            op->json_key, IP_ARGS(op->ip), IP_ARGS(op->bcast));
+        char *actions = xasprintf(
+            "ip4.dst = ip4.src; "
+            "ip4.src = "IP_FMT"; "
+            "ip.ttl = 255; "
+            "icmp4.type = 0; "
+            "inport = \"\"; /* Allow sending out inport. */ "
+            "next; ",
+            IP_ARGS(op->ip));
+        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                      match, actions);
+        free(match);
+        free(actions);
+
         /* ARP reply.  These flows reply to ARP requests for the router's own
          * IP address. */
         match = xasprintf(
             "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
             op->json_key, IP_ARGS(op->ip));
-        char *actions = xasprintf(
+        actions = xasprintf(
             "eth.dst = eth.src; "
             "eth.src = "ETH_ADDR_FMT"; "
             "arp.op = 2; /* ARP reply */ "
