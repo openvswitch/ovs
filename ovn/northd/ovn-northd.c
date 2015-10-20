@@ -1406,6 +1406,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             op->json_key);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                       match, actions);
+        free(match);
+        free(actions);
 
         /* Drop IP traffic to this router. */
         match = xasprintf("ip4.dst == "IP_FMT, IP_ARGS(op->ip));
