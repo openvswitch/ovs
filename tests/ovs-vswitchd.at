@@ -163,3 +163,27 @@ OVS_WAIT_UNTIL([test -n "`grep ERR ovs-vswitchd.log | grep overwrite.file`"])
 
 OVS_VSWITCHD_STOP(["/Not adding Unix domain socket controller/d"])
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+dnl OVSDB server before release version 2.5 does not support the monitor2
+dnl method.  This test defeatures the OVSDB server to simulate an older
+dnl OVSDB server and make sure ovs-vswitchd can still work with it
+AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2)])
+OVS_VSWITCHD_START
+
+dnl defeature OVSDB server -- no monitor2
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor2])
+
+sleep 1
+
+AT_CHECK([ovs-vsctl add-port br0 p0  -- set interface p0 type=internal])
+AT_CHECK([ovs-vsctl add-port br0 p1  -- set interface p1 type=internal])
+
+dnl ovs-vswitchd should still 'see' ovsdb change with the 'monitor' method
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+		br0 65534/100: (dummy)
+		p0 1/1: (dummy)
+		p1 2/2: (dummy)
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

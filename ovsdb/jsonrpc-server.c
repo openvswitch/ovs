@@ -45,6 +45,10 @@ VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server);
 struct ovsdb_jsonrpc_remote;
 struct ovsdb_jsonrpc_session;
 
+/* Set false to defeature monitor2, causing jsonrpc to respond to monitor2
+ * method with an error.  */
+static bool monitor2_enable__ = true;
+
 /* Message rate-limiting. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -845,7 +849,7 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
             reply = execute_transaction(s, db, request);
         }
     } else if (!strcmp(request->method, "monitor") ||
-               !strcmp(request->method, "monitor2")) {
+               (monitor2_enable__ && !strcmp(request->method, "monitor2"))) {
         struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
             int l = strlen(request->method) - strlen("monitor");
@@ -1367,4 +1371,11 @@ ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
             jsonrpc_session_send(s->js, msg);
         }
     }
+}
+
+void
+ovsdb_jsonrpc_disable_monitor2()
+{
+    /* Once disabled, it is not possible to re-enable it. */
+    monitor2_enable__ = false;
 }
