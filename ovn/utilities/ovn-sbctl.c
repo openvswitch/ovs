@@ -736,7 +736,7 @@ cmd_lflow_list(struct ctl_context *ctx)
         }
 
         const char *table_name = smap_get(&lflow->external_ids, "stage-name");
-        printf("  table=%" PRId64 "(%8s), priority=%5" PRId64
+        printf("  table=%" PRId64 "(%16s), priority=%5" PRId64
                ", match=(%s), action=(%s)\n",
                lflow->table_id, table_name ? table_name : "",
                lflow->priority, lflow->match, lflow->actions);

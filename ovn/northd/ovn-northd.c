@@ -83,26 +83,26 @@ enum ovn_datapath_type {
  * form the stage's full name, e.g. S_SWITCH_IN_PORT_SEC,
  * S_ROUTER_OUT_DELIVERY. */
 enum ovn_stage {
-#define PIPELINE_STAGES                                                 \
-    /* Logical switch ingress stages. */                                \
-    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC,    0, "switch_in_port_sec")   \
-    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,     1, "switch_in_pre_acl")    \
-    PIPELINE_STAGE(SWITCH, IN,  ACL,         2, "switch_in_acl")        \
-    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,     3, "switch_in_l2_lkup")    \
-                                                                        \
-    /* Logical switch egress stages. */                                 \
-    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "switch_out_pre_acl")   \
-    PIPELINE_STAGE(SWITCH, OUT, ACL,         1, "switch_out_acl")       \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC,    2, "switch_out_port_sec")  \
-                                                                        \
-    /* Logical router ingress stages. */                                \
-    PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "router_in_admission")  \
-    PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,    1, "router_in_ip_input")   \
-    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  2, "router_in_ip_routing") \
-    PIPELINE_STAGE(ROUTER, IN,  ARP,         3, "router_in_arp")        \
-                                                                        \
-    /* Logical router egress stages. */                                 \
-    PIPELINE_STAGE(ROUTER, OUT, DELIVERY,    0, "router_out_delivery")
+#define PIPELINE_STAGES                                               \
+    /* Logical switch ingress stages. */                              \
+    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC,    0, "ls_in_port_sec")     \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,     1, "ls_in_pre_acl")      \
+    PIPELINE_STAGE(SWITCH, IN,  ACL,         2, "ls_in_acl")          \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,     3, "ls_in_l2_lkup")      \
+                                                                      \
+    /* Logical switch egress stages. */                               \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "ls_out_pre_acl")     \
+    PIPELINE_STAGE(SWITCH, OUT, ACL,         1, "ls_out_acl")         \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC,    2, "ls_out_port_sec")    \
+                                                                      \
+    /* Logical router ingress stages. */                              \
+    PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
+    PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,    1, "lr_in_ip_input")     \
+    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  2, "lr_in_ip_routing")   \
+    PIPELINE_STAGE(ROUTER, IN,  ARP,         3, "lr_in_arp")          \
+                                                                      \
+    /* Logical router egress stages. */                               \
+    PIPELINE_STAGE(ROUTER, OUT, DELIVERY,    0, "lr_out_delivery")
 
 #define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)   \
     S_##DP_TYPE##_##PIPELINE##_##STAGE                          \
