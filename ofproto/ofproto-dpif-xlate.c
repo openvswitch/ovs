@@ -4448,7 +4448,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                        && !eth_type_mpls(flow->dl_type)) {
                 break;
             }
-            /* A flow may wildcard nw_frag.  Do nothing if setting a trasport
+            /* A flow may wildcard nw_frag.  Do nothing if setting a transport
              * header field on a packet that does not have them. */
             mf_mask_field_and_prereqs(mf, wc);
             if (mf_are_prereqs_ok(mf, flow)) {
