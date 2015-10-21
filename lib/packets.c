@@ -905,6 +905,24 @@ packet_set_sctp_port(struct dp_packet *packet, ovs_be16 src, ovs_be16 dst)
     put_16aligned_be32(&sh->sctp_csum, old_csum ^ old_correct_csum ^ new_csum);
 }
 
+/* Sets the ICMP type and code of the ICMP header contained in 'packet'.
+ * 'packet' must be a valid ICMP packet with its l4 offset properly
+ * populated. */
+void
+packet_set_icmp(struct dp_packet *packet, uint8_t type, uint8_t code)
+{
+    struct icmp_header *ih = dp_packet_l4(packet);
+    ovs_be16 orig_tc = htons(ih->icmp_type << 8 | ih->icmp_code);
+    ovs_be16 new_tc = htons(type << 8 | code);
+
+    if (orig_tc != new_tc) {
+        ih->icmp_type = type;
+        ih->icmp_code = code;
+
+        ih->icmp_csum = recalc_csum16(ih->icmp_csum, orig_tc, new_tc);
+    }
+}
+
 void
 packet_set_nd(struct dp_packet *packet, const ovs_be32 target[4],
               const struct eth_addr sll, const struct eth_addr tll) {

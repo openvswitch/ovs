@@ -975,6 +975,7 @@ void packet_set_ipv6(struct dp_packet *, uint8_t proto, const ovs_be32 src[4],
 void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
+void packet_set_icmp(struct dp_packet *, uint8_t type, uint8_t code);
 void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
                    const struct eth_addr sll, const struct eth_addr tll);
 
