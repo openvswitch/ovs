@@ -28,7 +28,9 @@ EXTRA_DIST += \
 	tutorial/ovn/env4/packet5.sh \
 	tutorial/ovn/env5/setup.sh \
 	tutorial/ovn/env5/packet1.sh \
-	tutorial/ovn/env5/packet2.sh
+	tutorial/ovn/env5/packet2.sh \
+	tutorial/ovn/env6/setup.sh \
+	tutorial/ovn/env6/add-acls.sh
 
 sandbox: all
 	cd $(srcdir)/tutorial && MAKE=$(MAKE) ./ovs-sandbox -b $(abs_builddir) $(SANDBOXFLAGS)

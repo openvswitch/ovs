@@ -628,6 +628,87 @@ see it output to OpenFlow ports 5 and 6 only.
     $ ovn/env5/packet2.sh
 
 
+6) Stateful ACLs
+----------------
+
+ACLs provide a way to do distributed packet filtering for OVN networks.  One
+example use of ACLs is that OpenStack Neutron uses them to implement security
+groups.  ACLs are implemented using conntrack integration with OVS.
+
+Start with a simple logical switch with 2 logical ports.
+
+[View ovn/env6/setup.sh][env6setup].
+
+    $ ovn/env6/setup.sh
+
+A common use case would be the following policy applied for `sw0-port1`:
+
+* Allow outbound IP traffic and associated return traffic.
+* Allow incoming ICMP requests and associated return traffic.
+* Allow incoming SSH connections and associated return traffic.
+* Drop other incoming IP traffic.
+
+The following script applies this policy to our environment.
+
+[View ovn/env6/add-acls.sh][env6acls].
+
+    $ ovn/env6/add-acls.sh
+
+We can view the configured ACLs on this network using the `ovn-nbctl` command.
+
+    $ ovn-nbctl acl-list sw0
+    from-lport  1002 (inport == “sw0-port1” && ip) allow-related
+      to-lport  1002 (outport == “sw0-port1” && ip && icmp) allow-related
+      to-lport  1002 (outport == “sw0-port1” && ip && tcp && tcp.dst == 22) allow-related
+      to-lport  1001 (outport == “sw0-port1” && ip) drop
+
+Now that we have ACLs configured, there are new entries in the logical flow
+table in the stages `switch_in_pre_acl`, switch_in_acl`, `switch_out_pre_acl`,
+and `switch_out_acl`.
+
+    $ ovn-sbctl lflow-list
+
+Let’s look more closely at `switch_out_pre_acl` and `switch_out_acl`.
+
+In `switch_out_pre_acl`, we match IP traffic and put it through the connection
+tracker.  This populates the connection state fields so that we can apply policy
+as appropriate.
+
+    table=0(switch_out_pre_acl), priority=  100, match=(ip), action=(ct_next;)
+    table=1(switch_in_pre_acl), priority=    0, match=(1), action=(next;)
+
+In `switch_out_acl`, we allow packets associated with existing connections.  We
+drop packets that are deemed to be invalid (such as non-SYN TCP packet not
+associated with an existing connection).
+
+    table=1(switch_out_acl), priority=65535, match=(!ct.est && ct.rel && !ct.new && !ct.inv), action=(next;)
+    table=1(switch_out_acl), priority=65535, match=(ct.est && !ct.rel && !ct.new && !ct.inv), action=(next;)
+    table=1(switch_out_acl), priority=65535, match=(ct.inv), action=(drop;)
+
+For new connections, we apply our configured ACL policy to decide whether to
+allow the connection or not.  In this case, we’ll allow ICMP or SSH.  Otherwise,
+we’ll drop the packet.
+
+    table=1(switch_out_acl), priority= 2002, match=(ct.new && (outport == “sw0-port1” && ip && icmp)), action=(ct_commit; next;)
+    table=1(switch_out_acl), priority= 2002, match=(ct.new && (outport == “sw0-port1” && ip && tcp && tcp.dst == 22)), action=(ct_commit; next;)
+    table=1(switch_out_acl), priority= 2001, match=(outport == “sw0-port1” && ip), action=(drop;)
+
+When using ACLs, the default policy is to allow and track IP connections.  Based
+on our above policy, IP traffic directed at `sw0-port1` will never hit this flow
+at priority 1.
+
+    table=1(switch_out_acl), priority=    1, match=(ip), action=(ct_commit; next;)
+    table=1(switch_out_acl), priority=    0, match=(1), action=(next;)
+
+Note that conntrack integration is not yet supported in ovs-sandbox, so the
+OpenFlow flows will not represent what you’d see in a real environment.  The
+logical flows described above give a very good idea of what the flows look like,
+though.
+
+[This blog post][openstack-ovn-acl-blog] discusses OVN ACLs from an OpenStack
+perspective and also provides an example of what the resulting OpenFlow flows
+look like.
+
 [ovn-architecture(7)]:http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
 [Tutorial.md]:./Tutorial.md
 [ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
@@ -659,3 +740,6 @@ see it output to OpenFlow ports 5 and 6 only.
 [env5setup]:./ovn/env5/setup.sh
 [env5packet1]:./ovn/env5/packet1.sh
 [env5packet2]:./ovn/env5/packet2.sh
+[env6setup]:./ovn/env6/setup.sh
+[env6acls]:./ovn/env6/add-acls.sh
+[openstack-ovn-acl-blog]:http://blog.russellbryant.net/2015/10/22/openstack-security-groups-using-ovn-acls/
