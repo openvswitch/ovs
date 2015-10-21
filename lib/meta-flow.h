@@ -1569,7 +1569,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Maskable: no.
      * Formatting: decimal.
      * Prerequisites: ICMPv4.
-     * Access: read-only.
+     * Access: read/write.
      * NXM: NXM_OF_ICMP_TYPE(13) since v1.1.
      * OXM: OXM_OF_ICMPV4_TYPE(19) since OF1.2 and v1.7.
      * OF1.0: exact match.
@@ -1585,7 +1585,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Maskable: no.
      * Formatting: decimal.
      * Prerequisites: ICMPv4.
-     * Access: read-only.
+     * Access: read/write.
      * NXM: NXM_OF_ICMP_CODE(14) since v1.1.
      * OXM: OXM_OF_ICMPV4_CODE(20) since OF1.2 and v1.7.
      * OF1.0: exact match.
@@ -1601,7 +1601,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Maskable: no.
      * Formatting: decimal.
      * Prerequisites: ICMPv6.
-     * Access: read-only.
+     * Access: read/write.
      * NXM: NXM_NX_ICMPV6_TYPE(21) since v1.1.
      * OXM: OXM_OF_ICMPV6_TYPE(29) since OF1.2 and v1.7.
      */
@@ -1615,7 +1615,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Maskable: no.
      * Formatting: decimal.
      * Prerequisites: ICMPv6.
-     * Access: read-only.
+     * Access: read/write.
      * NXM: NXM_NX_ICMPV6_CODE(22) since v1.1.
      * OXM: OXM_OF_ICMPV6_CODE(30) since OF1.2 and v1.7.
      */

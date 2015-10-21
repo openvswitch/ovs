@@ -5189,6 +5189,43 @@ commit_set_arp_action(const struct flow *flow, struct flow *base_flow,
 }
 
 static void
+get_icmp_key(const struct flow *flow, struct ovs_key_icmp *icmp)
+{
+    /* icmp_type and icmp_code are stored in tp_src and tp_dst, respectively */
+    icmp->icmp_type = ntohs(flow->tp_src);
+    icmp->icmp_code = ntohs(flow->tp_dst);
+}
+
+static void
+put_icmp_key(const struct ovs_key_icmp *icmp, struct flow *flow)
+{
+    /* icmp_type and icmp_code are stored in tp_src and tp_dst, respectively */
+    flow->tp_src = htons(icmp->icmp_type);
+    flow->tp_dst = htons(icmp->icmp_code);
+}
+
+static enum slow_path_reason
+commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
+                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+{
+    struct ovs_key_icmp key, mask, base;
+    enum ovs_key_attr attr;
+
+    get_icmp_key(flow, &key);
+    get_icmp_key(base_flow, &base);
+    get_icmp_key(&wc->masks, &mask);
+
+    attr = flow->dl_type == htons(ETH_TYPE_IP) ? OVS_KEY_ATTR_ICMP
+                                               : OVS_KEY_ATTR_ICMPV6;
+    if (commit(attr, false, &key, &base, &mask, sizeof key, odp_actions)) {
+        put_icmp_key(&base, base_flow);
+        put_icmp_key(&mask, &wc->masks);
+        return SLOW_ACTION;
+    }
+    return 0;
+}
+
+static void
 get_nd_key(const struct flow *flow, struct ovs_key_nd *nd)
 {
     memcpy(nd->nd_target, &flow->nd_target, sizeof flow->nd_target);
@@ -5361,15 +5398,16 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
                    bool use_masked)
 {
-    enum slow_path_reason slow;
+    enum slow_path_reason slow1, slow2;
 
     commit_set_ether_addr_action(flow, base, odp_actions, wc, use_masked);
-    slow = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
+    slow1 = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
     commit_set_port_action(flow, base, odp_actions, wc, use_masked);
+    slow2 = commit_set_icmp_action(flow, base, odp_actions, wc);
     commit_mpls_action(flow, base, odp_actions);
     commit_vlan_action(flow->vlan_tci, base, odp_actions, wc);
     commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc, use_masked);
 
-    return slow;
+    return slow1 ? slow1 : slow2;
 }

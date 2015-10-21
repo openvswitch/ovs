@@ -9,6 +9,7 @@ Post-v2.4.0
      * OpenFlow 1.4+ "importance" is now considered for flow eviction.
      * OpenFlow 1.4+ OFPTC_EVICTION is now implemented.
      * OpenFlow 1.4+ OFPMP_TABLE_DESC is now implemented.
+     * Allow modifying the ICMPv4/ICMPv6 type and code fields.
    - Support for matching/generating options as well as the OAM bit with
      Geneve tunnels.
    - Support Multicast Listener Discovery (MLDv1 and MLDv2).

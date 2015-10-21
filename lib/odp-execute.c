@@ -301,6 +301,16 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         set_arp(packet, nl_attr_get(a), NULL);
         break;
 
+    case OVS_KEY_ATTR_ICMP:
+    case OVS_KEY_ATTR_ICMPV6:
+        if (OVS_LIKELY(dp_packet_get_icmp_payload(packet))) {
+            const struct ovs_key_icmp *icmp_key
+                = nl_attr_get_unspec(a, sizeof(struct ovs_key_icmp));
+
+            packet_set_icmp(packet, icmp_key->icmp_type, icmp_key->icmp_code);
+        }
+        break;
+
     case OVS_KEY_ATTR_ND:
         if (OVS_LIKELY(dp_packet_get_nd_payload(packet))) {
             const struct ovs_key_nd *nd_key
@@ -323,8 +333,6 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
     case OVS_KEY_ATTR_ETHERTYPE:
     case OVS_KEY_ATTR_IN_PORT:
     case OVS_KEY_ATTR_VLAN:
-    case OVS_KEY_ATTR_ICMP:
-    case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_TCP_FLAGS:
     case OVS_KEY_ATTR_CT_STATE:
     case OVS_KEY_ATTR_CT_ZONE:

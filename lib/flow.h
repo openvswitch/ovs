@@ -135,8 +135,8 @@ struct flow {
     ovs_be16 pad3;              /* Pad to 64 bits. */
 
     /* L4 (64-bit aligned) */
-    ovs_be16 tp_src;            /* TCP/UDP/SCTP source port. */
-    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port. */
+    ovs_be16 tp_src;            /* TCP/UDP/SCTP source port/ICMP type. */
+    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port/ICMP code. */
     ovs_be32 igmp_group_ip4;    /* IGMP group IPv4 address.
                                  * Keep last for BUILD_ASSERT_DECL below. */
 };

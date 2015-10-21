@@ -1880,6 +1880,10 @@ OFP_ASSERT(sizeof(struct onf_action_copy_field) == 24);
  *   - NXM_OF_TCP_DST
  *   - NXM_OF_UDP_SRC
  *   - NXM_OF_UDP_DST
+ *   - NXM_OF_ICMP_TYPE
+ *   - NXM_OF_ICMP_CODE
+ *   - NXM_NX_ICMPV6_TYPE
+ *   - NXM_NX_ICMPV6_CODE
  *   - NXM_NX_ARP_SHA
  *   - NXM_NX_ARP_THA
  *   - NXM_OF_ARP_OP
