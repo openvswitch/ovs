@@ -373,7 +373,7 @@ arp.sha = <var>E</var>;
 arp.tpa = arp.spa;
 arp.spa = <var>A</var>;
 outport = <var>P</var>;
-inport = 0; /* Allow sending out inport. */
+inport = \"\"; /* Allow sending out inport. */
 output;
         </pre>
       </li>
