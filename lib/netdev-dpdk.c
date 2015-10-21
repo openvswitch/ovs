@@ -749,6 +749,10 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
                 return;
     }
 
+    if (rte_vhost_driver_unregister(dev->vhost_id)) {
+        VLOG_ERR("Unable to remove vhost-user socket %s", dev->vhost_id);
+    }
+
     ovs_mutex_lock(&dpdk_mutex);
     list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
