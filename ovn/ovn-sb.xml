@@ -870,7 +870,8 @@
             Decrements the IPv4 or IPv6 TTL.  If this would make the TTL zero
             or negative, then processing of the packet halts; no further
             actions are processed.  (To properly handle such cases, a
-            higher-priority flow should match on <code>ip.ttl &lt; 2</code>.)
+            higher-priority flow should match on
+            <code>ip.ttl == {0, 1};</code>.)
           </p>
 
           <p><b>Prerequisite:</b> <code>ip</code></p>
