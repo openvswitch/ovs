@@ -338,7 +338,7 @@
         <pre>
 ip4.dst = ip4.src;
 ip4.src = <var>S</var>;
-ip4.ttl = 255;
+ip.ttl = 255;
 icmp4.type = 0;
 next;
         </pre>
@@ -460,7 +460,7 @@ output;
         <p>
           ICMP time exceeded.  For each router port <var>P</var>, whose IP
           address is <var>A</var>, a priority-40 flow with match <code>inport
-          == <var>P</var> &amp;&amp; ip4.ttl == {0, 1} &amp;&amp;
+          == <var>P</var> &amp;&amp; ip.ttl == {0, 1} &amp;&amp;
           !ip.later_frag</code> matches packets whose TTL has expired, with the
           following actions to send an ICMP time exceeded reply:
         </p>
@@ -471,7 +471,7 @@ icmp4 {
     icmp4.code = 0;  /* TTL exceeded in transit. */
     ip4.dst = ip4.src;
     ip4.src = <var>A</var>;
-    ip4.ttl = 255;
+    ip.ttl = 255;
     next;
 };
         </pre>
@@ -482,7 +482,7 @@ icmp4 {
       </li>
 
       <li>
-        TTL discard.  A priority-30 flow with match <code>ip4.ttl == {0,
+        TTL discard.  A priority-30 flow with match <code>ip.ttl == {0,
         1}</code> and actions <code>drop;</code> drops other packets whose TTL
         has expired, that should not receive a ICMP error reply (i.e. fragments
         with nonzero offset).
@@ -519,13 +519,13 @@ icmp4 {
         </p>
 
         <pre>
-ip4.ttl--;
+ip.ttl--;
 reg0 = <var>G</var>;
 next;
         </pre>
 
         <p>
-          (Ingress table 1 already verified that <code>ip4.ttl--;</code> will
+          (Ingress table 1 already verified that <code>ip.ttl--;</code> will
           not yield a TTL exceeded error.)
         </p>
 
@@ -549,7 +549,7 @@ icmp4 {
     icmp4.code = 0; /* Network unreachable. */
     ip4.dst = ip4.src;
     ip4.src = <var>A</var>;
-    ip4.ttl = 255;
+    ip.ttl = 255;
     next(2);
 };
         </pre>

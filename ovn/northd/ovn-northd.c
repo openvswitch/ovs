@@ -1272,7 +1272,7 @@ add_route(struct hmap *lflows, struct ovn_datapath *od,
                             IP_ARGS(network), IP_ARGS(mask));
 
     struct ds actions = DS_EMPTY_INITIALIZER;
-    ds_put_cstr(&actions, "ip4.ttl--; reg0 = ");
+    ds_put_cstr(&actions, "ip.ttl--; reg0 = ");
     if (gateway) {
         ds_put_format(&actions, IP_FMT, IP_ARGS(gateway));
     } else {
