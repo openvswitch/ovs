@@ -236,18 +236,32 @@ tnl_arp_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
     unixctl_command_reply(conn, "OK");
 }
 
+static int
+lookup_any(const char *host_name, struct in6_addr *address)
+{
+    if (addr_is_ipv6(host_name)) {
+        return lookup_ipv6(host_name, address);
+    } else {
+        int r;
+        struct in_addr ip;
+        r = lookup_ip(host_name, &ip);
+        if (r == 0) {
+            in6_addr_set_mapped_ipv4(address, ip.s_addr);
+        }
+        return r;
+    }
+    return ENOENT;
+}
+
 static void
 tnl_arp_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
                   const char *argv[], void *aux OVS_UNUSED)
 {
     const char *br_name = argv[1];
     struct eth_addr mac;
-    struct in_addr ip;
     struct in6_addr ip6;
 
-    if (lookup_ip(argv[2], &ip) == 0) {
-        in6_addr_set_mapped_ipv4(&ip6, ip.s_addr);
-    } else if (lookup_ipv6(argv[2], &ip6) != 0) {
+    if (lookup_any(argv[2], &ip6) != 0) {
         unixctl_command_reply_error(conn, "bad IP address");
         return;
     }
