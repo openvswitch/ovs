@@ -412,9 +412,7 @@ ovsdb_monitor_table_find_changes(struct ovsdb_monitor_table *mt,
     return NULL;
 }
 
-/* Stop currently tracking changes to table 'mt' since 'transaction'.
- *
- * Return 'true' if the 'transaction' is being tracked. 'false' otherwise. */
+/* Stop currently tracking changes to table 'mt' since 'transaction'. */
 static void
 ovsdb_monitor_table_untrack_changes(struct ovsdb_monitor_table *mt,
                                     uint64_t transaction)
