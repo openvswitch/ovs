@@ -135,6 +135,11 @@ main(int argc, char *argv[])
     seqno = ovsdb_idl_get_seqno(idl);
     for (;;) {
         ovsdb_idl_run(idl);
+        if (!ovsdb_idl_is_alive(idl)) {
+            int retval = ovsdb_idl_get_last_error(idl);
+            ctl_fatal("%s: database connection failed (%s)",
+                        db, ovs_retval_to_string(retval));
+        }
 
         if (seqno != ovsdb_idl_get_seqno(idl)) {
             seqno = ovsdb_idl_get_seqno(idl);
