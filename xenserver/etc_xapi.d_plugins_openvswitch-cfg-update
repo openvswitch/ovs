@@ -30,6 +30,7 @@ import re
 vsctl = '/usr/bin/ovs-vsctl'
 ofctl = '/usr/bin/ovs-ofctl'
 cacert_filename = '/etc/openvswitch/vswitchd.cacert'
+ovsdb_port = '6640'
 
 
 # Delete the CA certificate, so that we go back to boot-strapping mode
@@ -224,7 +225,7 @@ def setControllerCfg(controller):
                    '/etc/xensource/xapi-ssl.pem',
                    '/etc/xensource/xapi-ssl.pem',
                    cacert_filename,
-                   '--', 'set-manager', 'ssl:' + controller + ':6640'])
+                   '--', 'set-manager', 'ssl:' + controller + ':' + ovsdb_port])
 
 
 def vswitchCfgQuery(action_args):
