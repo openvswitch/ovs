@@ -136,6 +136,15 @@ set_dscp(int fd, int family, uint8_t dscp)
     return retval ? sock_errno() : 0;
 }
 
+/* Checks whether 'host_name' is an IPv4 or IPv6 address.  It is assumed
+ * that 'host_name' is valid.  Returns false if it is IPv4 address, true if
+ * it is IPv6 address. */
+bool
+addr_is_ipv6(const char *host_name)
+{
+    return strchr(host_name, ':') != NULL;
+}
+
 /* Translates 'host_name', which must be a string representation of an IP
  * address, into a numeric IP address in '*addr'.  Returns 0 if successful,
  * otherwise a positive errno value. */

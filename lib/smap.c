@@ -95,6 +95,17 @@ smap_add_format(struct smap *smap, const char *key, const char *format, ...)
                hash_bytes(key, key_len, 0));
 }
 
+/* Adds 'key' paired with a string representation of 'addr'. It is the
+ * caller's responsibility to avoid duplicate keys if desirable. */
+void
+smap_add_ipv6(struct smap *smap, const char *key, struct in6_addr *addr)
+{
+    char buf[INET6_ADDRSTRLEN];
+
+    inet_ntop(AF_INET6, addr, buf, sizeof buf);
+    smap_add(smap, key, buf);
+}
+
 /* Searches for 'key' in 'smap'.  If it does not already exists, adds it.
  * Otherwise, changes its value to 'value'. */
 void

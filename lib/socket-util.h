@@ -32,6 +32,7 @@ void xset_nonblocking(int fd);
 void setsockopt_tcp_nodelay(int fd);
 int set_dscp(int fd, int family, uint8_t dscp);
 
+bool addr_is_ipv6(const char *host_name);
 int lookup_ip(const char *host_name, struct in_addr *address);
 int lookup_ipv6(const char *host_name, struct in6_addr *address);
 
