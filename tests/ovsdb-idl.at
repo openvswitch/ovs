@@ -598,3 +598,50 @@ AT_CHECK([grep '"monitor"' stderr | grep -c '"ua"'], [0], [1
 ])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
+
+m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PY],
+  [AT_SETUP([$1 - Python fetch])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl positive Python increment fetch $6])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket [$3] $4],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$7],,, [[| $7]]),
+            [0], [$5], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS],
+   [OVSDB_CHECK_IDL_FETCH_COLUMNS_PY($@)])
+
+OVSDB_CHECK_IDL_FETCH_COLUMNS([simple idl, initially populated],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [?simple:i,r!],
+  ['fetch 0 r'],
+  [[000: i=0 uuid=<0>
+000: i=1 uuid=<1>
+001: commit, status=success
+002: i=0 r=0 uuid=<0>
+002: i=1 uuid=<1>
+003: done
+]])
