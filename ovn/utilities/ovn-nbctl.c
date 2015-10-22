@@ -268,6 +268,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             abort();
         }
     }
+    free(short_options);
 
     if (!db) {
         db = nbctl_default_db();
