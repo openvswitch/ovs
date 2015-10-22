@@ -146,44 +146,53 @@ def do_parse_schema(schema_string):
 
 
 def print_idl(idl, step):
-    simple = idl.tables["simple"].rows
-    l1 = idl.tables["link1"].rows
-    l2 = idl.tables["link2"].rows
-
     n = 0
-    for row in simple.itervalues():
-        s = ("%03d: i=%s r=%s b=%s s=%s u=%s "
-             "ia=%s ra=%s ba=%s sa=%s ua=%s uuid=%s"
-             % (step, row.i, row.r, row.b, row.s, row.u,
-                row.ia, row.ra, row.ba, row.sa, row.ua, row.uuid))
-        s = re.sub('""|,|u?\'', "", s)
-        s = re.sub('UUID\(([^)]+)\)', r'\1', s)
-        s = re.sub('False', 'false', s)
-        s = re.sub('True', 'true', s)
-        s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
-        print(s)
-        n += 1
+    if "simple" in idl.tables:
+        simple_columns = ["i", "r", "b", "s", "u", "ia",
+                          "ra", "ba", "sa", "ua", "uuid"]
+        simple = idl.tables["simple"].rows
+        for row in simple.itervalues():
+            s = "%03d:" % step
+            for column in simple_columns:
+                if hasattr(row, column) and not (type(getattr(row, column))
+                                                 is ovs.db.data.Atom):
+                    s += " %s=%s" % (column, getattr(row, column))
+            s = re.sub('""|,|u?\'', "", s)
+            s = re.sub('UUID\(([^)]+)\)', r'\1', s)
+            s = re.sub('False', 'false', s)
+            s = re.sub('True', 'true', s)
+            s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
+            print(s)
+            n += 1
 
-    for row in l1.itervalues():
-        s = ["%03d: i=%s k=" % (step, row.i)]
-        if row.k:
-            s.append(str(row.k.i))
-        s.append(" ka=[")
-        s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
-        s.append("] l2=")
-        if row.l2:
-            s.append(str(row.l2[0].i))
-        s.append(" uuid=%s" % row.uuid)
-        print(''.join(s))
-        n += 1
+    if "link1" in idl.tables:
+        l1 = idl.tables["link1"].rows
+        for row in l1.itervalues():
+            s = ["%03d: i=%s k=" % (step, row.i)]
+            if hasattr(row, "k") and row.k:
+                s.append(str(row.k.i))
+            if hasattr(row, "ka"):
+                s.append(" ka=[")
+                s.append(' '.join(sorted(str(ka.i) for ka in row.ka)))
+                s.append("] l2=")
+            if hasattr(row, "l2") and row.l2:
+                s.append(str(row.l2[0].i))
+            if hasattr(row, "uuid"):
+                s.append(" uuid=%s" % row.uuid)
+            print(''.join(s))
+            n += 1
 
-    for row in l2.itervalues():
-        s = ["%03d: i=%s l1=" % (step, row.i)]
-        if row.l1:
-            s.append(str(row.l1[0].i))
-        s.append(" uuid=%s" % row.uuid)
-        print(''.join(s))
-        n += 1
+    if "link2" in idl.tables:
+        l2 = idl.tables["link2"].rows
+        for row in l2.itervalues():
+            s = ["%03d:" % step]
+            s.append(" i=%s l1=" % row.i)
+            if hasattr(row, "l1") and row.l1:
+                s.append(str(row.l1[0].i))
+            if hasattr(row, "uuid"):
+                s.append(" uuid=%s" % row.uuid)
+            print(''.join(s))
+            n += 1
 
     if not n:
         print("%03d: empty" % step)
@@ -228,6 +237,7 @@ def idltest_find_simple(idl, i):
 def idl_set(idl, commands, step):
     txn = ovs.db.idl.Transaction(idl)
     increment = False
+    fetch_cmds = []
     events = []
     for command in commands.split(','):
         words = command.split()
@@ -307,6 +317,20 @@ def idl_set(idl, commands, step):
                 sys.stderr.write('"verify" command asks for unknown column '
                                  '"%s"\n' % args[1])
                 sys.exit(1)
+        elif name == "fetch":
+            if len(args) != 2:
+                sys.stderr.write('"fetch" command requires 2 argument\n')
+                sys.exit(1)
+
+            row = idltest_find_simple(idl, int(args[0]))
+            if not row:
+                sys.stderr.write('"fetch" command asks for nonexistent i=%d\n'
+                                 % int(args[0]))
+                sys.exit(1)
+
+            column = args[1]
+            row.fetch(column)
+            fetch_cmds.append([row, column])
         elif name == "increment":
             if len(args) != 1:
                 sys.stderr.write('"increment" command requires 1 argument\n')
@@ -366,10 +390,16 @@ def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
     if commands and commands[0].startswith("?"):
         monitor = {}
+        readonly = {}
         for x in commands[0][1:].split("?"):
+            readonly = []
             table, columns = x.split(":")
-            monitor[table] = columns.split(",")
-            schema_helper.register_columns(table, monitor[table])
+            columns = columns.split(",")
+            for index, column in enumerate(columns):
+                if column[-1] == '!':
+                    columns[index] = columns[index][:-1]
+                    readonly.append(columns[index])
+            schema_helper.register_columns(table, columns, readonly)
         commands = commands[1:]
     else:
         schema_helper.register_all()
@@ -499,6 +529,12 @@ idl SCHEMA SERVER [?T1:C1,C2...[?T2:C1,C2,...]...] [TRANSACTION...]
   e.g.:
       ?simple:b?link1:i,k - Monitor column "b" in table "simple",
                             and column "i", "k" in table "link1"
+  Readonly columns: Suffixing a "!" after a column indicates that the
+  column is to be registered "readonly".
+  e.g.:
+      ?simple:i,b!  - Register interest in column "i" (monitoring) and
+                      column "b" (readonly).
+
 
 The following options are also available:
   -t, --timeout=SECS          give up after SECS seconds
