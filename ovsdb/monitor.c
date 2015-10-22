@@ -990,6 +990,7 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
             hmap_remove(&mt->changes, &changes->hmap_node);
             ovsdb_monitor_changes_destroy(changes);
         }
+        hmap_destroy(&mt->changes);
         free(mt->columns);
         free(mt);
     }
