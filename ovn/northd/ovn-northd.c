@@ -1328,6 +1328,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             ETH_ADDR_ARGS(op->mac), op->json_key);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_ADMISSION, 50,
                       match, "next;");
+        free(match);
     }
 
     /* Logical router ingress table 1: IP Input. */
