@@ -15,6 +15,9 @@
  */
 
 #include <config.h>
+
+#include "tnl-arp-cache.h"
+
 #include <inttypes.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
@@ -33,7 +36,6 @@
 #include "seq.h"
 #include "socket-util.h"
 #include "timeval.h"
-#include "tnl-arp-cache.h"
 #include "unaligned.h"
 #include "unixctl.h"
 #include "util.h"
