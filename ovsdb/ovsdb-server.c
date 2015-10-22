@@ -337,6 +337,7 @@ main(int argc, char *argv[])
         close_db(db);
         shash_delete(&all_dbs, node);
     }
+    shash_destroy(&all_dbs);
     sset_destroy(&remotes);
     sset_destroy(&db_filenames);
     unixctl_server_destroy(unixctl);
