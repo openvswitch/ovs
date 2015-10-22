@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -321,11 +321,8 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
     smap_add(smap, "state", bfd_state_str(bfd->state));
     smap_add(smap, "diagnostic", bfd_diag_str(bfd->diag));
     smap_add_format(smap, "flap_count", "%"PRIu64, bfd->flap_count);
-
-    if (bfd->state != STATE_DOWN) {
-        smap_add(smap, "remote_state", bfd_state_str(bfd->rmt_state));
-        smap_add(smap, "remote_diagnostic", bfd_diag_str(bfd->rmt_diag));
-    }
+    smap_add(smap, "remote_state", bfd_state_str(bfd->rmt_state));
+    smap_add(smap, "remote_diagnostic", bfd_diag_str(bfd->rmt_diag));
     ovs_mutex_unlock(&mutex);
 }
 
