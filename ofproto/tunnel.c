@@ -47,8 +47,8 @@ VLOG_DEFINE_THIS_MODULE(tunnel);
 
 struct tnl_match {
     ovs_be64 in_key;
-    ovs_be32 ip_src;
-    ovs_be32 ip_dst;
+    struct in6_addr ipv6_src;
+    struct in6_addr ipv6_dst;
     odp_port_t odp_port;
     uint32_t pkt_mark;
     bool in_key_flow;
@@ -161,8 +161,12 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port->change_seq = netdev_get_change_seq(tnl_port->netdev);
 
     tnl_port->match.in_key = cfg->in_key;
-    tnl_port->match.ip_src = cfg->ip_src;
-    tnl_port->match.ip_dst = cfg->ip_dst;
+    if (cfg->ip_src) {
+        in6_addr_set_mapped_ipv4(&tnl_port->match.ipv6_src, cfg->ip_src);
+    }
+    if (cfg->ip_dst) {
+        in6_addr_set_mapped_ipv4(&tnl_port->match.ipv6_dst, cfg->ip_dst);
+    }
     tnl_port->match.ip_src_flow = cfg->ip_src_flow;
     tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
     tnl_port->match.pkt_mark = cfg->ipsec ? IPSEC_MARK : 0;
@@ -412,10 +416,10 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     }
 
     if (!cfg->ip_src_flow) {
-        flow->tunnel.ip_src = tnl_port->match.ip_src;
+        flow->tunnel.ip_src = in6_addr_get_mapped_ipv4(&tnl_port->match.ipv6_src);
     }
     if (!cfg->ip_dst_flow) {
-        flow->tunnel.ip_dst = tnl_port->match.ip_dst;
+        flow->tunnel.ip_dst = in6_addr_get_mapped_ipv4(&tnl_port->match.ipv6_dst);
     }
     flow->pkt_mark = tnl_port->match.pkt_mark;
 
@@ -535,10 +539,12 @@ tnl_find(const struct flow *flow) OVS_REQ_RDLOCK(rwlock)
                      * here as a description of how to treat received
                      * packets. */
                     match.in_key = in_key_flow ? 0 : flow->tunnel.tun_id;
-                    match.ip_src = (ip_src == IP_SRC_CFG
-                                    ? flow->tunnel.ip_dst
-                                    : 0);
-                    match.ip_dst = ip_dst_flow ? 0 : flow->tunnel.ip_src;
+                    if (ip_src == IP_SRC_CFG && flow->tunnel.ip_dst) {
+                        in6_addr_set_mapped_ipv4(&match.ipv6_src, flow->tunnel.ip_dst);
+                    }
+                    if (!ip_dst_flow && flow->tunnel.ip_src) {
+                        in6_addr_set_mapped_ipv4(&match.ipv6_dst, flow->tunnel.ip_src);
+                    }
                     match.odp_port = flow->in_port.odp_port;
                     match.pkt_mark = flow->pkt_mark;
                     match.in_key_flow = in_key_flow;
@@ -567,7 +573,7 @@ tnl_match_map(const struct tnl_match *m)
     enum ip_src_type ip_src;
 
     ip_src = (m->ip_src_flow ? IP_SRC_FLOW
-              : m->ip_src ? IP_SRC_CFG
+              : ipv6_addr_is_set(&m->ipv6_src) ? IP_SRC_CFG
               : IP_SRC_ANY);
 
     return &tnl_match_maps[6 * m->in_key_flow + 3 * m->ip_dst_flow + ip_src];
@@ -578,10 +584,12 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     OVS_REQ_RDLOCK(rwlock)
 {
     if (!match->ip_dst_flow) {
-        ds_put_format(ds, IP_FMT"->"IP_FMT, IP_ARGS(match->ip_src),
-                      IP_ARGS(match->ip_dst));
+        print_ipv6_mapped(ds, &match->ipv6_src);
+        ds_put_cstr(ds, "->");
+        print_ipv6_mapped(ds, &match->ipv6_dst);
     } else if (!match->ip_src_flow) {
-        ds_put_format(ds, IP_FMT"->flow", IP_ARGS(match->ip_src));
+        print_ipv6_mapped(ds, &match->ipv6_src);
+        ds_put_cstr(ds, "->flow");
     } else {
         ds_put_cstr(ds, "flow->flow");
     }
