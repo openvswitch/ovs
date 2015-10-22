@@ -1430,6 +1430,7 @@ test_ovn_main(int argc, char *argv[])
             abort();
         }
     }
+    free(short_options);
 
     static const struct ovs_cmdl_command commands[] = {
         /* Lexer. */
