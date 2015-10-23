@@ -19,6 +19,7 @@
 #include "dynamic-string.h"
 #include "json.h"
 #include "lex.h"
+#include "logical-fields.h"
 #include "match.h"
 #include "ofp-actions.h"
 #include "shash.h"
@@ -668,16 +669,11 @@ exit:
 static bool
 expr_get_int(struct expr_context *ctx, int *value)
 {
-    if (ctx->lexer->token.type == LEX_T_INTEGER
-        && ctx->lexer->token.format == LEX_F_DECIMAL
-        && ntohll(ctx->lexer->token.value.integer) <= INT_MAX) {
-        *value = ntohll(ctx->lexer->token.value.integer);
-        lexer_get(ctx->lexer);
-        return true;
-    } else {
+    bool ok = lexer_get_int(ctx->lexer, value);
+    if (!ok) {
         expr_syntax_error(ctx, "expecting small integer.");
-        return false;
     }
+    return ok;
 }
 
 static bool
@@ -1480,7 +1476,10 @@ expr_annotate__(struct expr *expr, const struct shash *symtab,
  *     - Expands references to predicate symbols, by replacing them by the
  *       expressions that they expand to.
  *
- * In each case, annotation occurs recursively as necessary. */
+ * In each case, annotation occurs recursively as necessary.
+ *
+ * On failure, returns NULL and sets '*errorp' to an explanatory error
+ * message, which the caller must free. */
 struct expr *
 expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 {
@@ -2812,8 +2811,17 @@ parse_assignment(struct expr_context *ctx, const struct simap *ports,
             uint32_t port = simap_get(ports, c->string);
             bitwise_put(port, &sf->value,
                         sf->field->n_bytes, 0, sf->field->n_bits);
-            bitwise_put(UINT64_MAX, &sf->mask,
-                        sf->field->n_bytes, 0, sf->field->n_bits);
+            bitwise_one(&sf->mask, sf->field->n_bytes, 0, sf->field->n_bits);
+
+            /* If the logical input port is being zeroed, clear the OpenFlow
+             * ingress port also, to allow a packet to be sent back to its
+             * origin. */
+            if (!port && sf->field->id == MFF_LOG_INPORT) {
+                sf = ofpact_put_SET_FIELD(ofpacts);
+                sf->field = mf_from_id(MFF_IN_PORT);
+                bitwise_one(&sf->mask,
+                            sf->field->n_bytes, 0, sf->field->n_bits);
+            }
         }
 
     exit_destroy_cs:

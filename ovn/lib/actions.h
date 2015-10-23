@@ -27,13 +27,16 @@ struct shash;
 struct simap;
 
 char *actions_parse(struct lexer *, const struct shash *symtab,
-                    const struct simap *ports, uint8_t next_table_id,
-                    uint8_t output_table_id, struct ofpbuf *ofpacts,
+                    const struct simap *ports, const struct simap *ct_zones,
+                    uint8_t first_ptable, uint8_t n_tables, uint8_t cur_ltable,
+                    uint8_t output_ptable, struct ofpbuf *ofpacts,
                     struct expr **prereqsp)
     OVS_WARN_UNUSED_RESULT;
 char *actions_parse_string(const char *s, const struct shash *symtab,
-                           const struct simap *ports, uint8_t next_table_id,
-                           uint8_t output_table_id, struct ofpbuf *ofpacts,
+                           const struct simap *ports,
+                           const struct simap *ct_zones, uint8_t first_ptable,
+                           uint8_t n_tables, uint8_t cur_ltable,
+                           uint8_t output_ptable, struct ofpbuf *ofpacts,
                            struct expr **prereqsp)
     OVS_WARN_UNUSED_RESULT;
 

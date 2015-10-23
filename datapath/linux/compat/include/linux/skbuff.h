@@ -373,6 +373,13 @@ void rpl_kfree_skb_list(struct sk_buff *segs);
 #define kfree_skb_list rpl_kfree_skb_list
 #endif
 
+#ifndef HAVE_SKB_CHECKSUM_START_OFFSET
+static inline int skb_checksum_start_offset(const struct sk_buff *skb)
+{
+	return skb->csum_start - skb_headroom(skb);
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
 #define skb_postpull_rcsum rpl_skb_postpull_rcsum
 static inline void skb_postpull_rcsum(struct sk_buff *skb,

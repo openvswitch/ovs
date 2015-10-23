@@ -268,6 +268,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             abort();
         }
     }
+    free(short_options);
 
     if (!db) {
         db = nbctl_default_db();
@@ -294,10 +295,6 @@ Logical switch commands:\n\
   lswitch-add [LSWITCH]     create a logical switch named LSWITCH\n\
   lswitch-del LSWITCH       delete LSWITCH and all its ports\n\
   lswitch-list              print the names of all logical switches\n\
-  lswitch-set-external-id LSWITCH KEY [VALUE]\n\
-                            set or delete an external-id on LSWITCH\n\
-  lswitch-get-external-id LSWITCH [KEY]\n\
-                            list one or all external-ids on LSWITCH\n\
 \n\
 ACL commands:\n\
   acl-add LSWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
@@ -315,13 +312,9 @@ Logical port commands:\n\
   lport-list LSWITCH        print the names of all logical ports on LSWITCH\n\
   lport-get-parent LPORT    get the parent of LPORT if set\n\
   lport-get-tag LPORT       get the LPORT's tag if set\n\
-  lport-set-external-id LPORT KEY [VALUE]\n\
-                            set or delete an external-id on LPORT\n\
-  lport-get-external-id LPORT [KEY]\n\
-                            list one or all external-ids on LPORT\n\
-  lport-set-macs LPORT [MAC]...\n\
-                            set MAC addresses for LPORT.\n\
-  lport-get-macs LPORT      get a list of MAC addresses on LPORT\n\
+  lport-set-addresses LPORT [ADDRESS]...\n\
+                            set MAC or MAC+IP addresses for LPORT.\n\
+  lport-get-addresses LPORT      get a list of MAC addresses on LPORT\n\
   lport-set-port-security LPORT [ADDRS]...\n\
                             set port security addresses for LPORT.\n\
   lport-get-port-security LPORT    get LPORT's port security addresses\n\
@@ -410,10 +403,10 @@ print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
         if (lport->n_tag) {
             ds_put_format(s, "            tag: %"PRIu64"\n", lport->tag[0]);
         }
-        if (lport->n_macs) {
-            ds_put_cstr(s, "            macs:");
-            for (size_t j = 0; j < lport->n_macs; j++) {
-                ds_put_format(s, " %s", lport->macs[j]);
+        if (lport->n_addresses) {
+            ds_put_cstr(s, "            addresses:");
+            for (size_t j = 0; j < lport->n_addresses; j++) {
+                ds_put_format(s, " %s", lport->addresses[j]);
             }
             ds_put_char(s, '\n');
         }
@@ -480,61 +473,6 @@ nbctl_lswitch_list(struct ctl_context *ctx)
     }
     smap_destroy(&lswitches);
     free(nodes);
-}
-
-static void
-nbctl_lswitch_set_external_id(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch *lswitch;
-    struct smap new_external_ids;
-
-    lswitch = lswitch_by_name_or_uuid(ctx, id);
-    if (!lswitch) {
-        return;
-    }
-
-    smap_init(&new_external_ids);
-    smap_clone(&new_external_ids, &lswitch->external_ids);
-    if (ctx->argc == 4) {
-        smap_replace(&new_external_ids, ctx->argv[2], ctx->argv[3]);
-    } else {
-        smap_remove(&new_external_ids, ctx->argv[2]);
-    }
-    nbrec_logical_switch_set_external_ids(lswitch, &new_external_ids);
-    smap_destroy(&new_external_ids);
-}
-
-static void
-nbctl_lswitch_get_external_id(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch *lswitch;
-
-    lswitch = lswitch_by_name_or_uuid(ctx, id);
-    if (!lswitch) {
-        return;
-    }
-
-    if (ctx->argc == 3) {
-        const char *key = ctx->argv[2];
-        const char *value;
-
-        /* List one external ID */
-
-        value = smap_get(&lswitch->external_ids, key);
-        if (value) {
-            ds_put_format(&ctx->output, "%s\n", value);
-        }
-    } else {
-        struct smap_node *node;
-
-        /* List all external IDs */
-
-        SMAP_FOR_EACH(node, &lswitch->external_ids) {
-            ds_put_format(&ctx->output, "%s=%s\n", node->key, node->value);
-        }
-    }
 }
 
 static const struct nbrec_logical_port *
@@ -715,30 +653,7 @@ nbctl_lport_get_tag(struct ctl_context *ctx)
 }
 
 static void
-nbctl_lport_set_external_id(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_port *lport;
-    struct smap new_external_ids;
-
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
-    smap_init(&new_external_ids);
-    smap_clone(&new_external_ids, &lport->external_ids);
-    if (ctx->argc == 4) {
-        smap_replace(&new_external_ids, ctx->argv[2], ctx->argv[3]);
-    } else {
-        smap_remove(&new_external_ids, ctx->argv[2]);
-    }
-    nbrec_logical_port_set_external_ids(lport, &new_external_ids);
-    smap_destroy(&new_external_ids);
-}
-
-static void
-nbctl_lport_get_external_id(struct ctl_context *ctx)
+nbctl_lport_set_addresses(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
@@ -748,48 +663,16 @@ nbctl_lport_get_external_id(struct ctl_context *ctx)
         return;
     }
 
-    if (ctx->argc == 3) {
-        const char *key = ctx->argv[2];
-        const char *value;
-
-        /* List one external ID */
-
-        value = smap_get(&lport->external_ids, key);
-        if (value) {
-            ds_put_format(&ctx->output, "%s\n", value);
-        }
-    } else {
-        struct smap_node *node;
-
-        /* List all external IDs */
-
-        SMAP_FOR_EACH(node, &lport->external_ids) {
-            ds_put_format(&ctx->output, "%s=%s\n", node->key, node->value);
-        }
-    }
-}
-
-static void
-nbctl_lport_set_macs(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_port *lport;
-
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
-    nbrec_logical_port_set_macs(lport,
+    nbrec_logical_port_set_addresses(lport,
             (const char **) ctx->argv + 2, ctx->argc - 2);
 }
 
 static void
-nbctl_lport_get_macs(struct ctl_context *ctx)
+nbctl_lport_get_addresses(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
-    struct svec macs;
+    struct svec addresses;
     const char *mac;
     size_t i;
 
@@ -798,15 +681,15 @@ nbctl_lport_get_macs(struct ctl_context *ctx)
         return;
     }
 
-    svec_init(&macs);
-    for (i = 0; i < lport->n_macs; i++) {
-        svec_add(&macs, lport->macs[i]);
+    svec_init(&addresses);
+    for (i = 0; i < lport->n_addresses; i++) {
+        svec_add(&addresses, lport->addresses[i]);
     }
-    svec_sort(&macs);
-    SVEC_FOR_EACH(i, mac, &macs) {
+    svec_sort(&addresses);
+    SVEC_FOR_EACH(i, mac, &addresses) {
         ds_put_format(&ctx->output, "%s\n", mac);
     }
-    svec_destroy(&macs);
+    svec_destroy(&addresses);
 }
 
 static void
@@ -1065,8 +948,8 @@ nbctl_acl_add(struct ctl_context *ctx)
     }
 
     /* Validate priority. */
-    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 1
-        || priority > 65535) {
+    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 0
+        || priority > 32767) {
         VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
         return;
     }
@@ -1153,8 +1036,8 @@ nbctl_acl_del(struct ctl_context *ctx)
     }
 
     /* Validate priority. */
-    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 1
-        || priority > 65535) {
+    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 0
+        || priority > 32767) {
         VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
         return;
     }
@@ -1409,10 +1292,6 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "lswitch-del", 1, 1, "LSWITCH", NULL, nbctl_lswitch_del,
       NULL, "", RW },
     { "lswitch-list", 0, 0, "", NULL, nbctl_lswitch_list, NULL, "", RO },
-    { "lswitch-set-external-id", 2, 3, "LSWITCH KEY [VALUE]", NULL,
-      nbctl_lswitch_set_external_id, NULL, "", RW },
-    { "lswitch-get-external-id", 1, 2, "LSWITCH [KEY]", NULL,
-      nbctl_lswitch_get_external_id, NULL, "", RO },
 
     /* acl commands. */
     { "acl-add", 5, 5, "LSWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
@@ -1430,13 +1309,10 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       "", RO },
     { "lport-get-tag", 1, 1, "LPORT", NULL, nbctl_lport_get_tag, NULL, "",
       RO },
-    { "lport-set-external-id", 2, 3, "LPORT KEY [VALUE]", NULL,
-      nbctl_lport_set_external_id, NULL, "", RW },
-    { "lport-get-external-id", 1, 2, "LPORT [KEY]", NULL,
-      nbctl_lport_get_external_id, NULL, "", RO },
-    { "lport-set-macs", 1, INT_MAX, "LPORT [MAC]...", NULL,
-      nbctl_lport_set_macs, NULL, "", RW },
-    { "lport-get-macs", 1, 1, "LPORT", NULL, nbctl_lport_get_macs, NULL,
+    { "lport-set-addresses", 1, INT_MAX, "LPORT [ADDRESS]...", NULL,
+      nbctl_lport_set_addresses, NULL, "", RW },
+    { "lport-get-addresses", 1, 1, "LPORT", NULL,
+      nbctl_lport_get_addresses, NULL,
       "", RO },
     { "lport-set-port-security", 0, INT_MAX, "LPORT [ADDRS]...", NULL,
       nbctl_lport_set_port_security, NULL, "", RW },

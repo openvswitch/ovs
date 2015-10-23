@@ -93,7 +93,7 @@ struct rule;
 /* Metadata for restoring pipeline context after recirculation.  Helpers
  * are inlined below to keep them together with the definition for easier
  * updates. */
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
 struct recirc_metadata {
     /* Metadata in struct flow. */
@@ -142,6 +142,7 @@ struct recirc_state {
     struct recirc_metadata metadata; /* Flow metadata. */
     struct ofpbuf *stack;         /* Stack if any. */
     mirror_mask_t mirrors;        /* Mirrors already output. */
+    bool conntracked;             /* Conntrack occurred prior to recirc. */
 
     /* Actions to be translated on recirculation. */
     uint32_t action_set_len;      /* How much of 'ofpacts' consists of an

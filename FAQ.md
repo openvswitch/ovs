@@ -564,6 +564,32 @@ A: Open vSwitch has two kinds of flows (see the previous question), so
 
 A: Open vSwitch maintains snooping tables for each VLAN.
 
+### Q: Can OVS populate the kernel flow table in advance instead of in reaction to packets?
+
+A: No.  There are several reasons:
+
+  - Kernel flows are not as sophisticated as OpenFlow flows, which
+    means that some OpenFlow policies could require a large number of
+    kernel flows.  The "conjunctive match" feature is an extreme
+    example: the number of kernel flows it requires is the product of
+    the number of flows in each dimension.
+
+  - With multiple OpenFlow flow tables and simple sets of actions, the
+    number of kernel flows required can be as large as the product of
+    the number of flows in each dimension.  With more sophisticated
+    actions, the number of kernel flows could be even larger.
+
+  - Open vSwitch is designed so that any version of OVS userspace
+    interoperates with any version of the OVS kernel module.  This
+    forward and backward compatibility requires that userspace observe
+    how the kernel module parses received packets.  This is only
+    possible in a straightforward way when userspace adds kernel flows
+    in reaction to received packets.
+
+  For more relevant information on the architecture of Open vSwitch,
+  please read "The Design and Implementation of Open vSwitch",
+  published in USENIX NSDI 2015.
+
 
 Performance
 -----------

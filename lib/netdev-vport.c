@@ -321,7 +321,7 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
 
     iface[0] = '\0';
     route = netdev->tnl_cfg.ip_dst;
-    if (ovs_router_lookup(route, iface, &gw)) {
+    if (ovs_router_lookup4(route, iface, &gw)) {
         struct netdev *egress_netdev;
 
         if (!netdev_open(iface, "system", &egress_netdev)) {

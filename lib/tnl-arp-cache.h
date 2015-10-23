@@ -37,4 +37,9 @@ int tnl_arp_lookup(const char dev_name[], ovs_be32 dst, struct eth_addr *mac);
 void tnl_arp_cache_init(void);
 void tnl_arp_cache_run(void);
 
+int tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
+                 const char dev_name[]);
+int tnl_nd_lookup(const char dev_name[], const struct in6_addr *dst,
+                  struct eth_addr *mac);
+
 #endif

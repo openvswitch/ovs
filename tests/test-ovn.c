@@ -1208,7 +1208,7 @@ static void
 test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct shash symtab;
-    struct simap ports;
+    struct simap ports, ct_zones;
     struct ds input;
 
     create_symtab(&symtab);
@@ -1217,6 +1217,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     simap_put(&ports, "eth0", 5);
     simap_put(&ports, "eth1", 6);
     simap_put(&ports, "LOCAL", ofp_to_u16(OFPP_LOCAL));
+    simap_init(&ct_zones);
 
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
@@ -1225,7 +1226,8 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
         char *error;
 
         ofpbuf_init(&ofpacts, 0);
-        error = actions_parse_string(ds_cstr(&input), &symtab, &ports, 11, 64,
+        error = actions_parse_string(ds_cstr(&input), &symtab, &ports,
+                                     &ct_zones, 16, 16, 10, 64,
                                      &ofpacts, &prereqs);
         if (!error) {
             struct ds output;
@@ -1252,6 +1254,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     ds_destroy(&input);
 
     simap_destroy(&ports);
+    simap_destroy(&ct_zones);
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
 }
@@ -1427,6 +1430,7 @@ test_ovn_main(int argc, char *argv[])
             abort();
         }
     }
+    free(short_options);
 
     static const struct ovs_cmdl_command commands[] = {
         /* Lexer. */

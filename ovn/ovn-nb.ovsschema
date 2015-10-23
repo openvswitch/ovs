@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "1.0.0",
-    "cksum": "3052542625 4535",
+    "version": "2.0.0",
+    "cksum": "3039293926 4601",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -16,10 +16,6 @@
                                           "refType": "strong"},
                                   "min": 0,
                                   "max": "unlimited"}},
-                "router_port": {"type": {"key": {"type": "uuid",
-                                                 "refTable": "Logical_Router_Port",
-                                                 "refType": "strong"},
-                                         "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -39,9 +35,9 @@
                                       "minInteger": 1,
                                       "maxInteger": 4095},
                               "min": 0, "max": 1}},
-                "macs": {"type": {"key": "string",
-                                  "min": 0,
-                                  "max": "unlimited"}},
+                "addresses": {"type": {"key": "string",
+                                       "min": 0,
+                                       "max": "unlimited"}},
                 "port_security": {"type": {"key": "string",
                                            "min": 0,
                                            "max": "unlimited"}},
@@ -55,8 +51,8 @@
         "ACL": {
             "columns": {
                 "priority": {"type": {"key": {"type": "integer",
-                                              "minInteger": 1,
-                                              "maxInteger": 65534}}},
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
                 "direction": {"type": {"key": {"type": "string",
                                             "enum": ["set", ["from-lport", "to-lport"]]}}},
                 "match": {"type": "string"},
@@ -72,7 +68,7 @@
                 "name": {"type": "string"},
                 "ports": {"type": {"key": {"type": "uuid",
                                            "refTable": "Logical_Router_Port",
-                                           "refType": "weak"},
+                                           "refType": "strong"},
                                    "min": 0,
                                    "max": "unlimited"}},
                 "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
@@ -85,6 +81,11 @@
                 "name": {"type": "string"},
                 "network": {"type": "string"},
                 "mac": {"type": "string"},
+                "peer": {"type": {"key": {"type": "uuid",
+                                          "refTable": "Logical_Router_Port",
+                                          "refType": "strong"},
+                                  "min": 0, "max": 1}},
+                "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

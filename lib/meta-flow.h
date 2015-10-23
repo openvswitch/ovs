@@ -703,6 +703,109 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_PKT_MARK,
 
+    /* "ct_state".
+     *
+     * Connection tracking state.  The field is populated by the NXAST_CT
+     * action. The following bit values describe the state of the connection:
+     *
+     *   - New (0x01): This is the beginning of a new connection.
+     *   - Established (0x02): This is part of an already existing connection.
+     *   - Related (0x04): This is a separate connection that is related to an
+     *                     existing connection.
+     *   - Invalid (0x20): This flow could not be associated with a connection.
+     *                     This could be set for a variety of reasons,
+     *                     including (but not limited to):
+     *                     - L3/L4 protocol handler is not loaded/unavailable.
+     *                     - L3/L4 protocol handler determines that the packet
+     *                       is malformed or invalid for the current FSM stage.
+     *                     - Packets are unexpected length for protocol.
+     *   - Reply (0x40): This flow is in the reply direction, ie it did not
+     *                   initiate the connection.
+     *   - Tracked (0x80): Connection tracking has occurred.
+     *
+     * The "Tracked" bit corresponds to the packet_state as described in the
+     * description of NXAST_CT action. The remaining bits correspond to
+     * connection state. The "New" bit implies that the connection state
+     * is uncommitted, while "Established" implies that it has previously been
+     * committed.
+     *
+     * There are additional constraints on the ct_state bits, listed in order
+     * of precedence below:
+     *
+     *   - If "Tracked" is unset, no other bits may be set.
+     *   - If "Tracked" is set, one or more other bits may be set.
+     *   - If "Invalid" is set, only the "Tracked" bit is also set.
+     *   - The "New" and "Established" bits are mutually exclusive.
+     *   - The "New" and "Reply" bits are mutually exclusive.
+     *   - The "Related" bit may be set in conjunction with any other bits.
+     *     Connections that are identified as "Related" are separate
+     *     connections from the originating connection, so must be committed
+     *     separately. All packets for a related connection will have the
+     *     "Related" bit set (not just the initial packet).
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: ct state.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_CT_STATE(105) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_STATE,
+
+    /* "ct_zone".
+     *
+     * Connection tracking zone.  The field is populated by the
+     * NXAST_CT action.
+     *
+     * Type: be16.
+     * Maskable: no.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: NXM_NX_CT_ZONE(106) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_ZONE,
+
+    /* "ct_mark".
+     *
+     * Connection tracking mark.  The mark is carried with the
+     * connection tracking state.  On Linux this corresponds to the
+     * nf_conn's "mark" member but the exact implementation is
+     * platform-dependent.
+     *
+     * Writable only from nested actions within the NXAST_CT action.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_CT_MARK(107) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_MARK,
+
+    /* "ct_label".
+     *
+     * Connection tracking label.  The label is carried with the
+     * connection tracking state.  On Linux this is held in the
+     * conntrack label extension but the exact implementation is
+     * platform-dependent.
+     *
+     * Writable only from nested actions within the NXAST_CT action.
+     *
+     * Type: be128.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_CT_LABEL(108) since v2.5.
+     * OXM: none.
+     */
+    MFF_CT_LABEL,
+
 #if FLOW_N_REGS == 8
     /* "reg<N>".
      *
@@ -1059,7 +1162,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * The source address in the IPv6 header.
      *
-     * Type: IPv6.
+     * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
      * Prerequisites: IPv6.
@@ -1074,7 +1177,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * The destination address in the IPv6 header.
      *
-     * Type: IPv6.
+     * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
      * Prerequisites: IPv6.
@@ -1528,7 +1631,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * Before Open vSwitch 1.8, only CIDR masks were supported.
      *
-     * Type: IPv6.
+     * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
      * Prerequisites: ND.
@@ -1679,6 +1782,7 @@ enum OVS_PACKED_ENUM mf_string {
     MFS_HEXADECIMAL,
 
     /* Other formats. */
+    MFS_CT_STATE,               /* Connection tracking state */
     MFS_ETHERNET,
     MFS_IPV4,
     MFS_IPV6,
@@ -1742,6 +1846,7 @@ union mf_value {
     uint8_t tun_metadata[128];
     struct in6_addr ipv6;
     struct eth_addr mac;
+    ovs_be128 be128;
     ovs_be64 be64;
     ovs_be32 be32;
     ovs_be16 be16;
@@ -1861,10 +1966,8 @@ void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);
 
 /* Returns the set of usable protocols. */
-enum ofputil_protocol mf_set(const struct mf_field *,
-                             const union mf_value *value,
-                             const union mf_value *mask,
-                             struct match *, char **err_str);
+uint32_t mf_set(const struct mf_field *, const union mf_value *value,
+                const union mf_value *mask, struct match *, char **err_str);
 
 void mf_set_wild(const struct mf_field *, struct match *, char **err_str);
 

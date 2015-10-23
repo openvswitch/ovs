@@ -4,7 +4,7 @@ OVN Tutorial
 This tutorial is intended to give you a tour of the basic OVN features using
 `ovs-sandbox` as a simulated test environment.  It’s assumed that you have an
 understanding of OVS before going through this tutorial. Detail about OVN is
-covered in `ovn-architecture(7)`, but this tutorial lets you quickly see it in
+covered in [ovn-architecture(7)], but this tutorial lets you quickly see it in
 action.
 
 Getting Started
@@ -23,14 +23,15 @@ Running the sandbox with OVN enabled does the following additional steps to the
 environment:
 
   1. Creates the `OVN_Northbound` and `OVN_Southbound` databases as described in
-     `ovn-nb(5)` and `ovn-sb(5)`.
+     [ovn-nb(5)] and [ovn-sb(5)].
 
-  2. Creates the `hardware_vtep` database as described in `vtep(5)`.
+  2. Creates the `hardware_vtep` database as described in [vtep(5)].
 
-  3. Runs the `ovn-northd`, `ovn-controller`, and `ovn-controller-vtep` daemons.
+  3. Runs the [ovn-northd(8)], [ovn-controller(8)], and [ovn-controller-vtep(8)]
+     daemons.
 
   4. Makes OVN and VTEP utilities available for use in the environment,
-     including `vtep-ctl`, `ovn-nbctl`, and `ovn-sbctl`.
+     including [vtep-ctl(8)], [ovn-nbctl(8)], and [ovn-sbctl(8)].
 
 Note that each of these demos assumes you start with a fresh sandbox
 environment.  Re-run `ovs-sandbox` before starting each section.
@@ -53,9 +54,9 @@ You can use the `ovn-nbctl` utility to see an overview of the logical topology.
     $ ovn-nbctl show
     lswitch 78687d53-e037-4555-bcd3-f4f8eaf3f2aa (sw0)
         lport sw0-port1
-            macs: 00:00:00:00:00:01
+            addresses: 00:00:00:00:00:01
         lport sw0-port2
-            macs: 00:00:00:00:00:02
+            addresses: 00:00:00:00:00:02
 
 The `ovn-sbctl` utility can be used to see into the state stored in the
 `OVN_Southbound` database.  The `show` command shows that there is a single
@@ -146,7 +147,7 @@ fields have been omitted for brevity.
      table=64, priority=100,reg7=0x1,metadata=0x1 actions=output:1
      table=64, priority=100,reg7=0x2,metadata=0x1 actions=output:2
 
-The `ovs-appctl` command can be used to generate and OpenFlow trace of how a
+The `ovs-appctl` command can be used to generate an OpenFlow trace of how a
 packet would be processed in this configuration.  This first trace shows a
 packet from `sw0-port1` to `sw0-port2`.  The packet arrives from port `1` and
 should be output to port `2`.
@@ -192,14 +193,14 @@ View the logical topology with `ovn-nbctl`.
     $ ovn-nbctl show
     lswitch e3190dc2-89d1-44ed-9308-e7077de782b3 (sw0)
         lport sw0-port1
-            macs: 00:00:00:00:00:01
+            addresses: 00:00:00:00:00:01
         lport sw0-port2
-            macs: 00:00:00:00:00:02
+            addresses: 00:00:00:00:00:02
     lswitch c8ed4c5f-9733-43f6-93da-795b1aabacb1 (sw1)
         lport sw1-port1
-            macs: 00:00:00:00:00:03
+            addresses: 00:00:00:00:00:03
         lport sw1-port2
-            macs: 00:00:00:00:00:04
+            addresses: 00:00:00:00:00:04
 
 Physically, all ports reside on the same chassis.
 
@@ -278,13 +279,13 @@ You can start by viewing the logical topology with `ovn-nbctl`.
     $ ovn-nbctl show
     lswitch b977dc03-79a5-41ba-9665-341a80e1abfd (sw0)
         lport sw0-port1
-            macs: 00:00:00:00:00:01
+            addresses: 00:00:00:00:00:01
         lport sw0-port2
-            macs: 00:00:00:00:00:02
+            addresses: 00:00:00:00:00:02
         lport sw0-port4
-            macs: 00:00:00:00:00:04
+            addresses: 00:00:00:00:00:04
         lport sw0-port3
-            macs: 00:00:00:00:00:03
+            addresses: 00:00:00:00:00:03
 
 Using `ovn-sbctl` to view the state of the system, we can see that there are two
 chassis: one local that we can interact with, and a fake remote chassis. Two
@@ -393,24 +394,24 @@ The logical topology from `ovn-nbctl` should look like this.
     $ ovn-nbctl show
         lswitch 5a652488-cfba-4f3e-929d-00010cdfde40 (provnet1-2)
             lport provnet1-2-physnet1
-                macs: unknown
+                addresses: unknown
             lport provnet1-2-port1
-                macs: 00:00:00:00:00:02
+                addresses: 00:00:00:00:00:02
         lswitch 5829b60a-eda8-4d78-94f6-7017ff9efcf0 (provnet1-4)
             lport provnet1-4-port1
-                macs: 00:00:00:00:00:04
+                addresses: 00:00:00:00:00:04
             lport provnet1-4-physnet1
-                macs: unknown
+                addresses: unknown
         lswitch 06cbbcb6-38e3-418d-a81e-634ec9b54ad6 (provnet1-1)
             lport provnet1-1-port1
-                macs: 00:00:00:00:00:01
+                addresses: 00:00:00:00:00:01
             lport provnet1-1-physnet1
-                macs: unknown
+                addresses: unknown
         lswitch 9cba3b3b-59ae-4175-95f5-b6f1cd9c2afb (provnet1-3)
             lport provnet1-3-physnet1
-                macs: unknown
+                addresses: unknown
             lport provnet1-3-port1
-                macs: 00:00:00:00:00:03
+                addresses: 00:00:00:00:00:03
 
 `port1` on each logical switch represents a regular logical port for a VIF on a
 hypervisor.  `physnet1` on each logical switch is the special `localnet` port.
@@ -547,47 +548,47 @@ set to `101`.
         lswitch 12ea93d0-694b-48e9-adef-d0ddd3ec4ac9 (provnet1-7-101)
             lport provnet1-7-physnet1-101
                 parent: , tag:101
-                macs: unknown
+                addresses: unknown
             lport provnet1-7-101-port1
-                macs: 00:00:00:00:00:07
+                addresses: 00:00:00:00:00:07
         lswitch c9a5ce3a-15ec-48ea-a898-416013463589 (provnet1-4)
             lport provnet1-4-port1
-                macs: 00:00:00:00:00:04
+                addresses: 00:00:00:00:00:04
             lport provnet1-4-physnet1
-                macs: unknown
+                addresses: unknown
         lswitch e07d4f7a-2085-4fbb-9937-d6192b79a397 (provnet1-1)
             lport provnet1-1-physnet1
-                macs: unknown
+                addresses: unknown
             lport provnet1-1-port1
-                macs: 00:00:00:00:00:01
+                addresses: 00:00:00:00:00:01
         lswitch 6c098474-0509-4219-bc9b-eb4e28dd1aeb (provnet1-2)
             lport provnet1-2-physnet1
-                macs: unknown
+                addresses: unknown
             lport provnet1-2-port1
-                macs: 00:00:00:00:00:02
+                addresses: 00:00:00:00:00:02
         lswitch 723c4684-5d58-4202-b8e3-4ba99ad5ed9e (provnet1-8-101)
             lport provnet1-8-101-port1
-                macs: 00:00:00:00:00:08
+                addresses: 00:00:00:00:00:08
             lport provnet1-8-physnet1-101
                 parent: , tag:101
-                macs: unknown
+                addresses: unknown
         lswitch 8444e925-ceb2-4b02-ac20-eb2e4cfb954d (provnet1-6-101)
             lport provnet1-6-physnet1-101
                 parent: , tag:101
-                macs: unknown
+                addresses: unknown
             lport provnet1-6-101-port1
-                macs: 00:00:00:00:00:06
+                addresses: 00:00:00:00:00:06
         lswitch e11e5605-7c46-4395-b28d-cff57451fc7e (provnet1-3)
             lport provnet1-3-port1
-                macs: 00:00:00:00:00:03
+                addresses: 00:00:00:00:00:03
             lport provnet1-3-physnet1
-                macs: unknown
+                addresses: unknown
         lswitch 0706b697-6c92-4d54-bc0a-db5bababb74a (provnet1-5-101)
             lport provnet1-5-101-port1
-                macs: 00:00:00:00:00:05
+                addresses: 00:00:00:00:00:05
             lport provnet1-5-physnet1-101
                 parent: , tag:101
-                macs: unknown
+                addresses: unknown
 
 The physical topology shows that we have 4 regular VIF ports on each simulated
 hypervisor.
@@ -627,7 +628,17 @@ see it output to OpenFlow ports 5 and 6 only.
     $ ovn/env5/packet2.sh
 
 
+[ovn-architecture(7)]:http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
 [Tutorial.md]:./Tutorial.md
+[ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
+[ovn-sb(5)]:http://openvswitch.org/support/dist-docs/ovn-sb.5.html
+[vtep(5)]:http://openvswitch.org/support/dist-docs/vtep.5.html
+[ovn-northd(8)]:http://openvswitch.org/support/dist-docs/ovn-northd
+[ovn-controller(8)]:http://openvswitch.org/support/dist-docs/ovn-controller.8.html
+[ovn-controller-vtep(8)]:http://openvswitch.org/support/dist-docs/ovn-controller-vtep.8.html
+[vtep-ctl(8)]:http://openvswitch.org/support/dist-docs/vtep-ctl.8.html
+[ovn-nbctl(8)]:http://openvswitch.org/support/dist-docs/ovn-nbctl.8.html
+[ovn-sbctl(8)]:http://openvswitch.org/support/dist-docs/ovn-sbctl.8.html
 [env1setup]:./ovn/env1/setup.sh
 [env1packet1]:./ovn/env1/packet1.sh
 [env1packet2]:./ovn/env1/packet2.sh

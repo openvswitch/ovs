@@ -64,8 +64,46 @@ check_patches \
     'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
     'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int'
 
-# Delete the mapping and the patch ports should go away.
+# Add logical patch ports.
+AT_CHECK([ovn-sbctl \
+    -- --id=@dp1 create Datapath_Binding tunnel_key=1 \
+    -- --id=@dp2 create Datapath_Binding tunnel_key=2 \
+    -- create Port_Binding datapath=@dp1 logical_port=foo tunnel_key=1 type=patch options:peer=bar \
+    -- create Port_Binding datapath=@dp2 logical_port=bar tunnel_key=2 type=patch options:peer=foo \
+| ${PERL} $srcdir/uuidfilt.pl], [0], [<0>
+<1>
+<2>
+<3>
+])
+check_patches \
+    'br-eth2 patch-br-eth2-to-br-int patch-br-int-to-br-eth2' \
+    'br-int  patch-br-int-to-br-eth2 patch-br-eth2-to-br-int' \
+    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
+    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int' \
+    'br-int  patch-foo-to-bar        patch-bar-to-foo' \
+    'br-int  patch-bar-to-foo        patch-foo-to-bar'
+
+# Delete the mapping and the ovn-bridge-mapping patch ports should go away;
+# the ones from the logical patch port remain.
 AT_CHECK([ovs-vsctl remove Open_vSwitch . external-ids ovn-bridge-mappings])
+check_patches \
+    'br-int patch-foo-to-bar patch-bar-to-foo' \
+    'br-int patch-bar-to-foo patch-foo-to-bar'
+
+# Change name of logical patch port, check that the OVS patch ports
+# get updated.
+AT_CHECK([ovn-sbctl \
+    -- set Port_Binding foo logical_port=quux options:peer=baz \
+    -- set Port_Binding bar logical_port=baz  options:peer=quux])
+check_patches \
+    'br-int patch-quux-to-baz patch-baz-to-quux' \
+    'br-int patch-baz-to-quux patch-quux-to-baz'
+
+# Change the logical patch ports to VIFs and verify that the OVS patch
+# ports disappear.
+AT_CHECK([ovn-sbctl \
+    -- set Port_Binding quux type='""' options='{}' \
+    -- set Port_Binding baz type='""' options='{}'])
 check_patches
 
 AT_CLEANUP

@@ -314,7 +314,7 @@ def extract_ofp_actions(fn, definitions):
         print """\
 static enum ofperr
 ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
-              uint64_t arg, struct ofpbuf *out)
+              enum ofp_version version, uint64_t arg, struct ofpbuf *out)
 {
     switch (raw) {\
 """
@@ -333,7 +333,7 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                         arg = "%s(arg)" % hton
                     else:
                         arg = "arg"
-                print "        return decode_%s(%s, out);" % (enum, arg)
+                print "        return decode_%s(%s, version, out);" % (enum, arg)
             print
         print """\
     default:
@@ -348,15 +348,16 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
             base_argtype = versions[0]["base_argtype"]
             if base_argtype != 'void':
                 if base_argtype.startswith('struct'):
-                    prototype += "const %s *, " % base_argtype
+                    prototype += "const %s *, enum ofp_version, " % base_argtype
                 else:
-                    prototype += "%s, " % base_argtype
+                    prototype += "%s, enum ofp_version, " % base_argtype
             prototype += "struct ofpbuf *);"
             print prototype
 
         print """
 static enum ofperr ofpact_decode(const struct ofp_action_header *,
                                  enum ofp_raw_action_type raw,
+                                 enum ofp_version version,
                                  uint64_t arg, struct ofpbuf *out);
 """
 

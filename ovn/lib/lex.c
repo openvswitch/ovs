@@ -241,6 +241,9 @@ lex_token_format(const struct lex_token *token, struct ds *s)
     case LEX_T_EXCHANGE:
         ds_put_cstr(s, "<->");
         break;
+    case LEX_T_DECREMENT:
+        ds_put_cstr(s, "--");
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -640,6 +643,16 @@ next:
         token->type = LEX_T_SEMICOLON;
         break;
 
+    case '-':
+        p++;
+        if (*p == '-') {
+            token->type = LEX_T_DECREMENT;
+            p++;
+        } else {
+            lex_error(token, "`-' is only valid as part of `--'.");
+        }
+        break;
+
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
     case ':':
@@ -747,6 +760,27 @@ lexer_match_id(struct lexer *lexer, const char *id)
         lexer_get(lexer);
         return true;
     } else {
+        return false;
+    }
+}
+
+bool
+lexer_is_int(const struct lexer *lexer)
+{
+    return (lexer->token.type == LEX_T_INTEGER
+            && lexer->token.format == LEX_F_DECIMAL
+            && ntohll(lexer->token.value.integer) <= INT_MAX);
+}
+
+bool
+lexer_get_int(struct lexer *lexer, int *value)
+{
+    if (lexer_is_int(lexer)) {
+        *value = ntohll(lexer->token.value.integer);
+        lexer_get(lexer);
+        return true;
+    } else {
+        *value = 0;
         return false;
     }
 }

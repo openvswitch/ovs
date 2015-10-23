@@ -343,6 +343,7 @@ dnl Actions definition listed in both supported formats (w/ actions=)
 AT_SETUP([ofproto - del group (OpenFlow 1.5)])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
+group_id=1233,type=select,selection_method=hash,bucket=output:10,bucket=output:11
 group_id=1234,type=select,selection_method=hash,bucket=output:10,bucket=output:11
 group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
@@ -357,12 +358,14 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
@@ -1531,7 +1534,7 @@ head_table () {
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 dnl
 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 dnl
-metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
     matching:
       dp_hash: arbitrary mask
       recirc_id: exact match or wildcard
@@ -1611,6 +1614,10 @@ metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xr
       in_port_oxm: exact match or wildcard
       actset_output: exact match or wildcard
       pkt_mark: arbitrary mask
+      ct_state: arbitrary mask
+      ct_zone: exact match or wildcard
+      ct_mark: arbitrary mask
+      ct_label: arbitrary mask
       reg0: arbitrary mask
       reg1: arbitrary mask
       reg2: arbitrary mask
@@ -3958,8 +3965,8 @@ vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4010,8 +4017,8 @@ vconn|DBG|unix: sent (Success): NXST_FLOW reply:
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4041,8 +4048,8 @@ vconn|DBG|unix: sent (Success): NXST_FLOW reply:
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):

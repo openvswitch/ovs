@@ -404,6 +404,36 @@ ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *s)
     }
 }
 
+/* Parses string 's', which must be an IP address with an optional netmask or
+ * CIDR prefix length.  Stores the IP address into '*ip' and the netmask into
+ * '*mask'.  (If 's' does not contain a netmask, 255.255.255.255 is
+ * assumed.)
+ *
+ * Returns NULL if successful, otherwise an error message that the caller must
+ * free(). */
+char * OVS_WARN_UNUSED_RESULT
+ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
+{
+    int prefix;
+    int n;
+
+    if (ovs_scan(s, IP_SCAN_FMT"/"IP_SCAN_FMT"%n",
+                 IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask), &n) && !s[n]) {
+        /* OK. */
+    } else if (ovs_scan(s, IP_SCAN_FMT"/%d%n", IP_SCAN_ARGS(ip), &prefix, &n)
+               && !s[n]) {
+        if (prefix <= 0 || prefix > 32) {
+            return xasprintf("%s: network prefix bits not between 0 and "
+                             "32", s);
+        }
+        *mask = be32_prefix_mask(prefix);
+    } else if (ovs_scan(s, IP_SCAN_FMT"%n", IP_SCAN_ARGS(ip), &n) && !s[n]) {
+        *mask = OVS_BE32_MAX;
+    } else {
+        return xasprintf("%s: invalid IP address", s);
+    }
+    return NULL;
+}
 
 /* Stores the string representation of the IPv6 address 'addr' into the
  * character array 'addr_str', which must be at least INET6_ADDRSTRLEN
@@ -1062,3 +1092,4 @@ packet_csum_pseudoheader(const struct ip_header *ip)
 
     return partial;
 }
+

@@ -1122,6 +1122,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
     execute.packet = &packet;
     execute.needs_help = false;
     execute.probe = true;
+    execute.mtu = 0;
 
     error = dpif_execute(backer->dpif, &execute);
 
@@ -1220,6 +1221,7 @@ check_masked_set_action(struct dpif_backer *backer)
     execute.packet = &packet;
     execute.needs_help = false;
     execute.probe = true;
+    execute.mtu = 0;
 
     error = dpif_execute(backer->dpif, &execute);
 
@@ -1234,6 +1236,47 @@ check_masked_set_action(struct dpif_backer *backer)
     return !error;
 }
 
+#define CHECK_FEATURE__(NAME, FIELD)                                        \
+static bool                                                                 \
+check_##NAME(struct dpif_backer *backer)                                    \
+{                                                                           \
+    struct flow flow;                                                       \
+    struct odputil_keybuf keybuf;                                           \
+    struct ofpbuf key;                                                      \
+    bool enable;                                                            \
+    struct odp_flow_key_parms odp_parms = {                                 \
+        .flow = &flow,                                                      \
+        .support = {                                                        \
+            .NAME = true,                                                   \
+        },                                                                  \
+    };                                                                      \
+                                                                            \
+    memset(&flow, 0, sizeof flow);                                          \
+    flow.FIELD = 1;                                                         \
+                                                                            \
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);                         \
+    odp_flow_key_from_flow(&odp_parms, &key);                               \
+    enable = dpif_probe_feature(backer->dpif, #NAME, &key, NULL);           \
+                                                                            \
+    if (enable) {                                                           \
+        VLOG_INFO("%s: Datapath supports "#NAME, dpif_name(backer->dpif));  \
+    } else {                                                                \
+        VLOG_INFO("%s: Datapath does not support "#NAME,                    \
+                  dpif_name(backer->dpif));                                 \
+    }                                                                       \
+                                                                            \
+    return enable;                                                          \
+}
+#define CHECK_FEATURE(FIELD) CHECK_FEATURE__(FIELD, FIELD)
+
+CHECK_FEATURE(ct_state)
+CHECK_FEATURE(ct_zone)
+CHECK_FEATURE(ct_mark)
+CHECK_FEATURE__(ct_label, ct_label.u64.lo)
+
+#undef CHECK_FEATURE
+#undef CHECK_FEATURE__
+
 static void
 check_support(struct dpif_backer *backer)
 {
@@ -1245,6 +1288,11 @@ check_support(struct dpif_backer *backer)
     backer->support.masked_set_action = check_masked_set_action(backer);
     backer->support.ufid = check_ufid(backer);
     backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
+
+    backer->support.odp.ct_state = check_ct_state(backer);
+    backer->support.odp.ct_zone = check_ct_zone(backer);
+    backer->support.odp.ct_mark = check_ct_mark(backer);
+    backer->support.odp.ct_label = check_ct_label(backer);
 }
 
 static int
@@ -2296,9 +2344,14 @@ rstp_run(struct ofproto_dpif *ofproto)
         }
 
         if (rstp_shift_root_learned_address(ofproto->rstp)) {
-            bundle_move(((struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp))->bundle,
-                        ((struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp))->bundle);
-            rstp_reset_root_changed(ofproto->rstp);
+            struct ofport_dpif *old_root_aux =
+                (struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp);
+            struct ofport_dpif *new_root_aux =
+                (struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp);
+            if (old_root_aux != NULL && new_root_aux != NULL) {
+                bundle_move(old_root_aux->bundle, new_root_aux->bundle);
+                rstp_reset_root_changed(ofproto->rstp);
+            }
         }
     }
 }
@@ -2538,8 +2591,11 @@ set_rstp_port(struct ofport *ofport_,
 
     if (!s || !s->enable) {
         if (rp) {
-            rstp_port_unref(rp);
+            rstp_port_set_aux(rp, NULL);
+            rstp_port_set_state(rp, RSTP_DISABLED);
+            rstp_port_set_mac_operational(rp, false);
             ofport->rstp_port = NULL;
+            rstp_port_unref(rp);
             update_rstp_port_state(ofport);
         }
         return;
@@ -3683,6 +3739,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     execute.packet = packet;
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
     execute.probe = false;
+    execute.mtu = 0;
 
     /* Fix up in_port. */
     in_port = flow->in_port.ofp_port;
@@ -3955,10 +4012,51 @@ rule_dealloc(struct rule *rule_)
 }
 
 static enum ofperr
+rule_check(struct rule *rule)
+{
+    uint16_t ct_state, ct_zone;
+    const ovs_u128 *labelp;
+    ovs_u128 ct_label = { { 0, 0 } };
+    uint32_t ct_mark;
+
+    ct_state = MINIFLOW_GET_U16(rule->cr.match.flow, ct_state);
+    ct_zone = MINIFLOW_GET_U16(rule->cr.match.flow, ct_zone);
+    ct_mark = MINIFLOW_GET_U32(rule->cr.match.flow, ct_mark);
+    labelp = MINIFLOW_GET_U128_PTR(rule->cr.match.flow, ct_label);
+    if (labelp) {
+        ct_label = *labelp;
+    }
+
+    if (ct_state || ct_zone || ct_mark
+        || !ovs_u128_is_zero(&ct_label)) {
+        struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
+        const struct odp_support *support = &ofproto_dpif_get_support(ofproto)->odp;
+
+        if ((ct_state && !support->ct_state)
+            || (ct_zone && !support->ct_zone)
+            || (ct_mark && !support->ct_mark)
+            || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
+            return OFPERR_OFPBMC_BAD_FIELD;
+        }
+        if (ct_state & CS_UNSUPPORTED_MASK) {
+            return OFPERR_OFPBMC_BAD_MASK;
+        }
+    }
+    return 0;
+}
+
+static enum ofperr
 rule_construct(struct rule *rule_)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
+    int error;
+
+    error = rule_check(rule_);
+    if (error) {
+        return error;
+    }
+
     ovs_mutex_init_adaptive(&rule->stats_mutex);
     rule->stats.n_packets = 0;
     rule->stats.n_bytes = 0;

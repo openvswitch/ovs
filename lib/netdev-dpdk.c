@@ -749,6 +749,10 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
                 return;
     }
 
+    if (rte_vhost_driver_unregister(dev->vhost_id)) {
+        VLOG_ERR("Unable to remove vhost-user socket %s", dev->vhost_id);
+    }
+
     ovs_mutex_lock(&dpdk_mutex);
     list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
@@ -2111,9 +2115,9 @@ process_vhost_flags(char *flag, char *default_val, int size,
      * flag if it is provided on the vswitchd command line, otherwise resort to
      * a default value.
      *
-     * For vhost-user: Process "-cuse_dev_name" to set the custom location of
+     * For vhost-user: Process "-vhost_sock_dir" to set the custom location of
      * the vhost-user socket(s).
-     * For vhost-cuse: Process "-vhost_sock_dir" to set the custom name of the
+     * For vhost-cuse: Process "-cuse_dev_name" to set the custom name of the
      * vhost-cuse character device.
      */
     if (!strcmp(argv[1], flag) && (strlen(argv[2]) <= size)) {

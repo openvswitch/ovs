@@ -27,8 +27,8 @@ ovn-nbctl lport-add sw0 sw0-port1
 ovn-nbctl lport-add sw0 sw0-port2
 
 # Set a MAC address for each of the two logical ports.
-ovn-nbctl lport-set-macs sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-macs sw0-port2 00:00:00:00:00:02
+ovn-nbctl lport-set-addresses sw0-port1 00:00:00:00:00:01
+ovn-nbctl lport-set-addresses sw0-port2 00:00:00:00:00:02
 
 # Set up port security for the two logical ports.  This ensures that
 # the logical port mac address we have configured is the only allowed

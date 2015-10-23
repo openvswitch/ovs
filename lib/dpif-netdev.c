@@ -1920,6 +1920,12 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         return EINVAL;
     }
 
+    /* Userspace datapath doesn't support conntrack. */
+    if (flow->ct_state || flow->ct_zone || flow->ct_mark
+        || !ovs_u128_is_zero(&flow->ct_label)) {
+        return EINVAL;
+    }
+
     return 0;
 }
 
@@ -3604,6 +3610,13 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
         }
 
         VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
+        break;
+
+    case OVS_ACTION_ATTR_CT:
+        /* If a flow with this action is slow-pathed, datapath assistance is
+         * required to implement it. However, we don't support this action
+         * in the userspace datapath. */
+        VLOG_WARN("Cannot execute conntrack action in userspace.");
         break;
 
     case OVS_ACTION_ATTR_PUSH_VLAN:

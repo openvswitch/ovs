@@ -364,7 +364,15 @@ def idl_set(idl, commands, step):
 
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
-    schema_helper.register_all()
+    if commands and commands[0].startswith("?"):
+        monitor = {}
+        for x in commands[0][1:].split("?"):
+            table, columns = x.split(":")
+            monitor[table] = columns.split(",")
+            schema_helper.register_columns(table, monitor[table])
+        commands = commands[1:]
+    else:
+        schema_helper.register_all()
     idl = ovs.db.idl.Idl(remote, schema_helper)
 
     if commands:
@@ -475,11 +483,22 @@ parse-table NAME OBJECT [DEFAULT-IS-ROOT]
   parse table NAME with info OBJECT
 parse-schema JSON
   parse JSON as an OVSDB schema, and re-serialize
-idl SCHEMA SERVER [TRANSACTION...]
+idl SCHEMA SERVER [?T1:C1,C2...[?T2:C1,C2,...]...] [TRANSACTION...]
   connect to SERVER (which has the specified SCHEMA) and dump the
   contents of the database as seen initially by the IDL implementation
   and after executing each TRANSACTION.  (Each TRANSACTION must modify
   the database or this command will hang.)
+  By default, all columns of all tables are monitored. The "?" option
+  can be used to monitor specific Table:Column(s). The table and their
+  columns are listed as a string of the form starting with "?":
+      ?<table-name>:<column-name>,<column-name>,...
+  e.g.:
+      ?simple:b - Monitor column "b" in table "simple"
+  Entries for multiple tables are seperated by "?":
+      ?<table-name>:<column-name>,...?<table-name>:<column-name>,...
+  e.g.:
+      ?simple:b?link1:i,k - Monitor column "b" in table "simple",
+                            and column "i", "k" in table "link1"
 
 The following options are also available:
   -t, --timeout=SECS          give up after SECS seconds

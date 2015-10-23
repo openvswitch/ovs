@@ -202,7 +202,7 @@ ovn_attach() {
     ovs-vsctl \
         -- set Open_vSwitch . external-ids:system-id=$sandbox \
         -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock \
-        -- set Open_vSwitch . external-ids:ovn-encap-type=geneve \
+        -- set Open_vSwitch . external-ids:ovn-encap-type=geneve,vxlan \
         -- set Open_vSwitch . external-ids:ovn-encap-ip=$ip \
         -- add-br br-int \
         -- set bridge br-int fail-mode=secure other-config:disable-in-band=true \

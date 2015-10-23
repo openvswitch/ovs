@@ -280,6 +280,8 @@ rstp_create(const char *name, rstp_identifier bridge_address,
     rstp->aux = aux;
     rstp->changes = false;
     rstp->begin = true;
+    rstp->old_root_aux = NULL;
+    rstp->new_root_aux = NULL;
 
     ovs_refcount_init(&rstp->ref_cnt);
 

@@ -27,6 +27,7 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dynamic-string.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -43,12 +44,14 @@
 #include "binding.h"
 #include "chassis.h"
 #include "encaps.h"
+#include "patch.h"
 #include "physical.h"
 #include "lflow.h"
 
 VLOG_DEFINE_THIS_MODULE(main);
 
 static unixctl_cb_func ovn_controller_exit;
+static unixctl_cb_func ct_zone_list;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
 
@@ -57,7 +60,35 @@ OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
 
-static const struct ovsrec_bridge *
+const struct sbrec_chassis *
+get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
+{
+    const struct sbrec_chassis *chassis_rec;
+
+    SBREC_CHASSIS_FOR_EACH(chassis_rec, ovnsb_idl) {
+        if (!strcmp(chassis_rec->name, chassis_id)) {
+            break;
+        }
+    }
+
+    return chassis_rec;
+}
+
+uint32_t
+get_tunnel_type(const char *name)
+{
+    if (!strcmp(name, "geneve")) {
+        return GENEVE;
+    } else if (!strcmp(name, "stt")) {
+        return STT;
+    } else if (!strcmp(name, "vxlan")) {
+        return VXLAN;
+    }
+
+    return 0;
+}
+
+const struct ovsrec_bridge *
 get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
 {
     const struct ovsrec_bridge *br;
@@ -137,214 +168,6 @@ get_chassis_id(const struct ovsdb_idl *ovs_idl)
 {
     const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
     return cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
-}
-
-static char *
-patch_port_name(const struct ovsrec_bridge *b1, const struct ovsrec_bridge *b2)
-{
-    return xasprintf("patch-%s-to-%s", b1->name, b2->name);
-}
-
-/*
- * Return true if the port is a patch port from b1 to b2
- */
-static bool
-match_patch_port(const struct ovsrec_port *port,
-                 const struct ovsrec_bridge *b1,
-                 const struct ovsrec_bridge *b2)
-{
-    struct ovsrec_interface *iface;
-    size_t i;
-    char *peer_port_name;
-    bool res = false;
-
-    peer_port_name = patch_port_name(b2, b1);
-
-    for (i = 0; i < port->n_interfaces; i++) {
-        iface = port->interfaces[i];
-        if (strcmp(iface->type, "patch")) {
-            continue;
-        }
-        const char *peer;
-        peer = smap_get(&iface->options, "peer");
-        if (peer && !strcmp(peer, peer_port_name)) {
-            res = true;
-            break;
-        }
-    }
-
-    free(peer_port_name);
-
-    return res;
-}
-
-static void
-create_patch_port(struct controller_ctx *ctx,
-                  const char *network,
-                  const struct ovsrec_bridge *b1,
-                  const struct ovsrec_bridge *b2)
-{
-    if (!ctx->ovs_idl_txn) {
-        return;
-    }
-
-    char *port_name = patch_port_name(b1, b2);
-    char *peer_port_name = patch_port_name(b2, b1);
-
-    ovsdb_idl_txn_add_comment(ctx->ovs_idl_txn,
-            "ovn-controller: creating patch port '%s' from '%s' to '%s'",
-            port_name, b1->name, b2->name);
-
-    struct ovsrec_interface *iface;
-    iface = ovsrec_interface_insert(ctx->ovs_idl_txn);
-    ovsrec_interface_set_name(iface, port_name);
-    ovsrec_interface_set_type(iface, "patch");
-    const struct smap options = SMAP_CONST1(&options, "peer", peer_port_name);
-    ovsrec_interface_set_options(iface, &options);
-
-    struct ovsrec_port *port;
-    port = ovsrec_port_insert(ctx->ovs_idl_txn);
-    ovsrec_port_set_name(port, port_name);
-    ovsrec_port_set_interfaces(port, &iface, 1);
-    const struct smap ids = SMAP_CONST1(&ids, "ovn-patch-port", network);
-    ovsrec_port_set_external_ids(port, &ids);
-
-    struct ovsrec_port **ports;
-    ports = xmalloc(sizeof *ports * (b1->n_ports + 1));
-    memcpy(ports, b1->ports, sizeof *ports * b1->n_ports);
-    ports[b1->n_ports] = port;
-    ovsrec_bridge_verify_ports(b1);
-    ovsrec_bridge_set_ports(b1, ports, b1->n_ports + 1);
-
-    free(ports);
-    free(port_name);
-    free(peer_port_name);
-}
-
-static void
-create_patch_ports(struct controller_ctx *ctx,
-                   const char *network,
-                   struct shash *existing_ports,
-                   const struct ovsrec_bridge *b1,
-                   const struct ovsrec_bridge *b2)
-{
-    size_t i;
-
-    for (i = 0; i < b1->n_ports; i++) {
-        if (match_patch_port(b1->ports[i], b1, b2)) {
-            /* Patch port already exists on b1 */
-            shash_find_and_delete(existing_ports, b1->ports[i]->name);
-            break;
-        }
-    }
-    if (i == b1->n_ports) {
-        create_patch_port(ctx, network, b1, b2);
-    }
-}
-
-static void
-init_existing_ports(struct controller_ctx *ctx,
-                    struct shash *existing_ports)
-{
-    const struct ovsrec_port *port;
-
-    OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
-        if (smap_get(&port->external_ids, "ovn-patch-port")) {
-            shash_add(existing_ports, port->name, port);
-        }
-    }
-}
-
-static void
-remove_port(struct controller_ctx *ctx,
-            const struct ovsrec_port *port)
-{
-    const struct ovsrec_bridge *bridge;
-
-    /* We know the port we want to delete, but we have to find the bridge its on
-     * to do so.  Note this only runs on a config change that should be pretty
-     * rare. */
-    OVSREC_BRIDGE_FOR_EACH (bridge, ctx->ovs_idl) {
-        size_t i;
-        for (i = 0; i < bridge->n_ports; i++) {
-            if (bridge->ports[i] != port) {
-                continue;
-            }
-            struct ovsrec_port **new_ports;
-            new_ports = xmemdup(bridge->ports,
-                    sizeof *new_ports * (bridge->n_ports - 1));
-            if (i != bridge->n_ports - 1) {
-                /* Removed port was not last */
-                new_ports[i] = bridge->ports[bridge->n_ports - 1];
-            }
-            ovsrec_bridge_verify_ports(bridge);
-            ovsrec_bridge_set_ports(bridge, new_ports, bridge->n_ports - 1);
-            free(new_ports);
-            ovsrec_port_delete(port);
-            return;
-        }
-    }
-}
-
-static void
-parse_bridge_mappings(struct controller_ctx *ctx,
-                      const struct ovsrec_bridge *br_int,
-                      const char *mappings_cfg)
-{
-    struct shash existing_ports = SHASH_INITIALIZER(&existing_ports);
-    init_existing_ports(ctx, &existing_ports);
-
-    char *cur, *next, *start;
-    next = start = xstrdup(mappings_cfg);
-    while ((cur = strsep(&next, ",")) && *cur) {
-        char *network, *bridge = cur;
-        const struct ovsrec_bridge *ovs_bridge;
-
-        network = strsep(&bridge, ":");
-        if (!bridge || !*network || !*bridge) {
-            VLOG_ERR("Invalid ovn-bridge-mappings configuration: '%s'",
-                    mappings_cfg);
-            break;
-        }
-
-        ovs_bridge = get_bridge(ctx->ovs_idl, bridge);
-        if (!ovs_bridge) {
-            VLOG_WARN("Bridge '%s' not found for network '%s'",
-                    bridge, network);
-            continue;
-        }
-
-        create_patch_ports(ctx, network, &existing_ports, br_int, ovs_bridge);
-        create_patch_ports(ctx, network, &existing_ports, ovs_bridge, br_int);
-    }
-    free(start);
-
-    /* Any ports left in existing_ports are related to configuration that has
-     * been removed, so we should delete the ports now. */
-    struct shash_node *port_node, *port_next_node;
-    SHASH_FOR_EACH_SAFE (port_node, port_next_node, &existing_ports) {
-        struct ovsrec_port *port = port_node->data;
-        shash_delete(&existing_ports, port_node);
-        remove_port(ctx, port);
-    }
-    shash_destroy(&existing_ports);
-}
-
-static void
-init_bridge_mappings(struct controller_ctx *ctx,
-                     const struct ovsrec_bridge *br_int)
-{
-    const char *mappings_cfg = "";
-    const struct ovsrec_open_vswitch *cfg;
-
-    cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
-    if (cfg) {
-        mappings_cfg = smap_get(&cfg->external_ids, "ovn-bridge-mappings");
-        if (!mappings_cfg) {
-            mappings_cfg = "";
-        }
-    }
-    parse_bridge_mappings(ctx, br_int, mappings_cfg);
 }
 
 /* Retrieves the OVN Southbound remote location from the
@@ -435,6 +258,13 @@ main(int argc, char *argv[])
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
+    /* Initialize connection tracking zones. */
+    struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
+    unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
+    bitmap_set1(ct_zone_bitmap, 0); /* Zone 0 is reserved. */
+    unixctl_command_register("ct-zone-list", "", 0, 0,
+                             ct_zone_list, &ct_zones);
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -450,23 +280,23 @@ main(int argc, char *argv[])
 
         /* Map bridges to local nets from ovn-bridge-mappings */
         if (br_int) {
-            init_bridge_mappings(&ctx, br_int);
+            patch_run(&ctx, br_int);
         }
 
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id);
+            binding_run(&ctx, br_int, chassis_id, &ct_zones, ct_zone_bitmap);
         }
 
         if (br_int) {
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            lflow_run(&ctx, &flow_table);
+            lflow_run(&ctx, &flow_table, &ct_zones);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &flow_table);
+                             br_int, chassis_id, &ct_zones, &flow_table);
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
@@ -521,6 +351,8 @@ main(int argc, char *argv[])
     unixctl_server_destroy(unixctl);
     lflow_destroy();
     ofctrl_destroy();
+
+    simap_destroy(&ct_zones);
 
     ovsdb_idl_loop_destroy(&ovs_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
@@ -628,4 +460,20 @@ ovn_controller_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
     *exiting = true;
 
     unixctl_command_reply(conn, NULL);
+}
+
+static void
+ct_zone_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
+             const char *argv[] OVS_UNUSED, void *ct_zones_)
+{
+    struct simap *ct_zones = ct_zones_;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct simap_node *zone;
+
+    SIMAP_FOR_EACH(zone, ct_zones) {
+        ds_put_format(&ds, "%s %d\n", zone->name, zone->data);
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }

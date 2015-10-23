@@ -70,6 +70,10 @@ s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
  echo
+ echo '# Valid forms with conntrack fields.'
+ sed 's/^/skb_priority(0),skb_mark(0),ct_mark(0x12345678),ct_label(0x1234567890abcdef1234567890abcdef),recirc_id(0),dp_hash(0),/' odp-base.txt
+
+ echo
  echo '# Valid forms with IP first fragment.'
 sed 's/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt | sed -n 's/,frag=no),/,frag=first),/p'
 
@@ -85,6 +89,11 @@ dnl set to zero. This is reflected when the key is formated
 sed '/bos=0/{
 s/^/ODP_FIT_TOO_LITTLE: /
 }' < odp-in.txt > odp-out.txt
+
+dnl Some fields are always printed for this test, because wildcards aren't
+dnl specified. We can skip these.
+sed -i 's/\(skb_mark(0)\),\(ct\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
+sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),\2/' odp-out.txt
 
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
@@ -151,6 +160,10 @@ s/$/)/' odp-base.txt
  sed 's/^/skb_priority(0x1234),tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,flags(key)),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
+
+ echo
+ echo '# Valid forms with conntrack fields.'
+ sed 's/\(eth([[^)]]*)\),/\1,ct_state(+trk),ct_zone(0x5\/0xff),ct_mark(0x10305070\/0xf0f0f0f0),ct_label(0x1234567890abcdef1234567890abcdef\/0x102030405060708090a0b0c0d0e0f0),/' odp-base.txt
 
  echo
  echo '# Valid forms with IP first fragment.'
@@ -293,6 +306,12 @@ tnl_push(tnl_port(6),header(size=50,type=4,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:1
 tnl_push(tnl_port(6),header(size=50,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=6081,csum=0x0),geneve(oam,vni=0x1c7)),out_port(1))
 tnl_push(tnl_port(6),header(size=58,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=6081,csum=0x0),geneve(crit,vni=0x1c7,options({class=0xffff,type=0x80,len=4,0xa}))),out_port(1))
 tnl_push(tnl_port(6),header(size=50,type=5,eth(dst=f8:bc:12:44:34:b6,src=f8:bc:12:46:58:e0,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=6081,csum=0xffff),geneve(vni=0x1c7)),out_port(1))
+ct
+ct(commit)
+ct(commit,zone=5)
+ct(commit,mark=0xa0a0a0a0/0xfefefefe)
+ct(commit,label=0x1234567890abcdef1234567890abcdef/0xf1f2f3f4f5f6f7f8f9f0fafbfcfdfeff)
+ct(commit,helper=ftp)
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

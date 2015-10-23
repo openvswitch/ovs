@@ -199,7 +199,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -7783,7 +7783,6 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
                                  gds->type, reply, version);
     }
     ogds = ofpbuf_at_assert(reply, start_ogds, sizeof *ogds);
-    ogds->length = htons(reply->size - start_ogds);
     ogds->type = gds->type;
     ogds->group_id = htonl(gds->group_id);
     ogds->bucket_list_len =  htons(reply->size - start_buckets);
@@ -7793,6 +7792,7 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
         ofputil_put_group_prop_ntr_selection_method(version, &gds->props,
                                                     reply);
     }
+    ogds->length = htons(reply->size - start_ogds);
 
     ofpmp_postappend(replies, start_ogds);
 }
@@ -8338,7 +8338,7 @@ ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
      * claim that the group mod command is OFPGC15_ADD to
      * satisfy the check in parse_group_prop_ntr_selection_method() */
     return parse_ofp15_group_properties(msg, gd->type, OFPGC15_ADD, &gd->props,
-                                        msg->size);
+                                        length - sizeof *ogds - bucket_list_len);
 }
 
 /* Converts a group description reply in 'msg' into an abstract

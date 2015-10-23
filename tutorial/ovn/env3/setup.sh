@@ -22,10 +22,10 @@ ovn-nbctl lport-add sw0 sw0-port2
 ovn-nbctl lport-add sw0 sw0-port3
 ovn-nbctl lport-add sw0 sw0-port4
 
-ovn-nbctl lport-set-macs sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-macs sw0-port2 00:00:00:00:00:02
-ovn-nbctl lport-set-macs sw0-port3 00:00:00:00:00:03
-ovn-nbctl lport-set-macs sw0-port4 00:00:00:00:00:04
+ovn-nbctl lport-set-addresses sw0-port1 00:00:00:00:00:01
+ovn-nbctl lport-set-addresses sw0-port2 00:00:00:00:00:02
+ovn-nbctl lport-set-addresses sw0-port3 00:00:00:00:00:03
+ovn-nbctl lport-set-addresses sw0-port4 00:00:00:00:00:04
 
 ovn-nbctl lport-set-port-security sw0-port1 00:00:00:00:00:01
 ovn-nbctl lport-set-port-security sw0-port2 00:00:00:00:00:02

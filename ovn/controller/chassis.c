@@ -16,6 +16,7 @@
 #include <config.h>
 #include "chassis.h"
 
+#include "lib/dynamic-string.h"
 #include "lib/vswitch-idl.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -30,6 +31,23 @@ chassis_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_external_ids);
 }
 
+static const char *
+pop_tunnel_name(uint32_t *type)
+{
+    if (*type & GENEVE) {
+        *type &= ~GENEVE;
+        return "geneve";
+    } else if (*type & STT) {
+        *type &= ~STT;
+        return "stt";
+    } else if (*type & VXLAN) {
+        *type &= ~VXLAN;
+        return "vxlan";
+    }
+
+    OVS_NOT_REACHED();
+}
+
 void
 chassis_run(struct controller_ctx *ctx, const char *chassis_id)
 {
@@ -40,13 +58,10 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     const struct sbrec_chassis *chassis_rec;
     const struct ovsrec_open_vswitch *cfg;
     const char *encap_type, *encap_ip;
-    struct sbrec_encap *encap_rec;
     static bool inited = false;
 
-    chassis_rec = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
+    chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
 
-    /* xxx Need to support more than one encap.  Also need to support
-     * xxx encap options. */
     cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (!cfg) {
         VLOG_INFO("No Open_vSwitch row defined.");
@@ -60,23 +75,48 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
         return;
     }
 
+    char *tokstr = xstrdup(encap_type);
+    char *save_ptr = NULL;
+    char *token;
+    uint32_t req_tunnels = 0;
+    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
+         token = strtok_r(NULL, ",", &save_ptr)) {
+        uint32_t type = get_tunnel_type(token);
+        if (!type) {
+            VLOG_INFO("Unknown tunnel type: %s", token);
+        }
+        req_tunnels |= type;
+    }
+    free(tokstr);
+
     if (chassis_rec) {
-        int i;
+        /* Compare desired tunnels against those currently in the database. */
+        uint32_t cur_tunnels = 0;
+        bool same = true;
+        for (int i = 0; i < chassis_rec->n_encaps; i++) {
+            cur_tunnels |= get_tunnel_type(chassis_rec->encaps[i]->type);
+            same = same && strcmp(chassis_rec->encaps[i]->ip, encap_ip);
+        }
+        same = same && req_tunnels == cur_tunnels;
 
-        for (i = 0; i < chassis_rec->n_encaps; i++) {
-            if (!strcmp(chassis_rec->encaps[i]->type, encap_type)
-                && !strcmp(chassis_rec->encaps[i]->ip, encap_ip)) {
-                /* Nothing changed. */
-                inited = true;
-                return;
-            } else if (!inited) {
-                VLOG_WARN("Chassis config changing on startup, make sure "
-                          "multiple chassis are not configured : %s/%s->%s/%s",
-                          chassis_rec->encaps[i]->type,
-                          chassis_rec->encaps[i]->ip,
-                          encap_type, encap_ip);
+        if (same) {
+            /* Nothing changed. */
+            inited = true;
+            return;
+        } else if (!inited) {
+            struct ds cur_encaps = DS_EMPTY_INITIALIZER;
+            for (int i = 0; i < chassis_rec->n_encaps; i++) {
+                ds_put_format(&cur_encaps, "%s,",
+                              chassis_rec->encaps[i]->type);
             }
+            ds_chomp(&cur_encaps, ',');
 
+            VLOG_WARN("Chassis config changing on startup, make sure "
+                      "multiple chassis are not configured : %s/%s->%s/%s",
+                      ds_cstr(&cur_encaps),
+                      chassis_rec->encaps[0]->ip,
+                      encap_type, encap_ip);
+            ds_destroy(&cur_encaps);
         }
     }
 
@@ -89,12 +129,19 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
         sbrec_chassis_set_name(chassis_rec, chassis_id);
     }
 
-    encap_rec = sbrec_encap_insert(ctx->ovnsb_idl_txn);
+    int n_encaps = count_1bits(req_tunnels);
+    struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
+    for (int i = 0; i < n_encaps; i++) {
+        const char *type = pop_tunnel_name(&req_tunnels);
 
-    sbrec_encap_set_type(encap_rec, encap_type);
-    sbrec_encap_set_ip(encap_rec, encap_ip);
+        encaps[i] = sbrec_encap_insert(ctx->ovnsb_idl_txn);
 
-    sbrec_chassis_set_encaps(chassis_rec, &encap_rec, 1);
+        sbrec_encap_set_type(encaps[i], type);
+        sbrec_encap_set_ip(encaps[i], encap_ip);
+    }
+
+    sbrec_chassis_set_encaps(chassis_rec, encaps, n_encaps);
+    free(encaps);
 
     inited = true;
 }
@@ -110,7 +157,7 @@ chassis_cleanup(struct controller_ctx *ctx, const char *chassis_id)
 
     /* Delete Chassis row. */
     const struct sbrec_chassis *chassis_rec
-        = get_chassis_by_name(ctx->ovnsb_idl, chassis_id);
+        = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }

@@ -27,6 +27,9 @@
 
 #pragma comment(lib, "advapi32")
 
+#undef INET6_ADDRSTRLEN
+#define INET6_ADDRSTRLEN 46
+
 #define inline __inline
 #define __func__ __FUNCTION__
 #define ssize_t SSIZE_T

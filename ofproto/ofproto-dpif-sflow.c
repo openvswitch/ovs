@@ -455,7 +455,7 @@ sflow_choose_agent_address(const char *agent_device,
             && sa.ss.ss_family == AF_INET) {
             ovs_be32 gw;
 
-            if (ovs_router_lookup(sa.sin.sin_addr.s_addr, name, &gw)
+            if (ovs_router_lookup4(sa.sin.sin_addr.s_addr, name, &gw)
                 && !netdev_get_in4_by_name(name, &in4)) {
                 goto success;
             }
@@ -1029,6 +1029,10 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_ARP:
     case OVS_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_CT_STATE:
+    case OVS_KEY_ATTR_CT_ZONE:
+    case OVS_KEY_ATTR_CT_MARK:
+    case OVS_KEY_ATTR_CT_LABELS:
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -1137,6 +1141,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	case OVS_ACTION_ATTR_USERSPACE:
 	case OVS_ACTION_ATTR_RECIRC:
 	case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_CT:
 	    break;
 
 	case OVS_ACTION_ATTR_SET_MASKED:

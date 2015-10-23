@@ -106,6 +106,7 @@
     OFPACT(EXIT,            ofpact_null,        ofpact, "exit")         \
     OFPACT(SAMPLE,          ofpact_sample,      ofpact, "sample")       \
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
+    OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -470,6 +471,54 @@ struct ofpact_nest {
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions)
                   == sizeof(struct ofpact_nest));
+
+/* Bits for 'flags' in struct nx_action_conntrack.
+ *
+ * If NX_CT_F_COMMIT is set, then the connection entry is moved from the
+ * unconfirmed to confirmed list in the tracker. */
+enum nx_conntrack_flags {
+    NX_CT_F_COMMIT = 1 << 0,
+};
+
+/* Magic value for struct nx_action_conntrack 'recirc_table' field, to specify
+ * that the packet should not be recirculated. */
+#define NX_CT_RECIRC_NONE OFPTT_ALL
+
+/* We want to determine the size of these elements at compile time to ensure
+ * actions alignment, but we also want to allow ofpact_conntrack to have
+ * basic _put(), _get(), etc accessors defined below which access these
+ * members directly from ofpact_conntrack. An anonymous struct will serve
+ * both of these purposes. */
+#define CT_MEMBERS                      \
+struct {                                \
+    struct ofpact ofpact;               \
+    uint16_t flags;                     \
+    uint16_t zone_imm;                  \
+    struct mf_subfield zone_src;        \
+    uint16_t alg;                       \
+    uint8_t recirc_table;               \
+}
+
+/* OFPACT_CT.
+ *
+ * Used for NXAST_CT. */
+struct ofpact_conntrack {
+    union {
+        CT_MEMBERS;
+        uint8_t pad[OFPACT_ALIGN(sizeof(CT_MEMBERS))];
+    };
+    struct ofpact actions[0];
+};
+BUILD_ASSERT_DECL(offsetof(struct ofpact_conntrack, actions)
+                  % OFPACT_ALIGNTO == 0);
+BUILD_ASSERT_DECL(offsetof(struct ofpact_conntrack, actions)
+                  == sizeof(struct ofpact_conntrack));
+
+static inline size_t
+ofpact_ct_get_action_len(const struct ofpact_conntrack *oc)
+{
+    return oc->ofpact.len - offsetof(struct ofpact_conntrack, actions);
+}
 
 static inline size_t
 ofpact_nest_get_action_len(const struct ofpact_nest *on)

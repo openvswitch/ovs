@@ -13,21 +13,18 @@
  * limitations under the License.
  */
 
+#ifndef OVN_PATCH_H
+#define OVN_PATCH_H 1
 
-#ifndef OVN_BINDING_H
-#define OVN_BINDING_H 1
-
-#include <stdbool.h>
+/* Patch Ports
+ * ===========
+ *
+ * This module adds and removes patch ports between the integration bridge and
+ * physical bridges, as directed by other-config:ovn-bridge-mappings. */
 
 struct controller_ctx;
-struct ovsdb_idl;
 struct ovsrec_bridge;
-struct simap;
 
-void binding_register_ovs_idl(struct ovsdb_idl *);
-void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-                 const char *chassis_id, struct simap *ct_zones,
-                 unsigned long *ct_zone_bitmap);
-bool binding_cleanup(struct controller_ctx *, const char *chassis_id);
+void patch_run(struct controller_ctx *, const struct ovsrec_bridge *br_int);
 
-#endif /* ovn/binding.h */
+#endif /* ovn/patch.h */

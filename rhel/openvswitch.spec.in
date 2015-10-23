@@ -120,6 +120,7 @@ exit 0
 
 %files
 %defattr(-,root,root)
+%dir /etc/openvswitch
 /etc/bash_completion.d/ovs-appctl-bashcomp.bash
 /etc/bash_completion.d/ovs-vsctl-bashcomp.bash
 /etc/init.d/openvswitch

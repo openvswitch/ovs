@@ -240,12 +240,12 @@
       The default action when no flow matches is to drop packets.
     </p>
 
-    <p><em>Logical Life Cycle of a Packet</em></p>
+    <p><em>Architectural Logical Life Cycle of a Packet</em></p>
 
     <p>
       This following description focuses on the life cycle of a packet through
       a logical datapath, ignoring physical details of the implementation.
-      Please refer to <em>Life Cycle of a Packet</em> in
+      Please refer to <em>Architectural Physical Life Cycle of a Packet</em> in
       <code>ovn-architecture</code>(7) for the physical information.
     </p>
 
@@ -297,10 +297,11 @@
       <code>inport</code> to <code>outport</code>; if they are equal, it treats
       the <code>output</code> as a no-op.  In the common case, where they are
       different, the packet enters the egress pipeline.  This transition to the
-      egress pipeline discards register data, e.g. <code>reg0</code>
-      ... <code>reg5</code>, to achieve uniform behavior regardless of whether
-      the egress pipeline is on a different hypervisor (because registers
-      aren't preserve across tunnel encapsulation).
+      egress pipeline discards register data, e.g. <code>reg0</code> ...
+      <code>reg4</code> and connection tracking state, to achieve
+      uniform behavior regardless of whether the egress pipeline is on a
+      different hypervisor (because registers aren't preserve across
+      tunnel encapsulation).
     </p>
 
     <p>
@@ -684,7 +685,7 @@
       </p>
 
       <ul>
-        <li><code>reg0</code>...<code>reg5</code></li>
+        <li><code>reg0</code>...<code>reg4</code></li>
         <li><code>inport</code> <code>outport</code></li>
         <li><code>eth.src</code> <code>eth.dst</code> <code>eth.type</code></li>
         <li><code>vlan.tci</code> <code>vlan.vid</code> <code>vlan.pcp</code> <code>vlan.present</code></li>
@@ -698,6 +699,22 @@
         <li><code>icmp4.type</code> <code>icmp4.code</code></li>
         <li><code>icmp6.type</code> <code>icmp6.code</code></li>
         <li><code>nd.target</code> <code>nd.sll</code> <code>nd.tll</code></li>
+        <li>
+          <p>
+            <code>ct_state</code>, which has the following Boolean subfields:
+          </p>
+          <ul>
+            <li><code>ct.new</code>: True for a new flow</li>
+            <li><code>ct.est</code>: True for an established flow</li>
+            <li><code>ct.rel</code>: True for a related flow</li>
+            <li><code>ct.rpl</code>: True for a reply flow</li>
+            <li><code>ct.inv</code>: True for a connection entry in a bad state</li>
+          </ul>
+          <p>
+            <code>ct_state</code> and its subfields are initialized by the
+            <code>ct_next</code> action, described below.
+          </p>
+        </li>
       </ul>
 
       <p>
@@ -705,8 +722,11 @@
       </p>
 
       <ul>
+        <li><code>eth.bcast</code> expands to <code>eth.dst == ff:ff:ff:ff:ff:ff</code></li>
+        <li><code>eth.mcast</code> expands to <code>eth.dst[40]</code></li>
         <li><code>vlan.present</code> expands to <code>vlan.tci[12]</code></li>
         <li><code>ip4</code> expands to <code>eth.type == 0x800</code></li>
+        <li><code>ip4.mcast</code> expands to <code>ip4.dst[28..31] == 0xe</code></li>
         <li><code>ip6</code> expands to <code>eth.type == 0x86dd</code></li>
         <li><code>ip</code> expands to <code>ip4 || ip6</code></li>
         <li><code>icmp4</code> expands to <code>ip4 &amp;&amp; ip.proto == 1</code></li>
@@ -739,18 +759,18 @@
       </p>
 
       <p>
-	The following actions are defined:
+        The following actions are defined:
       </p>
 
       <dl>
         <dt><code>output;</code></dt>
         <dd>
           <p>
-	    In the ingress pipeline, this action executes the
-	    <code>egress</code> pipeline as a subroutine.  If
-	    <code>outport</code> names a logical port, the egress pipeline
-	    executes once; if it is a multicast group, the egress pipeline runs
-	    once for each logical port in the group.
+            In the ingress pipeline, this action executes the
+            <code>egress</code> pipeline as a subroutine.  If
+            <code>outport</code> names a logical port, the egress pipeline
+            executes once; if it is a multicast group, the egress pipeline runs
+            once for each logical port in the group.
           </p>
 
           <p>
@@ -762,13 +782,20 @@
           <p>
             Output to the input port is implicitly dropped, that is,
             <code>output</code> becomes a no-op if <code>outport</code> ==
-            <code>inport</code>.
+            <code>inport</code>.  Occasionally it may be useful to override
+            this behavior, e.g. to send an ARP reply to an ARP request; to do
+            so, use <code>inport = "";</code> to set the logical input port to
+            an empty string (which should not be used as the name of any
+            logical port).
           </p>
-	</dd>
+        </dd>
 
         <dt><code>next;</code></dt>
+        <dt><code>next(<var>table</var>);</code></dt>
         <dd>
-          Executes the next logical datapath table as a subroutine.
+          Executes another logical datapath table as a subroutine.  By default,
+          the table after the current one is executed.  Specify
+          <var>table</var> to jump to a specific table in the same pipeline.
         </dd>
 
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>
@@ -799,7 +826,7 @@
             <code>ingress</code> pipeline but not in the <code>egress</code>
             pipeline.
           </p>
-	</dd>
+        </dd>
 
         <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
         <dd>
@@ -836,6 +863,49 @@
             <var>field1</var> and <var>field2</var> must modifiable.
           </p>
         </dd>
+
+        <dt><code>ip.ttl--;</code></dt>
+        <dd>
+          <p>
+            Decrements the IPv4 or IPv6 TTL.  If this would make the TTL zero
+            or negative, then processing of the packet halts; no further
+            actions are processed.  (To properly handle such cases, a
+            higher-priority flow should match on <code>ip.ttl &lt; 2</code>.)
+          </p>
+
+          <p><b>Prerequisite:</b> <code>ip</code></p>
+        </dd>
+
+        <dt><code>ct_next;</code></dt>
+        <dd>
+          <p>
+            Apply connection tracking to the flow, initializing
+            <code>ct_state</code> for matching in later tables.
+            Automatically moves on to the next table, as if followed by
+            <code>next</code>.
+          </p>
+
+          <p>
+            As a side effect, IP fragments will be reassembled for matching.
+            If a fragmented packet is output, then it will be sent with any
+            overlapping fragments squashed.  The connection tracking state is
+            scoped by the logical port, so overlapping addresses may be used.
+            To allow traffic related to the matched flow, execute
+            <code>ct_commit</code>.
+          </p>
+
+          <p>
+            It is possible to have actions follow <code>ct_next</code>,
+            but they will not have access to any of its side-effects and
+            is not generally useful.
+          </p>
+        </dd>
+
+        <dt><code>ct_commit;</code></dt>
+        <dd>
+          Commit the flow to the connection tracking entry associated
+          with it by a previous call to <code>ct_next</code>.
+        </dd>
       </dl>
 
       <p>
@@ -844,21 +914,94 @@
       </p>
 
       <dl>
-        <dt><code>learn</code></dt>
 
-        <dt><code>conntrack</code></dt>
-
-        <dt><code>dec_ttl { <var>action</var>, </code>...<code> } { <var>action</var>; </code>...<code>};</code></dt>
+        <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
-          decrement TTL; execute first set of actions if
-          successful, second set if TTL decrement fails
+          <p>
+            Temporarily replaces the IPv4 packet being processed by an ARP
+            packet and executes each nested <var>action</var> on the ARP
+            packet.  Actions following the <var>arp</var> action, if any, apply
+            to the original, unmodified packet.
+          </p>
+
+          <p>
+            The ARP packet that this action operates on is initialized based on
+            the IPv4 packet being processed, as follows.  These are default
+            values that the nested actions will probably want to change:
+          </p>
+
+          <ul>
+            <li><code>eth.src</code> unchanged</li>
+            <li><code>eth.dst</code> unchanged</li>
+            <li><code>eth.type = 0x0806</code></li>
+            <li><code>arp.op = 1</code> (ARP request)</li>
+            <li><code>arp.sha</code> copied from <code>eth.src</code></li>
+            <li><code>arp.spa</code> copied from <code>ip4.src</code></li>
+            <li><code>arp.tha = 00:00:00:00:00:00</code></li>
+            <li><code>arp.tpa</code> copied from <code>ip4.dst</code></li>
+          </ul>
+
+          <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 
-        <dt><code>icmp_reply { <var>action</var>, </code>...<code> };</code></dt>
-        <dd>generate ICMP reply from packet, execute <var>action</var>s</dd>
+        <dt><code>icmp4 { <var>action</var>; </code>...<code> };</code></dt>
+        <dd>
+          <p>
+            Temporarily replaces the IPv4 packet being processed by an ICMPv4
+            packet and executes each nested <var>action</var> on the ICMPv4
+            packet.  Actions following the <var>icmp4</var> action, if any,
+            apply to the original, unmodified packet.
+          </p>
 
-        <dt><code>arp { <var>action</var>, </code>...<code> }</code></dt>
-        <dd>generate ARP from packet, execute <var>action</var>s</dd>
+          <p>
+            The ICMPv4 packet that this action operates on is initialized based
+            on the IPv4 packet being processed, as follows.  These are default
+            values that the nested actions will probably want to change.
+            Ethernet and IPv4 fields not listed here are not changed:
+          </p>
+
+          <ul>
+            <li><code>ip.proto = 1</code> (ICMPv4)</li>
+            <li><code>ip.frag = 0</code> (not a fragment)</li>
+            <li><code>icmp4.type = 3</code> (destination unreachable)</li>
+            <li><code>icmp4.code = 1</code> (host unreachable)</li>
+          </ul>
+
+          <p>
+            Details TBD.
+          </p>
+
+          <p><b>Prerequisite:</b> <code>ip4</code></p>
+        </dd>
+
+        <dt><code>tcp_reset;</code></dt>
+        <dd>
+          <p>
+            This action transforms the current TCP packet according to the
+            following pseudocode:
+          </p>
+
+          <pre>
+if (tcp.ack) {
+        tcp.seq = tcp.ack;
+} else {
+        tcp.ack = tcp.seq + length(tcp.payload);
+        tcp.seq = 0;
+}
+tcp.flags = RST;
+</pre>
+
+          <p>
+            Then, the action drops all TCP options and payload data, and
+            updates the TCP checksum.
+          </p>
+
+          <p>
+            Details TBD.
+          </p>
+
+          <p><b>Prerequisite:</b> <code>tcp</code></p>
+        </dd>
       </dl>
     </column>
 
@@ -939,12 +1082,28 @@
       constructed for each supported encapsulation.
     </column>
 
-    <column name="external_ids" key="logical-switch" type='{"type": "uuid"}'>
-      Each row in <ref table="Datapath_Binding"/> is associated with some
-      logical datapath.  <code>ovn-northd</code> uses this key to store the
-      UUID of the logical datapath <ref table="Logical_Switch"
-      db="OVN_Northbound"/> row in the <ref db="OVN_Northbound"/> database.
-    </column>
+    <group title="OVN_Northbound Relationship">
+      <p>
+        Each row in <ref table="Datapath_Binding"/> is associated with some
+        logical datapath.  <code>ovn-northd</code> uses these keys to track the
+        association of a logical datapath with concepts in the <ref
+        db="OVN_Northbound"/> database.
+      </p>
+
+      <column name="external_ids" key="logical-switch" type='{"type": "uuid"}'>
+        For a logical datapath that represents a logical switch,
+        <code>ovn-northd</code> stores in this key the UUID of the
+        corresponding <ref table="Logical_Switch" db="OVN_Northbound"/> row in
+        the <ref db="OVN_Northbound"/> database.
+      </column>
+
+      <column name="external_ids" key="logical-router" type='{"type": "uuid"}'>
+        For a logical datapath that represents a logical router,
+        <code>ovn-northd</code> stores in this key the UUID of the
+        corresponding <ref table="Logical_Router" db="OVN_Northbound"/> row in
+        the <ref db="OVN_Northbound"/> database.
+      </column>
+    </group>
 
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
@@ -956,8 +1115,9 @@
 
   <table name="Port_Binding" title="Physical-Logical Port Bindings">
     <p>
-      Each row in this table identifies the physical location of a logical
-      port.
+      Most rows in this table identify the physical location of a logical port.
+      (The exceptions are logical patch ports, which do not have any physical
+      location.)
     </p>
 
     <p>
@@ -1044,6 +1204,14 @@
         <dl>
           <dt>(empty string)</dt>
           <dd>VM (or VIF) interface.</dd>
+
+          <dt><code>patch</code></dt>
+          <dd>
+            One of a pair of logical ports that act as if connected by a patch
+            cable.  Useful for connecting two logical datapaths, e.g. to connect
+            a logical router to a logical switch or to another logical router.
+          </dd>
+
           <dt><code>localnet</code></dt>
           <dd>
             A connection to a locally accessible network from each
@@ -1064,6 +1232,22 @@
             be defined.
           </dd>
         </dl>
+      </column>
+    </group>
+
+    <group title="Patch Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/> of
+        <code>patch</code>.
+      </p>
+
+      <column name="options" key="peer">
+        The <ref column="logical_port"/> in the <ref table="Port_Binding"/>
+        record for the other side of the patch.  The named <ref
+        column="logical_port"/> must specify this <ref column="logical_port"/>
+        in its own <code>peer</code> option.  That is, the two patch logical
+        ports must have reversed <ref column="logical_port"/> and
+        <code>peer</code> values.
       </column>
     </group>
 

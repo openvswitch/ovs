@@ -137,6 +137,7 @@ recirc_metadata_hash(const struct recirc_state *state)
                             flow_tnl_size(state->metadata.tunnel)
                             / sizeof(uint64_t), hash);
     }
+    hash = hash_boolean(state->conntracked, hash);
     hash = hash_words64((const uint64_t *) &state->metadata.metadata,
                         (sizeof state->metadata - sizeof state->metadata.tunnel)
                         / sizeof(uint64_t),
@@ -168,6 +169,7 @@ recirc_metadata_equal(const struct recirc_state *a,
                  (!b->stack || !b->stack->size))
                 || (a->stack && b->stack && ofpbuf_equal(a->stack, b->stack)))
             && a->mirrors == b->mirrors
+            && a->conntracked == b->conntracked
             && a->action_set_len == b->action_set_len
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len));
