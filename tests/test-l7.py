@@ -30,6 +30,10 @@ def get_ftpd():
         from pyftpdlib.handlers import FTPHandler
         from pyftpdlib.servers import FTPServer
 
+        import logging
+        import pyftpdlib.log
+        pyftpdlib.log.LEVEL = logging.DEBUG
+
         class OVSFTPHandler(FTPHandler):
             authorizer = DummyAuthorizer()
             authorizer.add_anonymous("/tmp")
