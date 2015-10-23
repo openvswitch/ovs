@@ -186,6 +186,7 @@ OvsParseTcp(const NET_BUFFER_LIST *packet,
     if (tcp) {
         flow->tpSrc = tcp->source;
         flow->tpDst = tcp->dest;
+        flow->flags = OvsGetTcpFlags(packet, layers);
         layers->isTcp = 1;
         layers->l7Offset = layers->l4Offset + 4 * tcp->doff;
     }
