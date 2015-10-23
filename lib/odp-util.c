@@ -590,6 +590,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
         if (label) {
             ds_put_format(ds, "label=");
             format_u128(ds, label, label + 1, true);
+            ds_put_char(ds, ',');
         }
         if (helper) {
             ds_put_format(ds, "helper=%s,", helper);
