@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
     "version": "2.0.0",
-    "cksum": "3039293926 4601",
+    "cksum": "3515938918 4583",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -89,5 +89,6 @@
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
-            "isRoot": false}},
-    "version": "1.0.0"}
+            "isRoot": false}
+    }
+}

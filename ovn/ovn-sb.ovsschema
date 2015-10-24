@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
     "version": "1.0.0",
-    "cksum": "4202564645 5078",
+    "cksum": "1392129391 5060",
     "tables": {
         "Chassis": {
             "columns": {
@@ -99,5 +99,6 @@
                                  "min": 0,
                                  "max": "unlimited"}}},
             "indexes": [["datapath", "tunnel_key"], ["logical_port"]],
-            "isRoot": true}},
-    "version": "1.0.0"}
+            "isRoot": true}
+    }
+}
