@@ -959,6 +959,8 @@ struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
 struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
+char *ipv6_parse_masked(const char *s, struct in6_addr *ipv6,
+                        struct in6_addr *mask);
 
 void *eth_compose(struct dp_packet *, const struct eth_addr eth_dst,
                   const struct eth_addr eth_src, uint16_t eth_type,
