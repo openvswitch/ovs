@@ -86,12 +86,12 @@ enum ovn_stage {
 #define PIPELINE_STAGES                                                 \
     /* Logical switch ingress stages. */                                \
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC,    0, "switch_in_port_sec")   \
-    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,     1, "switch_in_pre_acl")        \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,     1, "switch_in_pre_acl")    \
     PIPELINE_STAGE(SWITCH, IN,  ACL,         2, "switch_in_acl")        \
     PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,     3, "switch_in_l2_lkup")    \
                                                                         \
     /* Logical switch egress stages. */                                 \
-    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "switch_out_pre_acl")       \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "switch_out_pre_acl")   \
     PIPELINE_STAGE(SWITCH, OUT, ACL,         1, "switch_out_acl")       \
     PIPELINE_STAGE(SWITCH, OUT, PORT_SEC,    2, "switch_out_port_sec")  \
                                                                         \
@@ -1151,7 +1151,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ds_destroy(&match);
     }
 
-    /* Ingress table 2: Destination lookup, broadcast and multicast handling
+    /* Ingress table 3: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
