@@ -291,7 +291,7 @@ tnl_arp_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         int start_len, need_ws;
 
         start_len = ds.length;
-        print_ipv6_mapped(&ds, &arp->ip);
+        ipv6_format_mapped(&arp->ip, &ds);
 
         need_ws = INET6_ADDRSTRLEN - (ds.length - start_len);
         ds_put_char_multiple(&ds, ' ', need_ws);

@@ -435,50 +435,41 @@ ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
     return NULL;
 }
 
-/* Stores the string representation of the IPv6 address 'addr' into the
- * character array 'addr_str', which must be at least INET6_ADDRSTRLEN
- * bytes long. */
 void
-format_ipv6_addr(char *addr_str, const struct in6_addr *addr)
-{
-    inet_ntop(AF_INET6, addr, addr_str, INET6_ADDRSTRLEN);
-}
-
-void
-print_ipv6_addr(struct ds *string, const struct in6_addr *addr)
+ipv6_format_addr(const struct in6_addr *addr, struct ds *s)
 {
     char *dst;
 
-    ds_reserve(string, string->length + INET6_ADDRSTRLEN);
+    ds_reserve(s, s->length + INET6_ADDRSTRLEN);
 
-    dst = string->string + string->length;
-    format_ipv6_addr(dst, addr);
-    string->length += strlen(dst);
+    dst = s->string + s->length;
+    inet_ntop(AF_INET6, addr, dst, INET6_ADDRSTRLEN);
+    s->length += strlen(dst);
 }
 
 void
-print_ipv6_mapped(struct ds *s, const struct in6_addr *addr)
+ipv6_format_mapped(const struct in6_addr *addr, struct ds *s)
 {
     if (IN6_IS_ADDR_V4MAPPED(addr)) {
         ds_put_format(s, IP_FMT, addr->s6_addr[12], addr->s6_addr[13],
                                  addr->s6_addr[14], addr->s6_addr[15]);
     } else {
-        print_ipv6_addr(s, addr);
+        ipv6_format_addr(addr, s);
     }
 }
 
 void
-print_ipv6_masked(struct ds *s, const struct in6_addr *addr,
-                  const struct in6_addr *mask)
+ipv6_format_masked(const struct in6_addr *addr, const struct in6_addr *mask,
+                   struct ds *s)
 {
-    print_ipv6_addr(s, addr);
+    ipv6_format_addr(addr, s);
     if (mask && !ipv6_mask_is_exact(mask)) {
         if (ipv6_is_cidr(mask)) {
             int cidr_bits = ipv6_count_cidr_bits(mask);
             ds_put_format(s, "/%d", cidr_bits);
         } else {
             ds_put_char(s, '/');
-            print_ipv6_addr(s, mask);
+            ipv6_format_addr(mask, s);
         }
     }
 }

@@ -950,11 +950,10 @@ struct vxlanhdr {
 
 #define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
 
-void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
-void print_ipv6_addr(struct ds *string, const struct in6_addr *addr);
-void print_ipv6_mapped(struct ds *string, const struct in6_addr *addr);
-void print_ipv6_masked(struct ds *string, const struct in6_addr *addr,
-                       const struct in6_addr *mask);
+void ipv6_format_addr(const struct in6_addr *addr, struct ds *);
+void ipv6_format_mapped(const struct in6_addr *addr, struct ds *);
+void ipv6_format_masked(const struct in6_addr *addr,
+                        const struct in6_addr *mask, struct ds *);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
                                  const struct in6_addr *mask);
 struct in6_addr ipv6_create_mask(int mask);

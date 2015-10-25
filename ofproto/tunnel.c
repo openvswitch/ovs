@@ -584,11 +584,11 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     OVS_REQ_RDLOCK(rwlock)
 {
     if (!match->ip_dst_flow) {
-        print_ipv6_mapped(ds, &match->ipv6_src);
+        ipv6_format_mapped(&match->ipv6_src, ds);
         ds_put_cstr(ds, "->");
-        print_ipv6_mapped(ds, &match->ipv6_dst);
+        ipv6_format_mapped(&match->ipv6_dst, ds);
     } else if (!match->ip_src_flow) {
-        print_ipv6_mapped(ds, &match->ipv6_src);
+        ipv6_format_mapped(&match->ipv6_src, ds);
         ds_put_cstr(ds, "->flow");
     } else {
         ds_put_cstr(ds, "flow->flow");

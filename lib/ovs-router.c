@@ -318,7 +318,7 @@ ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         } else {
             ds_put_format(&ds, "User: ");
         }
-        print_ipv6_mapped(&ds, &rt->nw_addr);
+        ipv6_format_mapped(&rt->nw_addr, &ds);
         plen = rt->plen;
         if (IN6_IS_ADDR_V4MAPPED(&rt->nw_addr)) {
             plen -= 96;
@@ -326,7 +326,7 @@ ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         ds_put_format(&ds, "/%"PRIu16" dev %s", plen, rt->output_bridge);
         if (ipv6_addr_is_set(&rt->gw)) {
             ds_put_format(&ds, " GW ");
-            print_ipv6_mapped(&ds, &rt->gw);
+            ipv6_format_mapped(&rt->gw, &ds);
         }
         ds_put_format(&ds, "\n");
     }
@@ -353,7 +353,7 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
     if (ovs_router_lookup(&ip6, iface, &gw)) {
         struct ds ds = DS_EMPTY_INITIALIZER;
         ds_put_format(&ds, "gateway ");
-        print_ipv6_mapped(&ds, &ip6);
+        ipv6_format_mapped(&ip6, &ds);
         ds_put_format(&ds, "\ndev %s\n", iface);
         unixctl_command_reply(conn, ds_cstr(&ds));
         ds_destroy(&ds);

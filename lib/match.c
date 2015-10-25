@@ -862,7 +862,7 @@ format_ipv6_netmask(struct ds *s, const char *name,
 {
     if (!ipv6_mask_is_any(netmask)) {
         ds_put_format(s, "%s=", name);
-        print_ipv6_masked(s, addr, netmask);
+        ipv6_format_masked(addr, netmask, s);
         ds_put_char(s, ',');
     }
 }

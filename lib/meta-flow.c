@@ -2422,7 +2422,7 @@ mf_format(const struct mf_field *mf,
         break;
 
     case MFS_IPV6:
-        print_ipv6_masked(s, &value->ipv6, mask ? &mask->ipv6 : NULL);
+        ipv6_format_masked(&value->ipv6, mask ? &mask->ipv6 : NULL, s);
         break;
 
     case MFS_FRAG:

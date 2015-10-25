@@ -117,7 +117,7 @@ lex_token_format_value(const union mf_subvalue *value,
         break;
 
     case LEX_F_IPV6:
-        print_ipv6_addr(s, &value->ipv6);
+        ipv6_format_addr(&value->ipv6, s);
         break;
 
     case LEX_F_ETHERNET:
