@@ -594,7 +594,7 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
         InitializeListHead(&missedPackets);
         status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS, vport,
                           &key,ovsFwdCtx->curNbl,
-                          ovsFwdCtx->tunnelRxNic != NULL, &ovsFwdCtx->layers,
+                          FALSE, &ovsFwdCtx->layers,
                           ovsFwdCtx->switchContext, &missedPackets, &num);
         if (num) {
             OvsQueuePackets(&missedPackets, num);
@@ -709,6 +709,7 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     PNET_BUFFER_LIST newNbl = NULL;
     POVS_VPORT_ENTRY tunnelRxVport = ovsFwdCtx->tunnelRxNic;
+    PCWSTR dropReason = L"OVS-dropped due to new decap packet";
 
     if (OvsValidateIPChecksum(ovsFwdCtx->curNbl, &ovsFwdCtx->layers)
             != NDIS_STATUS_SUCCESS) {
@@ -730,6 +731,10 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
     case OVS_VPORT_TYPE_STT:
         status = OvsDecapStt(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                              &ovsFwdCtx->tunKey, &newNbl);
+        if (status == NDIS_STATUS_SUCCESS && newNbl == NULL) {
+            /* This was an STT-LSO Fragment */
+            dropReason = L"OVS-STT segment is cached";
+        }
         break;
     default:
         OVS_LOG_ERROR("Rx: Unhandled tunnel type: %d\n",
@@ -747,25 +752,26 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
      * tunnelRxNic and other fields will be cleared, re-init the context
      * before usage.
       */
-    OvsCompleteNBLForwardingCtx(ovsFwdCtx,
-                                L"OVS-dropped due to new decap packet");
+    OvsCompleteNBLForwardingCtx(ovsFwdCtx, dropReason);
 
-    /* Decapsulated packet is in a new NBL */
-    ovsFwdCtx->tunnelRxNic = tunnelRxVport;
-    OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
-                         newNbl, tunnelRxVport->portNo, 0,
-                         NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
-                         ovsFwdCtx->completionList,
-                         &ovsFwdCtx->layers, FALSE);
+    if (newNbl) {
+        /* Decapsulated packet is in a new NBL */
+        ovsFwdCtx->tunnelRxNic = tunnelRxVport;
+        OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
+                             newNbl, tunnelRxVport->portNo, 0,
+                             NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
+                             ovsFwdCtx->completionList,
+                             &ovsFwdCtx->layers, FALSE);
 
-    /*
-     * Set the NBL's SourcePortId and SourceNicIndex to default values to
-     * keep NDIS happy when we forward the packet.
-     */
-    ovsFwdCtx->fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
-    ovsFwdCtx->fwdDetail->SourceNicIndex = 0;
+        /*
+         * Set the NBL's SourcePortId and SourceNicIndex to default values to
+         * keep NDIS happy when we forward the packet.
+         */
+        ovsFwdCtx->fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
+        ovsFwdCtx->fwdDetail->SourceNicIndex = 0;
 
-    status = OvsDoFlowLookupOutput(ovsFwdCtx);
+        status = OvsDoFlowLookupOutput(ovsFwdCtx);
+    }
     ASSERT(ovsFwdCtx->curNbl == NULL);
     OvsClearTunRxCtx(ovsFwdCtx);
 
