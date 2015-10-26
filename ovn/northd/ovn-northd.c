@@ -485,9 +485,15 @@ struct ovn_port {
     const struct sbrec_port_binding *sb;         /* May be NULL. */
 
     /* Logical router port data. */
-    ovs_be32 ip, mask;          /* 192.168.10.123/24. */
-    ovs_be32 network;           /* 192.168.10.0. */
-    ovs_be32 bcast;             /* 192.168.10.255. */
+    char *ip_s;                 /* "192.168.10.123" */
+    char *network_s;            /* "192.168.10.0" */
+    char *bcast_s;              /* "192.168.10.255" */
+    int plen;                   /* CIDR prefix: 24 */
+
+    ovs_be32 ip;                /* 192.168.10.123 */
+    ovs_be32 mask;              /* 255.255.255.0 */
+    ovs_be32 network;           /* 192.168.10.255 */
+
     struct eth_addr mac;
     struct ovn_port *peer;
 
@@ -524,6 +530,9 @@ ovn_port_destroy(struct hmap *ports, struct ovn_port *port)
          * private list and once we've exited that function it is not safe to
          * use it. */
         hmap_remove(ports, &port->key_node);
+        free(port->bcast_s);
+        free(port->network_s);
+        free(port->ip_s);
         free(port->json_key);
         free(port->key);
         free(port);
@@ -635,9 +644,13 @@ join_logical_ports(struct northd_context *ctx,
                 op->ip = ip;
                 op->mask = mask;
                 op->network = ip & mask;
-                op->bcast = ip | ~mask;
-                op->mac = mac;
+                op->plen = ip_count_cidr_bits(mask);
 
+                op->ip_s = xasprintf(IP_FMT, IP_ARGS(ip));
+                op->network_s = xasprintf(IP_FMT, IP_ARGS(op->network));
+                op->bcast_s = xasprintf(IP_FMT, IP_ARGS(ip | ~mask));
+
+                op->mac = mac;
                 op->od = od;
             }
         }
@@ -2017,30 +2030,29 @@ lrport_is_enabled(const struct nbrec_logical_router_port *lrport)
 
 static void
 add_route(struct hmap *lflows, const struct ovn_port *op,
-          ovs_be32 network, ovs_be32 mask, ovs_be32 gateway)
+          const char *network_s, int plen, const char *gateway)
 {
-    char *match = xasprintf("ip4.dst == "IP_FMT"/"IP_FMT,
-                            IP_ARGS(network), IP_ARGS(mask));
+    char *match = xasprintf("ip4.dst == %s/%d", network_s, plen);
 
     struct ds actions = DS_EMPTY_INITIALIZER;
     ds_put_cstr(&actions, "ip.ttl--; reg0 = ");
     if (gateway) {
-        ds_put_format(&actions, IP_FMT, IP_ARGS(gateway));
+        ds_put_cstr(&actions, gateway);
     } else {
         ds_put_cstr(&actions, "ip4.dst");
     }
     ds_put_format(&actions,
                   "; "
-                  "reg1 = "IP_FMT"; "
+                  "reg1 = %s; "
                   "eth.src = "ETH_ADDR_FMT"; "
                   "outport = %s; "
                   "next;",
-                  IP_ARGS(op->ip), ETH_ADDR_ARGS(op->mac), op->json_key);
+                  op->ip_s, ETH_ADDR_ARGS(op->mac), op->json_key);
 
     /* The priority here is calculated to implement longest-prefix-match
      * routing. */
-    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING,
-                  count_1bits(ntohl(mask)), match, ds_cstr(&actions));
+    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, plen, match,
+                  ds_cstr(&actions));
     ds_destroy(&actions);
     free(match);
 }
@@ -2065,7 +2077,7 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
     error = ip_parse_masked(route->ip_prefix, &prefix, &mask);
     if (error || !ip_is_cidr(mask)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad 'network' in static routes %s",
+        VLOG_WARN_RL(&rl, "bad 'ip_prefix' in static routes %s",
                      route->ip_prefix);
         free(error);
         return;
@@ -2110,7 +2122,10 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
         }
     }
 
-    add_route(lflows, out_port, prefix, mask, next_hop);
+    char *prefix_s = xasprintf(IP_FMT, IP_ARGS(prefix));
+    add_route(lflows, out_port, prefix_s, ip_count_cidr_bits(mask),
+              route->nexthop);
+    free(prefix_s);
 }
 
 static void
@@ -2211,8 +2226,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
          * owned by the router or a broadcast address known to the router
          * (priority 100). */
         ds_clear(&match);
-        ds_put_format(&match, "ip4.src == {"IP_FMT", "IP_FMT"}",
-                      IP_ARGS(op->ip), IP_ARGS(op->bcast));
+        ds_put_format(&match, "ip4.src == {%s, %s}", op->ip_s, op->bcast_s);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 100,
                       ds_cstr(&match), "drop;");
 
@@ -2223,26 +2237,25 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
          * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
         ds_clear(&match);
         ds_put_format(&match,
-            "ip4.dst == "IP_FMT" && icmp4.type == 8 && icmp4.code == 0",
-            IP_ARGS(op->ip));
+                      "ip4.dst == %s && icmp4.type == 8 && icmp4.code == 0",
+                      op->ip_s);
         ds_clear(&actions);
         ds_put_format(&actions,
             "ip4.dst = ip4.src; "
-            "ip4.src = "IP_FMT"; "
+            "ip4.src = %s; "
             "ip.ttl = 255; "
             "icmp4.type = 0; "
             "inport = \"\"; /* Allow sending out inport. */ "
             "next; ",
-            IP_ARGS(op->ip));
+            op->ip_s);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                       ds_cstr(&match), ds_cstr(&actions));
 
         /* ARP reply.  These flows reply to ARP requests for the router's own
          * IP address. */
         ds_clear(&match);
-        ds_put_format(&match,
-            "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
-            op->json_key, IP_ARGS(op->ip));
+        ds_put_format(&match, "inport == %s && arp.tpa == %s && arp.op == 1",
+                      op->json_key, op->ip_s);
         ds_clear(&actions);
         ds_put_format(&actions,
             "eth.dst = eth.src; "
@@ -2251,13 +2264,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             "arp.tha = arp.sha; "
             "arp.sha = "ETH_ADDR_FMT"; "
             "arp.tpa = arp.spa; "
-            "arp.spa = "IP_FMT"; "
+            "arp.spa = %s; "
             "outport = %s; "
             "inport = \"\"; /* Allow sending out inport. */ "
             "output;",
             ETH_ADDR_ARGS(op->mac),
             ETH_ADDR_ARGS(op->mac),
-            IP_ARGS(op->ip),
+            op->ip_s,
             op->json_key);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                       ds_cstr(&match), ds_cstr(&actions));
@@ -2334,7 +2347,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
         if (!snat_ip_is_router_ip) {
             ds_clear(&match);
-            ds_put_format(&match, "ip4.dst == "IP_FMT, IP_ARGS(op->ip));
+            ds_put_format(&match, "ip4.dst == %s", op->ip_s);
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60,
                           ds_cstr(&match), "drop;");
         }
@@ -2479,7 +2492,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        add_route(lflows, op, op->network, op->mask, 0);
+        add_route(lflows, op, op->network_s, op->plen, NULL);
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
@@ -2521,8 +2534,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     continue;
                 }
                 ds_clear(&match);
-                ds_put_format(&match, "outport == %s && reg0 == "IP_FMT,
-                              peer->json_key, IP_ARGS(op->ip));
+                ds_put_format(&match, "outport == %s && reg0 == %s",
+                              peer->json_key, op->ip_s);
                 ds_clear(&actions);
                 ds_put_format(&actions, "eth.dst = "ETH_ADDR_FMT"; next;",
                               ETH_ADDR_ARGS(op->mac));
@@ -2621,8 +2634,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     continue;
                 }
                 ds_clear(&match);
-                ds_put_format(&match, "outport == %s && reg0 == "IP_FMT,
-                              peer->json_key, IP_ARGS(router_port->ip));
+                ds_put_format(&match, "outport == %s && reg0 == %s",
+                              peer->json_key, router_port->ip_s);
                 ds_clear(&actions);
                 ds_put_format(&actions, "eth.dst = "ETH_ADDR_FMT"; next;",
                               ETH_ADDR_ARGS(router_port->mac));
