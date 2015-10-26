@@ -35,6 +35,11 @@
 #define OVS_DBG_MOD OVS_DBG_STT
 #include "Debug.h"
 
+KSTART_ROUTINE OvsSttDefragCleaner;
+static PLIST_ENTRY OvsSttPktFragHash;
+static NDIS_SPIN_LOCK OvsSttSpinLock;
+static OVS_STT_THREAD_CTX sttDefragThreadCtx;
+
 static NDIS_STATUS
 OvsDoEncapStt(POVS_VPORT_ENTRY vport, PNET_BUFFER_LIST curNbl,
               const OvsIPv4TunnelKey *tunKey,
@@ -349,7 +354,7 @@ OvsCalculateTCPChecksum(PNET_BUFFER_LIST curNbl, PNET_BUFFER curNb)
     if (csumInfo.Receive.TcpChecksumSucceeded) {
         return NDIS_STATUS_SUCCESS;
     }
-        
+
     EthHdr *eth = (EthHdr *)NdisGetDataBuffer(curNb, sizeof(EthHdr),
                                               NULL, 1, 0);
 
@@ -376,6 +381,123 @@ OvsCalculateTCPChecksum(PNET_BUFFER_LIST curNbl, PNET_BUFFER curNb)
     NET_BUFFER_LIST_INFO(curNbl,
                          TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
     return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * OvsInitSttDefragmentation
+ *     Initialize the components used by the stt lso defragmentation
+ *----------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsInitSttDefragmentation()
+{
+    NTSTATUS status;
+    HANDLE threadHandle = NULL;
+
+    /* Init the sync-lock */
+    NdisAllocateSpinLock(&OvsSttSpinLock);
+
+    /* Init the Hash Buffer */
+    OvsSttPktFragHash = (PLIST_ENTRY) OvsAllocateMemoryWithTag(
+                                                sizeof(LIST_ENTRY)
+                                                * STT_HASH_TABLE_SIZE,
+                                                OVS_STT_POOL_TAG);
+    if (OvsSttPktFragHash == NULL) {
+        NdisFreeSpinLock(&OvsSttSpinLock);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    for (int i = 0; i < STT_HASH_TABLE_SIZE; i++) {
+        InitializeListHead(&OvsSttPktFragHash[i]);
+    }
+
+    /* Init Defrag Cleanup Thread */
+    KeInitializeEvent(&sttDefragThreadCtx.event, NotificationEvent, FALSE);
+    status = PsCreateSystemThread(&threadHandle, SYNCHRONIZE, NULL, NULL,
+                                  NULL, OvsSttDefragCleaner,
+                                  &sttDefragThreadCtx);
+
+    if (status != STATUS_SUCCESS) {
+        OvsCleanupSttDefragmentation();
+        return status;
+    }
+
+    ObReferenceObjectByHandle(threadHandle, SYNCHRONIZE, NULL, KernelMode,
+                              &sttDefragThreadCtx.threadObject, NULL);
+    ZwClose(threadHandle);
+    threadHandle = NULL;
+    return STATUS_SUCCESS;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * OvsCleanupSttDefragmentation
+ *     Cleanup memory and thread that were spawned for STT LSO defragmentation
+ *----------------------------------------------------------------------------
+ */
+VOID
+OvsCleanupSttDefragmentation(VOID)
+{
+    NdisAcquireSpinLock(&OvsSttSpinLock);
+    sttDefragThreadCtx.exit = 1;
+    KeSetEvent(&sttDefragThreadCtx.event, 0, FALSE);
+    NdisReleaseSpinLock(&OvsSttSpinLock);
+
+    KeWaitForSingleObject(sttDefragThreadCtx.threadObject, Executive,
+                          KernelMode, FALSE, NULL);
+    ObDereferenceObject(sttDefragThreadCtx.threadObject);
+
+    if (OvsSttPktFragHash) {
+        OvsFreeMemoryWithTag(OvsSttPktFragHash, OVS_STT_POOL_TAG);
+        OvsSttPktFragHash = NULL;
+    }
+
+    NdisFreeSpinLock(&OvsSttSpinLock);
+}
+
+/*
+ *----------------------------------------------------------------------------
+ * OvsSttDefragCleaner
+ *     Runs periodically and cleans up the buffer to remove expired segments
+ *----------------------------------------------------------------------------
+ */
+VOID
+OvsSttDefragCleaner(PVOID data)
+{
+    POVS_STT_THREAD_CTX context = (POVS_STT_THREAD_CTX)data;
+    PLIST_ENTRY link, next;
+    POVS_STT_PKT_ENTRY entry;
+    BOOLEAN success = TRUE;
+
+    while (success) {
+        NdisAcquireSpinLock(&OvsSttSpinLock);
+        if (context->exit) {
+            NdisReleaseSpinLock(&OvsSttSpinLock);
+            break;
+        }
+
+        /* Set the timeout for the thread and cleanup */
+        UINT64 currentTime, threadSleepTimeout;
+        NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
+        threadSleepTimeout = currentTime + STT_CLEANUP_INTERVAL;
+
+        for (int i = 0; i < STT_HASH_TABLE_SIZE; i++) {
+            LIST_FORALL_SAFE(&OvsSttPktFragHash[i], link, next) {
+                entry = CONTAINING_RECORD(link, OVS_STT_PKT_ENTRY, link);
+                if (entry->timeout < currentTime) {
+                    RemoveEntryList(&entry->link);
+                    OvsFreeMemoryWithTag(entry, OVS_STT_POOL_TAG);
+                }
+            }
+        }
+
+        NdisReleaseSpinLock(&OvsSttSpinLock);
+        KeWaitForSingleObject(&context->event, Executive, KernelMode,
+                              FALSE, (LARGE_INTEGER *)&threadSleepTimeout);
+    }
+
+    PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 /*
@@ -416,7 +538,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     if (csumInfo.Receive.TcpChecksumFailed) {
         return NDIS_STATUS_INVALID_PACKET;
     }
-    
+
     /* Calculate the TCP Checksum */
     status = OvsCalculateTCPChecksum(curNbl, curNb);
     if (status != NDIS_STATUS_SUCCESS) {
@@ -455,7 +577,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     hdrLen = STT_HDR_LEN;
     NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
     advanceCnt += hdrLen;
-    
+
     /* Verify checksum for inner packet if it's required */
     if (!(sttHdr->flags & STT_CSUM_VERIFIED)) {
         BOOLEAN innerChecksumPartial = sttHdr->flags & STT_CSUM_PARTIAL;

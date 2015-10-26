@@ -212,6 +212,12 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
+    status = OvsInitSttDefragmentation();
+    if (status != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("Exit: Failed to initialize Stt Defragmentation");
+        goto create_switch_done;
+    }
+
     *switchContextOut = switchContext;
 
 create_switch_done:
@@ -242,6 +248,7 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     }
     OvsDeleteSwitch(switchContext);
     OvsCleanupIpHelper();
+    OvsCleanupSttDefragmentation();
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
