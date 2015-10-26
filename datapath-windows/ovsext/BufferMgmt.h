@@ -113,6 +113,9 @@ PNET_BUFFER_LIST OvsTcpSegmentNBL(PVOID context,
                                   POVS_PACKET_HDR_INFO hdrInfo,
                                   UINT32 MSS,
                                   UINT32 headRoom);
+PNET_BUFFER_LIST OvsAllocateNBLFromBuffer(PVOID context,
+                                          PVOID buffer,
+                                          ULONG length);
 PNET_BUFFER_LIST OvsFullCopyToMultipleNBLs(PVOID context,
     PNET_BUFFER_LIST nbl, UINT32 headRoom, BOOLEAN copyNblInfo);
 PNET_BUFFER_LIST OvsCompleteNBL(PVOID context, PNET_BUFFER_LIST nbl,

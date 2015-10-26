@@ -1308,6 +1308,52 @@ nblcopy_error:
     return NULL;
 }
 
+/*
+ * --------------------------------------------------------------------------
+ * OvsAllocateNBLFromBuffer --
+ *
+ * This function allocates all the stuff necessary for creating an NBL from the
+ * input buffer of specified length, namely, a nonpaged data buffer of size
+ * length, an MDL from it, and a NB and NBL from it. It does not allocate an NBL
+ * context yet. It also copies data from the specified buffer to the NBL.
+ * --------------------------------------------------------------------------
+ */
+PNET_BUFFER_LIST
+OvsAllocateNBLFromBuffer(PVOID context,
+                         PVOID buffer,
+                         ULONG length)
+{
+    POVS_SWITCH_CONTEXT switchContext = (POVS_SWITCH_CONTEXT)context;
+    UINT8 *data = NULL;
+    PNET_BUFFER_LIST nbl = NULL;
+    PNET_BUFFER nb;
+    PMDL mdl;
+
+    if (length > OVS_DEFAULT_DATA_SIZE) {
+        nbl = OvsAllocateVariableSizeNBL(switchContext, length,
+                                         OVS_DEFAULT_HEADROOM_SIZE);
+
+    } else {
+        nbl = OvsAllocateFixSizeNBL(switchContext, length,
+                                    OVS_DEFAULT_HEADROOM_SIZE);
+    }
+    if (nbl == NULL) {
+        return NULL;
+    }
+
+    nb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    mdl = NET_BUFFER_CURRENT_MDL(nb);
+    data = (PUINT8)MmGetSystemAddressForMdlSafe(mdl, LowPagePriority) +
+                    NET_BUFFER_CURRENT_MDL_OFFSET(nb);
+    if (!data) {
+        OvsCompleteNBL(switchContext, nbl, TRUE);
+        return NULL;
+    }
+
+    NdisMoveMemory(data, buffer, length);
+
+    return nbl;
+}
 
 /*
  * --------------------------------------------------------------------------
