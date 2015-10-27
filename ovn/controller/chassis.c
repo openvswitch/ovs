@@ -95,7 +95,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
         bool same = true;
         for (int i = 0; i < chassis_rec->n_encaps; i++) {
             cur_tunnels |= get_tunnel_type(chassis_rec->encaps[i]->type);
-            same = same && strcmp(chassis_rec->encaps[i]->ip, encap_ip);
+            same = same && !strcmp(chassis_rec->encaps[i]->ip, encap_ip);
         }
         same = same && req_tunnels == cur_tunnels;
 
