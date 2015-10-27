@@ -75,8 +75,11 @@ OvsGetTcpCtl(const NET_BUFFER_LIST *packet, // IN
 
 static UINT8
 OvsGetTcpFlags(const NET_BUFFER_LIST *packet,    // IN
+               const OvsFlowKey *key,   // IN
                const POVS_PACKET_HDR_INFO layers) // IN
 {
+    UNREFERENCED_PARAMETER(key); // should be removed later
+
     if (layers->isTcp) {
         return TCP_FLAGS(OvsGetTcpCtl(packet, layers));
     } else {

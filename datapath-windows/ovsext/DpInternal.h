@@ -65,8 +65,6 @@ typedef struct _OVS_VPORT_EXT_INFO {
 typedef struct L4Key {
     ovs_be16 tpSrc;              /* TCP/UDP/SCTP source port. */
     ovs_be16 tpDst;              /* TCP/UDP/SCTP destination port. */
-    ovs_be16 flags;              /* TCP flags */
-    uint8_t  pad[2];
 } L4Key;
 
 typedef struct Ipkey {
@@ -77,7 +75,7 @@ typedef struct Ipkey {
     uint8_t nwTtl;               /* IP TTL/Hop Limit. */
     uint8_t nwFrag;              /* FLOW_FRAG_* flags. */
     L4Key   l4;
-} IpKey;  /* Size of 20 byte. */
+} IpKey;  /* Size of 16 byte. */
 
 typedef struct ArpKey {
     ovs_be32 nwSrc;              /* IPv4 source address. */
@@ -97,6 +95,7 @@ typedef struct Ipv6Key {
     uint8_t nwTtl;               /* IP TTL/Hop Limit. */
     uint8_t nwFrag;              /* FLOW_FRAG_* flags. */
     L4Key  l4;
+    uint32_t pad;
 } Ipv6Key;  /* Size of 48 byte. */
 
 typedef struct Icmp6Key {
@@ -111,7 +110,7 @@ typedef struct Icmp6Key {
     uint8_t arpSha[6];           /* ARP/ND source hardware address. */
     uint8_t arpTha[6];           /* ARP/ND target hardware address. */
     struct in6_addr ndTarget;    /* IPv6 neighbor discovery (ND) target. */
-} Icmp6Key; /* Size of 76 byte. */
+} Icmp6Key; /* Size of 72 byte. */
 
 typedef struct L2Key {
     uint32_t inPort;             /* Port number of input port. */

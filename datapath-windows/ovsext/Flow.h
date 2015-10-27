@@ -28,7 +28,7 @@ typedef struct _OvsFlow {
     OvsFlowKey key;
     UINT64 hash;
     UINT32 actionsLen;
-    UINT8  tcpFlags;
+    UINT8 tcpFlags;
     UINT64 used;
     UINT64 packetCount;
     UINT64 byteCount;
