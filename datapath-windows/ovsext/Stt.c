@@ -681,6 +681,62 @@ handle_error:
     return lastPacket ? targetPNbl : NULL;
 }
 
+VOID
+OvsDecapSetOffloads(PNET_BUFFER_LIST curNbl, SttHdr *sttHdr)
+{
+    if ((sttHdr->flags & STT_CSUM_VERIFIED)
+        || !(sttHdr->flags & STT_CSUM_PARTIAL)) {
+        return;
+    }
+
+    UINT8 protoType;
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    csumInfo.Value = 0;
+    csumInfo.Transmit.IpHeaderChecksum = 0;
+    csumInfo.Transmit.TcpHeaderOffset = sttHdr->l4Offset;
+    protoType = sttHdr->flags & STT_PROTO_TYPES;
+    switch (protoType) {
+        case (STT_PROTO_IPV4 | STT_PROTO_TCP):
+            /* TCP/IPv4 */
+	        csumInfo.Transmit.IsIPv4 = 1;
+	        csumInfo.Transmit.TcpChecksum = 1;
+	        break;
+        case STT_PROTO_TCP:
+	        /* TCP/IPv6 */
+	        csumInfo.Transmit.IsIPv6 = 1;
+	        csumInfo.Transmit.TcpChecksum = 1;
+	        break;
+        case STT_PROTO_IPV4:
+	        /* UDP/IPv4 */
+	        csumInfo.Transmit.IsIPv4 = 1;
+	        csumInfo.Transmit.UdpChecksum = 1;
+	        break;
+        default:
+	        /* UDP/IPv6 */
+	        csumInfo.Transmit.IsIPv6 = 1;
+	        csumInfo.Transmit.UdpChecksum = 1;
+    }
+    NET_BUFFER_LIST_INFO(curNbl,
+                         TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
+
+    if (sttHdr->mss) {
+        NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
+        lsoInfo.Value = 0;
+        lsoInfo.LsoV2Transmit.TcpHeaderOffset = sttHdr->l4Offset;
+        lsoInfo.LsoV2Transmit.MSS = ETH_DEFAULT_MTU
+                                    - sizeof(IPHdr)
+                                    - sizeof(TCPHdr);
+        lsoInfo.LsoV2Transmit.Type = NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE;
+        if (sttHdr->flags & STT_PROTO_IPV4) {
+            lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv4;
+        } else {
+            lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv6;
+        }
+        NET_BUFFER_LIST_INFO(curNbl,
+                             TcpLargeSendNetBufferListInfo) = lsoInfo.Value;
+    }
+}
+
 /*
  * --------------------------------------------------------------------------
  * OvsDecapStt --
@@ -782,81 +838,8 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     tunKey->ttl = ipHdr->ttl;
     tunKey->pad = 0;
 
-    BOOLEAN requiresLSO = sttHdr->mss != 0;
-
-    /* Verify checksum for inner packet if it's required */
-    if (!(sttHdr->flags & STT_CSUM_VERIFIED)) {
-        BOOLEAN innerChecksumPartial = sttHdr->flags & STT_CSUM_PARTIAL;
-        EthHdr *eth = (EthHdr *)NdisGetDataBuffer(newNb, sizeof(EthHdr),
-                                                  NULL, 1, 0);
-
-        /* XXX Figure out a way to offload checksum receives */
-        if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV4)) {
-            IPHdr *ip = (IPHdr *)((PCHAR)eth + sizeof *eth);
-            UINT16 l4Payload = (UINT16)ntohs(ip->tot_len) - ip->ihl * 4;
-            UINT32 offset = sizeof(EthHdr) + ip->ihl * 4;
-
-            if (ip->protocol == IPPROTO_TCP) {
-                TCPHdr *tcp = (TCPHdr *)((PCHAR)ip + ip->ihl * 4);
-                if (!innerChecksumPartial){
-                    tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
-                                                  IPPROTO_TCP,
-                                                  (UINT16)l4Payload);
-                }
-                if (!requiresLSO) {
-                    tcp->check = CalculateChecksumNB(newNb, l4Payload, offset);
-                }
-            } else if (ip->protocol == IPPROTO_UDP) {
-                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
-                if (!innerChecksumPartial){
-                    udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
-                                                  IPPROTO_UDP, l4Payload);
-                }
-                udp->check = CalculateChecksumNB(newNb, l4Payload, offset);
-            }
-        } else if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV6)) {
-            IPv6Hdr *ip = (IPv6Hdr *)((PCHAR)eth + sizeof *eth);
-            UINT32 offset = (UINT32)(sizeof *eth + sizeof *ip);
-            UINT16 totalLength = (UINT16)ntohs(ip->payload_len);
-            if (ip->nexthdr == IPPROTO_TCP) {
-                TCPHdr *tcp = (TCPHdr *)((PCHAR)ip + sizeof *ip);
-                if (!innerChecksumPartial){
-                    tcp->check = IPv6PseudoChecksum((UINT32 *)&ip->saddr,
-                                                    (UINT32 *)&ip->daddr,
-                                                    IPPROTO_TCP, totalLength);
-                }
-                if (!requiresLSO) {
-                    tcp->check = CalculateChecksumNB(newNb, totalLength, offset);
-                }
-            }
-            else if (ip->nexthdr == IPPROTO_UDP) {
-                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
-                if (!innerChecksumPartial) {
-                    udp->check = IPv6PseudoChecksum((UINT32 *)&ip->saddr,
-                                                    (UINT32 *)&ip->daddr,
-                                                    IPPROTO_UDP, totalLength);
-                }
-                udp->check = CalculateChecksumNB(newNb, totalLength, offset);
-            }
-        }
-
-        NET_BUFFER_LIST_INFO(*newNbl, TcpIpChecksumNetBufferListInfo) = 0;
-    }
-
-    if (requiresLSO) {
-        NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
-        lsoInfo.Value = 0;
-        lsoInfo.LsoV2Transmit.TcpHeaderOffset = sttHdr->l4Offset;
-        lsoInfo.LsoV2Transmit.MSS = ETH_DEFAULT_MTU - sizeof(IPHdr) - sizeof(TCPHdr);
-        lsoInfo.LsoV2Transmit.Type = NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE;
-        if (sttHdr->flags & STT_PROTO_IPV4) {
-            lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv4;
-        } else {
-            lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv6;
-        }
-        NET_BUFFER_LIST_INFO(*newNbl,
-                                TcpLargeSendNetBufferListInfo) = lsoInfo.Value;
-    }
+    /* Set Checksum and LSO offload flags */
+    OvsDecapSetOffloads(*newNbl, sttHdr);
 
     return NDIS_STATUS_SUCCESS;
 }
