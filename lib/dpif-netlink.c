@@ -2331,6 +2331,16 @@ dpif_netlink_ct_dump_done(struct dpif *dpif OVS_UNUSED,
     return err;
 }
 
+static int
+dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone)
+{
+    if (zone) {
+        return nl_ct_flush_zone(*zone);
+    } else {
+        return nl_ct_flush();
+    }
+}
+
 const struct dpif_class dpif_netlink_class = {
     "system",
     NULL,                       /* init */
@@ -2374,7 +2384,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_ct_dump_start,
     dpif_netlink_ct_dump_next,
     dpif_netlink_ct_dump_done,
-    NULL,                       /* ct_flush */
+    dpif_netlink_ct_flush,
 };
 
 static int
