@@ -42,6 +42,7 @@
 struct json;
 struct ovsdb_datum;
 struct ovsdb_idl_class;
+struct ovsdb_idl_row;
 struct ovsdb_idl_column;
 struct ovsdb_idl_table_class;
 struct uuid;
@@ -93,9 +94,14 @@ int ovsdb_idl_get_last_error(const struct ovsdb_idl *);
  *     is suitable only for use by a client that "owns" a particular column.
  *
  *   - OVDSB_IDL_ALERT without OVSDB_IDL_MONITOR is not valid.
+ *
+ *   - (OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT | OVSDB_IDL_TRACK), for a column
+ *     that a client wants to track using the change tracking
+ *     ovsdb_idl_track_get_*() functions.
  */
 #define OVSDB_IDL_MONITOR (1 << 0) /* Monitor this column? */
 #define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column updated? */
+#define OVSDB_IDL_TRACK   (1 << 2)
 
 void ovsdb_idl_add_column(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 void ovsdb_idl_add_table(struct ovsdb_idl *,
@@ -103,6 +109,31 @@ void ovsdb_idl_add_table(struct ovsdb_idl *,
 
 void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 void ovsdb_idl_omit_alert(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+
+/* Change tracking. */
+enum ovsdb_idl_change {
+    OVSDB_IDL_CHANGE_INSERT,
+    OVSDB_IDL_CHANGE_MODIFY,
+    OVSDB_IDL_CHANGE_DELETE,
+    OVSDB_IDL_CHANGE_MAX
+};
+
+/* Row, table sequence numbers */
+unsigned int ovsdb_idl_table_get_seqno(
+    const struct ovsdb_idl *idl,
+    const struct ovsdb_idl_table_class *table_class);
+unsigned int ovsdb_idl_row_get_seqno(
+    const struct ovsdb_idl_row *row,
+    enum ovsdb_idl_change change);
+
+void ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
+                                const struct ovsdb_idl_column *column);
+void ovsdb_idl_track_add_all(struct ovsdb_idl *idl);
+const struct ovsdb_idl_row *ovsdb_idl_track_get_first(
+    const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
+const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row *);
+void ovsdb_idl_track_clear(const struct ovsdb_idl *);
+
 
 /* Reading the database replica. */
 
