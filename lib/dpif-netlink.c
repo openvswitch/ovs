@@ -40,6 +40,7 @@
 #include "netdev.h"
 #include "netdev-linux.h"
 #include "netdev-vport.h"
+#include "netlink-conntrack.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "netlink.h"
@@ -2279,6 +2280,59 @@ dpif_netlink_get_datapath_version(void)
     return version_str;
 }
 
+#ifdef __linux__
+struct dpif_netlink_ct_dump_state {
+    struct ct_dpif_dump_state up;
+    struct nl_ct_dump_state *nl_ct_dump;
+};
+
+static int
+dpif_netlink_ct_dump_start(struct dpif *dpif OVS_UNUSED,
+                           struct ct_dpif_dump_state **dump_,
+                           const uint16_t *zone)
+{
+    struct dpif_netlink_ct_dump_state *dump;
+    int err;
+
+    dump = xzalloc(sizeof *dump);
+    err = nl_ct_dump_start(&dump->nl_ct_dump, zone);
+    if (err) {
+        free(dump);
+        return err;
+    }
+
+    *dump_ = &dump->up;
+
+    return 0;
+}
+
+static int
+dpif_netlink_ct_dump_next(struct dpif *dpif OVS_UNUSED,
+                          struct ct_dpif_dump_state *dump_,
+                          struct ct_dpif_entry *entry)
+{
+    struct dpif_netlink_ct_dump_state *dump;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    return nl_ct_dump_next(dump->nl_ct_dump, entry);
+}
+
+static int
+dpif_netlink_ct_dump_done(struct dpif *dpif OVS_UNUSED,
+                          struct ct_dpif_dump_state *dump_)
+{
+    struct dpif_netlink_ct_dump_state *dump;
+    int err;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    err = nl_ct_dump_done(dump->nl_ct_dump);
+    free(dump);
+    return err;
+}
+#endif
+
 const struct dpif_class dpif_netlink_class = {
     "system",
     NULL,                       /* init */
@@ -2319,9 +2373,15 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
     dpif_netlink_get_datapath_version, /* get_datapath_version */
+#ifdef __linux__
+    dpif_netlink_ct_dump_start,
+    dpif_netlink_ct_dump_next,
+    dpif_netlink_ct_dump_done,
+#else
     NULL,                       /* ct_dump_start */
     NULL,                       /* ct_dump_next */
     NULL,                       /* ct_dump_done */
+#endif
     NULL,                       /* ct_flush */
 };
 
