@@ -2319,6 +2319,9 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
     dpif_netlink_get_datapath_version, /* get_datapath_version */
+    NULL,                       /* ct_dump_start */
+    NULL,                       /* ct_dump_next */
+    NULL,                       /* ct_dump_done */
 };
 
 static int
