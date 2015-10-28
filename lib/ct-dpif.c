@@ -108,6 +108,17 @@ ct_dpif_dump_done(struct ct_dpif_dump_state *dump)
             : EOPNOTSUPP);
 }
 
+/* Flush the entries in the connection tracker used by 'dpif'.
+ *
+ * If 'zone' is not NULL, flush only the entries in '*zone'. */
+int
+ct_dpif_flush(struct dpif *dpif, const uint16_t *zone)
+{
+    return (dpif->dpif_class->ct_flush
+            ? dpif->dpif_class->ct_flush(dpif, zone)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {
