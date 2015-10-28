@@ -3685,6 +3685,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
     dpif_netdev_get_datapath_version,
+    NULL,                       /* ct_dump_start */
+    NULL,                       /* ct_dump_next */
+    NULL,                       /* ct_dump_done */
 };
 
 static void

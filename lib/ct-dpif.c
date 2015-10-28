@@ -20,6 +20,8 @@
 
 #include "ct-dpif.h"
 
+#include "dpif-provider.h"
+
 /* Declarations for conntrack entry formatting. */
 struct flags {
     uint32_t flag;
@@ -45,6 +47,66 @@ static const struct flags ct_dpif_status_flags[] = {
 #undef CT_DPIF_STATUS_FLAG
     { 0, NULL } /* End marker. */
 };
+
+/* Dumping */
+
+/* Start dumping the entries from the connection tracker used by 'dpif'.
+ *
+ * 'dump' must be the address of a pointer to a struct ct_dpif_dump_state,
+ * which should be passed (unaltered) to ct_dpif_dump_{next,done}().
+ *
+ * If 'zone' is not NULL, it should point to an integer identifing a
+ * conntrack zone to which the dump will be limited.  If it is NULL,
+ * conntrack entries from all zones will be dumped.
+ *
+ * If there has been a problem the function returns a non-zero value
+ * that represents the error.  Otherwise it returns zero. */
+int
+ct_dpif_dump_start(struct dpif *dpif, struct ct_dpif_dump_state **dump,
+                   const uint16_t *zone)
+{
+    int err;
+
+    err = (dpif->dpif_class->ct_dump_start
+           ? dpif->dpif_class->ct_dump_start(dpif, dump, zone)
+           : EOPNOTSUPP);
+
+    if (!err) {
+        (*dump)->dpif = dpif;
+    }
+
+    return err;
+}
+
+/* Dump one connection from a tracker, and put it in 'entry'.
+ *
+ * 'dump' should have been initialized by ct_dpif_dump_start().
+ *
+ * The function returns 0, if an entry has been dumped succesfully.
+ * Otherwise it returns a non-zero value which can be:
+ * - EOF: meaning that there are no more entries to dump.
+ * - an error value.
+ * In both cases, the user should call ct_dpif_dump_done(). */
+int
+ct_dpif_dump_next(struct ct_dpif_dump_state *dump, struct ct_dpif_entry *entry)
+{
+    struct dpif *dpif = dump->dpif;
+
+    return (dpif->dpif_class->ct_dump_next
+            ? dpif->dpif_class->ct_dump_next(dpif, dump, entry)
+            : EOPNOTSUPP);
+}
+
+/* Free resources used by 'dump' */
+int
+ct_dpif_dump_done(struct ct_dpif_dump_state *dump)
+{
+    struct dpif *dpif = dump->dpif;
+
+    return (dpif->dpif_class->ct_dump_done
+            ? dpif->dpif_class->ct_dump_done(dpif, dump)
+            : EOPNOTSUPP);
+}
 
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
