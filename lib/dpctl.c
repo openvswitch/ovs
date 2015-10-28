@@ -1291,6 +1291,35 @@ dpctl_dump_conntrack(int argc, const char *argv[],
     return error;
 }
 
+static int
+dpctl_flush_conntrack(int argc, const char *argv[],
+                      struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    uint16_t zone, *pzone = NULL;
+    char *name;
+    int error;
+
+    if (argc > 1 && ovs_scan(argv[argc - 1], "zone=%"SCNu16, &zone)) {
+        pzone = &zone;
+        argc--;
+    }
+    name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
+    if (!name) {
+        return EINVAL;
+    }
+    error = parsed_dpif_open(name, false, &dpif);
+    free(name);
+    if (error) {
+        dpctl_error(dpctl_p, error, "opening datapath");
+        return error;
+    }
+
+    error = ct_dpif_flush(dpif, pzone);
+
+    dpif_close(dpif);
+    return error;
+}
 
 /* Undocumented commands for unit testing. */
 
@@ -1570,6 +1599,7 @@ static const struct dpctl_command all_commands[] = {
     { "del-flow", "del-flow [dp] flow", 1, 2, dpctl_del_flow },
     { "del-flows", "[dp]", 0, 1, dpctl_del_flows },
     { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack },
+    { "flush-conntrack", "[dp] [zone=N]", 0, 2, dpctl_flush_conntrack },
     { "help", "", 0, INT_MAX, dpctl_help },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands },
 

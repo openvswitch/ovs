@@ -172,6 +172,7 @@ usage(void *userdata OVS_UNUSED)
            "  del-flow [DP] FLOW         delete FLOW from DP\n"
            "  del-flows [DP]             delete all flows from DP\n"
            "  dump-conntrack [DP]        display conntrack entries\n"
+           "  flush-conntrack [DP]       delete all conntrack entries\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n"
