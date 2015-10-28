@@ -179,6 +179,7 @@ int ct_dpif_dump_start(struct dpif *, struct ct_dpif_dump_state **,
                        const uint16_t *zone);
 int ct_dpif_dump_next(struct ct_dpif_dump_state *, struct ct_dpif_entry *);
 int ct_dpif_dump_done(struct ct_dpif_dump_state *);
+int ct_dpif_flush(struct dpif *, const uint16_t *zone);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);

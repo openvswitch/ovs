@@ -415,6 +415,10 @@ struct dpif_class {
     int (*ct_dump_next)(struct dpif *, struct ct_dpif_dump_state *,
                         struct ct_dpif_entry *entry);
     int (*ct_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);
+
+    /* Flushes the connection tracking tables. If 'zone' is not NULL,
+     * only deletes connections in '*zone'. */
+    int (*ct_flush)(struct dpif *, const uint16_t *zone);
 };
 
 extern const struct dpif_class dpif_netlink_class;
