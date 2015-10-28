@@ -173,3 +173,9 @@ Prints to the console all the connection entries in the tracker used by
 in \fBzone\fR.  With \fB\-\-more\fR, some implementation specific details
 are included. With \fB\-\-statistics\fR timeouts and timestamps are
 added to the output.
+.
+.TP
+\*(DX\fBflush\-conntrack [\fIdp\fR] [\fBzone=\fIzone\fR]
+Flushes all the connection entries in the tracker used by \fIdp\fR.
+If \fBzone=\fIzone\fR is specified, only flushes the connections in
+\fBzone\fR.
