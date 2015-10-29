@@ -2220,7 +2220,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 transportPortDest = STT_TCP_PORT;
                 break;
             default:
-                break;
+                nlError = NL_ERROR_INVAL;
+                goto Cleanup;
             }
 
             if (vportAttrs[OVS_VPORT_ATTR_OPTIONS]) {
