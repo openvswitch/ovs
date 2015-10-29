@@ -186,7 +186,6 @@ table=0 priority=2 in_port=5 dl_vlan=1 actions=drop
 AT_CHECK([ovs-ofctl add-flows br-int flows.txt])
 
 # Sends a packet to trigger recirculation.
-# Should generate recirc_id(0x2),dp_hash(0xc1261ba2/0xff).
 AT_CHECK([ovs-appctl netdev-dummy/receive p5 "in_port(5),eth(src=50:54:00:00:00:05,dst=50:54:00:00:01:00),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1)"])
 
 # Collects flow stats.
@@ -194,8 +193,8 @@ AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 # Checks the flow stats in br1, should only be one flow with non-zero
 # 'n_packets' from internal table.
-AT_CHECK([ovs-appctl bridge/dump-flows br1 | ofctl_strip | grep -- "n_packets" | grep -- "table_id" | sed -e 's/dp_hash=0x[[0-9a-f]][[0-9a-f]]*/dp_hash=0x0/' -e 's/output:[[0-9]][[0-9]]*/output/'], [0], [dnl
-table_id=254, n_packets=1, n_bytes=64, priority=20,recirc_id=0x2,dp_hash=0x0/0xff,actions=output
+AT_CHECK([ovs-appctl bridge/dump-flows br1 | ofctl_strip | grep -- "n_packets" | grep -- "table_id" | sed -e 's/output:[[0-9]][[0-9]]*/output/'] , [0], [dnl
+table_id=254, n_packets=1, n_bytes=64, priority=20,recirc_id=0x0,dp_hash=0x0/0xff,actions=output
 ])
 
 # Checks the flow stats in br-int, should be only one match.
