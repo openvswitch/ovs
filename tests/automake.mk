@@ -324,6 +324,11 @@ tests_ovstest_SOURCES += \
 	tests/test-unix-socket.c
 endif
 
+if LINUX
+tests_ovstest_SOURCES += \
+	tests/test-netlink-conntrack.c
+endif
+
 tests_ovstest_LDADD = lib/libopenvswitch.la ovn/lib/libovn.la
 dist_check_SCRIPTS = tests/flowgen.pl
 
