@@ -60,7 +60,7 @@ on Debian/Ubuntu)
      `export DPDK_BUILD=$DPDK_DIR/x86_64-ivshmem-linuxapp-gcc/`
 
    ```
-   cd $(OVS_DIR)/openvswitch
+   cd $(OVS_DIR)/
    ./boot.sh
    ./configure --with-dpdk=$DPDK_BUILD [CFLAGS="-g -O2 -Wno-cast-align"]
    make
