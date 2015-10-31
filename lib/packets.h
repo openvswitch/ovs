@@ -581,7 +581,10 @@ ip_is_local_multicast(ovs_be32 ip)
 }
 int ip_count_cidr_bits(ovs_be32 netmask);
 void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
+bool ip_parse(const char *s, ovs_be32 *ip);
 char *ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
+    OVS_WARN_UNUSED_RESULT;
+char *ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
     OVS_WARN_UNUSED_RESULT;
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
@@ -1024,8 +1027,12 @@ struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
 struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
+
+bool ipv6_parse(const char *s, struct in6_addr *ip);
 char *ipv6_parse_masked(const char *s, struct in6_addr *ipv6,
                         struct in6_addr *mask);
+char *ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
+    OVS_WARN_UNUSED_RESULT;
 
 void *eth_compose(struct dp_packet *, const struct eth_addr eth_dst,
                   const struct eth_addr eth_src, uint16_t eth_type,
