@@ -42,18 +42,24 @@ ovs_be64 htonll(uint64_t);
 uint64_t ntohll(ovs_be64);
 #endif
 
-static inline void
-hton128(const ovs_u128 *src, ovs_be128 *dst)
+static inline ovs_be128
+hton128(const ovs_u128 src)
 {
-    dst->be64.hi = htonll(src->u64.hi);
-    dst->be64.lo = htonll(src->u64.lo);
+    ovs_be128 dst;
+
+    dst.be64.hi = htonll(src.u64.hi);
+    dst.be64.lo = htonll(src.u64.lo);
+    return dst;
 }
 
-static inline void
-ntoh128(const ovs_be128 *src, ovs_u128 *dst)
+static inline ovs_u128
+ntoh128(const ovs_be128 src)
 {
-    dst->u64.hi = ntohll(src->be64.hi);
-    dst->u64.lo = ntohll(src->be64.lo);
+    ovs_u128 dst;
+
+    dst.u64.hi = ntohll(src.be64.hi);
+    dst.u64.lo = ntohll(src.be64.lo);
+    return dst;
 }
 
 static inline uint32_t

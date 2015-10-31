@@ -979,13 +979,11 @@ static void
 format_ct_label_masked(struct ds *s, const ovs_u128 *key, const ovs_u128 *mask)
 {
     if (!ovs_u128_is_zero(mask)) {
-        ovs_be128 value;
-
-        hton128(key, &value);
+        ovs_be128 value = hton128(*key);
         ds_put_format(s, "ct_label=");
         ds_put_hex(s, &value, sizeof value);
         if (!is_all_ones(mask, sizeof(*mask))) {
-            hton128(mask, &value);
+            value = hton128(*mask);
             ds_put_char(s, '/');
             ds_put_hex(s, &value, sizeof value);
         }

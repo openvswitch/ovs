@@ -2540,10 +2540,10 @@ format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
     if (verbose || (mask && !ovs_u128_is_zero(mask))) {
         ovs_be128 value;
 
-        hton128(key, &value);
+        value = hton128(*key);
         ds_put_hex(ds, &value, sizeof value);
         if (mask && !(ovs_u128_is_ones(mask))) {
-            hton128(mask, &value);
+            value = hton128(*mask);
             ds_put_char(ds, '/');
             ds_put_hex(ds, &value, sizeof value);
         }
@@ -2558,7 +2558,7 @@ scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
     ovs_be128 be_mask;
 
     if (!parse_int_string(s, (uint8_t *)&be_value, sizeof be_value, &s)) {
-        ntoh128(&be_value, value);
+        *value = ntoh128(be_value);
 
         if (mask) {
             int n;
@@ -2572,7 +2572,7 @@ scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
                 if (error) {
                     return error;
                 }
-                ntoh128(&be_mask, mask);
+                *mask = ntoh128(be_mask);
             } else {
                 *mask = OVS_U128_MAX;
             }

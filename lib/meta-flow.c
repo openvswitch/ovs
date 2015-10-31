@@ -671,7 +671,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_CT_LABEL:
-        hton128(&flow->ct_label, &value->be128);
+        value->be128 = hton128(flow->ct_label);
         break;
 
     CASE_MFF_REGS:
@@ -918,13 +918,9 @@ mf_set_value(const struct mf_field *mf,
         match_set_ct_mark(match, ntohl(value->be32));
         break;
 
-    case MFF_CT_LABEL: {
-        ovs_u128 label;
-
-        ntoh128(&value->be128, &label);
-        match_set_ct_label(match, label);
+    case MFF_CT_LABEL:
+        match_set_ct_label(match, ntoh128(value->be128));
         break;
-    }
 
     CASE_MFF_REGS:
         match_set_reg(match, mf->id - MFF_REG0, ntohl(value->be32));
@@ -1223,7 +1219,7 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_CT_LABEL:
-        ntoh128(&value->be128, &flow->ct_label);
+        flow->ct_label = ntoh128(value->be128);
         break;
 
     CASE_MFF_REGS:
@@ -1810,18 +1806,10 @@ mf_set(const struct mf_field *mf,
         match_set_ct_mark_masked(match, ntohl(value->be32), ntohl(mask->be32));
         break;
 
-    case MFF_CT_LABEL: {
-        ovs_u128 hlabel, hmask;
-
-        ntoh128(&value->be128, &hlabel);
-        if (mask) {
-            ntoh128(&mask->be128, &hmask);
-        } else {
-            hmask.u64.lo = hmask.u64.hi = UINT64_MAX;
-        }
-        match_set_ct_label_masked(match, hlabel, hmask);
+    case MFF_CT_LABEL:
+        match_set_ct_label_masked(match, ntoh128(value->be128),
+                                  mask ? ntoh128(mask->be128) : OVS_U128_MAX);
         break;
-    }
 
     case MFF_ETH_DST:
         match_set_dl_dst_masked(match, value->mac, mask->mac);

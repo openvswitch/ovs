@@ -786,10 +786,8 @@ nxm_put_ct_label(struct ofpbuf *b,
                  enum mf_field_id field, enum ofp_version version,
                  const ovs_u128 value, const ovs_u128 mask)
 {
-    ovs_be128 bevalue, bemask;
-
-    hton128(&value, &bevalue);
-    hton128(&mask, &bemask);
+    ovs_be128 bevalue = hton128(value);
+    ovs_be128 bemask = hton128(mask);
     nxm_put(b, field, version, &bevalue, &bemask, sizeof(bevalue));
 }
 
