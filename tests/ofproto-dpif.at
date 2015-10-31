@@ -558,6 +558,27 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Tests that the standardized xxregs are mapped onto the legacy OVS
+dnl registers in the manner documented in ovs-ofctl(8).
+AT_SETUP([ofproto-dpif - extended-extended registers])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_DATA([flows.txt], [dnl
+table=0 actions=load:0x0123456789abcdeffedcba9876543210->NXM_NX_XXREG1[[]],resubmit(,1)
+table=1,reg4=0x01234567,reg5=0x89abcdef,reg6=0xfedcba98,reg7=0x76543210   actions=2
+
+# These low-priority rules shouldn't match.  They're here only to make really
+# sure that the test fails if either of the above rules fails to match.
+table=0,priority=0                        actions=3
+table=1,priority=0                        actions=3
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - load and move order])
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
@@ -628,6 +649,10 @@ table=2,priority=10                  actions=5,goto_table(3)
 # Verify that xreg0 got copied properly from actset_output.
 table=3,priority=20,xreg0=2  actions=6,goto_table(4)
 table=3,priority=10          actions=7,goto_table(4)
+
+# Verify that xxreg0 got copied properly from actset_output.
+table=3,priority=20,xxreg0=2  actions=6,goto_table(4)
+table=3,priority=10           actions=7,goto_table(4)
 
 # Verify that adding a group action unsets actset_output,
 # even if output follows group.

@@ -2991,6 +2991,12 @@ format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
     }
 }
 
+/* Read the string from 's_' as a 128-bit value.  If the string contains
+ * a "/", the rest of the string will be treated as a 128-bit mask.
+ *
+ * If either the value or mask is larger than 64 bits, the string must
+ * be in hexadecimal.
+ */
 static int
 scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
 {

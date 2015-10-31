@@ -894,10 +894,10 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "xreg<N>".
      *
      * OpenFlow 1.5 ``extended register".  Each extended register
-     * overlays two of the Nicira extension 32-bit registers: xreg0 overlays
-     * reg0 and reg1, with reg0 supplying the most-significant bits of xreg0
-     * and reg1 the least-significant.  xreg1 similarly overlays reg2 and reg3,
-     * and so on.
+     * overlays two of the Open vSwitch extension 32-bit registers:
+     * xreg0 overlays reg0 and reg1, with reg0 supplying the
+     * most-significant bits of xreg0 and reg1 the least-significant.
+     * xreg1 similarly overlays reg2 and reg3, and so on.
      *
      * These registers were introduced in OpenFlow 1.5, but EXT-244 in the ONF
      * JIRA also publishes them as a (draft) OpenFlow extension to OpenFlow
@@ -921,6 +921,34 @@ enum OVS_PACKED_ENUM mf_field_id {
     MFF_XREG7,
 #else
 #error "Need to update MFF_REG* to match FLOW_N_XREGS"
+#endif
+
+#if FLOW_N_XXREGS == 4
+    /* "xxreg<N>".
+     *
+     * ``extended-extended register".  Each of these extended registers
+     * overlays four of the Open vSwitch extension 32-bit registers:
+     * xxreg0 overlays reg0 through reg3, with reg0 supplying the
+     * most-significant bits of xxreg0 and reg3 the least-significant.
+     * xxreg1 similarly overlays reg4 and reg7.
+     *
+     * Type: be128.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_XXREG0(111) since v2.6.              <0>
+     * NXM: NXM_NX_XXREG1(112) since v2.6.              <1>
+     * NXM: NXM_NX_XXREG0(113) since v2.6.              <2>
+     * NXM: NXM_NX_XXREG1(114) since v2.6.              <3>
+     * OXM: none.
+     */
+    MFF_XXREG0,
+    MFF_XXREG1,
+    MFF_XXREG2,
+    MFF_XXREG3,
+#else
+#error "Need to update MFF_REG* to match FLOW_N_XXREGS"
 #endif
 
 /* ## -------- ## */
@@ -1769,6 +1797,15 @@ struct mf_bitmap {
     case MFF_XREG4: case MFF_XREG5: case MFF_XREG6: case MFF_XREG7
 #else
 #error "Need to update CASE_MFF_XREGS to match FLOW_N_XREGS"
+#endif
+
+/* Use this macro as CASE_MFF_XXREGS: in a switch statement to choose
+ * all of the MFF_REGn cases. */
+#if FLOW_N_XXREGS == 4
+#define CASE_MFF_XXREGS                                              \
+    case MFF_XXREG0: case MFF_XXREG1: case MFF_XXREG2: case MFF_XXREG3
+#else
+#error "Need to update CASE_MFF_XXREGS to match FLOW_N_XXREGS"
 #endif
 
 /* Use this macro as CASE_MFF_TUN_METADATA: in a switch statement to choose

@@ -1336,6 +1336,17 @@ just the ``packet registers,'' but Open vSwitch already had 32-bit
 registers by that name, which is why Open vSwitch refers to the
 standard registers as ``extended registers''.
 .
+.IP "\fBxxreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
+Matches \fIvalue\fR either exactly or with optional \fImask\fR in
+128-bit ``extended-extended register'' number \fIidx\fR.  Each of the
+128-bit extended registers overlays four of the 32-bit registers:
+\fBxxreg0\fR overlays \fBreg0\fR through \fBreg3\fR, with \fBreg0\fR
+supplying the most-significant bits of \fBxxreg0\fR and \fBreg3\fR the
+least-significant.  \fBxxreg1\fR similarly overlays \fBreg4\fR through
+\fBreg7\fR, and so on.
+.IP
+These fields were added in Open vSwitch 2.6.
+.
 .IP \fBpkt_mark=\fIvalue\fR[\fB/\fImask\fR]
 Matches packet metadata mark \fIvalue\fR either exactly or with optional
 \fImask\fR. The mark is associated data that may be passed into other

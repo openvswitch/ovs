@@ -71,6 +71,14 @@ for test_case in \
     'xreg6=6/1                                   NXM,OXM' \
     'xreg7=7                                     NXM,OXM' \
     'xreg7=7/1                                   NXM,OXM' \
+    'xxreg0=0                                    NXM,OXM' \
+    'xxreg0=0/1                                  NXM,OXM' \
+    'xxreg1=1                                    NXM,OXM' \
+    'xxreg1=1/1                                  NXM,OXM' \
+    'xxreg2=2                                    NXM,OXM' \
+    'xxreg2=2/1                                  NXM,OXM' \
+    'xxreg3=3                                    NXM,OXM' \
+    'xxreg3=3/1                                  NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
     'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_dst=00:11:22:33:44:55                    any' \
