@@ -131,21 +131,13 @@ m4_define([ADD_NATIVE_TUNNEL],
 #
 m4_define([FORMAT_PING], [grep "transmitted" | sed 's/time.*ms$/time 0ms/'])
 
-# FORMAT_CT()
+# FORMAT_CT([ip-addr])
 #
-# Strip content from the piped input which would differ from test to test.
-# Strip also content that depends on the system setup (accounting,
-# timestamping)
+# Strip content from the piped input which would differ from test to test
+# and limit the output to the rows containing 'ip-addr'.
+#
 m4_define([FORMAT_CT],
-    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/  */ /g' \
-                          -e 's/secctx[^ ]* //' \
-                          -e 's/packets=[^ ]* //' \
-                          -e 's/bytes=[^ ]* //' \
-                          -e 's/packets=[^ ]* //' \
-                          -e 's/bytes=[^ ]* //' \
-                          -e 's/delta-time=[^ ]* //' \
-                          -e 's/id=[0-9]*/id=<cleared>/g' \
-                    | cut -d' ' -f4- | sort | uniq]])
+    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' | sort | uniq]])
 
 # NETNS_DAEMONIZE([namespace], [command], [pidfile])
 #
