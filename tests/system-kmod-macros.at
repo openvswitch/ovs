@@ -50,12 +50,11 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
 # kernel conntrack tables when the test is finished.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF([test $HAVE_CONNTRACK = no])
-     AT_SKIP_IF([test $HAVE_PYTHON = no])
+    [AT_SKIP_IF([test $HAVE_PYTHON = no])
      m4_foreach([mod], [[nf_conntrack_ipv4], [nf_conntrack_ipv6], [nf_nat_ftp]],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
                 ])
-     on_exit 'conntrack -F'
+     on_exit 'ovstest test-netlink-conntrack flush'
     ]
 )
