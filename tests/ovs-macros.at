@@ -103,7 +103,21 @@ m4_define([OVS_WAIT],
      [ovs_wait_cond () { $1
 }
 ovs_wait], [0], [ignore], [ignore], [$2])])
+
+dnl OVS_WAIT_UNTIL(COMMAND)
+dnl
+dnl Executes shell COMMAND in a loop until it returns
+dnl zero return code.  If COMMAND did not return
+dnl zero code within reasonable time limit, then
+dnl the test fails.
 m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([$1], [$2])])
+
+dnl OVS_WAIT_WHILE(COMMAND)
+dnl
+dnl Executes shell COMMAND in a loop until it returns
+dnl non-zero return code.  If COMMAND did not return
+dnl non-zero code within reasonable time limit, then
+dnl the test fails.
 m4_define([OVS_WAIT_WHILE],
   [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2])])
 
