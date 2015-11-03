@@ -51,6 +51,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/crc32c.h \
 	lib/csum.c \
 	lib/csum.h \
+	lib/ct-dpif.c \
+	lib/ct-dpif.h \
 	lib/daemon.c \
 	lib/daemon.h \
 	lib/daemon-private.h \
