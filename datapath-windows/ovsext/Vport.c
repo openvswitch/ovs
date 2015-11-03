@@ -322,19 +322,51 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
         POVS_VPORT_ENTRY virtExtVport =
             (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
 
-        vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
+        vport = OvsFindVportByPortIdAndNicIndex(switchContext,
+                                                nicParam->PortId,
+                                                nicParam->NicIndex);
         if (vport == NULL) {
-            status = NDIS_STATUS_RESOURCES;
-            goto add_nic_done;
+            /* Find by interface name */
+            WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
+            NET_LUID interfaceLuid = { 0 };
+            size_t len = 0;
+            status = ConvertInterfaceGuidToLuid(&nicParam->NetCfgInstanceId,
+                                                &interfaceLuid);
+            if (status == STATUS_SUCCESS) {
+                status = ConvertInterfaceLuidToAlias(&interfaceLuid,
+                                                     interfaceName,
+                                                     IF_MAX_STRING_SIZE + 1);
+                if (status == STATUS_SUCCESS) {
+                    RtlStringCbLengthW(interfaceName,
+                                       IF_MAX_STRING_SIZE,
+                                       &len);
+                    vport = OvsFindVportByHvNameW(switchContext,
+                                                  interfaceName,
+                                                  len);
+                }
+            }
+
+            if (vport == NULL) {
+                /* XXX: Handle this event appropriately */
+                vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
+                if (vport == NULL) {
+                    status = NDIS_STATUS_RESOURCES;
+                    goto add_nic_done;
+                }
+            }
         }
+
         OvsInitPhysNicVport(vport, virtExtVport, nicParam->NicIndex);
+        OvsInitVportWithNicParam(switchContext, vport, nicParam);
         status = InitHvVportCommon(switchContext, vport, TRUE);
+        vport->isAbsentOnHv = FALSE;
         if (status != NDIS_STATUS_SUCCESS) {
             OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
             goto add_nic_done;
         }
+    } else {
+        OvsInitVportWithNicParam(switchContext, vport, nicParam);
     }
-    OvsInitVportWithNicParam(switchContext, vport, nicParam);
     portNo = vport->portNo;
     if (vport->ovsState == OVS_STATE_CONNECTED) {
         event = OVS_EVENT_CONNECT | OVS_EVENT_LINK_UP;
