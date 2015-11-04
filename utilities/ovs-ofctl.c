@@ -823,136 +823,6 @@ ofctl_dump_table_desc(struct ovs_cmdl_context *ctx)
 }
 
 
-static bool fetch_port_by_stats(struct vconn *,
-                                const char *port_name, ofp_port_t port_no,
-                                struct ofputil_phy_port *);
-
-/* Uses OFPT_FEATURES_REQUEST to attempt to fetch information about the port
- * named 'port_name' or numbered 'port_no' into '*pp'.  Returns true if
- * successful, false on failure.
- *
- * This is only appropriate for OpenFlow 1.0, 1.1, and 1.2, which include a
- * list of ports in OFPT_FEATURES_REPLY. */
-static bool
-fetch_port_by_features(struct vconn *vconn,
-                       const char *port_name, ofp_port_t port_no,
-                       struct ofputil_phy_port *pp)
-{
-    struct ofputil_switch_features features;
-    const struct ofp_header *oh;
-    struct ofpbuf *request, *reply;
-    enum ofperr error;
-    enum ofptype type;
-    struct ofpbuf b;
-    bool found = false;
-
-    /* Fetch the switch's ofp_switch_features. */
-    request = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST,
-                           vconn_get_version(vconn), 0);
-    run(vconn_transact(vconn, request, &reply),
-        "talking to %s", vconn_get_name(vconn));
-
-    oh = reply->data;
-    if (ofptype_decode(&type, reply->data)
-        || type != OFPTYPE_FEATURES_REPLY) {
-        ovs_fatal(0, "%s: received bad features reply", vconn_get_name(vconn));
-    }
-    if (!ofputil_switch_features_has_ports(reply)) {
-        /* The switch features reply does not contain a complete list of ports.
-         * Probably, there are more ports than will fit into a single 64 kB
-         * OpenFlow message.  Use OFPST_PORT_DESC to get a complete list of
-         * ports. */
-        ofpbuf_delete(reply);
-        return fetch_port_by_stats(vconn, port_name, port_no, pp);
-    }
-
-    error = ofputil_decode_switch_features(oh, &features, &b);
-    if (error) {
-        ovs_fatal(0, "%s: failed to decode features reply (%s)",
-                  vconn_get_name(vconn), ofperr_to_string(error));
-    }
-
-    while (!ofputil_pull_phy_port(oh->version, &b, pp)) {
-        if (port_no != OFPP_NONE
-            ? port_no == pp->port_no
-            : !strcmp(pp->name, port_name)) {
-            found = true;
-            break;
-        }
-    }
-    ofpbuf_delete(reply);
-    return found;
-}
-
-/* Uses a OFPST_PORT_DESC request to attempt to fetch information about the
- * port named 'port_name' or numbered 'port_no' into '*pp'.  Returns true if
- * successful, false on failure.
- *
- * This is most appropriate for OpenFlow 1.3 and later.  Open vSwitch 1.7 and
- * later also implements OFPST_PORT_DESC, as an extension, for OpenFlow 1.0,
- * 1.1, and 1.2, so this can be used as a fallback in those versions when there
- * are too many ports than fit in an OFPT_FEATURES_REPLY. */
-static bool
-fetch_port_by_stats(struct vconn *vconn,
-                    const char *port_name, ofp_port_t port_no,
-                    struct ofputil_phy_port *pp)
-{
-    struct ofpbuf *request;
-    ovs_be32 send_xid;
-    bool done = false;
-    bool found = false;
-
-    request = ofputil_encode_port_desc_stats_request(vconn_get_version(vconn),
-                                                     port_no);
-    send_xid = ((struct ofp_header *) request->data)->xid;
-
-    send_openflow_buffer(vconn, request);
-    while (!done) {
-        ovs_be32 recv_xid;
-        struct ofpbuf *reply;
-
-        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) reply->data)->xid;
-        if (send_xid == recv_xid) {
-            struct ofp_header *oh = reply->data;
-            enum ofptype type;
-            struct ofpbuf b;
-            uint16_t flags;
-
-            ofpbuf_use_const(&b, oh, ntohs(oh->length));
-            if (ofptype_pull(&type, &b)
-                || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
-                ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(reply->data, reply->size,
-                                        verbosity + 1));
-            }
-
-            flags = ofpmp_flags(oh);
-            done = !(flags & OFPSF_REPLY_MORE);
-
-            if (found) {
-                /* We've already found the port, but we need to drain
-                 * the queue of any other replies for this request. */
-                continue;
-            }
-
-            while (!ofputil_pull_phy_port(oh->version, &b, pp)) {
-                if (port_no != OFPP_NONE ? port_no == pp->port_no
-                                         : !strcmp(pp->name, port_name)) {
-                    found = true;
-                    break;
-                }
-            }
-        } else {
-            VLOG_DBG("received reply with xid %08"PRIx32" "
-                     "!= expected %08"PRIx32, recv_xid, send_xid);
-        }
-        ofpbuf_delete(reply);
-    }
-
-    return found;
-}
-
 static bool
 str_to_ofp(const char *s, ofp_port_t *ofp_port)
 {
@@ -964,6 +834,142 @@ str_to_ofp(const char *s, ofp_port_t *ofp_port)
     return ret;
 }
 
+struct port_iterator {
+    struct vconn *vconn;
+
+    enum { PI_FEATURES, PI_PORT_DESC } variant;
+    struct ofpbuf *reply;
+    ovs_be32 send_xid;
+    bool more;
+};
+
+static void
+port_iterator_fetch_port_desc(struct port_iterator *pi)
+{
+    pi->variant = PI_PORT_DESC;
+    pi->more = true;
+
+    struct ofpbuf *rq = ofputil_encode_port_desc_stats_request(
+        vconn_get_version(pi->vconn), OFPP_ANY);
+    pi->send_xid = ((struct ofp_header *) rq->data)->xid;
+    send_openflow_buffer(pi->vconn, rq);
+}
+
+static void
+port_iterator_fetch_features(struct port_iterator *pi)
+{
+    pi->variant = PI_FEATURES;
+
+    /* Fetch the switch's ofp_switch_features. */
+    enum ofp_version version = vconn_get_version(pi->vconn);
+    struct ofpbuf *rq = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, version, 0);
+    run(vconn_transact(pi->vconn, rq, &pi->reply),
+        "talking to %s", vconn_get_name(pi->vconn));
+
+    const struct ofp_header *oh = pi->reply->data;
+    enum ofptype type;
+    if (ofptype_decode(&type, pi->reply->data)
+        || type != OFPTYPE_FEATURES_REPLY) {
+        ovs_fatal(0, "%s: received bad features reply",
+                  vconn_get_name(pi->vconn));
+    }
+    if (!ofputil_switch_features_has_ports(pi->reply)) {
+        /* The switch features reply does not contain a complete list of ports.
+         * Probably, there are more ports than will fit into a single 64 kB
+         * OpenFlow message.  Use OFPST_PORT_DESC to get a complete list of
+         * ports. */
+        ofpbuf_delete(pi->reply);
+        pi->reply = NULL;
+        port_iterator_fetch_port_desc(pi);
+        return;
+    }
+
+    struct ofputil_switch_features features;
+    enum ofperr error = ofputil_decode_switch_features(oh, &features,
+                                                       pi->reply);
+    if (error) {
+        ovs_fatal(0, "%s: failed to decode features reply (%s)",
+                  vconn_get_name(pi->vconn), ofperr_to_string(error));
+    }
+}
+
+/* Initializes 'pi' to prepare for iterating through all of the ports on the
+ * OpenFlow switch to which 'vconn' is connected.
+ *
+ * During iteration, the client should not make other use of 'vconn', because
+ * that can cause other messages to be interleaved with the replies used by the
+ * iterator and thus some ports may be missed or a hang can occur. */
+static void
+port_iterator_init(struct port_iterator *pi, struct vconn *vconn)
+{
+    memset(pi, 0, sizeof *pi);
+    pi->vconn = vconn;
+    if (vconn_get_version(vconn) < OFP13_VERSION) {
+        port_iterator_fetch_features(pi);
+    } else {
+        port_iterator_fetch_port_desc(pi);
+    }
+}
+
+/* Obtains the next port from 'pi'.  On success, initializes '*pp' with the
+ * port's details and returns true, otherwise (if all the ports have already
+ * been seen), returns false.  */
+static bool
+port_iterator_next(struct port_iterator *pi, struct ofputil_phy_port *pp)
+{
+    for (;;) {
+        if (pi->reply) {
+            int retval = ofputil_pull_phy_port(vconn_get_version(pi->vconn),
+                                               pi->reply, pp);
+            if (!retval) {
+                return true;
+            } else if (retval != EOF) {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(pi->reply->data, pi->reply->size,
+                                        verbosity + 1));
+            }
+        }
+
+        if (pi->variant == PI_FEATURES || !pi->more) {
+            return false;
+        }
+
+        ovs_be32 recv_xid;
+        do {
+            ofpbuf_delete(pi->reply);
+            run(vconn_recv_block(pi->vconn, &pi->reply),
+                "OpenFlow receive failed");
+            recv_xid = ((struct ofp_header *) pi->reply->data)->xid;
+        } while (pi->send_xid != recv_xid);
+
+        struct ofp_header *oh = pi->reply->data;
+        enum ofptype type;
+        if (ofptype_pull(&type, pi->reply)
+            || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
+            ovs_fatal(0, "received bad reply: %s",
+                      ofp_to_string(pi->reply->data, pi->reply->size,
+                                    verbosity + 1));
+        }
+
+        pi->more = (ofpmp_flags(oh) & OFPSF_REPLY_MORE) != 0;
+    }
+}
+
+/* Destroys iterator 'pi'. */
+static void
+port_iterator_destroy(struct port_iterator *pi)
+{
+    if (pi) {
+        while (pi->variant == PI_PORT_DESC && pi->more) {
+            /* Drain vconn's queue of any other replies for this request. */
+            struct ofputil_phy_port pp;
+            port_iterator_next(pi, &pp);
+        }
+
+        ofpbuf_delete(pi->reply);
+    }
+}
+
 /* Opens a connection to 'vconn_name', fetches the port structure for
  * 'port_name' (which may be a port name or number), and copies it into
  * '*pp'. */
@@ -973,7 +979,7 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
 {
     struct vconn *vconn;
     ofp_port_t port_no;
-    bool found;
+    bool found = false;
 
     /* Try to interpret the argument as a port number. */
     if (!str_to_ofp(port_name, &port_no)) {
@@ -984,9 +990,16 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
      * OFPT_FEATURES_REPLY message.  OpenFlow 1.3 and later versions put it
      * into the OFPST_PORT_DESC reply.  Try it the correct way. */
     open_vconn(vconn_name, &vconn);
-    found = (vconn_get_version(vconn) < OFP13_VERSION
-             ? fetch_port_by_features(vconn, port_name, port_no, pp)
-             : fetch_port_by_stats(vconn, port_name, port_no, pp));
+    struct port_iterator pi;
+    for (port_iterator_init(&pi, vconn); port_iterator_next(&pi, pp); ) {
+        if (port_no != OFPP_NONE
+            ? port_no == pp->port_no
+            : !strcmp(pp->name, port_name)) {
+            found = true;
+            break;
+        }
+    }
+    port_iterator_destroy(&pi);
     vconn_close(vconn);
 
     if (!found) {
