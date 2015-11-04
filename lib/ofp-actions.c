@@ -4852,9 +4852,15 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
         } else if (!strcmp(key, "exec")) {
             /* Hide existing actions from ofpacts_parse_copy(), so the
              * nesting can be handled transparently. */
+            enum ofputil_protocol usable_protocols2;
+
             ofpbuf_pull(ofpacts, sizeof(*oc));
-            error = ofpacts_parse_copy(value, ofpacts, usable_protocols, false,
-                                       OFPACT_CT);
+            /* Initializes 'usable_protocol2', fold it back to
+             * '*usable_protocols' afterwards, so that we do not lose
+             * restrictions already in there. */
+            error = ofpacts_parse_copy(value, ofpacts, &usable_protocols2,
+                                       false, OFPACT_CT);
+            *usable_protocols &= usable_protocols2;
             ofpact_pad(ofpacts);
             ofpacts->header = ofpbuf_push_uninit(ofpacts, sizeof(*oc));
             oc = ofpacts->header;
@@ -6151,7 +6157,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 
     case OFPACT_CT: {
         struct ofpact_conntrack *oc = ofpact_get_CT(a);
-        enum ofputil_protocol p = *usable_protocols;
+        enum ofperr err;
 
         if (!dl_type_is_ip_any(flow->dl_type)
             || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)) {
@@ -6162,8 +6168,10 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
             return mf_check_src(&oc->zone_src, flow);
         }
 
-        return ofpacts_check(oc->actions, ofpact_ct_get_action_len(oc),
-                             flow, max_ports, table_id, n_tables, &p);
+        err = ofpacts_check(oc->actions, ofpact_ct_get_action_len(oc),
+                            flow, max_ports, table_id, n_tables,
+                            usable_protocols);
+        return err;
     }
 
     case OFPACT_CLEAR_ACTIONS:
