@@ -1293,10 +1293,8 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
     unsigned int flow_limit;
     size_t n_ops, n_opsp, i;
     bool may_put;
-    bool megaflow;
 
     atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
-    atomic_read_relaxed(&enable_megaflows, &megaflow);
 
     may_put = udpif_get_n_flows(udpif) < flow_limit;
 
