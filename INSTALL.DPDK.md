@@ -891,6 +891,18 @@ Restrictions:
     core count of the system to be less than or equal to 64 when using an XL710
     interface with DPDK.
 
+  vHost and QEMU v2.4.0+:
+  - For versions of QEMU v2.4.0 and later, it is currently not possible to
+    unbind more than one dpdkvhostuser port from the guest kernel driver
+    without causing the ovs-vswitchd process to crash. If this is a requirement
+    for your use case, it is recommended either to use a version of QEMU
+    between v2.2.0 and v2.3.1 (inclusive), or alternatively, to apply the
+    following patch to DPDK and rebuild:
+    http://dpdk.org/dev/patchwork/patch/7736/
+    This problem will likely be resolved in Open vSwitch at a later date, when
+    the next release of DPDK (which includes the above patch) is available and
+    integrated into OVS.
+
 Bug Reporting:
 --------------
 
