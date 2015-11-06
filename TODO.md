@@ -68,15 +68,6 @@ UDP or DTLS.  One place to start would be to implement a datagram
 abstraction library for OVS analogous to the ``stream'' library
 that already abstracts TCP, SSL, and other stream protocols.
 
-Controller connection logging to pcap file
-------------------------------------------
-
-http://patchwork.openvswitch.org/patch/2249/ is an RFC patch that
-allows the switch to record the traffic on OpenFlow controller
-connections to a pcap file for later analysis. The patch lacks a good
-way to enable and disable the feature. The task here would be to add
-that and repost the patch.
-
 Basic OpenFlow 1.4 support
 --------------------------
 
