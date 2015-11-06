@@ -1266,3 +1266,42 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([conntrack - resubmit to ct multiple times])
+CHECK_CONNTRACK()
+
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 secure -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=150,arp,action=normal
+table=0,priority=100,ip,in_port=1,action=resubmit(,1),resubmit(,2)
+
+table=1,priority=100,ip,action=ct(table=3)
+table=2,priority=100,ip,action=ct(table=3)
+
+table=3,ip,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ n_packets=1, n_bytes=98, priority=100,ip,in_port=1 actions=resubmit(,1),resubmit(,2)
+ n_packets=2, n_bytes=84, priority=150,arp actions=NORMAL
+ table=1, n_packets=1, n_bytes=98, priority=100,ip actions=ct(table=3)
+ table=2, n_packets=1, n_bytes=98, priority=100,ip actions=ct(table=3)
+ table=3, n_packets=2, n_bytes=196, ip actions=drop
+NXST_FLOW reply:
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
