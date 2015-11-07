@@ -3591,6 +3591,17 @@ compose_recirculate_action(struct xlate_ctx *ctx)
     compose_recirculate_action__(ctx, 0);
 }
 
+/* Fork the pipeline here. The current packet will continue processing the
+ * current action list. A clone of the current packet will recirculate, skip
+ * the remainder of the current action list and asynchronously resume pipeline
+ * processing in 'table' with the current metadata and action set. */
+static void
+compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
+{
+    ctx->recirc_action_offset = ctx->action_set.size;
+    compose_recirculate_action__(ctx, table);
+}
+
 static void
 compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
 {
@@ -4239,8 +4250,7 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     } else {
         /* Use ct_* fields from datapath during recirculation upcall. */
         ctx->conntracked = true;
-        ctx_trigger_recirculation(ctx);
-        compose_recirculate_action__(ctx, ofc->recirc_table);
+        compose_recirculate_and_fork(ctx, ofc->recirc_table);
     }
 }
 
