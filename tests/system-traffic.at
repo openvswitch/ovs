@@ -610,6 +610,46 @@ src=10.1.1.1 dst=10.1.1.2 type=8 code=0 id=<cleared> src=10.1.1.2 dst=10.1.1.1 t
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - multiple namespaces, internal ports])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START(
+   [set-fail-mode br0 secure -- ])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_INT(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_INT(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+dnl
+dnl If skb->nfct is leaking from inside the namespace, this test will fail.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=10,icmp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(commit,zone=1),2
+priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0,zone=1)
+priority=100,in_port=2,ct_state=+trk,ct_zone=1,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl (again) HTTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2)], [0], [dnl
+TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["dnl
+/ioctl(SIOCGIFINDEX) on .* device failed: No such device/d
+/removing policing failed: No such device/d"])
+AT_CLEANUP
+
 AT_SETUP([conntrack - multi-stage pipeline, local])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()

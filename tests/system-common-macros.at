@@ -43,6 +43,18 @@ m4_define([NS_CHECK_EXEC],
 # appropriate type, and allows additional arguments to be passed.
 m4_define([ADD_BR], [ovs-vsctl _ADD_BR([$1]) -- $2])
 
+# ADD_INT([port], [namespace], [ovs-br], [ip_addr])
+#
+# Add an internal port to 'ovs-br', then shift it into 'namespace' and
+# configure it with 'ip_addr' (specified in CIDR notation).
+m4_define([ADD_INT],
+    [ AT_CHECK([ovs-vsctl add-port $3 $1 -- set int $1 type=internal])
+      AT_CHECK([ip link set $1 netns $2])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1])
+      NS_CHECK_EXEC([$2], [ip link set dev $1 up])
+    ]
+)
+
 # ADD_VETH([port], [namespace], [ovs-br], [ip_addr])
 #
 # Add a pair of veth ports. 'port' will be added to name space 'namespace',
