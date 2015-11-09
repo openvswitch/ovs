@@ -1736,7 +1736,7 @@ nf_conntrack module loaded.
 .RE
 .
 .IP \fBdec_ttl\fR
-.IQ \fBdec_ttl\fB[\fR(\fIid1,id2\fI)\fR]\fR
+.IQ \fBdec_ttl(\fIid1\fR[\fB,\fIid2\fR]...\fB)\fR
 Decrement TTL of IPv4 packet or hop limit of IPv6 packet.  If the
 TTL or hop limit is initially zero or decrementing would make it so, no
 decrement occurs, as packets reaching TTL zero must be rejected.  Instead,
@@ -1744,10 +1744,11 @@ a ``packet-in'' message with reason code \fBOFPR_INVALID_TTL\fR is
 sent to each connected controller that has enabled receiving them,
 if any.  Processing the current set of actions then stops.  However,
 if the current set of actions was reached through ``resubmit'' then
-remaining actions in outer levels resume processing.  This action
-also optionally supports the ability to specify a list of valid
-controller ids.  Each of controllers in the list will receive the
-``packet_in'' message only if they have registered to receive the
+remaining actions in outer levels resume processing.
+.IP
+This action also optionally supports the ability to specify a list of
+valid controller ids.  Each of the controllers in the list will receive
+the ``packet_in'' message only if they have registered to receive the
 invalid ttl packets.  If controller ids are not specified, the
 ``packet_in'' message will be sent only to the controllers having
 controller id zero which have registered for the invalid ttl packets.
