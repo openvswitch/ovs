@@ -1242,8 +1242,6 @@ static void
 stream_ssl_set_ca_cert_file__(const char *file_name,
                               bool bootstrap, bool force)
 {
-    X509 **certs;
-    size_t n_certs;
     struct stat s;
 
     if (!update_ssl_config(&ca_cert, file_name) && !force) {
@@ -1256,33 +1254,26 @@ stream_ssl_set_ca_cert_file__(const char *file_name,
                   "(this is a security risk)");
     } else if (bootstrap && stat(file_name, &s) && errno == ENOENT) {
         bootstrap_ca_cert = true;
-    } else if (!read_cert_file(file_name, &certs, &n_certs)) {
-        size_t i;
+    } else {
+        STACK_OF(X509_NAME) *cert_names = SSL_load_client_CA_file(file_name);
+        if (cert_names) {
+            /* Set up list of CAs that the server will accept from the
+             * client. */
+            SSL_CTX_set_client_CA_list(ctx, cert_names);
 
-        /* Set up list of CAs that the server will accept from the client. */
-        for (i = 0; i < n_certs; i++) {
-            /* SSL_CTX_add_client_CA makes a copy of the relevant data. */
-            if (SSL_CTX_add_client_CA(ctx, certs[i]) != 1) {
-                VLOG_ERR("failed to add client certificate %"PRIuSIZE" from %s: %s",
-                         i, file_name,
+            /* Set up CAs for OpenSSL to trust in verifying the peer's
+             * certificate. */
+            SSL_CTX_set_cert_store(ctx, X509_STORE_new());
+            if (SSL_CTX_load_verify_locations(ctx, file_name, NULL) != 1) {
+                VLOG_ERR("SSL_CTX_load_verify_locations: %s",
                          ERR_error_string(ERR_get_error(), NULL));
-            } else {
-                log_ca_cert(file_name, certs[i]);
+                return;
             }
-            X509_free(certs[i]);
+            bootstrap_ca_cert = false;
+        } else {
+            VLOG_ERR("failed to load client certificates from %s: %s",
+                     file_name, ERR_error_string(ERR_get_error(), NULL));
         }
-        free(certs);
-
-        /* Set up CAs for OpenSSL to trust in verifying the peer's
-         * certificate. */
-        SSL_CTX_set_cert_store(ctx, X509_STORE_new());
-        if (SSL_CTX_load_verify_locations(ctx, file_name, NULL) != 1) {
-            VLOG_ERR("SSL_CTX_load_verify_locations: %s",
-                     ERR_error_string(ERR_get_error(), NULL));
-            return;
-        }
-
-        bootstrap_ca_cert = false;
     }
     ca_cert.read = true;
 }
