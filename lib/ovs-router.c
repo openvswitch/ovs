@@ -200,22 +200,22 @@ rt_entry_delete(uint8_t priority, const struct in6_addr *ip6_dst, uint8_t plen)
 static bool
 scan_ipv6_route(const char *s, struct in6_addr *addr, unsigned int *plen)
 {
-    int len, n;
-    int slen = strlen(s);
-    char ipv6_s[IPV6_SCAN_LEN + 1];
+    struct in6_addr mask;
+    char *error;
 
-    if (ovs_scan(s, IPV6_SCAN_FMT"%n", ipv6_s, &len)
-        && inet_pton(AF_INET6, ipv6_s, addr) == 1) {
-        if (len == slen) {
-            *plen = 128;
-            return true;
-        }
-        if (ovs_scan(s + len, "/%u%n", plen, &n)
-            && len + n == slen && *plen <= 128) {
-            return true;
-        }
+    error = ipv6_parse_masked(s, addr, &mask);
+    if (error) {
+        free(error);
+        return false;
     }
-    return false;
+
+    if (!ipv6_is_cidr(&mask)) {
+        return false;
+    }
+
+    *plen = ipv6_count_cidr_bits(&mask);
+
+    return true;
 }
 
 static bool
