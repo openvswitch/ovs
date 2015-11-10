@@ -641,7 +641,7 @@ ovsthread_key_destruct__(void *slots_)
     n = n_keys;
     ovs_mutex_unlock(&key_mutex);
 
-    for (i = 0; i < n / L2_SIZE; i++) {
+    for (i = 0; i <= n / L2_SIZE; i++) {
         free(slots->p1[i]);
     }
     free(slots);
