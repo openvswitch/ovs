@@ -4015,30 +4015,26 @@ rule_dealloc(struct rule *rule_)
 static enum ofperr
 rule_check(struct rule *rule)
 {
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
+    const struct odp_support *support;
     uint16_t ct_state, ct_zone;
     ovs_u128 ct_label;
     uint32_t ct_mark;
 
-    ct_state = MINIFLOW_GET_U16(rule->cr.match.flow, ct_state);
-    ct_zone = MINIFLOW_GET_U16(rule->cr.match.flow, ct_zone);
-    ct_mark = MINIFLOW_GET_U32(rule->cr.match.flow, ct_mark);
-    ct_label = MINIFLOW_GET_U128(rule->cr.match.flow, ct_label);
+    support = &ofproto_dpif_get_support(ofproto)->odp;
+    ct_state = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_state);
+    ct_zone = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_zone);
+    ct_mark = MINIFLOW_GET_U32(&rule->cr.match.mask->masks, ct_mark);
+    ct_label = MINIFLOW_GET_U128(&rule->cr.match.mask->masks, ct_label);
 
-    if (ct_state || ct_zone || ct_mark
-        || !ovs_u128_is_zero(&ct_label)) {
-        struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
-        const struct odp_support *support = &ofproto_dpif_get_support(ofproto)->odp;
-
-        if ((ct_state && !support->ct_state)
-            || (ct_zone && !support->ct_zone)
-            || (ct_mark && !support->ct_mark)
-            || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
-            return OFPERR_OFPBMC_BAD_FIELD;
-        }
-        if (ct_state & CS_UNSUPPORTED_MASK) {
-            return OFPERR_OFPBMC_BAD_MASK;
-        }
+    if ((ct_state && !support->ct_state)
+        || (ct_state & CS_UNSUPPORTED_MASK)
+        || (ct_zone && !support->ct_zone)
+        || (ct_mark && !support->ct_mark)
+        || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
+        return OFPERR_OFPBMC_BAD_MASK;
     }
+
     return 0;
 }
 
