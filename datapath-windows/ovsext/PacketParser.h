@@ -28,6 +28,8 @@ VOID OvsParseTcp(const NET_BUFFER_LIST *packet, L4Key *flow,
                  POVS_PACKET_HDR_INFO layers);
 VOID OvsParseUdp(const NET_BUFFER_LIST *packet, L4Key *flow,
                  POVS_PACKET_HDR_INFO layers);
+VOID OvsParseSctp(const NET_BUFFER_LIST *packet, L4Key *flow,
+                  POVS_PACKET_HDR_INFO layers);
 NDIS_STATUS OvsParseIcmpV6(const NET_BUFFER_LIST *packet, OvsFlowKey *key,
                             POVS_PACKET_HDR_INFO layers);
 
@@ -129,6 +131,14 @@ static const UDPHdr *
 OvsGetUdp(const NET_BUFFER_LIST *packet,
           UINT32 ofs,
           UDPHdr *storage)
+{
+    return OvsGetPacketBytes(packet, sizeof *storage, ofs, storage);
+}
+
+static const SCTPHdr *
+OvsGetSctp(const NET_BUFFER_LIST *packet,
+           UINT32 ofs,
+           SCTPHdr *storage)
 {
     return OvsGetPacketBytes(packet, sizeof *storage, ofs, storage);
 }

@@ -1673,7 +1673,7 @@ DeleteAllFlows(OVS_DATAPATH *datapath)
  *    - packet->l4 to just past the IPv4 header, if one is present and has a
  *      correct length, and otherwise NULL.
  *
- *    - packet->l7 to just past the TCP or UDP or ICMP header, if one is
+ *    - packet->l7 to just past the TCP, UDP, SCTP or ICMP header, if one is
  *      present and has a correct length, and otherwise NULL.
  *
  * Returns NDIS_STATUS_SUCCESS normally.  Fails only if packet data cannot be accessed
@@ -1802,6 +1802,8 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
                     OvsParseTcp(packet, &ipKey->l4, layers);
                 } else if (ipKey->nwProto == SOCKET_IPPROTO_UDP) {
                     OvsParseUdp(packet, &ipKey->l4, layers);
+                } else if (ipKey->nwProto == SOCKET_IPPROTO_SCTP) {
+                    OvsParseSctp(packet, &ipKey->l4, layers);
                 } else if (ipKey->nwProto == SOCKET_IPPROTO_ICMP) {
                     ICMPHdr icmpStorage;
                     const ICMPHdr *icmp;
@@ -1835,6 +1837,8 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
             OvsParseTcp(packet, &(flow->ipv6Key.l4), layers);
         } else if (flow->ipv6Key.nwProto == SOCKET_IPPROTO_UDP) {
             OvsParseUdp(packet, &(flow->ipv6Key.l4), layers);
+        } else if (flow->ipv6Key.nwProto == SOCKET_IPPROTO_SCTP) {
+            OvsParseSctp(packet, &flow->ipv6Key.l4, layers);
         } else if (flow->ipv6Key.nwProto == SOCKET_IPPROTO_ICMPV6) {
             OvsParseIcmpV6(packet, flow, layers);
             flow->l2.keyLen += (OVS_ICMPV6_KEY_SIZE - OVS_IPV6_KEY_SIZE);

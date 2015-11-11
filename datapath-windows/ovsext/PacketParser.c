@@ -192,6 +192,21 @@ OvsParseTcp(const NET_BUFFER_LIST *packet,
 }
 
 VOID
+OvsParseSctp(const NET_BUFFER_LIST *packet,
+             L4Key *flow,
+             POVS_PACKET_HDR_INFO layers)
+{
+    SCTPHdr sctpStorage;
+    const SCTPHdr *sctp = OvsGetSctp(packet, layers->l4Offset, &sctpStorage);
+    if (sctp) {
+        flow->tpSrc = sctp->source;
+        flow->tpDst = sctp->dest;
+        layers->isSctp = 1;
+        layers->l7Offset = layers->l4Offset + sizeof *sctp;
+    }
+}
+
+VOID
 OvsParseUdp(const NET_BUFFER_LIST *packet,
          L4Key *flow,
          POVS_PACKET_HDR_INFO layers)

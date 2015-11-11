@@ -82,6 +82,7 @@ typedef UINT64 IP6UnitLength;
 #define IPPROTO_UDP     17
 #define IPPROTO_GRE     47
 #define IPPROTO_TCP     6
+#define IPPROTO_SCTP    132
 #define IPPROTO_RSVD    0xff
 
 #define IPPROTO_HOPOPTS         0               /* Hop-by-hop option header */
@@ -202,6 +203,7 @@ typedef union _OVS_PACKET_HDR_INFO {
         UINT16 isIPv6:1;
         UINT16 isTcp:1;
         UINT16 isUdp:1;
+        UINT16 isSctp:1;
         UINT16 tcpCsumNeeded:1;
         UINT16 udpCsumNeeded:1;
         UINT16 udpCsumZero:1;
@@ -303,6 +305,13 @@ typedef struct TCPHdr {
    UINT16    urg_ptr;
 } TCPHdr;
 
+typedef struct SCTPHdr {
+   UINT16    source;
+   UINT16    dest;
+   UINT32    vtag;
+   UINT32    check;
+} SCTPHdr;
+
 typedef struct PseudoHdr {
    UINT32   sourceIPAddr;
    UINT32   destIPAddr;
@@ -365,5 +374,6 @@ typedef struct IPOpt {
 #define SOCKET_IPPROTO_TCP   6
 #define SOCKET_IPPROTO_UDP   17
 #define SOCKET_IPPROTO_GRE   47
+#define SOCKET_IPPROTO_SCTP  132
 
 #endif /* __NET_PROTO_H_ */
