@@ -4016,17 +4016,13 @@ static enum ofperr
 rule_check(struct rule *rule)
 {
     uint16_t ct_state, ct_zone;
-    const ovs_u128 *labelp;
-    ovs_u128 ct_label = { { 0, 0 } };
+    ovs_u128 ct_label;
     uint32_t ct_mark;
 
     ct_state = MINIFLOW_GET_U16(rule->cr.match.flow, ct_state);
     ct_zone = MINIFLOW_GET_U16(rule->cr.match.flow, ct_zone);
     ct_mark = MINIFLOW_GET_U32(rule->cr.match.flow, ct_mark);
-    labelp = MINIFLOW_GET_U128_PTR(rule->cr.match.flow, ct_label);
-    if (labelp) {
-        ct_label = *labelp;
-    }
+    ct_label = MINIFLOW_GET_U128(rule->cr.match.flow, ct_label);
 
     if (ct_state || ct_zone || ct_mark
         || !ovs_u128_is_zero(&ct_label)) {
