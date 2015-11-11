@@ -788,14 +788,12 @@ miniflow_get__(const struct miniflow *mf, size_t idx)
      [FLOW_U64_OFFREM(FIELD) / sizeof(TYPE)]                            \
      : 0)
 
-/* Get a pointer to the ovs_u128 value of struct flow 'FIELD' from miniflow
- * 'FLOW'. */
-#define MINIFLOW_GET_U128_PTR(FLOW, FIELD)                              \
-    ((MINIFLOW_IN_MAP(FLOW, FLOW_U64_OFFSET(FIELD))                     \
-      && (MINIFLOW_IN_MAP(FLOW, FLOW_U64_OFFSET(FIELD) + 1)))           \
-     ? &((OVS_FORCE const ovs_u128 *)miniflow_get__(FLOW, FLOW_U64_OFFSET(FIELD))) \
-     [FLOW_U64_OFFREM(FIELD) / sizeof(ovs_u128)]                        \
-     : NULL)
+#define MINIFLOW_GET_U128(FLOW, FIELD)                                  \
+    (ovs_u128) { .u64 = {                                               \
+            (MINIFLOW_IN_MAP(FLOW, FLOW_U64_OFFSET(FIELD)) ?            \
+             *miniflow_get__(FLOW, FLOW_U64_OFFSET(FIELD)) : 0),        \
+            (MINIFLOW_IN_MAP(FLOW, FLOW_U64_OFFSET(FIELD) + 1) ?        \
+             *miniflow_get__(FLOW, FLOW_U64_OFFSET(FIELD) + 1) : 0) } }
 
 #define MINIFLOW_GET_U8(FLOW, FIELD)            \
     MINIFLOW_GET_TYPE(FLOW, uint8_t, FIELD)
