@@ -103,9 +103,9 @@ EOF
 (cd $distdir
  for manpage in $manpages; do
      man -l -Tps $manpage | ps2pdf - > $manpage.pdf
-     man -l -Tutf8 $manpage | sed 's/.//g' > $manpage.txt
+     GROFF_NO_SGR=1 man -l -Tutf8 $manpage | sed 's/.//g' > $manpage.txt
      (echo '<html><head><meta charset="UTF-8"></head><body><pre>'
-      man -l -Tutf8 $manpage | sed '
+      GROFF_NO_SGR=1 man -l -Tutf8 $manpage | sed '
 s/&/&amp;/g
 s/</&lt;/g
 s/>/&gt;/g
