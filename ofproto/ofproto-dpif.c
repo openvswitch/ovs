@@ -4023,6 +4023,11 @@ rule_check(struct rule *rule)
 
     support = &ofproto_dpif_get_support(ofproto)->odp;
     ct_state = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_state);
+    if (support->ct_state && support->ct_zone && support->ct_mark
+        && support->ct_label) {
+        return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
+    }
+
     ct_zone = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_zone);
     ct_mark = MINIFLOW_GET_U32(&rule->cr.match.mask->masks, ct_mark);
     ct_label = MINIFLOW_GET_U128(&rule->cr.match.mask->masks, ct_label);
