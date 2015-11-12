@@ -430,12 +430,13 @@ vlog_reopen_log_file(void)
     }
 }
 
+#ifndef _WIN32
 /* In case a log file exists, change its owner to new 'user' and 'group'.
  *
  * This is useful for handling cases where the --log-file option is
  * specified ahead of the --user option.  */
 void
-vlog_change_owner(uid_t user, gid_t group)
+vlog_change_owner_unix(uid_t user, gid_t group)
 {
     if (!log_file_name) {
         return;
@@ -450,6 +451,7 @@ vlog_change_owner(uid_t user, gid_t group)
                    log_file_name, ovs_strerror(errno));
     }
 }
+#endif
 
 /* Set debugging levels.  Returns null if successful, otherwise an error
  * message that the caller must free(). */
