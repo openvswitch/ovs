@@ -357,7 +357,7 @@
       </p>
 
       <p>
-        In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
+        In many cases the BFD peer of a hardware VTEP will be an Open vSwitch
         instance. The Open vSwitch implementation of BFD aims to comply
         faithfully with the requirements put forth in RFC 5880.  Open vSwitch
         does not implement the optional Authentication or ``Echo Mode''
@@ -413,8 +413,8 @@
         </p>
 
         <column name="bfd_params" key="enable" type='{"type": "boolean"}'>
-          True to enable BFD on this tunnel.
-          The default is False.
+          True to enable BFD on this <ref table="Tunnel"/>.  If not
+          specified, BFD will not be enabled by default.
         </column>
 
         <column name="bfd_params" key="min_rx"
@@ -435,21 +435,24 @@
 
         <column name="bfd_params" key="decay_min_rx" type='{"type": "integer"}'>
           An alternate receive interval, in milliseconds, that must be greater
-          than or equal to <ref column="bfd" key="min_rx"/>.  The
-          implementation switches from <ref column="bfd" key="min_rx"/> to <ref
-          column="bfd" key="decay_min_rx"/> when there is no obvious incoming
-          data traffic at the interface, to reduce the CPU and bandwidth cost
-          of monitoring an idle interface.  This feature may be disabled by
-          setting a value of 0.  This feature is reset whenever <ref
-          column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
-          changes.
+          than or equal to <ref column="bfd_params" key="min_rx"/>.  The
+          implementation should switch from <ref column="bfd_params" key="min_rx"/>
+          to <ref column="bfd_params" key="decay_min_rx"/> when there is no obvious
+          incoming data traffic at the tunnel, to reduce the CPU and bandwidth
+          cost of monitoring an idle tunnel.  This feature may be disabled by
+          setting a value of 0.  This feature is reset whenever
+          <ref column="bfd_params" key="decay_min_rx"/> or
+          <ref column="bfd_params" key="min_rx"/> changes.
         </column>
 
         <column name="bfd_params" key="forwarding_if_rx" type='{"type": "boolean"}'>
-          True to consider the interface capable of packet I/O as long as it
-          continues to receive any packets (not just BFD packets).  This
-          prevents link congestion that causes consecutive BFD control packets
-          to be lost from marking the interface down.
+          When <code>true</code>, traffic received on the <ref table="Tunnel"/>
+          is used to indicate the capability of packet I/O.
+          BFD control packets are still transmitted and received. At least one
+          BFD control packet must be received every
+          100 * <ref column="bfd_params" key="min_rx"/> amount of time.
+          Otherwise, even if traffic is received, the
+          <ref column="bfd_params" key="forwarding"/> will be <code>false</code>.
         </column>
 
         <column name="bfd_params" key="cpath_down" type='{"type": "boolean"}'>
@@ -468,59 +471,58 @@
 
       </group>
 
-     <group title="BFD Status">
-      <p>
-        The VTEP sets key-value pairs in the <ref column="bfd_status"/>
-        column to report the status of BFD on this tunnel.  When BFD is
-        not enabled, with <ref column="bfd_params" key="enable"/>, the
-        HSC clears all key-value pairs from <ref column="bfd_status"/>.
-      </p>
+      <group title="BFD Status">
+        <p>
+          The VTEP sets key-value pairs in the <ref column="bfd_status"/>
+          column to report the status of BFD on this tunnel.  When BFD is
+          not enabled, with <ref column="bfd_params" key="enable"/>, the
+          HSC clears all key-value pairs from <ref column="bfd_status"/>.
+        </p>
 
-      <column name="bfd_status" key="enabled"
-        type='{"type": "boolean"}'>
-        Set to true if the BFD session has been successfully
-        enabled. Set to false if the VTEP cannot support BFD or has
-        insufficient resources to enable BFD on this tunnel. The NVC
-        will disable the BFD monitoring on the other side of the tunnel
-        once this value is set to false.
-      </column>
+        <column name="bfd_status" key="enabled" type='{"type": "boolean"}'>
+          Set to true if the BFD session has been successfully enabled.
+          Set to false if the VTEP cannot support BFD or has insufficient
+          resources to enable BFD on this tunnel. The NVC will disable
+          the BFD monitoring on the other side of the tunnel once this
+          value is set to false.
+        </column>
 
-      <column name="bfd_status" key="state"
-        type='{"type": "string",
+        <column name="bfd_status" key="state"
+                type='{"type": "string",
               "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-        Reports the state of the BFD session.  The BFD session is fully
-        healthy and negotiated if <code>UP</code>.
-      </column>
+          Reports the state of the BFD session.  The BFD session is fully
+          healthy and negotiated if <code>UP</code>.
+        </column>
 
-      <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
-        Reports whether the BFD session believes this tunnel
-        may be used to forward traffic.  Typically this means the local session
-        is signaling <code>UP</code>, and the remote system isn't signaling a
-        problem such as concatenated path down.
-      </column>
+        <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+          Reports whether the BFD session believes this  <ref table="Tunnel"/>
+          may be used to forward traffic.  Typically this means the local session
+          is signaling <code>UP</code>, and the remote system isn't signaling a
+          problem such as concatenated path down.
+        </column>
 
-      <column name="bfd_status" key="diagnostic">
-        In case of a problem, set to an error message that reports what the
-        local BFD session thinks is wrong.  The error messages are defined
-        in section 4.1 of [RFC 5880].
-      </column>
+        <column name="bfd_status" key="diagnostic">
+          A diagnostic code specifying the local system's reason for the
+          last change in session state. The error messages are defined in
+          section 4.1 of [RFC 5880].
+        </column>
 
-      <column name="bfd_status" key="remote_state"
-        type='{"type": "string",
+       <column name="bfd_status" key="remote_state"
+                type='{"type": "string",
               "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-        Reports the state of the remote endpoint's BFD session.
-      </column>
+          Reports the state of the remote endpoint's BFD session.
+        </column>
 
-      <column name="bfd_status" key="remote_diagnostic">
-        In case of a problem, set to an error message that reports what the
-        remote endpoint's BFD session thinks is wrong.  The error messages
-        are defined in section 4.1 of [RFC 5880].
-      </column>
+        <column name="bfd_status" key="remote_diagnostic">
+          A diagnostic code specifying the remote system's reason for the
+          last change in session state. The error messages are defined in
+          section 4.1 of [RFC 5880].
+        </column>
 
-      <column name="bfd_status" key="info">
-        A short message providing further information about the BFD status
-        (possibly including reasons why BFD could not be enabled).
-      </column>
+        <column name="bfd_status" key="info">
+          A short message providing further information about the BFD status
+          (possibly including reasons why BFD could not be enabled).
+        </column>
       </group>
     </group>
   </table>
