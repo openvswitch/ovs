@@ -438,15 +438,24 @@ vlog_reopen_log_file(void)
 void
 vlog_change_owner_unix(uid_t user, gid_t group)
 {
+    struct ds err = DS_EMPTY_INITIALIZER;
+    int error;
+
     ovs_mutex_lock(&log_file_mutex);
-    int error = log_file_name ? chown(log_file_name, user, group) : 0;
+    error = log_file_name ? chown(log_file_name, user, group) : 0;
+    if (error) {
+        /* Build the error message. We can not call VLOG_FATAL directly
+         * here because VLOG_FATAL() will try again to to acquire
+         * 'log_file_mutex' lock, causing deadlock.
+         */
+        ds_put_format(&err, "Failed to change %s ownership: %s.",
+                      log_file_name, ovs_strerror(errno));
+    }
+    ovs_mutex_unlock(&log_file_mutex);
 
     if (error) {
-        VLOG_FATAL("Failed to change %s ownership: %s.",
-                   log_file_name, ovs_strerror(errno));
+        VLOG_FATAL("%s", ds_steal_cstr(&err));
     }
-
-    ovs_mutex_unlock(&log_file_mutex);
 }
 #endif
 
