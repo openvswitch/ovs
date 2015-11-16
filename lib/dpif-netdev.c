@@ -35,6 +35,7 @@
 #include "cmap.h"
 #include "conntrack.h"
 #include "coverage.h"
+#include "ct-dpif.h"
 #include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
@@ -4539,6 +4540,59 @@ dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                         actions_len, dp_execute_cb);
 }
 
+struct dp_netdev_ct_dump {
+    struct ct_dpif_dump_state up;
+    struct conntrack_dump dump;
+    struct conntrack *ct;
+    struct dp_netdev *dp;
+};
+
+static int
+dpif_netdev_ct_dump_start(struct dpif *dpif, struct ct_dpif_dump_state **dump_,
+                          const uint16_t *pzone)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_ct_dump *dump;
+
+    dump = xzalloc(sizeof *dump);
+    dump->dp = dp;
+    dump->ct = &dp->conntrack;
+
+    conntrack_dump_start(&dp->conntrack, &dump->dump, pzone);
+
+    *dump_ = &dump->up;
+
+    return 0;
+}
+
+static int
+dpif_netdev_ct_dump_next(struct dpif *dpif OVS_UNUSED,
+                         struct ct_dpif_dump_state *dump_,
+                         struct ct_dpif_entry *entry)
+{
+    struct dp_netdev_ct_dump *dump;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    return conntrack_dump_next(&dump->dump, entry);
+}
+
+static int
+dpif_netdev_ct_dump_done(struct dpif *dpif OVS_UNUSED,
+                         struct ct_dpif_dump_state *dump_)
+{
+    struct dp_netdev_ct_dump *dump;
+    int err;
+
+    INIT_CONTAINER(dump, dump_, up);
+
+    err = conntrack_dump_done(&dump->dump);
+
+    free(dump);
+
+    return err;
+}
+
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     dpif_netdev_init,
@@ -4580,9 +4634,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
     dpif_netdev_get_datapath_version,
-    NULL,                       /* ct_dump_start */
-    NULL,                       /* ct_dump_next */
-    NULL,                       /* ct_dump_done */
+    dpif_netdev_ct_dump_start,
+    dpif_netdev_ct_dump_next,
+    dpif_netdev_ct_dump_done,
     NULL,                       /* ct_flush */
 };
 

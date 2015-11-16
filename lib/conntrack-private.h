@@ -22,6 +22,7 @@
 #include <netinet/ip6.h>
 
 #include "conntrack.h"
+#include "ct-dpif.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "openvswitch/types.h"
@@ -76,6 +77,8 @@ struct ct_l4_proto {
                                       struct conntrack_bucket *,
                                       struct dp_packet *pkt, bool reply,
                                       long long now);
+    void (*conn_get_protoinfo)(const struct conn *,
+                               struct ct_dpif_protoinfo *);
 };
 
 extern struct ct_l4_proto ct_proto_tcp;

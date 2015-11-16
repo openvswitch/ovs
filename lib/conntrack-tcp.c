@@ -457,8 +457,42 @@ tcp_new_conn(struct conntrack_bucket *ctb, struct dp_packet *pkt,
     return &newconn->up;
 }
 
+static uint8_t
+tcp_peer_to_protoinfo_flags(const struct tcp_peer *peer)
+{
+    uint8_t res = 0;
+
+    if (peer->wscale & CT_WSCALE_FLAG) {
+        res |= CT_DPIF_TCPF_WINDOW_SCALE;
+    }
+
+    if (peer->wscale & CT_WSCALE_UNKNOWN) {
+        res |= CT_DPIF_TCPF_BE_LIBERAL;
+    }
+
+    return res;
+}
+
+static void
+tcp_conn_get_protoinfo(const struct conn *conn_,
+                       struct ct_dpif_protoinfo *protoinfo)
+{
+    const struct conn_tcp *conn = conn_tcp_cast(conn_);
+
+    protoinfo->proto = IPPROTO_TCP;
+    protoinfo->tcp.state_orig = conn->peer[0].state;
+    protoinfo->tcp.state_reply = conn->peer[1].state;
+
+    protoinfo->tcp.wscale_orig = conn->peer[0].wscale & CT_WSCALE_MASK;
+    protoinfo->tcp.wscale_reply = conn->peer[1].wscale & CT_WSCALE_MASK;
+
+    protoinfo->tcp.flags_orig = tcp_peer_to_protoinfo_flags(&conn->peer[0]);
+    protoinfo->tcp.flags_reply = tcp_peer_to_protoinfo_flags(&conn->peer[1]);
+}
+
 struct ct_l4_proto ct_proto_tcp = {
     .new_conn = tcp_new_conn,
     .valid_new = tcp_valid_new,
     .conn_update = tcp_conn_update,
+    .conn_get_protoinfo = tcp_conn_get_protoinfo,
 };

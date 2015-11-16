@@ -26,6 +26,7 @@
 #include "conntrack-private.h"
 #include "coverage.h"
 #include "csum.h"
+#include "ct-dpif.h"
 #include "dp-packet.h"
 #include "flow.h"
 #include "netdev.h"
@@ -1047,4 +1048,126 @@ static void
 delete_conn(struct conn *conn)
 {
     free(conn);
+}
+
+static void
+ct_endpoint_to_ct_dpif_inet_addr(const struct ct_addr *a,
+                                 union ct_dpif_inet_addr *b,
+                                 ovs_be16 dl_type)
+{
+    if (dl_type == htons(ETH_TYPE_IP)) {
+        b->ip = a->ipv4_aligned;
+    } else if (dl_type == htons(ETH_TYPE_IPV6)){
+        b->in6 = a->ipv6_aligned;
+    }
+}
+
+static void
+conn_key_to_tuple(const struct conn_key *key, struct ct_dpif_tuple *tuple)
+{
+    if (key->dl_type == htons(ETH_TYPE_IP)) {
+        tuple->l3_type = AF_INET;
+    } else if (key->dl_type == htons(ETH_TYPE_IPV6)) {
+        tuple->l3_type = AF_INET6;
+    }
+    tuple->ip_proto = key->nw_proto;
+    ct_endpoint_to_ct_dpif_inet_addr(&key->src.addr, &tuple->src,
+                                     key->dl_type);
+    ct_endpoint_to_ct_dpif_inet_addr(&key->dst.addr, &tuple->dst,
+                                     key->dl_type);
+
+    if (key->nw_proto == IPPROTO_ICMP || key->nw_proto == IPPROTO_ICMPV6) {
+        tuple->icmp_id = key->src.port;
+        /* ICMP type and code are not tracked */
+        tuple->icmp_type = 0;
+        tuple->icmp_code = 0;
+    } else {
+        tuple->src_port = key->src.port;
+        tuple->dst_port = key->dst.port;
+    }
+}
+
+static void
+conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
+                      long long now)
+{
+    struct ct_l4_proto *class;
+    long long expiration;
+    memset(entry, 0, sizeof *entry);
+    conn_key_to_tuple(&conn->key, &entry->tuple_orig);
+    conn_key_to_tuple(&conn->rev_key, &entry->tuple_reply);
+
+    entry->zone = conn->key.zone;
+    entry->mark = conn->mark;
+
+    memcpy(&entry->labels, &conn->label, sizeof(entry->labels));
+    /* Not implemented yet */
+    entry->timestamp.start = 0;
+    entry->timestamp.stop = 0;
+
+    expiration = conn->expiration - now;
+    entry->timeout = (expiration > 0) ? expiration / 1000 : 0;
+
+    class = l4_protos[conn->key.nw_proto];
+    if (class->conn_get_protoinfo) {
+        class->conn_get_protoinfo(conn, &entry->protoinfo);
+    }
+}
+
+int
+conntrack_dump_start(struct conntrack *ct, struct conntrack_dump *dump,
+                     const uint16_t *pzone)
+{
+    memset(dump, 0, sizeof(*dump));
+    if (pzone) {
+        dump->zone = *pzone;
+        dump->filter_zone = true;
+    }
+    dump->ct = ct;
+
+    return 0;
+}
+
+int
+conntrack_dump_next(struct conntrack_dump *dump, struct ct_dpif_entry *entry)
+{
+    struct conntrack *ct = dump->ct;
+    long long now = time_msec();
+
+    while (dump->bucket < CONNTRACK_BUCKETS) {
+        struct hmap_node *node;
+
+        ct_lock_lock(&ct->buckets[dump->bucket].lock);
+        for (;;) {
+            struct conn *conn;
+
+            node = hmap_at_position(&ct->buckets[dump->bucket].connections,
+                                    &dump->bucket_pos);
+            if (!node) {
+                break;
+            }
+            INIT_CONTAINER(conn, node, node);
+            if (!dump->filter_zone || conn->key.zone == dump->zone) {
+                conn_to_ct_dpif_entry(conn, entry, now);
+                break;
+            }
+            /* Else continue, until we find an entry in the appropriate zone
+             * or the bucket has been scanned completely. */
+        }
+        ct_lock_unlock(&ct->buckets[dump->bucket].lock);
+
+        if (!node) {
+            memset(&dump->bucket_pos, 0, sizeof dump->bucket_pos);
+            dump->bucket++;
+        } else {
+            return 0;
+        }
+    }
+    return EOF;
+}
+
+int
+conntrack_dump_done(struct conntrack_dump *dump OVS_UNUSED)
+{
+    return 0;
 }
