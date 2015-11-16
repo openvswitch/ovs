@@ -49,6 +49,11 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/compiler.h \
 	lib/connectivity.c \
 	lib/connectivity.h \
+	lib/conntrack-private.h \
+	lib/conntrack-tcp.c \
+	lib/conntrack-other.c \
+	lib/conntrack.c \
+	lib/conntrack.h \
 	lib/coverage.c \
 	lib/coverage.h \
 	lib/crc32c.c \

@@ -25,6 +25,7 @@ License, version 2.
 The following files are licensed under the 2-clause BSD license.
     include/windows/getopt.h
     lib/getopt_long.c
+    lib/conntrack-tcp.c
 
 The following files are licensed under the 3-clause BSD-license
     include/windows/netinet/icmp6.h

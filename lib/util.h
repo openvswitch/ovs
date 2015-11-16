@@ -70,6 +70,15 @@ ovs_prefetch_range(const void *start, size_t size)
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #endif
 
+/* Comparisons for ints with modular arithmetic */
+#define INT_MOD_LT(a,b)     ((int) ((a)-(b)) < 0)
+#define INT_MOD_LEQ(a,b)    ((int) ((a)-(b)) <= 0)
+#define INT_MOD_GT(a,b)     ((int) ((a)-(b)) > 0)
+#define INT_MOD_GEQ(a,b)    ((int) ((a)-(b)) >= 0)
+
+#define INT_MOD_MIN(a, b)   ((INT_MOD_LT(a, b)) ? (a) : (b))
+#define INT_MOD_MAX(a, b)   ((INT_MOD_GT(a, b)) ? (a) : (b))
+
 #define OVS_NOT_REACHED() abort()
 
 /* Use "%"PRIuSIZE to format size_t with printf(). */
