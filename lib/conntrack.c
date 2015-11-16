@@ -852,3 +852,24 @@ delete_conn(struct conn *conn)
 {
     free(conn);
 }
+
+int
+conntrack_flush(struct conntrack *ct, const uint16_t *zone)
+{
+    unsigned i;
+
+    for (i = 0; i < CONNTRACK_BUCKETS; i++) {
+        struct conn *conn, *next;
+
+        ct_lock_lock(&ct->locks[i]);
+        HMAP_FOR_EACH_SAFE(conn, next, node, &ct->connections[i]) {
+            if (!zone || *zone == conn->key.zone) {
+                hmap_remove(&ct->connections[i], &conn->node);
+                delete_conn(conn);
+            }
+        }
+        ct_lock_unlock(&ct->locks[i]);
+    }
+
+    return 0;
+}

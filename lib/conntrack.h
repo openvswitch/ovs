@@ -69,6 +69,8 @@ int conntrack_execute(struct conntrack *, struct dp_packet **, size_t,
                       const struct ovs_key_ct_labels *setlabel,
                       const char *helper);
 
+int conntrack_flush(struct conntrack *, const uint16_t *zone);
+
 /* struct ct_lock is a standard mutex or a spinlock when using DPDK */
 
 #ifdef DPDK_NETDEV
@@ -140,5 +142,4 @@ struct conntrack {
     uint32_t purge_inner_bucket;
     uint32_t purge_inner_offset;
 };
-
 #endif /* conntrack.h */
