@@ -440,6 +440,82 @@ invalid:
     arp_buf[1] = eth_addr_zero;
 }
 
+static inline bool
+parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
+                      uint8_t *nw_frag)
+{
+    while (1) {
+        if (OVS_LIKELY((*nw_proto != IPPROTO_HOPOPTS)
+                       && (*nw_proto != IPPROTO_ROUTING)
+                       && (*nw_proto != IPPROTO_DSTOPTS)
+                       && (*nw_proto != IPPROTO_AH)
+                       && (*nw_proto != IPPROTO_FRAGMENT))) {
+            /* It's either a terminal header (e.g., TCP, UDP) or one we
+             * don't understand.  In either case, we're done with the
+             * packet, so use it to fill in 'nw_proto'. */
+            return true;
+        }
+
+        /* We only verify that at least 8 bytes of the next header are
+         * available, but many of these headers are longer.  Ensure that
+         * accesses within the extension header are within those first 8
+         * bytes. All extension headers are required to be at least 8
+         * bytes. */
+        if (OVS_UNLIKELY(*sizep < 8)) {
+            return false;
+        }
+
+        if ((*nw_proto == IPPROTO_HOPOPTS)
+            || (*nw_proto == IPPROTO_ROUTING)
+            || (*nw_proto == IPPROTO_DSTOPTS)) {
+            /* These headers, while different, have the fields we care
+             * about in the same location and with the same
+             * interpretation. */
+            const struct ip6_ext *ext_hdr = *datap;
+            *nw_proto = ext_hdr->ip6e_nxt;
+            if (OVS_UNLIKELY(!data_try_pull(datap, sizep,
+                                            (ext_hdr->ip6e_len + 1) * 8))) {
+                return false;
+            }
+        } else if (*nw_proto == IPPROTO_AH) {
+            /* A standard AH definition isn't available, but the fields
+             * we care about are in the same location as the generic
+             * option header--only the header length is calculated
+             * differently. */
+            const struct ip6_ext *ext_hdr = *datap;
+            *nw_proto = ext_hdr->ip6e_nxt;
+            if (OVS_UNLIKELY(!data_try_pull(datap, sizep,
+                                            (ext_hdr->ip6e_len + 2) * 4))) {
+                return false;
+            }
+        } else if (*nw_proto == IPPROTO_FRAGMENT) {
+            const struct ovs_16aligned_ip6_frag *frag_hdr = *datap;
+
+            *nw_proto = frag_hdr->ip6f_nxt;
+            if (!data_try_pull(datap, sizep, sizeof *frag_hdr)) {
+                return false;
+            }
+
+            /* We only process the first fragment. */
+            if (frag_hdr->ip6f_offlg != htons(0)) {
+                *nw_frag = FLOW_NW_FRAG_ANY;
+                if ((frag_hdr->ip6f_offlg & IP6F_OFF_MASK) != htons(0)) {
+                    *nw_frag |= FLOW_NW_FRAG_LATER;
+                    *nw_proto = IPPROTO_FRAGMENT;
+                    return true;
+                }
+            }
+        }
+    }
+}
+
+bool
+parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
+                    uint8_t *nw_frag)
+{
+    return parse_ipv6_ext_hdrs__(datap, sizep, nw_proto, nw_frag);
+}
+
 /* Initializes 'flow' members from 'packet' and 'md'
  *
  * Initializes 'packet' header l2 pointer to the start of the Ethernet
@@ -642,68 +718,8 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_ttl = nh->ip6_hlim;
         nw_proto = nh->ip6_nxt;
 
-        while (1) {
-            if (OVS_LIKELY((nw_proto != IPPROTO_HOPOPTS)
-                           && (nw_proto != IPPROTO_ROUTING)
-                           && (nw_proto != IPPROTO_DSTOPTS)
-                           && (nw_proto != IPPROTO_AH)
-                           && (nw_proto != IPPROTO_FRAGMENT))) {
-                /* It's either a terminal header (e.g., TCP, UDP) or one we
-                 * don't understand.  In either case, we're done with the
-                 * packet, so use it to fill in 'nw_proto'. */
-                break;
-            }
-
-            /* We only verify that at least 8 bytes of the next header are
-             * available, but many of these headers are longer.  Ensure that
-             * accesses within the extension header are within those first 8
-             * bytes. All extension headers are required to be at least 8
-             * bytes. */
-            if (OVS_UNLIKELY(size < 8)) {
-                goto out;
-            }
-
-            if ((nw_proto == IPPROTO_HOPOPTS)
-                || (nw_proto == IPPROTO_ROUTING)
-                || (nw_proto == IPPROTO_DSTOPTS)) {
-                /* These headers, while different, have the fields we care
-                 * about in the same location and with the same
-                 * interpretation. */
-                const struct ip6_ext *ext_hdr = data;
-                nw_proto = ext_hdr->ip6e_nxt;
-                if (OVS_UNLIKELY(!data_try_pull(&data, &size,
-                                                (ext_hdr->ip6e_len + 1) * 8))) {
-                    goto out;
-                }
-            } else if (nw_proto == IPPROTO_AH) {
-                /* A standard AH definition isn't available, but the fields
-                 * we care about are in the same location as the generic
-                 * option header--only the header length is calculated
-                 * differently. */
-                const struct ip6_ext *ext_hdr = data;
-                nw_proto = ext_hdr->ip6e_nxt;
-                if (OVS_UNLIKELY(!data_try_pull(&data, &size,
-                                                (ext_hdr->ip6e_len + 2) * 4))) {
-                    goto out;
-                }
-            } else if (nw_proto == IPPROTO_FRAGMENT) {
-                const struct ovs_16aligned_ip6_frag *frag_hdr = data;
-
-                nw_proto = frag_hdr->ip6f_nxt;
-                if (!data_try_pull(&data, &size, sizeof *frag_hdr)) {
-                    goto out;
-                }
-
-                /* We only process the first fragment. */
-                if (frag_hdr->ip6f_offlg != htons(0)) {
-                    nw_frag = FLOW_NW_FRAG_ANY;
-                    if ((frag_hdr->ip6f_offlg & IP6F_OFF_MASK) != htons(0)) {
-                        nw_frag |= FLOW_NW_FRAG_LATER;
-                        nw_proto = IPPROTO_FRAGMENT;
-                        break;
-                    }
-                }
-            }
+        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag)) {
+            goto out;
         }
     } else {
         if (dl_type == htons(ETH_TYPE_ARP) ||

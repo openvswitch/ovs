@@ -106,6 +106,9 @@ void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
 void flow_compose(struct dp_packet *, const struct flow *);
 
+bool parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
+                         uint8_t *nw_frag);
+
 static inline uint64_t
 flow_get_xreg(const struct flow *flow, int idx)
 {
