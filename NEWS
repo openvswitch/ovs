@@ -61,6 +61,8 @@ Post-v2.5.0
      * PMD threads servicing vHost User ports can now come from the NUMA
        node that device memory is located on if CONFIG_RTE_LIBRTE_VHOST_NUMA
        is enabled in DPDK.
+     * Basic connection tracking for the userspace datapath (no ALG,
+       fragmentation or NAT support yet)
    - Increase number of registers to 16.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.

@@ -33,6 +33,7 @@
 
 #include "bitmap.h"
 #include "cmap.h"
+#include "conntrack.h"
 #include "coverage.h"
 #include "csum.h"
 #include "dp-packet.h"
@@ -91,9 +92,17 @@ static struct shash dp_netdevs OVS_GUARDED_BY(dp_netdev_mutex)
 
 static struct vlog_rate_limit upcall_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
+#define DP_NETDEV_CS_SUPPORTED_MASK (CS_NEW | CS_ESTABLISHED | CS_RELATED \
+                                     | CS_INVALID | CS_REPLY_DIR | CS_TRACKED)
+#define DP_NETDEV_CS_UNSUPPORTED_MASK (~(uint32_t)DP_NETDEV_CS_SUPPORTED_MASK)
+
 static struct odp_support dp_netdev_support = {
     .max_mpls_depth = SIZE_MAX,
     .recirc = true,
+    .ct_state = true,
+    .ct_zone = true,
+    .ct_mark = true,
+    .ct_label = true,
 };
 
 /* Stores a miniflow with inline values */
@@ -232,6 +241,8 @@ struct dp_netdev {
     char *pmd_cmask;
 
     uint64_t last_tnl_conf_seq;
+
+    struct conntrack conntrack;
 };
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
@@ -967,6 +978,8 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->upcall_aux = NULL;
     dp->upcall_cb = NULL;
 
+    conntrack_init(&dp->conntrack);
+
     cmap_init(&dp->poll_threads);
     ovs_mutex_init_recursive(&dp->non_pmd_mutex);
     ovsthread_key_create(&dp->per_pmd_key, NULL);
@@ -1050,6 +1063,8 @@ dp_netdev_free(struct dp_netdev *dp)
     dp_netdev_destroy_all_pmds(dp);
     ovs_mutex_destroy(&dp->non_pmd_mutex);
     ovsthread_key_delete(dp->per_pmd_key);
+
+    conntrack_destroy(&dp->conntrack);
 
     ovs_mutex_lock(&dp->port_mutex);
     HMAP_FOR_EACH_SAFE (port, next, node, &dp->ports) {
@@ -2094,9 +2109,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         return EINVAL;
     }
 
-    /* Userspace datapath doesn't support conntrack. */
-    if (flow->ct_state || flow->ct_zone || flow->ct_mark
-        || !ovs_u128_is_zero(flow->ct_label)) {
+    if (flow->ct_state & DP_NETDEV_CS_UNSUPPORTED_MASK) {
         return EINVAL;
     }
 
@@ -4455,12 +4468,46 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
         break;
 
-    case OVS_ACTION_ATTR_CT:
-        /* If a flow with this action is slow-pathed, datapath assistance is
-         * required to implement it. However, we don't support this action
-         * in the userspace datapath. */
-        VLOG_WARN("Cannot execute conntrack action in userspace.");
+    case OVS_ACTION_ATTR_CT: {
+        const struct nlattr *b;
+        bool commit = false;
+        unsigned int left;
+        uint16_t zone = 0;
+        const char *helper = NULL;
+        const uint32_t *setmark = NULL;
+        const struct ovs_key_ct_labels *setlabel = NULL;
+
+        NL_ATTR_FOR_EACH_UNSAFE (b, left, nl_attr_get(a),
+                                 nl_attr_get_size(a)) {
+            enum ovs_ct_attr sub_type = nl_attr_type(b);
+
+            switch(sub_type) {
+            case OVS_CT_ATTR_COMMIT:
+                commit = true;
+                break;
+            case OVS_CT_ATTR_ZONE:
+                zone = nl_attr_get_u16(b);
+                break;
+            case OVS_CT_ATTR_HELPER:
+                helper = nl_attr_get_string(b);
+                break;
+            case OVS_CT_ATTR_MARK:
+                setmark = nl_attr_get(b);
+                break;
+            case OVS_CT_ATTR_LABELS:
+                setlabel = nl_attr_get(b);
+                break;
+            case OVS_CT_ATTR_NAT:
+            case OVS_CT_ATTR_UNSPEC:
+            case __OVS_CT_ATTR_MAX:
+                OVS_NOT_REACHED();
+            }
+        }
+
+        conntrack_execute(&dp->conntrack, packets_, commit, zone,
+                          setmark, setlabel, helper);
         break;
+    }
 
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
