@@ -328,6 +328,7 @@ tests_ovstest_SOURCES = \
 	tests/test-classifier.c \
 	tests/test-ccmap.c \
 	tests/test-cmap.c \
+	tests/test-conntrack.c \
 	tests/test-csum.c \
 	tests/test-flows.c \
 	tests/test-hash.c \
