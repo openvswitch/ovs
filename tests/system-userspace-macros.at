@@ -60,9 +60,48 @@ m4_define([CONFIGURE_VETH_OFFLOADS],
 
 # CHECK_CONNTRACK()
 #
-# Perform requirements checks for running conntrack tests, and flush the
-# kernel conntrack tables when the test is finished.
+# Perform requirements checks for running conntrack tests.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF(true)]
+    [AT_SKIP_IF([test $HAVE_PYTHON = no])]
 )
+
+# CHECK_CONNTRACK_ALG()
+#
+# Perform requirements checks for running conntrack ALG tests. The userspace
+# doesn't support ALGs yet, so skip the tests
+#
+m4_define([CHECK_CONNTRACK_ALG],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_FRAG()
+#
+# Perform requirements checks for running conntrack fragmentations tests.
+# The userspace doesn't support fragmentation yet, so skip the tests.
+m4_define([CHECK_CONNTRACK_FRAG],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_LOCAL_STACK()
+#
+# Perform requirements checks for running conntrack tests with local stack.
+# While the kernel connection tracker automatically passes all the connection
+# tracking state from an internal port to the OpenvSwitch kernel module, there
+# is simply no way of doing that with the userspace, so skip the tests.
+m4_define([CHECK_CONNTRACK_LOCAL_STACK],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_NAT()
+#
+# Perform requirements checks for running conntrack NAT tests. The userspace
+# doesn't support NATs yet, so skip the tests
+#
+m4_define([CHECK_CONNTRACK_NAT],
+[
+    AT_SKIP_IF([:])
+])

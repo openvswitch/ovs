@@ -67,3 +67,31 @@ m4_define([CHECK_CONNTRACK],
      on_exit 'ovstest test-netlink-conntrack flush'
     ]
 )
+
+# CHECK_CONNTRACK_ALG()
+#
+# Perform requirements checks for running conntrack ALG tests. The kernel
+# supports ALG, so no check is needed.
+#
+m4_define([CHECK_CONNTRACK_ALG])
+
+# CHECK_CONNTRACK_FRAG()
+#
+# Perform requirements checks for running conntrack fragmentations tests.
+# The kernel always supports fragmentation, so no check is needed.
+m4_define([CHECK_CONNTRACK_FRAG])
+
+# CHECK_CONNTRACK_LOCAL_STACK()
+#
+# Perform requirements checks for running conntrack tests with local stack.
+# The kernel always supports reading the connection state of an skb coming
+# from an internal port, without an explicit ct() action, so no check is
+# needed.
+m4_define([CHECK_CONNTRACK_LOCAL_STACK])
+
+# CHECK_CONNTRACK_NAT()
+#
+# Perform requirements checks for running conntrack NAT tests. The kernel
+# always supports NAT, so no check is needed.
+#
+m4_define([CHECK_CONNTRACK_NAT])
