@@ -611,8 +611,20 @@ struct ip_header {
     ovs_16aligned_be32 ip_src;
     ovs_16aligned_be32 ip_dst;
 };
-
 BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
+
+/* ICMPv4 types. */
+#define ICMP4_ECHO_REPLY 0
+#define ICMP4_DST_UNREACH 3
+#define ICMP4_SOURCEQUENCH 4
+#define ICMP4_REDIRECT 5
+#define ICMP4_ECHO_REQUEST 8
+#define ICMP4_TIME_EXCEEDED 11
+#define ICMP4_PARAM_PROB 12
+#define ICMP4_TIMESTAMP 13
+#define ICMP4_TIMESTAMPREPLY 14
+#define ICMP4_INFOREQUEST 15
+#define ICMP4_INFOREPLY 16
 
 #define ICMP_HEADER_LEN 8
 struct icmp_header {
