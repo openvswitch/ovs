@@ -789,6 +789,16 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     dst->map = mf.map;
 }
 
+ovs_be16
+parse_dl_type(const struct eth_header *data_, size_t size)
+{
+    const void *data = data_;
+
+    parse_vlan(&data, &size);
+
+    return parse_ethertype(&data, &size);
+}
+
 /* For every bit of a field that is wildcarded in 'wildcards', sets the
  * corresponding bit in 'flow' to zero. */
 void
