@@ -69,6 +69,22 @@ int conntrack_execute(struct conntrack *, struct dp_packet **, size_t,
                       const struct ovs_key_ct_labels *setlabel,
                       const char *helper);
 
+struct conntrack_dump {
+    struct conntrack *ct;
+    unsigned bucket;
+    uint32_t inner_bucket;
+    uint32_t inner_offset;
+    bool filter_zone;
+    uint16_t zone;
+};
+
+struct ct_dpif_entry;
+
+int conntrack_dump_start(struct conntrack *, struct conntrack_dump *,
+                         const uint16_t *pzone);
+int conntrack_dump_next(struct conntrack_dump *, struct ct_dpif_entry *);
+int conntrack_dump_done(struct conntrack_dump *);
+
 int conntrack_flush(struct conntrack *, const uint16_t *zone);
 
 /* struct ct_lock is a standard mutex or a spinlock when using DPDK */

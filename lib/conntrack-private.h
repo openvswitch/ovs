@@ -21,6 +21,7 @@
 #include <netinet/in.h>
 #include <netinet/ip6.h>
 
+#include "ct-dpif.h"
 #include "hmap.h"
 #include "openvswitch/types.h"
 #include "packets.h"
@@ -69,6 +70,8 @@ struct ct_l4_proto {
     bool (*valid_new)(struct dp_packet *pkt);
     enum ct_update_res (*conn_update)(struct conn *conn, struct dp_packet *pkt,
                                       bool reply, long long now);
+    void (*conn_get_protoinfo)(const struct conn *,
+                               struct ct_dpif_protoinfo *);
 };
 
 extern struct ct_l4_proto ct_proto_tcp;
