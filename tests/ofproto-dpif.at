@@ -8118,5 +8118,683 @@ AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: unchanged
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100)'], [0], [stdout])
 AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: unchanged
 ])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - controller])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2, but not on p2->p1.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp,action=ct(commit,zone=0),controller
+priority=100,in_port=2,ct_state=-trk,udp,action=ct(table=0,zone=0)
+priority=100,in_port=2,ct_state=+trk+est-new,udp,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+dnl OK, now start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We only see the latter two packets, not the first.
+dnl Note that the first packet doesn't have the ct_state bits set. This
+dnl happens because the ct_state field is available only after recirc.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl OK, now start a second connection from port 1
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=3,dst=4)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=4,dst=3)'])
+
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We should see both packets
+dnl Note that the first packet doesn't have the ct_state bits set. This
+dnl happens because the ct_state field is available only after recirc.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=4 udp_csum:e9d2
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - ipv6])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2, but not on p2->p1.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp6,action=ct(commit,zone=0),controller
+priority=100,in_port=2,ct_state=-trk,udp6,action=ct(table=0,zone=0)
+priority=100,in_port=2,ct_state=+trk+est-new,udp6,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x86dd),ipv6(src=2001:db8::2,dst=2001:db8::1,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=2,dst=1)'])
+
+dnl OK, now start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x86dd),ipv6(src=2001:db8::1,dst=2001:db8::2,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x86dd),ipv6(src=2001:db8::2,dst=2001:db8::1,label=0,proto=17,tclass=0x70,hlimit=128,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We only see the latter two packets, not the first.
+dnl Note that the first packet doesn't have the ct_state bits set. This
+dnl happens because the ct_state field is available only after recirc.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
+udp6,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,ipv6_src=2001:db8::1,ipv6_dst=2001:db8::2,ipv6_label=0x00000,nw_tos=112,nw_ecn=0,nw_ttl=128,tp_src=1,tp_dst=2 udp_csum:a466
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=62 ct_state=est|rpl|trk,in_port=2 (via action) data_len=62 (unbuffered)
+udp6,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,ipv6_src=2001:db8::2,ipv6_dst=2001:db8::1,ipv6_label=0x00000,nw_tos=112,nw_ecn=0,nw_ttl=128,tp_src=2,tp_dst=1 udp_csum:a466
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - output action])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp,action=ct(commit,zone=0),2
+priority=100,in_port=2,ct_state=-trk,udp,action=ct(table=0,zone=0)
+priority=100,in_port=2,ct_state=+trk+est-new,udp,action=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+dnl OK, now start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+dnl OK, now start a second connection from port 1
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+
+AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
+ct_state(+new-est+trk),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:drop
+ct_state(-new+est+trk),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(proto=17,frag=no), actions:1
+ct_state(-trk),recirc_id(0),in_port(2),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct,recirc(0x1)
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct(commit),2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - expiration])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp,action=ct(commit,zone=0)
+priority=100,in_port=2,ct_state=-trk,udp,action=ct(table=0,zone=0)
+priority=100,in_port=2,ct_state=+trk+est-new,udp,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl time/stop])
+
+dnl Start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+ovs-appctl time/warp 100000
+
+dnl Now try another reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 3])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. Only one reply must be there
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+dnl
+OFPT_ECHO_REQUEST (xid=0x0): 0 bytes of payload
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - untrackable traffic])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+AT_DATA([flows.txt], [dnl
+ct_state=-trk,action=ct(table=0,zone=0)
+ct_state=+trk,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl time/stop])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'eth(src=80:88:88:88:88:88,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 1])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=inv|trk,in_port=2 (via action) data_len=60 (unbuffered)
+arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=1,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - zones])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2 3 4
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2 or p3->p4.
+dnl Allow only established connections p2->p1 and p4->p3
+dnl p1,p2 and p3,p4 are on different zones
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp,action=ct(commit,zone=0),controller
+priority=100,in_port=2,ct_state=-trk,udp,action=ct(table=0,zone=0)
+priority=100,in_port=2,ct_state=+trk+est-new,udp,action=controller
+priority=100,in_port=3,udp,action=ct(commit,zone=1),controller
+priority=100,in_port=4,ct_state=-trk,udp,action=ct(table=0,zone=1)
+priority=100,in_port=4,ct_state=+trk+est-new,udp,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl Basic "only established" test on ports 1,2
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+dnl Now use the same 5-tuples but on ports 3,4
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p4 'in_port(4),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p4 'in_port(4),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 8])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We only see the latter two packets (for each zone), not the first.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=3 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_zone=1,in_port=4 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+])
+
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - recirc,commit])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,ct_state=-trk,udp,action=ct(table=0,zone=0)
+priority=100,in_port=1,ct_state=+trk+new,udp,action=ct(commit,zone=0),controller
+priority=100,ct_state=+trk+est,udp,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+dnl OK, now start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We only see the latter two packets, not the first.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=new|trk,in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - ICMP related])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ct_state=-trk,udp,action=ct(commit,zone=0,table=0)
+priority=100,in_port=1,ct_state=+trk,actions=controller
+priority=100,in_port=2,ct_state=-trk,action=ct(table=0,zone=0)
+priority=100,in_port=2,ct_state=+trk-inv-new,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl 1. Send an ICMP port unreach reply for port 8738, without any previous request
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0,zone=0\) 'f64c473528c9c6f54ecb72db080045c0003d2e8700004001f351ac100004ac1000030303553f0000000045000021317040004011b138ac100003ac10000411112222000da5a06369616f0a'])
+
+dnl 2. Send and UDP packet to port 5555
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit,zone=0,table=0\) 'c6f94ecb72dbe64c473528c9080045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+
+dnl 3. Send an ICMP port unreach reply for port 5555, related to the first packet
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0,zone=0\) 'e64c473528c9c6f94ecb72db080045c0003d2e8700004001f355ac100002ac1000010303553f0000000045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We only see the first and the last packet
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - ct_mark])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ct_state=-trk,udp,tp_src=1,action=ct(commit,exec(set_field:1->ct_mark)),controller
+priority=100,in_port=1,ct_state=-trk,udp,tp_src=3,action=ct(commit,exec(set_field:3->ct_mark)),controller
+priority=100,in_port=1,ct_state=-trk,udp,tp_src=5,action=ct(commit,exec(set_field:5->ct_mark)),controller
+priority=100,in_port=2,ct_state=-trk,actions=ct(table=0)
+priority=100,ct_state=+trk+rpl,ct_mark=0/4,actions=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=3,dst=4)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=5,dst=6)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=4,dst=3)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=6,dst=5)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 10])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_mark=0x1,in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_mark=0x3,in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=4 udp_csum:e9d2
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_mark=0x5,in_port=1 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=5,tp_dst=6 udp_csum:e9ce
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_mark=0x1,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_mark=0x3,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - ct_label])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ct_state=-trk,udp,tp_src=1,action=ct(commit,exec(set_field:000000000000000001->ct_label))
+priority=100,in_port=1,ct_state=-trk,udp,tp_src=3,action=ct(commit,exec(set_field:000000000000000002->ct_label))
+priority=100,in_port=2,ct_state=-trk,actions=ct(table=0)
+priority=100,ct_state=+trk+rpl,actions=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=3,dst=4)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=4,dst=3)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_label=0x1,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_label=0x2,in_port=2 (via action) data_len=60 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - ct_label datapath flow])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,ct_state=-trk,udp,tp_src=1,action=ct(commit,exec(set_field:1->ct_label)),2
+priority=100,in_port=2,ct_state=-trk,actions=ct(table=0)
+priority=100,ct_state=+trk+rpl,ct_label=0x1,actions=1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
+ct_state(+rpl+trk),ct_label(0x1),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:1
+ct_state(-trk),recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=no),udp(src=1), actions:ct(commit,label=0x1),2
+ct_state(-trk),recirc_id(0),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:ct,recirc(0x1)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - no output])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+in_port=1,udp,action=ct(commit,zone=0)
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct(commit)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - tcp port reuse])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+in_port=1,ip,ct_state=-trk,action=ct(commit,table=0)
+dnl The following two flows are separated to explicitly count the packets
+dnl that create a new connection
+priority=100,cookie=0x1,in_port=1,ip,ct_state=+trk+new-inv-rpl,action=2
+priority=100,in_port=1,ip,ct_state=+trk-new-inv-rpl,action=2
+dnl
+priority=100,in_port=2,ip,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,ip,ct_state=+trk+est+rpl-new-inv,action=1
+ip,ct_state=+trk+inv,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002ca4e5400040067fe20a0101010a0101020001000259b5d93f0000000060027210dd190000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c35468459b5d940601272101a4f0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e6400040067fe50a0101010a0101020001000259b5d9407c35468550107210320c0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000303b5f40004006e9640a0101020a010101000200017c35468559b5d9405018721074c200007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e7400040067fe40a0101010a0101020001000259b5d9407c35468d5010721032040000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6040004006e96b0a0101020a010101000200017c35468d59b5d9405011721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e8400040067fe30a0101010a0101020001000259b5d9407c35468e5010721032030000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028a4e9400040067fe20a0101010a0101020001000259b5d9407c35468e5011721032020000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a0800450000283b6140004006e96a0a0101020a010101000200017c35468e59b5d9415010721032020000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+dnl Only one new connection
+n_packets=1
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a50540000000908004500002cc0a74000400664200a0101010a010102000100025b7dbf1f0000000060027210f5710000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a08004500002c00004000400624c80a0101020a010101000200017c36468f5b7dbf2060127210329b0000020405b4'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028c0a84000400664230a0101010a010102000100025b7dbf207c364690501072104a580000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a080045000030392840004006eb9b0a0101020a010101000200017c3646905b7dbf20501872108d0e00007061796c6f61640a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028c0a94000400664220a0101010a010102000100025b7dbf207c364698501072104a500000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a080045000028392940004006eba20a0101020a010101000200017c3646985b7dbf20501172104a4f0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028c0aa4000400664210a0101010a010102000100025b7dbf207c364699501072104a4f0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000a505400000009080045000028c0ab4000400664200a0101010a010102000100025b7dbf207c364699501172104a4e0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000950540000000a080045000028392a40004006eba10a0101020a010101000200017c3646995b7dbf21501072104a4e0000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+dnl Two new connections
+n_packets=2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - conntrack - tcp pick up])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2. Allow only established connections p2->p1
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,tcp,ct_state=-trk,action=ct(commit,zone=0,table=0)
+priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0,zone=0)
+priority=100,in_port=2,tcp,ct_state=+trk+est-new,action=drop
+cookie=0x1,ip,ct_state=+trk+inv,action=controller
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+dnl No dropped packets
+n_packets=0
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl The first two packets (SYN, SYN|ACK) are commented out.  We're making
+dnl sure that the connection tracker is able to pick up already established
+dnl connections that use window scaling.
+dnl
+dnl AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a080045000030fc2540004006289e0a0101020a01010100020001396bb359000000007002008080cc0000020405b401030307'])
+dnl AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000a50540000000908004500003000004000400624c40a0101010a010102000100028cadbdb3396bb35a70120080365a0000020405b401030307'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a080045000028fc264000400628a50a0101020a01010100020001396bb35a8cadbdb45010000a629b0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a080045000029fc274000400628a30a0101020a01010100020001396bb35a8cadbdb45018000a589200000a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000a505400000009080045000028f2c84000400632030a0101010a010102000100028cadbdb4396bb35b5010000a629a0000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a08004500022afc284000400626a10a0101020a01010100020001396bb35b8cadbdb45018000a941f0000 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666 dnl
+                                              6666666666666666666666666666666666666666666666666666660a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000a505400000009080045000028f2c94000400632020a0101010a010102000100028cadbdb4396bb55d5010000a60980000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000a5054000000090800450001fdf2ca40004006302c0a0101010a010102000100028cadbdb4396bb55d5018000aa60c0000 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565656565 dnl
+                                              6565656565656565656565656565656565656565656565656565656565656565656565650a'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a080045000028fc294000400628a20a0101020a01010100020001396bb55d8cadbf895010000a5ec30000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a080045000028fc2a4000400628a10a0101020a01010100020001396bb55d8cadbf895011000a5ec20000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000a505400000009080045000028f2cb4000400632000a0101010a010102000100028cadbf89396bb55e5010000a5ec20000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '50540000000a505400000009080045000028f2cc4000400631ff0a0101010a010102000100028cadbf89396bb55e5011000a5ec10000'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '50540000000950540000000a080045000028258e40004006ff3d0a0101020a01010100020001396bb55e8cadbf8a5010000a5ec10000'])
+
+AT_CHECK([ovs-appctl revalidator/purge])
+
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | grep cookie=0x1 | grep -o "n_packets=[[0-9]]*"], [0], [dnl
+dnl No dropped packets
+n_packets=0
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
