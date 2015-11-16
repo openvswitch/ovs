@@ -4593,6 +4593,14 @@ dpif_netdev_ct_dump_done(struct dpif *dpif OVS_UNUSED,
     return err;
 }
 
+static int
+dpif_netdev_ct_flush(struct dpif *dpif, const uint16_t *zone)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+
+    return conntrack_flush(&dp->conntrack, zone);
+}
+
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     dpif_netdev_init,
@@ -4637,7 +4645,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_dump_start,
     dpif_netdev_ct_dump_next,
     dpif_netdev_ct_dump_done,
-    NULL,                       /* ct_flush */
+    dpif_netdev_ct_flush,
 };
 
 static void

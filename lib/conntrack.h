@@ -83,6 +83,8 @@ int conntrack_dump_start(struct conntrack *, struct conntrack_dump *,
                          const uint16_t *pzone);
 int conntrack_dump_next(struct conntrack_dump *, struct ct_dpif_entry *);
 int conntrack_dump_done(struct conntrack_dump *);
+
+int conntrack_flush(struct conntrack *, const uint16_t *zone);
 
 /* 'struct ct_lock' is a wrapper for an adaptive mutex.  It's useful to try
  * different types of locks (e.g. spinlocks) */

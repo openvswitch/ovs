@@ -1171,3 +1171,26 @@ conntrack_dump_done(struct conntrack_dump *dump OVS_UNUSED)
 {
     return 0;
 }
+
+int
+conntrack_flush(struct conntrack *ct, const uint16_t *zone)
+{
+    unsigned i;
+
+    for (i = 0; i < CONNTRACK_BUCKETS; i++) {
+        struct conn *conn, *next;
+
+        ct_lock_lock(&ct->buckets[i].lock);
+        HMAP_FOR_EACH_SAFE(conn, next, node, &ct->buckets[i].connections) {
+            if (!zone || *zone == conn->key.zone) {
+                ovs_list_remove(&conn->exp_node);
+                hmap_remove(&ct->buckets[i].connections, &conn->node);
+                atomic_count_dec(&ct->n_conn);
+                delete_conn(conn);
+            }
+        }
+        ct_lock_unlock(&ct->buckets[i].lock);
+    }
+
+    return 0;
+}
