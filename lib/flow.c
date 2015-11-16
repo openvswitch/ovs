@@ -328,7 +328,7 @@ parse_mpls(const void **datap, size_t *sizep)
     return MIN(count, FLOW_MAX_MPLS_LABELS);
 }
 
-static inline ovs_be16
+static inline ALWAYS_INLINE ovs_be16
 parse_vlan(const void **datap, size_t *sizep)
 {
     const struct eth_header *eth = *datap;
@@ -350,7 +350,7 @@ parse_vlan(const void **datap, size_t *sizep)
     return 0;
 }
 
-static inline ovs_be16
+static inline ALWAYS_INLINE ovs_be16
 parse_ethertype(const void **datap, size_t *sizep)
 {
     const struct llc_snap_header *llc;
@@ -825,6 +825,16 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     }
  out:
     dst->map = mf.map;
+}
+
+ovs_be16
+parse_dl_type(const struct eth_header *data_, size_t size)
+{
+    const void *data = data_;
+
+    parse_vlan(&data, &size);
+
+    return parse_ethertype(&data, &size);
 }
 
 /* For every bit of a field that is wildcarded in 'wildcards', sets the
