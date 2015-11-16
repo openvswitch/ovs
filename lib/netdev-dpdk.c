@@ -1931,9 +1931,9 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return -err;
     }
 
-    /* Create single consumer/producer rings, netdev does explicit locking. */
+    /* Create single producer tx ring, netdev does explicit locking. */
     ivshmem->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
-                                        RING_F_SP_ENQ | RING_F_SC_DEQ);
+                                        RING_F_SP_ENQ);
     if (ivshmem->cring_tx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
@@ -1944,9 +1944,9 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return -err;
     }
 
-    /* Create single consumer/producer rings, netdev does explicit locking. */
+    /* Create single consumer rx ring, netdev does explicit locking. */
     ivshmem->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
-                                        RING_F_SP_ENQ | RING_F_SC_DEQ);
+                                        RING_F_SC_DEQ);
     if (ivshmem->cring_rx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
