@@ -448,7 +448,7 @@ A: The following commands configure br0 with eth0 and tap0 as trunk
    To later disable mirroring and destroy the GRE tunnel:
 
        ovs-vsctl clear bridge br0 mirrors
-       ovs-vcstl del-port br0 gre0
+       ovs-vsctl del-port br0 gre0
 
 ### Q: Does Open vSwitch support ERSPAN?
 
