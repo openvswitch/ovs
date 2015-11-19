@@ -177,6 +177,15 @@ const struct %(s)s *%(s)s_next(const struct %(s)s *);
              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
              (ROW) = (NEXT))
 
+unsigned int %(s)s_get_seqno(const struct ovsdb_idl *);
+unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change);
+const struct %(s)s *%(s)s_track_get_first(const struct ovsdb_idl *);
+const struct %(s)s *%(s)s_track_get_next(const struct %(s)s *);
+#define %(S)s_FOR_EACH_TRACKED(ROW, IDL) \\
+        for ((ROW) = %(s)s_track_get_first(IDL); \\
+             (ROW); \\
+             (ROW) = %(s)s_track_get_next(ROW))
+
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
@@ -462,6 +471,28 @@ const struct %(s)s *
 %(s)s_next(const struct %(s)s *row)
 {
     return %(s)s_cast(ovsdb_idl_next_row(&row->header_));
+}
+
+unsigned int %(s)s_get_seqno(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_table_get_seqno(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+}
+
+unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change)
+{
+    return ovsdb_idl_row_get_seqno(&row->header_, change);
+}
+
+const struct %(s)s *
+%(s)s_track_get_first(const struct ovsdb_idl *idl)
+{
+    return %(s)s_cast(ovsdb_idl_track_get_first(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
+}
+
+const struct %(s)s
+*%(s)s_track_get_next(const struct %(s)s *row)
+{
+    return %(s)s_cast(ovsdb_idl_track_get_next(&row->header_));
 }''' % {'s': structName,
         'p': prefix,
         'P': prefix.upper(),
@@ -469,6 +500,7 @@ const struct %(s)s *
         'T': tableName.upper()}
 
         print '''
+
 /* Deletes 'row' from table "%(t)s".  'row' may be freed, so it must not be
  * accessed afterward.
  *

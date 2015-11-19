@@ -51,16 +51,22 @@
 #include "util.h"
 #include "openvswitch/vlog.h"
 
+struct test_ovsdb_pvt_context {
+    bool track;
+};
+
 OVS_NO_RETURN static void usage(void);
-static void parse_options(int argc, char *argv[]);
+static void parse_options(int argc, char *argv[],
+    struct test_ovsdb_pvt_context *pvt);
 static struct ovs_cmdl_command *get_all_commands(void);
 
 int
 main(int argc, char *argv[])
 {
-    struct ovs_cmdl_context ctx = { .argc = 0, };
+    struct test_ovsdb_pvt_context pvt = {.track = false};
+    struct ovs_cmdl_context ctx = { .argc = 0, .pvt = &pvt};
     set_program_name(argv[0]);
-    parse_options(argc, argv);
+    parse_options(argc, argv, &pvt);
     ctx.argc = argc - optind;
     ctx.argv = argv + optind;
     ovs_cmdl_run_command(&ctx, get_all_commands());
@@ -68,11 +74,12 @@ main(int argc, char *argv[])
 }
 
 static void
-parse_options(int argc, char *argv[])
+parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 {
     static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
+        {"change-track", optional_argument, NULL, 'c'},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
@@ -103,6 +110,10 @@ parse_options(int argc, char *argv[])
 
         case 'v':
             vlog_set_verbosity(optarg);
+            break;
+
+        case 'c':
+            pvt->track = true;
             break;
 
         case '?':
@@ -191,7 +202,9 @@ usage(void)
     vlog_usage();
     printf("\nOther options:\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
-           "  -h, --help                  display this help message\n");
+           "  -h, --help                  display this help message\n"
+           "  -c, --change-track          used with the 'idl' command to\n"
+           "                              enable tracking of IDL changes\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -1600,6 +1613,70 @@ compare_link1(const void *a_, const void *b_)
 }
 
 static void
+print_idl_row_simple(const struct idltest_simple *s, int step)
+{
+    size_t i;
+
+    printf("%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
+           step, s->i, s->r, s->b ? "true" : "false",
+           s->s, UUID_ARGS(&s->u));
+    for (i = 0; i < s->n_ia; i++) {
+        printf("%s%"PRId64, i ? " " : "", s->ia[i]);
+    }
+    printf("] ra=[");
+    for (i = 0; i < s->n_ra; i++) {
+        printf("%s%g", i ? " " : "", s->ra[i]);
+    }
+    printf("] ba=[");
+    for (i = 0; i < s->n_ba; i++) {
+        printf("%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
+    }
+    printf("] sa=[");
+    for (i = 0; i < s->n_sa; i++) {
+        printf("%s%s", i ? " " : "", s->sa[i]);
+    }
+    printf("] ua=[");
+    for (i = 0; i < s->n_ua; i++) {
+        printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
+    }
+    printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
+}
+
+static void
+print_idl_row_link1(const struct idltest_link1 *l1, int step)
+{
+    struct idltest_link1 **links;
+    size_t i;
+
+    printf("%03d: i=%"PRId64" k=", step, l1->i);
+    if (l1->k) {
+        printf("%"PRId64, l1->k->i);
+    }
+    printf(" ka=[");
+    links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
+    qsort(links, l1->n_ka, sizeof *links, compare_link1);
+    for (i = 0; i < l1->n_ka; i++) {
+        printf("%s%"PRId64, i ? " " : "", links[i]->i);
+    }
+    free(links);
+    printf("] l2=");
+    if (l1->l2) {
+        printf("%"PRId64, l1->l2->i);
+    }
+    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
+}
+
+static void
+print_idl_row_link2(const struct idltest_link2 *l2, int step)
+{
+    printf("%03d: i=%"PRId64" l1=", step, l2->i);
+    if (l2->l1) {
+        printf("%"PRId64, l2->l1->i);
+    }
+    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
+}
+
+static void
 print_idl(struct ovsdb_idl *idl, int step)
 {
     const struct idltest_simple *s;
@@ -1608,61 +1685,52 @@ print_idl(struct ovsdb_idl *idl, int step)
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH (s, idl) {
-        size_t i;
-
-        printf("%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
-               step, s->i, s->r, s->b ? "true" : "false",
-               s->s, UUID_ARGS(&s->u));
-        for (i = 0; i < s->n_ia; i++) {
-            printf("%s%"PRId64, i ? " " : "", s->ia[i]);
-        }
-        printf("] ra=[");
-        for (i = 0; i < s->n_ra; i++) {
-            printf("%s%g", i ? " " : "", s->ra[i]);
-        }
-        printf("] ba=[");
-        for (i = 0; i < s->n_ba; i++) {
-            printf("%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
-        }
-        printf("] sa=[");
-        for (i = 0; i < s->n_sa; i++) {
-            printf("%s%s", i ? " " : "", s->sa[i]);
-        }
-        printf("] ua=[");
-        for (i = 0; i < s->n_ua; i++) {
-            printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
-        }
-        printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
+        print_idl_row_simple(s, step);
         n++;
     }
     IDLTEST_LINK1_FOR_EACH (l1, idl) {
-        struct idltest_link1 **links;
-        size_t i;
-
-        printf("%03d: i=%"PRId64" k=", step, l1->i);
-        if (l1->k) {
-            printf("%"PRId64, l1->k->i);
-        }
-        printf(" ka=[");
-        links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
-        qsort(links, l1->n_ka, sizeof *links, compare_link1);
-        for (i = 0; i < l1->n_ka; i++) {
-            printf("%s%"PRId64, i ? " " : "", links[i]->i);
-        }
-        free(links);
-        printf("] l2=");
-        if (l1->l2) {
-            printf("%"PRId64, l1->l2->i);
-        }
-        printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
+        print_idl_row_link1(l1, step);
         n++;
     }
     IDLTEST_LINK2_FOR_EACH (l2, idl) {
-        printf("%03d: i=%"PRId64" l1=", step, l2->i);
-        if (l2->l1) {
-            printf("%"PRId64, l2->l1->i);
+        print_idl_row_link2(l2, step);
+        n++;
+    }
+    if (!n) {
+        printf("%03d: empty\n", step);
+    }
+}
+
+static void
+print_idl_track(struct ovsdb_idl *idl, int step, unsigned int seqno)
+{
+    const struct idltest_simple *s;
+    const struct idltest_link1 *l1;
+    const struct idltest_link2 *l2;
+    int n = 0;
+
+    IDLTEST_SIMPLE_FOR_EACH_TRACKED (s, idl) {
+        if (idltest_simple_row_get_seqno(s, OVSDB_IDL_CHANGE_DELETE) >= seqno) {
+            printf("%03d: ##deleted## uuid="UUID_FMT"\n", step, UUID_ARGS(&s->header_.uuid));
+        } else {
+            print_idl_row_simple(s, step);
         }
-        printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
+        n++;
+    }
+    IDLTEST_LINK1_FOR_EACH_TRACKED (l1, idl) {
+        if (idltest_simple_row_get_seqno(s, OVSDB_IDL_CHANGE_DELETE) >= seqno) {
+            printf("%03d: ##deleted## uuid="UUID_FMT"\n", step, UUID_ARGS(&s->header_.uuid));
+        } else {
+            print_idl_row_link1(l1, step);
+        }
+        n++;
+    }
+    IDLTEST_LINK2_FOR_EACH_TRACKED (l2, idl) {
+        if (idltest_simple_row_get_seqno(s, OVSDB_IDL_CHANGE_DELETE) >= seqno) {
+            printf("%03d: ##deleted## uuid="UUID_FMT"\n", step, UUID_ARGS(&s->header_.uuid));
+        } else {
+            print_idl_row_link2(l2, step);
+        }
         n++;
     }
     if (!n) {
@@ -1882,8 +1950,11 @@ do_idl(struct ovs_cmdl_context *ctx)
     int step = 0;
     int error;
     int i;
+    bool track;
 
     idltest_init();
+
+    track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
 
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
     if (ctx->argc > 2) {
@@ -1897,6 +1968,10 @@ do_idl(struct ovs_cmdl_context *ctx)
         rpc = jsonrpc_open(stream);
     } else {
         rpc = NULL;
+    }
+
+    if (track) {
+        ovsdb_idl_track_add_all(idl);
     }
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -1924,7 +1999,12 @@ do_idl(struct ovs_cmdl_context *ctx)
             }
 
             /* Print update. */
-            print_idl(idl, step++);
+            if (track) {
+                print_idl_track(idl, step++, ovsdb_idl_get_seqno(idl));
+                ovsdb_idl_track_clear(idl);
+            } else {
+                print_idl(idl, step++);
+            }
         }
         seqno = ovsdb_idl_get_seqno(idl);
 
@@ -1964,6 +2044,7 @@ do_idl(struct ovs_cmdl_context *ctx)
         poll_block();
     }
     print_idl(idl, step++);
+    ovsdb_idl_track_clear(idl);
     ovsdb_idl_destroy(idl);
     printf("%03d: done\n", step);
 }
