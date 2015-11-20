@@ -2958,9 +2958,9 @@ ofctl_meter_request__(const char *bridge, const char *str,
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
-    transact_noreply(vconn, ofputil_encode_meter_request(version,
-                                                         type,
-                                                         mm.meter.meter_id));
+    dump_stats_transaction(vconn,
+                           ofputil_encode_meter_request(version, type,
+                                                        mm.meter.meter_id));
     vconn_close(vconn);
 }
 
