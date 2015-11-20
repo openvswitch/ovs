@@ -5,7 +5,7 @@
     physical ports into logical switches maintained by a network
     virtualization controller such as NSX.
   </p>
-  
+
   <p>Glossary:</p>
 
   <dl>
@@ -29,7 +29,7 @@
     <dd>
       Virtual Routing and Forwarding instance.
     </dd>
- </dl>
+  </dl>
 
   <table name="Global" title="Top-level configuration.">
     Top-level configuration for a hardware VTEP.  There must be
@@ -238,7 +238,7 @@
       </p>
 
       <column name="other_config" key="dscp"
-                type='{"type": "integer"}'>
+              type='{"type": "integer"}'>
         The Differentiated Service Code Point (DSCP) is specified using 6 bits
         in the Type of Service (TOS) field in the IP header. DSCP provides a
         mechanism to classify the network traffic and provide Quality of
@@ -287,7 +287,7 @@
       <column name="name">
         Symbolic name for the switch, such as its hostname.
       </column>
-      
+
       <column name="description">
         An extended description for the switch, such as its switch login
         banner.
@@ -700,7 +700,7 @@
       <column name="name">
         Symbolic name for the logical switch.
       </column>
-      
+
       <column name="description">
         An extended description for the logical switch, such as its switch
         login banner.
@@ -737,7 +737,7 @@
 
   </table>
 
- <table name="Ucast_Macs_Remote" title="Unicast MACs (remote)">
+  <table name="Ucast_Macs_Remote" title="Unicast MACs (remote)">
     <p>
       Mapping of unicast MAC addresses to tunnels (physical
       locators). This table is written by the NVC, so it contains the
@@ -781,7 +781,7 @@
 
     <column name="MAC">
       <p>
-        A MAC address that has been learned by the VTEP. 
+        A MAC address that has been learned by the VTEP.
       </p>
       <p>
         The keyword <code>unknown-dst</code> is used as a special
@@ -860,10 +860,10 @@
   <table name="Logical_Router" title="A logical L3 router.">
     <p>
       A logical router, or VRF. A logical router may be connected to one or more
-      logical switches. Subnet addresses and interface addresses may be configured on the 
+      logical switches. Subnet addresses and interface addresses may be configured on the
       interfaces.
     </p>
-    
+
     <column name="switch_binding">
       Maps from an IPv4 or IPv6 address prefix in CIDR notation to a
       logical switch. Multiple prefixes may map to the same switch. By
@@ -983,7 +983,7 @@
       table="Physical_Locator"/> records.''
     </p>
 
-    <column name="locators"/>    
+    <column name="locators"/>
   </table>
 
   <table name="Physical_Locator">
@@ -1064,7 +1064,7 @@
           <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
         </p>
       </column>
-            <column name="ethertype">
+      <column name="ethertype">
         <p>
           Ethertype in hexadecimal, in the form
           <var>0xAAAA</var>
