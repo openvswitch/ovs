@@ -4946,13 +4946,18 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         goto exit;
     }
     if (enforce_consistency) {
-        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size,
-                                           &flow, u16_to_ofp(ofproto->up.max_ports),
-                                           0, 0, usable_protocols);
+        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &flow,
+                                           u16_to_ofp(ofproto->up.max_ports),
+                                           0, ofproto->up.n_tables,
+                                           usable_protocols);
     } else {
         retval = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
-                               u16_to_ofp(ofproto->up.max_ports), 0, 0,
-                               &usable_protocols);
+                               u16_to_ofp(ofproto->up.max_ports), 0,
+                               ofproto->up.n_tables, &usable_protocols);
+    }
+    if (!retval) {
+        retval = ofproto_check_ofpacts(&ofproto->up, ofpacts.data,
+                                       ofpacts.size);
     }
 
     if (retval) {

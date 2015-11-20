@@ -3333,7 +3333,7 @@ reject_slave_controller(struct ofconn *ofconn)
  *    - If they use any groups, then 'ofproto' has that group configured.
  *
  * Returns 0 if successful, otherwise an OpenFlow error. */
-static enum ofperr
+enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofpact ofpacts[], size_t ofpacts_len)
 {
@@ -3399,10 +3399,22 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Verify actions against packet, then send packet if successful. */
     flow_extract(payload, &flow);
     flow.in_port.ofp_port = po.in_port;
-    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
+
+    /* Check actions like for flow mods.  We pass a 'table_id' of 0 to
+     * ofproto_check_consistency(), which isn't strictly correct because these
+     * actions aren't in any table.  This is OK as 'table_id' is only used to
+     * check instructions (e.g., goto-table), which can't appear on the action
+     * list of a packet-out. */
+    error = ofpacts_check_consistency(po.ofpacts, po.ofpacts_len,
+                                      &flow, u16_to_ofp(p->max_ports),
+                                      0, p->n_tables,
+                                      ofconn_get_protocol(ofconn));
     if (!error) {
-        error = p->ofproto_class->packet_out(p, payload, &flow,
-                                             po.ofpacts, po.ofpacts_len);
+        error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
+        if (!error) {
+            error = p->ofproto_class->packet_out(p, payload, &flow,
+                                                 po.ofpacts, po.ofpacts_len);
+        }
     }
     dp_packet_delete(payload);
 
