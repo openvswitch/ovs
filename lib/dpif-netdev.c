@@ -1993,6 +1993,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
         struct match match;
         struct ds ds = DS_EMPTY_INITIALIZER;
 
+        match.tun_md.valid = false;
         match.flow = flow->flow;
         miniflow_expand(&flow->cr.mask->mf, &match.wc.masks);
 
@@ -3300,6 +3301,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
             miss_cnt++;
 
+            match.tun_md.valid = false;
             miniflow_expand(&keys[i].mf, &match.flow);
 
             ofpbuf_clear(&actions);
