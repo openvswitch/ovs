@@ -134,6 +134,56 @@ log_property(bool loose, const char *message, ...)
     }
 }
 
+static enum ofperr
+ofputil_check_mask(uint16_t type, uint32_t mask)
+{
+    switch (type) {
+    case OFPACPT_PACKET_IN_SLAVE:
+    case OFPACPT_PACKET_IN_MASTER:
+        if (mask > MAXIMUM_MASK_PACKET_IN) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+        break;
+
+    case OFPACPT_FLOW_REMOVED_SLAVE:
+    case OFPACPT_FLOW_REMOVED_MASTER:
+        if (mask > MAXIMUM_MASK_FLOW_REMOVED) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+        break;
+
+    case OFPACPT_PORT_STATUS_SLAVE:
+    case OFPACPT_PORT_STATUS_MASTER:
+        if (mask > MAXIMUM_MASK_PORT_STATUS) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+        break;
+
+    case OFPACPT_ROLE_STATUS_SLAVE:
+    case OFPACPT_ROLE_STATUS_MASTER:
+        if (mask > MAXIMUM_MASK_ROLE_STATUS) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+        break;
+
+    case OFPACPT_TABLE_STATUS_SLAVE:
+    case OFPACPT_TABLE_STATUS_MASTER:
+        if ((mask < MINIMUM_MASK_TABLE_STATUS) |
+            (mask > MAXIMUM_MASK_TABLE_STATUS)) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+        break;
+
+    case OFPACPT_REQUESTFORWARD_SLAVE:
+    case OFPACPT_REQUESTFORWARD_MASTER:
+        if (mask > MAXIMUM_MASK_REQUESTFORWARD) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+        break;
+    }
+    return 0;
+}
+
 static size_t
 start_property(struct ofpbuf *msg, uint16_t type)
 {
@@ -9409,7 +9459,13 @@ ofputil_uninit_geneve_table(struct ovs_list *mappings)
  * treats unknown properties and values as an error, as a switch would want to
  * do when interpreting a configuration request made by a controller.
  *
- * Returns 0 if successful, otherwise an OFPERR_* value. */
+ * Returns 0 if successful, otherwise an OFPERR_* value.
+ *
+ * Returns error code OFPERR_OFPACFC_INVALID if the value of mask is not in
+ * the valid range of mask.
+ *
+ * Returns error code OFPERR_OFPACFC_UNSUPPORTED if the configuration is not
+ * supported.*/
 enum ofperr
 ofputil_decode_set_async_config(const struct ofp_header *oh,
                                 uint32_t master[OAM_N_TYPES],
@@ -9453,6 +9509,13 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
 
             if (property.size != sizeof *msg) {
                 return OFPERR_OFPBRC_BAD_LEN;
+            }
+
+            if (!loose) {
+                error = ofputil_check_mask(type, ntohl(msg->mask));
+                if (error) {
+                    return error;
+                }
             }
 
             switch (type) {
@@ -9505,10 +9568,7 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
                 break;
 
             default:
-                error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
-                break;
-            }
-            if (error) {
+                error = loose ? 0 : OFPERR_OFPACFC_UNSUPPORTED;
                 return error;
             }
         }
