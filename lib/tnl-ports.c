@@ -91,8 +91,14 @@ tnl_port_map_insert(odp_port_t port, ovs_be16 udp_port, const char dev_name[])
 
         match.wc.masks.dl_type = OVS_BE16_MAX;
         match.wc.masks.nw_proto = 0xff;
-        match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
-        match.wc.masks.tp_dst = OVS_BE16_MAX;
+         /* XXX: No fragments support. */
+        match.wc.masks.nw_frag = FLOW_NW_FRAG_MASK;
+
+        /* 'udp_port' is zero for non-UDP tunnels (e.g. GRE). In this case it
+         * doesn't make sense to match on UDP port numbers. */
+        if (udp_port) {
+            match.wc.masks.tp_dst = OVS_BE16_MAX;
+        }
 
         cls_rule_init(&p->cr, &match, 0, CLS_MIN_VERSION); /* Priority == 0. */
         ovs_refcount_init(&p->ref_cnt);
