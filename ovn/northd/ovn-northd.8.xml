@@ -340,7 +340,7 @@ ip4.dst = ip4.src;
 ip4.src = <var>S</var>;
 ip.ttl = 255;
 icmp4.type = 0;
-inport = \"\"; /* Allow sending out inport. */
+inport = ""; /* Allow sending out inport. */
 next;
         </pre>
 
@@ -370,7 +370,7 @@ arp.sha = <var>E</var>;
 arp.tpa = arp.spa;
 arp.spa = <var>A</var>;
 outport = <var>P</var>;
-inport = \"\"; /* Allow sending out inport. */
+inport = ""; /* Allow sending out inport. */
 output;
         </pre>
       </li>
