@@ -306,11 +306,18 @@ think it does everything else.
    the Multicast_Group table entry in ovn-sb database into
    Mcast_Macs_Remote table configuration in VTEP database.
 
-* Use BFD as tunnel monitor.
+* Consider the use of BFD as tunnel monitor.
 
-   Both ovn-controller and ovn-contorller-vtep should use BFD to
-   monitor the tunnel liveness.  Both ovs-vswitchd schema and
-   VTEP schema supports BFD.
+  The use of BFD for hypervisor-to-hypervisor tunnels is probably not worth it,
+  since there's no alternative to switch to if a tunnel goes down.  It could
+  make sense at a slow rate if someone does OVN monitoring system integration,
+  but not otherwise.
+
+  When OVN gets to supporting HA for gateways (see ovn/OVN-GW-HA.md), BFD is
+  likely needed as a part of that solution.
+
+  There's more commentary in this ML post:
+  http://openvswitch.org/pipermail/dev/2015-November/062385.html
 
 * ACL
 
