@@ -1618,10 +1618,12 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 }
 
 static void
-ovnnb_db_changed(struct northd_context *ctx)
+ovnnb_db_run(struct northd_context *ctx)
 {
-    VLOG_DBG("ovn-nb db contents have changed.");
-
+    if (!ctx->ovnsb_txn) {
+        return;
+    }
+    VLOG_DBG("ovn-nb db contents may have changed.");
     struct hmap datapaths, ports;
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, &ports);
@@ -1646,8 +1648,11 @@ ovnnb_db_changed(struct northd_context *ctx)
  * need to set the corresponding logical port as 'up' in the northbound DB.
  */
 static void
-ovnsb_db_changed(struct northd_context *ctx)
+ovnsb_db_run(struct northd_context *ctx)
 {
+    if (!ctx->ovnnb_txn) {
+        return;
+    }
     struct hmap lports_hmap;
     const struct sbrec_port_binding *sb;
     const struct nbrec_logical_port *nb;
@@ -1794,14 +1799,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
-    struct ovsdb_idl *ovnnb_idl, *ovnsb_idl;
-    unsigned int ovnnb_seqno, ovn_seqno;
     int res = EXIT_SUCCESS;
-    struct northd_context ctx = {
-        .ovnsb_txn = NULL,
-    };
-    bool ovnnb_changes_pending = false;
-    bool ovn_changes_pending = false;
     struct unixctl_server *unixctl;
     int retval;
     bool exiting;
@@ -1827,190 +1825,82 @@ main(int argc, char *argv[])
     sbrec_init();
 
     /* We want to detect all changes to the ovn-nb db. */
-    ctx.ovnnb_idl = ovnnb_idl = ovsdb_idl_create(ovnnb_db,
-            &nbrec_idl_class, true, true);
+    struct ovsdb_idl_loop ovnnb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
+        ovsdb_idl_create(ovnnb_db, &nbrec_idl_class, true, true));
 
-    ctx.ovnsb_idl = ovnsb_idl = ovsdb_idl_create(ovnsb_db,
-            &sbrec_idl_class, false, true);
+    struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
+        ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
 
-    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_logical_flow);
-    add_column_noalert(ovnsb_idl, &sbrec_logical_flow_col_logical_datapath);
-    add_column_noalert(ovnsb_idl, &sbrec_logical_flow_col_pipeline);
-    add_column_noalert(ovnsb_idl, &sbrec_logical_flow_col_table_id);
-    add_column_noalert(ovnsb_idl, &sbrec_logical_flow_col_priority);
-    add_column_noalert(ovnsb_idl, &sbrec_logical_flow_col_match);
-    add_column_noalert(ovnsb_idl, &sbrec_logical_flow_col_actions);
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_logical_flow);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_logical_flow_col_logical_datapath);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_pipeline);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_table_id);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_priority);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_match);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_actions);
 
-    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_multicast_group);
-    add_column_noalert(ovnsb_idl, &sbrec_multicast_group_col_datapath);
-    add_column_noalert(ovnsb_idl, &sbrec_multicast_group_col_tunnel_key);
-    add_column_noalert(ovnsb_idl, &sbrec_multicast_group_col_name);
-    add_column_noalert(ovnsb_idl, &sbrec_multicast_group_col_ports);
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_multicast_group);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_multicast_group_col_datapath);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_multicast_group_col_tunnel_key);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_multicast_group_col_name);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_multicast_group_col_ports);
 
-    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_datapath_binding);
-    add_column_noalert(ovnsb_idl, &sbrec_datapath_binding_col_tunnel_key);
-    add_column_noalert(ovnsb_idl, &sbrec_datapath_binding_col_external_ids);
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_datapath_binding);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_datapath_binding_col_tunnel_key);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_datapath_binding_col_external_ids);
 
-    ovsdb_idl_add_table(ovnsb_idl, &sbrec_table_port_binding);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_datapath);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_logical_port);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_tunnel_key);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_parent_port);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_tag);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_type);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_options);
-    add_column_noalert(ovnsb_idl, &sbrec_port_binding_col_mac);
-    ovsdb_idl_add_column(ovnsb_idl, &sbrec_port_binding_col_chassis);
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_port_binding);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_datapath);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_port_binding_col_logical_port);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_port_binding_col_tunnel_key);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_port_binding_col_parent_port);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_tag);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_type);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_options);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
 
-    /*
-     * The loop here just runs the IDL in a loop waiting for the seqno to
-     * change, which indicates that the contents of the db have changed.
-     *
-     * If the contents of the ovn-nb db change, the mappings to the ovn-sb
-     * db must be recalculated.
-     *
-     * If the contents of the ovn-sb db change, it means the 'up' state of
-     * a port may have changed, as that's the only type of change ovn-northd is
-     * watching for.
-     */
-
-    ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
-    ovn_seqno = ovsdb_idl_get_seqno(ovnsb_idl);
+    /* Main loop. */
     exiting = false;
     while (!exiting) {
-        ovsdb_idl_run(ovnnb_idl);
-        ovsdb_idl_run(ovnsb_idl);
+        struct northd_context ctx = {
+            .ovnnb_idl = ovnnb_idl_loop.idl,
+            .ovnnb_txn = ovsdb_idl_loop_run(&ovnnb_idl_loop),
+            .ovnsb_idl = ovnsb_idl_loop.idl,
+            .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
+        };
+
+        ovnnb_db_run(&ctx);
+        ovnsb_db_run(&ctx);
+
         unixctl_server_run(unixctl);
-
-        if (!ovsdb_idl_is_alive(ovnnb_idl)) {
-            int retval = ovsdb_idl_get_last_error(ovnnb_idl);
-            VLOG_ERR("%s: database connection failed (%s)",
-                    ovnnb_db, ovs_retval_to_string(retval));
-            res = EXIT_FAILURE;
-            break;
+        unixctl_server_wait(unixctl);
+        if (exiting) {
+            poll_immediate_wake();
         }
+        ovsdb_idl_loop_commit_and_wait(&ovnnb_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
 
-        if (!ovsdb_idl_is_alive(ovnsb_idl)) {
-            int retval = ovsdb_idl_get_last_error(ovnsb_idl);
-            VLOG_ERR("%s: database connection failed (%s)",
-                    ovnsb_db, ovs_retval_to_string(retval));
-            res = EXIT_FAILURE;
-            break;
-        }
-
-        if (ovnnb_seqno != ovsdb_idl_get_seqno(ovnnb_idl)) {
-            ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl);
-            ovnnb_changes_pending = true;
-        }
-
-        if (ovn_seqno != ovsdb_idl_get_seqno(ovnsb_idl)) {
-            ovn_seqno = ovsdb_idl_get_seqno(ovnsb_idl);
-            ovn_changes_pending = true;
-        }
-
-        /*
-         * If there are any pending changes, we delay recalculating the
-         * necessary updates until after an existing transaction finishes.
-         * This avoids the possibility of rapid updates causing ovn-northd to
-         * never be able to successfully make the corresponding updates to the
-         * other db.  Instead, pending changes are batched up until the next
-         * time we get a chance to calculate the new state and apply it.
-         */
-
-        if (ovnnb_changes_pending && !ctx.ovnsb_txn) {
-            /*
-             * The OVN-nb db contents have changed, so create a transaction for
-             * updating the OVN-sb DB.
-             */
-            ctx.ovnsb_txn = ovsdb_idl_txn_create(ctx.ovnsb_idl);
-            ovsdb_idl_txn_add_comment(ctx.ovnsb_txn,
-                                      "ovn-northd: northbound db changed");
-            ovnnb_db_changed(&ctx);
-            ovnnb_changes_pending = false;
-        }
-
-        if (ovn_changes_pending && !ctx.ovnnb_txn) {
-            /*
-             * The OVN-sb db contents have changed, so create a transaction for
-             * updating the northbound DB.
-             */
-            ctx.ovnnb_txn = ovsdb_idl_txn_create(ctx.ovnnb_idl);
-            ovsdb_idl_txn_add_comment(ctx.ovnnb_txn,
-                                      "ovn-northd: southbound db changed");
-            ovnsb_db_changed(&ctx);
-            ovn_changes_pending = false;
-        }
-
-        if (ctx.ovnnb_txn) {
-            enum ovsdb_idl_txn_status txn_status;
-            txn_status = ovsdb_idl_txn_commit(ctx.ovnnb_txn);
-            switch (txn_status) {
-            case TXN_UNCOMMITTED:
-            case TXN_INCOMPLETE:
-                /* Come back around and try to commit this transaction again */
-                break;
-            case TXN_ABORTED:
-            case TXN_TRY_AGAIN:
-            case TXN_NOT_LOCKED:
-            case TXN_ERROR:
-                /* Something went wrong, so try creating a new transaction. */
-                ovn_changes_pending = true;
-            case TXN_UNCHANGED:
-            case TXN_SUCCESS:
-                ovsdb_idl_txn_destroy(ctx.ovnnb_txn);
-                ctx.ovnnb_txn = NULL;
-            }
-        }
-
-        if (ctx.ovnsb_txn) {
-            enum ovsdb_idl_txn_status txn_status;
-            txn_status = ovsdb_idl_txn_commit(ctx.ovnsb_txn);
-            switch (txn_status) {
-            case TXN_UNCOMMITTED:
-            case TXN_INCOMPLETE:
-                /* Come back around and try to commit this transaction again */
-                break;
-            case TXN_ABORTED:
-            case TXN_TRY_AGAIN:
-            case TXN_NOT_LOCKED:
-            case TXN_ERROR:
-                /* Something went wrong, so try creating a new transaction. */
-                ovnnb_changes_pending = true;
-            case TXN_UNCHANGED:
-            case TXN_SUCCESS:
-                ovsdb_idl_txn_destroy(ctx.ovnsb_txn);
-                ctx.ovnsb_txn = NULL;
-            }
-        }
-
-        if (ovnnb_seqno == ovsdb_idl_get_seqno(ovnnb_idl) &&
-                ovn_seqno == ovsdb_idl_get_seqno(ovnsb_idl)) {
-            ovsdb_idl_wait(ovnnb_idl);
-            ovsdb_idl_wait(ovnsb_idl);
-            if (ctx.ovnnb_txn) {
-                ovsdb_idl_txn_wait(ctx.ovnnb_txn);
-            }
-            if (ctx.ovnsb_txn) {
-                ovsdb_idl_txn_wait(ctx.ovnsb_txn);
-            }
-            unixctl_server_wait(unixctl);
-            if (exiting) {
-                poll_immediate_wake();
-            }
-            poll_block();
-        }
+        poll_block();
         if (should_service_stop()) {
             exiting = true;
         }
     }
 
     unixctl_server_destroy(unixctl);
-    ovsdb_idl_destroy(ovnsb_idl);
-    ovsdb_idl_destroy(ovnnb_idl);
+    ovsdb_idl_loop_destroy(&ovnnb_idl_loop);
+    ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
     service_stop();
 
     free(default_db_);
-
     exit(res);
 }
 
