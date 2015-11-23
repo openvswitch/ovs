@@ -137,7 +137,7 @@ void ovs_udp_csum_gso(struct sk_buff *skb)
 	/* csum segment if tunnel sets skb with csum. The cleanest way
 	 * to do this just to set it up from scratch. */
 	skb->ip_summed = CHECKSUM_NONE;
-	udp_set_csum(true, skb, iph->saddr, iph->daddr,
+	udp_set_csum(false, skb, iph->saddr, iph->daddr,
 		     skb->len - udp_offset);
 }
 EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
