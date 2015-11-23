@@ -126,8 +126,14 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
 
         match.wc.masks.dl_type = OVS_BE16_MAX;
         match.wc.masks.nw_proto = 0xff;
-        match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
-        match.wc.masks.tp_dst = OVS_BE16_MAX;
+         /* XXX: No fragments support. */
+        match.wc.masks.nw_frag = FLOW_NW_FRAG_MASK;
+
+        /* 'udp_port' is zero for non-UDP tunnels (e.g. GRE). In this case it
+         * doesn't make sense to match on UDP port numbers. */
+        if (udp_port) {
+            match.wc.masks.tp_dst = OVS_BE16_MAX;
+        }
         if (IN6_IS_ADDR_V4MAPPED(addr)) {
             match.wc.masks.nw_dst = OVS_BE32_MAX;
         } else {
