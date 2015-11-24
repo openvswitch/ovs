@@ -4887,6 +4887,22 @@ parse_table_desc_eviction_property(struct ofpbuf *property,
     return 0;
 }
 
+static enum ofperr
+parse_table_desc_vacancy_property(struct ofpbuf *property,
+                                  struct ofputil_table_desc *td)
+{
+    struct ofp14_table_mod_prop_vacancy *otv = property->data;
+
+    if (property->size != sizeof *otv) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    td->table_vacancy.vacancy_down = otv->vacancy_down;
+    td->table_vacancy.vacancy_up = otv->vacancy_up;
+    td->table_vacancy.vacancy = otv->vacancy;
+    return 0;
+}
+
 /* Decodes the next OpenFlow "table desc" message (of possibly several) from
  * 'msg' into an abstract form in '*td'.  Returns 0 if successful, EOF if the
  * last "table desc" in 'msg' was already decoded, otherwise an OFPERR_*
@@ -4928,6 +4944,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
     ofpbuf_use_const(&properties, ofpbuf_pull(msg, length), length);
 
     td->eviction = ofputil_decode_table_eviction(otd->config, version);
+    td->vacancy = ofputil_decode_table_vacancy(otd->config, version);
     td->eviction_flags = UINT32_MAX;
 
     while (properties.size > 0) {
@@ -4943,6 +4960,10 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
         switch (type) {
         case OFPTMPT14_EVICTION:
             error = parse_table_desc_eviction_property(&payload, td);
+            break;
+
+        case OFPTMPT14_VACANCY:
+            error = parse_table_desc_vacancy_property(&payload, td);
             break;
 
         default:
@@ -4996,6 +5017,16 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
         ote->type = htons(OFPTMPT14_EVICTION);
         ote->length = htons(sizeof *ote);
         ote->flags = htonl(td->eviction_flags);
+    }
+    if (td->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+        struct ofp14_table_mod_prop_vacancy *otv;
+
+        otv = ofpbuf_put_zeros(reply, sizeof *otv);
+        otv->type = htons(OFPTMPT14_VACANCY);
+        otv->length = htons(sizeof *otv);
+        otv->vacancy_down = td->table_vacancy.vacancy_down;
+        otv->vacancy_up = td->table_vacancy.vacancy_up;
+        otv->vacancy = td->table_vacancy.vacancy;
     }
 
     otd = ofpbuf_at_assert(reply, start_otd, sizeof *otd);

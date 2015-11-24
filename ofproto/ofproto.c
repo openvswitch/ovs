@@ -3588,6 +3588,26 @@ handle_table_features_request(struct ofconn *ofconn,
     return 0;
 }
 
+static void
+query_table_desc__(struct ofputil_table_desc *td,
+                   struct ofproto *ofproto, uint8_t table_id)
+{
+    unsigned int count = ofproto->tables[table_id].n_flows;
+    unsigned int max_flows = ofproto->tables[table_id].max_flows;
+
+    td->table_id = table_id;
+    td->eviction = (ofproto->tables[table_id].eviction & EVICTION_OPENFLOW
+                    ? OFPUTIL_TABLE_EVICTION_ON
+                    : OFPUTIL_TABLE_EVICTION_OFF);
+    td->eviction_flags = OFPROTO_EVICTION_FLAGS;
+    td->vacancy = (ofproto->tables[table_id].vacancy_enabled
+                   ? OFPUTIL_TABLE_VACANCY_ON
+                   : OFPUTIL_TABLE_VACANCY_OFF);
+    td->table_vacancy.vacancy_down = ofproto->tables[table_id].vacancy_down;
+    td->table_vacancy.vacancy_up = ofproto->tables[table_id].vacancy_up;
+    td->table_vacancy.vacancy = max_flows ? (count * 100) / max_flows : 0;
+}
+
 /* This function queries the database for dumping table-desc. */
 static void
 query_tables_desc(struct ofproto *ofproto, struct ofputil_table_desc **descp)
@@ -3598,11 +3618,7 @@ query_tables_desc(struct ofproto *ofproto, struct ofputil_table_desc **descp)
     table_desc = *descp = xcalloc(ofproto->n_tables, sizeof *table_desc);
     for (i = 0; i < ofproto->n_tables; i++) {
         struct ofputil_table_desc *td = &table_desc[i];
-        td->table_id = i;
-        td->eviction = (ofproto->tables[i].eviction & EVICTION_OPENFLOW
-                        ? OFPUTIL_TABLE_EVICTION_ON
-                        : OFPUTIL_TABLE_EVICTION_OFF);
-        td->eviction_flags = OFPROTO_EVICTION_FLAGS;
+        query_table_desc__(td, ofproto, i);
     }
 }
 

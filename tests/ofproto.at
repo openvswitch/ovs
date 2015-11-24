@@ -1923,7 +1923,8 @@ OVS_VSWITCHD_START
  while test $x -lt 254; do
    y=`expr $x + 1`
    echo "  table $x:
-   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME"
+   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME
+   vacancy=off"
    x=$y
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d

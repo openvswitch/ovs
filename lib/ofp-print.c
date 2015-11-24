@@ -1053,6 +1053,17 @@ ofp_print_table_desc(struct ds *string, const struct ofputil_table_desc *td)
                   ofputil_table_eviction_to_string(td->eviction));
     ofputil_put_eviction_flags(string, td->eviction_flags);
     ds_put_char(string, '\n');
+    ds_put_format(string, "   vacancy=%s",
+                  ofputil_table_vacancy_to_string(td->vacancy));
+    if (td->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+        ds_put_format(string, " vacancy_down=%"PRIu8"%%",
+                      td->table_vacancy.vacancy_down);
+        ds_put_format(string, " vacancy_up=%"PRIu8"%%",
+                      td->table_vacancy.vacancy_up);
+        ds_put_format(string, " vacancy=%"PRIu8"%%",
+                      td->table_vacancy.vacancy);
+    }
+    ds_put_char(string, '\n');
 }
 
 static void
