@@ -41,6 +41,7 @@
 #include "util.h"
 
 #include "ofctrl.h"
+#include "pinctrl.h"
 #include "binding.h"
 #include "chassis.h"
 #include "encaps.h"
@@ -223,6 +224,7 @@ main(int argc, char *argv[])
     sbrec_init();
 
     ofctrl_init();
+    pinctrl_init();
     lflow_init();
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
@@ -292,6 +294,8 @@ main(int argc, char *argv[])
         if (br_int) {
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
+            pinctrl_run(&ctx, br_int);
+
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &flow_table, &ct_zones);
             if (chassis_id) {
@@ -314,6 +318,7 @@ main(int argc, char *argv[])
 
         if (br_int) {
             ofctrl_wait();
+            pinctrl_wait();
         }
         poll_block();
         if (should_service_stop()) {
@@ -351,6 +356,7 @@ main(int argc, char *argv[])
     unixctl_server_destroy(unixctl);
     lflow_destroy();
     ofctrl_destroy();
+    pinctrl_destroy();
 
     simap_destroy(&ct_zones);
 

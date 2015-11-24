@@ -10,6 +10,8 @@ ovn_controller_ovn_controller_SOURCES = \
 	ovn/controller/lflow.h \
 	ovn/controller/ofctrl.c \
 	ovn/controller/ofctrl.h \
+	ovn/controller/pinctrl.c \
+	ovn/controller/pinctrl.h \
 	ovn/controller/patch.c \
 	ovn/controller/patch.h \
 	ovn/controller/ovn-controller.c \
