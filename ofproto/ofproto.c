@@ -6646,20 +6646,20 @@ ofproto_table_get_miss_config(const struct ofproto *ofproto, uint8_t table_id)
 
 static void
 table_mod__(struct oftable *oftable,
-            enum ofputil_table_miss miss, enum ofputil_table_eviction eviction)
+            const struct ofputil_table_mod *tm)
 {
-    if (miss == OFPUTIL_TABLE_MISS_DEFAULT) {
+    if (tm->miss == OFPUTIL_TABLE_MISS_DEFAULT) {
         /* This is how an OFPT_TABLE_MOD decodes if it doesn't specify any
          * table-miss configuration (because the protocol used doesn't have
          * such a concept), so there's nothing to do. */
     } else {
-        atomic_store_relaxed(&oftable->miss_config, miss);
+        atomic_store_relaxed(&oftable->miss_config, tm->miss);
     }
 
     unsigned int new_eviction = oftable->eviction;
-    if (eviction == OFPUTIL_TABLE_EVICTION_ON) {
+    if (tm->eviction == OFPUTIL_TABLE_EVICTION_ON) {
         new_eviction |= EVICTION_OPENFLOW;
-    } else if (eviction == OFPUTIL_TABLE_EVICTION_OFF) {
+    } else if (tm->eviction == OFPUTIL_TABLE_EVICTION_OFF) {
         new_eviction &= ~EVICTION_OPENFLOW;
     }
 
@@ -6668,6 +6668,16 @@ table_mod__(struct oftable *oftable,
         oftable_configure_eviction(oftable, new_eviction,
                                    oftable->eviction_fields,
                                    oftable->n_eviction_fields);
+        ovs_mutex_unlock(&ofproto_mutex);
+    }
+
+    if (tm->vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
+        ovs_mutex_lock(&ofproto_mutex);
+        oftable->vacancy_enabled = (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON
+                                    ? OFPTC14_VACANCY_EVENTS
+                                    : 0);
+        oftable->vacancy_down = tm->table_vacancy.vacancy_down;
+        oftable->vacancy_up = tm->table_vacancy.vacancy_up;
         ovs_mutex_unlock(&ofproto_mutex);
     }
 }
@@ -6693,7 +6703,7 @@ table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
         struct oftable *oftable;
         OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
             if (!(oftable->flags & (OFTABLE_HIDDEN | OFTABLE_READONLY))) {
-                table_mod__(oftable, tm->miss, tm->eviction);
+                table_mod__(oftable, tm);
             }
         }
     } else {
@@ -6701,7 +6711,7 @@ table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
         if (oftable->flags & OFTABLE_READONLY) {
             return OFPERR_OFPTMFC_EPERM;
         }
-        table_mod__(oftable, tm->miss, tm->eviction);
+        table_mod__(oftable, tm);
     }
 
     return 0;

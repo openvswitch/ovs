@@ -96,8 +96,13 @@ algorithm described for the \fBFlow_Table\fR table in
 \fBovs-vswitchd.conf.db\fR(5).
 .IP \fBnoevict\fR
 Refuse to add the new flow.  (Eviction might still be enabled through
-the \fBoverflow_policy\fR oclumn in the \fBFlow_Table\fR table
+the \fBoverflow_policy\fR column in the \fBFlow_Table\fR table
 documented in \fBovs-vswitchd.conf.db\fR(5).)
+.IP \fBvacancy:\fIlow\fB,\fIhigh\fR
+Enables sending vacancy events to controllers using \fBTABLE_STATUS\fR
+messages, based on percentage thresholds \fIlow\fR and \fIhigh\fR.
+.IP \fBnovacancy\fR
+Disables vacancy events.
 .RE
 .
 .TP

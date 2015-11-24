@@ -628,6 +628,33 @@ enum ofputil_table_eviction {
     OFPUTIL_TABLE_EVICTION_OFF      /* Disable eviction. */
 };
 
+/* Abstract version of OFPTC14_VACANCY_EVENTS.
+ *
+ * OpenFlow 1.0 through 1.3 don't know anything about vacancy events, so
+ * decoding a message for one of these protocols always yields
+ * OFPUTIL_TABLE_VACANCY_DEFAULT. */
+enum ofputil_table_vacancy {
+    OFPUTIL_TABLE_VACANCY_DEFAULT, /* No value. */
+    OFPUTIL_TABLE_VACANCY_ON,      /* Enable vacancy events. */
+    OFPUTIL_TABLE_VACANCY_OFF      /* Disable vacancy events. */
+};
+
+/* Abstract version of OFPTMPT_VACANCY.
+ *
+ * Openflow 1.4+ defines vacancy events.
+ * The fields vacancy_down and vacancy_up are the threshold for generating
+ * vacancy events that should be configured on the flow table, expressed as
+ * a percent.
+ * The vacancy field is only used when this property in included in a
+ * OFPMP_TABLE_DESC multipart reply or a OFPT_TABLE_STATUS message and
+ * represent the current vacancy of the table, expressed as a percent. In
+ * OFP_TABLE_MOD requests, this field must be set to 0 */
+struct ofputil_table_mod_prop_vacancy {
+    uint8_t vacancy_down;    /* Vacancy threshold when space decreases (%). */
+    uint8_t vacancy_up;      /* Vacancy threshold when space increases (%). */
+    uint8_t vacancy;         /* Current vacancy (%). */
+};
+
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
     uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */
@@ -644,6 +671,16 @@ struct ofputil_table_mod {
      * absence.  For other versions, ignored on encoding, decoded to
      * UINT32_MAX.*/
     uint32_t eviction_flags;    /* OFPTMPEF14_*. */
+
+    /* OpenFlow 1.4+ only. For other versions, ignored on encoding, decoded to
+     * OFPUTIL_TABLE_VACANCY_DEFAULT. */
+    enum ofputil_table_vacancy vacancy;
+
+    /* Openflow 1.4+ only. Defines threshold values of vacancy expressed as
+     * percent, value of current vacancy is set to zero for table-mod.
+     * For other versions, ignored on encoding, all values decoded to
+     * zero. */
+    struct ofputil_table_mod_prop_vacancy table_vacancy;
 };
 
 /* Abstract ofp14_table_desc. */
@@ -651,6 +688,8 @@ struct ofputil_table_desc {
     uint8_t table_id;         /* ID of the table. */
     enum ofputil_table_eviction eviction;
     uint32_t eviction_flags;    /* UINT32_MAX if not present. */
+    enum ofputil_table_vacancy vacancy;
+    struct ofputil_table_mod_prop_vacancy table_vacancy;
 };
 
 enum ofperr ofputil_decode_table_mod(const struct ofp_header *,

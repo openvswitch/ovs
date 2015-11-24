@@ -990,6 +990,18 @@ ofputil_put_eviction_flags(struct ds *string, uint32_t eviction_flags)
     }
 }
 
+static const char *
+ofputil_table_vacancy_to_string(enum ofputil_table_vacancy vacancy)
+{
+    switch (vacancy) {
+    case OFPUTIL_TABLE_VACANCY_DEFAULT: return "default";
+    case OFPUTIL_TABLE_VACANCY_ON: return "on";
+    case OFPUTIL_TABLE_VACANCY_OFF: return "off";
+    default: return "***error***";
+    }
+
+}
+
 static void
 ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
 {
@@ -1019,6 +1031,15 @@ ofp_print_table_mod(struct ds *string, const struct ofp_header *oh)
     if (pm.eviction_flags != UINT32_MAX) {
         ds_put_cstr(string, "eviction_flags=");
         ofputil_put_eviction_flags(string, pm.eviction_flags);
+    }
+    if (pm.vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
+        ds_put_format(string, ", vacancy=%s",
+                      ofputil_table_vacancy_to_string(pm.vacancy));
+        if (pm.vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+            ds_put_format(string, " vacancy:%"PRIu8""
+                          ",%"PRIu8"", pm.table_vacancy.vacancy_down,
+                          pm.table_vacancy.vacancy_up);
+        }
     }
 }
 

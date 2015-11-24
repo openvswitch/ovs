@@ -1132,7 +1132,7 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 11 00 10 00 00 00 02 02 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, eviction=off
+OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, eviction=off, vacancy=off
 ])
 AT_CLEANUP
 

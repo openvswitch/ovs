@@ -1936,6 +1936,13 @@ mv expout orig-expout
 sed -e '2s/eviction=off/eviction=on/' <orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
 /^OFPST_TABLE_DESC/d'], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O Openflow14 mod-table br0 0 vacancy:20,80])
+# Check that the configuration was updated.
+mv expout orig-expout
+sed -e '3s/vacancy=off/vacancy=on vacancy_down=20% vacancy_up=80% vacancy=0%/' <orig-expout > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
+/^OFPST_TABLE_DESC/d'], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

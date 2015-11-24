@@ -347,7 +347,7 @@ usage(void)
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
            "      OF1.1/1.2 MOD: controller, continue, drop\n"
-           "      OF1.4+ MOD: evict, noevict\n"
+           "      OF1.4+ MOD: evict, noevict, vacancy:low,high, novacancy\n"
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
            "      FRAG_MODE: normal, drop, reassemble, nx-match\n"
@@ -1934,6 +1934,70 @@ found:
     vconn_close(vconn);
 }
 
+/* This function uses OFPMP14_TABLE_DESC request to get the current
+ * table configuration from switch. The function then modifies
+ * only that table-config property, which has been requested. */
+static void
+fetch_table_desc(struct vconn *vconn, struct ofputil_table_mod *tm,
+                 struct ofputil_table_desc *td)
+{
+    struct ofpbuf *request;
+    ovs_be32 send_xid;
+    bool done = false;
+    bool found = false;
+
+    request = ofputil_encode_table_desc_request(vconn_get_version(vconn));
+    send_xid = ((struct ofp_header *) request->data)->xid;
+    send_openflow_buffer(vconn, request);
+    while (!done) {
+        ovs_be32 recv_xid;
+        struct ofpbuf *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            struct ofp_header *oh = reply->data;
+            enum ofptype type;
+            struct ofpbuf b;
+            uint16_t flags;
+
+            ofpbuf_use_const(&b, oh, ntohs(oh->length));
+            if (ofptype_pull(&type, &b)
+                || type != OFPTYPE_TABLE_DESC_REPLY) {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(reply->data, reply->size,
+                                        verbosity + 1));
+            }
+            flags = ofpmp_flags(oh);
+            done = !(flags & OFPSF_REPLY_MORE);
+            if (found) {
+                /* We've already found the table desc consisting of current
+                 * table configuration, but we need to drain the queue of
+                 * any other replies for this request. */
+                continue;
+            }
+            while (!ofputil_decode_table_desc(&b, td, oh->version)) {
+                if (td->table_id == tm->table_id) {
+                    found = true;
+                    break;
+                }
+            }
+        } else {
+            VLOG_DBG("received reply with xid %08"PRIx32" "
+                     "!= expected %08"PRIx32, recv_xid, send_xid);
+        }
+        ofpbuf_delete(reply);
+    }
+    if (tm->eviction != OFPUTIL_TABLE_EVICTION_DEFAULT) {
+        tm->vacancy = td->vacancy;
+        tm->table_vacancy.vacancy_down = td->table_vacancy.vacancy_down;
+        tm->table_vacancy.vacancy_up = td->table_vacancy.vacancy_up;
+    } else if (tm->vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
+        tm->eviction = td->eviction;
+        tm->eviction_flags = td->eviction_flags;
+    }
+}
+
 static void
 ofctl_mod_table(struct ovs_cmdl_context *ctx)
 {
@@ -1941,6 +2005,7 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
     struct ofputil_table_mod tm;
     struct vconn *vconn;
     char *error;
+    int i;
 
     error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3],
                                 &usable_versions);
@@ -1951,15 +2016,36 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
     uint32_t allowed_versions = get_allowed_ofp_versions();
     if (!(allowed_versions & usable_versions)) {
         struct ds versions = DS_EMPTY_INITIALIZER;
-        ofputil_format_version_bitmap_names(&versions, allowed_versions);
+        ofputil_format_version_bitmap_names(&versions, usable_versions);
         ovs_fatal(0, "table_mod '%s' requires one of the OpenFlow "
-                  "versions %s but none is enabled (use -O)",
+                  "versions %s",
                   ctx->argv[3], ds_cstr(&versions));
     }
     mask_allowed_ofp_versions(usable_versions);
-
     enum ofputil_protocol protocol = open_vconn(ctx->argv[1], &vconn);
-    transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
+
+    /* For OpenFlow 1.4+, ovs-ofctl mod-table should not affect table-config
+     * properties that the user didn't ask to change, so it is necessary to
+     * restore the current configuration of table-config parameters using
+     * OFPMP14_TABLE_DESC request. */
+    if ((allowed_versions & (1u << OFP14_VERSION)) ||
+        (allowed_versions & (1u << OFP15_VERSION))) {
+        struct ofputil_table_desc td;
+
+        if (tm.table_id == OFPTT_ALL) {
+            for (i = 0; i < OFPTT_MAX; i++) {
+                tm.table_id = i;
+                fetch_table_desc(vconn, &tm, &td);
+                transact_noreply(vconn,
+                                 ofputil_encode_table_mod(&tm, protocol));
+            }
+        } else {
+            fetch_table_desc(vconn, &tm, &td);
+            transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
+        }
+    } else {
+        transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
+    }
     vconn_close(vconn);
 }
 

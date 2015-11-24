@@ -53,10 +53,13 @@ VLOG_DEFINE_THIS_MODULE(ofp_util);
  * in the peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit bad_ofmsg_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+static enum ofputil_table_vacancy ofputil_decode_table_vacancy(
+    ovs_be32 config, enum ofp_version);
 static enum ofputil_table_eviction ofputil_decode_table_eviction(
     ovs_be32 config, enum ofp_version);
 static ovs_be32 ofputil_encode_table_config(enum ofputil_table_miss,
                                             enum ofputil_table_eviction,
+                                            enum ofputil_table_vacancy,
                                             enum ofp_version);
 
 struct ofp_prop_header {
@@ -4999,8 +5002,60 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
     otd->length = htons(reply->size - start_otd);
     otd->table_id = td->table_id;
     otd->config = ofputil_encode_table_config(OFPUTIL_TABLE_MISS_DEFAULT,
-                                              td->eviction, version);
+                                              td->eviction, td->vacancy,
+                                              version);
     ofpmp_postappend(replies, start_otd);
+}
+
+/* This function parses Vacancy property, and decodes the
+ * ofp14_table_mod_prop_vacancy in ofputil_table_mod.
+ * Returns OFPERR_OFPBPC_BAD_VALUE error code when vacancy_down is
+ * greater than vacancy_up and also when current vacancy has non-zero
+ * value. Returns 0 on success. */
+static enum ofperr
+parse_table_mod_vacancy_property(struct ofpbuf *property,
+                                 struct ofputil_table_mod *tm)
+{
+    struct ofp14_table_mod_prop_vacancy *otv = property->data;
+
+    if (property->size != sizeof *otv) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    tm->table_vacancy.vacancy_down = otv->vacancy_down;
+    tm->table_vacancy.vacancy_up = otv->vacancy_up;
+    if (tm->table_vacancy.vacancy_down > tm->table_vacancy.vacancy_up) {
+        log_property(false, "Value of vacancy_down is greater than "
+                     "vacancy_up");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+    if (tm->table_vacancy.vacancy_down > 100 ||
+        tm->table_vacancy.vacancy_up > 100) {
+        log_property(false, "Vacancy threshold percentage should not be"
+                     "greater than 100");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+    tm->table_vacancy.vacancy = otv->vacancy;
+    if (tm->table_vacancy.vacancy) {
+        log_property(false, "Vacancy value should be zero for table-mod "
+                     "messages");
+        return OFPERR_OFPBPC_BAD_VALUE;
+    }
+    return 0;
+}
+
+/* Given 'config', taken from an OpenFlow 'version' message that specifies
+ * table configuration (a table mod, table stats, or table features message),
+ * returns the table vacancy configuration that it specifies.
+ *
+ * Only OpenFlow 1.4 and later specify table vacancy configuration this way,
+ * so for other 'version' this function always returns
+ * OFPUTIL_TABLE_VACANCY_DEFAULT. */
+static enum ofputil_table_vacancy
+ofputil_decode_table_vacancy(ovs_be32 config, enum ofp_version version)
+{
+    return (version < OFP14_VERSION ? OFPUTIL_TABLE_VACANCY_DEFAULT
+            : config & htonl(OFPTC14_VACANCY_EVENTS) ? OFPUTIL_TABLE_VACANCY_ON
+            : OFPUTIL_TABLE_VACANCY_OFF);
 }
 
 static enum ofperr
@@ -5038,8 +5093,10 @@ ofputil_decode_table_eviction(ovs_be32 config, enum ofp_version version)
 static ovs_be32
 ofputil_encode_table_config(enum ofputil_table_miss miss,
                             enum ofputil_table_eviction eviction,
+                            enum ofputil_table_vacancy vacancy,
                             enum ofp_version version)
 {
+    uint32_t config = 0;
     /* See the section "OFPTC_* Table Configuration" in DESIGN.md for more
      * information on the crazy evolution of this field. */
     switch (version) {
@@ -5072,10 +5129,15 @@ ofputil_encode_table_config(enum ofputil_table_miss miss,
 
     case OFP14_VERSION:
     case OFP15_VERSION:
-        /* OpenFlow 1.4 introduced OFPTC14_EVICTION and OFPTC14_VACANCY_EVENTS
-         * and we don't support the latter yet. */
-        return htonl(eviction == OFPUTIL_TABLE_EVICTION_ON
-                     ? OFPTC14_EVICTION : 0);
+        /* OpenFlow 1.4 introduced OFPTC14_EVICTION and
+         * OFPTC14_VACANCY_EVENTS. */
+        if (eviction == OFPUTIL_TABLE_EVICTION_ON) {
+            config |= OFPTC14_EVICTION;
+        }
+        if (vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+            config |= OFPTC14_VACANCY_EVENTS;
+        }
+        return htonl(config);
     }
 
     OVS_NOT_REACHED();
@@ -5126,6 +5188,7 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
     pm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
     pm->eviction = OFPUTIL_TABLE_EVICTION_DEFAULT;
     pm->eviction_flags = UINT32_MAX;
+    pm->vacancy = OFPUTIL_TABLE_VACANCY_DEFAULT;
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
 
@@ -5140,6 +5203,7 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
         pm->table_id = otm->table_id;
         pm->miss = ofputil_decode_table_miss(otm->config, oh->version);
         pm->eviction = ofputil_decode_table_eviction(otm->config, oh->version);
+        pm->vacancy = ofputil_decode_table_vacancy(otm->config, oh->version);
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
@@ -5153,6 +5217,10 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
             switch (type) {
             case OFPTMPT14_EVICTION:
                 error = parse_table_mod_eviction_property(&property, pm);
+                break;
+
+            case OFPTMPT14_VACANCY:
+                error = parse_table_mod_vacancy_property(&property, pm);
                 break;
 
             default:
@@ -5196,25 +5264,33 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
         otm = ofpbuf_put_zeros(b, sizeof *otm);
         otm->table_id = tm->table_id;
         otm->config = ofputil_encode_table_config(tm->miss, tm->eviction,
-                                                  ofp_version);
+                                                  tm->vacancy, ofp_version);
         break;
     }
     case OFP14_VERSION:
     case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
         struct ofp14_table_mod_prop_eviction *ote;
+        struct ofp14_table_mod_prop_vacancy *otv;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
         otm->table_id = tm->table_id;
         otm->config = ofputil_encode_table_config(tm->miss, tm->eviction,
-                                                  ofp_version);
+                                                  tm->vacancy, ofp_version);
 
         if (tm->eviction_flags != UINT32_MAX) {
             ote = ofpbuf_put_zeros(b, sizeof *ote);
             ote->type = htons(OFPTMPT14_EVICTION);
             ote->length = htons(sizeof *ote);
             ote->flags = htonl(tm->eviction_flags);
+        }
+        if (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+            otv = ofpbuf_put_zeros(b, sizeof *otv);
+            otv->type = htons(OFPTMPT14_VACANCY);
+            otv->length = htons(sizeof *otv);
+            otv->vacancy_down = tm->table_vacancy.vacancy_down;
+            otv->vacancy_up = tm->table_vacancy.vacancy_up;
         }
         break;
     }
@@ -5682,6 +5758,7 @@ ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
         features->nonmiss.instructions, OFP12_VERSION);
     out->config = ofputil_encode_table_config(features->miss_config,
                                               OFPUTIL_TABLE_EVICTION_DEFAULT,
+                                              OFPUTIL_TABLE_VACANCY_DEFAULT,
                                               OFP12_VERSION);
     out->max_entries = htonl(features->max_entries);
     out->active_count = htonl(stats->active_count);
