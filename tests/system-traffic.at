@@ -165,7 +165,7 @@ priority=100,in_port=2,ct_state=-trk,udp,action=ct(table=0)
 priority=100,in_port=2,ct_state=+trk+est,udp,action=controller
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
@@ -209,7 +209,7 @@ priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0)
 priority=100,in_port=2,ct_state=+trk+est,tcp,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 >/dev/null])
@@ -248,7 +248,7 @@ priority=100,in_port=2,ct_state=-trk,tcp6,action=ct(table=0)
 priority=100,in_port=2,ct_state=+trk+est,tcp6,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Without this sleep, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
@@ -294,7 +294,7 @@ priority=100,in_port=4,tcp,ct_state=-trk,action=ct(commit,table=0)
 priority=100,in_port=4,tcp,ct_state=+trk,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -334,7 +334,7 @@ priority=100,in_port=4,tcp,ct_state=-trk,action=ct(commit,table=0)
 priority=100,in_port=4,tcp,ct_state=+trk,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -375,7 +375,7 @@ priority=100,in_port=4,ct_state=+trk+inv,tcp,action=3
 priority=100,in_port=4,ct_state=+trk+new,tcp,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl We set up our rules to allow the request without committing. The return
 dnl traffic can't be identified, because the initial request wasn't committed.
@@ -415,7 +415,7 @@ priority=100,in_port=4,ct_state=-trk,tcp,action=ct(table=0,zone=2)
 priority=100,in_port=4,ct_state=+trk,ct_zone=1,tcp,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -461,7 +461,7 @@ priority=100,in_port=4,ct_state=-trk,tcp,action=load:0x1002->NXM_NX_REG0[[0..15]
 priority=100,in_port=4,ct_state=+trk,ct_zone=0x1001,tcp,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -517,8 +517,8 @@ priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0,zone=2)
 priority=100,in_port=2,tcp,ct_state=+trk+est,ct_zone=2,action=ct(commit,zone=2),1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows-br0.txt])
-AT_CHECK([ovs-ofctl add-flows br1 flows-br1.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows-br0.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br1 flows-br1.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -546,7 +546,7 @@ priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=0,zone=2)
 priority=100,in_port=2,ct_state=+trk,ct_zone=2,tcp,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -587,7 +587,7 @@ table=1,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=1,action=ct(table=2,
 table=2,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -656,7 +656,7 @@ dnl output table
 table=4,priority=100,ip,action=output:NXM_NX_REG0[[]]
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -704,7 +704,7 @@ priority=100,in_port=4,ct_state=-trk,tcp,action=ct(table=0)
 priority=100,in_port=4,ct_state=+trk,ct_mark=1,tcp,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -750,7 +750,7 @@ priority=100,in_port=4,ct_state=-trk,tcp,action=ct(table=0)
 priority=100,in_port=4,ct_state=+trk,ct_mark=1,tcp,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -797,7 +797,7 @@ priority=100,in_port=4,ct_state=-trk,tcp,action=ct(table=0)
 priority=100,in_port=4,ct_state=+trk,ct_label=0x0a000d000005000001,tcp,action=3
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -829,7 +829,7 @@ priority=100,in_port=2,icmp,ct_state=-trk,action=ct(table=0)
 priority=100,in_port=2,icmp,ct_state=+trk+rel,ct_mark=1,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
 dnl We pass "-q 1" here to handle openbsd-style nc that can't quit immediately.
@@ -860,13 +860,13 @@ dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0
 AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=10,arp,action=normal
-priority=100,in_port=1,ct_state=-trk,udp,action=ct(commit,table=0)
-priority=100,in_port=1,ct_state=+trk,actions=controller
-priority=100,in_port=2,ct_state=-trk,action=ct(table=0)
-priority=100,in_port=2,ct_state=+trk+rel+rpl,action=controller
+priority=100,in_port=1,udp,ct_state=-trk,action=ct(commit,table=0)
+priority=100,in_port=1,ip,ct_state=+trk,actions=controller
+priority=100,in_port=2,ip,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,ip,ct_state=+trk+rel+rpl,action=controller
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows.txt])
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
@@ -926,7 +926,7 @@ priority=100,in_port=2,tcp,ct_state=+trk+est,action=1
 priority=100,in_port=2,tcp,ct_state=+trk-new+rel,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows1.txt])
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
 
 NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
@@ -944,9 +944,8 @@ TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2
 ])
 
 dnl Try the second set of flows.
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows2.txt])
 conntrack -F
-AT_CHECK([ovs-ofctl del-flows br0])
-AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
@@ -1000,7 +999,7 @@ priority=100,in_port=2,tcp,ct_zone=1,ct_state=+trk+rel,action=ct(commit,zone=2),
 priority=100,in_port=2,tcp,ct_zone=1,ct_state=+trk+est,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
@@ -1052,7 +1051,7 @@ priority=100,in_port=2,ct_state=-trk,icmp,action=ct(table=0,zone=9)
 priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
@@ -1092,7 +1091,7 @@ priority=100,in_port=2,ct_state=-trk,icmp,action=ct(table=0,zone=9)
 priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
@@ -1131,7 +1130,7 @@ priority=100,icmp6,icmp_type=135,action=normal
 priority=100,icmp6,icmp_type=136,action=normal
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Without this sleep, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
@@ -1177,7 +1176,7 @@ priority=100,icmp6,icmp_type=135,action=normal
 priority=100,icmp6,icmp_type=136,action=normal
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Without this sleep, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
@@ -1220,7 +1219,7 @@ priority=100,in_port=LOCAL,ct_state=-trk,icmp,action=ct(table=0,zone=9)
 priority=100,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
 ])
 
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Set up underlay link from host into the namespace using veth pair.
 ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
