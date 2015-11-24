@@ -1,8 +1,8 @@
 # _ADD_BR([name])
 #
 # Expands into the proper ovs-vsctl commands to create a bridge with the
-# appropriate type
-m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" ]])
+# appropriate type and properties
+m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15 fail-mode=secure ]])
 
 # OVS_TRAFFIC_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
 #
@@ -16,7 +16,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [
    _OVS_VSWITCHD_START([--disable-system])
    dnl Add bridges, ports, etc.
-   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- set bridge br0 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
 # OVS_TRAFFIC_VSWITCHD_STOP([WHITELIST], [extra_cmds])

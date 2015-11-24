@@ -1,8 +1,9 @@
 AT_BANNER([datapath-sanity])
 
 AT_SETUP([datapath - ping between two ports])
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -23,8 +24,9 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping between two ports on vlan])
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -48,8 +50,9 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping6 between two ports])
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -74,8 +77,9 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping6 between two ports on vlan])
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -105,9 +109,12 @@ AT_CLEANUP
 AT_SETUP([datapath - ping over vxlan tunnel])
 AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])
 
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
-ADD_BR([br-underlay], [set-fail-mode br-underlay standalone])
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
 ADD_NAMESPACES(at_ns0)
 
 dnl Set up underlay link from host into the namespace using veth pair.
@@ -142,8 +149,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - controller])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -186,8 +192,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 HTTP])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -227,8 +232,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 HTTP])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -265,8 +269,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - commit, recirc])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -306,8 +309,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - preserve registers])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -347,8 +349,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - invalid])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -391,8 +392,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - zones])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -439,8 +439,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - zones from field])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -487,8 +486,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - multiple bridges])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone --\
-    add-br br1 --\
+   [_ADD_BR([br1]) --\
     add-port br0 patch+ -- set int patch+ type=patch options:peer=patch- --\
     add-port br1 patch- -- set int patch- type=patch options:peer=patch+ --])
 
@@ -531,8 +529,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - multiple zones])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -568,8 +565,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - multiple zones, local])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0)
 
@@ -616,8 +612,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - multi-stage pipeline, local])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0)
 
@@ -686,8 +681,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ct_mark])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -734,8 +728,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ct_mark from register])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -781,8 +774,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ct_label])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
 
@@ -821,8 +813,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -858,8 +849,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related 2])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -904,8 +894,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - FTP])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -987,8 +976,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - FTP with multiple expectations])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -1048,8 +1036,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation ])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -1087,8 +1074,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation + vlan])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -1128,8 +1114,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -1172,8 +1157,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation + vlan])
 CHECK_CONNTRACK()
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 secure -- ])
+OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -1221,9 +1205,10 @@ AT_SETUP([conntrack - Fragmentation over vxlan])
 AT_SKIP_IF([! ip link help 2>&1 | grep vxlan >/dev/null])
 CHECK_CONNTRACK()
 
-OVS_TRAFFIC_VSWITCHD_START(
-   [set-fail-mode br0 standalone --])
-ADD_BR([br-underlay], [set-fail-mode br-underlay standalone])
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
 ADD_NAMESPACES(at_ns0)
 
 dnl Sending ping through conntrack
