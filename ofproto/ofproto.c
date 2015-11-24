@@ -4929,7 +4929,7 @@ modify_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, CLS_MAX_VERSION,
-                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
+                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_loose(ofproto, &criteria, old_rules);
@@ -5006,7 +5006,7 @@ modify_flow_start_strict(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
                        CLS_MAX_VERSION, fm->cookie, fm->cookie_mask, OFPP_ANY,
-                       OFPG11_ANY);
+                       OFPG_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_strict(ofproto, &criteria, old_rules);

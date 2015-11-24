@@ -1713,7 +1713,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         fm->out_group = (ofm->command == OFPFC_DELETE ||
                          ofm->command == OFPFC_DELETE_STRICT
                          ? ntohl(ofm->out_group)
-                         : OFPG11_ANY);
+                         : OFPG_ANY);
         raw_flags = ofm->flags;
     } else {
         uint16_t command;
@@ -1745,7 +1745,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->importance = 0;
             fm->buffer_id = ntohl(ofm->buffer_id);
             fm->out_port = u16_to_ofp(ntohs(ofm->out_port));
-            fm->out_group = OFPG11_ANY;
+            fm->out_group = OFPG_ANY;
             raw_flags = ofm->flags;
         } else if (raw == OFPRAW_NXT_FLOW_MOD) {
             /* Nicira extended flow_mod. */
@@ -1773,7 +1773,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->importance = 0;
             fm->buffer_id = ntohl(nfm->buffer_id);
             fm->out_port = u16_to_ofp(ntohs(nfm->out_port));
-            fm->out_group = OFPG11_ANY;
+            fm->out_group = OFPG_ANY;
             raw_flags = nfm->flags;
         } else {
             OVS_NOT_REACHED();
@@ -2334,7 +2334,7 @@ ofputil_decode_ofpst10_flow_request(struct ofputil_flow_stats_request *fsr,
     fsr->aggregate = aggregate;
     ofputil_match_from_ofp10_match(&ofsr->match, &fsr->match);
     fsr->out_port = u16_to_ofp(ntohs(ofsr->out_port));
-    fsr->out_group = OFPG11_ANY;
+    fsr->out_group = OFPG_ANY;
     fsr->table_id = ofsr->table_id;
     fsr->cookie = fsr->cookie_mask = htonll(0);
 
@@ -2385,7 +2385,7 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
 
     fsr->aggregate = aggregate;
     fsr->out_port = u16_to_ofp(ntohs(nfsr->out_port));
-    fsr->out_group = OFPG11_ANY;
+    fsr->out_group = OFPG_ANY;
     fsr->table_id = nfsr->table_id;
 
     return 0;
@@ -6482,9 +6482,9 @@ bool
 ofputil_group_from_string(const char *s, uint32_t *group_idp)
 {
     if (!strcasecmp(s, "any")) {
-        *group_idp = OFPG11_ANY;
+        *group_idp = OFPG_ANY;
     } else if (!strcasecmp(s, "all")) {
-        *group_idp = OFPG11_ALL;
+        *group_idp = OFPG_ALL;
     } else if (!str_to_uint(s, 10, group_idp)) {
         VLOG_WARN("%s is not a valid group ID.  (Valid group IDs are "
                   "32-bit nonnegative integers or the keywords ANY or "
@@ -6497,7 +6497,7 @@ ofputil_group_from_string(const char *s, uint32_t *group_idp)
 
 /* Appends to 's' a string representation of the OpenFlow group ID 'group_id'.
  * Most groups' string representation is just the number, but for special
- * groups, e.g. OFPG11_ALL, it is the name, e.g. "ALL". */
+ * groups, e.g. OFPG_ALL, it is the name, e.g. "ALL". */
 void
 ofputil_format_group(uint32_t group_id, struct ds *s)
 {
@@ -6510,18 +6510,18 @@ ofputil_format_group(uint32_t group_id, struct ds *s)
 
 /* Puts in the 'bufsize' byte in 'namebuf' a null-terminated string
  * representation of OpenFlow group ID 'group_id'.  Most group are represented
- * as just their number, but special groups, e.g. OFPG11_ALL, are represented
+ * as just their number, but special groups, e.g. OFPG_ALL, are represented
  * by name, e.g. "ALL". */
 void
 ofputil_group_to_string(uint32_t group_id,
                         char namebuf[MAX_GROUP_NAME_LEN + 1], size_t bufsize)
 {
     switch (group_id) {
-    case OFPG11_ALL:
+    case OFPG_ALL:
         ovs_strlcpy(namebuf, "ALL", bufsize);
         break;
 
-    case OFPG11_ANY:
+    case OFPG_ANY:
         ovs_strlcpy(namebuf, "ANY", bufsize);
         break;
 

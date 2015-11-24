@@ -2385,7 +2385,7 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
         if (bucket->watch_port != OFPP_NONE) {
             ds_put_format(s, "watch_port:%"PRIu32",", bucket->watch_port);
         }
-        if (bucket->watch_group != OFPG11_ANY) {
+        if (bucket->watch_group != OFPG_ANY) {
             ds_put_format(s, "watch_group:%"PRIu32",", bucket->watch_group);
         }
 

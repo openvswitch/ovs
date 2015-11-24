@@ -351,7 +351,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     fm->out_port = OFPP_ANY;
     fm->flags = 0;
     fm->importance = 0;
-    fm->out_group = OFPG11_ANY;
+    fm->out_group = OFPG_ANY;
     fm->delete_reason = OFPRR_DELETE;
     if (fields & F_ACTIONS) {
         act_str = extract_actions(string);
@@ -1165,7 +1165,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_, uint8_t group_type,
     bucket->weight = group_type == OFPGT11_SELECT ? 1 : 0;
     bucket->bucket_id = OFPG15_BUCKET_ALL;
     bucket->watch_port = OFPP_ANY;
-    bucket->watch_group = OFPG11_ANY;
+    bucket->watch_group = OFPG_ANY;
 
     ds_init(&actions);
 

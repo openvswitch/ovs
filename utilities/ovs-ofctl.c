@@ -2383,7 +2383,7 @@ ofctl_dump_group_desc(struct ovs_cmdl_context *ctx)
     open_vconn(ctx->argv[1], &vconn);
 
     if (ctx->argc < 3 || !ofputil_group_from_string(ctx->argv[2], &group_id)) {
-        group_id = OFPG11_ALL;
+        group_id = OFPG_ALL;
     }
 
     request = ofputil_encode_group_desc_request(vconn_get_version(vconn),
