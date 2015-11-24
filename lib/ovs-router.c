@@ -275,7 +275,8 @@ ovs_router_add(struct unixctl_conn *conn, int argc,
             gw6 = in6addr_any;
         }
     } else {
-        unixctl_command_reply(conn, "Invalid parameters");
+        unixctl_command_reply_error(conn, "Invalid parameters");
+        return;
     }
     ovs_router_insert__(plen + 32, &ip6, plen, argv[2], &gw6);
     unixctl_command_reply(conn, "OK");
@@ -293,13 +294,14 @@ ovs_router_del(struct unixctl_conn *conn, int argc OVS_UNUSED,
         in6_addr_set_mapped_ipv4(&ip6, ip);
         plen += 96;
     } else if (!scan_ipv6_route(argv[1], &ip6, &plen)) {
-        unixctl_command_reply(conn, "Invalid parameters");
+        unixctl_command_reply_error(conn, "Invalid parameters");
+        return;
     }
     if (rt_entry_delete(plen + 32, &ip6, plen)) {
         unixctl_command_reply(conn, "OK");
         seq_change(tnl_conf_seq);
     } else {
-        unixctl_command_reply(conn, "Not found");
+        unixctl_command_reply_error(conn, "Not found");
     }
 }
 
@@ -347,7 +349,8 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
     if (scan_ipv4_route(argv[1], &ip, &plen) && plen == 32) {
         in6_addr_set_mapped_ipv4(&ip6, ip);
     } else if (!(scan_ipv6_route(argv[1], &ip6, &plen) && plen == 128)) {
-        unixctl_command_reply(conn, "Invalid parameters");
+        unixctl_command_reply_error(conn, "Invalid parameters");
+        return;
     }
 
     if (ovs_router_lookup(&ip6, iface, &gw)) {
@@ -358,7 +361,7 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
         unixctl_command_reply(conn, ds_cstr(&ds));
         ds_destroy(&ds);
     } else {
-        unixctl_command_reply(conn, "Not found");
+        unixctl_command_reply_error(conn, "Not found");
     }
 }
 
