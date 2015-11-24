@@ -447,6 +447,21 @@ ipv6_format_addr(const struct in6_addr *addr, struct ds *s)
     s->length += strlen(dst);
 }
 
+/* Same as print_ipv6_addr, but optionally encloses the address in square
+ * brackets. */
+void
+ipv6_format_addr_bracket(const struct in6_addr *addr, struct ds *s,
+                         bool bracket)
+{
+    if (bracket) {
+        ds_put_char(s, '[');
+    }
+    ipv6_format_addr(addr, s);
+    if (bracket) {
+        ds_put_char(s, ']');
+    }
+}
+
 void
 ipv6_format_mapped(const struct in6_addr *addr, struct ds *s)
 {
