@@ -878,7 +878,7 @@ for i in 1 2 3; do
 	    -- lport-add ls$i lrp$i$j-attachment`
 	ovn-nbctl \
 	    set Logical_Port lrp$i$j-attachment type=router \
-                             options:router-port=$lrp_uuid \
+                             options:router-port=lrp$i$j \
                              addresses='"00:00:00:00:ff:'$i$j'"'
     done
 done

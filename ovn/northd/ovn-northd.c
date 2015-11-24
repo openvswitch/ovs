@@ -594,23 +594,20 @@ join_logical_ports(struct northd_context *ctx,
                     continue;
                 }
 
-                char name[UUID_LEN + 1];
-                snprintf(name, sizeof name, UUID_FMT,
-                         UUID_ARGS(&nbr->header_.uuid));
-                struct ovn_port *op = ovn_port_find(ports, name);
+                struct ovn_port *op = ovn_port_find(ports, nbr->name);
                 if (op) {
                     if (op->nbs || op->nbr) {
                         static struct vlog_rate_limit rl
                             = VLOG_RATE_LIMIT_INIT(5, 1);
                         VLOG_WARN_RL(&rl, "duplicate logical router port %s",
-                                     name);
+                                     nbr->name);
                         continue;
                     }
                     op->nbr = nbr;
                     list_remove(&op->list);
                     list_push_back(both, &op->list);
                 } else {
-                    op = ovn_port_create(ports, name, NULL, nbr, NULL);
+                    op = ovn_port_create(ports, nbr->name, NULL, nbr, NULL);
                     list_push_back(nb_only, &op->list);
                 }
 
@@ -647,10 +644,7 @@ join_logical_ports(struct northd_context *ctx,
                 sizeof *op->od->router_ports * (op->od->n_router_ports + 1));
             op->od->router_ports[op->od->n_router_ports++] = op;
         } else if (op->nbr && op->nbr->peer) {
-            char peer_name[UUID_LEN + 1];
-            snprintf(peer_name, sizeof peer_name, UUID_FMT,
-                     UUID_ARGS(&op->nbr->peer->header_.uuid));
-            op->peer = ovn_port_find(ports, peer_name);
+            op->peer = ovn_port_find(ports, op->nbr->name);
         }
     }
 }

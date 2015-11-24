@@ -148,9 +148,10 @@
           subnets).
         </p>
 
-        <column name="options" key="router-port" type='{"type": "uuid"}'>
-          Required.  The UUID of the <ref table="Logical_Router_Port"/> to
-          which this logical switch port is connected.
+        <column name="options" key="router-port">
+          Required.  The <ref column="name"/> of the <ref
+          table="Logical_Router_Port"/> to which this logical switch port is
+          connected.
         </column>
       </group>
 
@@ -468,10 +469,14 @@
 
     <column name="name">
       <p>
-        A name for the logical router port.  This name has no special meaning or purpose
-        other than to provide convenience for human interaction with the ovn-nb
-        database.  There is no requirement for the name to be unique.  The
-        logical router port's UUID should be used as the unique identifier.
+        A name for the logical router port.
+      </p>
+
+      <p>
+        In addition to provide convenience for human interaction with the
+        ovn-nb database, this column is used as reference by its patch port in
+        <ref table="Logical_Port"/> or another logical router port in <ref
+        table="Logical_Router_Port"/>.
       </p>
     </column>
 
@@ -502,8 +507,10 @@
         <li>
           To attach a logical switch to a logical router.  A logical router
           port of this type is referenced by exactly one <ref
-          table="Logical_Port"/> of type <code>router</code>.  The <ref
-          column="peer"/> column is empty.
+          table="Logical_Port"/> of type <code>router</code>.  The value of
+          <ref column="name"/> is set as <code>router-port</code> in column
+          <ref column="options"/> of <ref table="Logical_Port"/>.
+          In this case <ref column="peer"/> column is empty.
         </li>
 
         <li>
@@ -518,7 +525,7 @@
       <column name="peer">
         <p>
           For a router port used to connect two logical routers, this
-          identifies the other router port in the pair.
+          identifies the other router port in the pair by <ref column="name"/>.
         </p>
 
         <p>
