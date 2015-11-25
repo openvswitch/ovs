@@ -94,7 +94,8 @@ static VOID OvsTunnelVportPendingInit(PVOID context,
 static VOID OvsTunnelVportPendingRemove(PVOID context,
                                         NTSTATUS status,
                                         UINT32 *replyLen);
-static VOID AssignNicNameSpecial(POVS_VPORT_ENTRY vport);
+static NTSTATUS GetNICAlias(GUID *netCfgInstanceId,
+                            IF_COUNTED_STRING *portFriendlyName);
 
 /*
  * --------------------------------------------------------------------------
@@ -311,7 +312,7 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
 {
     POVS_VPORT_ENTRY vport;
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
-
+    IF_COUNTED_STRING portFriendlyName = {0};
     LOCK_STATE_EX lockState;
 
     VPORT_NIC_ENTER(nicParam);
@@ -324,6 +325,12 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
         /* Veto the creation of nic */
         status = NDIS_STATUS_NOT_SUPPORTED;
         goto done;
+    }
+
+    if (nicParam->NicType == NdisSwitchNicTypeInternal ||
+        (nicParam->NicType == NdisSwitchNicTypeExternal &&
+         nicParam->NicIndex != 0)) {
+        GetNICAlias(&nicParam->NetCfgInstanceId, &portFriendlyName);
     }
 
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
@@ -386,17 +393,12 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
     if (nicParam->NicType == NdisSwitchNicTypeInternal ||
         (nicParam->NicType == NdisSwitchNicTypeExternal &&
          nicParam->NicIndex != 0)) {
-        AssignNicNameSpecial(vport);
+        RtlCopyMemory(&vport->portFriendlyName, &portFriendlyName,
+                      sizeof portFriendlyName);
     }
 
 add_nic_done:
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-    if (status == STATUS_SUCCESS &&
-        (vport->portType == NdisSwitchPortTypeInternal ||
-         (vport->portType == NdisSwitchPortTypeExternal &&
-          nicParam->NicIndex != 0))) {
-        AssignNicNameSpecial(vport);
-    }
 
 done:
     VPORT_NIC_EXIT(nicParam);
@@ -467,6 +469,7 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
     UINT32 event = 0;
+    IF_COUNTED_STRING portFriendlyName = {0};
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -476,6 +479,13 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     if (!switchContext->isActivated) {
         OVS_LOG_WARN("Switch is not activated yet.");
         goto update_nic_done;
+    }
+
+    /* GetNICAlias() must be called outside of a lock. */
+    if (nicParam->NicType == NdisSwitchNicTypeInternal ||
+        (nicParam->NicType == NdisSwitchNicTypeExternal &&
+         nicParam->NicIndex != 0)) {
+        GetNICAlias(&nicParam->NetCfgInstanceId, &portFriendlyName);
     }
 
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
@@ -492,7 +502,8 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     case NdisSwitchNicTypeInternal:
         RtlCopyMemory(&vport->netCfgInstanceId, &nicParam->NetCfgInstanceId,
                       sizeof (GUID));
-        AssignNicNameSpecial(vport);
+        RtlCopyMemory(&vport->portFriendlyName, &portFriendlyName,
+                      sizeof portFriendlyName);
         break;
     case NdisSwitchNicTypeSynthetic:
     case NdisSwitchNicTypeEmulated:
@@ -1033,18 +1044,16 @@ OvsInitBridgeInternalVport(POVS_VPORT_ENTRY vport)
  * Hyper-V, is overwritten with the interface alias name.
  * --------------------------------------------------------------------------
  */
-static VOID
-AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
+static NTSTATUS
+GetNICAlias(GUID *netCfgInstanceId,
+            IF_COUNTED_STRING *portFriendlyName)
 {
     NTSTATUS status = STATUS_SUCCESS;
     WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
     NET_LUID interfaceLuid = { 0 };
     size_t len = 0;
 
-    ASSERT(vport->portType == NdisSwitchPortTypeExternal ||
-           vport->portType == NdisSwitchPortTypeInternal);
-
-    status = ConvertInterfaceGuidToLuid(&vport->netCfgInstanceId,
+    status = ConvertInterfaceGuidToLuid(netCfgInstanceId,
                                         &interfaceLuid);
     if (status == STATUS_SUCCESS) {
         /*
@@ -1054,26 +1063,21 @@ AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
         status = ConvertInterfaceLuidToAlias(&interfaceLuid, interfaceName,
                                              IF_MAX_STRING_SIZE + 1);
         if (status == STATUS_SUCCESS) {
-            if (vport->portType == NdisSwitchPortTypeExternal &&
-                vport->nicIndex == 0) {
-                RtlStringCbPrintfW(vport->portFriendlyName.String, IF_MAX_STRING_SIZE,
-                                   L"%s.virtualAdapter", interfaceName);
-            } else {
-                RtlStringCbPrintfW(vport->portFriendlyName.String,
-                                   IF_MAX_STRING_SIZE, L"%s", interfaceName);
-            }
-
-            RtlStringCbLengthW(vport->portFriendlyName.String, IF_MAX_STRING_SIZE,
+            RtlStringCbPrintfW(portFriendlyName->String,
+                               IF_MAX_STRING_SIZE, L"%s", interfaceName);
+            RtlStringCbLengthW(portFriendlyName->String, IF_MAX_STRING_SIZE,
                                &len);
-            vport->portFriendlyName.Length = (USHORT)len;
+            portFriendlyName->Length = (USHORT)len;
         } else {
-            OVS_LOG_INFO("Fail to convert interface LUID to alias, status: %x",
+            OVS_LOG_ERROR("Fail to convert interface LUID to alias, status: %x",
                 status);
         }
     } else {
-        OVS_LOG_INFO("Fail to convert interface GUID to LUID, status: %x",
+        OVS_LOG_ERROR("Fail to convert interface GUID to LUID, status: %x",
                       status);
     }
+
+    return status;
 }
 
 
