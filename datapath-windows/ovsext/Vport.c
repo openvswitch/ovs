@@ -68,8 +68,8 @@ static VOID OvsInitVportWithPortParam(POVS_VPORT_ENTRY vport,
                 PNDIS_SWITCH_PORT_PARAMETERS portParam);
 static VOID OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
                 POVS_VPORT_ENTRY vport, PNDIS_SWITCH_NIC_PARAMETERS nicParam);
-static VOID OvsInitPhysNicVport(POVS_VPORT_ENTRY physExtVPort,
-                POVS_VPORT_ENTRY virtExtVport, UINT32 nicIndex);
+static VOID OvsCopyPortParamsFromVport(POVS_VPORT_ENTRY vport,
+                                       PNDIS_SWITCH_PORT_PARAMETERS portParam);
 static __inline VOID OvsWaitActivate(POVS_SWITCH_CONTEXT switchContext,
                                      ULONG sleepMicroSec);
 static NTSTATUS OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
@@ -81,9 +81,8 @@ static NTSTATUS CreateNetlinkMesgForNetdev(POVS_VPORT_EXT_INFO info,
                                            int dpIfIndex);
 static POVS_VPORT_ENTRY OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
                                               PWSTR wsName, SIZE_T wstrSize);
-static NDIS_STATUS InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
-                                     POVS_VPORT_ENTRY vport,
-                                     BOOLEAN newPort);
+static VOID UpdateSwitchCtxWithVport(POVS_SWITCH_CONTEXT switchContext,
+                                     POVS_VPORT_ENTRY vport, BOOLEAN newPort);
 static NTSTATUS OvsRemoveTunnelVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                      POVS_SWITCH_CONTEXT switchContext,
                                      POVS_VPORT_ENTRY vport,
@@ -98,11 +97,16 @@ static VOID OvsTunnelVportPendingRemove(PVOID context,
 static VOID AssignNicNameSpecial(POVS_VPORT_ENTRY vport);
 
 /*
- * Functions implemented in relaton to NDIS port manipulation.
+ * --------------------------------------------------------------------------
+ *  Creates a Vport entry for a Hyper-V switch port. 'nicIndex' is typically
+ *  associated with a NIC than a port. We use it here for the special case
+ *  where we need to create a Vport for an external NIC with NicIndex > 0.
+ * --------------------------------------------------------------------------
  */
 NDIS_STATUS
 HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
-             PNDIS_SWITCH_PORT_PARAMETERS portParam)
+             PNDIS_SWITCH_PORT_PARAMETERS portParam,
+             NDIS_SWITCH_NIC_INDEX nicIndex)
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
@@ -114,7 +118,7 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
     /* Lookup by port ID. */
     vport = OvsFindVportByPortIdAndNicIndex(switchContext,
-                                            portParam->PortId, 0);
+                                            portParam->PortId, nicIndex);
     if (vport != NULL) {
         OVS_LOG_ERROR("Port add failed due to duplicate port name, "
                       "port Id: %u", portParam->PortId);
@@ -163,7 +167,8 @@ HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
         newPort = TRUE;
     }
     OvsInitVportWithPortParam(vport, portParam);
-    InitHvVportCommon(switchContext, vport, newPort);
+    vport->nicIndex = nicIndex;
+    UpdateSwitchCtxWithVport(switchContext, vport, newPort);
 
 create_port_done:
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
@@ -173,7 +178,9 @@ create_port_done:
 
 
 /*
- * Function updating the port properties
+ * --------------------------------------------------------------------------
+ * Function to process updates to a port on the Hyper-Vs witch.
+ * --------------------------------------------------------------------------
  */
 NDIS_STATUS
 HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
@@ -226,6 +233,12 @@ update_port_done:
     return NDIS_STATUS_SUCCESS;
 }
 
+
+/*
+ * --------------------------------------------------------------------------
+ * Function to process teardown of a port on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 VOID
 HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
                PNDIS_SWITCH_PORT_PARAMETERS portParam)
@@ -250,7 +263,11 @@ HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
     VPORT_PORT_EXIT(portParam);
 }
 
-
+/*
+ * --------------------------------------------------------------------------
+ * Function to process deletion of a port on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 VOID
 HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
              PNDIS_SWITCH_PORT_PARAMETERS portParams)
@@ -282,7 +299,9 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
 
 
 /*
- * Functions implemented in relaton to NDIS NIC manipulation.
+ * --------------------------------------------------------------------------
+ * Function to process addition of a NIC connection on the Hyper-V switch.
+ * --------------------------------------------------------------------------
  */
 NDIS_STATUS
 HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
@@ -308,15 +327,11 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
     }
 
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
-    vport = OvsFindVportByPortIdAndNicIndex(switchContext, nicParam->PortId, 0);
-    if (vport == NULL) {
-        OVS_LOG_ERROR("Create NIC without Switch Port,"
-                      " PortId: %x, NicIndex: %d",
-                      nicParam->PortId, nicParam->NicIndex);
-        status = NDIS_STATUS_INVALID_PARAMETER;
-        goto add_nic_done;
-    }
-
+    /*
+     * There can be one or more NICs for the external port. We create a vport
+     * structure for each such NIC, and each NIC inherits a lot of properties
+     * from the parent external port.
+     */
     if (nicParam->NicType == NdisSwitchNicTypeExternal &&
         nicParam->NicIndex != 0) {
         POVS_VPORT_ENTRY virtExtVport =
@@ -326,6 +341,7 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
                                                 nicParam->PortId,
                                                 nicParam->NicIndex);
         if (vport == NULL) {
+            NDIS_SWITCH_PORT_PARAMETERS portParam;
             /* Find by interface name */
             WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
             NET_LUID interfaceLuid = { 0 };
@@ -346,27 +362,33 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
                 }
             }
 
-            if (vport == NULL) {
-                /* XXX: Handle this event appropriately */
-                vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
-                if (vport == NULL) {
-                    status = NDIS_STATUS_RESOURCES;
-                    goto add_nic_done;
-                }
+            OvsCopyPortParamsFromVport(virtExtVport, &portParam);
+            NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
+            status = HvCreatePort(switchContext, &portParam,
+                                  nicParam->NicIndex);
+            NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
+            if (status != NDIS_STATUS_SUCCESS) {
+                goto add_nic_done;
             }
         }
-
-        OvsInitPhysNicVport(vport, virtExtVport, nicParam->NicIndex);
-        OvsInitVportWithNicParam(switchContext, vport, nicParam);
-        status = InitHvVportCommon(switchContext, vport, TRUE);
-        vport->isAbsentOnHv = FALSE;
-        if (status != NDIS_STATUS_SUCCESS) {
-            OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
-            goto add_nic_done;
-        }
-    } else {
-        OvsInitVportWithNicParam(switchContext, vport, nicParam);
     }
+
+    vport = OvsFindVportByPortIdAndNicIndex(switchContext, nicParam->PortId,
+                                            nicParam->NicIndex);
+    if (vport == NULL) {
+        OVS_LOG_ERROR("Create NIC without Switch Port,"
+                      " PortId: %x, NicIndex: %d",
+                      nicParam->PortId, nicParam->NicIndex);
+        status = NDIS_STATUS_INVALID_PARAMETER;
+        goto add_nic_done;
+    }
+    OvsInitVportWithNicParam(switchContext, vport, nicParam);
+    if (nicParam->NicType == NdisSwitchNicTypeInternal ||
+        (nicParam->NicType == NdisSwitchNicTypeExternal &&
+         nicParam->NicIndex != 0)) {
+        AssignNicNameSpecial(vport);
+    }
+
     portNo = vport->portNo;
     if (vport->ovsState == OVS_STATE_CONNECTED) {
         event = OVS_EVENT_CONNECT | OVS_EVENT_LINK_UP;
@@ -393,8 +415,11 @@ done:
     return status;
 }
 
-
-/* Mark already created NIC as connected. */
+/*
+ * --------------------------------------------------------------------------
+ * Function to process connection event of a NIC on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 VOID
 HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
              PNDIS_SWITCH_NIC_PARAMETERS nicParam)
@@ -442,6 +467,12 @@ done:
     VPORT_NIC_EXIT(nicParam);
 }
 
+
+/*
+ * --------------------------------------------------------------------------
+ * Function to process updates to a NIC on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 VOID
 HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
@@ -517,7 +548,11 @@ update_nic_done:
     VPORT_NIC_EXIT(nicParam);
 }
 
-
+/*
+ * --------------------------------------------------------------------------
+ * Function to process disconnect event of a NIC on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 VOID
 HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
                 PNDIS_SWITCH_NIC_PARAMETERS nicParam)
@@ -569,7 +604,11 @@ done:
     VPORT_NIC_EXIT(nicParam);
 }
 
-
+/*
+ * --------------------------------------------------------------------------
+ * Function to process delete event of a NIC on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 VOID
 HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
@@ -901,33 +940,23 @@ OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
 
 /*
  * --------------------------------------------------------------------------
- * Copies the relevant NDIS port properties from a virtual (pseudo) external
- * NIC to a physical (real) external NIC.
+ * Populates 'portParam' based on 'vport'.
  * --------------------------------------------------------------------------
  */
 static VOID
-OvsInitPhysNicVport(POVS_VPORT_ENTRY physExtVport,
-                    POVS_VPORT_ENTRY virtExtVport,
-                    UINT32 physNicIndex)
+OvsCopyPortParamsFromVport(POVS_VPORT_ENTRY vport,
+                           PNDIS_SWITCH_PORT_PARAMETERS portParam)
 {
-    physExtVport->portType = virtExtVport->portType;
-    physExtVport->portState = virtExtVport->portState;
-    physExtVport->portId = virtExtVport->portId;
-    physExtVport->nicState = NdisSwitchNicStateUnknown;
-    physExtVport->ovsType = OVS_VPORT_TYPE_NETDEV;
-    physExtVport->isExternal = TRUE;
-    physExtVport->isBridgeInternal = FALSE;
-    physExtVport->nicIndex = (NDIS_SWITCH_NIC_INDEX)physNicIndex;
-
-    RtlCopyMemory(&physExtVport->hvPortName, &virtExtVport->hvPortName,
+    portParam->Flags = 0;
+    portParam->PortId = vport->portId;
+    RtlCopyMemory(&portParam->PortName, &vport->hvPortName,
                   sizeof (NDIS_SWITCH_PORT_NAME));
-
-    /* 'portFriendlyName' is overwritten later. */
-    RtlCopyMemory(&physExtVport->portFriendlyName,
-                  &virtExtVport->portFriendlyName,
+    RtlCopyMemory(&portParam->PortFriendlyName,
+                  &vport->portFriendlyName,
                   sizeof(NDIS_SWITCH_PORT_FRIENDLYNAME));
-
-    physExtVport->ovsState = OVS_STATE_PORT_CREATED;
+    portParam->PortType = vport->portType;
+    portParam->IsValidationPort = FALSE;
+    portParam->PortState = vport->portState;
 }
 
 /*
@@ -1017,7 +1046,7 @@ AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
     NET_LUID interfaceLuid = { 0 };
     size_t len = 0;
 
-    ASSERT(vport->portType == NdisSwitchPortTypeExternal || 
+    ASSERT(vport->portType == NdisSwitchPortTypeExternal ||
            vport->portType == NdisSwitchPortTypeInternal);
 
     status = ConvertInterfaceGuidToLuid(&vport->netCfgInstanceId,
@@ -1060,26 +1089,17 @@ AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
  *
  * Inserts the port into 'portIdHashArray' and caches the pointer in the
  * 'switchContext' if needed.
- *
- * For external NIC, assigns the name for the NIC.
  * --------------------------------------------------------------------------
  */
-static NDIS_STATUS
-InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
-                  POVS_VPORT_ENTRY vport,
-                  BOOLEAN newPort)
+static VOID
+UpdateSwitchCtxWithVport(POVS_SWITCH_CONTEXT switchContext,
+                         POVS_VPORT_ENTRY vport,
+                         BOOLEAN newPort)
 {
     UINT32 hash;
 
     switch (vport->portType) {
     case NdisSwitchPortTypeExternal:
-        /*
-         * Overwrite the 'portFriendlyName' of this external vport. The reason
-         * for having this in common code is to be able to call it from the NDIS
-         * Port callback as well as the NDIS NIC callback.
-         */
-        AssignNicNameSpecial(vport);
-
         if (vport->nicIndex == 0) {
             switchContext->virtualExternalPortId = vport->portId;
             switchContext->virtualExternalVport = vport;
@@ -1089,9 +1109,6 @@ InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
         break;
     case NdisSwitchPortTypeInternal:
         ASSERT(vport->isBridgeInternal == FALSE);
-
-        /* Overwrite the 'portFriendlyName' of the internal vport. */
-        AssignNicNameSpecial(vport);
         switchContext->internalPortId = vport->portId;
         switchContext->internalVport = vport;
         break;
@@ -1107,7 +1124,7 @@ InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
      */
     if (vport->portType == NdisSwitchPortTypeExternal &&
         vport->nicIndex == 0) {
-        return NDIS_STATUS_SUCCESS;
+        return;
     }
 
     /*
@@ -1121,7 +1138,7 @@ InitHvVportCommon(POVS_SWITCH_CONTEXT switchContext,
     if (newPort) {
         switchContext->numHvVports++;
     }
-    return NDIS_STATUS_SUCCESS;
+    return;
 }
 
 /*
@@ -1183,7 +1200,7 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
 /*
  * --------------------------------------------------------------------------
  * Provides functionality that is partly complementatry to
- * InitOvsVportCommon()/InitHvVportCommon().
+ * InitOvsVportCommon()/UpdateSwitchCtxWithVport().
  *
  * 'hvDelete' indicates if caller is removing the vport as a result of the
  * port being removed on the Hyper-V switch.
@@ -1370,7 +1387,7 @@ OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
              continue;
          }
 
-         status = HvCreatePort(switchContext, portParam);
+         status = HvCreatePort(switchContext, portParam, 0);
          if (status != STATUS_SUCCESS && status != STATUS_DATA_NOT_ACCEPTED) {
              break;
          }

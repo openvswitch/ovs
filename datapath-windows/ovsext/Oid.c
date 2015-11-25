@@ -169,7 +169,7 @@ OvsProcessSetOidPort(POVS_SWITCH_CONTEXT switchObject,
 
     switch(setInfo->Oid) {
     case OID_SWITCH_PORT_CREATE:
-        status = HvCreatePort(switchObject, portParam);
+        status = HvCreatePort(switchObject, portParam, 0);
         break;
     case OID_SWITCH_PORT_UPDATED:
         status = HvUpdatePort(switchObject, portParam);

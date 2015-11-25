@@ -155,7 +155,8 @@ VOID OvsClearAllSwitchVports(struct _OVS_SWITCH_CONTEXT *switchContext);
 NDIS_STATUS HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
                         PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 NDIS_STATUS HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
-                         PNDIS_SWITCH_PORT_PARAMETERS portParam);
+                         PNDIS_SWITCH_PORT_PARAMETERS portParam,
+                         NDIS_SWITCH_NIC_INDEX nicIndex);
 NDIS_STATUS HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
                          PNDIS_SWITCH_PORT_PARAMETERS portParam);
 VOID HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
