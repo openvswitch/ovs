@@ -19,6 +19,7 @@
 
 #include "hash.h"
 #include "json.h"
+#include "packets.h"
 #include "uuid.h"
 
 static struct smap_node *smap_add__(struct smap *, char *, void *,
@@ -101,8 +102,7 @@ void
 smap_add_ipv6(struct smap *smap, const char *key, struct in6_addr *addr)
 {
     char buf[INET6_ADDRSTRLEN];
-
-    inet_ntop(AF_INET6, addr, buf, sizeof buf);
+    ipv6_string_mapped(buf, addr);
     smap_add(smap, key, buf);
 }
 
