@@ -161,12 +161,8 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port->change_seq = netdev_get_change_seq(tnl_port->netdev);
 
     tnl_port->match.in_key = cfg->in_key;
-    if (cfg->ip_src) {
-        in6_addr_set_mapped_ipv4(&tnl_port->match.ipv6_src, cfg->ip_src);
-    }
-    if (cfg->ip_dst) {
-        in6_addr_set_mapped_ipv4(&tnl_port->match.ipv6_dst, cfg->ip_dst);
-    }
+    tnl_port->match.ipv6_src = cfg->ipv6_src;
+    tnl_port->match.ipv6_dst = cfg->ipv6_dst;
     tnl_port->match.ip_src_flow = cfg->ip_src_flow;
     tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
     tnl_port->match.pkt_mark = cfg->ipsec ? IPSEC_MARK : 0;

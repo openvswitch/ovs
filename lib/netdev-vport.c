@@ -222,7 +222,7 @@ netdev_vport_route_changed(void)
 
         ovs_mutex_lock(&netdev->mutex);
         /* Finds all tunnel vports. */
-        if (netdev->tnl_cfg.ip_dst) {
+        if (ipv6_addr_is_set(&netdev->tnl_cfg.ipv6_dst)) {
             if (tunnel_check_status_change__(netdev)) {
                 netdev_change_seq_changed(netdev_);
             }
@@ -316,12 +316,12 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
 {
     char iface[IFNAMSIZ];
     bool status = false;
-    ovs_be32 route;
-    ovs_be32 gw;
+    struct in6_addr *route;
+    struct in6_addr gw;
 
     iface[0] = '\0';
-    route = netdev->tnl_cfg.ip_dst;
-    if (ovs_router_lookup4(route, iface, &gw)) {
+    route = &netdev->tnl_cfg.ipv6_dst;
+    if (ovs_router_lookup(route, iface, &gw)) {
         struct netdev *egress_netdev;
 
         if (!netdev_open(iface, "system", &egress_netdev)) {
@@ -425,12 +425,44 @@ parse_key(const struct smap *args, const char *name,
 }
 
 static int
+parse_tunnel_ip(const char *value, bool accept_mcast, bool *flow,
+                struct in6_addr *ipv6, uint16_t *protocol)
+{
+    if (!strcmp(value, "flow")) {
+        *flow = true;
+        *protocol = 0;
+        return 0;
+    }
+    if (addr_is_ipv6(value)) {
+        if (lookup_ipv6(value, ipv6)) {
+            return ENOENT;
+        }
+        if (!accept_mcast && ipv6_addr_is_multicast(ipv6)) {
+            return EINVAL;
+        }
+        *protocol = ETH_TYPE_IPV6;
+    } else {
+        struct in_addr ip;
+        if (lookup_ip(value, &ip)) {
+            return ENOENT;
+        }
+        if (!accept_mcast && ip_is_multicast(ip.s_addr)) {
+            return EINVAL;
+        }
+        in6_addr_set_mapped_ipv4(ipv6, ip.s_addr);
+        *protocol = ETH_TYPE_IP;
+    }
+    return 0;
+}
+
+static int
 set_tunnel_config(struct netdev *dev_, const struct smap *args)
 {
     struct netdev_vport *dev = netdev_vport_cast(dev_);
     const char *name = netdev_get_name(dev_);
     const char *type = netdev_get_type(dev_);
     bool ipsec_mech_set, needs_dst_port, has_csum;
+    uint16_t dst_proto = 0, src_proto = 0;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
 
@@ -462,28 +494,26 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
 
     SMAP_FOR_EACH (node, args) {
         if (!strcmp(node->key, "remote_ip")) {
-            struct in_addr in_addr;
-            if (!strcmp(node->value, "flow")) {
-                tnl_cfg.ip_dst_flow = true;
-                tnl_cfg.ip_dst = htonl(0);
-            } else if (lookup_ip(node->value, &in_addr)) {
+            int err;
+            err = parse_tunnel_ip(node->value, false, &tnl_cfg.ip_dst_flow,
+                                  &tnl_cfg.ipv6_dst, &dst_proto);
+            switch (err) {
+            case ENOENT:
                 VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
-            } else if (ip_is_multicast(in_addr.s_addr)) {
-                VLOG_WARN("%s: multicast remote_ip="IP_FMT" not allowed",
-                          name, IP_ARGS(in_addr.s_addr));
+                break;
+            case EINVAL:
+                VLOG_WARN("%s: multicast remote_ip=%s not allowed",
+                          name, node->value);
                 return EINVAL;
-            } else {
-                tnl_cfg.ip_dst = in_addr.s_addr;
             }
         } else if (!strcmp(node->key, "local_ip")) {
-            struct in_addr in_addr;
-            if (!strcmp(node->value, "flow")) {
-                tnl_cfg.ip_src_flow = true;
-                tnl_cfg.ip_src = htonl(0);
-            } else if (lookup_ip(node->value, &in_addr)) {
+            int err;
+            err = parse_tunnel_ip(node->value, true, &tnl_cfg.ip_src_flow,
+                                  &tnl_cfg.ipv6_src, &src_proto);
+            switch (err) {
+            case ENOENT:
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
-            } else {
-                tnl_cfg.ip_src = in_addr.s_addr;
+                break;
             }
         } else if (!strcmp(node->key, "tos")) {
             if (!strcmp(node->value, "inherit")) {
@@ -601,7 +631,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
         }
     }
 
-    if (!tnl_cfg.ip_dst && !tnl_cfg.ip_dst_flow) {
+    if (!ipv6_addr_is_set(&tnl_cfg.ipv6_dst) && !tnl_cfg.ip_dst_flow) {
         VLOG_ERR("%s: %s type requires valid 'remote_ip' argument",
                  name, type);
         return EINVAL;
@@ -609,6 +639,11 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
     if (tnl_cfg.ip_src_flow && !tnl_cfg.ip_dst_flow) {
         VLOG_ERR("%s: %s type requires 'remote_ip=flow' with 'local_ip=flow'",
                  name, type);
+        return EINVAL;
+    }
+    if (src_proto && dst_proto && src_proto != dst_proto) {
+        VLOG_ERR("%s: 'remote_ip' and 'local_ip' has to be of the same address family",
+                 name);
         return EINVAL;
     }
     if (!tnl_cfg.ttl) {
@@ -644,14 +679,14 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
     tnl_cfg = netdev->tnl_cfg;
     ovs_mutex_unlock(&netdev->mutex);
 
-    if (tnl_cfg.ip_dst) {
-        smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(tnl_cfg.ip_dst));
+    if (ipv6_addr_is_set(&tnl_cfg.ipv6_dst)) {
+        smap_add_ipv6(args, "remote_ip", &tnl_cfg.ipv6_dst);
     } else if (tnl_cfg.ip_dst_flow) {
         smap_add(args, "remote_ip", "flow");
     }
 
-    if (tnl_cfg.ip_src) {
-        smap_add_format(args, "local_ip", IP_FMT, IP_ARGS(tnl_cfg.ip_src));
+    if (ipv6_addr_is_set(&tnl_cfg.ipv6_src)) {
+        smap_add_ipv6(args, "local_ip", &tnl_cfg.ipv6_src);
     } else if (tnl_cfg.ip_src_flow) {
         smap_add(args, "local_ip", "flow");
     }

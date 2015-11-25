@@ -118,8 +118,8 @@ struct netdev_tunnel_config {
 
     bool ip_src_flow;
     bool ip_dst_flow;
-    ovs_be32 ip_src;
-    ovs_be32 ip_dst;
+    struct in6_addr ipv6_src;
+    struct in6_addr ipv6_dst;
 
     uint32_t exts;
 
