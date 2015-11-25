@@ -1360,22 +1360,10 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
         RtlCopyMemory(&ovsFwdCtx->tunKey, &tunKey, sizeof ovsFwdCtx->tunKey);
         break;
     }
-    case OVS_KEY_ATTR_SKB_MARK:
-    /* XXX: Not relevant to Hyper-V. Return OK */
-    break;
-    case OVS_KEY_ATTR_UNSPEC:
-    case OVS_KEY_ATTR_ENCAP:
-    case OVS_KEY_ATTR_ETHERTYPE:
-    case OVS_KEY_ATTR_IN_PORT:
-    case OVS_KEY_ATTR_VLAN:
-    case OVS_KEY_ATTR_ICMP:
-    case OVS_KEY_ATTR_ICMPV6:
-    case OVS_KEY_ATTR_ARP:
-    case OVS_KEY_ATTR_ND:
-    case __OVS_KEY_ATTR_MAX:
+
     default:
-    OVS_LOG_INFO("Unhandled attribute %#x", type);
-    ASSERT(FALSE);
+        OVS_LOG_INFO("Unhandled attribute %#x", type);
+        break
     }
     return status;
 }
