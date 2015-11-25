@@ -41,67 +41,9 @@ struct xlate_out {
     enum slow_path_reason slow; /* 0 if fast path may be used. */
     bool fail_open;             /* Initial rule is fail open? */
 
-    /* Recirculation IDs on which references are held. */
-    unsigned n_recircs;
-    union {
-        uint32_t recirc[2];   /* When n_recircs == 1 or 2 */
-        uint32_t *recircs;    /* When 'n_recircs' > 2 */
-    };
+    struct recirc_refs recircs; /* Recirc action IDs on which references are
+                                 * held. */
 };
-
-/* Helpers to abstract the recirculation union away. */
-static inline void
-xlate_out_add_recirc(struct xlate_out *xout, uint32_t id)
-{
-    if (OVS_LIKELY(xout->n_recircs < ARRAY_SIZE(xout->recirc))) {
-        xout->recirc[xout->n_recircs++] = id;
-    } else {
-        if (xout->n_recircs == ARRAY_SIZE(xout->recirc)) {
-            uint32_t *recircs = xmalloc(sizeof xout->recirc + sizeof id);
-
-            memcpy(recircs, xout->recirc, sizeof xout->recirc);
-            xout->recircs = recircs;
-        } else {
-            xout->recircs = xrealloc(xout->recircs,
-                                     (xout->n_recircs + 1) * sizeof id);
-        }
-        xout->recircs[xout->n_recircs++] = id;
-    }
-}
-
-static inline const uint32_t *
-xlate_out_get_recircs(const struct xlate_out *xout)
-{
-    if (OVS_LIKELY(xout->n_recircs <= ARRAY_SIZE(xout->recirc))) {
-        return xout->recirc;
-    } else {
-        return xout->recircs;
-    }
-}
-
-static inline void
-xlate_out_take_recircs(struct xlate_out *xout)
-{
-    if (OVS_UNLIKELY(xout->n_recircs > ARRAY_SIZE(xout->recirc))) {
-        free(xout->recircs);
-    }
-    xout->n_recircs = 0;
-}
-
-static inline void
-xlate_out_free_recircs(struct xlate_out *xout)
-{
-    if (OVS_LIKELY(xout->n_recircs <= ARRAY_SIZE(xout->recirc))) {
-        for (int i = 0; i < xout->n_recircs; i++) {
-            recirc_free_id(xout->recirc[i]);
-        }
-    } else {
-        for (int i = 0; i < xout->n_recircs; i++) {
-            recirc_free_id(xout->recircs[i]);
-        }
-        free(xout->recircs);
-    }
-}
 
 struct xlate_in {
     struct ofproto_dpif *ofproto;

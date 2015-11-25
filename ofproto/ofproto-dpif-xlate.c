@@ -3592,30 +3592,18 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
         .ofpacts = ctx->action_set.data,
     };
 
-    /* Only allocate recirculation ID if we have a packet. */
-    if (ctx->xin->packet) {
-        /* Allocate a unique recirc id for the given metadata state in the
-         * flow.  The life-cycle of this recirc id is managed by associating it
-         * with the udpif key ('ukey') created for each new datapath flow. */
-        id = recirc_alloc_id_ctx(&state);
-        if (!id) {
-            XLATE_REPORT_ERROR(ctx, "Failed to allocate recirculation id");
-            ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
-            return;
-        }
-        xlate_out_add_recirc(ctx->xout, id);
-    } else {
-        /* Look up an existing recirc id for the given metadata state in the
-         * flow.  No new reference is taken, as the ID is RCU protected and is
-         * only required temporarily for verification.
-         * If flow tables have changed sufficiently this can fail and we will
-         * delete the old datapath flow. */
-        id = recirc_find_id(&state);
-        if (!id) {
-            ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
-            return;
-        }
+    /* Allocate a unique recirc id for the given metadata state in the
+     * flow.  An existing id, with a new reference to the corresponding
+     * recirculation context, will be returned if possible.
+     * The life-cycle of this recirc id is managed by associating it
+     * with the udpif key ('ukey') created for each new datapath flow. */
+    id = recirc_alloc_id_ctx(&state);
+    if (!id) {
+        XLATE_REPORT_ERROR(ctx, "Failed to allocate recirculation id");
+        ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
+        return;
     }
+    recirc_refs_add(&ctx->xout->recircs, id);
 
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
 
@@ -4722,7 +4710,7 @@ void
 xlate_out_uninit(struct xlate_out *xout)
 {
     if (xout) {
-        xlate_out_free_recircs(xout);
+        recirc_refs_unref(&xout->recircs);
     }
 }
 
@@ -4940,7 +4928,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     *xout = (struct xlate_out) {
         .slow = 0,
         .fail_open = false,
-        .n_recircs = 0,
+        .recircs = RECIRC_REFS_EMPTY_INITIALIZER,
     };
 
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
