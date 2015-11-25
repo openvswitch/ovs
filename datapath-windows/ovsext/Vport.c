@@ -301,6 +301,8 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
 /*
  * --------------------------------------------------------------------------
  * Function to process addition of a NIC connection on the Hyper-V switch.
+ * XXX: Posting an event to DPIF is incorrect here. However, it might be useful
+ * to post an event to netdev-windows.c.
  * --------------------------------------------------------------------------
  */
 NDIS_STATUS
@@ -308,8 +310,6 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
             PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     POVS_VPORT_ENTRY vport;
-    UINT32 portNo = 0;
-    UINT32 event = 0;
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
 
     LOCK_STATE_EX lockState;
@@ -389,13 +389,6 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
         AssignNicNameSpecial(vport);
     }
 
-    portNo = vport->portNo;
-    if (vport->ovsState == OVS_STATE_CONNECTED) {
-        event = OVS_EVENT_CONNECT | OVS_EVENT_LINK_UP;
-    } else if (vport->ovsState == OVS_STATE_NIC_CREATED) {
-        event = OVS_EVENT_CONNECT;
-    }
-
 add_nic_done:
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
     if (status == STATUS_SUCCESS &&
@@ -403,9 +396,6 @@ add_nic_done:
          (vport->portType == NdisSwitchPortTypeExternal &&
           nicParam->NicIndex != 0))) {
         AssignNicNameSpecial(vport);
-    }
-    if (portNo != OVS_DPPORT_NUMBER_INVALID && event) {
-        OvsPostEvent(portNo, event);
     }
 
 done:
@@ -426,7 +416,7 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
 {
     LOCK_STATE_EX lockState;
     POVS_VPORT_ENTRY vport;
-    UINT32 portNo = 0;
+    UINT32 portNo;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -456,9 +446,6 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
-    /* XXX only if portNo != INVALID or always? */
-    OvsPostEvent(portNo, OVS_EVENT_LINK_UP);
-
     if (nicParam->NicType == NdisSwitchNicTypeInternal) {
         OvsInternalAdapterUp(portNo, &nicParam->NetCfgInstanceId);
     }
@@ -479,8 +466,7 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
 {
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
-
-    UINT32 status = 0, portNo = 0;
+    UINT32 event = 0;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -512,7 +498,7 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     case NdisSwitchNicTypeEmulated:
         if (!RtlEqualMemory(vport->vmMacAddress, nicParam->VMMacAddress,
                            sizeof (vport->vmMacAddress))) {
-            status |= OVS_EVENT_MAC_CHANGE;
+            event |= OVS_EVENT_MAC_CHANGE;
             RtlCopyMemory(vport->vmMacAddress, nicParam->VMMacAddress,
                           sizeof (vport->vmMacAddress));
         }
@@ -524,26 +510,31 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
                         sizeof (vport->permMacAddress))) {
         RtlCopyMemory(vport->permMacAddress, nicParam->PermanentMacAddress,
                       sizeof (vport->permMacAddress));
-        status |= OVS_EVENT_MAC_CHANGE;
+        event |= OVS_EVENT_MAC_CHANGE;
     }
     if (!RtlEqualMemory(vport->currMacAddress, nicParam->CurrentMacAddress,
                         sizeof (vport->currMacAddress))) {
         RtlCopyMemory(vport->currMacAddress, nicParam->CurrentMacAddress,
                       sizeof (vport->currMacAddress));
-        status |= OVS_EVENT_MAC_CHANGE;
+        event |= OVS_EVENT_MAC_CHANGE;
     }
 
     if (vport->mtu != nicParam->MTU) {
         vport->mtu = nicParam->MTU;
-        status |= OVS_EVENT_MTU_CHANGE;
+        event |= OVS_EVENT_MTU_CHANGE;
     }
     vport->numaNodeId = nicParam->NumaNodeId;
-    portNo = vport->portNo;
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-    if (status && portNo) {
-        OvsPostEvent(portNo, status);
-    }
+
+    /*
+     * XXX: Not sure what kind of event to post here. DPIF is not interested in
+     * changes to MAC address. Netdev-windows might be intrested, though.
+     * That said, if the name chagnes, not clear what kind of event to be
+     * posted. We might have to delete the vport, and have userspace recreate
+     * it.
+     */
+
 update_nic_done:
     VPORT_NIC_EXIT(nicParam);
 }
@@ -558,9 +549,9 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
                 PNDIS_SWITCH_NIC_PARAMETERS nicParam)
 {
     POVS_VPORT_ENTRY vport;
-    UINT32 portNo = 0;
     LOCK_STATE_EX lockState;
     BOOLEAN isInternalPort = FALSE;
+    OVS_EVENT_ENTRY event;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -585,16 +576,25 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
 
     vport->nicState = NdisSwitchNicStateDisconnected;
     vport->ovsState = OVS_STATE_NIC_CREATED;
-    portNo = vport->portNo;
 
     if (vport->ovsType == OVS_VPORT_TYPE_INTERNAL) {
         isInternalPort = TRUE;
     }
 
+    event.portNo = vport->portNo;
+    event.ovsType = vport->ovsType;
+    event.upcallPid = vport->upcallPid;
+    RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
+    event.type = OVS_EVENT_LINK_DOWN;
+
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
-    /* XXX if portNo != INVALID or always? */
-    OvsPostEvent(portNo, OVS_EVENT_LINK_DOWN);
+    /*
+     * Delete the port from the hash tables accessible to userspace. After this
+     * point, userspace should not be able to access this port.
+     */
+    OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
+    OvsPostEvent(&event);
 
     if (isInternalPort) {
         OvsInternalAdapterDown();
@@ -615,7 +615,6 @@ HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
 {
     LOCK_STATE_EX lockState;
     POVS_VPORT_ENTRY vport;
-    UINT32 portNo = 0;
 
     VPORT_NIC_ENTER(nicParam);
     /* Wait for lists to be initialized. */
@@ -640,20 +639,16 @@ HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
     vport->nicState = NdisSwitchNicStateUnknown;
     vport->ovsState = OVS_STATE_PORT_CREATED;
 
-    portNo = vport->portNo;
     if (vport->portType == NdisSwitchPortTypeExternal &&
         vport->nicIndex != 0) {
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, FALSE);
     }
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-    /* XXX if portNo != INVALID or always? */
-    OvsPostEvent(portNo, OVS_EVENT_DISCONNECT);
 
 done:
     VPORT_NIC_EXIT(nicParam);
 }
-
 
 /*
  * OVS Vport related functionality.

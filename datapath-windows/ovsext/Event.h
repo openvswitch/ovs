@@ -19,8 +19,7 @@
 
 typedef struct _OVS_EVENT_QUEUE_ELEM {
     LIST_ENTRY link;
-    UINT32 portNo;
-    UINT32 status;
+    OVS_EVENT_ENTRY event;
 } OVS_EVENT_QUEUE_ELEM, *POVS_EVENT_QUEUE_ELEM;
 
 typedef struct _OVS_EVENT_QUEUE {
@@ -39,7 +38,7 @@ VOID OvsCleanupEventQueue(VOID);
 struct _OVS_OPEN_INSTANCE;
 
 VOID OvsCleanupEvent(struct _OVS_OPEN_INSTANCE *instance);
-VOID OvsPostEvent(UINT32 portNo, UINT32 status);
+VOID OvsPostEvent(POVS_EVENT_ENTRY event);
 NTSTATUS OvsSubscribeEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
                                 UINT32 inputLength);
 NTSTATUS OvsPollEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,

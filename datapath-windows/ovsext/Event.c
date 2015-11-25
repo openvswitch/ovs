@@ -31,7 +31,6 @@
 LIST_ENTRY ovsEventQueue;
 static NDIS_SPIN_LOCK eventQueueLock;
 UINT32 ovsNumEventQueue;
-UINT32 ovsNumPollAll;
 
 NTSTATUS
 OvsInitEventQueue()
@@ -112,57 +111,37 @@ OvsCleanupEvent(POVS_OPEN_INSTANCE instance)
  * --------------------------------------------------------------------------
  */
 VOID
-OvsPostEvent(UINT32 portNo,
-             UINT32 status)
+OvsPostEvent(POVS_EVENT_ENTRY event)
 {
     POVS_EVENT_QUEUE_ELEM elem;
     POVS_EVENT_QUEUE queue;
     PLIST_ENTRY link;
-    BOOLEAN triggerPollAll = FALSE;
     LIST_ENTRY list;
-    PLIST_ENTRY entry;
+   PLIST_ENTRY entry;
     PIRP irp;
 
     InitializeListHead(&list);
 
-    OVS_LOG_TRACE("Enter: portNo: %#x, status: %#x", portNo, status);
+    OVS_LOG_TRACE("Enter: portNo: %#x, status: %#x", event->portNo,
+                  event->type);
 
     OvsAcquireEventQueueLock();
 
     LIST_FORALL(&ovsEventQueue, link) {
         queue = CONTAINING_RECORD(link, OVS_EVENT_QUEUE, queueLink);
-        if ((status & queue->mask) == 0 ||
-            queue->pollAll) {
+        if ((event->type & queue->mask) == 0) {
             continue;
         }
-        if (queue->numElems > (OVS_MAX_VPORT_ARRAY_SIZE >> 1) ||
-            portNo == OVS_DEFAULT_PORT_NO) {
-            queue->pollAll = TRUE;
-        } else {
-            elem = (POVS_EVENT_QUEUE_ELEM)OvsAllocateMemoryWithTag(
-                sizeof(*elem), OVS_EVENT_POOL_TAG);
-            if (elem == NULL) {
-                queue->pollAll = TRUE;
-            } else {
-                elem->portNo = portNo;
-                elem->status = (status & queue->mask);
-                InsertTailList(&queue->elemList, &elem->link);
-                queue->numElems++;
-                OVS_LOG_INFO("Queue: %p, numElems: %d",
-                             queue, queue->numElems);
-            }
-        }
-        if (queue->pollAll) {
-            PLIST_ENTRY curr, next;
-            triggerPollAll = TRUE;
-            ovsNumPollAll++;
-            LIST_FORALL_SAFE(&queue->elemList, curr, next) {
-                RemoveEntryList(curr);
-                elem = CONTAINING_RECORD(curr, OVS_EVENT_QUEUE_ELEM, link);
-                OvsFreeMemoryWithTag(elem, OVS_EVENT_POOL_TAG);
-            }
-            queue->numElems = 0;
-        }
+        event->type &= queue->mask;
+
+        elem = (POVS_EVENT_QUEUE_ELEM)OvsAllocateMemoryWithTag(
+            sizeof(*elem), OVS_EVENT_POOL_TAG);
+        RtlCopyMemory(&elem->event, event, sizeof elem->event);
+        InsertTailList(&queue->elemList, &elem->link);
+        queue->numElems++;
+        OVS_LOG_INFO("Queue: %p, numElems: %d",
+                        queue, queue->numElems);
+
         if (queue->pendingIrp != NULL) {
             PDRIVER_CANCEL cancelRoutine;
             irp = queue->pendingIrp;
@@ -180,8 +159,6 @@ OvsPostEvent(UINT32 portNo,
         OVS_LOG_INFO("Wakeup thread with IRP: %p", irp);
         OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
     }
-    OVS_LOG_TRACE("Exit: triggered pollAll: %s",
-                  (triggerPollAll ? "TRUE" : "FALSE"));
 }
 
 
@@ -255,7 +232,6 @@ OvsSubscribeEventIoctl(PFILE_OBJECT fileObject,
         queue->mask = request->mask;
         queue->pendingIrp = NULL;
         queue->numElems = 0;
-        queue->pollAll = TRUE; /* always poll all in the begining */
         InsertHeadList(&ovsEventQueue, &queue->queueLink);
         ovsNumEventQueue++;
         instance->eventQueue = queue;
@@ -360,11 +336,13 @@ OvsWaitEventIoctl(PIRP irp,
                   PVOID inputBuffer,
                   UINT32 inputLength)
 {
-    NTSTATUS status;
+    NTSTATUS status = STATUS_SUCCESS;
     POVS_EVENT_POLL poll;
     POVS_EVENT_QUEUE queue;
     POVS_OPEN_INSTANCE instance;
     BOOLEAN cancelled = FALSE;
+    PDRIVER_CANCEL cancelRoutine;
+
     OVS_LOG_TRACE("Enter: inputLength: %u", inputLength);
 
     if (inputLength < sizeof (OVS_EVENT_POLL)) {
@@ -377,38 +355,36 @@ OvsWaitEventIoctl(PIRP irp,
 
     instance = OvsGetOpenInstance(fileObject, poll->dpNo);
     if (instance == NULL) {
-        OvsReleaseEventQueueLock();
-        OVS_LOG_TRACE("Exit: Can not find open instance, dpNo: %d", poll->dpNo);
+        OVS_LOG_TRACE("Exit: Can not find open instance, dpNo: %d",
+                      poll->dpNo);
         return STATUS_INVALID_PARAMETER;
     }
 
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
     if (queue == NULL) {
-        OvsReleaseEventQueueLock();
         OVS_LOG_TRACE("Exit: Event queue does not exist");
-        return STATUS_INVALID_PARAMETER;
+        status = STATUS_INVALID_PARAMETER;
+        goto unlock;
     }
     if (queue->pendingIrp) {
-        OvsReleaseEventQueueLock();
         OVS_LOG_TRACE("Exit: Event queue already in pending state");
-        return STATUS_DEVICE_BUSY;
+        status = STATUS_DEVICE_BUSY;
+        goto unlock;
     }
 
-    status = (queue->numElems != 0 || queue->pollAll) ?
-                        STATUS_SUCCESS : STATUS_PENDING;
-    if (status == STATUS_PENDING) {
-        PDRIVER_CANCEL cancelRoutine;
-        IoMarkIrpPending(irp);
-        IoSetCancelRoutine(irp, OvsCancelIrp);
-        if (irp->Cancel) {
-            cancelRoutine = IoSetCancelRoutine(irp, NULL);
-            if (cancelRoutine) {
-                cancelled = TRUE;
-            }
-        } else {
-            queue->pendingIrp = irp;
+    IoMarkIrpPending(irp);
+    IoSetCancelRoutine(irp, OvsCancelIrp);
+    if (irp->Cancel) {
+        cancelRoutine = IoSetCancelRoutine(irp, NULL);
+        if (cancelRoutine) {
+            cancelled = TRUE;
         }
+    } else {
+        queue->pendingIrp = irp;
+        status = STATUS_PENDING;
     }
+
+unlock:
     OvsReleaseEventQueueLock();
     if (cancelled) {
         OvsCompleteIrpRequest(irp, 0, STATUS_CANCELLED);
@@ -446,8 +422,7 @@ OvsRemoveEventEntry(POVS_OPEN_INSTANCE instance,
 
     if (queue->numElems) {
         elem = (POVS_EVENT_QUEUE_ELEM)RemoveHeadList(&queue->elemList);
-        entry->portNo = elem->portNo;
-        entry->status = elem->status;
+        *entry = elem->event;
         OvsFreeMemoryWithTag(elem, OVS_EVENT_POOL_TAG);
         queue->numElems--;
         status = STATUS_SUCCESS;

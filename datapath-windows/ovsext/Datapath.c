@@ -1497,7 +1497,6 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     BOOLEAN ok;
     OVS_MESSAGE msgOutTmp;
     PNL_MSG_HDR nlMsg;
-    POVS_VPORT_ENTRY vport;
 
     ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof msgOutTmp);
 
@@ -1512,9 +1511,9 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     msgOutTmp.genlMsg.reserved = 0;
 
     /* we don't have netdev yet, treat link up/down a adding/removing a port*/
-    if (eventEntry->status & (OVS_EVENT_LINK_UP | OVS_EVENT_CONNECT)) {
+    if (eventEntry->type & (OVS_EVENT_LINK_UP | OVS_EVENT_CONNECT)) {
         msgOutTmp.genlMsg.cmd = OVS_VPORT_CMD_NEW;
-    } else if (eventEntry->status &
+    } else if (eventEntry->type &
              (OVS_EVENT_LINK_DOWN | OVS_EVENT_DISCONNECT)) {
         msgOutTmp.genlMsg.cmd = OVS_VPORT_CMD_DEL;
     } else {
@@ -1529,17 +1528,11 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto cleanup;
     }
 
-    vport = OvsFindVportByPortNo(gOvsSwitchContext, eventEntry->portNo);
-    if (!vport) {
-        status = STATUS_DEVICE_DOES_NOT_EXIST;
-        goto cleanup;
-    }
-
     ok = NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_PORT_NO, eventEntry->portNo) &&
-         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, vport->ovsType) &&
+         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, eventEntry->ovsType) &&
          NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_UPCALL_PID,
-                         vport->upcallPid) &&
-         NlMsgPutTailString(nlBuf, OVS_VPORT_ATTR_NAME, vport->ovsName);
+                         eventEntry->upcallPid) &&
+         NlMsgPutTailString(nlBuf, OVS_VPORT_ATTR_NAME, eventEntry->ovsName);
     if (!ok) {
         status = STATUS_INVALID_BUFFER_SIZE;
         goto cleanup;
@@ -1606,4 +1599,3 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 cleanup:
     return status;
 }
-
