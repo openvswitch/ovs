@@ -6317,8 +6317,8 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
 
     ofputil_bucket_clone_list(&new_ofgroup->buckets, &ofgroup->buckets, NULL);
 
-    if (ofputil_bucket_check_duplicate_id(&ofgroup->buckets)) {
-            VLOG_WARN_RL(&rl, "Duplicate bucket id");
+    if (ofputil_bucket_check_duplicate_id(&new_ofgroup->buckets)) {
+            VLOG_INFO_RL(&rl, "Duplicate bucket id");
             return OFPERR_OFPGMFC_BUCKET_EXISTS;
     }
 
