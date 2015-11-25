@@ -66,7 +66,7 @@ VOID OvsFreeAlignedMemory(VOID *ptr);
 VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 
 
-#define MIN(_a, _b) (_a) > (_b) ? (_b) : (_a)
+#define MIN(_a, _b) ((_a) > (_b) ? (_b) : (_a))
 #define ARRAY_SIZE(_x)  ((sizeof(_x))/sizeof (_x)[0])
 #define OVS_SWITCH_PORT_ID_INVALID  (NDIS_SWITCH_PORT_ID)(-1)
 
