@@ -2095,13 +2095,12 @@ format_ipv4(struct ds *ds, const char *name, ovs_be32 key,
 }
 
 static void
-format_ipv6(struct ds *ds, const char *name, const ovs_be32 key_[4],
-            const ovs_be32 (*mask_)[4], bool verbose)
+format_in6_addr(struct ds *ds, const char *name,
+                const struct in6_addr *key,
+                const struct in6_addr *mask,
+                bool verbose)
 {
     char buf[INET6_ADDRSTRLEN];
-    const struct in6_addr *key = (const struct in6_addr *)key_;
-    const struct in6_addr *mask = mask_ ? (const struct in6_addr *)*mask_
-        : NULL;
     bool mask_empty = mask && ipv6_mask_is_any(mask);
 
     if (verbose || !mask_empty) {
@@ -2115,6 +2114,16 @@ format_ipv6(struct ds *ds, const char *name, const ovs_be32 key_[4],
         }
         ds_put_char(ds, ',');
     }
+}
+
+static void
+format_ipv6(struct ds *ds, const char *name, const ovs_be32 key_[4],
+            const ovs_be32 (*mask_)[4], bool verbose)
+{
+    format_in6_addr(ds, name,
+                    (const struct in6_addr *)key_,
+                    mask_ ? (const struct in6_addr *)*mask_ : NULL,
+                    verbose);
 }
 
 static void
@@ -3090,7 +3099,7 @@ scan_ipv4(const char *s, ovs_be32 *key, ovs_be32 *mask)
 }
 
 static int
-scan_ipv6(const char *s, ovs_be32 (*key)[4], ovs_be32 (*mask)[4])
+scan_in6_addr(const char *s, struct in6_addr *key, struct in6_addr *mask)
 {
     int n;
     char ipv6_s[IPV6_SCAN_LEN + 1];
@@ -3110,6 +3119,13 @@ scan_ipv6(const char *s, ovs_be32 (*key)[4], ovs_be32 (*mask)[4])
         return len;
     }
     return 0;
+}
+
+static int
+scan_ipv6(const char *s, ovs_be32 (*key)[4], ovs_be32 (*mask)[4])
+{
+    return scan_in6_addr(s, key ? (struct in6_addr *) *key : NULL,
+                         mask ? (struct in6_addr *) *mask : NULL);
 }
 
 static int
