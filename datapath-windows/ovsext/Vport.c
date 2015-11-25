@@ -327,9 +327,8 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
         goto done;
     }
 
-    if (nicParam->NicType == NdisSwitchNicTypeInternal ||
-        (nicParam->NicType == NdisSwitchNicTypeExternal &&
-         nicParam->NicIndex != 0)) {
+    if (OvsIsInternalNIC(nicParam->NicType) ||
+        OvsIsRealExternalNIC(nicParam->NicType, nicParam->NicIndex)) {
         GetNICAlias(&nicParam->NetCfgInstanceId, &portFriendlyName);
     }
 
@@ -339,44 +338,22 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
      * structure for each such NIC, and each NIC inherits a lot of properties
      * from the parent external port.
      */
-    if (nicParam->NicType == NdisSwitchNicTypeExternal &&
-        nicParam->NicIndex != 0) {
+    if (OvsIsRealExternalNIC(nicParam->NicType, nicParam->NicIndex)) {
+        NDIS_SWITCH_PORT_PARAMETERS portParam;
         POVS_VPORT_ENTRY virtExtVport =
             (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
 
-        vport = OvsFindVportByPortIdAndNicIndex(switchContext,
-                                                nicParam->PortId,
-                                                nicParam->NicIndex);
-        if (vport == NULL) {
-            NDIS_SWITCH_PORT_PARAMETERS portParam;
-            /* Find by interface name */
-            WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
-            NET_LUID interfaceLuid = { 0 };
-            size_t len = 0;
-            status = ConvertInterfaceGuidToLuid(&nicParam->NetCfgInstanceId,
-                                                &interfaceLuid);
-            if (status == STATUS_SUCCESS) {
-                status = ConvertInterfaceLuidToAlias(&interfaceLuid,
-                                                     interfaceName,
-                                                     IF_MAX_STRING_SIZE + 1);
-                if (status == STATUS_SUCCESS) {
-                    RtlStringCbLengthW(interfaceName,
-                                       IF_MAX_STRING_SIZE,
-                                       &len);
-                    vport = OvsFindVportByHvNameW(switchContext,
-                                                  interfaceName,
-                                                  len);
-                }
-            }
-
-            OvsCopyPortParamsFromVport(virtExtVport, &portParam);
-            NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-            status = HvCreatePort(switchContext, &portParam,
-                                  nicParam->NicIndex);
-            NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
-            if (status != NDIS_STATUS_SUCCESS) {
-                goto add_nic_done;
-            }
+        ASSERT(virtExtVport);
+        ASSERT(OvsFindVportByPortIdAndNicIndex(switchContext,
+                                               nicParam->PortId,
+                                               nicParam->NicIndex) == NULL);
+        OvsCopyPortParamsFromVport(virtExtVport, &portParam);
+        NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
+        status = HvCreatePort(switchContext, &portParam,
+                              nicParam->NicIndex);
+        NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
+        if (status != NDIS_STATUS_SUCCESS) {
+            goto add_nic_done;
         }
     }
 
@@ -390,9 +367,8 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
         goto add_nic_done;
     }
     OvsInitVportWithNicParam(switchContext, vport, nicParam);
-    if (nicParam->NicType == NdisSwitchNicTypeInternal ||
-        (nicParam->NicType == NdisSwitchNicTypeExternal &&
-         nicParam->NicIndex != 0)) {
+    if (OvsIsInternalNIC(nicParam->NicType) ||
+        OvsIsRealExternalNIC(nicParam->NicType, nicParam->NicIndex)) {
         RtlCopyMemory(&vport->portFriendlyName, &portFriendlyName,
                       sizeof portFriendlyName);
     }
@@ -470,6 +446,8 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     LOCK_STATE_EX lockState;
     UINT32 event = 0;
     IF_COUNTED_STRING portFriendlyName = {0};
+    BOOLEAN nameChanged = FALSE;
+    BOOLEAN aliasLookup = FALSE;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -483,9 +461,9 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
 
     /* GetNICAlias() must be called outside of a lock. */
     if (nicParam->NicType == NdisSwitchNicTypeInternal ||
-        (nicParam->NicType == NdisSwitchNicTypeExternal &&
-         nicParam->NicIndex != 0)) {
+        OvsIsRealExternalNIC(nicParam->NicType, nicParam->NicIndex)) {
         GetNICAlias(&nicParam->NetCfgInstanceId, &portFriendlyName);
+        aliasLookup = TRUE;
     }
 
     NdisAcquireRWLockWrite(switchContext->dispatchLock, &lockState, 0);
@@ -502,8 +480,15 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     case NdisSwitchNicTypeInternal:
         RtlCopyMemory(&vport->netCfgInstanceId, &nicParam->NetCfgInstanceId,
                       sizeof (GUID));
-        RtlCopyMemory(&vport->portFriendlyName, &portFriendlyName,
-                      sizeof portFriendlyName);
+        if (aliasLookup) {
+            if (RtlCompareMemory(&vport->portFriendlyName,
+                    &portFriendlyName, vport->portFriendlyName.Length) !=
+                    vport->portFriendlyName.Length) {
+                RtlCopyMemory(&vport->portFriendlyName, &portFriendlyName,
+                    sizeof portFriendlyName);
+                nameChanged = TRUE;
+            }
+        }
         break;
     case NdisSwitchNicTypeSynthetic:
     case NdisSwitchNicTypeEmulated:
@@ -535,6 +520,17 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
         event |= OVS_EVENT_MTU_CHANGE;
     }
     vport->numaNodeId = nicParam->NumaNodeId;
+
+    if (nameChanged) {
+        OVS_EVENT_ENTRY event;
+        event.portNo = vport->portNo;
+        event.ovsType = vport->ovsType;
+        event.upcallPid = vport->upcallPid;
+        RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
+        event.type = OVS_EVENT_LINK_DOWN;
+        OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
+        OvsPostEvent(&event);
+    }
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
@@ -598,14 +594,15 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
     RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
     event.type = OVS_EVENT_LINK_DOWN;
 
-    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-
     /*
      * Delete the port from the hash tables accessible to userspace. After this
      * point, userspace should not be able to access this port.
      */
-    OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
-    OvsPostEvent(&event);
+    if (OvsIsRealExternalVport(vport)) {
+        OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
+        OvsPostEvent(&event);
+    }
+    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
     if (isInternalPort) {
         OvsInternalAdapterDown();
@@ -650,8 +647,8 @@ HvDeleteNic(POVS_SWITCH_CONTEXT switchContext,
     vport->nicState = NdisSwitchNicStateUnknown;
     vport->ovsState = OVS_STATE_PORT_CREATED;
 
-    if (vport->portType == NdisSwitchPortTypeExternal &&
-        vport->nicIndex != 0) {
+    if (OvsIsRealExternalVport(vport)) {
+        /* This vport was created in HvCreateNic(). */
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, FALSE);
     }
 
@@ -926,6 +923,7 @@ OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
     vport->mtu = nicParam->MTU;
     vport->nicState = nicParam->NicState;
     vport->nicIndex = nicParam->NicIndex;
+    vport->nicType = nicParam->NicType;
     vport->numaNodeId = nicParam->NumaNodeId;
 
     switch (vport->nicState) {

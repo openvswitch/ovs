@@ -95,6 +95,7 @@ typedef struct _OVS_VPORT_ENTRY {
     PVOID                  priv;
     NDIS_SWITCH_PORT_ID    portId;
     NDIS_SWITCH_NIC_INDEX  nicIndex;
+    NDIS_SWITCH_NIC_TYPE   nicType;
     UINT16                 numaNodeId;
     NDIS_SWITCH_PORT_STATE portState;
     NDIS_SWITCH_NIC_STATE  nicState;
@@ -194,12 +195,39 @@ OvsIsInternalVportType(OVS_VPORT_TYPE ovsType)
 }
 
 static __inline BOOLEAN
+OvsIsVirtualExternalVport(POVS_VPORT_ENTRY vport)
+{
+    return vport->nicType == NdisSwitchNicTypeExternal &&
+           vport->nicIndex == 0;
+}
+
+static __inline BOOLEAN
+OvsIsRealExternalVport(POVS_VPORT_ENTRY vport)
+{
+    return vport->nicType == NdisSwitchNicTypeExternal &&
+           vport->nicIndex != 0;
+}
+
+static __inline BOOLEAN
 OvsIsBridgeInternalVport(POVS_VPORT_ENTRY vport)
 {
-    if (vport->isBridgeInternal) {
-       ASSERT(vport->ovsType == OVS_VPORT_TYPE_INTERNAL);
-    }
+    ASSERT(vport->isBridgeInternal != TRUE ||
+           vport->ovsType == OVS_VPORT_TYPE_INTERNAL);
     return vport->isBridgeInternal == TRUE;
+}
+
+static __inline BOOLEAN
+OvsIsInternalNIC(NDIS_SWITCH_NIC_TYPE   nicType)
+{
+    return nicType == NdisSwitchNicTypeInternal;
+}
+
+static __inline BOOLEAN
+OvsIsRealExternalNIC(NDIS_SWITCH_NIC_TYPE   nicType,
+                     NDIS_SWITCH_NIC_INDEX  nicIndex)
+{
+    return nicType == NdisSwitchNicTypeExternal &&
+           nicIndex != 0;
 }
 
 NTSTATUS OvsRemoveAndDeleteVport(PVOID usrParamsCtx,
