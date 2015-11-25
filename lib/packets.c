@@ -489,6 +489,21 @@ ipv6_format_masked(const struct in6_addr *addr, const struct in6_addr *mask,
     }
 }
 
+/* Stores the string representation of the IPv6 address 'addr' into the
+ * character array 'addr_str', which must be at least INET6_ADDRSTRLEN
+ * bytes long. If addr is IPv4-mapped, store an IPv4 dotted-decimal string. */
+const char *
+ipv6_string_mapped(char *addr_str, const struct in6_addr *addr)
+{
+    ovs_be32 ip;
+    ip = in6_addr_get_mapped_ipv4(addr);
+    if (ip) {
+        return inet_ntop(AF_INET, &ip, addr_str, INET6_ADDRSTRLEN);
+    } else {
+        return inet_ntop(AF_INET6, addr, addr_str, INET6_ADDRSTRLEN);
+    }
+}
+
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *a,
                                  const struct in6_addr *b)
 {

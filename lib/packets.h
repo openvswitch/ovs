@@ -959,6 +959,7 @@ void ipv6_format_addr_bracket(const struct in6_addr *addr, struct ds *,
 void ipv6_format_mapped(const struct in6_addr *addr, struct ds *);
 void ipv6_format_masked(const struct in6_addr *addr,
                         const struct in6_addr *mask, struct ds *);
+const char * ipv6_string_mapped(char *addr_str, const struct in6_addr *addr);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
                                  const struct in6_addr *mask);
 struct in6_addr ipv6_create_mask(int mask);
