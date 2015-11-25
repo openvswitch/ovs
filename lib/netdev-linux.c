@@ -1040,8 +1040,6 @@ netdev_linux_rxq_recv_tap(int fd, struct dp_packet *buffer)
 
     if (retval < 0) {
         return errno;
-    } else if (retval > size) {
-        return EMSGSIZE;
     }
 
     dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
