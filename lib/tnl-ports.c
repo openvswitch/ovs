@@ -20,15 +20,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "classifier.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "list.h"
+#include "netdev.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
-#include "tnl-arp-cache.h"
 #include "ovs-thread.h"
 #include "unixctl.h"
 #include "util.h"
