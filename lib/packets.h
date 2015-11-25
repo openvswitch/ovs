@@ -722,9 +722,9 @@ BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 #define CS_NEW               0x01
 #define CS_ESTABLISHED       0x02
 #define CS_RELATED           0x04
-#define CS_INVALID           0x20
-#define CS_REPLY_DIR         0x40
-#define CS_TRACKED           0x80
+#define CS_REPLY_DIR         0x08
+#define CS_INVALID           0x10
+#define CS_TRACKED           0x20
 
 /* Undefined connection state bits. */
 #define CS_SUPPORTED_MASK    (CS_NEW | CS_ESTABLISHED | CS_RELATED \
