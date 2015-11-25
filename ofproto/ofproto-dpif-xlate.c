@@ -451,7 +451,7 @@ struct xc_entry {
         } group;
         struct {
             char br_name[IFNAMSIZ];
-            ovs_be32 d_ip;
+            struct in6_addr d_ipv6;
         } tnl_neigh_cache;
     } u;
 };
@@ -2813,7 +2813,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_NEIGH);
         ovs_strlcpy(entry->u.tnl_neigh_cache.br_name, out_dev->xbridge->name,
                     sizeof entry->u.tnl_neigh_cache.br_name);
-        entry->u.tnl_neigh_cache.d_ip = d_ip;
+        in6_addr_set_mapped_ipv4(&entry->u.tnl_neigh_cache.d_ipv6, d_ip);
     }
 
     xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" "IP_FMT
@@ -5486,8 +5486,8 @@ xlate_push_stats(struct xlate_cache *xcache,
             break;
         case XC_TNL_NEIGH:
             /* Lookup neighbor to avoid timeout. */
-            tnl_arp_lookup(entry->u.tnl_neigh_cache.br_name,
-                           entry->u.tnl_neigh_cache.d_ip, &dmac);
+            tnl_neigh_lookup(entry->u.tnl_neigh_cache.br_name,
+                             &entry->u.tnl_neigh_cache.d_ipv6, &dmac);
             break;
         default:
             OVS_NOT_REACHED();
