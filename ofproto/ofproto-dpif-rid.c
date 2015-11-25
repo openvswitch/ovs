@@ -130,7 +130,7 @@ recirc_metadata_hash(const struct recirc_state *state)
 
     hash = hash_pointer(state->ofproto, 0);
     hash = hash_int(state->table_id, hash);
-    if (state->metadata.tunnel->ip_dst) {
+    if (flow_tnl_dst_is_set(state->metadata.tunnel)) {
         /* We may leave remainder bytes unhashed, but that is unlikely as
          * the tunnel is not in the datapath format. */
         hash = hash_words64((const uint64_t *) state->metadata.tunnel,
@@ -289,6 +289,7 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
 {
     struct flow_tnl tunnel;
     tunnel.ip_dst = htonl(0);
+    tunnel.ipv6_dst = in6addr_any;
     struct recirc_state state = {
         .table_id = TBL_INTERNAL,
         .ofproto = ofproto,

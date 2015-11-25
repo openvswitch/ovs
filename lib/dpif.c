@@ -1107,8 +1107,10 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
         struct pkt_metadata *md = &packet->md;
+        bool dst_set;
 
-        if (md->tunnel.ip_dst) {
+        dst_set = flow_tnl_dst_is_set(&md->tunnel);
+        if (dst_set) {
             /* The Linux kernel datapath throws away the tunnel information
              * that we supply as metadata.  We have to use a "set" action to
              * supply it. */
@@ -1130,7 +1132,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &execute, true, aux->error);
 
-        if (md->tunnel.ip_dst) {
+        if (dst_set) {
             ofpbuf_uninit(&execute_actions);
         }
         break;

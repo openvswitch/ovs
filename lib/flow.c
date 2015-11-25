@@ -123,7 +123,7 @@ struct mf_ctx {
  * away.  Some GCC versions gave warnings on ALWAYS_INLINE, so these are
  * defined as macros. */
 
-#if (FLOW_WC_SEQ != 34)
+#if (FLOW_WC_SEQ != 35)
 #define MINIFLOW_ASSERT(X) ovs_assert(X)
 BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
                "assertions enabled. Consider updating FLOW_WC_SEQ after "
@@ -449,7 +449,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     uint8_t nw_frag, nw_tos, nw_ttl, nw_proto;
 
     /* Metadata. */
-    if (md->tunnel.ip_dst) {
+    if (flow_tnl_dst_is_set(&md->tunnel)) {
         miniflow_push_words(mf, tunnel, &md->tunnel,
                             offsetof(struct flow_tnl, metadata) /
                             sizeof(uint64_t));
@@ -805,7 +805,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
     match_init_catchall(flow_metadata);
     if (flow->tunnel.tun_id != htonll(0)) {
@@ -815,11 +815,17 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
         match_set_tun_flags(flow_metadata,
                             flow->tunnel.flags & FLOW_TNL_PUB_F_MASK);
     }
-    if (flow->tunnel.ip_src != htonl(0)) {
+    if (flow->tunnel.ip_src) {
         match_set_tun_src(flow_metadata, flow->tunnel.ip_src);
     }
-    if (flow->tunnel.ip_dst != htonl(0)) {
+    if (flow->tunnel.ip_dst) {
         match_set_tun_dst(flow_metadata, flow->tunnel.ip_dst);
+    }
+    if (ipv6_addr_is_set(&flow->tunnel.ipv6_src)) {
+        match_set_tun_ipv6_src(flow_metadata, &flow->tunnel.ipv6_src);
+    }
+    if (ipv6_addr_is_set(&flow->tunnel.ipv6_dst)) {
+        match_set_tun_ipv6_dst(flow_metadata, &flow->tunnel.ipv6_dst);
     }
     if (flow->tunnel.gbp_id != htons(0)) {
         match_set_tun_gbp_id(flow_metadata, flow->tunnel.gbp_id);
@@ -1205,14 +1211,16 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     memset(&wc->masks, 0x0, sizeof wc->masks);
 
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
-    if (flow->tunnel.ip_dst) {
+    if (flow_tnl_dst_is_set(&flow->tunnel)) {
         if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
             WC_MASK_FIELD(wc, tunnel.tun_id);
         }
         WC_MASK_FIELD(wc, tunnel.ip_src);
         WC_MASK_FIELD(wc, tunnel.ip_dst);
+        WC_MASK_FIELD(wc, tunnel.ipv6_src);
+        WC_MASK_FIELD(wc, tunnel.ipv6_dst);
         WC_MASK_FIELD(wc, tunnel.flags);
         WC_MASK_FIELD(wc, tunnel.ip_tos);
         WC_MASK_FIELD(wc, tunnel.ip_ttl);
@@ -1320,11 +1328,11 @@ void
 flow_wc_map(const struct flow *flow, struct flowmap *map)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
     flowmap_init(map);
 
-    if (flow->tunnel.ip_dst) {
+    if (flow_tnl_dst_is_set(&flow->tunnel)) {
         FLOWMAP_SET__(map, tunnel, offsetof(struct flow_tnl, metadata));
         if (!(flow->tunnel.flags & FLOW_TNL_F_UDPIF)) {
             if (flow->tunnel.metadata.present.map) {
@@ -1404,7 +1412,7 @@ void
 flow_wildcards_clear_non_packet_fields(struct flow_wildcards *wc)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
     memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
@@ -2031,7 +2039,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
 
         /* Clear all L3 and L4 fields and dp_hash. */
-        BUILD_ASSERT(FLOW_WC_SEQ == 34);
+        BUILD_ASSERT(FLOW_WC_SEQ == 35);
         memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
                sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
         flow->dp_hash = 0;

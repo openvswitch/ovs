@@ -70,6 +70,12 @@ void match_set_tun_src(struct match *match, ovs_be32 src);
 void match_set_tun_src_masked(struct match *match, ovs_be32 src, ovs_be32 mask);
 void match_set_tun_dst(struct match *match, ovs_be32 dst);
 void match_set_tun_dst_masked(struct match *match, ovs_be32 dst, ovs_be32 mask);
+void match_set_tun_ipv6_src(struct match *, const struct in6_addr *);
+void match_set_tun_ipv6_src_masked(struct match *, const struct in6_addr *,
+                                   const struct in6_addr *);
+void match_set_tun_ipv6_dst(struct match *, const struct in6_addr *);
+void match_set_tun_ipv6_dst_masked(struct match *, const struct in6_addr *,
+                                   const struct in6_addr *);
 void match_set_tun_ttl(struct match *match, uint8_t ttl);
 void match_set_tun_ttl_masked(struct match *match, uint8_t ttl, uint8_t mask);
 void match_set_tun_tos(struct match *match, uint8_t tos);

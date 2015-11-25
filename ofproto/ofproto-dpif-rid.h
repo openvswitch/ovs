@@ -93,7 +93,7 @@ struct rule;
 /* Metadata for restoring pipeline context after recirculation.  Helpers
  * are inlined below to keep them together with the definition for easier
  * updates. */
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
 struct recirc_metadata {
     /* Metadata in struct flow. */
@@ -120,7 +120,7 @@ static inline void
 recirc_metadata_to_flow(const struct recirc_metadata *md,
                         struct flow *flow)
 {
-    if (md->tunnel && md->tunnel->ip_dst) {
+    if (md->tunnel && flow_tnl_dst_is_set(md->tunnel)) {
         flow->tunnel = *md->tunnel;
     } else {
         memset(&flow->tunnel, 0, sizeof flow->tunnel);

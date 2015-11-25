@@ -47,7 +47,7 @@ odp_port_t tnl_port_send(const struct ofport_dpif *, struct flow *,
 static inline bool
 tnl_port_should_receive(const struct flow *flow)
 {
-    return flow->tunnel.ip_dst != 0;
+    return flow_tnl_dst_is_set(&flow->tunnel);
 }
 
 int tnl_port_build_header(const struct ofport_dpif *ofport,

@@ -1707,6 +1707,8 @@ static const struct attr_len_tbl ovs_tun_key_attr_lens[OVS_TUNNEL_KEY_ATTR_MAX +
     [OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS]    = { .len = ATTR_LEN_NESTED,
                                             .next = ovs_vxlan_ext_attr_lens ,
                                             .next_max = OVS_VXLAN_EXT_MAX},
+    [OVS_TUNNEL_KEY_ATTR_IPV6_SRC]      = { .len = 16 },
+    [OVS_TUNNEL_KEY_ATTR_IPV6_DST]      = { .len = 16 },
 };
 
 static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = {
@@ -1819,6 +1821,12 @@ odp_tun_key_from_attr__(const struct nlattr *attr,
         case OVS_TUNNEL_KEY_ATTR_IPV4_DST:
             tun->ip_dst = nl_attr_get_be32(a);
             break;
+        case OVS_TUNNEL_KEY_ATTR_IPV6_SRC:
+            tun->ipv6_src = nl_attr_get_in6_addr(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_IPV6_DST:
+            tun->ipv6_dst = nl_attr_get_in6_addr(a);
+            break;
         case OVS_TUNNEL_KEY_ATTR_TOS:
             tun->ip_tos = nl_attr_get_u8(a);
             break;
@@ -1910,6 +1918,12 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
     }
     if (tun_key->ip_dst) {
         nl_msg_put_be32(a, OVS_TUNNEL_KEY_ATTR_IPV4_DST, tun_key->ip_dst);
+    }
+    if (ipv6_addr_is_set(&tun_key->ipv6_src)) {
+        nl_msg_put_in6_addr(a, OVS_TUNNEL_KEY_ATTR_IPV6_SRC, &tun_key->ipv6_src);
+    }
+    if (ipv6_addr_is_set(&tun_key->ipv6_dst)) {
+        nl_msg_put_in6_addr(a, OVS_TUNNEL_KEY_ATTR_IPV6_DST, &tun_key->ipv6_dst);
     }
     if (tun_key->ip_tos) {
         nl_msg_put_u8(a, OVS_TUNNEL_KEY_ATTR_TOS, tun_key->ip_tos);
@@ -2466,6 +2480,20 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
             format_ipv4(ds, "dst", nl_attr_get_be32(a),
                         ma ? nl_attr_get(ma) : NULL, verbose);
             break;
+        case OVS_TUNNEL_KEY_ATTR_IPV6_SRC: {
+            struct in6_addr ipv6_src;
+            ipv6_src = nl_attr_get_in6_addr(a);
+            format_in6_addr(ds, "ipv6_src", &ipv6_src,
+                            ma ? nl_attr_get(ma) : NULL, verbose);
+            break;
+        }
+        case OVS_TUNNEL_KEY_ATTR_IPV6_DST: {
+            struct in6_addr ipv6_dst;
+            ipv6_dst = nl_attr_get_in6_addr(a);
+            format_in6_addr(ds, "ipv6_dst", &ipv6_dst,
+                            ma ? nl_attr_get(ma) : NULL, verbose);
+            break;
+        }
         case OVS_TUNNEL_KEY_ATTR_TOS:
             format_u8x(ds, "tos", nl_attr_get_u8(a),
                        ma ? nl_attr_get(ma) : NULL, verbose);
@@ -3901,6 +3929,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         SCAN_FIELD_NESTED("tun_id=", ovs_be64, be64, OVS_TUNNEL_KEY_ATTR_ID);
         SCAN_FIELD_NESTED("src=", ovs_be32, ipv4, OVS_TUNNEL_KEY_ATTR_IPV4_SRC);
         SCAN_FIELD_NESTED("dst=", ovs_be32, ipv4, OVS_TUNNEL_KEY_ATTR_IPV4_DST);
+        SCAN_FIELD_NESTED("ipv6_src=", struct in6_addr, in6_addr, OVS_TUNNEL_KEY_ATTR_IPV6_SRC);
+        SCAN_FIELD_NESTED("ipv6_dst=", struct in6_addr, in6_addr, OVS_TUNNEL_KEY_ATTR_IPV6_DST);
         SCAN_FIELD_NESTED("tos=", uint8_t, u8, OVS_TUNNEL_KEY_ATTR_TOS);
         SCAN_FIELD_NESTED("ttl=", uint8_t, u8, OVS_TUNNEL_KEY_ATTR_TTL);
         SCAN_FIELD_NESTED("tp_src=", ovs_be16, be16, OVS_TUNNEL_KEY_ATTR_TP_SRC);
@@ -4124,7 +4154,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
-    if (flow->tunnel.ip_dst || export_mask) {
+    if (flow_tnl_dst_is_set(&flow->tunnel) || export_mask) {
         tun_key_to_attr(buf, &data->tunnel, &parms->flow->tunnel,
                         parms->key_buf);
     }
@@ -4321,7 +4351,7 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
 {
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, md->skb_priority);
 
-    if (md->tunnel.ip_dst) {
+    if (flow_tnl_dst_is_set(&md->tunnel)) {
         tun_key_to_attr(buf, &md->tunnel, &md->tunnel, NULL);
     }
 
@@ -5232,8 +5262,9 @@ void
 commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
                          struct ofpbuf *odp_actions)
 {
-    /* A valid IPV4_TUNNEL must have non-zero ip_dst. */
-    if (flow->tunnel.ip_dst) {
+    /* A valid IPV4_TUNNEL must have non-zero ip_dst; a valid IPv6 tunnel
+     * must have non-zero ipv6_dst. */
+    if (flow_tnl_dst_is_set(&flow->tunnel)) {
         if (!memcmp(&base->tunnel, &flow->tunnel, sizeof base->tunnel)) {
             return;
         }

@@ -38,7 +38,9 @@ struct ds;
 /* Tunnel information used in flow key and metadata. */
 struct flow_tnl {
     ovs_be32 ip_dst;
+    struct in6_addr ipv6_dst;
     ovs_be32 ip_src;
+    struct in6_addr ipv6_src;
     ovs_be64 tun_id;
     uint16_t flags;
     uint8_t ip_tos;
@@ -72,12 +74,23 @@ struct flow_tnl {
 /* Tunnel information is in userspace datapath format. */
 #define FLOW_TNL_F_UDPIF (1 << 4)
 
+static inline bool ipv6_addr_is_set(const struct in6_addr *addr);
+
+static inline bool
+flow_tnl_dst_is_set(const struct flow_tnl *tnl)
+{
+    return tnl->ip_dst || ipv6_addr_is_set(&tnl->ipv6_dst);
+}
+
+struct in6_addr flow_tnl_dst(const struct flow_tnl *tnl);
+struct in6_addr flow_tnl_src(const struct flow_tnl *tnl);
+
 /* Returns an offset to 'src' covering all the meaningful fields in 'src'. */
 static inline size_t
 flow_tnl_size(const struct flow_tnl *src)
 {
-    if (!src->ip_dst) {
-        /* Covers ip_dst only. */
+    if (!flow_tnl_dst_is_set(src)) {
+        /* Covers ip_dst and ipv6_dst only. */
         return offsetof(struct flow_tnl, ip_src);
     }
     if (src->flags & FLOW_TNL_F_UDPIF) {
@@ -145,6 +158,7 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
      * looked at. */
     memset(md, 0, offsetof(struct pkt_metadata, in_port));
     md->tunnel.ip_dst = 0;
+    md->tunnel.ipv6_dst = in6addr_any;
 
     md->in_port.odp_port = port;
 }

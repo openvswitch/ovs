@@ -191,6 +191,36 @@ match_set_tun_dst_masked(struct match *match, ovs_be32 dst, ovs_be32 mask)
 }
 
 void
+match_set_tun_ipv6_src(struct match *match, const struct in6_addr *src)
+{
+    match->flow.tunnel.ipv6_src = *src;
+    match->wc.masks.tunnel.ipv6_src = in6addr_exact;
+}
+
+void
+match_set_tun_ipv6_src_masked(struct match *match, const struct in6_addr *src,
+                              const struct in6_addr *mask)
+{
+    match->flow.tunnel.ipv6_src = ipv6_addr_bitand(src, mask);
+    match->wc.masks.tunnel.ipv6_src = *mask;
+}
+
+void
+match_set_tun_ipv6_dst(struct match *match, const struct in6_addr *dst)
+{
+    match->flow.tunnel.ipv6_dst = *dst;
+    match->wc.masks.tunnel.ipv6_dst = in6addr_exact;
+}
+
+void
+match_set_tun_ipv6_dst_masked(struct match *match, const struct in6_addr *dst,
+                              const struct in6_addr *mask)
+{
+    match->flow.tunnel.ipv6_dst = ipv6_addr_bitand(dst, mask);
+    match->wc.masks.tunnel.ipv6_dst = *mask;
+}
+
+void
 match_set_tun_ttl(struct match *match, uint8_t ttl)
 {
     match_set_tun_ttl_masked(match, ttl, UINT8_MAX);
@@ -949,6 +979,10 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     format_be64_masked(s, "tun_id", tnl->tun_id, wc->masks.tunnel.tun_id);
     format_ip_netmask(s, "tun_src", tnl->ip_src, wc->masks.tunnel.ip_src);
     format_ip_netmask(s, "tun_dst", tnl->ip_dst, wc->masks.tunnel.ip_dst);
+    format_ipv6_netmask(s, "tun_ipv6_src", &tnl->ipv6_src,
+                        &wc->masks.tunnel.ipv6_src);
+    format_ipv6_netmask(s, "tun_ipv6_dst", &tnl->ipv6_dst,
+                        &wc->masks.tunnel.ipv6_dst);
 
     if (wc->masks.tunnel.gbp_id) {
         format_be16_masked(s, "tun_gbp_id", tnl->gbp_id,
@@ -1004,7 +1038,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", priority);

@@ -362,8 +362,13 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
 {
     if (tnl_port_should_receive(flow)) {
         wc->masks.tunnel.tun_id = OVS_BE64_MAX;
-        wc->masks.tunnel.ip_src = OVS_BE32_MAX;
-        wc->masks.tunnel.ip_dst = OVS_BE32_MAX;
+        if (flow->tunnel.ip_dst) {
+            wc->masks.tunnel.ip_src = OVS_BE32_MAX;
+            wc->masks.tunnel.ip_dst = OVS_BE32_MAX;
+        } else {
+            wc->masks.tunnel.ipv6_src = in6addr_exact;
+            wc->masks.tunnel.ipv6_dst = in6addr_exact;
+        }
         wc->masks.tunnel.flags = (FLOW_TNL_F_DONT_FRAGMENT |
                                   FLOW_TNL_F_CSUM |
                                   FLOW_TNL_F_KEY);
@@ -412,9 +417,15 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
 
     if (!cfg->ip_src_flow) {
         flow->tunnel.ip_src = in6_addr_get_mapped_ipv4(&tnl_port->match.ipv6_src);
+        if (!flow->tunnel.ip_src) {
+            flow->tunnel.ipv6_src = tnl_port->match.ipv6_src;
+        }
     }
     if (!cfg->ip_dst_flow) {
         flow->tunnel.ip_dst = in6_addr_get_mapped_ipv4(&tnl_port->match.ipv6_dst);
+        if (!flow->tunnel.ip_dst) {
+            flow->tunnel.ipv6_dst = tnl_port->match.ipv6_dst;
+        }
     }
     flow->pkt_mark = tnl_port->match.pkt_mark;
 
@@ -534,11 +545,11 @@ tnl_find(const struct flow *flow) OVS_REQ_RDLOCK(rwlock)
                      * here as a description of how to treat received
                      * packets. */
                     match.in_key = in_key_flow ? 0 : flow->tunnel.tun_id;
-                    if (ip_src == IP_SRC_CFG && flow->tunnel.ip_dst) {
-                        in6_addr_set_mapped_ipv4(&match.ipv6_src, flow->tunnel.ip_dst);
+                    if (ip_src == IP_SRC_CFG) {
+                        match.ipv6_src = flow_tnl_dst(&flow->tunnel);
                     }
-                    if (!ip_dst_flow && flow->tunnel.ip_src) {
-                        in6_addr_set_mapped_ipv4(&match.ipv6_dst, flow->tunnel.ip_src);
+                    if (!ip_dst_flow) {
+                        match.ipv6_dst = flow_tnl_src(&flow->tunnel);
                     }
                     match.odp_port = flow->in_port.odp_port;
                     match.pkt_mark = flow->pkt_mark;

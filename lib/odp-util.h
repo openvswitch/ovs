@@ -109,6 +109,8 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  - OVS_TUNNEL_KEY_ATTR_ID             8    --     4     12
  *  - OVS_TUNNEL_KEY_ATTR_IPV4_SRC       4    --     4      8
  *  - OVS_TUNNEL_KEY_ATTR_IPV4_DST       4    --     4      8
+ *  - OVS_TUNNEL_KEY_ATTR_IPV6_SRC       16   --     4     20
+ *  - OVS_TUNNEL_KEY_ATTR_IPV6_DST       16   --     4     20
  *  - OVS_TUNNEL_KEY_ATTR_TOS            1    3      4      8
  *  - OVS_TUNNEL_KEY_ATTR_TTL            1    3      4      8
  *  - OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT  0    --     4      4
@@ -133,13 +135,13 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  OVS_KEY_ATTR_ICMPV6                  2     2     4      8
  *  OVS_KEY_ATTR_ND                     28    --     4     32
  *  ----------------------------------------------------------
- *  total                                                 532
+ *  total                                                 572
  *
  * We include some slack space in case the calculation isn't quite right or we
  * add another field and forget to adjust this value.
  */
-#define ODPUTIL_FLOW_KEY_BYTES 576
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 34);
+#define ODPUTIL_FLOW_KEY_BYTES 640
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
