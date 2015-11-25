@@ -447,7 +447,7 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
     if (nicParam->NicType == NdisSwitchNicTypeInternal) {
-        OvsInternalAdapterUp(portNo, &nicParam->NetCfgInstanceId);
+        OvsInternalAdapterUp(&nicParam->NetCfgInstanceId);
     }
 
 done:

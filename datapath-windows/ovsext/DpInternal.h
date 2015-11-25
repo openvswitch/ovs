@@ -294,8 +294,6 @@ typedef struct _OVS_EVENT_ENTRY {
     UINT32 type;
 } OVS_EVENT_ENTRY, *POVS_EVENT_ENTRY;
 
-#define OVS_DEFAULT_PORT_NO 0xffffffff
-#define OVS_DEFAULT_EVENT_STATUS  0xffffffff
 
 typedef struct _OVS_EVENT_STATUS {
     uint32_t numberEntries;

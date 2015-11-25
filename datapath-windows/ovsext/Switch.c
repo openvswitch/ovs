@@ -564,7 +564,6 @@ OvsActivateSwitch(POVS_SWITCH_CONTEXT switchContext)
         OvsClearAllSwitchVports(switchContext);
         goto cleanup;
     }
-    // OvsPostEvent(OVS_DEFAULT_PORT_NO, OVS_DEFAULT_EVENT_STATUS);
 
 cleanup:
     if (status != NDIS_STATUS_SUCCESS) {

@@ -291,7 +291,7 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * If the packet will not be encapsulated, consume the tunnel context
          * by clearing it.
          */
-        if (ovsFwdCtx->srcVportNo != OVS_DEFAULT_PORT_NO) {
+        if (ovsFwdCtx->srcVportNo != OVS_DPPORT_NUMBER_INVALID) {
 
             POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(
                 ovsFwdCtx->switchContext, ovsFwdCtx->srcVportNo);

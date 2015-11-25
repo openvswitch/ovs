@@ -434,7 +434,7 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
         NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
         ndisStatus = OvsActionsExecute(gOvsSwitchContext, NULL, pNbl,
                                        vport ? vport->portNo :
-                                               OVS_DEFAULT_PORT_NO,
+                                               OVS_DPPORT_NUMBER_INVALID,
                                        NDIS_SEND_FLAGS_SWITCH_DESTINATION_GROUP,
                                        &key, NULL, &layers, actions,
                                        execute->actionsLen);

@@ -88,6 +88,7 @@
 #include "Flow.h"
 #include "Checksum.h"
 #include "PacketParser.h"
+#include "Vport.h"
 
 /*
  * --------------------------------------------------------------------------
@@ -418,7 +419,7 @@ OvsAllocateFixSizeNBL(PVOID ovsContext,
 
     OvsInitNBLContext(ctx, OVS_BUFFER_FROM_FIX_SIZE_POOL |
                       OVS_BUFFER_PRIVATE_FORWARD_CONTEXT, size,
-                      OVS_DEFAULT_PORT_NO);
+                      OVS_DPPORT_NUMBER_INVALID);
     line = __LINE__;
 allocate_done:
     OVS_LOG_LOUD("Allocate Fix NBL: %p, line: %d", nbl, line);
@@ -531,7 +532,7 @@ OvsAllocateVariableSizeNBL(PVOID ovsContext,
     OvsInitNBLContext(ctx, OVS_BUFFER_PRIVATE_MDL | OVS_BUFFER_PRIVATE_DATA |
                            OVS_BUFFER_PRIVATE_FORWARD_CONTEXT |
                            OVS_BUFFER_FROM_ZERO_SIZE_POOL,
-                      size, OVS_DEFAULT_PORT_NO);
+                           size, OVS_DPPORT_NUMBER_INVALID);
 
     OVS_LOG_LOUD("Allocate variable size NBL: %p", nbl);
     return nbl;
@@ -583,7 +584,8 @@ OvsInitExternalNBLContext(PVOID ovsContext,
      * we use first nb to decide whether we need advance or retreat during
      * complete.
      */
-    OvsInitNBLContext(ctx, flags, NET_BUFFER_DATA_LENGTH(nb), OVS_DEFAULT_PORT_NO);
+    OvsInitNBLContext(ctx, flags, NET_BUFFER_DATA_LENGTH(nb),
+                      OVS_DPPORT_NUMBER_INVALID);
     return ctx;
 }
 
@@ -799,7 +801,7 @@ OvsPartialCopyNBL(PVOID ovsContext,
 
     srcNb = NET_BUFFER_LIST_FIRST_NB(nbl);
     OvsInitNBLContext(dstCtx, flags, NET_BUFFER_DATA_LENGTH(srcNb) - copySize,
-                      OVS_DEFAULT_PORT_NO);
+                      OVS_DPPORT_NUMBER_INVALID);
 
     InterlockedIncrement((LONG volatile *)&srcCtx->refCount);
 
@@ -1053,7 +1055,7 @@ OvsFullCopyNBL(PVOID ovsContext,
              OVS_BUFFER_PRIVATE_FORWARD_CONTEXT;
 
     OvsInitNBLContext(dstCtx, flags, NET_BUFFER_DATA_LENGTH(firstNb),
-                      OVS_DEFAULT_PORT_NO);
+                      OVS_DPPORT_NUMBER_INVALID);
 
 #ifdef DBG
     OvsDumpNetBufferList(nbl);
