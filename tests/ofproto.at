@@ -441,6 +441,14 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
+
+# Verify that duplicate bucket IDs are rejected.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15], [1], [], [stderr])
+AT_CHECK([STRIP_XIDS stderr | sed '/truncated/,$d'], [0], [dnl
+OFPT_ERROR (OF1.5): OFPGMFC_BUCKET_EXISTS
+OFPT_GROUP_MOD (OF1.5):
+])
+
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
