@@ -376,6 +376,12 @@ HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
 
 add_nic_done:
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
+    if (status == STATUS_SUCCESS &&
+        (vport->portType == NdisSwitchPortTypeInternal ||
+         (vport->portType == NdisSwitchPortTypeExternal &&
+          nicParam->NicIndex != 0))) {
+        AssignNicNameSpecial(vport);
+    }
     if (portNo != OVS_DPPORT_NUMBER_INVALID && event) {
         OvsPostEvent(portNo, event);
     }
@@ -1017,6 +1023,10 @@ AssignNicNameSpecial(POVS_VPORT_ENTRY vport)
     status = ConvertInterfaceGuidToLuid(&vport->netCfgInstanceId,
                                         &interfaceLuid);
     if (status == STATUS_SUCCESS) {
+        /*
+         * Must be called from PASSIVE_LEVEL. Resulted in a
+         * STATUS_INVALID_DEVICE_REQUEST if not.
+         */
         status = ConvertInterfaceLuidToAlias(&interfaceLuid, interfaceName,
                                              IF_MAX_STRING_SIZE + 1);
         if (status == STATUS_SUCCESS) {
@@ -1333,8 +1343,11 @@ OvsRemoveTunnelVport(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                  tunnelContext);
 }
 
-
-
+/*
+ * --------------------------------------------------------------------------
+ * Enumerates the ports on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 NDIS_STATUS
 OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
 {
@@ -1342,7 +1355,6 @@ OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
     ULONG arrIndex;
     PNDIS_SWITCH_PORT_PARAMETERS portParam;
     PNDIS_SWITCH_PORT_ARRAY portArray = NULL;
-    POVS_VPORT_ENTRY vport;
 
     OVS_LOG_TRACE("Enter: switchContext:%p", switchContext);
 
@@ -1358,16 +1370,9 @@ OvsAddConfiguredSwitchPorts(POVS_SWITCH_CONTEXT switchContext)
              continue;
          }
 
-         vport = (POVS_VPORT_ENTRY)OvsAllocateVport();
-         if (vport == NULL) {
-             status = NDIS_STATUS_RESOURCES;
-             goto cleanup;
-         }
-         OvsInitVportWithPortParam(vport, portParam);
-         status = InitHvVportCommon(switchContext, vport, TRUE);
-         if (status != NDIS_STATUS_SUCCESS) {
-             OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
-             goto cleanup;
+         status = HvCreatePort(switchContext, portParam);
+         if (status != STATUS_SUCCESS && status != STATUS_DATA_NOT_ACCEPTED) {
+             break;
          }
     }
 
@@ -1383,7 +1388,11 @@ cleanup:
     return status;
 }
 
-
+/*
+ * --------------------------------------------------------------------------
+ * Enumerates the NICs on the Hyper-V switch.
+ * --------------------------------------------------------------------------
+ */
 NDIS_STATUS
 OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
 {
@@ -1391,7 +1400,6 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
     PNDIS_SWITCH_NIC_ARRAY nicArray = NULL;
     ULONG arrIndex;
     PNDIS_SWITCH_NIC_PARAMETERS nicParam;
-    POVS_VPORT_ENTRY vport;
 
     OVS_LOG_TRACE("Enter: switchContext: %p", switchContext);
     /*
@@ -1402,63 +1410,18 @@ OvsInitConfiguredSwitchNics(POVS_SWITCH_CONTEXT switchContext)
         goto cleanup;
     }
     for (arrIndex = 0; arrIndex < nicArray->NumElements; ++arrIndex) {
-
         nicParam = NDIS_SWITCH_NIC_AT_ARRAY_INDEX(nicArray, arrIndex);
 
         /*
          * XXX: Check if the port is configured with a VLAN. Disallow such a
          * configuration, since we don't support tag-in-tag.
-         */
-
-        /*
          * XXX: Check if the port is connected to a VF. Disconnect the VF in
          * such a case.
          */
 
-        if (nicParam->NicType == NdisSwitchNicTypeExternal &&
-            nicParam->NicIndex != 0) {
-            POVS_VPORT_ENTRY virtExtVport =
-                   (POVS_VPORT_ENTRY)switchContext->virtualExternalVport;
-
-            vport = OvsAllocateVport();
-            if (vport) {
-                OvsInitPhysNicVport(vport, virtExtVport,
-                                    nicParam->NicIndex);
-                OvsInitVportWithNicParam(switchContext, vport, nicParam);
-                status = InitHvVportCommon(switchContext, vport, TRUE);
-                if (status != NDIS_STATUS_SUCCESS) {
-                    OvsFreeMemoryWithTag(vport, OVS_VPORT_POOL_TAG);
-                    vport = NULL;
-                }
-            } else {
-                OVS_LOG_ERROR("Fail to allocate vport.");
-                continue;
-            }
-        } else {
-            vport = OvsFindVportByPortIdAndNicIndex(switchContext,
-                                                    nicParam->PortId,
-                                                    nicParam->NicIndex);
-            if (vport == NULL) {
-                OVS_LOG_ERROR(
-                    "Could not found vport with portId: %d and nicIndex: %d.",
-                    nicParam->PortId, nicParam->NicIndex);
-                continue;
-            }
-            OvsInitVportWithNicParam(switchContext, vport, nicParam);
-        }
-
-        if (nicParam->NicType == NdisSwitchNicTypeInternal) {
-            /*
-             * Overwrite the 'portFriendlyName' of the internal vport. 
-             * Note:
-             * The call to AssignNicNameSpecial() is needed here, because the
-             * necessary 'netCfgInstanceId' of the vport is available.
-             * On port creation the latter information is missing and the
-             * 'portFriendlyName' of the vport fails to be overwritten with the
-             * correct information.
-             */
-            AssignNicNameSpecial(vport);
-            OvsInternalAdapterUp(vport->portNo, &nicParam->NetCfgInstanceId);
+        status = HvCreateNic(switchContext, nicParam);
+        if (status == NDIS_STATUS_SUCCESS) {
+            HvConnectNic(switchContext, nicParam);
         }
     }
 cleanup:
