@@ -171,7 +171,7 @@ struct xlate_ctx {
      * which might lead to an infinite loop.  This could happen easily
      * if a tunnel is marked as 'ip_remote=flow', and the flow does not
      * actually set the tun_dst field. */
-    ovs_be32 orig_tunnel_ip_dst;
+    struct in6_addr orig_tunnel_ipv6_dst;
 
     /* Stack for the push and pop actions.  Each stack element is of type
      * "union mf_subvalue". */
@@ -3023,6 +3023,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (xport->is_tunnel) {
+        ovs_be32 dst;
          /* Save tunnel metadata so that changes made due to
           * the Logical (tunnel) Port are not visible for any further
           * matches, while explicit set actions on tunnel metadata are.
@@ -3033,7 +3034,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */
         }
-        if (flow->tunnel.ip_dst == ctx->orig_tunnel_ip_dst) {
+        dst = in6_addr_get_mapped_ipv4(&ctx->orig_tunnel_ipv6_dst);
+        if (flow->tunnel.ip_dst == dst) {
             xlate_report(ctx, "Not tunneling to our own address");
             goto out; /* restore flow_nw_tos */
         }
@@ -5016,7 +5018,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .xin = xin,
         .xout = xout,
         .base_flow = *flow,
-        .orig_tunnel_ip_dst = flow->tunnel.ip_dst,
         .xbridge = xbridge,
         .stack = OFPBUF_STUB_INITIALIZER(stack_stub),
         .rule = xin->rule,
@@ -5049,6 +5050,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .action_set_has_group = false,
         .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),
     };
+    in6_addr_set_mapped_ipv4(&ctx.orig_tunnel_ipv6_dst, flow->tunnel.ip_dst);
 
     /* 'base_flow' reflects the packet as it came in, but we need it to reflect
      * the packet as the datapath will treat it for output actions:
