@@ -313,7 +313,32 @@ struct xlate_ctx {
      * datapath actions. */
     bool action_set_has_group;  /* Action set contains OFPACT_GROUP? */
     struct ofpbuf action_set;   /* Action set. */
+
+    enum xlate_error error;     /* Translation failed. */
 };
+
+const char *xlate_strerror(enum xlate_error error)
+{
+    switch (error) {
+    case XLATE_OK:
+        return "OK";
+    case XLATE_BRIDGE_NOT_FOUND:
+        return "Bridge not found";
+    case XLATE_RECURSION_TOO_DEEP:
+        return "Recursion too deep";
+    case XLATE_TOO_MANY_RESUBMITS:
+        return "Too many resubmits";
+    case XLATE_STACK_TOO_DEEP:
+        return "Stack too deep";
+    case XLATE_NO_RECIRCULATION_CONTEXT:
+        return "No recirculation context";
+    case XLATE_RECIRCULATION_CONFLICT:
+        return "Recirculation conflict";
+    case XLATE_TOO_MANY_MPLS_LABELS:
+        return "Too many MPLS labels";
+    }
+    return "Unknown error";
+}
 
 static void xlate_action_set(struct xlate_ctx *ctx);
 static void xlate_commit_actions(struct xlate_ctx *ctx);
@@ -535,6 +560,17 @@ xlate_report(struct xlate_ctx *ctx, const char *format, ...)
         va_end(args);
     }
 }
+
+static struct vlog_rate_limit error_report_rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+#define XLATE_REPORT_ERROR(CTX, ...)                    \
+    do {                                                \
+        if (OVS_UNLIKELY((CTX)->xin->report_hook)) {    \
+            xlate_report(CTX, __VA_ARGS__);             \
+        } else {                                        \
+            VLOG_ERR_RL(&error_report_rl, __VA_ARGS__); \
+        }                                               \
+    } while (0)
 
 static inline void
 xlate_report_actions(struct xlate_ctx *ctx, const char *title,
@@ -2949,6 +2985,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
          * recirculated packet! */
         ctx->exit = false;
 
+        /* Peer bridge errors do not propagate back. */
+        ctx->error = XLATE_OK;
+
         if (ctx->xin->resubmit_stats) {
             netdev_vport_inc_tx(xport->netdev, ctx->xin->resubmit_stats);
             netdev_vport_inc_rx(peer->netdev, ctx->xin->resubmit_stats);
@@ -3126,17 +3165,20 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
 static bool
 xlate_resubmit_resource_check(struct xlate_ctx *ctx)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-
     if (ctx->recurse >= MAX_RESUBMIT_RECURSION + MAX_INTERNAL_RESUBMITS) {
-        VLOG_ERR_RL(&rl, "resubmit actions recursed over %d times",
-                    MAX_RESUBMIT_RECURSION);
+        XLATE_REPORT_ERROR(ctx, "resubmit actions recursed over %d times",
+                           MAX_RESUBMIT_RECURSION);
+        ctx->error = XLATE_RECURSION_TOO_DEEP;
     } else if (ctx->resubmits >= MAX_RESUBMITS + MAX_INTERNAL_RESUBMITS) {
-        VLOG_ERR_RL(&rl, "over %d resubmit actions", MAX_RESUBMITS);
+        XLATE_REPORT_ERROR(ctx, "over %d resubmit actions", MAX_RESUBMITS);
+        ctx->error = XLATE_TOO_MANY_RESUBMITS;
     } else if (ctx->odp_actions->size > UINT16_MAX) {
-        VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of actions");
+        XLATE_REPORT_ERROR(ctx, "resubmits yielded over 64 kB of actions");
+        /* NOT an error, as we'll be slow-pathing the flow in this case? */
+        ctx->exit = true; /* XXX: translation still terminated! */
     } else if (ctx->stack.size >= 65536) {
-        VLOG_ERR_RL(&rl, "resubmits yielded over 64 kB of stack");
+        XLATE_REPORT_ERROR(ctx, "resubmits yielded over 64 kB of stack");
+        ctx->error = XLATE_STACK_TOO_DEEP;
     } else {
         return true;
     }
@@ -3188,8 +3230,6 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         ctx->table_id = old_table_id;
         return;
     }
-
-    ctx->exit = true;
 }
 
 static void
@@ -3559,8 +3599,8 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
          * with the udpif key ('ukey') created for each new datapath flow. */
         id = recirc_alloc_id_ctx(&state);
         if (!id) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_ERR_RL(&rl, "Failed to allocate recirculation id");
+            XLATE_REPORT_ERROR(ctx, "Failed to allocate recirculation id");
+            ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
             return;
         }
         xlate_out_add_recirc(ctx->xout, id);
@@ -3568,11 +3608,13 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
         /* Look up an existing recirc id for the given metadata state in the
          * flow.  No new reference is taken, as the ID is RCU protected and is
          * only required temporarily for verification.
-         *
-         * This might fail and return 0.  We let zero 'id' to be used in the
-         * RECIRC action below, which will fail all revalidations as zero is
-         * not a valid recirculation ID. */
+         * If flow tables have changed sufficiently this can fail and we will
+         * delete the old datapath flow. */
         id = recirc_find_id(&state);
+        if (!id) {
+            ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
+            return;
+        }
     }
 
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
@@ -3615,13 +3657,12 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
         xlate_commit_actions(ctx);
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
         if (ctx->xin->packet != NULL) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_WARN_RL(&rl, "bridge %s: dropping packet on which an "
+            XLATE_REPORT_ERROR(ctx, "bridge %s: dropping packet on which an "
                          "MPLS push action can't be performed as it would "
                          "have more MPLS LSEs than the %d supported.",
                          ctx->xbridge->name, FLOW_MAX_MPLS_LABELS);
         }
-        ctx->exit = true;
+        ctx->error = XLATE_TOO_MANY_MPLS_LABELS;
         return;
     }
 
@@ -3640,13 +3681,12 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
         }
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
         if (ctx->xin->packet != NULL) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_WARN_RL(&rl, "bridge %s: dropping packet on which an "
+            XLATE_REPORT_ERROR(ctx, "bridge %s: dropping packet on which an "
                          "MPLS pop action can't be performed as it has "
                          "more MPLS LSEs than the %d supported.",
                          ctx->xbridge->name, FLOW_MAX_MPLS_LABELS);
         }
-        ctx->exit = true;
+        ctx->error = XLATE_TOO_MANY_MPLS_LABELS;
         ofpbuf_clear(ctx->odp_actions);
     }
 }
@@ -4274,6 +4314,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         const struct ofpact_set_field *set_field;
         const struct mf_field *mf;
 
+        if (ctx->error) {
+            break;
+        }
+
         if (ctx->exit) {
             /* Check if need to store the remaining actions for later
              * execution. */
@@ -4632,7 +4676,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         /* Check if need to store this and the remaining actions for later
          * execution. */
-        if (ctx->exit && ctx_first_recirculation_action(ctx)) {
+        if (!ctx->error && ctx->exit && ctx_first_recirculation_action(ctx)) {
             recirc_unroll_actions(a, OFPACT_ALIGN(ofpacts_len -
                                                   ((uint8_t *)a -
                                                    (uint8_t *)ofpacts)),
@@ -4688,8 +4732,15 @@ void
 xlate_actions_for_side_effects(struct xlate_in *xin)
 {
     struct xlate_out xout;
+    enum xlate_error error;
 
-    xlate_actions(xin, &xout);
+    error = xlate_actions(xin, &xout);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        VLOG_WARN_RL(&rl, "xlate_actions failed (%s)!", xlate_strerror(error));
+    }
+
     xlate_out_uninit(&xout);
 }
 
@@ -4878,8 +4929,12 @@ xlate_wc_finish(struct xlate_ctx *ctx)
 /* Translates the flow, actions, or rule in 'xin' into datapath actions in
  * 'xout'.
  * The caller must take responsibility for eventually freeing 'xout', with
- * xlate_out_uninit(). */
-void
+ * xlate_out_uninit().
+ * Returns 'XLATE_OK' if translation was successful.  In case of an error an
+ * empty set of actions will be returned in 'xin->odp_actions' (if non-NULL),
+ * so that most callers may ignore the return value and transparently install a
+ * drop flow when the translation fails. */
+enum xlate_error
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
     *xout = (struct xlate_out) {
@@ -4891,7 +4946,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     struct xbridge *xbridge = xbridge_lookup(xcfg, xin->ofproto);
     if (!xbridge) {
-        return;
+        return XLATE_BRIDGE_NOT_FOUND;
     }
 
     struct flow *flow = &xin->flow;
@@ -4924,6 +4979,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .sflow_odp_port = 0,
         .nf_output_iface = NF_OUT_DROP,
         .exit = false,
+        .error = XLATE_OK,
         .mirrors = 0,
 
         .recirc_action_offset = -1,
@@ -4976,6 +5032,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
             VLOG_WARN_RL(&rl, "Recirculation conflict (%s)!", conflict);
             xlate_report(&ctx, "- Recirculation conflict (%s)!", conflict);
+            ctx.error = XLATE_RECIRCULATION_CONFLICT;
             goto exit;
         }
 
@@ -4990,6 +5047,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
                 VLOG_WARN_RL(&rl, "Recirculation bridge no longer exists.");
                 xlate_report(&ctx, "- Recirculation bridge no longer exists.");
+                ctx.error = XLATE_BRIDGE_NOT_FOUND;
                 goto exit;
             }
             ctx.xbridge = new_bridge;
@@ -5049,6 +5107,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         VLOG_WARN_RL(&rl, "Recirculation context not found for ID %"PRIx32,
                      flow->recirc_id);
+        ctx.error = XLATE_NO_RECIRCULATION_CONTEXT;
         goto exit;
     }
     /* The bridge is now known so obtain its table version. */
@@ -5140,6 +5199,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
             mirror_ingress_packet(&ctx);
             do_xlate_actions(ofpacts, ofpacts_len, &ctx);
+            if (ctx.error) {
+                goto exit;
+            }
 
             /* We've let OFPP_NORMAL and the learning action look at the
              * packet, so drop it now if forwarding is disabled. */
@@ -5219,6 +5281,15 @@ exit:
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
     ofpbuf_uninit(&scratch_actions);
+
+    /* Make sure we return a "drop flow" in case of an error. */
+    if (ctx.error) {
+        xout->slow = 0;
+        if (xin->odp_actions) {
+            ofpbuf_clear(xin->odp_actions);
+        }
+    }
+    return ctx.error;
 }
 
 /* Sends 'packet' out 'ofport'.

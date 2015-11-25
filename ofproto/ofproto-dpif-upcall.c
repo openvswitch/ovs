@@ -1098,7 +1098,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         ofpbuf_use_const(&upcall->put_actions,
                          odp_actions->data, odp_actions->size);
     } else {
-        ofpbuf_init(&upcall->put_actions, 0);
+        /* upcall->put_actions already initialized by upcall_receive(). */
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
                           upcall->flow->in_port.odp_port,
                           &upcall->put_actions);

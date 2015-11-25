@@ -3730,7 +3730,10 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     xin.resubmit_stats = &stats;
     xin.recurse = recurse;
     xin.resubmits = resubmits;
-    xlate_actions(&xin, &xout);
+    if (xlate_actions(&xin, &xout) != XLATE_OK) {
+        error = EINVAL;
+        goto out;
+    }
 
     execute.actions = odp_actions.data;
     execute.actions_len = odp_actions.size;
@@ -3749,7 +3752,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     execute.packet->md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
 
     error = dpif_execute(ofproto->backer->dpif, &execute);
-
+out:
     xlate_out_uninit(&xout);
     ofpbuf_uninit(&odp_actions);
 
@@ -4993,6 +4996,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
               struct ds *ds)
 {
     struct trace_ctx trace;
+    enum xlate_error error;
 
     ds_put_format(ds, "Bridge: %s\n", ofproto->up.name);
     ds_put_cstr(ds, "Flow: ");
@@ -5012,8 +5016,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace.xin.resubmit_hook = trace_resubmit;
     trace.xin.report_hook = trace_report_valist;
 
-    xlate_actions(&trace.xin, &trace.xout);
-
+    error = xlate_actions(&trace.xin, &trace.xout);
     ds_put_char(ds, '\n');
     trace_format_flow(ds, 0, "Final flow", &trace);
     trace_format_megaflow(ds, 0, "Megaflow", &trace);
@@ -5021,7 +5024,10 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     ds_put_cstr(ds, "Datapath actions: ");
     format_odp_actions(ds, trace.odp_actions.data, trace.odp_actions.size);
 
-    if (trace.xout.slow) {
+    if (error != XLATE_OK) {
+        ds_put_format(ds, "\nTranslation failed (%s), packet is dropped.\n",
+                      xlate_strerror(error));
+    } else if (trace.xout.slow) {
         enum slow_path_reason slow;
 
         ds_put_cstr(ds, "\nThis flow is handled by the userspace "
