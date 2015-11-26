@@ -4735,7 +4735,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   on_exit 'kill `cat test-sflow.pid`'
   AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:$1 > sflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([sflow.log])
-  SFLOW_PORT=`parse_listening_port < test-sflow.log`
+  PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
   ovs-appctl time/stop
 
   ADD_OF_PORTS([br0], 1, 2)
@@ -5078,7 +5078,7 @@ OVS_VSWITCHD_START([dnl
 on_exit 'kill `cat test-sflow.pid`'
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
-SFLOW_PORT=`parse_listening_port < test-sflow.log`
+PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 
 ovs-appctl time/stop
 
@@ -5122,7 +5122,7 @@ OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 dnl set up sFlow logging
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
-SFLOW_PORT=`parse_listening_port < test-sflow.log`
+PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
 
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
@@ -5192,7 +5192,7 @@ OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_reques
 dnl set up sFlow logging
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
-SFLOW_PORT=`parse_listening_port < test-sflow.log`
+PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
 
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
@@ -5296,7 +5296,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 dnl set up sFlow logging
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
-SFLOW_PORT=`parse_listening_port < test-sflow.log`
+PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
 
 dnl configure sflow
@@ -5390,7 +5390,7 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
   on_exit 'kill `cat test-netflow.pid`'
   AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
-  NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+  PARSE_LISTENING_PORT([test-netflow.log], [NETFLOW_PORT])
 
   ovs-vsctl \
      set Bridge br0 netflow=@nf -- \
@@ -5437,7 +5437,7 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
   on_exit 'kill `cat test-netflow.pid`'
   AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
-  NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+  PARSE_LISTENING_PORT([test-netflow.log], [NETFLOW_PORT])
 
   ovs-vsctl \
      set Bridge br0 netflow=@nf -- \
@@ -6152,7 +6152,7 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
   on_exit 'kill `cat test-netflow.pid`'
   AT_CHECK([ovstest test-netflow --log-file --detach --no-chdir --pidfile 0:$1 > netflow.log], [0], [], [ignore])
   AT_CAPTURE_FILE([netflow.log])
-  NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+  PARSE_LISTENING_PORT([test-netflow.log], [NETFLOW_PORT])
   ovs-vsctl \
      set Bridge br0 netflow=@nf -- \
      --id=@nf create NetFlow targets=\"$1:$NETFLOW_PORT\" \

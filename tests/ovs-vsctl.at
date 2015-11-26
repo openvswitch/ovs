@@ -1319,7 +1319,7 @@ dnl Create database.
 OVSDB_INIT([conf.db])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
 on_exit "kill `cat pid`"
-SSL_PORT=`parse_listening_port < ovsdb-server.log`
+PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
 
 # During bootstrap, the connection gets torn down. So the o/p of ovs-vsctl is error.
 AT_CHECK([ovs-vsctl -t 5 --db=ssl:127.0.0.1:$SSL_PORT --private-key=$PKIDIR/vsctl-privkey.pem --certificate=$PKIDIR/vsctl-cert.pem --bootstrap-ca-cert=$PKIDIR/cacert.pem show], [1], [ignore], [ignore])
@@ -1346,7 +1346,7 @@ dnl Create database.
 OVSDB_INIT([conf.db])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --peer-ca-cert=$PKIDIR/pki/controllerca/cacert.pem --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
 on_exit "kill `cat pid`"
-SSL_PORT=`parse_listening_port < ovsdb-server.log`
+PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
 
 # During bootstrap, the connection gets torn down. So the o/p of ovs-vsctl is error.
 AT_CHECK([ovs-vsctl -t 5 --db=ssl:127.0.0.1:$SSL_PORT --private-key=$PKIDIR/vsctl-privkey.pem --certificate=$PKIDIR/vsctl-cert.pem --bootstrap-ca-cert=$PKIDIR/cacert.pem show], [1], [ignore], [ignore])

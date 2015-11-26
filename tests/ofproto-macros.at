@@ -33,22 +33,23 @@ s/tcp:127.0.0.1:[0-9][0-9]*:/unix:/
 s/No error/Success/
 '
 }
+]
 
-# parse_listening_port [SERVER]
+# PARSE_LISTENING_PORT LOGFILE VARIABLE
 #
-# Parses the TCP or SSL port on which a server is listening from the
-# log, given that the server was told to listen on a kernel-chosen
-# port, file provided on stdin, and prints the port number on stdout.
-# You should specify the listening remote as ptcp:0:127.0.0.1 or
+# Parses the TCP or SSL port on which a server is listening from
+# LOGFILE, given that the server was told to listen on a kernel-chosen
+# port, and assigns the port number to shell VARIABLE.  You should
+# specify the listening remote as ptcp:0:127.0.0.1 or
 # pssl:0:127.0.0.1, or the equivalent with [::1] instead of 127.0.0.1.
 #
 # Here's an example of how to use this with ovsdb-server:
 #
 #    ovsdb-server --log-file --remote=ptcp:0:127.0.0.1 ...
-#    TCP_PORT=`parse_listening_port < ovsdb-server.log`
-parse_listening_port () {
-    sed -n 's/.*0:.*: listening on port \([0-9]*\)$/\1/p'
-}]
+#    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+#    # Now $TCP_PORT holds the listening port.
+m4_define([PARSE_LISTENING_PORT],
+    [OVS_WAIT_UNTIL([$2=`sed -n 's/.*0:.*: listening on port \([[0-9]]*\)$/\1/p' "$1"` && test X != X"[$]$2"])])
 
 start_daemon () {
     "$@" -vconsole:off --detach --no-chdir --pidfile --log-file
