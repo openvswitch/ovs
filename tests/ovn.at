@@ -675,8 +675,8 @@ for i in 1 2 3; do
         file=hv$i/vif$i$j-tx.pcap
         echo $file
         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        cp $i$j.expected expout
-        AT_CHECK([cat $i$j.packets], [0], [expout])
+        sort $i$j.expected > expout
+        AT_CHECK([sort $i$j.packets], [0], [expout])
         echo
     done
 done
@@ -832,8 +832,8 @@ for i in 1 2 3; do
     file=hv$i/vif$i-tx.pcap
     echo $file
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    cp $i.expected expout
-    AT_CHECK([cat $i.packets], [0], [expout])
+    sort $i.expected > expout
+    AT_CHECK([sort $i.packets], [0], [expout])
     echo
 done
 AT_CLEANUP
@@ -1097,8 +1097,8 @@ for i in 1 2 3; do
 	    file=hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap
 	    echo $file
 	    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j$k.packets
-	    cp $i$j$k.expected expout
-	    AT_CHECK([cat $i$j$k.packets], [0], [expout])
+	    sort $i$j$k.expected > expout
+	    AT_CHECK([sort $i$j$k.packets], [0], [expout])
 	    echo
         done
     done
