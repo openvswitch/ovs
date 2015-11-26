@@ -4262,12 +4262,13 @@ put_ct_nat(struct xlate_ctx *ctx)
             nl_msg_put_flag(ctx->odp_actions, OVS_NAT_ATTR_PROTO_RANDOM);
         }
         if (ofn->range_af == AF_INET) {
-            nl_msg_put_u32(ctx->odp_actions, OVS_NAT_ATTR_IP_MIN,
+            nl_msg_put_be32(ctx->odp_actions, OVS_NAT_ATTR_IP_MIN,
                            ofn->range.addr.ipv4.min);
             if (ofn->range.addr.ipv4.max &&
-                ofn->range.addr.ipv4.max > ofn->range.addr.ipv4.min) {
-                nl_msg_put_u32(ctx->odp_actions, OVS_NAT_ATTR_IP_MAX,
-                               ofn->range.addr.ipv4.max);
+                (ntohl(ofn->range.addr.ipv4.max)
+                 > ntohl(ofn->range.addr.ipv4.min))) {
+                nl_msg_put_be32(ctx->odp_actions, OVS_NAT_ATTR_IP_MAX,
+                                ofn->range.addr.ipv4.max);
             }
         } else if (ofn->range_af == AF_INET6) {
             nl_msg_put_unspec(ctx->odp_actions, OVS_NAT_ATTR_IP_MIN,
