@@ -61,7 +61,8 @@ struct ovsdb_idl_table_class {
 struct ovsdb_idl_table {
     const struct ovsdb_idl_table_class *class;
     unsigned char *modes;    /* OVSDB_IDL_* bitmasks, indexed by column. */
-    bool need_table;         /* Monitor table even if no columns? */
+    bool need_table;         /* Monitor table even if no columns are selected
+                              * for replication. */
     struct shash columns;    /* Contains "const struct ovsdb_idl_column *"s. */
     struct hmap rows;        /* Contains "struct ovsdb_idl_row"s. */
     struct ovsdb_idl *idl;   /* Containing idl. */

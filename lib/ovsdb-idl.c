@@ -557,11 +557,13 @@ ovsdb_idl_add_column(struct ovsdb_idl *idl,
 }
 
 /* Ensures that the table with class 'tc' will be replicated on 'idl' even if
- * no columns are selected for replication.  This can be useful because it
- * allows 'idl' to keep track of what rows in the table actually exist, which
- * in turn allows columns that reference the table to have accurate contents.
- * (The IDL presents the database with references to rows that do not exist
- * removed.)
+ * no columns are selected for replication. Just the necessary data for table
+ * references will be replicated (the UUID of the rows, for instance), any
+ * columns not selected for replication will remain unreplicated.
+ * This can be useful because it allows 'idl' to keep track of what rows in the
+ * table actually exist, which in turn allows columns that reference the table
+ * to have accurate contents. (The IDL presents the database with references to
+ * rows that do not exist removed.)
  *
  * This function is only useful if 'monitor_everything_by_default' was false in
  * the call to ovsdb_idl_create().  This function should be called between
