@@ -2848,7 +2848,7 @@ AT_CHECK([ovs-ofctl add-flow br0 priority=22,importance=22,actions=normal])
 dnl Importance parameter will only be visible of flows that are added via OF1.4+ if dumped via OF1.4+
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/ST_FLOW reply/d' | sort], [0], [dnl
  importance=21, priority=21 actions=NORMAL
- priority=22 actions=NORMAL
+ reset_counts priority=22 actions=NORMAL
 ])
 
 dnl Importance parameter will not be visible if flow is dumped with previous version prior to OF1.4+ whether added via OF1.4+

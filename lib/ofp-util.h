@@ -249,14 +249,22 @@ enum ofputil_flow_mod_flags {
     OFPUTIL_FF_SEND_FLOW_REM = 1 << 0, /* All versions. */
     OFPUTIL_FF_NO_PKT_COUNTS = 1 << 1, /* OpenFlow 1.3+. */
     OFPUTIL_FF_NO_BYT_COUNTS = 1 << 2, /* OpenFlow 1.3+. */
+
+    /* These flags primarily affects flow_mod behavior.  They are not
+     * particularly useful as part of flow state.  We include them in flow
+     * state only because OpenFlow implies that they should be. */
+    OFPUTIL_FF_CHECK_OVERLAP = 1 << 3, /* All versions. */
+    OFPUTIL_FF_RESET_COUNTS  = 1 << 4, /* OpenFlow 1.2+. */
+
+    /* Not supported by OVS. */
+    OFPUTIL_FF_EMERG         = 1 << 5, /* OpenFlow 1.0 only. */
+
+    /* The set of flags maintained as part of a flow table entry. */
 #define OFPUTIL_FF_STATE (OFPUTIL_FF_SEND_FLOW_REM      \
                           | OFPUTIL_FF_NO_PKT_COUNTS    \
-                          | OFPUTIL_FF_NO_BYT_COUNTS)
-
-    /* Flags that affect flow_mod behavior but are not part of flow state. */
-    OFPUTIL_FF_CHECK_OVERLAP = 1 << 3, /* All versions. */
-    OFPUTIL_FF_EMERG         = 1 << 4, /* OpenFlow 1.0 only. */
-    OFPUTIL_FF_RESET_COUNTS  = 1 << 5, /* OpenFlow 1.2+. */
+                          | OFPUTIL_FF_NO_BYT_COUNTS    \
+                          | OFPUTIL_FF_CHECK_OVERLAP    \
+                          | OFPUTIL_FF_RESET_COUNTS)
 
     /* Flags that are only set by OVS for its internal use.  Cannot be set via
      * OpenFlow. */
