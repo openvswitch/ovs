@@ -185,11 +185,14 @@ BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
 #define OFPACT_ALIGNTO 8
 #define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
 
+/* Returns the ofpact following 'ofpact'. */
 static inline struct ofpact *
 ofpact_next(const struct ofpact *ofpact)
 {
     return (void *) ((uint8_t *) ofpact + OFPACT_ALIGN(ofpact->len));
 }
+
+struct ofpact *ofpact_next_flattened(const struct ofpact *);
 
 static inline struct ofpact *
 ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
@@ -202,6 +205,15 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 #define OFPACT_FOR_EACH(POS, OFPACTS, OFPACTS_LEN)                      \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next(POS))
+
+/* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
+ * starting at OFPACTS.
+ *
+ * For ofpacts that contain nested ofpacts, this visits each of the inner
+ * ofpacts as well. */
+#define OFPACT_FOR_EACH_FLATTENED(POS, OFPACTS, OFPACTS_LEN)           \
+    for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
+         (POS) = ofpact_next_flattened(POS))
 
 /* Action structure for each OFPACT_*. */
 

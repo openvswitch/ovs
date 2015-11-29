@@ -476,7 +476,7 @@ for i in `seq 0 2`;
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
- group_id=1234,ref_count=0,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=0,byte_count=0
+ group_id=1234,ref_count=1,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.2):
 ])
 OVS_VSWITCHD_STOP
@@ -497,7 +497,7 @@ for i in `seq 0 2`;
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
- group_id=1234,ref_count=0,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=3,byte_count=180
+ group_id=1234,ref_count=1,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=3,byte_count=180
 OFPST_GROUP reply (OF1.2):
 ])
 OVS_VSWITCHD_STOP
@@ -649,6 +649,7 @@ table=8,actions=clear_actions,write_actions(output(3),output(2)),goto_table(9)
 table=9,priority=20,actset_output=2 actions=12
 table=9,priority=10                 actions=13
 ])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 'group_id=5,type=all,bucket=output:1'])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [Datapath actions: 4,6,8,10,12,2
