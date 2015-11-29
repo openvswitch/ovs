@@ -726,15 +726,12 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     }
     hmap_destroy(&tunnels);
 
-    /* Table 0, Priority 150 and 100.
-     * ==============================
+    /* Table 0, Priority 100.
+     * ======================
      *
      * We have now determined the full set of port bindings associated with
      * each "localnet" network.  Only create flows for datapaths that have
      * another local binding.  Otherwise, we know it would just be dropped.
-     *
-     * Use priority 150 for inputs that match both the network and a VLAN tag.
-     * Use priority 100 for matching untagged traffic from the local network.
      */
     struct shash_node *ln_bindings_node, *ln_bindings_node_next;
     SHASH_FOR_EACH_SAFE (ln_bindings_node, ln_bindings_node_next,
@@ -747,14 +744,19 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             match_set_in_port(&match, ln_bindings->ofport);
             if (ln_vlan->tag) {
                 match_set_dl_vlan(&match, htons(ln_vlan->tag));
+            } else {
+                /* Match priority-tagged frames, e.g. VLAN ID 0.
+                 *
+                 * We'll add a second flow for frames that lack any 802.1Q
+                 * header later. */
+                match_set_dl_tci_masked(&match, htons(VLAN_CFI),
+                                        htons(VLAN_VID_MASK | VLAN_CFI));
             }
 
             struct ofpbuf ofpacts;
             ofpbuf_init(&ofpacts, 0);
 
-            if (ln_vlan->tag) {
-                ofpact_put_STRIP_VLAN(&ofpacts);
-            }
+            ofpact_put_STRIP_VLAN(&ofpacts);
             uint32_t ofpacts_orig_size = ofpacts.size;
 
             struct binding_elem *b;
@@ -775,8 +777,16 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             }
 
             if (ofpacts.size > ofpacts_orig_size) {
-                ofctrl_add_flow(flow_table, 0, ln_vlan->tag ? 150 : 100,
-                        &match, &ofpacts);
+                ofctrl_add_flow(flow_table, 0, 100, &match, &ofpacts);
+
+                if (!ln_vlan->tag) {
+                    /* Add a second flow for frames that lack any 802.1Q
+                     * header.  For these, drop the OFPACT_STRIP_VLAN
+                     * action. */
+                    ofpbuf_pull(&ofpacts, ofpacts_orig_size);
+                    match_set_dl_tci_masked(&match, 0, htons(VLAN_CFI));
+                    ofctrl_add_flow(flow_table, 0, 100, &match, &ofpacts);
+                }
             }
 
             ofpbuf_uninit(&ofpacts);
