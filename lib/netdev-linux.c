@@ -151,6 +151,32 @@ static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
         return ep->speed | (ep->speed_hi << 16);
 }
 
+/* Linux 2.6.30 introduced supported and advertised flags for
+ * 1G base KX, and 10G base KX4, KR and R. */
+#ifndef SUPPORTED_1000baseKX_Full
+#define SUPPORTED_1000baseKX_Full      (1 << 17)
+#define SUPPORTED_10000baseKX4_Full    (1 << 18)
+#define SUPPORTED_10000baseKR_Full     (1 << 19)
+#define SUPPORTED_10000baseR_FEC       (1 << 20)
+#define ADVERTISED_1000baseKX_Full     (1 << 17)
+#define ADVERTISED_10000baseKX4_Full   (1 << 18)
+#define ADVERTISED_10000baseKR_Full    (1 << 19)
+#define ADVERTISED_10000baseR_FEC      (1 << 20)
+#endif
+
+/* Linux 3.5 introduced supported and advertised flags for
+ * 40G base KR4, CR4, SR4 and LR4. */
+#ifndef SUPPORTED_40000baseKR4_Full
+#define SUPPORTED_40000baseKR4_Full    (1 << 23)
+#define SUPPORTED_40000baseCR4_Full    (1 << 24)
+#define SUPPORTED_40000baseSR4_Full    (1 << 25)
+#define SUPPORTED_40000baseLR4_Full    (1 << 26)
+#define ADVERTISED_40000baseKR4_Full   (1 << 23)
+#define ADVERTISED_40000baseCR4_Full   (1 << 24)
+#define ADVERTISED_40000baseSR4_Full   (1 << 25)
+#define ADVERTISED_40000baseLR4_Full   (1 << 26)
+#endif
+
 /* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64.
  *
  * Tests for rtnl_link_stats64 don't seem to consistently work, e.g. on
@@ -1797,11 +1823,21 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     if (ecmd.supported & SUPPORTED_1000baseT_Half) {
         netdev->supported |= NETDEV_F_1GB_HD;
     }
-    if (ecmd.supported & SUPPORTED_1000baseT_Full) {
+    if ((ecmd.supported & SUPPORTED_1000baseT_Full) ||
+        (ecmd.supported & SUPPORTED_1000baseKX_Full)) {
         netdev->supported |= NETDEV_F_1GB_FD;
     }
-    if (ecmd.supported & SUPPORTED_10000baseT_Full) {
+    if ((ecmd.supported & SUPPORTED_10000baseT_Full) ||
+        (ecmd.supported & SUPPORTED_10000baseKX4_Full) ||
+        (ecmd.supported & SUPPORTED_10000baseKR_Full) ||
+        (ecmd.supported & SUPPORTED_10000baseR_FEC)) {
         netdev->supported |= NETDEV_F_10GB_FD;
+    }
+    if ((ecmd.supported & SUPPORTED_40000baseKR4_Full) ||
+        (ecmd.supported & SUPPORTED_40000baseCR4_Full) ||
+        (ecmd.supported & SUPPORTED_40000baseSR4_Full) ||
+        (ecmd.supported & SUPPORTED_40000baseLR4_Full)) {
+        netdev->supported |= NETDEV_F_40GB_FD;
     }
     if (ecmd.supported & SUPPORTED_TP) {
         netdev->supported |= NETDEV_F_COPPER;
@@ -1836,11 +1872,21 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     if (ecmd.advertising & ADVERTISED_1000baseT_Half) {
         netdev->advertised |= NETDEV_F_1GB_HD;
     }
-    if (ecmd.advertising & ADVERTISED_1000baseT_Full) {
+    if ((ecmd.advertising & ADVERTISED_1000baseT_Full) ||
+        (ecmd.advertising & ADVERTISED_1000baseKX_Full)) {
         netdev->advertised |= NETDEV_F_1GB_FD;
     }
-    if (ecmd.advertising & ADVERTISED_10000baseT_Full) {
+    if ((ecmd.advertising & ADVERTISED_10000baseT_Full) ||
+        (ecmd.advertising & ADVERTISED_10000baseKX4_Full) ||
+        (ecmd.advertising & ADVERTISED_10000baseKR_Full) ||
+        (ecmd.advertising & ADVERTISED_10000baseR_FEC)) {
         netdev->advertised |= NETDEV_F_10GB_FD;
+    }
+    if ((ecmd.advertising & ADVERTISED_40000baseKR4_Full) ||
+        (ecmd.advertising & ADVERTISED_40000baseCR4_Full) ||
+        (ecmd.advertising & ADVERTISED_40000baseSR4_Full) ||
+        (ecmd.advertising & ADVERTISED_40000baseLR4_Full)) {
+        netdev->advertised |= NETDEV_F_40GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_TP) {
         netdev->advertised |= NETDEV_F_COPPER;
