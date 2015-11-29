@@ -139,6 +139,18 @@ struct tpacket_auxdata {
     uint16_t tp_vlan_tpid;
 };
 
+/* Linux 2.6.27 introduced ethtool_cmd_speed
+ *
+ * To avoid revisiting problems reported with using configure to detect
+ * compatibility (see report at
+ * http://openvswitch.org/pipermail/dev/2014-October/047978.html)
+ * unconditionally replace ethtool_cmd_speed. */
+#define ethtool_cmd_speed rpl_ethtool_cmd_speed
+static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
+{
+        return ep->speed | (ep->speed_hi << 16);
+}
+
 /* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64.
  *
  * Tests for rtnl_link_stats64 don't seem to consistently work, e.g. on
@@ -1847,7 +1859,7 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     }
 
     /* Current settings. */
-    speed = ecmd.speed;
+    speed = ethtool_cmd_speed(&ecmd);
     if (speed == SPEED_10) {
         netdev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
     } else if (speed == SPEED_100) {
