@@ -308,7 +308,8 @@ enum ofp_flow_removed_reason {
 enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added. */
     OFPPR_DELETE,           /* The port was removed. */
-    OFPPR_MODIFY            /* Some attribute of the port has changed. */
+    OFPPR_MODIFY,           /* Some attribute of the port has changed. */
+    OFPPR_N_REASONS         /* Denotes number of reasons. */
 };
 
 /* A physical port has changed in the datapath */

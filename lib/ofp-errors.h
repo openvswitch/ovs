@@ -623,6 +623,19 @@ enum ofperr {
     /* ONF1.3(4448), OF1.4+(14,8).  Permissions error. */
     OFPERR_OFPBPC_EPERM,
 
+/* ## -------------------------- ## */
+/* ## OFPET_ASYNC_CONFIG_FAILED  ## */
+/* ## -------------------------- ## */
+
+    /* OF1.4+(15,0).  One mask is invalid. */
+    OFPERR_OFPACFC_INVALID,
+
+    /* OF1.4+(15,1).  Requested configuration not supported. */
+    OFPERR_OFPACFC_UNSUPPORTED,
+
+    /* OF1.4+(15,2).  Permissions error. */
+    OFPERR_OFPACFC_EPERM,
+
 /* ## -------------------- ## */
 /* ## OFPET_BUNDLE_FAILED  ## */
 /* ## -------------------- ## */

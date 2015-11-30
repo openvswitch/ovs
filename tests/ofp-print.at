@@ -2824,6 +2824,30 @@ OFPT_SET_ASYNC (OF1.4) (xid=0x2):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_SET_ASYNC_CONFIG - invalid mask - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 1c 00 38 00 00 00 02 00 00 00 08 00 00 00 40 \
+00 01 00 08 00 00 00 02 00 02 00 08 00 00 00 02 \
+00 03 00 08 00 00 00 05 00 04 00 08 00 00 00 1c \
+00 05 00 08 00 00 00 05 \
+"], [0], [dnl
+OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_INVALID***
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_SET_ASYNC_CONFIG - unsupported configuration - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 1c 00 38 00 00 00 02 00 00 00 08 00 00 00 05 \
+00 11 00 08 00 00 00 02 00 02 00 08 00 00 00 02 \
+00 03 00 08 00 00 00 05 00 04 00 08 00 00 00 1c \
+00 05 00 08 00 00 00 05\
+"], [0], [dnl
+OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_UNSUPPORTED***
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_CONTROLLER_ID])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

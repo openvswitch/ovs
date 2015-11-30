@@ -1879,6 +1879,7 @@ ofp_print_role_status_message(struct ds *string, const struct ofp_header *oh)
     case OFPCRR_EXPERIMENTER:
         ds_put_cstr(string, "experimenter_data_changed");
         break;
+    case OFPCRR_N_REASONS:
     default:
         OVS_NOT_REACHED();
     }
@@ -1937,6 +1938,7 @@ ofp_port_reason_to_string(enum ofp_port_reason reason,
     case OFPPR_MODIFY:
         return "modify";
 
+    case OFPPR_N_REASONS:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
@@ -1960,6 +1962,7 @@ ofp_role_reason_to_string(enum ofp14_controller_role_reason reason,
     case OFPCRR_EXPERIMENTER:
         return "experimenter_data_changed";
 
+    case OFPCRR_N_REASONS:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
@@ -1980,6 +1983,7 @@ ofp_table_reason_to_string(enum ofp14_table_reason reason,
     case OFPTR_VACANCY_UP:
         return "vacancy_up";
 
+    case OFPTR_N_REASONS:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
@@ -2000,6 +2004,7 @@ ofp_requestforward_reason_to_string(enum ofp14_requestforward_reason reason,
     case OFPRFR_METER_MOD:
         return "meter_mod_request";
 
+    case OFPRFR_N_REASONS:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
@@ -2106,10 +2111,22 @@ ofp_print_nxt_set_async_config(struct ds *string,
         }
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+        enum ofperr error = 0;
         uint32_t role[2][OAM_N_TYPES] = {{0}};
         uint32_t type;
 
-        ofputil_decode_set_async_config(oh, role[0], role[1], true);
+        if (raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+            error = ofputil_decode_set_async_config(oh, role[0], role[1], true);
+        }
+        else if (raw == OFPRAW_OFPT14_SET_ASYNC) {
+            error = ofputil_decode_set_async_config(oh, role[0], role[1],
+                                                    false);
+        }
+        if (error) {
+            ofp_print_error(string, error);
+            return;
+        }
+
         for (i = 0; i < 2; i++) {
 
             ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
@@ -3118,6 +3135,9 @@ ofp_print_requestforward(struct ds *string, const struct ofp_header *oh)
         ds_put_cstr(string, "meter_mod");
         ofp_print_meter_mod__(string, rf.meter_mod);
         break;
+
+    case OFPRFR_N_REASONS:
+        OVS_NOT_REACHED();
     }
     ofputil_destroy_requestforward(&rf);
 }

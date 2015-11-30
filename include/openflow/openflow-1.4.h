@@ -134,6 +134,7 @@ enum ofp14_table_mod_prop_eviction_flag {
 enum ofp14_table_reason {
     OFPTR_VACANCY_DOWN = 3,    /* Vacancy down threshold event. */
     OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
+    OFPTR_N_REASONS            /* Denotes number of reasons. */
 };
 
 struct ofp14_table_mod_prop_eviction {
@@ -259,6 +260,7 @@ OFP_ASSERT(sizeof(struct ofp14_async_config) == 8);
 enum ofp14_requestforward_reason {
     OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
     OFPRFR_METER_MOD = 1,      /* Forward meter mod requests. */
+    OFPRFR_N_REASONS           /* Denotes number of reasons. */
 };
 
 /* Async Config property types.
@@ -332,6 +334,7 @@ enum ofp14_controller_role_reason {
     OFPCRR_MASTER_REQUEST = 0,  /* Another controller asked to be master. */
     OFPCRR_CONFIG         = 1,  /* Configuration changed on the switch. */
     OFPCRR_EXPERIMENTER   = 2,  /* Experimenter data changed. */
+    OFPCRR_N_REASONS            /* Denotes number of reasons. */
 };
 
 /* Role property types.
