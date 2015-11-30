@@ -27,6 +27,8 @@
 
 (test -x /usr/sbin/ovs-vswitchd && test -x /usr/sbin/ovsdb-server) || exit 0
 
+_SYSTEMCTL_SKIP_REDIRECT=yes
+
 . /usr/share/openvswitch/scripts/ovs-lib
 test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
