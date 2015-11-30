@@ -33,7 +33,6 @@
 #include "seq.h"
 #include "smap.h"
 #include "socket-util.h"
-#include "tnl-arp-cache.h"
 #include "tnl-ports.h"
 #include "tunnel.h"
 #include "openvswitch/vlog.h"

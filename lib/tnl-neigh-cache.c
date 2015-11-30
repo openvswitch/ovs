@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "tnl-arp-cache.h"
+#include "tnl-neigh-cache.h"
 
 #include <inttypes.h>
 #include <sys/types.h>
@@ -45,9 +45,9 @@
 
 
 /* In seconds */
-#define ARP_ENTRY_DEFAULT_IDLE_TIME  (15 * 60)
+#define NEIGH_ENTRY_DEFAULT_IDLE_TIME  (15 * 60)
 
-struct tnl_arp_entry {
+struct tnl_neigh_entry {
     struct cmap_node cmap_node;
     struct in6_addr ip;
     struct eth_addr mac;
@@ -59,22 +59,22 @@ static struct cmap table;
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
 static uint32_t
-tnl_arp_hash(const struct in6_addr *ip)
+tnl_neigh_hash(const struct in6_addr *ip)
 {
     return hash_bytes(ip->s6_addr, 16, 0);
 }
 
-static struct tnl_arp_entry *
-tnl_arp_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
+static struct tnl_neigh_entry *
+tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
 {
-    struct tnl_arp_entry *arp;
+    struct tnl_neigh_entry *neigh;
     uint32_t hash;
 
-    hash = tnl_arp_hash(dst);
-    CMAP_FOR_EACH_WITH_HASH (arp, cmap_node, hash, &table) {
-        if (ipv6_addr_equals(&arp->ip, dst) && !strcmp(arp->br_name, br_name)) {
-            arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
-            return arp;
+    hash = tnl_neigh_hash(dst);
+    CMAP_FOR_EACH_WITH_HASH (neigh, cmap_node, hash, &table) {
+        if (ipv6_addr_equals(&neigh->ip, dst) && !strcmp(neigh->br_name, br_name)) {
+            neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
+            return neigh;
         }
     }
     return NULL;
@@ -84,15 +84,15 @@ int
 tnl_arp_lookup(const char br_name[IFNAMSIZ], ovs_be32 dst,
                struct eth_addr *mac)
 {
-    struct tnl_arp_entry *arp;
+    struct tnl_neigh_entry *neigh;
     int res = ENOENT;
     struct in6_addr dst6;
 
     in6_addr_set_mapped_ipv4(&dst6, dst);
 
-    arp = tnl_arp_lookup__(br_name, &dst6);
-    if (arp) {
-        *mac = arp->mac;
+    neigh = tnl_neigh_lookup__(br_name, &dst6);
+    if (neigh) {
+        *mac = neigh->mac;
         res = 0;
     }
 
@@ -100,57 +100,57 @@ tnl_arp_lookup(const char br_name[IFNAMSIZ], ovs_be32 dst,
 }
 
 int
-tnl_nd_lookup(const char br_name[IFNAMSIZ], const struct in6_addr *dst,
-              struct eth_addr *mac)
+tnl_neigh_lookup(const char br_name[IFNAMSIZ], const struct in6_addr *dst,
+                 struct eth_addr *mac)
 {
-    struct tnl_arp_entry *arp;
+    struct tnl_neigh_entry *neigh;
     int res = ENOENT;
 
-    arp = tnl_arp_lookup__(br_name, dst);
-    if (arp) {
-        *mac = arp->mac;
+    neigh = tnl_neigh_lookup__(br_name, dst);
+    if (neigh) {
+        *mac = neigh->mac;
         res = 0;
     }
     return res;
 }
 
 static void
-arp_entry_free(struct tnl_arp_entry *arp)
+neigh_entry_free(struct tnl_neigh_entry *neigh)
 {
-    free(arp);
+    free(neigh);
 }
 
 static void
-tnl_arp_delete(struct tnl_arp_entry *arp)
+tnl_neigh_delete(struct tnl_neigh_entry *neigh)
 {
-    uint32_t hash = tnl_arp_hash(&arp->ip);
-    cmap_remove(&table, &arp->cmap_node, hash);
-    ovsrcu_postpone(arp_entry_free, arp);
+    uint32_t hash = tnl_neigh_hash(&neigh->ip);
+    cmap_remove(&table, &neigh->cmap_node, hash);
+    ovsrcu_postpone(neigh_entry_free, neigh);
 }
 
 static void
-tnl_arp_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
+tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
               const struct eth_addr mac)
 {
     ovs_mutex_lock(&mutex);
-    struct tnl_arp_entry *arp = tnl_arp_lookup__(name, dst);
-    if (arp) {
-        if (eth_addr_equals(arp->mac, mac)) {
-            arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
+    struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
+    if (neigh) {
+        if (eth_addr_equals(neigh->mac, mac)) {
+            neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
             ovs_mutex_unlock(&mutex);
             return;
         }
-        tnl_arp_delete(arp);
+        tnl_neigh_delete(neigh);
         seq_change(tnl_conf_seq);
     }
 
-    arp = xmalloc(sizeof *arp);
+    neigh = xmalloc(sizeof *neigh);
 
-    arp->ip = *dst;
-    arp->mac = mac;
-    arp->expires = time_now() + ARP_ENTRY_DEFAULT_IDLE_TIME;
-    ovs_strlcpy(arp->br_name, name, sizeof arp->br_name);
-    cmap_insert(&table, &arp->cmap_node, tnl_arp_hash(&arp->ip));
+    neigh->ip = *dst;
+    neigh->mac = mac;
+    neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
+    ovs_strlcpy(neigh->br_name, name, sizeof neigh->br_name);
+    cmap_insert(&table, &neigh->cmap_node, tnl_neigh_hash(&neigh->ip));
     ovs_mutex_unlock(&mutex);
 }
 
@@ -161,10 +161,10 @@ tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst,
     struct in6_addr dst6;
 
     in6_addr_set_mapped_ipv4(&dst6, dst);
-    tnl_arp_set__(name, &dst6, mac);
+    tnl_neigh_set__(name, &dst6, mac);
 }
 
-int
+static int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
@@ -181,7 +181,7 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
     return 0;
 }
 
-int
+static int
 tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
@@ -197,20 +197,32 @@ tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
     memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
     memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
 
-    tnl_arp_set__(name, &flow->nd_target, flow->arp_tha);
+    tnl_neigh_set__(name, &flow->nd_target, flow->arp_tha);
     return 0;
 }
 
-void
-tnl_arp_cache_run(void)
+int
+tnl_neigh_snoop(const struct flow *flow, struct flow_wildcards *wc,
+                const char name[IFNAMSIZ])
 {
-    struct tnl_arp_entry *arp;
+    int res;
+    res = tnl_arp_snoop(flow, wc, name);
+    if (res != EINVAL) {
+        return res;
+    }
+    return tnl_nd_snoop(flow, wc, name);
+}
+
+void
+tnl_neigh_cache_run(void)
+{
+    struct tnl_neigh_entry *neigh;
     bool changed = false;
 
     ovs_mutex_lock(&mutex);
-    CMAP_FOR_EACH(arp, cmap_node, &table) {
-        if (arp->expires <= time_now()) {
-            tnl_arp_delete(arp);
+    CMAP_FOR_EACH(neigh, cmap_node, &table) {
+        if (neigh->expires <= time_now()) {
+            tnl_neigh_delete(neigh);
             changed = true;
         }
     }
@@ -222,15 +234,15 @@ tnl_arp_cache_run(void)
 }
 
 static void
-tnl_arp_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
+tnl_neigh_cache_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    struct tnl_arp_entry *arp;
+    struct tnl_neigh_entry *neigh;
     bool changed = false;
 
     ovs_mutex_lock(&mutex);
-    CMAP_FOR_EACH(arp, cmap_node, &table) {
-        tnl_arp_delete(arp);
+    CMAP_FOR_EACH(neigh, cmap_node, &table) {
+        tnl_neigh_delete(neigh);
         changed = true;
     }
     ovs_mutex_unlock(&mutex);
@@ -258,8 +270,8 @@ lookup_any(const char *host_name, struct in6_addr *address)
 }
 
 static void
-tnl_arp_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                  const char *argv[], void *aux OVS_UNUSED)
+tnl_neigh_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                    const char *argv[], void *aux OVS_UNUSED)
 {
     const char *br_name = argv[1];
     struct eth_addr mac;
@@ -275,31 +287,31 @@ tnl_arp_cache_add(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    tnl_arp_set__(br_name, &ip6, mac);
+    tnl_neigh_set__(br_name, &ip6, mac);
     unixctl_command_reply(conn, "OK");
 }
 
 static void
-tnl_arp_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                   const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    struct tnl_arp_entry *arp;
+    struct tnl_neigh_entry *neigh;
 
     ds_put_cstr(&ds, "IP                                            MAC                 Bridge\n");
     ds_put_cstr(&ds, "==========================================================================\n");
     ovs_mutex_lock(&mutex);
-    CMAP_FOR_EACH(arp, cmap_node, &table) {
+    CMAP_FOR_EACH(neigh, cmap_node, &table) {
         int start_len, need_ws;
 
         start_len = ds.length;
-        ipv6_format_mapped(&arp->ip, &ds);
+        ipv6_format_mapped(&neigh->ip, &ds);
 
         need_ws = INET6_ADDRSTRLEN - (ds.length - start_len);
         ds_put_char_multiple(&ds, ' ', need_ws);
 
         ds_put_format(&ds, ETH_ADDR_FMT"   %s\n",
-                      ETH_ADDR_ARGS(arp->mac), arp->br_name);
+                      ETH_ADDR_ARGS(neigh->mac), neigh->br_name);
 
     }
     ovs_mutex_unlock(&mutex);
@@ -308,11 +320,14 @@ tnl_arp_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 void
-tnl_arp_cache_init(void)
+tnl_neigh_cache_init(void)
 {
     cmap_init(&table);
 
-    unixctl_command_register("tnl/arp/show", "", 0, 0, tnl_arp_cache_show, NULL);
-    unixctl_command_register("tnl/arp/set", "BRIDGE IP MAC", 3, 3, tnl_arp_cache_add, NULL);
-    unixctl_command_register("tnl/arp/flush", "", 0, 0, tnl_arp_cache_flush, NULL);
+    unixctl_command_register("tnl/arp/show", "", 0, 0, tnl_neigh_cache_show, NULL);
+    unixctl_command_register("tnl/arp/set", "BRIDGE IP MAC", 3, 3, tnl_neigh_cache_add, NULL);
+    unixctl_command_register("tnl/arp/flush", "", 0, 0, tnl_neigh_cache_flush, NULL);
+    unixctl_command_register("tnl/neigh/show", "", 0, 0, tnl_neigh_cache_show, NULL);
+    unixctl_command_register("tnl/neigh/set", "BRIDGE IP MAC", 3, 3, tnl_neigh_cache_add, NULL);
+    unixctl_command_register("tnl/neigh/flush", "", 0, 0, tnl_neigh_cache_flush, NULL);
 }

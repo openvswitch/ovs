@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef TNL_ARP_CACHE_H
-#define TNL_ARP_CACHE_H 1
+#ifndef TNL_NEIGH_CACHE_H
+#define TNL_NEIGH_CACHE_H 1
 
 #include <errno.h>
 
@@ -31,15 +31,13 @@
 #include "packets.h"
 #include "util.h"
 
-int tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
-                  const char dev_name[]);
-int tnl_arp_lookup(const char dev_name[], ovs_be32 dst, struct eth_addr *mac);
-void tnl_arp_cache_init(void);
-void tnl_arp_cache_run(void);
+int tnl_neigh_snoop(const struct flow *flow, struct flow_wildcards *wc,
+                    const char dev_name[]);
+int tnl_neigh_lookup(const char dev_name[], const struct in6_addr *dst,
+                     struct eth_addr *mac);
+void tnl_neigh_cache_init(void);
+void tnl_neigh_cache_run(void);
 
-int tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
-                 const char dev_name[]);
-int tnl_nd_lookup(const char dev_name[], const struct in6_addr *dst,
-                  struct eth_addr *mac);
+int tnl_arp_lookup(const char dev_name[], ovs_be32 dst, struct eth_addr *mac);
 
 #endif

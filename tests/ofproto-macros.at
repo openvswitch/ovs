@@ -225,7 +225,7 @@ ovn_populate_arp() {
         for e2 in $arp_table; do
             set `echo $e2 | sed 's/,/ /g'`; sb2=$1 br2=$2
             if test $sb1,$br1 != $sb2,$br2; then
-                as $sb2 ovs-appctl tnl/arp/set $br2 $ip $mac
+                as $sb2 ovs-appctl tnl/neigh/set $br2 $ip $mac
             fi
         done
     done

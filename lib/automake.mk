@@ -250,8 +250,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/timer.h \
 	lib/timeval.c \
 	lib/timeval.h \
-	lib/tnl-arp-cache.c \
-	lib/tnl-arp-cache.h \
+	lib/tnl-neigh-cache.c \
+	lib/tnl-neigh-cache.h \
 	lib/tnl-ports.c \
 	lib/tnl-ports.h \
 	lib/token-bucket.c \

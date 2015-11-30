@@ -64,7 +64,7 @@
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
-#include "tnl-arp-cache.h"
+#include "tnl-neigh-cache.h"
 #include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
@@ -2555,7 +2555,7 @@ dpif_netdev_run(struct dpif *dpif)
     ovs_mutex_unlock(&dp->non_pmd_mutex);
     dp_netdev_pmd_unref(non_pmd);
 
-    tnl_arp_cache_run();
+    tnl_neigh_cache_run();
     tnl_port_map_run();
     new_tnl_seq = seq_read(tnl_conf_seq);
 

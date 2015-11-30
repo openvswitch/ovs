@@ -22,7 +22,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include "tnl-arp-cache.h"
+#include "tnl-neigh-cache.h"
 #include "bfd.h"
 #include "bitmap.h"
 #include "bond.h"
@@ -399,7 +399,7 @@ enum xc_type {
     XC_NORMAL,
     XC_FIN_TIMEOUT,
     XC_GROUP,
-    XC_TNL_ARP,
+    XC_TNL_NEIGH,
 };
 
 /* xlate_cache entries hold enough information to perform the side effects of
@@ -452,7 +452,7 @@ struct xc_entry {
         struct {
             char br_name[IFNAMSIZ];
             ovs_be32 d_ip;
-        } tnl_arp_cache;
+        } tnl_neigh_cache;
     } u;
 };
 
@@ -2810,10 +2810,10 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     if (ctx->xin->xcache) {
         struct xc_entry *entry;
 
-        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_ARP);
-        ovs_strlcpy(entry->u.tnl_arp_cache.br_name, out_dev->xbridge->name,
-                    sizeof entry->u.tnl_arp_cache.br_name);
-        entry->u.tnl_arp_cache.d_ip = d_ip;
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_NEIGH);
+        ovs_strlcpy(entry->u.tnl_neigh_cache.br_name, out_dev->xbridge->name,
+                    sizeof entry->u.tnl_neigh_cache.br_name);
+        entry->u.tnl_neigh_cache.d_ip = d_ip;
     }
 
     xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" "IP_FMT
@@ -4356,8 +4356,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     const struct ofpact *a;
 
     if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
-        tnl_arp_snoop(flow, wc, ctx->xbridge->name);
-        tnl_nd_snoop(flow, wc, ctx->xbridge->name);
+        tnl_neigh_snoop(flow, wc, ctx->xbridge->name);
     }
     /* dl_type already in the mask, not set below. */
 
@@ -5485,10 +5484,10 @@ xlate_push_stats(struct xlate_cache *xcache,
             group_dpif_credit_stats(entry->u.group.group, entry->u.group.bucket,
                                     stats);
             break;
-        case XC_TNL_ARP:
-            /* Lookup arp to avoid arp timeout. */
-            tnl_arp_lookup(entry->u.tnl_arp_cache.br_name,
-                           entry->u.tnl_arp_cache.d_ip, &dmac);
+        case XC_TNL_NEIGH:
+            /* Lookup neighbor to avoid timeout. */
+            tnl_arp_lookup(entry->u.tnl_neigh_cache.br_name,
+                           entry->u.tnl_neigh_cache.d_ip, &dmac);
             break;
         default:
             OVS_NOT_REACHED();
@@ -5560,7 +5559,7 @@ xlate_cache_clear(struct xlate_cache *xcache)
         case XC_GROUP:
             group_dpif_unref(entry->u.group.group);
             break;
-        case XC_TNL_ARP:
+        case XC_TNL_NEIGH:
             break;
         default:
             OVS_NOT_REACHED();

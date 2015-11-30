@@ -44,7 +44,7 @@
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
-#include "tnl-arp-cache.h"
+#include "tnl-neigh-cache.h"
 #include "tnl-ports.h"
 #include "util.h"
 #include "uuid.h"
@@ -122,7 +122,7 @@ dp_initialize(void)
         tnl_conf_seq = seq_create();
         dpctl_unixctl_register();
         tnl_port_map_init();
-        tnl_arp_cache_init();
+        tnl_neigh_cache_init();
         route_table_init();
 
         for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
