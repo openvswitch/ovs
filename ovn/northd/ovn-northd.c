@@ -1145,6 +1145,44 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ds_destroy(&match);
     }
 
+    /* Ingress table 3: Destination lookup, ARP reply for known IPs.
+     * (priority 150). */
+    HMAP_FOR_EACH (op, key_node, ports) {
+        if (!op->nbs) {
+            continue;
+        }
+
+        for (size_t i = 0; i < op->nbs->n_addresses; i++) {
+            struct eth_addr ea;
+            ovs_be32 ip;
+
+            if (ovs_scan(op->nbs->addresses[i],
+                         ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+                         ETH_ADDR_SCAN_ARGS(ea), IP_SCAN_ARGS(&ip))) {
+                char *match = xasprintf(
+                    "arp.tpa == "IP_FMT" && arp.op == 1", IP_ARGS(ip));
+                char *actions = xasprintf(
+                    "eth.dst = eth.src; "
+                    "eth.src = "ETH_ADDR_FMT"; "
+                    "arp.op = 2; /* ARP reply */ "
+                    "arp.tha = arp.sha; "
+                    "arp.sha = "ETH_ADDR_FMT"; "
+                    "arp.tpa = arp.spa; "
+                    "arp.spa = "IP_FMT"; "
+                    "outport = inport; "
+                    "inport = \"\"; /* Allow sending out inport. */ "
+                    "output;",
+                    ETH_ADDR_ARGS(ea),
+                    ETH_ADDR_ARGS(ea),
+                    IP_ARGS(ip));
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, 150,
+                              match, actions);
+                free(match);
+                free(actions);
+            }
+        }
+    }
+
     /* Ingress table 3: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
