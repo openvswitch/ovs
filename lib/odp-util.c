@@ -755,7 +755,6 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     int expected_len;
     enum ovs_action_attr type = nl_attr_type(a);
-    const struct ovs_action_push_vlan *vlan;
     size_t size;
 
     expected_len = odp_action_len(nl_attr_type(a));
@@ -813,8 +812,8 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         format_odp_key_attr(nl_attr_get(a), NULL, NULL, ds, true);
         ds_put_cstr(ds, ")");
         break;
-    case OVS_ACTION_ATTR_PUSH_VLAN:
-        vlan = nl_attr_get(a);
+    case OVS_ACTION_ATTR_PUSH_VLAN: {
+        const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
         ds_put_cstr(ds, "push_vlan(");
         if (vlan->vlan_tpid != htons(ETH_TYPE_VLAN)) {
             ds_put_format(ds, "tpid=0x%04"PRIx16",", ntohs(vlan->vlan_tpid));
@@ -822,6 +821,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         format_vlan_tci(ds, vlan->vlan_tci, OVS_BE16_MAX, false);
         ds_put_char(ds, ')');
         break;
+    }
     case OVS_ACTION_ATTR_POP_VLAN:
         ds_put_cstr(ds, "pop_vlan");
         break;
