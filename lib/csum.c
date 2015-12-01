@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include "unaligned.h"
 
 #ifndef __CHECKER__
-
 /* Returns the IP checksum of the 'n' bytes in 'data'.
  *
  * The return value has the same endianness as the data.  That is, if 'data'
@@ -31,25 +30,6 @@ csum(const void *data, size_t n)
 {
     return csum_finish(csum_continue(0, data, n));
 }
-
-/* Adds the 16 bits in 'new' to the partial IP checksum 'partial' and returns
- * the updated checksum.  (To start a new checksum, pass 0 for 'partial'.  To
- * obtain the finished checksum, pass the return value to csum_finish().) */
-uint32_t
-csum_add16(uint32_t partial, ovs_be16 new)
-{
-    return partial + new;
-}
-
-/* Adds the 32 bits in 'new' to the partial IP checksum 'partial' and returns
- * the updated checksum.  (To start a new checksum, pass 0 for 'partial'.  To
- * obtain the finished checksum, pass the return value to csum_finish().) */
-uint32_t
-csum_add32(uint32_t partial, ovs_be32 new)
-{
-    return partial + (new >> 16) + (new & 0xffff);
-}
-
 
 /* Adds the 'n' bytes in 'data' to the partial IP checksum 'partial' and
  * returns the updated checksum.  (To start a new checksum, pass 0 for
