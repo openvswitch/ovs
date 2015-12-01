@@ -18,10 +18,13 @@ overwrite the pidfile.
 .IP
 When \fB\-\-pidfile\fR is not specified, this option has no effect.
 .
-.TP
-\fB\-\-detach\fR
-Causes \fB\*(PN\fR to detach itself from the foreground session and
-run as a background process. \*(DD
+.IP \fB\-\-detach\fR
+Runs \fB\*(PN\fR as a background process.  The process forks, and in
+the child it starts a new session, closes the standard file
+descriptors (which has the side effect of disabling logging to the
+console), and changes its current directory to the root (unless
+\fB\-\-no\-chdir\fR is specified).  After the child completes its
+initialization, the parent exits.  \*(DD
 .
 .TP
 \fB\-\-monitor\fR
