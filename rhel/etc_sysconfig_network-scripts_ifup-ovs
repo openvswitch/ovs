@@ -72,15 +72,19 @@ else
 fi
 
 case "$TYPE" in
-	OVSBridge)
+	OVSBridge|OVSUserBridge)
 		# If bridge already exists and is up, it has been configured through
 		# other cases like OVSPort, OVSIntPort and OVSBond. If it is down or
 		# it does not exist, create it. It is possible for a bridge to exist
 		# because it remained in the OVSDB for some reason, but it won't be up.
+		if [ "${TYPE}" = "OVSUserBridge" ]; then
+			DATAPATH="netdev"
+		fi
 		if check_device_down "${DEVICE}"; then
 			ovs-vsctl -t ${TIMEOUT} -- --may-exist add-br "$DEVICE" $OVS_OPTIONS \
 			${OVS_EXTRA+-- $OVS_EXTRA} \
-			${STP+-- set bridge "$DEVICE" stp_enable="${STP}"}
+			${STP+-- set bridge "$DEVICE" stp_enable="${STP}"} \
+			${DATAPATH+-- set bridge "$DEVICE" datapath_type="$DATAPATH"}
 		else
 			OVSBRIDGECONFIGURED="yes"
 		fi
@@ -149,6 +153,22 @@ case "$TYPE" in
 	OVSPatchPort)
 		ifup_ovs_bridge
 		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=patch options:peer="${OVS_PATCH_PEER}" ${OVS_EXTRA+-- $OVS_EXTRA}
+		;;
+	OVSDPDKPort)
+		ifup_ovs_bridge
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdk ${OVS_EXTRA+-- $OVS_EXTRA}
+		;;
+	OVSDPDKRPort)
+		ifup_ovs_bridge
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdkr ${OVS_EXTRA+-- $OVS_EXTRA}
+		;;
+	OVSDPDVhostPort)
+		ifup_ovs_bridge
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdkvhost ${OVS_EXTRA+-- $OVS_EXTRA}
+		;;
+	OVSDPDKVhostUserPort)
+		ifup_ovs_bridge
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdkvhostuser ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"
