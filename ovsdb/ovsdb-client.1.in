@@ -25,7 +25,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable\fR
+[\fIcolumn\fR...]]
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR
 [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
@@ -100,9 +101,11 @@ Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array containing one or more valid OVSDB
 operations, and prints the received reply on stdout.
 .
-.IP "\fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR"
+.IP "\fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable \fR[\fIcolumn\fR...]]"
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
-and prints it on stdout as a series of tables.
+and prints it on stdout as a series of tables. If \fItable\fR is
+specified, only that table is retrieved.  If at least one \fIcolumn\fR
+is specified, only those columns are retrieved.
 .
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of \fItable\fR in
