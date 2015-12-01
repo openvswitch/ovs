@@ -263,7 +263,7 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     miniflow_push_be16_(MF, offsetof(struct flow, FIELD), VALUE)
 
 #define miniflow_pad_to_64(MF, FIELD)                       \
-    miniflow_pad_to_64_(MF, offsetof(struct flow, FIELD))
+    miniflow_pad_to_64_(MF, OFFSETOFEND(struct flow, FIELD))
 
 #define miniflow_push_words(MF, FIELD, VALUEP, N_WORDS)                 \
     miniflow_push_words_(MF, offsetof(struct flow, FIELD), VALUEP, N_WORDS)
@@ -485,7 +485,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
     if (md->ct_state) {
         miniflow_push_uint32(mf, ct_mark, md->ct_mark);
-        miniflow_pad_to_64(mf, pad1);
+        miniflow_pad_to_64(mf, ct_mark);
 
         if (!ovs_u128_is_zero(&md->ct_label)) {
             miniflow_push_words(mf, ct_label, &md->ct_label,
@@ -695,7 +695,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 arp_buf[0] = arp->ar_sha;
                 arp_buf[1] = arp->ar_tha;
                 miniflow_push_macs(mf, arp_sha, arp_buf);
-                miniflow_pad_to_64(mf, tcp_flags);
+                miniflow_pad_to_64(mf, arp_tha);
             }
         }
         goto out;
@@ -715,7 +715,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                                    TCP_FLAGS_BE32(tcp->tcp_ctl));
                 miniflow_push_be16(mf, tp_src, tcp->tcp_src);
                 miniflow_push_be16(mf, tp_dst, tcp->tcp_dst);
-                miniflow_pad_to_64(mf, igmp_group_ip4);
+                miniflow_pad_to_64(mf, tp_dst);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_UDP)) {
             if (OVS_LIKELY(size >= UDP_HEADER_LEN)) {
@@ -723,7 +723,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
                 miniflow_push_be16(mf, tp_src, udp->udp_src);
                 miniflow_push_be16(mf, tp_dst, udp->udp_dst);
-                miniflow_pad_to_64(mf, igmp_group_ip4);
+                miniflow_pad_to_64(mf, tp_dst);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_SCTP)) {
             if (OVS_LIKELY(size >= SCTP_HEADER_LEN)) {
@@ -731,7 +731,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
                 miniflow_push_be16(mf, tp_src, sctp->sctp_src);
                 miniflow_push_be16(mf, tp_dst, sctp->sctp_dst);
-                miniflow_pad_to_64(mf, igmp_group_ip4);
+                miniflow_pad_to_64(mf, tp_dst);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_ICMP)) {
             if (OVS_LIKELY(size >= ICMP_HEADER_LEN)) {
@@ -739,7 +739,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 
                 miniflow_push_be16(mf, tp_src, htons(icmp->icmp_type));
                 miniflow_push_be16(mf, tp_dst, htons(icmp->icmp_code));
-                miniflow_pad_to_64(mf, igmp_group_ip4);
+                miniflow_pad_to_64(mf, tp_dst);
             }
         } else if (OVS_LIKELY(nw_proto == IPPROTO_IGMP)) {
             if (OVS_LIKELY(size >= IGMP_HEADER_LEN)) {
@@ -762,10 +762,10 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                                         sizeof *nd_target / sizeof(uint64_t));
                 }
                 miniflow_push_macs(mf, arp_sha, arp_buf);
-                miniflow_pad_to_64(mf, tcp_flags);
+                miniflow_pad_to_64(mf, arp_tha);
                 miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
                 miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
-                miniflow_pad_to_64(mf, igmp_group_ip4);
+                miniflow_pad_to_64(mf, tp_dst);
             }
         }
     }
