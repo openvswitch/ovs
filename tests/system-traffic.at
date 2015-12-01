@@ -1436,8 +1436,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.2XX sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1483,8 +1483,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.2XX sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1535,8 +1535,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.2XX sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1582,15 +1582,15 @@ dnl Should work with the virtual IP address through NAT
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.64) ], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.64 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64) ], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 dnl Should work with the assigned IP address as well
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) ], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) ], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1642,15 +1642,15 @@ dnl Should work with the virtual IP address through NAT
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.64) ], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.64 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64) ], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 dnl Should work with the assigned IP address as well
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) ], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.1 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 zone=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) ], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1709,8 +1709,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sort | grep -v 
 OFPST_FLOW reply (OF1.5):
 ])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[UNREPLIED]] src=10.1.1.2 dst=10.1.1.2XX sport=<cleared> dport=<cleared> mark=1 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),mark=1
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1788,9 +1788,9 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.240 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 helper=ftp use=2
-TIME_WAIT src=10.1.1.2 dst=10.1.1.240 sport=<cleared> dport=<cleared> src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 use=1
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1855,9 +1855,10 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
-AT_CHECK([conntrack -L 2>&1 | FORMAT_CT(10.1.1.2) | grep -v "FIN" | grep -v "CLOSE"], [0], [dnl
-TIME_WAIT src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> src=10.1.1.2 dst=10.1.1.240 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 helper=ftp use=2
-TIME_WAIT src=10.1.1.2 dst=10.1.1.240 sport=<cleared> dport=<cleared> src=10.1.1.1 dst=10.1.1.2 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 use=1
+dnl Discards CLOSE_WAIT and CLOSING
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN" | grep -v "CLOS"], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1947,9 +1948,10 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
-AT_CHECK([conntrack -L -f ipv6 2>&1 | FORMAT_CT(fc00::2) | grep -v "FIN" | grep -v "CLOSE"], [0], [dnl
-TIME_WAIT src=fc00::1 dst=fc00::2 sport=<cleared> dport=<cleared> src=fc00::2 dst=fc00::240 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 helper=ftp use=2
-TIME_WAIT src=fc00::2 dst=fc00::240 sport=<cleared> dport=<cleared> src=fc00::1 dst=fc00::2 sport=<cleared> dport=<cleared> [[ASSURED]] mark=0 use=1
+dnl Discards CLOSE_WAIT and CLOSING
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2) | grep -v "FIN" | grep -v "CLOS"], [0], [dnl
+tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
+tcp,orig=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
