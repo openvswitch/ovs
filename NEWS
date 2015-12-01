@@ -34,6 +34,8 @@ v2.5.0 - xx xxx xxxx
      system to support virtual network abstraction.  OVN complements the
      existing capabilities of OVS to add native support for virtual network
      abstractions, such as virtual L2 and L3 overlays and security groups.
+   - RHEL packaging:
+     * DPDK ports may now be created via network scripts (see README.RHEL).
 
 
 v2.4.0 - 20 Aug 2015
