@@ -4013,24 +4013,23 @@ rule_dealloc(struct rule *rule_)
 }
 
 static enum ofperr
-rule_check(struct rule *rule)
+check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
     const struct odp_support *support;
     uint16_t ct_state, ct_zone;
     ovs_u128 ct_label;
     uint32_t ct_mark;
 
     support = &ofproto_dpif_get_support(ofproto)->odp;
-    ct_state = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_state);
+    ct_state = MINIFLOW_GET_U16(flow, ct_state);
     if (support->ct_state && support->ct_zone && support->ct_mark
         && support->ct_label) {
         return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
     }
 
-    ct_zone = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_zone);
-    ct_mark = MINIFLOW_GET_U32(&rule->cr.match.mask->masks, ct_mark);
-    ct_label = MINIFLOW_GET_U128(&rule->cr.match.mask->masks, ct_label);
+    ct_zone = MINIFLOW_GET_U16(flow, ct_zone);
+    ct_mark = MINIFLOW_GET_U32(flow, ct_mark);
+    ct_label = MINIFLOW_GET_U128(flow, ct_label);
 
     if ((ct_state && !support->ct_state)
         || (ct_state & CS_UNSUPPORTED_MASK)
@@ -4041,6 +4040,57 @@ rule_check(struct rule *rule)
     }
 
     return 0;
+}
+
+static enum ofperr
+check_actions(const struct ofproto_dpif *ofproto,
+              const struct rule_actions *const actions)
+{
+    const struct ofpact *ofpact;
+
+    OFPACT_FOR_EACH (ofpact, actions->ofpacts, actions->ofpacts_len) {
+        const struct odp_support *support;
+        const struct ofpact_conntrack *ct;
+        const struct ofpact *a;
+
+        if (ofpact->type != OFPACT_CT) {
+            continue;
+        }
+
+        ct = CONTAINER_OF(ofpact, struct ofpact_conntrack, ofpact);
+        support = &ofproto_dpif_get_support(ofproto)->odp;
+
+        if (!support->ct_state) {
+            return OFPERR_OFPBAC_BAD_TYPE;
+        }
+        if ((ct->zone_imm || ct->zone_src.field) && !support->ct_zone) {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+
+        OFPACT_FOR_EACH(a, ct->actions, ofpact_ct_get_action_len(ct)) {
+            const struct mf_field *dst = ofpact_get_mf_dst(a);
+
+            if (dst && ((dst->id == MFF_CT_MARK && !support->ct_mark)
+                        || (dst->id == MFF_CT_LABEL && !support->ct_label))) {
+                return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static enum ofperr
+rule_check(struct rule *rule)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
+    enum ofperr err;
+
+    err = check_mask(ofproto, &rule->cr.match.mask->masks);
+    if (err) {
+        return err;
+    }
+    return check_actions(ofproto, rule->actions);
 }
 
 static enum ofperr
