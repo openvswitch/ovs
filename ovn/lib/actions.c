@@ -52,6 +52,8 @@ struct action_context {
     struct expr *prereqs;       /* Prerequisites to apply to match. */
 };
 
+static bool parse_action(struct action_context *);
+
 static bool
 action_error_handle_common(struct action_context *ctx)
 {
@@ -225,6 +227,42 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
     add_prerequisite(ctx, "ip");
 }
 
+static bool
+parse_action(struct action_context *ctx)
+{
+    if (ctx->lexer->token.type != LEX_T_ID) {
+        action_syntax_error(ctx, NULL);
+        return false;
+    }
+
+    enum lex_type lookahead = lexer_lookahead(ctx->lexer);
+    if (lookahead == LEX_T_EQUALS || lookahead == LEX_T_EXCHANGE
+        || lookahead == LEX_T_LSQUARE) {
+        parse_set_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "next")) {
+        parse_next_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "output")) {
+        emit_resubmit(ctx, ctx->output_ptable);
+    } else if (lexer_match_id(ctx->lexer, "ip.ttl")) {
+        if (lexer_match(ctx->lexer, LEX_T_DECREMENT)) {
+            add_prerequisite(ctx, "ip");
+            ofpact_put_DEC_TTL(ctx->ofpacts);
+        } else {
+            action_syntax_error(ctx, "expecting `--'");
+        }
+    } else if (lexer_match_id(ctx->lexer, "ct_next")) {
+        emit_ct(ctx, true, false);
+    } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
+        emit_ct(ctx, false, true);
+    } else {
+        action_syntax_error(ctx, "expecting action");
+    }
+    if (!lexer_match(ctx->lexer, LEX_T_SEMICOLON)) {
+        action_syntax_error(ctx, "expecting ';'");
+    }
+    return !ctx->error;
+}
+
 static void
 parse_actions(struct action_context *ctx)
 {
@@ -242,37 +280,7 @@ parse_actions(struct action_context *ctx)
     }
 
     while (ctx->lexer->token.type != LEX_T_END) {
-        if (ctx->lexer->token.type != LEX_T_ID) {
-            action_syntax_error(ctx, NULL);
-            break;
-        }
-
-        enum lex_type lookahead = lexer_lookahead(ctx->lexer);
-        if (lookahead == LEX_T_EQUALS || lookahead == LEX_T_EXCHANGE
-            || lookahead == LEX_T_LSQUARE) {
-            parse_set_action(ctx);
-        } else if (lexer_match_id(ctx->lexer, "next")) {
-            parse_next_action(ctx);
-        } else if (lexer_match_id(ctx->lexer, "output")) {
-            emit_resubmit(ctx, ctx->output_ptable);
-        } else if (lexer_match_id(ctx->lexer, "ip.ttl")) {
-            if (lexer_match(ctx->lexer, LEX_T_DECREMENT)) {
-                add_prerequisite(ctx, "ip");
-                ofpact_put_DEC_TTL(ctx->ofpacts);
-            } else {
-                action_syntax_error(ctx, "expecting `--'");
-            }
-        } else if (lexer_match_id(ctx->lexer, "ct_next")) {
-            emit_ct(ctx, true, false);
-        } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
-            emit_ct(ctx, false, true);
-        } else {
-            action_syntax_error(ctx, "expecting action");
-        }
-        if (!lexer_match(ctx->lexer, LEX_T_SEMICOLON)) {
-            action_syntax_error(ctx, "expecting ';'");
-        }
-        if (ctx->error) {
+        if (!parse_action(ctx)) {
             return;
         }
     }
