@@ -383,6 +383,11 @@
         restrictive policy, it is important to remember to allow flows
         such as ARP and IPv6 neighbor discovery packets.
       </p>
+
+      <p>
+        Note that you can not create an ACL matching on a port with
+        type=router.
+      </p>
     </column>
 
     <column name="action">
