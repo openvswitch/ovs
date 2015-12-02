@@ -964,9 +964,11 @@ has_stateful_acl(struct ovn_datapath *od)
 }
 
 static void
-build_acls(struct ovn_datapath *od, struct hmap *lflows)
+build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 {
     bool has_stateful = has_stateful_acl(od);
+	struct ovn_port *op;
+	struct ds match;
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
@@ -988,7 +990,16 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
          * Regardless of whether the ACL is "from-lport" or "to-lport",
          * we need rules in both the ingress and egress table, because
          * the return traffic needs to be followed. */
-        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 100, "ip", "ct_next;");
+		HMAP_FOR_EACH (op, key_node, ports) {
+			if (op->od != od || !strcmp(op->nbs->type, "router")) {
+				/* The traffic form gateway port not need to be followed */
+				continue;
+			}
+			ds_init(&match);
+        	ds_put_format(&match, "ip && inport == %s", op->json_key);
+        	ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 100, ds_cstr(&match), "ct_next;");
+			ds_destroy(&match);
+        }
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 100, "ip", "ct_next;");
 
         /* Ingress and Egress ACL Table (Priority 1).
@@ -1100,7 +1111,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        build_acls(od, lflows);
+        build_acls(od, lflows, ports);
     }
 
     /* Logical switch ingress table 0: Admission control framework (priority
