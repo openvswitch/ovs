@@ -31,6 +31,10 @@ Post-v2.4.0
    - Add support for connection tracking through the new "ct" action
      and "ct_state"/"ct_zone"/"ct_mark"/"ct_label" match fields.  Only
      available on Linux kernels with the connection tracking module loaded.
+   - Add experimental version of OVN.  OVN, the Open Virtual Network, is a
+     system to support virtual network abstraction.  OVN complements the
+     existing capabilities of OVS to add native support for virtual network
+     abstractions, such as virtual L2 and L3 overlays and security groups.
 
 
 v2.4.0 - 20 Aug 2015
