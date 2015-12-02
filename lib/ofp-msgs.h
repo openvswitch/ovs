@@ -247,6 +247,9 @@ enum ofpraw {
     /* OFPT 1.4+ (30): struct ofp14_role_status, uint8_t[8][]. */
     OFPRAW_OFPT14_ROLE_STATUS,
 
+    /* OFPT 1.4+ (32): struct ofp14_requestforward, uint8_t[8][]. */
+    OFPRAW_OFPT14_REQUESTFORWARD,
+
     /* OFPT 1.4+ (33): struct ofp14_bundle_ctrl_msg, uint8_t[8][]. */
     OFPRAW_OFPT14_BUNDLE_CONTROL,
 
@@ -375,10 +378,10 @@ enum ofpraw {
     /* OFPST 1.3+ (12): struct ofp13_table_features, uint8_t[8][]. */
     OFPRAW_OFPST13_TABLE_FEATURES_REPLY,
 
-    /* OFPST 1.4+ (15): void. */
+    /* OFPST 1.4+ (14): void. */
     OFPRAW_OFPST14_TABLE_DESC_REQUEST,
 
-    /* OFPST 1.4+ (15): struct ofp14_table_desc, uint8_t[8][]. */
+    /* OFPST 1.4+ (14): struct ofp14_table_desc, uint8_t[8][]. */
     OFPRAW_OFPST14_TABLE_DESC_REPLY,
 
     /* OFPST 1.0-1.4 (13): void. */
@@ -558,6 +561,9 @@ enum ofptype {
 
     /* Controller role change event messages. */
     OFPTYPE_ROLE_STATUS,          /* OFPRAW_OFPT14_ROLE_STATUS. */
+
+    /* Request forwarding by the switch. */
+    OFPTYPE_REQUESTFORWARD,       /* OFPRAW_OFPT14_REQUESTFORWARD. */
 
     OFPTYPE_BUNDLE_CONTROL,       /* OFPRAW_OFPT14_BUNDLE_CONTROL. */
 

@@ -34,6 +34,7 @@
 #define OVS_USER_POOL_TAG               'USVO'
 #define OVS_VPORT_POOL_TAG              'PSVO'
 #define OVS_STT_POOL_TAG                'RSVO'
+#define OVS_TUNFLT_POOL_TAG             'WSVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
@@ -65,7 +66,7 @@ VOID OvsFreeAlignedMemory(VOID *ptr);
 VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 
 
-#define MIN(_a, _b) (_a) > (_b) ? (_b) : (_a)
+#define MIN(_a, _b) ((_a) > (_b) ? (_b) : (_a))
 #define ARRAY_SIZE(_x)  ((sizeof(_x))/sizeof (_x)[0])
 #define OVS_SWITCH_PORT_ID_INVALID  (NDIS_SWITCH_PORT_ID)(-1)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ int ds_get_preprocessed_line(struct ds *, FILE *, int *line_number);
 int ds_get_test_line(struct ds *, FILE *);
 
 void ds_put_strftime_msec(struct ds *, const char *format, long long int when,
-			  bool utc);
+                          bool utc);
 char *xastrftime_msec(const char *format, long long int when, bool utc);
 
 char *ds_cstr(struct ds *);

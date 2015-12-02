@@ -56,10 +56,13 @@ command line has options, then those options must be separated from
 the global options by \fB\-\-\fR.
 .
 .IP "\fB\-\-db=\fIserver\fR"
-Sets \fIserver\fR as the database server that \fBovn\-sbctl\fR
-contacts to query or modify configuration.  The default is
-\fBunix:@RUNDIR@/db.sock\fR.  \fIserver\fR must take one of the
-following forms:
+The OVSDB database remote to contact.  If the \fBOVN_SB_DB\fR
+environment variable is set, its value is used as the default.
+Otherwise, the default is \fBunix:@RUNDIR@/db.sock\fR, but this
+default is unlikely to be useful outside of single-machine OVN test
+environments.
+.IP
+\fIserver\fR must take one of the following forms:
 .RS
 .so ovsdb/remote-active.man
 .so ovsdb/remote-passive.man
@@ -111,14 +114,15 @@ Prints a brief overview of the database contents.
 .SS "Chassis Commands"
 These commands manipulate \fBOVN_Southbound\fR chassis.
 .
-.IP "[\fB\-\-may\-exist\fR] \fBchassis\-add \fIchassis\fR \fIencap-type\fR \fIencap-ip\fR"
-Creates a new chassis named \fIchassis\fR.  The chassis will have
-one encap entry with \fIencap-type\fR as tunnel type and \fIencap-ip\fR
-as destination ip.
+.IP "[\fB\-\-may\-exist\fR] \fBchassis\-add \fIchassis\fR \fIencap\-type\fR \fIencap-ip\fR"
+Creates a new chassis named \fIchassis\fR.  \fIencap\-type\fR is a
+comma-separated list of tunnel types.  The chassis will have
+one encap entry for each specified tunnel type with \fIencap-ip\fR
+as the destination IP for each.
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a chassis that
 exists is an error.  With \fB\-\-may\-exist\fR, this command does
-nothing if \fIchassis\fR already exists as a real bridge.
+nothing if \fIchassis\fR already exists.
 .
 .IP "[\fB\-\-if\-exists\fR] \fBchassis\-del \fIchassis\fR"
 Deletes \fIchassis\fR and its \fIencaps\fR and \fIgateway_ports\fR.
@@ -161,9 +165,6 @@ Alias for \fBlflow\-list\fB.
 Successful program execution.
 .IP "1"
 Usage, syntax, or configuration file error.
-.IP "2"
-The \fIbridge\fR argument to \fBbr\-exists\fR specified the name of a
-bridge that does not exist.
 .SH "SEE ALSO"
 .
 .BR ovn\-sb (5).

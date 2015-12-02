@@ -19,6 +19,7 @@
 
 #include "hash.h"
 #include "json.h"
+#include "packets.h"
 #include "uuid.h"
 
 static struct smap_node *smap_add__(struct smap *, char *, void *,
@@ -93,6 +94,16 @@ smap_add_format(struct smap *smap, const char *key, const char *format, ...)
     key_len = strlen(key);
     smap_add__(smap, xmemdup0(key, key_len), value,
                hash_bytes(key, key_len, 0));
+}
+
+/* Adds 'key' paired with a string representation of 'addr'. It is the
+ * caller's responsibility to avoid duplicate keys if desirable. */
+void
+smap_add_ipv6(struct smap *smap, const char *key, struct in6_addr *addr)
+{
+    char buf[INET6_ADDRSTRLEN];
+    ipv6_string_mapped(buf, addr);
+    smap_add(smap, key, buf);
 }
 
 /* Searches for 'key' in 'smap'.  If it does not already exists, adds it.

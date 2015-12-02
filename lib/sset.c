@@ -269,6 +269,20 @@ sset_at_position(const struct sset *set, uint32_t *bucketp, uint32_t *offsetp)
     return SSET_NODE_FROM_HMAP_NODE(hmap_node);
 }
 
+/* Replaces 'a' by the intersection of 'a' and 'b'.  That is, removes from 'a'
+ * all of the strings that are not also in 'b'. */
+void
+sset_intersect(struct sset *a, const struct sset *b)
+{
+    const char *name, *next;
+
+    SSET_FOR_EACH_SAFE (name, next, a) {
+        if (!sset_contains(b, name)) {
+            sset_delete(a, SSET_NODE_FROM_NAME(name));
+        }
+    }
+}
+
 /* Returns a null-terminated array of pointers to the strings in 'set', in no
  * particular order.  The caller must free the returned array when it is no
  * longer needed, but the strings in the array belong to 'set' and thus must

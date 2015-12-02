@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2014 Nicira, Inc.
+
+/* Copyright (c) 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef TNL_ARP_CACHE_H
-#define TNL_ARP_CACHE_H 1
+#ifndef DHCP_H
+#define DHCP_H 1
 
-#include <errno.h>
-
-#include <inttypes.h>
-#include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-#include <net/if.h>
-#include <sys/socket.h>
 
-#include "flow.h"
-#include "netdev.h"
-#include "packets.h"
-#include "util.h"
+#include "meta-flow.h"
 
-int tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
-                  const char dev_name[]);
-int tnl_arp_lookup(const char dev_name[], ovs_be32 dst, uint8_t mac[ETH_ADDR_LEN]);
-void tnl_arp_cache_init(void);
-void tnl_arp_cache_run(void);
+struct ovsrec_bridge;
+struct controller_ctx;
 
-#endif
+/* Interface for OVN main loop. */
+void pinctrl_init(void);
+void pinctrl_run(struct controller_ctx *ctx,
+                 const struct ovsrec_bridge *br_int);
+void pinctrl_wait(void);
+void pinctrl_destroy(void);
+
+#endif /* ovn/dhcp.h */

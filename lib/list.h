@@ -62,7 +62,7 @@ static inline bool list_is_short(const struct ovs_list *);
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
 #define LIST_FOR_EACH_CONTINUE(ITER, MEMBER, LIST)                      \
-    for (INIT_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER);             \
+    for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER);             \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
 #define LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \

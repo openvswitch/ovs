@@ -94,7 +94,7 @@ void cfm_unref(struct cfm *);
 void cfm_run(struct cfm *);
 bool cfm_should_send_ccm(struct cfm *);
 void cfm_compose_ccm(struct cfm *, struct dp_packet *,
-                     const uint8_t eth_src[ETH_ADDR_LEN]);
+                     const struct eth_addr eth_src);
 long long int cfm_wait(struct cfm *);
 bool cfm_configure(struct cfm *, const struct cfm_settings *);
 void cfm_set_netdev(struct cfm *, const struct netdev *);

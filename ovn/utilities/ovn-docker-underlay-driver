@@ -1,0 +1,677 @@
+#! /usr/bin/python
+# Copyright (C) 2015 Nicira, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import argparse
+import atexit
+import getpass
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+import uuid
+
+import ovs.dirs
+import ovs.util
+import ovs.daemon
+import ovs.unixctl.server
+import ovs.vlog
+
+from neutronclient.v2_0 import client
+from flask import Flask, jsonify
+from flask import request, abort
+
+app = Flask(__name__)
+vlog = ovs.vlog.Vlog("ovn-docker-underlay-driver")
+
+AUTH_STRATEGY = ""
+AUTH_URL = ""
+ENDPOINT_URL = ""
+OVN_BRIDGE = ""
+PASSWORD = ""
+PLUGIN_DIR = "/etc/docker/plugins"
+PLUGIN_FILE = "/etc/docker/plugins/openvswitch.spec"
+TENANT_ID = ""
+USERNAME = ""
+VIF_ID = ""
+
+
+def call_popen(cmd):
+    child = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    output = child.communicate()
+    if child.returncode:
+        raise RuntimeError("Fatal error executing %s" % (cmd))
+    if len(output) == 0 or output[0] == None:
+        output = ""
+    else:
+        output = output[0].strip()
+    return output
+
+
+def call_prog(prog, args_list):
+    cmd = [prog, "--timeout=5", "-vconsole:off"] + args_list
+    return call_popen(cmd)
+
+
+def ovs_vsctl(*args):
+    return call_prog("ovs-vsctl", list(args))
+
+
+def cleanup():
+    if os.path.isfile(PLUGIN_FILE):
+        os.remove(PLUGIN_FILE)
+
+
+def ovn_init_underlay(args):
+    global USERNAME, PASSWORD, TENANT_ID, AUTH_URL, AUTH_STRATEGY, VIF_ID
+    global OVN_BRIDGE
+
+    if not args.bridge:
+        sys.exit("OVS bridge name not provided")
+    OVN_BRIDGE = args.bridge
+
+    VIF_ID = os.environ.get('OS_VIF_ID', '')
+    if not VIF_ID:
+        sys.exit("env OS_VIF_ID not set")
+    USERNAME = os.environ.get('OS_USERNAME', '')
+    if not USERNAME:
+        sys.exit("env OS_USERNAME not set")
+    TENANT_ID = os.environ.get('OS_TENANT_ID', '')
+    if not TENANT_ID:
+        sys.exit("env OS_TENANT_ID not set")
+    AUTH_URL = os.environ.get('OS_AUTH_URL', '')
+    if not AUTH_URL:
+        sys.exit("env OS_AUTH_URL not set")
+    AUTH_STRATEGY = "keystone"
+
+    PASSWORD = os.environ.get('OS_PASSWORD', '')
+    if not PASSWORD:
+        PASSWORD = getpass.getpass()
+
+
+def prepare():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--bridge', help="The Bridge to which containers "
+                        "interfaces connect to.")
+
+    ovs.vlog.add_args(parser)
+    ovs.daemon.add_args(parser)
+    args = parser.parse_args()
+    ovs.vlog.handle_args(args)
+    ovs.daemon.handle_args(args)
+    ovn_init_underlay(args)
+
+    if not os.path.isdir(PLUGIN_DIR):
+        os.makedirs(PLUGIN_DIR)
+
+    ovs.daemon.daemonize()
+    try:
+        fo = open(PLUGIN_FILE, "w")
+        fo.write("tcp://127.0.0.1:5000")
+        fo.close()
+    except Exception as e:
+        ovs.util.ovs_fatal(0, "Failed to write to spec file (%s)" % str(e),
+                           vlog)
+
+    atexit.register(cleanup)
+
+
+@app.route('/Plugin.Activate', methods=['POST'])
+def plugin_activate():
+    return jsonify({"Implements": ["NetworkDriver"]})
+
+
+@app.route('/NetworkDriver.GetCapabilities', methods=['POST'])
+def get_capability():
+    return jsonify({"Scope": "global"})
+
+
+@app.route('/NetworkDriver.DiscoverNew', methods=['POST'])
+def new_discovery():
+    return jsonify({})
+
+
+@app.route('/NetworkDriver.DiscoverDelete', methods=['POST'])
+def delete_discovery():
+    return jsonify({})
+
+
+def neutron_login():
+    try:
+        neutron = client.Client(username=USERNAME,
+                                password=PASSWORD,
+                                tenant_id=TENANT_ID,
+                                auth_url=AUTH_URL,
+                                endpoint_url=ENDPOINT_URL,
+                                auth_strategy=AUTH_STRATEGY)
+    except Exception as e:
+        raise RuntimeError("Failed to login into Neutron(%s)" % str(e))
+    return neutron
+
+
+def get_networkuuid_by_name(neutron, name):
+    param = {'fields': 'id', 'name': name}
+    ret = neutron.list_networks(**param)
+    if len(ret['networks']) > 1:
+        raise RuntimeError("More than one network for the given name")
+    elif len(ret['networks']) == 0:
+        network = None
+    else:
+        network = ret['networks'][0]['id']
+    return network
+
+
+def get_subnetuuid_by_name(neutron, name):
+    param = {'fields': 'id', 'name': name}
+    ret = neutron.list_subnets(**param)
+    if len(ret['subnets']) > 1:
+        raise RuntimeError("More than one subnet for the given name")
+    elif len(ret['subnets']) == 0:
+        subnet = None
+    else:
+        subnet = ret['subnets'][0]['id']
+    return subnet
+
+
+@app.route('/NetworkDriver.CreateNetwork', methods=['POST'])
+def create_network():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    # NetworkID will have docker generated network uuid and it
+    # becomes 'name' in a neutron network record.
+    network = data.get("NetworkID", "")
+    if not network:
+        abort(400)
+
+    # Limit subnet handling to ipv4 till ipv6 usecase is clear.
+    ipv4_data = data.get("IPv4Data", "")
+    if not ipv4_data:
+        error = "create_network: No ipv4 subnet provided"
+        return jsonify({'Err': error})
+
+    subnet = ipv4_data[0].get("Pool", "")
+    if not subnet:
+        error = "create_network: no subnet in ipv4 data from libnetwork"
+        return jsonify({'Err': error})
+
+    gateway_ip = ipv4_data[0].get("Gateway", "").rsplit('/', 1)[0]
+    if not gateway_ip:
+        error = "create_network: no gateway in ipv4 data from libnetwork"
+        return jsonify({'Err': error})
+
+    try:
+        neutron = neutron_login()
+    except Exception as e:
+        error = "create_network: neutron login. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        if get_networkuuid_by_name(neutron, network):
+            error = "create_network: network has already been created"
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "create_network: neutron network uuid by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        body = {'network': {'name': network, 'admin_state_up': True}}
+        ret = neutron.create_network(body)
+        network_id = ret['network']['id']
+    except Exception as e:
+        error = "create_network: neutron net-create call. (%s)" % str(e)
+        return jsonify({'Err': error})
+
+    subnet_name = "docker-%s" % (network)
+
+    try:
+        body = {'subnet': {'network_id': network_id,
+                           'ip_version': 4,
+                           'cidr': subnet,
+                           'gateway_ip': gateway_ip,
+                           'name': subnet_name}}
+        created_subnet = neutron.create_subnet(body)
+    except Exception as e:
+        error = "create_network: neutron subnet-create call. (%s)" % str(e)
+        return jsonify({'Err': error})
+
+    return jsonify({})
+
+
+@app.route('/NetworkDriver.DeleteNetwork', methods=['POST'])
+def delete_network():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    nid = data.get("NetworkID", "")
+    if not nid:
+        abort(400)
+
+    try:
+        neutron = neutron_login()
+    except Exception as e:
+        error = "delete_network: neutron login. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        network = get_networkuuid_by_name(neutron, nid)
+        if not network:
+            error = "delete_network: failed in network by name. (%s)" % (nid)
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "delete_network: network uuid by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        neutron.delete_network(network)
+    except Exception as e:
+        error = "delete_network: neutron net-delete. (%s)" % str(e)
+        return jsonify({'Err': error})
+
+    return jsonify({})
+
+
+def reserve_vlan():
+    reserved_vlan = 0
+    vlans = ovs_vsctl("--if-exists", "get", "Open_vSwitch", ".",
+                      "external_ids:vlans").strip('"')
+    if not vlans:
+        reserved_vlan = 1
+        ovs_vsctl("set", "Open_vSwitch", ".",
+                  "external_ids:vlans=" + str(reserved_vlan))
+        return reserved_vlan
+
+    vlan_set = str(vlans).split(',')
+
+    for vlan in range(1, 4095):
+        if str(vlan) not in vlan_set:
+            vlan_set.append(str(vlan))
+            reserved_vlan = vlan
+            vlans = re.sub(r'[ \[\]\']', '', str(vlan_set))
+            ovs_vsctl("set", "Open_vSwitch", ".",
+                      "external_ids:vlans=" + vlans)
+            return reserved_vlan
+
+    if not reserved_vlan:
+        raise RuntimeError("No more vlans available on this host")
+
+
+def unreserve_vlan(reserved_vlan):
+    vlans = ovs_vsctl("--if-exists", "get", "Open_vSwitch", ".",
+                      "external_ids:vlans").strip('"')
+    if not vlans:
+        return
+
+    vlan_set = str(vlans).split(',')
+    if str(reserved_vlan) not in vlan_set:
+        return
+
+    vlan_set.remove(str(reserved_vlan))
+    vlans = re.sub(r'[ \[\]\']', '', str(vlan_set))
+    if vlans:
+        ovs_vsctl("set", "Open_vSwitch", ".", "external_ids:vlans=" + vlans)
+    else:
+        ovs_vsctl("remove", "Open_vSwitch", ".", "external_ids", "vlans")
+
+
+def create_port_underlay(neutron, network, eid, ip_address, mac_address):
+    reserved_vlan = reserve_vlan()
+    if mac_address:
+        body = {'port': {'network_id': network,
+                         'binding:profile': {'parent_name': VIF_ID,
+                                             'tag': int(reserved_vlan)},
+                         'mac_address': mac_address,
+                         'fixed_ips': [{'ip_address': ip_address}],
+                         'name': eid,
+                         'admin_state_up': True}}
+    else:
+        body = {'port': {'network_id': network,
+                         'binding:profile': {'parent_name': VIF_ID,
+                                             'tag': int(reserved_vlan)},
+                         'fixed_ips': [{'ip_address': ip_address}],
+                         'name': eid,
+                         'admin_state_up': True}}
+
+    try:
+        ret = neutron.create_port(body)
+        mac_address = ret['port']['mac_address']
+    except Exception as e:
+        unreserve_vlan(reserved_vlan)
+        raise RuntimeError("Failed in creation of neutron port (%s)." % str(e))
+
+    ovs_vsctl("set", "Open_vSwitch", ".",
+              "external_ids:" + eid + "_vlan=" + str(reserved_vlan))
+
+    return mac_address
+
+
+def get_endpointuuid_by_name(neutron, name):
+    param = {'fields': 'id', 'name': name}
+    ret = neutron.list_ports(**param)
+    if len(ret['ports']) > 1:
+        raise RuntimeError("More than one endpoint for the given name")
+    elif len(ret['ports']) == 0:
+        endpoint = None
+    else:
+        endpoint = ret['ports'][0]['id']
+    return endpoint
+
+
+@app.route('/NetworkDriver.CreateEndpoint', methods=['POST'])
+def create_endpoint():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    nid = data.get("NetworkID", "")
+    if not nid:
+        abort(400)
+
+    eid = data.get("EndpointID", "")
+    if not eid:
+        abort(400)
+
+    interface = data.get("Interface", "")
+    if not interface:
+        error = "create_endpoint: no interfaces supplied by libnetwork"
+        return jsonify({'Err': error})
+
+    ip_address_and_mask = interface.get("Address", "")
+    if not ip_address_and_mask:
+        error = "create_endpoint: ip address not provided by libnetwork"
+        return jsonify({'Err': error})
+
+    ip_address = ip_address_and_mask.rsplit('/', 1)[0]
+    mac_address_input = interface.get("MacAddress", "")
+    mac_address_output = ""
+
+    try:
+        neutron = neutron_login()
+    except Exception as e:
+        error = "create_endpoint: neutron login. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        endpoint = get_endpointuuid_by_name(neutron, eid)
+        if endpoint:
+            error = "create_endpoint: Endpoint has already been created"
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "create_endpoint: endpoint uuid by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        network = get_networkuuid_by_name(neutron, nid)
+        if not network:
+            error = "Failed to get neutron network record for (%s)" % (nid)
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "create_endpoint: network uuid by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        mac_address = create_port_underlay(neutron, network, eid, ip_address,
+                                           mac_address_input)
+    except Exception as e:
+        error = "create_endpoint: neutron port-create (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    if not mac_address_input:
+        mac_address_output = mac_address
+
+    return jsonify({"Interface": {
+                                    "Address": "",
+                                    "AddressIPv6": "",
+                                    "MacAddress": mac_address_output
+                                    }})
+
+
+@app.route('/NetworkDriver.EndpointOperInfo', methods=['POST'])
+def show_endpoint():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    nid = data.get("NetworkID", "")
+    if not nid:
+        abort(400)
+
+    eid = data.get("EndpointID", "")
+    if not eid:
+        abort(400)
+
+    try:
+        neutron = neutron_login()
+    except Exception as e:
+        error = "%s" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        endpoint = get_endpointuuid_by_name(neutron, eid)
+        if not endpoint:
+            error = "show_endpoint: Failed to get endpoint by name"
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "show_endpoint: get endpoint by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        ret = neutron.show_port(endpoint)
+        mac_address = ret['port']['mac_address']
+        ip_address = ret['port']['fixed_ips'][0]['ip_address']
+    except Exception as e:
+        error = "show_endpoint: show port (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    veth_outside = eid[0:15]
+    return jsonify({"Value": {"ip_address": ip_address,
+                              "mac_address": mac_address,
+                              "veth_outside": veth_outside
+                              }})
+
+
+@app.route('/NetworkDriver.DeleteEndpoint', methods=['POST'])
+def delete_endpoint():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    nid = data.get("NetworkID", "")
+    if not nid:
+        abort(400)
+
+    eid = data.get("EndpointID", "")
+    if not eid:
+        abort(400)
+
+    try:
+        neutron = neutron_login()
+    except Exception as e:
+        error = "delete_endpoint: neutron login (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    endpoint = get_endpointuuid_by_name(neutron, eid)
+    if not endpoint:
+        return jsonify({})
+
+    reserved_vlan = ovs_vsctl("--if-exists", "get", "Open_vSwitch", ".",
+                              "external_ids:" + eid + "_vlan").strip('"')
+    if reserved_vlan:
+        unreserve_vlan(reserved_vlan)
+        ovs_vsctl("remove", "Open_vSwitch", ".", "external_ids",
+                  eid + "_vlan")
+
+    try:
+        neutron.delete_port(endpoint)
+    except Exception as e:
+        error = "delete_endpoint: neutron port-delete. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    return jsonify({})
+
+
+@app.route('/NetworkDriver.Join', methods=['POST'])
+def network_join():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    nid = data.get("NetworkID", "")
+    if not nid:
+        abort(400)
+
+    eid = data.get("EndpointID", "")
+    if not eid:
+        abort(400)
+
+    sboxkey = data.get("SandboxKey", "")
+    if not sboxkey:
+        abort(400)
+
+    # sboxkey is of the form: /var/run/docker/netns/CONTAINER_ID
+    vm_id = sboxkey.rsplit('/')[-1]
+
+    try:
+        neutron = neutron_login()
+    except Exception as e:
+        error = "network_join: neutron login. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    subnet_name = "docker-%s" % (nid)
+    try:
+        subnet = get_subnetuuid_by_name(neutron, subnet_name)
+        if not subnet:
+            error = "network_join: can't find subnet in neutron"
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "network_join: subnet uuid by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        ret = neutron.show_subnet(subnet)
+        gateway_ip = ret['subnet']['gateway_ip']
+        if not gateway_ip:
+            error = "network_join: no gateway_ip for the subnet"
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "network_join: neutron show subnet. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        endpoint = get_endpointuuid_by_name(neutron, eid)
+        if not endpoint:
+            error = "network_join: Failed to get endpoint by name"
+            return jsonify({'Err': error})
+    except Exception as e:
+        error = "network_join: neutron endpoint by name. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        ret = neutron.show_port(endpoint)
+        mac_address = ret['port']['mac_address']
+    except Exception as e:
+        error = "network_join: neutron show port. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    veth_outside = eid[0:15]
+    veth_inside = eid[0:13] + "_c"
+    command = "ip link add %s type veth peer name %s" \
+              % (veth_inside, veth_outside)
+    try:
+        call_popen(shlex.split(command))
+    except Exception as e:
+        error = "network_join: failed to create veth pair. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    command = "ip link set dev %s address %s" \
+              % (veth_inside, mac_address)
+
+    try:
+        call_popen(shlex.split(command))
+    except Exception as e:
+        error = "network_join: failed to set veth mac address. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    command = "ip link set %s up" % (veth_outside)
+
+    try:
+        call_popen(shlex.split(command))
+    except Exception as e:
+        error = "network_join: failed to up the veth iface. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        reserved_vlan = ovs_vsctl("--if-exists", "get", "Open_vSwitch", ".",
+                                  "external_ids:" + eid + "_vlan").strip('"')
+        if not reserved_vlan:
+            error = "network_join: no reserved vlan for this endpoint"
+            return jsonify({'Err': error})
+        ovs_vsctl("add-port", OVN_BRIDGE, veth_outside, "tag=" + reserved_vlan)
+    except Exception as e:
+        error = "network_join: failed to create a OVS port. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    return jsonify({"InterfaceName": {
+                                        "SrcName": veth_inside,
+                                        "DstPrefix": "eth"
+                                     },
+                    "Gateway": gateway_ip,
+                    "GatewayIPv6": ""})
+
+
+@app.route('/NetworkDriver.Leave', methods=['POST'])
+def network_leave():
+    if not request.data:
+        abort(400)
+
+    data = json.loads(request.data)
+
+    nid = data.get("NetworkID", "")
+    if not nid:
+        abort(400)
+
+    eid = data.get("EndpointID", "")
+    if not eid:
+        abort(400)
+
+    veth_outside = eid[0:15]
+    command = "ip link delete %s" % (veth_outside)
+    try:
+        call_popen(shlex.split(command))
+    except Exception as e:
+        error = "network_leave: failed to delete veth pair. (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    try:
+        ovs_vsctl("--if-exists", "del-port", veth_outside)
+    except Exception as e:
+        error = "network_leave: Failed to delete port (%s)" % (str(e))
+        return jsonify({'Err': error})
+
+    return jsonify({})
+
+if __name__ == '__main__':
+    prepare()
+    app.run(host='127.0.0.1')

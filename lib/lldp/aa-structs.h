@@ -24,7 +24,7 @@
 #include "list.h"
 
 struct lldp_aa_element_system_id {
-    uint8_t  system_mac[6];
+    struct eth_addr system_mac;
     uint16_t conn_type;
     uint16_t rsvd;
     uint8_t  rsvd2[2];

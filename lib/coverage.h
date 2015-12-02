@@ -88,6 +88,7 @@ void coverage_counter_register(struct coverage_counter*);
 void coverage_init(void);
 void coverage_log(void);
 void coverage_clear(void);
+void coverage_try_clear(void);
 void coverage_run(void);
 
 #endif /* coverage.h */

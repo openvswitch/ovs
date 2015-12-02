@@ -436,11 +436,13 @@ Each column is interpreted as follows.
     NXM_OF_VLAN_TCI(_W), a mask of ffff is equivalent to
     NXM_OF_VLAN_TCI.
 
-  - OF1.0 and OF1.1: wwww/x,yy/z means dl_vlan wwww, OFPFW_DL_VLAN
-    x, dl_vlan_pcp yy, and OFPFW_DL_VLAN_PCP z.  ? means that the
-    given nibble is ignored (and conventionally 0 for wwww or yy,
-    conventionally 1 for x or z).  <none> means that the given match
-    is not supported.
+  - OF1.0 and OF1.1: wwww/x,yy/z means dl_vlan wwww, OFPFW_DL_VLAN x,
+    dl_vlan_pcp yy, and OFPFW_DL_VLAN_PCP z.  If OFPFW_DL_VLAN or
+    OFPFW_DL_VLAN_PCP is 1, the corresponding field value is
+    wildcarded, otherwise it is matched.  ? means that the given bits
+    are ignored (their conventional values are 0000/x,00/0 in OF1.0,
+    0000/x,00/1 in OF1.1; x is never ignored).  <none> means that the
+    given match is not supported.
 
   - OF1.2: xxxx/yyyy,zz means OXM_OF_VLAN_VID_W with value xxxx and
     mask yyyy, and OXM_OF_VLAN_PCP (which is not maskable) with

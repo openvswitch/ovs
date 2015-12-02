@@ -119,11 +119,11 @@ static void
 send_bogus_packet_ins(struct fail_open *fo)
 {
     struct ofproto_packet_in pin;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
     struct dp_packet b;
 
     dp_packet_init(&b, 128);
-    eth_addr_nicira_random(mac);
+    eth_addr_nicira_random(&mac);
     compose_rarp(&b, mac);
 
     memset(&pin, 0, sizeof pin);

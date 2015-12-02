@@ -33,10 +33,19 @@ binaries.  In addition to that, if you want to compile the kernel module you
 will also need to install Windows Driver Kit (WDK) 8.1 Update.
 
 It is important to get the Visual Studio related environment variables and to
-have the $PATH inside the bash to point to the proper compiler and linker. One
-easy way to achieve this is to get into the "Developer Command prompt for visual
-studio" and through it enter into the bash shell available from msys by typing
+have the $PATH inside the bash to point to the proper compiler and linker.  One
+easy way to achieve this for VS2013 is to get into the "VS2013 x86 Native
+Tools Command Prompt" (in a default installation of Visual Studio 2013 this can
+be found under the following location:
+C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts)
+and through it enter into the bash shell available from msys by typing
 'bash --login'.
+
+There is support for generating 64 bit binaries too.  To compile under x64,
+open the "VS2013 x64 Native Tools Command Prompt" (if your current running OS
+is 64 bit) or "VS2013 x64 Cross Tools Command Prompt" (if your current running
+OS is not 64 bit) instead of opening its x86 variant.  This will point the
+compiler and the linker to their 64 bit equivalent.
 
 If after the above step, a 'which link' inside MSYS's bash says,
 "/bin/link.exe", rename /bin/link.exe to something else so that the
@@ -263,21 +272,43 @@ ovs-vswitchd by running 'ovs-appctl exit'.)
 
 07> Add the physical NIC and the internal port to br-pif.
 
-In OVS for Hyper-V, we use 'external' as a special name to refer to the
-physical NICs connected to the Hyper-V switch.  An index is added to this
-special name to refer to the particular physical NIC. Eg. 'external.1' refers
-to the first physical NIC on the Hyper-V switch.
+In OVS for Hyper-V, we use the name of the adapter on top of which the Hyper-V
+virtual switch was created, as a special name to refer to the physical NICs
+connected to the Hyper-V switch. I.e. let us suppose we created the Hyper-V
+virtual switch on top of the adapter named 'Ethernet0'. In OVS for Hyper-V, we
+use that name('Ethernet0') as a special name to refer to that adapter.
 
 Note: Currently, we assume that the Hyper-V switch on which OVS extension is
 enabled has a single physical NIC connected to it.
 
-Interal port is the virtual adapter created on the Hyper-V switch using the
+Internal port is the virtual adapter created on the Hyper-V switch using the
 'AllowManagementOS' setting.  This has already been setup while creating the
-switch using the instructions above.  In OVS for Hyper-V, we use a 'internal'
-as a special name to refer to that adapter.
+switch using the instructions above.  In OVS for Hyper-V, we use a the name of
+that specific adapter as a special name to refer to that adapter. By default it
+is created under the following rule "vEthernet (<name of the switch>)".
 
-    % ovs-vsctl add-port br-pif external.1
-    % ovs-vsctl add-port br-pif internal
+As a whole example, if we issue the following in a powershell console:
+PS C:\package\binaries> Get-NetAdapter | select Name,MacAddress,InterfaceDescription
+
+Name                   MacAddress         InterfaceDescription
+----                   ----------         --------------------
+Ethernet1              00-0C-29-94-05-65  Intel(R) PRO/1000 MT Network Connection
+vEthernet (external)   00-0C-29-94-05-5B  Hyper-V Virtual Ethernet Adapter #2
+Ethernet0              00-0C-29-94-05-5B  Intel(R) PRO/1000 MT Network Connection #2
+
+PS C:\package\binaries> Get-VMSwitch
+
+Name     SwitchType NetAdapterInterfaceDescription
+----     ---------- ------------------------------
+external External   Intel(R) PRO/1000 MT Network Connection #2
+
+
+We can see that we have a switch(external) created upon adapter name 'Ethernet0'
+with an internal port under name 'vEthernet (external)'. Thus resulting into the
+following ovs-vsctl commands
+
+    % ovs-vsctl add-port br-pif Ethernet0
+    % ovs-vsctl add-port br-pif "vEthernet (external)"
 
 * Dumping the ports should show the additional ports that were just added.
   Sample output shows up as follows:
@@ -286,22 +317,23 @@ as a special name to refer to that adapter.
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
-            port 4: internal (internal)   <<< 'AllowManagementOS' adapter on
-                                              Hyper-V switch
+            port 4: vEthernet (external) (internal) <<< 'AllowManagementOS'
+                                                         adapter on
+                                                         Hyper-V switch
             port 2: br-pif (internal)
-            port 1: br-int (internal
-            port 3: external.1            <<< Physical NIC
+            port 1: br-int (internal)
+            port 3: Ethernet0                       <<< Physical NIC
 
     % ovs-vsctl show
     a56ec7b5-5b1f-49ec-a795-79f6eb63228b
         Bridge br-pif
-            Port internal
-                Interface internal
+            Port "vEthernet (external)"
+                Interface "vEthernet (external)"
             Port br-pif
                 Interface br-pif
                     type: internal
-            Port "external.1"
-                Interface "external.1"
+            Port "Ethernet0"
+                Interface "Ethernet0"
         Bridge br-int
             Port br-int
                 Interface br-int
@@ -342,19 +374,19 @@ with OVS extension enabled.
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
-            port 4: internal (internal)
+            port 4: vEthernet (external) (internal)
             port 5: ovs-port-a
             port 2: br-pif (internal)
             port 1: br-int (internal
-            port 3: external.1
+            port 3: Ethernet0
 
     % ovs-vsctl show
     4cd86499-74df-48bd-a64d-8d115b12a9f2
         Bridge br-pif
-            Port internal
-                Interface internal
-            Port "external.1"
-                Interface "external.1"
+            Port "vEthernet (external)"
+                Interface "vEthernet (external)"
+            Port "Ethernet0"
+                Interface "Ethernet0"
             Port br-pif
                 Interface br-pif
                     type: internal
@@ -410,7 +442,7 @@ prior to adding tunnels.
     % ovs-vsctl set Interface tun-2 options:in_key=flow
     % ovs-vsctl set Interface tun-2 options:out_key=flow
 
-	Where port-type is the string stt or vxlan
+    Where port-type is the string stt or vxlan
 
 
 Requirements

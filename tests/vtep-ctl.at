@@ -2,8 +2,7 @@ dnl VTEP_OVSDB_INIT([$1])
 dnl
 dnl Creates an empty database named $1.
 m4_define([VTEP_OVSDB_INIT],
-  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-   AT_CHECK(
+  [AT_CHECK(
      [ovsdb-tool create $1 $abs_top_srcdir/vtep/vtep.ovsschema],
      [0], [stdout], [ignore])
    AT_CHECK(
@@ -899,7 +898,7 @@ AT_CHECK([RUN_VTEP_CTL(
   [bind-ls a a1 100 ls1],
   [set Physical_Switch a management_ips=[[4.3.2.1]] tunnel_ips=[[1.2.3.4]]])], [0], [ignore], [], [VTEP_CTL_CLEANUP])
 
-AT_CHECK([vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket show | tail -n+2 | sed 's/=[[a-f0-9-]][[a-f0-9-]]*\}/=<ls>\}/' ], [0], [dnl
+AT_CHECK([vtep-ctl --timeout=5 -vreconnect:emer --db=unix:socket show | tail -n+2 | sed 's/=[[a-f0-9-]][[a-f0-9-]]*}/=<ls>}/' ], [0], [dnl
     Manager "tcp:4.5.6.7"
     Physical_Switch a
         management_ips: [["4.3.2.1"]]

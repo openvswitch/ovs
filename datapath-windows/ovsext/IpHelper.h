@@ -114,7 +114,7 @@ typedef struct _OVS_IP_HELPER_THREAD_CONTEXT {
 NTSTATUS OvsInitIpHelper(NDIS_HANDLE ndisFilterHandle);
 VOID OvsCleanupIpHelper(VOID);
 
-VOID OvsInternalAdapterUp(UINT32 portNo, GUID *netCfgInstanceId);
+VOID OvsInternalAdapterUp(GUID *netCfgInstanceId);
 VOID OvsInternalAdapterDown(VOID);
 
 NTSTATUS OvsFwdIPHelperRequest(PNET_BUFFER_LIST nbl, UINT32 inPort,

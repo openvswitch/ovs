@@ -212,6 +212,12 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
+    status = OvsInitSttDefragmentation();
+    if (status != STATUS_SUCCESS) {
+        OVS_LOG_ERROR("Exit: Failed to initialize Stt Defragmentation");
+        goto create_switch_done;
+    }
+
     *switchContextOut = switchContext;
 
 create_switch_done:
@@ -242,6 +248,7 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     }
     OvsDeleteSwitch(switchContext);
     OvsCleanupIpHelper();
+    OvsCleanupSttDefragmentation();
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
@@ -542,6 +549,7 @@ OvsActivateSwitch(POVS_SWITCH_CONTEXT switchContext)
     OVS_LOG_TRACE("Enter: activate switch %p, dpNo: %ld",
                   switchContext, switchContext->dpNo);
 
+    switchContext->isActivated = TRUE;
     status = OvsAddConfiguredSwitchPorts(switchContext);
 
     if (status != NDIS_STATUS_SUCCESS) {
@@ -556,10 +564,12 @@ OvsActivateSwitch(POVS_SWITCH_CONTEXT switchContext)
         OvsClearAllSwitchVports(switchContext);
         goto cleanup;
     }
-    switchContext->isActivated = TRUE;
-    OvsPostEvent(OVS_DEFAULT_PORT_NO, OVS_DEFAULT_EVENT_STATUS);
 
 cleanup:
+    if (status != NDIS_STATUS_SUCCESS) {
+        switchContext->isActivated = TRUE;
+    }
+
     OVS_LOG_TRACE("Exit: activate switch:%p, isActivated: %s, status = %lx",
                   switchContext,
                   (switchContext->isActivated ? "TRUE" : "FALSE"), status);

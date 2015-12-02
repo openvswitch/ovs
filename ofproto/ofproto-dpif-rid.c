@@ -130,8 +130,17 @@ recirc_metadata_hash(const struct recirc_state *state)
 
     hash = hash_pointer(state->ofproto, 0);
     hash = hash_int(state->table_id, hash);
-    hash = hash_words64((const uint64_t *) &state->metadata,
-                        sizeof state->metadata / sizeof(uint64_t),
+    if (flow_tnl_dst_is_set(state->metadata.tunnel)) {
+        /* We may leave remainder bytes unhashed, but that is unlikely as
+         * the tunnel is not in the datapath format. */
+        hash = hash_words64((const uint64_t *) state->metadata.tunnel,
+                            flow_tnl_size(state->metadata.tunnel)
+                            / sizeof(uint64_t), hash);
+    }
+    hash = hash_boolean(state->conntracked, hash);
+    hash = hash_words64((const uint64_t *) &state->metadata.metadata,
+                        (sizeof state->metadata - sizeof state->metadata.tunnel)
+                        / sizeof(uint64_t),
                         hash);
     if (state->stack && state->stack->size != 0) {
         hash = hash_words64((const uint64_t *) state->stack->data,
@@ -153,11 +162,14 @@ recirc_metadata_equal(const struct recirc_state *a,
 {
     return (a->table_id == b->table_id
             && a->ofproto == b->ofproto
-            && !memcmp(&a->metadata, &b->metadata, sizeof a->metadata)
+            && flow_tnl_equal(a->metadata.tunnel, b->metadata.tunnel)
+            && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
+                       sizeof a->metadata - sizeof a->metadata.tunnel)
             && (((!a->stack || !a->stack->size) &&
                  (!b->stack || !b->stack->size))
                 || (a->stack && b->stack && ofpbuf_equal(a->stack, b->stack)))
             && a->mirrors == b->mirrors
+            && a->conntracked == b->conntracked
             && a->action_set_len == b->action_set_len
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len));
@@ -193,9 +205,13 @@ recirc_ref_equal(const struct recirc_state *target, uint32_t hash)
 }
 
 static void
-recirc_state_clone(struct recirc_state *new, const struct recirc_state *old)
+recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
+                   struct flow_tnl *tunnel)
 {
     *new = *old;
+    flow_tnl_copy__(tunnel, old->metadata.tunnel);
+    new->metadata.tunnel = tunnel;
+
     if (new->stack) {
         new->stack = new->stack->size ? ofpbuf_clone(new->stack) : NULL;
     }
@@ -216,9 +232,11 @@ recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
     ovs_assert(state->action_set_len <= state->ofpacts_len);
 
     struct recirc_id_node *node = xzalloc(sizeof *node);
+
     node->hash = hash;
     ovs_refcount_init(&node->refcount);
-    recirc_state_clone(CONST_CAST(struct recirc_state *, &node->state), state);
+    recirc_state_clone(CONST_CAST(struct recirc_state *, &node->state), state,
+                       &node->state_metadata_tunnel);
 
     ovs_mutex_lock(&mutex);
     for (;;) {
@@ -269,10 +287,13 @@ recirc_alloc_id_ctx(const struct recirc_state *state)
 uint32_t
 recirc_alloc_id(struct ofproto_dpif *ofproto)
 {
+    struct flow_tnl tunnel;
+    tunnel.ip_dst = htonl(0);
+    tunnel.ipv6_dst = in6addr_any;
     struct recirc_state state = {
         .table_id = TBL_INTERNAL,
         .ofproto = ofproto,
-        .metadata = { .in_port = OFPP_NONE },
+        .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
     return recirc_alloc_id__(&state, recirc_metadata_hash(&state))->id;
 }

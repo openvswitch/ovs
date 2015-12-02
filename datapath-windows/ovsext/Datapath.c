@@ -89,11 +89,8 @@ typedef struct _NETLINK_FAMILY {
 
 /* Handlers for the various netlink commands. */
 static NetlinkCmdHandler OvsPendEventCmdHandler,
-                         OvsPendPacketCmdHandler,
                          OvsSubscribeEventCmdHandler,
-                         OvsSubscribePacketCmdHandler,
                          OvsReadEventCmdHandler,
-                         OvsReadPacketCmdHandler,
                          OvsNewDpCmdHandler,
                          OvsGetDpCmdHandler,
                          OvsSetDpCmdHandler;
@@ -102,7 +99,10 @@ NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsGetVportCmdHandler,
                          OvsSetVportCmdHandler,
                          OvsNewVportCmdHandler,
-                         OvsDeleteVportCmdHandler;
+                         OvsDeleteVportCmdHandler,
+                         OvsPendPacketCmdHandler,
+                         OvsSubscribePacketCmdHandler,
+                         OvsReadPacketCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -918,10 +918,6 @@ done:
 exit:
     /* Should not complete a pending IRP unless proceesing is completed. */
     if (status == STATUS_PENDING) {
-        /* STATUS_PENDING is returned by the NL handler when the request is
-         * to be processed later, so we mark the IRP as pending and complete
-         * it in another thread when the request is processed. */
-        IoMarkIrpPending(irp);
         return status;
     }
     return OvsCompleteIrpRequest(irp, (ULONG_PTR)replyLen, status);
@@ -1024,10 +1020,24 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     if (status != STATUS_SUCCESS && status != STATUS_PENDING) {
         if (usrParamsCtx->devOp != OVS_WRITE_DEV_OP && *replyLen == 0) {
             NL_ERROR nlError = NlMapStatusToNlErr(status);
-            POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+            OVS_MESSAGE msgInTmp = { 0 };
+            POVS_MESSAGE msgIn = NULL;
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                 usrParamsCtx->outputBuffer;
 
+            if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
+                usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY) {
+                /* There's no input buffer associated with such requests. */
+                NL_BUFFER nlBuffer;
+                msgIn = &msgInTmp;
+                NlBufInit(&nlBuffer, (PCHAR)msgIn, sizeof *msgIn);
+                NlFillNlHdr(&nlBuffer, nlFamilyOps->id, 0, 0,
+                            usrParamsCtx->ovsInstance->pid);
+            } else {
+                msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+            }
+
+            ASSERT(msgIn);
             ASSERT(msgError);
             NlBuildErrorMsg(msgIn, msgError, nlError);
             *replyLen = msgError->nlMsg.nlmsgLen;
@@ -1180,7 +1190,8 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
 
     rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
-         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, ARRAY_SIZE(attrs));
+         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, ARRAY_SIZE(policy),
+                       attrs, ARRAY_SIZE(attrs));
     if (!rc) {
         status = STATUS_INVALID_PARAMETER;
         goto done;
@@ -1349,7 +1360,9 @@ HandleDpTransactionCommon(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         if (!NlAttrParse((PNL_MSG_HDR)msgIn,
                         NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
                         NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
-                        ovsDatapathSetPolicy, dpAttrs, ARRAY_SIZE(dpAttrs))) {
+                        ovsDatapathSetPolicy,
+                        ARRAY_SIZE(ovsDatapathSetPolicy),
+                        dpAttrs, ARRAY_SIZE(dpAttrs))) {
             return STATUS_INVALID_PARAMETER;
         }
 
@@ -1484,7 +1497,6 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     BOOLEAN ok;
     OVS_MESSAGE msgOutTmp;
     PNL_MSG_HDR nlMsg;
-    POVS_VPORT_ENTRY vport;
 
     ASSERT(NlBufAt(nlBuf, 0, 0) != 0 && nlBuf->bufRemLen >= sizeof msgOutTmp);
 
@@ -1499,9 +1511,9 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     msgOutTmp.genlMsg.reserved = 0;
 
     /* we don't have netdev yet, treat link up/down a adding/removing a port*/
-    if (eventEntry->status & (OVS_EVENT_LINK_UP | OVS_EVENT_CONNECT)) {
+    if (eventEntry->type & (OVS_EVENT_LINK_UP | OVS_EVENT_CONNECT)) {
         msgOutTmp.genlMsg.cmd = OVS_VPORT_CMD_NEW;
-    } else if (eventEntry->status &
+    } else if (eventEntry->type &
              (OVS_EVENT_LINK_DOWN | OVS_EVENT_DISCONNECT)) {
         msgOutTmp.genlMsg.cmd = OVS_VPORT_CMD_DEL;
     } else {
@@ -1516,17 +1528,11 @@ OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto cleanup;
     }
 
-    vport = OvsFindVportByPortNo(gOvsSwitchContext, eventEntry->portNo);
-    if (!vport) {
-        status = STATUS_DEVICE_DOES_NOT_EXIST;
-        goto cleanup;
-    }
-
     ok = NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_PORT_NO, eventEntry->portNo) &&
-         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, vport->ovsType) &&
+         NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_TYPE, eventEntry->ovsType) &&
          NlMsgPutTailU32(nlBuf, OVS_VPORT_ATTR_UPCALL_PID,
-                         vport->upcallPid) &&
-         NlMsgPutTailString(nlBuf, OVS_VPORT_ATTR_NAME, vport->ovsName);
+                         eventEntry->upcallPid) &&
+         NlMsgPutTailString(nlBuf, OVS_VPORT_ATTR_NAME, eventEntry->ovsName);
     if (!ok) {
         status = STATUS_INVALID_BUFFER_SIZE;
         goto cleanup;
@@ -1592,111 +1598,4 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 cleanup:
     return status;
-}
-
-/*
- * --------------------------------------------------------------------------
- * Handler for reading missed pacckets from the driver event queue. This
- * handler is executed when user modes issues a socket receive on a socket
- * --------------------------------------------------------------------------
- */
-static NTSTATUS
-OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                       UINT32 *replyLen)
-{
-#ifdef DBG
-    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
-#endif
-    POVS_OPEN_INSTANCE instance =
-        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
-    NTSTATUS status;
-
-    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
-
-    /* Should never read events with a dump socket */
-    ASSERT(instance->dumpState.ovsMsg == NULL);
-
-    /* Must have an packet queue */
-    ASSERT(instance->packetQueue != NULL);
-
-    /* Output buffer has been validated while validating read dev op. */
-    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
-
-    /* Read a packet from the instance queue */
-    status = OvsReadDpIoctl(instance->fileObject, usrParamsCtx->outputBuffer,
-                            usrParamsCtx->outputLength, replyLen);
-    return status;
-}
-
-/*
- * --------------------------------------------------------------------------
- *  Handler for the subscription for a packet queue
- * --------------------------------------------------------------------------
- */
-static NTSTATUS
-OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                            UINT32 *replyLen)
-{
-    NDIS_STATUS status;
-    BOOLEAN rc;
-    UINT8 join;
-    UINT32 pid;
-    const NL_POLICY policy[] =  {
-        [OVS_NL_ATTR_PACKET_PID] = {.type = NL_A_U32 },
-        [OVS_NL_ATTR_PACKET_SUBSCRIBE] = {.type = NL_A_U8 }
-        };
-    PNL_ATTR attrs[ARRAY_SIZE(policy)];
-
-    UNREFERENCED_PARAMETER(replyLen);
-
-    POVS_OPEN_INSTANCE instance =
-        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
-    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
-
-    rc = NlAttrParse(&msgIn->nlMsg, sizeof (*msgIn),
-         NlMsgAttrsLen((PNL_MSG_HDR)msgIn), policy, attrs, ARRAY_SIZE(attrs));
-    if (!rc) {
-        status = STATUS_INVALID_PARAMETER;
-        goto done;
-    }
-
-    join = NlAttrGetU8(attrs[OVS_NL_ATTR_PACKET_PID]);
-    pid = NlAttrGetU32(attrs[OVS_NL_ATTR_PACKET_PID]);
-
-    /* The socket subscribed with must be the same socket we perform receive*/
-    ASSERT(pid == instance->pid);
-
-    status = OvsSubscribeDpIoctl(instance, pid, join);
-
-    /*
-     * XXX Need to add this instance to a global data structure
-     * which hold all packet based instances. The data structure (hash)
-     * should be searched through the pid field of the instance for
-     * placing the missed packet into the correct queue
-     */
-done:
-    return status;
-}
-
-/*
- * --------------------------------------------------------------------------
- * Handler for queueing an IRP used for missed packet notification. The IRP is
- * completed when a packet received and mismatched. STATUS_PENDING is returned
- * on success. User mode keep a pending IRP at all times.
- * --------------------------------------------------------------------------
- */
-static NTSTATUS
-OvsPendPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                       UINT32 *replyLen)
-{
-    UNREFERENCED_PARAMETER(replyLen);
-
-    POVS_OPEN_INSTANCE instance =
-        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
-
-    /*
-     * XXX access to packet queue must be through acquiring a lock as user mode
-     * could unsubscribe and the instnace will be freed.
-     */
-    return OvsWaitDpIoctl(usrParamsCtx->irp, instance->fileObject);
 }

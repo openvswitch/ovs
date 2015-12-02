@@ -205,8 +205,10 @@
   <p>
     Each chassis in an OVN deployment must be configured with an Open vSwitch
     bridge dedicated for OVN's use, called the <dfn>integration bridge</dfn>.
-    System startup scripts create this bridge prior to starting
-    <code>ovn-controller</code>.  The ports on the integration bridge include:
+    System startup scripts may create this bridge prior to starting
+    <code>ovn-controller</code> if desired.  If this bridge does not exist when
+    ovn-controller starts, it will be created automatically with the default
+    configuration suggested below.  The ports on the integration bridge include:
   </p>
 
   <ul>
@@ -248,6 +250,8 @@
     <code>ovs-vswitchd.conf.db</code>(5):
   </p>
 
+  <!-- Keep the following in sync with create_br_int() in
+       ovn/controller/ovn-controller.c. -->
   <dl>
     <dt><code>fail-mode=secure</code></dt>
     <dd>
@@ -457,7 +461,7 @@
     </li>
   </ol>
 
-  <h2>Life Cycle of a container interface inside a VM</h2>
+  <h2>Life Cycle of a Container Interface Inside a VM</h2>
 
   <p>
     OVN provides virtual network abstractions by converting information
@@ -592,7 +596,7 @@
     </li>
   </ol>
 
-  <h2>Life Cycle of a Packet</h2>
+  <h2>Architectural Physical Life Cycle of a Packet</h2>
 
   <p>
     This section describes how a packet travels from one virtual machine or
@@ -622,7 +626,7 @@
       A field that denotes the logical datapath through which a packet is being
       processed.
       <!-- Keep the following in sync with MFF_LOG_DATAPATH in
-           ovn/controller/lflow.h. -->
+           ovn/lib/logical-fields.h. -->
       OVN uses the field that OpenFlow 1.1+ simply (and confusingly) calls
       ``metadata'' to store the logical datapath.  (This field is passed across
       tunnels as part of the tunnel key.)
@@ -630,24 +634,47 @@
 
     <dt>logical input port field</dt>
     <dd>
-      A field that denotes the logical port from which the packet
-      entered the logical datapath.
-      <!-- Keep the following in sync with MFF_LOG_INPORT in
-           ovn/controller/lflow.h. -->
-      OVN stores this in Nicira extension register number 6.  (This field is
-      passed across tunnels as part of the tunnel key.)
+      <p>
+        A field that denotes the logical port from which the packet
+        entered the logical datapath.
+        <!-- Keep the following in sync with MFF_LOG_INPORT in
+             ovn/lib/logical-fields.h. -->
+        OVN stores this in Nicira extension register number 6.
+      </p>
+
+      <p>
+        Geneve and STT tunnels pass this field as part of the tunnel key.
+        Although VXLAN tunnels do not explicitly carry a logical input port,
+        OVN only uses VXLAN to communicate with gateways that from OVN's
+        perspective consist of only a single logical port, so that OVN can set
+        the logical input port field to this one on ingress to the OVN logical
+        pipeline.
+      </p>
     </dd>
 
     <dt>logical output port field</dt>
     <dd>
-      A field that denotes the logical port from which the packet will
-      leave the logical datapath.  This is initialized to 0 at the
-      beginning of the logical ingress pipeline.
-      <!-- Keep the following in sync with MFF_LOG_OUTPORT in
-           ovn/controller/lflow.h. -->
-      OVN stores this in
-      Nicira extension register number 7.  (This field is passed across
-      tunnels as part of the tunnel key.)
+      <p>
+        A field that denotes the logical port from which the packet will
+        leave the logical datapath.  This is initialized to 0 at the
+        beginning of the logical ingress pipeline.
+        <!-- Keep the following in sync with MFF_LOG_OUTPORT in
+             ovn/lib/logical-fields.h. -->
+        OVN stores this in Nicira extension register number 7.
+      </p>
+
+      <p>
+        Geneve and STT tunnels pass this field as part of the tunnel key.
+        VXLAN tunnels do not transmit the logical output port field.
+      </p>
+    </dd>
+
+    <dt>conntrack zone field</dt>
+    <dd>
+      A field that denotes the connection tracking zone.  The value only
+      has local significance and is not meaningful between chassis.
+      This is initialized to 0 at the beginning of the logical ingress
+      pipeline.  OVN stores this in Nicira extension register number 5.
     </dd>
 
     <dt>VLAN ID</dt>
@@ -672,6 +699,13 @@
         logical datapath that the packet is traversing and the logical input
         port field to identify the ingress port.  Then it resubmits to table 16
         to enter the logical ingress pipeline.
+      </p>
+
+      <p>
+        It's possible that a single ingress physical port maps to multiple
+        logical ports with a type of <code>localnet</code>. The logical datapath
+        and logical input port fields will be reset and the packet will be
+        resubmitted to table 16 multiple times.
       </p>
 
       <p>
@@ -744,6 +778,18 @@
       </p>
 
       <p>
+        Logical patch ports are a special case.  Logical patch ports do not
+        have a physical location and effectively reside on every hypervisor.
+        Thus, flow table 33, for output to ports on the local hypervisor,
+        naturally implements output to unicast logical patch ports too.
+        However, applying the same logic to a logical patch port that is part
+        of a logical multicast group yields packet duplication, because each
+        hypervisor that contains a logical port in the multicast group will
+        also output the packet to the logical patch port.  Thus, multicast
+        groups implement output to logical patch ports in table 32.
+      </p>
+
+      <p>
         Each flow in table 32 matches on a logical output port for unicast or
         multicast logical ports that include a logical port on a remote
         hypervisor.  Each flow's actions implement sending a packet to the port
@@ -803,6 +849,109 @@
         is a container nested with a VM, then before sending the packet the
         actions push on a VLAN header with an appropriate VLAN ID.
       </p>
+
+      <p>
+        If the logical egress port is a logical patch port, then table 64
+        outputs to an OVS patch port that represents the logical patch port.
+        The packet re-enters the OpenFlow flow table from the OVS patch port's
+        peer in table 0, which identifies the logical datapath and logical
+        input port based on the OVS patch port's OpenFlow port number.
+      </p>
+    </li>
+  </ol>
+
+  <h2>Life Cycle of a VTEP gateway</h2>
+
+  <p>
+    A gateway is a chassis that forwards traffic between the OVN-managed
+    part of a logical network and a physical VLAN,  extending a
+    tunnel-based logical network into a physical network.
+  </p>
+
+  <p>
+    The steps below refer often to details of the OVN and VTEP database
+    schemas.  Please see <code>ovn-sb</code>(5), <code>ovn-nb</code>(5)
+    and <code>vtep</code>(5), respectively, for the full story on these
+    databases.
+  </p>
+
+  <ol>
+    <li>
+      A VTEP gateway's life cycle begins with the administrator registering
+      the VTEP gateway as a <code>Physical_Switch</code> table entry in the
+      <code>VTEP</code> database.  The <code>ovn-controller-vtep</code>
+      connected to this VTEP database, will recognize the new VTEP gateway
+      and create a new <code>Chassis</code> table entry for it in the
+      <code>OVN_Southbound</code> database.
+    </li>
+
+    <li>
+      The administrator can then create a new <code>Logical_Switch</code>
+      table entry, and bind a particular vlan on a VTEP gateway's port to
+      any VTEP logical switch.  Once a VTEP logical switch is bound to
+      a VTEP gateway, the <code>ovn-controller-vtep</code> will detect
+      it and add its name to the <var>vtep_logical_switches</var>
+      column of the <code>Chassis</code> table in the <code>
+      OVN_Southbound</code> database.  Note, the <var>tunnel_key</var>
+      column of VTEP logical switch is not filled at creation.  The
+      <code>ovn-controller-vtep</code> will set the column when the
+      correponding vtep logical switch is bound to an OVN logical network.
+    </li>
+
+    <li>
+      Now, the administrator can use the CMS to add a VTEP logical switch
+      to the OVN logical network.  To do that, the CMS must first create a
+      new <code>Logical_Port</code> table entry in the <code>
+      OVN_Northbound</code> database.  Then, the <var>type</var> column
+      of this entry must be set to "vtep".  Next, the <var>
+      vtep-logical-switch</var> and <var>vtep-physical-switch</var> keys
+      in the <var>options</var> column must also be specified, since
+      multiple VTEP gateways can attach to the same VTEP logical switch.
+    </li>
+
+    <li>
+      The newly created logical port in the <code>OVN_Northbound</code>
+      database and its configuration will be passed down to the <code>
+      OVN_Southbound</code> database as a new <code>Port_Binding</code>
+      table entry.  The <code>ovn-controller-vtep</code> will recognize the
+      change and bind the logical port to the corresponding VTEP gateway
+      chassis.  Configuration of binding the same VTEP logical switch to
+      a different OVN logical networks is not allowed and a warning will be
+      generated in the log.
+    </li>
+
+    <li>
+      Beside binding to the VTEP gateway chassis, the <code>
+      ovn-controller-vtep</code> will update the <var>tunnel_key</var>
+      column of the VTEP logical switch to the corresponding <code>
+      Datapath_Binding</code> table entry's <var>tunnel_key</var> for the
+      bound OVN logical network.
+    </li>
+
+    <li>
+      Next, the <code>ovn-controller-vtep</code> will keep reacting to the
+      configuration change in the <code>Port_Binding</code> in the
+      <code>OVN_Northbound</code> database, and updating the
+      <code>Ucast_Macs_Remote</code> table in the <code>VTEP</code> database.
+      This allows the VTEP gateway to understand where to forward the unicast
+      traffic coming from the extended external network.
+    </li>
+
+    <li>
+      Eventually, the VTEP gateway's life cycle ends when the administrator
+      unregisters the VTEP gateway from the <code>VTEP</code> database.
+      The <code>ovn-controller-vtep</code> will recognize the event and
+      remove all related configurations (<code>Chassis</code> table entry
+      and port bindings) in the <code>OVN_Southbound</code> database.
+    </li>
+
+    <li>
+      When the <code>ovn-controller-vtep</code> is terminated, all related
+      configurations in the <code>OVN_Southbound</code> database and
+      the <code>VTEP</code> database will be cleaned, including
+      <code>Chassis</code> table entries for all registered VTEP gateways
+      and their port bindings, and all <code>Ucast_Macs_Remote</code> table
+      entries and the <code>Logical_Switch</code> tunnel keys.
     </li>
   </ol>
 

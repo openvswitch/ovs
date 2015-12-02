@@ -8,9 +8,16 @@ man_MANS += \
 
 MAN_ROOTS += ovn/utilities/ovn-sbctl.8.in
 
+# Docker drivers
+bin_SCRIPTS += \
+    ovn/utilities/ovn-docker-overlay-driver \
+    ovn/utilities/ovn-docker-underlay-driver
+
 EXTRA_DIST += \
     ovn/utilities/ovn-ctl \
     ovn/utilities/ovn-ctl.8.xml \
+    ovn/utilities/ovn-docker-overlay-driver \
+    ovn/utilities/ovn-docker-underlay-driver \
     ovn/utilities/ovn-nbctl.8.xml
 
 DISTCLEANFILES += \

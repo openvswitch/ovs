@@ -299,11 +299,11 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie, uint64_t *header,
         }
         *header = ntohll(get_unaligned_be64(b->data));
     }
-    if (nxm_length(*header) <= nxm_experimenter_len(*header)) {
+    if (nxm_length(*header) < nxm_experimenter_len(*header)) {
         VLOG_WARN_RL(&rl, "OXM header "NXM_HEADER_FMT" has invalid length %d "
                      "(minimum is %d)",
                      NXM_HEADER_ARGS(*header), nxm_length(*header),
-                     nxm_header_len(*header) + 1);
+                     nxm_header_len(*header));
         goto error;
     }
     ofpbuf_pull(b, nxm_header_len(*header));
@@ -511,7 +511,15 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
         } else if (!mf_is_all_wild(field, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
         } else {
-            mf_set(field, &value, &mask, match);
+            char *err_str;
+
+            mf_set(field, &value, &mask, match, &err_str);
+            if (err_str) {
+                VLOG_DBG_RL(&rl, "error parsing OXM at offset %"PRIdPTR" "
+                           "within match (%s)", pos - p, err_str);
+                free(err_str);
+                return OFPERR_OFPBMC_BAD_VALUE;
+            }
         }
 
         if (error) {
@@ -674,26 +682,25 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
  * 'put' functions whose names end in 'm' add a field that might be wildcarded.
  * Other 'put' functions add exact-match fields.
  */
-
-static void
-nxm_put_unmasked(struct ofpbuf *b, enum mf_field_id field,
-                 enum ofp_version version, const void *value, size_t n_bytes)
+void
+nxm_put__(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
+          const void *value, const void *mask, size_t n_bytes)
 {
-    nx_put_header_len(b, field, version, false, n_bytes);
+    nx_put_header_len(b, field, version, !!mask, n_bytes);
     ofpbuf_put(b, value, n_bytes);
+    if (mask) {
+        ofpbuf_put(b, mask, n_bytes);
+    }
+
 }
 
-void
+static void
 nxm_put(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
         const void *value, const void *mask, size_t n_bytes)
 {
     if (!is_all_zeros(mask, n_bytes)) {
         bool masked = !is_all_ones(mask, n_bytes);
-        nx_put_header_len(b, field, version, masked, n_bytes);
-        ofpbuf_put(b, value, n_bytes);
-        if (masked) {
-            ofpbuf_put(b, mask, n_bytes);
-        }
+        nxm_put__(b, field, version, value, masked ? mask : NULL, n_bytes);
     }
 }
 
@@ -708,7 +715,7 @@ static void
 nxm_put_8(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
           uint8_t value)
 {
-    nxm_put_unmasked(b, field, version, &value, sizeof value);
+    nxm_put__(b, field, version, &value, NULL, sizeof value);
 }
 
 static void
@@ -722,7 +729,7 @@ static void
 nxm_put_16(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
            ovs_be16 value)
 {
-    nxm_put_unmasked(b, field, version, &value, sizeof value);
+    nxm_put__(b, field, version, &value, NULL, sizeof value);
 }
 
 static void
@@ -736,7 +743,7 @@ static void
 nxm_put_32(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
            ovs_be32 value)
 {
-    nxm_put_unmasked(b, field, version, &value, sizeof value);
+    nxm_put__(b, field, version, &value, NULL, sizeof value);
 }
 
 static void
@@ -747,12 +754,19 @@ nxm_put_64m(struct ofpbuf *b, enum mf_field_id field, enum ofp_version version,
 }
 
 static void
+nxm_put_128m(struct ofpbuf *b,
+             enum mf_field_id field, enum ofp_version version,
+             const ovs_be128 value, const ovs_be128 mask)
+{
+    nxm_put(b, field, version, &value, &mask, sizeof(value));
+}
+
+static void
 nxm_put_eth_masked(struct ofpbuf *b,
                    enum mf_field_id field, enum ofp_version version,
-                   const uint8_t value[ETH_ADDR_LEN],
-                   const uint8_t mask[ETH_ADDR_LEN])
+                   const struct eth_addr value, const struct eth_addr mask)
 {
-    nxm_put(b, field, version, value, mask, ETH_ADDR_LEN);
+    nxm_put(b, field, version, value.ea, mask.ea, ETH_ADDR_LEN);
 }
 
 static void
@@ -811,7 +825,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                   flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!oxm && match->wc.masks.nw_ttl) {
+    if (match->wc.masks.nw_ttl) {
         nxm_put_8(b, MFF_IP_TTL, oxm, flow->nw_ttl);
     }
 
@@ -895,7 +909,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 33);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -1026,9 +1040,19 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
         }
     }
 
-    /* Mark. */
+    /* Packet mark. */
     nxm_put_32m(b, MFF_PKT_MARK, oxm, htonl(flow->pkt_mark),
                 htonl(match->wc.masks.pkt_mark));
+
+    /* Connection tracking. */
+    nxm_put_32m(b, MFF_CT_STATE, oxm, htonl(flow->ct_state),
+                htonl(match->wc.masks.ct_state));
+    nxm_put_16m(b, MFF_CT_ZONE, oxm, htons(flow->ct_zone),
+                htons(match->wc.masks.ct_zone));
+    nxm_put_32m(b, MFF_CT_MARK, oxm, htonl(flow->ct_mark),
+                htonl(match->wc.masks.ct_mark));
+    nxm_put_128m(b, MFF_CT_LABEL, oxm, hton128(flow->ct_label),
+                 hton128(match->wc.masks.ct_label));
 
     /* OpenFlow 1.1+ Metadata. */
     nxm_put_64m(b, MFF_METADATA, oxm,
@@ -1172,10 +1196,10 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
 
     for (i = 0; i < MFF_N_IDS; i++) {
         if (bitmap_is_set(fa->used.bm, i)) {
-            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL);
-            nxm_put_unmasked(b, i, version,
-                             &fa->value[i].u8 + mf_from_id(i)->n_bytes - len,
-                             len);
+            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL, NULL);
+            nxm_put__(b, i, version,
+                      &fa->value[i].u8 + mf_from_id(i)->n_bytes - len, NULL,
+                      len);
         }
     }
 
@@ -1217,10 +1241,10 @@ nx_put_entry(struct ofpbuf *b,
              const union mf_value *value, const union mf_value *mask)
 {
     const struct mf_field *mf = mf_from_id(field);
-    bool masked = mask && !is_all_ones(mask, mf->n_bytes);
+    bool masked;
     int len, offset;
 
-    len = mf_field_len(mf, value, mask);
+    len = mf_field_len(mf, value, mask, &masked);
     offset = mf->n_bytes - len;
 
     nx_put_header_len(b, field, version, masked, len);
@@ -1577,8 +1601,8 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
     union mf_value src_value;
     union mf_value dst_value;
 
-    mf_mask_field_and_prereqs(move->dst.field, &wc->masks);
-    mf_mask_field_and_prereqs(move->src.field, &wc->masks);
+    mf_mask_field_and_prereqs(move->dst.field, wc);
+    mf_mask_field_and_prereqs(move->src.field, wc);
 
     /* A flow may wildcard nw_frag.  Do nothing if setting a transport
      * header field on a packet that does not have them. */

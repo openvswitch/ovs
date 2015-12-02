@@ -70,6 +70,22 @@ AC_DEFUN([OVS_CHECK_ESX],
       AC_DEFINE([ESX], [1], [Define to 1 if building on ESX.])
    fi])
 
+dnl Checks for MSVC x64 compiler.
+AC_DEFUN([OVS_CHECK_WIN64],
+  [AC_CACHE_CHECK(
+    [for MSVC x64 compiler],
+    [cl_cv_x64],
+    [dnl "cl" writes x64 output to stdin:
+     if (cl) 2>&1 | grep 'x64' >/dev/null 2>&1; then
+       cl_cv_x64=yes
+       MSVC64_LDFLAGS=" /MACHINE:X64 "
+     else
+       cl_cv_x64=no
+       MSVC64_LDFLAGS=""
+     fi])
+     AC_SUBST([MSVC64_LDFLAGS])
+])
+
 dnl Checks for WINDOWS.
 AC_DEFUN([OVS_CHECK_WIN32],
   [AC_CHECK_HEADER([windows.h],
@@ -86,11 +102,24 @@ AC_DEFUN([OVS_CHECK_WIN32],
             AC_MSG_ERROR([Invalid --with-pthread value])
               ;;
             *)
-            PTHREAD_WIN32_DIR=$withval/lib/x86
-            PTHREAD_WIN32_DIR_DLL=/${withval/:/}/dll/x86
+            if (cl) 2>&1 | grep 'x64' >/dev/null 2>&1; then
+              cl_cv_x64=yes
+            else
+              cl_cv_x64=no
+            fi
+            if test "$cl_cv_x64" = yes; then
+                PTHREAD_WIN32_DIR=$withval/lib/x64
+                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e '/://')/dll/x64
+                PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x64
+            else
+                PTHREAD_WIN32_DIR=$withval/lib/x86
+                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e '/://')/dll/x64
+                PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x86
+            fi
             PTHREAD_INCLUDES=-I$withval/include
             PTHREAD_LDFLAGS=-L$PTHREAD_WIN32_DIR
             PTHREAD_LIBS="-lpthreadVC2"
+            AC_SUBST([PTHREAD_WIN32_DIR_DLL_WIN_FORM])
             AC_SUBST([PTHREAD_WIN32_DIR_DLL])
             AC_SUBST([PTHREAD_INCLUDES])
             AC_SUBST([PTHREAD_LDFLAGS])
@@ -155,6 +184,42 @@ AC_DEFUN([OVS_CHECK_NETLINK],
    if test "$HAVE_NETLINK" = yes; then
       AC_DEFINE([HAVE_NETLINK], [1],
                 [Define to 1 if Netlink protocol is available.])
+   fi])
+
+dnl Checks for libcap-ng.
+AC_DEFUN([OVS_CHECK_LIBCAPNG],
+  [AC_ARG_ENABLE(
+     [libcapng],
+     [AC_HELP_STRING([--disable-libcapng], [Disable Linux capability support])],
+     [case "${enableval}" in
+        (yes) libcapng=true ;;
+        (no)  libcapng=false ;;
+        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-libcapng]) ;;
+      esac],
+     [libcapng=check])
+
+   if test "$libcapng" != false; then
+       AC_CHECK_LIB([cap-ng], [capng_clear], [HAVE_LIBCAPNG=yes])
+
+       if test "$HAVE_LIBCAPNG" != yes; then
+           if test "$libcapng" = true ; then
+                AC_MSG_ERROR([libcap-ng support requested, but not found])
+           fi
+           if test "$libcapng" = check ; then
+                 AC_MSG_WARN([cannot find libcap-ng.
+--user option will not be supported on Linux.
+(you may use --disable-libcapng to suppress this warning). ])
+           fi
+       fi
+   fi
+
+   AC_SUBST([HAVE_LIBCAPNG])
+   AM_CONDITIONAL([HAVE_LIBCAPNG], [test "$HAVE_LIBCAPNG" = yes])
+   if test "$HAVE_LIBCAPNG" = yes; then
+      AC_DEFINE([HAVE_LIBCAPNG], [1],
+                [Define to 1 if libcap-ng is available.])
+      CAPNG_LDADD="-lcap-ng"
+      AC_SUBST([CAPNG_LDADD])
    fi])
 
 dnl Checks for OpenSSL.

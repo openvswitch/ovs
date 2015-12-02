@@ -280,9 +280,14 @@ tun_metadata_write(struct flow_tnl *tnl,
 
 static const struct tun_metadata_loc *
 metadata_loc_from_match(struct tun_table *map, struct match *match,
-                        unsigned int idx, unsigned int field_len)
+                        const char *name, unsigned int idx,
+                        unsigned int field_len, bool masked, char **err_str)
 {
     ovs_assert(idx < TUN_METADATA_NUM_OPTS);
+
+    if (err_str) {
+        *err_str = NULL;
+    }
 
     if (map) {
         if (map->entries[idx].valid) {
@@ -292,19 +297,34 @@ metadata_loc_from_match(struct tun_table *map, struct match *match,
         }
     }
 
-    if (match->tun_md.alloc_offset + field_len >= TUN_METADATA_TOT_OPT_SIZE ||
-        match->tun_md.loc[idx].len) {
+    if (match->tun_md.alloc_offset + field_len > TUN_METADATA_TOT_OPT_SIZE) {
+        if (err_str) {
+            *err_str = xasprintf("field %s exceeds maximum size for tunnel "
+                                 "metadata (used %d, max %d)", name,
+                                 match->tun_md.alloc_offset + field_len,
+                                 TUN_METADATA_TOT_OPT_SIZE);
+        }
+
         return NULL;
     }
 
-    match->tun_md.loc[idx].len = field_len;
-    match->tun_md.loc[idx].c.offset = match->tun_md.alloc_offset;
-    match->tun_md.loc[idx].c.len = field_len;
-    match->tun_md.loc[idx].c.next = NULL;
+    if (ULLONG_GET(match->wc.masks.tunnel.metadata.present.map, idx)) {
+        if (err_str) {
+            *err_str = xasprintf("field %s set multiple times", name);
+        }
+
+        return NULL;
+    }
+
+    match->tun_md.entry[idx].loc.len = field_len;
+    match->tun_md.entry[idx].loc.c.offset = match->tun_md.alloc_offset;
+    match->tun_md.entry[idx].loc.c.len = field_len;
+    match->tun_md.entry[idx].loc.c.next = NULL;
+    match->tun_md.entry[idx].masked = masked;
     match->tun_md.alloc_offset += field_len;
     match->tun_md.valid = true;
 
-    return &match->tun_md.loc[idx];
+    return &match->tun_md.entry[idx].loc;
 }
 
 /* Makes 'match' match 'value'/'mask' on field 'mf'.
@@ -321,22 +341,29 @@ metadata_loc_from_match(struct tun_table *map, struct match *match,
  * value.
  *
  * 'mask' may be NULL; if so, then 'mf' is made exact-match.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string.
  */
 void
 tun_metadata_set_match(const struct mf_field *mf, const union mf_value *value,
-                       const union mf_value *mask, struct match *match)
+                       const union mf_value *mask, struct match *match,
+                       char **err_str)
 {
     struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
     const struct tun_metadata_loc *loc;
     unsigned int idx = mf->id - MFF_TUN_METADATA0;
     unsigned int field_len;
+    bool is_masked;
     unsigned int data_offset;
     union mf_value data;
 
     ovs_assert(!(match->flow.tunnel.flags & FLOW_TNL_F_UDPIF));
 
-    field_len = mf_field_len(mf, value, mask);
-    loc = metadata_loc_from_match(map, match, idx, field_len);
+    field_len = mf_field_len(mf, value, mask, &is_masked);
+    loc = metadata_loc_from_match(map, match, mf->name, idx, field_len,
+                                  is_masked, err_str);
     if (!loc) {
         return;
     }
@@ -422,7 +449,8 @@ tun_metadata_get_fmd(const struct flow_tnl *tnl, struct match *flow_metadata)
         const struct tun_metadata_loc *old_loc = &flow.metadata.tab->entries[i].loc;
         const struct tun_metadata_loc *new_loc;
 
-        new_loc = metadata_loc_from_match(NULL, flow_metadata, i, old_loc->len);
+        new_loc = metadata_loc_from_match(NULL, flow_metadata, NULL, i,
+                                          old_loc->len, false, NULL);
 
         memcpy_from_metadata(opts.tun_metadata, &flow.metadata, old_loc);
         memcpy_to_metadata(&flow_metadata->flow.tunnel.metadata,
@@ -950,12 +978,22 @@ tun_metadata_to_geneve_udpif_mask(const struct flow_tnl *flow_src,
 
 static const struct tun_metadata_loc *
 metadata_loc_from_match_read(struct tun_table *map, const struct match *match,
-                             unsigned int idx)
+                             unsigned int idx, struct flow_tnl *mask,
+                             bool *is_masked)
 {
+    union mf_value mask_opts;
+
     if (match->tun_md.valid) {
-        return &match->tun_md.loc[idx];
+        *is_masked = match->tun_md.entry[idx].masked;
+        return &match->tun_md.entry[idx].loc;
     }
 
+    memcpy_from_metadata(mask_opts.tun_metadata, &mask->metadata,
+                         &map->entries[idx].loc);
+
+    *is_masked = map->entries[idx].loc.len == 0 ||
+                 !is_all_ones(mask_opts.tun_metadata,
+                              map->entries[idx].loc.len);
     return &map->entries[idx].loc;
 }
 
@@ -973,14 +1011,16 @@ tun_metadata_to_nx_match(struct ofpbuf *b, enum ofp_version oxm,
 
     ULLONG_FOR_EACH_1 (i, mask.metadata.present.map) {
         const struct tun_metadata_loc *loc;
+        bool is_masked;
         union mf_value opts;
         union mf_value mask_opts;
 
-        loc = metadata_loc_from_match_read(flow.metadata.tab, match, i);
+        loc = metadata_loc_from_match_read(flow.metadata.tab, match, i,
+                                           &mask, &is_masked);
         memcpy_from_metadata(opts.tun_metadata, &flow.metadata, loc);
         memcpy_from_metadata(mask_opts.tun_metadata, &mask.metadata, loc);
-        nxm_put(b, MFF_TUN_METADATA0 + i, oxm, opts.tun_metadata,
-                mask_opts.tun_metadata, loc->len);
+        nxm_put__(b, MFF_TUN_METADATA0 + i, oxm, opts.tun_metadata,
+                  is_masked ? mask_opts.tun_metadata : NULL, loc->len);
     }
 }
 
@@ -997,18 +1037,29 @@ tun_metadata_match_format(struct ds *s, const struct match *match)
 
     ULLONG_FOR_EACH_1 (i, mask.metadata.present.map) {
         const struct tun_metadata_loc *loc;
-        union mf_value opts;
+        bool is_masked;
+        union mf_value opts, mask_opts;
 
-        loc = metadata_loc_from_match_read(flow.metadata.tab, match, i);
+        loc = metadata_loc_from_match_read(flow.metadata.tab, match, i,
+                                           &mask, &is_masked);
 
-        ds_put_format(s, "tun_metadata%u=", i);
-        memcpy_from_metadata(opts.tun_metadata, &flow.metadata, loc);
-        ds_put_hex(s, opts.tun_metadata, loc->len);
+        ds_put_format(s, "tun_metadata%u", i);
+        memcpy_from_metadata(mask_opts.tun_metadata, &mask.metadata, loc);
 
-        memcpy_from_metadata(opts.tun_metadata, &mask.metadata, loc);
-        if (!is_all_ones(opts.tun_metadata, loc->len)) {
-            ds_put_char(s, '/');
+        if (!ULLONG_GET(flow.metadata.present.map, i)) {
+            /* Indicate that we are matching on the field being not present. */
+            ds_put_cstr(s, "=NP");
+        } else if (!(is_masked &&
+                     is_all_zeros(mask_opts.tun_metadata, loc->len))) {
+            ds_put_char(s, '=');
+
+            memcpy_from_metadata(opts.tun_metadata, &flow.metadata, loc);
             ds_put_hex(s, opts.tun_metadata, loc->len);
+
+            if (!is_all_ones(mask_opts.tun_metadata, loc->len)) {
+                ds_put_char(s, '/');
+                ds_put_hex(s, mask_opts.tun_metadata, loc->len);
+            }
         }
         ds_put_char(s, ',');
     }

@@ -697,6 +697,8 @@ struct dpif_execute {
     size_t actions_len;             /* Length of 'actions' in bytes. */
     bool needs_help;
     bool probe;                     /* Suppress error messages. */
+    unsigned int mtu;               /* Maximum transmission unit to fragment.
+                                       0 if not a fragmented packet */
 
     /* Input, but possibly modified as a side effect of execution. */
     struct dp_packet *packet;          /* Packet to execute. */
@@ -780,12 +782,26 @@ struct dpif_upcall {
     struct nlattr *key;         /* Flow key. */
     size_t key_len;             /* Length of 'key' in bytes. */
     ovs_u128 ufid;              /* Unique flow identifier for 'key'. */
+    struct nlattr *mru;         /* Maximum receive unit. */
 
     /* DPIF_UC_ACTION only. */
     struct nlattr *userdata;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
     struct nlattr *out_tun_key;    /* Output tunnel key. */
     struct nlattr *actions;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
+
+/* A callback to notify higher layer of dpif about to be purged, so that
+ * higher layer could try reacting to this (e.g. grabbing all flow stats
+ * before they are gone).  This function is currently implemented only by
+ * dpif-netdev.
+ *
+ * The caller needs to provide the 'aux' pointer passed down by higher
+ * layer from the dpif_register_notify_cb() function and the 'pmd_id' of
+ * the polling thread.
+ */
+    typedef void dp_purge_callback(void *aux, unsigned pmd_id);
+
+void dpif_register_dp_purge_cb(struct dpif *, dp_purge_callback *, void *aux);
 
 /* A callback to process an upcall, currently implemented only by dpif-netdev.
  *

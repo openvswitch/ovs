@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,6 +130,7 @@ ovs_pcap_write_header(FILE *file)
     ph.snaplen = 1518;
     ph.network = 1;             /* Ethernet */
     ignore(fwrite(&ph, sizeof ph, 1, file));
+    fflush(file);
 }
 
 int
@@ -202,6 +203,7 @@ ovs_pcap_write(FILE *file, struct dp_packet *buf)
     prh.orig_len = dp_packet_size(buf);
     ignore(fwrite(&prh, sizeof prh, 1, file));
     ignore(fwrite(dp_packet_data(buf), dp_packet_size(buf), 1, file));
+    fflush(file);
 }
 
 struct tcp_key {

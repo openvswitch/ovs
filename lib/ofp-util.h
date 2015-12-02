@@ -140,6 +140,22 @@ enum ofputil_protocol {
                        OFPUTIL_P_ANY_OXM)
 };
 
+    /* Valid value of mask for asynchronous messages. */
+#define MAXIMUM_MASK_PACKET_IN ((1 << OFPR_N_REASONS) - 1)
+
+#define MAXIMUM_MASK_FLOW_REMOVED ((1 << OVS_OFPRR_NONE) - 1)
+
+#define MAXIMUM_MASK_PORT_STATUS ((1 << OFPPR_N_REASONS) - 1)
+
+#define MAXIMUM_MASK_ROLE_STATUS ((1 << OFPCRR_N_REASONS) - 1)
+
+#define MINIMUM_MASK_TABLE_STATUS (1 << OFPTR_VACANCY_DOWN)
+
+#define MAXIMUM_MASK_TABLE_STATUS ((1 << OFPTR_N_REASONS) - \
+                                   MINIMUM_MASK_TABLE_STATUS)
+
+#define MAXIMUM_MASK_REQUESTFORWARD ((1 << OFPRFR_N_REASONS) - 1)
+
 /* Protocols to use for flow dumps, from most to least preferred. */
 extern enum ofputil_protocol ofputil_flow_dump_protocols[];
 extern size_t ofputil_n_flow_dump_protocols;
@@ -249,14 +265,22 @@ enum ofputil_flow_mod_flags {
     OFPUTIL_FF_SEND_FLOW_REM = 1 << 0, /* All versions. */
     OFPUTIL_FF_NO_PKT_COUNTS = 1 << 1, /* OpenFlow 1.3+. */
     OFPUTIL_FF_NO_BYT_COUNTS = 1 << 2, /* OpenFlow 1.3+. */
+
+    /* These flags primarily affects flow_mod behavior.  They are not
+     * particularly useful as part of flow state.  We include them in flow
+     * state only because OpenFlow implies that they should be. */
+    OFPUTIL_FF_CHECK_OVERLAP = 1 << 3, /* All versions. */
+    OFPUTIL_FF_RESET_COUNTS  = 1 << 4, /* OpenFlow 1.2+. */
+
+    /* Not supported by OVS. */
+    OFPUTIL_FF_EMERG         = 1 << 5, /* OpenFlow 1.0 only. */
+
+    /* The set of flags maintained as part of a flow table entry. */
 #define OFPUTIL_FF_STATE (OFPUTIL_FF_SEND_FLOW_REM      \
                           | OFPUTIL_FF_NO_PKT_COUNTS    \
-                          | OFPUTIL_FF_NO_BYT_COUNTS)
-
-    /* Flags that affect flow_mod behavior but are not part of flow state. */
-    OFPUTIL_FF_CHECK_OVERLAP = 1 << 3, /* All versions. */
-    OFPUTIL_FF_EMERG         = 1 << 4, /* OpenFlow 1.0 only. */
-    OFPUTIL_FF_RESET_COUNTS  = 1 << 5, /* OpenFlow 1.2+. */
+                          | OFPUTIL_FF_NO_BYT_COUNTS    \
+                          | OFPUTIL_FF_CHECK_OVERLAP    \
+                          | OFPUTIL_FF_RESET_COUNTS)
 
     /* Flags that are only set by OVS for its internal use.  Cannot be set via
      * OpenFlow. */
@@ -496,7 +520,7 @@ enum ofputil_port_state {
 /* Abstract ofp10_phy_port or ofp11_port. */
 struct ofputil_phy_port {
     ofp_port_t port_no;
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     char name[OFP_MAX_PORT_NAME_LEN];
     enum ofputil_port_config config;
     enum ofputil_port_state state;
@@ -572,7 +596,7 @@ struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
 /* Abstract ofp_port_mod. */
 struct ofputil_port_mod {
     ofp_port_t port_no;
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     enum ofputil_port_config config;
     enum ofputil_port_config mask;
     enum netdev_features advertise;
@@ -620,6 +644,33 @@ enum ofputil_table_eviction {
     OFPUTIL_TABLE_EVICTION_OFF      /* Disable eviction. */
 };
 
+/* Abstract version of OFPTC14_VACANCY_EVENTS.
+ *
+ * OpenFlow 1.0 through 1.3 don't know anything about vacancy events, so
+ * decoding a message for one of these protocols always yields
+ * OFPUTIL_TABLE_VACANCY_DEFAULT. */
+enum ofputil_table_vacancy {
+    OFPUTIL_TABLE_VACANCY_DEFAULT, /* No value. */
+    OFPUTIL_TABLE_VACANCY_ON,      /* Enable vacancy events. */
+    OFPUTIL_TABLE_VACANCY_OFF      /* Disable vacancy events. */
+};
+
+/* Abstract version of OFPTMPT_VACANCY.
+ *
+ * Openflow 1.4+ defines vacancy events.
+ * The fields vacancy_down and vacancy_up are the threshold for generating
+ * vacancy events that should be configured on the flow table, expressed as
+ * a percent.
+ * The vacancy field is only used when this property in included in a
+ * OFPMP_TABLE_DESC multipart reply or a OFPT_TABLE_STATUS message and
+ * represent the current vacancy of the table, expressed as a percent. In
+ * OFP_TABLE_MOD requests, this field must be set to 0 */
+struct ofputil_table_mod_prop_vacancy {
+    uint8_t vacancy_down;    /* Vacancy threshold when space decreases (%). */
+    uint8_t vacancy_up;      /* Vacancy threshold when space increases (%). */
+    uint8_t vacancy;         /* Current vacancy (%). */
+};
+
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
     uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */
@@ -636,6 +687,16 @@ struct ofputil_table_mod {
      * absence.  For other versions, ignored on encoding, decoded to
      * UINT32_MAX.*/
     uint32_t eviction_flags;    /* OFPTMPEF14_*. */
+
+    /* OpenFlow 1.4+ only. For other versions, ignored on encoding, decoded to
+     * OFPUTIL_TABLE_VACANCY_DEFAULT. */
+    enum ofputil_table_vacancy vacancy;
+
+    /* Openflow 1.4+ only. Defines threshold values of vacancy expressed as
+     * percent, value of current vacancy is set to zero for table-mod.
+     * For other versions, ignored on encoding, all values decoded to
+     * zero. */
+    struct ofputil_table_mod_prop_vacancy table_vacancy;
 };
 
 /* Abstract ofp14_table_desc. */
@@ -643,6 +704,8 @@ struct ofputil_table_desc {
     uint8_t table_id;         /* ID of the table. */
     enum ofputil_table_eviction eviction;
     uint32_t eviction_flags;    /* UINT32_MAX if not present. */
+    enum ofputil_table_vacancy vacancy;
+    struct ofputil_table_mod_prop_vacancy table_vacancy;
 };
 
 enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
@@ -1238,5 +1301,26 @@ enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_get_async_config(const struct ofp_header *,
                                                uint32_t master[OAM_N_TYPES],
                                                uint32_t slave[OAM_N_TYPES]);
+
+struct ofputil_requestforward {
+    ovs_be32 xid;
+    enum ofp14_requestforward_reason reason;
+    union {
+        /* reason == OFPRFR_METER_MOD. */
+        struct {
+            struct ofputil_meter_mod *meter_mod;
+            struct ofpbuf bands;
+        };
+
+        /* reason == OFPRFR_GROUP_MOD. */
+        struct ofputil_group_mod *group_mod;
+    };
+};
+
+struct ofpbuf *ofputil_encode_requestforward(
+    const struct ofputil_requestforward *, enum ofputil_protocol);
+enum ofperr ofputil_decode_requestforward(const struct ofp_header *,
+                                          struct ofputil_requestforward *);
+void ofputil_destroy_requestforward(struct ofputil_requestforward *);
 
 #endif /* ofp-util.h */

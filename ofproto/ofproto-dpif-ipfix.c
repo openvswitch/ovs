@@ -230,8 +230,8 @@ OVS_PACKED(
 struct ipfix_data_record_flow_key_common {
     ovs_be32 observation_point_id;  /* OBSERVATION_POINT_ID */
     uint8_t flow_direction;  /* FLOW_DIRECTION */
-    uint8_t source_mac_address[ETH_ADDR_LEN]; /* SOURCE_MAC_ADDRESS */
-    uint8_t destination_mac_address[ETH_ADDR_LEN]; /* DESTINATION_MAC_ADDRESS */
+    struct eth_addr source_mac_address; /* SOURCE_MAC_ADDRESS */
+    struct eth_addr destination_mac_address; /* DESTINATION_MAC_ADDRESS */
     ovs_be16 ethernet_type;  /* ETHERNET_TYPE */
     uint8_t ethernet_header_length;  /* ETHERNET_HEADER_LENGTH */
 });
@@ -1438,10 +1438,8 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         data_common->observation_point_id = htonl(obs_point_id);
         data_common->flow_direction =
             (output_odp_port == ODPP_NONE) ? INGRESS_FLOW : EGRESS_FLOW;
-        memcpy(data_common->source_mac_address, flow->dl_src,
-               sizeof flow->dl_src);
-        memcpy(data_common->destination_mac_address, flow->dl_dst,
-               sizeof flow->dl_dst);
+        data_common->source_mac_address = flow->dl_src;
+        data_common->destination_mac_address = flow->dl_dst;
         data_common->ethernet_type = flow->dl_type;
         data_common->ethernet_header_length = ethernet_header_length;
     }
@@ -1676,6 +1674,12 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
     ipfix_cache_update(exporter, entry);
 }
 
+static bool
+bridge_exporter_enabled(struct dpif_ipfix *di)
+{
+    return di->bridge_exporter.probability > 0;
+}
+
 void
 dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                          const struct flow *flow,
@@ -1688,6 +1692,10 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
     struct dpif_ipfix_port * tunnel_port = NULL;
 
     ovs_mutex_lock(&mutex);
+    if (!bridge_exporter_enabled(di)) {
+        ovs_mutex_unlock(&mutex);
+        return;
+    }
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
     packet_delta_count = UINT32_MAX / di->bridge_exporter.probability;
@@ -1824,7 +1832,7 @@ dpif_ipfix_run(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
 
     ovs_mutex_lock(&mutex);
     get_export_time_now(&export_time_usec, &export_time_sec);
-    if (di->bridge_exporter.probability > 0) {  /* Bridge exporter enabled. */
+    if (bridge_exporter_enabled(di)) {
       dpif_ipfix_cache_expire(
           &di->bridge_exporter.exporter, false, export_time_usec,
           export_time_sec);
@@ -1844,7 +1852,7 @@ dpif_ipfix_wait(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
     struct dpif_ipfix_flow_exporter_map_node *flow_exporter_node;
 
     ovs_mutex_lock(&mutex);
-    if (di->bridge_exporter.probability > 0) {  /* Bridge exporter enabled. */
+    if (bridge_exporter_enabled(di)) {
         if (ipfix_cache_next_timeout_msec(
                 &di->bridge_exporter.exporter, &next_timeout_msec)) {
             poll_timer_wait_until(next_timeout_msec);

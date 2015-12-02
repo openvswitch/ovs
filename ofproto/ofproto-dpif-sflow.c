@@ -136,7 +136,7 @@ static void *
 sflow_agent_alloc_cb(void *magic OVS_UNUSED, SFLAgent *agent OVS_UNUSED,
                      size_t bytes)
 {
-    return calloc(1, bytes);
+    return xzalloc(bytes);
 }
 
 /* sFlow library callback to free memory. */
@@ -368,12 +368,10 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     if (ofproto_port_get_lacp_stats(dsp->ofport, &lacp_stats) == 0) {
 	memset(&lacp_elem, 0, sizeof lacp_elem);
 	lacp_elem.tag = SFLCOUNTERS_LACP;
-	memcpy(&lacp_elem.counterBlock.lacp.actorSystemID,
-	       lacp_stats.dot3adAggPortActorSystemID,
-	       ETH_ADDR_LEN);
-	memcpy(&lacp_elem.counterBlock.lacp.partnerSystemID,
-	       lacp_stats.dot3adAggPortPartnerOperSystemID,
-	       ETH_ADDR_LEN);
+	lacp_elem.counterBlock.lacp.actorSystemID =
+        lacp_stats.dot3adAggPortActorSystemID;
+	lacp_elem.counterBlock.lacp.partnerSystemID =
+        lacp_stats.dot3adAggPortPartnerOperSystemID;
 	lacp_elem.counterBlock.lacp.attachedAggID =
 	    lacp_stats.dot3adAggPortAttachedAggID;
 	lacp_elem.counterBlock.lacp.portState.v.actorAdmin =
@@ -457,7 +455,7 @@ sflow_choose_agent_address(const char *agent_device,
             && sa.ss.ss_family == AF_INET) {
             ovs_be32 gw;
 
-            if (ovs_router_lookup(sa.sin.sin_addr.s_addr, name, &gw)
+            if (ovs_router_lookup4(sa.sin.sin_addr.s_addr, name, &gw)
                 && !netdev_get_in4_by_name(name, &in4)) {
                 goto success;
             }
@@ -1031,6 +1029,10 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_ICMPV6:
     case OVS_KEY_ATTR_ARP:
     case OVS_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_CT_STATE:
+    case OVS_KEY_ATTR_CT_ZONE:
+    case OVS_KEY_ATTR_CT_MARK:
+    case OVS_KEY_ATTR_CT_LABELS:
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -1139,6 +1141,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	case OVS_ACTION_ATTR_USERSPACE:
 	case OVS_ACTION_ATTR_RECIRC:
 	case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_CT:
 	    break;
 
 	case OVS_ACTION_ATTR_SET_MASKED:

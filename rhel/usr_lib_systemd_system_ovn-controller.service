@@ -1,3 +1,12 @@
+#
+# You may override the following variables to customize ovn-controller behavior:
+#
+#   OVS_DB - Set this variable to the location of the ovsdb server that is
+#            serving the Open_vSwitch database for the local ovs-vswitchd.
+#            See the manpage for ovn-controller for more details on the
+#            format for the db location.
+#
+
 [Unit]
 Description=OVN controller daemon
 After=syslog.target
@@ -6,11 +15,8 @@ After=openvswitch.service
 
 [Service]
 Type=simple
-RuntimeDirectory=ovn-controller
-RuntimeDirectoryMode=0755
-PIDFile=%t/ovn-controller/ovn-controller.pid
-Environment=OVS_RUNDIR=%t/ovn-controller
+Environment=OVS_RUNDIR=%t/openvswitch
+Environment=OVS_DB=unix:%t/openvswitch/db.sock
 ExecStart=/usr/bin/ovn-controller -vconsole:emer -vsyslog:err -vfile:info \
           --log-file=/var/log/openvswitch/ovn-controller.log \
-          --no-chdir --pidfile=%t/ovn-controller/ovn-controller.pid \
-          unix:/var/run/openvswitch/db.sock
+          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller.pid ${OVS_DB}

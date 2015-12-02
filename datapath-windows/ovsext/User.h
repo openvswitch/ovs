@@ -72,7 +72,8 @@ VOID OvsCleanupPacketQueue(struct _OVS_OPEN_INSTANCE *instance);
 
 POVS_PACKET_QUEUE_ELEM OvsCreateQueueNlPacket(PVOID userData,
                                               UINT32 userDataLen,
-                                              UINT32 cmd, UINT32 inPort,
+                                              UINT32 cmd, 
+                                              POVS_VPORT_ENTRY vport,
                                               OvsFlowKey *key,
                                               PNET_BUFFER_LIST nbl,
                                               PNET_BUFFER nb,
@@ -83,7 +84,7 @@ VOID OvsQueuePackets(PLIST_ENTRY packetList, UINT32 numElems);
 NTSTATUS OvsCreateAndAddPackets(PVOID userData,
                                 UINT32 userDataLen,
                                 UINT32 cmd,
-                                UINT32 inPort,
+                                POVS_VPORT_ENTRY vport,
                                 OvsFlowKey *key,
                                 PNET_BUFFER_LIST nbl,
                                 BOOLEAN isRecv,
@@ -117,5 +118,12 @@ OvsAddPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid,
 
 VOID
 OvsDelPidInstance(POVS_SWITCH_CONTEXT switchContext, UINT32 pid);
+
+NTSTATUS OvsReadPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                 UINT32 *replyLen);
+NTSTATUS OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                      UINT32 *replyLen);
+NTSTATUS OvsPendPacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                                 UINT32 *replyLen);
 
 #endif /* __USER_H_ */

@@ -21,6 +21,7 @@
 #include <linux/list.h>
 #include <linux/log2.h>
 #include <linux/module.h>
+#include <linux/net.h>
 #include <linux/netfilter.h>
 #include <linux/percpu.h>
 #include <linux/skbuff.h>
@@ -30,6 +31,7 @@
 #include <net/icmp.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
+#include <net/ip6_checksum.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
 #include <net/sock.h>
@@ -1250,7 +1252,7 @@ drop:
 static void tcp_sock_release(struct socket *sock)
 {
 	kernel_sock_shutdown(sock, SHUT_RDWR);
-	sk_release_kernel(sock->sk);
+	sock_release(sock);
 }
 
 static int tcp_sock_create4(struct net *net, __be16 port,
@@ -1260,11 +1262,9 @@ static int tcp_sock_create4(struct net *net, __be16 port,
 	struct socket *sock = NULL;
 	int err;
 
-	err = sock_create_kern(AF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
+	err = sock_create_kern(net, AF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
 	if (err < 0)
 		goto error;
-
-	sk_change_net(sock->sk, net);
 
 	memset(&tcp_addr, 0, sizeof(tcp_addr));
 	tcp_addr.sin_family = AF_INET;
@@ -1319,16 +1319,18 @@ static void clean_percpu(struct work_struct *work)
 }
 
 #ifdef HAVE_NF_HOOKFN_ARG_OPS
-#define FIRST_PARAM const struct nf_hook_ops *ops,
+#define FIRST_PARAM const struct nf_hook_ops *ops
 #else
-#define FIRST_PARAM unsigned int hooknum,
+#define FIRST_PARAM unsigned int hooknum
 #endif
 
-static unsigned int nf_ip_hook(FIRST_PARAM
-			       struct sk_buff *skb,
-			       const struct net_device *in,
-			       const struct net_device *out,
-			       int (*okfn)(struct sk_buff *))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+#define LAST_PARAM const struct nf_hook_state *state
+#else
+#define LAST_PARAM const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *)
+#endif
+
+static unsigned int nf_ip_hook(FIRST_PARAM, struct sk_buff *skb, LAST_PARAM)
 {
 	struct stt_sock *stt_sock;
 	int ip_hdr_len;

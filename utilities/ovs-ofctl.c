@@ -130,6 +130,8 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     ctx.argc = argc - optind;
     ctx.argv = argv + optind;
+
+    daemon_become_new_user(false);
     ovs_cmdl_run_command(&ctx, get_all_commands());
     return 0;
 }
@@ -310,6 +312,9 @@ parse_options(int argc, char *argv[])
         /* Add implicit allowance for OpenFlow 1.4. */
         add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                      OFPUTIL_P_OF14_OXM));
+        /* Remove all prior versions. */
+        mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF14_UP));
     }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
@@ -342,7 +347,7 @@ usage(void)
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  mod-table SWITCH MOD        modify flow table behavior\n"
            "      OF1.1/1.2 MOD: controller, continue, drop\n"
-           "      OF1.4+ MOD: evict, noevict\n"
+           "      OF1.4+ MOD: evict, noevict, vacancy:low,high, novacancy\n"
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
            "      FRAG_MODE: normal, drop, reassemble, nx-match\n"
@@ -1611,7 +1616,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
     int error;
 
     daemon_save_fd(STDERR_FILENO);
-    daemonize_start();
+    daemonize_start(false);
     error = unixctl_server_create(unixctl_path, &server);
     if (error) {
         ovs_fatal(error, "failed to create unixctl server");
@@ -1899,7 +1904,7 @@ ofctl_mod_port(struct ovs_cmdl_context *ctx)
     fetch_ofputil_phy_port(ctx->argv[1], ctx->argv[2], &pp);
 
     pm.port_no = pp.port_no;
-    memcpy(pm.hw_addr, pp.hw_addr, ETH_ADDR_LEN);
+    pm.hw_addr = pp.hw_addr;
     pm.config = 0;
     pm.mask = 0;
     pm.advertise = 0;
@@ -1929,6 +1934,70 @@ found:
     vconn_close(vconn);
 }
 
+/* This function uses OFPMP14_TABLE_DESC request to get the current
+ * table configuration from switch. The function then modifies
+ * only that table-config property, which has been requested. */
+static void
+fetch_table_desc(struct vconn *vconn, struct ofputil_table_mod *tm,
+                 struct ofputil_table_desc *td)
+{
+    struct ofpbuf *request;
+    ovs_be32 send_xid;
+    bool done = false;
+    bool found = false;
+
+    request = ofputil_encode_table_desc_request(vconn_get_version(vconn));
+    send_xid = ((struct ofp_header *) request->data)->xid;
+    send_openflow_buffer(vconn, request);
+    while (!done) {
+        ovs_be32 recv_xid;
+        struct ofpbuf *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            struct ofp_header *oh = reply->data;
+            enum ofptype type;
+            struct ofpbuf b;
+            uint16_t flags;
+
+            ofpbuf_use_const(&b, oh, ntohs(oh->length));
+            if (ofptype_pull(&type, &b)
+                || type != OFPTYPE_TABLE_DESC_REPLY) {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(reply->data, reply->size,
+                                        verbosity + 1));
+            }
+            flags = ofpmp_flags(oh);
+            done = !(flags & OFPSF_REPLY_MORE);
+            if (found) {
+                /* We've already found the table desc consisting of current
+                 * table configuration, but we need to drain the queue of
+                 * any other replies for this request. */
+                continue;
+            }
+            while (!ofputil_decode_table_desc(&b, td, oh->version)) {
+                if (td->table_id == tm->table_id) {
+                    found = true;
+                    break;
+                }
+            }
+        } else {
+            VLOG_DBG("received reply with xid %08"PRIx32" "
+                     "!= expected %08"PRIx32, recv_xid, send_xid);
+        }
+        ofpbuf_delete(reply);
+    }
+    if (tm->eviction != OFPUTIL_TABLE_EVICTION_DEFAULT) {
+        tm->vacancy = td->vacancy;
+        tm->table_vacancy.vacancy_down = td->table_vacancy.vacancy_down;
+        tm->table_vacancy.vacancy_up = td->table_vacancy.vacancy_up;
+    } else if (tm->vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
+        tm->eviction = td->eviction;
+        tm->eviction_flags = td->eviction_flags;
+    }
+}
+
 static void
 ofctl_mod_table(struct ovs_cmdl_context *ctx)
 {
@@ -1936,6 +2005,7 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
     struct ofputil_table_mod tm;
     struct vconn *vconn;
     char *error;
+    int i;
 
     error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3],
                                 &usable_versions);
@@ -1946,15 +2016,36 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
     uint32_t allowed_versions = get_allowed_ofp_versions();
     if (!(allowed_versions & usable_versions)) {
         struct ds versions = DS_EMPTY_INITIALIZER;
-        ofputil_format_version_bitmap_names(&versions, allowed_versions);
+        ofputil_format_version_bitmap_names(&versions, usable_versions);
         ovs_fatal(0, "table_mod '%s' requires one of the OpenFlow "
-                  "versions %s but none is enabled (use -O)",
+                  "versions %s",
                   ctx->argv[3], ds_cstr(&versions));
     }
     mask_allowed_ofp_versions(usable_versions);
-
     enum ofputil_protocol protocol = open_vconn(ctx->argv[1], &vconn);
-    transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
+
+    /* For OpenFlow 1.4+, ovs-ofctl mod-table should not affect table-config
+     * properties that the user didn't ask to change, so it is necessary to
+     * restore the current configuration of table-config parameters using
+     * OFPMP14_TABLE_DESC request. */
+    if ((allowed_versions & (1u << OFP14_VERSION)) ||
+        (allowed_versions & (1u << OFP15_VERSION))) {
+        struct ofputil_table_desc td;
+
+        if (tm.table_id == OFPTT_ALL) {
+            for (i = 0; i < OFPTT_MAX; i++) {
+                tm.table_id = i;
+                fetch_table_desc(vconn, &tm, &td);
+                transact_noreply(vconn,
+                                 ofputil_encode_table_mod(&tm, protocol));
+            }
+        } else {
+            fetch_table_desc(vconn, &tm, &td);
+            transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
+        }
+    } else {
+        transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
+    }
     vconn_close(vconn);
 }
 
@@ -2378,7 +2469,7 @@ ofctl_dump_group_desc(struct ovs_cmdl_context *ctx)
     open_vconn(ctx->argv[1], &vconn);
 
     if (ctx->argc < 3 || !ofputil_group_from_string(ctx->argv[2], &group_id)) {
-        group_id = OFPG11_ALL;
+        group_id = OFPG_ALL;
     }
 
     request = ofputil_encode_group_desc_request(vconn_get_version(vconn),
@@ -2467,6 +2558,45 @@ ofctl_list_commands(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
 /* replace-flows and diff-flows commands. */
 
+struct flow_tables {
+    struct classifier tables[OFPTT_MAX + 1];
+};
+
+#define FOR_EACH_TABLE(CLS, TABLES)                               \
+    for ((CLS) = (TABLES)->tables;                                \
+         (CLS) < &(TABLES)->tables[ARRAY_SIZE((TABLES)->tables)]; \
+         (CLS)++)
+
+static void
+flow_tables_init(struct flow_tables *tables)
+{
+    struct classifier *cls;
+
+    FOR_EACH_TABLE (cls, tables) {
+        classifier_init(cls, NULL);
+    }
+}
+
+static void
+flow_tables_defer(struct flow_tables *tables)
+{
+    struct classifier *cls;
+
+    FOR_EACH_TABLE (cls, tables) {
+        classifier_defer(cls);
+    }
+}
+
+static void
+flow_tables_publish(struct flow_tables *tables)
+{
+    struct classifier *cls;
+
+    FOR_EACH_TABLE (cls, tables) {
+        classifier_publish(cls);
+    }
+}
+
 /* A flow table entry, possibly with two different versions. */
 struct fte {
     struct cls_rule rule;       /* Within a "struct classifier". */
@@ -2482,6 +2612,7 @@ struct fte_version {
     uint16_t flags;
     struct ofpact *ofpacts;
     size_t ofpacts_len;
+    uint8_t table_id;
 };
 
 /* Frees 'version' and the data that it owns. */
@@ -2505,6 +2636,7 @@ fte_version_equals(const struct fte_version *a, const struct fte_version *b)
             && a->idle_timeout == b->idle_timeout
             && a->hard_timeout == b->hard_timeout
             && a->importance == b->importance
+            && a->table_id == b->table_id
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len));
 }
@@ -2521,6 +2653,9 @@ fte_version_format(const struct fte *fte, int index, struct ds *s)
         return;
     }
 
+    if (version->table_id) {
+        ds_put_format(s, "table=%"PRIu8" ", version->table_id);
+    }
     cls_rule_format(&fte->rule, s);
     if (version->cookie != htonll(0)) {
         ds_put_format(s, " cookie=0x%"PRIx64, ntohll(version->cookie));
@@ -2559,29 +2694,34 @@ fte_free(struct fte *fte)
     }
 }
 
-/* Frees all of the FTEs within 'cls'. */
+/* Frees all of the FTEs within 'tables'. */
 static void
-fte_free_all(struct classifier *cls)
+fte_free_all(struct flow_tables *tables)
 {
-    struct fte *fte;
+    struct classifier *cls;
 
-    classifier_defer(cls);
-    CLS_FOR_EACH (fte, rule, cls) {
-        classifier_remove(cls, &fte->rule);
-        ovsrcu_postpone(fte_free, fte);
+    FOR_EACH_TABLE (cls, tables) {
+        struct fte *fte;
+
+        classifier_defer(cls);
+        CLS_FOR_EACH (fte, rule, cls) {
+            classifier_remove(cls, &fte->rule);
+            ovsrcu_postpone(fte_free, fte);
+        }
+        classifier_destroy(cls);
     }
-    classifier_destroy(cls);
 }
 
-/* Searches 'cls' for an FTE matching 'rule', inserting a new one if
+/* Searches 'tables' for an FTE matching 'rule', inserting a new one if
  * necessary.  Sets 'version' as the version of that rule with the given
  * 'index', replacing any existing version, if any.
  *
  * Takes ownership of 'version'. */
 static void
-fte_insert(struct classifier *cls, const struct match *match,
+fte_insert(struct flow_tables *tables, const struct match *match,
            int priority, struct fte_version *version, int index)
 {
+    struct classifier *cls = &tables->tables[version->table_id];
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
@@ -2598,11 +2738,12 @@ fte_insert(struct classifier *cls, const struct match *match,
     }
 }
 
-/* Reads the flows in 'filename' as flow table entries in 'cls' for the version
- * with the specified 'index'.  Returns the flow formats able to represent the
- * flows that were read. */
+/* Reads the flows in 'filename' as flow table entries in 'tables' for the
+ * version with the specified 'index'.  Returns the flow formats able to
+ * represent the flows that were read. */
 static enum ofputil_protocol
-read_flows_from_file(const char *filename, struct classifier *cls, int index)
+read_flows_from_file(const char *filename, struct flow_tables *tables,
+                     int index)
 {
     enum ofputil_protocol usable_protocols;
     int line_number;
@@ -2617,7 +2758,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
     ds_init(&s);
     usable_protocols = OFPUTIL_P_ANY;
     line_number = 0;
-    classifier_defer(cls);
+    flow_tables_defer(tables);
     while (!ds_get_preprocessed_line(&s, file, &line_number)) {
         struct fte_version *version;
         struct ofputil_flow_mod fm;
@@ -2639,10 +2780,11 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
                                      | OFPUTIL_FF_EMERG);
         version->ofpacts = fm.ofpacts;
         version->ofpacts_len = fm.ofpacts_len;
+        version->table_id = fm.table_id != OFPTT_ALL ? fm.table_id : 0;
 
-        fte_insert(cls, &fm.match, fm.priority, version, index);
+        fte_insert(tables, &fm.match, fm.priority, version, index);
     }
-    classifier_publish(cls);
+    flow_tables_publish(tables);
     ds_destroy(&s);
 
     if (file != stdin) {
@@ -2706,12 +2848,12 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
 }
 
 /* Reads the OpenFlow flow table from 'vconn', which has currently active flow
- * format 'protocol', and adds them as flow table entries in 'cls' for the
+ * format 'protocol', and adds them as flow table entries in 'tables' for the
  * version with the specified 'index'. */
 static void
 read_flows_from_switch(struct vconn *vconn,
                        enum ofputil_protocol protocol,
-                       struct classifier *cls, int index)
+                       struct flow_tables *tables, int index)
 {
     struct ofputil_flow_stats_request fsr;
     struct ofputil_flow_stats fs;
@@ -2723,6 +2865,7 @@ read_flows_from_switch(struct vconn *vconn,
     fsr.aggregate = false;
     match_init_catchall(&fsr.match);
     fsr.out_port = OFPP_ANY;
+    fsr.out_group = OFPG_ANY;
     fsr.table_id = 0xff;
     fsr.cookie = fsr.cookie_mask = htonll(0);
     request = ofputil_encode_flow_stats_request(&fsr, protocol);
@@ -2731,7 +2874,7 @@ read_flows_from_switch(struct vconn *vconn,
 
     reply = NULL;
     ofpbuf_init(&ofpacts, 0);
-    classifier_defer(cls);
+    flow_tables_defer(tables);
     while (recv_flow_stats_reply(vconn, send_xid, &reply, &fs, &ofpacts)) {
         struct fte_version *version;
 
@@ -2743,10 +2886,11 @@ read_flows_from_switch(struct vconn *vconn,
         version->flags = 0;
         version->ofpacts_len = fs.ofpacts_len;
         version->ofpacts = xmemdup(fs.ofpacts, fs.ofpacts_len);
+        version->table_id = fs.table_id;
 
-        fte_insert(cls, &fs.match, fs.priority, version, index);
+        fte_insert(tables, &fs.match, fs.priority, version, index);
     }
-    classifier_publish(cls);
+    flow_tables_publish(tables);
     ofpbuf_uninit(&ofpacts);
 }
 
@@ -2764,13 +2908,14 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     fm.cookie_mask = htonll(0);
     fm.new_cookie = version->cookie;
     fm.modify_cookie = true;
-    fm.table_id = 0xff;
+    fm.table_id = version->table_id;
     fm.command = command;
     fm.idle_timeout = version->idle_timeout;
     fm.hard_timeout = version->hard_timeout;
     fm.importance = version->importance;
     fm.buffer_id = UINT32_MAX;
     fm.out_port = OFPP_ANY;
+    fm.out_group = OFPG_ANY;
     fm.flags = version->flags;
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
         command == OFPFC_MODIFY_STRICT) {
@@ -2791,41 +2936,45 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 {
     enum { FILE_IDX = 0, SWITCH_IDX = 1 };
     enum ofputil_protocol usable_protocols, protocol;
-    struct classifier cls;
+    struct flow_tables tables;
+    struct classifier *cls;
     struct ovs_list requests;
     struct vconn *vconn;
     struct fte *fte;
 
-    classifier_init(&cls, NULL);
-    usable_protocols = read_flows_from_file(ctx->argv[2], &cls, FILE_IDX);
+    flow_tables_init(&tables);
+    usable_protocols = read_flows_from_file(ctx->argv[2], &tables, FILE_IDX);
 
     protocol = open_vconn(ctx->argv[1], &vconn);
     protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
 
-    read_flows_from_switch(vconn, protocol, &cls, SWITCH_IDX);
+    read_flows_from_switch(vconn, protocol, &tables, SWITCH_IDX);
 
     list_init(&requests);
 
-    /* Delete flows that exist on the switch but not in the file. */
-    CLS_FOR_EACH (fte, rule, &cls) {
-        struct fte_version *file_ver = fte->versions[FILE_IDX];
-        struct fte_version *sw_ver = fte->versions[SWITCH_IDX];
+    FOR_EACH_TABLE (cls, &tables) {
+        /* Delete flows that exist on the switch but not in the file. */
+        CLS_FOR_EACH (fte, rule, cls) {
+            struct fte_version *file_ver = fte->versions[FILE_IDX];
+            struct fte_version *sw_ver = fte->versions[SWITCH_IDX];
 
-        if (sw_ver && !file_ver) {
-            fte_make_flow_mod(fte, SWITCH_IDX, OFPFC_DELETE_STRICT,
-                              protocol, &requests);
+            if (sw_ver && !file_ver) {
+                fte_make_flow_mod(fte, SWITCH_IDX, OFPFC_DELETE_STRICT,
+                                  protocol, &requests);
+            }
         }
-    }
 
-    /* Add flows that exist in the file but not on the switch.
-     * Update flows that exist in both places but differ. */
-    CLS_FOR_EACH (fte, rule, &cls) {
-        struct fte_version *file_ver = fte->versions[FILE_IDX];
-        struct fte_version *sw_ver = fte->versions[SWITCH_IDX];
+        /* Add flows that exist in the file but not on the switch.
+         * Update flows that exist in both places but differ. */
+        CLS_FOR_EACH (fte, rule, cls) {
+            struct fte_version *file_ver = fte->versions[FILE_IDX];
+            struct fte_version *sw_ver = fte->versions[SWITCH_IDX];
 
-        if (file_ver
-            && (readd || !sw_ver || !fte_version_equals(sw_ver, file_ver))) {
-            fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, protocol, &requests);
+            if (file_ver &&
+                (readd || !sw_ver || !fte_version_equals(sw_ver, file_ver))) {
+                fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, protocol,
+                                  &requests);
+            }
         }
     }
     if (bundle) {
@@ -2835,24 +2984,25 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
     }
     vconn_close(vconn);
 
-    fte_free_all(&cls);
+    fte_free_all(&tables);
 }
 
 static void
-read_flows_from_source(const char *source, struct classifier *cls, int index)
+read_flows_from_source(const char *source, struct flow_tables *tables,
+                       int index)
 {
     struct stat s;
 
     if (source[0] == '/' || source[0] == '.'
         || (!strchr(source, ':') && !stat(source, &s))) {
-        read_flows_from_file(source, cls, index);
+        read_flows_from_file(source, tables, index);
     } else {
         enum ofputil_protocol protocol;
         struct vconn *vconn;
 
         protocol = open_vconn(source, &vconn);
         protocol = set_protocol_for_flow_dump(vconn, protocol, OFPUTIL_P_ANY);
-        read_flows_from_switch(vconn, protocol, cls, index);
+        read_flows_from_switch(vconn, protocol, tables, index);
         vconn_close(vconn);
     }
 }
@@ -2861,32 +3011,35 @@ static void
 ofctl_diff_flows(struct ovs_cmdl_context *ctx)
 {
     bool differences = false;
-    struct classifier cls;
+    struct flow_tables tables;
+    struct classifier *cls;
     struct ds a_s, b_s;
     struct fte *fte;
 
-    classifier_init(&cls, NULL);
-    read_flows_from_source(ctx->argv[1], &cls, 0);
-    read_flows_from_source(ctx->argv[2], &cls, 1);
+    flow_tables_init(&tables);
+    read_flows_from_source(ctx->argv[1], &tables, 0);
+    read_flows_from_source(ctx->argv[2], &tables, 1);
 
     ds_init(&a_s);
     ds_init(&b_s);
 
-    CLS_FOR_EACH (fte, rule, &cls) {
-        struct fte_version *a = fte->versions[0];
-        struct fte_version *b = fte->versions[1];
+    FOR_EACH_TABLE (cls, &tables) {
+        CLS_FOR_EACH (fte, rule, cls) {
+            struct fte_version *a = fte->versions[0];
+            struct fte_version *b = fte->versions[1];
 
-        if (!a || !b || !fte_version_equals(a, b)) {
-            fte_version_format(fte, 0, &a_s);
-            fte_version_format(fte, 1, &b_s);
-            if (strcmp(ds_cstr(&a_s), ds_cstr(&b_s))) {
-                if (a_s.length) {
-                    printf("-%s", ds_cstr(&a_s));
+            if (!a || !b || !fte_version_equals(a, b)) {
+                fte_version_format(fte, 0, &a_s);
+                fte_version_format(fte, 1, &b_s);
+                if (strcmp(ds_cstr(&a_s), ds_cstr(&b_s))) {
+                    if (a_s.length) {
+                        printf("-%s", ds_cstr(&a_s));
+                    }
+                    if (b_s.length) {
+                        printf("+%s", ds_cstr(&b_s));
+                    }
+                    differences = true;
                 }
-                if (b_s.length) {
-                    printf("+%s", ds_cstr(&b_s));
-                }
-                differences = true;
             }
         }
     }
@@ -2894,7 +3047,7 @@ ofctl_diff_flows(struct ovs_cmdl_context *ctx)
     ds_destroy(&a_s);
     ds_destroy(&b_s);
 
-    fte_free_all(&cls);
+    fte_free_all(&tables);
 
     if (differences) {
         exit(2);
@@ -2951,9 +3104,9 @@ ofctl_meter_request__(const char *bridge, const char *str,
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
-    transact_noreply(vconn, ofputil_encode_meter_request(version,
-                                                         type,
-                                                         mm.meter.meter_id));
+    dump_stats_transaction(vconn,
+                           ofputil_encode_meter_request(version, type,
+                                                        mm.meter.meter_id));
     vconn_close(vconn);
 }
 
@@ -3241,7 +3394,7 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
             error = ofpacts_check_consistency(ofpacts.data, ofpacts.size,
                                               &flow, OFPP_MAX,
                                               table_id ? atoi(table_id) : 0,
-                                              255, protocol);
+                                              OFPTT_MAX + 1, protocol);
         }
         if (error) {
             printf("bad %s %s: %s\n\n",

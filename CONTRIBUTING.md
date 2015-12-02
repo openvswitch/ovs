@@ -24,6 +24,8 @@ In particular:
 
   - A patch that adds or removes user-visible features should
     also update the appropriate user documentation or manpages.
+    Check "Feature Deprecation Guidelines" section in this document
+    if you intend to remove user-visible feature.
 
 Testing is also important:
 
@@ -157,6 +159,17 @@ Examples of common tags follow.
         the tag himself in response to an email indicating successful
         testing results.
 
+    Tested-at: <URL>
+
+        When a test report is publicly available, this provides a way
+        to reference it.  Typical <URL>s would be build logs from
+        autobuilders or references to mailing list archives.
+
+        Some autobuilders only retain their logs for a limited amount
+        of time.  It is less useful to cite these because they may be
+        dead links for a developer reading the commit message months
+        or years later.
+
     Reported-by: Reporter Name <reporter.name@email.address...>
 
         When a patch fixes a bug reported by some person, please
@@ -251,6 +264,37 @@ certifies the following:
         personal information I submit with it, including my sign-off) is
         maintained indefinitely and may be redistributed consistent with
         this project or the open source license(s) involved.
+
+Feature Deprecation Guidelines
+------------------------------
+
+Open vSwitch is intended to be user friendly.  This means that under
+normal circumstances we don't abruptly remove features from OVS that
+some users might still be using.  Otherwise, if we would, then we would
+possibly break our user setup when they upgrade and would receive bug
+reports.
+
+Typical process to deprecate a feature in Open vSwitch is to:
+
+    (a) Mention deprecation of a feature in the NEWS file.  Also, mention
+        expected release or absolute time when this feature would be removed
+        from OVS altogether.  Don't use relative time (e.g. "in 6 months")
+        because that is not clearly interpretable.
+
+    (b) If Open vSwitch is configured to use deprecated feature it should print
+        a warning message to the log files clearly indicating that feature is
+        deprecated and that use of it should be avoided.
+
+    (c) If this feature is mentioned in man pages, then add "Deprecated" keyword
+        to it.
+
+Also, if there is alternative feature to the one that is about to be marked
+as deprecated, then mention it in (a), (b) and (c) as well.
+
+Remember to followup and actually remove the feature from OVS codebase
+once deprecation grace period has expired and users had opportunity to
+use at least one OVS release that would have informed them about feature
+deprecation!
 
 Comments
 --------

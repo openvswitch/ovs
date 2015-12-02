@@ -47,7 +47,7 @@ allows controllers to:
 
 The Experimenter ID of this extension is:
 
-NTR_VENDOR_ID = 0x00001540
+NTR_VENDOR_ID = 0x0000154d
 
 
 4. Group Experimenter Property

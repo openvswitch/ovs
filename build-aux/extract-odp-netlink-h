@@ -20,11 +20,14 @@ $i\
 #include "OvsDpInterfaceExt.h"\
 #endif\
 
+# Use OVS's own struct eth_addr instead of a 6-byte char array.
+s,<linux/types\.h>,"openvswitch/types.h",
+s,#.*<linux/if_ether\.h>,,
+s/__u8[[:space:]]*\([a-zA-Z0-9_]*\)[[:space:]]*\[[[:space:]]*ETH_ALEN[[:space:]]*\]/struct eth_addr \1/
 
 # Transform most Linux-specific __u<N> types into C99 uint<N>_t types,
 # and most Linux-specific __be<N> into Open vSwitch ovs_be<N>,
 # and use the appropriate userspace header.
-s,<linux/types\.h>,"openvswitch/types.h",
 s/__u32/uint32_t/g
 s/__u16/uint16_t/g
 s/__u8/uint8_t/g
@@ -36,7 +39,3 @@ s/__be16/ovs_be16/g
 # boundary.
 s/__u64/ovs_32aligned_u64/g
 s/__be64/ovs_32aligned_be64/g
-
-# Use OVS's own ETH_ADDR_LEN instead of Linux-specific ETH_ALEN.
-s,<linux/if_ether\.h>,"packets.h",
-s/ETH_ALEN/ETH_ADDR_LEN/

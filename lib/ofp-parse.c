@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <netinet/in.h>
 
 #include "byte-order.h"
 #include "dynamic-string.h"
@@ -144,9 +145,9 @@ str_to_be64(const char *str, ovs_be64 *valuep)
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
-str_to_mac(const char *str, uint8_t mac[ETH_ADDR_LEN])
+str_to_mac(const char *str, struct eth_addr *mac)
 {
-    if (!ovs_scan(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
+    if (!ovs_scan(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(*mac))) {
         return xasprintf("invalid mac address %s", str);
     }
     return NULL;
@@ -168,6 +169,20 @@ str_to_ip(const char *str, ovs_be32 *ip)
     return NULL;
 }
 
+/* Parses 'str' as a conntrack helper into 'alg'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * OVS_WARN_UNUSED_RESULT
+str_to_connhelper(const char *str, uint16_t *alg)
+{
+    if (!strcmp(str, "ftp")) {
+        *alg = IPPORT_FTP;
+        return NULL;
+    }
+    return xasprintf("invalid conntrack helper \"%s\"", str);
+}
+
 struct protocol {
     const char *name;
     uint16_t dl_type;
@@ -179,6 +194,8 @@ parse_protocol(const char *name, const struct protocol **p_out)
 {
     static const struct protocol protocols[] = {
         { "ip", ETH_TYPE_IP, 0 },
+        { "ipv4", ETH_TYPE_IP, 0 },
+        { "ip4", ETH_TYPE_IP, 0 },
         { "arp", ETH_TYPE_ARP, 0 },
         { "icmp", ETH_TYPE_IP, IPPROTO_ICMP },
         { "tcp", ETH_TYPE_IP, IPPROTO_TCP },
@@ -219,9 +236,15 @@ parse_field(const struct mf_field *mf, const char *s, struct match *match,
     union mf_value value, mask;
     char *error;
 
+    if (!*s) {
+        /* If there's no string, we're just trying to match on the
+         * existence of the field, so use a no-op value. */
+        s = "0/0";
+    }
+
     error = mf_parse(mf, s, &value, &mask);
     if (!error) {
-        *usable_protocols &= mf_set(mf, &value, &mask, match);
+        *usable_protocols &= mf_set(mf, &value, &mask, match, &error);
     }
     return error;
 }
@@ -252,9 +275,8 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         F_PRIORITY = 1 << 4,
         F_FLAGS = 1 << 5,
     } fields;
-    char *save_ptr = NULL;
     char *act_str = NULL;
-    char *name;
+    char *name, *value;
 
     *usable_protocols = OFPUTIL_P_ANY;
 
@@ -329,7 +351,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     fm->out_port = OFPP_ANY;
     fm->flags = 0;
     fm->importance = 0;
-    fm->out_group = OFPG11_ANY;
+    fm->out_group = OFPG_ANY;
     fm->delete_reason = OFPRR_DELETE;
     if (fields & F_ACTIONS) {
         act_str = extract_actions(string);
@@ -337,8 +359,8 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             return xstrdup("must specify an action");
         }
     }
-    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+
+    while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct protocol *p;
         char *error = NULL;
 
@@ -363,11 +385,11 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         } else if (!strcmp(name, "no_readonly_table")
                    || !strcmp(name, "allow_hidden_fields")) {
              /* ignore these fields. */
+        } else if (mf_from_name(name)) {
+            error = parse_field(mf_from_name(name), value, &fm->match,
+                                usable_protocols);
         } else {
-            char *value;
-
-            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (!value) {
+            if (!*value) {
                 return xasprintf("field %s missing value", name);
             }
 
@@ -379,6 +401,12 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             } else if (fields & F_OUT_PORT && !strcmp(name, "out_port")) {
                 if (!ofputil_port_from_string(value, &fm->out_port)) {
                     error = xasprintf("%s is not a valid OpenFlow port",
+                                      value);
+                }
+            } else if (fields & F_OUT_PORT && !strcmp(name, "out_group")) {
+                *usable_protocols &= OFPUTIL_P_OF11_UP;
+                if (!ofputil_group_from_string(value, &fm->out_group)) {
+                    error = xasprintf("%s is not a valid OpenFlow group",
                                       value);
                 }
             } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
@@ -422,9 +450,6 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                     error = str_to_be64(value, &fm->new_cookie);
                     fm->modify_cookie = true;
                 }
-            } else if (mf_from_name(name)) {
-                error = parse_field(mf_from_name(name), value, &fm->match,
-                                    usable_protocols);
             } else if (!strcmp(name, "duration")
                        || !strcmp(name, "n_packets")
                        || !strcmp(name, "n_bytes")
@@ -436,10 +461,10 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             } else {
                 error = xasprintf("unknown keyword %s", name);
             }
+        }
 
-            if (error) {
-                return error;
-            }
+        if (error) {
+            return error;
         }
     }
     /* Check for usable protocol interdependencies between match fields. */
@@ -762,8 +787,7 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                              enum ofputil_protocol *usable_protocols)
 {
     static atomic_count id = ATOMIC_COUNT_INIT(0);
-    char *save_ptr = NULL;
-    char *name;
+    char *name, *value;
 
     fmr->id = atomic_count_inc(&id);
 
@@ -773,9 +797,9 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
     fmr->table_id = 0xff;
     match_init_catchall(&fmr->match);
 
-    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+    while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct protocol *p;
+        char *error = NULL;
 
         if (!strcmp(name, "!initial")) {
             fmr->flags &= ~NXFMF_INITIAL;
@@ -794,32 +818,25 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
             if (p->nw_proto) {
                 match_set_nw_proto(&fmr->match, p->nw_proto);
             }
+        } else if (mf_from_name(name)) {
+            error = parse_field(mf_from_name(name), value, &fmr->match,
+                                usable_protocols);
         } else {
-            char *value;
-
-            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (!value) {
+            if (!*value) {
                 return xasprintf("%s: field %s missing value", str_, name);
             }
 
             if (!strcmp(name, "table")) {
-                char *error = str_to_u8(value, "table", &fmr->table_id);
-                if (error) {
-                    return error;
-                }
+                error = str_to_u8(value, "table", &fmr->table_id);
             } else if (!strcmp(name, "out_port")) {
                 fmr->out_port = u16_to_ofp(atoi(value));
-            } else if (mf_from_name(name)) {
-                char *error;
-
-                error = parse_field(mf_from_name(name), value, &fmr->match,
-                                    usable_protocols);
-                if (error) {
-                    return error;
-                }
             } else {
                 return xasprintf("%s: unknown keyword %s", str_, name);
             }
+        }
+
+        if (error) {
+            return error;
         }
     }
     return NULL;
@@ -869,6 +886,49 @@ parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
     return error;
 }
 
+/* Convert 'setting' (as described for the "mod-table" command
+ * in ovs-ofctl man page) into 'tm->table_vacancy->vacancy_up' and
+ * 'tm->table_vacancy->vacancy_down' threshold values.
+ * For the two threshold values, value of vacancy_up is always greater
+ * than value of vacancy_down.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * OVS_WARN_UNUSED_RESULT
+parse_ofp_table_vacancy(struct ofputil_table_mod *tm, const char *setting)
+{
+    char *save_ptr = NULL;
+    char *vac_up, *vac_down;
+    char *value = strdup(setting);
+    int vacancy_up, vacancy_down;
+
+    strtok_r(value, ":", &save_ptr);
+    vac_down = strtok_r(NULL, ",", &save_ptr);
+    if (!vac_down) {
+        return xasprintf("Vacancy down value missing");
+    }
+    if (!str_to_int(vac_down, 0, &vacancy_down) ||
+        vacancy_down < 0 || vacancy_down > 100) {
+        return xasprintf("Invalid vacancy down value \"%s\"", vac_down);
+    }
+    vac_up = strtok_r(NULL, ",", &save_ptr);
+    if (!vac_up) {
+        return xasprintf("Vacancy up value missing");
+    }
+    if (!str_to_int(vac_up, 0, &vacancy_up) ||
+        vacancy_up < 0 || vacancy_up > 100) {
+        return xasprintf("Invalid vacancy up value \"%s\"", vac_up);
+    }
+    if (vacancy_down > vacancy_up) {
+        return xasprintf("Invalid vacancy range, vacancy up should be greater"
+                         " than vacancy down ""(%s)",
+                         ofperr_to_string(OFPERR_OFPBPC_BAD_VALUE));
+    }
+    tm->table_vacancy.vacancy_down = vacancy_down;
+    tm->table_vacancy.vacancy_up = vacancy_up;
+    return NULL;
+}
+
 /* Convert 'table_id' and 'setting' (as described for the "mod-table" command
  * in the ovs-ofctl man page) into 'tm' for sending a table_mod command to a
  * switch.
@@ -895,13 +955,13 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
     tm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
     tm->eviction = OFPUTIL_TABLE_EVICTION_DEFAULT;
     tm->eviction_flags = UINT32_MAX;
-
+    tm->vacancy = OFPUTIL_TABLE_VACANCY_DEFAULT;
+    tm->table_vacancy.vacancy_down = 0;
+    tm->table_vacancy.vacancy_up = 0;
+    tm->table_vacancy.vacancy = 0;
     /* Only OpenFlow 1.1 and 1.2 can configure table-miss via table_mod.
-     * Only OpenFlow 1.4+ can configure eviction via table_mod.
-     *
-     * (OpenFlow 1.4+ can also configure vacancy events via table_mod, but OVS
-     * doesn't support those yet and they're also logically a per-OpenFlow
-     * session setting so it wouldn't make sense to support them here anyway.)
+     * Only OpenFlow 1.4+ can configure eviction and vacancy events
+     * via table_mod.
      */
     if (!strcmp(setting, "controller")) {
         tm->miss = OFPUTIL_TABLE_MISS_CONTROLLER;
@@ -917,6 +977,16 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
         *usable_versions = (1 << OFP14_VERSION) | (1u << OFP15_VERSION);
     } else if (!strcmp(setting, "noevict")) {
         tm->eviction = OFPUTIL_TABLE_EVICTION_OFF;
+        *usable_versions = (1 << OFP14_VERSION) | (1u << OFP15_VERSION);
+    } else if (!strncmp(setting, "vacancy", strcspn(setting, ":"))) {
+        tm->vacancy = OFPUTIL_TABLE_VACANCY_ON;
+        *usable_versions = (1 << OFP14_VERSION) | (1u << OFP15_VERSION);
+        char *error = parse_ofp_table_vacancy(tm, setting);
+        if (error) {
+            return error;
+        }
+    } else if (!strcmp(setting, "novacancy")) {
+        tm->vacancy = OFPUTIL_TABLE_VACANCY_OFF;
         *usable_versions = (1 << OFP14_VERSION) | (1u << OFP15_VERSION);
     } else {
         return xasprintf("invalid table_mod setting %s", setting);
@@ -1096,7 +1166,7 @@ parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                 goto exit;
             }
 
-            if (!mf_is_zero(mf, flow)) {
+            if (mf_is_set(mf, flow)) {
                 error = xasprintf("%s: field %s set multiple times", s, key);
                 goto exit;
             }
@@ -1154,7 +1224,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_, uint8_t group_type,
     bucket->weight = group_type == OFPGT11_SELECT ? 1 : 0;
     bucket->bucket_id = OFPG15_BUCKET_ALL;
     bucket->watch_port = OFPP_ANY;
-    bucket->watch_group = OFPG11_ANY;
+    bucket->watch_group = OFPG_ANY;
 
     ds_init(&actions);
 
@@ -1217,31 +1287,28 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_select_group_field(char *s, struct field_array *fa,
                          enum ofputil_protocol *usable_protocols)
 {
-    char *save_ptr = NULL;
-    char *name;
+    char *name, *value_str;
 
-    for (name = strtok_r(s, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+    while (ofputil_parse_key_value(&s, &name, &value_str)) {
         const struct mf_field *mf = mf_from_name(name);
 
         if (mf) {
             char *error;
-            const char *value_str;
             union mf_value value;
 
             if (bitmap_is_set(fa->used.bm, mf->id)) {
                 return xasprintf("%s: duplicate field", name);
             }
 
-            value_str = strtok_r(NULL, ", \t\r\n", &save_ptr);
-            if (value_str) {
+            if (*value_str) {
                 error = mf_parse_value(mf, value_str, &value);
                 if (error) {
                     return error;
                 }
 
                 /* The mask cannot be all-zeros */
-                if (is_all_zeros(&value, mf->n_bytes)) {
+                if (!mf_is_tun_metadata(mf) &&
+                    is_all_zeros(&value, mf->n_bytes)) {
                     return xasprintf("%s: values are wildcards here "
                                      "and must not be all-zeros", s);
                 }
@@ -1285,10 +1352,8 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         F_COMMAND_BUCKET_ID     = 1 << 2,
         F_COMMAND_BUCKET_ID_ALL = 1 << 3,
     } fields;
-    char *save_ptr = NULL;
     bool had_type = false;
     bool had_command_bucket_id = false;
-    char *name;
     struct ofputil_bucket *bucket;
     char *error = NULL;
 
@@ -1346,16 +1411,9 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     }
 
     /* Parse everything before the buckets. */
-    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
-         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
-        char *value;
-
-        value = strtok_r(NULL, ", \t\r\n", &save_ptr);
-        if (!value) {
-            error = xasprintf("field %s missing value", name);
-            goto out;
-        }
-
+    char *pos = string;
+    char *name, *value;
+    while (ofputil_parse_key_value(&pos, &name, &value)) {
         if (!strcmp(name, "command_bucket_id")) {
             if (!(fields & F_COMMAND_BUCKET_ID)) {
                 error = xstrdup("command bucket id is not needed");

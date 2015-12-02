@@ -34,6 +34,11 @@
 #define STT_PROTO_TCP       (1 << 3)
 #define STT_PROTO_TYPES     (STT_PROTO_IPV4 | STT_PROTO_TCP)
 
+#define STT_HASH_TABLE_SIZE ((UINT32)1 << 10)
+#define STT_HASH_TABLE_MASK (STT_HASH_TABLE_SIZE - 1)
+#define STT_ENTRY_TIMEOUT 300000000   // 30s
+#define STT_CLEANUP_INTERVAL 300000000 // 30s
+
 #define STT_ETH_PAD 2
 typedef struct SttHdr {
     UINT8    version;
@@ -58,13 +63,31 @@ typedef struct _OVS_STT_VPORT {
     UINT64 slowOutPkts;
 } OVS_STT_VPORT, *POVS_STT_VPORT;
 
+typedef struct _OVS_STT_PKT_KEY {
+    UINT32 sAddr;
+    UINT32 dAddr;
+    UINT32 ackSeq;
+} OVS_STT_PKT_KEY, *POVS_STT_PKT_KEY;
+
+typedef struct _OVS_STT_PKT_ENTRY {
+    OVS_STT_PKT_KEY     ovsPktKey;
+    UINT64              timeout;
+    UINT32              recvdLen;
+    SttHdr              sttHdr;
+    PCHAR               packetBuf;
+    LIST_ENTRY          link;
+} OVS_STT_PKT_ENTRY, *POVS_STT_PKT_ENTRY;
+
+typedef struct _OVS_STT_THREAD_CTX {
+    KEVENT      event;
+    PVOID       threadObject;
+    UINT32      exit;
+} OVS_STT_THREAD_CTX, *POVS_STT_THREAD_CTX;
+
 NTSTATUS OvsInitSttTunnel(POVS_VPORT_ENTRY vport,
                           UINT16 udpDestPort);
 
 VOID OvsCleanupSttTunnel(POVS_VPORT_ENTRY vport);
-
-
-void OvsCleanupSttTunnel(POVS_VPORT_ENTRY vport);
 
 NDIS_STATUS OvsEncapStt(POVS_VPORT_ENTRY vport,
                         PNET_BUFFER_LIST curNbl,
@@ -78,6 +101,10 @@ NDIS_STATUS OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
                         PNET_BUFFER_LIST curNbl,
                         OvsIPv4TunnelKey *tunKey,
                         PNET_BUFFER_LIST *newNbl);
+
+NTSTATUS OvsInitSttDefragmentation();
+
+VOID OvsCleanupSttDefragmentation(VOID);
 
 static __inline UINT32
 OvsGetSttTunHdrSize(VOID)

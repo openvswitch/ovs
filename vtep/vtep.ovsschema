@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "58544667 7319",
+  "cksum": "2177247725 10499",
   "tables": {
     "Global": {
       "columns": {
@@ -42,12 +42,18 @@
                            "minInteger": 0, "maxInteger": 4095},
                    "value": {"type": "uuid", "refTable": "Logical_Switch"},
                    "min": 0, "max": "unlimited"}},
+        "acl_bindings": {
+          "type": {"key": {"type": "integer",
+                           "minInteger": 0, "maxInteger": 4095},
+                   "value": {"type": "uuid", "refTable": "ACL"},
+                   "min": 0, "max": "unlimited"}},
         "vlan_stats": {
           "type": {"key": {"type": "integer",
                            "minInteger": 0, "maxInteger": 4095},
                    "value": {"type": "uuid",
                              "refTable": "Logical_Binding_Stats"},
-                   "min": 0, "max": "unlimited"}},
+                   "min": 0, "max": "unlimited"},
+          "ephemeral": true},
         "port_fault_status": {
           "type": {
             "key": "string", "min": 0, "max": "unlimited"},
@@ -71,13 +77,14 @@
               "min": 0, "max": "unlimited"}},
         "bfd_status": {
           "type": {"key": "string", "value": "string",
-              "min": 0, "max": "unlimited"}}}},
+              "min": 0, "max": "unlimited"},
+          "ephemeral": true}}},
     "Logical_Binding_Stats": {
       "columns": {
-        "bytes_from_local": {"type": "integer"},
-        "packets_from_local": {"type": "integer"},
-        "bytes_to_local": {"type": "integer"},
-        "packets_to_local": {"type": "integer"}}},
+        "bytes_from_local": {"type": "integer", "ephemeral": true},
+        "packets_from_local": {"type": "integer", "ephemeral": true},
+        "bytes_to_local": {"type": "integer", "ephemeral": true},
+        "packets_to_local": {"type": "integer", "ephemeral": true}}},
     "Logical_Switch": {
       "columns": {
         "name": {"type": "string"},
@@ -141,7 +148,16 @@
         "static_routes": {
           "type": {"key": {"type": "string"},
                    "value": {"type" : "string"},
-                   "min": 0, "max": "unlimited"}}},
+                   "min": 0, "max": "unlimited"}},
+        "acl_binding": {
+          "type": {"key": {"type": "string"},
+                   "value": {"type": "uuid",
+                             "refTable": "ACL"},
+                   "min": 0, "max": "unlimited"}},
+        "LR_fault_status": {
+          "type": {
+            "key": "string", "min": 0, "max": "unlimited"},
+          "ephemeral": true}},
       "isRoot": true,
       "indexes": [["name"]]},
     "Arp_Sources_Local": {
@@ -174,6 +190,80 @@
           "mutable": false},
         "dst_ip": {"type": "string", "mutable": false}},
       "indexes": [["encapsulation_type", "dst_ip"]]},
+    "ACL_entry": {
+      "columns": {
+        "sequence": {"type": "integer"},
+        "source_mac": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "dest_mac": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "ethertype": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "source_ip": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "source_mask": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "dest_ip": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "dest_mask": {
+          "type": {
+            "key": "string", "min": 0, "max": 1}},
+        "protocol": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "source_port_min": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "source_port_max": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "dest_port_min": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "dest_port_max": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "tcp_flags": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "tcp_flags_mask": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "icmp_code": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "icmp_type": {
+          "type": {
+            "key": "integer", "min": 0, "max": 1}},
+        "direction": {
+          "type": {
+            "key": {"type": "string", "enum": ["set", ["ingress", "egress"]]}}},
+        "action": {
+          "type": {
+            "key": {"type": "string", "enum": ["set", ["permit", "deny"]]}}},
+        "acle_fault_status": {
+          "type": {
+            "key": "string", "min": 0, "max": "unlimited"},
+          "ephemeral": true}},
+       "isRoot": true},
+    "ACL": {
+      "columns": {
+        "acl_entries": {
+          "type": {"key": {"type": "uuid", "refTable": "ACL_entry"},
+                   "min": 1, "max": "unlimited"}},
+        "acl_name": {"type": "string"},
+        "acl_fault_status": {
+          "type": {
+            "key": "string", "min": 0, "max": "unlimited"},
+          "ephemeral": true}},
+      "indexes": [["acl_name"]],
+      "isRoot": true},
     "Manager": {
       "columns": {
         "target": {"type": "string"},
@@ -193,4 +283,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.3.0"}
+  "version": "1.4.1"}

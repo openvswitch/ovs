@@ -455,7 +455,8 @@ static int lisp_send(struct vport *vport, struct sk_buff *skb)
 	ovs_skb_set_inner_protocol(skb, skb->protocol);
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
-	sent_len = udp_tunnel_xmit_skb(rt, skb, saddr, tun_key->ipv4_dst,
+	sent_len = udp_tunnel_xmit_skb(rt, lisp_port->lisp_rcv_socket->sk, skb,
+				       saddr, tun_key->ipv4_dst,
 				       tun_key->ipv4_tos, tun_key->ipv4_ttl,
 				       df, src_port, dst_port, false, true);
 

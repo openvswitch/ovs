@@ -1709,6 +1709,28 @@ connmgr_send_port_status(struct connmgr *mgr, struct ofconn *source,
     }
 }
 
+/* Sends an OFPT_REQUESTFORWARD message with 'request' and 'reason' to
+ * appropriate controllers managed by 'mgr'.  For messages caused by a
+ * controller OFPT_GROUP_MOD and OFPT_METER_MOD, specify 'source' as the
+ * controller connection that sent the request; otherwise, specify 'source'
+ * as NULL. */
+void
+connmgr_send_requestforward(struct connmgr *mgr, const struct ofconn *source,
+                            const struct ofputil_requestforward *rf)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        if (ofconn_receives_async_msg(ofconn, OAM_REQUESTFORWARD, rf->reason)
+            && rconn_get_version(ofconn->rconn) >= OFP14_VERSION
+            && ofconn != source) {
+            enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
+            ofconn_send(ofconn, ofputil_encode_requestforward(rf, protocol),
+                        NULL);
+        }
+    }
+}
+
 /* Sends an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message based on 'fr' to
  * appropriate controllers managed by 'mgr'. */
 void

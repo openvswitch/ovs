@@ -72,7 +72,7 @@ struct ofp14_port {
     ovs_be32 port_no;
     ovs_be16 length;
     uint8_t pad[2];
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     uint8_t pad2[2];                  /* Align to 64 bits. */
     char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
@@ -106,7 +106,7 @@ OFP_ASSERT(sizeof(struct ofp14_port_mod_prop_ethernet) == 8);
 struct ofp14_port_mod {
     ovs_be32 port_no;
     uint8_t pad[4];
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     uint8_t pad2[2];
     ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
     ovs_be32 mask;          /* Bitmap of OFPPC_* flags to be changed. */
@@ -134,6 +134,7 @@ enum ofp14_table_mod_prop_eviction_flag {
 enum ofp14_table_reason {
     OFPTR_VACANCY_DOWN = 3,    /* Vacancy down threshold event. */
     OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
+    OFPTR_N_REASONS            /* Denotes number of reasons. */
 };
 
 struct ofp14_table_mod_prop_eviction {
@@ -259,6 +260,7 @@ OFP_ASSERT(sizeof(struct ofp14_async_config) == 8);
 enum ofp14_requestforward_reason {
     OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
     OFPRFR_METER_MOD = 1,      /* Forward meter mod requests. */
+    OFPRFR_N_REASONS           /* Denotes number of reasons. */
 };
 
 /* Async Config property types.
@@ -332,6 +334,7 @@ enum ofp14_controller_role_reason {
     OFPCRR_MASTER_REQUEST = 0,  /* Another controller asked to be master. */
     OFPCRR_CONFIG         = 1,  /* Configuration changed on the switch. */
     OFPCRR_EXPERIMENTER   = 2,  /* Experimenter data changed. */
+    OFPCRR_N_REASONS            /* Denotes number of reasons. */
 };
 
 /* Role property types.
@@ -354,6 +357,12 @@ struct ofp14_role_prop_experimenter {
      *     bytes of all-zero bytes */
 };
 OFP_ASSERT(sizeof(struct ofp14_role_prop_experimenter) == 12);
+
+/* Group/Meter request forwarding. */
+struct ofp14_requestforward {
+    struct ofp_header request;  /* Request being forwarded. */
+};
+OFP_ASSERT(sizeof(struct ofp14_requestforward) == 8);
 
 /* Bundle control message types */
 enum ofp14_bundle_ctrl_type {

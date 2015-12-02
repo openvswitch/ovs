@@ -63,12 +63,17 @@ struct tun_metadata {
         uint8_t len;                       /* Length of data in 'opts'. */
     } present;
     struct tun_table *tab;      /* Types & lengths for 'opts' and 'opt_map'. */
-    uint8_t pad[sizeof(uint64_t) - sizeof(struct tun_table *)]; /* Make 8 bytes */
+
+#if UINTPTR_MAX == UINT32_MAX
+    uint8_t pad[4];             /* Pad to 64-bit boundary. */
+#endif
+
     union {
         uint8_t u8[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
         struct geneve_opt gnv[GENEVE_TOT_OPT_SIZE / sizeof(struct geneve_opt)];
     } opts;
 };
+BUILD_ASSERT_DECL(offsetof(struct tun_metadata, opts) % 8 == 0);
 BUILD_ASSERT_DECL(sizeof(((struct tun_metadata *)0)->present.map) * 8 >=
                   TUN_METADATA_NUM_OPTS);
 
@@ -77,13 +82,22 @@ BUILD_ASSERT_DECL(sizeof(((struct tun_metadata *)0)->present.map) * 8 >=
  * linked list of these blocks. */
 struct tun_metadata_loc_chain {
     struct tun_metadata_loc_chain *next;
-    uint8_t offset;       /* In bytes, from start of 'opts', multiple of 4.  */
-    uint8_t len;          /* In bytes, multiple of 4. */
+    int offset;       /* In bytes, from start of 'opts', multiple of 4.  */
+    int len;          /* In bytes, multiple of 4. */
 };
 
 struct tun_metadata_loc {
     int len;                    /* Sum of 'len' over elements in chain. */
     struct tun_metadata_loc_chain c;
+};
+
+/* Bookkeeping information to keep track of an option that was allocated
+ * inside struct match. */
+struct tun_metadata_match_entry {
+    struct tun_metadata_loc loc; /* Allocated position. */
+    bool masked; /* Source value had a mask. Otherwise we can't tell if the
+                  * entire field was exact matched or only the portion that
+                  * is the same size as the value. */
 };
 
 /* Allocation of options inside struct match.  This is important if we don't
@@ -92,8 +106,8 @@ struct tun_metadata_loc {
  * processing context (Packet-In). These structures never have dynamically
  * allocated memory because the address space is never fragmented. */
 struct tun_metadata_allocation {
-    struct tun_metadata_loc loc[TUN_METADATA_NUM_OPTS];
-    uint8_t alloc_offset;       /* Byte offset into 'opts', multiple of 4.  */
+    struct tun_metadata_match_entry entry[TUN_METADATA_NUM_OPTS];
+    int alloc_offset;           /* Byte offset into 'opts', multiple of 4.  */
     bool valid;                 /* Set to true after any allocation occurs. */
 };
 
@@ -108,7 +122,8 @@ void tun_metadata_write(struct flow_tnl *,
                         const struct mf_field *, const union mf_value *);
 void tun_metadata_set_match(const struct mf_field *,
                             const union mf_value *value,
-                            const union mf_value *mask, struct match *);
+                            const union mf_value *mask, struct match *,
+                            char **err_str);
 void tun_metadata_get_fmd(const struct flow_tnl *, struct match *flow_metadata);
 
 int tun_metadata_from_geneve_nlattr(const struct nlattr *attr,

@@ -87,11 +87,11 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
                                       : 0);
 
             if (attrs[IFLA_ADDRESS] &&
-                nl_attr_get_size(attrs[IFLA_ADDRESS]) == ETH_ALEN) {
-                memcpy(change->addr, nl_attr_get(attrs[IFLA_ADDRESS]),
-                       ETH_ALEN);
+                nl_attr_get_size(attrs[IFLA_ADDRESS]) == ETH_ADDR_LEN) {
+                memcpy(&change->mac, nl_attr_get(attrs[IFLA_ADDRESS]),
+                       ETH_ADDR_LEN);
             } else {
-                memset(change->addr, 0, ETH_ALEN);
+                memset(&change->mac, 0, ETH_ADDR_LEN);
             }
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(nlmsg->nlmsg_type)) {

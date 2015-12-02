@@ -57,16 +57,20 @@ struct poll_loop {
 
 static struct poll_loop *poll_loop(void);
 
-/* Look up the node with same fd and wevent. */
+/* Look up the node with same fd or wevent. */
 static struct poll_node *
 find_poll_node(struct poll_loop *loop, int fd, HANDLE wevent)
 {
     struct poll_node *node;
 
+    /* Both 'fd' and 'wevent' cannot be set. */
+    ovs_assert(!fd != !wevent);
+
     HMAP_FOR_EACH_WITH_HASH (node, hmap_node,
                              hash_2words(fd, (uint32_t)wevent),
                              &loop->poll_nodes) {
-        if (node->pollfd.fd == fd && node->wevent == wevent) {
+        if ((fd && node->pollfd.fd == fd)
+            || (wevent && node->wevent == wevent)) {
             return node;
         }
     }

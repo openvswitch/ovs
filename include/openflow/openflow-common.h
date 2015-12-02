@@ -103,7 +103,8 @@ enum ofp_version {
  */
 #define OF_VENDOR_ID    0
 #define HPL_VENDOR_ID   0x000004EA /* HP Labs. */
-#define NTR_VENDOR_ID   0x00001540 /* Netronome. */
+#define NTR_VENDOR_ID   0x0000154d /* Netronome. */
+#define NTR_COMPAT_VENDOR_ID   0x00001540 /* Incorrect value used in v2.4. */
 #define NX_VENDOR_ID    0x00002320 /* Nicira. */
 #define ONF_VENDOR_ID   0x4f4e4600 /* Open Networking Foundation. */
 
@@ -112,8 +113,6 @@ enum ofp_version {
 
 #define OFP_OLD_PORT  6633
 #define OFP_PORT  6653
-
-#define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
 
 #define OFP_DEFAULT_MISS_SEND_LEN   128
 
@@ -309,7 +308,8 @@ enum ofp_flow_removed_reason {
 enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added. */
     OFPPR_DELETE,           /* The port was removed. */
-    OFPPR_MODIFY            /* Some attribute of the port has changed. */
+    OFPPR_MODIFY,           /* Some attribute of the port has changed. */
+    OFPPR_N_REASONS         /* Denotes number of reasons. */
 };
 
 /* A physical port has changed in the datapath */

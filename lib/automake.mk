@@ -8,6 +8,7 @@
 lib_LTLIBRARIES += lib/libopenvswitch.la
 
 lib_libopenvswitch_la_LIBADD = $(SSL_LIBS)
+lib_libopenvswitch_la_LIBADD += $(CAPNG_LDADD)
 
 if WIN32
 lib_libopenvswitch_la_LIBADD += ${PTHREAD_LIBS}
@@ -245,14 +246,12 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/syslog-provider.h \
 	lib/table.c \
 	lib/table.h \
-	lib/tag.c \
-	lib/tag.h \
 	lib/timer.c \
 	lib/timer.h \
 	lib/timeval.c \
 	lib/timeval.h \
-	lib/tnl-arp-cache.c \
-	lib/tnl-arp-cache.h \
+	lib/tnl-neigh-cache.c \
+	lib/tnl-neigh-cache.h \
 	lib/tnl-ports.c \
 	lib/tnl-ports.h \
 	lib/token-bucket.c \

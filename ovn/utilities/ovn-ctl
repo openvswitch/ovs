@@ -30,37 +30,28 @@ done
 ## start ##
 ## ----- ##
 
-create_db () {
-    DB_FILE=$1
-    DB_SCHEMA=$2
-    action "Creating empty database $DB_FILE" ovsdb-tool create "$DB_FILE" "$DB_SCHEMA"
-}
-
-check_ovn_dbs () {
-    if test ! -e "$DB_NB_FILE"; then
-        create_db "$DB_NB_FILE" "$DB_NB_SCHEMA"
-    fi
-
-    if test ! -e "$DB_SB_FILE"; then
-        create_db "$DB_SB_FILE" "$DB_SB_SCHEMA"
-    fi
-
-    running_ovn_dbs=$(ovs-appctl -t ovsdb-server ovsdb-server/list-dbs | grep OVN | wc -l)
-    if [ "$running_ovn_dbs" != "2" ] ; then
-        ovs-appctl -t ovsdb-server ovsdb-server/add-db $DB_NB_FILE
-        ovs-appctl -t ovsdb-server ovsdb-server/add-db $DB_SB_FILE
-        running_ovn_dbs=$(ovs-appctl -t ovsdb-server ovsdb-server/list-dbs | grep OVN | wc -l)
-        if [ "$running_ovn_dbs" != "2" ] ; then
-            echo >&2 "$0: Failed to add OVN dbs to ovsdb-server"
-            exit 1
-        fi
-    fi
+upgrade_ovn_dbs () {
+    ovn_dbs=$(ovs-appctl -t ovsdb-server ovsdb-server/list-dbs 2>/dev/null)
+    for db in $ovn_dbs; do
+        case $db in
+            OVN*)
+                action "Removing $db from ovsdb-server" \
+                    ovs-appctl -t ovsdb-server ovsdb-server/remove-db $db
+                ;;
+        esac
+    done
+    upgrade_db "$DB_NB_FILE" "$DB_NB_SCHEMA"
+    upgrade_db "$DB_SB_FILE" "$DB_SB_SCHEMA"
+    for db in $DB_NB_FILE $DB_SB_FILE; do
+        action "Adding $db to ovsdb-server" \
+            ovs-appctl -t ovsdb-server ovsdb-server/add-db $db || exit 1
+    done
 }
 
 start_northd () {
     # We expect ovn-northd to be co-located with ovsdb-server handling both the
     # OVN_Northbound and OVN_Southbound dbs.
-    check_ovn_dbs
+    upgrade_ovn_dbs
 
     set ovn-northd
     set "$@" -vconsole:emer -vsyslog:err -vfile:info
@@ -229,13 +220,10 @@ case $command in
         stop_controller
         ;;
     restart_northd)
-        restart_northda
+        restart_northd
         ;;
     restart_controller)
         restart_controller
-        ;;
-    create_ovn_dbs)
-        create_ovn_dbs
         ;;
     help)
         usage

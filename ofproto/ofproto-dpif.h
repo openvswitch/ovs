@@ -153,6 +153,10 @@ bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *,
 int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
                                  struct rule_dpif *, const struct ofpact *,
                                  size_t ofpacts_len, struct dp_packet *);
+int ofproto_dpif_execute_actions__(struct ofproto_dpif *, const struct flow *,
+                                   struct rule_dpif *, const struct ofpact *,
+                                   size_t ofpacts_len, int recurse,
+                                   int resubmits, struct dp_packet *);
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofproto_packet_in *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);
@@ -164,6 +168,8 @@ struct rule_dpif *ofproto_dpif_refresh_rule(struct rule_dpif *);
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 struct ofport_dpif *ofp_port_to_ofport(const struct ofproto_dpif *,
                                        ofp_port_t);
+
+bool ofproto_dpif_backer_enabled(struct dpif_backer* backer);
 
 int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
                                    const struct match *, int priority,

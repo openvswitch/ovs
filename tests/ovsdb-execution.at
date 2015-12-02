@@ -138,7 +138,6 @@ m4_divert_pop([PREPARE_TESTS])
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb execute execution positive $5])
-   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([test-ovsdb execute "`$2`" m4_foreach([txn], [$3], [ 'txn'])],
      [0], [stdout], [])
    AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [$4])

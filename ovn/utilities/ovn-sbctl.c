@@ -40,6 +40,8 @@
 #include "process.h"
 #include "sset.h"
 #include "shash.h"
+#include "stream-ssl.h"
+#include "stream.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
@@ -75,6 +77,7 @@ OVS_NO_RETURN static void sbctl_exit(int status);
 static void sbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
+static const char *sbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static void do_sbctl(const char *args, struct ctl_command *, size_t n,
@@ -145,6 +148,19 @@ main(int argc, char *argv[])
     }
 }
 
+static const char *
+sbctl_default_db(void)
+{
+    static char *def;
+    if (!def) {
+        def = getenv("OVN_SB_DB");
+        if (!def) {
+            def = ctl_default_db();
+        }
+    }
+    return def;
+}
+
 static void
 parse_options(int argc, char *argv[], struct shash *local_options)
 {
@@ -171,6 +187,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"options", no_argument, NULL, OPT_OPTIONS},
         {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
+        STREAM_SSL_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
@@ -249,13 +266,13 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout < 0) {
-                ctl_fatal("value %s on -t or --timeout is invalid",
-                            optarg);
+                ctl_fatal("value %s on -t or --timeout is invalid", optarg);
             }
             break;
 
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
+        STREAM_SSL_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);
@@ -267,7 +284,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(short_options);
 
     if (!db) {
-        db = ctl_default_db();
+        db = sbctl_default_db();
     }
 
     for (i = n_global_long_options; options[i].name; i++) {
@@ -280,20 +297,20 @@ static void
 usage(void)
 {
     printf("\
-%s: ovs-vswitchd management utility\n\
+%s: OVN southbound DB management utility\n\
 \n\
-for debugging and testing only, never use it in production\n\
+For debugging and testing only, not for use in production.\n\
 \n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
-SouthBound DB commands:\n\
+General commands:\n\
   show                        print overview of database contents\n\
 \n\
 Chassis commands:\n\
   chassis-add CHASSIS ENCAP-TYPE ENCAP-IP  create a new chassis named\n\
-                                           CHASSIS with one encapsulation\n\
-                                           entry of ENCAP-TYPE and ENCAP-IP\n\
-  chassis-del CHASSIS         delete CHASSIS and all of its encaps,\n\
+                                           CHASSIS with ENCAP-TYPE tunnels\n\
+                                           and ENCAP-IP\n\
+  chassis-del CHASSIS         delete CHASSIS and all of its encaps\n\
                               and gateway_ports\n\
 \n\
 Port binding commands:\n\
@@ -309,7 +326,7 @@ Logical flow commands:\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
-  -t, --timeout=SECS          wait at most SECS seconds for ovs-vswitchd\n\
+  -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, ctl_get_db_cmd_usage(), ctl_default_db());
@@ -320,6 +337,7 @@ Options:\n\
 Other options:\n\
   -h, --help                  display this help message\n\
   -V, --version               display version information\n");
+    stream_usage("database", true, true, false);
     exit(EXIT_SUCCESS);
 }
 
@@ -342,7 +360,7 @@ struct sbctl_context {
     struct shash port_bindings;
 };
 
-/* Casts 'base' into 'strcut sbctl_context'. */
+/* Casts 'base' into 'struct sbctl_context'. */
 static struct sbctl_context *
 sbctl_context_cast(struct ctl_context *base)
 {
@@ -508,13 +526,11 @@ static void
 cmd_chassis_add(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
-    struct sbrec_chassis *ch;
-    struct sbrec_encap *encap;
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
-    const char *ch_name, *encap_type, *encap_ip;
+    const char *ch_name, *encap_types, *encap_ip;
 
     ch_name = ctx->argv[1];
-    encap_type = ctx->argv[2];
+    encap_types = ctx->argv[2];
     encap_ip = ctx->argv[3];
 
     sbctl_context_populate_cache(ctx);
@@ -528,12 +544,34 @@ cmd_chassis_add(struct ctl_context *ctx)
     }
     check_conflicts(sbctl_ctx, ch_name,
                     xasprintf("cannot create a chassis named %s", ch_name));
-    ch = sbrec_chassis_insert(ctx->txn);
+
+    char *tokstr = xstrdup(encap_types);
+    char *token, *save_ptr = NULL;
+    struct sset encap_set = SSET_INITIALIZER(&encap_set);
+    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
+         token = strtok_r(NULL, ",", &save_ptr)) {
+        sset_add(&encap_set, token);
+    }
+    free(tokstr);
+
+    size_t n_encaps = sset_count(&encap_set);
+    struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
+    const char *encap_type;
+    int i = 0;
+    SSET_FOR_EACH (encap_type, &encap_set){
+        encaps[i] = sbrec_encap_insert(ctx->txn);
+
+        sbrec_encap_set_type(encaps[i], encap_type);
+        sbrec_encap_set_ip(encaps[i], encap_ip);
+        i++;
+    }
+    sset_destroy(&encap_set);
+
+    struct sbrec_chassis *ch = sbrec_chassis_insert(ctx->txn);
     sbrec_chassis_set_name(ch, ch_name);
-    encap = sbrec_encap_insert(ctx->txn);
-    sbrec_encap_set_type(encap, encap_type);
-    sbrec_encap_set_ip(encap, encap_ip);
-    sbrec_chassis_set_encaps(ch, &encap, 1);
+    sbrec_chassis_set_encaps(ch, encaps, n_encaps);
+    free(encaps);
+
     sbctl_context_invalidate_cache(ctx);
 }
 
@@ -698,7 +736,7 @@ cmd_lflow_list(struct ctl_context *ctx)
         }
 
         const char *table_name = smap_get(&lflow->external_ids, "stage-name");
-        printf("  table=%" PRId64 "(%8s), priority=%3" PRId64
+        printf("  table=%" PRId64 "(%16s), priority=%5" PRId64
                ", match=(%s), action=(%s)\n",
                lflow->table_id, table_name ? table_name : "",
                lflow->priority, lflow->match, lflow->actions);
@@ -836,8 +874,8 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         struct ovsdb_symbol *symbol = node->data;
         if (!symbol->created) {
             ctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                        "with \"-- --id=%s create ...\")",
-                        node->name, node->name);
+                      "with \"-- --id=%s create ...\")",
+                      node->name, node->name);
         }
         if (!symbol->strong_ref) {
             if (!symbol->weak_ref) {

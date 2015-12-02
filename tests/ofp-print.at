@@ -1132,7 +1132,7 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 11 00 10 00 00 00 02 02 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, eviction=off
+OFPT_TABLE_MOD (OF1.4) (xid=0x2): table_id=2, eviction=off, vacancy=off
 ])
 AT_CLEANUP
 
@@ -2026,7 +2026,7 @@ AT_SETUP([OFPST_GROUP_DESC reply - OF1.5])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
 06 13 00 d8 00 00 00 02 00 07 00 00 00 00 00 00 \
-00 88 01 00 00 00 20 00 00 78 00 00 00 00 00 00 \
+00 c8 01 00 00 00 20 00 00 78 00 00 00 00 00 00 \
 00 28 00 10 00 00 00 00 00 00 00 10 00 00 00 01 \
 00 00 00 00 00 00 00 00 00 00 00 08 00 64 00 00 \
 00 01 00 08 00 00 00 01 \
@@ -2043,7 +2043,7 @@ ff ff 00 3b 00 00 15 40 00 00 00 01 00 00 00 00 \
 14 01 ff 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5) (xid=0x2):
- group_id=8192,type=select,selection_method=hash,fields=ip_dst=255.255.255.0,nw_proto,tcp_src,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+ group_id=8192,type=select,selection_method=hash,fields(ip_dst=255.255.255.0,nw_proto,tcp_src),bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
 ])
 AT_CLEANUP
 
@@ -2675,6 +2675,52 @@ OFPT_ROLE_STATUS (OF1.4) (xid=0xa): role=master generation_id=16 reason=configur
 ])
 AT_CLEANUP
 
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 0f 00 10 02 00 00 00 \
+00 00 00 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=group_mod
+ ADD group_id=1,type=all
+])
+AT_CLEANUP
+
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 0f 00 10 02 00 00 00 \
+00 01 01 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=group_mod
+ MOD group_id=1,type=select
+])
+AT_CLEANUP
+
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 1d 00 10 02 00 00 00 \
+00 00 00 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=meter_mod ADD meter=1 bands=
+])
+AT_CLEANUP
+
+AT_SETUP([OFP_REQUESTFORWARD - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 20 00 18 00 00 00 02 \
+05 1d 00 10 02 00 00 00 \
+00 01 01 00 00 00 00 01 \
+"], [0], [dnl
+OFPT_REQUESTFORWARD (OF1.4) (xid=0x2): reason=meter_mod MOD meter=1 flags:0x100 bands=
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_PACKET_IN])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -2775,6 +2821,30 @@ OFPT_SET_ASYNC (OF1.4) (xid=0x2):
      ROLE_STATUS: (off)
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_SET_ASYNC_CONFIG - invalid mask - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 1c 00 38 00 00 00 02 00 00 00 08 00 00 00 40 \
+00 01 00 08 00 00 00 02 00 02 00 08 00 00 00 02 \
+00 03 00 08 00 00 00 05 00 04 00 08 00 00 00 1c \
+00 05 00 08 00 00 00 05 \
+"], [0], [dnl
+OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_INVALID***
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_SET_ASYNC_CONFIG - unsupported configuration - OF1.4])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 1c 00 38 00 00 00 02 00 00 00 08 00 00 00 05 \
+00 11 00 08 00 00 00 02 00 02 00 08 00 00 00 02 \
+00 03 00 08 00 00 00 05 00 04 00 08 00 00 00 1c \
+00 05 00 08 00 00 00 05\
+"], [0], [dnl
+OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_UNSUPPORTED***
 ])
 AT_CLEANUP
 

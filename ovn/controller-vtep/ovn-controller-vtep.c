@@ -39,6 +39,7 @@
 
 #include "binding.h"
 #include "gateway.h"
+#include "vtep.h"
 #include "ovn-controller-vtep.h"
 
 static unixctl_cb_func ovn_controller_vtep_exit;
@@ -63,7 +64,7 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
-    daemonize_start();
+    daemonize_start(false);
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
@@ -99,6 +100,7 @@ main(int argc, char *argv[])
 
         gateway_run(&ctx);
         binding_run(&ctx);
+        vtep_run(&ctx);
         unixctl_server_run(unixctl);
 
         unixctl_server_wait(unixctl);
@@ -127,6 +129,7 @@ main(int argc, char *argv[])
          * We're done if all of them return true. */
         done = binding_cleanup(&ctx);
         done = gateway_cleanup(&ctx) && done;
+        done = vtep_cleanup(&ctx) && done;
         if (done) {
             poll_immediate_wake();
         }

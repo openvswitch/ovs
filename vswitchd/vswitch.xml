@@ -145,10 +145,25 @@
           The maximum
           number of flows allowed in the datapath flow table.  Internally OVS
           will choose a flow limit which will likely be lower than this number,
-          based on real time network conditions.
+          based on real time network conditions. Tweaking this value is
+          discouraged unless you know exactly what you're doing.
         </p>
         <p>
           The default is 200000.
+        </p>
+      </column>
+
+      <column name="other_config" key="max-idle"
+              type='{"type": "integer", "minInteger": 500}'>
+        <p>
+          The maximum time (in ms) that idle flows will remain cached in the
+          datapath. Internally OVS will check the validity and activity for
+          datapath flows regularly and may expire flows quicker than this
+          number, based on real time network conditions. Tweaking this
+          value is discouraged unless you know exactly what you're doing.
+        </p>
+        <p>
+          The default is 10000.
         </p>
       </column>
 
@@ -530,7 +545,7 @@
       </column>
 
       <column name="auto_attach">
-          Auto Attach configuration.
+        Auto Attach configuration.
       </column>
     </group>
 
@@ -685,16 +700,16 @@
       </column>
 
       <column name="protocols">
-	<p>
-	  List of OpenFlow protocols that may be used when negotiating
-	  a connection with a controller.  OpenFlow 1.0, 1.1, 1.2, and
-	  1.3 are enabled by default if this column is empty.
-	</p>
+        <p>
+          List of OpenFlow protocols that may be used when negotiating
+          a connection with a controller.  OpenFlow 1.0, 1.1, 1.2, and
+          1.3 are enabled by default if this column is empty.
+        </p>
 
-	<p>
-	  OpenFlow 1.4 is not enabled by default because its implementation is
-	  missing features.
-	</p>
+        <p>
+          OpenFlow 1.4 is not enabled by default because its implementation is
+          missing features.
+        </p>
 
         <p>
           OpenFlow 1.5 has the same risks as OpenFlow 1.4, but it is even more
@@ -982,45 +997,45 @@
       <column name="other_config" key="forward-bpdu"
               type='{"type": "boolean"}'>
 
-	<p>
+        <p>
           Controls forwarding of BPDUs and other network control frames when
           NORMAL action is invoked.  When this option is <code>false</code> or
           unset, frames with reserved Ethernet addresses (see table below) will
           not be forwarded.  When this option is <code>true</code>, such frames
           will not be treated specially.
-	</p>
-
-	<p>
-	  The above general rule has the following exceptions:
-	</p>
-
-	<ul>
-	  <li>
-	    If STP is enabled on the bridge (see the <ref column="stp_enable"
-	    table="Bridge"/> column in the <ref table="Bridge"/> table), the
-	    bridge processes all received STP packets and never passes them to
-	    OpenFlow or forwards them.  This is true even if STP is disabled on
-	    an individual port.
-	  </li>
-
-	  <li>
-	    If LLDP is enabled on an interface (see the <ref column="lldp"
-	    table="Interface"/> column in the <ref table="Interface"/> table),
-	    the interface processes received LLDP packets and never passes them
-	    to OpenFlow or forwards them.
-	  </li>
-	</ul>
-
-	<p>
-	  Set this option to <code>true</code> if the Open vSwitch bridge
-	  connects different Ethernet networks and is not configured to
-	  participate in STP.
-	</p>
+        </p>
 
         <p>
-	  This option affects packets with the following destination MAC
-	  addresses:
-	</p>
+          The above general rule has the following exceptions:
+        </p>
+
+        <ul>
+          <li>
+            If STP is enabled on the bridge (see the <ref column="stp_enable"
+            table="Bridge"/> column in the <ref table="Bridge"/> table), the
+            bridge processes all received STP packets and never passes them to
+            OpenFlow or forwards them.  This is true even if STP is disabled on
+            an individual port.
+          </li>
+
+          <li>
+            If LLDP is enabled on an interface (see the <ref column="lldp"
+            table="Interface"/> column in the <ref table="Interface"/> table),
+            the interface processes received LLDP packets and never passes them
+            to OpenFlow or forwards them.
+          </li>
+        </ul>
+
+        <p>
+          Set this option to <code>true</code> if the Open vSwitch bridge
+          connects different Ethernet networks and is not configured to
+          participate in STP.
+        </p>
+
+        <p>
+          This option affects packets with the following destination MAC
+          addresses:
+        </p>
 
         <dl>
           <dt><code>01:80:c2:00:00:00</code></dt>
@@ -1036,8 +1051,8 @@
           <dd>Extreme Discovery Protocol (EDP).</dd>
 
           <dt>
-	    <code>00:e0:2b:00:00:04</code> and <code>00:e0:2b:00:00:06</code>
-	  </dt>
+            <code>00:e0:2b:00:00:04</code> and <code>00:e0:2b:00:00:06</code>
+          </dt>
           <dd>Ethernet Automatic Protection Switching (EAPS).</dd>
 
           <dt><code>01:00:0c:cc:cc:cc</code></dt>
@@ -1099,8 +1114,8 @@
       <column name="external_ids"/>
     </group>
   </table>
- 
- <table name="Port" table="Port or bond configuration.">
+  
+  <table name="Port" table="Port or bond configuration.">
     <p>A port within a <ref table="Bridge"/>.</p>
     <p>Most commonly, a port has exactly one ``interface,'' pointed to by its
     <ref column="interfaces"/> column.  Such a port logically
@@ -1382,7 +1397,7 @@
         </column>
 
         <column name="other_config" key="lacp-time"
-          type='{"type": "string", "enum": ["set", ["fast", "slow"]]}'>
+                type='{"type": "string", "enum": ["set", ["fast", "slow"]]}'>
           <p>
             The LACP timing which should be used on this <ref table="Port"/>.
             By default <code>slow</code> is used.  When configured to be
@@ -1394,7 +1409,7 @@
         </column>
 
         <column name="other_config" key="lacp-fallback-ab"
-          type='{"type": "boolean"}'>
+                type='{"type": "boolean"}'>
           <p>
             Determines the behavior of openvswitch bond in LACP mode. If
             the partner switch does not support LACP, setting this option
@@ -1659,6 +1674,14 @@
         <code>fake-bridge-</code>,
         e.g. <code>fake-bridge-xs-network-uuids</code>.
       </column>
+
+      <column name="other_config" key="transient"
+              type='{"type": "boolean"}'>
+        <p>
+          If set to <code>true</code>, the port will be removed when
+          <code>ovs-ctl start --delete-transient-ports</code> is used.
+        </p>
+      </column>
     </group>
 
     <column name="bond_active_slave">
@@ -1745,57 +1768,57 @@
       </column>
 
       <group title="OpenFlow Port Number">
-	<p>
-	  When a client adds a new interface, Open vSwitch chooses an OpenFlow
-	  port number for the new port.  If the client that adds the port fills
-	  in <ref column="ofport_request"/>, then Open vSwitch tries to use its
-	  value as the OpenFlow port number.  Otherwise, or if the requested
-	  port number is already in use or cannot be used for another reason,
-	  Open vSwitch automatically assigns a free port number.  Regardless of
-	  how the port number was obtained, Open vSwitch then reports in <ref
-	  column="ofport"/> the port number actually assigned.
-	</p>
+        <p>
+          When a client adds a new interface, Open vSwitch chooses an OpenFlow
+          port number for the new port.  If the client that adds the port fills
+          in <ref column="ofport_request"/>, then Open vSwitch tries to use its
+          value as the OpenFlow port number.  Otherwise, or if the requested
+          port number is already in use or cannot be used for another reason,
+          Open vSwitch automatically assigns a free port number.  Regardless of
+          how the port number was obtained, Open vSwitch then reports in <ref
+          column="ofport"/> the port number actually assigned.
+        </p>
 
-	<p>
-	  Open vSwitch limits the port numbers that it automatically assigns to
-	  the range 1 through 32,767, inclusive.  Controllers therefore have
-	  free use of ports 32,768 and up.
-	</p>
+        <p>
+          Open vSwitch limits the port numbers that it automatically assigns to
+          the range 1 through 32,767, inclusive.  Controllers therefore have
+          free use of ports 32,768 and up.
+        </p>
 
-	<column name="ofport">
-	  <p>
-	    OpenFlow port number for this interface.  Open vSwitch sets this
-	    column's value, so other clients should treat it as read-only.
-	  </p>
-	  <p>
-	    The OpenFlow ``local'' port (<code>OFPP_LOCAL</code>) is 65,534.
-	    The other valid port numbers are in the range 1 to 65,279,
-	    inclusive.  Value -1 indicates an error adding the interface.
-	  </p>
-	</column>
+        <column name="ofport">
+          <p>
+            OpenFlow port number for this interface.  Open vSwitch sets this
+            column's value, so other clients should treat it as read-only.
+          </p>
+          <p>
+            The OpenFlow ``local'' port (<code>OFPP_LOCAL</code>) is 65,534.
+            The other valid port numbers are in the range 1 to 65,279,
+            inclusive.  Value -1 indicates an error adding the interface.
+          </p>
+        </column>
 
-	<column name="ofport_request"
-		type='{"type": "integer", "minInteger": 1, "maxInteger": 65279}'>
-	  <p>
-	    Requested OpenFlow port number for this interface.
-	  </p>
+        <column name="ofport_request"
+                type='{"type": "integer", "minInteger": 1, "maxInteger": 65279}'>
+          <p>
+            Requested OpenFlow port number for this interface.
+          </p>
 
-	  <p>
-	    A client should ideally set this column's value in the same
-	    database transaction that it uses to create the interface.  Open
-	    vSwitch version 2.1 and later will honor a later request for a
-	    specific port number, althuogh it might confuse some controllers:
-	    OpenFlow does not have a way to announce a port number change, so
-	    Open vSwitch represents it over OpenFlow as a port deletion
-	    followed immediately by a port addition.
-	  </p>
+          <p>
+            A client should ideally set this column's value in the same
+            database transaction that it uses to create the interface.  Open
+            vSwitch version 2.1 and later will honor a later request for a
+            specific port number, althuogh it might confuse some controllers:
+            OpenFlow does not have a way to announce a port number change, so
+            Open vSwitch represents it over OpenFlow as a port deletion
+            followed immediately by a port addition.
+          </p>
 
-	  <p>
-	    If <ref column="ofport_request"/> is set or changed to some other
-	    port's automatically assigned port number, Open vSwitch chooses a
-	    new port number for the latter port.
-	  </p>
-	</column>
+          <p>
+            If <ref column="ofport_request"/> is set or changed to some other
+            port's automatically assigned port number, Open vSwitch chooses a
+            new port number for the latter port.
+          </p>
+        </column>
       </group>
     </group>
 
@@ -1850,15 +1873,15 @@
 
           <dt><code>vxlan</code></dt>
           <dd>
-	    <p>
-	      An Ethernet tunnel over the UDP-based VXLAN protocol described in
-	      RFC 7348.
-	    </p>
-	    <p>
-	      Open vSwitch uses UDP destination port 4789.  The source port used for
-	      VXLAN traffic varies on a per-flow basis and is in the ephemeral port
-	      range.
-	    </p>
+            <p>
+              An Ethernet tunnel over the UDP-based VXLAN protocol described in
+              RFC 7348.
+            </p>
+            <p>
+              Open vSwitch uses UDP destination port 4789.  The source port used for
+              VXLAN traffic varies on a per-flow basis and is in the ephemeral port
+              range.
+            </p>
           </dd>
 
           <dt><code>lisp</code></dt>
@@ -1879,21 +1902,21 @@
 
           <dt><code>stt</code></dt>
           <dd>
-             The Stateless TCP Tunnel (STT) is particularly useful when tunnel
-             endpoints are in end-systems, as it utilizes the capabilities of
-             standard network interface cards to improve performance.  STT utilizes
-             a TCP-like header inside the IP header. It is stateless, i.e., there is
-             no TCP connection state of any kind associated with the tunnel.  The
-             TCP-like header is used to leverage the capabilities of existing
-             network interface cards, but should not be interpreted as implying
-             any sort of connection state between endpoints.
-             Since the STT protocol does not engage in the usual TCP 3-way handshake,
-             so it will have difficulty traversing stateful firewalls.
-             The protocol is documented at
-             http://www.ietf.org/archive/id/draft-davie-stt-06.txt
+            The Stateless TCP Tunnel (STT) is particularly useful when tunnel
+            endpoints are in end-systems, as it utilizes the capabilities of
+            standard network interface cards to improve performance.  STT utilizes
+            a TCP-like header inside the IP header. It is stateless, i.e., there is
+            no TCP connection state of any kind associated with the tunnel.  The
+            TCP-like header is used to leverage the capabilities of existing
+            network interface cards, but should not be interpreted as implying
+            any sort of connection state between endpoints.
+            Since the STT protocol does not engage in the usual TCP 3-way handshake,
+            so it will have difficulty traversing stateful firewalls.
+            The protocol is documented at
+            http://www.ietf.org/archive/id/draft-davie-stt-06.txt
 
-             All traffic uses a default destination port of 7471. STT is only
-             available in kernel datapath on kernel 3.5 or newer.
+            All traffic uses a default destination port of 7471. STT is only
+            available in kernel datapath on kernel 3.5 or newer.
           </dd>
 
           <dt><code>patch</code></dt>
@@ -1903,7 +1926,7 @@
 
           <dt><code>null</code></dt>
           <dd>An ignored interface. Deprecated and slated for removal in
-              February 2013.</dd>
+          February 2013.</dd>
         </dl>
       </column>
     </group>
@@ -1947,9 +1970,9 @@
         </ul>
 
         <p>
-         The remote tunnel endpoint for any packet received from a tunnel
-         is available in the <code>tun_src</code> field for matching in the
-         flow table.
+          The remote tunnel endpoint for any packet received from a tunnel
+          is available in the <code>tun_src</code> field for matching in the
+          flow table.
         </p>
       </column>
 
@@ -2071,23 +2094,23 @@
 
       <group title="Tunnel Options: vxlan only">
 
-      <column name="options" key="exts">
-        <p>Optional.  Comma separated list of optional VXLAN extensions to
-           enable. The following extensions are supported:</p>
+        <column name="options" key="exts">
+          <p>Optional.  Comma separated list of optional VXLAN extensions to
+          enable. The following extensions are supported:</p>
 
-        <ul>
-          <li>
-            <code>gbp</code>: VXLAN-GBP allows to transport the group policy
-            context of a packet across the VXLAN tunnel to other network
-            peers. See the field description of <code>tun_gbp_id</code> and
-            <code>tun_gbp_flags</code> in ovs-ofctl(8) for additional
-            information.
-            (<code>https://tools.ietf.org/html/draft-smith-vxlan-group-policy</code>)
-          </li>
-        </ul>
-      </column>
+          <ul>
+            <li>
+              <code>gbp</code>: VXLAN-GBP allows to transport the group policy
+              context of a packet across the VXLAN tunnel to other network
+              peers. See the field description of <code>tun_gbp_id</code> and
+              <code>tun_gbp_flags</code> in ovs-ofctl(8) for additional
+              information.
+              (<code>https://tools.ietf.org/html/draft-smith-vxlan-group-policy</code>)
+            </li>
+          </ul>
+        </column>
 
-	  </group>
+      </group>
 
       <group title="Tunnel Options: gre, ipsec_gre, geneve, and vxlan">
         <p>
@@ -2101,7 +2124,7 @@
             checksums on outgoing packets.  Default is disabled, set to
             <code>true</code> to enable.  Checksums present on incoming
             packets will be validated regardless of this setting.
-	  </p>
+          </p>
 
           <p>
             When using the upstream Linux kernel module, computation of
@@ -2114,9 +2137,9 @@
           </p>
 
           <p>
-	    This option is supported for <code>ipsec_gre</code>, but not useful
-	    because GRE checksums are weaker than, and redundant with, IPsec
-	    payload authentication.
+            This option is supported for <code>ipsec_gre</code>, but not useful
+            because GRE checksums are weaker than, and redundant with, IPsec
+            payload authentication.
           </p>
         </column>
       </group>
@@ -2411,70 +2434,70 @@
 
     <group title="Bidirectional Forwarding Detection (BFD)">
       <p>
-	BFD, defined in RFC 5880 and RFC 5881, allows point-to-point
-	detection of connectivity failures by occasional transmission of
-	BFD control messages.  Open vSwitch implements BFD to serve
-	as a more popular and standards compliant alternative to CFM.
+        BFD, defined in RFC 5880 and RFC 5881, allows point-to-point
+        detection of connectivity failures by occasional transmission of
+        BFD control messages.  Open vSwitch implements BFD to serve
+        as a more popular and standards compliant alternative to CFM.
       </p>
 
       <p>
-	BFD operates by regularly transmitting BFD control messages at a rate
-	negotiated independently in each direction.  Each endpoint specifies
-	the rate at which it expects to receive control messages, and the rate
-	at which it is willing to transmit them.  Open vSwitch uses a detection
-	multiplier of three, meaning that an endpoint signals a connectivity
-	fault if three consecutive BFD control messages fail to arrive.  In the
-	case of a unidirectional connectivity issue, the system not receiving
-	BFD control messages signals the problem to its peer in the messages it
-	transmits.
+        BFD operates by regularly transmitting BFD control messages at a rate
+        negotiated independently in each direction.  Each endpoint specifies
+        the rate at which it expects to receive control messages, and the rate
+        at which it is willing to transmit them.  Open vSwitch uses a detection
+        multiplier of three, meaning that an endpoint signals a connectivity
+        fault if three consecutive BFD control messages fail to arrive.  In the
+        case of a unidirectional connectivity issue, the system not receiving
+        BFD control messages signals the problem to its peer in the messages it
+        transmits.
       </p>
 
       <p>
-	The Open vSwitch implementation of BFD aims to comply faithfully
-	with RFC 5880 requirements.  Open vSwitch does not implement the
-	optional Authentication or ``Echo Mode'' features.
+        The Open vSwitch implementation of BFD aims to comply faithfully
+        with RFC 5880 requirements.  Open vSwitch does not implement the
+        optional Authentication or ``Echo Mode'' features.
       </p>
 
       <group title="BFD Configuration">
-	<p>
-	  A controller sets up key-value pairs in the <ref column="bfd"/>
-	  column to enable and configure BFD.
-	</p>
+        <p>
+          A controller sets up key-value pairs in the <ref column="bfd"/>
+          column to enable and configure BFD.
+        </p>
 
-	<column name="bfd" key="enable" type='{"type": "boolean"}'>
+        <column name="bfd" key="enable" type='{"type": "boolean"}'>
           True to enable BFD on this <ref table="Interface"/>.  If not
           specified, BFD will not be enabled by default.
-	</column>
+        </column>
 
-	<column name="bfd" key="min_rx"
-		type='{"type": "integer", "minInteger": 1}'>
+        <column name="bfd" key="min_rx"
+                type='{"type": "integer", "minInteger": 1}'>
           The shortest interval, in milliseconds, at which this BFD session
           offers to receive BFD control messages.  The remote endpoint may
           choose to send messages at a slower rate.  Defaults to
           <code>1000</code>.
-	</column>
+        </column>
 
-	<column name="bfd" key="min_tx"
-		type='{"type": "integer", "minInteger": 1}'>
+        <column name="bfd" key="min_tx"
+                type='{"type": "integer", "minInteger": 1}'>
           The shortest interval, in milliseconds, at which this BFD session is
           willing to transmit BFD control messages.  Messages will actually be
           transmitted at a slower rate if the remote endpoint is not willing to
           receive as quickly as specified.  Defaults to <code>100</code>.
-	</column>
+        </column>
 
-	<column name="bfd" key="decay_min_rx" type='{"type": "integer"}'>
-	  An alternate receive interval, in milliseconds, that must be greater
-	  than or equal to <ref column="bfd" key="min_rx"/>.  The
-	  implementation switches from <ref column="bfd" key="min_rx"/> to <ref
-	  column="bfd" key="decay_min_rx"/> when there is no obvious incoming
-	  data traffic at the interface, to reduce the CPU and bandwidth cost
-	  of monitoring an idle interface.  This feature may be disabled by
-	  setting a value of 0.  This feature is reset whenever <ref
-	  column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
-	  changes.
-	</column>
+        <column name="bfd" key="decay_min_rx" type='{"type": "integer"}'>
+          An alternate receive interval, in milliseconds, that must be greater
+          than or equal to <ref column="bfd" key="min_rx"/>.  The
+          implementation switches from <ref column="bfd" key="min_rx"/> to <ref
+          column="bfd" key="decay_min_rx"/> when there is no obvious incoming
+          data traffic at the interface, to reduce the CPU and bandwidth cost
+          of monitoring an idle interface.  This feature may be disabled by
+          setting a value of 0.  This feature is reset whenever <ref
+          column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
+          changes.
+        </column>
 
-	<column name="bfd" key="forwarding_if_rx" type='{"type": "boolean"}'>
+        <column name="bfd" key="forwarding_if_rx" type='{"type": "boolean"}'>
           When <code>true</code>, traffic received on the
           <ref table="Interface"/> is used to indicate the capability of packet
           I/O.  BFD control packets are still transmitted and received.  At
@@ -2482,98 +2505,98 @@
           column="bfd" key="min_rx"/> amount of time.  Otherwise, even if
           traffic are received, the <ref column="bfd" key="forwarding"/>
           will be <code>false</code>.
-	</column>
+        </column>
 
-	<column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
-	  Set to true to notify the remote endpoint that traffic should not be
-	  forwarded to this system for some reason other than a connectivty
-	  failure on the interface being monitored.  The typical underlying
-	  reason is ``concatenated path down,'' that is, that connectivity
-	  beyond the local system is down.  Defaults to false.
-	</column>
+        <column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
+          Set to true to notify the remote endpoint that traffic should not be
+          forwarded to this system for some reason other than a connectivty
+          failure on the interface being monitored.  The typical underlying
+          reason is ``concatenated path down,'' that is, that connectivity
+          beyond the local system is down.  Defaults to false.
+        </column>
 
-	<column name="bfd" key="check_tnl_key" type='{"type": "boolean"}'>
+        <column name="bfd" key="check_tnl_key" type='{"type": "boolean"}'>
           Set to true to make BFD accept only control messages with a tunnel
           key of zero.  By default, BFD accepts control messages with any
           tunnel key.
-	</column>
+        </column>
 
-	<column name="bfd" key="bfd_local_src_mac">
-	  Set to an Ethernet address in the form
-	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
-	  to set the MAC used as source for transmitted BFD packets.  The
-	  default is the mac address of the BFD enabled interface.
-	</column>
+        <column name="bfd" key="bfd_local_src_mac">
+          Set to an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+          to set the MAC used as source for transmitted BFD packets.  The
+          default is the mac address of the BFD enabled interface.
+        </column>
 
-	<column name="bfd" key="bfd_local_dst_mac">
-	  Set to an Ethernet address in the form
-	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
-	  to set the MAC used as destination for transmitted BFD packets.  The
-	  default is <code>00:23:20:00:00:01</code>.
-	</column>
+        <column name="bfd" key="bfd_local_dst_mac">
+          Set to an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+          to set the MAC used as destination for transmitted BFD packets.  The
+          default is <code>00:23:20:00:00:01</code>.
+        </column>
 
-	<column name="bfd" key="bfd_remote_dst_mac">
-	  Set to an Ethernet address in the form
-	  <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
-	  to set the MAC used for checking the destination of received BFD packets.
-	  Packets with different destination MAC will not be considered as BFD packets.
-	  If not specified the destination MAC address of received BFD packets
-	  are not checked.
-	</column>
+        <column name="bfd" key="bfd_remote_dst_mac">
+          Set to an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+          to set the MAC used for checking the destination of received BFD packets.
+          Packets with different destination MAC will not be considered as BFD packets.
+          If not specified the destination MAC address of received BFD packets
+          are not checked.
+        </column>
 
-	<column name="bfd" key="bfd_src_ip">
+        <column name="bfd" key="bfd_src_ip">
           Set to an IPv4 address to set the IP address used as source for
           transmitted BFD packets.  The default is <code>169.254.1.1</code>.
-	</column>
+        </column>
 
-	<column name="bfd" key="bfd_dst_ip">
+        <column name="bfd" key="bfd_dst_ip">
           Set to an IPv4 address to set the IP address used as destination
           for transmitted BFD packets.  The default is <code>169.254.1.0</code>.
-	</column>
+        </column>
       </group>
 
       <group title="BFD Status">
-	<p>
-	  The switch sets key-value pairs in the <ref column="bfd_status"/>
-	  column to report the status of BFD on this interface.  When BFD is
-	  not enabled, with <ref column="bfd" key="enable"/>, the switch clears
-	  all key-value pairs from <ref column="bfd_status"/>.
-	</p>
+        <p>
+          The switch sets key-value pairs in the <ref column="bfd_status"/>
+          column to report the status of BFD on this interface.  When BFD is
+          not enabled, with <ref column="bfd" key="enable"/>, the switch clears
+          all key-value pairs from <ref column="bfd_status"/>.
+        </p>
 
-	<column name="bfd_status" key="state"
-		type='{"type": "string",
-		      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-	  Reports the state of the BFD session.  The BFD session is fully
-	  healthy and negotiated if <code>UP</code>.
-	</column>
+        <column name="bfd_status" key="state"
+                type='{"type": "string",
+                      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+          Reports the state of the BFD session.  The BFD session is fully
+          healthy and negotiated if <code>UP</code>.
+        </column>
 
-	<column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
-	  Reports whether the BFD session believes this <ref
-	  table="Interface"/> may be used to forward traffic.  Typically this
-	  means the local session is signaling <code>UP</code>, and the remote
-	  system isn't signaling a problem such as concatenated path down.
-	</column>
+        <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+          Reports whether the BFD session believes this <ref
+          table="Interface"/> may be used to forward traffic.  Typically this
+          means the local session is signaling <code>UP</code>, and the remote
+          system isn't signaling a problem such as concatenated path down.
+        </column>
 
-	<column name="bfd_status" key="diagnostic">
-	  In case of a problem, set to an error message that reports what the
-	  local BFD session thinks is wrong.  The error messages are defined
-	  in section 4.1 of [RFC 5880].
-	</column>
+        <column name="bfd_status" key="diagnostic">
+          A diagnostic code specifying the local system's reason for the
+          last change in session state. The error messages are defined in
+          section 4.1 of [RFC 5880].
+        </column>
 
-	<column name="bfd_status" key="remote_state"
-		type='{"type": "string",
-		      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-	  Reports the state of the remote endpoint's BFD session.
-	</column>
+        <column name="bfd_status" key="remote_state"
+                type='{"type": "string",
+                      "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+          Reports the state of the remote endpoint's BFD session.
+        </column>
 
-	<column name="bfd_status" key="remote_diagnostic">
-	  In case of a problem, set to an error message that reports what the
-	  remote endpoint's BFD session thinks is wrong.  The error messages
-	  are defined in section 4.1 of [RFC 5880].
-	</column>
+        <column name="bfd_status" key="remote_diagnostic">
+          A diagnostic code specifying the remote system's reason for the
+          last change in session state. The error messages are defined in
+          section 4.1 of [RFC 5880].
+        </column>
 
         <column name="bfd_status" key="flap_count"
-          type='{"type": "integer", "minInteger": 0}'>
+                type='{"type": "integer", "minInteger": 0}'>
           Counts the number of <ref column="bfd_status" key="forwarding" />
           flaps since start.  A flap is considered as a change of the
           <ref column="bfd_status" key="forwarding" /> value.
@@ -2601,9 +2624,9 @@
       </p>
 
       <p>
-          When operating over tunnels which have no <code>in_key</code>, or an
-          <code>in_key</code> of <code>flow</code>.  CFM will only accept CCMs
-          with a tunnel key of zero.
+        When operating over tunnels which have no <code>in_key</code>, or an
+        <code>in_key</code> of <code>flow</code>.  CFM will only accept CCMs
+        with a tunnel key of zero.
       </p>
 
       <column name="cfm_mpid">
@@ -2688,8 +2711,8 @@
 
       <column name="cfm_remote_opstate">
         <p>When in extended mode, indicates the operational state of the
-          remote endpoint as either <code>up</code> or <code>down</code>.  See
-          <ref column="other_config" key="cfm_opstate"/>.
+        remote endpoint as either <code>up</code> or <code>down</code>.  See
+        <ref column="other_config" key="cfm_opstate"/>.
         </p>
       </column>
 
@@ -2765,7 +2788,7 @@
         </p>
 
         <p>
-            Demand mode has a couple of caveats:
+          Demand mode has a couple of caveats:
           <ul>
             <li>
               To ensure that ovs-vswitchd has enough time to pull statistics
@@ -2803,14 +2826,14 @@
       </column>
 
       <column name="other_config" key="cfm_ccm_vlan"
-        type='{"type": "integer", "minInteger": 1, "maxInteger": 4095}'>
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 4095}'>
         When set, the CFM module will apply a VLAN tag to all CCMs it generates
         with the given value.  May be the string <code>random</code> in which
         case each CCM will be tagged with a different randomly generated VLAN.
       </column>
 
       <column name="other_config" key="cfm_ccm_pcp"
-        type='{"type": "integer", "minInteger": 1, "maxInteger": 7}'>
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 7}'>
         When set, the CFM module will apply a VLAN tag to all CCMs it generates
         with the given PCP value, the VLAN ID of the tag is governed by the
         value of <ref column="other_config" key="cfm_ccm_vlan"/>. If
@@ -2918,17 +2941,17 @@
 
     <group title="VLAN Splinters">
       <p>
-	The ``VLAN splinters'' feature increases Open vSwitch compatibility
-	with buggy network drivers in old versions of Linux that do not
-	properly support VLANs when VLAN devices are not used, at some cost
-	in memory and performance.
+        The ``VLAN splinters'' feature increases Open vSwitch compatibility
+        with buggy network drivers in old versions of Linux that do not
+        properly support VLANs when VLAN devices are not used, at some cost
+        in memory and performance.
       </p>
 
       <p>
-	When VLAN splinters are enabled on a particular interface, Open vSwitch
-	creates a VLAN device for each in-use VLAN.  For sending traffic tagged
-	with a VLAN on the interface, it substitutes the VLAN device.  Traffic
-	received on the VLAN device is treated as if it had been received on
+        When VLAN splinters are enabled on a particular interface, Open vSwitch
+        creates a VLAN device for each in-use VLAN.  For sending traffic tagged
+        with a VLAN on the interface, it substitutes the VLAN device.  Traffic
+        received on the VLAN device is treated as if it had been received on
         the interface on the particular VLAN.
       </p>
 
@@ -2970,8 +2993,8 @@
       </p>
 
       <p>
-	VLAN splinters are deprecated.  When broken device drivers are no
-	longer in widespread use, we will delete this feature.
+        VLAN splinters are deprecated.  When broken device drivers are no
+        longer in widespread use, we will delete this feature.
       </p>
 
       <column name="other_config" key="enable-vlan-splinters"
@@ -2996,12 +3019,12 @@
 
     <group title="Auto Attach Configuration">
       <p>
-          Auto Attach configuration for a particular interface.
+        Auto Attach configuration for a particular interface.
       </p>
 
       <column name="lldp" key="enable" type='{"type": "boolean"}'>
-          True to enable LLDP on this <ref table="Interface"/>.  If not
-          specified, LLDP will be disabled by default.
+        True to enable LLDP on this <ref table="Interface"/>.  If not
+        specified, LLDP will be disabled by default.
       </column>
     </group>
 
@@ -3978,7 +4001,7 @@
       </p>
 
       <column name="other_config" key="dscp"
-                type='{"type": "integer"}'>
+              type='{"type": "integer"}'>
         The Differentiated Service Code Point (DSCP) is specified using 6 bits
         in the Type of Service (TOS) field in the IP header. DSCP provides a
         mechanism to classify the network traffic and provide Quality of
@@ -4244,11 +4267,11 @@
       </column>
 
       <column name="status" key="bound_port" type='{"type": "integer"}'>
-          When <ref column="target"/> is <code>ptcp:</code> or
-          <code>pssl:</code>, this is the TCP port on which the OVSDB server is
-          listening.  (This is is particularly useful when <ref
-          column="target"/> specifies a port of 0, allowing the kernel to
-          choose any available port.)
+        When <ref column="target"/> is <code>ptcp:</code> or
+        <code>pssl:</code>, this is the TCP port on which the OVSDB server is
+        listening.  (This is is particularly useful when <ref
+        column="target"/> specifies a port of 0, allowing the kernel to
+        choose any available port.)
       </column>
     </group>
 
@@ -4259,7 +4282,7 @@
       </p>
 
       <column name="other_config" key="dscp"
-                type='{"type": "integer"}'>
+              type='{"type": "integer"}'>
         The Differentiated Service Code Point (DSCP) is specified using 6 bits
         in the Type of Service (TOS) field in the IP header. DSCP provides a
         mechanism to classify the network traffic and provide Quality of
@@ -4304,18 +4327,18 @@
 
     <column name="active_timeout">
       <p>
-	The interval at which NetFlow records are sent for flows that
-	are still active, in seconds.  A value of <code>0</code>
-	requests the default timeout (currently 600 seconds); a value
-	of <code>-1</code> disables active timeouts.
+        The interval at which NetFlow records are sent for flows that
+        are still active, in seconds.  A value of <code>0</code>
+        requests the default timeout (currently 600 seconds); a value
+        of <code>-1</code> disables active timeouts.
       </p>
 
       <p>
-	The NetFlow passive timeout, for flows that become inactive,
-	is not configurable.  It will vary depending on the Open
-	vSwitch version, the forms and contents of the OpenFlow flow
-	tables, CPU and memory usage, and network activity.  A typical
-	passive timeout is about a second.
+        The NetFlow passive timeout, for flows that become inactive,
+        is not configurable.  It will vary depending on the Open
+        vSwitch version, the forms and contents of the OpenFlow flow
+        tables, CPU and memory usage, and network activity.  A typical
+        passive timeout is about a second.
       </p>
     </column>
 
@@ -4642,39 +4665,46 @@
   </table>
 
   <table name="AutoAttach">
-    <p>Auto Attach configuration within a bridge.  The IETF Auto-Attach SPBM
-       draft standard describes a compact method of using IEEE 802.1AB Link
-       Layer Discovery Protocol (LLDP) together with a IEEE 802.1aq Shortest
-       Path Bridging (SPB) network to automatically attach network devices
-       to individual services in a SPB network.  The intent here is to allow
-       network applications and devices using OVS to be able to easily take
-       advantage of features offered by industry standard SPB networks.</p>
+    <p>
+      Auto Attach configuration within a bridge.  The IETF Auto-Attach SPBM
+      draft standard describes a compact method of using IEEE 802.1AB Link
+      Layer Discovery Protocol (LLDP) together with a IEEE 802.1aq Shortest
+      Path Bridging (SPB) network to automatically attach network devices
+      to individual services in a SPB network.  The intent here is to allow
+      network applications and devices using OVS to be able to easily take
+      advantage of features offered by industry standard SPB networks.
+    </p>
 
-    <p>Auto Attach (AA) uses LLDP to communicate between a directly connected
-       Auto Attach Client (AAC) and Auto Attach Server (AAS). The LLDP protocol
-       is extended to add two new Type-Length-Value tuples (TLVs). The first
-       new TLV supports the ongoing discovery of directly connected AA
-       correspondents. Auto Attach operates by regularly transmitting AA
-       discovery TLVs between the AA client and AA server. By exchanging these
-       discovery messages, both the AAC and AAS learn the system name and
-       system description of their peer. In the OVS context, OVS operates as
-       the AA client and the AA server resides on a switch at the edge of the
-       SPB network.</p>
+    <p>
+      Auto Attach (AA) uses LLDP to communicate between a directly connected
+      Auto Attach Client (AAC) and Auto Attach Server (AAS). The LLDP protocol
+      is extended to add two new Type-Length-Value tuples (TLVs). The first
+      new TLV supports the ongoing discovery of directly connected AA
+      correspondents. Auto Attach operates by regularly transmitting AA
+      discovery TLVs between the AA client and AA server. By exchanging these
+      discovery messages, both the AAC and AAS learn the system name and
+      system description of their peer. In the OVS context, OVS operates as
+      the AA client and the AA server resides on a switch at the edge of the
+      SPB network.
+    </p>
 
-     <p>Once AA discovery has been completed the AAC then uses the
-       second new TLV to deliver identifier mappings from the AAC to the AAS. A primary
-       feature of Auto Attach is to facilitate the mapping of VLANs defined
-       outside the SPB network onto service ids (ISIDs) defined within the SPM
-       network. By doing so individual external VLANs can be mapped onto
-       specific SPB network services. These VLAN id to ISID mappings can be
-       configured and managed locally using new options added to the ovs-vsctl
-       command.</p>
+    <p>
+      Once AA discovery has been completed the AAC then uses the second new TLV
+      to deliver identifier mappings from the AAC to the AAS. A primary feature
+      of Auto Attach is to facilitate the mapping of VLANs defined outside the
+      SPB network onto service ids (ISIDs) defined within the SPM network. By
+      doing so individual external VLANs can be mapped onto specific SPB
+      network services. These VLAN id to ISID mappings can be configured and
+      managed locally using new options added to the ovs-vsctl command.
+    </p>
 
-    <p>The Auto Attach OVS feature does not provide a full implementation of
-       the LLDP protocol. Support for the mandatory TLVs as defined by the LLDP
-       standard and support for the AA TLV extensions is provided. LLDP
-       protocol support in OVS can be enabled or disabled on a port by port
-       basis. LLDP support is disabled by default.</p>
+    <p>
+      The Auto Attach OVS feature does not provide a full implementation of
+      the LLDP protocol. Support for the mandatory TLVs as defined by the LLDP
+      standard and support for the AA TLV extensions is provided. LLDP
+      protocol support in OVS can be enabled or disabled on a port by port
+      basis. LLDP support is disabled by default.
+    </p>
 
     <column name="system_name">
       The system_name string is exported in LLDP messages.  It should uniquely
@@ -4687,7 +4717,8 @@
     </column>
 
     <column name="mappings">
-      A mapping from SPB network Individual Service Identifier (ISID) to VLAN id.
+      A mapping from SPB network Individual Service Identifier (ISID) to VLAN
+      id.
     </column>
   </table>
 </database>

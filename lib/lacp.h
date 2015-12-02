@@ -31,7 +31,7 @@ enum lacp_status {
 
 struct lacp_settings {
     char *name;                       /* Name (for debugging). */
-    uint8_t id[ETH_ADDR_LEN];         /* System ID. Must be nonzero. */
+    struct eth_addr id;               /* System ID. Must be nonzero. */
     uint16_t priority;                /* System priority. */
     bool active;                      /* Active or passive mode? */
     bool fast;                        /* Fast or slow probe interval. */
@@ -72,8 +72,8 @@ void lacp_wait(struct lacp *);
 
 struct lacp_slave_stats {
     /* id */
-    uint8_t dot3adAggPortActorSystemID[ETH_ADDR_LEN];
-    uint8_t dot3adAggPortPartnerOperSystemID[ETH_ADDR_LEN];
+    struct eth_addr dot3adAggPortActorSystemID;
+    struct eth_addr dot3adAggPortPartnerOperSystemID;
     uint32_t dot3adAggPortAttachedAggID;
     /* state */
     uint8_t dot3adAggPortActorAdminState;

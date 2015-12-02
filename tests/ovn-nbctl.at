@@ -1,0 +1,163 @@
+AT_BANNER([ovn-nbctl])
+
+# OVN_NBCTL_TEST_START
+m4_define([OVN_NBCTL_TEST_START],
+  [dnl Create ovn-nb database.
+   AT_CHECK([ovsdb-tool create ovn-nb.db $abs_top_srcdir/ovn/ovn-nb.ovsschema])
+
+   dnl Start ovsdb-server.
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock ovn-nb.db], [0], [], [stderr])
+   on_exit "kill `cat ovsdb-server.pid`"
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d
+/ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
+   AT_CAPTURE_FILE([ovsdb-server.log])
+])
+
+# OVN_NBCTL_TEST_STOP
+m4_define([OVN_NBCTL_TEST_STOP],
+  [AT_CHECK([check_logs $1])
+   AT_CHECK([ovs-appctl -t ovsdb-server exit])])
+
+
+AT_SETUP([ovn-nbctl - basic lswitch commands])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+<0> (ls0)
+])
+
+AT_CHECK([ovn-nbctl lswitch-add ls1])
+AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+<0> (ls0)
+<1> (ls1)
+])
+
+AT_CHECK([ovn-nbctl lswitch-del ls0])
+AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+<0> (ls1)
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - basic lport commands])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl lport-add ls0 lp0])
+AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+<0> (lp0)
+])
+
+AT_CHECK([ovn-nbctl lport-add ls0 lp1])
+AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+<0> (lp0)
+<1> (lp1)
+])
+
+AT_CHECK([ovn-nbctl lport-del lp1])
+AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+<0> (lp0)
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - addresses])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl lport-add ls0 lp0])
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+])
+
+AT_CHECK([ovn-nbctl lport-set-addresses lp0 00:11:22:33:44:55 unknown])
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+00:11:22:33:44:55
+unknown
+])
+
+AT_CHECK([ovn-nbctl lport-set-addresses lp0])
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - port security])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl lport-add ls0 lp0])
+AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+])
+
+AT_CHECK([ovn-nbctl lport-set-port-security lp0 aa:bb:cc:dd:ee:ff 00:11:22:33:44:55])
+AT_CHECK([ovn-nbctl lport-get-port-security lp0], [0], [dnl
+00:11:22:33:44:55
+aa:bb:cc:dd:ee:ff
+])
+
+AT_CHECK([ovn-nbctl lport-set-port-security lp0])
+AT_CHECK([ovn-nbctl lport-get-port-security lp0], [0], [dnl
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - ACLs])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl --log acl-add ls0 from-lport 600 udp drop])
+AT_CHECK([ovn-nbctl --log acl-add ls0 to-lport 500 udp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 300 tcp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop])
+
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+from-lport   600 (udp) drop log
+from-lport   400 (tcp) drop
+from-lport   200 (ip) drop
+  to-lport   500 (udp) drop log
+  to-lport   300 (tcp) drop
+  to-lport   100 (ip) drop
+])
+
+dnl Delete in one direction.
+AT_CHECK([ovn-nbctl acl-del ls0 to-lport])
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+from-lport   600 (udp) drop log
+from-lport   400 (tcp) drop
+from-lport   200 (ip) drop
+])
+
+dnl Delete all ACLs.
+AT_CHECK([ovn-nbctl acl-del ls0])
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+])
+
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 600 udp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
+AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
+
+dnl Delete a single flow.
+AT_CHECK([ovn-nbctl acl-del ls0 from-lport 400 tcp])
+AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+from-lport   600 (udp) drop
+from-lport   200 (ip) drop
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP

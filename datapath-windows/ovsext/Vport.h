@@ -34,11 +34,6 @@
  */
 #define OVS_DPPORT_NUMBER_LOCAL    0
 
-#define OVS_DPPORT_INTERNAL_NAME_A  "internal"
-#define OVS_DPPORT_INTERNAL_NAME_W  L"internal"
-#define OVS_DPPORT_EXTERNAL_NAME_A   "external"
-#define OVS_DPPORT_EXTERNAL_NAME_W  L"external"
-
 /*
  * A Vport, or Virtual Port, is a port on the OVS. It can be one of the
  * following types. Some of the Vports are "real" ports on the hyper-v switch,
@@ -100,6 +95,7 @@ typedef struct _OVS_VPORT_ENTRY {
     PVOID                  priv;
     NDIS_SWITCH_PORT_ID    portId;
     NDIS_SWITCH_NIC_INDEX  nicIndex;
+    NDIS_SWITCH_NIC_TYPE   nicType;
     UINT16                 numaNodeId;
     NDIS_SWITCH_PORT_STATE portState;
     NDIS_SWITCH_NIC_STATE  nicState;
@@ -160,7 +156,8 @@ VOID OvsClearAllSwitchVports(struct _OVS_SWITCH_CONTEXT *switchContext);
 NDIS_STATUS HvCreateNic(POVS_SWITCH_CONTEXT switchContext,
                         PNDIS_SWITCH_NIC_PARAMETERS nicParam);
 NDIS_STATUS HvCreatePort(POVS_SWITCH_CONTEXT switchContext,
-                         PNDIS_SWITCH_PORT_PARAMETERS portParam);
+                         PNDIS_SWITCH_PORT_PARAMETERS portParam,
+                         NDIS_SWITCH_NIC_INDEX nicIndex);
 NDIS_STATUS HvUpdatePort(POVS_SWITCH_CONTEXT switchContext,
                          PNDIS_SWITCH_PORT_PARAMETERS portParam);
 VOID HvTeardownPort(POVS_SWITCH_CONTEXT switchContext,
@@ -198,12 +195,39 @@ OvsIsInternalVportType(OVS_VPORT_TYPE ovsType)
 }
 
 static __inline BOOLEAN
+OvsIsVirtualExternalVport(POVS_VPORT_ENTRY vport)
+{
+    return vport->nicType == NdisSwitchNicTypeExternal &&
+           vport->nicIndex == 0;
+}
+
+static __inline BOOLEAN
+OvsIsRealExternalVport(POVS_VPORT_ENTRY vport)
+{
+    return vport->nicType == NdisSwitchNicTypeExternal &&
+           vport->nicIndex != 0;
+}
+
+static __inline BOOLEAN
 OvsIsBridgeInternalVport(POVS_VPORT_ENTRY vport)
 {
-    if (vport->isBridgeInternal) {
-       ASSERT(vport->ovsType == OVS_VPORT_TYPE_INTERNAL);
-    }
+    ASSERT(vport->isBridgeInternal != TRUE ||
+           vport->ovsType == OVS_VPORT_TYPE_INTERNAL);
     return vport->isBridgeInternal == TRUE;
+}
+
+static __inline BOOLEAN
+OvsIsInternalNIC(NDIS_SWITCH_NIC_TYPE   nicType)
+{
+    return nicType == NdisSwitchNicTypeInternal;
+}
+
+static __inline BOOLEAN
+OvsIsRealExternalNIC(NDIS_SWITCH_NIC_TYPE   nicType,
+                     NDIS_SWITCH_NIC_INDEX  nicIndex)
+{
+    return nicType == NdisSwitchNicTypeExternal &&
+           nicIndex != 0;
 }
 
 NTSTATUS OvsRemoveAndDeleteVport(PVOID usrParamsCtx,

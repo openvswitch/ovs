@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 0; then
+       if test "$version" = 4 && test "$patchlevel" -le 2; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.0.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.2.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3; then
        : # Linux 3.x
@@ -172,11 +172,12 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 
     DPDK_INCLUDE=$RTE_SDK/include
     DPDK_LIB_DIR=$RTE_SDK/lib
-    DPDK_LIB="-lintel_dpdk"
+    DPDK_LIB="-ldpdk"
     DPDK_EXTRA_LIB=""
+    RTE_SDK_FULL=`readlink -f $RTE_SDK`
 
     AC_COMPILE_IFELSE(
-      [AC_LANG_PROGRAM([#include <$RTE_SDK/include/rte_config.h>
+      [AC_LANG_PROGRAM([#include <$RTE_SDK_FULL/include/rte_config.h>
 #if !RTE_LIBRTE_VHOST_USER
 #error
 #endif], [])],
@@ -322,13 +323,18 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [ether_addr_copy])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_set_encap_proto])
+  OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_hwaccel_push_inside])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [ipv4_is_multicast])
+  OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [proto_ports_offset])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [__ip_select_ident.*dst_entry],
                   [OVS_DEFINE([HAVE_IP_SELECT_IDENT_USING_DST_ENTRY])])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [inet_get_local_port_range.*net],
                   [OVS_DEFINE([HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
 
+  OVS_GREP_IFELSE([$KSRC/include/linux/net.h], [sock_create_kern.*net],
+                  [OVS_DEFINE([HAVE_SOCK_CREATE_KERN_NET])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_by_index_rcu])
@@ -336,6 +342,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_rx_handler_register])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_extended])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [rx_handler_func_t.*pskb],
+                  [OVS_DEFINE([HAVE_RX_HANDLER_PSKB])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
 
@@ -353,6 +363,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   # quoting rules.
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [[[^@]]proto_data_valid],
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_checksum_start_offset])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [kfree_skb_list])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [rxhash])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [u16.*rxhash],
@@ -381,7 +392,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_clear_hash])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [int.skb_zerocopy(],
                   [OVS_DEFINE([HAVE_SKB_ZEROCOPY])])
-  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [l4_rxhash])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [u8.*l4_rxhash],
+                  [OVS_DEFINE([HAVE_L4_RXHASH])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_ensure_writable])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_vlan_pop])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_vlan_push])
@@ -408,6 +420,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h],
                         [genl_multicast_group], [id])
+  OVS_GREP_IFELSE([$KSRC/include/net/geneve.h], [geneve_hdr])
 
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_cisco_register])
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6.h], [IP6_FH_F_SKIP_RH])
@@ -415,6 +428,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be32])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be64])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_in_addr])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_find_nested])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_is_last])
 
@@ -445,6 +459,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP_TUNNEL_CSUM])])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/netdevice.h], [NET_NAME_UNKNOWN],
                   [OVS_DEFINE([HAVE_NET_NAME_UNKNOWN])])
+
+  OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
+                  [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

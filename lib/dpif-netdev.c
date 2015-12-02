@@ -42,6 +42,7 @@
 #include "fat-rwlock.h"
 #include "flow.h"
 #include "cmap.h"
+#include "coverage.h"
 #include "latch.h"
 #include "list.h"
 #include "match.h"
@@ -63,7 +64,8 @@
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
-#include "tnl-arp-cache.h"
+#include "tnl-neigh-cache.h"
+#include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
@@ -202,6 +204,11 @@ struct dp_netdev {
     struct fat_rwlock upcall_rwlock;
     upcall_callback *upcall_cb;  /* Callback function for executing upcalls. */
     void *upcall_aux;
+
+    /* Callback function for notifying the purging of dp flows (during
+     * reseting pmd deletion). */
+    dp_purge_callback *dp_purge_cb;
+    void *dp_purge_aux;
 
     /* Stores all 'struct dp_netdev_pmd_thread's. */
     struct cmap poll_threads;
@@ -488,15 +495,12 @@ emc_cache_init(struct emc_cache *flow_cache)
 {
     int i;
 
-    BUILD_ASSERT(sizeof(struct miniflow) == 2 * sizeof(uint64_t));
-
     flow_cache->sweep_idx = 0;
     for (i = 0; i < ARRAY_SIZE(flow_cache->entries); i++) {
         flow_cache->entries[i].flow = NULL;
         flow_cache->entries[i].key.hash = 0;
         flow_cache->entries[i].key.len = sizeof(struct miniflow);
-        flow_cache->entries[i].key.mf.tnl_map = 0;
-        flow_cache->entries[i].key.mf.pkt_map = 0;
+        flowmap_init(&flow_cache->entries[i].key.mf.map);
     }
 }
 
@@ -1521,12 +1525,7 @@ static bool dp_netdev_flow_ref(struct dp_netdev_flow *flow)
  *   miniflow_extract(), if the map is different the miniflow is different.
  *   Therefore we can be faster by comparing the map and the miniflow in a
  *   single memcmp().
- * - These functions can be inlined by the compiler.
- *
- * The following assertions make sure that what we're doing with miniflow is
- * safe.
- */
-BUILD_ASSERT_DECL(sizeof(struct miniflow) == 2 * sizeof(uint64_t));
+ * - These functions can be inlined by the compiler. */
 
 /* Given the number of bits set in miniflow's maps, returns the size of the
  * 'netdev_flow_key.mf' */
@@ -1585,47 +1584,32 @@ static inline void
 netdev_flow_mask_init(struct netdev_flow_key *mask,
                       const struct match *match)
 {
-    const uint64_t *mask_u64 = (const uint64_t *) &match->wc.masks;
     uint64_t *dst = miniflow_values(&mask->mf);
-    struct miniflow maps;
-    uint64_t map;
+    struct flowmap fmap;
     uint32_t hash = 0;
-    int n;
+    size_t idx;
 
     /* Only check masks that make sense for the flow. */
-    flow_wc_map(&match->flow, &maps);
-    memset(&mask->mf, 0, sizeof mask->mf);   /* Clear maps. */
+    flow_wc_map(&match->flow, &fmap);
+    flowmap_init(&mask->mf.map);
 
-    map = maps.tnl_map;
-    while (map) {
-        uint64_t rm1bit = rightmost_1bit(map);
-        int i = raw_ctz(map);
+    FLOWMAP_FOR_EACH_INDEX(idx, fmap) {
+        uint64_t mask_u64 = flow_u64_value(&match->wc.masks, idx);
 
-        if (mask_u64[i]) {
-            mask->mf.tnl_map |= rm1bit;
-            *dst++ = mask_u64[i];
-            hash = hash_add64(hash, mask_u64[i]);
+        if (mask_u64) {
+            flowmap_set(&mask->mf.map, idx, 1);
+            *dst++ = mask_u64;
+            hash = hash_add64(hash, mask_u64);
         }
-        map -= rm1bit;
-    }
-    mask_u64 += FLOW_TNL_U64S;
-    map = maps.pkt_map;
-    while (map) {
-        uint64_t rm1bit = rightmost_1bit(map);
-        int i = raw_ctz(map);
-
-        if (mask_u64[i]) {
-            mask->mf.pkt_map |= rm1bit;
-            *dst++ = mask_u64[i];
-            hash = hash_add64(hash, mask_u64[i]);
-        }
-        map -= rm1bit;
     }
 
-    hash = hash_add64(hash, mask->mf.tnl_map);
-    hash = hash_add64(hash, mask->mf.pkt_map);
+    map_t map;
 
-    n = dst - miniflow_get_values(&mask->mf);
+    FLOWMAP_FOR_EACH_MAP (map, mask->mf.map) {
+        hash = hash_add64(hash, map);
+    }
+
+    size_t n = dst - miniflow_get_values(&mask->mf);
 
     mask->hash = hash_finish(hash, n * 8);
     mask->len = netdev_flow_key_size(n);
@@ -1645,7 +1629,7 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
     dst->len = mask->len;
     dst->mf = mask->mf;   /* Copy maps. */
 
-    FLOW_FOR_EACH_IN_MAPS(value, flow, mask->mf) {
+    FLOW_FOR_EACH_IN_MAPS(value, flow, mask->mf.map) {
         *dst_u64 = value & *mask_u64++;
         hash = hash_add64(hash, *dst_u64++);
     }
@@ -1653,13 +1637,9 @@ netdev_flow_key_init_masked(struct netdev_flow_key *dst,
                             (dst_u64 - miniflow_get_values(&dst->mf)) * 8);
 }
 
-/* Iterate through netdev_flow_key TNL u64 values specified by 'MAPS'. */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(VALUE, KEY, MAPS)   \
-    MINIFLOW_FOR_EACH_IN_TNL_MAP(VALUE, &(KEY)->mf, MAPS)
-
-/* Iterate through netdev_flow_key PKT u64 values specified by 'MAPS'. */
-#define NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(VALUE, KEY, MAPS)   \
-    MINIFLOW_FOR_EACH_IN_PKT_MAP(VALUE, &(KEY)->mf, MAPS)
+/* Iterate through netdev_flow_key TNL u64 values specified by 'FLOWMAP'. */
+#define NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(VALUE, KEY, FLOWMAP)   \
+    MINIFLOW_FOR_EACH_IN_FLOWMAP(VALUE, &(KEY)->mf, FLOWMAP)
 
 /* Returns a hash value for the bits of 'key' where there are 1-bits in
  * 'mask'. */
@@ -1669,13 +1649,10 @@ netdev_flow_key_hash_in_mask(const struct netdev_flow_key *key,
 {
     const uint64_t *p = miniflow_get_values(&mask->mf);
     uint32_t hash = 0;
-    uint64_t key_u64;
+    uint64_t value;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(key_u64, key, mask->mf) {
-        hash = hash_add64(hash, key_u64 & *p++);
-    }
-    NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(key_u64, key, mask->mf) {
-        hash = hash_add64(hash, key_u64 & *p++);
+    NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(value, key, mask->mf.map) {
+        hash = hash_add64(hash, value & *p++);
     }
 
     return hash_finish(hash, (p - miniflow_get_values(&mask->mf)) * 8);
@@ -1943,6 +1920,12 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         return EINVAL;
     }
 
+    /* Userspace datapath doesn't support conntrack. */
+    if (flow->ct_state || flow->ct_zone || flow->ct_mark
+        || !ovs_u128_is_zero(&flow->ct_label)) {
+        return EINVAL;
+    }
+
     return 0;
 }
 
@@ -1986,8 +1969,8 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 
     netdev_flow_mask_init(&mask, match);
     /* Make sure wc does not have metadata. */
-    ovs_assert(!(mask.mf.pkt_map
-                 & (MINIFLOW_PKT_MAP(metadata) | MINIFLOW_PKT_MAP(regs))));
+    ovs_assert(!FLOWMAP_HAS_FIELD(&mask.mf.map, metadata)
+               && !FLOWMAP_HAS_FIELD(&mask.mf.map, regs));
 
     /* Do not allocate extra space. */
     flow = xmalloc(sizeof *flow - sizeof flow->cr.flow.mf + mask.len);
@@ -2572,7 +2555,8 @@ dpif_netdev_run(struct dpif *dpif)
     ovs_mutex_unlock(&dp->non_pmd_mutex);
     dp_netdev_pmd_unref(non_pmd);
 
-    tnl_arp_cache_run();
+    tnl_neigh_cache_run();
+    tnl_port_map_run();
     new_tnl_seq = seq_read(tnl_conf_seq);
 
     if (dp->last_tnl_conf_seq != new_tnl_seq) {
@@ -2696,6 +2680,7 @@ reload:
             lc = 0;
 
             emc_cache_slow_sweep(&pmd->flow_cache);
+            coverage_try_clear();
             ovsrcu_quiesce();
 
             atomic_read_relaxed(&pmd->change_seq, &seq);
@@ -2879,7 +2864,7 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
 /* Stops the pmd thread, removes it from the 'dp->poll_threads',
  * and unrefs the struct. */
 static void
-dp_netdev_del_pmd(struct dp_netdev_pmd_thread *pmd)
+dp_netdev_del_pmd(struct dp_netdev *dp, struct dp_netdev_pmd_thread *pmd)
 {
     /* Uninit the 'flow_cache' since there is
      * no actual thread uninit it for NON_PMD_CORE_ID. */
@@ -2890,6 +2875,11 @@ dp_netdev_del_pmd(struct dp_netdev_pmd_thread *pmd)
         dp_netdev_reload_pmd__(pmd);
         ovs_numa_unpin_core(pmd->core_id);
         xpthread_join(pmd->thread, NULL);
+    }
+    /* Purges the 'pmd''s flows after stopping the thread, but before
+     * destroying the flows, so that the flow stats can be collected. */
+    if (dp->dp_purge_cb) {
+        dp->dp_purge_cb(dp->dp_purge_aux, pmd->core_id);
     }
     cmap_remove(&pmd->dp->poll_threads, &pmd->node, hash_int(pmd->core_id, 0));
     dp_netdev_pmd_unref(pmd);
@@ -2902,7 +2892,7 @@ dp_netdev_destroy_all_pmds(struct dp_netdev *dp)
     struct dp_netdev_pmd_thread *pmd;
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        dp_netdev_del_pmd(pmd);
+        dp_netdev_del_pmd(dp, pmd);
     }
 }
 
@@ -2914,7 +2904,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         if (pmd->numa_id == numa_id) {
-            dp_netdev_del_pmd(pmd);
+            dp_netdev_del_pmd(dp, pmd);
         }
     }
 }
@@ -3116,8 +3106,9 @@ dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
 {
     uint32_t hash, recirc_depth;
 
-    hash = dp_packet_get_rss_hash(packet);
-    if (OVS_UNLIKELY(!hash)) {
+    if (OVS_LIKELY(dp_packet_rss_valid(packet))) {
+        hash = dp_packet_get_rss_hash(packet);
+    } else {
         hash = miniflow_hash_5tuple(mf, 0);
         dp_packet_set_rss_hash(packet, hash);
     }
@@ -3324,6 +3315,16 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
 
+            /* The Netlink encoding of datapath flow keys cannot express
+             * wildcarding the presence of a VLAN tag. Instead, a missing VLAN
+             * tag is interpreted as exact match on the fact that there is no
+             * VLAN.  Unless we refactor a lot of code that translates between
+             * Netlink and struct flow representations, we have to do the same
+             * here. */
+            if (!match.wc.masks.vlan_tci) {
+                match.wc.masks.vlan_tci = htons(0xffff);
+            }
+
             /* We can't allow the packet batching in the next loop to execute
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
@@ -3417,6 +3418,15 @@ dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
 struct dp_netdev_execute_aux {
     struct dp_netdev_pmd_thread *pmd;
 };
+
+static void
+dpif_netdev_register_dp_purge_cb(struct dpif *dpif, dp_purge_callback *cb,
+                                 void *aux)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    dp->dp_purge_aux = aux;
+    dp->dp_purge_cb = cb;
+}
 
 static void
 dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
@@ -3602,6 +3612,13 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
         VLOG_WARN("Packet dropped. Max recirculation depth exceeded.");
         break;
 
+    case OVS_ACTION_ATTR_CT:
+        /* If a flow with this action is slow-pathed, datapath assistance is
+         * required to implement it. However, we don't support this action
+         * in the userspace datapath. */
+        VLOG_WARN("Cannot execute conntrack action in userspace.");
+        break;
+
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
     case OVS_ACTION_ATTR_PUSH_MPLS:
@@ -3665,6 +3682,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* recv */
     NULL,                       /* recv_wait */
     NULL,                       /* recv_purge */
+    dpif_netdev_register_dp_purge_cb,
     dpif_netdev_register_upcall_cb,
     dpif_netdev_enable_upcall,
     dpif_netdev_disable_upcall,
@@ -3768,7 +3786,14 @@ dpif_dummy_register__(const char *type)
 static void
 dpif_dummy_override(const char *type)
 {
-    if (!dp_unregister_provider(type)) {
+    int error;
+
+    /*
+     * Ignore EAFNOSUPPORT to allow --enable-dummy=system with
+     * a userland-only build.  It's useful for testsuite.
+     */
+    error = dp_unregister_provider(type);
+    if (error == 0 || error == EAFNOSUPPORT) {
         dpif_dummy_register__(type);
     }
 }
@@ -3916,15 +3941,10 @@ dpcls_rule_matches_key(const struct dpcls_rule *rule,
 {
     const uint64_t *keyp = miniflow_get_values(&rule->flow.mf);
     const uint64_t *maskp = miniflow_get_values(&rule->mask->mf);
-    uint64_t target_u64;
+    uint64_t value;
 
-    NETDEV_FLOW_KEY_FOR_EACH_IN_TNL_MAP(target_u64, target, rule->flow.mf) {
-        if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
-            return false;
-        }
-    }
-    NETDEV_FLOW_KEY_FOR_EACH_IN_PKT_MAP(target_u64, target, rule->flow.mf) {
-        if (OVS_UNLIKELY((target_u64 & *maskp++) != *keyp++)) {
+    NETDEV_FLOW_KEY_FOR_EACH_IN_FLOWMAP(value, target, rule->flow.mf.map) {
+        if (OVS_UNLIKELY((value & *maskp++) != *keyp++)) {
             return false;
         }
     }

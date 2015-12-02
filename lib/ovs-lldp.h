@@ -88,7 +88,7 @@ bool lldp_should_process_flow(struct lldp *lldp, const struct flow *flow);
 bool lldp_configure(struct lldp *lldp, const struct smap *cfg);
 void lldp_process_packet(struct lldp *cfg, const struct dp_packet *);
 void lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
-                     uint8_t eth_src[ETH_ADDR_LEN]);
+                     const struct eth_addr eth_src);
 void lldpd_assign_cfg_to_protocols(struct lldpd *cfg);
 struct lldp * lldp_create(const struct netdev *netdev, const uint32_t mtu,
                           const struct smap *cfg);

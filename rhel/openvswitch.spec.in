@@ -22,7 +22,7 @@ License: ASL 2.0
 Release: 1
 Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
-Requires: logrotate, python
+Requires: logrotate, python >= 2.7
 BuildRequires: openssl-devel
 
 %bcond_without check
@@ -64,7 +64,11 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-test.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-l3ping.8 \
     $RPM_BUILD_ROOT/usr/sbin/ovs-vlan-bug-workaround \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-vlan-bug-workaround.8
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-vlan-bug-workaround.8 \
+    $RPM_BUILD_ROOT/usr/bin/ovn-* \
+    $RPM_BUILD_ROOT/usr/share/man/man?/ovn-* \
+    $RPM_BUILD_ROOT/usr/share/openvswitch/ovn-* \
+    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovn-*
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/lib)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 
@@ -120,6 +124,7 @@ exit 0
 
 %files
 %defattr(-,root,root)
+%dir /etc/openvswitch
 /etc/bash_completion.d/ovs-appctl-bashcomp.bash
 /etc/bash_completion.d/ovs-vsctl-bashcomp.bash
 /etc/init.d/openvswitch
@@ -179,10 +184,3 @@ exit 0
 %doc INSTALL.DPDK.md rhel/README.RHEL README-native-tunneling.md
 /var/lib/openvswitch
 /var/log/openvswitch
-%exclude /usr/bin/ovn-*
-%exclude /usr/share/man/man1/ovs-sim.1.gz
-%exclude /usr/share/man/man5/ovn-*
-%exclude /usr/share/man/man7/ovn-*
-%exclude /usr/share/man/man8/ovn-*
-%exclude /usr/share/openvswitch/ovn-*
-%exclude /usr/share/openvswitch/scripts/ovn-*

@@ -27,8 +27,7 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
 {
     dp_packet_set_allocated(b, allocated);
     b->source = source;
-    b->l2_pad_size = 0;
-    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
+    dp_packet_reset_offsets(b);
     pkt_metadata_init(&b->md, 0);
 }
 

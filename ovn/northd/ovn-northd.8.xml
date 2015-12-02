@@ -1,0 +1,648 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manpage program="ovn-northd" section="8" title="ovn-northd">
+    <h1>Name</h1>
+    <p>ovn-northd -- Open Virtual Network central control daemon</p>
+
+    <h1>Synopsis</h1>
+    <p><code>ovn-northd</code> [<var>options</var>]</p>
+
+    <h1>Description</h1>
+    <p>
+      <code>ovn-northd</code> is a centralized daemon responsible for
+      translating the high-level OVN configuration into logical
+      configuration consumable by daemons such as
+      <code>ovn-controller</code>.  It translates the logical network
+      configuration in terms of conventional network concepts, taken
+      from the OVN Northbound Database (see <code>ovn-nb</code>(5)),
+      into logical datapath flows in the OVN Southbound Database (see
+      <code>ovn-sb</code>(5)) below it.
+    </p>
+
+    <h1>Configuration</h1>
+    <p>
+      <code>ovn-northd</code> requires a connection to the Northbound
+      and Southbound databases.  The default is <code>db.sock</code>
+      in the local Open vSwitch's "run" directory.  This may be
+      overridden with the following commands:
+    </p>
+    <ul>
+      <li>
+        <p>
+          <code>--ovnnb-db=<var>database</var></code>
+        </p>
+        <p>
+          The database containing the OVN Northbound Database.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>--ovsnb-db=<var>database</var></code>
+        </p>
+        <p>
+          The database containing the OVN Southbound Database.
+        </p>
+      </li>
+    </ul>
+    <p>
+      The <var>database</var> argument must take one of the following forms:
+    </p>
+    <ul>
+      <li>
+        <p>
+          <code>ssl:<var>ip</var>:<var>port</var></code>
+        </p>
+        <p>
+          The specified SSL <var>port</var> on the host at the given
+          <var>ip</var>, which must be expressed as an IP address (not a DNS
+          name) in IPv4 or IPv6 address format.  If <var>ip</var> is an IPv6
+          address, then wrap <var>ip</var> with square brackets, e.g.:
+          <code>ssl:[::1]:6640</code>.  The <code>--private-key</code>,
+          <code>--certificate</code>, and <code>--ca-cert</code> options are
+          mandatory when this form is used.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>tcp:<var>ip</var>:<var>port</var></code>
+        </p>
+        <p>
+          Connect to the given TCP <var>port</var> on <var>ip</var>, where
+          <var>ip</var> can be IPv4 or IPv6 address. If <var>ip</var> is an
+          IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
+          <code>tcp:[::1]:6640</code>.
+        </p>
+      </li>
+      <li>
+        <p>
+          <code>unix:<var>file</var></code>
+        </p>
+        <p>
+          On POSIX, connect to the Unix domain server socket named
+          <var>file</var>.
+        </p>
+        <p>
+          On Windows, connect to a localhost TCP port whose value is written
+          in <var>file</var>.
+        </p>
+      </li>
+    </ul>
+
+    <h1>Runtime Management Commands</h1>
+    <p>
+      <code>ovs-appctl</code> can send commands to a running
+      <code>ovn-northd</code> process.  The currently supported commands
+      are described below.
+      <dl>
+      <dt><code>exit</code></dt>
+      <dd>
+        Causes <code>ovn-northd</code> to gracefully terminate.
+      </dd>
+      </dl>
+    </p>
+
+    <h1>Logical Flow Table Structure</h1>
+
+    <p>
+      One of the main purposes of <code>ovn-northd</code> is to populate the
+      <code>Logical_Flow</code> table in the <code>OVN_Southbound</code>
+      database.  This section describes how <code>ovn-northd</code> does this
+      for switch and router logical datapaths.
+    </p>
+
+    <h2>Logical Switch Datapaths</h2>
+
+    <h3>Ingress Table 0: Admission Control and Ingress Port Security</h3>
+
+    <p>
+      Ingress table 0 contains these logical flows:
+    </p>
+
+    <ul>
+      <li>
+        Priority 100 flows to drop packets with VLAN tags or multicast Ethernet
+        source addresses.
+      </li>
+
+      <li>
+        Priority 50 flows that implement ingress port security for each enabled
+        logical port.  For logical ports on which port security is enabled,
+        these match the <code>inport</code> and the valid <code>eth.src</code>
+        address(es) and advance only those packets to the next flow table.  For
+        logical ports on which port security is not enabled, these advance all
+        packets that match the <code>inport</code>.
+      </li>
+    </ul>
+
+    <p>
+      There are no flows for disabled logical ports because the default-drop
+      behavior of logical flow tables causes packets that ingress from them to
+      be dropped.
+    </p>
+
+    <h3>Ingress Table 1: <code>from-lport</code> Pre-ACLs</h3>
+
+    <p>
+      Ingress table 1 prepares flows for possible stateful ACL processing
+      in table 2.  It contains a priority-0 flow that simply moves
+      traffic to table 2.  If stateful ACLs are used in the logical
+      datapath, a priority-100 flow is added that sends IP packets to
+      the connection tracker before advancing to table 2.
+    </p>
+
+    <h3>Ingress table 2: <code>from-lport</code> ACLs</h3>
+
+    <p>
+      Logical flows in this table closely reproduce those in the
+      <code>ACL</code> table in the <code>OVN_Northbound</code> database
+      for the <code>from-lport</code> direction.  <code>allow</code>
+      ACLs translate into logical flows with the <code>next;</code>
+      action, <code>allow-related</code> ACLs translate into logical
+      flows with the <code>ct_next;</code> action, other ACLs translate
+      to <code>drop;</code>.  The <code>priority</code> values from the
+      <code>ACL</code> table are used directly.
+    </p>
+
+    <p>
+      Ingress table 2 also contains a priority 0 flow with action
+      <code>next;</code>, so that ACLs allow packets by default.  If the
+      logical datapath has a statetful ACL, the following flows will
+      also be added:
+    </p>
+
+    <ul>
+      <li>
+        A priority-1 flow to commit IP traffic to the connection
+        tracker.  This is needed for the default allow policy because,
+        while the initiater's direction may not have any stateful rules,
+        the server's may and then its return traffic would not be known
+        and marked as invalid.
+      </li>
+
+      <li>
+        A priority-65535 flow that allows any traffic that has been
+        committed to the connection tracker (i.e., established flows).
+      </li>
+
+      <li>
+        A priority-65535 flow that allows any traffic that is considered
+        related to a committed flow in the connection tracker (e.g., an
+        ICMP Port Unreachable from a non-listening UDP port).
+      </li>
+
+      <li>
+        A priority-65535 flow that drops all traffic marked by the
+        connection tracker as invalid.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 3: Destination Lookup</h3>
+
+    <p>
+      This table implements switching behavior.  It contains these logical
+      flows:
+    </p>
+
+    <ul>
+      <li>
+        A priority-100 flow that outputs all packets with an Ethernet broadcast
+        or multicast <code>eth.dst</code> to the <code>MC_FLOOD</code>
+        multicast group, which <code>ovn-northd</code> populates with all
+        enabled logical ports.
+      </li>
+
+      <li>
+        One priority-50 flow that matches each known Ethernet address against
+        <code>eth.dst</code> and outputs the packet to the single associated
+        output port.
+      </li>
+
+      <li>
+        One priority-0 fallback flow that matches all packets and outputs them
+        to the <code>MC_UNKNOWN</code> multicast group, which
+        <code>ovn-northd</code> populates with all enabled logical ports that
+        accept unknown destination packets.  As a small optimization, if no
+        logical ports accept unknown destination packets,
+        <code>ovn-northd</code> omits this multicast group and logical flow.
+      </li>
+    </ul>
+
+    <h3>Egress Table 0: <code>to-lport</code> Pre-ACLs</h3>
+
+    <p>
+      This is similar to ingress table 1 except for <code>to-lport</code>
+      traffic.
+    </p>
+
+    <h3>Egress Table 1: <code>to-lport</code> ACLs</h3>
+
+    <p>
+      This is similar to ingress table 2 except for <code>to-lport</code> ACLs.
+    </p>
+
+    <h3>Egress Table 2: Egress Port Security</h3>
+
+    <p>
+      This is similar to the ingress port security logic in ingress table 0,
+      but with important differences.  Most obviously, <code>outport</code> and
+      <code>eth.dst</code> are checked instead of <code>inport</code> and
+      <code>eth.src</code>.  Second, packets directed to broadcast or multicast
+      <code>eth.dst</code> are always accepted instead of being subject to the
+      port security rules; this is implemented through a priority-100 flow that
+      matches on <code>eth.mcast</code> with action <code>output;</code>.
+      Finally, to ensure that even broadcast and multicast packets are not
+      delivered to disabled logical ports, a priority-150 flow for each
+      disabled logical <code>outport</code> overrides the priority-100 flow
+      with a <code>drop;</code> action.
+    </p>
+
+    <h2>Logical Router Datapaths</h2>
+
+    <h3>Ingress Table 0: L2 Admission Control</h3>
+
+    <p>
+      This table drops packets that the router shouldn't see at all based on
+      their Ethernet headers.  It contains the following flows:
+    </p>
+
+    <ul>
+      <li>
+        Priority-100 flows to drop packets with VLAN tags or multicast Ethernet
+        source addresses.
+      </li>
+
+      <li>
+        For each enabled router port <var>P</var> with Ethernet address
+        <var>E</var>, a priority-50 flow that matches <code>inport ==
+        <var>P</var> &amp;&amp; (eth.mcast || eth.dst ==
+        <var>E</var></code>), with action <code>next;</code>.
+      </li>
+    </ul>
+
+    <p>
+      Other packets are implicitly dropped.
+    </p>
+
+    <h3>Ingress Table 1: IP Input</h3>
+
+    <p>
+      This table is the core of the logical router datapath functionality.  It
+      contains the following flows to implement very basic IP host
+      functionality.
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          L3 admission control: A priority-100 flow drops packets that match
+          any of the following:
+        </p>
+
+        <ul>
+          <li>
+            <code>ip4.src[28..31] == 0xe</code> (multicast source)
+          </li>
+          <li>
+            <code>ip4.src == 255.255.255.255</code> (broadcast source)
+          </li>
+          <li>
+            <code>ip4.src == 127.0.0.0/8 || ip4.dst == 127.0.0.0/8</code>
+            (localhost source or destination)
+          </li>
+          <li>
+            <code>ip4.src == 0.0.0.0/8 || ip4.dst == 0.0.0.0/8</code> (zero
+            network source or destination)
+          </li>
+          <li>
+            <code>ip4.src</code> is any IP address owned by the router.
+          </li>
+          <li>
+            <code>ip4.src</code> is the broadcast address of any IP network
+            known to the router.
+          </li>
+        </ul>
+      </li>
+
+      <li>
+        <p>
+          ICMP echo reply.  These flows reply to ICMP echo requests received
+          for the router's IP address.  Let <var>A</var> be an IP address or
+          broadcast address owned by a router port.  Then, for each
+          <var>A</var>, a priority-90 flow matches on <code>ip4.dst ==
+          <var>A</var></code> and <code>icmp4.type == 8 &amp;&amp; icmp4.code
+          == 0</code> (ICMP echo request).  These flows use the following
+          actions where, if <var>A</var> is unicast, then <var>S</var> is
+          <var>A</var>, and if <var>A</var> is broadcast, <var>S</var> is the
+          router's IP address in <var>A</var>'s network:
+        </p>
+
+        <pre>
+ip4.dst = ip4.src;
+ip4.src = <var>S</var>;
+ip.ttl = 255;
+icmp4.type = 0;
+inport = ""; /* Allow sending out inport. */
+next;
+        </pre>
+
+        <p>
+          Similar flows match on <code>ip4.dst == 255.255.255.255</code> and
+          each individual <code>inport</code>, and use the same actions in
+          which <var>S</var> is a function of <code>inport</code>.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          ARP reply.  These flows reply to ARP requests for the router's own IP
+          address.  For each router port <var>P</var> that owns IP address
+          <var>A</var> and Ethernet address <var>E</var>, a priority-90 flow
+          matches <code>inport == <var>P</var> &amp;&amp; arp.tpa ==
+          <var>A</var> &amp;&amp; arp.op == 1</code> (ARP request) with the
+          following actions:
+        </p>
+
+        <pre>
+eth.dst = eth.src;
+eth.src = <var>E</var>;
+arp.op = 2; /* ARP reply. */
+arp.tha = arp.sha;
+arp.sha = <var>E</var>;
+arp.tpa = arp.spa;
+arp.spa = <var>A</var>;
+outport = <var>P</var>;
+inport = ""; /* Allow sending out inport. */
+output;
+        </pre>
+      </li>
+
+      <li>
+        <p>
+          UDP port unreachable.  Priority-80 flows generate ICMP port
+          unreachable messages in reply to UDP datagrams directed to the
+          router's IP address.  The logical router doesn't accept any UDP
+          traffic so it always generates such a reply.
+        </p>
+
+        <p>
+          These flows should not match IP fragments with nonzero offset.
+        </p>
+
+        <p>
+          Details TBD.  Not yet implemented.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          TCP reset.  Priority-80 flows generate TCP reset messages in reply to
+          TCP datagrams directed to the router's IP address.  The logical
+          router doesn't accept any TCP traffic so it always generates such a
+          reply.
+        </p>
+
+        <p>
+          These flows should not match IP fragments with nonzero offset.
+        </p>
+
+        <p>
+          Details TBD.  Not yet implemented.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          Protocol unreachable.  Priority-70 flows generate ICMP protocol
+          unreachable messages in reply to packets directed to the router's IP
+          address on IP protocols other than UDP, TCP, and ICMP.
+        </p>
+
+        <p>
+          These flows should not match IP fragments with nonzero offset.
+        </p>
+
+        <p>
+          Details TBD.  Not yet implemented.
+        </p>
+      </li>
+
+      <li>
+        Drop other IP traffic to this router.  These flows drop any other
+        traffic destined to an IP address of this router that is not already
+        handled by one of the flows above, which amounts to ICMP (other than
+        echo requests) and fragments with nonzero offsets.  For each IP address
+        <var>A</var> owned by the router, a priority-60 flow matches
+        <code>ip4.dst == <var>A</var></code> and drops the traffic.
+      </li>
+    </ul>
+
+    <p>
+      The flows above handle all of the traffic that might be directed to the
+      router itself.  The following flows (with lower priorities) handle the
+      remaining traffic, potentially for forwarding:
+    </p>
+
+    <ul>
+      <li>
+        Drop Ethernet local broadcast.  A priority-50 flow with match
+        <code>eth.bcast</code> drops traffic destined to the local Ethernet
+        broadcast address.  By definition this traffic should not be forwarded.
+      </li>
+
+      <li>
+        Drop IP multicast.  A priority-50 flow with match
+        <code>ip4.mcast</code> drops IP multicast traffic.
+      </li>
+
+      <li>
+        <p>
+          ICMP time exceeded.  For each router port <var>P</var>, whose IP
+          address is <var>A</var>, a priority-40 flow with match <code>inport
+          == <var>P</var> &amp;&amp; ip.ttl == {0, 1} &amp;&amp;
+          !ip.later_frag</code> matches packets whose TTL has expired, with the
+          following actions to send an ICMP time exceeded reply:
+        </p>
+
+        <pre>
+icmp4 {
+    icmp4.type = 11; /* Time exceeded. */
+    icmp4.code = 0;  /* TTL exceeded in transit. */
+    ip4.dst = ip4.src;
+    ip4.src = <var>A</var>;
+    ip.ttl = 255;
+    next;
+};
+        </pre>
+
+        <p>
+          Not yet implemented.
+        </p>
+      </li>
+
+      <li>
+        TTL discard.  A priority-30 flow with match <code>ip.ttl == {0,
+        1}</code> and actions <code>drop;</code> drops other packets whose TTL
+        has expired, that should not receive a ICMP error reply (i.e. fragments
+        with nonzero offset).
+      </li>
+
+      <li>
+        Next table.  A priority-0 flows match all packets that aren't already
+        handled and uses actions <code>next;</code> to feed them to the ingress
+        table for routing.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 2: IP Routing</h3>
+
+    <p>
+      A packet that arrives at this table is an IP packet that should be routed
+      to the address in <code>ip4.dst</code>.  This table implements IP
+      routing, setting <code>reg0</code> to the next-hop IP address (leaving
+      <code>ip4.dst</code>, the packet's final destination, unchanged) and
+      advances to the next table for ARP resolution.
+    </p>
+
+    <p>
+      This table contains the following logical flows:
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          Routing table.  For each route to IPv4 network <var>N</var> with
+          netmask <var>M</var>, a logical flow with match <code>ip4.dst ==
+          <var>N</var>/<var>M</var></code>, whose priority is the number of
+          1-bits in <var>M</var>, has the following actions:
+        </p>
+
+        <pre>
+ip.ttl--;
+reg0 = <var>G</var>;
+next;
+        </pre>
+
+        <p>
+          (Ingress table 1 already verified that <code>ip.ttl--;</code> will
+          not yield a TTL exceeded error.)
+        </p>
+
+        <p>
+          If the route has a gateway, <var>G</var> is the gateway IP address,
+          otherwise it is <code>ip4.dst</code>.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          Destination unreachable.  For each router port <var>P</var>, which
+          owns IP address <var>A</var>, a priority-0 logical flow with match
+          <code>in_port == <var>P</var> &amp;&amp; !ip.later_frag &amp;&amp;
+          !icmp</code> has the following actions:
+        </p>
+
+        <pre>
+icmp4 {
+    icmp4.type = 3; /* Destination unreachable. */
+    icmp4.code = 0; /* Network unreachable. */
+    ip4.dst = ip4.src;
+    ip4.src = <var>A</var>;
+    ip.ttl = 255;
+    next(2);
+};
+        </pre>
+
+        <p>
+          (The <code>!icmp</code> check prevents recursion if the destination
+          unreachable message itself cannot be routed.)
+        </p>
+
+        <p>
+          These flows are omitted if the logical router has a default route,
+          that is, a route with netmask 0.0.0.0.
+        </p>
+      </li>
+    </ul>
+
+    <h3>Ingress Table 3: ARP Resolution</h3>
+
+    <p>
+      Any packet that reaches this table is an IP packet whose next-hop IP
+      address is in <code>reg0</code>.  (<code>ip4.dst</code> is the final
+      destination.)  This table resolves the IP address in <code>reg0</code>
+      into an output port in <code>outport</code> and an Ethernet address in
+      <code>eth.dst</code>, using the following flows:
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          Known MAC bindings.  For each IP address <var>A</var> whose host is
+          known to have Ethernet address <var>HE</var> and reside on router
+          port <var>P</var> with Ethernet address <var>PE</var>, a priority-200
+          flow with match <code>reg0 == <var>A</var></code> has the following
+          actions:
+        </p>
+
+        <pre>
+eth.src = <var>PE</var>;
+eth.dst = <var>HE</var>;
+outport = <var>P</var>;
+output;
+        </pre>
+
+        <p>
+          MAC bindings can be known statically based on data in the
+          <code>OVN_Northbound</code> database.  For router ports connected to
+          logical switches, MAC bindings can be known statically from the
+          <code>addresses</code> column in the <code>Logical_Port</code> table.
+          For router ports connected to other logical routers, MAC bindings can
+          be known statically from the <code>mac</code> and
+          <code>network</code> column in the <code>Logical_Router_Port</code>
+          table.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          Unknown MAC bindings.  For each non-gateway route to IPv4 network
+          <var>N</var> with netmask <var>M</var> on router port <var>P</var>
+          that owns IP address <var>A</var> and Ethernet address <var>E</var>,
+          a logical flow with match <code>ip4.dst ==
+          <var>N</var>/<var>M</var></code>, whose priority is the number of
+          1-bits in <var>M</var>, has the following actions:
+        </p>
+
+        <pre>
+arp {
+    eth.dst = ff:ff:ff:ff:ff:ff;
+    eth.src = <var>E</var>;
+    arp.sha = <var>E</var>;
+    arp.tha = 00:00:00:00:00:00;
+    arp.spa = <var>A</var>;
+    arp.tpa = ip4.dst;
+    arp.op = 1;  /* ARP request. */
+    outport = <var>P</var>;
+    output;
+};
+        </pre>
+
+        <p>
+          TBD: How to install MAC bindings when an ARP response comes back.
+          (Implement a "learn" action?)
+        </p>
+
+        <p>
+          Not yet implemented.
+        </p>
+      </li>
+    </ul>
+
+    <h3>Egress Table 0: Delivery</h3>
+
+    <p>
+      Packets that reach this table are ready for delivery.  It contains
+      priority-100 logical flows that match packets on each enabled logical
+      router port, with action <code>output;</code>.
+    </p>
+
+</manpage>

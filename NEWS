@@ -8,7 +8,11 @@ Post-v2.4.0
        now supported.
      * OpenFlow 1.4+ "importance" is now considered for flow eviction.
      * OpenFlow 1.4+ OFPTC_EVICTION is now implemented.
+     * OpenFlow 1.4+ OFPTC_VACANCY_EVENTS is now implemented.
      * OpenFlow 1.4+ OFPMP_TABLE_DESC is now implemented.
+     * Allow modifying the ICMPv4/ICMPv6 type and code fields.
+   - ovs-ofctl:
+     * New "out_group" keyword for OpenFlow 1.1+ matching on output group.
    - Support for matching/generating options as well as the OAM bit with
      Geneve tunnels.
    - Support Multicast Listener Discovery (MLDv1 and MLDv2).
@@ -21,9 +25,15 @@ Post-v2.4.0
      targets to run a new system testsuite.  These tests can be run inside
      a Vagrant box.  See INSTALL.md for details
    - Dropped support for GRE64 tunnel.
+   - Mark --syslog-target argument as deprecated.  It will be removed in
+     the next OVS release.
+   - Added --user option to all daemons
+   - Add support for connection tracking through the new "ct" action
+     and "ct_state"/"ct_zone"/"ct_mark"/"ct_label" match fields.  Only
+     available on Linux kernels with the connection tracking module loaded.
 
 
-v2.4.0 - xx xxx xxxx
+v2.4.0 - 20 Aug 2015
 ---------------------
    - Flow table modifications are now atomic, meaning that each packet
      now sees a coherent version of the OpenFlow pipeline.  For

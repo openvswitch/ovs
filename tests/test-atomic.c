@@ -185,13 +185,14 @@ static ATOMIC(struct atomic_aux *) paux = ATOMIC_VAR_INIT(NULL);
 static struct atomic_aux *auxes = NULL;
 
 #define ATOMIC_ITEM_COUNT 1000000
+#define	DURATION 5000
 
 static void *
 atomic_consumer(void * arg1 OVS_UNUSED)
 {
     struct atomic_aux *old_aux = NULL;
     uint64_t count;
-    long long int stop_time = time_msec() + 1000;
+    long long int stop_time = time_msec() + DURATION;
 
     do {
         struct atomic_aux *aux;
@@ -263,7 +264,7 @@ atomic_reader(void *aux_)
     uint64_t count;
     uint64_t data;
     long long int now = time_msec();
-    long long int stop_time = now + 1000;
+    long long int stop_time = now + DURATION;
 
     do {
         /* Non-synchronized add. */
@@ -301,7 +302,7 @@ atomic_writer(void *aux_)
     uint64_t data;
     size_t i;
     long long int now = time_msec();
-    long long int stop_time = now + 1000;
+    long long int stop_time = now + DURATION;
 
     for (i = 0; i < ATOMIC_ITEM_COUNT; i++) {
         /* Wait for the reader to be done with the data. */

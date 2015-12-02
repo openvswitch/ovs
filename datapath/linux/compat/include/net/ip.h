@@ -5,7 +5,7 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
+#ifndef HAVE_IP_IS_FRAGMENT
 static inline bool ip_is_fragment(const struct iphdr *iph)
 {
 	return (iph->frag_off & htons(IP_MF | IP_OFFSET)) != 0;

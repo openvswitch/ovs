@@ -23,7 +23,9 @@
 #include "ovn-controller.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "openvswitch/vlog.h"
+#include "shash.h"
 #include "simap.h"
+#include "smap.h"
 #include "sset.h"
 #include "vswitch-idl.h"
 
@@ -52,7 +54,7 @@ struct chassis_tunnel {
     struct hmap_node hmap_node;
     const char *chassis_id;
     ofp_port_t ofport;
-    enum chassis_tunnel_type { GENEVE, STT } type;
+    enum chassis_tunnel_type type;
 };
 
 static struct chassis_tunnel *
@@ -118,6 +120,8 @@ put_encapsulation(enum mf_field_id mff_ovn_geneve,
         put_load(datapath->tunnel_key | (outport << 24), MFF_TUN_ID, 0, 64,
                  ofpacts);
         put_move(MFF_LOG_INPORT, 0, MFF_TUN_ID, 40, 15, ofpacts);
+    } else if (tun->type == VXLAN) {
+        put_load(datapath->tunnel_key, MFF_TUN_ID, 0, 24, ofpacts);
     } else {
         OVS_NOT_REACHED();
     }
@@ -134,10 +138,12 @@ put_stack(enum mf_field_id field, struct ofpact_stack *stack)
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
-             struct hmap *flow_table)
+             const struct simap *ct_zones, struct hmap *flow_table)
 {
-    struct simap lport_to_ofport = SIMAP_INITIALIZER(&lport_to_ofport);
+    struct simap localvif_to_ofport = SIMAP_INITIALIZER(&localvif_to_ofport);
     struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
+    struct simap localnet_to_ofport = SIMAP_INITIALIZER(&localnet_to_ofport);
+
     for (int i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
         if (!strcmp(port_rec->name, br_int->name)) {
@@ -149,6 +155,11 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         if (chassis_id && !strcmp(chassis_id, this_chassis_id)) {
             continue;
         }
+
+        const char *localnet = smap_get(&port_rec->external_ids,
+                                        "ovn-localnet-port");
+        const char *logpatch = smap_get(&port_rec->external_ids,
+                                        "ovn-logical-patch-port");
 
         for (int j = 0; j < port_rec->n_interfaces; j++) {
             const struct ovsrec_interface *iface_rec = port_rec->interfaces[j];
@@ -162,8 +173,17 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 continue;
             }
 
-            /* Record as chassis or local logical port. */
-            if (chassis_id) {
+            /* Record as patch to local net, logical patch port, chassis, or
+             * local logical port. */
+            bool is_patch = !strcmp(iface_rec->type, "patch");
+            if (is_patch && localnet) {
+                simap_put(&localnet_to_ofport, localnet, ofport);
+                break;
+            } else if (is_patch && logpatch) {
+                /* Logical patch ports can be handled just like VIFs. */
+                simap_put(&localvif_to_ofport, logpatch, ofport);
+                break;
+            } else if (chassis_id) {
                 enum chassis_tunnel_type tunnel_type;
                 if (!strcmp(iface_rec->type, "geneve")) {
                     tunnel_type = GENEVE;
@@ -172,6 +192,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                     }
                 } else if (!strcmp(iface_rec->type, "stt")) {
                     tunnel_type = STT;
+                } else if (!strcmp(iface_rec->type, "vxlan")) {
+                    tunnel_type = VXLAN;
                 } else {
                     continue;
                 }
@@ -187,7 +209,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 const char *iface_id = smap_get(&iface_rec->external_ids,
                                                 "iface-id");
                 if (iface_id) {
-                    simap_put(&lport_to_ofport, iface_id, ofport);
+                    simap_put(&localvif_to_ofport, iface_id, ofport);
                 }
             }
         }
@@ -196,28 +218,78 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     struct ofpbuf ofpacts;
     ofpbuf_init(&ofpacts, 0);
 
+    struct binding_elem {
+        struct ovs_list list_elem;
+        const struct sbrec_port_binding *binding;
+    };
+    /* The bindings for a given VLAN on a localnet port. */
+    struct localnet_vlan {
+        struct hmap_node node;
+        int tag;
+        struct ovs_list bindings;
+    };
+    /* A hash of localnet_vlans, hashed on VLAN ID, for a localnet port */
+    struct localnet_bindings {
+        ofp_port_t ofport;
+        struct hmap vlans;
+    };
+    /* Maps from network name to "struct localnet_bindings". */
+    struct shash localnet_inputs = SHASH_INITIALIZER(&localnet_inputs);
+
+    /* Contains bare "struct hmap_node"s whose hash values are the tunnel_key
+     * of datapaths with at least one local port binding. */
+    struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
+
     /* Set up flows in table 0 for physical-to-logical translation and in table
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        /* Find the OpenFlow port for the logical port, as 'ofport'.  If it's
-         * on a remote chassis, this is the OpenFlow port for the tunnel to
-         * that chassis (and set 'local' to false).  Otherwise, if it's on the
-         * chassis we're managing, this is the OpenFlow port for the vif itself
-         * (and set 'local' to true). When 'parent_port' is set for a binding,
-         * it implies a container sitting inside a VM reachable via a 'tag'.
+        /* Find the OpenFlow port for the logical port, as 'ofport'.  This is
+         * one of:
+         *
+         *     - If the port is a VIF on the chassis we're managing, the
+         *       OpenFlow port for the VIF.  'tun' will be NULL.
+         *
+         *       In this or the next case, for a container nested inside a VM
+         *       and accessible via a VLAN, 'tag' is the VLAN ID; otherwise
+         *       'tag' is 0.
+         *
+         *       The same logic handles logical patch ports.
+         *
+         *     - If the port is on a remote chassis, the OpenFlow port for a
+         *       tunnel to the VIF's remote chassis.  'tun' identifies that
+         *       tunnel.
+         *
+         *     - If the port is a "localnet" port for a network that is
+         *       attached to the chassis we're managing, the OpenFlow port for
+         *       the localnet port (a patch port).
+         *
+         *       The "localnet" port may be configured with a VLAN ID.  If so,
+         *       'tag' will be set to that VLAN ID; otherwise 'tag' is 0.
          */
 
         int tag = 0;
         ofp_port_t ofport;
-        if (binding->parent_port) {
-            ofport = u16_to_ofp(simap_get(&lport_to_ofport,
-                                          binding->parent_port));
+        if (!strcmp(binding->type, "localnet")) {
+            const char *network = smap_get(&binding->options, "network_name");
+            if (!network) {
+                continue;
+            }
+            ofport = u16_to_ofp(simap_get(&localnet_to_ofport, network));
             if (ofport && binding->tag) {
                 tag = *binding->tag;
             }
+        } else if (binding->parent_port) {
+            if (!binding->tag) {
+                continue;
+            }
+            ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
+                                          binding->parent_port));
+            if (ofport) {
+                tag = *binding->tag;
+            }
         } else {
-            ofport = u16_to_ofp(simap_get(&lport_to_ofport,
+            ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
                                           binding->logical_port));
         }
 
@@ -235,6 +307,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         struct match match;
         if (!tun) {
+            int zone_id = simap_get(ct_zones, binding->logical_port);
             /* Packets that arrive from a vif can belong to a VM or
              * to a container located inside that VM. Packets that
              * arrive from containers have a tag (vlan) associated with them.
@@ -243,35 +316,85 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             /* Table 0, Priority 150 and 100.
              * ==============================
              *
-             * Priority 150 is for traffic belonging to containers. For such
-             * traffic, match on the tags and then strip the tag.
-             * Priority 100 is for traffic belonging to VMs.
+             * Priority 150 is for tagged traffic. This may be containers in a
+             * VM or a VLAN on a local network. For such traffic, match on the
+             * tags and then strip the tag.
+             *
+             * Priority 100 is for traffic belonging to VMs or untagged locally
+             * connected networks.
              *
              * For both types of traffic: set MFF_LOG_INPORT to the logical
              * input port, MFF_LOG_DATAPATH to the logical datapath, and
              * resubmit into the logical ingress pipeline starting at table
              * 16. */
-            match_init_catchall(&match);
-            ofpbuf_clear(&ofpacts);
-            match_set_in_port(&match, ofport);
-            if (tag) {
-                match_set_dl_vlan(&match, htons(tag));
+            if (!strcmp(binding->type, "localnet")) {
+                /* The same OpenFlow port may correspond to localnet ports
+                 * attached to more than one logical datapath, so keep track of
+                 * all associated bindings and add a flow at the end. */
+
+                const char *network
+                    = smap_get(&binding->options, "network_name");
+                struct localnet_bindings *ln_bindings;
+                struct hmap_node *node;
+                struct localnet_vlan *ln_vlan;
+
+                ln_bindings = shash_find_data(&localnet_inputs, network);
+                if (!ln_bindings) {
+                    ln_bindings = xmalloc(sizeof *ln_bindings);
+                    ln_bindings->ofport = ofport;
+                    hmap_init(&ln_bindings->vlans);
+                    shash_add(&localnet_inputs, network, ln_bindings);
+                }
+                node = hmap_first_with_hash(&ln_bindings->vlans, tag);
+                if (node) {
+                    ASSIGN_CONTAINER(ln_vlan, node, node);
+                } else {
+                    ln_vlan = xmalloc(sizeof *ln_vlan);
+                    ln_vlan->tag = tag;
+                    list_init(&ln_vlan->bindings);
+                    hmap_insert(&ln_bindings->vlans, &ln_vlan->node, tag);
+                }
+
+                struct binding_elem *b = xmalloc(sizeof *b);
+                b->binding = binding;
+                list_insert(&ln_vlan->bindings, &b->list_elem);
+            } else {
+                struct hmap_node *ld;
+                ld = hmap_first_with_hash(&local_datapaths,
+                                          binding->datapath->tunnel_key);
+                if (!ld) {
+                    ld = xmalloc(sizeof *ld);
+                    hmap_insert(&local_datapaths, ld,
+                                binding->datapath->tunnel_key);
+                }
+
+                ofpbuf_clear(&ofpacts);
+                match_init_catchall(&match);
+                match_set_in_port(&match, ofport);
+                if (tag) {
+                    match_set_dl_vlan(&match, htons(tag));
+                }
+
+                if (zone_id) {
+                    put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
+                }
+
+                /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
+                put_load(binding->datapath->tunnel_key, MFF_LOG_DATAPATH, 0, 64,
+                         &ofpacts);
+                put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 32,
+                         &ofpacts);
+
+                /* Strip vlans. */
+                if (tag) {
+                    ofpact_put_STRIP_VLAN(&ofpacts);
+                }
+
+                /* Resubmit to first logical ingress pipeline table. */
+                put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
+                ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG,
+                                tag ? 150 : 100, &match, &ofpacts);
             }
-
-            /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
-            put_load(binding->datapath->tunnel_key, MFF_LOG_DATAPATH, 0, 64,
-                     &ofpacts);
-            put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 32, &ofpacts);
-
-            /* Strip vlans. */
-            if (tag) {
-                ofpact_put_STRIP_VLAN(&ofpacts);
-            }
-
-            /* Resubmit to first logical ingress pipeline table. */
-            put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
-            ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, tag ? 150 : 100,
-                            &match, &ofpacts);
 
             /* Table 33, priority 100.
              * =======================
@@ -288,6 +411,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
             match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
                           binding->tunnel_key);
+
+            if (zone_id) {
+                put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
+            }
 
             /* Resubmit to table 34. */
             put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
@@ -370,6 +497,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
     /* Handle output to multicast groups, in tables 32 and 33. */
     const struct sbrec_multicast_group *mc;
+    struct ofpbuf remote_ofpacts;
+    ofpbuf_init(&remote_ofpacts, 0);
     SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
         struct sset remote_chassis = SSET_INITIALIZER(&remote_chassis);
         struct match match;
@@ -380,11 +509,18 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         /* Go through all of the ports in the multicast group:
          *
-         *    - For local ports, add actions to 'ofpacts' to set the output
-         *      port and resubmit.
+         *    - For remote ports, add the chassis to 'remote_chassis'.
          *
-         *    - For remote ports, add the chassis to 'remote_chassis'. */
+         *    - For local ports (other than logical patch ports), add actions
+         *      to 'ofpacts' to set the output port and resubmit.
+         *
+         *    - For logical patch ports, add actions to 'remote_ofpacts'
+         *      instead.  (If we put them in 'ofpacts', then the output
+         *      would happen on every hypervisor in the multicast group,
+         *      effectively duplicating the packet.)
+         */
         ofpbuf_clear(&ofpacts);
+        ofpbuf_clear(&remote_ofpacts);
         for (size_t i = 0; i < mc->n_ports; i++) {
             struct sbrec_port_binding *port = mc->ports[i];
 
@@ -396,11 +532,32 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 continue;
             }
 
-            if (simap_contains(&lport_to_ofport, port->logical_port)) {
+            int zone_id = simap_get(ct_zones, port->logical_port);
+            if (zone_id) {
+                put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
+            }
+
+            if (!strcmp(port->type, "patch")) {
+                put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
+                         &remote_ofpacts);
+                put_resubmit(OFTABLE_DROP_LOOPBACK, &remote_ofpacts);
+            } else if (simap_contains(&localvif_to_ofport,
+                               port->parent_port
+                               ? port->parent_port : port->logical_port)) {
                 put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
                 put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
             } else if (port->chassis) {
                 sset_add(&remote_chassis, port->chassis->name);
+            } else if (!strcmp(port->type, "localnet")) {
+                const char *network = smap_get(&port->options, "network_name");
+                if (!network) {
+                    continue;
+                }
+                if (!simap_contains(&localnet_to_ofport, network)) {
+                    continue;
+                }
+                put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
+                put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
             }
         }
 
@@ -411,6 +568,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          * any. */
         bool local_ports = ofpacts.size > 0;
         if (local_ports) {
+            /* Following delivery to local logical ports, restore the multicast
+             * group as the logical output port. */
+            put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
+
             ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100,
                             &match, &ofpacts);
         }
@@ -420,8 +581,13 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          *
          * Handle output to the remote chassis in the multicast group, if
          * any. */
-        if (!sset_is_empty(&remote_chassis)) {
-            ofpbuf_clear(&ofpacts);
+        if (!sset_is_empty(&remote_chassis) || remote_ofpacts.size > 0) {
+            if (remote_ofpacts.size > 0) {
+                /* Following delivery to logical patch ports, restore the
+                 * multicast group as the logical output port. */
+                put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
+                         &remote_ofpacts);
+            }
 
             const char *chassis;
             const struct chassis_tunnel *prev = NULL;
@@ -433,32 +599,36 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 }
 
                 if (!prev || tun->type != prev->type) {
-                    put_encapsulation(mff_ovn_geneve, tun,
-                                      mc->datapath, mc->tunnel_key, &ofpacts);
+                    put_encapsulation(mff_ovn_geneve, tun, mc->datapath,
+                                      mc->tunnel_key, &remote_ofpacts);
                     prev = tun;
                 }
-                ofpact_put_OUTPUT(&ofpacts)->port = tun->ofport;
+                ofpact_put_OUTPUT(&remote_ofpacts)->port = tun->ofport;
             }
 
-            if (ofpacts.size) {
+            if (remote_ofpacts.size) {
                 if (local_ports) {
-                    put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
+                    put_resubmit(OFTABLE_LOCAL_OUTPUT, &remote_ofpacts);
                 }
                 ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 100,
-                                &match, &ofpacts);
+                                &match, &remote_ofpacts);
             }
         }
         sset_destroy(&remote_chassis);
     }
+    ofpbuf_uninit(&remote_ofpacts);
 
     /* Table 0, priority 100.
      * ======================
      *
-     * For packets that arrive from a remote hypervisor (by matching a tunnel
-     * in_port), set MFF_LOG_DATAPATH, MFF_LOG_INPORT, and MFF_LOG_OUTPORT from
-     * the tunnel key data, then resubmit to table 33 to handle packets to the
-     * local hypervisor. */
+     * Process packets that arrive from a remote hypervisor (by matching
+     * on tunnel in_port). */
 
+    /* Add flows for Geneve and STT encapsulations.  These
+     * encapsulations have metadata about the ingress and egress logical
+     * ports.  We set MFF_LOG_DATAPATH, MFF_LOG_INPORT, and
+     * MFF_LOG_OUTPORT from the tunnel key data, then resubmit to table
+     * 33 to handle packets to the local hypervisor. */
     struct chassis_tunnel *tun;
     HMAP_FOR_EACH (tun, hmap_node, &tunnels) {
         struct match match = MATCH_CATCHALL_INITIALIZER;
@@ -475,12 +645,51 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             put_move(MFF_TUN_ID, 40, MFF_LOG_INPORT,   0, 15, &ofpacts);
             put_move(MFF_TUN_ID, 24, MFF_LOG_OUTPORT,  0, 16, &ofpacts);
             put_move(MFF_TUN_ID,  0, MFF_LOG_DATAPATH, 0, 24, &ofpacts);
+        } else if (tun->type == VXLAN) {
+            /* We'll handle VXLAN later. */
+            continue;
         } else {
             OVS_NOT_REACHED();
         }
+
         put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
 
         ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, 100, &match, &ofpacts);
+    }
+
+    /* Add flows for VXLAN encapsulations.  Due to the limited amount of
+     * metadata, we only support VXLAN for connections to gateways.  The
+     * VNI is used to populate MFF_LOG_DATAPATH.  The gateway's logical
+     * port is set to MFF_LOG_INPORT.  Then the packet is resubmitted to
+     * table 16 to determine the logical egress port.
+     *
+     * xxx Due to resubmitting to table 16, broadcasts will be re-sent to
+     * xxx all logical ports, including non-local ones which could cause
+     * xxx duplicate packets to be received by multiply-connected gateways. */
+    HMAP_FOR_EACH (tun, hmap_node, &tunnels) {
+        if (tun->type != VXLAN) {
+            continue;
+        }
+
+        SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+            struct match match = MATCH_CATCHALL_INITIALIZER;
+
+            if (!binding->chassis ||
+                strcmp(tun->chassis_id, binding->chassis->name)) {
+                continue;
+            }
+
+            match_set_in_port(&match, tun->ofport);
+            match_set_tun_id(&match, htonll(binding->datapath->tunnel_key));
+
+            ofpbuf_clear(&ofpacts);
+            put_move(MFF_TUN_ID, 0,  MFF_LOG_DATAPATH, 0, 24, &ofpacts);
+            put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 15, &ofpacts);
+            put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
+
+            ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG, 100, &match,
+                    &ofpacts);
+        }
     }
 
     /* Table 32, Priority 0.
@@ -509,11 +718,84 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     ofctrl_add_flow(flow_table, OFTABLE_DROP_LOOPBACK, 0, &match, &ofpacts);
 
     ofpbuf_uninit(&ofpacts);
-    simap_destroy(&lport_to_ofport);
+    simap_destroy(&localvif_to_ofport);
     struct chassis_tunnel *tun_next;
     HMAP_FOR_EACH_SAFE (tun, tun_next, hmap_node, &tunnels) {
         hmap_remove(&tunnels, &tun->hmap_node);
         free(tun);
     }
     hmap_destroy(&tunnels);
+
+    /* Table 0, Priority 150 and 100.
+     * ==============================
+     *
+     * We have now determined the full set of port bindings associated with
+     * each "localnet" network.  Only create flows for datapaths that have
+     * another local binding.  Otherwise, we know it would just be dropped.
+     *
+     * Use priority 150 for inputs that match both the network and a VLAN tag.
+     * Use priority 100 for matching untagged traffic from the local network.
+     */
+    struct shash_node *ln_bindings_node, *ln_bindings_node_next;
+    SHASH_FOR_EACH_SAFE (ln_bindings_node, ln_bindings_node_next,
+                         &localnet_inputs) {
+        struct localnet_bindings *ln_bindings = ln_bindings_node->data;
+        struct localnet_vlan *ln_vlan, *ln_vlan_next;
+        HMAP_FOR_EACH_SAFE (ln_vlan, ln_vlan_next, node, &ln_bindings->vlans) {
+            struct match match;
+            match_init_catchall(&match);
+            match_set_in_port(&match, ln_bindings->ofport);
+            if (ln_vlan->tag) {
+                match_set_dl_vlan(&match, htons(ln_vlan->tag));
+            }
+
+            struct ofpbuf ofpacts;
+            ofpbuf_init(&ofpacts, 0);
+
+            if (ln_vlan->tag) {
+                ofpact_put_STRIP_VLAN(&ofpacts);
+            }
+            uint32_t ofpacts_orig_size = ofpacts.size;
+
+            struct binding_elem *b;
+            LIST_FOR_EACH_POP (b, list_elem, &ln_vlan->bindings) {
+                struct hmap_node *ld;
+                ld = hmap_first_with_hash(&local_datapaths,
+                                          b->binding->datapath->tunnel_key);
+                if (ld) {
+                    /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
+                    put_load(b->binding->datapath->tunnel_key, MFF_LOG_DATAPATH,
+                             0, 64, &ofpacts);
+                    put_load(b->binding->tunnel_key, MFF_LOG_INPORT, 0, 32,
+                             &ofpacts);
+                    put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
+                }
+
+                free(b);
+            }
+
+            if (ofpacts.size > ofpacts_orig_size) {
+                ofctrl_add_flow(flow_table, 0, ln_vlan->tag ? 150 : 100,
+                        &match, &ofpacts);
+            }
+
+            ofpbuf_uninit(&ofpacts);
+
+            hmap_remove(&ln_bindings->vlans, &ln_vlan->node);
+            free(ln_vlan);
+        }
+        shash_delete(&localnet_inputs, ln_bindings_node);
+        hmap_destroy(&ln_bindings->vlans);
+        free(ln_bindings);
+    }
+    shash_destroy(&localnet_inputs);
+
+    struct hmap_node *node;
+    while ((node = hmap_first(&local_datapaths))) {
+        hmap_remove(&local_datapaths, node);
+        free(node);
+    }
+    hmap_destroy(&local_datapaths);
+
+    simap_destroy(&localnet_to_ofport);
 }

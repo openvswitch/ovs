@@ -722,12 +722,12 @@ lldp_wait(struct lldp *lldp) OVS_EXCLUDED(mutex)
  */
 void
 lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
-                uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
+                const struct eth_addr eth_src) OVS_EXCLUDED(mutex)
 {
     struct lldpd *mylldpd = lldp->lldpd;
     struct lldpd_hardware *hw = lldpd_first_hardware(mylldpd);
-    static const uint8_t eth_addr_lldp[6] =
-        {0x01, 0x80, 0xC2, 0x00, 0x00, 0x0e};
+    static const struct eth_addr eth_addr_lldp =
+        { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x0e } } };
 
     ovs_mutex_lock(&mutex);
 
@@ -791,8 +791,10 @@ lldp_create(const struct netdev *netdev,
     lchassis->c_cap_enabled = LLDP_CAP_BRIDGE;
     lchassis->c_id_subtype = LLDP_CHASSISID_SUBTYPE_LLADDR;
     lchassis->c_id_len = ETH_ADDR_LEN;
-    lchassis->c_id = xmalloc(ETH_ADDR_LEN);
-    netdev_get_etheraddr(netdev, lchassis->c_id);
+
+    struct eth_addr *mac = xmalloc(ETH_ADDR_LEN);
+    netdev_get_etheraddr(netdev, mac);
+    lchassis->c_id = &mac->ea[0];
 
     list_init(&lchassis->c_mgmt);
     lchassis->c_ttl = lldp->lldpd->g_config.c_tx_interval *

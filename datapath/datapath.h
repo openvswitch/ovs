@@ -25,6 +25,7 @@
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <linux/u64_stats_sync.h>
+#include <net/net_namespace.h>
 
 #include "compat.h"
 #include "flow.h"
@@ -86,10 +87,8 @@ struct datapath {
 	/* Stats. */
 	struct dp_stats_percpu __percpu *stats_percpu;
 
-#ifdef CONFIG_NET_NS
 	/* Network namespace ref. */
-	struct net *net;
-#endif
+	possible_net_t net;
 
 	u32 user_features;
 };
@@ -156,12 +155,12 @@ int lockdep_ovsl_is_held(void);
 
 static inline struct net *ovs_dp_get_net(const struct datapath *dp)
 {
-	return read_pnet(&dp->net);
+	return rpl_read_pnet(&dp->net);
 }
 
 static inline void ovs_dp_set_net(struct datapath *dp, struct net *net)
 {
-	write_pnet(&dp->net, net);
+	rpl_write_pnet(&dp->net, net);
 }
 
 struct vport *ovs_lookup_vport(const struct datapath *dp, u16 port_no);

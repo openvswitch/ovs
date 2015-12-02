@@ -85,7 +85,7 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     ovsrec_init();
 
-    daemonize_start();
+    daemonize_start(true);
 
     if (want_mlockall) {
 #ifdef HAVE_MLOCKALL

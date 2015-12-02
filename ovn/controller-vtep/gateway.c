@@ -189,7 +189,8 @@ gateway_run(struct controller_vtep_ctx *ctx)
 }
 
 /* Destroys the chassis table entries for vtep physical switches.
- * Returns true when all done. */
+ * Returns true when done (i.e. there is no change made to 'ctx->ovnsb_idl'),
+ * otherwise returns false. */
 bool
 gateway_cleanup(struct controller_vtep_ctx *ctx)
 {

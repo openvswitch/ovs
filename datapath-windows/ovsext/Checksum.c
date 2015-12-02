@@ -68,34 +68,48 @@ CalculateOnesComplement(UINT8 *start,
 {
     UINT64  sum = 0, val;
     UINT64  *src = (UINT64 *)start;
-    union {
-        UINT32 val;
-        UINT8  b8[4];
-    } tmp;
-
     while (totalLength > 7) {
         val = *src;
-        sum += (val >> 32) + (val & 0xffffffff);
+        sum += val;
+        if (sum < val) sum++;
         src++;
         totalLength -= 8;
     }
+
+    start = (UINT8 *)src;
+
     if (totalLength > 3) {
-        sum += *(UINT32 *)src;
-        src = (UINT64 *)((UINT8 *)src + 4);
+        UINT32 val = *(UINT32 *)start;
+        sum += val;
+        if (sum < val) sum++;
+        start += 4;
         totalLength -= 4;
     }
-    start = (UINT8 *)src;
-    tmp.val = 0;
-    switch (totalLength) {
-    case 3:
-        tmp.b8[2] = start[2];
-    case 2:
-        tmp.b8[1] = start[1];
-    case 1:
-        tmp.b8[0] = start[0];
-        sum += tmp.val;
+
+    if (totalLength > 1) {
+        UINT16 val = *(UINT16 *)start;
+        sum += val;
+        if (sum < val) sum++;
+        start += 2;
+        totalLength -= 2;
     }
-    sum = (isEvenStart ? sum : swap64(sum)) + initial;
+
+    if (totalLength > 0) {
+        UINT8 val = *start;
+        sum += val;
+        if (sum < val) sum++;
+        start += 1;
+        totalLength -= 1;
+    }
+    ASSERT(totalLength == 0);
+
+    if (!isEvenStart) {
+        sum = _byteswap_uint64(sum);
+    }
+
+    sum += initial;
+    if (sum < initial) sum++;
+
     return sum;
 }
 
@@ -428,6 +442,7 @@ CalculateChecksumNB(const PNET_BUFFER nb,
     ULONG firstMdlLen;
     /* Running count of bytes in remainder of the MDLs including current. */
     ULONG packetLen;
+    BOOLEAN swapEnd = 1 & csumDataLen;
 
     if ((nb == NULL) || (csumDataLen == 0)
             || (offset >= NET_BUFFER_DATA_LENGTH(nb))
@@ -482,10 +497,8 @@ CalculateChecksumNB(const PNET_BUFFER nb,
     while (csumDataLen && (currentMdl != NULL)) {
         ASSERT(mdlLen < 65536);
         csLen = MIN((UINT16) mdlLen, csumDataLen);
-        //XXX Not handling odd bytes yet.
-        ASSERT(((csLen & 0x1) == 0) || csumDataLen <= mdlLen);
 
-        csum = CalculateOnesComplement(src, csLen, csum, TRUE);
+        csum = CalculateOnesComplement(src, csLen, csum, !(1 & csumDataLen));
         fold64(csum);
 
         csumDataLen -= csLen;
@@ -504,9 +517,14 @@ CalculateChecksumNB(const PNET_BUFFER nb,
         }
     }
 
+    fold64(csum);
     ASSERT(csumDataLen == 0);
     ASSERT((csum & ~0xffff) == 0);
-    return (UINT16) ~csum;
+    csum = (UINT16)~csum;
+    if (swapEnd) {
+        return _byteswap_ushort((UINT16)csum);
+    }
+    return (UINT16)csum;
 }
 
 /*

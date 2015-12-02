@@ -105,7 +105,7 @@ struct netdev_dummy {
     /* Protects all members below. */
     struct ovs_mutex mutex OVS_ACQ_AFTER(dummy_list_mutex);
 
-    uint8_t hwaddr[ETH_ADDR_LEN] OVS_GUARDED;
+    struct eth_addr hwaddr OVS_GUARDED;
     int mtu OVS_GUARDED;
     struct netdev_stats stats OVS_GUARDED;
     enum netdev_flags flags OVS_GUARDED;
@@ -651,12 +651,12 @@ netdev_dummy_construct(struct netdev *netdev_)
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
-    netdev->hwaddr[0] = 0xaa;
-    netdev->hwaddr[1] = 0x55;
-    netdev->hwaddr[2] = n >> 24;
-    netdev->hwaddr[3] = n >> 16;
-    netdev->hwaddr[4] = n >> 8;
-    netdev->hwaddr[5] = n;
+    netdev->hwaddr.ea[0] = 0xaa;
+    netdev->hwaddr.ea[1] = 0x55;
+    netdev->hwaddr.ea[2] = n >> 24;
+    netdev->hwaddr.ea[3] = n >> 16;
+    netdev->hwaddr.ea[4] = n >> 8;
+    netdev->hwaddr.ea[5] = n;
     netdev->mtu = 1500;
     netdev->flags = 0;
     netdev->ifindex = -EOPNOTSUPP;
@@ -855,7 +855,7 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
-    dp_packet_set_rss_hash(packet, 0);
+    dp_packet_rss_invalidate(packet);
 
     arr[0] = packet;
     *c = 1;
@@ -970,14 +970,13 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 }
 
 static int
-netdev_dummy_set_etheraddr(struct netdev *netdev,
-                           const uint8_t mac[ETH_ADDR_LEN])
+netdev_dummy_set_etheraddr(struct netdev *netdev, const struct eth_addr mac)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
     if (!eth_addr_equals(dev->hwaddr, mac)) {
-        memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
+        dev->hwaddr = mac;
         netdev_change_seq_changed(netdev);
     }
     ovs_mutex_unlock(&dev->mutex);
@@ -986,13 +985,12 @@ netdev_dummy_set_etheraddr(struct netdev *netdev,
 }
 
 static int
-netdev_dummy_get_etheraddr(const struct netdev *netdev,
-                           uint8_t mac[ETH_ADDR_LEN])
+netdev_dummy_get_etheraddr(const struct netdev *netdev, struct eth_addr *mac)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    memcpy(mac, dev->hwaddr, ETH_ADDR_LEN);
+    *mac = dev->hwaddr;
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;

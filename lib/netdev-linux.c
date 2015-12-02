@@ -139,6 +139,44 @@ struct tpacket_auxdata {
     uint16_t tp_vlan_tpid;
 };
 
+/* Linux 2.6.27 introduced ethtool_cmd_speed
+ *
+ * To avoid revisiting problems reported with using configure to detect
+ * compatibility (see report at
+ * http://openvswitch.org/pipermail/dev/2014-October/047978.html)
+ * unconditionally replace ethtool_cmd_speed. */
+#define ethtool_cmd_speed rpl_ethtool_cmd_speed
+static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
+{
+        return ep->speed | (ep->speed_hi << 16);
+}
+
+/* Linux 2.6.30 introduced supported and advertised flags for
+ * 1G base KX, and 10G base KX4, KR and R. */
+#ifndef SUPPORTED_1000baseKX_Full
+#define SUPPORTED_1000baseKX_Full      (1 << 17)
+#define SUPPORTED_10000baseKX4_Full    (1 << 18)
+#define SUPPORTED_10000baseKR_Full     (1 << 19)
+#define SUPPORTED_10000baseR_FEC       (1 << 20)
+#define ADVERTISED_1000baseKX_Full     (1 << 17)
+#define ADVERTISED_10000baseKX4_Full   (1 << 18)
+#define ADVERTISED_10000baseKR_Full    (1 << 19)
+#define ADVERTISED_10000baseR_FEC      (1 << 20)
+#endif
+
+/* Linux 3.5 introduced supported and advertised flags for
+ * 40G base KR4, CR4, SR4 and LR4. */
+#ifndef SUPPORTED_40000baseKR4_Full
+#define SUPPORTED_40000baseKR4_Full    (1 << 23)
+#define SUPPORTED_40000baseCR4_Full    (1 << 24)
+#define SUPPORTED_40000baseSR4_Full    (1 << 25)
+#define SUPPORTED_40000baseLR4_Full    (1 << 26)
+#define ADVERTISED_40000baseKR4_Full   (1 << 23)
+#define ADVERTISED_40000baseCR4_Full   (1 << 24)
+#define ADVERTISED_40000baseSR4_Full   (1 << 25)
+#define ADVERTISED_40000baseLR4_Full   (1 << 26)
+#endif
+
 /* Linux 2.6.35 introduced IFLA_STATS64 and rtnl_link_stats64.
  *
  * Tests for rtnl_link_stats64 don't seem to consistently work, e.g. on
@@ -443,7 +481,7 @@ struct netdev_linux {
     /* The following are figured out "on demand" only.  They are only valid
      * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
-    uint8_t etheraddr[ETH_ADDR_LEN];
+    struct eth_addr etheraddr;
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
@@ -506,8 +544,8 @@ static int get_ifindex(const struct netdev *, int *ifindexp);
 static int do_set_addr(struct netdev *netdev,
                        int ioctl_nr, const char *ioctl_name,
                        struct in_addr addr);
-static int get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN]);
-static int set_etheraddr(const char *netdev_name, const uint8_t[ETH_ADDR_LEN]);
+static int get_etheraddr(const char *netdev_name, struct eth_addr *ea);
+static int set_etheraddr(const char *netdev_name, const struct eth_addr);
 static int get_stats_via_netlink(const struct netdev *, struct netdev_stats *);
 static int af_packet_sock(void);
 static bool netdev_linux_miimon_enabled(void);
@@ -700,8 +738,8 @@ netdev_linux_update(struct netdev_linux *dev,
                 dev->netdev_mtu_error = 0;
             }
 
-            if (!eth_addr_is_zero(change->addr)) {
-                memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
+            if (!eth_addr_is_zero(change->mac)) {
+                dev->etheraddr = change->mac;
                 dev->cache_valid |= VALID_ETHERADDR;
                 dev->ether_addr_error = 0;
             }
@@ -1040,8 +1078,6 @@ netdev_linux_rxq_recv_tap(int fd, struct dp_packet *buffer)
 
     if (retval < 0) {
         return errno;
-    } else if (retval > size) {
-        return EMSGSIZE;
     }
 
     dp_packet_set_size(buffer, dp_packet_size(buffer) + retval);
@@ -1076,7 +1112,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        dp_packet_set_rss_hash(buffer, 0);
+        dp_packet_rss_invalidate(buffer);
         packets[0] = buffer;
         *c = 1;
     }
@@ -1234,8 +1270,7 @@ netdev_linux_send_wait(struct netdev *netdev, int qid OVS_UNUSED)
 /* Attempts to set 'netdev''s MAC address to 'mac'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 static int
-netdev_linux_set_etheraddr(struct netdev *netdev_,
-                           const uint8_t mac[ETH_ADDR_LEN])
+netdev_linux_set_etheraddr(struct netdev *netdev_, const struct eth_addr mac)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     enum netdev_flags old_flags = 0;
@@ -1260,7 +1295,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         netdev->ether_addr_error = error;
         netdev->cache_valid |= VALID_ETHERADDR;
         if (!error) {
-            memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+            netdev->etheraddr = mac;
         }
     }
 
@@ -1275,8 +1310,7 @@ exit:
 
 /* Copies 'netdev''s MAC address to 'mac' which is passed as param. */
 static int
-netdev_linux_get_etheraddr(const struct netdev *netdev_,
-                           uint8_t mac[ETH_ADDR_LEN])
+netdev_linux_get_etheraddr(const struct netdev *netdev_, struct eth_addr *mac)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
@@ -1284,13 +1318,13 @@ netdev_linux_get_etheraddr(const struct netdev *netdev_,
     ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_ETHERADDR)) {
         netdev->ether_addr_error = get_etheraddr(netdev_get_name(netdev_),
-                                                 netdev->etheraddr);
+                                                 &netdev->etheraddr);
         netdev->cache_valid |= VALID_ETHERADDR;
     }
 
     error = netdev->ether_addr_error;
     if (!error) {
-        memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+        *mac = netdev->etheraddr;
     }
     ovs_mutex_unlock(&netdev->mutex);
 
@@ -1789,11 +1823,21 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     if (ecmd.supported & SUPPORTED_1000baseT_Half) {
         netdev->supported |= NETDEV_F_1GB_HD;
     }
-    if (ecmd.supported & SUPPORTED_1000baseT_Full) {
+    if ((ecmd.supported & SUPPORTED_1000baseT_Full) ||
+        (ecmd.supported & SUPPORTED_1000baseKX_Full)) {
         netdev->supported |= NETDEV_F_1GB_FD;
     }
-    if (ecmd.supported & SUPPORTED_10000baseT_Full) {
+    if ((ecmd.supported & SUPPORTED_10000baseT_Full) ||
+        (ecmd.supported & SUPPORTED_10000baseKX4_Full) ||
+        (ecmd.supported & SUPPORTED_10000baseKR_Full) ||
+        (ecmd.supported & SUPPORTED_10000baseR_FEC)) {
         netdev->supported |= NETDEV_F_10GB_FD;
+    }
+    if ((ecmd.supported & SUPPORTED_40000baseKR4_Full) ||
+        (ecmd.supported & SUPPORTED_40000baseCR4_Full) ||
+        (ecmd.supported & SUPPORTED_40000baseSR4_Full) ||
+        (ecmd.supported & SUPPORTED_40000baseLR4_Full)) {
+        netdev->supported |= NETDEV_F_40GB_FD;
     }
     if (ecmd.supported & SUPPORTED_TP) {
         netdev->supported |= NETDEV_F_COPPER;
@@ -1828,11 +1872,21 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     if (ecmd.advertising & ADVERTISED_1000baseT_Half) {
         netdev->advertised |= NETDEV_F_1GB_HD;
     }
-    if (ecmd.advertising & ADVERTISED_1000baseT_Full) {
+    if ((ecmd.advertising & ADVERTISED_1000baseT_Full) ||
+        (ecmd.advertising & ADVERTISED_1000baseKX_Full)) {
         netdev->advertised |= NETDEV_F_1GB_FD;
     }
-    if (ecmd.advertising & ADVERTISED_10000baseT_Full) {
+    if ((ecmd.advertising & ADVERTISED_10000baseT_Full) ||
+        (ecmd.advertising & ADVERTISED_10000baseKX4_Full) ||
+        (ecmd.advertising & ADVERTISED_10000baseKR_Full) ||
+        (ecmd.advertising & ADVERTISED_10000baseR_FEC)) {
         netdev->advertised |= NETDEV_F_10GB_FD;
+    }
+    if ((ecmd.advertising & ADVERTISED_40000baseKR4_Full) ||
+        (ecmd.advertising & ADVERTISED_40000baseCR4_Full) ||
+        (ecmd.advertising & ADVERTISED_40000baseSR4_Full) ||
+        (ecmd.advertising & ADVERTISED_40000baseLR4_Full)) {
+        netdev->advertised |= NETDEV_F_40GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_TP) {
         netdev->advertised |= NETDEV_F_COPPER;
@@ -1851,7 +1905,7 @@ netdev_linux_read_features(struct netdev_linux *netdev)
     }
 
     /* Current settings. */
-    speed = ecmd.speed;
+    speed = ethtool_cmd_speed(&ecmd);
     if (speed == SPEED_10) {
         netdev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
     } else if (speed == SPEED_100) {
@@ -2681,7 +2735,7 @@ netdev_internal_get_status(const struct netdev *netdev OVS_UNUSED,
  * ENXIO indicates that there is not ARP table entry for 'ip' on 'netdev'. */
 static int
 netdev_linux_arp_lookup(const struct netdev *netdev,
-                        ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
+                        ovs_be32 ip, struct eth_addr *mac)
 {
     struct arpreq r;
     struct sockaddr_in sin;
@@ -5300,7 +5354,11 @@ netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
     }
 
     COVERAGE_INC(netdev_set_ethtool);
-    evalue.data = new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
+    new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
+    if (new_flags == evalue.data) {
+        return 0;
+    }
+    evalue.data = new_flags;
     error = netdev_linux_do_ethtool(netdev_name,
                                     (struct ethtool_cmd *)&evalue,
                                     ETHTOOL_SFLAGS, "ETHTOOL_SFLAGS");
@@ -5493,7 +5551,7 @@ get_ifindex(const struct netdev *netdev_, int *ifindexp)
 }
 
 static int
-get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
+get_etheraddr(const char *netdev_name, struct eth_addr *ea)
 {
     struct ifreq ifr;
     int hwaddr_family;
@@ -5514,16 +5572,16 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
     }
     hwaddr_family = ifr.ifr_hwaddr.sa_family;
     if (hwaddr_family != AF_UNSPEC && hwaddr_family != ARPHRD_ETHER) {
-        VLOG_WARN("%s device has unknown hardware address family %d",
+        VLOG_INFO("%s device has unknown hardware address family %d",
                   netdev_name, hwaddr_family);
+        return EINVAL;
     }
     memcpy(ea, ifr.ifr_hwaddr.sa_data, ETH_ADDR_LEN);
     return 0;
 }
 
 static int
-set_etheraddr(const char *netdev_name,
-              const uint8_t mac[ETH_ADDR_LEN])
+set_etheraddr(const char *netdev_name, const struct eth_addr mac)
 {
     struct ifreq ifr;
     int error;
@@ -5531,7 +5589,7 @@ set_etheraddr(const char *netdev_name,
     memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
-    memcpy(ifr.ifr_hwaddr.sa_data, mac, ETH_ADDR_LEN);
+    memcpy(ifr.ifr_hwaddr.sa_data, &mac, ETH_ADDR_LEN);
     COVERAGE_INC(netdev_set_hwaddr);
     error = af_inet_ioctl(SIOCSIFHWADDR, &ifr);
     if (error) {

@@ -19,6 +19,7 @@ AM_CPPFLAGS += -I $(top_srcdir)/datapath-windows/include
 AM_CPPFLAGS += $(PTHREAD_INCLUDES)
 AM_CPPFLAGS += $(MSVC_CFLAGS)
 AM_LDFLAGS += $(PTHREAD_LDFLAGS)
+AM_LDFLAGS += $(MSVC64_LDFLAGS)
 endif
 
 AM_CPPFLAGS += -I $(top_srcdir)/include
@@ -65,7 +66,6 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 # A list of Markdown-formatted documentation that will automatically be
 # included in the "make dist-docs" output.
 docs = \
-	appveyor.yml \
 	CONTRIBUTING.md \
 	CodingStyle.md \
 	DESIGN.md \
@@ -99,8 +99,10 @@ EXTRA_DIST = \
 	.travis.yml \
 	.travis/build.sh \
 	.travis/prepare.sh \
+	appveyor.yml \
 	boot.sh \
 	build-aux/cccl \
+	build-aux/cksum-schema-check \
 	build-aux/dist-docs \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \

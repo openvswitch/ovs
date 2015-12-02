@@ -17,7 +17,11 @@
 #ifndef OVN_CONTROLLER_H
 #define OVN_CONTROLLER_H 1
 
+#include "simap.h"
 #include "ovn/lib/ovn-sb-idl.h"
+
+/* Linux supports a maximum of 64K zones, which seems like a fine default. */
+#define MAX_CT_ZONES 65535
 
 struct controller_ctx {
     struct ovsdb_idl *ovnsb_idl;
@@ -27,18 +31,21 @@ struct controller_ctx {
     struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
-static inline const struct sbrec_chassis *
-get_chassis_by_name(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
-{
-    const struct sbrec_chassis *chassis_rec;
+const struct ovsrec_bridge *get_bridge(struct ovsdb_idl *,
+                                       const char *br_name);
 
-    SBREC_CHASSIS_FOR_EACH(chassis_rec, ovnsb_idl) {
-        if (!strcmp(chassis_rec->name, chassis_id)) {
-            break;
-        }
-    }
+const struct sbrec_chassis *get_chassis(struct ovsdb_idl *,
+                                        const char *chassis_id);
 
-    return chassis_rec;
-}
+/* Must be a bit-field ordered from most-preferred (higher number) to
+ * least-preferred (lower number). */
+enum chassis_tunnel_type {
+    GENEVE = 1 << 2,
+    STT    = 1 << 1,
+    VXLAN  = 1 << 0
+};
+
+uint32_t get_tunnel_type(const char *name);
+
 
 #endif /* ovn/ovn-controller.h */

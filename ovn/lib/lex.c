@@ -117,7 +117,7 @@ lex_token_format_value(const union mf_subvalue *value,
         break;
 
     case LEX_F_IPV6:
-        print_ipv6_addr(s, &value->ipv6);
+        ipv6_format_addr(&value->ipv6, s);
         break;
 
     case LEX_F_ETHERNET:
@@ -238,6 +238,12 @@ lex_token_format(const struct lex_token *token, struct ds *s)
     case LEX_T_EQUALS:
         ds_put_cstr(s, "=");
         break;
+    case LEX_T_EXCHANGE:
+        ds_put_cstr(s, "<->");
+        break;
+    case LEX_T_DECREMENT:
+        ds_put_cstr(s, "--");
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -295,7 +301,7 @@ lex_parse_integer__(const char *p, struct lex_token *token)
     size_t len = end - start;
 
     int n;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
 
     if (!len) {
         lex_error(token, "Integer constant expected.");
@@ -303,7 +309,7 @@ lex_parse_integer__(const char *p, struct lex_token *token)
                && ovs_scan(start, ETH_ADDR_SCAN_FMT"%n",
                            ETH_ADDR_SCAN_ARGS(mac), &n)
                && n == len) {
-        memcpy(token->value.mac, mac, sizeof token->value.mac);
+        token->value.mac = mac;
         token->format = LEX_F_ETHERNET;
     } else if (start + strspn(start, "0123456789") == end) {
         if (p[0] == '0' && len > 1) {
@@ -599,6 +605,9 @@ next:
         if (*p == '=') {
             token->type = LEX_T_LE;
             p++;
+        } else if (*p == '-' && p[1] == '>') {
+            token->type = LEX_T_EXCHANGE;
+            p += 2;
         } else {
             token->type = LEX_T_LT;
         }
@@ -632,6 +641,16 @@ next:
     case ';':
         p++;
         token->type = LEX_T_SEMICOLON;
+        break;
+
+    case '-':
+        p++;
+        if (*p == '-') {
+            token->type = LEX_T_DECREMENT;
+            p++;
+        } else {
+            lex_error(token, "`-' is only valid as part of `--'.");
+        }
         break;
 
     case '0': case '1': case '2': case '3': case '4':
@@ -741,6 +760,27 @@ lexer_match_id(struct lexer *lexer, const char *id)
         lexer_get(lexer);
         return true;
     } else {
+        return false;
+    }
+}
+
+bool
+lexer_is_int(const struct lexer *lexer)
+{
+    return (lexer->token.type == LEX_T_INTEGER
+            && lexer->token.format == LEX_F_DECIMAL
+            && ntohll(lexer->token.value.integer) <= INT_MAX);
+}
+
+bool
+lexer_get_int(struct lexer *lexer, int *value)
+{
+    if (lexer_is_int(lexer)) {
+        *value = ntohll(lexer->token.value.integer);
+        lexer_get(lexer);
+        return true;
+    } else {
+        *value = 0;
         return false;
     }
 }

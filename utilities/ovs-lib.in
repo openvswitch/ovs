@@ -325,3 +325,55 @@ move_ip_routes () {
         echo "ip route add $route dev $dst"
     done
 }
+
+ovsdb_tool () {
+    ovsdb-tool -vconsole:off "$@"
+}
+
+create_db () {
+    DB_FILE="$1"
+    DB_SCHEMA="$2"
+    action "Creating empty database $DB_FILE" ovsdb_tool create "$DB_FILE" "$DB_SCHEMA"
+}
+
+upgrade_db () {
+    DB_FILE="$1"
+    DB_SCHEMA="$2"
+
+    schemaver=`ovsdb_tool schema-version "$DB_SCHEMA"`
+    if test ! -e "$DB_FILE"; then
+        log_warning_msg "$DB_FILE does not exist"
+        install -d -m 755 -o root -g root `dirname $DB_FILE`
+        create_db "$DB_FILE" "$DB_SCHEMA"
+    elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" != Xno; then
+        # Back up the old version.
+        version=`ovsdb_tool db-version "$DB_FILE"`
+        cksum=`ovsdb_tool db-cksum "$DB_FILE" | awk '{print $1}'`
+        backup=$DB_FILE.backup$version-$cksum
+        action "Backing up database to $backup" cp "$DB_FILE" "$backup" || return 1
+
+        # Compact database.  This is important if the old schema did not enable
+        # garbage collection (i.e. if it did not have any tables with "isRoot":
+        # true) but the new schema does.  In that situation the old database
+        # may contain a transaction that creates a record followed by a
+        # transaction that creates the first use of the record.  Replaying that
+        # series of transactions against the new database schema (as "convert"
+        # does) would cause the record to be dropped by the first transaction,
+        # then the second transaction would cause a referential integrity
+        # failure (for a strong reference).
+        #
+        # Errors might occur on an Open vSwitch downgrade if ovsdb-tool doesn't
+        # understand some feature of the schema used in the OVSDB version that
+        # we're downgrading from, so we don't give up on error.
+        action "Compacting database" ovsdb_tool compact "$DB_FILE"
+
+        # Upgrade or downgrade schema.
+        if action "Converting database schema" ovsdb_tool convert "$DB_FILE" "$DB_SCHEMA"; then
+            :
+        else
+            log_warning_msg "Schema conversion failed, using empty database instead"
+            rm -f "$DB_FILE"
+            create_db "$DB_FILE" "$DB_SCHEMA"
+        fi
+    fi
+}

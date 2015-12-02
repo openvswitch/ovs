@@ -76,6 +76,8 @@ const struct stream_class tcp_stream_class = {
 };
 
 #ifdef _WIN32
+#include "dirs.h"
+
 static int
 windows_open(const char *name, char *suffix, struct stream **streamp,
              uint8_t dscp)

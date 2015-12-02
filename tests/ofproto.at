@@ -343,26 +343,29 @@ dnl Actions definition listed in both supported formats (w/ actions=)
 AT_SETUP([ofproto - del group (OpenFlow 1.5)])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
-group_id=1234,type=select,selection_method=hash,bucket=output:10,bucket=output:11
+group_id=1233,type=select,selection_method=hash,bucket=output:10,bucket=output:11
+group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11
 group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
- group_id=1234,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
@@ -417,33 +420,69 @@ dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
 AT_SETUP([ofproto - insert buckets])
 OVS_VSWITCHD_START
+# Add group with no buckets.
 AT_DATA([groups.txt], [dnl
-group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+group_id=1234,type=all
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all
+])
+
+# Add two buckets, using "last".
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
+
+# Start over again, then add two buckets using "first".
+AT_CHECK([ovs-ofctl -O OpenFlow15 --strict del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 group_id=1234,type=all])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+])
+
+# Add two more buckets before the existing ones.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
+
+# Add another bucket at the end.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
+
+# Verify that duplicate bucket IDs are rejected.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15], [1], [], [stderr])
+AT_CHECK([STRIP_XIDS stderr | sed '/truncated/,$d'], [0], [dnl
+OFPT_ERROR (OF1.5): OFPGMFC_BUCKET_EXISTS
+OFPT_GROUP_MOD (OF1.5):
+])
+
+
+# Add another bucket just before bucket 15.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
+
+# Add two more buckets just before bucket 11,
+# getting the command from a file.
 AT_DATA([buckets.txt], [dnl
 group_id=1234,command_bucket_id=11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13
 ])
@@ -453,6 +492,8 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
+
+# Add yet two more buckets.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
@@ -829,6 +870,41 @@ OFPST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
 ])
 AT_CHECK([ovs-ofctl -F openflow10 del-flows br0])
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip], [0], [OFPST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# It's really dumb that check_overlap and reset_counts are considered
+# part of flow state, but OpenFlow implies that it is, and OFTest and
+# some users insist on it.
+AT_SETUP([ofproto - add-flow and flags])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -F openflow10 add-flow br0 check_overlap,in_port=1,actions=drop])
+# Prior to OF1.3, flow dumps didn't include a "flags" field.
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply:
+ in_port=1 actions=drop
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.1):
+ in_port=1 actions=drop
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.2):
+ in_port=1 actions=drop
+])
+# OF1.3 makes the flags visible.
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.3):
+ check_overlap reset_counts in_port=1 actions=drop
+])
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.4):
+ check_overlap reset_counts in_port=1 actions=drop
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.5):
+ check_overlap reset_counts in_port=1 actions=drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1304,6 +1380,120 @@ OFPST_FLOW reply (OF1.2):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - flow_mod with out_port matching (OpenFlow 1.0)])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=output:2
+ in_port=2 actions=output:1,output:2,output:3
+ in_port=3 actions=output:3,output:1,output:2
+ in_port=4 actions=drop
+ in_port=5 actions=output:3
+ in_port=6 actions=output:1
+])
+AT_CHECK([ovs-ofctl -F openflow10 add-flows br0 flows.txt])
+(cat flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:2' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 out_port=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0 out_port=2])
+(grep -v 'output:2' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0 out_port=3])
+(grep -v 'output:[[23]]' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -F openflow10 del-flows br0 out_port=1])
+(grep -v 'output:[[123]]' flows.txt; echo 'OFPST_FLOW reply:') > expout
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - flow_mod with out_port matching (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=output:2
+ in_port=2 actions=output:1,write_actions(output:2,output:3)
+ in_port=3 actions=output:3,output:1,write_actions(output:2)
+ in_port=4 actions=drop
+ in_port=5 actions=write_actions(output:3)
+ in_port=6 actions=output:1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flows br0 flows.txt])
+(cat flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:2' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 out_port=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_port=2])
+(grep -v 'output:2' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_port=3])
+(grep -v 'output:[[23]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_port=1])
+(grep -v 'output:[[123]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - flow_mod with out_group matching (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1,type=all,bucket=output:10
+group_id=2,type=all,bucket=output:10
+group_id=3,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-groups br0 groups.txt])
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=group:2,output:5
+ in_port=2 actions=group:1,write_actions(group:2,group:3,output:6)
+ in_port=3 actions=group:3,group:1,write_actions(group:2,output:3)
+ in_port=4 actions=output:4
+ in_port=5 actions=write_actions(output:4,group:3)
+ in_port=6 actions=group:1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flows br0 flows.txt])
+(cat flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:3' flows.txt | grep 'group:2'; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 out_port=3,out_group=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=2])
+(grep -v 'group:2' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=3])
+(grep -v 'group:[[23]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=1])
+(grep -v 'group:[[123]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Check the default configuration.
@@ -1411,7 +1601,7 @@ ditto() {
 }
 (head_table classifier; ditto 1 253) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
-OVS_VSWITCHD_STOP(["/cannot find route for controller/d"])
+OVS_VSWITCHD_STOP(["/240\.0\.0\.1/d"])
 AT_CLEANUP
 
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.2)])
@@ -1428,7 +1618,7 @@ head_table() {
       instructions: apply_actions,clear_actions,write_actions,write_metadata,goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: metadata in_port_oxm eth_src eth_dst vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+        supported on Set-Field: metadata in_port_oxm eth_src eth_dst vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label ip_dscp nw_ecn arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
     matching:
       metadata: exact match or wildcard
       in_port_oxm: exact match or wildcard
@@ -1529,7 +1719,9 @@ head_table () {
       instructions: meter,apply_actions,clear_actions,write_actions,write_metadata,goto_table
       Write-Actions and Apply-Actions features:
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
-        supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 metadata in_port in_port_oxm pkt_mark reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst nd_target nd_sll nd_tll
+        supported on Set-Field: tun_id tun_src tun_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 dnl
+tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 dnl
+metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
     matching:
       dp_hash: arbitrary mask
       recirc_id: exact match or wildcard
@@ -1609,6 +1801,10 @@ head_table () {
       in_port_oxm: exact match or wildcard
       actset_output: exact match or wildcard
       pkt_mark: arbitrary mask
+      ct_state: arbitrary mask
+      ct_zone: exact match or wildcard
+      ct_mark: arbitrary mask
+      ct_label: arbitrary mask
       reg0: arbitrary mask
       reg1: arbitrary mask
       reg2: arbitrary mask
@@ -1727,7 +1923,8 @@ OVS_VSWITCHD_START
  while test $x -lt 254; do
    y=`expr $x + 1`
    echo "  table $x:
-   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME"
+   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME
+   vacancy=off"
    x=$y
  done) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
@@ -1738,6 +1935,13 @@ AT_CHECK([ovs-ofctl -O Openflow14 mod-table br0 0 evict])
 # Check that the configuration was updated.
 mv expout orig-expout
 sed -e '2s/eviction=off/eviction=on/' <orig-expout > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
+/^OFPST_TABLE_DESC/d'], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O Openflow14 mod-table br0 0 vacancy:20,80])
+# Check that the configuration was updated.
+mv expout orig-expout
+sed -e '3s/vacancy=off/vacancy=on vacancy_down=20% vacancy_up=80% vacancy=0%/' <orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
 /^OFPST_TABLE_DESC/d'], [0], [expout])
 OVS_VSWITCHD_STOP
@@ -2421,8 +2625,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
     fi
     AT_FAIL_IF([test X"$1" != X])
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "OFPT_BARRIER_REPLY (OF1.2):"
+    sleep 1
 
     AT_CHECK(
       [[sed '
@@ -2774,7 +2977,7 @@ dnl This test checks that the role request/response messaging works
 dnl and that generation_id is handled properly.
 AT_SETUP([ofproto - controller role (OpenFlow 1.2)])
 OVS_VSWITCHD_START
-ON_EXIT([kill `cat c1.pid c2.pid`])
+on_exit 'kill `cat c1.pid c2.pid`'
 
 # Start two ovs-ofctl controller processes.
 AT_CAPTURE_FILE([monitor1.log])
@@ -2839,7 +3042,7 @@ dnl messages are sent when a controller's role gets changed from master
 dnl to slave.
 AT_SETUP([ofproto - controller role (OpenFlow 1.4)])
 OVS_VSWITCHD_START
-ON_EXIT([kill `cat c1.pid c2.pid`])
+on_exit 'kill `cat c1.pid c2.pid`'
 
 # Start two ovs-ofctl controller processes.
 AT_CAPTURE_FILE([monitor1.log])
@@ -2896,6 +3099,97 @@ for i in 1 2; do
     cp experr$i expout
     AT_CHECK([grep '^send:' monitor$i.log | STRIP_XIDS], [0], [expout])
 done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This test checks the Group and meter notifications when a group mod
+dnl command is sent from one controller and the reply is received by
+dnl other controllers.
+AT_SETUP([ofproto - requestforward (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+on_exit 'kill `cat c1.pid c2.pid c3.pid`'
+
+# Start two ovs-ofctl controller processes.
+AT_CAPTURE_FILE([monitor1.log])
+AT_CAPTURE_FILE([expout1])
+AT_CAPTURE_FILE([monitor2.log])
+AT_CAPTURE_FILE([expout2])
+AT_CAPTURE_FILE([monitor3.log])
+AT_CAPTURE_FILE([expout3])
+
+ovs-ofctl -O OpenFlow15 monitor br0 --detach --no-chdir --pidfile=`pwd`/c1.pid --unixctl=`pwd`/c1
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=`pwd`/c2.pid --unixctl=`pwd`/c2
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=`pwd`/c3.pid --unixctl=`pwd`/c3
+
+check_async () {
+    for i in 1 3; do
+        ovs-appctl -t `pwd`/c$i ofctl/barrier
+        ovs-appctl -t `pwd`/c$i ofctl/set-output-file monitor$i.log
+        : > expout$i
+    done
+
+    printf '\n\n--- check_async %d ---\n\n\n' $1
+    INDEX=$1
+    shift
+
+    # OFPGC_ADD
+    ovs-appctl -t `pwd`/c2 ofctl/send 050f0010000000020000000000000001
+    if test X"$1" = X"OFPGC_ADD"; then shift;
+        echo >>expout2 "send: OFPT_GROUP_MOD (OF1.4):
+ ADD group_id=1,type=all"
+        echo >>expout1 "OFPT_REQUESTFORWARD (OF1.5): reason=group_mod
+ ADD group_id=1,type=all"
+        echo >>expout3 "OFPT_REQUESTFORWARD (OF1.4): reason=group_mod
+ ADD group_id=1,type=all"
+    fi
+
+    # OFPGC_MODIFY
+    ovs-appctl -t `pwd`/c2 ofctl/send 050f0010000000020001010000000001
+    if test X"$1" = X"OFPGC_MODIFY"; then shift;
+        echo >>expout2 "send: OFPT_GROUP_MOD (OF1.4):
+ MOD group_id=1,type=select"
+        echo >>expout1 "OFPT_REQUESTFORWARD (OF1.5): reason=group_mod
+ MOD group_id=1,type=select"
+        echo >>expout3 "OFPT_REQUESTFORWARD (OF1.4): reason=group_mod
+ MOD group_id=1,type=select"
+    fi
+
+    ovs-appctl -t `pwd`/c1 ofctl/barrier
+    echo >>expout1 "OFPT_BARRIER_REPLY (OF1.5):"
+    ovs-appctl -t `pwd`/c2 ofctl/barrier
+    echo >>expout2 "OFPT_BARRIER_REPLY (OF1.4):"
+    ovs-appctl -t `pwd`/c3 ofctl/barrier
+    echo >>expout3 "OFPT_BARRIER_REPLY (OF1.4):"
+
+    # Check output.
+    for i in 1 3; do
+        cp expout$i expout
+        AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
+      [0], [expout])
+    done
+}
+
+# controller 1: Become slave
+ovs-appctl -t `pwd`/c1 ofctl/send 061800180000000300000003000000008000000000000002
+
+# controller 2: Become master
+ovs-appctl -t `pwd`/c2 ofctl/send 051800180000000300000002000000008000000000000003
+
+# controller 1: Become slave
+ovs-appctl -t `pwd`/c3 ofctl/send 051800180000000300000003000000008000000000000004
+
+# controller 1: Enabled requestforward using set Asynchronous message
+ovs-appctl -t `pwd`/c1 ofctl/send 061c00280000000200000008000000050002000800000002000400080000001a000a000800000003
+
+# controller 2: Enabled requestforward using set Asynchronous message
+ovs-appctl -t `pwd`/c2 ofctl/send 051c002800000002000100080000000200030008000000050005000800000005000b000800000003
+
+# controller 1: Enabled requestforward using set Asynchronous message
+ovs-appctl -t `pwd`/c3 ofctl/send 051c00280000000200000008000000050002000800000002000400080000001a000a000800000003
+check_async 1 OFPGC_ADD OFPGC_MODIFY
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3394,7 +3688,7 @@ echo n_msgs=$n_msgs
 OVS_VSWITCHD_START
 
 # Start a monitor watching the flow table, then make it block.
-ON_EXIT([kill `cat ovs-ofctl.pid`])
+on_exit 'kill `cat ovs-ofctl.pid`'
 ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/block
@@ -3542,8 +3836,8 @@ set_and_check_poorly_specified_ofports () {
 	AT_CHECK([test "$p1" = "$1" || test "$p2" = "$1"])
 	# The other port number must be different (already tested above).
     else
-        AT_CHECK([test "$1" = '[[]]' || test "$p1" == "$1"])
-        AT_CHECK([test "$2" = '[[]]' || test "$p2" == "$2"])
+        AT_CHECK([test "$1" = '[[]]' || test "$p1" = "$1"])
+        AT_CHECK([test "$2" = '[[]]' || test "$p2" = "$2"])
     fi
 }
 for pre in      '1 2' '[[]] 2' '1 [[]]' '[[]] [[]]' '2 1' '[[]] 1' '2 [[]]' \
@@ -3852,8 +4146,8 @@ NXST_FLOW reply:
 
 dnl Check logs for OpenFlow trace
 # Prevent race.
-OVS_WAIT_UNTIL([cat ovs-vswitchd.log | vconn_windows_sub | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
-AT_CHECK([print_vconn_debug | vconn_windows_sub | ofctl_strip], [0], [dnl
+OVS_WAIT_UNTIL([cat ovs-vswitchd.log | vconn_sub | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
+AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
@@ -3865,8 +4159,8 @@ vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -3917,8 +4211,8 @@ vconn|DBG|unix: sent (Success): NXST_FLOW reply:
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -3948,8 +4242,8 @@ vconn|DBG|unix: sent (Success): NXST_FLOW reply:
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):

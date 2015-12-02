@@ -261,11 +261,12 @@ EOF
     done
 
     OVN_NB_DB=unix:$sim_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
+    OVN_SB_DB=unix:$sim_base/ovn-sb/ovn-sb.sock; export OVN_SB_DB
 
     mkdir "$sim_base"/northd
     as northd ovn-northd $daemon_opts \
-	       --ovnnb-db=unix:"$sim_base"/ovn-nb/ovn-nb.sock \
-	       --ovnsb-db=unix:"$sim_base"/ovn-sb/ovn-sb.sock
+	       --ovnnb-db="$OVN_NB_DB" \
+	       --ovnsb-db="$OVN_SB_DB"
 }
 export -f ovn_start
 

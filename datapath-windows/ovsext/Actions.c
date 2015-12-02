@@ -291,7 +291,7 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * If the packet will not be encapsulated, consume the tunnel context
          * by clearing it.
          */
-        if (ovsFwdCtx->srcVportNo != OVS_DEFAULT_PORT_NO) {
+        if (ovsFwdCtx->srcVportNo != OVS_DPPORT_NUMBER_INVALID) {
 
             POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(
                 ovsFwdCtx->switchContext, ovsFwdCtx->srcVportNo);
@@ -566,9 +566,10 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
 
     /* Assert that in the Rx direction, key is always setup. */
     ASSERT(ovsFwdCtx->tunnelRxNic == NULL || ovsFwdCtx->tunKey.dst != 0);
-    status = OvsExtractFlow(ovsFwdCtx->curNbl, ovsFwdCtx->srcVportNo,
-                          &key, &ovsFwdCtx->layers, ovsFwdCtx->tunKey.dst != 0 ?
-                                         &ovsFwdCtx->tunKey : NULL);
+    status =
+        OvsExtractFlow(ovsFwdCtx->curNbl, ovsFwdCtx->srcVportNo,
+                       &key, &ovsFwdCtx->layers,
+                       ovsFwdCtx->tunKey.dst != 0 ? &ovsFwdCtx->tunKey : NULL);
     if (status != NDIS_STATUS_SUCCESS) {
         OvsCompleteNBLForwardingCtx(ovsFwdCtx,
                                     L"OVS-Flow extract failed");
@@ -581,20 +582,19 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
         OvsFlowUsed(flow, ovsFwdCtx->curNbl, &ovsFwdCtx->layers);
         ovsFwdCtx->switchContext->datapath.hits++;
         status = OvsActionsExecute(ovsFwdCtx->switchContext,
-                                 ovsFwdCtx->completionList, ovsFwdCtx->curNbl,
-                                 ovsFwdCtx->srcVportNo, ovsFwdCtx->sendFlags,
-                                 &key, &hash, &ovsFwdCtx->layers,
-                                 flow->actions, flow->actionsLen);
+                                   ovsFwdCtx->completionList, ovsFwdCtx->curNbl,
+                                   ovsFwdCtx->srcVportNo, ovsFwdCtx->sendFlags,
+                                   &key, &hash, &ovsFwdCtx->layers,
+                                   flow->actions, flow->actionsLen);
         ovsFwdCtx->curNbl = NULL;
     } else {
         LIST_ENTRY missedPackets;
         UINT32 num = 0;
         ovsFwdCtx->switchContext->datapath.misses++;
         InitializeListHead(&missedPackets);
-        status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
-                          ovsFwdCtx->srcVportNo,
+        status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS, vport,
                           &key,ovsFwdCtx->curNbl,
-                          ovsFwdCtx->tunnelRxNic != NULL, &ovsFwdCtx->layers,
+                          FALSE, &ovsFwdCtx->layers,
                           ovsFwdCtx->switchContext, &missedPackets, &num);
         if (num) {
             OvsQueuePackets(&missedPackets, num);
@@ -709,6 +709,7 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     PNET_BUFFER_LIST newNbl = NULL;
     POVS_VPORT_ENTRY tunnelRxVport = ovsFwdCtx->tunnelRxNic;
+    PCWSTR dropReason = L"OVS-dropped due to new decap packet";
 
     if (OvsValidateIPChecksum(ovsFwdCtx->curNbl, &ovsFwdCtx->layers)
             != NDIS_STATUS_SUCCESS) {
@@ -730,6 +731,10 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
     case OVS_VPORT_TYPE_STT:
         status = OvsDecapStt(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                              &ovsFwdCtx->tunKey, &newNbl);
+        if (status == NDIS_STATUS_SUCCESS && newNbl == NULL) {
+            /* This was an STT-LSO Fragment */
+            dropReason = L"OVS-STT segment is cached";
+        }
         break;
     default:
         OVS_LOG_ERROR("Rx: Unhandled tunnel type: %d\n",
@@ -747,25 +752,26 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
      * tunnelRxNic and other fields will be cleared, re-init the context
      * before usage.
       */
-    OvsCompleteNBLForwardingCtx(ovsFwdCtx,
-                                L"OVS-dropped due to new decap packet");
+    OvsCompleteNBLForwardingCtx(ovsFwdCtx, dropReason);
 
-    /* Decapsulated packet is in a new NBL */
-    ovsFwdCtx->tunnelRxNic = tunnelRxVport;
-    OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
-                         newNbl, tunnelRxVport->portNo, 0,
-                         NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
-                         ovsFwdCtx->completionList,
-                         &ovsFwdCtx->layers, FALSE);
+    if (newNbl) {
+        /* Decapsulated packet is in a new NBL */
+        ovsFwdCtx->tunnelRxNic = tunnelRxVport;
+        OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
+                             newNbl, tunnelRxVport->portNo, 0,
+                             NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
+                             ovsFwdCtx->completionList,
+                             &ovsFwdCtx->layers, FALSE);
 
-    /*
-     * Set the NBL's SourcePortId and SourceNicIndex to default values to
-     * keep NDIS happy when we forward the packet.
-     */
-    ovsFwdCtx->fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
-    ovsFwdCtx->fwdDetail->SourceNicIndex = 0;
+        /*
+         * Set the NBL's SourcePortId and SourceNicIndex to default values to
+         * keep NDIS happy when we forward the packet.
+         */
+        ovsFwdCtx->fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
+        ovsFwdCtx->fwdDetail->SourceNicIndex = 0;
 
-    status = OvsDoFlowLookupOutput(ovsFwdCtx);
+        status = OvsDoFlowLookupOutput(ovsFwdCtx);
+    }
     ASSERT(ovsFwdCtx->curNbl == NULL);
     OvsClearTunRxCtx(ovsFwdCtx);
 
@@ -947,7 +953,6 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
 {
     PNET_BUFFER_LIST newNbl;
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
-    PNET_BUFFER nb;
 
     /*
      * Create a copy and work on the copy after this point. The original NBL is
@@ -967,14 +972,14 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
      * XXX Head room needs to include the additional encap.
      * XXX copySize check is not considering multiple NBs.
      */
-    nb = NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl);
     newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                                0, 0, TRUE /*copy NBL info*/);
 
     ASSERT(ovsFwdCtx->destPortsSizeOut > 0 ||
            ovsFwdCtx->tunnelTxNic != NULL || ovsFwdCtx->tunnelRxNic != NULL);
 
-    /* Send the original packet out */
+    /* Send the original packet out and save the original source port number */
+    UINT32 tempVportNo = ovsFwdCtx->srcVportNo;
     status = OvsOutputForwardingCtx(ovsFwdCtx);
     ASSERT(ovsFwdCtx->curNbl == NULL);
     ASSERT(ovsFwdCtx->destPortsSizeOut == 0);
@@ -992,7 +997,7 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
         OvsCompleteNBL(ovsFwdCtx->switchContext, newNbl, TRUE);
     } else {
         status = OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
-                                      newNbl, ovsFwdCtx->srcVportNo, 0,
+                                      newNbl, tempVportNo, 0,
                                       NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
                                       ovsFwdCtx->completionList,
                                       &ovsFwdCtx->layers, FALSE);
@@ -1531,7 +1536,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             elem = OvsCreateQueueNlPacket((PVOID)userdataAttr,
                                     userdataAttr->nlaLen,
                                     OVS_PACKET_CMD_ACTION,
-                                    portNo, key,ovsFwdCtx.curNbl,
+                                    vport, key, ovsFwdCtx.curNbl,
                                     NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx.curNbl),
                                     isRecv,
                                     layers);

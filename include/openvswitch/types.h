@@ -84,9 +84,23 @@ typedef struct {
 typedef union {
     uint32_t u32[4];
     struct {
+#ifdef WORDS_BIGENDIAN
+        uint64_t hi, lo;
+#else
         uint64_t lo, hi;
+#endif
     } u64;
 } ovs_u128;
+
+typedef union {
+    ovs_be32 be32[4];
+    struct {
+        ovs_be64 hi, lo;
+    } be64;
+} ovs_be128;
+
+#define OVS_U128_MAX (ovs_u128) { .u64 = { UINT64_MAX, UINT64_MAX } }
+#define OVS_BE128_MAX (ovs_be128) { .be64 = { OVS_BE64_MAX, OVS_BE64_MAX } }
 
 /* A 64-bit value, in network byte order, that is only aligned on a 32-bit
  * boundary. */
@@ -105,5 +119,15 @@ typedef uint32_t OVS_BITWISE ofp11_port_t;
 #define OFP_PORT_C(X) ((OVS_FORCE ofp_port_t) (X))
 #define ODP_PORT_C(X) ((OVS_FORCE odp_port_t) (X))
 #define OFP11_PORT_C(X) ((OVS_FORCE ofp11_port_t) (X))
+
+/* Using this struct instead of a bare array makes an ethernet address field
+ * assignable.  The size of the array is also part of the type, so it is easier
+ * to deal with. */
+struct eth_addr {
+    union {
+        uint8_t ea[6];
+        ovs_be16 be16[3];
+    };
+};
 
 #endif /* openvswitch/types.h */

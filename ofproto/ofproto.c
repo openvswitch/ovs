@@ -2317,7 +2317,7 @@ ofport_open(struct ofproto *ofproto,
         }
     }
     pp->port_no = ofproto_port->ofp_port;
-    netdev_get_etheraddr(netdev, pp->hw_addr);
+    netdev_get_etheraddr(netdev, &pp->hw_addr);
     ovs_strlcpy(pp->name, ofproto_port->name, sizeof pp->name);
     netdev_get_flags(netdev, &flags);
     pp->config = flags & NETDEV_UP ? 0 : OFPUTIL_PC_PORT_DOWN;
@@ -2424,7 +2424,7 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
 static void
 ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
 {
-    memcpy(port->pp.hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    port->pp.hw_addr = pp->hw_addr;
     port->pp.config = ((port->pp.config & ~OFPUTIL_PC_PORT_DOWN)
                         | (pp->config & OFPUTIL_PC_PORT_DOWN));
     port->pp.state = ((port->pp.state & ~OFPUTIL_PS_LINK_DOWN)
@@ -3333,7 +3333,7 @@ reject_slave_controller(struct ofconn *ofconn)
  *    - If they use any groups, then 'ofproto' has that group configured.
  *
  * Returns 0 if successful, otherwise an OpenFlow error. */
-static enum ofperr
+enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofpact ofpacts[], size_t ofpacts_len)
 {
@@ -3345,7 +3345,7 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
         return OFPERR_OFPMMFC_INVALID_METER;
     }
 
-    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+    OFPACT_FOR_EACH_FLATTENED (a, ofpacts, ofpacts_len) {
         if (a->type == OFPACT_GROUP
             && !ofproto_group_exists(ofproto, ofpact_get_GROUP(a)->group_id)) {
             return OFPERR_OFPBAC_BAD_OUT_GROUP;
@@ -3399,10 +3399,22 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Verify actions against packet, then send packet if successful. */
     flow_extract(payload, &flow);
     flow.in_port.ofp_port = po.in_port;
-    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
+
+    /* Check actions like for flow mods.  We pass a 'table_id' of 0 to
+     * ofproto_check_consistency(), which isn't strictly correct because these
+     * actions aren't in any table.  This is OK as 'table_id' is only used to
+     * check instructions (e.g., goto-table), which can't appear on the action
+     * list of a packet-out. */
+    error = ofpacts_check_consistency(po.ofpacts, po.ofpacts_len,
+                                      &flow, u16_to_ofp(p->max_ports),
+                                      0, p->n_tables,
+                                      ofconn_get_protocol(ofconn));
     if (!error) {
-        error = p->ofproto_class->packet_out(p, payload, &flow,
-                                             po.ofpacts, po.ofpacts_len);
+        error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
+        if (!error) {
+            error = p->ofproto_class->packet_out(p, payload, &flow,
+                                                 po.ofpacts, po.ofpacts_len);
+        }
     }
     dp_packet_delete(payload);
 
@@ -3576,6 +3588,26 @@ handle_table_features_request(struct ofconn *ofconn,
     return 0;
 }
 
+static void
+query_table_desc__(struct ofputil_table_desc *td,
+                   struct ofproto *ofproto, uint8_t table_id)
+{
+    unsigned int count = ofproto->tables[table_id].n_flows;
+    unsigned int max_flows = ofproto->tables[table_id].max_flows;
+
+    td->table_id = table_id;
+    td->eviction = (ofproto->tables[table_id].eviction & EVICTION_OPENFLOW
+                    ? OFPUTIL_TABLE_EVICTION_ON
+                    : OFPUTIL_TABLE_EVICTION_OFF);
+    td->eviction_flags = OFPROTO_EVICTION_FLAGS;
+    td->vacancy = (ofproto->tables[table_id].vacancy_enabled
+                   ? OFPUTIL_TABLE_VACANCY_ON
+                   : OFPUTIL_TABLE_VACANCY_OFF);
+    td->table_vacancy.vacancy_down = ofproto->tables[table_id].vacancy_down;
+    td->table_vacancy.vacancy_up = ofproto->tables[table_id].vacancy_up;
+    td->table_vacancy.vacancy = max_flows ? (count * 100) / max_flows : 0;
+}
+
 /* This function queries the database for dumping table-desc. */
 static void
 query_tables_desc(struct ofproto *ofproto, struct ofputil_table_desc **descp)
@@ -3586,11 +3618,7 @@ query_tables_desc(struct ofproto *ofproto, struct ofputil_table_desc **descp)
     table_desc = *descp = xcalloc(ofproto->n_tables, sizeof *table_desc);
     for (i = 0; i < ofproto->n_tables; i++) {
         struct ofputil_table_desc *td = &table_desc[i];
-        td->table_id = i;
-        td->eviction = (ofproto->tables[i].eviction & EVICTION_OPENFLOW
-                        ? OFPUTIL_TABLE_EVICTION_ON
-                        : OFPUTIL_TABLE_EVICTION_OFF);
-        td->eviction_flags = OFPROTO_EVICTION_FLAGS;
+        query_table_desc__(td, ofproto, i);
     }
 }
 
@@ -4917,7 +4945,7 @@ modify_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, CLS_MAX_VERSION,
-                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG11_ANY);
+                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_loose(ofproto, &criteria, old_rules);
@@ -4994,7 +5022,7 @@ modify_flow_start_strict(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
                        CLS_MAX_VERSION, fm->cookie, fm->cookie_mask, OFPP_ANY,
-                       OFPG11_ANY);
+                       OFPG_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     error = collect_rules_strict(ofproto, &criteria, old_rules);
@@ -5385,10 +5413,14 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    enum ofperr error;
     uint32_t master[OAM_N_TYPES] = {0};
     uint32_t slave[OAM_N_TYPES] = {0};
 
-    ofputil_decode_set_async_config(oh, master, slave, false);
+    error = ofputil_decode_set_async_config(oh, master, slave, false);
+    if (error) {
+        return error;
+    }
 
     ofconn_set_async_config(ofconn, master, slave);
     if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&
@@ -5908,6 +5940,14 @@ handle_meter_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         break;
     }
 
+    if (!error) {
+        struct ofputil_requestforward rf;
+        rf.xid = oh->xid;
+        rf.reason = OFPRFR_METER_MOD;
+        rf.meter_mod = &mm;
+        connmgr_send_requestforward(ofproto->connmgr, ofconn, &rf);
+    }
+
 exit_free_bands:
     ofpbuf_uninit(&bands);
     return error;
@@ -6360,22 +6400,24 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
 
     ofputil_bucket_clone_list(&new_ofgroup->buckets, &ofgroup->buckets, NULL);
 
-    if (ofputil_bucket_check_duplicate_id(&ofgroup->buckets)) {
-            VLOG_WARN_RL(&rl, "Duplicate bucket id");
+    if (ofputil_bucket_check_duplicate_id(&new_ofgroup->buckets)) {
+            VLOG_INFO_RL(&rl, "Duplicate bucket id");
             return OFPERR_OFPGMFC_BUCKET_EXISTS;
     }
 
     /* Rearrange list according to command_bucket_id */
     if (command_bucket_id == OFPG15_BUCKET_LAST) {
-        struct ofputil_bucket *new_first;
-        const struct ofputil_bucket *first;
+        if (!list_is_empty(&ofgroup->buckets)) {
+            struct ofputil_bucket *new_first;
+            const struct ofputil_bucket *first;
 
-        first = ofputil_bucket_list_front(&ofgroup->buckets);
-        new_first = ofputil_bucket_find(&new_ofgroup->buckets,
-                                        first->bucket_id);
+            first = ofputil_bucket_list_front(&ofgroup->buckets);
+            new_first = ofputil_bucket_find(&new_ofgroup->buckets,
+                                            first->bucket_id);
 
-        list_splice(new_ofgroup->buckets.next, &new_first->list_node,
-                    &new_ofgroup->buckets);
+            list_splice(new_ofgroup->buckets.next, &new_first->list_node,
+                        &new_ofgroup->buckets);
+        }
     } else if (command_bucket_id <= OFPG15_BUCKET_MAX && last) {
         struct ofputil_bucket *after;
 
@@ -6575,28 +6617,42 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     switch (gm.command) {
     case OFPGC11_ADD:
-        return add_group(ofproto, &gm);
+        error = add_group(ofproto, &gm);
+        break;
 
     case OFPGC11_MODIFY:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     case OFPGC11_DELETE:
         delete_group(ofproto, gm.group_id);
-        return 0;
+        error = 0;
+        break;
 
     case OFPGC15_INSERT_BUCKET:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     case OFPGC15_REMOVE_BUCKET:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     default:
         if (gm.command > OFPGC11_DELETE) {
-            VLOG_WARN_RL(&rl, "%s: Invalid group_mod command type %d",
+            VLOG_INFO_RL(&rl, "%s: Invalid group_mod command type %d",
                          ofproto->name, gm.command);
         }
         return OFPERR_OFPGMFC_BAD_COMMAND;
     }
+
+    if (!error) {
+        struct ofputil_requestforward rf;
+        rf.xid = oh->xid;
+        rf.reason = OFPRFR_GROUP_MOD;
+        rf.group_mod = &gm;
+        connmgr_send_requestforward(ofproto->connmgr, ofconn, &rf);
+    }
+    return error;
 }
 
 enum ofputil_table_miss
@@ -6610,20 +6666,20 @@ ofproto_table_get_miss_config(const struct ofproto *ofproto, uint8_t table_id)
 
 static void
 table_mod__(struct oftable *oftable,
-            enum ofputil_table_miss miss, enum ofputil_table_eviction eviction)
+            const struct ofputil_table_mod *tm)
 {
-    if (miss == OFPUTIL_TABLE_MISS_DEFAULT) {
+    if (tm->miss == OFPUTIL_TABLE_MISS_DEFAULT) {
         /* This is how an OFPT_TABLE_MOD decodes if it doesn't specify any
          * table-miss configuration (because the protocol used doesn't have
          * such a concept), so there's nothing to do. */
     } else {
-        atomic_store_relaxed(&oftable->miss_config, miss);
+        atomic_store_relaxed(&oftable->miss_config, tm->miss);
     }
 
     unsigned int new_eviction = oftable->eviction;
-    if (eviction == OFPUTIL_TABLE_EVICTION_ON) {
+    if (tm->eviction == OFPUTIL_TABLE_EVICTION_ON) {
         new_eviction |= EVICTION_OPENFLOW;
-    } else if (eviction == OFPUTIL_TABLE_EVICTION_OFF) {
+    } else if (tm->eviction == OFPUTIL_TABLE_EVICTION_OFF) {
         new_eviction &= ~EVICTION_OPENFLOW;
     }
 
@@ -6632,6 +6688,16 @@ table_mod__(struct oftable *oftable,
         oftable_configure_eviction(oftable, new_eviction,
                                    oftable->eviction_fields,
                                    oftable->n_eviction_fields);
+        ovs_mutex_unlock(&ofproto_mutex);
+    }
+
+    if (tm->vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
+        ovs_mutex_lock(&ofproto_mutex);
+        oftable->vacancy_enabled = (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON
+                                    ? OFPTC14_VACANCY_EVENTS
+                                    : 0);
+        oftable->vacancy_down = tm->table_vacancy.vacancy_down;
+        oftable->vacancy_up = tm->table_vacancy.vacancy_up;
         ovs_mutex_unlock(&ofproto_mutex);
     }
 }
@@ -6657,7 +6723,7 @@ table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
         struct oftable *oftable;
         OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
             if (!(oftable->flags & (OFTABLE_HIDDEN | OFTABLE_READONLY))) {
-                table_mod__(oftable, tm->miss, tm->eviction);
+                table_mod__(oftable, tm);
             }
         }
     } else {
@@ -6665,7 +6731,7 @@ table_mod(struct ofproto *ofproto, const struct ofputil_table_mod *tm)
         if (oftable->flags & OFTABLE_READONLY) {
             return OFPERR_OFPTMFC_EPERM;
         }
-        table_mod__(oftable, tm->miss, tm->eviction);
+        table_mod__(oftable, tm);
     }
 
     return 0;
@@ -7211,6 +7277,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
+    case OFPTYPE_REQUESTFORWARD:
     case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {
@@ -7277,10 +7344,10 @@ pick_datapath_id(const struct ofproto *ofproto)
 
     port = ofproto_get_port(ofproto, OFPP_LOCAL);
     if (port) {
-        uint8_t ea[ETH_ADDR_LEN];
+        struct eth_addr ea;
         int error;
 
-        error = netdev_get_etheraddr(port->netdev, ea);
+        error = netdev_get_etheraddr(port->netdev, &ea);
         if (!error) {
             return eth_addr_to_uint64(ea);
         }
@@ -7294,8 +7361,8 @@ pick_datapath_id(const struct ofproto *ofproto)
 static uint64_t
 pick_fallback_dpid(void)
 {
-    uint8_t ea[ETH_ADDR_LEN];
-    eth_addr_nicira_random(ea);
+    struct eth_addr ea;
+    eth_addr_nicira_random(&ea);
     return eth_addr_to_uint64(ea);
 }
 

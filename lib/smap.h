@@ -39,6 +39,25 @@ struct smap_node {
 #define SMAP_FOR_EACH_SAFE(SMAP_NODE, NEXT, SMAP) \
     HMAP_FOR_EACH_SAFE (SMAP_NODE, NEXT, node, &(SMAP)->map)
 
+/* Initializer for an immutable struct smap 'SMAP' that contains a single
+ * 'KEY'-'VALUE' pair, e.g.
+ *
+ *     const struct smap smap = SMAP1_CONST1(&smap, "key", "value");
+ *
+ * An smap initialized this way must not be modified or destroyed.
+ *
+ * The 'KEY' argument is evaluated multiple times.
+ */
+#define SMAP_CONST1(SMAP, KEY, VALUE) {                                 \
+        HMAP_CONST1(&(SMAP)->map,                                       \
+                   (&(struct smap_node) SMAP_NODE_INIT(KEY, VALUE).node)) \
+            }
+#define SMAP_NODE_INIT(KEY, VALUE) {                \
+        HMAP_NODE_INIT(hash_string(KEY, 0)),        \
+                       CONST_CAST(char *, KEY),     \
+                       CONST_CAST(char *, VALUE) }
+
+
 void smap_init(struct smap *);
 void smap_destroy(struct smap *);
 
@@ -47,6 +66,7 @@ struct smap_node *smap_add_nocopy(struct smap *, char *, char *);
 bool smap_add_once(struct smap *, const char *, const char *);
 void smap_add_format(struct smap *, const char *key, const char *, ...)
     OVS_PRINTF_FORMAT(3, 4);
+void smap_add_ipv6(struct smap *, const char *, struct in6_addr *);
 void smap_replace(struct smap *, const char *, const char *);
 
 void smap_remove(struct smap *, const char *);

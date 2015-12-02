@@ -96,7 +96,7 @@ enum ofp10_port_features {
 /* Description of a physical port */
 struct ofp10_phy_port {
     ovs_be16 port_no;
-    uint8_t hw_addr[OFP_ETH_ALEN];
+    struct eth_addr hw_addr;
     char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
     ovs_be32 config;        /* Bitmap of OFPPC_* and OFPPC10_* flags. */
@@ -114,11 +114,10 @@ OFP_ASSERT(sizeof(struct ofp10_phy_port) == 48);
 /* Modify behavior of the physical port */
 struct ofp10_port_mod {
     ovs_be16 port_no;
-    uint8_t hw_addr[OFP_ETH_ALEN]; /* The hardware address is not
-                                      configurable.  This is used to
-                                      sanity-check the request, so it must
-                                      be the same as returned in an
-                                      ofp10_phy_port struct. */
+    struct eth_addr hw_addr; /* The hardware address is not configurable.  This
+                                is used to sanity-check the request, so it must
+                                be the same as returned in an ofp10_phy_port
+                                struct. */
 
     ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
     ovs_be32 mask;          /* Bitmap of OFPPC_* flags to be changed. */
@@ -234,8 +233,8 @@ enum ofp10_flow_wildcards {
 struct ofp10_match {
     ovs_be32 wildcards;        /* Wildcard fields. */
     ovs_be16 in_port;          /* Input switch port. */
-    uint8_t dl_src[OFP_ETH_ALEN]; /* Ethernet source address. */
-    uint8_t dl_dst[OFP_ETH_ALEN]; /* Ethernet destination address. */
+    struct eth_addr dl_src;    /* Ethernet source address. */
+    struct eth_addr dl_dst;    /* Ethernet destination address. */
     ovs_be16 dl_vlan;          /* Input VLAN. */
     uint8_t dl_vlan_pcp;       /* Input VLAN priority. */
     uint8_t pad1[1];           /* Align to 64-bits. */

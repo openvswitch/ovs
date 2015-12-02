@@ -19,10 +19,12 @@
 #include "dynamic-string.h"
 #include "json.h"
 #include "lex.h"
+#include "logical-fields.h"
 #include "match.h"
 #include "ofp-actions.h"
 #include "shash.h"
 #include "simap.h"
+#include "sset.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(expr);
@@ -243,6 +245,11 @@ expr_fix_andor(struct expr *expr, bool short_circuit)
     }
 }
 
+/* Returns 'expr' modified so that top-level oddities are fixed up:
+ *
+ *     - Eliminates any EXPR_T_BOOLEAN operands at the top level.
+ *
+ *     - Replaces one-operand EXPR_T_AND or EXPR_T_OR by its subexpression. */
 static struct expr *
 expr_fix(struct expr *expr)
 {
@@ -626,6 +633,7 @@ make_cmp(struct expr_context *ctx,
 
     if (f->symbol->level == EXPR_L_NOMINAL) {
         if (f->symbol->expansion) {
+            ovs_assert(f->symbol->width > 0);
             for (size_t i = 0; i < cs->n_values; i++) {
                 const union mf_subvalue *value = &cs->values[i].value;
                 bool positive = (value->integer & htonll(1)) != 0;
@@ -661,16 +669,11 @@ exit:
 static bool
 expr_get_int(struct expr_context *ctx, int *value)
 {
-    if (ctx->lexer->token.type == LEX_T_INTEGER
-        && ctx->lexer->token.format == LEX_F_DECIMAL
-        && ntohll(ctx->lexer->token.value.integer) <= INT_MAX) {
-        *value = ntohll(ctx->lexer->token.value.integer);
-        lexer_get(ctx->lexer);
-        return true;
-    } else {
+    bool ok = lexer_get_int(ctx->lexer, value);
+    if (!ok) {
         expr_syntax_error(ctx, "expecting small integer.");
-        return false;
     }
+    return ok;
 }
 
 static bool
@@ -1206,7 +1209,7 @@ expr_parse_level(const char *s, const struct shash *symtab, char **errorp)
 }
 
 /* Adds a predicate symbol, whose value is the given Boolean 'expression',
- * named 'name' to 'symtab'.  For example, "ip4 && ip4.proto == 1" might be an
+ * named 'name' to 'symtab'.  For example, "ip4 && ip4.proto == 6" might be an
  * appropriate predicate named "tcp4". */
 struct expr_symbol *
 expr_symtab_add_predicate(struct shash *symtab, const char *name,
@@ -1473,7 +1476,10 @@ expr_annotate__(struct expr *expr, const struct shash *symtab,
  *     - Expands references to predicate symbols, by replacing them by the
  *       expressions that they expand to.
  *
- * In each case, annotation occurs recursively as necessary. */
+ * In each case, annotation occurs recursively as necessary.
+ *
+ * On failure, returns NULL and sets '*errorp' to an explanatory error
+ * message, which the caller must free. */
 struct expr *
 expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 {
@@ -1637,8 +1643,119 @@ compare_expr_sort(const void *a_, const void *b_)
 
 static struct expr *crush_cmps(struct expr *, const struct expr_symbol *);
 
+static bool
+disjunction_matches_string(const struct expr *or, const char *s)
+{
+    const struct expr *sub;
+
+    LIST_FOR_EACH (sub, node, &or->andor) {
+        if (!strcmp(sub->cmp.string, s)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Implementation of crush_cmps() for expr->type == EXPR_T_AND and a
+ * string-typed 'symbol'. */
 static struct expr *
-crush_and(struct expr *expr, const struct expr_symbol *symbol)
+crush_and_string(struct expr *expr, const struct expr_symbol *symbol)
+{
+    ovs_assert(!list_is_short(&expr->andor));
+
+    struct expr *singleton = NULL;
+
+    /* First crush each subexpression into either a single EXPR_T_CMP or an
+     * EXPR_T_OR with EXPR_T_CMP subexpressions. */
+    struct expr *sub, *next = NULL;
+    LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
+        list_remove(&sub->node);
+        struct expr *new = crush_cmps(sub, symbol);
+        switch (new->type) {
+        case EXPR_T_CMP:
+            if (!singleton) {
+                list_insert(&next->node, &new->node);
+                singleton = new;
+            } else {
+                bool match = !strcmp(new->cmp.string, singleton->cmp.string);
+                expr_destroy(new);
+                if (!match) {
+                    expr_destroy(expr);
+                    return expr_create_boolean(false);
+                }
+            }
+            break;
+        case EXPR_T_AND:
+            OVS_NOT_REACHED();
+        case EXPR_T_OR:
+            list_insert(&next->node, &new->node);
+            break;
+        case EXPR_T_BOOLEAN:
+            if (!new->boolean) {
+                expr_destroy(expr);
+                return new;
+            }
+            free(new);
+            break;
+        }
+    }
+
+    /* If we have a singleton, then the result is either the singleton itself
+     * (if the ORs allow the singleton) or false. */
+    if (singleton) {
+        LIST_FOR_EACH (sub, node, &expr->andor) {
+            if (sub->type == EXPR_T_OR
+                && !disjunction_matches_string(sub, singleton->cmp.string)) {
+                expr_destroy(expr);
+                return expr_create_boolean(false);
+            }
+        }
+        list_remove(&singleton->node);
+        expr_destroy(expr);
+        return singleton;
+    }
+
+    /* Otherwise the result is the intersection of all of the ORs. */
+    struct sset result = SSET_INITIALIZER(&result);
+    LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
+        struct sset strings = SSET_INITIALIZER(&strings);
+        const struct expr *s;
+        LIST_FOR_EACH (s, node, &sub->andor) {
+            sset_add(&strings, s->cmp.string);
+        }
+        if (sset_is_empty(&result)) {
+            sset_swap(&result, &strings);
+        } else {
+            sset_intersect(&result, &strings);
+        }
+        sset_destroy(&strings);
+
+        if (sset_is_empty(&result)) {
+            expr_destroy(expr);
+            sset_destroy(&result);
+            return expr_create_boolean(false);
+        }
+    }
+
+    expr_destroy(expr);
+    expr = expr_create_andor(EXPR_T_OR);
+
+    const char *string;
+    SSET_FOR_EACH (string, &result) {
+        sub = xmalloc(sizeof *sub);
+        sub->type = EXPR_T_CMP;
+        sub->cmp.symbol = symbol;
+        sub->cmp.string = xstrdup(string);
+        list_push_back(&expr->andor, &sub->node);
+    }
+    return expr_fix(expr);
+}
+
+/* Implementation of crush_cmps() for expr->type == EXPR_T_AND and a
+ * numeric-typed 'symbol'. */
+static struct expr *
+crush_and_numeric(struct expr *expr, const struct expr_symbol *symbol)
 {
     ovs_assert(!list_is_short(&expr->andor));
 
@@ -1793,26 +1910,39 @@ crush_and(struct expr *expr, const struct expr_symbol *symbol)
 }
 
 static int
-compare_expr(const void *a_, const void *b_)
+compare_cmps_3way(const struct expr *a, const struct expr *b)
+{
+    ovs_assert(a->cmp.symbol == b->cmp.symbol);
+    if (!a->cmp.symbol->width) {
+        return strcmp(a->cmp.string, b->cmp.string);
+    } else {
+        int d = memcmp(&a->cmp.value, &b->cmp.value, sizeof a->cmp.value);
+        if (!d) {
+            d = memcmp(&a->cmp.mask, &b->cmp.mask, sizeof a->cmp.mask);
+        }
+        return d;
+    }
+}
+
+static int
+compare_cmps_cb(const void *a_, const void *b_)
 {
     const struct expr *const *ap = a_;
     const struct expr *const *bp = b_;
     const struct expr *a = *ap;
     const struct expr *b = *bp;
-    int d = memcmp(&a->cmp.value, &b->cmp.value, sizeof a->cmp.value);
-    if (!d) {
-        d = memcmp(&a->cmp.mask, &b->cmp.mask, sizeof a->cmp.mask);
-    }
-    return d;
+    return compare_cmps_3way(a, b);
 }
 
+/* Implementation of crush_cmps() for expr->type == EXPR_T_OR. */
 static struct expr *
 crush_or(struct expr *expr, const struct expr_symbol *symbol)
 {
     struct expr *sub, *next = NULL;
 
     /* First, crush all the subexpressions.  That might eliminate the
-     * OR-expression entirely; if so, return the result. */
+     * OR-expression entirely; if so, return the result.  Otherwise, 'expr'
+     * is now a disjunction of cmps over the same symbol. */
     LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
         list_remove(&sub->node);
         expr_insert_andor(expr, next, crush_cmps(sub, symbol));
@@ -1822,7 +1952,7 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
         return expr;
     }
 
-    /* Eliminate duplicates by sorting the subexpressions. */
+    /* Sort subexpressions by value and mask, to bring together duplicates. */
     size_t n = list_size(&expr->andor);
     struct expr **subs = xmalloc(n * sizeof *subs);
 
@@ -1832,15 +1962,15 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
     }
     ovs_assert(i == n);
 
-    qsort(subs, n, sizeof *subs, compare_expr);
+    qsort(subs, n, sizeof *subs, compare_cmps_cb);
 
+    /* Eliminate duplicates. */
     list_init(&expr->andor);
     list_push_back(&expr->andor, &subs[0]->node);
     for (i = 1; i < n; i++) {
         struct expr *a = expr_from_node(list_back(&expr->andor));
         struct expr *b = subs[i];
-        if (memcmp(&a->cmp.value, &b->cmp.value, sizeof a->cmp.value)
-            || memcmp(&a->cmp.mask, &b->cmp.mask, sizeof a->cmp.mask)) {
+        if (compare_cmps_3way(a, b)) {
             list_push_back(&expr->andor, &b->node);
         } else {
             free(b);
@@ -1850,8 +1980,10 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
     return expr_fix(expr);
 }
 
-/* Converts 'expr', which must be a cmp in the sense determined by
- * expr_is_cmp().  Returns a cmp, a disjunction of cmps, or a boolean. */
+/* Takes ownership of 'expr', which must be a cmp in the sense determined by
+ * 'expr_is_cmp(expr)', where 'symbol' is the symbol returned by that function.
+ * Returns an equivalent expression owned by the caller that is a single
+ * EXPR_T_CMP or a disjunction of them or a EXPR_T_BOOLEAN. */
 static struct expr *
 crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
 {
@@ -1860,7 +1992,9 @@ crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
         return crush_or(expr, symbol);
 
     case EXPR_T_AND:
-        return crush_and(expr, symbol);
+        return (symbol->width
+                ? crush_and_numeric(expr, symbol)
+                : crush_and_string(expr, symbol));
 
     case EXPR_T_CMP:
         return expr;
@@ -1956,12 +2090,14 @@ expr_normalize_and(struct expr *expr)
     struct expr *a, *b;
     LIST_FOR_EACH_SAFE (a, b, node, &expr->andor) {
         if (&b->node == &expr->andor
-            || a->type != EXPR_T_CMP || b->type != EXPR_T_CMP) {
-        } else if (a->cmp.symbol != b->cmp.symbol) {
+            || a->type != EXPR_T_CMP || b->type != EXPR_T_CMP
+            || a->cmp.symbol != b->cmp.symbol) {
             continue;
-        } else if (mf_subvalue_intersect(&a->cmp.value, &a->cmp.mask,
-                                         &b->cmp.value, &b->cmp.mask,
-                                         &b->cmp.value, &b->cmp.mask)) {
+        } else if (a->cmp.symbol->width
+                   ? mf_subvalue_intersect(&a->cmp.value, &a->cmp.mask,
+                                           &b->cmp.value, &b->cmp.mask,
+                                           &b->cmp.value, &b->cmp.mask)
+                   : !strcmp(a->cmp.string, b->cmp.string)) {
             list_remove(&a->node);
             expr_destroy(a);
         } else {
@@ -2482,113 +2618,224 @@ expr_is_normalized(const struct expr *expr)
 
 /* Action parsing helper. */
 
-static struct expr *
-parse_assignment(struct expr_context *ctx, const struct simap *ports,
-                 struct ofpbuf *ofpacts)
+/* Expands 'f' repeatedly as long as it has an expansion, that is, as long as
+ * it is a subfield or a predicate.  Adds any prerequisites for 'f' to
+ * '*prereqs'.
+ *
+ * If 'rw', verifies that 'f' is a read/write field.
+ *
+ * 'exchange' should be true if an exchange action is being parsed.  This is
+ * only used to improve error message phrasing.
+ *
+ * Returns true if successful, false if an error was encountered (in which case
+ * 'ctx->error' reports the particular error). */
+static bool
+expand_symbol(struct expr_context *ctx, bool rw, bool exchange,
+              struct expr_field *f, struct expr **prereqsp)
 {
-    struct expr *prereqs = NULL;
+    const struct expr_symbol *orig_symbol = f->symbol;
 
-    struct expr_field f;
-    if (!parse_field(ctx, &f)) {
-        goto exit;
-    }
-    if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
-        expr_syntax_error(ctx, "expecting `='.");
-        goto exit;
+    if (f->symbol->expansion && f->symbol->level != EXPR_L_ORDINAL) {
+        expr_error(ctx, "Predicate symbol %s cannot be used in %s.",
+                   f->symbol->name, exchange ? "exchange" : "assignment");
+        return false;
     }
 
-    if (f.symbol->expansion && f.symbol->level != EXPR_L_ORDINAL) {
-        expr_error(ctx, "Can't assign to predicate symbol %s.",
-                   f.symbol->name);
-        goto exit;
-    }
-
-    struct expr_constant_set cs;
-    if (!parse_constant_set(ctx, &cs)) {
-        goto exit;
-    }
-
-    if (!type_check(ctx, &f, &cs)) {
-        goto exit_destroy_cs;
-    }
-    if (cs.in_curlies) {
-        expr_error(ctx, "Assignments require a single value.");
-        goto exit_destroy_cs;
-    }
-
-    const struct expr_symbol *orig_symbol = f.symbol;
-    union expr_constant *c = cs.values;
     for (;;) {
         /* Accumulate prerequisites. */
-        if (f.symbol->prereqs) {
+        if (f->symbol->prereqs) {
             struct ovs_list nesting = OVS_LIST_INITIALIZER(&nesting);
             char *error;
             struct expr *e;
-            e = parse_and_annotate(f.symbol->prereqs, ctx->symtab, &nesting,
+            e = parse_and_annotate(f->symbol->prereqs, ctx->symtab, &nesting,
                                    &error);
             if (error) {
                 expr_error(ctx, "%s", error);
                 free(error);
-                goto exit_destroy_cs;
+                return false;
             }
-            prereqs = expr_combine(EXPR_T_AND, prereqs, e);
+            *prereqsp = expr_combine(EXPR_T_AND, *prereqsp, e);
         }
 
         /* If there's no expansion, we're done. */
-        if (!f.symbol->expansion) {
+        if (!f->symbol->expansion) {
             break;
         }
 
         /* Expand. */
         struct expr_field expansion;
         char *error;
-        if (!parse_field_from_string(f.symbol->expansion, ctx->symtab,
+        if (!parse_field_from_string(f->symbol->expansion, ctx->symtab,
                                      &expansion, &error)) {
             expr_error(ctx, "%s", error);
             free(error);
+            return false;
+        }
+        f->symbol = expansion.symbol;
+        f->ofs += expansion.ofs;
+    }
+
+    if (rw && !f->symbol->field->writable) {
+        expr_error(ctx, "Field %s is not modifiable.", orig_symbol->name);
+        return false;
+    }
+
+    return true;
+}
+
+static void
+mf_subfield_from_expr_field(const struct expr_field *f, struct mf_subfield *sf)
+{
+    sf->field = f->symbol->field;
+    sf->ofs = f->ofs;
+    sf->n_bits = f->n_bits ? f->n_bits : f->symbol->field->n_bits;
+}
+
+static void
+init_stack_action(const struct expr_field *f, struct ofpact_stack *stack)
+{
+    mf_subfield_from_expr_field(f, &stack->subfield);
+}
+
+static struct expr *
+parse_assignment(struct expr_context *ctx, const struct simap *ports,
+                 struct ofpbuf *ofpacts)
+{
+    struct expr *prereqs = NULL;
+
+    /* Parse destination and do basic checking. */
+    struct expr_field dst;
+    if (!parse_field(ctx, &dst)) {
+        goto exit;
+    }
+    bool exchange = lexer_match(ctx->lexer, LEX_T_EXCHANGE);
+    if (!exchange && !lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+        expr_syntax_error(ctx, "expecting `='.");
+        goto exit;
+    }
+    const struct expr_symbol *orig_dst = dst.symbol;
+    if (!expand_symbol(ctx, true, exchange, &dst, &prereqs)) {
+        goto exit;
+    }
+
+    if (exchange || ctx->lexer->token.type == LEX_T_ID) {
+        struct expr_field src;
+        if (!parse_field(ctx, &src)) {
+            goto exit;
+        }
+        const struct expr_symbol *orig_src = src.symbol;
+        if (!expand_symbol(ctx, exchange, exchange, &src, &prereqs)) {
+            goto exit;
+        }
+
+        if ((dst.symbol->width != 0) != (src.symbol->width != 0)) {
+            if (exchange) {
+                expr_error(ctx,
+                           "Can't exchange %s field (%s) with %s field (%s).",
+                           orig_dst->width ? "integer" : "string",
+                           orig_dst->name,
+                           orig_src->width ? "integer" : "string",
+                           orig_src->name);
+            } else {
+                expr_error(ctx, "Can't assign %s field (%s) to %s field (%s).",
+                           orig_src->width ? "integer" : "string",
+                           orig_src->name,
+                           orig_dst->width ? "integer" : "string",
+                           orig_dst->name);
+            }
+            goto exit;
+        }
+
+        if (dst.n_bits != src.n_bits) {
+            if (exchange) {
+                expr_error(ctx,
+                           "Can't exchange %d-bit field with %d-bit field.",
+                           dst.n_bits, src.n_bits);
+            } else {
+                expr_error(ctx,
+                           "Can't assign %d-bit value to %d-bit destination.",
+                           src.n_bits, dst.n_bits);
+            }
+            goto exit;
+        } else if (!dst.n_bits
+                   && dst.symbol->field->n_bits != src.symbol->field->n_bits) {
+            expr_error(ctx, "String fields %s and %s are incompatible for "
+                       "%s.", orig_dst->name, orig_src->name,
+                       exchange ? "exchange" : "assignment");
+            goto exit;
+        }
+
+        if (exchange) {
+            init_stack_action(&src, ofpact_put_STACK_PUSH(ofpacts));
+            init_stack_action(&dst, ofpact_put_STACK_PUSH(ofpacts));
+            init_stack_action(&src, ofpact_put_STACK_POP(ofpacts));
+            init_stack_action(&dst, ofpact_put_STACK_POP(ofpacts));
+        } else {
+            struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
+            mf_subfield_from_expr_field(&src, &move->src);
+            mf_subfield_from_expr_field(&dst, &move->dst);
+        }
+    } else {
+        struct expr_constant_set cs;
+        if (!parse_constant_set(ctx, &cs)) {
+            goto exit;
+        }
+
+        if (!type_check(ctx, &dst, &cs)) {
             goto exit_destroy_cs;
         }
-        f.symbol = expansion.symbol;
-        f.ofs += expansion.ofs;
-    }
-
-    if (!f.symbol->field->writable) {
-        expr_error(ctx, "Field %s is not modifiable.", orig_symbol->name);
-        goto exit_destroy_cs;
-    }
-
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = f.symbol->field;
-    if (f.symbol->width) {
-        mf_subvalue_shift(&c->value, f.ofs);
-        if (!c->masked) {
-            memset(&c->mask, 0, sizeof c->mask);
-            bitwise_one(&c->mask, sizeof c->mask, f.ofs, f.n_bits);
-        } else {
-            mf_subvalue_shift(&c->mask, f.ofs);
+        if (cs.in_curlies) {
+            expr_error(ctx, "Assignments require a single value.");
+            goto exit_destroy_cs;
         }
 
-        memcpy(&sf->value, &c->value.u8[sizeof c->value - sf->field->n_bytes],
-               sf->field->n_bytes);
-        memcpy(&sf->mask, &c->mask.u8[sizeof c->mask - sf->field->n_bytes],
-               sf->field->n_bytes);
-    } else {
-        uint32_t port = simap_get(ports, c->string);
-        bitwise_put(port, &sf->value,
-                    sf->field->n_bytes, 0, sf->field->n_bits);
-        bitwise_put(UINT64_MAX, &sf->mask,
-                    sf->field->n_bytes, 0, sf->field->n_bits);
+        union expr_constant *c = cs.values;
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+        sf->field = dst.symbol->field;
+        if (dst.symbol->width) {
+            mf_subvalue_shift(&c->value, dst.ofs);
+            if (!c->masked) {
+                memset(&c->mask, 0, sizeof c->mask);
+                bitwise_one(&c->mask, sizeof c->mask, dst.ofs, dst.n_bits);
+            } else {
+                mf_subvalue_shift(&c->mask, dst.ofs);
+            }
+
+            memcpy(&sf->value,
+                   &c->value.u8[sizeof c->value - sf->field->n_bytes],
+                   sf->field->n_bytes);
+            memcpy(&sf->mask,
+                   &c->mask.u8[sizeof c->mask - sf->field->n_bytes],
+                   sf->field->n_bytes);
+        } else {
+            uint32_t port = simap_get(ports, c->string);
+            bitwise_put(port, &sf->value,
+                        sf->field->n_bytes, 0, sf->field->n_bits);
+            bitwise_one(&sf->mask, sf->field->n_bytes, 0, sf->field->n_bits);
+
+            /* If the logical input port is being zeroed, clear the OpenFlow
+             * ingress port also, to allow a packet to be sent back to its
+             * origin. */
+            if (!port && sf->field->id == MFF_LOG_INPORT) {
+                sf = ofpact_put_SET_FIELD(ofpacts);
+                sf->field = mf_from_id(MFF_IN_PORT);
+                bitwise_one(&sf->mask,
+                            sf->field->n_bytes, 0, sf->field->n_bits);
+            }
+        }
+
+    exit_destroy_cs:
+        expr_constant_set_destroy(&cs);
     }
 
-exit_destroy_cs:
-    expr_constant_set_destroy(&cs);
 exit:
     return prereqs;
 }
 
 /* A helper for actions_parse(), to parse an OVN assignment action in the form
- * "field = value" into 'ofpacts'.  The parameters and return value match those
- * for actions_parse(). */
+ * "field = value" or "field1 = field2", or a "exchange" action in the form
+ * "field1 <-> field2", into 'ofpacts'.  The parameters and return value match
+ * those for actions_parse(). */
 char *
 expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
                       const struct simap *ports,

@@ -1,0 +1,109 @@
+AT_BANNER([ovn-controller])
+
+AT_SETUP([ovn-controller - ovn-bridge-mappings])
+ovn_init_db ovn-sb
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl \
+    -- add-br br-phys \
+    -- add-br br-eth0 \
+    -- add-br br-eth1 \
+    -- add-br br-eth2
+ovn_attach n1 br-phys 192.168.0.1
+
+# Waits until the OVS database contains exactly the specified patch ports.
+# Each argument should be of the form BRIDGE PORT PEER.
+check_patches () {
+    # Generate code to check that the set of patch ports is exactly as
+    # specified.
+    echo 'ovs-vsctl -f csv -d bare --no-headings --columns=name find Interface type=patch | sort' > query
+    for patch
+    do
+	echo $patch
+    done | cut -d' ' -f 2 | sort > expout
+
+    # Generate code to verify that the configuration of each patch
+    # port is correct.
+    for patch
+    do
+	set $patch; bridge=$1 port=$2 peer=$3
+        echo >>query "ovs-vsctl iface-to-br $port -- get Interface $port type options"
+        echo >>expout "$bridge
+patch
+{peer=$peer}"
+    done
+
+    # Run the query until we get the expected result (or until a timeout).
+    #
+    # (We use sed to drop all "s from output because ovs-vsctl quotes some
+    # of the port names but not others.)
+    AT_CAPTURE_FILE([query])
+    AT_CAPTURE_FILE([expout])
+    AT_CAPTURE_FILE([stdout])
+    OVS_WAIT_UNTIL([. ./query | sed 's/"//g' > stdout #"
+                    diff -u stdout expout >/dev/null])
+}
+
+# Initially there should be no patch ports.
+check_patches
+
+# Configure two ovn-bridge mappings to create two patch ports.
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1])
+check_patches \
+    'br-eth0 patch-br-eth0-to-br-int patch-br-int-to-br-eth0' \
+    'br-int  patch-br-int-to-br-eth0 patch-br-eth0-to-br-int' \
+    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
+    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int'
+
+# Change the mapping and the patch ports should change.
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth2,physnet2:br-eth1])
+check_patches \
+    'br-eth2 patch-br-eth2-to-br-int patch-br-int-to-br-eth2' \
+    'br-int  patch-br-int-to-br-eth2 patch-br-eth2-to-br-int' \
+    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
+    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int'
+
+# Add logical patch ports.
+AT_CHECK([ovn-sbctl \
+    -- --id=@dp1 create Datapath_Binding tunnel_key=1 \
+    -- --id=@dp2 create Datapath_Binding tunnel_key=2 \
+    -- create Port_Binding datapath=@dp1 logical_port=foo tunnel_key=1 type=patch options:peer=bar \
+    -- create Port_Binding datapath=@dp2 logical_port=bar tunnel_key=2 type=patch options:peer=foo \
+| ${PERL} $srcdir/uuidfilt.pl], [0], [<0>
+<1>
+<2>
+<3>
+])
+check_patches \
+    'br-eth2 patch-br-eth2-to-br-int patch-br-int-to-br-eth2' \
+    'br-int  patch-br-int-to-br-eth2 patch-br-eth2-to-br-int' \
+    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
+    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int' \
+    'br-int  patch-foo-to-bar        patch-bar-to-foo' \
+    'br-int  patch-bar-to-foo        patch-foo-to-bar'
+
+# Delete the mapping and the ovn-bridge-mapping patch ports should go away;
+# the ones from the logical patch port remain.
+AT_CHECK([ovs-vsctl remove Open_vSwitch . external-ids ovn-bridge-mappings])
+check_patches \
+    'br-int patch-foo-to-bar patch-bar-to-foo' \
+    'br-int patch-bar-to-foo patch-foo-to-bar'
+
+# Change name of logical patch port, check that the OVS patch ports
+# get updated.
+AT_CHECK([ovn-sbctl \
+    -- set Port_Binding foo logical_port=quux options:peer=baz \
+    -- set Port_Binding bar logical_port=baz  options:peer=quux])
+check_patches \
+    'br-int patch-quux-to-baz patch-baz-to-quux' \
+    'br-int patch-baz-to-quux patch-quux-to-baz'
+
+# Change the logical patch ports to VIFs and verify that the OVS patch
+# ports disappear.
+AT_CHECK([ovn-sbctl \
+    -- set Port_Binding quux type='""' options='{}' \
+    -- set Port_Binding baz type='""' options='{}'])
+check_patches
+
+AT_CLEANUP

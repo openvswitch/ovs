@@ -515,6 +515,12 @@ lookup_ofproto_dpif_by_port_name(const char *name)
     return NULL;
 }
 
+bool
+ofproto_dpif_backer_enabled(struct dpif_backer* backer)
+{
+    return backer->recv_set_enable;
+}
+
 static int
 type_run(const char *type)
 {
@@ -1116,6 +1122,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
     execute.packet = &packet;
     execute.needs_help = false;
     execute.probe = true;
+    execute.mtu = 0;
 
     error = dpif_execute(backer->dpif, &execute);
 
@@ -1214,6 +1221,7 @@ check_masked_set_action(struct dpif_backer *backer)
     execute.packet = &packet;
     execute.needs_help = false;
     execute.probe = true;
+    execute.mtu = 0;
 
     error = dpif_execute(backer->dpif, &execute);
 
@@ -1228,6 +1236,47 @@ check_masked_set_action(struct dpif_backer *backer)
     return !error;
 }
 
+#define CHECK_FEATURE__(NAME, FIELD)                                        \
+static bool                                                                 \
+check_##NAME(struct dpif_backer *backer)                                    \
+{                                                                           \
+    struct flow flow;                                                       \
+    struct odputil_keybuf keybuf;                                           \
+    struct ofpbuf key;                                                      \
+    bool enable;                                                            \
+    struct odp_flow_key_parms odp_parms = {                                 \
+        .flow = &flow,                                                      \
+        .support = {                                                        \
+            .NAME = true,                                                   \
+        },                                                                  \
+    };                                                                      \
+                                                                            \
+    memset(&flow, 0, sizeof flow);                                          \
+    flow.FIELD = 1;                                                         \
+                                                                            \
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);                         \
+    odp_flow_key_from_flow(&odp_parms, &key);                               \
+    enable = dpif_probe_feature(backer->dpif, #NAME, &key, NULL);           \
+                                                                            \
+    if (enable) {                                                           \
+        VLOG_INFO("%s: Datapath supports "#NAME, dpif_name(backer->dpif));  \
+    } else {                                                                \
+        VLOG_INFO("%s: Datapath does not support "#NAME,                    \
+                  dpif_name(backer->dpif));                                 \
+    }                                                                       \
+                                                                            \
+    return enable;                                                          \
+}
+#define CHECK_FEATURE(FIELD) CHECK_FEATURE__(FIELD, FIELD)
+
+CHECK_FEATURE(ct_state)
+CHECK_FEATURE(ct_zone)
+CHECK_FEATURE(ct_mark)
+CHECK_FEATURE__(ct_label, ct_label.u64.lo)
+
+#undef CHECK_FEATURE
+#undef CHECK_FEATURE__
+
 static void
 check_support(struct dpif_backer *backer)
 {
@@ -1239,6 +1288,11 @@ check_support(struct dpif_backer *backer)
     backer->support.masked_set_action = check_masked_set_action(backer);
     backer->support.ufid = check_ufid(backer);
     backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
+
+    backer->support.odp.ct_state = check_ct_state(backer);
+    backer->support.odp.ct_zone = check_ct_zone(backer);
+    backer->support.odp.ct_mark = check_ct_mark(backer);
+    backer->support.odp.ct_label = check_ct_label(backer);
 }
 
 static int
@@ -1581,8 +1635,6 @@ wait(struct ofproto *ofproto_)
     mcast_snooping_wait(ofproto->ms);
     stp_wait(ofproto);
     if (ofproto->backer->need_revalidate) {
-        /* Shouldn't happen, but if it does just go around again. */
-        VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
         poll_immediate_wake();
     }
 
@@ -1829,7 +1881,7 @@ port_modified(struct ofport *port_)
     }
 
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
-                                     port->lldp, port->up.pp.hw_addr);
+                                     port->lldp, &port->up.pp.hw_addr);
 
     dp_port_name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
 
@@ -1965,7 +2017,7 @@ out:
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
-                                     ofport->lldp, ofport->up.pp.hw_addr);
+                                     ofport->lldp, &ofport->up.pp.hw_addr);
     return error;
 }
 
@@ -2007,7 +2059,7 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
     ofproto_dpif_monitor_port_update(ofport, ofport->bfd, ofport->cfm,
-                                     ofport->lldp, ofport->up.pp.hw_addr);
+                                     ofport->lldp, &ofport->up.pp.hw_addr);
     return 0;
 }
 
@@ -2063,7 +2115,7 @@ set_lldp(struct ofport *ofport_,
                                      ofport->bfd,
                                      ofport->cfm,
                                      ofport->lldp,
-                                     ofport->up.pp.hw_addr);
+                                     &ofport->up.pp.hw_addr);
     return error;
 }
 
@@ -2119,7 +2171,7 @@ rstp_send_bpdu_cb(struct dp_packet *pkt, void *ofport_, void *ofproto_)
     struct ofport_dpif *ofport = ofport_;
     struct eth_header *eth = dp_packet_l2(pkt);
 
-    netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+    netdev_get_etheraddr(ofport->up.netdev, &eth->eth_src);
     if (eth_addr_is_zero(eth->eth_src)) {
         VLOG_WARN_RL(&rl, "%s port %d: cannot send RSTP BPDU on a port which "
                      "does not have a configured source MAC address.",
@@ -2144,7 +2196,7 @@ send_bpdu_cb(struct dp_packet *pkt, int port_num, void *ofproto_)
     } else {
         struct eth_header *eth = dp_packet_l2(pkt);
 
-        netdev_get_etheraddr(ofport->up.netdev, eth->eth_src);
+        netdev_get_etheraddr(ofport->up.netdev, &eth->eth_src);
         if (eth_addr_is_zero(eth->eth_src)) {
             VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
                          "with unknown MAC", ofproto->up.name, port_num);
@@ -2290,9 +2342,14 @@ rstp_run(struct ofproto_dpif *ofproto)
         }
 
         if (rstp_shift_root_learned_address(ofproto->rstp)) {
-            bundle_move(((struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp))->bundle,
-                        ((struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp))->bundle);
-            rstp_reset_root_changed(ofproto->rstp);
+            struct ofport_dpif *old_root_aux =
+                (struct ofport_dpif *)rstp_get_old_root_aux(ofproto->rstp);
+            struct ofport_dpif *new_root_aux =
+                (struct ofport_dpif *)rstp_get_new_root_aux(ofproto->rstp);
+            if (old_root_aux != NULL && new_root_aux != NULL) {
+                bundle_move(old_root_aux->bundle, new_root_aux->bundle);
+                rstp_reset_root_changed(ofproto->rstp);
+            }
         }
     }
 }
@@ -2532,8 +2589,11 @@ set_rstp_port(struct ofport *ofport_,
 
     if (!s || !s->enable) {
         if (rp) {
-            rstp_port_unref(rp);
+            rstp_port_set_aux(rp, NULL);
+            rstp_port_set_state(rp, RSTP_DISABLED);
+            rstp_port_set_mac_operational(rp, false);
             ofport->rstp_port = NULL;
+            rstp_port_unref(rp);
             update_rstp_port_state(ofport);
         }
         return;
@@ -2978,10 +3038,10 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
     struct ofport_dpif *port = port_;
-    uint8_t ea[ETH_ADDR_LEN];
+    struct eth_addr ea;
     int error;
 
-    error = netdev_get_etheraddr(port->up.netdev, ea);
+    error = netdev_get_etheraddr(port->up.netdev, &ea);
     if (!error) {
         struct dp_packet packet;
         void *packet_pdu;
@@ -3636,14 +3696,13 @@ rule_expire(struct rule_dpif *rule)
     }
 }
 
-/* Executes, within 'ofproto', the actions in 'rule' or 'ofpacts' on 'packet'.
- * 'flow' must reflect the data in 'packet'. */
 int
-ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
-                             const struct flow *flow,
-                             struct rule_dpif *rule,
-                             const struct ofpact *ofpacts, size_t ofpacts_len,
-                             struct dp_packet *packet)
+ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
+                               const struct flow *flow,
+                               struct rule_dpif *rule,
+                               const struct ofpact *ofpacts, size_t ofpacts_len,
+                               int recurse, int resubmits,
+                               struct dp_packet *packet)
 {
     struct dpif_flow_stats stats;
     struct xlate_out xout;
@@ -3667,7 +3726,12 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
-    xlate_actions(&xin, &xout);
+    xin.recurse = recurse;
+    xin.resubmits = resubmits;
+    if (xlate_actions(&xin, &xout) != XLATE_OK) {
+        error = EINVAL;
+        goto out;
+    }
 
     execute.actions = odp_actions.data;
     execute.actions_len = odp_actions.size;
@@ -3676,6 +3740,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     execute.packet = packet;
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
     execute.probe = false;
+    execute.mtu = 0;
 
     /* Fix up in_port. */
     in_port = flow->in_port.ofp_port;
@@ -3685,11 +3750,24 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
     execute.packet->md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
 
     error = dpif_execute(ofproto->backer->dpif, &execute);
-
+out:
     xlate_out_uninit(&xout);
     ofpbuf_uninit(&odp_actions);
 
     return error;
+}
+
+/* Executes, within 'ofproto', the actions in 'rule' or 'ofpacts' on 'packet'.
+ * 'flow' must reflect the data in 'packet'. */
+int
+ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
+                             const struct flow *flow,
+                             struct rule_dpif *rule,
+                             const struct ofpact *ofpacts, size_t ofpacts_len,
+                             struct dp_packet *packet)
+{
+    return ofproto_dpif_execute_actions__(ofproto, flow, rule, ofpacts,
+                                          ofpacts_len, 0, 0, packet);
 }
 
 void
@@ -3935,10 +4013,48 @@ rule_dealloc(struct rule *rule_)
 }
 
 static enum ofperr
+rule_check(struct rule *rule)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->ofproto);
+    const struct odp_support *support;
+    uint16_t ct_state, ct_zone;
+    ovs_u128 ct_label;
+    uint32_t ct_mark;
+
+    support = &ofproto_dpif_get_support(ofproto)->odp;
+    ct_state = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_state);
+    if (support->ct_state && support->ct_zone && support->ct_mark
+        && support->ct_label) {
+        return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
+    }
+
+    ct_zone = MINIFLOW_GET_U16(&rule->cr.match.mask->masks, ct_zone);
+    ct_mark = MINIFLOW_GET_U32(&rule->cr.match.mask->masks, ct_mark);
+    ct_label = MINIFLOW_GET_U128(&rule->cr.match.mask->masks, ct_label);
+
+    if ((ct_state && !support->ct_state)
+        || (ct_state & CS_UNSUPPORTED_MASK)
+        || (ct_zone && !support->ct_zone)
+        || (ct_mark && !support->ct_mark)
+        || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
+    return 0;
+}
+
+static enum ofperr
 rule_construct(struct rule *rule_)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
+    int error;
+
+    error = rule_check(rule_);
+    if (error) {
+        return error;
+    }
+
     ovs_mutex_init_adaptive(&rule->stats_mutex);
     rule->stats.n_packets = 0;
     rule->stats.n_bytes = 0;
@@ -4422,7 +4538,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
             ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
                                    name, sizeof name);
             ds_put_format(&ds, "%5s  %4d  ", name, grp->vlan);
-            print_ipv6_mapped(&ds, &grp->addr);
+            ipv6_format_mapped(&grp->addr, &ds);
             ds_put_format(&ds, "         %3d\n",
                           mcast_bundle_age(ofproto->ms, b));
         }
@@ -4828,13 +4944,18 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         goto exit;
     }
     if (enforce_consistency) {
-        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size,
-                                           &flow, u16_to_ofp(ofproto->up.max_ports),
-                                           0, 0, usable_protocols);
+        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &flow,
+                                           u16_to_ofp(ofproto->up.max_ports),
+                                           0, ofproto->up.n_tables,
+                                           usable_protocols);
     } else {
         retval = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
-                               u16_to_ofp(ofproto->up.max_ports), 0, 0,
-                               &usable_protocols);
+                               u16_to_ofp(ofproto->up.max_ports), 0,
+                               ofproto->up.n_tables, &usable_protocols);
+    }
+    if (!retval) {
+        retval = ofproto_check_ofpacts(&ofproto->up, ofpacts.data,
+                                       ofpacts.size);
     }
 
     if (retval) {
@@ -4870,6 +4991,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
               struct ds *ds)
 {
     struct trace_ctx trace;
+    enum xlate_error error;
 
     ds_put_format(ds, "Bridge: %s\n", ofproto->up.name);
     ds_put_cstr(ds, "Flow: ");
@@ -4889,8 +5011,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace.xin.resubmit_hook = trace_resubmit;
     trace.xin.report_hook = trace_report_valist;
 
-    xlate_actions(&trace.xin, &trace.xout);
-
+    error = xlate_actions(&trace.xin, &trace.xout);
     ds_put_char(ds, '\n');
     trace_format_flow(ds, 0, "Final flow", &trace);
     trace_format_megaflow(ds, 0, "Megaflow", &trace);
@@ -4898,7 +5019,10 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     ds_put_cstr(ds, "Datapath actions: ");
     format_odp_actions(ds, trace.odp_actions.data, trace.odp_actions.size);
 
-    if (trace.xout.slow) {
+    if (error != XLATE_OK) {
+        ds_put_format(ds, "\nTranslation failed (%s), packet is dropped.\n",
+                      xlate_strerror(error));
+    } else if (trace.xout.slow) {
         enum slow_path_reason slow;
 
         ds_put_cstr(ds, "\nThis flow is handled by the userspace "

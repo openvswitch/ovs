@@ -152,9 +152,9 @@ OvsCleanupVxlanTunnel(PIRP irp,
 
     if (vxlanPort->filterID != 0) {
         status = OvsTunnelFilterDelete(irp,
-				       vxlanPort->filterID,
-				       callback,
-				       tunnelContext);
+                                       vxlanPort->filterID,
+                                       callback,
+                                       tunnelContext);
     } else {
         OvsFreeMemoryWithTag(vport->priv, OVS_VXLAN_POOL_TAG);
         vport->priv = NULL;
@@ -198,20 +198,24 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
      */
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
+
     if (layers->isTcp) {
         NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO tsoInfo;
 
         tsoInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
-                TcpLargeSendNetBufferListInfo);
-        OVS_LOG_TRACE("MSS %u packet len %u", tsoInfo.LsoV1Transmit.MSS, packetLength);
+                                             TcpLargeSendNetBufferListInfo);
+        OVS_LOG_TRACE("MSS %u packet len %u", tsoInfo.LsoV1Transmit.MSS,
+                      packetLength);
         if (tsoInfo.LsoV1Transmit.MSS) {
             OVS_LOG_TRACE("l4Offset %d", layers->l4Offset);
             *newNbl = OvsTcpSegmentNBL(switchContext, curNbl, layers,
-                        tsoInfo.LsoV1Transmit.MSS, headRoom);
+                                       tsoInfo.LsoV1Transmit.MSS, headRoom);
             if (*newNbl == NULL) {
                 OVS_LOG_ERROR("Unable to segment NBL");
                 return NDIS_STATUS_FAILURE;
             }
+            /* Clear out LSO flags after this point */
+            NET_BUFFER_LIST_INFO(*newNbl, TcpLargeSendNetBufferListInfo) = 0;
         }
     }
 
@@ -226,6 +230,70 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
             OVS_LOG_ERROR("Unable to copy NBL");
             return NDIS_STATUS_FAILURE;
         }
+        /*
+         * To this point we do not have VXLAN offloading.
+         * Apply defined checksums
+         */
+        curNb = NET_BUFFER_LIST_FIRST_NB(*newNbl);
+        curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+        bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl, LowPagePriority);
+        if (!bufferStart) {
+            status = NDIS_STATUS_RESOURCES;
+            goto ret_error;
+        }
+
+        NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+        csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                              TcpIpChecksumNetBufferListInfo);
+
+        bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+
+        if (layers->isIPv4) {
+            IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
+
+            if (csumInfo.Transmit.IpHeaderChecksum) {
+                ip->check = 0;
+                ip->check = IPChecksum((UINT8 *)ip, 4 * ip->ihl, 0);
+            }
+
+            if (layers->isTcp && csumInfo.Transmit.TcpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
+                tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                              IPPROTO_TCP, csumLength);
+                tcp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            } else if (layers->isUdp && csumInfo.Transmit.UdpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+                udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                              IPPROTO_UDP, csumLength);
+                udp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            }
+        } else if (layers->isIPv6) {
+            IPv6Hdr *ip = (IPv6Hdr *)(bufferStart + layers->l3Offset);
+
+            if (layers->isTcp && csumInfo.Transmit.TcpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
+                tcp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
+                                                (UINT32 *) &ip->daddr,
+                                                IPPROTO_TCP, csumLength);
+                tcp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            } else if (layers->isUdp && csumInfo.Transmit.UdpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+                udp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
+                                                (UINT32 *) &ip->daddr,
+                                                IPPROTO_UDP, csumLength);
+                udp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            }
+        }
+        /* Clear out TcpIpChecksumNetBufferListInfo flag */
+        NET_BUFFER_LIST_INFO(*newNbl, TcpIpChecksumNetBufferListInfo) = 0;
     }
 
     curNbl = *newNbl;
@@ -257,9 +325,6 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
                        sizeof ethHdr->Destination + sizeof ethHdr->Source);
         ethHdr->Type = htons(ETH_TYPE_IPV4);
 
-        // XXX: question: there are fields in the OvsIPv4TunnelKey for ttl and such,
-        // should we use those values instead? or will they end up being
-        // uninitialized;
         /* IP header */
         ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
 
@@ -277,6 +342,7 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
         ASSERT(tunKey->src == fwdInfo->srcIpAddr || tunKey->src == 0);
         ipHdr->saddr = fwdInfo->srcIpAddr;
         ipHdr->daddr = fwdInfo->dstIpAddr;
+
         ipHdr->check = 0;
         ipHdr->check = IPChecksum((UINT8 *)ipHdr, sizeof *ipHdr, 0);
 

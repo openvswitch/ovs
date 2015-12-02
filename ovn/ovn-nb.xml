@@ -55,21 +55,6 @@
       </p>
     </column>
 
-    <column name="router_port">
-      <p>
-        The router port to which this logical switch is connected, or empty if
-        this logical switch is not connected to any router.  A switch may be
-        connected to at most one logical router, but this is not a significant
-        restriction because logical routers may be connected into arbitrary
-        topologies.
-      </p>
-
-      <p>
-        It is an error for multiple logical switches to refer to the same
-        router port.
-      </p>
-    </column>
-
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
@@ -86,111 +71,253 @@
       A port within an L2 logical switch.
     </p>
 
-    <column name="name">
-      <p>
-      The logical port name.
-      </p>
+    <group title="Core Features">
+      <column name="name">
+        <p>
+          The logical port name.
+        </p>
 
-      <p>
-      For entities (VMs or containers) that are spawned in the hypervisor,
-      the name used here must match those used in the <ref key="iface-id"
-      table="Interface" column="external_ids" db="Open_vSwitch"/> in the
-      <ref db="Open_vSwitch"/> database's <ref table="Interface"
-      db="Open_vSwitch"/> table, because hypervisors use <ref key="iface-id"
-      table="Interface" column="external_ids" db="Open_vSwitch"/> as a lookup
-      key to identify the network interface of that entity.
-      </p>
+        <p>
+          For entities (VMs or containers) that are spawned in the hypervisor,
+          the name used here must match those used in the <ref key="iface-id"
+          table="Interface" column="external_ids" db="Open_vSwitch"/> in the
+          <ref db="Open_vSwitch"/> database's <ref table="Interface"
+          db="Open_vSwitch"/> table, because hypervisors use <ref key="iface-id"
+          table="Interface" column="external_ids" db="Open_vSwitch"/> as a lookup
+          key to identify the network interface of that entity.
+        </p>
 
-      <p>
-      For containers that are spawned inside a VM, the name can be
-      any unique identifier.  In such a case, <ref column="parent_name"/>
-      must be populated.
-      </p>
-    </column>
+        <p>
+          For containers that share a VIF within a VM, the name can be any
+          unique identifier.  See <code>Containers</code>, below, for more
+          information.
+        </p>
+      </column>
 
-    <column name="type">
-      <p>
-      Specify a type for this logical port.  Logical ports can be used to model
-      other types of connectivity into an OVN logical switch.  Leaving this column
-      blank maintains the default logical port behavior.
-      </p>
+      <column name="type">
+        <p>
+          Specify a type for this logical port.  Logical ports can be used to
+          model other types of connectivity into an OVN logical switch.  The
+          following types are defined:
+        </p>
 
-      <p>
-      There are no other logical port types implemented yet.
-      </p>
-    </column>
+        <dl>
+          <dt>(empty string)</dt>
+          <dd>
+            A VM (or VIF) interface.
+          </dd>
 
-    <column name="options">
+          <dt><code>router</code></dt>
+          <dd>
+            A connection to a logical router.
+          </dd>
+
+          <dt><code>localnet</code></dt>
+          <dd>
+            A connection to a locally accessible network from each
+            <code>ovn-controller</code> instance.  A logical switch can only
+            have a single <code>localnet</code> port attached and at most one
+            regular logical port.  This is used to model direct connectivity to
+            an existing network.
+          </dd>
+
+          <dt><code>vtep</code></dt>
+          <dd>
+            A port to a logical switch on a VTEP gateway.
+          </dd>
+        </dl>
+      </column>
+    </group>
+
+    <group title="Options">
+      <column name="options">
         This column provides key/value settings specific to the logical port
-        <ref column="type"/>.
-    </column>
+        <ref column="type"/>.  The type-specific options are described
+        individually below.
+      </column>
 
-    <column name="parent_name">
-      When <ref column="name"/> identifies the interface of a container
-      spawned inside a tenant VM, this column represents the VM interface
-      through which the container interface sends its network traffic.
-      The name used here must match those used in the <ref key="iface-id"
-      table="Interface" column="external_ids" db="Open_vSwitch"/> in the
-      <ref db="Open_vSwitch"/> table, because hypervisors in this case use
-      <ref key="iface-id" table="Interface" column="external_ids"
-      db="Open_vSwitch"/> as a lookup key to identify the network interface
-      of the tenant VM.
-    </column>
+      <group title="Options for router ports">
+        <p>
+          These options apply when <ref column="type"/> is <code>router</code>.
+        </p>
 
-    <column name="tag">
-      When <ref column="name"/> identifies the interface of a container
-      spawned inside a tenant VM, this column identifies the VLAN tag in
-      the network traffic associated with that container's network interface.
-      When there are multiple container interfaces inside a VM, all of
-      them send their network traffic through a single VM network interface and
-      this value helps OVN identify the correct container interface.
-    </column>
+        <p>
+          If a given logical switch has multiple <code>router</code> ports, the
+          <ref table="Logical_Router_Port"/> rows that they reference must be
+          all on the same <ref table="Logical_Router"/> (for different
+          subnets).
+        </p>
 
-    <column name="up">
-      This column is populated by <code>ovn-northd</code>, rather than by
-      the CMS plugin as is most of this database.  When a logical port is bound
-      to a physical location in the OVN Southbound database <ref
-      db="OVN_Southbound" table="Binding"/> table, <code>ovn-northd</code>
-      sets this column to <code>true</code>; otherwise, or if the port
-      becomes unbound later, it sets it to <code>false</code>.  This
-      allows the CMS to wait for a VM's (or container's) networking to
-      become active before it allows the VM (or container) to start.
-    </column>
+        <column name="options" key="router-port">
+          Required.  The <ref column="name"/> of the <ref
+          table="Logical_Router_Port"/> to which this logical switch port is
+          connected.
+        </column>
+      </group>
 
-    <column name="enabled">
-      This column is used to administratively set port state.  If this column is
-      empty or is set to <code>true</code>, the port is enabled.  If this column
-      is set to <code>false</code>, the port is disabled.  A disabled port has all
-      ingress and egress traffic dropped.
-    </column>
+      <group title="Options for localnet ports">
+        <p>
+          These options apply when <ref column="type"/> is
+          <code>localnet</code>.
+        </p>
 
-    <column name="macs">
-      The logical port's own Ethernet address or addresses, each in the form
-      <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
-      Like a physical Ethernet NIC, a logical port ordinarily has a single
-      fixed Ethernet address.  The string <code>unknown</code> is also allowed
-      to indicate that the logical port has an unknown set of (additional)
-      source addresses.
-    </column>
+        <column name="options" key="network_name">
+          Required.  The name of the network to which the <code>localnet</code>
+          port is connected.  Each hypervisor, via <code>ovn-controller</code>,
+          uses its local configuration to determine exactly how to connect to
+          this locally accessible network.
+        </column>
+      </group>
 
-    <column name="port_security">
+      <group title="Options for vtep ports">
+        <p>
+          These options apply when <ref column="type"/> is <code>vtep</code>.
+        </p>
+
+        <column name="options" key="vtep-physical-switch">
+          Required.  The name of the VTEP gateway.
+        </column>
+
+        <column name="options" key="vtep-logical-switch">
+          Required.  A logical switch name connected by the VTEP gateway.
+        </column>
+      </group>
+    </group>
+
+    <group title="Containers">
       <p>
-        A set of L2 (Ethernet) addresses
-        from which the logical port is allowed to send packets and to which it
-        is allowed to receive packets.  If this column is empty, all addresses
-        are permitted.  Logical ports are always allowed to receive packets
-        addressed to multicast and broadcast addresses.
+        When a large number of containers are nested within a VM, it may be too
+        expensive to dedicate a VIF to each container.  OVN can use VLAN tags
+        to support such cases.  Each container is assigned a VLAN ID and each
+        packet that passes between the hypervisor and the VM is tagged with the
+        appropriate ID for the container.  Such VLAN IDs never appear on a
+        physical wire, even inside a tunnel, so they need not be unique except
+        relative to a single VM on a hypervisor.
       </p>
 
       <p>
-        Each member of the set is an Ethernet address in the form
-        <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+        These columns are used for VIFs that represent nested containers using
+        shared VIFs.  For VMs and for containers that have dedicated VIFs, they
+        are empty.
       </p>
 
-      <p>
-	This specification will be extended to support L3 port security.
-      </p>
-    </column>
+      <column name="parent_name">
+        The VM interface through which the nested container sends its network
+        traffic.  This must match the <ref column="name"/> column for some
+        other <ref table="Logical_Port"/>.
+      </column>
+
+      <column name="tag">
+        <p>
+          The VLAN tag in the network traffic associated with a container's
+          network interface.
+        </p>
+
+        <p>
+          When <ref column="type"/> is set to <code>localnet</code>, this can
+          be set to indicate that the port represents a connection to a
+          specific VLAN on a locally accessible network. The VLAN ID is used to
+          match incoming traffic and is also added to outgoing traffic.
+        </p>
+      </column>
+    </group>
+
+    <group title="Port State">
+      <column name="up">
+        This column is populated by <code>ovn-northd</code>, rather than by the
+        CMS plugin as is most of this database.  When a logical port is bound
+        to a physical location in the OVN Southbound database <ref
+        db="OVN_Southbound" table="Binding"/> table, <code>ovn-northd</code>
+        sets this column to <code>true</code>; otherwise, or if the port
+        becomes unbound later, it sets it to <code>false</code>.  This allows
+        the CMS to wait for a VM's (or container's) networking to become active
+        before it allows the VM (or container) to start.
+      </column>
+
+      <column name="enabled">
+        This column is used to administratively set port state.  If this column
+        is empty or is set to <code>true</code>, the port is enabled.  If this
+        column is set to <code>false</code>, the port is disabled.  A disabled
+        port has all ingress and egress traffic dropped.
+      </column>
+
+    </group>
+
+    <group title="Addressing">
+      <column name="addresses">
+        <p>
+          Addresses owned by the logical port.
+        </p>
+
+        <p>
+          Each element in the set must take one of the following forms:
+        </p>
+
+        <dl>
+          <dt><code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code></dt>
+          <dd>
+            <p>
+              An Ethernet address owned by the logical port.  Like a physical
+              Ethernet NIC, a logical port ordinarily has a single fixed
+              Ethernet address.
+            </p>
+
+            <p>
+              When a OVN logical switch processes a unicast Ethernet frame
+              whose destination MAC address is in a logical port's <ref
+              column="addresses"/> column, it delivers it only to that port, as
+              if a MAC learning process had learned that MAC address on the
+              port.
+            </p>
+          </dd>
+
+          <dt><code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var> <var>a</var>.<var>b</var>.<var>c</var>.<var>d</var></code></dt>
+          <dd>
+            <p>
+              This form has all the effects of the previous form.  It also
+              indicates that the logical port owns the given IPv4 address.
+            </p>
+
+            <p>
+              The OVN logical switch uses this information to synthesize
+              responses to ARP requests without traversing the physical
+              network.  The OVN logical router connected to the logical switch,
+              if any, uses this information to avoid issuing ARP requests for
+              logical switch ports.
+            </p>
+          </dd>
+
+          <dt><code>unknown</code></dt>
+          <dd>
+            This indicates that the logical port has an unknown set of Ethernet
+            addresses.  When an OVN logical switch processes a unicast Ethernet
+            frame whose destination MAC address is not in any logical port's
+            <ref column="addresses"/> column, it delivers it to the port (or
+            ports) whose <ref column="addresses"/> columns include
+            <code>unknown</code>.
+          </dd>
+        </dl>
+      </column>
+
+      <column name="port_security">
+        <p>
+          A set of L2 (Ethernet) addresses from which the logical port is
+          allowed to send packets and to which it is allowed to receive
+          packets.  If this column is empty, all addresses are permitted.
+          Logical ports are always allowed to receive packets addressed to
+          multicast and broadcast addresses.
+        </p>
+
+        <p>
+          Each member of the set is an Ethernet address in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+        </p>
+
+        <p>
+          This specification will be extended to support L3 port security.
+        </p>
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">
@@ -206,32 +333,60 @@
       column="action"/> column for the highest-<ref column="priority"/>
       matching row in this table determines a packet's treatment.  If no row
       matches, packets are allowed by default.  (Default-deny treatment is
-      possible: add a rule with <ref column="priority"/> 1, <code>1</code> as
+      possible: add a rule with <ref column="priority"/> 0, <code>0</code> as
       <ref column="match"/>, and <code>deny</code> as <ref column="action"/>.)
     </p>
 
     <column name="priority">
-      The ACL rule's priority.  Rules with numerically higher priority take
-      precedence over those with lower.  If two ACL rules with the same
-      priority both match, then the one actually applied to a packet is
-      undefined.
+      <p>
+        The ACL rule's priority.  Rules with numerically higher priority
+        take precedence over those with lower.  If two ACL rules with
+        the same priority both match, then the one actually applied to a
+        packet is undefined.
+      </p>
+
+      <p>
+        Return traffic from an <code>allow-related</code> flow is always
+        allowed and cannot be changed through an ACL.
+      </p>
+    </column>
+
+    <column name="direction">
+      <p>Direction of the traffic to which this rule should apply:</p>
+      <ul>
+        <li>
+          <code>from-lport</code>: Used to implement filters on traffic
+          arriving from a logical port.  These rules are applied to the
+          logical switch's ingress pipeline.
+        </li>
+        <li>
+          <code>to-lport</code>: Used to implement filters on traffic
+          forwarded to a logical port.  These rules are applied to the
+          logical switch's egress pipeline.
+        </li>
+      </ul>
     </column>
 
     <column name="match">
-      The packets that the ACL should match, in the same expression language
-      used for the <ref column="match" table="Logical_Flow"
-      db="OVN_Southbound"/> column in the OVN Southbound database's <ref
-      table="Logical_Flow" db="OVN_Southbound"/> table.  Match
-      <code>inport</code> and <code>outport</code> against names of logical
-      ports within <ref column="lswitch"/> to implement ingress and egress
-      ACLs, respectively.  In logical switches connected to logical routers,
-      the special port name <code>ROUTER</code> refers to the logical router
-      port.
+      <p>
+        The packets that the ACL should match, in the same expression
+        language used for the <ref column="match" table="Logical_Flow"
+        db="OVN_Southbound"/> column in the OVN Southbound database's
+        <ref table="Logical_Flow" db="OVN_Southbound"/> table.  The
+        <code>outport</code> logical port is only available in the
+        <code>to-lport</code> direction (the <code>inport</code> is
+        available in both directions).
+      </p>
+
+      <p>
+        By default all traffic is allowed.  When writing a more
+        restrictive policy, it is important to remember to allow flows
+        such as ARP and IPv6 neighbor discovery packets.
+      </p>
     </column>
 
     <column name="action">
       <p>The action to take when the ACL rule matches:</p>
-      
       <ul>
         <li>
           <code>allow</code>: Forward the packet.
@@ -249,25 +404,20 @@
         <li>
           <code>reject</code>: Drop the packet, replying with a RST for TCP or
           ICMP unreachable message for other IP-based protocols.
+          <code>Not implemented--currently treated as drop</code>
         </li>
       </ul>
-
-      <p>
-	Only <code>allow</code> and <code>drop</code> are implemented:
-	<code>allow-related</code> is currently treated as <code>allow</code>,
-	and <code>reject</code> as <code>drop</code>.
-      </p>
     </column>
 
     <column name="log">
       <p>
-	If set to <code>true</code>, packets that match the ACL will trigger a
-	log message on the transport node or nodes that perform ACL processing.
-	Logging may be combined with any <ref column="action"/>.
+        If set to <code>true</code>, packets that match the ACL will trigger a
+        log message on the transport node or nodes that perform ACL processing.
+        Logging may be combined with any <ref column="action"/>.
       </p>
 
       <p>
-	Logging is not yet implemented.
+        Logging is not yet implemented.
       </p>
     </column>
 
@@ -293,9 +443,7 @@
     </column>
 
     <column name="ports">
-      The router's ports.  This is a set of weak references, so a <ref
-      table="Logical_Switch"/> must also refer to any given <ref
-      table="Logical_Router_Port"/> or it will automatically be deleted.
+      The router's ports.
     </column>
 
     <column name="default_gw">
@@ -315,22 +463,20 @@
     </p>
 
     <p>
-      A router port is always attached to a logical switch and to a logical
-      router.  The former attachment, which is enforced by the database schema,
-      can be identified by finding the <ref table="Logical_Switch"/> row whose
-      <ref column="router_port" table="Logical_Switch"/> column points to the
-      router port.  The latter attachment, which the database schema does not
-      enforce, can be identified by finding the <ref table="Logical_Router"/>
-      row whose <ref column="ports" table="Logical_Router"/> column includes
-      the router port.
+      Exactly one <ref table="Logical_Router"/> row must reference a given
+      logical router port.
     </p>
 
     <column name="name">
       <p>
-        A name for the logical router port.  This name has no special meaning or purpose
-        other than to provide convenience for human interaction with the ovn-nb
-        database.  There is no requirement for the name to be unique.  The
-        logical router port's UUID should be used as the unique identifier.
+        A name for the logical router port.
+      </p>
+
+      <p>
+        In addition to provide convenience for human interaction with the
+        ovn-nb database, this column is used as reference by its patch port in
+        <ref table="Logical_Port"/> or another logical router port in <ref
+        table="Logical_Router_Port"/>.
       </p>
     </column>
 
@@ -344,6 +490,49 @@
     <column name="mac">
       The Ethernet address that belongs to this router port.
     </column>
+
+    <column name="enabled">
+      This column is used to administratively set port state.  If this column
+      is empty or is set to <code>true</code>, the port is enabled.  If this
+      column is set to <code>false</code>, the port is disabled.  A disabled
+      port has all ingress and egress traffic dropped.
+    </column>
+
+    <group title="Attachment">
+      <p>
+        A given router port serves one of two purposes:
+      </p>
+
+      <ul>
+        <li>
+          To attach a logical switch to a logical router.  A logical router
+          port of this type is referenced by exactly one <ref
+          table="Logical_Port"/> of type <code>router</code>.  The value of
+          <ref column="name"/> is set as <code>router-port</code> in column
+          <ref column="options"/> of <ref table="Logical_Port"/>.
+          In this case <ref column="peer"/> column is empty.
+        </li>
+
+        <li>
+          To connect one logical router to another.  This requires a pair of
+          logical router ports, each connected to a different router.  Each
+          router port in the pair specifies the other in its <ref
+          column="peer"/> column.  No <ref table="Logical_Switch"/> refers to
+          the router port.
+        </li>
+      </ul>
+
+      <column name="peer">
+        <p>
+          For a router port used to connect two logical routers, this
+          identifies the other router port in the pair by <ref column="name"/>.
+        </p>
+
+        <p>
+          For a router port attached to a logical switch, this column is empty.
+        </p>
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">

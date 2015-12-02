@@ -58,6 +58,8 @@ enum lex_type {
     LEX_T_COMMA,                /* , */
     LEX_T_SEMICOLON,            /* ; */
     LEX_T_EQUALS,               /* = */
+    LEX_T_EXCHANGE,             /* <-> */
+    LEX_T_DECREMENT,            /* -- */
 };
 
 /* Subtype for LEX_T_INTEGER and LEX_T_MASKED_INTEGER tokens.
@@ -108,5 +110,7 @@ enum lex_type lexer_get(struct lexer *);
 enum lex_type lexer_lookahead(const struct lexer *);
 bool lexer_match(struct lexer *, enum lex_type);
 bool lexer_match_id(struct lexer *, const char *id);
+bool lexer_is_int(const struct lexer *);
+bool lexer_get_int(struct lexer *, int *value);
 
 #endif /* ovn/lex.h */

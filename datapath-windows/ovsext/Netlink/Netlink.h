@@ -133,10 +133,12 @@ const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,
                                 UINT16 type);
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                     UINT32 totalAttrLen, const NL_POLICY policy[],
-                    PNL_ATTR attrs[], UINT32 n_attrs);
+                    const UINT32 numPolicy, PNL_ATTR attrs[], 
+                    UINT32 numAttrs);
 BOOLEAN NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                           UINT32 totalAttrLen, const NL_POLICY policy[],
-                          PNL_ATTR attrs[], UINT32 n_attrs);
+                          const UINT32 numPolicy, PNL_ATTR attrs[],
+                          UINT32 numAttrs);
 /*
  * --------------------------------------------------------------------------
  * Returns the length of attribute.
@@ -201,8 +203,8 @@ BOOLEAN NlMsgPutHeadU64(PNL_BUFFER buf, UINT16 type, UINT64 value);
 BOOLEAN NlMsgPutHeadString(PNL_BUFFER buf, UINT16 type, PCHAR value);
 UINT32 NlMsgStartNested(PNL_BUFFER buf, UINT16 type);
 VOID NlMsgEndNested(PNL_BUFFER buf, UINT32 offset);
-VOID NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
-                    const PVOID data, UINT32 size);
+BOOLEAN NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
+                       const PVOID data, UINT32 size);
 
 /* These variants are convenient for iterating nested attributes. */
 #define NL_NESTED_FOR_EACH(ITER, LEFT, A)                               \

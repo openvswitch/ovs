@@ -53,7 +53,7 @@ struct netdev_windows {
 
     unsigned int cache_valid;
     int ifindex;
-    uint8_t mac[ETH_ADDR_LEN];
+    struct eth_addr mac;
     uint32_t mtu;
     unsigned int ifi_flags;
 };
@@ -70,7 +70,7 @@ struct netdev_windows_netdev_info {
 
     /* General information of a network device. */
     const char *name;
-    uint8_t mac_address[ETH_ADDR_LEN];
+    struct eth_addr mac_address;
     uint32_t mtu;
     uint32_t ifi_flags;
 };
@@ -153,7 +153,6 @@ static int
 netdev_windows_system_construct(struct netdev *netdev_)
 {
     struct netdev_windows *netdev = netdev_windows_cast(netdev_);
-    uint8_t mac[ETH_ADDR_LEN];
     struct netdev_windows_netdev_info info;
     struct ofpbuf *buf;
     int ret;
@@ -169,7 +168,7 @@ netdev_windows_system_construct(struct netdev *netdev_)
     netdev->dev_type = info.ovs_type;
     netdev->port_no = info.port_no;
 
-    memcpy(netdev->mac, info.mac_address, ETH_ADDR_LEN);
+    netdev->mac = info.mac_address;
     netdev->cache_valid = VALID_ETHERADDR;
     netdev->ifindex = -EOPNOTSUPP;
 
@@ -249,7 +248,7 @@ netdev_windows_netdev_from_ofpbuf(struct netdev_windows_netdev_info *info,
     info->port_no = nl_attr_get_odp_port(a[OVS_WIN_NETDEV_ATTR_PORT_NO]);
     info->ovs_type = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_TYPE]);
     info->name = nl_attr_get_string(a[OVS_WIN_NETDEV_ATTR_NAME]);
-    memcpy(info->mac_address, nl_attr_get_unspec(a[OVS_WIN_NETDEV_ATTR_MAC_ADDR],
+    memcpy(&info->mac_address, nl_attr_get_unspec(a[OVS_WIN_NETDEV_ATTR_MAC_ADDR],
                sizeof(info->mac_address)), sizeof(info->mac_address));
     info->mtu = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_MTU]);
     info->ifi_flags = nl_attr_get_u32(a[OVS_WIN_NETDEV_ATTR_IF_FLAGS]);
@@ -318,13 +317,13 @@ netdev_windows_dealloc(struct netdev *netdev_)
 
 static int
 netdev_windows_get_etheraddr(const struct netdev *netdev_,
-                             uint8_t mac[ETH_ADDR_LEN])
+                             struct eth_addr *mac)
 {
     struct netdev_windows *netdev = netdev_windows_cast(netdev_);
 
     ovs_assert((netdev->cache_valid & VALID_ETHERADDR) != 0);
     if (netdev->cache_valid & VALID_ETHERADDR) {
-        memcpy(mac, netdev->mac, ETH_ADDR_LEN);
+        *mac = netdev->mac;
     } else {
         return EINVAL;
     }
@@ -349,7 +348,7 @@ netdev_windows_get_mtu(const struct netdev *netdev_, int *mtup)
  * But vswitchd bringup expects this to be implemented. */
 static int
 netdev_windows_set_etheraddr(const struct netdev *netdev_,
-                             uint8_t mac[ETH_ADDR_LEN])
+                             const struct eth_addr mac)
 {
     return 0;
 }
@@ -380,7 +379,7 @@ netdev_windows_update_flags(struct netdev *netdev_,
  */
 static int
 netdev_windows_arp_lookup(const struct netdev *netdev,
-                          ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
+                          ovs_be32 ip, struct eth_addr *mac)
 {
     PMIB_IPNETTABLE arp_table = NULL;
     /* The buffer length of all ARP entries */

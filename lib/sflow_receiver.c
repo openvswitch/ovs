@@ -227,9 +227,10 @@ inline static u_int32_t addressEncodingLength(SFLAddress *addr) {
     return (addr->type == SFLADDRESSTYPE_IP_V6) ? 20 : 8;  // type + address (unspecified == IPV4)
 }
 
-inline static void putMACAddress(SFLReceiver *receiver, u_int8_t *mac)
+inline static void putMACAddress(SFLReceiver *receiver,
+                                 const struct eth_addr mac)
 {
-    memcpy(receiver->sampleCollector.datap, mac, 6);
+    memcpy(receiver->sampleCollector.datap, &mac, 6);
     receiver->sampleCollector.datap += 2;
 }
 

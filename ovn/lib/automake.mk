@@ -9,7 +9,8 @@ ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/expr.c \
 	ovn/lib/expr.h \
 	ovn/lib/lex.c \
-	ovn/lib/lex.h
+	ovn/lib/lex.h \
+	ovn/lib/logical-fields.h
 nodist_ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/ovn-nb-idl.c \
 	ovn/lib/ovn-nb-idl.h \

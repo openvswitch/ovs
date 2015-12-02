@@ -57,15 +57,7 @@ vswitchd/ovs-vswitchd.conf.db.5: \
 # Version checking for vswitch.ovsschema.
 ALL_LOCAL += vswitchd/vswitch.ovsschema.stamp
 vswitchd/vswitch.ovsschema.stamp: vswitchd/vswitch.ovsschema
-	@sum=`sed '/cksum/d' $? | cksum`; \
-	expected=`sed -n 's/.*"cksum": "\(.*\)".*/\1/p' $?`; \
-	if test "X$$sum" = "X$$expected"; then \
-	  touch $@; \
-	else \
-	  ln=`sed -n '/"cksum":/=' $?`; \
-	  echo >&2 "$?:$$ln: The checksum \"$$sum\" was calculated from the schema file and does not match cksum field in the schema file - you should probably update the version number and the checksum in the schema file with the value listed here."; \
-	  exit 1; \
-	fi
+	$(srcdir)/build-aux/cksum-schema-check $? $@
 CLEANFILES += vswitchd/vswitch.ovsschema.stamp
 
 # Clean up generated files from older OVS versions.  (This is important so that

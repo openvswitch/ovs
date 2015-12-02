@@ -60,6 +60,15 @@ static struct shash mf_by_name;
  * controller and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+#define MF_VALUE_EXACT_8 0xff, 0xff, 0xff, 0xff,  0xff, 0xff, 0xff, 0xff
+#define MF_VALUE_EXACT_16 MF_VALUE_EXACT_8, MF_VALUE_EXACT_8
+#define MF_VALUE_EXACT_32 MF_VALUE_EXACT_16, MF_VALUE_EXACT_16
+#define MF_VALUE_EXACT_64 MF_VALUE_EXACT_32, MF_VALUE_EXACT_32
+#define MF_VALUE_EXACT_128 MF_VALUE_EXACT_64, MF_VALUE_EXACT_64
+#define MF_VALUE_EXACT_INITIALIZER { .tun_metadata = { MF_VALUE_EXACT_128 } }
+
+const union mf_value exact_match_mask = MF_VALUE_EXACT_INITIALIZER;
+
 static void nxm_init(void);
 
 /* Returns the field with the given 'name', or a null pointer if no field has
@@ -193,12 +202,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.tunnel.gbp_id;
     case MFF_TUN_GBP_FLAGS:
         return !wc->masks.tunnel.gbp_flags;
-    CASE_MFF_TUN_METADATA: {
-        union mf_value value;
-
-        tun_metadata_read(&wc->masks.tunnel, mf, &value);
-        return is_all_zeros(&value.tun_metadata, mf->n_bytes);
-    }
+    CASE_MFF_TUN_METADATA:
+        return !ULLONG_GET(wc->masks.tunnel.metadata.present.map,
+                           mf->id - MFF_TUN_METADATA0);
     case MFF_METADATA:
         return !wc->masks.metadata;
     case MFF_IN_PORT:
@@ -208,6 +214,14 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.skb_priority;
     case MFF_PKT_MARK:
         return !wc->masks.pkt_mark;
+    case MFF_CT_STATE:
+        return !wc->masks.ct_state;
+    case MFF_CT_ZONE:
+        return !wc->masks.ct_zone;
+    case MFF_CT_MARK:
+        return !wc->masks.ct_mark;
+    case MFF_CT_LABEL:
+        return ovs_u128_is_zero(&wc->masks.ct_label);
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
@@ -392,19 +406,16 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
  * This is only ever called for writeable 'mf's, but we do not make the
  * distinction here. */
 void
-mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
+mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
 {
-    static union mf_value exact_match_mask;
-
-    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
-    mf_set_flow_value(mf, &exact_match_mask, mask);
+    mf_set_flow_value(mf, &exact_match_mask, &wc->masks);
 
     switch (mf->prereqs) {
     case MFP_ND:
     case MFP_ND_SOLICIT:
     case MFP_ND_ADVERT:
-        mask->tp_src = OVS_BE16_MAX;
-        mask->tp_dst = OVS_BE16_MAX;
+        WC_MASK_FIELD(wc, tp_src);
+        WC_MASK_FIELD(wc, tp_dst);
         /* Fall through. */
     case MFP_TCP:
     case MFP_UDP:
@@ -412,17 +423,17 @@ mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow *mask)
     case MFP_ICMPV4:
     case MFP_ICMPV6:
         /* nw_frag always unwildcarded. */
-        mask->nw_proto = 0xff;
+        WC_MASK_FIELD(wc, nw_proto);
         /* Fall through. */
     case MFP_ARP:
     case MFP_IPV4:
     case MFP_IPV6:
     case MFP_MPLS:
     case MFP_IP_ANY:
-        mask->dl_type = OVS_BE16_MAX;
+        /* dl_type always unwildcarded. */
         break;
     case MFP_VLAN_VID:
-        mask->vlan_tci |= htons(VLAN_CFI);
+        WC_MASK_FIELD_MASK(wc, vlan_tci, htons(VLAN_CFI));
         break;
     case MFP_NONE:
         break;
@@ -494,6 +505,9 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_IN_PORT:
     case MFF_SKB_PRIORITY:
     case MFF_PKT_MARK:
+    case MFF_CT_ZONE:
+    case MFF_CT_MARK:
+    case MFF_CT_LABEL:
     CASE_MFF_REGS:
     CASE_MFF_XREGS:
     case MFF_ETH_SRC:
@@ -569,6 +583,9 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_FLAGS:
         return !(value->be16 & ~htons(FLOW_TNL_PUB_F_MASK));
 
+    case MFF_CT_STATE:
+        return !(value->be32 & ~htonl(CS_SUPPORTED_MASK));
+
     case MFF_N_IDS:
     default:
         OVS_NOT_REACHED();
@@ -641,6 +658,22 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->be32 = htonl(flow->pkt_mark);
         break;
 
+    case MFF_CT_STATE:
+        value->be32 = htonl(flow->ct_state);
+        break;
+
+    case MFF_CT_ZONE:
+        value->be16 = htons(flow->ct_zone);
+        break;
+
+    case MFF_CT_MARK:
+        value->be32 = htonl(flow->ct_mark);
+        break;
+
+    case MFF_CT_LABEL:
+        value->be128 = hton128(flow->ct_label);
+        break;
+
     CASE_MFF_REGS:
         value->be32 = htonl(flow->regs[mf->id - MFF_REG0]);
         break;
@@ -650,11 +683,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_ETH_SRC:
-        memcpy(value->mac, flow->dl_src, ETH_ADDR_LEN);
+        value->mac = flow->dl_src;
         break;
 
     case MFF_ETH_DST:
-        memcpy(value->mac, flow->dl_dst, ETH_ADDR_LEN);
+        value->mac = flow->dl_dst;
         break;
 
     case MFF_ETH_TYPE:
@@ -747,12 +780,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memcpy(value->mac, flow->arp_sha, ETH_ADDR_LEN);
+        value->mac = flow->arp_sha;
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memcpy(value->mac, flow->arp_tha, ETH_ADDR_LEN);
+        value->mac = flow->arp_tha;
         break;
 
     case MFF_TCP_SRC:
@@ -793,11 +826,19 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
 /* Makes 'match' match field 'mf' exactly, with the value matched taken from
  * 'value'.  The caller is responsible for ensuring that 'match' meets 'mf''s
- * prerequisites. */
+ * prerequisites.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string. */
 void
 mf_set_value(const struct mf_field *mf,
-             const union mf_value *value, struct match *match)
+             const union mf_value *value, struct match *match, char **err_str)
 {
+    if (err_str) {
+        *err_str = NULL;
+    }
+
     switch (mf->id) {
     case MFF_DP_HASH:
         match_set_dp_hash(match, ntohl(value->be32));
@@ -833,7 +874,7 @@ mf_set_value(const struct mf_field *mf,
         match_set_tun_ttl(match, value->u8);
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_set_match(mf, value, NULL, match);
+        tun_metadata_set_match(mf, value, NULL, match, err_str);
         break;
 
     case MFF_METADATA:
@@ -863,6 +904,22 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_PKT_MARK:
         match_set_pkt_mark(match, ntohl(value->be32));
+        break;
+
+    case MFF_CT_STATE:
+        match_set_ct_state(match, ntohl(value->be32));
+        break;
+
+    case MFF_CT_ZONE:
+        match_set_ct_zone(match, ntohs(value->be16));
+        break;
+
+    case MFF_CT_MARK:
+        match_set_ct_mark(match, ntohl(value->be32));
+        break;
+
+    case MFF_CT_LABEL:
+        match_set_ct_label(match, ntoh128(value->be128));
         break;
 
     CASE_MFF_REGS:
@@ -1020,10 +1077,6 @@ mf_set_value(const struct mf_field *mf,
 void
 mf_mask_field(const struct mf_field *mf, struct flow *mask)
 {
-    union mf_value exact_match_mask;
-
-    memset(&exact_match_mask, 0xff, sizeof exact_match_mask);
-
     /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan()
      * as that will be considered as OFP10_VLAN_NONE. So consider it as a
      * special case. For the rest, calling mf_set_flow_value() is good
@@ -1061,17 +1114,26 @@ field_len(const struct mf_field *mf, const union mf_value *value_)
 /* Returns the effective length of the field. For fixed length fields,
  * this is just the defined length. For variable length fields, it is
  * the minimum size encoding that retains the same meaning (i.e.
- * discarding leading zeros). */
+ * discarding leading zeros).
+ *
+ * 'is_masked' returns (if non-NULL) whether the original contained
+ * a mask. Otherwise, a mask that is the same length as the value
+ * might be misinterpreted as an exact match. */
 int
 mf_field_len(const struct mf_field *mf, const union mf_value *value,
-             const union mf_value *mask)
+             const union mf_value *mask, bool *is_masked_)
 {
     int len, mask_len;
+    bool is_masked = mask && !is_all_ones(mask, mf->n_bytes);
 
     len = field_len(mf, value);
-    if (mask && !is_all_ones(mask, mf->n_bytes)) {
+    if (is_masked) {
         mask_len = field_len(mf, mask);
         len = MAX(len, mask_len);
+    }
+
+    if (is_masked_) {
+        *is_masked_ = is_masked;
     }
 
     return len;
@@ -1144,6 +1206,22 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->pkt_mark = ntohl(value->be32);
         break;
 
+    case MFF_CT_STATE:
+        flow->ct_state = ntohl(value->be32);
+        break;
+
+    case MFF_CT_ZONE:
+        flow->ct_zone = ntohs(value->be16);
+        break;
+
+    case MFF_CT_MARK:
+        flow->ct_mark = ntohl(value->be32);
+        break;
+
+    case MFF_CT_LABEL:
+        flow->ct_label = ntoh128(value->be128);
+        break;
+
     CASE_MFF_REGS:
         flow->regs[mf->id - MFF_REG0] = ntohl(value->be32);
         break;
@@ -1153,11 +1231,11 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_ETH_SRC:
-        memcpy(flow->dl_src, value->mac, ETH_ADDR_LEN);
+        flow->dl_src = value->mac;
         break;
 
     case MFF_ETH_DST:
-        memcpy(flow->dl_dst, value->mac, ETH_ADDR_LEN);
+        flow->dl_dst = value->mac;
         break;
 
     case MFF_ETH_TYPE:
@@ -1253,12 +1331,12 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memcpy(flow->arp_sha, value->mac, ETH_ADDR_LEN);
+        flow->arp_sha = value->mac;
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memcpy(flow->arp_tha, value->mac, ETH_ADDR_LEN);
+        flow->arp_tha = value->mac;
         break;
 
     case MFF_TCP_SRC:
@@ -1327,26 +1405,47 @@ mf_set_flow_value_masked(const struct mf_field *field,
     mf_set_flow_value(field, &tmp, flow);
 }
 
-/* Returns true if 'mf' has a zero value in 'flow', false if it is nonzero.
+bool
+mf_is_tun_metadata(const struct mf_field *mf)
+{
+    return mf->id >= MFF_TUN_METADATA0 &&
+           mf->id < MFF_TUN_METADATA0 + TUN_METADATA_NUM_OPTS;
+}
+
+/* Returns true if 'mf' has previously been set in 'flow', false if
+ * it contains a non-default value.
  *
  * The caller is responsible for ensuring that 'flow' meets 'mf''s
  * prerequisites. */
 bool
-mf_is_zero(const struct mf_field *mf, const struct flow *flow)
+mf_is_set(const struct mf_field *mf, const struct flow *flow)
 {
-    union mf_value value;
+    if (!mf_is_tun_metadata(mf)) {
+        union mf_value value;
 
-    mf_get_value(mf, flow, &value);
-    return is_all_zeros(&value, mf->n_bytes);
+        mf_get_value(mf, flow, &value);
+        return !is_all_zeros(&value, mf->n_bytes);
+    } else {
+        return ULLONG_GET(flow->tunnel.metadata.present.map,
+                          mf->id - MFF_TUN_METADATA0);
+    }
 }
 
 /* Makes 'match' wildcard field 'mf'.
  *
  * The caller is responsible for ensuring that 'match' meets 'mf''s
- * prerequisites. */
+ * prerequisites.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string. */
 void
-mf_set_wild(const struct mf_field *mf, struct match *match)
+mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
 {
+    if (err_str) {
+        *err_str = NULL;
+    }
+
     switch (mf->id) {
     case MFF_DP_HASH:
         match->flow.dp_hash = 0;
@@ -1385,7 +1484,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match_set_tun_ttl_masked(match, 0, 0);
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_set_match(mf, NULL, NULL, match);
+        tun_metadata_set_match(mf, NULL, NULL, match, err_str);
         break;
 
     case MFF_METADATA:
@@ -1412,6 +1511,26 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match->wc.masks.pkt_mark = 0;
         break;
 
+    case MFF_CT_STATE:
+        match->flow.ct_state = 0;
+        match->wc.masks.ct_state = 0;
+        break;
+
+    case MFF_CT_ZONE:
+        match->flow.ct_zone = 0;
+        match->wc.masks.ct_zone = 0;
+        break;
+
+    case MFF_CT_MARK:
+        match->flow.ct_mark = 0;
+        match->wc.masks.ct_mark = 0;
+        break;
+
+    case MFF_CT_LABEL:
+        memset(&match->flow.ct_label, 0, sizeof(match->flow.ct_label));
+        memset(&match->wc.masks.ct_label, 0, sizeof(match->wc.masks.ct_label));
+        break;
+
     CASE_MFF_REGS:
         match_set_reg_masked(match, mf->id - MFF_REG0, 0, 0);
         break;
@@ -1421,13 +1540,13 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         break;
 
     case MFF_ETH_SRC:
-        memset(match->flow.dl_src, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.dl_src, 0, ETH_ADDR_LEN);
+        match->flow.dl_src = eth_addr_zero;
+        match->wc.masks.dl_src = eth_addr_zero;
         break;
 
     case MFF_ETH_DST:
-        memset(match->flow.dl_dst, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.dl_dst, 0, ETH_ADDR_LEN);
+        match->flow.dl_dst = eth_addr_zero;
+        match->wc.masks.dl_dst = eth_addr_zero;
         break;
 
     case MFF_ETH_TYPE:
@@ -1519,14 +1638,14 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memset(match->flow.arp_sha, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.arp_sha, 0, ETH_ADDR_LEN);
+        match->flow.arp_sha = eth_addr_zero;
+        match->wc.masks.arp_sha = eth_addr_zero;
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memset(match->flow.arp_tha, 0, ETH_ADDR_LEN);
-        memset(match->wc.masks.arp_tha, 0, ETH_ADDR_LEN);
+        match->flow.arp_tha = eth_addr_zero;
+        match->wc.masks.arp_tha = eth_addr_zero;
         break;
 
     case MFF_TCP_SRC:
@@ -1574,21 +1693,36 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
  * call is equivalent to mf_set_wild(mf, match).
  *
  * 'mask' must be a valid mask for 'mf' (see mf_is_mask_valid()).  The caller
- * is responsible for ensuring that 'match' meets 'mf''s prerequisites. */
-enum ofputil_protocol
+ * is responsible for ensuring that 'match' meets 'mf''s prerequisites.
+ *
+ * If non-NULL, 'err_str' returns a malloc'ed string describing any errors
+ * with the request or NULL if there is no error. The caller is reponsible
+ * for freeing the string.
+ *
+ * Return a set of enum ofputil_protocol bits (as an uint32_t to avoid circular
+ * dependency on enum ofputil_protocol definition) indicating which OpenFlow
+ * protocol versions can support this functionality. */
+uint32_t
 mf_set(const struct mf_field *mf,
        const union mf_value *value, const union mf_value *mask,
-       struct match *match)
+       struct match *match, char **err_str)
 {
     if (!mask || is_all_ones(mask, mf->n_bytes)) {
-        mf_set_value(mf, value, match);
+        mf_set_value(mf, value, match, err_str);
         return mf->usable_protocols_exact;
-    } else if (is_all_zeros(mask, mf->n_bytes)) {
-        mf_set_wild(mf, match);
+    } else if (is_all_zeros(mask, mf->n_bytes) && !mf_is_tun_metadata(mf)) {
+        /* Tunnel metadata matches on the existence of the field itself, so
+         * it still needs to be encoded even if the value is wildcarded. */
+        mf_set_wild(mf, match, err_str);
         return OFPUTIL_P_ANY;
     }
 
+    if (err_str) {
+        *err_str = NULL;
+    }
+
     switch (mf->id) {
+    case MFF_CT_ZONE:
     case MFF_RECIRC_ID:
     case MFF_CONJ_ID:
     case MFF_IN_PORT:
@@ -1642,7 +1776,7 @@ mf_set(const struct mf_field *mf,
         match_set_tun_tos_masked(match, value->u8, mask->u8);
         break;
     CASE_MFF_TUN_METADATA:
-        tun_metadata_set_match(mf, value, mask, match);
+        tun_metadata_set_match(mf, value, mask, match, err_str);
         break;
 
     case MFF_METADATA:
@@ -1662,6 +1796,19 @@ mf_set(const struct mf_field *mf,
     case MFF_PKT_MARK:
         match_set_pkt_mark_masked(match, ntohl(value->be32),
                                   ntohl(mask->be32));
+        break;
+
+    case MFF_CT_STATE:
+        match_set_ct_state_masked(match, ntohl(value->be32), ntohl(mask->be32));
+        break;
+
+    case MFF_CT_MARK:
+        match_set_ct_mark_masked(match, ntohl(value->be32), ntohl(mask->be32));
+        break;
+
+    case MFF_CT_LABEL:
+        match_set_ct_label_masked(match, ntoh128(value->be128),
+                                  mask ? ntoh128(mask->be128) : OVS_U128_MAX);
         break;
 
     case MFF_ETH_DST:
@@ -1708,7 +1855,7 @@ mf_set(const struct mf_field *mf,
 
     case MFF_IPV6_LABEL:
         if ((mask->be32 & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK)) {
-            mf_set_value(mf, value, match);
+            mf_set_value(mf, value, match, err_str);
         } else {
             match_set_ipv6_label_masked(match, value->be32, mask->be32);
         }
@@ -1856,23 +2003,22 @@ syntax_error:
 
 static char *
 mf_from_ethernet_string(const struct mf_field *mf, const char *s,
-                        uint8_t mac[ETH_ADDR_LEN],
-                        uint8_t mask[ETH_ADDR_LEN])
+                        struct eth_addr *mac, struct eth_addr *mask)
 {
     int n;
 
     ovs_assert(mf->n_bytes == ETH_ADDR_LEN);
 
     n = -1;
-    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(mac), &n)
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(*mac), &n)
         && n == strlen(s)) {
-        memset(mask, 0xff, ETH_ADDR_LEN);
+        *mask = eth_addr_exact;
         return NULL;
     }
 
     n = -1;
     if (ovs_scan(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT"%n",
-                 ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask), &n)
+                 ETH_ADDR_SCAN_ARGS(*mac), ETH_ADDR_SCAN_ARGS(*mask), &n)
         && n == strlen(s)) {
         return NULL;
     }
@@ -1884,66 +2030,16 @@ static char *
 mf_from_ipv4_string(const struct mf_field *mf, const char *s,
                     ovs_be32 *ip, ovs_be32 *mask)
 {
-    int prefix;
-
     ovs_assert(mf->n_bytes == sizeof *ip);
-
-    if (ovs_scan(s, IP_SCAN_FMT"/"IP_SCAN_FMT,
-                 IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask))) {
-        /* OK. */
-    } else if (ovs_scan(s, IP_SCAN_FMT"/%d", IP_SCAN_ARGS(ip), &prefix)) {
-        if (prefix <= 0 || prefix > 32) {
-            return xasprintf("%s: network prefix bits not between 0 and "
-                             "32", s);
-        }
-        *mask = be32_prefix_mask(prefix);
-    } else if (ovs_scan(s, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
-        *mask = OVS_BE32_MAX;
-    } else {
-        return xasprintf("%s: invalid IP address", s);
-    }
-    return NULL;
+    return ip_parse_masked(s, ip, mask);
 }
 
 static char *
 mf_from_ipv6_string(const struct mf_field *mf, const char *s,
-                    struct in6_addr *value, struct in6_addr *mask)
+                    struct in6_addr *ipv6, struct in6_addr *mask)
 {
-    char *str = xstrdup(s);
-    char *save_ptr = NULL;
-    const char *name, *netmask;
-    int retval;
-
-    ovs_assert(mf->n_bytes == sizeof *value);
-
-    name = strtok_r(str, "/", &save_ptr);
-    retval = name ? lookup_ipv6(name, value) : EINVAL;
-    if (retval) {
-        char *err;
-
-        err = xasprintf("%s: could not convert to IPv6 address", str);
-        free(str);
-
-        return err;
-    }
-
-    netmask = strtok_r(NULL, "/", &save_ptr);
-    if (netmask) {
-        if (inet_pton(AF_INET6, netmask, mask) != 1) {
-            int prefix = atoi(netmask);
-            if (prefix <= 0 || prefix > 128) {
-                free(str);
-                return xasprintf("%s: prefix bits not between 1 and 128", s);
-            } else {
-                *mask = ipv6_create_mask(prefix);
-            }
-        }
-    } else {
-        *mask = in6addr_exact;
-    }
-    free(str);
-
-    return NULL;
+    ovs_assert(mf->n_bytes == sizeof *ipv6);
+    return ipv6_parse_masked(s, ipv6, mask);
 }
 
 static char *
@@ -2057,6 +2153,27 @@ mf_from_tun_flags_string(const char *s, ovs_be16 *flagsp, ovs_be16 *maskp)
                           htons(FLOW_TNL_PUB_F_MASK), maskp);
 }
 
+static char *
+mf_from_ct_state_string(const char *s, ovs_be32 *flagsp, ovs_be32 *maskp)
+{
+    int err;
+    char *err_str;
+    uint32_t flags, mask;
+
+    err = parse_flags(s, ct_state_to_string, '\0', "ct_state", &err_str,
+                      &flags, CS_SUPPORTED_MASK, maskp ? &mask : NULL);
+    if (err < 0) {
+        return err_str;
+    }
+
+    *flagsp = htonl(flags);
+    if (maskp) {
+        *maskp = htonl(mask);
+    }
+
+    return NULL;
+}
+
 /* Parses 's', a string value for field 'mf', into 'value' and 'mask'.  Returns
  * NULL if successful, otherwise a malloc()'d string describing the error. */
 char *
@@ -2078,8 +2195,13 @@ mf_parse(const struct mf_field *mf, const char *s,
                                        (uint8_t *) value, (uint8_t *) mask);
         break;
 
+    case MFS_CT_STATE:
+        ovs_assert(mf->n_bytes == sizeof(ovs_be32));
+        error = mf_from_ct_state_string(s, &value->be32, &mask->be32);
+        break;
+
     case MFS_ETHERNET:
-        error = mf_from_ethernet_string(mf, s, value->mac, mask->mac);
+        error = mf_from_ethernet_string(mf, s, &value->mac, &mask->mac);
         break;
 
     case MFS_IPV4:
@@ -2198,6 +2320,13 @@ mf_format_tcp_flags_string(ovs_be16 value, ovs_be16 mask, struct ds *s)
                         TCP_FLAGS(mask), TCP_FLAGS(OVS_BE16_MAX));
 }
 
+static void
+mf_format_ct_state_string(ovs_be32 value, ovs_be32 mask, struct ds *s)
+{
+    format_flags_masked(s, NULL, ct_state_to_string, ntohl(value),
+                        ntohl(mask), UINT16_MAX);
+}
+
 /* Appends to 's' a string representation of field 'mf' whose value is in
  * 'value' and 'mask'.  'mask' may be NULL to indicate an exact match. */
 void
@@ -2234,8 +2363,13 @@ mf_format(const struct mf_field *mf,
         mf_format_integer_string(mf, (uint8_t *) value, (uint8_t *) mask, s);
         break;
 
+    case MFS_CT_STATE:
+        mf_format_ct_state_string(value->be32,
+                                  mask ? mask->be32 : OVS_BE32_MAX, s);
+        break;
+
     case MFS_ETHERNET:
-        eth_format_masked(value->mac, mask->mac, s);
+        eth_format_masked(value->mac, mask ? &mask->mac : NULL, s);
         break;
 
     case MFS_IPV4:
@@ -2243,7 +2377,7 @@ mf_format(const struct mf_field *mf,
         break;
 
     case MFS_IPV6:
-        print_ipv6_masked(s, &value->ipv6, mask ? &mask->ipv6 : NULL);
+        ipv6_format_masked(&value->ipv6, mask ? &mask->ipv6 : NULL, s);
         break;
 
     case MFS_FRAG:
@@ -2294,7 +2428,7 @@ mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
     mf_get(field, match, &value, &mask);
     bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
     bitwise_one (                 &mask,  field->n_bytes, sf->ofs, sf->n_bits);
-    mf_set(field, &value, &mask, match);
+    mf_set(field, &value, &mask, match, NULL);
 }
 
 /* 'v' and 'm' correspond to values of 'field'.  This function copies them into
@@ -2310,7 +2444,7 @@ mf_mask_subfield(const struct mf_field *field,
     mf_get(field, match, &value, &mask);
     bitwise_copy(v, sizeof *v, 0, &value, field->n_bytes, 0, field->n_bits);
     bitwise_copy(m, sizeof *m, 0, &mask,  field->n_bytes, 0, field->n_bits);
-    mf_set(field, &value, &mask, match);
+    mf_set(field, &value, &mask, match, NULL);
 }
 
 /* Initializes 'x' to the value of 'sf' within 'flow'.  'sf' must be valid for

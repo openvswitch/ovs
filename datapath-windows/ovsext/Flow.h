@@ -40,7 +40,7 @@ typedef struct _OvsFlow {
 
 typedef struct _OvsLayers {
     UINT32 l3Ofs;             // IPv4, IPv6, ARP, or other L3 header.
-    UINT32 l4Ofs;             // TCP, UDP, ICMP, ICMPv6, or other L4 header.
+    UINT32 l4Ofs;             // TCP, UDP, SCTP, ICMP, ICMPv6, or other L4 header.
     UINT32 l7Ofs;             // L4 protocol's payload.
 } OvsLayers;
 

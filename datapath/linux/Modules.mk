@@ -12,6 +12,7 @@ openvswitch_sources += \
 	linux/compat/net_namespace.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
+	linux/compat/socket.c \
 	linux/compat/stt.c \
 	linux/compat/udp.c \
 	linux/compat/udp_tunnel.c \

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -534,7 +534,6 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
         }
 
         if (datum->n != orig_n) {
-            bitmap_set1(txn_row->changed, OVSDB_COL_VERSION);
             bitmap_set1(txn_row->changed, column->index);
             ovsdb_datum_sort_assert(datum, column->type.key.type);
             if (datum->n < column->type.n_min) {
@@ -748,6 +747,21 @@ check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
     return NULL;
 }
 
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+update_version(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *txn_row)
+{
+    struct ovsdb_table *table = txn_row->table;
+    size_t n_columns = shash_count(&table->schema->columns);
+
+    if (txn_row->old && txn_row->new
+        && !bitmap_is_all_zeros(txn_row->changed, n_columns)) {
+        bitmap_set1(txn_row->changed, OVSDB_COL_VERSION);
+        uuid_generate(ovsdb_row_get_version_rw(txn_row->new));
+    }
+
+    return NULL;
+}
+
 static struct ovsdb_error *
 ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
 {
@@ -799,6 +813,12 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
     if (error) {
         ovsdb_txn_abort(txn);
         return error;
+    }
+
+    /* Update _version for rows that changed.  */
+    error = for_each_txn_row(txn, update_version);
+    if (error) {
+        return OVSDB_WRAP_BUG("can't happen", error);
     }
 
     /* Send the commit to each replica. */
@@ -915,7 +935,6 @@ ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
 
         rw_row = ovsdb_row_clone(ro_row);
         rw_row->n_refs = ro_row->n_refs;
-        uuid_generate(ovsdb_row_get_version_rw(rw_row));
         ovsdb_txn_row_create(txn, table, ro_row, rw_row);
         hmap_replace(&table->rows, &ro_row->hmap_node, &rw_row->hmap_node);
 

@@ -1,0 +1,30 @@
+#
+# You may override the following variables to customize ovn-controller-vtep
+# behavior:
+#
+#   OVN_DB - Set this variable to the location of the ovsdb server that is
+#            serving the OVN_Southbound database.  See the manpage for
+#            ovn-controller-vtep for more details on the format for the db
+#            location.
+#
+#   VTEP_DB - Set this variable to the location of the ovsdb server that is
+#             serving the hardware_vtep database.  See the manpage for
+#             ovn-controller-vtep for more details on the format for the db
+#             location.
+#
+
+[Unit]
+Description=OVN VTEP gateway controller daemon
+After=syslog.target
+Requires=openvswitch.service
+After=openvswitch.service
+
+[Service]
+Type=simple
+Environment=OVS_RUNDIR=%t/openvswitch
+Environment=OVN_DB=unix:%t/openvswitch/db.sock
+Environment=VTEP_DB=unix:%t/openvswitch/db.sock
+ExecStart=/usr/bin/ovn-controller-vtep -vconsole:emer -vsyslog:err -vfile:info \
+          --log-file=/var/log/openvswitch/ovn-controller-vtep.log \
+          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller-vtep.pid \
+          --ovnsb-db=${OVN_DB} --vtep-db=${VTEP_DB}

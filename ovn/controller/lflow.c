@@ -58,10 +58,22 @@ symtab_init(void)
     MFF_LOG_REGS;
 #undef MFF_LOG_REG
 
+    /* Connection tracking state. */
+    expr_symtab_add_field(&symtab, "ct_state", MFF_CT_STATE, NULL, false);
+    expr_symtab_add_predicate(&symtab, "ct.trk", "ct_state[7]");
+    expr_symtab_add_subfield(&symtab, "ct.new", "ct.trk", "ct_state[0]");
+    expr_symtab_add_subfield(&symtab, "ct.est", "ct.trk", "ct_state[1]");
+    expr_symtab_add_subfield(&symtab, "ct.rel", "ct.trk", "ct_state[2]");
+    expr_symtab_add_subfield(&symtab, "ct.inv", "ct.trk", "ct_state[5]");
+    expr_symtab_add_subfield(&symtab, "ct.rpl", "ct.trk", "ct_state[6]");
+
     /* Data fields. */
     expr_symtab_add_field(&symtab, "eth.src", MFF_ETH_SRC, NULL, false);
     expr_symtab_add_field(&symtab, "eth.dst", MFF_ETH_DST, NULL, false);
     expr_symtab_add_field(&symtab, "eth.type", MFF_ETH_TYPE, NULL, true);
+    expr_symtab_add_predicate(&symtab, "eth.bcast",
+                              "eth.dst == ff:ff:ff:ff:ff:ff");
+    expr_symtab_add_subfield(&symtab, "eth.mcast", NULL, "eth.dst[40]");
 
     expr_symtab_add_field(&symtab, "vlan.tci", MFF_VLAN_TCI, NULL, false);
     expr_symtab_add_predicate(&symtab, "vlan.present", "vlan.tci[12]");
@@ -80,6 +92,7 @@ symtab_init(void)
 
     expr_symtab_add_field(&symtab, "ip4.src", MFF_IPV4_SRC, "ip4", false);
     expr_symtab_add_field(&symtab, "ip4.dst", MFF_IPV4_DST, "ip4", false);
+    expr_symtab_add_predicate(&symtab, "ip4.mcast", "ip4.dst[28..31] == 0xe");
 
     expr_symtab_add_predicate(&symtab, "icmp4", "ip4 && ip.proto == 1");
     expr_symtab_add_field(&symtab, "icmp4.type", MFF_ICMPV4_TYPE, "icmp4",
@@ -245,7 +258,8 @@ lflow_init(void)
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
-lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
+lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
+          const struct simap *ct_zones)
 {
     struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
@@ -264,16 +278,16 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
             continue;
         }
 
-        /* Translate logical table ID to physical table ID. */
+        /* Determine translation of logical table IDs to physical table IDs. */
         bool ingress = !strcmp(lflow->pipeline, "ingress");
-        uint8_t phys_table = lflow->table_id + (ingress
-                                                ? OFTABLE_LOG_INGRESS_PIPELINE
-                                                : OFTABLE_LOG_EGRESS_PIPELINE);
-        uint8_t next_phys_table
-            = lflow->table_id + 1 < LOG_PIPELINE_LEN ? phys_table + 1 : 0;
-        uint8_t output_phys_table = (ingress
-                                     ? OFTABLE_REMOTE_OUTPUT
-                                     : OFTABLE_LOG_TO_PHY);
+        uint8_t first_ptable = (ingress
+                                ? OFTABLE_LOG_INGRESS_PIPELINE
+                                : OFTABLE_LOG_EGRESS_PIPELINE);
+        uint8_t ptable = first_ptable + lflow->table_id;
+        uint8_t output_ptable = (ingress
+                                 ? OFTABLE_REMOTE_OUTPUT
+                                 : OFTABLE_LOG_TO_PHY);
+
         /* Translate OVN actions into OpenFlow actions.
          *
          * XXX Deny changes to 'outport' in egress pipeline. */
@@ -284,7 +298,8 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
         error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
-                                     next_phys_table, output_phys_table,
+                                     ct_zones, first_ptable, LOG_PIPELINE_LEN,
+                                     lflow->table_id, output_ptable,
                                      &ofpacts, &prereqs);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -329,7 +344,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
                 m->match.flow.conj_id += conj_id_ofs;
             }
             if (!m->n) {
-                ofctrl_add_flow(flow_table, phys_table, lflow->priority,
+                ofctrl_add_flow(flow_table, ptable, lflow->priority,
                                 &m->match, &ofpacts);
             } else {
                 uint64_t conj_stubs[64 / 8];
@@ -345,7 +360,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table)
                     dst->clause = src->clause;
                     dst->n_clauses = src->n_clauses;
                 }
-                ofctrl_add_flow(flow_table, phys_table, lflow->priority,
+                ofctrl_add_flow(flow_table, ptable, lflow->priority,
                                 &m->match, &conj);
                 ofpbuf_uninit(&conj);
             }

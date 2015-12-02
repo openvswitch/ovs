@@ -31,6 +31,7 @@
  * Linux-specific definitions for Netlink sockets, see netlink-socket.h.
  */
 
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -69,7 +70,11 @@ void nl_msg_put_u64(struct ofpbuf *, uint16_t type, uint64_t value);
 void nl_msg_put_be16(struct ofpbuf *, uint16_t type, ovs_be16 value);
 void nl_msg_put_be32(struct ofpbuf *, uint16_t type, ovs_be32 value);
 void nl_msg_put_be64(struct ofpbuf *, uint16_t type, ovs_be64 value);
+void nl_msg_put_in6_addr(struct ofpbuf *msg, uint16_t type,
+                         const struct in6_addr *value);
 void nl_msg_put_odp_port(struct ofpbuf *, uint16_t type, odp_port_t value);
+void nl_msg_put_string__(struct ofpbuf *, uint16_t type, const char *value,
+                         size_t len);
 void nl_msg_put_string(struct ofpbuf *, uint16_t type, const char *value);
 
 size_t nl_msg_start_nested(struct ofpbuf *, uint16_t type);
@@ -111,6 +116,7 @@ struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);
 #define NL_A_BE32_SIZE NL_ATTR_SIZE(sizeof(ovs_be32))
 #define NL_A_BE64_SIZE NL_ATTR_SIZE(sizeof(ovs_be64))
 #define NL_A_FLAG_SIZE NL_ATTR_SIZE(0)
+#define NL_A_IPV6_SIZE NL_ATTR_SIZE(sizeof(struct in6_addr))
 
 bool nl_attr_oversized(size_t payload_size);
 
@@ -128,6 +134,7 @@ enum nl_attr_type
     NL_A_BE64 = NL_A_U64,
     NL_A_STRING,
     NL_A_FLAG,
+    NL_A_IPV6,
     NL_A_NESTED,
     N_NL_ATTR_TYPES
 };
@@ -189,6 +196,7 @@ uint64_t nl_attr_get_u64(const struct nlattr *);
 ovs_be16 nl_attr_get_be16(const struct nlattr *);
 ovs_be32 nl_attr_get_be32(const struct nlattr *);
 ovs_be64 nl_attr_get_be64(const struct nlattr *);
+struct in6_addr nl_attr_get_in6_addr(const struct nlattr *nla);
 odp_port_t nl_attr_get_odp_port(const struct nlattr *);
 const char *nl_attr_get_string(const struct nlattr *);
 void nl_attr_get_nested(const struct nlattr *, struct ofpbuf *);

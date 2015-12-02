@@ -2036,9 +2036,14 @@ static const struct ctl_command_syntax db_ctl_commands[] = {
      NULL, "--if-exists,--all", RW},
     {"wait-until", 2, INT_MAX, "TABLE RECORD [COLUMN[:KEY]=VALUE]...",
      pre_cmd_wait_until, cmd_wait_until, NULL, "", RO},
-    {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO},
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };
+
+static void
+ctl_register_command(const struct ctl_command_syntax *command)
+{
+    shash_add_assert(&all_commands, command->name, command);
+}
 
 /* Registers commands represented by 'struct ctl_command_syntax's to
  * 'all_commands'.  The last element of 'commands' must be an all-NULL
@@ -2049,7 +2054,7 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
     const struct ctl_command_syntax *p;
 
     for (p = commands; p->name; p++) {
-        shash_add_assert(&all_commands, p->name, p);
+        ctl_register_command(p);
     }
 }
 
@@ -2060,9 +2065,15 @@ ctl_init(const struct ctl_table_class tables_[],
          void (*ctl_exit_func_)(int status))
 {
     tables = tables_;
-    cmd_show_tables = cmd_show_tables_;
     ctl_exit_func = ctl_exit_func_;
     ctl_register_commands(db_ctl_commands);
+
+    cmd_show_tables = cmd_show_tables_;
+    if (cmd_show_tables) {
+        static const struct ctl_command_syntax show =
+            {"show", 0, 0, "", pre_cmd_show, cmd_show, NULL, "", RO};
+        ctl_register_command(&show);
+    }
 }
 
 /* Returns the text for the database commands usage.  */

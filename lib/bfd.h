@@ -36,7 +36,7 @@ void bfd_run(struct bfd *);
 
 bool bfd_should_send_packet(const struct bfd *);
 void bfd_put_packet(struct bfd *bfd, struct dp_packet *packet,
-                    uint8_t eth_src[ETH_ADDR_LEN]);
+                    const struct eth_addr eth_src);
 
 bool bfd_should_process_flow(const struct bfd *, const struct flow *,
                              struct flow_wildcards *);

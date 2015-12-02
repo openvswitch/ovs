@@ -76,53 +76,6 @@ ovs_vsctl () {
     ovs-vsctl --no-wait "$@"
 }
 
-ovsdb_tool () {
-    ovsdb-tool -vconsole:off "$@"
-}
-
-create_db () {
-    action "Creating empty database $DB_FILE" ovsdb_tool create "$DB_FILE" "$DB_SCHEMA"
-}
-
-upgrade_db () {
-    schemaver=`ovsdb_tool schema-version "$DB_SCHEMA"`
-    if test ! -e "$DB_FILE"; then
-        log_warning_msg "$DB_FILE does not exist"
-        install -d -m 755 -o root -g root `dirname $DB_FILE`
-        create_db
-    elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" != Xno; then
-        # Back up the old version.
-        version=`ovsdb_tool db-version "$DB_FILE"`
-        cksum=`ovsdb_tool db-cksum "$DB_FILE" | awk '{print $1}'`
-        backup=$DB_FILE.backup$version-$cksum
-        action "Backing up database to $backup" cp "$DB_FILE" "$backup" || return 1
-
-        # Compact database.  This is important if the old schema did not enable
-        # garbage collection (i.e. if it did not have any tables with "isRoot":
-        # true) but the new schema does.  In that situation the old database
-        # may contain a transaction that creates a record followed by a
-        # transaction that creates the first use of the record.  Replaying that
-        # series of transactions against the new database schema (as "convert"
-        # does) would cause the record to be dropped by the first transaction,
-        # then the second transaction would cause a referential integrity
-        # failure (for a strong reference).
-        #
-        # Errors might occur on an Open vSwitch downgrade if ovsdb-tool doesn't
-        # understand some feature of the schema used in the OVSDB version that
-        # we're downgrading from, so we don't give up on error.
-        action "Compacting database" ovsdb_tool compact "$DB_FILE"
-
-        # Upgrade or downgrade schema.
-        if action "Converting database schema" ovsdb_tool convert "$DB_FILE" "$DB_SCHEMA"; then
-            :
-        else
-            log_warning_msg "Schema conversion failed, using empty database instead"
-            rm -f "$DB_FILE"
-            create_db
-        fi
-    fi
-}
-
 set_system_ids () {
     set ovs_vsctl set Open_vSwitch .
 
@@ -177,6 +130,12 @@ check_force_cores () {
     fi
 }
 
+del_transient_ports () {
+    for port in `ovs-vsctl --bare -- --columns=name find port other_config:transient=true`; do
+        ovs_vsctl -- del-port "$port"
+    done
+}
+
 start_ovsdb () {
     check_force_cores
 
@@ -184,7 +143,7 @@ start_ovsdb () {
         log_success_msg "ovsdb-server is already running"
     else
         # Create initial database or upgrade database schema.
-        upgrade_db || return 1
+        upgrade_db $DB_FILE $DB_SCHEMA || return 1
 
         # Start ovsdb-server.
         set ovsdb-server "$DB_FILE"
@@ -216,8 +175,11 @@ start_ovsdb () {
         set_system_ids || return 1
         if test X"$DELETE_BRIDGES" = Xyes; then
             for bridge in `ovs_vsctl list-br`; do
-        ovs_vsctl del-br $bridge
+                ovs_vsctl del-br $bridge
             done
+        fi
+        if test X"$DELETE_TRANSIENT_PORTS" = Xyes; then
+            del_transient_ports
         fi
     fi
 }
@@ -536,6 +498,7 @@ set_defaults () {
     SYSTEM_ID=
 
     DELETE_BRIDGES=no
+    DELETE_TRANSIENT_PORTS=no
 
     DAEMON_CWD=/
     FORCE_COREFILES=yes

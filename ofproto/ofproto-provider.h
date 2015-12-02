@@ -256,6 +256,15 @@ struct oftable {
 #define EVICTION_OPENFLOW (1 << 1) /* Set to 1 if OpenFlow enables eviction. */
     unsigned int eviction;
 
+    /* If true, vacancy events are enabled; otherwise they are disabled. */
+    bool vacancy_enabled;
+
+    /* Non-zero values for vacancy_up and vacancy_down indicates that vacancy
+     * is enabled by table-mod, else these values are set to zero when
+     * vacancy is disabled */
+    uint8_t vacancy_down; /* Vacancy threshold when space decreases (%). */
+    uint8_t vacancy_up;   /* Vacancy threshold when space increases (%). */
+
     atomic_ulong n_matched;
     atomic_ulong n_missed;
 };
@@ -1787,6 +1796,9 @@ void ofproto_delete_flow(struct ofproto *, const struct match *, int priority)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_flush_flows(struct ofproto *);
 
+enum ofperr ofproto_check_ofpacts(struct ofproto *,
+                                  const struct ofpact ofpacts[],
+                                  size_t ofpacts_len);
 
 static inline const struct rule_actions *
 rule_get_actions(const struct rule *rule)

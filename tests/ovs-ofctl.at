@@ -19,6 +19,7 @@ for test_case in \
     'tun_gbp_flags=0/0x1                         NXM,OXM' \
     'tun_metadata0=0                             NXM,OXM' \
     'tun_metadata0=0/0x1                         NXM,OXM' \
+    'tun_metadata0                               NXM,OXM' \
     'metadata=0                                  NXM,OXM,OpenFlow11' \
     'metadata=1/1                                NXM,OXM,OpenFlow11' \
     'in_port=1                                   any' \
@@ -120,7 +121,12 @@ for test_case in \
     'icmp,icmp_type=1                            any' \
     'icmp,icmp_code=2                            any' \
     'icmp6,icmpv6_type=1                         NXM,OXM' \
-    'icmp6,icmpv6_code=2                         NXM,OXM'
+    'icmp6,icmpv6_code=2                         NXM,OXM' \
+    'ct_state=+trk                               NXM,OXM' \
+    'ct_zone=0                                   NXM,OXM' \
+    'ct_mark=0                                   NXM,OXM' \
+    'ct_label=0                                  NXM,OXM' \
+    'ct_label=0x1234567890ABCDEF12345678         NXM,OXM'
 do
     set $test_case
     echo
@@ -154,12 +160,23 @@ sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=ct(nat)
+actions=ct(commit,nat(dst))
+actions=ct(commit,nat(src))
+actions=ct(commit,nat(src=10.0.0.240,random))
+actions=ct(commit,nat(src=10.0.0.240:32768-65535,random))
+actions=ct(commit,nat(dst=10.0.0.128-10.0.0.254,hash))
+actions=ct(commit,nat(src=10.0.0.240-10.0.0.254:32768-65535,persistent))
+actions=ct(commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
+actions=ct(commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
+actions=ct(commit,nat(src=[fe80::20c:29ff:fe88:1]-[fe80::20c:29ff:fe88:a18b]:255-4096,random))
+actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),alg=ftp)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
 ], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
-[[usable protocols: any
+[[usable protocols: OpenFlow10,NXM
 chosen protocol: OpenFlow10-table_id
 OFPT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD: ADD in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
@@ -173,6 +190,17 @@ OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD: ADD actions=ct(nat)
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(dst))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.0.0.240,random))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.0.0.240:32768-65535,random))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(dst=10.0.0.128-10.0.0.254,hash))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.0.0.240-10.0.0.254:32768-65535,persistent))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=[fe80::20c:29ff:fe88:1]-[fe80::20c:29ff:fe88:a18b]:255-4096,random))
+OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),alg=ftp)
 ]])
 AT_CLEANUP
 
@@ -347,6 +375,12 @@ check_overlap,actions=output:1,exit,output:2
 tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+ip,actions=ct(commit,zone=5)
+ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
+ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
+ip,actions=ct(commit,exec(load(0x1234567890ABCDEF->NXM_NX_CT_LABEL[32..95])))
+ip,actions=ct(commit,exec(set_field(0x1->ct_label)))
+ip,ct_state=+trk,ct_label=0x1234567890abcdef12345678,actions=ct(commit)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -383,6 +417,12 @@ NXT_FLOW_MOD: ADD table:255 check_overlap actions=output:1,exit,output:2
 NXT_FLOW_MOD: ADD table:255 tcp actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1234567890abcdef->NXM_NX_CT_LABEL[32..95]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD table:255 ct_state=+trk,ct_label=0x1234567890abcdef12345678,ip actions=ct(commit)
 ]])
 AT_CLEANUP
 
@@ -417,6 +457,9 @@ dl_dst=00:00:00:00:00:00/01:00:00:00:00:00,actions=drop
 dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff,actions=drop
 dl_dst=aa:bb:cc:dd:ee:ff/00:00:00:00:00:00,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+ip,actions=ct(commit,zone=5)
+ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[[]])))
+ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[[]])))
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
@@ -450,6 +493,9 @@ NXT_FLOW_MOD: ADD dl_dst=00:00:00:00:00:00/01:00:00:00:00:00 actions=drop
 NXT_FLOW_MOD: ADD dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff actions=drop
 NXT_FLOW_MOD: ADD actions=drop
 NXT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+NXT_FLOW_MOD: ADD ip actions=ct(commit,zone=5)
+NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[[]]))
+NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[[0..63]],load:0->NXM_NX_CT_LABEL[[64..127]]))
 ])
 AT_CLEANUP
 
@@ -483,6 +529,10 @@ actions=move:OXM_OF_ETH_DST[]->OXM_OF_ETH_SRC[]
 actions=push:NXM_NX_REG0[0..31],pop:NXM_NX_REG0[]
 vlan_tci=0x1123/0x1fff,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+ip,actions=ct(commit,zone=5)
+ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
+ip,actions=ct(commit,exec(load(1->NXM_NX_CT_LABEL[])))
+ip,actions=ct(commit,exec(set_field(1->ct_label)))
 ]])
 AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout], [stderr])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
@@ -515,6 +565,10 @@ NXT_FLOW_MOD: ADD <any> actions=move:NXM_OF_ETH_DST[]->NXM_OF_ETH_SRC[]
 NXT_FLOW_MOD: ADD <any> actions=push:NXM_NX_REG0[],pop:NXM_NX_REG0[]
 NXT_FLOW_MOD: ADD NXM_OF_VLAN_TCI_W(1123/1fff) actions=drop
 NXT_FLOW_MOD: ADD <any> actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,zone=5)
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 ]])
 AT_CLEANUP
 
@@ -790,6 +844,17 @@ NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0_W(a0e0d050/ffffffff)
 NXM_NX_REG0_W(00000000/00000000)
+
+# Connection tracking fields,
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_STATE(00000020)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_STATE(00001080)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_STATE_W(00000020/00000020)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_STATE_W(00000020/000000F0)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_ZONE(5a5a)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_MARK(5a5a5a5a)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_MARK_W(5a5a5a5a/fefefefe)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_LABEL(1234567890abcdef1234567890abcdef)
+NXM_OF_ETH_TYPE(0800) NXM_NX_CT_LABEL_W(10203040506070809000a0b0c0d0e0f0/f1f2f3f4f5f6f7f8f9f0fafbfcfdfeff)
 
 # dp_hash (testing experimenter OXM).
 NXM_NX_DP_HASH(01234567)
@@ -1082,6 +1147,20 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 NXM_NX_REG0(a0e0d050)
 <any>
 
+# Connection tracking fields,
+dnl
+dnl When re-serialising, bits 16-31 are wildcarded, because current OVS userspace
+dnl doesn't understand (or store) those bits.
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/0000ffff)
+nx_pull_match() returned error OFPBMC_BAD_VALUE
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/00000020)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/000000f0)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_ZONE(5a5a)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_MARK(5a5a5a5a)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_MARK_W(5a5a5a5a/fefefefe)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_LABEL(1234567890abcdef1234567890abcdef)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_LABEL_W(10203040506070809000a0b0c0d0e0f0/f1f2f3f4f5f6f7f8f9f0fafbfcfdfeff)
+
 # dp_hash (testing experimenter OXM).
 NXM_NX_DP_HASH(01234567)
 NXM_NX_DP_HASH(01234567)
@@ -1140,14 +1219,16 @@ xxxxxxxx xxxxxxxx xxxx xxxx
 002820fd xxxx xxxxxxxxxxxx xxxxxxxxxxxx 0123 04 xx xxxx xx xx xxxx dnl
 xxxxxxxx xxxxxxxx xxxx xxxx
 
+dnl dl_vlan_pcp doesn't make sense when 802.1Q is not present, so
+dnl OVS ignores it and drops it on output.
 # vlan_tci=0x0000
+#  1: 38 -> 28
 003820fd xxxx xxxxxxxxxxxx xxxxxxxxxxxx ffff xx xx xxxx xx xx xxxx dnl
 xxxxxxxx xxxxxxxx xxxx xxxx
 
-dnl dl_vlan_pcp doesn't make sense when dl_vlan is "none", so
+dnl dl_vlan_pcp doesn't make sense when 802.1Q is not present, so
 dnl OVS ignores it and drops it on output.
 # vlan_tci=0x0000
-#  1: 28 -> 38
 # 20: 05 -> 00
 002820fd xxxx xxxxxxxxxxxx xxxxxxxxxxxx ffff 05 xx xxxx xx xx xxxx dnl
 xxxxxxxx xxxxxxxx xxxx xxxx
@@ -2374,7 +2455,7 @@ AT_CHECK([ovs-ofctl check-vlan 0000 ffff], [0], [dnl
 vlan_tci=0x0000 -> 0000/ffff
 NXM: NXM_OF_VLAN_TCI(0000) -> 0000/ffff
 OXM: OXM_OF_VLAN_VID(0000) -> 0000/1fff,--
-OF1.0: ffff/0,00/1 -> 0000/ffff
+OF1.0: ffff/0,00/0 -> 0000/ffff
 OF1.1: ffff/0,00/1 -> 0000/ffff
 ])
 
@@ -2419,7 +2500,7 @@ AT_CHECK([ovs-ofctl check-vlan 0000 f000], [0], [dnl
 vlan_tci=0x0000/0xf000 -> 0000/f000
 NXM: NXM_OF_VLAN_TCI_W(0000/f000) -> 0000/f000
 OXM: OXM_OF_VLAN_VID_W(0000/1000) -> 0000/1000,--
-OF1.0: ffff/0,00/1 -> 0000/ffff
+OF1.0: ffff/0,00/0 -> 0000/ffff
 OF1.1: ffff/0,00/1 -> 0000/ffff
 ])
 
@@ -2754,7 +2835,7 @@ AT_CLEANUP
 
 dnl Check importance parameter added in OF1.4.
 dnl It validates whether importance set via add-flow via OpenFlow1.4+ gets
-dnl set or not by validating it againt the dump-flows output via OpenFlow1.4+
+dnl set or not by validating it against the dump-flows output via OpenFlow1.4+
 dnl If add-flow or dump-flows is used with later version of OpenFlow prior to 1.4+
 dnl then the importance will be considered zero whether provided as an argument.
 
@@ -2767,7 +2848,7 @@ AT_CHECK([ovs-ofctl add-flow br0 priority=22,importance=22,actions=normal])
 dnl Importance parameter will only be visible of flows that are added via OF1.4+ if dumped via OF1.4+
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/ST_FLOW reply/d' | sort], [0], [dnl
  importance=21, priority=21 actions=NORMAL
- priority=22 actions=NORMAL
+ reset_counts priority=22 actions=NORMAL
 ])
 
 dnl Importance parameter will not be visible if flow is dumped with previous version prior to OF1.4+ whether added via OF1.4+
@@ -2792,12 +2873,12 @@ dnl Add flows to br0 with importance via OF1.4+. For more details refer "ovs-ofc
 for i in 1 2 3 4 5 6 7 8; do echo "dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
 AT_CHECK([ovs-ofctl -O OpenFlow14 add-flows br0 add-flows.txt])
 
-dnl Replace some flows in the bridge.
-for i in 1 3 5 7; do echo "dl_vlan=$i,importance=`expr $i + 10`,actions=drop"; done > replace-flows.txt
+dnl Replace the flows in the bridge.
+for i in 1 3 5 7; do echo " importance=`expr $i + 10`, dl_vlan=$i actions=drop"; done > replace-flows.txt
 AT_CHECK([ovs-ofctl -O OpenFlow14 replace-flows br0 replace-flows.txt])
 
 dnl Dump them and compare the dump flows output against the expected output.
-for i in 1 2 3 4 5 6 7 8; do if [[ `expr $i % 2` -eq 1 ]]; then importance=`expr $i + 10`; else importance=$i; fi; echo " importance=$importance, dl_vlan=$i actions=drop"; done | sort > expout
+cat replace-flows.txt > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort],
   [0], [expout])
 
@@ -2810,83 +2891,56 @@ OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl vlog/set vconn:dbg])
 
 dnl Add flows to br0 with importance via OF1.4+, using an OF1.4+ bundle. For more details refer "ovs-ofctl rule with importance" test case.
-for i in 1 2 3 4 5 6 7 8; do echo "dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
+for i in 1 2 3 4 5 6 7 8; do echo "table=$i,dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
 AT_CHECK([ovs-ofctl --bundle add-flows br0 add-flows.txt])
 
 dnl Replace some flows in the bridge.
-for i in 1 3 5 7; do echo "dl_vlan=$i,importance=`expr $i + 10`,actions=drop"; done > replace-flows.txt
+for i in 1 3 5 7; do echo " table=$i, importance=`expr $i + 10`, dl_vlan=$i actions=drop"; done > replace-flows.txt
 AT_CHECK([ovs-ofctl --bundle replace-flows br0 replace-flows.txt])
 
 dnl Dump them and compare the dump flows output against the expected output.
-for i in 1 2 3 4 5 6 7 8; do if [[ `expr $i % 2` -eq 1 ]]; then importance=`expr $i + 10`; else importance=$i; fi; echo " importance=$importance, dl_vlan=$i actions=drop"; done | sort > expout
+cat replace-flows.txt > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort],
   [0], [expout])
 
 dnl Check logs for OpenFlow trace
 # Prevent race.
-OVS_WAIT_UNTIL([cat ovs-vswitchd.log | vconn_windows_sub | test `grep -- "|vconn|DBG|unix: sent (Success): OFPST_FLOW reply" | wc -l` -ge 2])
+OVS_WAIT_UNTIL([cat ovs-vswitchd.log | vconn_sub | test `grep -- "|vconn|DBG|unix: sent (Success): OFPST_FLOW reply" | wc -l` -ge 2])
 # AT_CHECK([sed -n "s/^.*\(|vconn|DBG|.*xid=.*:\).*$/\1/p" ovs-vswitchd.log], [0], [dnl
-AT_CHECK([print_vconn_debug | vconn_windows_sub | ofctl_strip], [0], [dnl
+AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REPLY flags=0
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=1 importance:1 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:1 dl_vlan=1 importance:1 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=2 importance:2 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:2 dl_vlan=2 importance:2 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=3 importance:3 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:3 dl_vlan=3 importance:3 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=4 importance:4 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:4 dl_vlan=4 importance:4 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=5 importance:5 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:5 dl_vlan=5 importance:5 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=6 importance:6 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:6 dl_vlan=6 importance:6 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=7 importance:7 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:7 dl_vlan=7 importance:7 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=8 importance:8 actions=drop
-vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
- bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
-vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
- bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
-vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
- version bitmap: 0x01, 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports versions 0x01, 0x05)
-vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
-vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
-vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
- bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
-vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
- bundle_id=0 type=OPEN_REPLY flags=0
-vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
- bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=1 importance:11 actions=drop
-vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
- bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=3 importance:13 actions=drop
-vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
- bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=5 importance:15 actions=drop
-vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
- bundle_id=0 flags=atomic ordered
-OFPT_FLOW_MOD (OF1.4): ADD dl_vlan=7 importance:17 actions=drop
+OFPT_FLOW_MOD (OF1.4): ADD table:8 dl_vlan=8 importance:8 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -2898,14 +2952,57 @@ vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
 vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
 vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
- importance=2, dl_vlan=2 actions=drop
- importance=4, dl_vlan=4 actions=drop
- importance=6, dl_vlan=6 actions=drop
- importance=8, dl_vlan=8 actions=drop
- importance=11, dl_vlan=1 actions=drop
- importance=13, dl_vlan=3 actions=drop
- importance=15, dl_vlan=5 actions=drop
- importance=17, dl_vlan=7 actions=drop
+ table=1, importance=1, dl_vlan=1 actions=drop
+ table=2, importance=2, dl_vlan=2 actions=drop
+ table=3, importance=3, dl_vlan=3 actions=drop
+ table=4, importance=4, dl_vlan=4 actions=drop
+ table=5, importance=5, dl_vlan=5 actions=drop
+ table=6, importance=6, dl_vlan=6 actions=drop
+ table=7, importance=7, dl_vlan=7 actions=drop
+ table=8, importance=8, dl_vlan=8 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=OPEN_REPLY flags=0
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): ADD table:1 dl_vlan=1 importance:11 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:2 dl_vlan=2 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): ADD table:3 dl_vlan=3 importance:13 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:4 dl_vlan=4 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): ADD table:5 dl_vlan=5 importance:15 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:6 dl_vlan=6 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): ADD table:7 dl_vlan=7 importance:17 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:8 dl_vlan=8 actions=drop
+vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REPLY flags=0
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
+ version bitmap: 0x05
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
+vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
+vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
+ table=1, importance=11, dl_vlan=1 actions=drop
+ table=3, importance=13, dl_vlan=3 actions=drop
+ table=5, importance=15, dl_vlan=5 actions=drop
+ table=7, importance=17, dl_vlan=7 actions=drop
 ])
 
 OVS_VSWITCHD_STOP

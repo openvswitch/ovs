@@ -105,7 +105,7 @@ DEFINE_STATIC_PER_THREAD_DATA(unsigned int, msg_num, 0);
  * All of the following is protected by 'log_file_mutex', which nests inside
  * pattern_rwlock. */
 static struct ovs_mutex log_file_mutex = OVS_MUTEX_INITIALIZER;
-static char *log_file_name OVS_GUARDED_BY(log_file_mutex);
+static char *log_file_name OVS_GUARDED_BY(log_file_mutex) = NULL;
 static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 static bool log_async OVS_GUARDED_BY(log_file_mutex);
@@ -430,6 +430,35 @@ vlog_reopen_log_file(void)
     }
 }
 
+#ifndef _WIN32
+/* In case a log file exists, change its owner to new 'user' and 'group'.
+ *
+ * This is useful for handling cases where the --log-file option is
+ * specified ahead of the --user option.  */
+void
+vlog_change_owner_unix(uid_t user, gid_t group)
+{
+    struct ds err = DS_EMPTY_INITIALIZER;
+    int error;
+
+    ovs_mutex_lock(&log_file_mutex);
+    error = log_file_name ? chown(log_file_name, user, group) : 0;
+    if (error) {
+        /* Build the error message. We can not call VLOG_FATAL directly
+         * here because VLOG_FATAL() will try again to to acquire
+         * 'log_file_mutex' lock, causing deadlock.
+         */
+        ds_put_format(&err, "Failed to change %s ownership: %s.",
+                      log_file_name, ovs_strerror(errno));
+    }
+    ovs_mutex_unlock(&log_file_mutex);
+
+    if (error) {
+        VLOG_FATAL("%s", ds_steal_cstr(&err));
+    }
+}
+#endif
+
 /* Set debugging levels.  Returns null if successful, otherwise an error
  * message that the caller must free(). */
 char *
@@ -706,6 +735,7 @@ vlog_init(void)
     if (ovsthread_once_start(&once)) {
         long long int now;
         int facility;
+        bool print_syslog_target_deprecation;
 
         /* Do initialization work that needs to be done before any logging
          * occurs.  We want to keep this really minimal because any attempt to
@@ -740,6 +770,15 @@ vlog_init(void)
                                  0, INT_MAX, vlog_disable_rate_limit, NULL);
         unixctl_command_register("vlog/reopen", "", 0, 0,
                                  vlog_unixctl_reopen, NULL);
+
+        ovs_rwlock_rdlock(&pattern_rwlock);
+        print_syslog_target_deprecation = syslog_fd >= 0;
+        ovs_rwlock_unlock(&pattern_rwlock);
+
+        if (print_syslog_target_deprecation) {
+            VLOG_WARN("--syslog-target flag is deprecated, use "
+                      "--syslog-method instead");
+        }
     }
 }
 

@@ -5,7 +5,7 @@
     physical ports into logical switches maintained by a network
     virtualization controller such as NSX.
   </p>
-  
+
   <p>Glossary:</p>
 
   <dl>
@@ -29,7 +29,7 @@
     <dd>
       Virtual Routing and Forwarding instance.
     </dd>
- </dl>
+  </dl>
 
   <table name="Global" title="Top-level configuration.">
     Top-level configuration for a hardware VTEP.  There must be
@@ -238,7 +238,7 @@
       </p>
 
       <column name="other_config" key="dscp"
-                type='{"type": "integer"}'>
+              type='{"type": "integer"}'>
         The Differentiated Service Code Point (DSCP) is specified using 6 bits
         in the Type of Service (TOS) field in the IP header. DSCP provides a
         mechanism to classify the network traffic and provide Quality of
@@ -287,7 +287,7 @@
       <column name="name">
         Symbolic name for the switch, such as its hostname.
       </column>
-      
+
       <column name="description">
         An extended description for the switch, such as its switch login
         banner.
@@ -357,7 +357,7 @@
       </p>
 
       <p>
-        In most cases the BFD peer of a hardware VTEP will be an Open vSwitch
+        In many cases the BFD peer of a hardware VTEP will be an Open vSwitch
         instance. The Open vSwitch implementation of BFD aims to comply
         faithfully with the requirements put forth in RFC 5880.  Open vSwitch
         does not implement the optional Authentication or ``Echo Mode''
@@ -367,7 +367,7 @@
       <group title="BFD Local Configuration">
         <p>
           The HSC writes the key-value pairs in the
-          <ref column="bfd_config_local"/> column to specifiy the local
+          <ref column="bfd_config_local"/> column to specify the local
           configurations to be used for BFD sessions on this tunnel.
         </p>
 
@@ -413,8 +413,8 @@
         </p>
 
         <column name="bfd_params" key="enable" type='{"type": "boolean"}'>
-          True to enable BFD on this tunnel.
-          The default is False.
+          True to enable BFD on this <ref table="Tunnel"/>.  If not
+          specified, BFD will not be enabled by default.
         </column>
 
         <column name="bfd_params" key="min_rx"
@@ -435,26 +435,29 @@
 
         <column name="bfd_params" key="decay_min_rx" type='{"type": "integer"}'>
           An alternate receive interval, in milliseconds, that must be greater
-          than or equal to <ref column="bfd" key="min_rx"/>.  The
-          implementation switches from <ref column="bfd" key="min_rx"/> to <ref
-          column="bfd" key="decay_min_rx"/> when there is no obvious incoming
-          data traffic at the interface, to reduce the CPU and bandwidth cost
-          of monitoring an idle interface.  This feature may be disabled by
-          setting a value of 0.  This feature is reset whenever <ref
-          column="bfd" key="decay_min_rx"/> or <ref column="bfd" key="min_rx"/>
-          changes.
+          than or equal to <ref column="bfd_params" key="min_rx"/>.  The
+          implementation should switch from <ref column="bfd_params" key="min_rx"/>
+          to <ref column="bfd_params" key="decay_min_rx"/> when there is no obvious
+          incoming data traffic at the tunnel, to reduce the CPU and bandwidth
+          cost of monitoring an idle tunnel.  This feature may be disabled by
+          setting a value of 0.  This feature is reset whenever
+          <ref column="bfd_params" key="decay_min_rx"/> or
+          <ref column="bfd_params" key="min_rx"/> changes.
         </column>
 
         <column name="bfd_params" key="forwarding_if_rx" type='{"type": "boolean"}'>
-          True to consider the interface capable of packet I/O as long as it
-          continues to receive any packets (not just BFD packets).  This
-          prevents link congestion that causes consecutive BFD control packets
-          to be lost from marking the interface down.
+          When <code>true</code>, traffic received on the <ref table="Tunnel"/>
+          is used to indicate the capability of packet I/O.
+          BFD control packets are still transmitted and received. At least one
+          BFD control packet must be received every
+          100 * <ref column="bfd_params" key="min_rx"/> amount of time.
+          Otherwise, even if traffic is received, the
+          <ref column="bfd_params" key="forwarding"/> will be <code>false</code>.
         </column>
 
         <column name="bfd_params" key="cpath_down" type='{"type": "boolean"}'>
           Set to true to notify the remote endpoint that traffic should not be
-          forwarded to this system for some reason other than a connectivty
+          forwarded to this system for some reason other than a connectivity
           failure on the interface being monitored.  The typical underlying
           reason is ``concatenated path down,'' that is, that connectivity
           beyond the local system is down.  Defaults to false.
@@ -468,59 +471,58 @@
 
       </group>
 
-     <group title="BFD Status">
-      <p>
-        The VTEP sets key-value pairs in the <ref column="bfd_status"/>
-        column to report the status of BFD on this tunnel.  When BFD is
-        not enabled, with <ref column="bfd_params" key="enable"/>, the
-        HSC clears all key-value pairs from <ref column="bfd_status"/>.
-      </p>
+      <group title="BFD Status">
+        <p>
+          The VTEP sets key-value pairs in the <ref column="bfd_status"/>
+          column to report the status of BFD on this tunnel.  When BFD is
+          not enabled, with <ref column="bfd_params" key="enable"/>, the
+          HSC clears all key-value pairs from <ref column="bfd_status"/>.
+        </p>
 
-      <column name="bfd_status" key="enabled"
-        type='{"type": "boolean"}'>
-        Set to true if the BFD session has been successfully
-        enabled. Set to false if the VTEP cannot support BFD or has
-        insufficient resources to enable BFD on this tunnel. The NVC
-        will disable the BFD monitoring on the other side of the tunnel
-        once this value is set to false.
-      </column>
+        <column name="bfd_status" key="enabled" type='{"type": "boolean"}'>
+          Set to true if the BFD session has been successfully enabled.
+          Set to false if the VTEP cannot support BFD or has insufficient
+          resources to enable BFD on this tunnel. The NVC will disable
+          the BFD monitoring on the other side of the tunnel once this
+          value is set to false.
+        </column>
 
-      <column name="bfd_status" key="state"
-        type='{"type": "string",
+        <column name="bfd_status" key="state"
+                type='{"type": "string",
               "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-        Reports the state of the BFD session.  The BFD session is fully
-        healthy and negotiated if <code>UP</code>.
-      </column>
+          Reports the state of the BFD session.  The BFD session is fully
+          healthy and negotiated if <code>UP</code>.
+        </column>
 
-      <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
-        Reports whether the BFD session believes this tunnel
-        may be used to forward traffic.  Typically this means the local session
-        is signaling <code>UP</code>, and the remote system isn't signaling a
-        problem such as concatenated path down.
-      </column>
+        <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+          Reports whether the BFD session believes this  <ref table="Tunnel"/>
+          may be used to forward traffic.  Typically this means the local session
+          is signaling <code>UP</code>, and the remote system isn't signaling a
+          problem such as concatenated path down.
+        </column>
 
-      <column name="bfd_status" key="diagnostic">
-        In case of a problem, set to an error message that reports what the
-        local BFD session thinks is wrong.  The error messages are defined
-        in section 4.1 of [RFC 5880].
-      </column>
+        <column name="bfd_status" key="diagnostic">
+          A diagnostic code specifying the local system's reason for the
+          last change in session state. The error messages are defined in
+          section 4.1 of [RFC 5880].
+        </column>
 
-      <column name="bfd_status" key="remote_state"
-        type='{"type": "string",
+       <column name="bfd_status" key="remote_state"
+                type='{"type": "string",
               "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
-        Reports the state of the remote endpoint's BFD session.
-      </column>
+          Reports the state of the remote endpoint's BFD session.
+        </column>
 
-      <column name="bfd_status" key="remote_diagnostic">
-        In case of a problem, set to an error message that reports what the
-        remote endpoint's BFD session thinks is wrong.  The error messages
-        are defined in section 4.1 of [RFC 5880].
-      </column>
+        <column name="bfd_status" key="remote_diagnostic">
+          A diagnostic code specifying the remote system's reason for the
+          last change in session state. The error messages are defined in
+          section 4.1 of [RFC 5880].
+        </column>
 
-      <column name="bfd_status" key="info">
-        A short message providing further information about the BFD status
-        (possibly including reasons why BFD could not be enabled).
-      </column>
+        <column name="bfd_status" key="info">
+          A short message providing further information about the BFD status
+          (possibly including reasons why BFD could not be enabled).
+        </column>
       </group>
     </group>
   </table>
@@ -532,7 +534,25 @@
       Identifies how VLANs on the physical port are bound to logical switches.
       If, for example, the map contains a (VLAN, logical switch) pair, a packet
       that arrives on the port in the VLAN is considered to belong to the
-      paired logical switch.
+      paired logical switch. A value of zero in the VLAN field means
+      that untagged traffic on the physical port is mapped to the
+      logical switch.
+    </column>
+
+    <column name="acl_bindings">
+      <p>
+        Attach Access Control Lists (ACLs) to the physical port. The
+        column consists of a map of VLAN tags to <ref table="ACL"/>s. If the value of
+        the VLAN tag in the map is 0, this means that the ACL is
+        associated with the entire physical port. Non-zero values mean
+        that the ACL is to be applied only on packets carrying that VLAN
+        tag value. Switches will not necessarily support matching on the
+        VLAN tag for all ACLs, and unsupported ACL bindings will cause
+        errors to be reported. The binding of an ACL to a specific
+        VLAN and the binding of an ACL to the entire physical port
+        should not be combined on a single physical port. That is, a
+        mix of zero and non-zero keys in the map is not recommended.
+      </p>
     </column>
 
     <column name="vlan_stats">
@@ -541,7 +561,8 @@
       column with a mapping for every VLAN that is bound in <ref
       column="vlan_bindings"/>.  An implementation that does not support such
       statistics or only partially supports them would not populate this column
-      or partially populate it, respectively.
+      or partially populate it, respectively. A value of zero in the
+      VLAN field refers to untagged traffic on the physical port.
     </column>
 
     <group title="Identification">
@@ -558,7 +579,7 @@
     <group title="Error Notification">
       <p>
         An entry in this column indicates to the NVC that the physical port has
-        encountered a fault. The switch must clear this column when the errror
+        encountered a fault. The switch must clear this column when the error
         has been cleared.
       </p>
       <column name="port_fault_status" key="invalid_vlan_map">
@@ -566,6 +587,12 @@
           Indicates that a VLAN-to-logical-switch mapping requested by
           the controller could not be instantiated by the switch
           because of a conflict with local configuration.
+        </p>
+      </column>
+      <column name="port_fault_status" key="invalid_ACL_binding">
+        <p>
+          Indicates that an error has occurred in associating an ACL
+          with a port.
         </p>
       </column>
       <column name="port_fault_status" key="unspecified_fault">
@@ -673,7 +700,7 @@
       <column name="name">
         Symbolic name for the logical switch.
       </column>
-      
+
       <column name="description">
         An extended description for the logical switch, such as its switch
         login banner.
@@ -710,7 +737,7 @@
 
   </table>
 
- <table name="Ucast_Macs_Remote" title="Unicast MACs (remote)">
+  <table name="Ucast_Macs_Remote" title="Unicast MACs (remote)">
     <p>
       Mapping of unicast MAC addresses to tunnels (physical
       locators). This table is written by the NVC, so it contains the
@@ -754,7 +781,7 @@
 
     <column name="MAC">
       <p>
-        A MAC address that has been learned by the VTEP. 
+        A MAC address that has been learned by the VTEP.
       </p>
       <p>
         The keyword <code>unknown-dst</code> is used as a special
@@ -795,7 +822,7 @@
       in which case the physical locators will be IP addresses of
       service nodes. If the VTEP supports replication onto multiple
       tunnels, then this may be used to replicate directly onto
-      VTEP-hyperisor tunnels.
+      VTEP-hypervisor tunnels.
     </p>
 
     <column name="MAC">
@@ -833,10 +860,10 @@
   <table name="Logical_Router" title="A logical L3 router.">
     <p>
       A logical router, or VRF. A logical router may be connected to one or more
-      logical switches. Subnet addresses and interface addresses may be configured on the 
+      logical switches. Subnet addresses and interface addresses may be configured on the
       interfaces.
     </p>
-    
+
     <column name="switch_binding">
       Maps from an IPv4 or IPv6 address prefix in CIDR notation to a
       logical switch. Multiple prefixes may map to the same switch. By
@@ -851,6 +878,15 @@
       One or more static routes, mapping IP prefixes to next hop IP addresses.
     </column>
 
+    <column name="acl_binding">
+      Maps ACLs to logical router interfaces. The router interfaces
+      are indicated using IP address notation, and must be the same
+      interfaces created in the <ref column="switch_binding"/>
+      column. For example, an ACL could be associated with the logical
+      router interface with an address of 192.68.1.1 as defined in the
+      example above.
+    </column>
+
     <group title="Identification">
       <column name="name">
         Symbolic name for the logical router.
@@ -860,6 +896,28 @@
         An extended description for the logical router.
       </column>
     </group>
+
+    <group title="Error Notification">
+      <p>
+        An entry in this column indicates to the NVC that the HSC has
+        encountered a fault in configuring state related to the
+        logical router.
+      </p>
+      <column name="LR_fault_status" key="invalid_ACL_binding">
+        <p>
+          Indicates that an error has occurred in associating an ACL
+          with a logical router port.
+        </p>
+      </column>
+      <column name="LR_fault_status" key="unspecified_fault">
+        <p>
+          Indicates that an error has occurred in configuring the
+          logical router but that no
+          more specific information is available.
+        </p>
+      </column>
+    </group>
+
   </table>
 
   <table name="Arp_Sources_Local" title="ARP source addresses for logical routers">
@@ -925,7 +983,7 @@
       table="Physical_Locator"/> records.''
     </p>
 
-    <column name="locators"/>    
+    <column name="locators"/>
   </table>
 
   <table name="Physical_Locator">
@@ -972,5 +1030,212 @@
     </column>
 
   </table>
-
+  <table name="ACL_entry">
+    <p>
+      Describes the individual entries that comprise an Access Control List.
+    </p>
+    <p>
+      Each entry in the table is a single rule to match on certain
+      header fields. While there are a large number of fields that can
+      be matched on, most hardware cannot match on arbitrary
+      combinations of fields. It is common to match on either L2
+      fields (described below in the L2 group of columns) or L3/L4 fields
+      (the L3/L4 group of columns) but not both. The hardware switch
+      controller may log an error if an ACL entry requires it to match
+      on an incompatible mixture of fields.
+    </p>
+    <column name="sequence">
+      <p>
+        The sequence number for the ACL entry for the purpose of
+        ordering entries in an ACL. Lower numbered entries are matched
+        before higher numbered entries.
+      </p>
+    </column>
+    <group title="L2 fields">
+      <column name="source_mac">
+        <p>
+          Source MAC address, in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+        </p>
+      </column>
+      <column name="dest_mac">
+        <p>
+          Destination MAC address, in the form
+          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+        </p>
+      </column>
+      <column name="ethertype">
+        <p>
+          Ethertype in hexadecimal, in the form
+          <var>0xAAAA</var>
+        </p>
+      </column>
+    </group>
+    <group title="L3/L4 fields">
+      <column name="source_ip">
+        <p>
+          Source IP address, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="source_mask">
+        <p>
+          Mask that determines which bits of source_ip to match on, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="dest_ip">
+        <p>
+          Destination IP address, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="dest_mask">
+        <p>
+          Mask that determines which bits of dest_ip to match on, in the form
+          <var>xx.xx.xx.xx</var> for IPv4 or appropriate
+          colon-separated hexadecimal notation for IPv6.
+        </p>
+      </column>
+      <column name="protocol">
+        <p>
+          Protocol number in the IPv4 header, or value of the "next
+          header" field in the IPv6 header.
+        </p>
+      </column>
+      <column name="source_port_min">
+        <p>
+          Lower end of the range of source port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="source_port_max">
+        <p>
+          Upper end of the range of source port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="dest_port_min">
+        <p>
+          Lower end of the range of destination port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="dest_port_max">
+        <p>
+          Upper end of the range of destination port values. The value
+          specified is included in the range.
+        </p>
+      </column>
+      <column name="tcp_flags">
+        <p>
+          Integer representing the value of TCP flags to match. For
+          example, the SYN flag is the second least significant bit in
+          the TCP flags. Hence a value of 2 would indicate that the "SYN"
+          flag should be set (assuming an appropriate mask).
+        </p>
+      </column>
+      <column name="tcp_flags_mask">
+        <p>
+          Integer representing the mask to apply when matching TCP
+          flags. For example, a value of 2 would imply that the "SYN"
+          flag should be matched and all other flags ignored.
+        </p>
+      </column>
+      <column name="icmp_type">
+        <p>
+          ICMP type to be matched.
+        </p>
+      </column>
+      <column name="icmp_code">
+        <p>
+          ICMP code to be matched.
+        </p>
+      </column>
+    </group>
+    <column name="direction">
+      <p>
+        Direction of traffic to match on the specified port, either
+        "ingress" (toward the logical switch or router) or "egress"
+        (leaving the logical switch or router).
+      </p>
+    </column>
+    <column name="action">
+      <p>
+        Action to take for this rule, either "permit" or "deny".
+      </p>
+    </column>
+    <group title="Error Notification">
+      <p>
+        An entry in this column indicates to the NVC that the ACL
+        could not be configured as requested. The switch must clear this column when the error
+        has been cleared.
+      </p>
+      <column name="acle_fault_status" key="invalid_acl_entry">
+        <p>
+          Indicates that an ACL entry requested by
+          the controller could not be instantiated by the switch,
+          e.g. because it requires an unsupported combination of
+          fields to be matched.
+        </p>
+      </column>
+      <column name="acle_fault_status" key="unspecified_fault">
+        <p>
+          Indicates that an error has occurred in configuring the ACL
+          entry but no
+          more specific information is available.
+        </p>
+      </column>
+    </group>
+  </table>
+  <table name="ACL">
+    <p>
+      Access Control List table. Each ACL is constructed as a set of
+      entries from the <ref table="ACL_entry"/> table. Packets that
+      are not matched by any entry in the ACL are allowed by default.
+    </p>
+    <column name="acl_entries">
+      <p>
+        A set of references to entries in the <ref table="ACL_entry"/> table.
+      </p>
+    </column>
+    <column name="acl_name">
+      <p>
+        A human readable name for the ACL, which may (for example) be displayed on
+        the switch CLI.
+      </p>
+    </column>
+    <group title="Error Notification">
+      <p>
+        An entry in this column indicates to the NVC that the ACL
+        could not be configured as requested. The switch must clear this column when the error
+        has been cleared.
+      </p>
+      <column name="acl_fault_status" key="invalid_acl">
+        <p>
+          Indicates that an ACL requested by
+          the controller could not be instantiated by the switch,
+          e.g., because it requires an unsupported combination of
+          fields to be matched.
+        </p>
+      </column>
+      <column name="acl_fault_status" key="resource_shortage">
+        <p>
+          Indicates that an ACL requested by
+          the controller could not be instantiated by the switch due
+          to a shortage of resources (e.g. TCAM space).
+        </p>
+      </column>
+      <column name="acl_fault_status" key="unspecified_fault">
+        <p>
+          Indicates that an error has occurred in configuring the ACL
+          but no
+          more specific information is available.
+        </p>
+      </column>
+    </group>
+  </table>
 </database>

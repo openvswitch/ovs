@@ -38,31 +38,33 @@
       <dd>
         Lists all existing switches on standard output, one per line.
       </dd>
+    </dl>
 
-      <dt><code>lswitch-set-external-id</code> <var>lswitch</var> <var>key</var> [<var>value</var>]</dt>
+    <h1>ACL Commands</h1>
+    <dl>
+      <dt>[<code>--log</code>] <code>acl-add</code> <var>lswitch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>action</var></dt>
       <dd>
-        <p>Sets or clears an ``external ID'' value on <var>lswitch</var>.
-        These values are intended to identify entities external to OVN
-        with which <var>lswitch</var> is associated.  The OVN Northbound
-        database schema may specify well-known <var>key</var> values,
-        but <var>key</var> and <var>value</var> are otherwise arbitrary
-        strings.</p>
+        Adds the specified ACL to <var>lswitch</var>.
+        <var>direction</var> must be either <code>from-lport</code> or
+        <code>to-lport</code>.  <var>priority</var> must be between
+        <code>1</code> and <code>65534</code>, inclusive.  If
+        <code>--log</code> is specified, packet logging is enabled for the
+        ACL.  A full description of the fields are in <code>ovn-nb</code>(5).
+      </dd>
 
-        <p>If <var>value</var> is specified, then <var>key</var> is set to
-        <var>value</var> for <var>lswitch</var>, overwriting any
-        previous value.  If <var>value</var> is omitted, then
-        <var>key</var> is removed from <var>lswitch</var>'s set of
-        external IDs (if it was present.</p>
-       </dd>
-
-      <dt><code>lswitch-get-external-id</code> <var>lswitch</var> [<var>key</var>]</dt>
+      <dt><code>acl-del</code> <var>lswitch</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
       <dd>
-        Queries the external IDs on <var>lswitch</var>.  If
-        <var>key</var> is specified, the output is the value for that
-        <var>key</var> or the empty string if <var>key</var> is unset.
-        If <var>key</var> is omitted, the output is
-        <var>key</var><code>=</code><var>value</var>, one per line, for
-        each key-value pair.
+        Deletes ACLs from <var>lswitch</var>.  If only
+        <var>lswitch</var> is supplied, all the ACLs from the logical
+        switch are deleted.  If <var>direction</var> is also specified,
+        then all the flows in that direction will be deleted from the
+        logical switch.  If all the fields are given, then a single flow
+        that matches all the fields will be deleted.
+      </dd>
+
+      <dt><code>acl-list</code> <var>lswitch</var></dt>
+      <dd>
+        Lists the ACLs on <var>lswitch</var>.
       </dd>
     </dl>
 
@@ -77,7 +79,7 @@
       <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
       <dd>
         Creates on <var>lswitch</var> a logical port named <var>lport</var>
-        that is a child of <var>parent</var> that is identied with
+        that is a child of <var>parent</var> that is identifed with VLAN ID
         <var>tag</var>.  This is useful in cases such as virtualized
         container environments where Open vSwitch does not have a direct
         connection to the container's port and it must be shared with
@@ -107,62 +109,40 @@
         nothing.
       </dd>
 
-      <dt><code>lport-set-external-id</code> <var>lport</var> <var>key</var> [<var>value</var>]</dt>
+      <dt><code>lport-set-addresses</code> <var>lport</var> [<var>address</var>]...</dt>
       <dd>
-        <p>Sets or clears an ``external ID'' value on <var>lport</var>.
-        These values are intended to identify entities external to OVN
-        with which <var>lport</var> is associated.  The OVN Northbound
-        database schema may specify well-known <var>key</var> values,
-        but <var>key</var> and <var>value</var> are otherwise arbitrary
-        strings.</p>
-
-        <p>If <var>value</var> is specified, then <var>key</var> is set to
-        <var>value</var> for <var>lport</var>, overwriting any
-        previous value.  If <var>value</var> is omitted, then
-        <var>key</var> is removed from <var>lport</var>'s set of
-        external IDs (if it was present.</p>
+        Sets the addresses associated with <var>lport</var> to
+        <var>address</var>.  Each <var>address</var> should be either an
+        Ethernet address or an Ethernet address followed by an IP address
+        (separated by a space and quoted to form a single command-line
+        argument).  The special form <code>unknown</code> is also valid.
+        Multiple Ethernet addresses or Ethernet+IP pairs may be set. If no
+        <var>address</var> argument is given, <var>lport</var> will have no
+        addresses associated with it.
       </dd>
 
-      <dt><code>lport-get-external-id</code> <var>lport</var> [<var>key</var>]</dt>
+      <dt><code>lport-get-addresses</code> <var>lport</var></dt>
       <dd>
-        Queries the external IDs on <var>lport</var>.  If
-        <var>key</var> is specified, the output is the value for that
-        <var>key</var> or the empty string if <var>key</var> is unset.
-        If <var>key</var> is omitted, the output is
-        <var>key</var><code>=</code><var>value</var>, one per line, for
-        each key-value pair.
-      </dd>
-
-      <dt><code>lport-set-macs</code> <var>lport</var> [<var>mac</var>]...</dt>
-      <dd>
-        Sets the MACs associated with <var>lport</var> to
-        <var>mac</var>.  Multiple MACs may be sets by using multiple
-        <var>mac</var> arguments.  If no <var>mac</var> argument is
-        given, <var>lport</var> will have no MACs associated with it.
-      </dd>
-
-      <dt><code>lport-get-macs</code> <var>lport</var></dt>
-      <dd>
-        Lists all the MACs associated with <var>lport</var> on standard
+        Lists all the addresses associated with <var>lport</var> on standard
         output, one per line.
       </dd>
 
       <dt><code>lport-set-port-security</code> <var>lport</var> [<var>addrs</var>]...</dt>
       <dd>
-	<p>
+        <p>
           Sets the port security addresses associated with <var>lport</var> to
           <var>addrs</var>.  Multiple sets of addresses may be set by using
           multiple <var>addrs</var> arguments.  If no <var>addrs</var> argument
           is given, <var>lport</var> will not have port security enabled.
-	</p>
+        </p>
 
-	<p>
-	  Port security limits the addresses from which a logical port may send
-	  packets and to which it may receive packets.  See the
-	  <code>ovn-nb</code>(5) documentation for the <ref
-	  column="port_security" table="Logical_Port"/> column in the <ref
-	  table="Logical_Port"/> table for details.
-	</p>
+        <p>
+          Port security limits the addresses from which a logical port may send
+          packets and to which it may receive packets.  See the
+          <code>ovn-nb</code>(5) documentation for the <ref
+          column="port_security" table="Logical_Port"/> column in the <ref
+          table="Logical_Port"/> table for details.
+        </p>
       </dd>
 
       <dt><code>lport-get-port-security</code> <var>lport</var></dt>
@@ -215,7 +195,6 @@
     <h1>Options</h1>
 
     <dl>
-    <dt><code>-d</code> <var>database</var></dt>
     <dt><code>--db</code> <var>database</var></dt>
     <dd>
       The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>

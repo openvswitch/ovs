@@ -24,9 +24,9 @@
     <p>
       <code>ovn-controller</code> retrieves most of its configuration
       information from the local Open vSwitch's ovsdb-server instance.
-      The default is the <code>db.sock</code> in local Open vSwitch's
-      "run" directory.  <var>ovs-database</var> must take one of the
-      following forms:
+      The default location is <code>db.sock</code> in the local Open
+      vSwitch's "run" directory.  It may be overridden by specifying the
+      <var>ovs-database</var> argument in one of the following forms:
     </p>
     <ul>
       <li>
@@ -73,51 +73,144 @@
       <code>ovn-controller</code> assumes it gets configuration
       information from the following keys in the <code>Open_vSwitch</code>
       table of the local OVS instance:
-      <ul>
-        <li>
-          <p>
-            <code>external_ids:system-id</code> specifies the chassis
-            name to use in the Chassis table.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-bridge</code> specifies the
-            integration bridge to which logical ports are attached.
-            The default is <code>br-int</code>.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-remote</code> specifies the OVN
-            database that this system should connect to for its
-            configuration.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-encap-type</code> specifies the
-            encapsulation type that a chassis should use to connect to
-            this node.  Supported tunnel types for connecting
-            hypervisors are <code>geneve</code> and <code>stt</code>.
-            Gateways may use <code>geneve</code>, <code>vxlan</code>,
-            or <code>stt</code>.
-          </p>
-        </li>
-        <li>
-          <p>
-            <code>external_ids:ovn-encap-ip</code> specifies the IP
-            address that a chassis should use to connect to this node
-            using encapsulation type specified by
-            <code>external_ids:ovn-encap-ip</code>.
-          </p>
-        </li>
-      </ul>
-      <p>
-        Currently, <code>ovn-controller</code> does not support changing
-        the chassis name, integration bridge, or OVN database mid-run.
-        If these values need to change, the daemon must be restarted.
-        This behavior should be changed.
-      </p>
     </p>
+    <dl>
+      <dt><code>external_ids:system-id</code></dt>
+      <dd>The chassis name to use in the Chassis table.</dd>
+
+      <dt><code>external_ids:ovn-bridge</code></dt>
+      <dd>
+        The integration bridge to which logical ports are attached.  The
+        default is <code>br-int</code>.  If this bridge does not exist when
+        ovn-controller starts, it will be created automatically with the
+        default configuration suggested in <code>ovn-architecture</code>(7).
+      </dd>
+
+      <dt><code>external_ids:ovn-remote</code></dt>
+      <dd>
+        <p>
+          The OVN database that this system should connect to for its
+          configuration.
+        </p>
+
+        <p>
+          Currently, <code>ovn-controller</code> does not support changing this
+          setting mid-run.  If the value needs to change, the daemon must be
+          restarted.  (This behavior should be improved.)
+        </p>
+      </dd>
+
+      <dt><code>external_ids:ovn-encap-type</code></dt>
+      <dd>
+        <p>
+          The encapsulation type that a chassis should use to connect to
+          this node.  Multiple encapsulation types may be specified with
+          a comma-separated list.  Each listed encapsulation type will
+          be paired with <code>ovn-encap-ip</code>.
+        </p>
+
+        <p>
+          Supported tunnel types for connecting hypervisors
+          are <code>geneve</code> and <code>stt</code>.  Gateways may
+          use <code>geneve</code>, <code>vxlan</code>, or
+          <code>stt</code>.
+        </p>
+
+        <p>
+          Due to the limited amount of metadata in <code>vxlan</code>,
+          the capabilities and performance of connected gateways will be
+          reduced versus other tunnel formats.
+        </p>
+      </dd>
+
+      <dt><code>external_ids:ovn-encap-ip</code></dt>
+      <dd>
+        The IP address that a chassis should use to connect to this node
+        using encapsulation types specified by
+        <code>external_ids:ovn-encap-type</code>.
+      </dd>
+
+      <dt><code>external_ids:ovn-bridge-mappings</code></dt>
+      <dd>
+        A list of key-value pairs that map a physical network name to a local
+        ovs bridge that provides connectivity to that network.  An example
+        value mapping two physical network names to two ovs bridges would be:
+        <code>physnet1:br-eth0,physnet2:br-eth1</code>.
+      </dd>
+    </dl>
+
+    <h1>Open vSwitch Database Usage</h1>
+
+    <p>
+      <code>ovn-controller</code> uses a number of <code>external-ids</code>
+      keys in the Open vSwitch database to keep track of ports and interfaces.
+      For proper operation, users should not change or clear these keys:
+    </p>
+
+    <dl>
+      <dt>
+        <code>external_ids:ovn-chassis-id</code> in the <code>Port</code> table
+      </dt>
+      <dd>
+        The presence of this key identifies a tunnel port within the
+        integration bridge as one created by <code>ovn-controller</code> to
+        reach a remote chassis.  Its value is the chassis ID of the remote
+        chassis.
+      </dd>
+
+      <dt>
+        <code>external-ids:ovn-localnet-port</code> in the <code>Port</code>
+        table
+      </dt>
+      <dd>
+        <p>
+          The presence of this key identifies a patch port as one created by
+          <code>ovn-controller</code> to connect the integration bridge and
+          another bridge to implement a <code>localnet</code> logical port.
+          Its value is the name of the physical network that the port
+          implements.  See <code>external_ids:ovn-bridge-mappings</code>,
+          above, for more information.
+        </p>
+
+        <p>
+          Each <code>localnet</code> logical port is implemented as a pair of
+          patch ports, one in the integration bridge, one in a different
+          bridge, with the same <code>external-ids:ovn-localnet-port</code>
+          value.
+        </p>
+      </dd>
+
+      <dt>
+        <code>external-ids:ovn-logical-patch-port</code> in the
+        <code>Port</code> table
+      </dt>
+
+      <dd>
+        <p>
+          This key identifies a patch port as one created by
+          <code>ovn-controller</code> to implement an OVN logical patch port
+          within the integration bridge.  Its value is the name of the OVN
+          logical patch port that it implements.
+        </p>
+      </dd>
+    </dl>
+
+    <h1>Runtime Management Commands</h1>
+    <p>
+      <code>ovs-appctl</code> can send commands to a running
+      <code>ovn-controller</code> process.  The currently supported
+      commands are described below.
+      <dl>
+      <dt><code>exit</code></dt>
+      <dd>
+        Causes <code>ovn-controller</code> to gracefully terminate.
+      </dd>
+
+      <dt><code>ct-zone-list</code></dt>
+      <dd>
+        Lists each local logical port and its connection tracking zone.
+      </dd>
+      </dl>
+    </p>
+
 </manpage>

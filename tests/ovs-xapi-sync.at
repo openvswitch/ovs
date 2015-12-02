@@ -8,15 +8,12 @@ cp "$top_srcdir/tests/MockXenAPI.py" XenAPI.py
 PYTHONPATH=`pwd`:$PYTHONPATH
 export PYTHONPATH
 
-OVS_RUNDIR=`pwd`; export OVS_RUNDIR
-OVS_DBDIR=`pwd`; export OVS_DBDIR
-OVS_PKGDATADIR=`pwd`; export OVS_PKGDATADIR
 cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
 
 cp "$top_srcdir/xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync" \
    ovs-xapi-sync
 
-ON_EXIT([kill `cat pid ovs-xapi-sync.pid`])
+on_exit 'kill `cat pid ovs-xapi-sync.pid`'
 
 mkdir var var/run
 touch var/run/xapi_init_complete.cookie

@@ -180,8 +180,7 @@ static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, u32 vxflags,
 	gbp->policy_id = htons(md->gbp & VXLAN_GBP_ID_MASK);
 }
 
-int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
-		       struct rtable *rt, struct sk_buff *skb,
+int rpl_vxlan_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *skb,
 		       __be32 src, __be32 dst, __u8 tos, __u8 ttl, __be16 df,
 		       __be16 src_port, __be16 dst_port,
 		       struct vxlan_metadata *md, bool xnet, u32 vxflags)
@@ -217,11 +216,11 @@ int rpl_vxlan_xmit_skb(struct vxlan_sock *vs,
 	if (vxflags & VXLAN_F_GBP)
 		vxlan_build_gbp_hdr(vxh, vxflags, md);
 
-	vxlan_set_owner(vs->sock->sk, skb);
+	vxlan_set_owner(sk, skb);
 
 	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
 
-	return udp_tunnel_xmit_skb(rt, skb, src, dst, tos,
+	return udp_tunnel_xmit_skb(rt, sk, skb, src, dst, tos,
 				   ttl, df, src_port, dst_port, xnet,
 				   !udp_sum);
 }

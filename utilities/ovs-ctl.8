@@ -90,10 +90,14 @@ Initializes a few values inside the database.
 If the \fB\-\-delete\-bridges\fR option was used, deletes all of the
 bridges from the database.
 .
+.IP 6.
+If the \fB\-\-delete\-transient\-ports\fR option was used, deletes all ports
+that have \fBother_config:transient\fR set to true.
+.
 .PP
 The \fBstart\fR command skips the following step if
 \fBovs\-vswitchd\fR is already running:
-.IP 6.
+.IP 7.
 Starts \fBovs\-vswitchd\fR.
 .
 .SS "Options"
@@ -147,6 +151,11 @@ expect to re-create all of the bridges and other configuration state
 on every boot.  This option supports that, by deleting all Open
 vSwitch bridges after starting \fBovsdb\-server\fR but before starting
 \fBovs\-vswitchd\fR.
+.
+.IP "\fB\-\-delete\-transient\-ports\fR"
+Deletes all ports that have the other_config:transient value set to true. This
+is important on certain environments where some ports are going to be recreated
+after reboot, but other ports need to be persisted in the database.
 .
 .PP
 The following options are less important:

@@ -74,6 +74,8 @@ struct sockaddr_in6 {
 #define IPPROTO_DSTOPTS 60
 #define IPPROTO_SCTP 132
 
+#define IPPORT_FTP 21
+
 /* All the IP options documented in Linux ip(7). */
 #define IP_ADD_MEMBERSHIP 0
 #define IP_DROP_MEMBERSHIP 1

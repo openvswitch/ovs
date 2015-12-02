@@ -14,10 +14,17 @@ from system routing table and user configured routes.
 .IP "\fBovs/route/del ipv4_address/plen\fR"
 Delete ipv4_address/plen route from OVS routing table.
 .
+.IP "\fBtnl/neigh/show\fR"
 .IP "\fBtnl/arp/show\fR"
 OVS builds ARP cache by snooping are messages. This command shows
 ARP cache table.
 .
+.IP "\fBtnl/neigh/set \fIbridge ip mac\fR"
+.IP "\fBtnl/arp/set \fIbridge ip mac\fR"
+Adds or modifies an ARP cache entry in \fIbridge\fR, mapping \fIip\fR
+to \fImac\fR.
+.
+.IP "\fBtnl/neigh/flush\fR"
 .IP "\fBtnl/arp/flush\fR"
 Flush ARP table.
 .

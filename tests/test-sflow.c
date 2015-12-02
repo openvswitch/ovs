@@ -241,7 +241,7 @@ process_counter_sample(struct sflow_xdr *x)
         printf("\n");
     }
     if (x->offset.LACPCOUNTERS) {
-	uint8_t *mac;
+	struct eth_addr *mac;
 	union {
 	    ovs_be32 all;
 	    struct {
@@ -254,11 +254,11 @@ process_counter_sample(struct sflow_xdr *x)
 
         sflowxdr_setc(x, x->offset.LACPCOUNTERS);
         printf("LACPCOUNTERS");
-	mac = (uint8_t *)sflowxdr_str(x);
-	printf(" sysID="ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+	mac = (void *)sflowxdr_str(x);
+	printf(" sysID="ETH_ADDR_FMT, ETH_ADDR_ARGS(*mac));
 	sflowxdr_skip(x, 2);
-	mac = (uint8_t *)sflowxdr_str(x);
-	printf(" partnerID="ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+	mac = (void *)sflowxdr_str(x);
+	printf(" partnerID="ETH_ADDR_FMT, ETH_ADDR_ARGS(*mac));
 	sflowxdr_skip(x, 2);
 	printf(" aggID=%"PRIu32, sflowxdr_next(x));
 	state.all = sflowxdr_next_n(x);
@@ -683,7 +683,7 @@ test_sflow_main(int argc, char *argv[])
     }
 
     daemon_save_fd(STDOUT_FILENO);
-    daemonize_start();
+    daemonize_start(false);
 
     error = unixctl_server_create(NULL, &server);
     if (error) {

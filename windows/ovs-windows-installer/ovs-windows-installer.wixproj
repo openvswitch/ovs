@@ -24,6 +24,45 @@
     <Pedantic>False</Pedantic>
     <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <DefineConstants>Debug</DefineConstants>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <SuppressAllWarnings>False</SuppressAllWarnings>
+    <Pedantic>False</Pedantic>
+    <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <DefineConstants>Debug</DefineConstants>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <SuppressAllWarnings>False</SuppressAllWarnings>
+    <Pedantic>False</Pedantic>
+    <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <DefineConstants>Debug</DefineConstants>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <SuppressAllWarnings>False</SuppressAllWarnings>
+    <Pedantic>False</Pedantic>
+    <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
+    <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="Binaries.wxs" />
     <Compile Include="CustomActions.wxs" />

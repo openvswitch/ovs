@@ -157,11 +157,13 @@ static struct ovsdb_idl_row *ovsdb_idl_row_create__(
 static struct ovsdb_idl_row *ovsdb_idl_row_create(struct ovsdb_idl_table *,
                                                   const struct uuid *);
 static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *);
+static void ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *);
 
 static void ovsdb_idl_row_parse(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_unparse(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_clear_old(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_clear_new(struct ovsdb_idl_row *);
+static void ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *, bool destroy_dsts);
 
 static void ovsdb_idl_txn_abort_all(struct ovsdb_idl *);
 static bool ovsdb_idl_txn_process_reply(struct ovsdb_idl *,
@@ -174,6 +176,10 @@ static void ovsdb_idl_parse_lock_reply(struct ovsdb_idl *,
 static void ovsdb_idl_parse_lock_notify(struct ovsdb_idl *,
                                         const struct json *params,
                                         bool new_has_lock);
+static struct ovsdb_idl_table *
+ovsdb_idl_table_from_class(const struct ovsdb_idl *,
+                           const struct ovsdb_idl_table_class *);
+static bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 
 /* Creates and returns a connection to database 'remote', which should be in a
  * form acceptable to jsonrpc_session_open().  The connection will maintain an
@@ -227,6 +233,10 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
             shash_add_assert(&table->columns, column->name, column);
         }
         hmap_init(&table->rows);
+        list_init(&table->track_list);
+        table->change_seqno[OVSDB_IDL_CHANGE_INSERT]
+            = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
+            = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
         table->idl = idl;
     }
 
@@ -292,9 +302,15 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
             /* No need to do anything with dst_arcs: some node has those arcs
              * as forward arcs and will destroy them itself. */
 
+            if (!list_is_empty(&row->track_node)) {
+                list_remove(&row->track_node);
+            }
+
             ovsdb_idl_row_destroy(row);
         }
     }
+
+    ovsdb_idl_track_clear(idl);
 
     if (changed) {
         idl->change_seqno++;
@@ -394,6 +410,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         }
         jsonrpc_msg_destroy(msg);
     }
+    ovsdb_idl_row_destroy_postprocess(idl);
 }
 
 /* Arranges for poll_block() to wake up when ovsdb_idl_run() has something to
@@ -540,11 +557,13 @@ ovsdb_idl_add_column(struct ovsdb_idl *idl,
 }
 
 /* Ensures that the table with class 'tc' will be replicated on 'idl' even if
- * no columns are selected for replication.  This can be useful because it
- * allows 'idl' to keep track of what rows in the table actually exist, which
- * in turn allows columns that reference the table to have accurate contents.
- * (The IDL presents the database with references to rows that do not exist
- * removed.)
+ * no columns are selected for replication. Just the necessary data for table
+ * references will be replicated (the UUID of the rows, for instance), any
+ * columns not selected for replication will remain unreplicated.
+ * This can be useful because it allows 'idl' to keep track of what rows in the
+ * table actually exist, which in turn allows columns that reference the table
+ * to have accurate contents. (The IDL presents the database with references to
+ * rows that do not exist removed.)
  *
  * This function is only useful if 'monitor_everything_by_default' was false in
  * the call to ovsdb_idl_create().  This function should be called between
@@ -591,6 +610,142 @@ ovsdb_idl_omit(struct ovsdb_idl *idl, const struct ovsdb_idl_column *column)
 {
     *ovsdb_idl_get_mode(idl, column) = 0;
 }
+
+/* Returns the most recent IDL change sequence number that caused a
+ * insert, modify or delete update to the table with class 'table_class'.
+ */
+unsigned int
+ovsdb_idl_table_get_seqno(const struct ovsdb_idl *idl,
+                          const struct ovsdb_idl_table_class *table_class)
+{
+    struct ovsdb_idl_table *table
+        = ovsdb_idl_table_from_class(idl, table_class);
+    unsigned int max_seqno = table->change_seqno[OVSDB_IDL_CHANGE_INSERT];
+
+    if (max_seqno < table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]) {
+        max_seqno = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY];
+    }
+    if (max_seqno < table->change_seqno[OVSDB_IDL_CHANGE_DELETE]) {
+        max_seqno = table->change_seqno[OVSDB_IDL_CHANGE_DELETE];
+    }
+    return max_seqno;
+}
+
+/* For each row that contains tracked columns, IDL stores the most
+ * recent IDL change sequence numbers associateed with insert, modify
+ * and delete updates to the table.
+ */
+unsigned int
+ovsdb_idl_row_get_seqno(const struct ovsdb_idl_row *row,
+                        enum ovsdb_idl_change change)
+{
+    return row->change_seqno[change];
+}
+
+/* Turns on OVSDB_IDL_TRACK for 'column' in 'idl', ensuring that
+ * all rows whose 'column' is modified are traced. Similarly, insert
+ * or delete of rows having 'column' are tracked. Clients are able
+ * to retrive the tracked rows with the ovsdb_idl_track_get_*()
+ * functions.
+ *
+ * This function should be called between ovsdb_idl_create() and
+ * the first call to ovsdb_idl_run(). The column to be tracked
+ * should have OVSDB_IDL_ALERT turned on.
+ */
+void
+ovsdb_idl_track_add_column(struct ovsdb_idl *idl,
+                           const struct ovsdb_idl_column *column)
+{
+    if (!(*ovsdb_idl_get_mode(idl, column) & OVSDB_IDL_ALERT)) {
+        ovsdb_idl_add_column(idl, column);
+    }
+    *ovsdb_idl_get_mode(idl, column) |= OVSDB_IDL_TRACK;
+}
+
+void
+ovsdb_idl_track_add_all(struct ovsdb_idl *idl)
+{
+    size_t i, j;
+
+    for (i = 0; i < idl->class->n_tables; i++) {
+        const struct ovsdb_idl_table_class *tc = &idl->class->tables[i];
+
+        for (j = 0; j < tc->n_columns; j++) {
+            const struct ovsdb_idl_column *column = &tc->columns[j];
+            ovsdb_idl_track_add_column(idl, column);
+        }
+    }
+}
+
+/* Returns true if 'table' has any tracked column. */
+static bool
+ovsdb_idl_track_is_set(struct ovsdb_idl_table *table)
+{
+    size_t i;
+
+    for (i = 0; i < table->class->n_columns; i++) {
+        if (table->modes[i] & OVSDB_IDL_TRACK) {
+            return true;
+        }
+    }
+   return false;
+}
+
+/* Returns the first tracked row in table with class 'table_class'
+ * for the specified 'idl'. Returns NULL if there are no tracked rows */
+const struct ovsdb_idl_row *
+ovsdb_idl_track_get_first(const struct ovsdb_idl *idl,
+                          const struct ovsdb_idl_table_class *table_class)
+{
+    struct ovsdb_idl_table *table
+        = ovsdb_idl_table_from_class(idl, table_class);
+
+    if (!list_is_empty(&table->track_list)) {
+        return CONTAINER_OF(list_front(&table->track_list), struct ovsdb_idl_row, track_node);
+    }
+    return NULL;
+}
+
+/* Returns the next tracked row in table after the specified 'row'
+ * (in no particular order). Returns NULL if there are no tracked rows */
+const struct ovsdb_idl_row *
+ovsdb_idl_track_get_next(const struct ovsdb_idl_row *row)
+{
+    if (row->track_node.next != &row->table->track_list) {
+        return CONTAINER_OF(row->track_node.next, struct ovsdb_idl_row, track_node);
+    }
+
+    return NULL;
+}
+
+/* Flushes the tracked rows. Client calls this function after calling
+ * ovsdb_idl_run() and read all tracked rows with the ovsdb_idl_track_get_*()
+ * functions. This is usually done at the end of the client's processing
+ * loop when it is ready to do ovsdb_idl_run() again.
+ */
+void
+ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
+{
+    size_t i;
+
+    for (i = 0; i < idl->class->n_tables; i++) {
+        struct ovsdb_idl_table *table = &idl->tables[i];
+
+        if (!list_is_empty(&table->track_list)) {
+            struct ovsdb_idl_row *row, *next;
+
+            LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
+                list_remove(&row->track_node);
+                list_init(&row->track_node);
+                if (ovsdb_idl_row_is_orphan(row)) {
+                    ovsdb_idl_row_clear_old(row);
+                    free(row);
+                }
+            }
+        }
+    }
+}
+
 
 static void
 ovsdb_idl_send_schema_request(struct ovsdb_idl *idl)
@@ -916,7 +1071,8 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
 /* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
  * otherwise. */
 static bool
-ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
+ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json,
+                     enum ovsdb_idl_change change)
 {
     struct ovsdb_idl_table *table = row->table;
     struct shash_node *node;
@@ -944,6 +1100,15 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
                 ovsdb_datum_swap(old, &datum);
                 if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
                     changed = true;
+                    row->change_seqno[change]
+                        = row->table->change_seqno[change]
+                        = row->table->idl->change_seqno + 1;
+                    if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
+                        if (list_is_empty(&row->track_node)) {
+                            list_push_front(&row->table->track_list,
+                                            &row->track_node);
+                        }
+                    }
                 }
             } else {
                 /* Didn't really change but the OVSDB monitor protocol always
@@ -1067,7 +1232,10 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
     struct ovsdb_idl_arc *arc, *next;
 
     /* Delete all forward arcs.  If 'destroy_dsts', destroy any orphaned rows
-     * that this causes to be unreferenced. */
+     * that this causes to be unreferenced, if tracking is not enabled.
+     * If tracking is enabled, orphaned nodes are removed from hmap but not
+     * freed.
+     */
     LIST_FOR_EACH_SAFE (arc, next, src_node, &row->src_arcs) {
         list_remove(&arc->dst_node);
         if (destroy_dsts
@@ -1113,6 +1281,7 @@ ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
     list_init(&row->src_arcs);
     list_init(&row->dst_arcs);
     hmap_node_nullify(&row->txn_node);
+    list_init(&row->track_node);
     return row;
 }
 
@@ -1132,7 +1301,35 @@ ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
     if (row) {
         ovsdb_idl_row_clear_old(row);
         hmap_remove(&row->table->rows, &row->hmap_node);
-        free(row);
+        if (ovsdb_idl_track_is_set(row->table)) {
+            row->change_seqno[OVSDB_IDL_CHANGE_DELETE]
+                = row->table->change_seqno[OVSDB_IDL_CHANGE_DELETE]
+                = row->table->idl->change_seqno + 1;
+        }
+        if (list_is_empty(&row->track_node)) {
+            list_push_front(&row->table->track_list, &row->track_node);
+        }
+    }
+}
+
+static void
+ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *idl)
+{
+    size_t i;
+
+    for (i = 0; i < idl->class->n_tables; i++) {
+        struct ovsdb_idl_table *table = &idl->tables[i];
+
+        if (!list_is_empty(&table->track_list)) {
+            struct ovsdb_idl_row *row, *next;
+
+            LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
+                if (!ovsdb_idl_track_is_set(row->table)) {
+                    list_remove(&row->track_node);
+                    free(row);
+                }
+            }
+        }
     }
 }
 
@@ -1147,7 +1344,7 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
     for (i = 0; i < class->n_columns; i++) {
         ovsdb_datum_init_default(&row->old[i], &class->columns[i].type);
     }
-    ovsdb_idl_row_update(row, row_json);
+    ovsdb_idl_row_update(row, row_json, OVSDB_IDL_CHANGE_INSERT);
     ovsdb_idl_row_parse(row);
 
     ovsdb_idl_row_reparse_backrefs(row);
@@ -1175,7 +1372,7 @@ ovsdb_idl_modify_row(struct ovsdb_idl_row *row, const struct json *row_json)
 
     ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
-    changed = ovsdb_idl_row_update(row, row_json);
+    changed = ovsdb_idl_row_update(row, row_json, OVSDB_IDL_CHANGE_MODIFY);
     ovsdb_idl_row_parse(row);
 
     return changed;

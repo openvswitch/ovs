@@ -38,7 +38,7 @@ KSTART_ROUTINE             OvsStartIpHelper;
  * queued.
  */
 static BOOLEAN             ovsInternalIPConfigured;
-static UINT32              ovsInternalPortNo;
+static BOOLEAN             ovsInternalAdapterUp;
 static GUID                ovsInternalNetCfgId;
 static MIB_IF_ROW2         ovsInternalRow;
 static MIB_IPINTERFACE_ROW ovsInternalIPRow;
@@ -1059,7 +1059,7 @@ VOID
 OvsInternalAdapterDown(VOID)
 {
     NdisAcquireSpinLock(&ovsIpHelperLock);
-    ovsInternalPortNo = OVS_DEFAULT_PORT_NO;
+    ovsInternalAdapterUp = FALSE;
     ovsInternalIPConfigured = FALSE;
     NdisReleaseSpinLock(&ovsIpHelperLock);
 
@@ -1070,8 +1070,7 @@ OvsInternalAdapterDown(VOID)
 
 
 VOID
-OvsInternalAdapterUp(UINT32 portNo,
-                     GUID *netCfgInstanceId)
+OvsInternalAdapterUp(GUID *netCfgInstanceId)
 {
     POVS_IP_HELPER_REQUEST request;
 
@@ -1088,7 +1087,7 @@ OvsInternalAdapterUp(UINT32 portNo,
     request->command = OVS_IP_HELPER_INTERNAL_ADAPTER_UP;
 
     NdisAcquireSpinLock(&ovsIpHelperLock);
-    ovsInternalPortNo = portNo;
+    ovsInternalAdapterUp = TRUE;
     InsertHeadList(&ovsIpHelperRequestList, &request->link);
     ovsNumIpHelperRequests++;
     if (ovsNumIpHelperRequests == 1) {
@@ -1160,7 +1159,7 @@ OvsEnqueueIpHelperRequest(POVS_IP_HELPER_REQUEST request)
 
     NdisAcquireSpinLock(&ovsIpHelperLock);
 
-    if (ovsInternalPortNo == OVS_DEFAULT_PORT_NO ||
+    if (ovsInternalAdapterUp == FALSE ||
         ovsInternalIPConfigured == FALSE) {
         NdisReleaseSpinLock(&ovsIpHelperLock);
         OvsFreeMemoryWithTag(request, OVS_IPHELPER_POOL_TAG);
@@ -1554,7 +1553,7 @@ OvsInitIpHelper(NDIS_HANDLE ndisFilterHandle)
     RtlZeroMemory(&ovsInternalIPRow, sizeof (MIB_IPINTERFACE_ROW));
     ovsInternalIP = 0;
 
-    ovsInternalPortNo = OVS_DEFAULT_PORT_NO;
+    ovsInternalAdapterUp = FALSE;
 
     InitializeListHead(&ovsSortedIPNeighList);
 

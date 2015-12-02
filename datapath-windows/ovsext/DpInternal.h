@@ -62,12 +62,6 @@ typedef struct _OVS_VPORT_EXT_INFO {
  * that is, pure 802.2 frames. */
 #define OVSWIN_DL_TYPE_NONE 0x5ff
 
-/* Fragment bits, used for IPv4 and IPv6, always zero for non-IP flows. */
-#define OVSWIN_NW_FRAG_ANY   (1 << 0)   /* Set for any IP frag. */
-#define OVSWIN_NW_FRAG_LATER (1 << 1)   /* Set for IP frag with nonzero
-                                         * offset. */
-#define OVSWIN_NW_FRAG_MASK  (OVSWIN_NW_FRAG_ANY | OVSWIN_NW_FRAG_LATER)
-
 typedef struct L4Key {
     ovs_be16 tpSrc;              /* TCP/UDP/SCTP source port. */
     ovs_be16 tpDst;              /* TCP/UDP/SCTP destination port. */
@@ -293,12 +287,13 @@ enum {
 
 
 typedef struct _OVS_EVENT_ENTRY {
-    uint32_t portNo;
-    uint32_t status;
+    UINT32 portNo;
+    OVS_VPORT_TYPE ovsType;
+    UINT32 upcallPid;
+    CHAR ovsName[OVS_MAX_PORT_NAME_LENGTH];
+    UINT32 type;
 } OVS_EVENT_ENTRY, *POVS_EVENT_ENTRY;
 
-#define OVS_DEFAULT_PORT_NO 0xffffffff
-#define OVS_DEFAULT_EVENT_STATUS  0xffffffff
 
 typedef struct _OVS_EVENT_STATUS {
     uint32_t numberEntries;

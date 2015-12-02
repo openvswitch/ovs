@@ -315,12 +315,12 @@ static ovs_be16 dl_type_values[]
 static ovs_be16 tp_src_values[] = { CONSTANT_HTONS(49362),
                                     CONSTANT_HTONS(80) };
 static ovs_be16 tp_dst_values[] = { CONSTANT_HTONS(6667), CONSTANT_HTONS(22) };
-static uint8_t dl_src_values[][ETH_ADDR_LEN] = {
-                                      { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
-                                      { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } };
-static uint8_t dl_dst_values[][ETH_ADDR_LEN] = {
-                                      { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
-                                      { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } };
+static struct eth_addr dl_src_values[] = {
+    { { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 } } },
+    { { { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } } } };
+static struct eth_addr dl_dst_values[] = {
+    { { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 } } },
+    { { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } } };
 static uint8_t nw_proto_values[] = { IPPROTO_TCP, IPPROTO_ICMP };
 static uint8_t nw_dscp_values[] = { 48, 0 };
 
@@ -341,11 +341,11 @@ init_values(void)
     values[CLS_F_IDX_VLAN_TCI][0] = &vlan_tci_values[0];
     values[CLS_F_IDX_VLAN_TCI][1] = &vlan_tci_values[1];
 
-    values[CLS_F_IDX_DL_SRC][0] = dl_src_values[0];
-    values[CLS_F_IDX_DL_SRC][1] = dl_src_values[1];
+    values[CLS_F_IDX_DL_SRC][0] = &dl_src_values[0];
+    values[CLS_F_IDX_DL_SRC][1] = &dl_src_values[1];
 
-    values[CLS_F_IDX_DL_DST][0] = dl_dst_values[0];
-    values[CLS_F_IDX_DL_DST][1] = dl_dst_values[1];
+    values[CLS_F_IDX_DL_DST][0] = &dl_dst_values[0];
+    values[CLS_F_IDX_DL_DST][1] = &dl_dst_values[1];
 
     values[CLS_F_IDX_DL_TYPE][0] = &dl_type_values[0];
     values[CLS_F_IDX_DL_TYPE][1] = &dl_type_values[1];
@@ -431,10 +431,8 @@ compare_classifiers(struct classifier *cls, size_t n_invisible_rules,
         flow.dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow.tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow.tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
-        memcpy(flow.dl_src, dl_src_values[get_value(&x, N_DL_SRC_VALUES)],
-               ETH_ADDR_LEN);
-        memcpy(flow.dl_dst, dl_dst_values[get_value(&x, N_DL_DST_VALUES)],
-               ETH_ADDR_LEN);
+        flow.dl_src = dl_src_values[get_value(&x, N_DL_SRC_VALUES)];
+        flow.dl_dst = dl_dst_values[get_value(&x, N_DL_DST_VALUES)];
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow.nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
 
@@ -685,9 +683,9 @@ make_rule(int wc_fields, int priority, int value_pat)
         } else if (f_idx == CLS_F_IDX_TP_DST) {
             match.wc.masks.tp_dst = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_DL_SRC) {
-            memset(match.wc.masks.dl_src, 0xff, ETH_ADDR_LEN);
+            WC_MASK_FIELD(&match.wc, dl_src);
         } else if (f_idx == CLS_F_IDX_DL_DST) {
-            memset(match.wc.masks.dl_dst, 0xff, ETH_ADDR_LEN);
+            WC_MASK_FIELD(&match.wc, dl_dst);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             match.wc.masks.vlan_tci = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
@@ -1434,10 +1432,8 @@ benchmark(bool use_wc)
         flow->dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow->tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow->tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
-        memcpy(flow->dl_src, dl_src_values[get_value(&x, N_DL_SRC_VALUES)],
-               ETH_ADDR_LEN);
-        memcpy(flow->dl_dst, dl_dst_values[get_value(&x, N_DL_DST_VALUES)],
-               ETH_ADDR_LEN);
+        flow->dl_src = dl_src_values[get_value(&x, N_DL_SRC_VALUES)];
+        flow->dl_dst = dl_dst_values[get_value(&x, N_DL_DST_VALUES)];
         flow->nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow->nw_tos = nw_dscp_values[get_value(&x, N_NW_DSCP_VALUES)];
     }
@@ -1662,30 +1658,26 @@ miniflow_clone__(const struct miniflow *src)
 static inline uint32_t
 miniflow_hash__(const struct miniflow *flow, uint32_t basis)
 {
-    const uint64_t *values = miniflow_get_values(flow);
-    const uint64_t *p = values;
+    const uint64_t *p = miniflow_get_values(flow);
+    size_t n_values = miniflow_n_values(flow);
+    struct flowmap hash_map = FLOWMAP_EMPTY_INITIALIZER;
     uint32_t hash = basis;
-    uint64_t hash_tnl_map = 0, hash_pkt_map = 0;
-    uint64_t map;
+    size_t idx;
 
-    for (map = flow->tnl_map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = hash_add64(hash, *p);
-            hash_tnl_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    for (map = flow->pkt_map; map; map = zero_rightmost_1bit(map)) {
-        if (*p) {
-            hash = hash_add64(hash, *p);
-            hash_pkt_map |= rightmost_1bit(map);
-        }
-        p++;
-    }
-    hash = hash_add64(hash, hash_tnl_map);
-    hash = hash_add64(hash, hash_pkt_map);
+    FLOWMAP_FOR_EACH_INDEX(idx, flow->map) {
+        uint64_t value = *p++;
 
-    return hash_finish(hash, p - values);
+        if (value) {
+            hash = hash_add64(hash, value);
+            flowmap_set(&hash_map, idx, 1);
+        }
+    }
+    map_t map;
+    FLOWMAP_FOR_EACH_MAP (map, hash_map) {
+        hash = hash_add64(hash, map);
+    }
+
+    return hash_finish(hash, n_values);
 }
 
 static void

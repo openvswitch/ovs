@@ -13,9 +13,10 @@
  * limitations under the License.
  */
 
-
 #ifndef OVN_LFLOW_H
 #define OVN_LFLOW_H 1
+
+#include "ovn/lib/logical-fields.h"
 
 /* Logical_Flow table translation to OpenFlow
  * ==========================================
@@ -36,6 +37,7 @@
 
 struct controller_ctx;
 struct hmap;
+struct simap;
 struct uuid;
 
 /* OpenFlow table numbers.
@@ -53,27 +55,9 @@ struct uuid;
 /* The number of tables for the ingress and egress pipelines. */
 #define LOG_PIPELINE_LEN 16
 
-/* Logical fields.
- *
- * These values are documented in ovn-architecture(7), please update the
- * documentation if you change any of them. */
-#define MFF_LOG_DATAPATH MFF_METADATA /* Logical datapath (64 bits). */
-#define MFF_LOG_INPORT   MFF_REG6     /* Logical input port (32 bits). */
-#define MFF_LOG_OUTPORT  MFF_REG7     /* Logical output port (32 bits). */
-
-/* Logical registers.
- *
- * Make sure these don't overlap with the logical fields! */
-#define MFF_LOG_REGS \
-    MFF_LOG_REG(MFF_REG0) \
-    MFF_LOG_REG(MFF_REG1) \
-    MFF_LOG_REG(MFF_REG2) \
-    MFF_LOG_REG(MFF_REG3) \
-    MFF_LOG_REG(MFF_REG4) \
-    MFF_LOG_REG(MFF_REG5)
-
 void lflow_init(void);
-void lflow_run(struct controller_ctx *, struct hmap *flow_table);
+void lflow_run(struct controller_ctx *, struct hmap *flow_table,
+               const struct simap *ct_zones);
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */
