@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,10 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
 /* Cf. IETF RFC 5101 Section 10.3.4. */
 #define IPFIX_DEFAULT_COLLECTOR_PORT 4739
+
+/* Cf. IETF RFC 5881 Setion 8. */
+#define BFD_CONTROL_DEST_PORT        3784
+#define BFD_ECHO_DEST_PORT           3785
 
 /* The standard layer2SegmentId (ID 351) element is included in vDS to send
  * the VxLAN tunnel's VNI. It is 64-bit long, the most significant byte is
@@ -1696,6 +1700,23 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
         ovs_mutex_unlock(&mutex);
         return;
     }
+
+    /* Skip BFD packets:
+     * Bidirectional Forwarding Detection(BFD) packets are for monitoring
+     * the tunnel link status and consumed by ovs itself. No need to
+     * smaple them.
+     * CF  IETF RFC 5881, BFD control packet is the UDP packet with
+     * destination port 3784, and BFD echo packet is the UDP packet with
+     * destination port 3785.
+     */
+    if (is_ip_any(flow) &&
+        flow->nw_proto == IPPROTO_UDP &&
+        (flow->tp_dst == htons(BFD_CONTROL_DEST_PORT) ||
+         flow->tp_dst == htons(BFD_ECHO_DEST_PORT))) {
+        ovs_mutex_unlock(&mutex);
+        return;
+    }
+
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
     packet_delta_count = UINT32_MAX / di->bridge_exporter.probability;
@@ -1711,6 +1732,7 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
             tunnel_port = dpif_ipfix_find_port(di, output_odp_port);
         }
     }
+
     dpif_ipfix_sample(&di->bridge_exporter.exporter, packet, flow,
                       packet_delta_count,
                       di->bridge_exporter.options->obs_domain_id,
