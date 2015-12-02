@@ -6730,16 +6730,20 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
             : 0);
 }
 
-static const struct mf_field *
-ofpact_get_mf_field(enum ofpact_type type, const void *ofpact)
+/* Returns the destination field that 'ofpact' would write to, or NULL
+ * if the action would not write to an mf_field. */
+const struct mf_field *
+ofpact_get_mf_dst(const struct ofpact *ofpact)
 {
-    if (type == OFPACT_SET_FIELD) {
-        const struct ofpact_set_field *orl = ofpact;
+    if (ofpact->type == OFPACT_SET_FIELD) {
+        const struct ofpact_set_field *orl;
 
+        orl = CONTAINER_OF(ofpact, struct ofpact_set_field, ofpact);
         return orl->field;
-    } else if (type == OFPACT_REG_MOVE) {
-        const struct ofpact_reg_move *orm = ofpact;
+    } else if (ofpact->type == OFPACT_REG_MOVE) {
+        const struct ofpact_reg_move *orm;
 
+        orm = CONTAINER_OF(ofpact, struct ofpact_reg_move, ofpact);
         return orm->dst.field;
     }
 
@@ -6764,7 +6768,7 @@ field_requires_ct(enum mf_field_id field)
 static enum ofperr
 ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 {
-    const struct mf_field *field = ofpact_get_mf_field(a->type, a);
+    const struct mf_field *field = ofpact_get_mf_dst(a);
 
     if (field && field_requires_ct(field->id) && outer_action != OFPACT_CT) {
         VLOG_WARN("cannot set CT fields outside of ct action");
