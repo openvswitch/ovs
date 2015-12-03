@@ -47,4 +47,11 @@ static inline u32 ipv6_addr_hash(const struct in6_addr *a)
 }
 #endif
 
+#if defined(OVS_FRAGMENT_BACKPORT) && !defined(HAVE___IPV6_ADDR_JHASH)
+static inline u32 __ipv6_addr_jhash(const struct in6_addr *a, const u32 unused)
+{
+       return ipv6_addr_jhash(a);
+}
+#endif
+
 #endif
