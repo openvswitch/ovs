@@ -199,6 +199,10 @@ struct pcpu_sw_netstats {
 })
 #endif
 
+#ifndef HAVE_DEV_RECURSION_LEVEL
+static inline bool dev_recursion_level(void) { return false; }
+#endif
+
 #ifndef NET_NAME_USER
 #define NET_NAME_USER 3
 #endif
