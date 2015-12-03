@@ -86,10 +86,9 @@ ovs_router_lookup(const struct in6_addr *ip6_dst, char output_bridge[],
 bool
 ovs_router_lookup4(ovs_be32 ip_dst, char output_bridge[], ovs_be32 *gw)
 {
-    struct in6_addr ip6_dst;
+    struct in6_addr ip6_dst = in6_addr_mapped_ipv4(ip_dst);
     struct in6_addr gw6;
 
-    in6_addr_set_mapped_ipv4(&ip6_dst, ip_dst);
     if (ovs_router_lookup(&ip6_dst, output_bridge, &gw6)) {
         *gw = in6_addr_get_mapped_ipv4(&gw6);
         return true;

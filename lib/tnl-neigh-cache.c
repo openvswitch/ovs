@@ -86,9 +86,7 @@ tnl_arp_lookup(const char br_name[IFNAMSIZ], ovs_be32 dst,
 {
     struct tnl_neigh_entry *neigh;
     int res = ENOENT;
-    struct in6_addr dst6;
-
-    in6_addr_set_mapped_ipv4(&dst6, dst);
+    struct in6_addr dst6 = in6_addr_mapped_ipv4(dst);
 
     neigh = tnl_neigh_lookup__(br_name, &dst6);
     if (neigh) {
@@ -158,9 +156,7 @@ static void
 tnl_arp_set(const char name[IFNAMSIZ], ovs_be32 dst,
             const struct eth_addr mac)
 {
-    struct in6_addr dst6;
-
-    in6_addr_set_mapped_ipv4(&dst6, dst);
+    struct in6_addr dst6 = in6_addr_mapped_ipv4(dst);
     tnl_neigh_set__(name, &dst6, mac);
 }
 

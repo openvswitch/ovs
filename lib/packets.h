@@ -913,13 +913,18 @@ static inline bool ipv6_addr_is_multicast(const struct in6_addr *ip) {
     return ip->s6_addr[0] == 0xff;
 }
 
-static inline void
-in6_addr_set_mapped_ipv4(struct in6_addr *addr, ovs_be32 ip4)
+static inline struct in6_addr
+in6_addr_mapped_ipv4(ovs_be32 ip4)
 {
-    union ovs_16aligned_in6_addr *taddr = (void *) addr;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[5] = OVS_BE16_MAX;
-    put_16aligned_be32(&taddr->be32[3], ip4);
+    struct in6_addr ip6 = { .s6_addr = { [10] = 0xff, [11] = 0xff } };
+    memcpy(&ip6.s6_addr[12], &ip4, 4);
+    return ip6;
+}
+
+static inline void
+in6_addr_set_mapped_ipv4(struct in6_addr *ip6, ovs_be32 ip4)
+{
+    *ip6 = in6_addr_mapped_ipv4(ip4);
 }
 
 static inline ovs_be32

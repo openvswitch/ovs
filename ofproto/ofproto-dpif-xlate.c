@@ -4949,6 +4949,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .xin = xin,
         .xout = xout,
         .base_flow = *flow,
+        .orig_tunnel_ipv6_dst = in6_addr_mapped_ipv4(flow->tunnel.ip_dst),
         .xbridge = xbridge,
         .stack = OFPBUF_STUB_INITIALIZER(stack_stub),
         .rule = xin->rule,
@@ -4979,7 +4980,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .action_set_has_group = false,
         .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),
     };
-    in6_addr_set_mapped_ipv4(&ctx.orig_tunnel_ipv6_dst, flow->tunnel.ip_dst);
 
     /* 'base_flow' reflects the packet as it came in, but we need it to reflect
      * the packet as the datapath will treat it for output actions:
