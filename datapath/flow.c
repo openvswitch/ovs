@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -48,7 +48,7 @@
 #include "datapath.h"
 #include "flow.h"
 #include "flow_netlink.h"
-
+#include "vport.h"
 #include "vlan.h"
 
 u64 ovs_flow_used_time(unsigned long flow_jiffies)
@@ -684,19 +684,21 @@ int ovs_flow_key_update(struct sk_buff *skb, struct sw_flow_key *key)
 	return key_extract(skb, key);
 }
 
-int ovs_flow_key_extract(const struct ovs_tunnel_info *tun_info,
+int ovs_flow_key_extract(const struct ip_tunnel_info *tun_info,
 			 struct sk_buff *skb, struct sw_flow_key *key)
 {
 	/* Extract metadata from packet. */
 	if (tun_info) {
-		memcpy(&key->tun_key, &tun_info->tunnel, sizeof(key->tun_key));
+		if (ip_tunnel_info_af(tun_info) != AF_INET)
+			return -EINVAL;
 
+		memcpy(&key->tun_key, &tun_info->key, sizeof(key->tun_key));
 		BUILD_BUG_ON(((1 << (sizeof(tun_info->options_len) * 8)) - 1) >
 			     sizeof(key->tun_opts));
 
-		if (tun_info->options) {
-			memcpy(TUN_METADATA_OPTS(key, tun_info->options_len),
-			       tun_info->options, tun_info->options_len);
+		if (tun_info->options_len) {
+			ip_tunnel_info_opts_get(TUN_METADATA_OPTS(key, tun_info->options_len),
+						tun_info);
 			key->tun_opts_len = tun_info->options_len;
 		} else {
 			key->tun_opts_len = 0;

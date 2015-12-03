@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2012 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -43,41 +43,7 @@
 #define inet_sport(sk)	(inet_sk(sk)->inet_sport)
 #endif
 
-static inline struct rtable *find_route(struct net *net,
-					__be32 *saddr, __be32 daddr,
-					u8 ipproto, u8 tos, u32 skb_mark)
-{
-	struct rtable *rt;
-	/* Tunnel configuration keeps DSCP part of TOS bits, But Linux
-	 * router expect RT_TOS bits only.
-	 */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-	struct flowi fl = { .nl_u = { .ip4_u = {
-					.daddr = daddr,
-					.saddr = *saddr,
-					.tos   = RT_TOS(tos) } },
-					.mark = skb_mark,
-					.proto = ipproto };
-
-	if (unlikely(ip_route_output_key(net, &rt, &fl)))
-		return ERR_PTR(-EADDRNOTAVAIL);
-	*saddr = fl.nl_u.ip4_u.saddr;
-	return rt;
-#else
-	struct flowi4 fl = { .daddr = daddr,
-			     .saddr = *saddr,
-			     .flowi4_tos = RT_TOS(tos),
-			     .flowi4_mark = skb_mark,
-			     .flowi4_proto = ipproto };
-
-	rt = ip_route_output_key(net, &fl);
-	*saddr = fl.saddr;
-	return rt;
-#endif
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
 static inline bool skb_encapsulation(struct sk_buff *skb)
 {
 	return skb->encapsulation;

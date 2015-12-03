@@ -45,6 +45,7 @@
 #include <net/ndisc.h>
 
 #include "vlan.h"
+#include "flow_netlink.h"
 
 #define TBL_MIN_BUCKETS		1024
 #define MASK_ARRAY_SIZE_MIN	16
@@ -151,7 +152,8 @@ static void flow_free(struct sw_flow *flow)
 
 	if (ovs_identifier_is_key(&flow->id))
 		kfree(flow->id.unmasked_key);
-	kfree(rcu_dereference_raw(flow->sf_acts));
+	if (flow->sf_acts)
+		ovs_nla_free_flow_actions((struct sw_flow_actions __force *)flow->sf_acts);
 	for_each_node(node)
 		if (flow->stats[node])
 			kmem_cache_free(flow_stats_cache,
@@ -505,7 +507,7 @@ static u32 flow_hash(const struct sw_flow_key *key,
 
 static int flow_key_start(const struct sw_flow_key *key)
 {
-	if (key->tun_key.ipv4_dst)
+	if (key->tun_key.u.ipv4.dst)
 		return 0;
 	else
 		return rounddown(offsetof(struct sw_flow_key, phy),

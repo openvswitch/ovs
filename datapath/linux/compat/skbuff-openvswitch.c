@@ -2,6 +2,7 @@
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <linux/if_vlan.h>
+#include <linux/kconfig.h>
 
 #include "gso.h"
 
@@ -279,4 +280,35 @@ void rpl_kfree_skb_list(struct sk_buff *segs)
 	}
 }
 EXPORT_SYMBOL(rpl_kfree_skb_list);
+#endif
+
+#ifndef HAVE_SKB_SCRUB_PACKET_XNET
+
+#define nf_reset_trace rpl_nf_reset_trace
+static void nf_reset_trace(struct sk_buff *skb)
+{
+#if IS_ENABLED(CONFIG_NETFILTER_XT_TARGET_TRACE) || defined(CONFIG_NF_TABLES)
+	skb->nf_trace = 0;
+#endif
+}
+
+void rpl_skb_scrub_packet(struct sk_buff *skb, bool xnet)
+{
+	skb->tstamp.tv64 = 0;
+	skb->pkt_type = PACKET_HOST;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+	skb->skb_iif = 0;
+#endif
+	skb->ignore_df = 0;
+	skb_dst_drop(skb);
+	secpath_reset(skb);
+	nf_reset(skb);
+	nf_reset_trace(skb);
+
+	if (!xnet)
+		return;
+
+	skb_orphan(skb);
+	skb->mark = 0;
+}
 #endif

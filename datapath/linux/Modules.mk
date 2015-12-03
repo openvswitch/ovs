@@ -7,7 +7,10 @@ openvswitch_sources += \
 	linux/compat/gre.c \
 	linux/compat/gso.c \
 	linux/compat/genetlink-openvswitch.c \
+	linux/compat/ip_gre.c \
+	linux/compat/ip_tunnel.c \
 	linux/compat/ip_tunnels_core.c \
+	linux/compat/lisp.c \
 	linux/compat/netdevice.c \
 	linux/compat/net_namespace.c \
 	linux/compat/reciprocal_div.c \
@@ -33,6 +36,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/if.h \
 	linux/compat/include/linux/if_arp.h \
 	linux/compat/include/linux/if_ether.h \
+	linux/compat/include/linux/if_link.h \
 	linux/compat/include/linux/if_vlan.h \
 	linux/compat/include/linux/in.h \
 	linux/compat/include/linux/ip.h \
@@ -40,6 +44,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/jiffies.h \
 	linux/compat/include/linux/kconfig.h \
 	linux/compat/include/linux/kernel.h \
+	linux/compat/include/net/lisp.h \
 	linux/compat/include/linux/list.h \
 	linux/compat/include/linux/mpls.h \
 	linux/compat/include/linux/net.h \
@@ -63,17 +68,23 @@ openvswitch_headers += \
 	linux/compat/include/linux/workqueue.h \
 	linux/compat/include/net/checksum.h \
 	linux/compat/include/net/dst.h \
+	linux/compat/include/net/dst_metadata.h \
 	linux/compat/include/net/flow_keys.h \
 	linux/compat/include/net/genetlink.h \
 	linux/compat/include/net/geneve.h \
 	linux/compat/include/net/gre.h \
+	linux/compat/include/net/inet_ecn.h \
 	linux/compat/include/net/inet_frag.h \
 	linux/compat/include/net/ip.h \
 	linux/compat/include/net/ip_tunnels.h \
+	linux/compat/include/net/ip6_route.h \
+	linux/compat/include/net/ip6_tunnel.h \
 	linux/compat/include/net/ipv6.h \
 	linux/compat/include/net/mpls.h \
 	linux/compat/include/net/net_namespace.h \
 	linux/compat/include/net/netlink.h \
+	linux/compat/include/net/route.h \
+	linux/compat/include/net/rtnetlink.h \
 	linux/compat/include/net/udp.h \
 	linux/compat/include/net/udp_tunnel.h \
 	linux/compat/include/net/sock.h \
