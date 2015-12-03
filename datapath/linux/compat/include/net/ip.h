@@ -3,6 +3,7 @@
 
 #include_next <net/ip.h>
 
+#include <net/route.h>
 #include <linux/version.h>
 
 #ifndef HAVE_IP_IS_FRAGMENT
@@ -61,4 +62,49 @@ static inline unsigned int rpl_ip_skb_dst_mtu(const struct sk_buff *skb)
 #define ip_skb_dst_mtu rpl_ip_skb_dst_mtu
 #endif /* HAVE_IP_SKB_DST_MTU */
 
+#ifdef HAVE_IP_FRAGMENT_TAKES_SOCK
+#define OVS_VPORT_OUTPUT_PARAMS struct sock *sock, struct sk_buff *skb
+#else
+#define OVS_VPORT_OUTPUT_PARAMS struct sk_buff *skb
+#endif
+
+#ifdef OVS_FRAGMENT_BACKPORT
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+static inline bool ip_defrag_user_in_between(u32 user,
+					     enum ip_defrag_users lower_bond,
+					     enum ip_defrag_users upper_bond)
+{
+	return user >= lower_bond && user <= upper_bond;
+}
+#endif
+
+#ifndef HAVE_IP_DO_FRAGMENT
+static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
+				     int (*output)(OVS_VPORT_OUTPUT_PARAMS))
+{
+	unsigned int mtu = ip_skb_dst_mtu(skb);
+	struct iphdr *iph = ip_hdr(skb);
+	struct rtable *rt = skb_rtable(skb);
+	struct net_device *dev = rt->dst.dev;
+
+	if (unlikely(((iph->frag_off & htons(IP_DF)) && !skb->ignore_df) ||
+		     (IPCB(skb)->frag_max_size &&
+		      IPCB(skb)->frag_max_size > mtu))) {
+
+		pr_warn("Dropping packet in ip_do_fragment()\n");
+		IP_INC_STATS(dev_net(dev), IPSTATS_MIB_FRAGFAILS);
+		kfree_skb(skb);
+		return -EMSGSIZE;
+	}
+
+#ifndef HAVE_IP_FRAGMENT_TAKES_SOCK
+	return ip_fragment(skb, output);
+#else
+	return ip_fragment(sk, skb, output);
+#endif
+}
+#define ip_do_fragment rpl_ip_do_fragment
+#endif /* IP_DO_FRAGMENT */
+#endif /* OVS_FRAGMENT_BACKPORT */
 #endif

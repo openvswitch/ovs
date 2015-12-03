@@ -347,6 +347,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [inet_get_local_port_range.*net],
                   [OVS_DEFINE([HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_do_fragment])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_skb_dst_mtu])
   OVS_GREP_IFELSE([$KSRC/include/net/dst_metadata.h], [metadata_dst])
@@ -473,6 +474,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/gre.h], [gre_handle_offloads])
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6.h], [IP6_FH_F_SKIP_RH])
   OVS_GREP_IFELSE([$KSRC/include/net/ipv6.h], [ip6_local_out_sk])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip6_route.h], [ip6_frag.*sock],
+                  [OVS_DEFINE([HAVE_IP_FRAGMENT_TAKES_SOCK])])
+
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be32])
