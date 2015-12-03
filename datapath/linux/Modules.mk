@@ -17,6 +17,7 @@ openvswitch_sources += \
 	linux/compat/netdevice.c \
 	linux/compat/net_namespace.c \
 	linux/compat/nf_conntrack_core.c \
+	linux/compat/nf_conntrack_reasm.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/socket.c \
@@ -101,5 +102,6 @@ openvswitch_headers += \
 	linux/compat/include/net/netfilter/nf_conntrack_expect.h \
 	linux/compat/include/net/netfilter/nf_conntrack_labels.h \
 	linux/compat/include/net/netfilter/nf_conntrack_zones.h \
+	linux/compat/include/net/netfilter/ipv6/nf_defrag_ipv6.h \
 	linux/compat/include/net/sctp/checksum.h
 EXTRA_DIST += linux/compat/build-aux/export-check-whitelist

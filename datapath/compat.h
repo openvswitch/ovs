@@ -25,6 +25,7 @@
 #include <net/ip.h>
 #include <net/route.h>
 #include <net/xfrm.h>
+#include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 
 #ifdef HAVE_GENL_MULTICAST_GROUP_WITH_ID
 #define GROUP_ID(grp)	((grp)->id)
@@ -54,12 +55,37 @@ static inline bool skb_encapsulation(struct sk_buff *skb)
 #endif
 
 #ifdef OVS_FRAGMENT_BACKPORT
+int __init ip6_output_init(void);
+void ip6_output_exit(void);
+
 static inline int __init compat_init(void)
 {
-	return ipfrag_init();
+	int err;
+
+	err = ipfrag_init();
+	if (err)
+		return err;
+
+	err = nf_ct_frag6_init();
+	if (err)
+		goto error_ipfrag_exit;
+
+	err = ip6_output_init();
+	if (err)
+		goto error_frag6_exit;
+
+	return 0;
+
+error_frag6_exit:
+	nf_ct_frag6_cleanup();
+error_ipfrag_exit:
+	rpl_ipfrag_fini();
+	return err;
 }
 static inline void compat_exit(void)
 {
+	ip6_output_exit();
+	nf_ct_frag6_cleanup();
 	rpl_ipfrag_fini();
 }
 #else
