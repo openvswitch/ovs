@@ -23,6 +23,10 @@ static inline void rpl_inet_get_local_port_range(struct net *net, int *low,
 
 #endif
 
+#ifndef IPSKB_FRAG_PMTU
+#define IPSKB_FRAG_PMTU                BIT(6)
+#endif
+
 /* IPv4 datagram length is stored into 16bit field (tot_len) */
 #ifndef IP_MAX_MTU
 #define IP_MAX_MTU	0xFFFFU
@@ -106,5 +110,22 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 }
 #define ip_do_fragment rpl_ip_do_fragment
 #endif /* IP_DO_FRAGMENT */
+
+/* Prior to upstream commit d6b915e29f4a ("ip_fragment: don't forward
+ * defragmented DF packet"), IPCB(skb)->frag_max_size was not always populated
+ * correctly, which would lead to reassembled packets not being refragmented.
+ * So, we backport all of ip_defrag() in these cases.
+ */
+int rpl_ip_defrag(struct sk_buff *skb, u32 user);
+#define ip_defrag rpl_ip_defrag
+
+int __init rpl_ipfrag_init(void);
+void rpl_ipfrag_fini(void);
+#else /* OVS_FRAGMENT_BACKPORT */
+static inline int rpl_ipfrag_init(void) { return 0; }
+static inline void rpl_ipfrag_fini(void) { }
 #endif /* OVS_FRAGMENT_BACKPORT */
+#define ipfrag_init rpl_ipfrag_init
+#define ipfrag_fini rpl_ipfrag_fini
+
 #endif

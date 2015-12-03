@@ -22,6 +22,7 @@
 #include <linux/in.h>
 #include <linux/in_route.h>
 #include <linux/netlink.h>
+#include <net/ip.h>
 #include <net/route.h>
 #include <net/xfrm.h>
 
@@ -50,6 +51,20 @@ static inline bool skb_encapsulation(struct sk_buff *skb)
 }
 #else
 #define skb_encapsulation(skb) false
+#endif
+
+#ifdef OVS_FRAGMENT_BACKPORT
+static inline int __init compat_init(void)
+{
+	return ipfrag_init();
+}
+static inline void compat_exit(void)
+{
+	rpl_ipfrag_fini();
+}
+#else
+static inline int __init compat_init(void) { return 0; }
+static inline void compat_exit(void) { }
 #endif
 
 #endif /* compat.h */

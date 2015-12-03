@@ -7,7 +7,9 @@ openvswitch_sources += \
 	linux/compat/gre.c \
 	linux/compat/gso.c \
 	linux/compat/genetlink-openvswitch.c \
+	linux/compat/inet_fragment.c \
 	linux/compat/ip_gre.c \
+	linux/compat/ip_fragment.c \
 	linux/compat/ip_tunnel.c \
 	linux/compat/ip_tunnels_core.c \
 	linux/compat/lisp.c \
@@ -76,6 +78,7 @@ openvswitch_headers += \
 	linux/compat/include/net/gre.h \
 	linux/compat/include/net/inet_ecn.h \
 	linux/compat/include/net/inet_frag.h \
+	linux/compat/include/net/inetpeer.h \
 	linux/compat/include/net/ip.h \
 	linux/compat/include/net/ip_tunnels.h \
 	linux/compat/include/net/ip6_route.h \
@@ -90,6 +93,7 @@ openvswitch_headers += \
 	linux/compat/include/net/udp_tunnel.h \
 	linux/compat/include/net/sock.h \
 	linux/compat/include/net/stt.h \
+	linux/compat/include/net/vrf.h \
 	linux/compat/include/net/vxlan.h \
 	linux/compat/include/net/netfilter/nf_conntrack_core.h \
 	linux/compat/include/net/netfilter/nf_conntrack_expect.h \
