@@ -1616,8 +1616,12 @@ netdev_dpdk_get_status(const struct netdev *netdev_, struct smap *args)
     smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
     smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
 
-    smap_add_format(args, "pci-vendor_id", "0x%u", dev_info.pci_dev->id.vendor_id);
-    smap_add_format(args, "pci-device_id", "0x%x", dev_info.pci_dev->id.device_id);
+    if (dev_info.pci_dev) {
+        smap_add_format(args, "pci-vendor_id", "0x%u",
+                        dev_info.pci_dev->id.vendor_id);
+        smap_add_format(args, "pci-device_id", "0x%x",
+                        dev_info.pci_dev->id.device_id);
+    }
 
     return 0;
 }
