@@ -165,6 +165,29 @@ A: The following table lists the Linux kernel versions against which the
    It should build against almost any kernel, certainly against 2.6.32
    and later.
 
+### Q: Are all features available with all versions of the kernel module?
+
+A: Features are gradually introduced into the upstream kernel so unless
+   you are running the latest Linux release there may be some missing
+   features. ovs-vswitchd probes for kernel features during startup and
+   lists them in the ovs-vswitchd log file. If you need features that
+   are unsupported, you can upgrade the Linux version or use the kernel
+   module paired with the userspace distribution.
+
+   For a given Open vSwitch release, the vast majority of features are
+   supported when using the kernel module paired with the userspace
+   distribution, no matter which kernel you build it against. However,
+   from time to time, new features may be introduced which rely on
+   functionality not available in older kernels. The features below are
+   included in the kernel module distributed with OVS, but have more
+   stringent requirements for minimum kernel versions than the support
+   listed earlier.
+
+| Feature   | Open vSwitch | Linux kernel
+|:---------:|:------------:|:------------:
+|    STT    |     2.4+     |     3.5+
+| Conntrack |     2.5+     |     3.10+
+
 ### Q: I get an error like this when I configure Open vSwitch:
 
        configure: error: Linux kernel in <dir> is version <x>, but
