@@ -1,6 +1,7 @@
 #include <linux/if_bridge.h>
 #include <linux/netdevice.h>
 #include <linux/version.h>
+#include <net/rtnetlink.h>
 
 #ifndef HAVE_DEV_DISABLE_LRO
 
@@ -93,3 +94,24 @@ void rpl_netdev_rx_handler_unregister(struct net_device *dev)
 EXPORT_SYMBOL_GPL(rpl_netdev_rx_handler_unregister);
 
 #endif
+
+int rpl_rtnl_delete_link(struct net_device *dev)
+{
+	const struct rtnl_link_ops *ops;
+
+	ops = dev->rtnl_link_ops;
+	if (!ops || !ops->dellink)
+		return -EOPNOTSUPP;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+	ops->dellink(dev);
+#else
+	{
+		LIST_HEAD(list_kill);
+
+		ops->dellink(dev, &list_kill);
+		unregister_netdevice_many(&list_kill);
+	}
+#endif
+	return 0;
+}

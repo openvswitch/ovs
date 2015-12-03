@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -26,12 +26,12 @@
 #include <linux/skbuff.h>
 #include <linux/u64_stats_sync.h>
 #include <net/net_namespace.h>
+#include <net/ip_tunnels.h>
 
 #include "compat.h"
 #include "flow.h"
 #include "flow_table.h"
 #include "vlan.h"
-#include "vport.h"
 
 #define DP_MAX_PORTS           USHRT_MAX
 #define DP_VPORT_HASH_BUCKETS  1024
@@ -95,13 +95,10 @@ struct datapath {
 
 /**
  * struct ovs_skb_cb - OVS data in skb CB
- * @egress_tun_info: Tunnel information about this packet on egress path.
- * NULL if the packet is not being tunneled.
  * @input_vport: The original vport packet came in on. This value is cached
  * when a packet is received by OVS.
  */
 struct ovs_skb_cb {
-	struct ovs_tunnel_info  *egress_tun_info;
 	struct vport		*input_vport;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
@@ -117,7 +114,8 @@ struct ovs_skb_cb {
  * @egress_tun_info: If nonnull, becomes %OVS_PACKET_ATTR_EGRESS_TUN_KEY.
  */
 struct dp_upcall_info {
-	const struct ovs_tunnel_info *egress_tun_info;
+	struct ip_tunnel_info *egress_tun_info;
+	const void *egress_tun_opts;
 	const struct nlattr *userdata;
 	const struct nlattr *actions;
 	int actions_len;
@@ -129,12 +127,10 @@ struct dp_upcall_info {
  * struct ovs_net - Per net-namespace data for ovs.
  * @dps: List of datapaths to enable dumping them all out.
  * Protected by genl_mutex.
- * @vport_net: Per network namespace data for vport.
  */
 struct ovs_net {
 	struct list_head dps;
 	struct work_struct dp_notify_work;
-	struct vport_net vport_net;
 };
 
 extern int ovs_net_id;

@@ -42,8 +42,7 @@ openvswitch_headers = \
 	vlan.h \
 	vport.h \
 	vport-internal_dev.h \
-	vport-netdev.h \
-	vport-vxlan.h
+	vport-netdev.h
 
 openvswitch_extras = \
 	README.md

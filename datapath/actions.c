@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -618,12 +618,11 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	else
 		kfree_skb(skb);
 }
-
 static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 			    struct sw_flow_key *key, const struct nlattr *attr,
 			    const struct nlattr *actions, int actions_len)
 {
-	struct ovs_tunnel_info info;
+	struct ip_tunnel_info info;
 	struct dp_upcall_info upcall;
 	const struct nlattr *a;
 	int rem;
@@ -650,11 +649,13 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 			if (vport) {
 				int err;
 
+				upcall.egress_tun_info = &info;
 				err = ovs_vport_get_egress_tun_info(vport, skb,
-								    &info);
-				if (!err)
-					upcall.egress_tun_info = &info;
+								    &upcall);
+				if (err)
+					upcall.egress_tun_info = NULL;
 			}
+
 			break;
 		}
 
@@ -748,7 +749,11 @@ static int execute_set_action(struct sk_buff *skb,
 {
 	/* Only tunnel set execution is supported without a mask. */
 	if (nla_type(a) == OVS_KEY_ATTR_TUNNEL_INFO) {
-		OVS_CB(skb)->egress_tun_info = nla_data(a);
+		struct ovs_tunnel_info *tun = nla_data(a);
+
+		ovs_skb_dst_drop(skb);
+		ovs_dst_hold((struct dst_entry *)tun->tun_dst);
+		ovs_skb_dst_set(skb, (struct dst_entry *)tun->tun_dst);
 		return 0;
 	}
 

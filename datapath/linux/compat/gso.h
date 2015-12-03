@@ -2,29 +2,35 @@
 #define __LINUX_GSO_WRAPPER_H
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-
-#include <linux/netdevice.h>
-#include <linux/skbuff.h>
-#include <net/protocol.h>
-
 #include "datapath.h"
+
 typedef void (*gso_fix_segment_t)(struct sk_buff *);
 
 struct ovs_gso_cb {
 	struct ovs_skb_cb dp_cb;
+#ifndef HAVE_METADATA_DST
+	struct metadata_dst	*tun_dst;
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 	gso_fix_segment_t fix_segment;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
+#endif
+#ifndef HAVE_INNER_PROTOCOL
 	__be16		inner_protocol;
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#ifndef HAVE_INNER_MAC_HEADER
 	unsigned int	inner_mac_header;
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
+#ifndef HAVE_INNER_NETWORK_HEADER
 	unsigned int	inner_network_header;
 #endif
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
+
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#include <linux/netdevice.h>
+#include <linux/skbuff.h>
+#include <net/protocol.h>
 
 static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
 {
@@ -37,7 +43,7 @@ static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#ifndef HAVE_INNER_MAC_HEADER
 static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
 {
 	return skb->head + OVS_GSO_CB(skb)->inner_mac_header;
@@ -48,9 +54,9 @@ static inline void skb_set_inner_mac_header(const struct sk_buff *skb,
 {
 	OVS_GSO_CB(skb)->inner_mac_header = (skb->data - skb->head) + offset;
 }
-#endif
+#endif /* HAVE_INNER_MAC_HEADER */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
+#ifndef HAVE_INNER_NETWORK_HEADER
 static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
 {
 	return skb->head + OVS_GSO_CB(skb)->inner_network_header;
@@ -88,15 +94,17 @@ static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
 	return skb_inner_transport_header(skb) - skb->data;
 }
 
-#endif
+#endif /* HAVE_INNER_NETWORK_HEADER */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
-static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb) {
+#ifndef HAVE_INNER_PROTOCOL
+static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb)
+{
 	OVS_GSO_CB(skb)->inner_protocol = htons(0);
 }
 
 static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
-					      __be16 ethertype) {
+					      __be16 ethertype)
+{
 	OVS_GSO_CB(skb)->inner_protocol = ethertype;
 }
 
@@ -107,31 +115,28 @@ static inline __be16 ovs_skb_get_inner_protocol(struct sk_buff *skb)
 
 #else
 
-static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb) {
+static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb)
+{
 	/* Nothing to do. The inner_protocol is either zero or
 	 * has been set to a value by another user.
 	 * Either way it may be considered initialised.
 	 */
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+static inline __be16 ovs_skb_get_inner_protocol(struct sk_buff *skb)
+{
+	return skb->inner_protocol;
+}
+
+#ifdef ENCAP_TYPE_ETHER
+#define ovs_skb_set_inner_protocol skb_set_inner_protocol
+#else
 static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
 					      __be16 ethertype)
 {
 	skb->inner_protocol = ethertype;
 }
-#else
-static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
-					      __be16 ethertype)
-{
-	skb_set_inner_protocol(skb, ethertype);
-}
-#endif
-
-static inline __be16 ovs_skb_get_inner_protocol(struct sk_buff *skb)
-{
-	return skb->inner_protocol;
-}
+#endif /* ENCAP_TYPE_ETHER */
 #endif /* 3.11 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
@@ -152,5 +157,41 @@ static inline void skb_reset_inner_headers(struct sk_buff *skb)
 	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
 }
 #endif /* 3.18 */
+
+#ifndef HAVE_METADATA_DST
+/* We need two separate functions to manage different dst in this case.
+ * First is dst_entry and second is tunnel-dst.
+ * So define ovs_* separate functions for tun_dst.
+ */
+static inline void ovs_skb_dst_set(struct sk_buff *skb, void *dst)
+{
+	OVS_GSO_CB(skb)->tun_dst = (void *)dst;
+}
+
+static inline struct ip_tunnel_info *ovs_skb_tunnel_info(struct sk_buff *skb)
+{
+	return &OVS_GSO_CB(skb)->tun_dst->u.tun_info;
+}
+
+static inline void ovs_skb_dst_drop(struct sk_buff *skb)
+{
+	OVS_GSO_CB(skb)->tun_dst = NULL;
+}
+
+static inline void ovs_dst_hold(void *dst)
+{
+}
+
+static inline void ovs_dst_release(struct dst_entry *dst)
+{
+	kfree(dst);
+}
+
+#else
+#define ovs_skb_dst_set skb_dst_set
+#define ovs_skb_dst_drop skb_dst_drop
+#define ovs_dst_hold dst_hold
+#define ovs_dst_release dst_release
+#endif
 
 #endif

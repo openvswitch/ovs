@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2013 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -54,8 +54,9 @@ int ovs_nla_put_mask(const struct sw_flow *flow, struct sk_buff *skb);
 
 int ovs_nla_get_match(struct sw_flow_match *, const struct nlattr *key,
 		      const struct nlattr *mask, bool log);
-int ovs_nla_put_egress_tunnel_key(struct sk_buff *,
-				  const struct ovs_tunnel_info *);
+int ovs_nla_put_egress_tunnel_key(struct sk_buff *skb,
+				  const struct ip_tunnel_info *egress_tun_info,
+				  const void *egress_tun_opts);
 
 bool ovs_nla_get_ufid(struct sw_flow_id *, const struct nlattr *, bool log);
 int ovs_nla_get_identifier(struct sw_flow_id *sfid, const struct nlattr *ufid,
@@ -69,5 +70,6 @@ int ovs_nla_put_actions(const struct nlattr *attr,
 			int len, struct sk_buff *skb);
 
 void ovs_nla_free_flow_actions(struct sw_flow_actions *);
+void ovs_nla_free_flow_actions_rcu(struct sw_flow_actions *);
 
 #endif /* flow_netlink.h */
