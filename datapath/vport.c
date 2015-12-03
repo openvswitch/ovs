@@ -493,6 +493,7 @@ int ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 	int error;
 
 	OVS_CB(skb)->input_vport = vport;
+	OVS_CB(skb)->mru = 0;
 	ovs_skb_init_inner_protocol(skb);
 	skb_clear_ovs_gso_cb(skb);
 	/* Extract flow from 'skb' into 'key'. */

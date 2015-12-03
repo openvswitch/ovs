@@ -25,4 +25,10 @@
 #define this_cpu_dec(ptr) percpu_sub(ptr, 1)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+#define get_pcpu_ptr(name) ((void *)this_cpu_ptr(&__pcpu_unique_##name))
+#else
+#define get_pcpu_ptr(name) (this_cpu_ptr(&name))
+#endif
+
 #endif
