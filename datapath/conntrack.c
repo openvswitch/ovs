@@ -43,9 +43,9 @@ struct md_mark {
 };
 
 /* Metadata label for masked write to conntrack label. */
-struct md_label {
-	struct ovs_key_ct_label value;
-	struct ovs_key_ct_label mask;
+struct md_labels {
+	struct ovs_key_ct_labels value;
+	struct ovs_key_ct_labels mask;
 };
 
 /* Conntrack action context for execution. */
@@ -53,10 +53,10 @@ struct ovs_conntrack_info {
 	struct nf_conntrack_helper *helper;
 	struct nf_conntrack_zone zone;
 	struct nf_conn *ct;
-	u32 flags;
+	u8 commit : 1;
 	u16 family;
 	struct md_mark mark;
-	struct md_label label;
+	struct md_labels labels;
 };
 
 static void __ovs_ct_free_action(struct ovs_conntrack_info *ct_info);
@@ -108,21 +108,30 @@ static u8 ovs_ct_get_state(enum ip_conntrack_info ctinfo)
 	return ct_state;
 }
 
-static void ovs_ct_get_label(const struct nf_conn *ct,
-			     struct ovs_key_ct_label *label)
+static u32 ovs_ct_get_mark(const struct nf_conn *ct)
+{
+#if IS_ENABLED(CONFIG_NF_CONNTRACK_MARK)
+	return ct ? ct->mark : 0;
+#else
+	return 0;
+#endif
+}
+
+static void ovs_ct_get_labels(const struct nf_conn *ct,
+			      struct ovs_key_ct_labels *labels)
 {
 	struct nf_conn_labels *cl = ct ? nf_ct_labels_find(ct) : NULL;
 
 	if (cl) {
 		size_t len = cl->words * sizeof(long);
 
-		if (len > OVS_CT_LABEL_LEN)
-			len = OVS_CT_LABEL_LEN;
-		else if (len < OVS_CT_LABEL_LEN)
-			memset(label, 0, OVS_CT_LABEL_LEN);
-		memcpy(label, cl->bits, len);
+		if (len > OVS_CT_LABELS_LEN)
+			len = OVS_CT_LABELS_LEN;
+		else if (len < OVS_CT_LABELS_LEN)
+			memset(labels, 0, OVS_CT_LABELS_LEN);
+		memcpy(labels, cl->bits, len);
 	} else {
-		memset(label, 0, OVS_CT_LABEL_LEN);
+		memset(labels, 0, OVS_CT_LABELS_LEN);
 	}
 }
 
@@ -132,8 +141,8 @@ static void __ovs_ct_update_key(struct sw_flow_key *key, u8 state,
 {
 	key->ct.state = state;
 	key->ct.zone = zone->id;
-	key->ct.mark = ct ? ct->mark : 0;
-	ovs_ct_get_label(ct, &key->ct.label);
+	key->ct.mark = ovs_ct_get_mark(ct);
+	ovs_ct_get_labels(ct, &key->ct.labels);
 }
 
 /* Update 'key' based on skb->nfct. If 'post_ct' is true, then OVS has
@@ -150,6 +159,8 @@ static void ovs_ct_update_key(const struct sk_buff *skb,
 	ct = nf_ct_get(skb, &ctinfo);
 	if (ct) {
 		state = ovs_ct_get_state(ctinfo);
+		if (!nf_ct_is_confirmed(ct))
+			state |= OVS_CS_F_NEW;
 		if (ct->master)
 			state |= OVS_CS_F_RELATED;
 		zone = nf_ct_zone(ct);
@@ -166,7 +177,7 @@ void ovs_ct_fill_key(const struct sk_buff *skb, struct sw_flow_key *key)
 
 int ovs_ct_put_key(const struct sw_flow_key *key, struct sk_buff *skb)
 {
-	if (nla_put_u8(skb, OVS_KEY_ATTR_CT_STATE, key->ct.state))
+	if (nla_put_u32(skb, OVS_KEY_ATTR_CT_STATE, key->ct.state))
 		return -EMSGSIZE;
 
 	if (IS_ENABLED(CONFIG_NF_CONNTRACK_ZONES) &&
@@ -177,9 +188,9 @@ int ovs_ct_put_key(const struct sw_flow_key *key, struct sk_buff *skb)
 	    nla_put_u32(skb, OVS_KEY_ATTR_CT_MARK, key->ct.mark))
 		return -EMSGSIZE;
 
-	if (IS_ENABLED(CONFIG_NF_CONNTRACK_LABEL) &&
-	    nla_put(skb, OVS_KEY_ATTR_CT_LABEL, sizeof(key->ct.label),
-		    &key->ct.label))
+	if (IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS) &&
+	    nla_put(skb, OVS_KEY_ATTR_CT_LABELS, sizeof(key->ct.labels),
+		    &key->ct.labels))
 		return -EMSGSIZE;
 
 	return 0;
@@ -188,12 +199,11 @@ int ovs_ct_put_key(const struct sw_flow_key *key, struct sk_buff *skb)
 static int ovs_ct_set_mark(struct sk_buff *skb, struct sw_flow_key *key,
 			   u32 ct_mark, u32 mask)
 {
+#if IS_ENABLED(CONFIG_NF_CONNTRACK_MARK)
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn *ct;
 	u32 new_mark;
 
-	if (!IS_ENABLED(CONFIG_NF_CONNTRACK_MARK))
-		return -ENOTSUPP;
 
 	/* The connection could be invalid, in which case set_mark is no-op. */
 	ct = nf_ct_get(skb, &ctinfo);
@@ -208,19 +218,19 @@ static int ovs_ct_set_mark(struct sk_buff *skb, struct sw_flow_key *key,
 	}
 
 	return 0;
+#else
+	return -ENOTSUPP;
+#endif
 }
 
-static int ovs_ct_set_label(struct sk_buff *skb, struct sw_flow_key *key,
-			    const struct ovs_key_ct_label *label,
-			    const struct ovs_key_ct_label *mask)
+static int ovs_ct_set_labels(struct sk_buff *skb, struct sw_flow_key *key,
+			     const struct ovs_key_ct_labels *labels,
+			     const struct ovs_key_ct_labels *mask)
 {
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn_labels *cl;
 	struct nf_conn *ct;
 	int err;
-
-	if (!IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS))
-		return -ENOTSUPP;
 
 	/* The connection could be invalid, in which case set_label is no-op.*/
 	ct = nf_ct_get(skb, &ctinfo);
@@ -232,15 +242,15 @@ static int ovs_ct_set_label(struct sk_buff *skb, struct sw_flow_key *key,
 		nf_ct_labels_ext_add(ct);
 		cl = nf_ct_labels_find(ct);
 	}
-	if (!cl || cl->words * sizeof(long) < OVS_CT_LABEL_LEN)
+	if (!cl || cl->words * sizeof(long) < OVS_CT_LABELS_LEN)
 		return -ENOSPC;
 
-	err = nf_connlabels_replace(ct, (u32 *)label, (u32 *)mask,
-				    OVS_CT_LABEL_LEN / sizeof(u32));
+	err = nf_connlabels_replace(ct, (u32 *)labels, (u32 *)mask,
+				    OVS_CT_LABELS_LEN / sizeof(u32));
 	if (err)
 		return err;
 
-	ovs_ct_get_label(ct, &key->ct.label);
+	ovs_ct_get_labels(ct, &key->ct.labels);
 	return 0;
 }
 
@@ -272,13 +282,15 @@ static int ovs_ct_helper(struct sk_buff *skb, u16 proto)
 	case NFPROTO_IPV6: {
 		u8 nexthdr = ipv6_hdr(skb)->nexthdr;
 		__be16 frag_off;
+		int ofs;
 
-		protoff = ipv6_skip_exthdr(skb, sizeof(struct ipv6hdr),
-					   &nexthdr, &frag_off);
-		if (protoff < 0 || (frag_off & htons(~0x7)) != 0) {
+		ofs = ipv6_skip_exthdr(skb, sizeof(struct ipv6hdr), &nexthdr,
+				       &frag_off);
+		if (ofs < 0 || (frag_off & htons(~0x7)) != 0) {
 			pr_debug("proto header not found\n");
 			return NF_ACCEPT;
 		}
+		protoff = ofs;
 		break;
 	}
 	default:
@@ -289,6 +301,9 @@ static int ovs_ct_helper(struct sk_buff *skb, u16 proto)
 	return helper->help(skb, protoff, ct, ctinfo);
 }
 
+/* Returns 0 on success, -EINPROGRESS if 'skb' is stolen, or other nonzero
+ * value if 'skb' is freed.
+ */
 static int handle_fragments(struct net *net, struct sw_flow_key *key,
 			    u16 zone, struct sk_buff *skb)
 {
@@ -309,8 +324,8 @@ static int handle_fragments(struct net *net, struct sw_flow_key *key,
 			return err;
 
 		ovs_cb.mru = IPCB(skb)->frag_max_size;
-	} else if (key->eth.type == htons(ETH_P_IPV6)) {
 #if IS_ENABLED(CONFIG_NF_DEFRAG_IPV6)
+	} else if (key->eth.type == htons(ETH_P_IPV6)) {
 		enum ip6_defrag_users user = IP6_DEFRAG_CONNTRACK_IN + zone;
 		struct sk_buff *reasm;
 
@@ -319,17 +334,25 @@ static int handle_fragments(struct net *net, struct sw_flow_key *key,
 		if (!reasm)
 			return -EINPROGRESS;
 
-		if (skb == reasm)
+		if (skb == reasm) {
+			kfree_skb(skb);
 			return -EINVAL;
+		}
+
+		/* Don't free 'skb' even though it is one of the original
+		 * fragments, as we're going to morph it into the head.
+		 */
+		skb_get(skb);
+		nf_ct_frag6_consume_orig(reasm);
 
 		key->ip.proto = ipv6_hdr(reasm)->nexthdr;
 		skb_morph(skb, reasm);
+		skb->next = reasm->next;
 		consume_skb(reasm);
 		ovs_cb.mru = IP6CB(skb)->frag_max_size;
-#else
-		return -EPFNOSUPPORT;
 #endif /* IP frag support */
 	} else {
+		kfree_skb(skb);
 		return -EPFNOSUPPORT;
 	}
 
@@ -377,7 +400,7 @@ static bool skb_nfct_cached(const struct net *net, const struct sk_buff *skb,
 	return true;
 }
 
-static int __ovs_ct_lookup(struct net *net, const struct sw_flow_key *key,
+static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 			   const struct ovs_conntrack_info *info,
 			   struct sk_buff *skb)
 {
@@ -408,6 +431,8 @@ static int __ovs_ct_lookup(struct net *net, const struct sw_flow_key *key,
 		}
 	}
 
+	ovs_ct_update_key(skb, key, true);
+
 	return 0;
 }
 
@@ -430,8 +455,6 @@ static int ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 		err = __ovs_ct_lookup(net, key, info, skb);
 		if (err)
 			return err;
-
-		ovs_ct_update_key(skb, key, true);
 	}
 
 	return 0;
@@ -460,22 +483,23 @@ static int ovs_ct_commit(struct net *net, struct sw_flow_key *key,
 	if (nf_conntrack_confirm(skb) != NF_ACCEPT)
 		return -EINVAL;
 
-	ovs_ct_update_key(skb, key, true);
-
 	return 0;
 }
 
-static bool label_nonzero(const struct ovs_key_ct_label *label)
+static bool labels_nonzero(const struct ovs_key_ct_labels *labels)
 {
 	size_t i;
 
-	for (i = 0; i < sizeof(*label); i++)
-		if (label->ct_label[i])
+	for (i = 0; i < sizeof(*labels); i++)
+		if (labels->ct_labels[i])
 			return true;
 
 	return false;
 }
 
+/* Returns 0 on success, -EINPROGRESS if 'skb' is stolen, or other nonzero
+ * value if 'skb' is freed.
+ */
 int ovs_ct_execute(struct net *net, struct sk_buff *skb,
 		   struct sw_flow_key *key,
 		   const struct ovs_conntrack_info *info)
@@ -493,7 +517,7 @@ int ovs_ct_execute(struct net *net, struct sk_buff *skb,
 			return err;
 	}
 
-	if (info->flags & OVS_CT_F_COMMIT)
+	if (info->commit)
 		err = ovs_ct_commit(net, key, info, skb);
 	else
 		err = ovs_ct_lookup(net, key, info, skb);
@@ -506,11 +530,13 @@ int ovs_ct_execute(struct net *net, struct sk_buff *skb,
 		if (err)
 			goto err;
 	}
-	if (label_nonzero(&info->label.mask))
-		err = ovs_ct_set_label(skb, key, &info->label.value,
-				       &info->label.mask);
+	if (labels_nonzero(&info->labels.mask))
+		err = ovs_ct_set_labels(skb, key, &info->labels.value,
+					&info->labels.mask);
 err:
 	skb_push(skb, nh_ofs);
+	if (err)
+		kfree_skb(skb);
 	return err;
 }
 
@@ -539,14 +565,13 @@ static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 }
 
 static const struct ovs_ct_len_tbl ovs_ct_attr_lens[OVS_CT_ATTR_MAX + 1] = {
-	[OVS_CT_ATTR_FLAGS]	= { .minlen = sizeof(u32),
-				    .maxlen = sizeof(u32) },
+	[OVS_CT_ATTR_COMMIT]	= { .minlen = 0, .maxlen = 0 },
 	[OVS_CT_ATTR_ZONE]	= { .minlen = sizeof(u16),
 				    .maxlen = sizeof(u16) },
 	[OVS_CT_ATTR_MARK]	= { .minlen = sizeof(struct md_mark),
 				    .maxlen = sizeof(struct md_mark) },
-	[OVS_CT_ATTR_LABEL]	= { .minlen = sizeof(struct md_label),
-				    .maxlen = sizeof(struct md_label) },
+	[OVS_CT_ATTR_LABELS]	= { .minlen = sizeof(struct md_labels),
+				    .maxlen = sizeof(struct md_labels) },
 	[OVS_CT_ATTR_HELPER]	= { .minlen = 1,
 				    .maxlen = NF_CT_HELPER_NAME_LEN }
 };
@@ -576,8 +601,8 @@ static int parse_ct(const struct nlattr *attr, struct ovs_conntrack_info *info,
 		}
 
 		switch (type) {
-		case OVS_CT_ATTR_FLAGS:
-			info->flags = nla_get_u32(a);
+		case OVS_CT_ATTR_COMMIT:
+			info->commit = true;
 			break;
 #ifdef CONFIG_NF_CONNTRACK_ZONES
 		case OVS_CT_ATTR_ZONE:
@@ -588,15 +613,23 @@ static int parse_ct(const struct nlattr *attr, struct ovs_conntrack_info *info,
 		case OVS_CT_ATTR_MARK: {
 			struct md_mark *mark = nla_data(a);
 
+			if (!mark->mask) {
+				OVS_NLERR(log, "ct_mark mask cannot be 0");
+				return -EINVAL;
+			}
 			info->mark = *mark;
 			break;
 		}
 #endif
 #ifdef CONFIG_NF_CONNTRACK_LABELS
-		case OVS_CT_ATTR_LABEL: {
-			struct md_label *label = nla_data(a);
+		case OVS_CT_ATTR_LABELS: {
+			struct md_labels *labels = nla_data(a);
 
-			info->label = *label;
+			if (!labels_nonzero(&labels->mask)) {
+				OVS_NLERR(log, "ct_labels mask cannot be 0");
+				return -EINVAL;
+			}
+			info->labels = *labels;
 			break;
 		}
 #endif
@@ -633,7 +666,7 @@ bool ovs_ct_verify(struct net *net, enum ovs_key_attr attr)
 	    attr == OVS_KEY_ATTR_CT_MARK)
 		return true;
 	if (IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS) &&
-	    attr == OVS_KEY_ATTR_CT_LABEL) {
+	    attr == OVS_KEY_ATTR_CT_LABELS) {
 		struct ovs_net *ovs_net = net_generic(net, ovs_net_id);
 
 		return ovs_net->xt_label;
@@ -701,18 +734,19 @@ int ovs_ct_action_to_attr(const struct ovs_conntrack_info *ct_info,
 	if (!start)
 		return -EMSGSIZE;
 
-	if (nla_put_u32(skb, OVS_CT_ATTR_FLAGS, ct_info->flags))
+	if (ct_info->commit && nla_put_flag(skb, OVS_CT_ATTR_COMMIT))
 		return -EMSGSIZE;
 	if (IS_ENABLED(CONFIG_NF_CONNTRACK_ZONES) &&
 	    nla_put_u16(skb, OVS_CT_ATTR_ZONE, ct_info->zone.id))
 		return -EMSGSIZE;
-	if (IS_ENABLED(CONFIG_NF_CONNTRACK_MARK) &&
+	if (IS_ENABLED(CONFIG_NF_CONNTRACK_MARK) && ct_info->mark.mask &&
 	    nla_put(skb, OVS_CT_ATTR_MARK, sizeof(ct_info->mark),
 		    &ct_info->mark))
 		return -EMSGSIZE;
 	if (IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS) &&
-	    nla_put(skb, OVS_CT_ATTR_LABEL, sizeof(ct_info->label),
-		    &ct_info->label))
+	    labels_nonzero(&ct_info->labels.mask) &&
+	    nla_put(skb, OVS_CT_ATTR_LABELS, sizeof(ct_info->labels),
+		    &ct_info->labels))
 		return -EMSGSIZE;
 	if (ct_info->helper) {
 		if (nla_put_string(skb, OVS_CT_ATTR_HELPER,
@@ -742,7 +776,7 @@ static void __ovs_ct_free_action(struct ovs_conntrack_info *ct_info)
 
 void ovs_ct_init(struct net *net)
 {
-	unsigned int n_bits = sizeof(struct ovs_key_ct_label) * BITS_PER_BYTE;
+	unsigned int n_bits = sizeof(struct ovs_key_ct_labels) * BITS_PER_BYTE;
 	struct ovs_net *ovs_net = net_generic(net, ovs_net_id);
 
 	if (nf_connlabels_get(net, n_bits)) {

@@ -35,6 +35,10 @@ int ovs_ct_execute(struct net *, struct sk_buff *, struct sw_flow_key *,
 void ovs_ct_fill_key(const struct sk_buff *skb, struct sw_flow_key *key);
 int ovs_ct_put_key(const struct sw_flow_key *key, struct sk_buff *skb);
 void ovs_ct_free_action(const struct nlattr *a);
+
+#define CT_SUPPORTED_MASK (OVS_CS_F_NEW | OVS_CS_F_ESTABLISHED | \
+			   OVS_CS_F_RELATED | OVS_CS_F_REPLY_DIR | \
+			   OVS_CS_F_INVALID | OVS_CS_F_TRACKED)
 #else
 #include <linux/errno.h>
 
@@ -64,6 +68,7 @@ static inline int ovs_ct_execute(struct net *net, struct sk_buff *skb,
 				 struct sw_flow_key *key,
 				 const struct ovs_conntrack_info *info)
 {
+	kfree_skb(skb);
 	return -ENOTSUPP;
 }
 
@@ -73,7 +78,7 @@ static inline void ovs_ct_fill_key(const struct sk_buff *skb,
 	key->ct.state = 0;
 	key->ct.zone = 0;
 	key->ct.mark = 0;
-	memset(&key->ct.label, 0, sizeof(key->ct.label));
+	memset(&key->ct.labels, 0, sizeof(key->ct.labels));
 }
 
 static inline int ovs_ct_put_key(const struct sw_flow_key *key,
@@ -83,5 +88,7 @@ static inline int ovs_ct_put_key(const struct sw_flow_key *key,
 }
 
 static inline void ovs_ct_free_action(const struct nlattr *a) { }
+
+#define CT_SUPPORTED_MASK 0
 #endif
 #endif /* ovs_conntrack.h */

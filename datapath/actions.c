@@ -688,7 +688,7 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 {
 	if (skb_network_offset(skb) > MAX_L2_LEN) {
 		OVS_NLERR(1, "L2 header too long to fragment");
-		return;
+		goto err;
 	}
 
 	if (ethertype == htons(ETH_P_IP)) {
@@ -712,8 +712,7 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 		struct rt6_info ovs_rt;
 
 		if (!v6ops) {
-			kfree_skb(skb);
-			return;
+			goto err;
 		}
 
 		prepare_frag(vport, skb);
@@ -732,8 +731,12 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 		WARN_ONCE(1, "Failed fragment ->%s: eth=%04x, MRU=%d, MTU=%d.",
 			  ovs_vport_name(vport), ntohs(ethertype), mru,
 			  vport->dev->mtu);
-		kfree_skb(skb);
+		goto err;
 	}
+
+	return;
+err:
+	kfree_skb(skb);
 }
 #else /* <= 3.9 */
 static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
@@ -982,7 +985,7 @@ static int execute_masked_set_action(struct sk_buff *skb,
 	case OVS_KEY_ATTR_CT_STATE:
 	case OVS_KEY_ATTR_CT_ZONE:
 	case OVS_KEY_ATTR_CT_MARK:
-	case OVS_KEY_ATTR_CT_LABEL:
+	case OVS_KEY_ATTR_CT_LABELS:
 		err = -EINVAL;
 		break;
 	}
@@ -1113,12 +1116,18 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_CT:
+			if (!is_flow_key_valid(key)) {
+				err = ovs_flow_key_update(skb, key);
+				if (err)
+					return err;
+			}
+
 			err = ovs_ct_execute(ovs_dp_get_net(dp), skb, key,
 					     nla_data(a));
 
 			/* Hide stolen IP fragments from user space. */
-			if (err == -EINPROGRESS)
-				return 0;
+			if (err)
+				return err == -EINPROGRESS ? 0 : err;
 			break;
 		}
 
