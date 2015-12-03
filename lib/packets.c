@@ -39,23 +39,13 @@ const struct in6_addr in6addr_all_hosts = IN6ADDR_ALL_HOSTS_INIT;
 struct in6_addr
 flow_tnl_dst(const struct flow_tnl *tnl)
 {
-    struct in6_addr addr;
-    if (tnl->ip_dst) {
-        in6_addr_set_mapped_ipv4(&addr, tnl->ip_dst);
-        return addr;
-    }
-    return tnl->ipv6_dst;
+    return tnl->ip_dst ? in6_addr_mapped_ipv4(tnl->ip_dst) : tnl->ipv6_dst;
 }
 
 struct in6_addr
 flow_tnl_src(const struct flow_tnl *tnl)
 {
-    struct in6_addr addr;
-    if (tnl->ip_src) {
-        in6_addr_set_mapped_ipv4(&addr, tnl->ip_src);
-        return addr;
-    }
-    return tnl->ipv6_src;
+    return tnl->ip_src ? in6_addr_mapped_ipv4(tnl->ip_src) : tnl->ipv6_src;
 }
 
 /* Parses 's' as a 16-digit hexadecimal number representing a datapath ID.  On
