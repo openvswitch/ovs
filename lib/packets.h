@@ -945,6 +945,28 @@ in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
     }
 }
 
+static inline void
+in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
+{
+    union ovs_16aligned_in6_addr *taddr = (void *) addr;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[0] = htons(0xff02);
+    taddr->be16[5] = htons(0x1);
+    taddr->be16[6] = htons(0xff00);
+    memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
+}
+
+static inline void
+ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
+{
+    eth->ea[0] = 0x33;
+    eth->ea[1] = 0x33;
+    eth->ea[2] = ip6->s6_addr[12];
+    eth->ea[3] = ip6->s6_addr[13];
+    eth->ea[4] = ip6->s6_addr[14];
+    eth->ea[5] = ip6->s6_addr[15];
+}
+
 static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 {
     return dl_type == htons(ETH_TYPE_IP)
@@ -1015,6 +1037,8 @@ void compose_arp(struct dp_packet *, uint16_t arp_op,
                  const struct eth_addr arp_sha,
                  const struct eth_addr arp_tha, bool broadcast,
                  ovs_be32 arp_spa, ovs_be32 arp_tpa);
+void compose_nd(struct dp_packet *, const struct eth_addr eth_src,
+                struct in6_addr *, struct in6_addr *);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 
 #endif /* packets.h */
