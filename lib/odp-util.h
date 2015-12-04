@@ -178,6 +178,11 @@ struct odp_support {
     bool ct_zone;
     bool ct_mark;
     bool ct_label;
+
+    /* If true, it means that the datapath supports the NAT bits in
+     * 'ct_state'.  The above 'ct_state' member must be true for this
+     * to make sense */
+    bool ct_state_nat;
 };
 
 struct odp_flow_key_parms {
