@@ -437,52 +437,31 @@ AT_CLEANUP
 AT_SETUP([ovn -- action parsing])
 dnl Text before => is input, text after => is expected output.
 AT_DATA([test-cases.txt], [[
-# Positive tests.
+# drop
 drop; => actions=drop, prereqs=1
-next; => actions=resubmit(,27), prereqs=1
-next(0); => actions=resubmit(,16), prereqs=1
-next(15); => actions=resubmit(,31), prereqs=1
-ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
-ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
-output; => actions=resubmit(,64), prereqs=1
-outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,27),set_field:0xfffe->reg7,resubmit(,27), prereqs=1
-tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
-eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
-vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
-vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
-reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], prereqs=1
-vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
-reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
-outport = inport; => actions=move:NXM_NX_REG6[]->NXM_NX_REG7[], prereqs=1
-inport = ""; => actions=set_field:0->reg6,set_field:0->in_port, prereqs=1
-reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
-vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
-reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
-outport <-> inport; => actions=push:NXM_NX_REG6[],push:NXM_NX_REG7[],pop:NXM_NX_REG6[],pop:NXM_NX_REG7[], prereqs=1
-ip.ttl--; => actions=dec_ttl, prereqs=ip
-ip.ttl = 4; => actions=set_field:4->nw_ttl, prereqs=eth.type == 0x800 || eth.type == 0x86dd
-
-# Contradictionary prerequisites (allowed but not useful):
-ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
-ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
-
-## Negative tests.
-
-; => Syntax error at `;'.
-xyzzy; => Syntax error at `xyzzy' expecting action.
-next; 123; => Syntax error at `123'.
-next; xyzzy; => Syntax error at `xyzzy' expecting action.
-
-# "drop;" must be on its own:
 drop; next; => Syntax error at `next' expecting end of input.
 next; drop; => Syntax error at `drop' expecting action.
 
-# Missing ";":
-next => Syntax error at end of input expecting ';'.
+# output
+output; => actions=resubmit(,64), prereqs=1
+
+# next
+next; => actions=resubmit(,27), prereqs=1
+next(0); => actions=resubmit(,16), prereqs=1
+next(15); => actions=resubmit(,31), prereqs=1
 
 next(); => Syntax error at `)' expecting small integer.
 next(10; => Syntax error at `;' expecting `)'.
 next(16); => "next" argument must be in range 0 to 15.
+
+# Loading a constant value.
+tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
+vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
+vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
+inport = ""; => actions=set_field:0->reg6,set_field:0->in_port, prereqs=1
+ip.ttl = 4; => actions=set_field:4->nw_ttl, prereqs=eth.type == 0x800 || eth.type == 0x86dd
+outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,27),set_field:0xfffe->reg7,resubmit(,27), prereqs=1
 
 inport[1] = 1; => Cannot select subfield of string field inport.
 ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
@@ -494,18 +473,50 @@ inport = {}; => Syntax error at `}' expecting constant.
 bad_prereq = 123; => Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
 self_recurse = 123; => Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
 vlan.present = 0; => Predicate symbol vlan.present used where lvalue required.
+
+# Moving one field into another.
+reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], prereqs=1
+vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
+reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
+outport = inport; => actions=move:NXM_NX_REG6[]->NXM_NX_REG7[], prereqs=1
+
 reg0[0] = vlan.present; => Predicate symbol vlan.present used where lvalue required.
 reg0 = reg1[0..10]; => Can't assign 11-bit value to 32-bit destination.
 inport = reg0; => Can't assign integer field (reg0) to string field (inport).
 inport = big_string; => String fields inport and big_string are incompatible for assignment.
 ip.proto = reg0[0..7]; => Field ip.proto is not modifiable.
+
+# Exchanging fields.
+reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
+vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
+reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
+outport <-> inport; => actions=push:NXM_NX_REG6[],push:NXM_NX_REG7[],pop:NXM_NX_REG6[],pop:NXM_NX_REG7[], prereqs=1
+
 reg0[0] <-> vlan.present; => Predicate symbol vlan.present used where lvalue required.
 reg0 <-> reg1[0..10]; => Can't exchange 32-bit field with 11-bit field.
 inport <-> reg0; => Can't exchange string field (inport) with integer field (reg0).
 inport <-> big_string; => String fields inport and big_string are incompatible for exchange.
 ip.proto <-> reg0[0..7]; => Field ip.proto is not modifiable.
 reg0[0..7] <-> ip.proto; => Field ip.proto is not modifiable.
+
+# TTL decrement.
+ip.ttl--; => actions=dec_ttl, prereqs=ip
 ip.ttl => Syntax error at end of input expecting `--'.
+
+# conntrack
+ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
+ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
+
+# Contradictionary prerequisites (allowed but not useful):
+ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
+ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
+
+## Miscellaneous negative tests.
+; => Syntax error at `;'.
+xyzzy; => Syntax error at `xyzzy' expecting action.
+next; 123; => Syntax error at `123'.
+next; xyzzy; => Syntax error at `xyzzy' expecting action.
+next => Syntax error at end of input expecting ';'.
 ]])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout
