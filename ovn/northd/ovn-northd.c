@@ -1799,6 +1799,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
+    unsigned int ovnnb_seqno, ovnsb_seqno;
     int res = EXIT_SUCCESS;
     struct unixctl_server *unixctl;
     int retval;
@@ -1868,6 +1869,9 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
 
+    ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl_loop.idl);
+    ovnsb_seqno = ovsdb_idl_get_seqno(ovnsb_idl_loop.idl);
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -1878,8 +1882,14 @@ main(int argc, char *argv[])
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        ovnnb_db_run(&ctx);
-        ovnsb_db_run(&ctx);
+        if (ovnnb_seqno != ovsdb_idl_get_seqno(ctx.ovnnb_idl)) {
+            ovnnb_seqno = ovsdb_idl_get_seqno(ctx.ovnnb_idl);
+            ovnnb_db_run(&ctx);
+        }
+        if (ovnsb_seqno != ovsdb_idl_get_seqno(ctx.ovnsb_idl)) {
+            ovnsb_seqno = ovsdb_idl_get_seqno(ctx.ovnsb_idl);
+            ovnsb_db_run(&ctx);
+        }
 
         unixctl_server_run(unixctl);
         unixctl_server_wait(unixctl);
