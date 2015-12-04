@@ -2617,6 +2617,10 @@ odp_ct_state_to_string(uint32_t flag)
         return "rel";
     case OVS_CS_F_INVALID:
         return "inv";
+    case OVS_CS_F_SRC_NAT:
+        return "snat";
+    case OVS_CS_F_DST_NAT:
+        return "dnat";
     default:
         return NULL;
     }
@@ -3387,6 +3391,12 @@ ovs_to_odp_ct_state(uint8_t state)
     if (state & CS_TRACKED) {
         odp |= OVS_CS_F_TRACKED;
     }
+    if (state & CS_SRC_NAT) {
+        odp |= OVS_CS_F_SRC_NAT;
+    }
+    if (state & CS_DST_NAT) {
+        odp |= OVS_CS_F_DST_NAT;
+    }
 
     return odp;
 }
@@ -3413,6 +3423,12 @@ odp_to_ovs_ct_state(uint32_t flags)
     }
     if (flags & OVS_CS_F_TRACKED) {
         state |= CS_TRACKED;
+    }
+    if (flags & OVS_CS_F_SRC_NAT) {
+        state |= CS_SRC_NAT;
+    }
+    if (flags & OVS_CS_F_DST_NAT) {
+        state |= CS_DST_NAT;
     }
 
     return state;
