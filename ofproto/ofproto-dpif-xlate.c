@@ -3569,13 +3569,12 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
+    xlate_commit_actions(ctx);
     if (!ctx->xin->packet) {
         return;
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-
-    xlate_commit_actions(ctx);
 
     odp_execute_actions(NULL, &packet, 1, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
