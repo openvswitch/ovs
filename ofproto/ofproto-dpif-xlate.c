@@ -2771,6 +2771,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     struct ovs_action_push_tnl tnl_push_data;
     struct xport *out_dev = NULL;
     ovs_be32 s_ip, d_ip = 0;
+    struct in6_addr s_ip6;
     struct eth_addr smac;
     struct eth_addr dmac;
     int err;
@@ -2817,8 +2818,9 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                  " to "ETH_ADDR_FMT" "IP_FMT,
                  ETH_ADDR_ARGS(smac), IP_ARGS(s_ip),
                  ETH_ADDR_ARGS(dmac), IP_ARGS(d_ip));
+    in6_addr_set_mapped_ipv4(&s_ip6, s_ip);
     err = tnl_port_build_header(xport->ofport, flow,
-                                dmac, smac, s_ip, &tnl_push_data);
+                                dmac, smac, &s_ip6, &tnl_push_data);
     if (err) {
         return err;
     }

@@ -768,6 +768,8 @@ struct arp_eth_header {
 };
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
+#define IPV6_HEADER_LEN 40
+
 /* Like struct in6_addr, but whereas that struct requires 32-bit alignment on
  * most implementations, this one only requires 16-bit alignment. */
 union ovs_16aligned_in6_addr {
@@ -807,6 +809,8 @@ struct icmp6_header {
     ovs_be16 icmp6_cksum;
 };
 BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
+
+uint32_t packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *);
 
 /* Neighbor Discovery option field.
  * ND options are always a multiple of 8 bytes in size. */
