@@ -487,19 +487,19 @@ next(16); => "next" argument must be in range 0 to 15.
 inport[1] = 1; => Cannot select subfield of string field inport.
 ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
 eth.dst[40] == 1; => Syntax error at `==' expecting `='.
-ip = 1; => Predicate symbol ip cannot be used in assignment.
+ip = 1; => Predicate symbol ip used where lvalue required.
 ip.proto = 6; => Field ip.proto is not modifiable.
 inport = {"a", "b"}; => Assignments require a single value.
 inport = {}; => Syntax error at `}' expecting constant.
 bad_prereq = 123; => Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
 self_recurse = 123; => Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
-vlan.present = 0; => Predicate symbol vlan.present cannot be used in assignment.
-reg0[0] = vlan.present; => Predicate symbol vlan.present cannot be used in assignment.
+vlan.present = 0; => Predicate symbol vlan.present used where lvalue required.
+reg0[0] = vlan.present; => Predicate symbol vlan.present used where lvalue required.
 reg0 = reg1[0..10]; => Can't assign 11-bit value to 32-bit destination.
 inport = reg0; => Can't assign integer field (reg0) to string field (inport).
 inport = big_string; => String fields inport and big_string are incompatible for assignment.
 ip.proto = reg0[0..7]; => Field ip.proto is not modifiable.
-reg0[0] <-> vlan.present; => Predicate symbol vlan.present cannot be used in exchange.
+reg0[0] <-> vlan.present; => Predicate symbol vlan.present used where lvalue required.
 reg0 <-> reg1[0..10]; => Can't exchange 32-bit field with 11-bit field.
 inport <-> reg0; => Can't exchange string field (inport) with integer field (reg0).
 inport <-> big_string; => String fields inport and big_string are incompatible for exchange.
