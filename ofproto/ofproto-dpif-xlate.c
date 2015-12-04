@@ -2369,15 +2369,15 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     struct pkt_metadata md = PKT_METADATA_INITIALIZER(0);
 
     ctx->xout->slow |= SLOW_CONTROLLER;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          &ctx->xout->odp_actions,
+                                          &ctx->xout->wc);
+
     if (!ctx->xin->packet) {
         return;
     }
 
     packet = ofpbuf_clone(ctx->xin->packet);
-
-    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                                          &ctx->xout->odp_actions,
-                                          &ctx->xout->wc);
 
     odp_execute_actions(NULL, packet, false, &md,
                         ofpbuf_data(&ctx->xout->odp_actions),
