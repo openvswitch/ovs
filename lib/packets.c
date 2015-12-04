@@ -1167,6 +1167,36 @@ compose_arp(struct dp_packet *b, uint16_t arp_op,
     dp_packet_set_l3(b, arp);
 }
 
+void
+compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
+           struct in6_addr * ipv6_src, struct in6_addr * ipv6_dst)
+{
+    struct in6_addr sn_addr;
+    struct eth_addr eth_dst;
+    struct ovs_nd_msg *ns;
+    struct ovs_nd_opt *nd_opt;
+
+    in6_addr_solicited_node(&sn_addr, ipv6_dst);
+    ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
+
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6,
+                IPV6_HEADER_LEN + ICMP6_HEADER_LEN + ND_OPT_LEN);
+    packet_set_ipv6(b, IPPROTO_ICMPV6,
+                    ALIGNED_CAST(ovs_be32 *, ipv6_src->s6_addr),
+                    ALIGNED_CAST(ovs_be32 *, sn_addr.s6_addr),
+                    0, 0, 255);
+
+    ns = dp_packet_l4(b);
+    nd_opt = &ns->options[0];
+
+    ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
+    ns->icmph.icmp6_code = 0;
+
+    nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
+    packet_set_nd(b, ALIGNED_CAST(ovs_be32 *, ipv6_dst->s6_addr),
+                  eth_src, eth_addr_zero);
+}
+
 uint32_t
 packet_csum_pseudoheader(const struct ip_header *ip)
 {
