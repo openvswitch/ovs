@@ -3431,16 +3431,15 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     bool use_masked;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
+    use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->xout->odp_actions,
+                                          &ctx->xout->wc, use_masked);
     if (!ctx->xin->packet) {
         return;
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-
-    use_masked = ctx->xbridge->support.masked_set_action;
-    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                                          ctx->xout->odp_actions,
-                                          &ctx->xout->wc, use_masked);
 
     odp_execute_actions(NULL, &packet, 1, false,
                         ctx->xout->odp_actions->data,
