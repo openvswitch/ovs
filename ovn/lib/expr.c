@@ -2625,20 +2625,17 @@ expr_is_normalized(const struct expr *expr)
  *
  * If 'rw', verifies that 'f' is a read/write field.
  *
- * 'exchange' should be true if an exchange action is being parsed.  This is
- * only used to improve error message phrasing.
- *
  * Returns true if successful, false if an error was encountered (in which case
  * 'ctx->error' reports the particular error). */
 static bool
-expand_symbol(struct expr_context *ctx, bool rw, bool exchange,
+expand_symbol(struct expr_context *ctx, bool rw,
               struct expr_field *f, struct expr **prereqsp)
 {
     const struct expr_symbol *orig_symbol = f->symbol;
 
     if (f->symbol->expansion && f->symbol->level != EXPR_L_ORDINAL) {
-        expr_error(ctx, "Predicate symbol %s cannot be used in %s.",
-                   f->symbol->name, exchange ? "exchange" : "assignment");
+        expr_error(ctx, "Predicate symbol %s used where lvalue required.",
+                   f->symbol->name);
         return false;
     }
 
@@ -2715,7 +2712,7 @@ parse_assignment(struct expr_context *ctx, const struct simap *ports,
         goto exit;
     }
     const struct expr_symbol *orig_dst = dst.symbol;
-    if (!expand_symbol(ctx, true, exchange, &dst, &prereqs)) {
+    if (!expand_symbol(ctx, true, &dst, &prereqs)) {
         goto exit;
     }
 
@@ -2725,7 +2722,7 @@ parse_assignment(struct expr_context *ctx, const struct simap *ports,
             goto exit;
         }
         const struct expr_symbol *orig_src = src.symbol;
-        if (!expand_symbol(ctx, exchange, exchange, &src, &prereqs)) {
+        if (!expand_symbol(ctx, exchange, &src, &prereqs)) {
             goto exit;
         }
 
