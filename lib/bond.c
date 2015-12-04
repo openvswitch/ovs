@@ -60,7 +60,7 @@ struct bond_slave {
     void *aux;                  /* Client-provided handle for this slave. */
 
     struct netdev *netdev;      /* Network device, owned by the client. */
-    uint64_t change_seq;        /* Tracks changes in 'netdev'. */
+    unsigned int change_seq;    /* Tracks changes in 'netdev'. */
     char *name;                 /* Name (a copy of netdev_get_name(netdev)). */
 
     /* Link status. */
