@@ -1236,7 +1236,7 @@ check_masked_set_action(struct dpif_backer *backer)
     return !error;
 }
 
-#define CHECK_FEATURE__(NAME, FIELD)                                        \
+#define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE)                        \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
 {                                                                           \
@@ -1247,12 +1247,12 @@ check_##NAME(struct dpif_backer *backer)                                    \
     struct odp_flow_key_parms odp_parms = {                                 \
         .flow = &flow,                                                      \
         .support = {                                                        \
-            .NAME = true,                                                   \
+            .SUPPORT = true,                                                \
         },                                                                  \
     };                                                                      \
                                                                             \
     memset(&flow, 0, sizeof flow);                                          \
-    flow.FIELD = 1;                                                         \
+    flow.FIELD = VALUE;                                                     \
                                                                             \
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);                         \
     odp_flow_key_from_flow(&odp_parms, &key);                               \
@@ -1267,12 +1267,13 @@ check_##NAME(struct dpif_backer *backer)                                    \
                                                                             \
     return enable;                                                          \
 }
-#define CHECK_FEATURE(FIELD) CHECK_FEATURE__(FIELD, FIELD)
+#define CHECK_FEATURE(FIELD) CHECK_FEATURE__(FIELD, FIELD, FIELD, 1)
 
 CHECK_FEATURE(ct_state)
 CHECK_FEATURE(ct_zone)
 CHECK_FEATURE(ct_mark)
-CHECK_FEATURE__(ct_label, ct_label.u64.lo)
+CHECK_FEATURE__(ct_label, ct_label, ct_label.u64.lo, 1)
+CHECK_FEATURE__(ct_state_nat, ct_state, ct_state, CS_TRACKED|CS_SRC_NAT)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
@@ -1293,6 +1294,8 @@ check_support(struct dpif_backer *backer)
     backer->support.odp.ct_zone = check_ct_zone(backer);
     backer->support.odp.ct_mark = check_ct_mark(backer);
     backer->support.odp.ct_label = check_ct_label(backer);
+
+    backer->support.odp.ct_state_nat = check_ct_state_nat(backer);
 }
 
 static int
@@ -4023,7 +4026,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     support = &ofproto_dpif_get_support(ofproto)->odp;
     ct_state = MINIFLOW_GET_U16(flow, ct_state);
     if (support->ct_state && support->ct_zone && support->ct_mark
-        && support->ct_label) {
+        && support->ct_label && support->ct_state_nat) {
         return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
     }
 
@@ -4033,6 +4036,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
 
     if ((ct_state && !support->ct_state)
         || (ct_state & CS_UNSUPPORTED_MASK)
+        || ((ct_state & (CS_SRC_NAT | CS_DST_NAT)) && !support->ct_state_nat)
         || (ct_zone && !support->ct_zone)
         || (ct_mark && !support->ct_mark)
         || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
@@ -4070,6 +4074,12 @@ check_actions(const struct ofproto_dpif *ofproto,
         OFPACT_FOR_EACH(a, ct->actions, ofpact_ct_get_action_len(ct)) {
             const struct mf_field *dst = ofpact_get_mf_dst(a);
 
+            if (a->type == OFPACT_NAT && !support->ct_state_nat) {
+                /* The backer doesn't seem to support the NAT bits in
+                 * 'ct_state': assume that it doesn't support the NAT
+                 * action. */
+                return OFPERR_OFPBAC_BAD_TYPE;
+            }
             if (dst && ((dst->id == MFF_CT_MARK && !support->ct_mark)
                         || (dst->id == MFF_CT_LABEL && !support->ct_label))) {
                 return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
