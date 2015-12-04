@@ -2344,7 +2344,7 @@ the same way.)
 Conjunctive flows can be a useful building block for negation, that
 is, inequality matches like \fBtcp_src\fR \[!=] 80.  To implement an
 inequality match, convert it to a pair of range matches, e.g. 0 \[<=]
-\fBtcp_src\ < 80 and 80 < \fBtcp_src\fR \[<=] 65535, then convert each
+\fBtcp_src\fR < 80 and 80 < \fBtcp_src\fR \[<=] 65535, then convert each
 of the range matches into a collection of bitwise matches as explained
 above in the description of \fBtcp_src\fR.
 .IP \(bu
