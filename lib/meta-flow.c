@@ -190,6 +190,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.tunnel.ip_src;
     case MFF_TUN_DST:
         return !wc->masks.tunnel.ip_dst;
+    case MFF_TUN_IPV6_SRC:
+        return ipv6_mask_is_any(&wc->masks.tunnel.ipv6_src);
+    case MFF_TUN_IPV6_DST:
+        return ipv6_mask_is_any(&wc->masks.tunnel.ipv6_dst);
     case MFF_TUN_ID:
         return !wc->masks.tunnel.tun_id;
     case MFF_TUN_TOS:
@@ -496,6 +500,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_ID:
     case MFF_TUN_SRC:
     case MFF_TUN_DST:
+    case MFF_TUN_IPV6_SRC:
+    case MFF_TUN_IPV6_DST:
     case MFF_TUN_TOS:
     case MFF_TUN_TTL:
     case MFF_TUN_GBP_ID:
@@ -616,6 +622,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_TUN_DST:
         value->be32 = flow->tunnel.ip_dst;
+        break;
+    case MFF_TUN_IPV6_SRC:
+        value->ipv6 = flow->tunnel.ipv6_src;
+        break;
+    case MFF_TUN_IPV6_DST:
+        value->ipv6 = flow->tunnel.ipv6_dst;
         break;
     case MFF_TUN_FLAGS:
         value->be16 = htons(flow->tunnel.flags & FLOW_TNL_PUB_F_MASK);
@@ -857,6 +869,12 @@ mf_set_value(const struct mf_field *mf,
         break;
     case MFF_TUN_DST:
         match_set_tun_dst(match, value->be32);
+        break;
+    case MFF_TUN_IPV6_SRC:
+        match_set_tun_ipv6_src(match, &value->ipv6);
+        break;
+    case MFF_TUN_IPV6_DST:
+        match_set_tun_ipv6_dst(match, &value->ipv6);
         break;
     case MFF_TUN_FLAGS:
         match_set_tun_flags(match, ntohs(value->be16));
@@ -1164,6 +1182,12 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_TUN_DST:
         flow->tunnel.ip_dst = value->be32;
         break;
+    case MFF_TUN_IPV6_SRC:
+        flow->tunnel.ipv6_src = value->ipv6;
+        break;
+    case MFF_TUN_IPV6_DST:
+        flow->tunnel.ipv6_dst = value->ipv6;
+        break;
     case MFF_TUN_FLAGS:
         flow->tunnel.flags = (flow->tunnel.flags & ~FLOW_TNL_PUB_F_MASK) |
                              ntohs(value->be16);
@@ -1468,6 +1492,18 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
     case MFF_TUN_DST:
         match_set_tun_dst_masked(match, htonl(0), htonl(0));
         break;
+    case MFF_TUN_IPV6_SRC:
+        memset(&match->wc.masks.tunnel.ipv6_src, 0,
+               sizeof match->wc.masks.tunnel.ipv6_src);
+        memset(&match->flow.tunnel.ipv6_src, 0,
+               sizeof match->flow.tunnel.ipv6_src);
+        break;
+    case MFF_TUN_IPV6_DST:
+        memset(&match->wc.masks.tunnel.ipv6_dst, 0,
+               sizeof match->wc.masks.tunnel.ipv6_dst);
+        memset(&match->flow.tunnel.ipv6_dst, 0,
+               sizeof match->flow.tunnel.ipv6_dst);
+        break;
     case MFF_TUN_FLAGS:
         match_set_tun_flags_masked(match, 0, 0);
         break;
@@ -1759,6 +1795,12 @@ mf_set(const struct mf_field *mf,
         break;
     case MFF_TUN_DST:
         match_set_tun_dst_masked(match, value->be32, mask->be32);
+        break;
+    case MFF_TUN_IPV6_SRC:
+        match_set_tun_ipv6_src_masked(match, &value->ipv6, &mask->ipv6);
+        break;
+    case MFF_TUN_IPV6_DST:
+        match_set_tun_ipv6_dst_masked(match, &value->ipv6, &mask->ipv6);
         break;
     case MFF_TUN_FLAGS:
         match_set_tun_flags_masked(match, ntohs(value->be16), ntohs(mask->be16));
