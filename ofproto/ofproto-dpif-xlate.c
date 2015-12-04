@@ -305,9 +305,6 @@ struct xlate_ctx {
      * state from the datapath should be honored after recirculation. */
     bool conntracked;
 
-    /* Pointer to an embedded NAT action in a conntrack action, or NULL. */
-    struct ofpact_nat *ct_nat_action;
-
     /* OpenFlow 1.1+ action set.
      *
      * 'action_set' accumulates "struct ofpact"s added by OFPACT_WRITE_ACTIONS.
@@ -4169,7 +4166,6 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_SAMPLE:
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_CT:
-        case OFPACT_NAT:
             break;
 
             /* These need not be copied for restoration. */
@@ -4242,62 +4238,6 @@ put_ct_helper(struct ofpbuf *odp_actions, struct ofpact_conntrack *ofc)
 }
 
 static void
-put_ct_nat(struct xlate_ctx *ctx)
-{
-    struct ofpact_nat *ofn = ctx->ct_nat_action;
-    size_t nat_offset;
-
-    if (!ofn) {
-        return;
-    }
-
-    nat_offset = nl_msg_start_nested(ctx->odp_actions, OVS_CT_ATTR_NAT);
-    if (ofn->flags & NX_NAT_F_SRC || ofn->flags & NX_NAT_F_DST) {
-        nl_msg_put_flag(ctx->odp_actions, ofn->flags & NX_NAT_F_SRC
-                        ? OVS_NAT_ATTR_SRC : OVS_NAT_ATTR_DST);
-        if (ofn->flags & NX_NAT_F_PERSISTENT) {
-            nl_msg_put_flag(ctx->odp_actions, OVS_NAT_ATTR_PERSISTENT);
-        }
-        if (ofn->flags & NX_NAT_F_PROTO_HASH) {
-            nl_msg_put_flag(ctx->odp_actions, OVS_NAT_ATTR_PROTO_HASH);
-        } else if (ofn->flags & NX_NAT_F_PROTO_RANDOM) {
-            nl_msg_put_flag(ctx->odp_actions, OVS_NAT_ATTR_PROTO_RANDOM);
-        }
-        if (ofn->range_af == AF_INET) {
-            nl_msg_put_be32(ctx->odp_actions, OVS_NAT_ATTR_IP_MIN,
-                           ofn->range.addr.ipv4.min);
-            if (ofn->range.addr.ipv4.max &&
-                (ntohl(ofn->range.addr.ipv4.max)
-                 > ntohl(ofn->range.addr.ipv4.min))) {
-                nl_msg_put_be32(ctx->odp_actions, OVS_NAT_ATTR_IP_MAX,
-                                ofn->range.addr.ipv4.max);
-            }
-        } else if (ofn->range_af == AF_INET6) {
-            nl_msg_put_unspec(ctx->odp_actions, OVS_NAT_ATTR_IP_MIN,
-                              &ofn->range.addr.ipv6.min,
-                              sizeof ofn->range.addr.ipv6.min);
-            if (!ipv6_mask_is_any(&ofn->range.addr.ipv6.max) &&
-                memcmp(&ofn->range.addr.ipv6.max, &ofn->range.addr.ipv6.min,
-                       sizeof ofn->range.addr.ipv6.max) > 0) {
-                nl_msg_put_unspec(ctx->odp_actions, OVS_NAT_ATTR_IP_MAX,
-                                  &ofn->range.addr.ipv6.max,
-                                  sizeof ofn->range.addr.ipv6.max);
-            }
-        }
-        if (ofn->range_af != AF_UNSPEC && ofn->range.proto.min) {
-            nl_msg_put_u16(ctx->odp_actions, OVS_NAT_ATTR_PROTO_MIN,
-                           ofn->range.proto.min);
-            if (ofn->range.proto.max &&
-                ofn->range.proto.max > ofn->range.proto.min) {
-                nl_msg_put_u16(ctx->odp_actions, OVS_NAT_ATTR_PROTO_MAX,
-                               ofn->range.proto.max);
-            }
-        }
-    }
-    nl_msg_end_nested(ctx->odp_actions, nat_offset);
-}
-
-static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
     ovs_u128 old_ct_label = ctx->base_flow.ct_label;
@@ -4310,7 +4250,6 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     xlate_commit_actions(ctx);
 
     /* Process nested actions first, to populate the key. */
-    ctx->ct_nat_action = NULL;
     do_xlate_actions(ofc->actions, ofpact_ct_get_action_len(ofc), ctx);
 
     if (ofc->zone_src.field) {
@@ -4327,8 +4266,6 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     put_ct_mark(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
     put_ct_label(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
     put_ct_helper(ctx->odp_actions, ofc);
-    put_ct_nat(ctx);
-    ctx->ct_nat_action = NULL;
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
 
     /* Restore the original ct fields in the key. These should only be exposed
@@ -4720,11 +4657,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             compose_conntrack_action(ctx, ofpact_get_CT(a));
             break;
 
-        case OFPACT_NAT:
-            /* This will be processed by compose_conntrack_action(). */
-            ctx->ct_nat_action = ofpact_get_NAT(a);
-            break;
-
         case OFPACT_DEBUG_RECIRC:
             ctx_trigger_recirculation(ctx);
             a = ofpact_next(a);
@@ -5043,8 +4975,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         .was_mpls = false,
         .conntracked = false,
-
-        .ct_nat_action = NULL,
 
         .action_set_has_group = false,
         .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),

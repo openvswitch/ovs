@@ -28,7 +28,6 @@
 #include "meta-flow.h"
 #include "multipath.h"
 #include "nx-match.h"
-#include "odp-netlink.h"
 #include "ofp-parse.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -292,9 +291,6 @@ enum ofp_raw_action_type {
     /* NX1.0+(35): struct nx_action_conntrack, ... */
     NXAST_RAW_CT,
 
-    /* NX1.0+(36): struct nx_action_nat, ... */
-    NXAST_RAW_NAT,
-
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -417,7 +413,6 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
-    case OFPACT_NAT:
         return ofpact_next(ofpact);
 
     case OFPACT_CT:
@@ -4390,12 +4385,21 @@ encode_NOTE(const struct ofpact_note *note,
 {
     size_t start_ofs = out->size;
     struct nx_action_note *nan;
+    unsigned int remainder;
+    unsigned int len;
 
     put_NXAST_NOTE(out);
     out->size = out->size - sizeof nan->note;
 
     ofpbuf_put(out, note->data, note->length);
-    pad_ofpat(out, start_ofs);
+
+    len = out->size - start_ofs;
+    remainder = len % OFP_ACTION_ALIGN;
+    if (remainder) {
+        ofpbuf_put_zeros(out, OFP_ACTION_ALIGN - remainder);
+    }
+    nan = ofpbuf_at(out, start_ofs, sizeof *nan);
+    nan->len = htons(out->size - start_ofs);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -4838,18 +4842,9 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     if (conntrack->ofpact.len > sizeof(*conntrack)
         && !(conntrack->flags & NX_CT_F_COMMIT)) {
-        const struct ofpact *a;
-        size_t ofpacts_len = conntrack->ofpact.len - sizeof(*conntrack);
-
-        OFPACT_FOR_EACH (a, conntrack->actions, ofpacts_len) {
-            if (a->type != OFPACT_NAT || ofpact_get_NAT(a)->flags
-                || ofpact_get_NAT(a)->range_af != AF_UNSPEC) {
-                VLOG_WARN_RL(&rl, "CT action requires commit flag if actions "
-                             "other than NAT without arguments are specified.");
-                error = OFPERR_OFPBAC_BAD_ARGUMENT;
-                goto out;
-            }
-        }
+        VLOG_WARN_RL(&rl, "CT action requires commit flag if actions are "
+                     "specified.");
+        error = OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
 out:
@@ -4885,9 +4880,6 @@ encode_CT(const struct ofpact_conntrack *conntrack,
     nac = ofpbuf_at(out, ofs, sizeof(*nac));
     nac->len = htons(len);
 }
-
-static char * OVS_WARN_UNUSED_RESULT parse_NAT(char *arg, struct ofpbuf *,
-                                               enum ofputil_protocol * OVS_UNUSED);
 
 /* Parses 'arg' as the argument to a "ct" action, and appends such an
  * action to 'ofpacts'.
@@ -4926,20 +4918,12 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
             }
         } else if (!strcmp(key, "alg")) {
             error = str_to_connhelper(value, &oc->alg);
-        } else if (!strcmp(key, "nat")) {
-            const size_t nat_offset = ofpacts_pull(ofpacts);
-
-            error = parse_NAT(value, ofpacts, usable_protocols);
-            ofpact_pad(ofpacts);
-            /* Update CT action pointer and length. */
-            ofpacts->header = ofpbuf_push_uninit(ofpacts, nat_offset);
-            oc = ofpacts->header;
         } else if (!strcmp(key, "exec")) {
             /* Hide existing actions from ofpacts_parse_copy(), so the
              * nesting can be handled transparently. */
             enum ofputil_protocol usable_protocols2;
-            const size_t exec_offset = ofpacts_pull(ofpacts);
 
+            ofpbuf_pull(ofpacts, sizeof(*oc));
             /* Initializes 'usable_protocol2', fold it back to
              * '*usable_protocols' afterwards, so that we do not lose
              * restrictions already in there. */
@@ -4947,7 +4931,7 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
                                        false, OFPACT_CT);
             *usable_protocols &= usable_protocols2;
             ofpact_pad(ofpacts);
-            ofpacts->header = ofpbuf_push_uninit(ofpacts, exec_offset);
+            ofpacts->header = ofpbuf_push_uninit(ofpacts, sizeof(*oc));
             oc = ofpacts->header;
         } else {
             error = xasprintf("invalid argument to \"ct\" action: `%s'", key);
@@ -4972,8 +4956,6 @@ format_alg(int port, struct ds *s)
     }
 }
 
-static void format_NAT(const struct ofpact_nat *a, struct ds *ds);
-
 static void
 format_CT(const struct ofpact_conntrack *a, struct ds *s)
 {
@@ -4991,365 +4973,15 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
     } else if (a->zone_imm) {
         ds_put_format(s, "zone=%"PRIu16",", a->zone_imm);
     }
-    /* If the first action is a NAT action, format it outside of the 'exec'
-     * envelope. */
-    const struct ofpact *action = a->actions;
-    size_t actions_len = ofpact_ct_get_action_len(a);
-    if (actions_len && action->type == OFPACT_NAT) {
-        format_NAT(ofpact_get_NAT(action), s);
-        ds_put_char(s, ',');
-        actions_len -= OFPACT_ALIGN(action->len);
-        action = ofpact_next(action);
-    }
-    if (actions_len) {
+    if (ofpact_ct_get_action_len(a)) {
         ds_put_cstr(s, "exec(");
-        ofpacts_format(action, actions_len, s);
-        ds_put_cstr(s, "),");
+        ofpacts_format(a->actions, ofpact_ct_get_action_len(a), s);
+        ds_put_format(s, "),");
     }
     format_alg(a->alg, s);
     ds_chomp(s, ',');
     ds_put_char(s, ')');
 }
-
-/* NAT action. */
-
-/* Which optional fields are present? */
-enum nx_nat_range {
-    NX_NAT_RANGE_IPV4_MIN  = 1 << 0, /* ovs_be32 */
-    NX_NAT_RANGE_IPV4_MAX  = 1 << 1, /* ovs_be32 */
-    NX_NAT_RANGE_IPV6_MIN  = 1 << 2, /* struct in6_addr */
-    NX_NAT_RANGE_IPV6_MAX  = 1 << 3, /* struct in6_addr */
-    NX_NAT_RANGE_PROTO_MIN = 1 << 4, /* ovs_be16 */
-    NX_NAT_RANGE_PROTO_MAX = 1 << 5, /* ovs_be16 */
-};
-
-/* Action structure for NXAST_NAT. */
-struct nx_action_nat {
-    ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* At least 16. */
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be16 subtype;           /* NXAST_NAT. */
-    uint8_t  pad[2];            /* Must be zero. */
-    ovs_be16 flags;             /* Zero or more NX_NAT_F_* flags.
-                                 * Unspecified flag bits must be zero. */
-    ovs_be16 range_present;     /* NX_NAT_RANGE_* */
-    /* Followed by optional parameters as specified by 'range_present' */
-};
-OFP_ASSERT(sizeof(struct nx_action_nat) == 16);
-
-static void
-encode_NAT(const struct ofpact_nat *nat,
-           enum ofp_version ofp_version OVS_UNUSED,
-           struct ofpbuf *out)
-{
-    struct nx_action_nat *nan;
-    const size_t ofs = out->size;
-    uint16_t range_present = 0;
-
-    nan = put_NXAST_NAT(out);
-    nan->flags = htons(nat->flags);
-    if (nat->range_af == AF_INET) {
-        if (nat->range.addr.ipv4.min) {
-            ovs_be32 *min = ofpbuf_put_uninit(out, sizeof *min);
-            *min = nat->range.addr.ipv4.min;
-            range_present |= NX_NAT_RANGE_IPV4_MIN;
-        }
-        if (nat->range.addr.ipv4.max) {
-            ovs_be32 *max = ofpbuf_put_uninit(out, sizeof *max);
-            *max = nat->range.addr.ipv4.max;
-            range_present |= NX_NAT_RANGE_IPV4_MAX;
-        }
-    } else if (nat->range_af == AF_INET6) {
-        if (!ipv6_mask_is_any(&nat->range.addr.ipv6.min)) {
-            struct in6_addr *min = ofpbuf_put_uninit(out, sizeof *min);
-            *min = nat->range.addr.ipv6.min;
-            range_present |= NX_NAT_RANGE_IPV6_MIN;
-        }
-        if (!ipv6_mask_is_any(&nat->range.addr.ipv6.max)) {
-            struct in6_addr *max = ofpbuf_put_uninit(out, sizeof *max);
-            *max = nat->range.addr.ipv6.max;
-            range_present |= NX_NAT_RANGE_IPV6_MAX;
-        }
-    }
-    if (nat->range_af != AF_UNSPEC) {
-        if (nat->range.proto.min) {
-            ovs_be16 *min = ofpbuf_put_uninit(out, sizeof *min);
-            *min = htons(nat->range.proto.min);
-            range_present |= NX_NAT_RANGE_PROTO_MIN;
-        }
-        if (nat->range.proto.max) {
-            ovs_be16 *max = ofpbuf_put_uninit(out, sizeof *max);
-            *max = htons(nat->range.proto.max);
-            range_present |= NX_NAT_RANGE_PROTO_MAX;
-        }
-    }
-    pad_ofpat(out, ofs);
-    nan = ofpbuf_at(out, ofs, sizeof *nan);
-    nan->range_present = htons(range_present);
-}
-
-static enum ofperr
-decode_NXAST_RAW_NAT(const struct nx_action_nat *nan,
-                     enum ofp_version ofp_version OVS_UNUSED,
-                     struct ofpbuf *out)
-{
-    struct ofpact_nat *nat;
-    uint16_t range_present = ntohs(nan->range_present);
-    const char *opts = (char *)(nan + 1);
-    uint16_t len = ntohs(nan->len) - sizeof *nan;
-
-    nat = ofpact_put_NAT(out);
-    nat->flags = ntohs(nan->flags);
-
-#define NX_NAT_GET_OPT(DST, SRC, LEN, TYPE)                     \
-    (LEN >= sizeof(TYPE)                                        \
-     ? (memcpy(DST, SRC, sizeof(TYPE)), LEN -= sizeof(TYPE),    \
-        SRC += sizeof(TYPE))                                    \
-     : NULL)
-
-    nat->range_af = AF_UNSPEC;
-    if (range_present & NX_NAT_RANGE_IPV4_MIN) {
-        if (range_present & (NX_NAT_RANGE_IPV6_MIN | NX_NAT_RANGE_IPV6_MAX)) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
-
-        if (!NX_NAT_GET_OPT(&nat->range.addr.ipv4.min, opts, len, ovs_be32)
-            || !nat->range.addr.ipv4.min) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
-
-        nat->range_af = AF_INET;
-
-        if (range_present & NX_NAT_RANGE_IPV4_MAX) {
-            if (!NX_NAT_GET_OPT(&nat->range.addr.ipv4.max, opts, len,
-                                ovs_be32)) {
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
-            }
-            if (ntohl(nat->range.addr.ipv4.max)
-                < ntohl(nat->range.addr.ipv4.min)) {
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
-            }
-        }
-    } else if (range_present & NX_NAT_RANGE_IPV4_MAX) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    } else if (range_present & NX_NAT_RANGE_IPV6_MIN) {
-        if (!NX_NAT_GET_OPT(&nat->range.addr.ipv6.min, opts, len,
-                            struct in6_addr)
-            || ipv6_mask_is_any(&nat->range.addr.ipv6.min)) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
-
-        nat->range_af = AF_INET6;
-
-        if (range_present & NX_NAT_RANGE_IPV6_MAX) {
-            if (!NX_NAT_GET_OPT(&nat->range.addr.ipv6.max, opts, len,
-                                struct in6_addr)) {
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
-            }
-            if (memcmp(&nat->range.addr.ipv6.max, &nat->range.addr.ipv6.min,
-                       sizeof(struct in6_addr)) < 0) {
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
-            }
-        }
-    } else if (range_present & NX_NAT_RANGE_IPV6_MAX) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
-
-    if (range_present & NX_NAT_RANGE_PROTO_MIN) {
-        ovs_be16 proto;
-
-        if (nat->range_af == AF_UNSPEC) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
-        if (!NX_NAT_GET_OPT(&proto, opts, len, ovs_be16) || proto == 0) {
-            return OFPERR_OFPBAC_BAD_ARGUMENT;
-        }
-        nat->range.proto.min = ntohs(proto);
-        if (range_present & NX_NAT_RANGE_PROTO_MAX) {
-            if (!NX_NAT_GET_OPT(&proto, opts, len, ovs_be16)) {
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
-            }
-            nat->range.proto.max = ntohs(proto);
-            if (nat->range.proto.max < nat->range.proto.min) {
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
-            }
-        }
-    } else if (range_present & NX_NAT_RANGE_PROTO_MAX) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
-
-    return 0;
-}
-
-static void
-format_NAT(const struct ofpact_nat *a, struct ds *ds)
-{
-    ds_put_cstr(ds, "nat");
-
-    if (a->flags & (NX_NAT_F_SRC | NX_NAT_F_DST)) {
-        ds_put_char(ds, '(');
-        ds_put_cstr(ds, a->flags & NX_NAT_F_SRC ? "src" : "dst");
-
-        if (a->range_af != AF_UNSPEC) {
-            ds_put_cstr(ds, "=");
-
-            if (a->range_af == AF_INET) {
-                ds_put_format(ds, IP_FMT, IP_ARGS(a->range.addr.ipv4.min));
-
-                if (a->range.addr.ipv4.max
-                    && a->range.addr.ipv4.max != a->range.addr.ipv4.min) {
-                    ds_put_format(ds, "-"IP_FMT,
-                                  IP_ARGS(a->range.addr.ipv4.max));
-                }
-            } else if (a->range_af == AF_INET6) {
-                ipv6_format_addr_bracket(&a->range.addr.ipv6.min, ds,
-                                        a->range.proto.min);
-
-                if (!ipv6_mask_is_any(&a->range.addr.ipv6.max)
-                    && memcmp(&a->range.addr.ipv6.max, &a->range.addr.ipv6.min,
-                              sizeof(struct in6_addr)) != 0) {
-                    ds_put_char(ds, '-');
-                    ipv6_format_addr_bracket(&a->range.addr.ipv6.max, ds,
-                                            a->range.proto.min);
-                }
-            }
-            if (a->range.proto.min) {
-                ds_put_char(ds, ':');
-                ds_put_format(ds, "%"PRIu16, a->range.proto.min);
-
-                if (a->range.proto.max
-                    && a->range.proto.max != a->range.proto.min) {
-                    ds_put_format(ds, "-%"PRIu16, a->range.proto.max);
-                }
-            }
-            ds_put_char(ds, ',');
-
-            if (a->flags & NX_NAT_F_PERSISTENT) {
-                ds_put_cstr(ds, "persistent,");
-            }
-            if (a->flags & NX_NAT_F_PROTO_HASH) {
-                ds_put_cstr(ds, "hash,");
-            }
-            if (a->flags & NX_NAT_F_PROTO_RANDOM) {
-                ds_put_cstr(ds, "random,");
-            }
-        }
-        ds_chomp(ds, ',');
-        ds_put_char(ds, ')');
-    }
-}
-
-static char * OVS_WARN_UNUSED_RESULT
-str_to_nat_range(const char *s, struct ofpact_nat *on)
-{
-    char ipv6_s[IPV6_SCAN_LEN + 1];
-    int n = 0;
-
-    on->range_af = AF_UNSPEC;
-    if (ovs_scan_len(s, &n, IP_SCAN_FMT,
-                     IP_SCAN_ARGS(&on->range.addr.ipv4.min))) {
-        on->range_af = AF_INET;
-
-        if (s[n] == '-') {
-            n++;
-            if (!ovs_scan_len(s, &n, IP_SCAN_FMT,
-                              IP_SCAN_ARGS(&on->range.addr.ipv4.max))
-                || (ntohl(on->range.addr.ipv4.max)
-                    < ntohl(on->range.addr.ipv4.min))) {
-                goto error;
-            }
-        }
-    } else if ((ovs_scan_len(s, &n, IPV6_SCAN_FMT, ipv6_s)
-                || ovs_scan_len(s, &n, "["IPV6_SCAN_FMT"]", ipv6_s))
-               && inet_pton(AF_INET6, ipv6_s, &on->range.addr.ipv6.min) == 1) {
-        on->range_af = AF_INET6;
-
-        if (s[n] == '-') {
-            n++;
-            if (!(ovs_scan_len(s, &n, IPV6_SCAN_FMT, ipv6_s)
-                  || ovs_scan_len(s, &n, "["IPV6_SCAN_FMT"]", ipv6_s))
-                || inet_pton(AF_INET6, ipv6_s, &on->range.addr.ipv6.max) != 1
-                || memcmp(&on->range.addr.ipv6.max, &on->range.addr.ipv6.min,
-                          sizeof on->range.addr.ipv6.max) < 0) {
-                goto error;
-            }
-        }
-    }
-    if (on->range_af != AF_UNSPEC && s[n] == ':') {
-        n++;
-        if (!ovs_scan_len(s, &n, "%"SCNu16, &on->range.proto.min)) {
-            goto error;
-        }
-        if (s[n] == '-') {
-            n++;
-            if (!ovs_scan_len(s, &n, "%"SCNu16, &on->range.proto.max)
-                || on->range.proto.max < on->range.proto.min) {
-                goto error;
-            }
-        }
-    }
-    if (strlen(s) != n) {
-        return xasprintf("garbage (%s) after nat range \"%s\" (pos: %d)",
-                         &s[n], s, n);
-    }
-    return NULL;
-error:
-    return xasprintf("invalid nat range \"%s\"", s);
-}
-
-
-/* Parses 'arg' as the argument to a "nat" action, and appends such an
- * action to 'ofpacts'.
- *
- * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
-static char * OVS_WARN_UNUSED_RESULT
-parse_NAT(char *arg, struct ofpbuf *ofpacts,
-          enum ofputil_protocol *usable_protocols OVS_UNUSED)
-{
-    struct ofpact_nat *on = ofpact_put_NAT(ofpacts);
-    char *key, *value;
-
-    on->flags = 0;
-    on->range_af = AF_UNSPEC;
-
-    while (ofputil_parse_key_value(&arg, &key, &value)) {
-        char *error = NULL;
-
-        if (!strcmp(key, "src")) {
-            on->flags |= NX_NAT_F_SRC;
-            error = str_to_nat_range(value, on);
-        } else if (!strcmp(key, "dst")) {
-            on->flags |= NX_NAT_F_DST;
-            error = str_to_nat_range(value, on);
-        } else if (!strcmp(key, "persistent")) {
-            on->flags |= NX_NAT_F_PERSISTENT;
-        } else if (!strcmp(key, "hash")) {
-            on->flags |= NX_NAT_F_PROTO_HASH;
-        } else if (!strcmp(key, "random")) {
-            on->flags |= NX_NAT_F_PROTO_RANDOM;
-        } else {
-            error = xasprintf("invalid key \"%s\" in \"nat\" argument",
-                              key);
-        }
-        if (error) {
-            return error;
-        }
-    }
-    if (on->flags & NX_NAT_F_SRC && on->flags & NX_NAT_F_DST) {
-        return xasprintf("May only specify one of \"snat\" or \"dnat\".");
-    }
-    if (!(on->flags & NX_NAT_F_SRC || on->flags & NX_NAT_F_DST)) {
-        if (on->flags) {
-            return xasprintf("Flags allowed only with \"snat\" or \"dnat\".");
-        }
-        if (on->range_af != AF_UNSPEC) {
-            return xasprintf("Range allowed only with \"snat\" or \"dnat\".");
-        }
-    }
-    return NULL;
-}
-
 
 /* Meter instruction. */
 
@@ -5731,7 +5363,6 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_CT:
-    case OFPACT_NAT:
     case OFPACT_CONTROLLER:
     case OFPACT_DEC_MPLS_TTL:
     case OFPACT_DEC_TTL:
@@ -5807,7 +5438,6 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_BUNDLE:
     case OFPACT_CONTROLLER:
     case OFPACT_CT:
-    case OFPACT_NAT:
     case OFPACT_ENQUEUE:
     case OFPACT_EXIT:
     case OFPACT_UNROLL_XLATE:
@@ -6038,7 +5668,6 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_SAMPLE:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_CT:
-    case OFPACT_NAT:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -6614,18 +6243,6 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return err;
     }
 
-    case OFPACT_NAT: {
-        struct ofpact_nat *on = ofpact_get_NAT(a);
-
-        if (!dl_type_is_ip_any(flow->dl_type) ||
-            (on->range_af == AF_INET && flow->dl_type != htons(ETH_TYPE_IP)) ||
-            (on->range_af == AF_INET6
-             && flow->dl_type != htons(ETH_TYPE_IPV6))) {
-            inconsistent_match(usable_protocols);
-        }
-        return 0;
-    }
-
     case OFPACT_CLEAR_ACTIONS:
         return 0;
 
@@ -6773,13 +6390,6 @@ ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
     if (field && field_requires_ct(field->id) && outer_action != OFPACT_CT) {
         VLOG_WARN("cannot set CT fields outside of ct action");
         return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
-    }
-    if (a->type == OFPACT_NAT) {
-        if (outer_action != OFPACT_CT) {
-            VLOG_WARN("Cannot have NAT action outside of \"ct\" action");
-            return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
-        }
-        return 0;
     }
 
     if (outer_action) {
@@ -7152,7 +6762,6 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_GROUP:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_CT:
-    case OFPACT_NAT:
     default:
         return false;
     }
@@ -7819,8 +7428,7 @@ pad_ofpat(struct ofpbuf *openflow, size_t start_ofs)
 {
     struct ofp_action_header *oah;
 
-    ofpbuf_put_zeros(openflow, PAD_SIZE(openflow->size - start_ofs,
-                                        OFP_ACTION_ALIGN));
+    ofpbuf_put_zeros(openflow, PAD_SIZE(openflow->size - start_ofs, 8));
 
     oah = ofpbuf_at_assert(openflow, start_ofs, sizeof *oah);
     oah->len = htons(openflow->size - start_ofs);
