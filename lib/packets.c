@@ -1181,3 +1181,26 @@ packet_csum_pseudoheader(const struct ip_header *ip)
     return partial;
 }
 
+#ifndef __CHECKER__
+uint32_t
+packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
+{
+    uint32_t partial = 0;
+
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[0])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[1])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[2])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[3])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[0])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[1])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[2])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[3])));
+
+    partial = csum_add16(partial, 0);
+    partial = csum_add16(partial, ip6->ip6_plen);
+    partial = csum_add16(partial, 0);
+    partial = csum_add16(partial, ip6->ip6_nxt);
+
+    return partial;
+}
+#endif

@@ -22,6 +22,7 @@
 #include <math.h>
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
+#include <netinet/ip6.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -435,11 +436,8 @@ format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
 }
 
 static const void *
-format_udp_tnl_push_header(struct ds *ds, const struct ip_header *ip)
+format_udp_tnl_push_header(struct ds *ds, const struct udp_header *udp)
 {
-    const struct udp_header *udp;
-
-    udp = (const struct udp_header *) (ip + 1);
     ds_put_format(ds, "udp(src=%"PRIu16",dst=%"PRIu16",csum=0x%"PRIx16"),",
                   ntohs(udp->udp_src), ntohs(udp->udp_dst),
                   ntohs(udp->udp_csum));
@@ -451,13 +449,13 @@ static void
 format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 {
     const struct eth_header *eth;
-    const struct ip_header *ip;
     const void *l3;
+    const void *l4;
+    const struct udp_header *udp;
 
     eth = (const struct eth_header *)data->header;
 
     l3 = eth + 1;
-    ip = (const struct ip_header *)l3;
 
     /* Ethernet */
     ds_put_format(ds, "header(size=%"PRIu8",type=%"PRIu8",eth(dst=",
@@ -467,19 +465,38 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     ds_put_format(ds, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_src));
     ds_put_format(ds, ",dl_type=0x%04"PRIx16"),", ntohs(eth->eth_type));
 
-    /* IPv4 */
-    ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
-                  ",tos=%#"PRIx8",ttl=%"PRIu8",frag=0x%"PRIx16"),",
-                  IP_ARGS(get_16aligned_be32(&ip->ip_src)),
-                  IP_ARGS(get_16aligned_be32(&ip->ip_dst)),
-                  ip->ip_proto, ip->ip_tos,
-                  ip->ip_ttl,
-                  ip->ip_frag_off);
+    if (eth->eth_type == htons(ETH_TYPE_IP)) {
+        /* IPv4 */
+        const struct ip_header *ip;
+        ip = (const struct ip_header *) l3;
+        ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
+                      ",tos=%#"PRIx8",ttl=%"PRIu8",frag=0x%"PRIx16"),",
+                      IP_ARGS(get_16aligned_be32(&ip->ip_src)),
+                      IP_ARGS(get_16aligned_be32(&ip->ip_dst)),
+                      ip->ip_proto, ip->ip_tos,
+                      ip->ip_ttl,
+                      ip->ip_frag_off);
+        l4 = (ip + 1);
+    } else {
+        const struct ip6_hdr *ip6;
+        ip6 = (const struct ip6_hdr *) l3;
+        ds_put_format(ds, "ipv6(src=");
+        ipv6_format_addr(&ip6->ip6_src, ds);
+        ds_put_format(ds, ",dst=");
+        ipv6_format_addr(&ip6->ip6_dst, ds);
+        ds_put_format(ds, ",label=%i,proto=%"PRIu8",tclass=0x%"PRIx8
+                          ",hlimit=%"PRIu8"),",
+                      ntohl(ip6->ip6_flow) & IPV6_LABEL_MASK, ip6->ip6_nxt,
+                      (ntohl(ip6->ip6_flow) >> 20) & 0xff, ip6->ip6_hlim);
+        l4 = (ip6 + 1);
+    }
+
+    udp = (const struct udp_header *) l4;
 
     if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
         const struct vxlanhdr *vxh;
 
-        vxh = format_udp_tnl_push_header(ds, ip);
+        vxh = format_udp_tnl_push_header(ds, udp);
 
         ds_put_format(ds, "vxlan(flags=0x%"PRIx32",vni=0x%"PRIx32")",
                       ntohl(get_16aligned_be32(&vxh->vx_flags)),
@@ -487,7 +504,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     } else if (data->tnl_type == OVS_VPORT_TYPE_GENEVE) {
         const struct genevehdr *gnh;
 
-        gnh = format_udp_tnl_push_header(ds, ip);
+        gnh = format_udp_tnl_push_header(ds, udp);
 
         ds_put_format(ds, "geneve(%s%svni=0x%"PRIx32,
                       gnh->oam ? "oam," : "",
@@ -505,9 +522,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
         const struct gre_base_hdr *greh;
         ovs_16aligned_be32 *options;
-        void *l4;
 
-        l4 = ((uint8_t *)l3  + sizeof(struct ip_header));
         greh = (const struct gre_base_hdr *) l4;
 
         ds_put_format(ds, "gre((flags=0x%"PRIx16",proto=0x%"PRIx16")",
@@ -1010,11 +1025,12 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
 {
     struct eth_header *eth;
     struct ip_header *ip;
+    struct ovs_16aligned_ip6_hdr *ip6;
     struct udp_header *udp;
     struct gre_base_hdr *greh;
     uint16_t gre_proto, gre_flags, dl_type, udp_src, udp_dst, csum;
     ovs_be32 sip, dip;
-    uint32_t tnl_type = 0, header_len = 0;
+    uint32_t tnl_type = 0, header_len = 0, ip_len = 0;
     void *l3, *l4;
     int n = 0;
 
@@ -1023,8 +1039,8 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     }
     eth = (struct eth_header *) data->header;
     l3 = (data->header + sizeof *eth);
-    l4 = ((uint8_t *) l3 + sizeof (struct ip_header));
     ip = (struct ip_header *) l3;
+    ip6 = (struct ovs_16aligned_ip6_hdr *) l3;
     if (!ovs_scan_len(s, &n, "header(size=%"SCNi32",type=%"SCNi32","
                       "eth(dst="ETH_ADDR_SCAN_FMT",",
                       &data->header_len,
@@ -1042,19 +1058,44 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     }
     eth->eth_type = htons(dl_type);
 
-    /* IPv4 */
-    if (!ovs_scan_len(s, &n, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT",proto=%"SCNi8
-                      ",tos=%"SCNi8",ttl=%"SCNi8",frag=0x%"SCNx16"),",
-                      IP_SCAN_ARGS(&sip),
-                      IP_SCAN_ARGS(&dip),
-                      &ip->ip_proto, &ip->ip_tos,
-                      &ip->ip_ttl, &ip->ip_frag_off)) {
-        return -EINVAL;
+    if (eth->eth_type == htons(ETH_TYPE_IP)) {
+        /* IPv4 */
+        if (!ovs_scan_len(s, &n, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT",proto=%"SCNi8
+                          ",tos=%"SCNi8",ttl=%"SCNi8",frag=0x%"SCNx16"),",
+                          IP_SCAN_ARGS(&sip),
+                          IP_SCAN_ARGS(&dip),
+                          &ip->ip_proto, &ip->ip_tos,
+                          &ip->ip_ttl, &ip->ip_frag_off)) {
+            return -EINVAL;
+        }
+        put_16aligned_be32(&ip->ip_src, sip);
+        put_16aligned_be32(&ip->ip_dst, dip);
+        ip_len = sizeof *ip;
+    } else {
+        char sip6_s[IPV6_SCAN_LEN + 1];
+        char dip6_s[IPV6_SCAN_LEN + 1];
+        struct in6_addr sip6, dip6;
+        uint8_t tclass;
+        uint32_t label;
+        if (!ovs_scan_len(s, &n, "ipv6(src="IPV6_SCAN_FMT",dst="IPV6_SCAN_FMT
+                             ",label=%i,proto=%"SCNi8",tclass=0x%"SCNx8
+                             ",hlimit=%"SCNi8"),",
+                             sip6_s, dip6_s, &label, &ip6->ip6_nxt,
+                             &tclass, &ip6->ip6_hlim)
+            || (label & ~IPV6_LABEL_MASK) != 0
+            || inet_pton(AF_INET6, sip6_s, &sip6) != 1
+            || inet_pton(AF_INET6, dip6_s, &dip6) != 1) {
+            return -EINVAL;
+        }
+        put_16aligned_be32(&ip6->ip6_flow, htonl(6 << 28) |
+                           htonl(tclass << 20) | htonl(label));
+        memcpy(&ip6->ip6_src, &sip6, sizeof(ip6->ip6_src));
+        memcpy(&ip6->ip6_dst, &dip6, sizeof(ip6->ip6_dst));
+        ip_len = sizeof *ip6;
     }
-    put_16aligned_be32(&ip->ip_src, sip);
-    put_16aligned_be32(&ip->ip_dst, dip);
 
     /* Tunnel header */
+    l4 = ((uint8_t *) l3 + ip_len);
     udp = (struct udp_header *) l4;
     greh = (struct gre_base_hdr *) l4;
     if (ovs_scan_len(s, &n, "udp(src=%"SCNi16",dst=%"SCNi16",csum=0x%"SCNx16"),",
@@ -1073,13 +1114,13 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
             put_16aligned_be32(&vxh->vx_flags, htonl(vx_flags));
             put_16aligned_be32(&vxh->vx_vni, htonl(vni << 8));
             tnl_type = OVS_VPORT_TYPE_VXLAN;
-            header_len = sizeof *eth + sizeof *ip +
+            header_len = sizeof *eth + ip_len +
                          sizeof *udp + sizeof *vxh;
         } else if (ovs_scan_len(s, &n, "geneve(")) {
             struct genevehdr *gnh = (struct genevehdr *) (udp + 1);
 
             memset(gnh, 0, sizeof *gnh);
-            header_len = sizeof *eth + sizeof *ip +
+            header_len = sizeof *eth + ip_len +
                          sizeof *udp + sizeof *gnh;
 
             if (ovs_scan_len(s, &n, "oam,")) {
@@ -1158,7 +1199,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
             return -EINVAL;
         }
 
-        header_len = sizeof *eth + sizeof *ip +
+        header_len = sizeof *eth + ip_len +
                      ((uint8_t *) options - (uint8_t *) greh);
     } else {
         return -EINVAL;
