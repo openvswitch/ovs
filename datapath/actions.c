@@ -68,7 +68,9 @@ struct ovs_frag_data {
 	u8 l2_data[MAX_L2_LEN];
 };
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0)
 static DEFINE_PER_CPU(struct ovs_frag_data, ovs_frag_data_storage);
+#endif
 
 #define DEFERRED_ACTION_FIFO_SIZE 10
 struct action_fifo {
