@@ -2220,9 +2220,10 @@ iface_refresh_netdev_status(struct iface *iface)
 
     error = netdev_get_etheraddr(iface->netdev, &mac);
     if (!error) {
-        char mac_string[32];
+        char mac_string[ETH_ADDR_STRLEN + 1];
 
-        sprintf(mac_string, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+        snprintf(mac_string, sizeof mac_string,
+                 ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
         ovsrec_interface_set_mac_in_use(iface->cfg, mac_string);
     } else {
         ovsrec_interface_set_mac_in_use(iface->cfg, NULL);
