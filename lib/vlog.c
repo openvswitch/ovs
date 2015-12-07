@@ -430,6 +430,21 @@ vlog_reopen_log_file(void)
     }
 }
 
+/* Closes Log File if it is already open */
+int
+vlog_close_log_file(void)
+{
+   ovs_mutex_lock(&log_file_mutex);
+   if(log_fd >= 0){
+      free(log_file_name);
+      close(log_fd);
+      async_append_destroy(log_writer);
+   }
+   ovs_mutex_unlock(&log_file_mutex);
+   VLOG_INFO("closing log file");
+   return 0;
+}
+
 #ifndef _WIN32
 /* In case a log file exists, change its owner to new 'user' and 'group'.
  *
@@ -725,6 +740,61 @@ vlog_disable_rate_limit(struct unixctl_conn *conn, int argc,
     set_rate_limits(conn, argc, argv, false);
 }
 
+/* UnixCtl Command : invoked via vlog/enable-file-log [FILEPATH]
+ * Enables Logging to File, if logging to file is already enabled
+ * we will Error out */
+static void
+vlog_unixctl_enable_file_log(struct unixctl_conn *conn, int argc,
+                       const char *argv[], void *aux OVS_UNUSED)
+{
+   bool has_log_file = 0;
+   int  error = 0;
+   ovs_mutex_lock(&log_file_mutex);
+   has_log_file = log_file_name != NULL;
+   ovs_mutex_unlock(&log_file_mutex);
+
+   if (has_log_file) {
+      unixctl_command_reply_error(conn,"Logging to file is already enabled");
+   } else {
+      if(argc > 1){
+         /* File Path Optional Argument is given */
+         error = vlog_set_log_file(argv[1]);
+      } else {
+         error = vlog_set_log_file(NULL);
+      }
+      if (error) {
+         unixctl_command_reply_error(conn, ovs_strerror(errno));
+      } else {
+         unixctl_command_reply(conn, NULL);
+      }
+   }
+
+}
+
+/* UnixCtl Command : Invoked via vlog/disable-file-log
+ * Disables Logging to File, if logging to file is already disabled
+ * we will Error out */
+static void
+vlog_unixctl_disable_file_log(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                       const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+   bool has_log_file;
+   int  error;
+   ovs_mutex_lock(&log_file_mutex);
+   has_log_file = log_file_name != NULL;
+   ovs_mutex_unlock(&log_file_mutex);
+
+   if (has_log_file) {
+         error = vlog_close_log_file();
+      if (error) {
+         unixctl_command_reply_error(conn, ovs_strerror(errno));
+      } else {
+         unixctl_command_reply(conn, NULL);
+      }
+   } else {
+      unixctl_command_reply_error(conn,"Logging to file is already disabled");
+   }
+}
 /* Initializes the logging subsystem and registers its unixctl server
  * commands. */
 void
@@ -770,7 +840,10 @@ vlog_init(void)
                                  0, INT_MAX, vlog_disable_rate_limit, NULL);
         unixctl_command_register("vlog/reopen", "", 0, 0,
                                  vlog_unixctl_reopen, NULL);
-
+        unixctl_command_register("vlog/enable-file-log","",0,INT_MAX,
+                                 vlog_unixctl_enable_file_log,NULL);
+        unixctl_command_register("vlog/disable-file-log","",0,0,
+                                 vlog_unixctl_disable_file_log,NULL);
         ovs_rwlock_rdlock(&pattern_rwlock);
         print_syslog_target_deprecation = syslog_fd >= 0;
         ovs_rwlock_unlock(&pattern_rwlock);
