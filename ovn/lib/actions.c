@@ -183,6 +183,19 @@ parse_next_action(struct action_context *ctx)
     }
 }
 
+/* Parses 'prerequisite' as an expression in the context of 'ctx', then adds it
+ * as a conjunction with the existing 'ctx->prereqs'. */
+static void
+add_prerequisite(struct action_context *ctx, const char *prerequisite)
+{
+    struct expr *expr;
+    char *error;
+
+    expr = expr_parse_string(prerequisite, ctx->symtab, &error);
+    ovs_assert(!error);
+    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
+}
+
 static void
 emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 {
@@ -209,12 +222,7 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
     ct->alg = 0;
 
     /* CT only works with IP, so set up a prerequisite. */
-    struct expr *expr;
-    char *error;
-
-    expr = expr_parse_string("ip", ctx->symtab, &error);
-    ovs_assert(!error);
-    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
+    add_prerequisite(ctx, "ip");
 }
 
 static void
@@ -249,9 +257,7 @@ parse_actions(struct action_context *ctx)
             emit_resubmit(ctx, ctx->output_ptable);
         } else if (lexer_match_id(ctx->lexer, "ip.ttl")) {
             if (lexer_match(ctx->lexer, LEX_T_DECREMENT)) {
-                struct expr *e = expr_parse_string("ip", ctx->symtab,
-                                                   &ctx->error);
-                ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, e);
+                add_prerequisite(ctx, "ip");
                 ofpact_put_DEC_TTL(ctx->ofpacts);
             } else {
                 action_syntax_error(ctx, "expecting `--'");
