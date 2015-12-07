@@ -207,7 +207,7 @@ typedef union _OVS_PACKET_HDR_INFO {
         UINT16 tcpCsumNeeded:1;
         UINT16 udpCsumNeeded:1;
         UINT16 udpCsumZero:1;
-        UINT16 pad:9;
+        UINT16 pad:8;
     } ;
     UINT64 value;
 } OVS_PACKET_HDR_INFO, *POVS_PACKET_HDR_INFO;
