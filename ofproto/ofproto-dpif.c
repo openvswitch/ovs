@@ -5318,6 +5318,8 @@ disable_tnl_push_pop(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
         ofproto_use_tnl_push_pop = true;
         unixctl_command_reply(conn, "Tunnel push-pop on");
         ofproto_revalidate_all_backers();
+    } else {
+        unixctl_command_reply_error(conn, "Invalid argument");
     }
 }
 
