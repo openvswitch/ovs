@@ -1226,9 +1226,18 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
         char *error;
 
         ofpbuf_init(&ofpacts, 0);
-        error = actions_parse_string(ds_cstr(&input), &symtab, &ports,
-                                     &ct_zones, 16, 16, 10, 64,
-                                     &ofpacts, &prereqs);
+
+        struct action_params ap = {
+            .symtab = &symtab,
+            .ports = &ports,
+            .ct_zones = &ct_zones,
+
+            .n_tables = 16,
+            .first_ptable = 16,
+            .cur_ltable = 10,
+            .output_ptable = 64,
+        };
+        error = actions_parse_string(ds_cstr(&input), &ap, &ofpacts, &prereqs);
         if (!error) {
             struct ds output;
 

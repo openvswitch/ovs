@@ -26,18 +26,47 @@ struct ofpbuf;
 struct shash;
 struct simap;
 
-char *actions_parse(struct lexer *, const struct shash *symtab,
-                    const struct simap *ports, const struct simap *ct_zones,
-                    uint8_t first_ptable, uint8_t n_tables, uint8_t cur_ltable,
-                    uint8_t output_ptable, struct ofpbuf *ofpacts,
-                    struct expr **prereqsp)
+struct action_params {
+    /* A table of "struct expr_symbol"s to support (as one would provide to
+     * expr_parse()). */
+    const struct shash *symtab;
+
+     /* 'ports' must be a map from strings (presumably names of ports) to
+      * integers (as one would provide to expr_to_matches()).  Strings used in
+      * the actions that are not in 'ports' are translated to zero. */
+    const struct simap *ports;
+
+    /* A map from a port name to its connection tracking zone. */
+    const struct simap *ct_zones;
+
+    /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
+     * OpenFlow flow table (ptable).  A number of parameters describe this
+     * mapping and data related to flow tables:
+     *
+     *     - 'first_ptable' and 'n_tables' define the range of OpenFlow tables
+     *        to which the logical "next" action should be able to jump.
+     *        Logical table 0 maps to OpenFlow table 'first_ptable', logical
+     *        table 1 to 'first_ptable + 1', and so on.  If 'n_tables' is 0
+     *        then "next" is disallowed entirely.
+     *
+     *     - 'cur_ltable' is an offset from 'first_ptable' (e.g. 0 <=
+     *       cur_ltable < n_ptables) of the logical flow that contains the
+     *       actions.  If cur_ltable + 1 < n_tables, then this defines the
+     *       default table that "next" will jump to.
+     *
+     *     - 'output_ptable' should be the OpenFlow table to which the logical
+     *       "output" action will resubmit. */
+    uint8_t n_tables;           /* Number of flow tables. */
+    uint8_t first_ptable;       /* First OpenFlow table. */
+    uint8_t cur_ltable;         /* 0 <= cur_ltable < n_tables. */
+    uint8_t output_ptable;      /* OpenFlow table for 'output' to resubmit. */
+};
+
+char *actions_parse(struct lexer *, const struct action_params *,
+                    struct ofpbuf *ofpacts, struct expr **prereqsp)
     OVS_WARN_UNUSED_RESULT;
-char *actions_parse_string(const char *s, const struct shash *symtab,
-                           const struct simap *ports,
-                           const struct simap *ct_zones, uint8_t first_ptable,
-                           uint8_t n_tables, uint8_t cur_ltable,
-                           uint8_t output_ptable, struct ofpbuf *ofpacts,
-                           struct expr **prereqsp)
+char *actions_parse_string(const char *s, const struct action_params *,
+                           struct ofpbuf *ofpacts, struct expr **prereqsp)
     OVS_WARN_UNUSED_RESULT;
 
 #endif /* ovn/actions.h */
