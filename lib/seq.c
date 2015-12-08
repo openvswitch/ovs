@@ -20,12 +20,15 @@
 
 #include <stdbool.h>
 
+#include "coverage.h"
 #include "hash.h"
 #include "hmap.h"
 #include "latch.h"
 #include "list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
+
+COVERAGE_DEFINE(seq_change);
 
 /* A sequence number object. */
 struct seq {
@@ -74,6 +77,9 @@ seq_create(void)
     seq_init();
 
     seq = xmalloc(sizeof *seq);
+
+    COVERAGE_INC(seq_change);
+
     ovs_mutex_lock(&seq_mutex);
     seq->value = seq_next++;
     hmap_init(&seq->waiters);
@@ -100,6 +106,8 @@ void
 seq_change(struct seq *seq)
     OVS_EXCLUDED(seq_mutex)
 {
+    COVERAGE_INC(seq_change);
+
     ovs_mutex_lock(&seq_mutex);
     seq->value = seq_next++;
     seq_wake_waiters(seq);
