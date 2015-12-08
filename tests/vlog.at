@@ -101,6 +101,47 @@ AssertionError
 
 AT_CLEANUP
 
+m4_divert_push([PREPARE_TESTS])
+vlog_filt () {
+    sed 's/.*\(opened log file\).*/\1/
+s/.*|//' "$@"
+}
+m4_divert_pop([PREPARE_TESTS])
+
+AT_SETUP([vlog - vlog/reopen - C])
+# This test won't work as-is on Windows because Windows doesn't allow
+# files that are open to be renamed.
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+on_exit 'kill `cat test-unixctl.pid`'
+
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([log.old])
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+  [0], [], [stderr])
+AT_CHECK([vlog_filt stderr], [0],
+  [opened log file
+])
+
+AT_CHECK([APPCTL -t test-unixctl log message])
+mv log log.old
+AT_CHECK([APPCTL -t test-unixctl log message2])
+AT_CHECK([APPCTL -t test-unixctl vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl log message3])
+AT_CHECK([APPCTL -t test-unixctl exit])
+
+AT_CHECK([vlog_filt log.old], [0], [dnl
+opened log file
+Entering run loop.
+message
+message2
+closing log file
+])
+AT_CHECK([vlog_filt log], [0], [dnl
+opened log file
+message3
+])
+AT_CLEANUP
+
 AT_SETUP([vlog - vlog/reopen - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 on_exit 'kill `cat test-unixctl.py.pid`'
@@ -126,6 +167,17 @@ AT_CHECK([sed 's/.*|//' log], [0], [dnl
 ])
 AT_CLEANUP
 
+AT_SETUP([vlog - vlog/reopen without log file - C])
+on_exit 'kill `cat test-unixctl.pid`'
+
+AT_CHECK([ovstest test-unixctl --pidfile --detach])
+
+AT_CHECK([APPCTL -t test-unixctl vlog/reopen], [2], [],
+  [Logging to file not configured
+ovs-appctl: test-unixctl: server returned an error
+])
+AT_CLEANUP
+
 AT_SETUP([vlog - vlog/reopen without log file - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 on_exit 'kill `cat test-unixctl.py.pid`'
@@ -134,6 +186,41 @@ AT_CHECK([$PYTHON $srcdir/test-unixctl.py --pidfile --detach])
 
 AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
   [Logging to file not configured
+])
+AT_CLEANUP
+
+dnl This checks that if vlog/reopen can't reopen the log file,
+dnl nothing particularly bad (e.g. a crash) happens.
+AT_SETUP([vlog - vlog/reopen can't reopen log file - C])
+# Verify that /dev/full is a character device that fails writes.
+AT_SKIP_IF([test ! -c /dev/full])
+AT_SKIP_IF([echo > /dev/full])
+
+on_exit 'kill `cat test-unixctl.pid`'
+
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+  [0], [], [stderr])
+AT_CHECK([vlog_filt stderr], [0], [opened log file
+])
+
+AT_CHECK([APPCTL -t test-unixctl log message])
+mv log log.old
+ln -s /dev/full log
+AT_CHECK([APPCTL -t test-unixctl vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl log message2])
+rm log
+AT_CHECK([APPCTL -t test-unixctl vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl log message3])
+AT_CHECK([APPCTL -t test-unixctl exit])
+AT_CHECK([vlog_filt log.old], [0], [dnl
+opened log file
+Entering run loop.
+message
+closing log file
+])
+AT_CHECK([vlog_filt log], [0], [dnl
+opened log file
+message3
 ])
 AT_CLEANUP
 
@@ -166,6 +253,50 @@ AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
 AT_CHECK([sed 's/.*|//' log], [0], [dnl
  message3
 ])
+AT_CLEANUP
+
+AT_SETUP([vlog - vlog/set and vlog/list - C])
+on_exit 'kill `cat test-unixctl.pid`'
+
+AT_CAPTURE_FILE([log])
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+  [0], [], [stderr])
+AT_CHECK([vlog_filt stderr], [0], [opened log file
+])
+
+AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p
+/\(test_unixctl\|daemon\) /p'], [0], [dnl
+                 console    syslog    file
+                 -------    ------    ------
+daemon             OFF       INFO       INFO
+test_unixctl       OFF       INFO       INFO
+])
+
+AT_CHECK([APPCTL -t test-unixctl vlog/set daemon:syslog:err])
+AT_CHECK([APPCTL -t test-unixctl vlog/set file:dbg])
+AT_CHECK([APPCTL -t test-unixctl vlog/set nonexistent], [2], [],
+  [no destination, level, or module "nonexistent"
+ovs-appctl: test-unixctl: server returned an error
+])
+AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p
+/\(test_unixctl\|daemon\) /p'], [0], [dnl
+                 console    syslog    file
+                 -------    ------    ------
+daemon             OFF        ERR        DBG
+test_unixctl       OFF       INFO        DBG
+])
+
+AT_CHECK([APPCTL -t test-unixctl vlog/set pattern], [2], [],
+  [missing destination
+ovs-appctl: test-unixctl: server returned an error
+])
+AT_CHECK([APPCTL -t test-unixctl vlog/set pattern:nonexistent], [2], [],
+  [unknown destination "nonexistent"
+ovs-appctl: test-unixctl: server returned an error
+])
+AT_CHECK([APPCTL -t test-unixctl vlog/set pattern:file:'I<3OVS|%m'])
+AT_CHECK([APPCTL -t test-unixctl log patterntest])
+AT_CHECK([grep -q 'I<3OVS' log])
 AT_CLEANUP
 
 AT_SETUP([vlog - vlog/set and vlog/list - Python])
