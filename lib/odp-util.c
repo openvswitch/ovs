@@ -4313,9 +4313,17 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
  * 'key' fits our expectations for what a flow key should contain. */
 enum odp_key_fitness
 odp_flow_key_to_mask(const struct nlattr *key, size_t key_len,
-                     struct flow *mask, const struct flow *flow)
+                     struct flow_wildcards *mask, const struct flow *flow)
 {
-   return odp_flow_key_to_flow__(key, key_len, mask, flow);
+    if (key_len) {
+        return odp_flow_key_to_flow__(key, key_len, &mask->masks, flow);
+    } else {
+        /* A missing mask means that the flow should be exact matched.
+         * Generate an appropriate exact wildcard for the flow. */
+        flow_wildcards_init_for_packet(mask, flow);
+
+        return ODP_FIT_PERFECT;
+    }
 }
 
 /* Returns 'fitness' as a string, for use in debug messages. */

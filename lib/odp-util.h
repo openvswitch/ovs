@@ -189,7 +189,7 @@ enum odp_key_fitness {
 enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
                                           struct flow *);
 enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *key, size_t len,
-                                          struct flow *mask,
+                                          struct flow_wildcards *mask,
                                           const struct flow *flow);
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
