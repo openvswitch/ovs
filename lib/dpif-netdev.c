@@ -1858,33 +1858,29 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               uint32_t mask_key_len, const struct flow *flow,
                               struct flow_wildcards *wc)
 {
-    if (mask_key_len) {
-        enum odp_key_fitness fitness;
+    enum odp_key_fitness fitness;
 
-        fitness = odp_flow_key_to_mask_udpif(mask_key, mask_key_len, key,
-                                             key_len, &wc->masks, flow);
-        if (fitness) {
-            /* This should not happen: it indicates that
-             * odp_flow_key_from_mask() and odp_flow_key_to_mask()
-             * disagree on the acceptable form of a mask.  Log the problem
-             * as an error, with enough details to enable debugging. */
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    fitness = odp_flow_key_to_mask_udpif(mask_key, mask_key_len, key,
+                                         key_len, wc, flow);
+    if (fitness) {
+        /* This should not happen: it indicates that
+         * odp_flow_key_from_mask() and odp_flow_key_to_mask()
+         * disagree on the acceptable form of a mask.  Log the problem
+         * as an error, with enough details to enable debugging. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-            if (!VLOG_DROP_ERR(&rl)) {
-                struct ds s;
+        if (!VLOG_DROP_ERR(&rl)) {
+            struct ds s;
 
-                ds_init(&s);
-                odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
-                                true);
-                VLOG_ERR("internal error parsing flow mask %s (%s)",
-                         ds_cstr(&s), odp_key_fitness_to_string(fitness));
-                ds_destroy(&s);
-            }
-
-            return EINVAL;
+            ds_init(&s);
+            odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
+                            true);
+            VLOG_ERR("internal error parsing flow mask %s (%s)",
+                     ds_cstr(&s), odp_key_fitness_to_string(fitness));
+            ds_destroy(&s);
         }
-    } else {
-        flow_wildcards_init_for_packet(wc, flow);
+
+        return EINVAL;
     }
 
     return 0;

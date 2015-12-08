@@ -4800,6 +4800,26 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
    return odp_flow_key_to_flow__(key, key_len, NULL, 0, flow, flow, false);
 }
 
+static enum odp_key_fitness
+odp_flow_key_to_mask__(const struct nlattr *mask_key, size_t mask_key_len,
+                       const struct nlattr *flow_key, size_t flow_key_len,
+                       struct flow_wildcards *mask,
+                       const struct flow *src_flow,
+                       bool udpif)
+{
+    if (mask_key_len) {
+        return odp_flow_key_to_flow__(mask_key, mask_key_len,
+                                      flow_key, flow_key_len,
+                                      &mask->masks, src_flow, udpif);
+
+    } else {
+        /* A missing mask means that the flow should be exact matched.
+         * Generate an appropriate exact wildcard for the flow. */
+        flow_wildcards_init_for_packet(mask, src_flow);
+
+        return ODP_FIT_PERFECT;
+    }
+}
 /* Converts the 'mask_key_len' bytes of OVS_KEY_ATTR_* attributes in 'mask_key'
  * to a mask structure in 'mask'.  'flow' must be a previously translated flow
  * corresponding to 'mask' and similarly flow_key/flow_key_len must be the
@@ -4808,10 +4828,11 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 enum odp_key_fitness
 odp_flow_key_to_mask(const struct nlattr *mask_key, size_t mask_key_len,
                      const struct nlattr *flow_key, size_t flow_key_len,
-                     struct flow *mask, const struct flow *flow)
+                     struct flow_wildcards *mask, const struct flow *flow)
 {
-   return odp_flow_key_to_flow__(mask_key, mask_key_len, flow_key, flow_key_len,
-                                 mask, flow, false);
+    return odp_flow_key_to_mask__(mask_key, mask_key_len,
+                                  flow_key, flow_key_len,
+                                  mask, flow, false);
 }
 
 /* These functions are similar to their non-"_udpif" variants but output a
@@ -4833,10 +4854,12 @@ odp_flow_key_to_flow_udpif(const struct nlattr *key, size_t key_len,
 enum odp_key_fitness
 odp_flow_key_to_mask_udpif(const struct nlattr *mask_key, size_t mask_key_len,
                            const struct nlattr *flow_key, size_t flow_key_len,
-                           struct flow *mask, const struct flow *flow)
+                           struct flow_wildcards *mask,
+                           const struct flow *flow)
 {
-   return odp_flow_key_to_flow__(mask_key, mask_key_len, flow_key, flow_key_len,
-                                 mask, flow, true);
+    return odp_flow_key_to_mask__(mask_key, mask_key_len,
+                                  flow_key, flow_key_len,
+                                  mask, flow, true);
 }
 
 /* Returns 'fitness' as a string, for use in debug messages. */

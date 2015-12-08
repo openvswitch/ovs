@@ -1878,7 +1878,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, ukey->key,
-                             ukey->key_len, &dp_mask.masks, &flow)
+                             ukey->key_len, &dp_mask, &flow)
         == ODP_FIT_ERROR) {
         goto exit;
     }
