@@ -5299,12 +5299,18 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
     struct ovs_key_icmp key, mask, base;
     enum ovs_key_attr attr;
 
+    if (is_icmpv4(flow)) {
+        attr = OVS_KEY_ATTR_ICMP;
+    } else if (is_icmpv6(flow)) {
+        attr = OVS_KEY_ATTR_ICMPV6;
+    } else {
+        return 0;
+    }
+
     get_icmp_key(flow, &key);
     get_icmp_key(base_flow, &base);
     get_icmp_key(&wc->masks, &mask);
 
-    attr = flow->dl_type == htons(ETH_TYPE_IP) ? OVS_KEY_ATTR_ICMP
-                                               : OVS_KEY_ATTR_ICMPV6;
     if (commit(attr, false, &key, &base, &mask, sizeof key, odp_actions)) {
         put_icmp_key(&base, base_flow);
         put_icmp_key(&mask, &wc->masks);
