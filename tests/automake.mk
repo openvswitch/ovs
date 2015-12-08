@@ -170,6 +170,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-stp \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-unix-socket \
+	tests/valgrind/test-unixctl \
 	tests/valgrind/test-uuid \
 	tests/valgrind/test-vconn
 
@@ -313,6 +314,7 @@ tests_ovstest_SOURCES = \
 	tests/test-sflow.c \
 	tests/test-sha1.c \
 	tests/test-stp.c \
+	tests/test-unixctl.c \
 	tests/test-util.c \
 	tests/test-uuid.c \
 	tests/test-bitmap.c \
