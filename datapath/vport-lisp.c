@@ -129,7 +129,6 @@ static struct vport_ops ovs_lisp_vport_ops = {
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= lisp_get_options,
 	.send		= lisp_xmit,
-	.owner          = THIS_MODULE,
 	.get_egress_tun_info	= lisp_get_egress_tun_info,
 };
 

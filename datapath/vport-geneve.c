@@ -129,7 +129,6 @@ static struct vport_ops ovs_geneve_vport_ops = {
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= geneve_get_options,
 	.send		= geneve_xmit,
-	.owner          = THIS_MODULE,
 	.get_egress_tun_info	= geneve_get_egress_tun_info,
 };
 
