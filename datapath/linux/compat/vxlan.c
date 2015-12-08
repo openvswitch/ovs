@@ -824,7 +824,6 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 #endif
 	union vxlan_addr saddr;
 	int err = 0;
-	union vxlan_addr *remote_ip;
 
 	/* For flow based devices, map all packets to VNI 0 */
 	if (vs->flags & VXLAN_F_COLLECT_METADATA)
@@ -835,7 +834,6 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 	if (!vxlan)
 		goto drop;
 
-	remote_ip = &vxlan->default_dst.remote_ip;
 	skb_reset_mac_header(skb);
 	skb_scrub_packet(skb, !net_eq(vxlan->net, dev_net(vxlan->dev)));
 	skb->protocol = eth_type_trans(skb, vxlan->dev);
@@ -845,8 +843,8 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 	if (ether_addr_equal(eth_hdr(skb)->h_source, vxlan->dev->dev_addr))
 		goto drop;
 
-	/* Re-examine inner Ethernet packet */
-	if (remote_ip->sa.sa_family == AF_INET) {
+	/* Get data from the outer IP header */
+	if (vxlan_get_sk_family(vs) == AF_INET) {
 		oip = ip_hdr(skb);
 		saddr.sin.sin_addr.s_addr = oip->saddr;
 		saddr.sa.sa_family = AF_INET;
