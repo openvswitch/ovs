@@ -797,7 +797,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
             odp_flow_key_to_flow(f.key, f.key_len, &flow);
             odp_flow_key_to_mask(f.mask, f.mask_len, f.key, f.key_len,
-                                 &wc.masks, &flow);
+                                 &wc, &flow);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);
