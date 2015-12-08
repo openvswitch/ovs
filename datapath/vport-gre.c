@@ -97,7 +97,6 @@ static struct vport_ops ovs_gre_vport_ops = {
 	.send		= gre_fb_xmit,
 	.get_egress_tun_info	= gre_get_egress_tun_info,
 	.destroy	= ovs_netdev_tunnel_destroy,
-	.owner		= THIS_MODULE,
 };
 
 static int __init ovs_gre_tnl_init(void)

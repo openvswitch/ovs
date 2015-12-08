@@ -131,7 +131,6 @@ static struct vport_ops ovs_stt_vport_ops = {
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= stt_get_options,
 	.send		= ovs_stt_xmit,
-	.owner          = THIS_MODULE,
 	.get_egress_tun_info	= stt_get_egress_tun_info,
 };
 
