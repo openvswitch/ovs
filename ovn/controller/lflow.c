@@ -58,14 +58,14 @@ symtab_init(void)
     MFF_LOG_REGS;
 #undef MFF_LOG_REG
 
-    /* Connection tracking state. */
+    /* Connection tracking state. See CS_* in lib/packets.h. */
     expr_symtab_add_field(&symtab, "ct_state", MFF_CT_STATE, NULL, false);
-    expr_symtab_add_predicate(&symtab, "ct.trk", "ct_state[7]");
+    expr_symtab_add_predicate(&symtab, "ct.trk", "ct_state[5]");
     expr_symtab_add_subfield(&symtab, "ct.new", "ct.trk", "ct_state[0]");
     expr_symtab_add_subfield(&symtab, "ct.est", "ct.trk", "ct_state[1]");
     expr_symtab_add_subfield(&symtab, "ct.rel", "ct.trk", "ct_state[2]");
-    expr_symtab_add_subfield(&symtab, "ct.inv", "ct.trk", "ct_state[5]");
-    expr_symtab_add_subfield(&symtab, "ct.rpl", "ct.trk", "ct_state[6]");
+    expr_symtab_add_subfield(&symtab, "ct.rpl", "ct.trk", "ct_state[3]");
+    expr_symtab_add_subfield(&symtab, "ct.inv", "ct.trk", "ct_state[4]");
 
     /* Data fields. */
     expr_symtab_add_field(&symtab, "eth.src", MFF_ETH_SRC, NULL, false);
