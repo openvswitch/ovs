@@ -3069,11 +3069,15 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
             struct geneve_opt opts[TLV_TOT_OPT_SIZE /
                                    sizeof(struct geneve_opt)];
 
-            tun_metadata_to_geneve_udpif_mask(&flow->tunnel,
-                                              &wc->masks.tunnel,
-                                              orig_tunnel.metadata.opts.gnv,
-                                              orig_tunnel.metadata.present.len,
-                                              opts);
+            if (orig_tunnel.flags & FLOW_TNL_F_UDPIF) {
+                tun_metadata_to_geneve_udpif_mask(&flow->tunnel,
+                                                  &wc->masks.tunnel,
+                                                  orig_tunnel.metadata.opts.gnv,
+                                                  orig_tunnel.metadata.present.len,
+                                                  opts);
+            } else {
+                orig_tunnel.metadata.present.len = 0;
+            }
 
             memset(&wc->masks.tunnel.metadata, 0,
                    sizeof wc->masks.tunnel.metadata);
