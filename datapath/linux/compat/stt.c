@@ -1286,8 +1286,24 @@ static bool set_offloads(struct sk_buff *skb)
 	return true;
 }
 
+static void rcv_list(struct net_device *dev, struct sk_buff *skb,
+		     struct metadata_dst *tun_dst)
+{
+	struct sk_buff *next;
+
+	do {
+		next = skb->next;
+		skb->next = NULL;
+		if (next) {
+			ovs_dst_hold((struct dst_entry *)tun_dst);
+			ovs_skb_dst_set(next, (struct dst_entry *)tun_dst);
+		}
+		ovs_ip_tunnel_rcv(dev, skb, tun_dst);
+	} while ((skb = next));
+}
+
 #ifndef HAVE_METADATA_DST
-static int __rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
+static int __stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 {
 	struct metadata_dst tun_dst;
 
@@ -1296,11 +1312,11 @@ static int __rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 	tun_dst.u.tun_info.key.tp_src = tcp_hdr(skb)->source;
 	tun_dst.u.tun_info.key.tp_dst = tcp_hdr(skb)->dest;
 
-	ovs_ip_tunnel_rcv(stt_dev->dev, skb, &tun_dst);
+	rcv_list(stt_dev->dev, skb, &tun_dst);
 	return 0;
 }
 #else
-static int __rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
+static int __stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 {
 	struct metadata_dst *tun_dst;
 	__be16 flags;
@@ -1314,11 +1330,11 @@ static int __rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 	tun_dst->u.tun_info.key.tp_src = tcp_hdr(skb)->source;
 	tun_dst->u.tun_info.key.tp_dst = tcp_hdr(skb)->dest;
 
-	ovs_ip_tunnel_rcv(stt_dev->dev, skb, tun_dst);
+	rcv_list(stt_dev->dev, skb, tun_dst);
 	return 0;
 }
-
 #endif
+
 static void stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 {
 	int err;
@@ -1348,7 +1364,7 @@ static void stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 	if (skb_shinfo(skb)->frag_list && try_to_segment(skb))
 		goto drop;
 
-	err = __rcv(stt_dev, skb);
+	err = __stt_rcv(stt_dev, skb);
 	if (err)
 		goto drop;
 	return;
