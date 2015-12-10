@@ -80,18 +80,6 @@ def manpage_to_nroff(xml_file, subst, version=None):
 
     return s
 
-def usage():
-    print """\
-%(argv0)s: converts XML in a somewhat HTML-like format to nroff
-usage: %(argv0)s [OPTIONS] XML
-where XML is documentation in a somewhat HTML-like XML format.
-The manpage, in nroff "man" format, is output on stdout.
-
-The following options are also available:
-  --version=VERSION           use VERSION to display on document footer
-  -h, --help                  display this help message\
-""" % {'argv0': argv0}
-    sys.exit(0)
 
 if __name__ == "__main__":
     try:
