@@ -109,11 +109,11 @@ AC_DEFUN([OVS_CHECK_WIN32],
             fi
             if test "$cl_cv_x64" = yes; then
                 PTHREAD_WIN32_DIR=$withval/lib/x64
-                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e '/://')/dll/x64
+                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/dll/x64
                 PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x64
             else
                 PTHREAD_WIN32_DIR=$withval/lib/x86
-                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e '/://')/dll/x64
+                PTHREAD_WIN32_DIR_DLL=/$(echo ${withval} | ${SED} -e 's/://')/dll/x86
                 PTHREAD_WIN32_DIR_DLL_WIN_FORM=$withval/dll/x86
             fi
             PTHREAD_INCLUDES=-I$withval/include
