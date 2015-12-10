@@ -1363,7 +1363,7 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
 
     default:
         OVS_LOG_INFO("Unhandled attribute %#x", type);
-        break
+        break;
     }
     return status;
 }
