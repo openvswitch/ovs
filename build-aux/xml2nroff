@@ -14,15 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import date
 import getopt
-import os
 import sys
 import xml.dom.minidom
 
 import build.nroff
 
 argv0 = sys.argv[0]
+
 
 def usage():
     print """\
@@ -40,6 +39,7 @@ The following options are also available:
 """ % {'argv0': argv0}
     sys.exit(0)
 
+
 def manpage_to_nroff(xml_file, subst, version=None):
     f = open(xml_file)
     input = []
@@ -48,9 +48,8 @@ def manpage_to_nroff(xml_file, subst, version=None):
             line = line.replace(k, v)
         input += [line]
     doc = xml.dom.minidom.parseString(''.join(input)).documentElement
-    d = date.fromtimestamp(os.stat(xml_file).st_mtime)
 
-    if version == None:
+    if version is None:
         version = "UNKNOWN"
     program = doc.attributes['program'].nodeValue
     title = doc.attributes['title'].nodeValue
