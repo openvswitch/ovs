@@ -42,12 +42,12 @@ The following options are also available:
 
 def manpage_to_nroff(xml_file, subst, version=None):
     f = open(xml_file)
-    input = []
+    content = []
     for line in f:
         for k, v in subst.iteritems():
             line = line.replace(k, v)
-        input += [line]
-    doc = xml.dom.minidom.parseString(''.join(input)).documentElement
+        content += [line]
+    doc = xml.dom.minidom.parseString(''.join(content)).documentElement
 
     if version is None:
         version = "UNKNOWN"
