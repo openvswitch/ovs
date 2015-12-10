@@ -570,7 +570,6 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
     POVS_VPORT_ENTRY vport =
         OvsFindVportByPortNo(ovsFwdCtx->switchContext, ovsFwdCtx->srcVportNo);
     if (vport == NULL || vport->ovsState != OVS_STATE_CONNECTED) {
-        ASSERT(FALSE);  // XXX: let's catch this for now
         OvsCompleteNBLForwardingCtx(ovsFwdCtx,
             L"OVS-Dropped due to internal/tunnel port removal");
         ovsActionStats.noVport++;
