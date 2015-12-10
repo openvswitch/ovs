@@ -41,13 +41,11 @@ The following options are also available:
 
 
 def manpage_to_nroff(xml_file, subst, version=None):
-    f = open(xml_file)
-    content = []
-    for line in f:
-        for k, v in subst.iteritems():
-            line = line.replace(k, v)
-        content += [line]
-    doc = xml.dom.minidom.parseString(''.join(content)).documentElement
+    with open(xml_file) as f:
+        content = f.read()
+    for k, v in subst.iteritems():
+        content = content.replace(k, v)
+    doc = xml.dom.minidom.parseString(content).documentElement
 
     if version is None:
         version = "UNKNOWN"
