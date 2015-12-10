@@ -20,7 +20,7 @@ import os
 import sys
 import xml.dom.minidom
 
-from build.nroff import *
+import build.nroff
 
 argv0 = sys.argv[0]
 
@@ -73,10 +73,10 @@ def manpage_to_nroff(xml_file, subst, version=None):
 .  I "\\$1"
 .  RE
 ..
-''' % (text_to_nroff(program), text_to_nroff(section),
-       text_to_nroff(title), text_to_nroff(version))
+''' % (build.nroff.text_to_nroff(program), build.nroff.text_to_nroff(section),
+       build.nroff.text_to_nroff(title), build.nroff.text_to_nroff(version))
 
-    s += block_xml_to_nroff(doc.childNodes) + "\n"
+    s += build.nroff.block_xml_to_nroff(doc.childNodes) + "\n"
 
     return s
 
@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
     try:
         s = manpage_to_nroff(args[0], subst, version)
-    except error.Error, e:
+    except build.nroff.error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
     for line in s.splitlines():
