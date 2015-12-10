@@ -132,6 +132,8 @@ void ovsdb_idl_track_add_all(struct ovsdb_idl *idl);
 const struct ovsdb_idl_row *ovsdb_idl_track_get_first(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
 const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row *);
+bool ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
+                                const struct ovsdb_idl_column *column);
 void ovsdb_idl_track_clear(const struct ovsdb_idl *);
 
 
