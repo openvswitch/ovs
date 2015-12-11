@@ -176,7 +176,6 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
             default:
                 OVS_LOG_ERROR("Unknown LSO transmit type:%d",
                               lsoInfo.Transmit.Type);
-                return NDIS_STATUS_FAILURE;
         }
     }
 
