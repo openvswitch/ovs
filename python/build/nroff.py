@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import re
+import sys
 
 from ovs.db import error
 
@@ -107,6 +108,12 @@ def pre_to_nroff(nodes, para, font):
         s += inline_xml_to_nroff(node, font, False, '\n.br\n' + font)
     s += '\n.fi\n'
     return s
+
+
+def fatal(msg):
+    sys.stderr.write('%s\n' % msg)
+    sys.exit(1)
+
 
 def diagram_header_to_nroff(header_node):
     header_fields = []

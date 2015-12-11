@@ -1221,7 +1221,7 @@ class Transaction(object):
             if len(fetched_rows) != 1:
                 # XXX rate-limit
                 vlog.warn('"select" reply "rows" has %d elements '
-                          'instead of 1' % len(rows))
+                          'instead of 1' % len(fetched_rows))
                 continue
             fetched_row = fetched_rows[0]
             if not Transaction.__check_json_type(fetched_row, (dict,),
