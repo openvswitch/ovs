@@ -49,23 +49,23 @@
 static bool versioned = false;
 
 /* Fields in a rule. */
-#define CLS_FIELDS                        \
-    /*        struct flow    all-caps */  \
-    /*        member name    name     */  \
-    /*        -----------    -------- */  \
-    CLS_FIELD(tunnel.tun_id, TUN_ID)      \
-    CLS_FIELD(metadata,      METADATA)    \
-    CLS_FIELD(nw_src,        NW_SRC)      \
-    CLS_FIELD(nw_dst,        NW_DST)      \
-    CLS_FIELD(in_port,       IN_PORT)     \
-    CLS_FIELD(vlan_tci,      VLAN_TCI)    \
-    CLS_FIELD(dl_type,       DL_TYPE)     \
-    CLS_FIELD(tp_src,        TP_SRC)      \
-    CLS_FIELD(tp_dst,        TP_DST)      \
-    CLS_FIELD(dl_src,        DL_SRC)      \
-    CLS_FIELD(dl_dst,        DL_DST)      \
-    CLS_FIELD(nw_proto,      NW_PROTO)    \
-    CLS_FIELD(nw_tos,        NW_DSCP)
+#define CLS_FIELDS                            \
+    /*        struct flow        all-caps */  \
+    /*        member name        name     */  \
+    /*        -----------        -------- */  \
+    CLS_FIELD(tunnel.tun_id,     TUN_ID)      \
+    CLS_FIELD(metadata,          METADATA)    \
+    CLS_FIELD(nw_src,            NW_SRC)      \
+    CLS_FIELD(nw_dst,            NW_DST)      \
+    CLS_FIELD(in_port.ofp_port,  IN_PORT)     \
+    CLS_FIELD(vlan_tci,          VLAN_TCI)    \
+    CLS_FIELD(dl_type,           DL_TYPE)     \
+    CLS_FIELD(tp_src,            TP_SRC)      \
+    CLS_FIELD(tp_dst,            TP_DST)      \
+    CLS_FIELD(dl_src,            DL_SRC)      \
+    CLS_FIELD(dl_dst,            DL_DST)      \
+    CLS_FIELD(nw_proto,          NW_PROTO)    \
+    CLS_FIELD(nw_tos,            NW_DSCP)
 
 /* Field indexes.
  *
