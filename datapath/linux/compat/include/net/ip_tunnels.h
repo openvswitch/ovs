@@ -302,5 +302,7 @@ void rpl_ip_tunnel_delete_net(struct ip_tunnel_net *itn, struct rtnl_link_ops *o
 #define ip_tunnel_setup rpl_ip_tunnel_setup
 void rpl_ip_tunnel_setup(struct net_device *dev, int net_id);
 
+#define ip_tunnel_get_iflink rpl_ip_tunnel_get_iflink
+int rpl_ip_tunnel_get_iflink(const struct net_device *dev);
 #endif /* HAVE_METADATA_DST */
 #endif /* __NET_IP_TUNNELS_H */
