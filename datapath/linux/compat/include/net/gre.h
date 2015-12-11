@@ -1,8 +1,10 @@
 #ifndef __LINUX_GRE_WRAPPER_H
 #define __LINUX_GRE_WRAPPER_H
 
+#include <linux/version.h>
 #include <linux/skbuff.h>
 #include <net/ip_tunnels.h>
+
 #ifdef HAVE_METADATA_DST
 #include_next <net/gre.h>
 
@@ -17,7 +19,6 @@ static inline void rpl_ipgre_fini(void)
 
 #else
 
-#include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37) || \
    defined(HAVE_GRE_CISCO_REGISTER)
 #include_next <net/gre.h>

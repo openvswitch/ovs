@@ -3,15 +3,14 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#ifdef HAVE_METADATA_DST
+/* Block all ip_tunnel functions.
+ * Only function that do not depend on ip_tunnel structure can
+ * be used. Those needs to be explicitly defined in this header file. */
 #include_next <net/ip_tunnels.h>
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-
 #include <linux/if_tunnel.h>
-#include <linux/netdevice.h>
-#include <linux/skbuff.h>
 #include <linux/types.h>
 #include <net/dsfield.h>
 #include <net/flow.h>
@@ -19,6 +18,7 @@
 #include <net/ip.h>
 #include <net/rtnetlink.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 					     bool csum_help, int gso_type_mask,
 					     void (*fix_segment)(struct sk_buff *));
@@ -36,7 +36,24 @@ int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_prot
 #define ovs_iptunnel_handle_offloads(skb, csum_help, gso_type_mask, fix_segment) \
 	iptunnel_handle_offloads(skb, csum_help, gso_type_mask)
 
+/* This macro is to make OVS build happy about declared functions name. */
+#define rpl_iptunnel_pull_header iptunnel_pull_header
+int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
+
+#define rpl_iptunnel_xmit iptunnel_xmit
+int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
+		      __be16 df, bool xnet);
+
 #endif /* 3.18 */
+
+/* This is not required for OVS on kernel older than 3.18, but gre.h
+ * header file needs this declaration for function gre_handle_offloads().
+ * So it is defined for all kernel version.
+ */
+#define rpl_iptunnel_handle_offloads iptunnel_handle_offloads
+struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum,
+					 int gso_type_mask);
 
 #ifndef TUNNEL_CSUM
 #define TUNNEL_CSUM	__cpu_to_be16(0x01)
@@ -211,9 +228,11 @@ struct ip_tunnel_net {
 
 #ifndef HAVE_PCPU_SW_NETSTATS
 #define ip_tunnel_get_stats64 rpl_ip_tunnel_get_stats64
+#else
+#define rpl_ip_tunnel_get_stats64 ip_tunnel_get_stats64
+#endif
 struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 						    struct rtnl_link_stats64 *tot);
-#endif
 
 #define ip_tunnel_get_dsfield rpl_ip_tunnel_get_dsfield
 static inline u8 ip_tunnel_get_dsfield(const struct iphdr *iph,
