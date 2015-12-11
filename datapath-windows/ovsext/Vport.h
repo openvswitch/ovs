@@ -17,9 +17,10 @@
 #ifndef __VPORT_H_
 #define __VPORT_H_ 1
 
+#include "Gre.h"
+#include "Stt.h"
 #include "Switch.h"
 #include "VxLan.h"
-#include "Stt.h"
 
 #define OVS_MAX_DPPORTS             MAXUINT16
 #define OVS_DPPORT_NUMBER_INVALID   OVS_MAX_DPPORTS
@@ -147,6 +148,8 @@ POVS_VPORT_ENTRY OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchConte
 POVS_VPORT_ENTRY OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
                                              UINT16 dstPort,
                                              OVS_VPORT_TYPE ovsVportType);
+POVS_VPORT_ENTRY OvsFindTunnelVportByPortType(POVS_SWITCH_CONTEXT switchContext,
+                                              OVS_VPORT_TYPE ovsPortType);
 
 NDIS_STATUS OvsAddConfiguredSwitchPorts(struct _OVS_SWITCH_CONTEXT *switchContext);
 NDIS_STATUS OvsInitConfiguredSwitchNics(struct _OVS_SWITCH_CONTEXT *switchContext);
@@ -256,16 +259,18 @@ GetPortFromPriv(POVS_VPORT_ENTRY vport)
     /* XXX would better to have a commom tunnel "parent" structure */
     ASSERT(vportPriv);
     switch(vport->ovsType) {
-    case OVS_VPORT_TYPE_VXLAN:
-        dstPort = ((POVS_VXLAN_VPORT)vportPriv)->dstPort;
+    case OVS_VPORT_TYPE_GRE:
         break;
     case OVS_VPORT_TYPE_STT:
         dstPort = ((POVS_STT_VPORT)vportPriv)->dstPort;
         break;
+    case OVS_VPORT_TYPE_VXLAN:
+        dstPort = ((POVS_VXLAN_VPORT)vportPriv)->dstPort;
+        break;
     default:
         ASSERT(! "Port is not a tunnel port");
     }
-    ASSERT(dstPort);
+    ASSERT(dstPort || vport->ovsType == OVS_VPORT_TYPE_GRE);
     return dstPort;
 }
 

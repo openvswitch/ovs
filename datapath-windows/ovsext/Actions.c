@@ -16,16 +16,17 @@
 
 #include "precomp.h"
 
-#include "Switch.h"
-#include "Vport.h"
-#include "Event.h"
-#include "User.h"
-#include "NetProto.h"
-#include "Flow.h"
-#include "Vxlan.h"
-#include "Stt.h"
 #include "Checksum.h"
+#include "Event.h"
+#include "Flow.h"
+#include "Gre.h"
+#include "NetProto.h"
 #include "PacketIO.h"
+#include "Stt.h"
+#include "Switch.h"
+#include "User.h"
+#include "Vport.h"
+#include "Vxlan.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -34,6 +35,8 @@
 #include "Debug.h"
 
 typedef struct _OVS_ACTION_STATS {
+    UINT64 rxGre;
+    UINT64 txGre;
     UINT64 rxVxlan;
     UINT64 txVxlan;
     UINT64 rxStt;
@@ -205,26 +208,34 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
     /* XXX: we should also check for the length of the UDP payload to pick
      * packets only if they are at least VXLAN header size.
      */
-    if (!flowKey->ipKey.nwFrag &&
-        flowKey->ipKey.nwProto == IPPROTO_UDP) {
-        UINT16 dstPort = ntohs(flowKey->ipKey.l4.tpDst);
-        tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
-                                                  dstPort,
-                                                  OVS_VPORT_TYPE_VXLAN);
-        if (tunnelVport) {
-            ovsActionStats.rxVxlan++;
-        }
-    } else if (!flowKey->ipKey.nwFrag &&
-                flowKey->ipKey.nwProto == IPPROTO_TCP) {
+    if (!flowKey->ipKey.nwFrag) {
         UINT16 dstPort = htons(flowKey->ipKey.l4.tpDst);
-        tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
-                                                  dstPort,
-                                                  OVS_VPORT_TYPE_STT);
-        if (tunnelVport) {
-            ovsActionStats.rxStt++;
+        switch (flowKey->ipKey.nwProto) {
+        case IPPROTO_GRE:
+            tunnelVport = OvsFindTunnelVportByPortType(ovsFwdCtx->switchContext,
+                                                       OVS_VPORT_TYPE_GRE);
+            if (tunnelVport) {
+                ovsActionStats.rxGre++;
+            }
+            break;
+        case IPPROTO_TCP:
+            tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
+                                                      dstPort,
+                                                      OVS_VPORT_TYPE_STT);
+            if (tunnelVport) {
+                ovsActionStats.rxStt++;
+            }
+            break;
+        case IPPROTO_UDP:
+            tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
+                                                      dstPort,
+                                                      OVS_VPORT_TYPE_VXLAN);
+            if (tunnelVport) {
+                ovsActionStats.rxVxlan++;
+            }
+            break;
         }
     }
-
 
     // We might get tunnel packets even before the tunnel gets initialized.
     if (tunnelVport) {
@@ -306,6 +317,9 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
         /* Tunnel the packet only if tunnel context is set. */
         if (ovsFwdCtx->tunKey.dst != 0) {
             switch(dstVport->ovsType) {
+            case OVS_VPORT_TYPE_GRE:
+                ovsActionStats.txGre++;
+                break;
             case OVS_VPORT_TYPE_VXLAN:
                 ovsActionStats.txVxlan++;
                 break;
@@ -652,6 +666,11 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
 
     /* Do the encap. Encap function does not consume the NBL. */
     switch(ovsFwdCtx->tunnelTxNic->ovsType) {
+    case OVS_VPORT_TYPE_GRE:
+        status = OvsEncapGre(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
+                             &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
+                             &ovsFwdCtx->layers, &newNbl);
+        break;
     case OVS_VPORT_TYPE_VXLAN:
         status = OvsEncapVxlan(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
                                &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
@@ -724,6 +743,10 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
      */
 
     switch(tunnelRxVport->ovsType) {
+    case OVS_VPORT_TYPE_GRE:
+        status = OvsDecapGre(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                             &ovsFwdCtx->tunKey, &newNbl);
+        break;
     case OVS_VPORT_TYPE_VXLAN:
         status = OvsDecapVxlan(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                                &ovsFwdCtx->tunKey, &newNbl);

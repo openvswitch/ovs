@@ -197,7 +197,7 @@ Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 Connection tracking   |      4.3       |       3.10     |    NO     |   NO    |
 Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
 Tunnel - STT          |      NO        |       3.5      |    NO     |   YES   |
-Tunnel - GRE          |      3.11      |       YES      |    YES    |   NO    |
+Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
 Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
 Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
 QoS - Policing        |      YES       |       YES      |    NO     |   NO    |

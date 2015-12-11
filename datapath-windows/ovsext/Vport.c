@@ -15,16 +15,18 @@
  */
 
 #include "precomp.h"
-#include "Jhash.h"
-#include "Switch.h"
-#include "Vport.h"
-#include "Event.h"
-#include "User.h"
-#include "Vxlan.h"
-#include "Stt.h"
-#include "IpHelper.h"
-#include "Oid.h"
+
 #include "Datapath.h"
+#include "Event.h"
+#include "Gre.h"
+#include "IpHelper.h"
+#include "Jhash.h"
+#include "Oid.h"
+#include "Stt.h"
+#include "Switch.h"
+#include "User.h"
+#include "Vport.h"
+#include "Vxlan.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -700,6 +702,24 @@ OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
     return NULL;
 }
 
+POVS_VPORT_ENTRY
+OvsFindTunnelVportByPortType(POVS_SWITCH_CONTEXT switchContext,
+                             OVS_VPORT_TYPE ovsPortType)
+{
+    POVS_VPORT_ENTRY vport;
+    PLIST_ENTRY head, link;
+    UINT16 dstPort = 0;
+    UINT32 hash = OvsJhashBytes((const VOID *)&dstPort, sizeof(dstPort),
+                                OVS_HASH_BASIS);
+    head = &(switchContext->tunnelVportsArray[hash & OVS_VPORT_MASK]);
+    LIST_FORALL(head, link) {
+        vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, tunnelVportLink);
+        if (vport->ovsType == ovsPortType) {
+            return vport;
+        }
+    }
+    return NULL;
+}
 
 POVS_VPORT_ENTRY
 OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
@@ -983,6 +1003,7 @@ OvsInitTunnelVport(PVOID userContext,
     vport->ovsState = OVS_STATE_PORT_CREATED;
     switch (ovsType) {
     case OVS_VPORT_TYPE_GRE:
+        status = OvsInitGreTunnel(vport);
         break;
     case OVS_VPORT_TYPE_VXLAN:
     {
@@ -1153,6 +1174,7 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
     UINT32 hash;
 
     switch(vport->ovsType) {
+    case OVS_VPORT_TYPE_GRE:
     case OVS_VPORT_TYPE_VXLAN:
     case OVS_VPORT_TYPE_STT:
     {
@@ -1242,6 +1264,7 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
         OvsCleanupSttTunnel(vport);
         break;
     case OVS_VPORT_TYPE_GRE:
+        OvsCleanupGreTunnel(vport);
         break;
     case OVS_VPORT_TYPE_NETDEV:
         if (vport->isExternal) {
@@ -1299,7 +1322,8 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
         RemoveEntryList(&vport->portNoLink);
         InitializeListHead(&vport->portNoLink);
         if (OVS_VPORT_TYPE_VXLAN == vport->ovsType ||
-            OVS_VPORT_TYPE_STT == vport->ovsType) {
+            OVS_VPORT_TYPE_STT == vport->ovsType   ||
+            OVS_VPORT_TYPE_GRE == vport->ovsType) {
             RemoveEntryList(&vport->tunnelVportLink);
             InitializeListHead(&vport->tunnelVportLink);
         }
@@ -2190,6 +2214,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             UINT16 transportPortDest = 0;
 
             switch (portType) {
+            case OVS_VPORT_TYPE_GRE:
+                break;
             case OVS_VPORT_TYPE_VXLAN:
                 transportPortDest = VXLAN_UDP_PORT;
                 break;
