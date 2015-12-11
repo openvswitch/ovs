@@ -304,5 +304,8 @@ void rpl_ip_tunnel_setup(struct net_device *dev, int net_id);
 
 #define ip_tunnel_get_iflink rpl_ip_tunnel_get_iflink
 int rpl_ip_tunnel_get_iflink(const struct net_device *dev);
+
+#define ip_tunnel_get_link_net rpl_ip_tunnel_get_link_net
+struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev);
 #endif /* HAVE_METADATA_DST */
 #endif /* __NET_IP_TUNNELS_H */

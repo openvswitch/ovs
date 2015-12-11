@@ -290,4 +290,11 @@ int rpl_ip_tunnel_get_iflink(const struct net_device *dev)
 	return tunnel->parms.link;
 }
 
+struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev)
+{
+	struct ip_tunnel *tunnel = netdev_priv(dev);
+
+	return tunnel->net;
+}
+
 #endif
