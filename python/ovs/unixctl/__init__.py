@@ -67,6 +67,7 @@ def command_register(name, usage, min_args, max_args, callback, aux):
         commands[name] = _UnixctlCommand(usage, min_args, max_args, callback,
                                          aux)
 
+
 def socket_name_from_target(target):
     assert isinstance(target, strtypes)
 

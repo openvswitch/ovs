@@ -17,6 +17,7 @@ import sys
 
 from ovs.db import error
 
+
 def text_to_nroff(s, font=r'\fR'):
     def escape(match):
         c = match.group(0)
@@ -56,8 +57,10 @@ def text_to_nroff(s, font=r'\fR'):
     s = re.sub('(-[0-9]|--|[-"\'\\\\.])', escape, s)
     return s
 
+
 def escape_nroff_literal(s, font=r'\fB'):
     return font + r'%s\fR' % text_to_nroff(s, font)
+
 
 def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
     if node.nodeType == node.TEXT_NODE:
@@ -98,6 +101,7 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
         return ''
     else:
         raise error.Error("unknown node %s in inline xml" % node)
+
 
 def pre_to_nroff(nodes, para, font):
     # This puts 'font' at the beginning of each line so that leading and
@@ -168,6 +172,7 @@ def diagram_header_to_nroff(header_node):
         text_s += "\n"
     return pic_s, text_s
 
+
 def diagram_to_nroff(nodes, para):
     pic_s = ''
     text_s = ''
@@ -209,6 +214,7 @@ fillval = .2
 """ + text_s + """\
 .RE
 \\}"""
+
 
 def block_xml_to_nroff(nodes, para='.PP'):
     s = ''

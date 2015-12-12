@@ -13,6 +13,7 @@ import sys
 import xml.sax
 import xml.sax.handler
 
+
 class IpfixEntityHandler(xml.sax.handler.ContentHandler):
 
     RECORD_FIELDS = ['name', 'dataType', 'elementId', 'status']
@@ -90,8 +91,10 @@ class IpfixEntityHandler(xml.sax.handler.ContentHandler):
         if self.current_field_name is not None:
             self.current_field_value.append(content)
 
+
 def print_ipfix_entity_macros(xml_file):
     xml.sax.parse(xml_file, IpfixEntityHandler())
+
 
 def usage(name):
     print """\

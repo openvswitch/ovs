@@ -135,6 +135,7 @@ def _unixctl_version(conn, unused_argv, version):
     version = "%s (Open vSwitch) %s" % (ovs.util.PROGRAM_NAME, version)
     conn.reply(version)
 
+
 class UnixctlServer(object):
     def __init__(self, listener):
         assert isinstance(listener, ovs.stream.PassiveStream)

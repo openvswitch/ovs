@@ -139,7 +139,6 @@ def do_l3_tests(node1, node2, bandwidth, duration, ps, type):
             server.del_bridge(DEFAULT_TEST_BRIDGE)
 
 
-
 def do_vlan_tests(node1, node2, bandwidth, duration, ps, tag):
     """
     Do VLAN tests between node1 and node2. Each node is given
