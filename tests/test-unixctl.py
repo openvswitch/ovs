@@ -22,6 +22,7 @@ import ovs.unixctl.server
 vlog = ovs.vlog.Vlog("test-unixctl")
 exiting = False
 
+
 def unixctl_exit(conn, unused_argv, aux):
     assert aux == "aux_exit"
     global exiting

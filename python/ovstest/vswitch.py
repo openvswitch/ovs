@@ -33,6 +33,7 @@ def ovs_vsctl_del_bridge(bridge):
     ret, _out, _err = util.start_process(["ovs-vsctl", "del-br", bridge])
     return ret
 
+
 def ovs_vsctl_del_pbridge(bridge, iface):
     """
     This function deletes the OVS bridge and assigns the bridge IP address

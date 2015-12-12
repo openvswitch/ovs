@@ -52,6 +52,7 @@ except:
     # Librt shared library could not be loaded
     librt = None
 
+
 def monotonic():
     if not librt:
         return time.time()
@@ -62,9 +63,11 @@ def monotonic():
     # Kernel does not support CLOCK_MONOTONIC
     return time.time()
 
+
 # Use time.monotonic() if Python version >= 3.3
 if not hasattr(time, 'monotonic'):
     time.monotonic = monotonic
+
 
 def msec():
     """ Returns the system's monotonic time if possible, otherwise returns the

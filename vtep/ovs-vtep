@@ -49,6 +49,7 @@ tun_id = 0
 bfd_bridge = "vtep_bfd"
 bfd_ref = {}
 
+
 def call_prog(prog, args_list):
     cmd = [prog, "-vconsole:off"] + args_list
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
@@ -58,11 +59,14 @@ def call_prog(prog, args_list):
         output = output[0].strip()
     return output
 
+
 def ovs_vsctl(args):
     return call_prog("ovs-vsctl", shlex.split(args))
 
+
 def ovs_ofctl(args):
     return call_prog("ovs-ofctl", shlex.split(args))
+
 
 def vtep_ctl(args):
     return call_prog("vtep-ctl", shlex.split(args))
@@ -325,6 +329,7 @@ class Logical_Switch(object):
         self.update_remote_macs()
         self.update_stats()
 
+
 def get_vtep_tunnel(remote_ip):
     # Get the physical_locator record for the local tunnel end point.
     column = vtep_ctl("--columns=_uuid find physical_locator "
@@ -346,6 +351,7 @@ def get_vtep_tunnel(remote_ip):
 
     return (local, remote, tunnel)
 
+
 def create_vtep_tunnel(remote_ip):
     local, remote, tunnel = get_vtep_tunnel(remote_ip)
     if not local or not remote:
@@ -359,6 +365,7 @@ def create_vtep_tunnel(remote_ip):
                           %(ps_name, local, remote))
     return tunnel
 
+
 def destroy_vtep_tunnel(remote_ip):
     local, remote, tunnel = get_vtep_tunnel(remote_ip)
     if tunnel:
@@ -367,6 +374,7 @@ def destroy_vtep_tunnel(remote_ip):
         vtep_ctl("remove physical_switch %s tunnels %s "
                  "-- --if-exists destroy tunnel %s"
                  % (ps_name, tunnel, tunnel))
+
 
 def add_bfd(remote_ip):
     # The VTEP emulator creates one OVS bridge for every logical switch.
@@ -397,6 +405,7 @@ def add_bfd(remote_ip):
     # conditions, pass the responsibility of creating a 'tunnel' record
     # to run_bfd() which runs more often.
 
+
 def del_bfd(remote_ip):
     if remote_ip in bfd_ref:
         if bfd_ref[remote_ip] == 1:
@@ -407,6 +416,7 @@ def del_bfd(remote_ip):
             del bfd_ref[remote_ip]
         else:
             bfd_ref[remote_ip] -= 1
+
 
 def run_bfd():
     bfd_ports = ovs_vsctl("list-ports %s" % bfd_bridge).split()
@@ -475,6 +485,7 @@ def run_bfd():
                   bfd_lconf_default['bfd_config_local:bfd_dst_mac'],
                   bfd_dst_mac))
 
+
 def add_binding(binding, ls):
     vlog.info("adding binding %s" % binding)
 
@@ -516,6 +527,7 @@ def add_binding(binding, ls):
     ls.add_lbinding(lbinding)
     Bindings[binding] = ls.name
 
+
 def del_binding(binding, ls):
     vlog.info("removing binding %s" % binding)
 
@@ -544,6 +556,7 @@ def del_binding(binding, ls):
     vtep_ctl("remove physical_port %s vlan_stats %s" % (pp_name, vlan))
 
     del Bindings[binding]
+
 
 def handle_physical():
     # Gather physical ports except the patch ports we created
@@ -582,7 +595,6 @@ def handle_physical():
 
             add_binding(binding, ls)
 
-
     dead_bindings = set(Bindings.keys()).difference(new_bindings)
     for binding in dead_bindings:
         ls_name = Bindings[binding]
@@ -595,6 +607,7 @@ def handle_physical():
             ovs_vsctl("del-br %s" % Lswitches[ls_name].short_name)
             vtep_ctl("clear-local-macs %s" % Lswitches[ls_name].name)
             del Lswitches[ls_name]
+
 
 def setup():
     br_list = ovs_vsctl("list-br").split()

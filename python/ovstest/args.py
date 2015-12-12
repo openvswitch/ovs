@@ -24,6 +24,7 @@ import sys
 CONTROL_PORT = 15531
 DATA_PORT = 15532
 
+
 def ip_address(string):
     """Verifies if string is a valid IP address"""
     try:
@@ -245,6 +246,7 @@ def ovs_initialize_args():
                 'ovs-test server in the client mode by using 127.0.0.1 as '
                 'OuterIP.')
     return parser.parse_args()
+
 
 def l3_initialize_args():
     """
