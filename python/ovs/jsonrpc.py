@@ -490,7 +490,7 @@ class Session(object):
                 request.id = "echo"
                 self.rpc.send(request)
         else:
-            assert action == None
+            assert action is None
 
     def wait(self, poller):
         if self.rpc is not None:
