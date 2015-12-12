@@ -80,7 +80,7 @@ def is_identifier(s):
 
 
 def json_type_to_string(type_):
-    if type_ == None:
+    if type_ is None:
         return "null"
     elif type_ == bool:
         return "boolean"

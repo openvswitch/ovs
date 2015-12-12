@@ -179,7 +179,7 @@ class Idl(object):
             if (msg.type == ovs.jsonrpc.Message.T_NOTIFY
                 and msg.method == "update"
                 and len(msg.params) == 2
-                and msg.params[0] == None):
+                and msg.params[0] is None):
                 # Database contents changed.
                 self.__parse_update(msg.params[1])
             elif (msg.type == ovs.jsonrpc.Message.T_REPLY
