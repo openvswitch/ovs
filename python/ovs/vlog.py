@@ -51,7 +51,7 @@ def get_level(level_str):
     return LEVELS.get(level_str.lower())
 
 
-class Vlog:
+class Vlog(object):
     __inited = False
     __msg_num = 0
     __start_time = 0
