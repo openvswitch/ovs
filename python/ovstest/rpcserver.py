@@ -20,8 +20,8 @@ from __future__ import print_function
 
 import exceptions
 import sys
-import xmlrpclib
 
+import six.moves.xmlrpc_client
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from twisted.web import xmlrpc
@@ -108,7 +108,8 @@ class TestArena(xmlrpc.XMLRPC):
         Returns the ovs-test server IP address that the other ovs-test server
         with the given ip will see.
         """
-        server1 = xmlrpclib.Server("http://%s:%u/" % (his_ip, his_port))
+        server1 = six.moves.xmlrpc_client.Server("http://%s:%u/" %
+                                                 (his_ip, his_port))
         return server1.get_my_address()
 
     def xmlrpc_create_udp_listener(self, port):

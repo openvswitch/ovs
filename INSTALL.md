@@ -48,7 +48,7 @@ you will need the following software:
     privileges.  If libcap-ng is installed, then Open vSwitch will
     automatically build with support for it.
 
-  - Python 2.7.
+  - Python 2.7. You must also have the Python six library.
 
 On Linux, you may choose to compile the kernel module that comes with
 the Open vSwitch distribution or to use the kernel module built into
@@ -149,6 +149,8 @@ following software:
   - For optional support of ingress policing on Linux, the "tc" program
     from iproute2 (part of all major distributions and available at
     http://www.linux-foundation.org/en/Net:Iproute2).
+
+  - Python 2.7. You must also have the Python six library.
 
 On Linux you should ensure that /dev/urandom exists.  To support TAP
 devices, you must also ensure that /dev/net/tun exists.
