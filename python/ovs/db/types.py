@@ -39,7 +39,7 @@ class AtomicType(object):
 
     @staticmethod
     def from_json(json):
-        if type(json) not in [str, unicode]:
+        if not isinstance(json, six.string_types):
             raise error.Error("atomic-type expected", json)
         else:
             return AtomicType.from_string(json)
@@ -64,7 +64,7 @@ VoidType = AtomicType("void", None, ())
 IntegerType = AtomicType("integer", 0, six.integer_types)
 RealType = AtomicType("real", 0.0, REAL_PYTHON_TYPES)
 BooleanType = AtomicType("boolean", False, (bool,))
-StringType = AtomicType("string", "", (str, unicode))
+StringType = AtomicType("string", "", six.string_types)
 UuidType = AtomicType("uuid", ovs.ovsuuid.zero(), (uuid.UUID,))
 
 ATOMIC_TYPES = [VoidType, IntegerType, RealType, BooleanType, StringType,
@@ -166,11 +166,12 @@ class BaseType(object):
 
     @staticmethod
     def from_json(json):
-        if type(json) in [str, unicode]:
+        if isinstance(json, six.string_types):
             return BaseType(AtomicType.from_json(json))
 
         parser = ovs.db.parser.Parser(json, "ovsdb type")
-        atomic_type = AtomicType.from_json(parser.get("type", [str, unicode]))
+        atomic_type = AtomicType.from_json(parser.get("type",
+                                                      six.string_types))
 
         base = BaseType(atomic_type)
 
@@ -199,7 +200,8 @@ class BaseType(object):
         elif base.type == UuidType:
             base.ref_table_name = parser.get_optional("refTable", ['id'])
             if base.ref_table_name:
-                base.ref_type = parser.get_optional("refType", [str, unicode],
+                base.ref_type = parser.get_optional("refType",
+                                                    six.string_types,
                                                    "strong")
                 if base.ref_type not in ['strong', 'weak']:
                     raise error.Error('refType must be "strong" or "weak" '
@@ -487,14 +489,18 @@ class Type(object):
 
     @staticmethod
     def from_json(json):
-        if type(json) in [str, unicode]:
+        if isinstance(json, six.string_types):
             return Type(BaseType.from_json(json))
 
         parser = ovs.db.parser.Parser(json, "ovsdb type")
-        key_json = parser.get("key", [dict, str, unicode])
-        value_json = parser.get_optional("value", [dict, str, unicode])
+        _types = list(six.string_types)
+        _types.extend([dict])
+        key_json = parser.get("key", _types)
+        value_json = parser.get_optional("value", _types)
         min_json = parser.get_optional("min", [int])
-        max_json = parser.get_optional("max", [int, str, unicode])
+        _types = list(six.string_types)
+        _types.extend([int])
+        max_json = parser.get_optional("max", _types)
         parser.finish()
 
         key = BaseType.from_json(key_json)

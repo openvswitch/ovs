@@ -15,6 +15,8 @@
 import errno
 import os
 
+import six
+
 import ovs.json
 import ovs.poller
 import ovs.reconnect
@@ -115,7 +117,7 @@ class Message(object):
 
         if "method" in json:
             method = json.pop("method")
-            if type(method) not in [str, unicode]:
+            if not isinstance(method, six.string_types):
                 return "method is not a JSON string"
         else:
             method = None
@@ -318,7 +320,7 @@ class Connection(object):
     def __process_msg(self):
         json = self.parser.finish()
         self.parser = None
-        if type(json) in [str, unicode]:
+        if isinstance(json, six.string_types):
             # XXX rate-limit
             vlog.warn("%s: error parsing stream: %s" % (self.name, json))
             self.error(errno.EPROTO)

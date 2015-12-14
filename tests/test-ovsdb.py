@@ -204,7 +204,7 @@ def print_idl(idl, step):
 
 
 def substitute_uuids(json, symtab):
-    if type(json) in [str, unicode]:
+    if isinstance(json, six.string_types):
         symbol = symtab.get(json)
         if symbol:
             return str(symbol)
@@ -219,7 +219,8 @@ def substitute_uuids(json, symtab):
 
 
 def parse_uuids(json, symtab):
-    if type(json) in [str, unicode] and ovs.ovsuuid.is_valid_string(json):
+    if (isinstance(json, six.string_types)
+            and ovs.ovsuuid.is_valid_string(json)):
         name = "#%d#" % len(symtab)
         sys.stderr.write("%s = %s\n" % (name, json))
         symtab[name] = json
@@ -450,7 +451,7 @@ def do_idl(schema_file, remote, *commands):
             step += 1
         else:
             json = ovs.json.from_string(command)
-            if type(json) in [str, unicode]:
+            if isinstance(json, six.string_types):
                 sys.stderr.write("\"%s\": %s\n" % (command, json))
                 sys.exit(1)
             json = substitute_uuids(json, symtab)

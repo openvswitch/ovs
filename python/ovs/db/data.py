@@ -117,7 +117,7 @@ class Atom(object):
                 and isinstance(json, real_types))
             or (type_ == ovs.db.types.BooleanType and isinstance(json, bool))
             or (type_ == ovs.db.types.StringType
-                and isinstance(json, (str, unicode)))):
+                and isinstance(json, six.string_types))):
             atom = Atom(type_, json)
         elif type_ == ovs.db.types.UuidType:
             atom = Atom(type_, ovs.ovsuuid.from_json(json, symtab))
@@ -129,7 +129,7 @@ class Atom(object):
     @staticmethod
     def from_python(base, value):
         value = ovs.db.parser.float_to_int(value)
-        if type(value) in base.type.python_types:
+        if isinstance(value, base.type.python_types):
             atom = Atom(base.type, value)
         else:
             raise error.Error("expected %s, got %s" % (base.type, type(value)))
@@ -247,7 +247,7 @@ class Atom(object):
             t = ovs.db.types.RealType
         elif isinstance(x, bool):
             t = ovs.db.types.BooleanType
-        elif isinstance(x, (str, unicode)):
+        elif isinstance(x, six.string_types):
             t = ovs.db.types.StringType
         elif isinstance(x, uuid):
             t = ovs.db.types.UuidType

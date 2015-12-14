@@ -33,7 +33,10 @@ class Parser(object):
             member = float_to_int(self.json[name])
             if is_identifier(member) and "id" in types:
                 return member
-            if len(types) and type(member) not in types:
+            try:
+                if len(types) and not isinstance(member, tuple(types)):
+                    self.__raise_error("Type mismatch for member '%s'." % name)
+            except TypeError:
                 self.__raise_error("Type mismatch for member '%s'." % name)
             return member
         else:
@@ -78,7 +81,7 @@ id_re = re.compile("[_a-zA-Z][_a-zA-Z0-9]*$")
 
 
 def is_identifier(s):
-    return type(s) in [str, unicode] and id_re.match(s)
+    return isinstance(s, six.string_types) and id_re.match(s)
 
 
 def json_type_to_string(type_):
@@ -95,15 +98,16 @@ def json_type_to_string(type_):
         return "array"
     elif issubclass(type_, number_types):
         return "number"
-    elif issubclass(type_, (str, unicode)):
+    elif issubclass(type_, six.string_types):
         return "string"
     else:
         return "<invalid>"
 
 
 def unwrap_json(json, name, types, desc):
-    if (type(json) not in (list, tuple) or len(json) != 2 or json[0] != name or
-        type(json[1]) not in types):
+    if (not isinstance(json, (list, tuple))
+            or len(json) != 2 or json[0] != name
+            or not isinstance(json[1], tuple(types))):
         raise error.Error('expected ["%s", <%s>]' % (name, desc), json)
     return json[1]
 

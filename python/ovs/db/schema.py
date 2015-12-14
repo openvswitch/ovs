@@ -67,8 +67,8 @@ class DbSchema(object):
     def from_json(json):
         parser = ovs.db.parser.Parser(json, "database schema")
         name = parser.get("name", ['id'])
-        version = parser.get_optional("version", [str, unicode])
-        parser.get_optional("cksum", [str, unicode])
+        version = parser.get_optional("version", six.string_types)
+        parser.get_optional("cksum", six.string_types)
         tablesJson = parser.get("tables", [dict])
         parser.finish()
 
@@ -133,8 +133,8 @@ class IdlSchema(DbSchema):
     @staticmethod
     def from_json(json):
         parser = ovs.db.parser.Parser(json, "IDL schema")
-        idlPrefix = parser.get("idlPrefix", [str, unicode])
-        idlHeader = parser.get("idlHeader", [str, unicode])
+        idlPrefix = parser.get("idlPrefix", six.string_types)
+        idlHeader = parser.get("idlHeader", six.string_types)
 
         subjson = dict(json)
         del subjson["idlPrefix"]
@@ -152,7 +152,7 @@ def column_set_from_json(json, columns):
         raise error.Error("array of distinct column names expected", json)
     else:
         for column_name in json:
-            if type(column_name) not in [str, unicode]:
+            if not isinstance(column_name, six.string_types):
                 raise error.Error("array of distinct column names expected",
                                   json)
             elif column_name not in columns:
@@ -260,8 +260,9 @@ class ColumnSchema(object):
         parser = ovs.db.parser.Parser(json, "schema for column %s" % name)
         mutable = parser.get_optional("mutable", [bool], True)
         ephemeral = parser.get_optional("ephemeral", [bool], False)
-        type_ = ovs.db.types.Type.from_json(parser.get("type",
-                                                       [dict, str, unicode]))
+        _types = list(six.string_types)
+        _types.extend([dict])
+        type_ = ovs.db.types.Type.from_json(parser.get("type", _types))
         parser.finish()
 
         return ColumnSchema(name, mutable, not ephemeral, type_)
