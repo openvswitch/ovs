@@ -61,10 +61,13 @@ class _Serializer(object):
             self.stream.write(u"%d" % obj)
         elif isinstance(obj, float):
             self.stream.write("%.15g" % obj)
-        elif isinstance(obj, unicode):
+        elif isinstance(obj, six.text_type):
+            # unicode() on Python 2, or str() in Python 3 (always unicode)
             self.__serialize_string(obj)
         elif isinstance(obj, str):
-            self.__serialize_string(unicode(obj))
+            # This is for Python 2, where this comes out to unicode(str()).
+            # For Python 3, it's str(str()), but it's harmless.
+            self.__serialize_string(six.text_type(obj))
         elif isinstance(obj, dict):
             self.stream.write(u"{")
 
@@ -79,7 +82,7 @@ class _Serializer(object):
                 if i > 0:
                     self.stream.write(u",")
                     self.__indent_line()
-                self.__serialize_string(unicode(key))
+                self.__serialize_string(six.text_type(key))
                 self.stream.write(u":")
                 if self.pretty:
                     self.stream.write(u' ')
@@ -144,12 +147,16 @@ def from_file(name):
 
 
 def from_string(s):
-    try:
-        s = unicode(s, 'utf-8')
-    except UnicodeDecodeError as e:
-        seq = ' '.join(["0x%2x" % ord(c)
-                        for c in e.object[e.start:e.end] if ord(c) >= 0x80])
-        return ("not a valid UTF-8 string: invalid UTF-8 sequence %s" % seq)
+    if not isinstance(s, six.text_type):
+        # We assume the input is a string.  We will only hit this case for a
+        # str in Python 2 which is not unicode, so we need to go ahead and
+        # decode it.
+        try:
+            s = six.text_type(s, 'utf-8')
+        except UnicodeDecodeError as e:
+            seq = ' '.join(["0x%2x" % ord(c)
+                           for c in e.object[e.start:e.end] if ord(c) >= 0x80])
+            return "not a valid UTF-8 string: invalid UTF-8 sequence %s" % seq
     p = Parser(check_trailer=True)
     p.feed(s)
     return p.finish()

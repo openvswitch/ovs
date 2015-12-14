@@ -19,10 +19,11 @@ import getopt
 import sys
 
 import ovs.json
+import six
 
 
 def print_json(json):
-    if type(json) in [str, unicode]:
+    if isinstance(json, six.string_types):
         print("error: %s" % json)
         return False
     else:
