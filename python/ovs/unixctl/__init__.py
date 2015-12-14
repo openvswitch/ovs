@@ -14,10 +14,12 @@
 
 import types
 
+import six
+
 import ovs.util
 
 commands = {}
-strtypes = types.StringTypes
+strtypes = six.string_types
 
 
 class _UnixctlCommand(object):
