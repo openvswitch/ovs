@@ -108,12 +108,16 @@ class Atom(object):
     def from_json(base, json, symtab=None):
         type_ = base.type
         json = ovs.db.parser.float_to_int(json)
-        if ((type_ == ovs.db.types.IntegerType and type(json) in [int, long])
+        real_types = list(six.integer_types)
+        real_types.extend([float])
+        real_types = tuple(real_types)
+        if ((type_ == ovs.db.types.IntegerType
+                and isinstance(json, six.integer_types))
             or (type_ == ovs.db.types.RealType
-                and type(json) in [int, long, float])
-            or (type_ == ovs.db.types.BooleanType and type(json) == bool)
+                and isinstance(json, real_types))
+            or (type_ == ovs.db.types.BooleanType and isinstance(json, bool))
             or (type_ == ovs.db.types.StringType
-                and type(json) in [str, unicode])):
+                and isinstance(json, (str, unicode)))):
             atom = Atom(type_, json)
         elif type_ == ovs.db.types.UuidType:
             atom = Atom(type_, ovs.ovsuuid.from_json(json, symtab))
@@ -237,13 +241,13 @@ class Atom(object):
 
     @staticmethod
     def new(x):
-        if type(x) in [int, long]:
+        if isinstance(x, six.integer_types):
             t = ovs.db.types.IntegerType
-        elif type(x) == float:
+        elif isinstance(x, float):
             t = ovs.db.types.RealType
-        elif x in [False, True]:
+        elif isinstance(x, bool):
             t = ovs.db.types.BooleanType
-        elif type(x) in [str, unicode]:
+        elif isinstance(x, (str, unicode)):
             t = ovs.db.types.StringType
         elif isinstance(x, uuid):
             t = ovs.db.types.UuidType
