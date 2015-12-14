@@ -733,14 +733,27 @@ struct tcp_header {
 BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 
 /* Connection states */
-#define CS_NEW               0x01
-#define CS_ESTABLISHED       0x02
-#define CS_RELATED           0x04
-#define CS_REPLY_DIR         0x08
-#define CS_INVALID           0x10
-#define CS_TRACKED           0x20
-#define CS_SRC_NAT           0x40
-#define CS_DST_NAT           0x80
+enum {
+    CS_NEW_BIT =         0,
+    CS_ESTABLISHED_BIT = 1,
+    CS_RELATED_BIT =     2,
+    CS_REPLY_DIR_BIT =   3,
+    CS_INVALID_BIT =     4,
+    CS_TRACKED_BIT =     5,
+    CS_SRC_NAT_BIT =     6,
+    CS_DST_NAT_BIT =     7,
+};
+
+enum {
+    CS_NEW =         (1 << CS_NEW_BIT),
+    CS_ESTABLISHED = (1 << CS_ESTABLISHED_BIT),
+    CS_RELATED =     (1 << CS_RELATED_BIT),
+    CS_REPLY_DIR =   (1 << CS_REPLY_DIR_BIT),
+    CS_INVALID =     (1 << CS_INVALID_BIT),
+    CS_TRACKED =     (1 << CS_TRACKED_BIT),
+    CS_SRC_NAT =     (1 << CS_SRC_NAT_BIT),
+    CS_DST_NAT =     (1 << CS_DST_NAT_BIT),
+};
 
 /* Undefined connection state bits. */
 #define CS_SUPPORTED_MASK    (CS_NEW | CS_ESTABLISHED | CS_RELATED \
