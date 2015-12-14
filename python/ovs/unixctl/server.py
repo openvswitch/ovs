@@ -15,7 +15,6 @@
 import copy
 import errno
 import os
-import types
 
 import six
 from six.moves import range
@@ -30,7 +29,7 @@ import ovs.vlog
 
 Message = ovs.jsonrpc.Message
 vlog = ovs.vlog.Vlog("unixctl_server")
-strtypes = types.StringTypes
+strtypes = six.string_types
 
 
 class UnixctlConnection(object):
