@@ -15,6 +15,8 @@
 import re
 import uuid
 
+import six
+
 import ovs.poller
 import ovs.socket_util
 import ovs.json
@@ -293,7 +295,7 @@ class Datum(object):
         This function is not commonly useful because the most ordinary way to
         obtain a datum is ultimately via Datum.from_json() or Atom.from_json(),
         which check constraints themselves."""
-        for keyAtom, valueAtom in self.values.iteritems():
+        for keyAtom, valueAtom in six.iteritems(self.values):
             keyAtom.check_constraints(self.type.key)
             if valueAtom is not None:
                 valueAtom.check_constraints(self.type.value)
@@ -354,7 +356,7 @@ class Datum(object):
             return ["map", [[k.to_json(), v.to_json()]
                             for k, v in sorted(self.values.items())]]
         elif len(self.values) == 1:
-            key = self.values.keys()[0]
+            key = next(six.iterkeys(self.values))
             return key.to_json()
         else:
             return ["set", [k.to_json() for k in sorted(self.values.keys())]]
@@ -388,9 +390,9 @@ class Datum(object):
 
     def as_list(self):
         if self.type.is_map():
-            return [[k.value, v.value] for k, v in self.values.iteritems()]
+            return [[k.value, v.value] for k, v in six.iteritems(self.values)]
         else:
-            return [k.value for k in self.values.iterkeys()]
+            return [k.value for k in six.iterkeys(self.values)]
 
     def as_dict(self):
         return dict(self.values)
@@ -398,10 +400,10 @@ class Datum(object):
     def as_scalar(self):
         if len(self.values) == 1:
             if self.type.is_map():
-                k, v = self.values.iteritems()[0]
+                k, v = next(six.iteritems(self.values))
                 return [k.value, v.value]
             else:
-                return self.values.keys()[0].value
+                return next(six.iterkeys(self.values)).value
         else:
             return None
 
@@ -448,7 +450,7 @@ class Datum(object):
                 return value
         elif self.type.is_map():
             value = {}
-            for k, v in self.values.iteritems():
+            for k, v in six.iteritems(self.values):
                 dk = uuid_to_row(k.value, self.type.key)
                 dv = uuid_to_row(v.value, self.type.value)
                 if dk is not None and dv is not None:
@@ -476,7 +478,7 @@ class Datum(object):
         'type_'."""
         d = {}
         if type(value) == dict:
-            for k, v in value.iteritems():
+            for k, v in six.iteritems(value):
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 va = Atom.from_python(type_.value, row_to_uuid(v))
                 d[ka] = va

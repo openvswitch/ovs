@@ -85,7 +85,7 @@ class _SelectSelect(object):
             events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
                                                         POLLHUP |
                                                         POLLNVAL)
-        return events_dict.items()
+        return list(events_dict.items())
 
 
 SelectPoll = _SelectSelect

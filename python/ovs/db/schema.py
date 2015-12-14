@@ -15,6 +15,8 @@
 import re
 import sys
 
+import six
+
 from ovs.db import error
 import ovs.db.parser
 import ovs.db.types
@@ -40,7 +42,7 @@ class DbSchema(object):
         # backward compatibility, if the root set is empty then assume that
         # every table is in the root set.
         if self.__root_set_size() == 0:
-            for table in self.tables.itervalues():
+            for table in six.itervalues(self.tables):
                 table.is_root = True
 
         # Find the "ref_table"s referenced by "ref_table_name"s.
@@ -48,15 +50,15 @@ class DbSchema(object):
         # Also force certain columns to be persistent, as explained in
         # __check_ref_table().  This requires 'is_root' to be known, so this
         # must follow the loop updating 'is_root' above.
-        for table in self.tables.itervalues():
-            for column in table.columns.itervalues():
+        for table in six.itervalues(self.tables):
+            for column in six.itervalues(table.columns):
                 self.__follow_ref_table(column, column.type.key, "key")
                 self.__follow_ref_table(column, column.type.value, "value")
 
     def __root_set_size(self):
         """Returns the number of tables in the schema's root set."""
         n_root = 0
-        for table in self.tables.itervalues():
+        for table in six.itervalues(self.tables):
             if table.is_root:
                 n_root += 1
         return n_root
@@ -76,7 +78,7 @@ class DbSchema(object):
                               % version)
 
         tables = {}
-        for tableName, tableJson in tablesJson.iteritems():
+        for tableName, tableJson in six.iteritems(tablesJson):
             _check_id(tableName, json)
             tables[tableName] = TableSchema.from_json(tableJson, tableName)
 
@@ -90,7 +92,7 @@ class DbSchema(object):
         default_is_root = self.__root_set_size() == len(self.tables)
 
         tables = {}
-        for table in self.tables.itervalues():
+        for table in six.itervalues(self.tables):
             tables[table.name] = table.to_json(default_is_root)
         json = {"name": self.name, "tables": tables}
         if self.version:
@@ -191,7 +193,7 @@ class TableSchema(object):
             raise error.Error("table must have at least one column", json)
 
         columns = {}
-        for column_name, column_json in columns_json.iteritems():
+        for column_name, column_json in six.iteritems(columns_json):
             _check_id(column_name, json)
             columns[column_name] = ColumnSchema.from_json(column_json,
                                                           column_name)
@@ -230,7 +232,7 @@ class TableSchema(object):
             json["isRoot"] = self.is_root
 
         json["columns"] = columns = {}
-        for column in self.columns.itervalues():
+        for column in six.itervalues(self.columns):
             if not column.name.startswith("_"):
                 columns[column.name] = column.to_json()
 
