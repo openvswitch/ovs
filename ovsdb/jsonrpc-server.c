@@ -1374,7 +1374,7 @@ ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
 }
 
 void
-ovsdb_jsonrpc_disable_monitor2()
+ovsdb_jsonrpc_disable_monitor2(void)
 {
     /* Once disabled, it is not possible to re-enable it. */
     monitor2_enable__ = false;
