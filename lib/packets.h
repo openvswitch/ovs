@@ -739,13 +739,10 @@ BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 #define CS_REPLY_DIR         0x08
 #define CS_INVALID           0x10
 #define CS_TRACKED           0x20
-#define CS_SRC_NAT           0x40
-#define CS_DST_NAT           0x80
 
 /* Undefined connection state bits. */
 #define CS_SUPPORTED_MASK    (CS_NEW | CS_ESTABLISHED | CS_RELATED \
-                              | CS_INVALID | CS_REPLY_DIR | CS_TRACKED \
-                              | CS_SRC_NAT | CS_DST_NAT)
+                              | CS_INVALID | CS_REPLY_DIR | CS_TRACKED)
 #define CS_UNSUPPORTED_MASK  (~(uint32_t)CS_SUPPORTED_MASK)
 
 #define ARP_HRD_ETHERNET 1
@@ -999,8 +996,6 @@ struct vxlanhdr {
 #define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
 
 void ipv6_format_addr(const struct in6_addr *addr, struct ds *);
-void ipv6_format_addr_bracket(const struct in6_addr *addr, struct ds *,
-                              bool bracket);
 void ipv6_format_mapped(const struct in6_addr *addr, struct ds *);
 void ipv6_format_masked(const struct in6_addr *addr,
                         const struct in6_addr *mask, struct ds *);

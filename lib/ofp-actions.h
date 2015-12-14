@@ -107,7 +107,6 @@
     OFPACT(SAMPLE,          ofpact_sample,      ofpact, "sample")       \
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
     OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
-    OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -546,42 +545,6 @@ ofpact_nest_get_action_len(const struct ofpact_nest *on)
 void ofpacts_execute_action_set(struct ofpbuf *action_list,
                                 const struct ofpbuf *action_set);
 
-/* Bits for 'flags' in struct nx_action_nat.
- */
-enum nx_nat_flags {
-    NX_NAT_F_SRC          = 1 << 0,
-    NX_NAT_F_DST          = 1 << 1,
-    NX_NAT_F_PERSISTENT   = 1 << 2,
-    NX_NAT_F_PROTO_HASH   = 1 << 3,
-    NX_NAT_F_PROTO_RANDOM = 1 << 4,
-};
-
-/* OFPACT_NAT.
- *
- * Used for NXAST_NAT. */
-struct ofpact_nat {
-    struct ofpact ofpact;
-    uint8_t range_af; /* AF_UNSPEC, AF_INET, or AF_INET6 */
-    uint16_t flags;  /* NX_NAT_F_* */
-    struct {
-        struct {
-            uint16_t min;
-            uint16_t max;
-        } proto;
-        union {
-            struct {
-                ovs_be32 min;
-                ovs_be32 max;
-            } ipv4;
-            struct {
-                struct in6_addr min;
-                struct in6_addr max;
-            } ipv6;
-        } addr;
-    } range;
-};
-
-
 /* OFPACT_RESUBMIT.
  *
  * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE. */
@@ -898,7 +861,7 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *
  *     Appends a new 'ofpact', of length OFPACT_<ENUM>_RAW_SIZE, to 'ofpacts',
  *     initializes it with ofpact_init_<ENUM>(), and returns it.  Also sets
- *     'ofpacts->header' to the returned action.
+ *     'ofpacts->l2' to the returned action.
  *
  *     After using this function to add a variable-length action, add the
  *     elements of the flexible array (e.g. with ofpbuf_put()), then use
