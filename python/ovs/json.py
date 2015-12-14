@@ -16,6 +16,7 @@ import re
 import StringIO
 import sys
 
+import six
 from six.moves import range
 
 __pychecker__ = 'no-stringiter'
@@ -73,7 +74,7 @@ class _Serializer(object):
             if self.sort_keys:
                 items = sorted(obj.items())
             else:
-                items = obj.iteritems()
+                items = six.iteritems(obj)
             for i, (key, value) in enumerate(items):
                 if i > 0:
                     self.stream.write(u",")

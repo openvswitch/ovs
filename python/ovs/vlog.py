@@ -22,6 +22,7 @@ import socket
 import sys
 import threading
 
+import six
 from six.moves import range
 
 import ovs.dirs
@@ -80,7 +81,7 @@ class Vlog(object):
         msg_num = Vlog.__msg_num
         Vlog.__msg_num += 1
 
-        for f, f_level in Vlog.__mfl[self.name].iteritems():
+        for f, f_level in six.iteritems(Vlog.__mfl[self.name]):
             f_level = LEVELS.get(f_level, logging.CRITICAL)
             if level_num >= f_level:
                 msg = self._build_message(message, f, level, msg_num)
@@ -184,7 +185,7 @@ class Vlog(object):
 
     def __is_enabled(self, level):
         level = LEVELS.get(level.lower(), logging.DEBUG)
-        for f, f_level in Vlog.__mfl[self.name].iteritems():
+        for f, f_level in six.iteritems(Vlog.__mfl[self.name]):
             f_level = LEVELS.get(f_level, logging.CRITICAL)
             if level >= f_level:
                 return True
@@ -266,12 +267,12 @@ class Vlog(object):
             return
 
         if module == "any":
-            modules = Vlog.__mfl.keys()
+            modules = list(Vlog.__mfl.keys())
         else:
             modules = [module]
 
         if destination == "any":
-            destinations = DESTINATIONS.keys()
+            destinations = list(DESTINATIONS.keys())
         else:
             destinations = [destination]
 

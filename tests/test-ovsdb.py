@@ -29,6 +29,7 @@ import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
+import six
 
 
 def unbox_json(json):
@@ -154,7 +155,7 @@ def print_idl(idl, step):
         simple_columns = ["i", "r", "b", "s", "u", "ia",
                           "ra", "ba", "sa", "ua", "uuid"]
         simple = idl.tables["simple"].rows
-        for row in simple.itervalues():
+        for row in six.itervalues(simple):
             s = "%03d:" % step
             for column in simple_columns:
                 if hasattr(row, column) and not (type(getattr(row, column))
@@ -170,7 +171,7 @@ def print_idl(idl, step):
 
     if "link1" in idl.tables:
         l1 = idl.tables["link1"].rows
-        for row in l1.itervalues():
+        for row in six.itervalues(l1):
             s = ["%03d: i=%s k=" % (step, row.i)]
             if hasattr(row, "k") and row.k:
                 s.append(str(row.k.i))
@@ -187,7 +188,7 @@ def print_idl(idl, step):
 
     if "link2" in idl.tables:
         l2 = idl.tables["link2"].rows
-        for row in l2.itervalues():
+        for row in six.itervalues(l2):
             s = ["%03d:" % step]
             s.append(" i=%s l1=" % row.i)
             if hasattr(row, "l1") and row.l1:
@@ -211,7 +212,7 @@ def substitute_uuids(json, symtab):
         return [substitute_uuids(element, symtab) for element in json]
     elif type(json) == dict:
         d = {}
-        for key, value in json.iteritems():
+        for key, value in six.iteritems(json):
             d[key] = substitute_uuids(value, symtab)
         return d
     return json
@@ -226,12 +227,12 @@ def parse_uuids(json, symtab):
         for element in json:
             parse_uuids(element, symtab)
     elif type(json) == dict:
-        for value in json.itervalues():
+        for value in six.itervalues(json):
             parse_uuids(value, symtab)
 
 
 def idltest_find_simple(idl, i):
-    for row in idl.tables["simple"].rows.itervalues():
+    for row in six.itervalues(idl.tables["simple"].rows):
         if row.i == i:
             return row
     return None
@@ -254,7 +255,7 @@ def idl_set(idl, commands, step):
 
             def notify(event, row, updates=None):
                 if updates:
-                    upcol = updates._data.keys()[0]
+                    upcol = list(updates._data.keys())[0]
                 else:
                     upcol = None
                 events.append("%s|%s|%s" % (event, row.i, upcol))

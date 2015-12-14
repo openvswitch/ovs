@@ -89,7 +89,7 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
                 s += node.attributes['db'].nodeValue
             else:
                 raise error.Error("'ref' lacks required attributes: %s"
-                                  % node.attributes.keys())
+                                  % list(node.attributes.keys()))
             return s + font
         elif node.tagName in ['var', 'dfn', 'i']:
             s = r'\fI'

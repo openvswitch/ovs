@@ -16,6 +16,8 @@ import errno
 import os
 import socket
 
+import six
+
 import ovs.poller
 import ovs.socket_util
 import ovs.vlog
@@ -58,7 +60,7 @@ class Stream(object):
 
     @staticmethod
     def _find_method(name):
-        for method, cls in Stream._SOCKET_METHODS.items():
+        for method, cls in six.iteritems(Stream._SOCKET_METHODS):
             if name.startswith(method):
                 return cls
         return None
