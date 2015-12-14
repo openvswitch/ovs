@@ -16,6 +16,8 @@ import re
 import StringIO
 import sys
 
+from six.moves import range
+
 __pychecker__ = 'no-stringiter'
 
 escapes = {ord('"'): u"\\\"",

@@ -15,6 +15,8 @@
 import re
 import uuid
 
+from six.moves import range
+
 from ovs.db import error
 import ovs.db.parser
 

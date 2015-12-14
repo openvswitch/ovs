@@ -26,6 +26,7 @@ import signal
 import subprocess
 import re
 
+from six.moves import range
 import six.moves.xmlrpc_client
 
 

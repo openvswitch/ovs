@@ -39,6 +39,7 @@ import ovs.db.idl
 import ovs.unixctl
 import ovs.unixctl.server
 import ovs.vlog
+from six.moves import range
 
 vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 root_prefix = ''                # Prefix for absolute file names, for testing.
