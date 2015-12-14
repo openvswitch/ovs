@@ -143,9 +143,9 @@ enum ovsdb_update_version {
 };
 
 /* Name arrays indexed by 'enum ovsdb_update_version'. */
-const char *table_updates_names[] = {"table_updates", "table_updates2"};
-const char *table_update_names[] = {"table_update", "table_update2"};
-const char *row_update_names[] = {"row_update", "row_update2"};
+static const char *table_updates_names[] = {"table_updates", "table_updates2"};
+static const char *table_update_names[] = {"table_update", "table_update2"};
+static const char *row_update_names[] = {"row_update", "row_update2"};
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit semantic_rl = VLOG_RATE_LIMIT_INIT(1, 5);
