@@ -29,6 +29,7 @@ import ovs.util
 import ovs.daemon
 import ovs.unixctl.server
 import ovs.vlog
+from six.moves import range
 
 
 VERSION = "0.99"

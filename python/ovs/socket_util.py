@@ -19,6 +19,8 @@ import random
 import socket
 import sys
 
+from six.moves import range
+
 import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
@@ -32,7 +34,7 @@ def make_short_name(long_name):
     long_name = os.path.abspath(long_name)
     long_dirname = os.path.dirname(long_name)
     tmpdir = os.getenv('TMPDIR', '/tmp')
-    for x in xrange(0, 1000):
+    for x in range(0, 1000):
         link_name = \
             '%s/ovs-un-py-%d-%d' % (tmpdir, random.randint(0, 10000), x)
         try:

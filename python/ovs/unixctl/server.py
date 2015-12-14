@@ -17,6 +17,8 @@ import errno
 import os
 import types
 
+from six.moves import range
+
 import ovs.dirs
 import ovs.jsonrpc
 import ovs.stream

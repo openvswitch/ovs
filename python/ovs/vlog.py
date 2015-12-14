@@ -22,6 +22,8 @@ import socket
 import sys
 import threading
 
+from six.moves import range
+
 import ovs.dirs
 import ovs.unixctl
 import ovs.util
