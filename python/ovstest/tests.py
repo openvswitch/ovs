@@ -96,8 +96,8 @@ def do_tcp_tests(receiver, sender, duration):
 
         time.sleep(duration + 1)
 
-        rcv_bytes = long(server1.get_tcp_listener_results(listen_handle))
-        snt_bytes = long(server2.get_tcp_sender_results(send_handle))
+        rcv_bytes = int(server1.get_tcp_listener_results(listen_handle))
+        snt_bytes = int(server2.get_tcp_sender_results(send_handle))
 
         bwidth = rcv_bytes / duration
 

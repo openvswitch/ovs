@@ -15,6 +15,8 @@
 import sys
 import uuid
 
+import six
+
 from ovs.db import error
 import ovs.db.parser
 import ovs.db.data
@@ -54,9 +56,13 @@ class AtomicType(object):
     def default_atom(self):
         return ovs.db.data.Atom(self, self.default)
 
+REAL_PYTHON_TYPES = list(six.integer_types)
+REAL_PYTHON_TYPES.extend([float])
+REAL_PYTHON_TYPES = tuple(REAL_PYTHON_TYPES)
+
 VoidType = AtomicType("void", None, ())
-IntegerType = AtomicType("integer", 0, (int, long))
-RealType = AtomicType("real", 0.0, (int, long, float))
+IntegerType = AtomicType("integer", 0, six.integer_types)
+RealType = AtomicType("real", 0.0, REAL_PYTHON_TYPES)
 BooleanType = AtomicType("boolean", False, (bool,))
 StringType = AtomicType("string", "", (str, unicode))
 UuidType = AtomicType("uuid", ovs.ovsuuid.zero(), (uuid.UUID,))
@@ -148,7 +154,7 @@ class BaseType(object):
 
     @staticmethod
     def __parse_uint(parser, name, default):
-        value = parser.get_optional(name, [int, long])
+        value = parser.get_optional(name, six.integer_types)
         if value is None:
             value = default
         else:
@@ -173,14 +179,14 @@ class BaseType(object):
             base.enum = ovs.db.data.Datum.from_json(
                     BaseType.get_enum_type(base.type), enum)
         elif base.type == IntegerType:
-            base.min = parser.get_optional("minInteger", [int, long])
-            base.max = parser.get_optional("maxInteger", [int, long])
+            base.min = parser.get_optional("minInteger", six.integer_types)
+            base.max = parser.get_optional("maxInteger", six.integer_types)
             if (base.min is not None and base.max is not None
                     and base.min > base.max):
                 raise error.Error("minInteger exceeds maxInteger", json)
         elif base.type == RealType:
-            base.min = parser.get_optional("minReal", [int, long, float])
-            base.max = parser.get_optional("maxReal", [int, long, float])
+            base.min = parser.get_optional("minReal", REAL_PYTHON_TYPES)
+            base.max = parser.get_optional("maxReal", REAL_PYTHON_TYPES)
             if (base.min is not None and base.max is not None
                     and base.min > base.max):
                 raise error.Error("minReal exceeds maxReal", json)

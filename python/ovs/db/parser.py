@@ -14,6 +14,8 @@
 
 import re
 
+import six
+
 from ovs.db import error
 
 
@@ -80,17 +82,20 @@ def is_identifier(s):
 
 
 def json_type_to_string(type_):
+    number_types = list(six.integer_types)
+    number_types.extend([float])
+    number_types = tuple(number_types)
     if type_ is None:
         return "null"
-    elif type_ == bool:
+    elif issubclass(type_, bool):
         return "boolean"
-    elif type_ == dict:
+    elif issubclass(type_, dict):
         return "object"
-    elif type_ == list:
+    elif issubclass(type_, list):
         return "array"
-    elif type_ in [int, long, float]:
+    elif issubclass(type_, number_types):
         return "number"
-    elif type_ in [str, unicode]:
+    elif issubclass(type_, (str, unicode)):
         return "string"
     else:
         return "<invalid>"

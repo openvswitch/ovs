@@ -1261,7 +1261,7 @@ class Transaction(object):
         # __process_reply() already checked.
         mutate = ops[self._inc_index]
         count = mutate.get("count")
-        if not Transaction.__check_json_type(count, (int, long),
+        if not Transaction.__check_json_type(count, six.integer_types,
                                              '"mutate" reply "count"'):
             return False
         if count != 1:
@@ -1284,7 +1284,7 @@ class Transaction(object):
                                              '"select" reply row'):
             return False
         column = row.get(self._inc_column)
-        if not Transaction.__check_json_type(column, (int, long),
+        if not Transaction.__check_json_type(column, six.integer_types,
                                              '"select" reply inc column'):
             return False
         self._inc_new_value = column

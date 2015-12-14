@@ -57,15 +57,15 @@ class _Serializer(object):
             self.stream.write(u"false")
         elif obj is True:
             self.stream.write(u"true")
-        elif type(obj) in (int, long):
+        elif isinstance(obj, six.integer_types):
             self.stream.write(u"%d" % obj)
-        elif type(obj) == float:
+        elif isinstance(obj, float):
             self.stream.write("%.15g" % obj)
-        elif type(obj) == unicode:
+        elif isinstance(obj, unicode):
             self.__serialize_string(obj)
-        elif type(obj) == str:
+        elif isinstance(obj, str):
             self.__serialize_string(unicode(obj))
-        elif type(obj) == dict:
+        elif isinstance(obj, dict):
             self.stream.write(u"{")
 
             self.depth += 1
@@ -87,7 +87,7 @@ class _Serializer(object):
 
             self.stream.write(u"}")
             self.depth -= 1
-        elif type(obj) in (list, tuple):
+        elif isinstance(obj, (list, tuple)):
             self.stream.write(u"[")
             self.depth += 1
 
@@ -248,7 +248,7 @@ class Parser(object):
         if m:
             sign, integer, fraction, exp = m.groups()
             if (exp is not None and
-                (long(exp) > sys.maxint or long(exp) < -sys.maxint - 1)):
+                (int(exp) > sys.maxint or int(exp) < -sys.maxint - 1)):
                 self.__error("exponent outside valid range")
                 return
 
@@ -264,7 +264,7 @@ class Parser(object):
             if fraction is not None:
                 pow10 -= len(fraction)
             if exp is not None:
-                pow10 += long(exp)
+                pow10 += int(exp)
 
             if significand == 0:
                 self.__parser_input(0)
@@ -527,7 +527,10 @@ class Parser(object):
                 self.parse_state = Parser.__parse_object_next
 
     def __parse_value(self, token, string, next_state):
-        if token in [False, None, True] or type(token) in [int, long, float]:
+        number_types = list(six.integer_types)
+        number_types.extend([float])
+        number_types = tuple(number_types)
+        if token in [False, None, True] or isinstance(token, number_types):
             self.__put_value(token)
         elif token == 'string':
             self.__put_value(string)

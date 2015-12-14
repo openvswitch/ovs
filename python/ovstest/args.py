@@ -161,7 +161,7 @@ def bandwidth(string):
         raise argparse.ArgumentTypeError("Not a valid target bandwidth")
     bwidth = string.replace("M", "000000")
     bwidth = bwidth.replace("K", "000")
-    return long(bwidth) / 8  # Convert from bits to bytes
+    return int(bwidth) / 8  # Convert from bits to bytes
 
 
 def tunnel_types(string):
