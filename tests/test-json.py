@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
+
 import codecs
 import getopt
 import sys
@@ -21,7 +23,7 @@ import ovs.json
 
 def print_json(json):
     if type(json) in [str, unicode]:
-        print "error: %s" % json
+        print("error: %s" % json)
         return False
     else:
         ovs.json.to_stream(json, sys.stdout)
