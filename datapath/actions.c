@@ -68,7 +68,7 @@ struct ovs_frag_data {
 	u8 l2_data[MAX_L2_LEN];
 };
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 static DEFINE_PER_CPU(struct ovs_frag_data, ovs_frag_data_storage);
 #endif
 
@@ -625,7 +625,7 @@ static int set_sctp(struct sk_buff *skb, struct sw_flow_key *flow_key,
 	return 0;
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3,9,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 {
 	struct ovs_frag_data *data = get_pcpu_ptr(ovs_frag_data_storage);
@@ -740,7 +740,7 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 err:
 	kfree_skb(skb);
 }
-#else /* <= 3.9 */
+#else /* < 3.10 */
 static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 			 __be16 ethertype)
 {
