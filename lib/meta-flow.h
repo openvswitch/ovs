@@ -1888,7 +1888,7 @@ union mf_value {
     uint8_t u8;
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == 128);
-BUILD_ASSERT_DECL(sizeof(union mf_value) >= GENEVE_MAX_OPT_SIZE);
+BUILD_ASSERT_DECL(sizeof(union mf_value) >= TLV_MAX_OPT_SIZE);
 
 /* A const mf_value with all bits initialized to ones. */
 extern const union mf_value exact_match_mask;

@@ -9274,7 +9274,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_PACKET_OUT:
-    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
+    case OFPTYPE_NXT_TLV_TABLE_MOD:
 
         /* Not to be bundlable. */
     case OFPTYPE_ECHO_REQUEST:
@@ -9341,8 +9341,8 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_REQUESTFORWARD:
-    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
-    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
+    case OFPTYPE_NXT_TLV_TABLE_REQUEST:
+    case OFPTYPE_NXT_TLV_TABLE_REPLY:
         break;
     }
 
@@ -9421,12 +9421,12 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
 }
 
 static void
-encode_geneve_table_mappings(struct ofpbuf *b, struct ovs_list *mappings)
+encode_tlv_table_mappings(struct ofpbuf *b, struct ovs_list *mappings)
 {
-    struct ofputil_geneve_map *map;
+    struct ofputil_tlv_map *map;
 
     LIST_FOR_EACH (map, list_node, mappings) {
-        struct nx_geneve_map *nx_map;
+        struct nx_tlv_map *nx_map;
 
         nx_map = ofpbuf_put_zeros(b, sizeof *nx_map);
         nx_map->option_class = htons(map->option_class);
@@ -9437,29 +9437,29 @@ encode_geneve_table_mappings(struct ofpbuf *b, struct ovs_list *mappings)
 }
 
 struct ofpbuf *
-ofputil_encode_geneve_table_mod(enum ofp_version ofp_version,
-                                struct ofputil_geneve_table_mod *gtm)
+ofputil_encode_tlv_table_mod(enum ofp_version ofp_version,
+                                struct ofputil_tlv_table_mod *ttm)
 {
     struct ofpbuf *b;
-    struct nx_geneve_table_mod *nx_gtm;
+    struct nx_tlv_table_mod *nx_ttm;
 
-    b = ofpraw_alloc(OFPRAW_NXT_GENEVE_TABLE_MOD, ofp_version, 0);
-    nx_gtm = ofpbuf_put_zeros(b, sizeof *nx_gtm);
-    nx_gtm->command = htons(gtm->command);
-    encode_geneve_table_mappings(b, &gtm->mappings);
+    b = ofpraw_alloc(OFPRAW_NXT_TLV_TABLE_MOD, ofp_version, 0);
+    nx_ttm = ofpbuf_put_zeros(b, sizeof *nx_ttm);
+    nx_ttm->command = htons(ttm->command);
+    encode_tlv_table_mappings(b, &ttm->mappings);
 
     return b;
 }
 
 static enum ofperr
-decode_geneve_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
+decode_tlv_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
                              struct ovs_list *mappings)
 {
     list_init(mappings);
 
     while (msg->size) {
-        struct nx_geneve_map *nx_map;
-        struct ofputil_geneve_map *map;
+        struct nx_tlv_map *nx_map;
+        struct ofputil_tlv_map *map;
 
         nx_map = ofpbuf_pull(msg, sizeof *nx_map);
         map = xmalloc(sizeof *map);
@@ -9469,21 +9469,21 @@ decode_geneve_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
         map->option_type = nx_map->option_type;
 
         map->option_len = nx_map->option_len;
-        if (map->option_len % 4 || map->option_len > GENEVE_MAX_OPT_SIZE) {
+        if (map->option_len % 4 || map->option_len > TLV_MAX_OPT_SIZE) {
             VLOG_WARN_RL(&bad_ofmsg_rl,
-                         "geneve table option length (%u) is not a valid option size",
+                         "tlv table option length (%u) is not a valid option size",
                          map->option_len);
-            ofputil_uninit_geneve_table(mappings);
-            return OFPERR_NXGTMFC_BAD_OPT_LEN;
+            ofputil_uninit_tlv_table(mappings);
+            return OFPERR_NXTTMFC_BAD_OPT_LEN;
         }
 
         map->index = ntohs(nx_map->index);
         if (map->index >= max_fields) {
             VLOG_WARN_RL(&bad_ofmsg_rl,
-                         "geneve table field index (%u) is too large (max %u)",
+                         "tlv table field index (%u) is too large (max %u)",
                          map->index, max_fields - 1);
-            ofputil_uninit_geneve_table(mappings);
-            return OFPERR_NXGTMFC_BAD_FIELD_IDX;
+            ofputil_uninit_tlv_table(mappings);
+            return OFPERR_NXTTMFC_BAD_FIELD_IDX;
         }
     }
 
@@ -9491,72 +9491,72 @@ decode_geneve_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
 }
 
 enum ofperr
-ofputil_decode_geneve_table_mod(const struct ofp_header *oh,
-                                struct ofputil_geneve_table_mod *gtm)
+ofputil_decode_tlv_table_mod(const struct ofp_header *oh,
+                                struct ofputil_tlv_table_mod *ttm)
 {
     struct ofpbuf msg;
-    struct nx_geneve_table_mod *nx_gtm;
+    struct nx_tlv_table_mod *nx_ttm;
 
     ofpbuf_use_const(&msg, oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
 
-    nx_gtm = ofpbuf_pull(&msg, sizeof *nx_gtm);
-    gtm->command = ntohs(nx_gtm->command);
-    if (gtm->command > NXGTMC_CLEAR) {
+    nx_ttm = ofpbuf_pull(&msg, sizeof *nx_ttm);
+    ttm->command = ntohs(nx_ttm->command);
+    if (ttm->command > NXTTMC_CLEAR) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "geneve table mod command (%u) is out of range",
-                     gtm->command);
-        return OFPERR_NXGTMFC_BAD_COMMAND;
+                     "tlv table mod command (%u) is out of range",
+                     ttm->command);
+        return OFPERR_NXTTMFC_BAD_COMMAND;
     }
 
-    return decode_geneve_table_mappings(&msg, TUN_METADATA_NUM_OPTS,
-                                        &gtm->mappings);
+    return decode_tlv_table_mappings(&msg, TUN_METADATA_NUM_OPTS,
+                                        &ttm->mappings);
 }
 
 struct ofpbuf *
-ofputil_encode_geneve_table_reply(const struct ofp_header *oh,
-                                  struct ofputil_geneve_table_reply *gtr)
+ofputil_encode_tlv_table_reply(const struct ofp_header *oh,
+                                  struct ofputil_tlv_table_reply *ttr)
 {
     struct ofpbuf *b;
-    struct nx_geneve_table_reply *nx_gtr;
+    struct nx_tlv_table_reply *nx_ttr;
 
-    b = ofpraw_alloc_reply(OFPRAW_NXT_GENEVE_TABLE_REPLY, oh, 0);
-    nx_gtr = ofpbuf_put_zeros(b, sizeof *nx_gtr);
-    nx_gtr->max_option_space = htonl(gtr->max_option_space);
-    nx_gtr->max_fields = htons(gtr->max_fields);
+    b = ofpraw_alloc_reply(OFPRAW_NXT_TLV_TABLE_REPLY, oh, 0);
+    nx_ttr = ofpbuf_put_zeros(b, sizeof *nx_ttr);
+    nx_ttr->max_option_space = htonl(ttr->max_option_space);
+    nx_ttr->max_fields = htons(ttr->max_fields);
 
-    encode_geneve_table_mappings(b, &gtr->mappings);
+    encode_tlv_table_mappings(b, &ttr->mappings);
 
     return b;
 }
 
-/* Decodes the NXT_GENEVE_TABLE_REPLY message in 'oh' into '*gtr'.  Returns 0
+/* Decodes the NXT_TLV_TABLE_REPLY message in 'oh' into '*ttr'.  Returns 0
  * if successful, otherwise an ofperr.
  *
- * The decoder verifies that the indexes in 'gtr->mappings' are less than
- * 'gtr->max_fields', but the caller must ensure, if necessary, that they are
+ * The decoder verifies that the indexes in 'ttr->mappings' are less than
+ * 'ttr->max_fields', but the caller must ensure, if necessary, that they are
  * less than TUN_METADATA_NUM_OPTS. */
 enum ofperr
-ofputil_decode_geneve_table_reply(const struct ofp_header *oh,
-                                  struct ofputil_geneve_table_reply *gtr)
+ofputil_decode_tlv_table_reply(const struct ofp_header *oh,
+                                  struct ofputil_tlv_table_reply *ttr)
 {
     struct ofpbuf msg;
-    struct nx_geneve_table_reply *nx_gtr;
+    struct nx_tlv_table_reply *nx_ttr;
 
     ofpbuf_use_const(&msg, oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
 
-    nx_gtr = ofpbuf_pull(&msg, sizeof *nx_gtr);
-    gtr->max_option_space = ntohl(nx_gtr->max_option_space);
-    gtr->max_fields = ntohs(nx_gtr->max_fields);
+    nx_ttr = ofpbuf_pull(&msg, sizeof *nx_ttr);
+    ttr->max_option_space = ntohl(nx_ttr->max_option_space);
+    ttr->max_fields = ntohs(nx_ttr->max_fields);
 
-    return decode_geneve_table_mappings(&msg, gtr->max_fields, &gtr->mappings);
+    return decode_tlv_table_mappings(&msg, ttr->max_fields, &ttr->mappings);
 }
 
 void
-ofputil_uninit_geneve_table(struct ovs_list *mappings)
+ofputil_uninit_tlv_table(struct ovs_list *mappings)
 {
-    struct ofputil_geneve_map *map;
+    struct ofputil_tlv_map *map;
 
     LIST_FOR_EACH_POP (map, list_node, mappings) {
         free(map);

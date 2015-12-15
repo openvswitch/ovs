@@ -387,9 +387,9 @@ usage(void)
            "  dump-meters SWITCH          print all meter configuration\n"
            "  meter-stats SWITCH [METER]  print meter statistics\n"
            "  meter-features SWITCH       print meter features\n"
-           "  add-geneve-map SWITCH MAP   add Geneve option MAPpings\n"
-           "  del-geneve-map SWITCH [MAP] delete Geneve option MAPpings\n"
-           "  dump-geneve-map SWITCH      print Geneve option mappings\n"
+           "  add-tlv-map SWITCH MAP      add TLV option MAPpings\n"
+           "  del-tlv-map SWITCH [MAP] delete TLV option MAPpings\n"
+           "  dump-tlv-map SWITCH      print TLV option mappings\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -2497,17 +2497,17 @@ ofctl_dump_group_features(struct ovs_cmdl_context *ctx)
 }
 
 static void
-ofctl_geneve_mod(struct ovs_cmdl_context *ctx, uint16_t command)
+ofctl_tlv_mod(struct ovs_cmdl_context *ctx, uint16_t command)
 {
     enum ofputil_protocol usable_protocols;
     enum ofputil_protocol protocol;
-    struct ofputil_geneve_table_mod gtm;
+    struct ofputil_tlv_table_mod ttm;
     char *error;
     enum ofp_version version;
     struct ofpbuf *request;
     struct vconn *vconn;
 
-    error = parse_ofp_geneve_table_mod_str(&gtm, command, ctx->argc > 2 ?
+    error = parse_ofp_tlv_table_mod_str(&ttm, command, ctx->argc > 2 ?
                                            ctx->argv[2] : "",
                                            &usable_protocols);
     if (error) {
@@ -2517,31 +2517,31 @@ ofctl_geneve_mod(struct ovs_cmdl_context *ctx, uint16_t command)
     protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
 
-    request = ofputil_encode_geneve_table_mod(version, &gtm);
+    request = ofputil_encode_tlv_table_mod(version, &ttm);
     if (request) {
         transact_noreply(vconn, request);
     }
 
     vconn_close(vconn);
-    ofputil_uninit_geneve_table(&gtm.mappings);
+    ofputil_uninit_tlv_table(&ttm.mappings);
 }
 
 static void
-ofctl_add_geneve_map(struct ovs_cmdl_context *ctx)
+ofctl_add_tlv_map(struct ovs_cmdl_context *ctx)
 {
-    ofctl_geneve_mod(ctx, NXGTMC_ADD);
+    ofctl_tlv_mod(ctx, NXTTMC_ADD);
 }
 
 static void
-ofctl_del_geneve_map(struct ovs_cmdl_context *ctx)
+ofctl_del_tlv_map(struct ovs_cmdl_context *ctx)
 {
-    ofctl_geneve_mod(ctx, ctx->argc > 2 ? NXGTMC_DELETE : NXGTMC_CLEAR);
+    ofctl_tlv_mod(ctx, ctx->argc > 2 ? NXTTMC_DELETE : NXTTMC_CLEAR);
 }
 
 static void
-ofctl_dump_geneve_map(struct ovs_cmdl_context *ctx)
+ofctl_dump_tlv_map(struct ovs_cmdl_context *ctx)
 {
-    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXT_GENEVE_TABLE_REQUEST);
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXT_TLV_TABLE_REQUEST);
 }
 
 static void
@@ -3929,12 +3929,12 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_dump_group_stats },
     { "dump-group-features", "switch",
       1, 1, ofctl_dump_group_features },
-    { "add-geneve-map", "switch map",
-      2, 2, ofctl_add_geneve_map },
-    { "del-geneve-map", "switch [map]",
-      1, 2, ofctl_del_geneve_map },
-    { "dump-geneve-map", "switch",
-      1, 1, ofctl_dump_geneve_map },
+    { "add-tlv-map", "switch map",
+      2, 2, ofctl_add_tlv_map },
+    { "del-tlv-map", "switch [map]",
+      1, 2, ofctl_del_tlv_map },
+    { "dump-tlv-map", "switch",
+      1, 1, ofctl_dump_tlv_map },
     { "help", NULL, 0, INT_MAX, ofctl_help },
     { "list-commands", NULL, 0, INT_MAX, ofctl_list_commands },
 

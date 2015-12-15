@@ -924,13 +924,27 @@ struct nx_flow_monitor_cancel {
 };
 OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 4);
 
-/* Geneve option table maintenance commands.
+/* Variable-length option TLV table maintenance commands.
  *
- * In order to work with Geneve options, we need to maintain a mapping
- * table between an option (defined by <class, type, length>) and
- * an NXM field that can be operated on for the purposes of matches,
- * actions, etc. This mapping must be explicitly specified by the
- * user.
+ * The option in Type-Length-Value format is widely used in tunnel options,
+ * e.g., the base Geneve header is followed by zero or more options in TLV
+ * format. Each option consists of a four byte option header and a variable
+ * amount of option data interpreted according to the type. The generic TLV
+ * format in tunnel options is as following:
+ *
+ * 0                   1                   2                   3
+ * 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |          Option Class         |      Type     |R|R|R| Length  |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                      Variable Option Data                     |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * In order to work with this variable-length options in TLV format in
+ * tunnel options, we need to maintain a mapping table between an option
+ * TLV (defined by <class, type, length>) and an NXM field that can be
+ * operated on for the purposes of matches, actions, etc. This mapping
+ * must be explicitly specified by the user.
  *
  * There are two primary groups of OpenFlow messages that are introduced
  * as Nicira extensions: modification commands (add, delete, clear mappings)
@@ -940,58 +954,56 @@ OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 4);
  * Note that mappings should not be changed while they are in active use by
  * a flow. The result of doing so is undefined. */
 
-/* Geneve table commands */
-enum nx_geneve_table_mod_command {
-    NXGTMC_ADD,          /* New mappings (fails if an option is already
+/* TLV table commands */
+enum nx_tlv_table_mod_command {
+    NXTTMC_ADD,          /* New mappings (fails if an option is already
                             mapped). */
-    NXGTMC_DELETE,       /* Delete mappings, identified by index
+    NXTTMC_DELETE,       /* Delete mappings, identified by index
                           * (unmapped options are ignored). */
-    NXGTMC_CLEAR,        /* Clear all mappings. Additional information
+    NXTTMC_CLEAR,        /* Clear all mappings. Additional information
                             in this command is ignored. */
 };
 
-/* Map between a Geneve option and an NXM field. */
-struct nx_geneve_map {
-    ovs_be16 option_class; /* Geneve option class. */
-    uint8_t  option_type;  /* Geneve option type. */
-    uint8_t  option_len;   /* Geneve option length (multiple of 4). */
+/* Map between an option TLV and an NXM field. */
+struct nx_tlv_map {
+    ovs_be16 option_class; /* TLV class. */
+    uint8_t  option_type;  /* TLV type. */
+    uint8_t  option_len;   /* TLV length (multiple of 4). */
     ovs_be16 index;        /* NXM_NX_TUN_METADATA<n> index */
     uint8_t  pad[2];
 };
-OFP_ASSERT(sizeof(struct nx_geneve_map) == 8);
+OFP_ASSERT(sizeof(struct nx_tlv_map) == 8);
 
-/* NXT_GENEVE_TABLE_MOD.
+/* NXT_TLV_TABLE_MOD.
  *
- * Use to configure a mapping between Geneve options (class, type, length)
+ * Use to configure a mapping between option TLVs (class, type, length)
  * and NXM fields (NXM_NX_TUN_METADATA<n> where 'index' is <n>).
  *
  * This command is atomic: all operations on different options will
  * either succeed or fail. */
-struct nx_geneve_table_mod {
-    ovs_be16 command;           /* One of NTGTMC_* */
+struct nx_tlv_table_mod {
+    ovs_be16 command;           /* One of NTTTMC_* */
     uint8_t pad[6];
-    /* struct nx_geneve_map[0]; Array of maps between indicies and Geneve
-                                options. The number of elements is
-                                inferred from the length field in the
-                                header. */
+    /* struct nx_tlv_map[0]; Array of maps between indicies and option
+                                TLVs. The number of elements is inferred
+                                from the length field in the header. */
 };
-OFP_ASSERT(sizeof(struct nx_geneve_table_mod) == 8);
+OFP_ASSERT(sizeof(struct nx_tlv_table_mod) == 8);
 
-/* NXT_GENEVE_TABLE_REPLY.
+/* NXT_TLV_TABLE_REPLY.
  *
- * Issued in reponse to an NXT_GENEVE_TABLE_REQUEST to give information
- * about the current status of the Geneve table in the switch. Provides
+ * Issued in reponse to an NXT_TLV_TABLE_REQUEST to give information
+ * about the current status of the TLV table in the switch. Provides
  * both static information about the switch's capabilities as well as
- * the configured Geneve option table. */
-struct nx_geneve_table_reply {
+ * the configured TLV table. */
+struct nx_tlv_table_reply {
     ovs_be32 max_option_space; /* Maximum total of option sizes supported. */
     ovs_be16 max_fields;       /* Maximum number of match fields supported. */
     uint8_t reserved[10];
-    /* struct nx_geneve_map[0]; Array of maps between indicies and Geneve
-                                options. The number of elements is
-                                inferred from the length field in the
-                                header. */
+    /* struct nx_tlv_map[0]; Array of maps between indicies and option
+                                TLVs. The number of elements is inferred
+                                from the length field in the header. */
 };
-OFP_ASSERT(sizeof(struct nx_geneve_table_reply) == 16);
+OFP_ASSERT(sizeof(struct nx_tlv_table_reply) == 16);
 
 #endif /* openflow/nicira-ext.h */

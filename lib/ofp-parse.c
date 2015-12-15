@@ -1664,30 +1664,30 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
 }
 
 char * OVS_WARN_UNUSED_RESULT
-parse_ofp_geneve_table_mod_str(struct ofputil_geneve_table_mod *gtm,
+parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *ttm,
                                uint16_t command, const char *s,
                                enum ofputil_protocol *usable_protocols)
 {
     *usable_protocols = OFPUTIL_P_NXM_OXM_ANY;
 
-    gtm->command = command;
-    list_init(&gtm->mappings);
+    ttm->command = command;
+    list_init(&ttm->mappings);
 
     while (*s) {
-        struct ofputil_geneve_map *map = xmalloc(sizeof *map);
+        struct ofputil_tlv_map *map = xmalloc(sizeof *map);
         int n;
 
         if (*s == ',') {
             s++;
         }
 
-        list_push_back(&gtm->mappings, &map->list_node);
+        list_push_back(&ttm->mappings, &map->list_node);
 
         if (!ovs_scan(s, "{class=%"SCNi16",type=%"SCNi8",len=%"SCNi8"}->tun_metadata%"SCNi16"%n",
                       &map->option_class, &map->option_type, &map->option_len,
                       &map->index, &n)) {
-            ofputil_uninit_geneve_table(&gtm->mappings);
-            return xstrdup("invalid geneve mapping");
+            ofputil_uninit_tlv_table(&ttm->mappings);
+            return xstrdup("invalid tlv mapping");
         }
 
         s += n;

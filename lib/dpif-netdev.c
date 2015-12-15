@@ -3066,7 +3066,7 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
     /* Translate tunnel metadata masks to datapath format. */
     if (wc) {
         if (wc->masks.tunnel.metadata.present.map) {
-            struct geneve_opt opts[GENEVE_TOT_OPT_SIZE /
+            struct geneve_opt opts[TLV_TOT_OPT_SIZE /
                                    sizeof(struct geneve_opt)];
 
             tun_metadata_to_geneve_udpif_mask(&flow->tunnel,

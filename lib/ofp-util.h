@@ -1252,7 +1252,7 @@ enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
                                       struct ofputil_bundle_add_msg *,
                                       enum ofptype *type);
 
-struct ofputil_geneve_map {
+struct ofputil_tlv_map {
     struct ovs_list list_node;
 
     uint16_t option_class;
@@ -1261,26 +1261,26 @@ struct ofputil_geneve_map {
     uint16_t index;
 };
 
-struct ofputil_geneve_table_mod {
+struct ofputil_tlv_table_mod {
     uint16_t command;
-    struct ovs_list mappings;      /* Contains "struct ofputil_geneve_map"s. */
+    struct ovs_list mappings;      /* Contains "struct ofputil_tlv_map"s. */
 };
 
-struct ofputil_geneve_table_reply {
+struct ofputil_tlv_table_reply {
     uint32_t max_option_space;
     uint16_t max_fields;
-    struct ovs_list mappings;      /* Contains "struct ofputil_geneve_map"s. */
+    struct ovs_list mappings;      /* Contains "struct ofputil_tlv_map"s. */
 };
 
-struct ofpbuf *ofputil_encode_geneve_table_mod(enum ofp_version ofp_version,
-                                               struct ofputil_geneve_table_mod *);
-enum ofperr ofputil_decode_geneve_table_mod(const struct ofp_header *,
-                                            struct ofputil_geneve_table_mod *);
-struct ofpbuf *ofputil_encode_geneve_table_reply(const struct ofp_header *,
-                                               struct ofputil_geneve_table_reply *);
-enum ofperr ofputil_decode_geneve_table_reply(const struct ofp_header *,
-                                              struct ofputil_geneve_table_reply *);
-void ofputil_uninit_geneve_table(struct ovs_list *mappings);
+struct ofpbuf *ofputil_encode_tlv_table_mod(enum ofp_version ofp_version,
+                                               struct ofputil_tlv_table_mod *);
+enum ofperr ofputil_decode_tlv_table_mod(const struct ofp_header *,
+                                            struct ofputil_tlv_table_mod *);
+struct ofpbuf *ofputil_encode_tlv_table_reply(const struct ofp_header *,
+                                               struct ofputil_tlv_table_reply *);
+enum ofperr ofputil_decode_tlv_table_reply(const struct ofp_header *,
+                                              struct ofputil_tlv_table_reply *);
+void ofputil_uninit_tlv_table(struct ovs_list *mappings);
 
 enum ofputil_async_msg_type {
     OAM_PACKET_IN,              /* OFPT_PACKET_IN or NXT_PACKET_IN. */
