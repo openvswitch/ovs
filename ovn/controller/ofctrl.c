@@ -67,8 +67,8 @@ static unsigned int seqno;
 /* Connection state machine. */
 #define STATES                                  \
     STATE(S_NEW)                                \
-    STATE(S_GENEVE_TABLE_REQUESTED)             \
-    STATE(S_GENEVE_TABLE_MOD_SENT)              \
+    STATE(S_TLV_TABLE_REQUESTED)                \
+    STATE(S_TLV_TABLE_MOD_SENT)                 \
     STATE(S_CLEAR_FLOWS)                        \
     STATE(S_UPDATE_FLOWS)
 enum ofctrl_state {
@@ -92,7 +92,7 @@ static struct rconn_packet_counter *tx_counter;
  * installed in the switch. */
 static struct hmap installed_flows;
 
-/* MFF_* field ID for our Geneve option.  In S_GENEVE_TABLE_MOD_SENT, this is
+/* MFF_* field ID for our Geneve option.  In S_TLV_TABLE_MOD_SENT, this is
  * the option we requested (we don't know whether we obtained it yet).  In
  * S_CLEAR_FLOWS or S_UPDATE_FLOWS, this is really the option we have. */
 static enum mf_field_id mff_ovn_geneve;
@@ -112,16 +112,16 @@ ofctrl_init(void)
 
 /* S_NEW, for a new connection.
  *
- * Sends NXT_GENEVE_TABLE_REQUEST and transitions to
- * S_GENEVE_TABLE_REQUESTED. */
+ * Sends NXT_TLV_TABLE_REQUEST and transitions to
+ * S_TLV_TABLE_REQUESTED. */
 
 static void
 run_S_NEW(void)
 {
-    struct ofpbuf *buf = ofpraw_alloc(OFPRAW_NXT_GENEVE_TABLE_REQUEST,
+    struct ofpbuf *buf = ofpraw_alloc(OFPRAW_NXT_TLV_TABLE_REQUEST,
                                       rconn_get_version(swconn), 0);
     xid = queue_msg(buf);
-    state = S_GENEVE_TABLE_REQUESTED;
+    state = S_TLV_TABLE_REQUESTED;
 }
 
 static void
@@ -131,17 +131,17 @@ recv_S_NEW(const struct ofp_header *oh OVS_UNUSED,
     OVS_NOT_REACHED();
 }
 
-/* S_GENEVE_TABLE_REQUESTED, when NXT_GENEVE_TABLE_REQUEST has been sent
+/* S_TLV_TABLE_REQUESTED, when NXT_TLV_TABLE_REQUEST has been sent
  * and we're waiting for a reply.
  *
- * If we receive an NXT_GENEVE_TABLE_REPLY:
+ * If we receive an NXT_TLV_TABLE_REPLY:
  *
  *     - If it contains our tunnel metadata option, assign its field ID to
  *       mff_ovn_geneve and transition to S_CLEAR_FLOWS.
  *
  *     - Otherwise, if there is an unused tunnel metadata field ID, send
- *       NXT_GENEVE_TABLE_MOD and OFPT_BARRIER_REQUEST, and transition to
- *       S_GENEVE_TABLE_MOD_SENT.
+ *       NXT_TLV_TABLE_MOD and OFPT_BARRIER_REQUEST, and transition to
+ *       S_TLV_TABLE_MOD_SENT.
  *
  *     - Otherwise, log an error, disable Geneve, and transition to
  *       S_CLEAR_FLOWS.
@@ -151,25 +151,25 @@ recv_S_NEW(const struct ofp_header *oh OVS_UNUSED,
  *     - Log an error, disable Geneve, and transition to S_CLEAR_FLOWS. */
 
 static void
-run_S_GENEVE_TABLE_REQUESTED(void)
+run_S_TLV_TABLE_REQUESTED(void)
 {
 }
 
 static void
-recv_S_GENEVE_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type)
+recv_S_TLV_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type)
 {
     if (oh->xid != xid) {
         ofctrl_recv(oh, type);
-    } else if (type == OFPTYPE_NXT_GENEVE_TABLE_REPLY) {
-        struct ofputil_geneve_table_reply reply;
-        enum ofperr error = ofputil_decode_geneve_table_reply(oh, &reply);
+    } else if (type == OFPTYPE_NXT_TLV_TABLE_REPLY) {
+        struct ofputil_tlv_table_reply reply;
+        enum ofperr error = ofputil_decode_tlv_table_reply(oh, &reply);
         if (error) {
-            VLOG_ERR("failed to decode Geneve table request (%s)",
+            VLOG_ERR("failed to decode TLV table request (%s)",
                      ofperr_to_string(error));
             goto error;
         }
 
-        const struct ofputil_geneve_map *map;
+        const struct ofputil_tlv_map *map;
         uint64_t md_free = UINT64_MAX;
         BUILD_ASSERT(TUN_METADATA_NUM_OPTS == 64);
 
@@ -204,27 +204,27 @@ recv_S_GENEVE_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type)
 
         unsigned int index = rightmost_1bit_idx(md_free);
         mff_ovn_geneve = MFF_TUN_METADATA0 + index;
-        struct ofputil_geneve_map gm;
-        gm.option_class = OVN_GENEVE_CLASS;
-        gm.option_type = OVN_GENEVE_TYPE;
-        gm.option_len = OVN_GENEVE_LEN;
-        gm.index = index;
+        struct ofputil_tlv_map tm;
+        tm.option_class = OVN_GENEVE_CLASS;
+        tm.option_type = OVN_GENEVE_TYPE;
+        tm.option_len = OVN_GENEVE_LEN;
+        tm.index = index;
 
-        struct ofputil_geneve_table_mod gtm;
-        gtm.command = NXGTMC_ADD;
-        list_init(&gtm.mappings);
-        list_push_back(&gtm.mappings, &gm.list_node);
+        struct ofputil_tlv_table_mod ttm;
+        ttm.command = NXTTMC_ADD;
+        list_init(&ttm.mappings);
+        list_push_back(&ttm.mappings, &tm.list_node);
 
-        xid = queue_msg(ofputil_encode_geneve_table_mod(OFP13_VERSION, &gtm));
+        xid = queue_msg(ofputil_encode_tlv_table_mod(OFP13_VERSION, &ttm));
         xid2 = queue_msg(ofputil_encode_barrier_request(OFP13_VERSION));
-        state = S_GENEVE_TABLE_MOD_SENT;
+        state = S_TLV_TABLE_MOD_SENT;
     } else if (type == OFPTYPE_ERROR) {
         VLOG_ERR("switch refused to allocate Geneve option (%s)",
                  ofperr_to_string(ofperr_decode_msg(oh, NULL)));
         goto error;
     } else {
         char *s = ofp_to_string(oh, ntohs(oh->length), 1);
-        VLOG_ERR("unexpected reply to Geneve table request (%s)",
+        VLOG_ERR("unexpected reply to TLV table request (%s)",
                  s);
         free(s);
         goto error;
@@ -236,12 +236,12 @@ error:
     state = S_CLEAR_FLOWS;
 }
 
-/* S_GENEVE_TABLE_MOD_SENT, when NXT_GENEVE_TABLE_MOD and OFPT_BARRIER_REQUEST
+/* S_TLV_TABLE_MOD_SENT, when NXT_TLV_TABLE_MOD and OFPT_BARRIER_REQUEST
  * have been sent and we're waiting for a reply to one or the other.
  *
  * If we receive an OFPT_ERROR:
  *
- *     - If the error is NXGTMFC_ALREADY_MAPPED or NXGTMFC_DUP_ENTRY, we
+ *     - If the error is NXTTMFC_ALREADY_MAPPED or NXTTMFC_DUP_ENTRY, we
  *       raced with some other controller.  Transition to S_NEW.
  *
  *     - Otherwise, log an error, disable Geneve, and transition to
@@ -254,12 +254,12 @@ error:
  */
 
 static void
-run_S_GENEVE_TABLE_MOD_SENT(void)
+run_S_TLV_TABLE_MOD_SENT(void)
 {
 }
 
 static void
-recv_S_GENEVE_TABLE_MOD_SENT(const struct ofp_header *oh, enum ofptype type)
+recv_S_TLV_TABLE_MOD_SENT(const struct ofp_header *oh, enum ofptype type)
 {
     if (oh->xid != xid && oh->xid != xid2) {
         ofctrl_recv(oh, type);
@@ -267,8 +267,8 @@ recv_S_GENEVE_TABLE_MOD_SENT(const struct ofp_header *oh, enum ofptype type)
         state = S_CLEAR_FLOWS;
     } else if (oh->xid == xid && type == OFPTYPE_ERROR) {
         enum ofperr error = ofperr_decode_msg(oh, NULL);
-        if (error == OFPERR_NXGTMFC_ALREADY_MAPPED ||
-            error == OFPERR_NXGTMFC_DUP_ENTRY) {
+        if (error == OFPERR_NXTTMFC_ALREADY_MAPPED ||
+            error == OFPERR_NXTTMFC_DUP_ENTRY) {
             VLOG_INFO("raced with another controller adding "
                       "Geneve option (%s); trying again",
                       ofperr_to_string(error));

@@ -7062,9 +7062,9 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
-handle_geneve_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofputil_geneve_table_mod gtm;
+    struct ofputil_tlv_table_mod ttm;
     enum ofperr error;
 
     error = reject_slave_controller(ofconn);
@@ -7072,26 +7072,26 @@ handle_geneve_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = ofputil_decode_geneve_table_mod(oh, &gtm);
+    error = ofputil_decode_tlv_table_mod(oh, &ttm);
     if (error) {
         return error;
     }
 
-    error = tun_metadata_table_mod(&gtm);
+    error = tun_metadata_table_mod(&ttm);
 
-    ofputil_uninit_geneve_table(&gtm.mappings);
+    ofputil_uninit_tlv_table(&ttm.mappings);
     return error;
 }
 
 static enum ofperr
-handle_geneve_table_request(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_tlv_table_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofputil_geneve_table_reply gtr;
+    struct ofputil_tlv_table_reply ttr;
     struct ofpbuf *b;
 
-    tun_metadata_table_request(&gtr);
-    b = ofputil_encode_geneve_table_reply(oh, &gtr);
-    ofputil_uninit_geneve_table(&gtr.mappings);
+    tun_metadata_table_request(&ttr);
+    b = ofputil_encode_tlv_table_reply(oh, &ttr);
+    ofputil_uninit_tlv_table(&ttr.mappings);
 
     ofconn_send_reply(ofconn, b);
     return 0;
@@ -7241,11 +7241,11 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_BUNDLE_ADD_MESSAGE:
         return handle_bundle_add(ofconn, oh);
 
-    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
-        return handle_geneve_table_mod(ofconn, oh);
+    case OFPTYPE_NXT_TLV_TABLE_MOD:
+        return handle_tlv_table_mod(ofconn, oh);
 
-    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
-        return handle_geneve_table_request(ofconn, oh);
+    case OFPTYPE_NXT_TLV_TABLE_REQUEST:
+        return handle_tlv_table_request(ofconn, oh);
 
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
@@ -7278,7 +7278,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_REQUESTFORWARD:
-    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
+    case OFPTYPE_NXT_TLV_TABLE_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {
             return OFPERR_OFPBRC_BAD_STAT;
