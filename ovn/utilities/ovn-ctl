@@ -225,6 +225,12 @@ case $command in
     restart_controller)
         restart_controller
         ;;
+    status_northd)
+        daemon_status ovn-northd || exit 1
+        ;;
+    status_controller)
+        daemon_status ovn-controller || exit 1
+        ;;
     help)
         usage
         ;;
