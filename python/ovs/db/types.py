@@ -119,7 +119,7 @@ def returnUnchanged(x):
 
 class BaseType(object):
     def __init__(self, type_, enum=None, min=None, max=None,
-                 min_length=0, max_length=sys.maxint, ref_table_name=None):
+                 min_length=0, max_length=sys.maxsize, ref_table_name=None):
         assert isinstance(type_, AtomicType)
         self.type = type_
         self.enum = enum
@@ -194,7 +194,7 @@ class BaseType(object):
         elif base.type == StringType:
             base.min_length = BaseType.__parse_uint(parser, "minLength", 0)
             base.max_length = BaseType.__parse_uint(parser, "maxLength",
-                                                    sys.maxint)
+                                                    sys.maxsize)
             if base.min_length > base.max_length:
                 raise error.Error("minLength exceeds maxLength", json)
         elif base.type == UuidType:
@@ -232,7 +232,7 @@ class BaseType(object):
         elif self.type == StringType:
             if self.min_length != 0:
                 json['minLength'] = self.min_length
-            if self.max_length != sys.maxint:
+            if self.max_length != sys.maxsize:
                 json['maxLength'] = self.max_length
         elif self.type == UuidType:
             if self.ref_table_name:
@@ -260,7 +260,7 @@ class BaseType(object):
     def has_constraints(self):
         return (self.enum is not None or self.min is not None or
                 self.max is not None or
-                self.min_length != 0 or self.max_length != sys.maxint or
+                self.min_length != 0 or self.max_length != sys.maxsize or
                 self.ref_table_name is not None)
 
     def without_constraints(self):
@@ -270,7 +270,7 @@ class BaseType(object):
     def get_enum_type(atomic_type):
         """Returns the type of the 'enum' member for a BaseType whose
         'type' is 'atomic_type'."""
-        return Type(BaseType(atomic_type), None, 1, sys.maxint)
+        return Type(BaseType(atomic_type), None, 1, sys.maxsize)
 
     def is_ref(self):
         return self.type == UuidType and self.ref_table_name is not None
@@ -322,7 +322,7 @@ class BaseType(object):
                 english = 'at most %s' % escapeNumber(commafy(self.max))
             else:
                 english = 'at most %s' % escapeNumber("%g" % self.max)
-        elif self.min_length != 0 and self.max_length != sys.maxint:
+        elif self.min_length != 0 and self.max_length != sys.maxsize:
             if self.min_length == self.max_length:
                 english = ('exactly %s characters long'
                            % commafy(self.min_length))
@@ -332,7 +332,7 @@ class BaseType(object):
                            commafy(self.max_length)))
         elif self.min_length != 0:
             return 'at least %s characters long' % commafy(self.min_length)
-        elif self.max_length != sys.maxint:
+        elif self.max_length != sys.maxsize:
             english = 'at most %s characters long' % commafy(self.max_length)
         else:
             english = ''
@@ -407,7 +407,7 @@ class BaseType(object):
             if self.min_length is not None:
                 stmts.append('%s.u.string.minLen = %d;'
                         % (var, self.min_length))
-            if self.max_length != sys.maxint:
+            if self.max_length != sys.maxsize:
                 stmts.append('%s.u.string.maxLen = %d;'
                         % (var, self.max_length))
         elif self.type == UuidType:
@@ -482,7 +482,7 @@ class Type(object):
     def __n_from_json(json, default):
         if json is None:
             return default
-        elif type(json) == int and 0 <= json <= sys.maxint:
+        elif isinstance(json, int) and 0 <= json <= sys.maxsize:
             return json
         else:
             raise error.Error("bad min or max value", json)
@@ -512,7 +512,7 @@ class Type(object):
         n_min = Type.__n_from_json(min_json, Type.DEFAULT_MIN)
 
         if max_json == 'unlimited':
-            n_max = sys.maxint
+            n_max = sys.maxsize
         else:
             n_max = Type.__n_from_json(max_json, Type.DEFAULT_MAX)
 
@@ -530,7 +530,7 @@ class Type(object):
             json["value"] = self.value.to_json()
         if self.n_min != Type.DEFAULT_MIN:
             json["min"] = self.n_min
-        if self.n_max == sys.maxint:
+        if self.n_max == sys.maxsize:
             json["max"] = "unlimited"
         elif self.n_max != Type.DEFAULT_MAX:
             json["max"] = self.n_max
@@ -549,7 +549,7 @@ class Type(object):
             else:
                 return "optional %s" % keyName
         else:
-            if self.n_max == sys.maxint:
+            if self.n_max == sys.maxsize:
                 if self.n_min:
                     quantity = "%s or more " % commafy(self.n_min)
                 else:
@@ -602,7 +602,7 @@ class Type(object):
             initValue = ('%sovsdb_base_type_init(&%s.value, '
                          'OVSDB_TYPE_VOID);' % (indent, var))
         initMin = "%s%s.n_min = %s;" % (indent, var, self.n_min)
-        if self.n_max == sys.maxint:
+        if self.n_max == sys.maxsize:
             n_max = "UINT_MAX"
         else:
             n_max = self.n_max

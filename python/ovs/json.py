@@ -254,7 +254,7 @@ class Parser(object):
         if m:
             sign, integer, fraction, exp = m.groups()
             if (exp is not None and
-                (int(exp) > sys.maxint or int(exp) < -sys.maxint - 1)):
+                (int(exp) > sys.maxsize or int(exp) < -sys.maxsize - 1)):
                 self.__error("exponent outside valid range")
                 return
 
