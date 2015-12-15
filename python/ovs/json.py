@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import re
-import StringIO
 import sys
 
 import six
@@ -122,7 +121,7 @@ def to_file(obj, name, pretty=False, sort_keys=True):
 
 
 def to_string(obj, pretty=False, sort_keys=True):
-    output = StringIO.StringIO()
+    output = six.StringIO()
     to_stream(obj, output, pretty, sort_keys)
     s = output.getvalue()
     output.close()
