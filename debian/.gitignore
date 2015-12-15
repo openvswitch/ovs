@@ -18,5 +18,6 @@
 /openvswitch-test
 /openvswitch-testcontroller
 /openvswitch-vtep
+/ovn-common
 /python-openvswitch
 /tmp

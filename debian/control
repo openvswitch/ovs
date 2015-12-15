@@ -98,6 +98,20 @@ Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.
 
+Package: ovn-common
+Architecture: linux-any
+Depends: openvswitch-switch (= ${binary:Version}),
+         openvswitch-common (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: OVN common components
+ OVN, the Open Virtual Network, is a system to support virtual network
+ abstraction.  OVN complements the existing capabilities of OVS to add
+ native support for virtual network abstractions, such as virtual L2 and L3
+ overlays and security groups.
+ .
+ ovn-common provides components required by other OVN packages.
+
 Package: openvswitch-ipsec
 Architecture: linux-any
 Depends: ipsec-tools (>=0.8~alpha20101208),
