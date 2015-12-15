@@ -2037,9 +2037,11 @@ ofputil_append_meter_config(struct ovs_list *replies,
     reply->flags = htons(mc->flags);
     reply->meter_id = htonl(mc->meter_id);
 
+    reply->length = htons(sizeof *reply + mc->n_bands * sizeof(struct ofp13_meter_band_drop));
+
     ofputil_put_bands(mc->n_bands, mc->bands, msg);
 
-    reply->length = htons(msg->size - start_ofs);
+    //reply->length = htons(msg->size - start_ofs);
 
     ofpmp_postappend(replies, start_ofs);
 }
