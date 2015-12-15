@@ -241,7 +241,7 @@ class Vlog(object):
 
         ovs.unixctl.command_register("vlog/reopen", "", 0, 0,
                                      Vlog._unixctl_vlog_reopen, None)
-        ovs.unixctl.command_register("vlog/set", "spec", 1, sys.maxint,
+        ovs.unixctl.command_register("vlog/set", "spec", 1, sys.maxsize,
                                      Vlog._unixctl_vlog_set, None)
         ovs.unixctl.command_register("vlog/list", "", 0, 0,
                                      Vlog._unixctl_vlog_list, None)
