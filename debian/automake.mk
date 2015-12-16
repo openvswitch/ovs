@@ -59,6 +59,7 @@ EXTRA_DIST += \
 	debian/ovn-central.template \
 	debian/ovn-common.install \
 	debian/ovn-common.manpages \
+    debian/ovn-docker.install \
 	debian/ovn-host.dirs \
 	debian/ovn-host.init \
 	debian/ovn-host.install \
