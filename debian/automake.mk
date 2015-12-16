@@ -50,6 +50,13 @@ EXTRA_DIST += \
 	debian/openvswitch-vtep.init \
 	debian/openvswitch-vtep.install \
 	debian/openvswitch-vtep.manpages \
+	debian/ovn-central.dirs \
+	debian/ovn-central.init \
+	debian/ovn-central.install \
+	debian/ovn-central.manpages \
+	debian/ovn-central.postinst \
+	debian/ovn-central.postrm \
+	debian/ovn-central.template \
 	debian/ovn-common.install \
 	debian/ovn-common.manpages \
 	debian/ovn-host.dirs \
