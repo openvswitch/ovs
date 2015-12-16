@@ -20,5 +20,6 @@
 /openvswitch-vtep
 /ovn-common
 /ovn-host
+/ovn-central
 /python-openvswitch
 /tmp
