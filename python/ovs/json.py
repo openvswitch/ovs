@@ -408,7 +408,7 @@ class Parser(object):
                 inp = inp[6:]
             else:
                 code_point = c0
-            out += unichr(code_point)
+            out += six.unichr(code_point)
         self.__parser_input('string', out)
 
     def __lex_string_escape(self, c):
