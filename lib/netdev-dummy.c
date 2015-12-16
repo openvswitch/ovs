@@ -1426,18 +1426,16 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct netdev *netdev = netdev_from_name(argv[1]);
 
     if (netdev && is_dummy_class(netdev->netdev_class)) {
-        struct in_addr ip;
-        uint16_t plen;
+        struct in_addr ip, mask;
+        char *error;
 
-        if (ovs_scan(argv[2], IP_SCAN_FMT"/%"SCNi16,
-                     IP_SCAN_ARGS(&ip.s_addr), &plen)) {
-            struct in_addr mask;
-
-            mask.s_addr = be32_prefix_mask(plen);
+        error = ip_parse_masked(argv[2], &ip.s_addr, &mask.s_addr);
+        if (!error) {
             netdev_dummy_set_in4(netdev, ip, mask);
             unixctl_command_reply(conn, "OK");
         } else {
-            unixctl_command_reply_error(conn, "Invalid parameters");
+            unixctl_command_reply_error(conn, error);
+            free(error);
         }
     } else {
         unixctl_command_reply_error(conn, "Unknown Dummy Interface");

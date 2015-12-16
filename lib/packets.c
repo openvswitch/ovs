@@ -447,7 +447,7 @@ ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
                              "32", s);
         }
         *mask = be32_prefix_mask(prefix);
-    } else if (ovs_scan(s, IP_SCAN_FMT"%n", IP_SCAN_ARGS(ip), &n) && !s[n]) {
+    } else if (ip_parse(s, ip)) {
         *mask = OVS_BE32_MAX;
     } else {
         return xasprintf("%s: invalid IP address", s);
