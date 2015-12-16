@@ -148,7 +148,7 @@ class IdlSchema(DbSchema):
 def column_set_from_json(json, columns):
     if json is None:
         return tuple(columns)
-    elif type(json) != list:
+    elif not isinstance(json, list):
         raise error.Error("array of distinct column names expected", json)
     else:
         for column_name in json:

@@ -498,7 +498,7 @@ class Parser(object):
 
     def __put_value(self, value):
         top = self.stack[-1]
-        if type(top) == dict:
+        if isinstance(top, dict):
             top[self.member_name] = value
         else:
             top.append(value)
@@ -527,7 +527,7 @@ class Parser(object):
         else:
             self.stack.pop()
             top = self.stack[-1]
-            if type(top) == list:
+            if isinstance(top, list):
                 self.parse_state = Parser.__parse_array_next
             else:
                 self.parse_state = Parser.__parse_object_next

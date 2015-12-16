@@ -244,7 +244,7 @@ def get_exception_errno(e):
     exception is documented as having two completely different forms of
     arguments: either a string or a (errno, string) tuple.  We only want the
     errno."""
-    if type(e.args) == tuple:
+    if isinstance(e.args, tuple):
         return e.args[0]
     else:
         return errno.EPROTO

@@ -90,7 +90,7 @@ class Message(object):
             return "%s %s have \"%s\"" % (type_name, verb, name)
 
     def is_valid(self):
-        if self.params is not None and type(self.params) != list:
+        if self.params is not None and not isinstance(self.params, list):
             return "\"params\" must be JSON array"
 
         pattern = {Message.T_REQUEST: 0x11001,
@@ -109,7 +109,7 @@ class Message(object):
 
     @staticmethod
     def from_json(json):
-        if type(json) != dict:
+        if not isinstance(json, dict):
             return "message is not a JSON object"
 
         # Make a copy to avoid modifying the caller's dict.

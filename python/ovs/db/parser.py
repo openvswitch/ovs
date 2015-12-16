@@ -23,7 +23,7 @@ class Parser(object):
     def __init__(self, json, name):
         self.name = name
         self.json = json
-        if type(json) != dict:
+        if not isinstance(json, dict):
             self.__raise_error("Object expected.")
         self.used = set()
 
@@ -70,7 +70,7 @@ class Parser(object):
 
 def float_to_int(x):
     # XXX still needed?
-    if type(x) == float:
+    if isinstance(x, float):
         integer = int(x)
         if integer == x and -2 ** 53 <= integer < 2 ** 53:
             return integer
@@ -113,6 +113,6 @@ def unwrap_json(json, name, types, desc):
 
 
 def parse_json_pair(json):
-    if type(json) != list or len(json) != 2:
+    if not isinstance(json, list) or len(json) != 2:
         raise error.Error("expected 2-element array", json)
     return json
