@@ -1997,6 +1997,7 @@ ofputil_append_meter_config(struct ovs_list *replies,
 
     ofputil_put_bands(mc->n_bands, mc->bands, msg);
 
+    reply = ofpbuf_at_assert(msg, start_ofs, sizeof *reply);
     reply->length = htons(msg->size - start_ofs);
 
     ofpmp_postappend(replies, start_ofs);
