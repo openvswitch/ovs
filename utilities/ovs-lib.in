@@ -202,11 +202,18 @@ start_daemon () {
 stop_daemon () {
     if test -e "$rundir/$1.pid"; then
         if pid=`cat "$rundir/$1.pid"`; then
-            for action in TERM .1 .25 .65 1 1 1 1 KILL 1 1 1 2 10 15 30 FAIL; do
+            for action in EXIT .1 .25 .65 1 \
+                          TERM .1 .25 .65 1 1 1 1 \
+                          KILL 1 1 1 2 10 15 30 \
+                          FAIL; do
                 if pid_exists "$pid" >/dev/null 2>&1; then :; else
                     return 0
                 fi
                 case $action in
+                    EXIT)
+                        action "Exiting $1 ($pid)" \
+                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit
+                        ;;
                     TERM)
                         action "Killing $1 ($pid)" kill $pid
                         ;;
