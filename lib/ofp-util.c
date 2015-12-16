@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1929,6 +1929,7 @@ ofputil_append_meter_config(struct list *replies,
 
     ofputil_put_bands(mc->n_bands, mc->bands, msg);
 
+    reply = ofpbuf_at_assert(msg, start_ofs, sizeof *reply);
     reply->length = htons(ofpbuf_size(msg) - start_ofs);
 
     ofpmp_postappend(replies, start_ofs);
