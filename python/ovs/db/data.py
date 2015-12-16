@@ -317,7 +317,7 @@ class Datum(object):
         that this function accepts."""
         is_map = type_.is_map()
         if (is_map or
-            (type(json) == list and len(json) > 0 and json[0] == "set")):
+            (isinstance(json, list) and len(json) > 0 and json[0] == "set")):
             if is_map:
                 class_ = "map"
             else:
@@ -481,12 +481,12 @@ class Datum(object):
         Raises ovs.db.error.Error if 'value' is not in an appropriate form for
         'type_'."""
         d = {}
-        if type(value) == dict:
+        if isinstance(value, dict):
             for k, v in six.iteritems(value):
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 va = Atom.from_python(type_.value, row_to_uuid(v))
                 d[ka] = va
-        elif type(value) in (list, tuple):
+        elif isinstance(value, (list, tuple)):
             for k in value:
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 d[ka] = None
