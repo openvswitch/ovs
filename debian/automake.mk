@@ -52,6 +52,13 @@ EXTRA_DIST += \
 	debian/openvswitch-vtep.manpages \
 	debian/ovn-common.install \
 	debian/ovn-common.manpages \
+	debian/ovn-host.dirs \
+	debian/ovn-host.init \
+	debian/ovn-host.install \
+	debian/ovn-host.manpages \
+	debian/ovn-host.postinst \
+	debian/ovn-host.postrm \
+	debian/ovn-host.template \
 	debian/ovs-monitor-ipsec \
 	debian/python-openvswitch.dirs \
 	debian/python-openvswitch.install \

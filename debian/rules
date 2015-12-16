@@ -54,6 +54,9 @@ override_dh_install:
 	# openvswitch-switch
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
 
+	# ovn-host
+	cp debian/ovn-host.template debian/ovn-host/usr/share/ovn/host/default.template
+
 	# openvswitch-datapath-source
 	cp debian/rules.modules debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
 	chmod 755 debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules

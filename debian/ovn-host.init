@@ -1,0 +1,53 @@
+#! /bin/sh
+#
+### BEGIN INIT INFO
+# Provides:          ovn-host
+# Required-Start:    openvswitch-switch $remote_fs $syslog
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: OVN host components
+# Description:       ovn-host provides the userspace
+#                    components and utilities for OVN that can be run on
+#                    every host/hypervisor.
+### END INIT INFO
+
+test -x /usr/bin/ovn-controller  || exit 0
+test -x /usr/share/openvswitch/scripts/ovn-ctl || exit 0
+
+_SYSTEMCTL_SKIP_REDIRECT=yes
+
+. /usr/share/openvswitch/scripts/ovs-lib
+if [ -e /etc/default/ovn-host ]; then
+    . /etc/default/ovn-host
+fi
+
+start () {
+    set /usr/share/openvswitch/scripts/ovn-ctl ${1-start_controller}
+    set "$@" $OVN_CTL_OPTS
+    "$@" || exit $?
+}
+
+case $1 in
+    start)
+        start
+        ;;
+    stop | force-stop)
+        /usr/share/openvswitch/scripts/ovn-ctl stop_controller
+        ;;
+    restart)
+        start restart_controller
+        ;;
+    status)
+        /usr/share/openvswitch/scripts/ovn-ctl status_controller
+        exit $?
+        ;;
+    reload | force-reload)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|reload|force-reload|restart|status}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
