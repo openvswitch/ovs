@@ -93,7 +93,7 @@ def do_advance(arg):
 def do_timeout(_):
     global now
     timeout = r.timeout(now)
-    if timeout >= 0:
+    if timeout is not None and timeout >= 0:
         print("  advance %d ms" % timeout)
         now += timeout
     else:
