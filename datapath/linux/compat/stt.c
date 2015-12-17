@@ -1770,7 +1770,7 @@ static int stt_configure(struct net *net, struct net_device *dev,
 	if (err)
 		return err;
 
-	list_add(&stt->next, &sn->stt_list);
+	list_add_rcu(&stt->next, &sn->stt_list);
 	return 0;
 }
 
@@ -1789,7 +1789,7 @@ static void stt_dellink(struct net_device *dev, struct list_head *head)
 {
 	struct stt_dev *stt = netdev_priv(dev);
 
-	list_del(&stt->next);
+	list_del_rcu(&stt->next);
 	unregister_netdevice_queue(dev, head);
 }
 
