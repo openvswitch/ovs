@@ -115,15 +115,15 @@ AT_CHECK([APPCTL -t test-unixctl.py version], [0], [expout])
 AT_CHECK([PYAPPCTL -t test-unixctl.py version], [0], [expout])
 
 AT_CHECK([APPCTL -t test-unixctl.py echo robot ninja], [0], [stdout])
-AT_CHECK([cat stdout], [0], [dnl
-[[u'robot', u'ninja']]
+AT_CHECK([cat stdout | sed -e "s/u'/'/g"], [0], [dnl
+[['robot', 'ninja']]
 ])
 mv stdout expout
 AT_CHECK([PYAPPCTL -t test-unixctl.py echo robot ninja], [0], [expout])
 
 AT_CHECK([APPCTL -t test-unixctl.py echo_error robot ninja], [2], [], [stderr])
-AT_CHECK([cat stderr], [0], [dnl
-[[u'robot', u'ninja']]
+AT_CHECK([cat stderr | sed -e "s/u'/'/g"], [0], [dnl
+[['robot', 'ninja']]
 ovs-appctl: test-unixctl.py: server returned an error
 ])
 sed 's/ovs-appctl/appctl.py/' stderr > experr
