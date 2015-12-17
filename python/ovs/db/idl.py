@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
 import uuid
 
 import six
@@ -504,6 +505,7 @@ def _row_to_uuid(value):
         return value
 
 
+@functools.total_ordering
 class Row(object):
     """A row within an IDL.
 
@@ -571,6 +573,19 @@ class Row(object):
         # verified as prerequisites when the transaction commits.  The values
         # in the dictionary are all None.
         self.__dict__["_prereqs"] = {}
+
+    def __lt__(self, other):
+        if not isinstance(other, Row):
+            return NotImplemented
+        return bool(self.__dict__['uuid'] < other.__dict__['uuid'])
+
+    def __eq__(self, other):
+        if not isinstance(other, Row):
+            return NotImplemented
+        return bool(self.__dict__['uuid'] == other.__dict__['uuid'])
+
+    def __hash__(self):
+        return int(self.__dict__['uuid'])
 
     def __getattr__(self, column_name):
         assert self._changes is not None

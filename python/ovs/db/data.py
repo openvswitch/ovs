@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
 import re
 import uuid
 
@@ -64,6 +65,7 @@ def returnUnchanged(x):
     return x
 
 
+@functools.total_ordering
 class Atom(object):
     def __init__(self, type_, value=None):
         self.type = type_
@@ -71,6 +73,16 @@ class Atom(object):
             self.value = value
         else:
             self.value = type_.default_atom()
+
+    def __eq__(self, other):
+        if not isinstance(other, Atom) or self.type != other.type:
+            return NotImplemented
+        return True if self.value == other.value else False
+
+    def __lt__(self, other):
+        if not isinstance(other, Atom) or self.type != other.type:
+            return NotImplemented
+        return True if self.value < other.value else False
 
     def __cmp__(self, other):
         if not isinstance(other, Atom) or self.type != other.type:
@@ -256,10 +268,21 @@ class Atom(object):
         return Atom(t, x)
 
 
+@functools.total_ordering
 class Datum(object):
     def __init__(self, type_, values={}):
         self.type = type_
         self.values = values
+
+    def __eq__(self, other):
+        if not isinstance(other, Datum):
+            return NotImplemented
+        return True if self.values == other.values else False
+
+    def __lt__(self, other):
+        if not isinstance(other, Datum):
+            return NotImplemented
+        return True if self.values < other.values else False
 
     def __cmp__(self, other):
         if not isinstance(other, Datum):
