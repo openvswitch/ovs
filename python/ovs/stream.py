@@ -15,6 +15,7 @@
 import errno
 import os
 import socket
+import sys
 
 import six
 
@@ -223,6 +224,11 @@ class Stream(object):
             return 0
 
         try:
+            # Python 3 has separate types for strings and bytes.  We must have
+            # bytes here.
+            if (sys.version_info[0] >= 3
+                    and not isinstance(buf, six.binary_type)):
+                buf = six.binary_type(buf, 'utf-8')
             return self.socket.send(buf)
         except socket.error as e:
             return -ovs.socket_util.get_exception_errno(e)

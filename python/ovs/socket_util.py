@@ -19,6 +19,7 @@ import random
 import socket
 import sys
 
+import six
 from six.moves import range
 
 import ovs.fatal_signal
@@ -275,6 +276,8 @@ def write_fully(fd, buf):
     bytes_written = 0
     if len(buf) == 0:
         return 0, 0
+    if sys.version_info[0] >= 3 and not isinstance(buf, six.binary_type):
+        buf = six.binary_type(buf, 'utf-8')
     while True:
         try:
             retval = os.write(fd, buf)
