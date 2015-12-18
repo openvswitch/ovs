@@ -1,11 +1,16 @@
 # -*- shell-script -*-
 HAVE_OPENSSL='@HAVE_OPENSSL@'
 HAVE_PYTHON='@HAVE_PYTHON@'
+HAVE_PYTHON3='@HAVE_PYTHON3@'
 EGREP='@EGREP@'
 PERL='@PERL@'
 
 if test x"$PYTHON" = x; then
     PYTHON='@PYTHON@'
+fi
+
+if test x"$PYTHON3" = x; then
+    PYTHON3='@PYTHON3@'
 fi
 
 PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
