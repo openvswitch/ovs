@@ -100,7 +100,9 @@ static inline struct rtable *rpl_ip_route_output_key(struct net *net, struct flo
 	return rt;
 }
 #define ip_route_output_key rpl_ip_route_output_key
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 static inline int ip4_dst_hoplimit(const struct dst_entry *dst)
 {
 	return dst_metric(dst, RTAX_HOPLIMIT);
