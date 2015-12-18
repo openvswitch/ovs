@@ -61,6 +61,7 @@ struct ovsdb_monitor {
  * inclusive.  */
 struct ovsdb_monitor_json_cache_node {
     struct hmap_node hmap_node;   /* Elements in json cache. */
+    enum ovsdb_monitor_version version;
     uint64_t from_txn;
     struct json *json;            /* Null, or a cloned of json */
 };
@@ -134,15 +135,27 @@ static void ovsdb_monitor_changes_destroy(
 static void ovsdb_monitor_table_track_changes(struct ovsdb_monitor_table *mt,
                                   uint64_t unflushed);
 
+static uint32_t
+json_cache_hash(enum ovsdb_monitor_version version, uint64_t from_txn)
+{
+    uint32_t hash;
+
+    hash = hash_uint64(version);
+    hash = hash_uint64_basis(from_txn, hash);
+
+    return hash;
+}
+
 static struct ovsdb_monitor_json_cache_node *
 ovsdb_monitor_json_cache_search(const struct ovsdb_monitor *dbmon,
+                                enum ovsdb_monitor_version version,
                                 uint64_t from_txn)
 {
     struct ovsdb_monitor_json_cache_node *node;
-    uint32_t hash = hash_uint64(from_txn);
+    uint32_t hash = json_cache_hash(version, from_txn);
 
     HMAP_FOR_EACH_WITH_HASH(node, hmap_node, hash, &dbmon->json_cache) {
-        if (node->from_txn == from_txn) {
+        if (node->from_txn == from_txn && node->version == version) {
             return node;
         }
     }
@@ -152,14 +165,15 @@ ovsdb_monitor_json_cache_search(const struct ovsdb_monitor *dbmon,
 
 static void
 ovsdb_monitor_json_cache_insert(struct ovsdb_monitor *dbmon,
+                                enum ovsdb_monitor_version version,
                                 uint64_t from_txn, struct json *json)
 {
     struct ovsdb_monitor_json_cache_node *node;
-    uint32_t hash;
+    uint32_t hash = json_cache_hash(version, from_txn);
 
     node = xmalloc(sizeof *node);
 
-    hash = hash_uint64(from_txn);
+    node->version = version;
     node->from_txn = from_txn;
     node->json = json ? json_clone(json) : NULL;
 
@@ -721,7 +735,7 @@ ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
 
     /* Return a clone of cached json if one exists. Otherwise,
      * generate a new one and add it to the cache.  */
-    cache_node = ovsdb_monitor_json_cache_search(dbmon, prev_txn);
+    cache_node = ovsdb_monitor_json_cache_search(dbmon, version, prev_txn);
     if (cache_node) {
         json = cache_node->json ? json_clone(cache_node->json) : NULL;
     } else {
@@ -733,7 +747,7 @@ ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
             json = ovsdb_monitor_compose_update(dbmon, initial, prev_txn,
                                         ovsdb_monitor_compose_row_update2);
         }
-        ovsdb_monitor_json_cache_insert(dbmon, prev_txn, json);
+        ovsdb_monitor_json_cache_insert(dbmon, version, prev_txn, json);
     }
 
     /* Maintain transaction id of 'changes'. */
