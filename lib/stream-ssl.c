@@ -806,7 +806,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     }
 
     port = ss_get_port(&ss);
-    snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
+    snprintf(bound_name, sizeof bound_name, "pssl:%"PRIu16":%s",
              port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
 
     pssl = xmalloc(sizeof *pssl);
@@ -856,7 +856,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
         return error;
     }
 
-    snprintf(name, sizeof name, "tcp:%s:%"PRIu16,
+    snprintf(name, sizeof name, "ssl:%s:%"PRIu16,
              ss_format_address(&ss, addrbuf, sizeof addrbuf),
              ss_get_port(&ss));
     return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING,
