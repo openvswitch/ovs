@@ -1556,10 +1556,12 @@ static int stt_start(struct net *net)
 	err = nf_register_hook(&nf_hook_ops);
 #endif
 	if (err)
-		goto free_percpu;
+		goto dec_n_tunnel;
 	sn->n_tunnels++;
 	return 0;
 
+dec_n_tunnel:
+	n_tunnels--;
 free_percpu:
 	for_each_possible_cpu(i) {
 		struct stt_percpu *stt_percpu = per_cpu_ptr(stt_percpu_data, i);
