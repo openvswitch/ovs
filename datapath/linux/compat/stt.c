@@ -173,7 +173,7 @@ static struct stt_dev *stt_find_sock(struct net *net, __be16 port)
 	struct stt_dev *stt_dev;
 
 	list_for_each_entry_rcu(stt_dev, &sn->stt_list, next) {
-		if (inet_sk(stt_dev->sock->sk)->inet_sport == port)
+		if (stt_dev->dst_port == port)
 			return stt_dev;
 	}
 	return NULL;
@@ -934,7 +934,7 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 	struct net_device *dev = skb->dev;
 	struct stt_dev *stt_dev = netdev_priv(dev);
 	struct net *net = stt_dev->net;
-	__be16 dport = inet_sk(stt_dev->sock->sk)->inet_sport;
+	__be16 dport = stt_dev->dst_port;
 	struct ip_tunnel_key *tun_key;
 	struct ip_tunnel_info *tun_info;
 	struct rtable *rt;
