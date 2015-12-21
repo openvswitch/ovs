@@ -16,7 +16,15 @@ m4_define([OVN_NBCTL_TEST_START],
 
 # OVN_NBCTL_TEST_STOP
 m4_define([OVN_NBCTL_TEST_STOP],
-  [AT_CHECK([check_logs $1])
+  [# removes all 'Broken pipe' warning logs from ovsdb-server.log.  this is in
+   # that *ctl command (e.g. ovn-nbctl) exits right after committing the change
+   # to database.  however, in reaction, some daemon (e.g. ovn-controller-vtep)
+   # may immediately update the database.  this later update may cause database
+   # sending update back to *ctl command if *ctl has not proceeded to exit yet.
+   # and if *ctl command exits before database calling send, the send from
+   # database will fail with 'Broken pipe' error.
+   AT_CHECK([check_logs "$1
+/Broken pipe/d"])
    AT_CHECK([ovs-appctl -t ovsdb-server exit])])
 
 
