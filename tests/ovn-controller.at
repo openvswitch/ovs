@@ -1,6 +1,7 @@
 AT_BANNER([ovn-controller])
 
 AT_SETUP([ovn-controller - ovn-bridge-mappings])
+AT_KEYWORDS([ovn])
 ovn_init_db ovn-sb
 net_add n1
 sim_add hv

@@ -3,6 +3,7 @@ AT_BANNER([ovn-nbctl])
 # OVN_NBCTL_TEST_START
 m4_define([OVN_NBCTL_TEST_START],
   [dnl Create ovn-nb database.
+   AT_KEYWORDS([ovn])
    AT_CHECK([ovsdb-tool create ovn-nb.db $abs_top_srcdir/ovn/ovn-nb.ovsschema])
 
    dnl Start ovsdb-server.
