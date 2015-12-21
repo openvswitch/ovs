@@ -496,25 +496,39 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_switch_config(struct ds *string, const struct ofp_switch_config *osc)
+ofp_print_switch_config(struct ds *string,
+                        const struct ofputil_switch_config *config)
 {
-    enum ofp_config_flags flags;
+    ds_put_format(string, " frags=%s",
+                  ofputil_frag_handling_to_string(config->frag));
 
-    flags = ntohs(osc->flags);
-
-    ds_put_format(string, " frags=%s", ofputil_frag_handling_to_string(flags));
-    flags &= ~OFPC_FRAG_MASK;
-
-    if (flags & OFPC_INVALID_TTL_TO_CONTROLLER) {
+    if (config->invalid_ttl_to_controller > 0) {
         ds_put_format(string, " invalid_ttl_to_controller");
-        flags &= ~OFPC_INVALID_TTL_TO_CONTROLLER;
     }
 
-    if (flags) {
-        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
-    }
+    ds_put_format(string, " miss_send_len=%"PRIu16"\n", config->miss_send_len);
+}
 
-    ds_put_format(string, " miss_send_len=%"PRIu16"\n", ntohs(osc->miss_send_len));
+static void
+ofp_print_set_config(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_switch_config config;
+    enum ofperr error;
+
+    error = ofputil_decode_set_config(oh, &config);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+    ofp_print_switch_config(string, &config);
+}
+
+static void
+ofp_print_get_config_reply(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_switch_config config;
+    ofputil_decode_get_config_reply(oh, &config);
+    ofp_print_switch_config(string, &config);
 }
 
 static void print_wild(struct ds *string, const char *leader, int is_wild,
@@ -3212,8 +3226,11 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
 
     case OFPTYPE_GET_CONFIG_REPLY:
+        ofp_print_get_config_reply(string, oh);
+        break;
+
     case OFPTYPE_SET_CONFIG:
-        ofp_print_switch_config(string, ofpmsg_body(oh));
+        ofp_print_set_config(string, oh);
         break;
 
     case OFPTYPE_PACKET_IN:

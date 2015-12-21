@@ -4074,6 +4074,84 @@ ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
     ofpmp_postappend(replies, start_ofs);
 }
 
+/* ofputil_switch_config */
+
+/* Decodes 'oh', which must be an OFPT_GET_CONFIG_REPLY or OFPT_SET_CONFIG
+ * message, into 'config'.  Returns false if 'oh' contained any flags that
+ * aren't specified in its version of OpenFlow, true otherwise. */
+static bool
+ofputil_decode_switch_config(const struct ofp_header *oh,
+                             struct ofputil_switch_config *config)
+{
+    const struct ofp_switch_config *osc;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+    osc = ofpbuf_pull(&b, sizeof *osc);
+
+    config->frag = ntohs(osc->flags) & OFPC_FRAG_MASK;
+    config->miss_send_len = ntohs(osc->miss_send_len);
+
+    ovs_be16 valid_mask = htons(OFPC_FRAG_MASK);
+    if (oh->version < OFP13_VERSION) {
+        const ovs_be16 ttl_bit = htons(OFPC_INVALID_TTL_TO_CONTROLLER);
+        valid_mask |= ttl_bit;
+        config->invalid_ttl_to_controller = (osc->flags & ttl_bit) != 0;
+    } else {
+        config->invalid_ttl_to_controller = -1;
+    }
+
+    return !(osc->flags & ~valid_mask);
+}
+
+void
+ofputil_decode_get_config_reply(const struct ofp_header *oh,
+                                struct ofputil_switch_config *config)
+{
+    ofputil_decode_switch_config(oh, config);
+}
+
+enum ofperr
+ofputil_decode_set_config(const struct ofp_header *oh,
+                          struct ofputil_switch_config *config)
+{
+    return (ofputil_decode_switch_config(oh, config)
+            ? 0
+            : OFPERR_OFPSCFC_BAD_FLAGS);
+}
+
+static struct ofpbuf *
+ofputil_put_switch_config(const struct ofputil_switch_config *config,
+                          struct ofpbuf *b)
+{
+    const struct ofp_header *oh = b->data;
+    struct ofp_switch_config *osc = ofpbuf_put_zeros(b, sizeof *osc);
+    osc->flags = htons(config->frag);
+    if (config->invalid_ttl_to_controller > 0 && oh->version < OFP13_VERSION) {
+        osc->flags |= htons(OFPC_INVALID_TTL_TO_CONTROLLER);
+    }
+    osc->miss_send_len = htons(config->miss_send_len);
+    return b;
+}
+
+struct ofpbuf *
+ofputil_encode_get_config_reply(const struct ofp_header *request,
+                                const struct ofputil_switch_config *config)
+{
+    struct ofpbuf *b = ofpraw_alloc_reply(OFPRAW_OFPT_GET_CONFIG_REPLY,
+                                          request, 0);
+    return ofputil_put_switch_config(config, b);
+}
+
+struct ofpbuf *
+ofputil_encode_set_config(const struct ofputil_switch_config *config,
+                          enum ofp_version version)
+{
+    struct ofpbuf *b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, version, 0);
+    return ofputil_put_switch_config(config, b);
+}
+
 /* ofputil_switch_features */
 
 #define OFPC_COMMON (OFPC_FLOW_STATS | OFPC_TABLE_STATS | OFPC_PORT_STATS | \
@@ -6453,29 +6531,30 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
 }
 
 const char *
-ofputil_frag_handling_to_string(enum ofp_config_flags flags)
+ofputil_frag_handling_to_string(enum ofputil_frag_handling frag)
 {
-    switch (flags & OFPC_FRAG_MASK) {
-    case OFPC_FRAG_NORMAL:   return "normal";
-    case OFPC_FRAG_DROP:     return "drop";
-    case OFPC_FRAG_REASM:    return "reassemble";
-    case OFPC_FRAG_NX_MATCH: return "nx-match";
+    switch (frag) {
+    case OFPUTIL_FRAG_NORMAL:   return "normal";
+    case OFPUTIL_FRAG_DROP:     return "drop";
+    case OFPUTIL_FRAG_REASM:    return "reassemble";
+    case OFPUTIL_FRAG_NX_MATCH: return "nx-match";
     }
 
     OVS_NOT_REACHED();
 }
 
 bool
-ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
+ofputil_frag_handling_from_string(const char *s,
+                                  enum ofputil_frag_handling *frag)
 {
     if (!strcasecmp(s, "normal")) {
-        *flags = OFPC_FRAG_NORMAL;
+        *frag = OFPUTIL_FRAG_NORMAL;
     } else if (!strcasecmp(s, "drop")) {
-        *flags = OFPC_FRAG_DROP;
+        *frag = OFPUTIL_FRAG_DROP;
     } else if (!strcasecmp(s, "reassemble")) {
-        *flags = OFPC_FRAG_REASM;
+        *frag = OFPUTIL_FRAG_REASM;
     } else if (!strcasecmp(s, "nx-match")) {
-        *flags = OFPC_FRAG_NX_MATCH;
+        *frag = OFPUTIL_FRAG_NX_MATCH;
     } else {
         return false;
     }
