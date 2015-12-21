@@ -574,9 +574,7 @@ ovs_u128_is_zero(const ovs_u128 *val)
 static inline bool
 ovs_u128_is_ones(const ovs_u128 *val)
 {
-    ovs_u128 ones = OVS_U128_MAX;
-
-    return ovs_u128_equals(val, &ones);
+    return ovs_u128_equals(val, &OVS_U128_MAX);
 }
 
 /* Returns non-zero if the parameters have equal value. */
