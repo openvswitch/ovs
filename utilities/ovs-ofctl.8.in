@@ -524,6 +524,8 @@ If \fBinvalid_ttl\fR is passed, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
 \fBINVALID_TTL_TO_CONTROLLER\fR, so that \fBovs\-ofctl monitor\fR can
 receive ``packet-in'' messages when TTL reaches zero on \fBdec_ttl\fR action.
+Only OpenFlow 1.1 and 1.2 support \fBinvalid_ttl\fR; Open vSwitch also
+implements it for OpenFlow 1.0 as an extension.
 .IP
 \fBwatch:\fR[\fB\fIspec\fR...] causes \fBovs\-ofctl\fR to send a
 ``monitor request'' Nicira extension message to the switch at

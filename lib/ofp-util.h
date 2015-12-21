@@ -490,6 +490,41 @@ enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
 struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *,
                                          enum ofputil_protocol protocol);
 
+enum ofputil_frag_handling {
+    OFPUTIL_FRAG_NORMAL = OFPC_FRAG_NORMAL,    /* No special handling. */
+    OFPUTIL_FRAG_DROP = OFPC_FRAG_DROP,        /* Drop fragments. */
+    OFPUTIL_FRAG_REASM = OFPC_FRAG_REASM,      /* Reassemble (if supported). */
+    OFPUTIL_FRAG_NX_MATCH = OFPC_FRAG_NX_MATCH /* Match on frag bits. */
+};
+
+const char *ofputil_frag_handling_to_string(enum ofputil_frag_handling);
+bool ofputil_frag_handling_from_string(const char *,
+                                       enum ofputil_frag_handling *);
+
+/* Abstract struct ofp_switch_config. */
+struct ofputil_switch_config {
+    /* Fragment handling. */
+    enum ofputil_frag_handling frag;
+
+    /* 0: Do not send packet to controller when decrementing invalid IP TTL.
+     * 1: Do send packet to controller when decrementing invalid IP TTL.
+     * -1: Unspecified (only OpenFlow 1.1 and 1.2 support this setting. */
+    int invalid_ttl_to_controller;
+
+    /* Maximum bytes of packet to send to controller on miss. */
+    uint16_t miss_send_len;
+};
+
+void ofputil_decode_get_config_reply(const struct ofp_header *,
+                                     struct ofputil_switch_config *);
+struct ofpbuf *ofputil_encode_get_config_reply(
+    const struct ofp_header *request, const struct ofputil_switch_config *);
+
+enum ofperr ofputil_decode_set_config(const struct ofp_header *,
+                                      struct ofputil_switch_config *);
+struct ofpbuf *ofputil_encode_set_config(
+    const struct ofputil_switch_config *, enum ofp_version);
+
 enum ofputil_port_config {
     /* OpenFlow 1.0 and 1.1 share these values for these port config bits. */
     OFPUTIL_PC_PORT_DOWN    = 1 << 0, /* Port is administratively down. */
@@ -1035,10 +1070,6 @@ struct ofpbuf *make_echo_request(enum ofp_version);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 struct ofpbuf *ofputil_encode_barrier_request(enum ofp_version);
-
-const char *ofputil_frag_handling_to_string(enum ofp_config_flags);
-bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
-
 
 /* Actions. */
 

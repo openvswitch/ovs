@@ -656,9 +656,8 @@ transact_noreply(struct vconn *vconn, struct ofpbuf *request)
 }
 
 static void
-fetch_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
+fetch_switch_config(struct vconn *vconn, struct ofputil_switch_config *config)
 {
-    struct ofp_switch_config *config;
     struct ofpbuf *request;
     struct ofpbuf *reply;
     enum ofptype type;
@@ -668,25 +667,20 @@ fetch_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
     run(vconn_transact(vconn, request, &reply),
         "talking to %s", vconn_get_name(vconn));
 
-    if (ofptype_pull(&type, reply) || type != OFPTYPE_GET_CONFIG_REPLY) {
+    if (ofptype_decode(&type, reply->data)
+        || type != OFPTYPE_GET_CONFIG_REPLY) {
         ovs_fatal(0, "%s: bad reply to config request", vconn_get_name(vconn));
     }
-
-    config = ofpbuf_pull(reply, sizeof *config);
-    *config_ = *config;
-
+    ofputil_decode_get_config_reply(reply->data, config);
     ofpbuf_delete(reply);
 }
 
 static void
-set_switch_config(struct vconn *vconn, const struct ofp_switch_config *config)
+set_switch_config(struct vconn *vconn,
+                  const struct ofputil_switch_config *config)
 {
-    struct ofpbuf *request;
-
-    request = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, vconn_get_version(vconn), 0);
-    ofpbuf_put(request, config, sizeof *config);
-
-    transact_noreply(vconn, request);
+    enum ofp_version version = vconn_get_version(vconn);
+    transact_noreply(vconn, ofputil_encode_set_config(config, version));
 }
 
 static void
@@ -1461,27 +1455,20 @@ set_packet_in_format(struct vconn *vconn,
 static int
 monitor_set_invalid_ttl_to_controller(struct vconn *vconn)
 {
-    struct ofp_switch_config config;
-    enum ofp_config_flags flags;
+    struct ofputil_switch_config config;
 
     fetch_switch_config(vconn, &config);
-    flags = ntohs(config.flags);
-    if (!(flags & OFPC_INVALID_TTL_TO_CONTROLLER)) {
-        /* Set the invalid ttl config. */
-        flags |= OFPC_INVALID_TTL_TO_CONTROLLER;
-
-        config.flags = htons(flags);
+    if (!config.invalid_ttl_to_controller) {
+        config.invalid_ttl_to_controller = 1;
         set_switch_config(vconn, &config);
 
         /* Then retrieve the configuration to see if it really took.  OpenFlow
-         * doesn't define error reporting for bad modes, so this is all we can
-         * do. */
+         * has ill-defined error reporting for bad flags, so this is about the
+         * best we can do. */
         fetch_switch_config(vconn, &config);
-        flags = ntohs(config.flags);
-        if (!(flags & OFPC_INVALID_TTL_TO_CONTROLLER)) {
+        if (!config.invalid_ttl_to_controller) {
             ovs_fatal(0, "setting invalid_ttl_to_controller failed (this "
-                      "switch probably doesn't support mode)");
-            return -EOPNOTSUPP;
+                      "switch probably doesn't support this flag)");
         }
     }
     return 0;
@@ -1742,15 +1729,37 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
     int i;
     enum ofputil_protocol usable_protocols;
 
+    /* If the user wants the invalid_ttl_to_controller feature, limit the
+     * OpenFlow versions to those that support that feature.  (Support in
+     * OpenFlow 1.0 is an Open vSwitch extension.) */
+    for (i = 2; i < ctx->argc; i++) {
+        if (!strcmp(ctx->argv[i], "invalid_ttl")) {
+            uint32_t usable_versions = ((1u << OFP10_VERSION) |
+                                        (1u << OFP11_VERSION) |
+                                        (1u << OFP12_VERSION));
+            uint32_t allowed_versions = get_allowed_ofp_versions();
+            if (!(allowed_versions & usable_versions)) {
+                struct ds versions = DS_EMPTY_INITIALIZER;
+                ofputil_format_version_bitmap_names(&versions,
+                                                    usable_versions);
+                ovs_fatal(0, "invalid_ttl requires one of the OpenFlow "
+                          "versions %s but none is enabled (use -O)",
+                          ds_cstr(&versions));
+            }
+            mask_allowed_ofp_versions(usable_versions);
+            break;
+        }
+    }
+
     open_vconn(ctx->argv[1], &vconn);
     for (i = 2; i < ctx->argc; i++) {
         const char *arg = ctx->argv[i];
 
         if (isdigit((unsigned char) *arg)) {
-            struct ofp_switch_config config;
+            struct ofputil_switch_config config;
 
             fetch_switch_config(vconn, &config);
-            config.miss_send_len = htons(atoi(arg));
+            config.miss_send_len = atoi(arg);
             set_switch_config(vconn, &config);
         } else if (!strcmp(arg, "invalid_ttl")) {
             monitor_set_invalid_ttl_to_controller(vconn);
@@ -2087,43 +2096,41 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
 static void
 ofctl_get_frags(struct ovs_cmdl_context *ctx)
 {
-    struct ofp_switch_config config;
+    struct ofputil_switch_config config;
     struct vconn *vconn;
 
     open_vconn(ctx->argv[1], &vconn);
     fetch_switch_config(vconn, &config);
-    puts(ofputil_frag_handling_to_string(ntohs(config.flags)));
+    puts(ofputil_frag_handling_to_string(config.frag));
     vconn_close(vconn);
 }
 
 static void
 ofctl_set_frags(struct ovs_cmdl_context *ctx)
 {
-    struct ofp_switch_config config;
-    enum ofp_config_flags mode;
+    struct ofputil_switch_config config;
+    enum ofputil_frag_handling frag;
     struct vconn *vconn;
-    ovs_be16 flags;
 
-    if (!ofputil_frag_handling_from_string(ctx->argv[2], &mode)) {
+    if (!ofputil_frag_handling_from_string(ctx->argv[2], &frag)) {
         ovs_fatal(0, "%s: unknown fragment handling mode", ctx->argv[2]);
     }
 
     open_vconn(ctx->argv[1], &vconn);
     fetch_switch_config(vconn, &config);
-    flags = htons(mode) | (config.flags & htons(~OFPC_FRAG_MASK));
-    if (flags != config.flags) {
+    if (frag != config.frag) {
         /* Set the configuration. */
-        config.flags = flags;
+        config.frag = frag;
         set_switch_config(vconn, &config);
 
         /* Then retrieve the configuration to see if it really took.  OpenFlow
-         * doesn't define error reporting for bad modes, so this is all we can
-         * do. */
+         * has ill-defined error reporting for bad flags, so this is about the
+         * best we can do. */
         fetch_switch_config(vconn, &config);
-        if (flags != config.flags) {
+        if (frag != config.frag) {
             ovs_fatal(0, "%s: setting fragment handling mode failed (this "
                       "switch probably doesn't support mode \"%s\")",
-                      ctx->argv[1], ofputil_frag_handling_to_string(mode));
+                      ctx->argv[1], ofputil_frag_handling_to_string(frag));
         }
     }
     vconn_close(vconn);
