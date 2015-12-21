@@ -3,6 +3,7 @@ AT_BANNER([ovn-sbctl])
 # OVN_SBCTL_TEST_START
 m4_define([OVN_SBCTL_TEST_START],
   [dnl Create databases (ovn-nb, ovn-sb).
+   AT_KEYWORDS([ovn])
    for daemon in ovn-nb ovn-sb; do
       AT_CHECK([ovsdb-tool create $daemon.db $abs_top_srcdir/${daemon%%-*}/${daemon}.ovsschema])
    done
