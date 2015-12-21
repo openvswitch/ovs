@@ -294,6 +294,7 @@ netdev_bsd_construct_system(struct netdev *netdev_)
     if (error == ENXIO) {
         free(netdev->kernel_name);
         cache_notifier_unref();
+        ovs_mutex_destroy(&netdev->mutex);
         return error;
     }
 
