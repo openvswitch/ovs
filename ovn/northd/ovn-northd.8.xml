@@ -204,9 +204,12 @@
 
     <ul>
       <li>
-        Priority-150 flows that matches ARP requests to each known IP address
-        <var>A</var> of logical port <var>P</var>, and respond ARP replies
-        directly with corresponding Ethernet address <var>E</var>:
+        <p>
+          Priority-150 flows that matches ARP requests to each known IP address
+          <var>A</var> of logical port <var>P</var>, and respond with ARP
+          replies directly with corresponding Ethernet address <var>E</var>:
+        </p>
+
         <pre>
 eth.dst = eth.src;
 eth.src = <var>E</var>;
@@ -219,6 +222,11 @@ outport = <var>P</var>;
 inport = ""; /* Allow sending out inport. */
 output;
         </pre>
+
+        <p>
+          These flows are omitted for logical ports (other than router ports)
+          that are down.
+        </p>
       </li>
 
       <li>

@@ -951,6 +951,12 @@ lport_is_enabled(const struct nbrec_logical_port *lport)
 }
 
 static bool
+lport_is_up(const struct nbrec_logical_port *lport)
+{
+    return !lport->up || *lport->up;
+}
+
+static bool
 has_stateful_acl(struct ovn_datapath *od)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
@@ -1175,6 +1181,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
      * (priority 150). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
+            continue;
+        }
+
+        /*
+         * Add ARP reply flows if either the
+         *  - port is up or
+         *  - port type is router
+         */
+        if (!lport_is_up(op->nbs) && strcmp(op->nbs->type, "router")) {
             continue;
         }
 
