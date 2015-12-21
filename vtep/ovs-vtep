@@ -651,6 +651,13 @@ def setup():
     else:
         ovs_vsctl("add-br %s" % bfd_bridge)
 
+    # Remove local-mac entries from the previous run.  Otherwise, if a vlan
+    # binding is removed while the emulator is *not* running, the corresponding
+    # local-mac entries are never cleaned up.
+    vtep_ls = set(vtep_ctl("list-ls").split())
+    for ls_name in vtep_ls:
+        vtep_ctl("clear-local-macs %s" % ls_name)
+
 
 def main():
     parser = argparse.ArgumentParser()
