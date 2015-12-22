@@ -8880,7 +8880,9 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
             }
             break;
         default:
-            OVS_NOT_REACHED();
+            /* Returning BAD TYPE to be consistent
+             * though gm->type has been checked already. */
+            return OFPERR_OFPGMFC_BAD_TYPE;
         }
     }
 
