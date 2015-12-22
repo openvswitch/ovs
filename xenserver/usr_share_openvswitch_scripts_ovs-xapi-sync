@@ -30,8 +30,6 @@ import time
 import XenAPI
 
 import ovs.dirs
-from ovs.db import error
-from ovs.db import types
 import ovs.daemon
 import ovs.db.idl
 import ovs.unixctl

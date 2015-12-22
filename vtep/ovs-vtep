@@ -641,7 +641,7 @@ def setup():
             for port in bfd_ports:
                 remote_ip = ovs_vsctl("get interface %s options:remote_ip"
                                       % port)
-                tunnel = destroy_vtep_tunnel(remote_ip)
+                destroy_vtep_tunnel(remote_ip)
 
             ovs_vsctl("del-br %s" % br)
 
