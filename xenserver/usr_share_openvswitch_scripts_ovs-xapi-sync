@@ -267,7 +267,7 @@ def main():
     while True:
         unixctl_server.run()
         if exiting:
-            break;
+            break
 
         idl.run()
         if not xapi_down and not flush_cache and seqno == idl.change_seqno:

@@ -165,7 +165,7 @@ class Logical_Switch(object):
     def del_lbinding(self, lbinding):
         vlog.info("removing %s binding from %s" % (lbinding, self.name))
         port_no = self.ports[lbinding]
-        ovs_ofctl("del-flows %s in_port=%s" % (self.short_name, port_no));
+        ovs_ofctl("del-flows %s in_port=%s" % (self.short_name, port_no))
         del self.ports[lbinding]
         self.update_flood()
 
@@ -520,9 +520,9 @@ def add_binding(binding, ls):
     # Create a logical_bindings_stats record.
     if not vlan_:
         vlan_ = "0"
-    vtep_ctl("set physical_port %s vlan_stats:%s=@stats --\
-            --id=@stats create logical_binding_stats packets_from_local=0"\
-            % (pp_name, vlan_))
+    vtep_ctl("set physical_port %s vlan_stats:%s=@stats -- "
+             "--id=@stats create logical_binding_stats packets_from_local=0"
+             % (pp_name, vlan_))
 
     ls.add_lbinding(lbinding)
     Bindings[binding] = ls.name
