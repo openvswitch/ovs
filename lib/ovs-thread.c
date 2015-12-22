@@ -584,6 +584,15 @@ count_cpu_cores(void)
 
     return n_cores > 0 ? n_cores : 0;
 }
+
+/* Returns 'true' if current thread is PMD thread. */
+bool
+thread_is_pmd(void)
+{
+    const char *name = get_subprogram_name();
+    return !strncmp(name, "pmd", 3);
+}
+
 
 /* ovsthread_key. */
 
