@@ -587,7 +587,7 @@ def main(argv):
 
     command_name = args[0]
     args = args[1:]
-    if not command_name in commands:
+    if command_name not in commands:
         sys.stderr.write("%s: unknown command \"%s\" "
                          "(use --help for help)\n" % (ovs.util.PROGRAM_NAME,
                                                       command_name))

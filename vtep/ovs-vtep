@@ -286,7 +286,7 @@ class Logical_Switch(object):
                 self.add_remote_mac(mac, remote_macs[mac])
 
         for mac in self.remote_macs.keys():
-            if not remote_macs.has_key(mac):
+            if mac not in remote_macs:
                 self.del_remote_mac(mac)
 
         self.remote_macs = remote_macs
@@ -587,7 +587,7 @@ def handle_physical():
             ls = Lswitches[ls_name]
             new_bindings.add(binding)
 
-            if Bindings.has_key(binding):
+            if binding in Bindings:
                 if Bindings[binding] == ls_name:
                     continue
                 else:
