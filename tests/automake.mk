@@ -354,6 +354,8 @@ CHECK_PYFILES = \
 EXTRA_DIST += $(CHECK_PYFILES)
 PYCOV_CLEAN_FILES += $(CHECK_PYFILES:.py=.py,cover) .coverage
 
+FLAKE8_PYFILES += $(CHECK_PYFILES)
+
 if HAVE_OPENSSL
 TESTPKI_FILES = \
 	tests/testpki-cacert.pem \

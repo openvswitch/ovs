@@ -141,6 +141,7 @@ SUFFIXES =
 check_DATA =
 check_SCRIPTS =
 pkgconfig_DATA =
+FLAKE8_PYFILES =
 
 scriptsdir = $(pkgdatadir)/scripts
 completiondir = $(sysconfdir)/bash_completion.d
@@ -337,6 +338,12 @@ manpage-check: $(man_MANS) $(dist_man_MANS) $(noinst_man_MANS)
 	if $$error; then exit 1; else touch $@; fi
 	$(AM_V_GEN) touch -c $@
 CLEANFILES += manpage-check
+endif
+
+if HAVE_FLAKE8
+ALL_LOCAL += flake8-check
+flake8-check: $(FLAKE8_PYFILES)
+	$(AM_V_GEN) if flake8 $^ --ignore=E111,E112,E113,E123,E126,E127,E128,E129,E131,E201,E203,E222,E225,E226,E231,E241,E251,E261,E262,E265,E271,E302,E303,E501,E502,E703,E711,E713,E721,F401,F811,F821,F841,W601 ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk

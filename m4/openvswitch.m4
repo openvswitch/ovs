@@ -353,6 +353,18 @@ else:
    AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])
 
 dnl Checks for dot.
+AC_DEFUN([OVS_CHECK_FLAKE8],
+  [AC_CACHE_CHECK(
+    [for flake8],
+    [ovs_cv_flake8],
+    [if flake8 --version >/dev/null 2>&1; then
+       ovs_cv_flake8=yes
+     else
+       ovs_cv_flake8=no
+     fi])
+   AM_CONDITIONAL([HAVE_FLAKE8], [test "$ovs_cv_flake8" = yes])])
+
+dnl Checks for dot.
 AC_DEFUN([OVS_CHECK_DOT],
   [AC_CACHE_CHECK(
     [for dot],
