@@ -26,6 +26,9 @@ EXTRA_DIST += \
 	xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template
 
+FLAKE8_PYFILES += \
+	xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync
+
 $(srcdir)/xenserver/openvswitch-xen.spec: xenserver/openvswitch-xen.spec.in $(top_builddir)/config.status
 	$(AM_V_GEN)($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
 		< $(srcdir)/xenserver/$(@F).in > $(@F).tmp || exit 1; \
