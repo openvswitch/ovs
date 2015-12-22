@@ -132,6 +132,7 @@ table_free(struct tun_table *map) OVS_REQUIRES(tab_mutex)
         tun_metadata_del_entry(map, entry - map->entries);
     }
 
+    hmap_destroy(&map->key_hmap);
     free(map);
 }
 
