@@ -487,6 +487,7 @@ cmd_rate(struct ovs_cmdl_context *ctx OVS_UNUSED)
             prev = now;
 
             if (timeout && elapsed > timeout * 1000LL) {
+                free(fds);
                 break;
             }
         }
