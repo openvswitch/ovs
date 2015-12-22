@@ -902,10 +902,9 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *
  *     After using this function to add a variable-length action, add the
  *     elements of the flexible array (e.g. with ofpbuf_put()), then use
- *     ofpact_update_len() to pad the action to a multiple of OFPACT_ALIGNTO
- *     bytes and update its embedded length field.  (Keep in mind the need to
- *     refresh the structure from 'ofpacts->header' after adding data to
- *     'ofpacts'.)
+ *     ofpact_finish() to pad the action to a multiple of OFPACT_ALIGNTO bytes
+ *     and update its embedded length field.  (Keep in mind the need to refresh
+ *     the structure from 'ofpacts->header' after adding data to 'ofpacts'.)
  *
  *   struct <STRUCT> *ofpact_get_<ENUM>(const struct ofpact *ofpact);
  *
@@ -958,7 +957,7 @@ OFPACTS
 #undef OFPACT
 
 /* Call after adding the variable-length part to a variable-length action. */
-void ofpact_update_len(struct ofpbuf *, struct ofpact *);
+void ofpact_finish(struct ofpbuf *, struct ofpact *);
 
 /* Additional functions for composing ofpacts. */
 struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);

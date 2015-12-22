@@ -1093,7 +1093,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     }
 
     bundle = ofpacts->header;
-    ofpact_update_len(ofpacts, &bundle->ofpact);
+    ofpact_finish(ofpacts, &bundle->ofpact);
 
     if (!error) {
         error = bundle_check(bundle, OFPP_MAX, NULL);
@@ -2933,7 +2933,7 @@ decode_OFPAT_RAW_DEC_NW_TTL(struct ofpbuf *out)
     ids->n_controllers = 1;
     ofpbuf_put(out, &id, sizeof id);
     ids = out->header;
-    ofpact_update_len(out, &ids->ofpact);
+    ofpact_finish(out, &ids->ofpact);
     return error;
 }
 
@@ -2970,7 +2970,7 @@ decode_NXAST_RAW_DEC_TTL_CNT_IDS(const struct nx_action_cnt_ids *nac_ids,
         ids = out->header;
     }
 
-    ofpact_update_len(out, &ids->ofpact);
+    ofpact_finish(out, &ids->ofpact);
 
     return 0;
 }
@@ -3009,7 +3009,7 @@ parse_noargs_dec_ttl(struct ofpbuf *ofpacts)
     ofpbuf_put(ofpacts, &id, sizeof id);
     ids = ofpacts->header;
     ids->n_controllers++;
-    ofpact_update_len(ofpacts, &ids->ofpact);
+    ofpact_finish(ofpacts, &ids->ofpact);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -3036,7 +3036,7 @@ parse_DEC_TTL(char *arg, struct ofpbuf *ofpacts,
             return xstrdup("dec_ttl_cnt_ids: expected at least one controller "
                            "id.");
         }
-        ofpact_update_len(ofpacts, &ids->ofpact);
+        ofpact_finish(ofpacts, &ids->ofpact);
     }
     return NULL;
 }
@@ -4054,7 +4054,7 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
             get_subfield(spec->n_bits, &p, &spec->dst);
         }
     }
-    ofpact_update_len(ofpacts, &learn->ofpact);
+    ofpact_finish(ofpacts, &learn->ofpact);
 
     if (!is_all_zeros(p, (char *) end - (char *) p)) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -4378,7 +4378,7 @@ decode_NXAST_RAW_NOTE(const struct nx_action_note *nan,
     note = ofpact_put_NOTE(out);
     note->length = length;
     ofpbuf_put(out, nan->note, length);
-    ofpact_update_len(out, out->header);
+    ofpact_finish(out, out->header);
 
     return 0;
 }
@@ -4426,7 +4426,7 @@ parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
 
         arg += 2;
     }
-    ofpact_update_len(ofpacts, &note->ofpact);
+    ofpact_finish(ofpacts, &note->ofpact);
     return NULL;
 }
 
@@ -4833,7 +4833,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
     out->header = &conntrack->ofpact;
-    ofpact_update_len(out, &conntrack->ofpact);
+    ofpact_finish(out, &conntrack->ofpact);
 
     if (conntrack->ofpact.len > sizeof(*conntrack)
         && !(conntrack->flags & NX_CT_F_COMMIT)) {
@@ -4954,7 +4954,7 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
         }
     }
 
-    ofpact_update_len(ofpacts, &oc->ofpact);
+    ofpact_finish(ofpacts, &oc->ofpact);
     ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
 }
@@ -7282,7 +7282,7 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
  * bytes and updating its embedded length field.  See the large comment near
  * the end of ofp-actions.h for more information. */
 void
-ofpact_update_len(struct ofpbuf *ofpacts, struct ofpact *ofpact)
+ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
     ovs_assert(ofpact == ofpacts->header);
     ofpact->len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;

@@ -379,7 +379,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             }
         }
     }
-    ofpact_update_len(ofpacts, &learn->ofpact);
+    ofpact_finish(ofpacts, &learn->ofpact);
 
     return NULL;
 }
