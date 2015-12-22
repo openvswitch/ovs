@@ -389,7 +389,6 @@ def idl_set(idl, commands, step):
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
     if commands and commands[0].startswith("?"):
-        monitor = {}
         readonly = {}
         for x in commands[0][1:].split("?"):
             readonly = []

@@ -15,9 +15,6 @@
 """
 vswitch module allows its callers to interact with OVS DB.
 """
-import exceptions
-import subprocess
-
 import util
 
 

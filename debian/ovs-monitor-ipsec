@@ -33,7 +33,6 @@ import sys
 
 import ovs.dirs
 from ovs.db import error
-from ovs.db import types
 import ovs.util
 import ovs.daemon
 import ovs.db.idl

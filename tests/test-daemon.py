@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import argparse
-import logging
 import signal
 import sys
 import time
