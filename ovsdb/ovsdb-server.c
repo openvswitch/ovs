@@ -259,6 +259,9 @@ main(int argc, char *argv[])
     shash_init(&all_dbs);
     server_config.all_dbs = &all_dbs;
     server_config.jsonrpc = jsonrpc;
+
+    perf_counters_init();
+
     SSET_FOR_EACH (db_filename, &db_filenames) {
         error = open_db(&server_config, db_filename);
         if (error) {
@@ -296,8 +299,6 @@ main(int argc, char *argv[])
     }
 
     daemonize_complete();
-
-    perf_counters_init();
 
     if (!run_command) {
         /* ovsdb-server is usually a long-running process, in which case it
