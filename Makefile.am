@@ -360,8 +360,8 @@ CLEAN_LOCAL += ovsext_clean
 ovsext_clean: datapath-windows/ovsext.sln
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
-.PHONY: ovsext_make
 endif
+.PHONY: ovsext_make
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
