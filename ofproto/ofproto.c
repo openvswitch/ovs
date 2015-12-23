@@ -6548,6 +6548,7 @@ delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
     flow_mod_init(&ofm.fm, &match, 0, NULL, 0, OFPFC_DELETE);
     ofm.fm.delete_reason = OFPRR_GROUP_DELETE;
     ofm.fm.out_group = ofgroup->group_id;
+    ofm.fm.table_id = OFPTT_ALL;
     handle_flow_mod__(ofproto, &ofm, NULL);
 
     hmap_remove(&ofproto->groups, &ofgroup->hmap_node);
