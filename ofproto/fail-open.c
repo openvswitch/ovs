@@ -229,7 +229,6 @@ fail_open_flushed(struct fail_open *fo)
          * OFPP_NORMAL. */
         ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
         ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
-        ofpact_pad(&ofpacts);
 
         match_init_catchall(&match);
         ofproto_add_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY,

@@ -642,7 +642,6 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         enqueue->port = out_port;
         enqueue->queue = queue_id;
     }
-    ofpact_pad(&ofpacts);
 
     /* Prepare packet_out in case we need one. */
     po.buffer_id = pi.buffer_id;

@@ -161,7 +161,6 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
             break;
         }
     }
-    ofpact_pad(ofpacts);
 
     fm->ofpacts = ofpacts->data;
     fm->ofpacts_len = ofpacts->size;

@@ -896,15 +896,16 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *
  *   struct <STRUCT> *ofpact_put_<ENUM>(struct ofpbuf *ofpacts);
  *
- *     Appends a new 'ofpact', of length OFPACT_<ENUM>_RAW_SIZE, to 'ofpacts',
+ *     Appends a new 'ofpact', of length OFPACT_<ENUM>_SIZE, to 'ofpacts',
  *     initializes it with ofpact_init_<ENUM>(), and returns it.  Also sets
  *     'ofpacts->header' to the returned action.
  *
  *     After using this function to add a variable-length action, add the
  *     elements of the flexible array (e.g. with ofpbuf_put()), then use
- *     ofpact_update_len() to update the length embedded into the action.
- *     (Keep in mind the need to refresh the structure from 'ofpacts->frame'
- *     after adding data to 'ofpacts'.)
+ *     ofpact_update_len() to pad the action to a multiple of OFPACT_ALIGNTO
+ *     bytes and update its embedded length field.  (Keep in mind the need to
+ *     refresh the structure from 'ofpacts->header' after adding data to
+ *     'ofpacts'.)
  *
  *   struct <STRUCT> *ofpact_get_<ENUM>(const struct ofpact *ofpact);
  *
@@ -916,29 +917,22 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *   void ofpact_init_<ENUM>(struct <STRUCT> *ofpact);
  *
  *     Initializes the parts of 'ofpact' that identify it as having type
- *     OFPACT_<ENUM> and length OFPACT_<ENUM>_RAW_SIZE and zeros the rest.
- *
- *   <ENUM>_RAW_SIZE
- *
- *     The size of the action structure.  For a fixed-length action, this is
- *     sizeof(struct <STRUCT>).  For a variable-length action, this is the
- *     offset to the variable-length part.
+ *     OFPACT_<ENUM> and length OFPACT_<ENUM>_SIZE and zeros the rest.
  *
  *   <ENUM>_SIZE
  *
- *     An integer constant, the value of OFPACT_<ENUM>_RAW_SIZE rounded up to a
- *     multiple of OFPACT_ALIGNTO.
+ *     The size of the action structure.  For a fixed-length action, this is
+ *     sizeof(struct <STRUCT>) rounded up to a multiple of OFPACT_ALIGNTO.  For
+ *     a variable-length action, this is the offset to the variable-length
+ *     part.
  */
 #define OFPACT(ENUM, STRUCT, MEMBER, NAME)                              \
     BUILD_ASSERT_DECL(offsetof(struct STRUCT, ofpact) == 0);            \
                                                                         \
-    enum { OFPACT_##ENUM##_RAW_SIZE                                     \
+    enum { OFPACT_##ENUM##_SIZE                                         \
            = (offsetof(struct STRUCT, MEMBER)                           \
               ? offsetof(struct STRUCT, MEMBER)                         \
-              : sizeof(struct STRUCT)) };                               \
-                                                                        \
-    enum { OFPACT_##ENUM##_SIZE                                         \
-           = ROUND_UP(OFPACT_##ENUM##_RAW_SIZE, OFPACT_ALIGNTO) };      \
+              : OFPACT_ALIGN(sizeof(struct STRUCT))) };                 \
                                                                         \
     static inline struct STRUCT *                                       \
     ofpact_get_##ENUM(const struct ofpact *ofpact)                      \
@@ -951,21 +945,20 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
     ofpact_put_##ENUM(struct ofpbuf *ofpacts)                           \
     {                                                                   \
         return ofpact_put(ofpacts, OFPACT_##ENUM,                       \
-                          OFPACT_##ENUM##_RAW_SIZE);                    \
+                          OFPACT_##ENUM##_SIZE);                        \
     }                                                                   \
                                                                         \
     static inline void                                                  \
     ofpact_init_##ENUM(struct STRUCT *ofpact)                           \
     {                                                                   \
         ofpact_init(&ofpact->ofpact, OFPACT_##ENUM,                     \
-                    OFPACT_##ENUM##_RAW_SIZE);                          \
+                    OFPACT_##ENUM##_SIZE);                              \
     }
 OFPACTS
 #undef OFPACT
 
-/* Functions to use after adding ofpacts to a buffer. */
+/* Call after adding the variable-length part to a variable-length action. */
 void ofpact_update_len(struct ofpbuf *, struct ofpact *);
-void ofpact_pad(struct ofpbuf *);
 
 /* Additional functions for composing ofpacts. */
 struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);
