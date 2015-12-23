@@ -306,25 +306,25 @@ group_id=1235,type=all,bucket=output:10
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
 AT_DATA([flows.txt], [dnl
 tcp actions=group:1234
-udp actions=group:1235
+table=2 udp actions=group:1235
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
 [0], [dnl
+ table=2, udp actions=group:1235
  tcp actions=group:1234
- udp actions=group:1235
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
 [0], [dnl
- udp actions=group:1235
+ table=2, udp actions=group:1235
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
 [0], [dnl
- udp actions=group:1235
+ table=2, udp actions=group:1235
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0])
