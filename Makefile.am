@@ -323,6 +323,7 @@ thread-safety-check:
 	    exit 1; \
 	fi
 EXTRA_DIST += build-aux/thread-safety-blacklist
+.PHONY: thread-safety-check
 
 if HAVE_GROFF
 ALL_LOCAL += manpage-check
@@ -359,6 +360,7 @@ CLEAN_LOCAL += ovsext_clean
 ovsext_clean: datapath-windows/ovsext.sln
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
+.PHONY: ovsext_make
 endif
 
 dist-hook: $(DIST_HOOKS)
