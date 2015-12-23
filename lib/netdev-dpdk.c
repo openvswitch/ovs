@@ -1480,9 +1480,9 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     stats->rx_dropped = rte_stats.rx_nombuf + rte_stats.imissed;
     stats->collisions = UINT64_MAX;
 
-    stats->rx_length_errors = rte_stats.ibadlen;
+    stats->rx_length_errors = UINT64_MAX;
     stats->rx_over_errors = UINT64_MAX;
-    stats->rx_crc_errors = rte_stats.ibadcrc;
+    stats->rx_crc_errors = UINT64_MAX;
     stats->rx_frame_errors = UINT64_MAX;
     stats->rx_fifo_errors = UINT64_MAX;
     stats->rx_missed_errors = rte_stats.imissed;

@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 2.1
+Required: DPDK 2.2
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -24,7 +24,7 @@ on Debian/Ubuntu)
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-2.1
+     export DPDK_DIR=/usr/src/dpdk-2.2
      cd $DPDK_DIR
      ```
 
@@ -473,7 +473,7 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-DPDK 2.1 supports two types of vhost:
+DPDK 2.2 supports two types of vhost:
 
 1. vhost-user
 2. vhost-cuse
@@ -494,7 +494,7 @@ with OVS.
 DPDK vhost-user Prerequisites:
 -------------------------
 
-1. DPDK 2.1 with vhost support enabled as documented in the "Building and
+1. DPDK 2.2 with vhost support enabled as documented in the "Building and
    Installing section"
 
 2. QEMU version v2.1.0+
@@ -576,7 +576,7 @@ with OVS.
 DPDK vhost-cuse Prerequisites:
 -------------------------
 
-1. DPDK 2.1 with vhost support enabled as documented in the "Building and
+1. DPDK 2.2 with vhost support enabled as documented in the "Building and
    Installing section"
    As an additional step, you must enable vhost-cuse in DPDK by setting the
    following additional flag in `config/common_linuxapp`:
