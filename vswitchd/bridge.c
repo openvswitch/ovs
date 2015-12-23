@@ -4997,6 +4997,9 @@ synthesize_splinter_port(const char *real_dev_name,
     smap_add(&port->other_config, "realdev", real_dev_name);
 
     register_rec(port);
+    
+    free(iface->name);
+    free(iface);
     return port;
 }
 
