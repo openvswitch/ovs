@@ -4100,7 +4100,6 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
     }
 
     ofpbuf_put(&ctx->action_set, on->actions, on_len);
-    ofpact_pad(&ctx->action_set);
 }
 
 static void
