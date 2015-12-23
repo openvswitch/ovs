@@ -19,14 +19,6 @@ set -e
 
 case "$1" in
     configure)
-        # Move the pki directory from its previous, non FHS-compliant location,
-        # to its new location, leaving behind a symlink for compatibility.
-        if test -d /usr/share/openvswitch/pki && \
-           test ! -e /var/lib/openvswitch/pki; then
-            mv /usr/share/openvswitch/pki /var/lib/openvswitch
-            ln -s /var/lib/openvswitch/pki /usr/share/openvswitch/pki
-        fi
-
         # Create certificate authorities.
         if test ! -e /var/lib/openvswitch/pki; then
             ovs-pki init
