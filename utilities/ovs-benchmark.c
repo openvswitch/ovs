@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -491,6 +491,7 @@ cmd_rate(struct ovs_cmdl_context *ctx OVS_UNUSED)
             }
         }
     }
+    free(fds);
 }
 
 static void
