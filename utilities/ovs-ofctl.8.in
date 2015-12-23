@@ -1105,7 +1105,11 @@ When \fBdl_type\fR specifies either ARP or RARP, \fBarp_sha\fR and
 address is specified as 6 pairs of hexadecimal digits delimited by colons
 (e.g. \fB00:0A:E4:25:6B:B0\fR), with a wildcard mask following the slash.
 .
-
+.IP \fBarp_op=\fIopcode\fR
+When \fBdl_type\fR specifies either ARP or RARP, \fBarp_op\fR matches the
+ARP opcode.  Only ARP opcodes between 1 and 255 should be specified for
+matching.
+.
 .IP \fBipv6_src=\fIipv6\fR[\fB/\fInetmask\fR]
 .IQ \fBipv6_dst=\fIipv6\fR[\fB/\fInetmask\fR]
 When \fBdl_type\fR is 0x86dd (possibly via shorthand, e.g., \fBipv6\fR
