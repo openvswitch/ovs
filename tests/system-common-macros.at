@@ -149,3 +149,9 @@ m4_define([NETNS_DAEMONIZE],
      echo "kill \`cat $3\`" >> cleanup
    ]
 )
+
+# OVS_CHECK_VXLAN()
+#
+# Do basic check for vxlan functionality, skip the test if it's not there.
+m4_define([OVS_CHECK_VXLAN],
+    [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])])

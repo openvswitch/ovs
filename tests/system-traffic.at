@@ -107,7 +107,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over vxlan tunnel])
-AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])
+OVS_CHECK_VXLAN()
 
 OVS_TRAFFIC_VSWITCHD_START()
 ADD_BR([br-underlay])
@@ -1307,7 +1307,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - Fragmentation over vxlan])
-AT_SKIP_IF([! ip link help 2>&1 | grep vxlan >/dev/null])
+OVS_CHECK_VXLAN()
 CHECK_CONNTRACK()
 
 OVS_TRAFFIC_VSWITCHD_START()
