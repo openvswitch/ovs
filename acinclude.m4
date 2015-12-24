@@ -355,10 +355,13 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_INET_FRAGS_CONST])])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [last_in],
                   [OVS_DEFINE([HAVE_INET_FRAGS_LAST_IN])])
+  OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frag_evicting])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
                         [frags_work])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
                         [rwlock])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frag_queue],
+                        [list_evictor])
   OVS_GREP_IFELSE([$KSRC/include/net/inetpeer.h], [vif],
                   [OVS_DEFINE([HAVE_INETPEER_VIF_SUPPORT])])
 
