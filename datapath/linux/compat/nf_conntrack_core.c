@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#ifndef HAVE_NF_CT_ZONE_INIT
 
 #include <net/netfilter/nf_conntrack_zones.h>
 
@@ -10,4 +10,4 @@ const struct nf_conntrack_zone nf_ct_zone_dflt = {
 	.dir	= NF_CT_DEFAULT_ZONE_DIR,
 };
 
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0) */
+#endif /* HAVE_NF_CT_ZONE_INIT */
