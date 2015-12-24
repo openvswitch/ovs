@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -5487,6 +5487,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
     fm.ofpacts = ofpacts->data;
     fm.ofpacts_len = ofpacts->size;
+    fm.delete_reason = OVS_OFPRR_NONE;
 
     error = ofproto_flow_mod(&ofproto->up, &fm);
     if (error) {
