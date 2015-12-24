@@ -272,7 +272,7 @@ void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
 
 static struct inet_frag_bucket *
 get_frag_bucket_locked(struct inet_frag_queue *fq, struct inet_frags *f)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 __acquires(f->lock)
 #endif
 __acquires(hb->chain_lock)
@@ -280,7 +280,7 @@ __acquires(hb->chain_lock)
 	struct inet_frag_bucket *hb;
 	unsigned int hash;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 	read_lock(&f->lock);
 #else
 	unsigned int seq;
@@ -293,7 +293,7 @@ __acquires(hb->chain_lock)
 
 	spin_lock(&hb->chain_lock);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifndef HAVE_INET_FRAGS_WITH_RWLOCK
 	if (read_seqretry(&f->rnd_seqlock, seq)) {
 		spin_unlock(&hb->chain_lock);
 		goto restart;
@@ -304,7 +304,7 @@ __acquires(hb->chain_lock)
 }
 
 static inline void fq_unlink(struct inet_frag_queue *fq, struct inet_frags *f)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 __releases(f->lock)
 #endif
 __releases(hb->chain_lock)
@@ -316,7 +316,7 @@ __releases(hb->chain_lock)
 	q_flags(fq) |= INET_FRAG_COMPLETE;
 	spin_unlock(&hb->chain_lock);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 	read_unlock(&f->lock);
 #endif
 }
@@ -433,7 +433,7 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 		if (qp->net == nf && f->match(qp, arg)) {
 			atomic_inc(&qp->refcnt);
 			spin_unlock(&hb->chain_lock);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 			read_unlock(&f->lock);
 #endif
 			q_flags(qp_in) |= INET_FRAG_COMPLETE;
@@ -450,7 +450,7 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 	hlist_add_head(&qp->list, &hb->chain);
 
 	spin_unlock(&hb->chain_lock);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 	read_unlock(&f->lock);
 #endif
 
