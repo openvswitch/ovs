@@ -7,7 +7,7 @@
 #include <net/ip.h>		/* For OVS_VPORT_OUTPUT_PARAMS */
 #include <net/ip6_route.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#ifndef HAVE_NF_IPV6_OPS_FRAGMENT
 /* Try to minimise changes required to the actions.c code for calling IPv6
  * fragmentation. We can keep the fragment() API mostly the same, except that
  * the callback parameter needs to be in the form that older kernels accept.
@@ -27,7 +27,7 @@ static inline struct ovs_nf_ipv6_ops *ovs_nf_get_ipv6_ops(void)
 {
 	return &ovs_ipv6_ops;
 }
-#else /* !OVS_FRAGMENT_BACKPORT || !CONFIG_NETFILTER || || !CONFIG_IPV6 */
+#else /* !OVS_FRAGMENT_BACKPORT */
 static inline const struct ovs_nf_ipv6_ops *ovs_nf_get_ipv6_ops(void)
 {
 	return NULL;
@@ -35,5 +35,5 @@ static inline const struct ovs_nf_ipv6_ops *ovs_nf_get_ipv6_ops(void)
 #endif
 #define nf_get_ipv6_ops ovs_nf_get_ipv6_ops
 
-#endif /* < 4.3 */
+#endif /* HAVE_NF_IPV6_OPS_FRAGMENT */
 #endif /* __NETFILTER_IPV6_WRAPPER_H */

@@ -55,8 +55,13 @@ static inline bool skb_encapsulation(struct sk_buff *skb)
 #endif
 
 #ifdef OVS_FRAGMENT_BACKPORT
+#ifdef HAVE_NF_IPV6_OPS_FRAGMENT
+static inline int __init ip6_output_init(void) { return 0; }
+static inline void ip6_output_exit(void) { }
+#else
 int __init ip6_output_init(void);
 void ip6_output_exit(void);
+#endif
 
 static inline int __init compat_init(void)
 {
