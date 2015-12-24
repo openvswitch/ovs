@@ -42,7 +42,7 @@ static inline void skb_dst_set_noref(struct sk_buff *skb,
 				     struct dst_entry *dst) { }
 static inline void dst_init_metrics(struct dst_entry *dst, const u32 *metrics,
 				    bool read_only) { }
-#elif  LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#elif !defined(HAVE___SKB_DST_COPY)
 static inline void __skb_dst_copy(struct sk_buff *nskb, unsigned long refdst)
 {
 	nskb->_skb_refdst = refdst;
