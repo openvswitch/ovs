@@ -471,6 +471,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/checksum.h], [csum_unfold])
 
   OVS_GREP_IFELSE([$KSRC/include/net/dst.h], [dst_discard_sk])
+  OVS_GREP_IFELSE([$KSRC/include/net/dst.h], [__skb_dst_copy])
 
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_has_listeners])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [mcgrp_offset])
