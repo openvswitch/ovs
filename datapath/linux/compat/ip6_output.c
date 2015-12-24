@@ -31,7 +31,7 @@
 
 #include <linux/version.h>
 
-#ifdef OVS_FRAGMENT_BACKPORT
+#if !defined(HAVE_NF_IPV6_OPS_FRAGMENT) && defined(OVS_FRAGMENT_BACKPORT)
 
 #include <linux/errno.h>
 #include <linux/kernel.h>
