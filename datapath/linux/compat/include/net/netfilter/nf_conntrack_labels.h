@@ -5,7 +5,7 @@
 #include <linux/version.h>
 #include_next <net/netfilter/nf_conntrack_labels.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#ifndef HAVE_NF_CONNLABELS_GET
 #if IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS)
 
 #ifndef NF_CT_LABELS_MAX_SIZE
@@ -45,5 +45,5 @@ static inline int nf_connlabels_get(struct net *net, unsigned int n_bits)
 
 static inline void nf_connlabels_put(struct net *net) { }
 #endif /* CONFIG_NF_CONNTRACK_LABELS */
-#endif /* 4.3 */
+#endif /* HAVE_NF_CONNLABELS_GET */
 #endif /* _NF_CONNTRACK_LABELS_WRAPPER_H */
