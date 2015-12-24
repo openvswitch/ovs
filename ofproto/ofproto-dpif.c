@@ -5666,6 +5666,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
     ofm.fm.ofpacts = ofpacts->data;
     ofm.fm.ofpacts_len = ofpacts->size;
+    ofm.fm.delete_reason = OVS_OFPRR_NONE;
 
     error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
