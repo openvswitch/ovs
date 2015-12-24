@@ -532,12 +532,53 @@ send_openflow_buffer(struct vconn *vconn, struct ofpbuf *buffer)
 static void
 dump_transaction(struct vconn *vconn, struct ofpbuf *request)
 {
-    struct ofpbuf *reply;
+    const struct ofp_header *oh = request->data;
+    if (ofpmsg_is_stat_request(oh)) {
+        ovs_be32 send_xid = oh->xid;
+        enum ofpraw request_raw;
+        enum ofpraw reply_raw;
+        bool done = false;
 
-    run(vconn_transact(vconn, request, &reply), "talking to %s",
-        vconn_get_name(vconn));
-    ofp_print(stdout, reply->data, reply->size, verbosity + 1);
-    ofpbuf_delete(reply);
+        ofpraw_decode_partial(&request_raw, request->data, request->size);
+        reply_raw = ofpraw_stats_request_to_reply(request_raw, oh->version);
+
+        send_openflow_buffer(vconn, request);
+        while (!done) {
+            ovs_be32 recv_xid;
+            struct ofpbuf *reply;
+
+            run(vconn_recv_block(vconn, &reply),
+                "OpenFlow packet receive failed");
+            recv_xid = ((struct ofp_header *) reply->data)->xid;
+            if (send_xid == recv_xid) {
+                enum ofpraw raw;
+
+                ofp_print(stdout, reply->data, reply->size, verbosity + 1);
+
+                ofpraw_decode(&raw, reply->data);
+                if (ofptype_from_ofpraw(raw) == OFPTYPE_ERROR) {
+                    done = true;
+                } else if (raw == reply_raw) {
+                    done = !ofpmp_more(reply->data);
+                } else {
+                    ovs_fatal(0, "received bad reply: %s",
+                              ofp_to_string(reply->data, reply->size,
+                                            verbosity + 1));
+                }
+            } else {
+                VLOG_DBG("received reply with xid %08"PRIx32" "
+                         "!= expected %08"PRIx32, recv_xid, send_xid);
+            }
+            ofpbuf_delete(reply);
+        }
+    } else {
+        struct ofpbuf *reply;
+
+        run(vconn_transact(vconn, request, &reply), "talking to %s",
+            vconn_get_name(vconn));
+        ofp_print(stdout, reply->data, reply->size, verbosity + 1);
+        ofpbuf_delete(reply);
+    }
 }
 
 static void
@@ -549,61 +590,6 @@ dump_trivial_transaction(const char *vconn_name, enum ofpraw raw)
     open_vconn(vconn_name, &vconn);
     request = ofpraw_alloc(raw, vconn_get_version(vconn), 0);
     dump_transaction(vconn, request);
-    vconn_close(vconn);
-}
-
-static void
-dump_stats_transaction(struct vconn *vconn, struct ofpbuf *request)
-{
-    const struct ofp_header *request_oh = request->data;
-    ovs_be32 send_xid = request_oh->xid;
-    enum ofpraw request_raw;
-    enum ofpraw reply_raw;
-    bool done = false;
-
-    ofpraw_decode_partial(&request_raw, request->data, request->size);
-    reply_raw = ofpraw_stats_request_to_reply(request_raw,
-                                              request_oh->version);
-
-    send_openflow_buffer(vconn, request);
-    while (!done) {
-        ovs_be32 recv_xid;
-        struct ofpbuf *reply;
-
-        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) reply->data)->xid;
-        if (send_xid == recv_xid) {
-            enum ofpraw raw;
-
-            ofp_print(stdout, reply->data, reply->size, verbosity + 1);
-
-            ofpraw_decode(&raw, reply->data);
-            if (ofptype_from_ofpraw(raw) == OFPTYPE_ERROR) {
-                done = true;
-            } else if (raw == reply_raw) {
-                done = !ofpmp_more(reply->data);
-            } else {
-                ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(reply->data, reply->size,
-                                        verbosity + 1));
-            }
-        } else {
-            VLOG_DBG("received reply with xid %08"PRIx32" "
-                     "!= expected %08"PRIx32, recv_xid, send_xid);
-        }
-        ofpbuf_delete(reply);
-    }
-}
-
-static void
-dump_trivial_stats_transaction(const char *vconn_name, enum ofpraw raw)
-{
-    struct ofpbuf *request;
-    struct vconn *vconn;
-
-    open_vconn(vconn_name, &vconn);
-    request = ofpraw_alloc(raw, vconn_get_version(vconn), 0);
-    dump_stats_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -704,7 +690,7 @@ ofctl_show(struct ovs_cmdl_context *ctx)
 
     if (!has_ports) {
         request = ofputil_encode_port_desc_stats_request(version, OFPP_ANY);
-        dump_stats_transaction(vconn, request);
+        dump_transaction(vconn, request);
     }
     dump_trivial_transaction(vconn_name, OFPRAW_OFPT_GET_CONFIG_REQUEST);
     vconn_close(vconn);
@@ -713,13 +699,13 @@ ofctl_show(struct ovs_cmdl_context *ctx)
 static void
 ofctl_dump_desc(struct ovs_cmdl_context *ctx)
 {
-    dump_trivial_stats_transaction(ctx->argv[1], OFPRAW_OFPST_DESC_REQUEST);
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_OFPST_DESC_REQUEST);
 }
 
 static void
 ofctl_dump_tables(struct ovs_cmdl_context *ctx)
 {
-    dump_trivial_stats_transaction(ctx->argv[1], OFPRAW_OFPST_TABLE_REQUEST);
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_OFPST_TABLE_REQUEST);
 }
 
 static void
@@ -731,7 +717,7 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
     open_vconn(ctx->argv[1], &vconn);
     request = ofputil_encode_table_features_request(vconn_get_version(vconn));
 
-    /* The following is similar to dump_trivial_stats_transaction(), but it
+    /* The following is similar to dump_trivial_transaction(), but it
      * maintains the previous 'ofputil_table_features' from one stats reply
      * message to the next, which allows duplication to be eliminated in the
      * output across messages.  Otherwise the output is much larger and harder
@@ -810,7 +796,7 @@ ofctl_dump_table_desc(struct ovs_cmdl_context *ctx)
     open_vconn(ctx->argv[1], &vconn);
     request = ofputil_encode_table_desc_request(vconn_get_version(vconn));
     if (request) {
-        dump_stats_transaction(vconn, request);
+        dump_transaction(vconn, request);
     }
 
     vconn_close(vconn);
@@ -1102,7 +1088,7 @@ ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
     struct vconn *vconn;
 
     vconn = prepare_dump_flows(argc, argv, aggregate, &request);
-    dump_stats_transaction(vconn, request);
+    dump_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -1238,7 +1224,7 @@ ofctl_queue_stats(struct ovs_cmdl_context *ctx)
     }
 
     request = ofputil_encode_queue_stats_request(vconn_get_version(vconn), &oqs);
-    dump_stats_transaction(vconn, request);
+    dump_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -1776,7 +1762,7 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
 
             msg = ofpbuf_new(0);
             ofputil_append_flow_monitor_request(&fmr, msg);
-            dump_stats_transaction(vconn, msg);
+            dump_transaction(vconn, msg);
             fflush(stdout);
         } else {
             ovs_fatal(0, "%s: unsupported \"monitor\" argument", arg);
@@ -1839,7 +1825,7 @@ ofctl_dump_ports(struct ovs_cmdl_context *ctx)
     open_vconn(ctx->argv[1], &vconn);
     port = ctx->argc > 2 ? str_to_port_no(ctx->argv[1], ctx->argv[2]) : OFPP_ANY;
     request = ofputil_encode_dump_ports_request(vconn_get_version(vconn), port);
-    dump_stats_transaction(vconn, request);
+    dump_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -1854,7 +1840,7 @@ ofctl_dump_ports_desc(struct ovs_cmdl_context *ctx)
     port = ctx->argc > 2 ? str_to_port_no(ctx->argv[1], ctx->argv[2]) : OFPP_ANY;
     request = ofputil_encode_port_desc_stats_request(vconn_get_version(vconn),
                                                      port);
-    dump_stats_transaction(vconn, request);
+    dump_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -2495,7 +2481,7 @@ ofctl_dump_group_stats(struct ovs_cmdl_context *ctx)
     request = ofputil_encode_group_stats_request(vconn_get_version(vconn),
                                                  group_id);
     if (request) {
-        dump_stats_transaction(vconn, request);
+        dump_transaction(vconn, request);
     }
 
     vconn_close(vconn);
@@ -2517,7 +2503,7 @@ ofctl_dump_group_desc(struct ovs_cmdl_context *ctx)
     request = ofputil_encode_group_desc_request(vconn_get_version(vconn),
                                                 group_id);
     if (request) {
-        dump_stats_transaction(vconn, request);
+        dump_transaction(vconn, request);
     }
 
     vconn_close(vconn);
@@ -2532,7 +2518,7 @@ ofctl_dump_group_features(struct ovs_cmdl_context *ctx)
     open_vconn(ctx->argv[1], &vconn);
     request = ofputil_encode_group_features_request(vconn_get_version(vconn));
     if (request) {
-        dump_stats_transaction(vconn, request);
+        dump_transaction(vconn, request);
     }
 
     vconn_close(vconn);
@@ -3147,9 +3133,8 @@ ofctl_meter_request__(const char *bridge, const char *str,
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
-    dump_stats_transaction(vconn,
-                           ofputil_encode_meter_request(version, type,
-                                                        mm.meter.meter_id));
+    dump_transaction(vconn, ofputil_encode_meter_request(version, type,
+                                                         mm.meter.meter_id));
     vconn_close(vconn);
 }
 
