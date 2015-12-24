@@ -61,7 +61,7 @@ inet_frag_hashfn(const struct inet_frags *f, struct inet_frag_queue *q)
 	return f->hashfn(q) & (INETFRAGS_HASHSZ - 1);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 static bool inet_frag_may_rebuild(struct inet_frags *f)
 {
 	return time_after(jiffies,
@@ -207,7 +207,7 @@ int inet_frags_init(struct inet_frags *f)
 {
 	int i;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	INIT_WORK(&f->frags_work, inet_frag_worker);
 #endif
 
@@ -218,16 +218,16 @@ int inet_frags_init(struct inet_frags *f)
 		INIT_HLIST_HEAD(&hb->chain);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	rwlock_init(&f->lock);
-	f->secret_timer.expires = jiffies + f->secret_interval;
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	seqlock_init(&f->rnd_seqlock);
 	f->last_rebuild_jiffies = 0;
 	f->frags_cachep = kmem_cache_create(f->frags_cache_name, f->qsize, 0, 0,
 					    NULL);
 	if (!f->frags_cachep)
 		return -ENOMEM;
+#else
+	rwlock_init(&f->lock);
+	f->secret_timer.expires = jiffies + f->secret_interval;
 #endif
 
 	return 0;
@@ -235,7 +235,7 @@ int inet_frags_init(struct inet_frags *f)
 
 void inet_frags_fini(struct inet_frags *f)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	cancel_work_sync(&f->frags_work);
 	kmem_cache_destroy(f->frags_cachep);
 #endif
@@ -243,14 +243,7 @@ void inet_frags_fini(struct inet_frags *f)
 
 int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
-{
-	read_lock_bh(&f->lock);
-	inet_frag_evictor(nf, f, true);
-	read_unlock_bh(&f->lock);
-}
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
 {
 	unsigned int seq;
@@ -267,6 +260,13 @@ evict_again:
 	if (read_seqretry(&f->rnd_seqlock, seq) ||
 	    percpu_counter_sum(&nf->mem))
 		goto evict_again;
+}
+#else
+void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
+{
+	read_lock_bh(&f->lock);
+	inet_frag_evictor(nf, f, true);
+	read_unlock_bh(&f->lock);
 }
 #endif
 
@@ -363,10 +363,10 @@ void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f)
 
 	if (f->destructor)
 		f->destructor(q);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	kfree(q);
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	kmem_cache_free(f->frags_cachep, q);
+#else
+	kfree(q);
 #endif
 
 	sub_frag_mem_limit(nf, sum);
@@ -374,7 +374,14 @@ void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f)
 
 int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
+	int i;
+
+	for (i = 0; i < INETFRAGS_HASHSZ ; i++)
+		inet_evict_bucket(f, &f->hash[i]);
+
+	return 0;
+#else
 	struct inet_frag_queue *q;
 	int work, evicted = 0;
 
@@ -406,13 +413,6 @@ int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 	}
 
 	return evicted;
-#else
-	int i;
-
-	for (i = 0; i < INETFRAGS_HASHSZ ; i++)
-		inet_evict_bucket(f, &f->hash[i]);
-
-	return 0;
 #endif
 }
 
@@ -464,16 +464,16 @@ static struct inet_frag_queue *inet_frag_alloc(struct netns_frags *nf,
 	struct inet_frag_queue *q;
 
 	if (frag_mem_limit(nf) > nf->high_thresh) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 		inet_frag_schedule_worker(f);
 #endif
 		return NULL;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	q = kzalloc(f->qsize, GFP_ATOMIC);
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	q = kmem_cache_zalloc(f->frags_cachep, GFP_ATOMIC);
+#else
+	q = kzalloc(f->qsize, GFP_ATOMIC);
 #endif
 	if (!q)
 		return NULL;
@@ -510,12 +510,12 @@ struct inet_frag_queue *inet_frag_find(struct netns_frags *nf,
 	struct inet_frag_queue *q;
 	int depth = 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	if (frag_mem_limit(nf) > nf->high_thresh)
-		inet_frag_evictor(nf, f, false);
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	if (frag_mem_limit(nf) > nf->low_thresh)
 		inet_frag_schedule_worker(f);
+#else
+	if (frag_mem_limit(nf) > nf->high_thresh)
+		inet_frag_evictor(nf, f, false);
 #endif
 
 	hash &= (INETFRAGS_HASHSZ - 1);
@@ -535,7 +535,7 @@ struct inet_frag_queue *inet_frag_find(struct netns_frags *nf,
 	if (depth <= INETFRAGS_MAXDEPTH)
 		return inet_frag_create(nf, f, key);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	if (inet_frag_may_rebuild(f)) {
 		if (!f->rebuild)
 			f->rebuild = true;
