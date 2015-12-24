@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2619,7 +2619,6 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
 {
     int error;
     struct ofputil_bundle_add_msg badd;
-    char *msg;
 
     error = ofputil_decode_bundle_add(oh, &badd, NULL);
     if (error) {
@@ -2633,10 +2632,8 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
     ofp_print_bit_names(s, badd.flags, bundle_flags_to_name, ' ');
 
     ds_put_char(s, '\n');
-    msg = ofp_to_string(badd.msg, ntohs(badd.msg->length), verbosity);
-    if (msg) {
-        ds_put_cstr(s, msg);
-    }
+    char *msg = ofp_to_string(badd.msg, ntohs(badd.msg->length), verbosity);
+    ds_put_and_free_cstr(s, msg);
 }
 
 static void
