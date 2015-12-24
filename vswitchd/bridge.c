@@ -4987,7 +4987,7 @@ synthesize_splinter_port(const char *real_dev_name,
 
     port = xmalloc(sizeof *port);
     ovsrec_port_init(port);
-    port->interfaces = xmemdup(&iface, sizeof iface);
+    port->interfaces = iface;
     port->n_interfaces = 1;
     port->name = xstrdup(vlan_dev_name);
     port->vlan_mode = "splinter";
