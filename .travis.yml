@@ -24,15 +24,15 @@ env:
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
   - KERNEL=3.17.7 DPDK=1
   - KERNEL=3.17.7 DPDK=1 OPTS="--enable-shared"
-  - KERNEL=4.2.5
-  - KERNEL=4.1.12
-  - KERNEL=3.18.23
-  - KERNEL=3.14.56
-  - KERNEL=3.12.49
-  - KERNEL=3.10.92
+  - KERNEL=4.3.5
+  - KERNEL=4.1.17
+  - KERNEL=3.18.26
+  - KERNEL=3.14.60
+  - KERNEL=3.12.53
+  - KERNEL=3.10.96
   - KERNEL=3.4.110
-  - KERNEL=3.2.72
-  - KERNEL=2.6.32.68
+  - KERNEL=3.2.76
+  - KERNEL=2.6.32.70
 
 script: ./.travis/build.sh $OPTS
 
