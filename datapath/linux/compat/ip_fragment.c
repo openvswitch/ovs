@@ -731,7 +731,7 @@ int __init rpl_ipfrag_init(void)
 	ip4_frags.qsize = sizeof(struct ipq);
 	ip4_frags.match = ip4_frag_match;
 	ip4_frags.frag_expire = ip_expire;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	ip4_frags.frags_cache_name = ip_frag_cache_name;
 #endif
 	if (inet_frags_init(&ip4_frags)) {

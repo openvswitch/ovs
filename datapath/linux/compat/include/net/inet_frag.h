@@ -36,11 +36,11 @@ struct ovs_inet_frag_queue {
 
 static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	return (q_flags(q) & INET_FRAG_FIRST_IN) && q->fragments != NULL;
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	struct ovs_inet_frag_queue *ofq = (struct ovs_inet_frag_queue *)q;
 	return !hlist_unhashed(&ofq->list_evictor);
+#else
+	return (q_flags(q) & INET_FRAG_FIRST_IN) && q->fragments != NULL;
 #endif
 }
 #define inet_frag_evicting rpl_inet_frag_evicting

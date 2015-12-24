@@ -631,7 +631,7 @@ int rpl_nf_ct_frag6_init(void)
 	nf_frags.qsize = sizeof(struct frag_queue);
 	nf_frags.match = rpl_ip6_frag_match;
 	nf_frags.frag_expire = nf_ct_frag6_expire;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	nf_frags.frags_cache_name = nf_frags_cache_name;
 #endif
 	ret = inet_frags_init(&nf_frags);
