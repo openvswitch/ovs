@@ -188,11 +188,11 @@ OFPST_QUEUE reply: 0 queues
 ])
 AT_CHECK([ovs-ofctl -vwarn queue-stats br0 ANY 5], [0],
   [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (xid=0x2):port=ANY queue=5
+OFPST_QUEUE request (xid=0x2): port=ANY queue=5
 ])
 AT_CHECK([ovs-ofctl -vwarn queue-stats br0 10], [0],
   [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (xid=0x2):port=10 queue=ALL
+OFPST_QUEUE request (xid=0x2): port=10 queue=ALL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -205,11 +205,11 @@ OFPST_QUEUE reply (OF1.2): 0 queues
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn queue-stats br0 ALL 5], [0],
   [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (OF1.2) (xid=0x2):port=ANY queue=5
+OFPST_QUEUE request (OF1.2) (xid=0x2): port=ANY queue=5
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn queue-stats br0 10], [0],
   [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (OF1.2) (xid=0x2):port=10 queue=ALL
+OFPST_QUEUE request (OF1.2) (xid=0x2): port=10 queue=ALL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -222,11 +222,11 @@ OFPST_QUEUE reply (OF1.4): 0 queues
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0 ALL 5], [0],
   [OFPT_ERROR (OF1.4) (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (OF1.4) (xid=0x2):port=ANY queue=5
+OFPST_QUEUE request (OF1.4) (xid=0x2): port=ANY queue=5
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0 10], [0],
   [OFPT_ERROR (OF1.4) (xid=0x2): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (OF1.4) (xid=0x2):port=10 queue=ALL
+OFPST_QUEUE request (OF1.4) (xid=0x2): port=10 queue=ALL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

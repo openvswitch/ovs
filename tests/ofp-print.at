@@ -1037,7 +1037,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 0f 00 20 00 00 00 03 00 03 50 54 00 00 00 01 \
 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1051,7 +1051,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.1) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.1) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1065,7 +1065,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.2) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.2) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1079,7 +1079,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.3) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.3) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1093,7 +1093,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 08 00 00 00 01
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.4) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD
@@ -1755,7 +1755,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 14 00 00 00 01 00 05 00 00 ff fc 00 00 \
 ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (xid=0x1):port=ANY queue=ALL
+OFPST_QUEUE request (xid=0x1): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1765,7 +1765,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 02 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.1) (xid=0x2):port=ANY queue=ALL
+OFPST_QUEUE request (OF1.1) (xid=0x2): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1775,7 +1775,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 03 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.2) (xid=0x2):port=ANY queue=ALL
+OFPST_QUEUE request (OF1.2) (xid=0x2): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1785,7 +1785,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 04 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.3) (xid=0x2):port=ANY queue=ALL
+OFPST_QUEUE request (OF1.3) (xid=0x2): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -3383,7 +3383,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x3):
  bundle_id=0x1 flags=atomic
-OFPT_PORT_MOD (OF1.4) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD

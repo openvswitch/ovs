@@ -934,7 +934,7 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
-    ds_put_cstr(string, "port: ");
+    ds_put_cstr(string, " port: ");
     ofputil_format_port(pm.port_no, string);
     ds_put_format(string, ": addr:"ETH_ADDR_FMT"\n",
                   ETH_ADDR_ARGS(pm.hw_addr));
@@ -1714,7 +1714,7 @@ ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
-    ds_put_cstr(string, "port=");
+    ds_put_cstr(string, " port=");
     ofputil_format_port(oqsr.port_no, string);
 
     ds_put_cstr(string, " queue=");
