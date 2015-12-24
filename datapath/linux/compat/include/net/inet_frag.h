@@ -14,7 +14,7 @@
 #endif
 
 #ifdef OVS_FRAGMENT_BACKPORT
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_LAST_IN
 #define q_flags(q) (q->last_in)
 #define qp_flags(qp) (qp->q.last_in)
 #else
