@@ -78,7 +78,7 @@ struct ipfrag_skb_cb
 struct ipq {
 	union {
 		struct inet_frag_queue q;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 		struct ovs_inet_frag_queue oq;
 #endif
 	};

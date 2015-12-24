@@ -22,6 +22,7 @@
 #define qp_flags(qp) (qp->q.flags)
 #endif
 
+#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 /**
  * struct ovs_inet_frag_queue - fragment queue
  *
@@ -44,6 +45,15 @@ static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
 #endif
 }
 #define inet_frag_evicting rpl_inet_frag_evicting
+#else /* HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR */
+#ifndef HAVE_INET_FRAG_EVICTING
+static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
+{
+	return !hlist_unhashed(&q->list_evictor);
+}
+#define inet_frag_evicting rpl_inet_frag_evicting
+#endif
+#endif
 
 static unsigned int rpl_frag_percpu_counter_batch = 130000;
 #define frag_percpu_counter_batch rpl_frag_percpu_counter_batch

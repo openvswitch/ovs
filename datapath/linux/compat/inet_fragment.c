@@ -130,7 +130,7 @@ static bool inet_fragq_should_evict(const struct inet_frag_queue *q)
 static unsigned int
 inet_evict_bucket(struct inet_frags *f, struct inet_frag_bucket *hb)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 	struct ovs_inet_frag_queue *ofq;
 #endif
 	struct inet_frag_queue *fq;
@@ -147,23 +147,23 @@ inet_evict_bucket(struct inet_frags *f, struct inet_frag_bucket *hb)
 		if (!del_timer(&fq->timer))
 			continue;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#ifdef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
+		hlist_add_head(&fq->list_evictor, &expired);
+#else
 		ofq = (struct ovs_inet_frag_queue *)fq;
 		hlist_add_head(&ofq->list_evictor, &expired);
-#else
-		hlist_add_head(&fq->list_evictor, &expired);
 #endif
 		++evicted;
 	}
 
 	spin_unlock(&hb->chain_lock);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
-	hlist_for_each_entry_safe(ofq, n, &expired, list_evictor)
-		f->frag_expire((unsigned long) &ofq->fq);
-#else
+#ifdef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 	hlist_for_each_entry_safe(fq, n, &expired, list_evictor)
 		f->frag_expire((unsigned long) fq);
+#else
+	hlist_for_each_entry_safe(ofq, n, &expired, list_evictor)
+		f->frag_expire((unsigned long) &ofq->fq);
 #endif
 
 	return evicted;
