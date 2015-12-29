@@ -36,6 +36,7 @@
 #include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-msgs.h"
+#include "ofp-prop.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/netronome-ext.h"
@@ -61,81 +62,6 @@ static ovs_be32 ofputil_encode_table_config(enum ofputil_table_miss,
                                             enum ofputil_table_eviction,
                                             enum ofputil_table_vacancy,
                                             enum ofp_version);
-
-struct ofp_prop_header {
-    ovs_be16 type;
-    ovs_be16 len;
-};
-
-struct ofp_prop_experimenter {
-    ovs_be16 type;          /* OFP*_EXPERIMENTER. */
-    ovs_be16 length;        /* Length in bytes of this property. */
-    ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
-                             * in struct ofp_experimenter_header. */
-    ovs_be32 exp_type;      /* Experimenter defined. */
-};
-
-/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
- * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code.
- *
- * This function pulls the property's stated size padded out to a multiple of
- * 'alignment' bytes.  The common case in OpenFlow is an 'alignment' of 8, so
- * you can use ofputil_pull_property() for that case. */
-static enum ofperr
-ofputil_pull_property__(struct ofpbuf *msg, struct ofpbuf *property,
-                        unsigned int alignment, uint16_t *typep)
-{
-    struct ofp_prop_header *oph;
-    unsigned int padded_len;
-    unsigned int len;
-
-    if (msg->size < sizeof *oph) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    oph = msg->data;
-    len = ntohs(oph->len);
-    padded_len = ROUND_UP(len, alignment);
-    if (len < sizeof *oph || padded_len > msg->size) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    *typep = ntohs(oph->type);
-    if (property) {
-        ofpbuf_use_const(property, msg->data, len);
-    }
-    ofpbuf_pull(msg, padded_len);
-    return 0;
-}
-
-/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
- * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code.
- *
- * This function pulls the property's stated size padded out to a multiple of
- * 8 bytes, which is the common case for OpenFlow properties. */
-static enum ofperr
-ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
-                      uint16_t *typep)
-{
-    return ofputil_pull_property__(msg, property, 8, typep);
-}
-
-static void OVS_PRINTF_FORMAT(2, 3)
-log_property(bool loose, const char *message, ...)
-{
-    enum vlog_level level = loose ? VLL_DBG : VLL_WARN;
-    if (!vlog_should_drop(THIS_MODULE, level, &bad_ofmsg_rl)) {
-        va_list args;
-
-        va_start(args, message);
-        vlog_valist(THIS_MODULE, level, message, args);
-        va_end(args);
-    }
-}
 
 static enum ofperr
 ofputil_check_mask(uint16_t type, uint32_t mask)
@@ -185,41 +111,6 @@ ofputil_check_mask(uint16_t type, uint32_t mask)
         break;
     }
     return 0;
-}
-
-static size_t
-start_property(struct ofpbuf *msg, uint16_t type)
-{
-    size_t start_ofs = msg->size;
-    struct ofp_prop_header *oph;
-
-    oph = ofpbuf_put_uninit(msg, sizeof *oph);
-    oph->type = htons(type);
-    oph->len = htons(4);        /* May be updated later by end_property(). */
-    return start_ofs;
-}
-
-static void
-end_property(struct ofpbuf *msg, size_t start_ofs)
-{
-    struct ofp_prop_header *oph;
-
-    oph = ofpbuf_at_assert(msg, start_ofs, sizeof *oph);
-    oph->len = htons(msg->size - start_ofs);
-    ofpbuf_padto(msg, ROUND_UP(msg->size, 8));
-}
-
-/* Appends a property to 'msg' whose type is 'type' and whose contents is a
- * series of property headers, one for each 1-bit in 'bitmap'. */
-static void
-put_bitmap_property(struct ofpbuf *msg, uint16_t type, uint64_t bitmap)
-{
-    size_t start_ofs = start_property(msg, type);
-
-    for (; bitmap; bitmap = zero_rightmost_1bit(bitmap)) {
-        start_property(msg, rightmost_1bit_idx(bitmap));
-    }
-    end_property(msg, start_ofs);
 }
 
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
@@ -3896,7 +3787,7 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
         enum ofperr error;
         uint16_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
@@ -3907,7 +3798,8 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
             break;
 
         default:
-            log_property(true, "unknown port property %"PRIu16, type);
+            OFPPROP_LOG(&bad_ofmsg_rl, true,
+                        "unknown port property %"PRIu16, type);
             error = 0;
             break;
         }
@@ -4500,7 +4392,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
             enum ofperr error;
             uint16_t type;
 
-            error = ofputil_pull_property(&b, &property, &type);
+            error = ofpprop_pull(&b, &property, &type);
             if (error) {
                 return error;
             }
@@ -4511,7 +4403,8 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
                 break;
 
             default:
-                log_property(loose, "unknown port_mod property %"PRIu16, type);
+                OFPPROP_LOG(&bad_ofmsg_rl, loose,
+                            "unknown port_mod property %"PRIu16, type);
                 if (loose) {
                     error = 0;
                 } else if (type == OFPPMPT14_EXPERIMENTER) {
@@ -4607,7 +4500,7 @@ pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
 {
     enum ofperr error;
 
-    error = ofputil_pull_property(msg, payload, typep);
+    error = ofpprop_pull(msg, payload, typep);
     if (payload && !error) {
         ofpbuf_pull(payload, sizeof(struct ofp_prop_header));
     }
@@ -4624,7 +4517,7 @@ parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
         uint16_t type;
         enum ofperr error;
 
-        error = ofputil_pull_property__(payload, NULL, 1, &type);
+        error = ofpprop_pull__(payload, NULL, 1, &type);
         if (error) {
             return error;
         }
@@ -4655,7 +4548,7 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
          *
          * Anyway, we just assume they're all glommed together on byte
          * boundaries. */
-        error = ofputil_pull_property__(payload, NULL, 1, &ofpit);
+        error = ofpprop_pull__(payload, NULL, 1, &ofpit);
         if (error) {
             return error;
         }
@@ -4859,8 +4752,8 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         case OFPTFPT13_EXPERIMENTER:
         case OFPTFPT13_EXPERIMENTER_MISS:
         default:
-            log_property(loose, "unknown table features property %"PRIu16,
-                         type);
+            OFPPROP_LOG(&bad_ofmsg_rl, loose,
+                        "unknown table features property %"PRIu16, type);
             error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
             break;
         }
@@ -4922,12 +4815,12 @@ put_fields_property(struct ofpbuf *reply,
     size_t start_ofs;
     int field;
 
-    start_ofs = start_property(reply, property);
+    start_ofs = ofpprop_start(reply, property);
     BITMAP_FOR_EACH_1 (field, MFF_N_IDS, fields->bm) {
         nx_put_header(reply, field, version,
                       masks && bitmap_is_set(masks->bm, field));
     }
-    end_property(reply, start_ofs);
+    ofpprop_end(reply, start_ofs);
 }
 
 static void
@@ -4937,9 +4830,9 @@ put_table_action_features(struct ofpbuf *reply,
                           enum ofp13_table_feature_prop_type set_fields_type,
                           int miss_offset, enum ofp_version version)
 {
-    put_bitmap_property(reply, actions_type + miss_offset,
-                        ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
-                                                        version)));
+    ofpprop_put_bitmap(reply, actions_type + miss_offset,
+                       ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
+                                                       version)));
     put_fields_property(reply, &taf->set_fields, NULL,
                         set_fields_type + miss_offset, version);
 }
@@ -4952,15 +4845,15 @@ put_table_instruction_features(
     size_t start_ofs;
     uint8_t table_id;
 
-    put_bitmap_property(reply, OFPTFPT13_INSTRUCTIONS + miss_offset,
-                        ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
-                                                         version)));
+    ofpprop_put_bitmap(reply, OFPTFPT13_INSTRUCTIONS + miss_offset,
+                       ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
+                                                        version)));
 
-    start_ofs = start_property(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
+    start_ofs = ofpprop_start(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
     BITMAP_FOR_EACH_1 (table_id, 255, tif->next) {
         ofpbuf_put(reply, &table_id, 1);
     }
-    end_property(reply, start_ofs);
+    ofpprop_end(reply, start_ofs);
 
     put_table_action_features(reply, &tif->write,
                               OFPTFPT13_WRITE_ACTIONS,
@@ -5086,7 +4979,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
         enum ofperr error;
         uint16_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
@@ -5101,7 +4994,8 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
             break;
 
         default:
-            log_property(true, "unknown table_desc property %"PRIu16, type);
+            OFPPROP_LOG(&bad_ofmsg_rl, true,
+                        "unknown table_desc property %"PRIu16, type);
             error = 0;
             break;
         }
@@ -5189,20 +5083,20 @@ parse_table_mod_vacancy_property(struct ofpbuf *property,
     tm->table_vacancy.vacancy_down = otv->vacancy_down;
     tm->table_vacancy.vacancy_up = otv->vacancy_up;
     if (tm->table_vacancy.vacancy_down > tm->table_vacancy.vacancy_up) {
-        log_property(false, "Value of vacancy_down is greater than "
-                     "vacancy_up");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "Value of vacancy_down is greater than vacancy_up");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
     if (tm->table_vacancy.vacancy_down > 100 ||
         tm->table_vacancy.vacancy_up > 100) {
-        log_property(false, "Vacancy threshold percentage should not be"
-                     "greater than 100");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "Vacancy threshold percentage "
+                    "should not be greater than 100");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
     tm->table_vacancy.vacancy = otv->vacancy;
     if (tm->table_vacancy.vacancy) {
-        log_property(false, "Vacancy value should be zero for table-mod "
-                     "messages");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "Vacancy value should be zero for table-mod messages");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
     return 0;
@@ -5374,7 +5268,7 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
             enum ofperr error;
             uint16_t type;
 
-            error = ofputil_pull_property(&b, &property, &type);
+            error = ofpprop_pull(&b, &property, &type);
             if (error) {
                 return error;
             }
@@ -7295,7 +7189,7 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
         enum ofperr error;
         uint16_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
@@ -7306,7 +7200,8 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
             break;
 
         default:
-            log_property(true, "unknown port stats property %"PRIu16, type);
+            OFPPROP_LOG(&bad_ofmsg_rl, true,
+                        "unknown port stats property %"PRIu16, type);
             error = 0;
             break;
         }
@@ -7909,11 +7804,11 @@ ofputil_put_ofp15_group_bucket_prop_weight(ovs_be16 weight,
     size_t start_ofs;
     struct ofp15_group_bucket_prop_weight *prop;
 
-    start_ofs = start_property(openflow, OFPGBPT15_WEIGHT);
+    start_ofs = ofpprop_start(openflow, OFPGBPT15_WEIGHT);
     ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
     prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
     prop->weight = weight;
-    end_property(openflow, start_ofs);
+    ofpprop_end(openflow, start_ofs);
 }
 
 static void
@@ -7923,11 +7818,11 @@ ofputil_put_ofp15_group_bucket_prop_watch(ovs_be32 watch, uint16_t type,
     size_t start_ofs;
     struct ofp15_group_bucket_prop_watch *prop;
 
-    start_ofs = start_property(openflow, type);
+    start_ofs = ofpprop_start(openflow, type);
     ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
     prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
     prop->watch = watch;
-    end_property(openflow, start_ofs);
+    ofpprop_end(openflow, start_ofs);
 }
 
 static void
@@ -7986,7 +7881,7 @@ ofputil_put_group_prop_ntr_selection_method(enum ofp_version ofp_version,
     prop->exp_type = htonl(NTRT_SELECTION_METHOD);
     strcpy(prop->selection_method, gp->selection_method);
     prop->selection_method_param = htonll(gp->selection_method_param);
-    end_property(openflow, start);
+    ofpprop_end(openflow, start);
 }
 
 static void
@@ -8146,8 +8041,8 @@ parse_ofp15_group_bucket_prop_weight(const struct ofpbuf *payload,
     struct ofp15_group_bucket_prop_weight *prop = payload->data;
 
     if (payload->size != sizeof *prop) {
-        log_property(false, "OpenFlow bucket weight property length "
-                     "%u is not valid", payload->size);
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "OpenFlow bucket weight property "
+                    "length %u is not valid", payload->size);
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
@@ -8163,8 +8058,8 @@ parse_ofp15_group_bucket_prop_watch(const struct ofpbuf *payload,
     struct ofp15_group_bucket_prop_watch *prop = payload->data;
 
     if (payload->size != sizeof *prop) {
-        log_property(false, "OpenFlow bucket watch port or group "
-                     "property length %u is not valid", payload->size);
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "OpenFlow bucket watch port or "
+                    "group property length %u is not valid", payload->size);
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
@@ -8235,7 +8130,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
             struct ofpbuf payload;
             uint16_t type;
 
-            err = ofputil_pull_property(&properties, &payload, &type);
+            err = ofpprop_pull(&properties, &payload, &type);
             if (err) {
                 goto err;
             }
@@ -8256,8 +8151,8 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
                 break;
 
             default:
-                log_property(false, "unknown group bucket property %"PRIu16,
-                             type);
+                OFPPROP_LOG(&bad_ofmsg_rl, false,
+                            "unknown group bucket property %"PRIu16, type);
                 err = OFPERR_OFPBPC_BAD_TYPE;
                 break;
             }
@@ -8328,8 +8223,8 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     case OFPGT11_ALL:
     case OFPGT11_INDIRECT:
     case OFPGT11_FF:
-        log_property(false, "ntr selection method property is only allowed "
-                     "for select groups");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method property is "
+                    "only allowed for select groups");
         return OFPERR_OFPBPC_BAD_VALUE;
     default:
         OVS_NOT_REACHED();
@@ -8342,29 +8237,31 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     case OFPGC15_DELETE:
     case OFPGC15_INSERT_BUCKET:
     case OFPGC15_REMOVE_BUCKET:
-        log_property(false, "ntr selection method property is only allowed "
-                     "for add and delete group modifications");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method property is "
+                    "only allowed for add and delete group modifications");
         return OFPERR_OFPBPC_BAD_VALUE;
     default:
         OVS_NOT_REACHED();
     }
 
     if (payload->size < sizeof *prop) {
-        log_property(false, "ntr selection method property length "
-                     "%u is not valid", payload->size);
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method property "
+                    "length %u is not valid", payload->size);
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
     method_len = strnlen(prop->selection_method, NTR_MAX_SELECTION_METHOD_LEN);
 
     if (method_len == NTR_MAX_SELECTION_METHOD_LEN) {
-        log_property(false, "ntr selection method is not null terminated");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "ntr selection method is not null terminated");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
     if (strcmp("hash", prop->selection_method)) {
-        log_property(false, "ntr selection method '%s' is not supported",
-                     prop->selection_method);
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "ntr selection method '%s' is not supported",
+                    prop->selection_method);
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
@@ -8372,8 +8269,8 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     gp->selection_method_param = ntohll(prop->selection_method_param);
 
     if (!method_len && gp->selection_method_param) {
-        log_property(false, "ntr selection method parameter is non-zero but "
-                     "selection method is empty");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method parameter is "
+                    "non-zero but selection method is empty");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
@@ -8381,15 +8278,16 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
 
     fields_len = ntohs(prop->length) - sizeof *prop;
     if (!method_len && fields_len) {
-        log_property(false, "ntr selection method parameter is zero "
-                     "but fields are provided");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method parameter is "
+                    "zero but fields are provided");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
     error = oxm_pull_field_array(payload->data, fields_len,
                                  &gp->fields);
     if (error) {
-        log_property(false, "ntr selection method fields are invalid");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "ntr selection method fields are invalid");
         return error;
     }
 
@@ -8411,8 +8309,9 @@ parse_group_prop_ntr(struct ofpbuf *payload, uint32_t exp_type,
         break;
 
     default:
-        log_property(false, "unknown group property ntr experimenter type "
-                     "%"PRIu32, exp_type);
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "unknown group property ntr experimenter type %"PRIu32,
+                    exp_type);
         error = OFPERR_OFPBPC_BAD_TYPE;
         break;
     }
@@ -8446,8 +8345,9 @@ parse_ofp15_group_prop_exp(struct ofpbuf *payload,
         break;
 
     default:
-        log_property(false, "unknown group property experimenter %"PRIu16,
-                     experimenter);
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "unknown group property experimenter %"PRIu16,
+                    experimenter);
         error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
         break;
     }
@@ -8472,7 +8372,7 @@ parse_ofp15_group_properties(struct ofpbuf *msg,
         enum ofperr error;
         uint16_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
@@ -8484,7 +8384,8 @@ parse_ofp15_group_properties(struct ofpbuf *msg,
             break;
 
         default:
-            log_property(false, "unknown group property %"PRIu16, type);
+            OFPPROP_LOG(&bad_ofmsg_rl, false,
+                        "unknown group property %"PRIu16, type);
             error = OFPERR_OFPBPC_BAD_TYPE;
             break;
         }
@@ -9701,7 +9602,7 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
             enum ofperr error;
             uint16_t type;
 
-            error = ofputil_pull_property(&b, &property, &type);
+            error = ofpprop_pull(&b, &property, &type);
             if (error) {
                 return error;
             }

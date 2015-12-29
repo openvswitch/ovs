@@ -209,6 +209,34 @@ enum ofp_port_features {
     OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
 };
 
+/* Generic OpenFlow property header, as used by various messages in OF1.3+, and
+ * especially in OF1.4.
+ *
+ * The OpenFlow specs prefer to define a new structure with a specialized name
+ * each time this property structure comes up: struct
+ * ofp_port_desc_prop_header, struct ofp_controller_status_prop_header, struct
+ * ofp_table_mod_prop_header, and more.  They're all the same, so it's easier
+ * to unify them.
+ */
+struct ofp_prop_header {
+    ovs_be16 type;
+    ovs_be16 len;
+};
+OFP_ASSERT(sizeof(struct ofp_prop_header) == 4);
+
+/* Generic OpenFlow experimenter property header.
+ *
+ * Again the OpenFlow specs define this over and over again and it's easier to
+ * unify them. */
+struct ofp_prop_experimenter {
+    ovs_be16 type;          /* Generally 0xffff (in one case 0xfffe). */
+    ovs_be16 len;           /* Length in bytes of this property. */
+    ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
+                             * in struct ofp_experimenter_header. */
+    ovs_be32 exp_type;      /* Experimenter defined. */
+};
+OFP_ASSERT(sizeof(struct ofp_prop_experimenter) == 12);
+
 /* Switch features. */
 struct ofp_switch_features {
     ovs_be64 datapath_id;   /* Datapath unique ID.  The lower 48-bits are for
