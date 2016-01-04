@@ -1109,7 +1109,7 @@ fail:
  */
 NTSTATUS
 OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                            UINT32 *replyLen)
+                             UINT32 *replyLen)
 {
     NDIS_STATUS status;
     BOOLEAN rc;
@@ -1135,7 +1135,7 @@ OvsSubscribePacketCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
-    join = NlAttrGetU8(attrs[OVS_NL_ATTR_PACKET_PID]);
+    join = NlAttrGetU8(attrs[OVS_NL_ATTR_PACKET_SUBSCRIBE]);
     pid = NlAttrGetU32(attrs[OVS_NL_ATTR_PACKET_PID]);
 
     /* The socket subscribed with must be the same socket we perform receive*/
