@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2015 Nicira, Inc.
+ * Copyright (c) 2009-2016 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2033,24 +2033,18 @@ flow_mod_init(struct ofputil_flow_mod *fm,
               const struct ofpact *ofpacts, size_t ofpacts_len,
               enum ofp_flow_mod_command command)
 {
-    memset(fm, 0, sizeof *fm);
-    fm->match = *match;
-    fm->priority = priority;
-    fm->cookie = 0;
-    fm->new_cookie = 0;
-    fm->modify_cookie = false;
-    fm->table_id = 0;
-    fm->command = command;
-    fm->idle_timeout = 0;
-    fm->hard_timeout = 0;
-    fm->importance = 0;
-    fm->buffer_id = UINT32_MAX;
-    fm->out_port = OFPP_ANY;
-    fm->out_group = OFPG_ANY;
-    fm->flags = 0;
-    fm->ofpacts = CONST_CAST(struct ofpact *, ofpacts);
-    fm->ofpacts_len = ofpacts_len;
-    fm->delete_reason = OFPRR_DELETE;
+    *fm = (struct ofputil_flow_mod) {
+        .match = *match,
+        .priority = priority,
+        .table_id = 0,
+        .command = command,
+        .buffer_id = UINT32_MAX,
+        .out_port = OFPP_ANY,
+        .out_group = OFPG_ANY,
+        .ofpacts = CONST_CAST(struct ofpact *, ofpacts),
+        .ofpacts_len = ofpacts_len,
+        .delete_reason = OFPRR_DELETE,
+    };
 }
 
 static int
