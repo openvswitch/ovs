@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -5660,23 +5660,17 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     struct rule_dpif *rule;
     int error;
 
-    ofm.fm.match = *match;
-    ofm.fm.priority = priority;
-    ofm.fm.new_cookie = htonll(0);
-    ofm.fm.cookie = htonll(0);
-    ofm.fm.cookie_mask = htonll(0);
-    ofm.fm.modify_cookie = false;
-    ofm.fm.table_id = TBL_INTERNAL;
-    ofm.fm.command = OFPFC_ADD;
-    ofm.fm.idle_timeout = idle_timeout;
-    ofm.fm.hard_timeout = 0;
-    ofm.fm.importance = 0;
-    ofm.fm.buffer_id = 0;
-    ofm.fm.out_port = 0;
-    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    ofm.fm.ofpacts = ofpacts->data;
-    ofm.fm.ofpacts_len = ofpacts->size;
-    ofm.fm.delete_reason = OVS_OFPRR_NONE;
+    ofm.fm = (struct ofputil_flow_mod) {
+        .match = *match,
+        .priority = priority,
+        .table_id = TBL_INTERNAL,
+        .command = OFPFC_ADD,
+        .idle_timeout = idle_timeout,
+        .flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY,
+        .ofpacts = ofpacts->data,
+        .ofpacts_len = ofpacts->size,
+        .delete_reason = OVS_OFPRR_NONE,
+    };
 
     error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
@@ -5705,15 +5699,13 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     struct ofproto_flow_mod ofm;
     int error;
 
-    ofm.fm.match = *match;
-    ofm.fm.priority = priority;
-    ofm.fm.new_cookie = htonll(0);
-    ofm.fm.cookie = htonll(0);
-    ofm.fm.cookie_mask = htonll(0);
-    ofm.fm.modify_cookie = false;
-    ofm.fm.table_id = TBL_INTERNAL;
-    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    ofm.fm.command = OFPFC_DELETE_STRICT;
+    ofm.fm = (struct ofputil_flow_mod) {
+        .match = *match,
+        .priority = priority,
+        .table_id = TBL_INTERNAL,
+        .flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY,
+        .command = OFPFC_DELETE_STRICT,
+    };
 
     error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {

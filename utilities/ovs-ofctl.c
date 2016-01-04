@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2899,24 +2899,24 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
                   enum ofputil_protocol protocol, struct ovs_list *packets)
 {
     const struct fte_version *version = fte->versions[index];
-    struct ofputil_flow_mod fm;
     struct ofpbuf *ofm;
 
+    struct ofputil_flow_mod fm = {
+        .priority = fte->rule.priority,
+        .new_cookie = version->cookie,
+        .modify_cookie = true,
+        .table_id = version->table_id,
+        .command = command,
+        .idle_timeout = version->idle_timeout,
+        .hard_timeout = version->hard_timeout,
+        .importance = version->importance,
+        .buffer_id = UINT32_MAX,
+        .out_port = OFPP_ANY,
+        .out_group = OFPG_ANY,
+        .flags = version->flags,
+        .delete_reason = OFPRR_DELETE,
+    };
     minimatch_expand(&fte->rule.match, &fm.match);
-    fm.priority = fte->rule.priority;
-    fm.cookie = htonll(0);
-    fm.cookie_mask = htonll(0);
-    fm.new_cookie = version->cookie;
-    fm.modify_cookie = true;
-    fm.table_id = version->table_id;
-    fm.command = command;
-    fm.idle_timeout = version->idle_timeout;
-    fm.hard_timeout = version->hard_timeout;
-    fm.importance = version->importance;
-    fm.buffer_id = UINT32_MAX;
-    fm.out_port = OFPP_ANY;
-    fm.out_group = OFPG_ANY;
-    fm.flags = version->flags;
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
         command == OFPFC_MODIFY_STRICT) {
         fm.ofpacts = version->ofpacts;
@@ -2925,7 +2925,6 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         fm.ofpacts = NULL;
         fm.ofpacts_len = 0;
     }
-    fm.delete_reason = OFPRR_DELETE;
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
     list_push_back(packets, &ofm->list_node);
