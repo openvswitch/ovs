@@ -214,6 +214,14 @@ Examples of common tags follow.
 
         Reported-at: http://openvswitch.org/pipermail/dev/2014-June/040952.html
 
+    Submitted-at: <URL>
+
+        If a patch was submitted somewhere other than the Open vSwitch
+        development mailing list, such as a GitHub pull request, this header can
+        be used to reference the source.
+
+        Submitted-at: https://github.com/openvswitch/ovs/pull/92
+
     VMware-BZ: #1234567
     ONF-JIRA: EXT-12345
 
