@@ -749,17 +749,26 @@ class Transaction(object):
        of Idl.change_seqno.  (Transaction.commit_block() calls Idl.run().)"""
 
     # Status values that Transaction.commit() can return.
-    UNCOMMITTED = "uncommitted"  # Not yet committed or aborted.
-    UNCHANGED = "unchanged"      # Transaction didn't include any changes.
-    INCOMPLETE = "incomplete"    # Commit in progress, please wait.
-    ABORTED = "aborted"          # ovsdb_idl_txn_abort() called.
-    SUCCESS = "success"          # Commit successful.
-    TRY_AGAIN = "try again"      # Commit failed because a "verify" operation
-                                 # reported an inconsistency, due to a network
-                                 # problem, or other transient failure.  Wait
-                                 # for a change, then try again.
-    NOT_LOCKED = "not locked"    # Server hasn't given us the lock yet.
-    ERROR = "error"              # Commit failed due to a hard error.
+
+    # Not yet committed or aborted.
+    UNCOMMITTED = "uncommitted"
+    # Transaction didn't include any changes.
+    UNCHANGED = "unchanged"
+    # Commit in progress, please wait.
+    INCOMPLETE = "incomplete"
+    # ovsdb_idl_txn_abort() called.
+    ABORTED = "aborted"
+    # Commit successful.
+    SUCCESS = "success"
+    # Commit failed because a "verify" operation
+    # reported an inconsistency, due to a network
+    # problem, or other transient failure.  Wait
+    # for a change, then try again.
+    TRY_AGAIN = "try again"
+    # Server hasn't given us the lock yet.
+    NOT_LOCKED = "not locked"
+    # Commit failed due to a hard error.
+    ERROR = "error"
 
     @staticmethod
     def status_to_string(status):

@@ -325,7 +325,7 @@ def _monitor_daemon(daemon_pid):
                 vlog.info("%s, exiting" % status_msg)
                 sys.exit(0)
 
-   # Running in new daemon process.
+    # Running in new daemon process.
 
 
 def _close_standard_fds():
