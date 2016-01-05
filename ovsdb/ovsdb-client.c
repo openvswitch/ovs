@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ int
 main(int argc, char *argv[])
 {
     const struct ovsdb_client_command *command;
-    const char *database;
+    char *database;
     struct jsonrpc *rpc;
 
     ovs_cmdl_proctitle_init(argc, argv);
@@ -128,12 +128,13 @@ main(int argc, char *argv[])
         fetch_dbs(rpc, &dbs);
         if (argc - optind > command->min_args
             && svec_contains(&dbs, argv[optind])) {
-            database = argv[optind++];
+            database = xstrdup(argv[optind++]);
         } else if (dbs.n == 1) {
             database = xstrdup(dbs.names[0]);
         } else if (svec_contains(&dbs, "Open_vSwitch")) {
-            database = "Open_vSwitch";
+            database = xstrdup("Open_vSwitch");
         } else {
+            jsonrpc_close(rpc);
             ovs_fatal(0, "no default database for `%s' command, please "
                       "specify a database name", command->name);
         }
@@ -150,6 +151,7 @@ main(int argc, char *argv[])
 
     command->handler(rpc, database, argc - optind, argv + optind);
 
+    free(database);
     jsonrpc_close(rpc);
 
     if (ferror(stdout)) {
@@ -455,6 +457,7 @@ do_list_tables(struct jsonrpc *rpc, const char *database,
     }
     ovsdb_schema_destroy(schema);
     table_print(&t, &table_style);
+    table_destroy(&t);
 }
 
 static void
@@ -493,6 +496,7 @@ do_list_columns(struct jsonrpc *rpc, const char *database,
     }
     ovsdb_schema_destroy(schema);
     table_print(&t, &table_style);
+    table_destroy(&t);
 }
 
 static void
