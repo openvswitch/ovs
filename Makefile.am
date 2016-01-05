@@ -342,9 +342,6 @@ endif
 
 if HAVE_FLAKE8
 ALL_LOCAL += flake8-check
-# E111 indentation is not a multiple of four
-# E112 expected an indented block
-# E113 unexpected indentation
 # E123 closing bracket does not match indentation of opening bracket's line
 # E126 continuation line over-indented for hanging indent
 # E127 continuation line over-indented for visual indent
@@ -353,7 +350,7 @@ ALL_LOCAL += flake8-check
 # E131 continuation line unaligned for hanging indent
 # E501 line too long (80 > 79 characters)
 flake8-check: $(FLAKE8_PYFILES)
-	$(AM_V_GEN) if flake8 $^ --ignore=E111,E112,E113,E123,E126,E127,E128,E129,E131,E501 ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
+	$(AM_V_GEN) if flake8 $^ --ignore=E123,E126,E127,E128,E129,E131,E501 ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk
