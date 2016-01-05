@@ -1039,6 +1039,7 @@ parse_ofp_flow_mod_file(const char *file_name, int command,
         error = parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command,
                                        &usable);
         if (error) {
+            char *err_msg;
             size_t i;
 
             for (i = 0; i < *n_fms; i++) {
@@ -1053,7 +1054,9 @@ parse_ofp_flow_mod_file(const char *file_name, int command,
                 fclose(stream);
             }
 
-            return xasprintf("%s:%d: %s", file_name, line_number, error);
+            err_msg = xasprintf("%s:%d: %s", file_name, line_number, error);
+            free(error);
+            return err_msg;
         }
         *usable_protocols &= usable; /* Each line can narrow the set. */
         *n_fms += 1;
