@@ -759,10 +759,13 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
     void *user_data = NULL;
     size_t user_data_size = 0;
     bool include_actions = false;
+    int res;
 
     if (!ovs_scan(s, "userspace(pid=%"SCNi32"%n", &pid, &n)) {
         return -EINVAL;
     }
+
+    ofpbuf_init(&buf, 16);
 
     {
         uint32_t output;
@@ -790,8 +793,6 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             user_data_size = sizeof cookie.sflow;
         } else if (ovs_scan(&s[n], ",slow_path(%n",
                             &n1)) {
-            int res;
-
             n += n1;
             cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
             cookie.slow_path.unused = 0;
@@ -801,7 +802,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
                                   &cookie.slow_path.reason,
                                   SLOW_PATH_REASON_MASK, NULL);
             if (res < 0 || s[n + res] != ')') {
-                return res;
+                goto out;
             }
             n += res + 1;
 
@@ -834,10 +835,10 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             char *end;
 
             n += n1;
-            ofpbuf_init(&buf, 16);
             end = ofpbuf_put_hex(&buf, &s[n], NULL);
             if (end[0] != ')') {
-                return -EINVAL;
+                res = -EINVAL;
+                goto out;
             }
             user_data = buf.data;
             user_data_size = buf.size;
@@ -859,15 +860,18 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
                      &tunnel_out_port, &n1)) {
             odp_put_userspace_action(pid, user_data, user_data_size,
                                      tunnel_out_port, include_actions, actions);
-            return n + n1;
+            res = n + n1;
         } else if (s[n] == ')') {
             odp_put_userspace_action(pid, user_data, user_data_size,
                                      ODPP_NONE, include_actions, actions);
-            return n + 1;
+            res = n + 1;
+        } else {
+            res = -EINVAL;
         }
     }
-
-    return -EINVAL;
+out:
+    ofpbuf_uninit(&buf);
+    return res;
 }
 
 static int
