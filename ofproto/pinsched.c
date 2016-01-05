@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,18 +195,11 @@ pinsched_send(struct pinsched *ps, ofp_port_t port_no,
         list_push_back(txq, &packet->list_node);
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
-        struct pinqueue *q;
-
-        /* We might be called with a buffer obtained from dpif_recv() that has
-         * much more allocated space than actual content most of the time.
-         * Since we're going to store the packet for some time, free up that
-         * otherwise wasted space. */
-        ofpbuf_trim(packet);
-
         if (ps->n_queued * 1000 >= ps->token_bucket.burst) {
             drop_packet(ps);
         }
-        q = pinqueue_get(ps, port_no);
+
+        struct pinqueue *q = pinqueue_get(ps, port_no);
         list_push_back(&q->packets, &packet->list_node);
         q->n++;
         ps->n_queued++;
