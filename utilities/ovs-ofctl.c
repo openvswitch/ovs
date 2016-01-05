@@ -1316,6 +1316,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
     }
 
     bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    ofpbuf_list_delete(&requests);
     vconn_close(vconn);
 }
 
@@ -2981,6 +2982,8 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
     } else {
         transact_multiple_noreply(vconn, &requests);
     }
+
+    ofpbuf_list_delete(&requests);
     vconn_close(vconn);
 
     fte_free_all(&tables);
