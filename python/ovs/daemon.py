@@ -22,7 +22,6 @@ import time
 
 import ovs.dirs
 import ovs.fatal_signal
-#import ovs.lockfile
 import ovs.process
 import ovs.socket_util
 import ovs.timeval
@@ -254,7 +253,6 @@ def _fork_and_wait_for_startup():
         # Running in parent process.
         os.close(rfd)
         ovs.timeval.postfork()
-        #ovs.lockfile.postfork()
 
         global _daemonize_fd
         _daemonize_fd = wfd
