@@ -592,7 +592,8 @@ class Row(object):
 
         if ((self._table.name in self._idl.readonly) and
             (column_name in self._idl.readonly[self._table.name])):
-            vlog.warn("attempting to write to readonly column %s" % column_name)
+            vlog.warn("attempting to write to readonly column %s"
+                      % column_name)
             return
 
         column = self._table.columns[column_name]
@@ -1117,7 +1118,8 @@ class Transaction(object):
         # transaction only does writes of existing values, without making any
         # real changes, we will drop the whole transaction later in
         # ovsdb_idl_txn_commit().)
-        if not column.alert and row._data and row._data.get(column.name) == datum:
+        if (not column.alert and row._data and
+                row._data.get(column.name) == datum):
             new_value = row._changes.get(column.name)
             if new_value is None or new_value == datum:
                 return

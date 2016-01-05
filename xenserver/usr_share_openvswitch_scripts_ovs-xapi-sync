@@ -81,7 +81,8 @@ def get_network_by_bridge(br_name):
                 " XAPI session could not be initialized" % br_name)
         return None
 
-    recs = session.xenapi.network.get_all_records_where('field "bridge"="%s"' % br_name)
+    recs = session.xenapi.network.get_all_records_where(
+            'field "bridge"="%s"' % br_name)
     if len(recs) > 0:
         return recs.values()[0]
 
