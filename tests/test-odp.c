@@ -109,6 +109,7 @@ parse_keys(bool wc_keys)
 
     next:
         ofpbuf_uninit(&odp_key);
+        ofpbuf_uninit(&odp_mask);
     }
     ds_destroy(&in);
 
