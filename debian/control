@@ -100,8 +100,7 @@ Description: Open vSwitch switch implementations
 
 Package: ovn-common
 Architecture: linux-any
-Depends: openvswitch-switch (= ${binary:Version}),
-         openvswitch-common (= ${binary:Version}),
+Depends: openvswitch-common (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: OVN common components
