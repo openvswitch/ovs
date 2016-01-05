@@ -130,7 +130,7 @@ class Vlog:
         matches = formatting.match(match)
         # Do we need to apply padding?
         if not matches.group(1) and replace != "":
-            replace = replace.center(len(replace)+2)
+            replace = replace.center(len(replace) + 2)
         # Does the field have a minimum width
         if matches.group(2):
             min_width = int(matches.group(2))

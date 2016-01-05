@@ -37,7 +37,7 @@ def unixctl_echo(conn, argv, aux):
 
 
 def unixctl_echo_error(conn, argv, aux):
-    assert aux ==  "aux_echo_error"
+    assert aux == "aux_echo_error"
     conn.reply_error(str(argv))
 
 

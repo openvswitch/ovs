@@ -60,7 +60,7 @@ class UdpSender(DatagramProtocol):
     def startProtocol(self):
         self.looper = LoopingCall(self.sendData)
         period = self.duration / float(self.count)
-        self.looper.start(period , now = False)
+        self.looper.start(period, now=False)
 
     def stopProtocol(self):
         if (self.looper is not None):

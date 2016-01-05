@@ -153,7 +153,7 @@ def from_string(s):
 
 
 class Parser(object):
-    ## Maximum height of parsing stack. ##
+    # Maximum height of parsing stack. #
     MAX_HEIGHT = 1000
 
     def __init__(self, check_trailer=False):

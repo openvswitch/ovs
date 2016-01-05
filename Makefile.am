@@ -343,7 +343,7 @@ endif
 if HAVE_FLAKE8
 ALL_LOCAL += flake8-check
 flake8-check: $(FLAKE8_PYFILES)
-	$(AM_V_GEN) if flake8 $^ --ignore=E111,E112,E113,E123,E126,E127,E128,E129,E131,E201,E203,E222,E225,E226,E231,E241,E251,E261,E262,E265,E271,E501,E502,E703,E713,W601 ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
+	$(AM_V_GEN) if flake8 $^ --ignore=E111,E112,E113,E123,E126,E127,E128,E129,E131,E501,E502,E703,E713,W601 ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk
