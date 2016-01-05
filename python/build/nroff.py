@@ -88,7 +88,8 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
             elif node.hasAttribute('db'):
                 s += node.attributes['db'].nodeValue
             else:
-                raise error.Error("'ref' lacks required attributes: %s" % node.attributes.keys())
+                raise error.Error("'ref' lacks required attributes: %s"
+                                  % node.attributes.keys())
             return s + font
         elif node.tagName in ['var', 'dfn', 'i']:
             s = r'\fI'
@@ -96,7 +97,8 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
                 s += inline_xml_to_nroff(child, r'\fI', to_upper, newline)
             return s + font
         else:
-            raise error.Error("element <%s> unknown or invalid here" % node.tagName)
+            raise error.Error("element <%s> unknown or invalid here"
+                              % node.tagName)
     elif node.nodeType == node.COMMENT_NODE:
         return ''
     else:
@@ -145,7 +147,8 @@ def diagram_header_to_nroff(header_node):
 
     pic_s = ""
     for f in header_fields:
-        pic_s += "  %s: box \"%s\" width %s" % (f['tag'], f['name'], f['width'])
+        pic_s += "  %s: box \"%s\" width %s" % (f['tag'], f['name'],
+                                                f['width'])
         if f['fill'] == 'yes':
             pic_s += " fill"
         pic_s += '\n'
@@ -241,7 +244,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         pass
                     elif (li_node.nodeType != node.TEXT_NODE
                           or not li_node.data.isspace()):
-                        raise error.Error("<%s> element may only have <li> children" % node.tagName)
+                        raise error.Error("<%s> element may only have "
+                                          "<li> children" % node.tagName)
                 s += ".RE\n"
             elif node.tagName == 'dl':
                 if s != "":
@@ -265,7 +269,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         continue
                     elif (li_node.nodeType != node.TEXT_NODE
                           or not li_node.data.isspace()):
-                        raise error.Error("<dl> element may only have <dt> and <dd> children")
+                        raise error.Error("<dl> element may only have "
+                                          "<dt> and <dd> children")
                     s += block_xml_to_nroff(li_node.childNodes, ".IP")
                 s += ".RE\n"
             elif node.tagName == 'p':
