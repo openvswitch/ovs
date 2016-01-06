@@ -353,7 +353,7 @@ ALL_LOCAL += flake8-check
 # D*** -- warnings from flake8-docstrings plugin
 # H*** -- warnings from flake8 hacking plugin (custom style checks beyond PEP8)
 flake8-check: $(FLAKE8_PYFILES)
-	$(AM_V_GEN) if flake8 $^ --ignore=E123,E126,E127,E128,E129,E131,W503,D100,D101,D102,D103,D104,D105,D200,D202,D203,D204,D205,D207,D208,D209,D210,D400,D401,H104,H201,H231,H232,H233,H238,H301,H306,H401,H403,H404,H405 ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
+	$(AM_V_GEN) if flake8 $^ --ignore=E123,E126,E127,E128,E129,E131,W503,D,H ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk
