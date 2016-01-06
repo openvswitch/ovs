@@ -163,7 +163,7 @@ path certificate "%s";
         conf_file.close()
 
         # Rewrite the pre-shared keys file; it must only be readable by root.
-        orig_umask = os.umask(0077)
+        orig_umask = os.umask(0o077)
         psk_file = open(root_prefix + Racoon.psk_file, 'w')
         os.umask(orig_umask)
 
