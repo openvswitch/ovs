@@ -1024,6 +1024,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
         unixctl_server_wait(unixctl);
         poll_block();
     }
+    ovsdb_schema_destroy(schema);
 }
 
 static void
