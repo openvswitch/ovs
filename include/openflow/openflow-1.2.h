@@ -172,15 +172,6 @@ enum ofp12_group_capabilities {
     OFPGFC12_CHAINING_CHECKS = 1 << 3, /* Check chaining for loops and delete */
 };
 
-/* Body for ofp12_stats_request/reply of type OFPST_EXPERIMENTER. */
-struct ofp12_experimenter_stats_header {
-    ovs_be32 experimenter;    /* Experimenter ID which takes the same form
-                                 as in struct ofp_experimenter_header. */
-    ovs_be32 exp_type;        /* Experimenter defined. */
-    /* Experimenter-defined arbitrary additional data. */
-};
-OFP_ASSERT(sizeof(struct ofp12_experimenter_stats_header) == 8);
-
 /* Role request and reply message. */
 struct ofp12_role_request {
     ovs_be32 role;            /* One of OFPCR12_ROLE_*. */
