@@ -363,8 +363,9 @@ ALL_LOCAL += flake8-check
 #   H231 Python 3.x incompatible 'except x,y:' construct
 #   H232 Python 3.x incompatible octal 077 should be written as 0o77
 #   H233 Python 3.x incompatible use of print operator
+#   H238 old style class declaration, use new style (inherit from `object`)
 flake8-check: $(FLAKE8_PYFILES)
-	$(AM_V_GEN) if flake8 $^ --select=H231,H232,H233 --ignore=E121,E123,E125,E126,E127,E128,E129,E131,W503,F811,D,H ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
+	$(AM_V_GEN) if flake8 $^ --select=H231,H232,H233,H238 --ignore=E121,E123,E125,E126,E127,E128,E129,E131,W503,F811,D,H ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk

@@ -55,7 +55,7 @@ def unixctl_exit(conn, unused_argv, unused_aux):
 
 
 # Class to configure the racoon daemon, which handles IKE negotiation
-class Racoon:
+class Racoon(object):
     # Default locations for files
     conf_file = "/etc/racoon/racoon.conf"
     cert_dir = "/etc/racoon/certs"
@@ -259,7 +259,7 @@ path certificate "%s";
 # Class to configure IPsec on a system using racoon for IKE and setkey
 # for maintaining the Security Association Database (SAD) and Security
 # Policy Database (SPD).  Only policies for GRE are supported.
-class IPsec:
+class IPsec(object):
     def __init__(self):
         self.sad_flush()
         self.spd_flush()
