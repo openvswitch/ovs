@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -232,13 +232,13 @@ enum ofpraw {
     OFPRAW_OFPT14_GET_ASYNC_REQUEST,
     /* OFPT 1.3 (27): struct ofp13_async_config. */
     OFPRAW_OFPT13_GET_ASYNC_REPLY,
-    /* OFPT 1.4+ (27): struct ofp14_async_config, uint8_t[8][]. */
+    /* OFPT 1.4+ (27): uint8_t[8][]. */
     OFPRAW_OFPT14_GET_ASYNC_REPLY,
     /* OFPT 1.3 (28): struct ofp13_async_config. */
     OFPRAW_OFPT13_SET_ASYNC,
     /* NXT 1.0+ (19): struct nx_async_config. */
     OFPRAW_NXT_SET_ASYNC_CONFIG,
-    /* OFPT 1.4+ (28): struct ofp14_async_config, uint8_t[8][]. */
+    /* OFPT 1.4+ (28): uint8_t[8][]. */
     OFPRAW_OFPT14_SET_ASYNC,
 
     /* OFPT 1.3+ (29): struct ofp13_meter_mod, uint8_t[8][]. */

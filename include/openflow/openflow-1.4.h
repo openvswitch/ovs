@@ -245,17 +245,6 @@ struct ofp14_async_config_prop_header {
     ovs_be16    length;     /* Length in bytes of this property. */
 };
 OFP_ASSERT(sizeof(struct ofp14_async_config_prop_header) == 4);
-
-/* Asynchronous message configuration.
- * OFPT_GET_ASYNC_REPLY or OFPT_SET_ASYNC.
- */
-struct ofp14_async_config {
-    struct ofp_header header;
-    /* Async config Property list - 0 or more */
-    struct ofp14_async_config_prop_header properties[0];
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config) == 8);
-
 /* Request forward reason */
 enum ofp14_requestforward_reason {
     OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
