@@ -73,7 +73,7 @@ if __name__ == "__main__":
         try:
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                               ['help', 'version'])
-        except getopt.GetoptException, geo:
+        except getopt.GetoptException as geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
             print binascii.hexlify(packet)
 
-    except PcapException, e:
+    except PcapException as e:
         sys.stderr.write("%s: %s\n" % (argv0, e))
         sys.exit(1)
 
