@@ -426,7 +426,9 @@ do_diff_data(struct ovs_cmdl_context *ctx)
         /* Apply diff to 'old' to create'reincarnation'. */
         error = ovsdb_datum_apply_diff(&reincarnation, &old, &diff, &type);
         if (error) {
-            ovs_fatal(0, "%s", ovsdb_error_to_string(error));
+            char *string = ovsdb_error_to_string(error);
+            ovsdb_error_destroy(error);
+            ovs_fatal(0, "%s", string);
         }
 
         /* Test to make sure 'new' equals 'reincarnation'.  */
