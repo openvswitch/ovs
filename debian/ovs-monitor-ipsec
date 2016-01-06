@@ -371,7 +371,7 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
 
         try:
             ipsec.add_entry(vals["local_ip"], vals["remote_ip"], vals)
-        except error.Error, msg:
+        except error.Error as msg:
             vlog.warn("skipping ipsec config for %s: %s" % (name, msg))
 
 

@@ -114,7 +114,7 @@ if __name__ == '__main__':
     try:
         options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                           ['help', 'version'])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         sys.stderr.write('%s: %s\n' % (sys.argv[0], geo.msg))
         sys.exit(1)
 

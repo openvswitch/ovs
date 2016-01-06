@@ -61,7 +61,7 @@ def main(argv):
 
     try:
         options, args = getopt.gnu_getopt(argv[1:], '', ['multiple'])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
 

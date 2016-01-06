@@ -105,7 +105,7 @@ def do_parse_atoms(type_string, *atom_strings):
         try:
             atom = data.Atom.from_json(base, atom_json)
             print ovs.json.to_string(atom.to_json())
-        except error.Error, e:
+        except error.Error as e:
             print e.args[0].encode("utf8")
 
 
@@ -548,7 +548,7 @@ def main(argv):
         options, args = getopt.gnu_getopt(argv[1:], 't:h',
                                           ['timeout',
                                            'help'])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
 
@@ -617,6 +617,6 @@ def main(argv):
 if __name__ == '__main__':
     try:
         main(sys.argv)
-    except error.Error, e:
+    except error.Error as e:
         sys.stderr.write("%s\n" % e)
         sys.exit(1)
