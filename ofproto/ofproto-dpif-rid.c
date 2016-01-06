@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ static struct ovs_list expired OVS_GUARDED_BY(mutex);
 static uint32_t next_id OVS_GUARDED_BY(mutex); /* Possible next free id. */
 
 #define RECIRC_POOL_STATIC_IDS 1024
+
+static void recirc_id_node_free(struct recirc_id_node *);
 
 void
 recirc_init(void)
@@ -88,7 +90,7 @@ recirc_run(void)
          * finished. */
         LIST_FOR_EACH_POP (node, exp_node, &expired) {
             cmap_remove(&id_map, &node->id_node, node->id);
-            ovsrcu_postpone(free, node);
+            ovsrcu_postpone(recirc_id_node_free, node);
         }
 
         if (!list_is_empty(&expiring)) {
@@ -313,6 +315,13 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
     node = recirc_alloc_id__(ofproto, TBL_INTERNAL, &md, NULL, 0, 0, NULL,
                              hash);
     return node->id;
+}
+
+static void
+recirc_id_node_free(struct recirc_id_node *node)
+{
+    ofpbuf_delete(node->stack);
+    free(node);
 }
 
 void
