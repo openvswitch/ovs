@@ -2240,9 +2240,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
         size_t n_ops = 0;
 
         CMAP_FOR_EACH(ukey, cmap_node, &umap->cmap) {
-            bool flow_exists, seq_mismatch;
-            struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
-            enum reval_result result;
+            bool flow_exists;
 
             /* Handler threads could be holding a ukey lock while it installs a
              * new flow, so don't hang around waiting for access to it. */
@@ -2250,36 +2248,40 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                 continue;
             }
             flow_exists = ukey->flow_exists;
-            seq_mismatch = (ukey->dump_seq != dump_seq
-                            && ukey->reval_seq != reval_seq);
+            if (flow_exists) {
+                struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
+                bool seq_mismatch = (ukey->dump_seq != dump_seq
+                                     && ukey->reval_seq != reval_seq);
+                enum reval_result result;
 
-            if (purge) {
-                result = UKEY_DELETE;
-            } else if (!seq_mismatch) {
-                result = UKEY_KEEP;
-            } else {
-                struct dpif_flow_stats stats;
-                COVERAGE_INC(revalidate_missed_dp_flow);
-                memset(&stats, 0, sizeof stats);
-                result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
-                                         reval_seq, &recircs);
-            }
-            if (flow_exists && result != UKEY_KEEP) {
-                /* Takes ownership of 'recircs'. */
-                reval_op_init(&ops[n_ops++], result, udpif, ukey, &recircs,
-                              &odp_actions);
+                if (purge) {
+                    result = UKEY_DELETE;
+                } else if (!seq_mismatch) {
+                    result = UKEY_KEEP;
+                } else {
+                    struct dpif_flow_stats stats;
+                    COVERAGE_INC(revalidate_missed_dp_flow);
+                    memset(&stats, 0, sizeof stats);
+                    result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
+                                             reval_seq, &recircs);
+                }
+                if (result != UKEY_KEEP) {
+                    /* Clears 'recircs' if filled by revalidate_ukey(). */
+                    reval_op_init(&ops[n_ops++], result, udpif, ukey, &recircs,
+                                  &odp_actions);
+                }
             }
             ovs_mutex_unlock(&ukey->mutex);
-
-            if (n_ops == REVALIDATE_MAX_BATCH) {
-                push_ukey_ops(udpif, umap, ops, n_ops);
-                n_ops = 0;
-            }
 
             if (!flow_exists) {
                 ovs_mutex_lock(&umap->mutex);
                 ukey_delete(umap, ukey);
                 ovs_mutex_unlock(&umap->mutex);
+            }
+
+            if (n_ops == REVALIDATE_MAX_BATCH) {
+                push_ukey_ops(udpif, umap, ops, n_ops);
+                n_ops = 0;
             }
         }
 
