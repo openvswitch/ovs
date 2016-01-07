@@ -378,7 +378,7 @@ usage(void)
            "  dump-group-features SWITCH  print group features\n"
            "  dump-groups SWITCH [GROUP]  print group description\n"
            "  dump-group-stats SWITCH [GROUP]  print group statistics\n"
-           "  queue-get-config SWITCH PORT  print queue information for port\n"
+           "  queue-get-config SWITCH [PORT]  print queue config for PORT\n"
            "  add-meter SWITCH METER      add meter described by METER\n"
            "  mod-meter SWITCH METER      modify specific METER\n"
            "  del-meter SWITCH METER      delete METER\n"
@@ -1252,19 +1252,40 @@ static void
 ofctl_queue_get_config(struct ovs_cmdl_context *ctx)
 {
     const char *vconn_name = ctx->argv[1];
-    const char *port_name = ctx->argv[2];
-    enum ofputil_protocol protocol;
-    enum ofp_version version;
-    struct ofpbuf *request;
+    const char *port_name = ctx->argc >= 3 ? ctx->argv[2] : NULL;
+    ofp_port_t port = (port_name
+                       ? str_to_port_no(vconn_name, port_name)
+                       : OFPP_ANY);
+
     struct vconn *vconn;
-    ofp_port_t port;
+    enum ofputil_protocol protocol = open_vconn(vconn_name, &vconn);
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+    if (port == OFPP_ANY && version == OFP10_VERSION) {
+        /* The user requested all queues on all ports.  OpenFlow 1.0 only
+         * supports getting queues for an individual port, so to implement the
+         * user's request we have to get a list of all the ports.
+         *
+         * We use a second vconn to avoid having to accumulate a list of all of
+         * the ports. */
+        struct vconn *vconn2;
+        enum ofputil_protocol protocol2 = open_vconn(vconn_name, &vconn2);
+        enum ofp_version version2 = ofputil_protocol_to_ofp_version(protocol2);
 
-    port = str_to_port_no(vconn_name, port_name);
-
-    protocol = open_vconn(vconn_name, &vconn);
-    version = ofputil_protocol_to_ofp_version(protocol);
-    request = ofputil_encode_queue_get_config_request(version, port);
-    dump_transaction(vconn, request);
+        struct port_iterator pi;
+        struct ofputil_phy_port pp;
+        for (port_iterator_init(&pi, vconn); port_iterator_next(&pi, &pp); ) {
+            if (ofp_to_u16(pp.port_no) < ofp_to_u16(OFPP_MAX)) {
+                dump_transaction(vconn2,
+                                 ofputil_encode_queue_get_config_request(
+                                     version2, pp.port_no));
+            }
+        }
+        port_iterator_destroy(&pi);
+        vconn_close(vconn2);
+    } else {
+        dump_transaction(vconn, ofputil_encode_queue_get_config_request(
+                             version, port));
+    }
     vconn_close(vconn);
 }
 
@@ -3870,8 +3891,8 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_dump_aggregate },
     { "queue-stats", "switch [port [queue]]",
       1, 3, ofctl_queue_stats },
-    { "queue-get-config", "switch port",
-      2, 2, ofctl_queue_get_config },
+    { "queue-get-config", "switch [port]",
+      1, 2, ofctl_queue_get_config },
     { "add-flow", "switch flow",
       2, 2, ofctl_add_flow },
     { "add-flows", "switch file",

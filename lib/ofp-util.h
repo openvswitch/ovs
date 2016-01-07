@@ -957,6 +957,7 @@ enum ofperr ofputil_decode_queue_get_config_request(const struct ofp_header *,
 
 /* Queue configuration reply. */
 struct ofputil_queue_config {
+    ofp_port_t port;
     uint32_t queue_id;
 
     /* Each of these optional values is expressed in tenths of a percent.

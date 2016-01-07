@@ -2492,14 +2492,23 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
         qgcr10 = b.data;
         *port = u16_to_ofp(ntohs(qgcr10->port));
-        return 0;
+        break;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
         qgcr11 = b.data;
-        return ofputil_port_from_ofp11(qgcr11->port, port);
+        enum ofperr error = ofputil_port_from_ofp11(qgcr11->port, port);
+        if (error || *port == OFPP_ANY) {
+            return error;
+        }
+        break;
+
+    default:
+        OVS_NOT_REACHED();
     }
 
-    OVS_NOT_REACHED();
+    return (ofp_to_u16(*port) < ofp_to_u16(OFPP_MAX)
+            ? 0
+            : OFPERR_OFPQOFC_BAD_PORT);
 }
 
 /* Constructs and returns the beginning of a reply to
@@ -2576,15 +2585,10 @@ ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
         opq10->queue_id = htonl(oqc->queue_id);
         len_ofs = (char *) &opq10->len - (char *) reply->data;
     } else {
-        struct ofp11_queue_get_config_reply *qgcr11;
         struct ofp12_packet_queue *opq12;
-        ovs_be32 port;
-
-        qgcr11 = reply->msg;
-        port = qgcr11->port;
 
         opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
-        opq12->port = port;
+        opq12->port = ofputil_port_to_ofp11(oqc->port);
         opq12->queue_id = htonl(oqc->queue_id);
         len_ofs = (char *) &opq12->len - (char *) reply->data;
     }

@@ -6230,30 +6230,12 @@ handle_group_features_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
-static enum ofperr
-handle_queue_get_config_request(struct ofconn *ofconn,
-                                const struct ofp_header *oh)
+static void
+put_queue_config(struct ofport *ofport, struct ofpbuf *reply)
 {
-   struct ofproto *p = ofconn_get_ofproto(ofconn);
    struct netdev_queue_dump queue_dump;
-   struct ofport *ofport;
    unsigned int queue_id;
-   struct ofpbuf *reply;
    struct smap details;
-   ofp_port_t request;
-   enum ofperr error;
-
-   error = ofputil_decode_queue_get_config_request(oh, &request);
-   if (error) {
-       return error;
-   }
-
-   ofport = ofproto_get_port(p, request);
-   if (!ofport) {
-      return OFPERR_OFPQOFC_BAD_PORT;
-   }
-
-   reply = ofputil_encode_queue_get_config_reply(oh);
 
    smap_init(&details);
    NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump, ofport->netdev) {
@@ -6261,13 +6243,42 @@ handle_queue_get_config_request(struct ofconn *ofconn,
 
        /* None of the existing queues have compatible properties, so we
         * hard-code omitting min_rate and max_rate. */
+       queue.port = ofport->ofp_port;
        queue.queue_id = queue_id;
        queue.min_rate = UINT16_MAX;
        queue.max_rate = UINT16_MAX;
        ofputil_append_queue_get_config_reply(reply, &queue);
    }
    smap_destroy(&details);
+}
 
+static enum ofperr
+handle_queue_get_config_request(struct ofconn *ofconn,
+                                const struct ofp_header *oh)
+{
+   struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+   ofp_port_t port;
+   enum ofperr error;
+
+   error = ofputil_decode_queue_get_config_request(oh, &port);
+   if (error) {
+       return error;
+   }
+
+   struct ofpbuf *reply = ofputil_encode_queue_get_config_reply(oh);
+   struct ofport *ofport;
+   if (port == OFPP_ANY) {
+       HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
+           put_queue_config(ofport, reply);
+       }
+   } else {
+       ofport = ofproto_get_port(ofproto, port);
+       if (!ofport) {
+           ofpbuf_delete(reply);
+           return OFPERR_OFPQOFC_BAD_PORT;
+       }
+       put_queue_config(ofport, reply);
+   }
    ofconn_send_reply(ofconn, reply);
 
    return 0;
