@@ -1317,8 +1317,7 @@ void ofputil_uninit_tlv_table(struct ovs_list *mappings);
 enum ofputil_async_msg_type {
     OAM_PACKET_IN,              /* OFPT_PACKET_IN or NXT_PACKET_IN. */
     OAM_PORT_STATUS,            /* OFPT_PORT_STATUS. */
-    OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or
-                                 * NXT_FLOW_REMOVED. */
+    OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED. */
     OAM_ROLE_STATUS,            /* OFPT_ROLE_STATUS. */
     OAM_TABLE_STATUS,           /* OFPT_TABLE_STATUS. */
     OAM_REQUESTFORWARD,         /* OFPT_REQUESTFORWARD. */
