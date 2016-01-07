@@ -2053,7 +2053,9 @@ push_ukey_ops(struct udpif *udpif, struct umap *umap,
     push_ukey_ops__(udpif, ops, n_ops);
     ovs_mutex_lock(&umap->mutex);
     for (i = 0; i < n_ops; i++) {
-        ukey_delete(umap, ops[i].ukey);
+        if (ops[i].dop.type == DPIF_OP_FLOW_DEL) {
+            ukey_delete(umap, ops[i].ukey);
+        }
     }
     ovs_mutex_unlock(&umap->mutex);
 }
