@@ -2151,31 +2151,8 @@ ofp_print_nxt_set_async_config(struct ds *string,
 
             ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
             for (type = 0; type < OAM_N_TYPES; type++) {
-                switch (type) {
-                case OAM_PACKET_IN:
-                    ds_put_cstr(string, "       PACKET_IN:");
-                    break;
-
-                case OAM_PORT_STATUS:
-                    ds_put_cstr(string, "     PORT_STATUS:");
-                    break;
-
-                case OAM_FLOW_REMOVED:
-                    ds_put_cstr(string, "    FLOW_REMOVED:");
-                    break;
-
-                case OAM_ROLE_STATUS:
-                    ds_put_cstr(string, "     ROLE_STATUS:");
-                    break;
-
-                case OAM_TABLE_STATUS:
-                    ds_put_cstr(string, "    TABLE_STATUS:");
-                    break;
-
-                case OAM_REQUESTFORWARD:
-                    ds_put_cstr(string, "  REQUESTFORWARD:");
-                    break;
-                }
+                ds_put_format(string, "%16s:",
+                              ofputil_async_msg_type_to_string(type));
 
                 for (j = 0; j < 32; j++) {
                     if (role[i][type] & (1u << j)) {

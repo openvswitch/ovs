@@ -1323,6 +1323,7 @@ enum ofputil_async_msg_type {
     OAM_REQUESTFORWARD,         /* OFPT_REQUESTFORWARD. */
     OAM_N_TYPES
 };
+const char *ofputil_async_msg_type_to_string(enum ofputil_async_msg_type);
 
 enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
                                             uint32_t master[OAM_N_TYPES],
