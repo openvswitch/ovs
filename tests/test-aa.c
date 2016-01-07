@@ -267,6 +267,11 @@ test_aa_send(void)
     /* Verify auto attach values */
     check_received_aa(&hardware.h_lport, nport, map_init);
 
+    lldpd_chassis_cleanup(nchassis, true);
+    lldpd_port_cleanup(nport, true);
+    free(nport);
+    lldp_destroy_dummy(lldp);
+
     return 0;
 }
 
