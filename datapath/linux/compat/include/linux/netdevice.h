@@ -268,7 +268,13 @@ struct rtnl_link_stats64 *rpl_dev_get_stats(struct net_device *dev,
 
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
 /* Only required on RHEL 6. */
+#ifdef HAVE_DEV_GET_STATS64
 #define dev_get_stats dev_get_stats64
+#else
+#define dev_get_stats rpl_dev_get_stats
+struct rtnl_link_stats64 *rpl_dev_get_stats(struct net_device *dev,
+					struct rtnl_link_stats64 *storage);
+#endif
 #endif
 
 #ifndef netdev_dbg
