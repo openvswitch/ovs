@@ -41,6 +41,8 @@ struct ovsdb_idl_row {
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_node; /* Rows modified/added/deleted by IDL */
     unsigned long int *updated; /* Bitmap of columns updated by IDL */
+
+    unsigned long int *partial_maps; /* Bitmap of columns containing partial maps */
 };
 
 struct ovsdb_idl_column {

@@ -2524,7 +2524,8 @@ ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
 static void
 ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
                       const struct ovsdb_idl_column *column,
-                      struct ovsdb_datum *datum, bool owns_datum)
+                      struct ovsdb_datum *datum, bool owns_datum,
+                      bool partial_map)
 {
     struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     const struct ovsdb_idl_table_class *class;
@@ -2581,6 +2582,12 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     } else {
         bitmap_set1(row->written, column_idx);
     }
+    /* If the datum contains a partial map of the column, set the corresponding
+     * bit in the bitmap so it can be handle accordingly in ovsdb_idl_txn_commit
+     */
+    if (partial_map) {
+        bitmap_set1(row->partial_maps, column_idx);
+    }
     if (owns_datum) {
         row->new[column_idx] = *datum;
     } else {
@@ -2601,7 +2608,7 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row,
                     const struct ovsdb_idl_column *column,
                     struct ovsdb_datum *datum)
 {
-    ovsdb_idl_txn_write__(row, column, datum, true);
+    ovsdb_idl_txn_write__(row, column, datum, true, false);
 }
 
 void
@@ -2610,7 +2617,7 @@ ovsdb_idl_txn_write_clone(const struct ovsdb_idl_row *row,
                           const struct ovsdb_datum *datum)
 {
     ovsdb_idl_txn_write__(row, column,
-                          CONST_CAST(struct ovsdb_datum *, datum), false);
+                          CONST_CAST(struct ovsdb_datum *, datum), false, false);
 }
 
 /* Causes the original contents of 'column' in 'row_' to be verified as a
@@ -3197,3 +3204,24 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
 
     ovsdb_idl_wait(loop->idl);
 }
+
+/* Skeleton functions needed to handle partial for map_columns
+ * This functions must be moved to a better place when finished implementation
+ *
+ */
+void
+ovsdb_idl_txn_write_partial_map(const struct ovsdb_idl_row *row,
+                                const struct ovsdb_idl_column *column,
+                                struct ovsdb_datum *datum)
+{
+    ovsdb_idl_txn_write__(row, column, datum, true, true);
+}
+
+void
+ovsdb_idl_txn_delete_partial_map(const struct ovsdb_idl_row *row,
+                                const struct ovsdb_idl_column *column,
+                                struct ovsdb_datum *datum)
+{
+    return;
+}
+
