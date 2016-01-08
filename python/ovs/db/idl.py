@@ -332,7 +332,7 @@ class Idl(object):
             and type(params) in (list, tuple)
             and params
             and params[0] == self.lock_name):
-            self.__update_has_lock(self, new_has_lock)
+            self.__update_has_lock(new_has_lock)
             if not new_has_lock:
                 self.is_lock_contended = True
 
