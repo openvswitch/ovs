@@ -21,8 +21,6 @@
 
 #include <linux/version.h>
 
-#ifdef OVS_FRAGMENT_BACKPORT
-
 #include <linux/errno.h>
 #include <linux/types.h>
 #include <linux/string.h>
@@ -55,6 +53,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
+
+#ifdef OVS_NF_DEFRAG6_BACKPORT
 
 static const char nf_frags_cache_name[] = "nf-frags";
 
@@ -651,4 +651,4 @@ void rpl_nf_ct_frag6_cleanup(void)
 	inet_frags_fini(&nf_frags);
 }
 
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif /* OVS_NF_DEFRAG6_BACKPORT */
