@@ -141,6 +141,7 @@ SUFFIXES =
 check_DATA =
 check_SCRIPTS =
 pkgconfig_DATA =
+FLAKE8_PYFILES =
 
 scriptsdir = $(pkgdatadir)/scripts
 completiondir = $(sysconfdir)/bash_completion.d
@@ -323,6 +324,7 @@ thread-safety-check:
 	    exit 1; \
 	fi
 EXTRA_DIST += build-aux/thread-safety-blacklist
+.PHONY: thread-safety-check
 
 if HAVE_GROFF
 ALL_LOCAL += manpage-check
@@ -336,6 +338,25 @@ manpage-check: $(man_MANS) $(dist_man_MANS) $(noinst_man_MANS)
 	if $$error; then exit 1; else touch $@; fi
 	$(AM_V_GEN) touch -c $@
 CLEANFILES += manpage-check
+endif
+
+if HAVE_FLAKE8
+ALL_LOCAL += flake8-check
+# http://flake8.readthedocs.org/en/latest/warnings.html
+# E121 continuation line under-indented for hanging indent (only from flake8 v2.0)
+# E123 closing bracket does not match indentation of opening bracket's line
+# E125 continuation line with same indent as next logical line (only from flake8 v2.0)
+# E126 continuation line over-indented for hanging indent
+# E127 continuation line over-indented for visual indent
+# E128 continuation line under-indented for visual indent
+# E129 visually indented line with same indent as next logical line
+# E131 continuation line unaligned for hanging indent
+# F811 redefinition of unused <name> from line <N> (only from flake8 v2.0)
+# W503 line break before binary operator
+# D*** -- warnings from flake8-docstrings plugin
+# H*** -- warnings from flake8 hacking plugin (custom style checks beyond PEP8)
+flake8-check: $(FLAKE8_PYFILES)
+	$(AM_V_GEN) if flake8 $^ --ignore=E121,E123,E125,E126,E127,E128,E129,E131,F811,W503,D,H ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk
@@ -360,6 +381,7 @@ ovsext_clean: datapath-windows/ovsext.sln
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 endif
+.PHONY: ovsext_make
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)

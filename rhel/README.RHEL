@@ -27,6 +27,19 @@ assignments.  The following OVS-specific variable names are supported:
 
         * "OVSPatchPort", if <name> is a patch port
 
+      Additionally the following DPDK port types may be available,
+      depends on OVS build- and runtime configuration:
+
+        * "OVSDPDKPort", if <name> is a physical DPDK NIC port (name
+          must start with "dpdk" and end with portid, eg "dpdk0")
+
+	* "OVSDPDKRPort", if <name> is a DPDK ring port (name must
+          start with dpdkr and end with portid, eg "dpdkr0")
+
+        * "OVSDPDKVhostPort" if <name> is a DPDK vhost-cuse port
+
+        * "OVSDPDKVhostUserPort" if <name> is a DPDK vhost-user port
+
     - OVS_BRIDGE: If TYPE is anything other than "OVSBridge", set to
       the name of the OVS bridge to which the port should be attached.
 
@@ -206,6 +219,36 @@ TYPE=OVSPatchPort
 OVS_BRIDGE=ovsbridge1
 OVS_PATCH_PEER=patch-ovs-0
 
+User bridge:
+
+==> ifcfg-obr0 <==
+
+DEVICE=obr0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSUserBridge
+BOOTPROTO=static
+IPADDR=A.B.C.D
+NETMASK=X.Y.Z.0
+HOTPLUG=no
+
+DPDK NIC port:
+
+==> ifcfg-dpdk0 <==
+
+DPDK vhost-user port:
+DEVICE=dpdk0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSDPDKPort
+OVS_BRIDGE=obr0
+
+==> ifcfg-vhu0 <==
+DEVICE=vhu0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSDPDKVhostUserPort
+OVS_BRIDGE=obr0
 
 Reporting Bugs
 --------------

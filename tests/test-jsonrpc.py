@@ -86,7 +86,7 @@ def do_listen(name):
             if error:
                 rpc.close()
                 dead_rpcs.append(rpc)
-        rpcs = [rpc for rpc in rpcs if not rpc in dead_rpcs]
+        rpcs = [rpc for rpc in rpcs if rpc not in dead_rpcs]
 
         if done and not rpcs:
             break
@@ -187,7 +187,7 @@ notify REMOTE METHOD PARAMS  send notification and exit
 
     command_name = args.command[0]
     args = args.command_args
-    if not command_name in commands:
+    if command_name not in commands:
         sys.stderr.write("%s: unknown command \"%s\" "
                          "(use --help for help)\n" % (argv[0], command_name))
         sys.exit(1)

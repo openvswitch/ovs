@@ -149,3 +149,33 @@ Fetches the flow from \fIdp\fR's flow table with unique identifier \fIufid\fR.
 .
 .IP "\*(DX\fBdel\-flows\fR [\fIdp\fR]"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
+.SS "CONNECTION TRACKING TABLE DEBUGGING COMMANDS"
+The following commands are primarily useful for debugging the connection
+tracking entries in the datapath.
+.
+.PP
+The \fIdp\fR argument to each of these commands is optional when
+exactly one datapath exists, in which case that datapath is the
+default.  When multiple datapaths exist, then a datapath name is
+required.
+.
+.PP
+\fBN.B.\fR(Linux specific): the \fIsystem\fR datapaths (i.e. the Linux
+kernel module Open vSwitch datapaths) share a single connection tracking
+table (which is also used by other kernel subsystems, such as iptables,
+nftables and the regular host stack).  Therefore, the following commands
+do not apply specifically to one datapath.
+.
+.TP
+.DO "[\fB\-m\fR | \fB\-\-more\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdump\-conntrack\fR" "[\fIdp\fR] [\fBzone=\fIzone\fR]"
+Prints to the console all the connection entries in the tracker used by
+\fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the connections
+in \fBzone\fR.  With \fB\-\-more\fR, some implementation specific details
+are included. With \fB\-\-statistics\fR timeouts and timestamps are
+added to the output.
+.
+.TP
+\*(DX\fBflush\-conntrack [\fIdp\fR] [\fBzone=\fIzone\fR]
+Flushes all the connection entries in the tracker used by \fIdp\fR.
+If \fBzone=\fIzone\fR is specified, only flushes the connections in
+\fBzone\fR.

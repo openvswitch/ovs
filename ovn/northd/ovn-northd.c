@@ -964,9 +964,11 @@ has_stateful_acl(struct ovn_datapath *od)
 }
 
 static void
-build_acls(struct ovn_datapath *od, struct hmap *lflows)
+build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 {
     bool has_stateful = has_stateful_acl(od);
+    struct ovn_port *op;
+    struct ds match_in, match_out;
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
@@ -983,6 +985,30 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
      * send all IP packets through the conntrack action, which handles
      * defragmentation, in order to match L4 headers. */
     if (has_stateful) {
+        HMAP_FOR_EACH (op, key_node, ports) {
+            if (op->od == od && !strcmp(op->nbs->type, "router")) {
+                /* Can't use ct() for router ports. Consider the following configuration:
+                lp1(10.0.0.2) on hostA--ls1--lr0--ls2--lp2(10.0.1.2) on hostB,
+                For a ping from lp1 to lp2, First, the response will go through ct()
+                with a zone for lp2 in the ls2 ingress pipeline on hostB.
+                That ct zone knows about this connection. Next, it goes through ct()
+                with the zone for the router port in the egress pipeline of ls2 on hostB.
+                This zone does not know about the connection, as the icmp request
+                went through the logical router on hostA, not hostB. This would only work
+                with distributed conntrack state across all chassis. */
+
+                ds_init(&match_in);
+                ds_init(&match_out);
+                ds_put_format(&match_in, "ip && inport == %s", op->json_key);
+                ds_put_format(&match_out, "ip && outport == %s", op->json_key);
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110, ds_cstr(&match_in), "next;");
+                ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110, ds_cstr(&match_out), "next;");
+
+                ds_destroy(&match_in);
+                ds_destroy(&match_out);
+            }
+        }
+
         /* Ingress and Egress Pre-ACL Table (Priority 100).
          *
          * Regardless of whether the ACL is "from-lport" or "to-lport",
@@ -1100,7 +1126,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        build_acls(od, lflows);
+        build_acls(od, lflows, ports);
     }
 
     /* Logical switch ingress table 0: Admission control framework (priority

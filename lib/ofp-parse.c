@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -332,27 +332,21 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         OVS_NOT_REACHED();
     }
 
-    match_init_catchall(&fm->match);
-    fm->priority = OFP_DEFAULT_PRIORITY;
-    fm->cookie = htonll(0);
-    fm->cookie_mask = htonll(0);
+    *fm = (struct ofputil_flow_mod) {
+        .match = MATCH_CATCHALL_INITIALIZER,
+        .priority = OFP_DEFAULT_PRIORITY,
+        .table_id = 0xff,
+        .command = command,
+        .buffer_id = UINT32_MAX,
+        .out_port = OFPP_ANY,
+        .out_group = OFPG_ANY,
+        .delete_reason = OFPRR_DELETE,
+    };
+    /* For modify, by default, don't update the cookie. */
     if (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT) {
-        /* For modify, by default, don't update the cookie. */
         fm->new_cookie = OVS_BE64_MAX;
-    } else{
-        fm->new_cookie = htonll(0);
     }
-    fm->modify_cookie = false;
-    fm->table_id = 0xff;
-    fm->command = command;
-    fm->idle_timeout = OFP_FLOW_PERMANENT;
-    fm->hard_timeout = OFP_FLOW_PERMANENT;
-    fm->buffer_id = UINT32_MAX;
-    fm->out_port = OFPP_ANY;
-    fm->flags = 0;
-    fm->importance = 0;
-    fm->out_group = OFPG_ANY;
-    fm->delete_reason = OFPRR_DELETE;
+
     if (fields & F_ACTIONS) {
         act_str = extract_actions(string);
         if (!act_str) {

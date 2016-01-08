@@ -33,7 +33,6 @@ import sys
 
 import ovs.dirs
 from ovs.db import error
-from ovs.db import types
 import ovs.util
 import ovs.daemon
 import ovs.db.idl
@@ -210,9 +209,9 @@ path certificate "%s";
         if host in self.psk_hosts:
             raise error.Error("host %s already defined for psk" % host)
 
-        if vals["certificate"] == None:
+        if vals["certificate"] is None:
             raise error.Error("'certificate' not defined for %s" % host)
-        elif vals["private_key"] == None:
+        elif vals["private_key"] is None:
             # Assume the private key is stored in the same PEM file as
             # the certificate.  We make a copy of "vals" so that we don't
             # modify the original "vals", which would cause the script

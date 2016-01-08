@@ -19,8 +19,10 @@ import getopt
 import struct
 import sys
 
+
 class PcapException(Exception):
     pass
+
 
 class PcapReader(object):
     def __init__(self, file_name):
@@ -52,6 +54,7 @@ class PcapReader(object):
             raise PcapException("end of file reading pcap packet data")
         return packet
 argv0 = sys.argv[0]
+
 
 def usage():
     print """\

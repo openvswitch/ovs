@@ -116,6 +116,7 @@ Kmindg G                kmindg@gmail.com
 Krishna Kondaka         kkondaka@vmware.com
 Kyle Mestery            mestery@mestery.com
 Kyle Upton              kupton@baymicrosystems.com
+Lance Richardson        lrichard@redhat.com
 Lars Kellogg-Stedman    lars@redhat.com
 Leo Alterman            lalterman@nicira.com
 Lilijun                 jerry.lilijun@huawei.com
@@ -215,14 +216,18 @@ Wei Li                  liw@dtdream.com
 Wei Yongjun             yjwei@cn.fujitsu.com
 Wenyu Zhang             wenyuz@vmware.com
 William Fulton
+William Tu              u9012063@gmail.com
 YAMAMOTO Takashi        yamamoto@midokura.com
 Yasuhito Takamiya       yasuhito@gmail.com
-yinpeijun               yinpeijun@huawei.com
+Yin Lin                 linyi@vmware.com
 Yu Zhiguo               yuzg@cn.fujitsu.com
 ZhengLingyun            konghuarukhr@163.com
+Zoltán Balogh           zoltan.balogh@ericsson.com
 Zoltan Kiss             zoltan.kiss@citrix.com
 Zhi Yong Wu             zwu.kernel@gmail.com
 Zang MingJie            zealot0630@gmail.com
+xushengping             shengping.xu@huawei.com
+yinpeijun               yinpeijun@huawei.com
 
 The following additional people are mentioned in commit logs as having
 provided helpful bug reports or suggestions.
@@ -295,6 +300,7 @@ Hemanth Kumar Mantri    mantri@nutanix.com
 Henrik Amren            henrik@nicira.com
 Hiroshi Tanaka          htanaka@nicira.com
 Hiroshi Miyata          miyahiro.dazu@gmail.com
+Hsin-Yi Shen            shenh@vmware.com
 Hyojoon Kim             joonk@gatech.edu
 Ian Stokes              ian.stokes@intel.com
 Igor Ganichev           iganichev@nicira.com
@@ -404,6 +410,7 @@ Voravit T.              voravit@kth.se
 Yeming Zhao             zhaoyeming@gmail.com
 Ying Chen               yingchen@vmware.com
 Yongqiang Liu           liuyq7809@gmail.com
+ZHANG Zhiming           zhangzhiming@yunshan.net.cn
 Zhangguanghui           zhang.guanghui@h3c.com
 Ziyou Wang              ziyouw@vmware.com
 Zoltán Balogh           zoltan.balogh@ericsson.com
@@ -411,8 +418,10 @@ ankur dwivedi           ankurengg2003@gmail.com
 chen zhang              3zhangchen9211@gmail.com
 kk yap                  yapkke@stanford.edu
 likunyun                kunyunli@hotmail.com
+meishengxin             meishengxin@huawei.com
 neeraj mehta            mehtaneeraj07@gmail.com
 rahim entezari          rahim.entezari@gmail.com
+weizj                   34965317@qq.com
 俊 赵                    zhaojun12@outlook.com
 冯全树(Crab)            fqs888@126.com
 胡靖飞                  hujingfei914@msn.com

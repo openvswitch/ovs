@@ -22,11 +22,6 @@ set -e
 case "$1" in
     purge)
         rm -f /var/log/openvswitch/ovs-pki.log* || true
-
-        # Remove backward compatibility symlink, if present.
-        if test -h /usr/share/openvswitch/pki; then
-            rm -f /usr/share/openvswitch/pki
-        fi
         ;;
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

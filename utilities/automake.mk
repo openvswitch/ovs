@@ -153,4 +153,6 @@ bin_PROGRAMS += utilities/ovs-benchmark
 utilities_ovs_benchmark_SOURCES = utilities/ovs-benchmark.c
 utilities_ovs_benchmark_LDADD = lib/libopenvswitch.la
 
+FLAKE8_PYFILES += utilities/ovs-pcap.in
+
 include utilities/bugtool/automake.mk

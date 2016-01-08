@@ -240,6 +240,11 @@ AT_CHECK([ovs-ofctl queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY: port=1
 ])
+AT_CHECK([ovs-ofctl queue-get-config br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY: port=1
+OFPT_QUEUE_GET_CONFIG_REPLY: port=2
+])
 AT_CHECK([ovs-ofctl queue-get-config br0 10], [0],
   [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_PORT
 OFPT_QUEUE_GET_CONFIG_REQUEST (xid=0x2): port=10
@@ -253,6 +258,10 @@ ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 ANY], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=ANY
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10], [0],
   [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
@@ -386,25 +395,25 @@ group_id=1235,type=all,bucket=output:10
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
 AT_DATA([flows.txt], [dnl
 tcp actions=group:1234
-udp actions=group:1235
+table=2 udp actions=group:1235
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
 [0], [dnl
+ table=2, udp actions=group:1235
  tcp actions=group:1234
- udp actions=group:1235
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
 [0], [dnl
- udp actions=group:1235
+ table=2, udp actions=group:1235
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-flows br0 | ofctl_strip | sort],
 [0], [dnl
- udp actions=group:1235
+ table=2, udp actions=group:1235
 OFPST_FLOW reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0])

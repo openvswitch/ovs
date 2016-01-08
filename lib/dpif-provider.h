@@ -73,6 +73,9 @@ dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
     thread->dpif = dump->dpif;
 }
 
+struct ct_dpif_dump_state;
+struct ct_dpif_entry;
+
 /* Datapath interface class structure, to be defined by each implementation of
  * a datapath interface.
  *
@@ -390,6 +393,32 @@ struct dpif_class {
     /* Get datapath version. Caller is responsible for freeing the string
      * returned.  */
     char *(*get_datapath_version)(void);
+
+    /* Conntrack entry dumping interface.
+     *
+     * These functions are used by ct-dpif.c to provide a datapath-agnostic
+     * dumping interface to the connection trackes provided by the
+     * datapaths.
+     *
+     * ct_dump_start() should put in '*state' a pointer to a newly allocated
+     * stucture that will be passed by the caller to ct_dump_next() and
+     * ct_dump_done(). If 'zone' is not NULL, only the entries in '*zone'
+     * should be dumped.
+     *
+     * ct_dump_next() should fill 'entry' with information from a connection
+     * and prepare to dump the next one on a subsequest invocation.
+     *
+     * ct_dump_done should perform any cleanup necessary (including
+     * deallocating the 'state' structure, if applicable). */
+    int (*ct_dump_start)(struct dpif *, struct ct_dpif_dump_state **state,
+                         const uint16_t *zone);
+    int (*ct_dump_next)(struct dpif *, struct ct_dpif_dump_state *,
+                        struct ct_dpif_entry *entry);
+    int (*ct_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);
+
+    /* Flushes the connection tracking tables. If 'zone' is not NULL,
+     * only deletes connections in '*zone'. */
+    int (*ct_flush)(struct dpif *, const uint16_t *zone);
 };
 
 extern const struct dpif_class dpif_netlink_class;

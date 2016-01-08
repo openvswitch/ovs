@@ -62,6 +62,7 @@ struct stt_dev {
 	struct net_device	*dev;
 	struct net		*net;
 	struct list_head	next;
+	struct list_head	up_next;
 	struct socket		*sock;
 	__be16			dst_port;
 };
@@ -150,6 +151,7 @@ struct frag_skb_cb {
 /* per-network namespace private data for this module */
 struct stt_net {
 	struct list_head stt_list;
+	struct list_head stt_up_list;	/* Devices which are in IFF_UP state. */
 	int n_tunnels;
 };
 
@@ -167,13 +169,13 @@ static DEFINE_PER_CPU(u32, pkt_seq_counter);
 static void clean_percpu(struct work_struct *work);
 static DECLARE_DELAYED_WORK(clean_percpu_wq, clean_percpu);
 
-static struct stt_dev *stt_find_sock(struct net *net, __be16 port)
+static struct stt_dev *stt_find_up_dev(struct net *net, __be16 port)
 {
 	struct stt_net *sn = net_generic(net, stt_net_id);
 	struct stt_dev *stt_dev;
 
-	list_for_each_entry_rcu(stt_dev, &sn->stt_list, next) {
-		if (inet_sk(stt_dev->sock->sk)->inet_sport == port)
+	list_for_each_entry_rcu(stt_dev, &sn->stt_up_list, up_next) {
+		if (stt_dev->dst_port == port)
 			return stt_dev;
 	}
 	return NULL;
@@ -934,7 +936,7 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 	struct net_device *dev = skb->dev;
 	struct stt_dev *stt_dev = netdev_priv(dev);
 	struct net *net = stt_dev->net;
-	__be16 dport = inet_sk(stt_dev->sock->sk)->inet_sport;
+	__be16 dport = stt_dev->dst_port;
 	struct ip_tunnel_key *tun_key;
 	struct ip_tunnel_info *tun_info;
 	struct rtable *rt;
@@ -1481,7 +1483,7 @@ static unsigned int nf_ip_hook(FIRST_PARAM, struct sk_buff *skb, LAST_PARAM)
 
 	skb_set_transport_header(skb, ip_hdr_len);
 
-	stt_dev = stt_find_sock(dev_net(skb->dev), tcp_hdr(skb)->dest);
+	stt_dev = stt_find_up_dev(dev_net(skb->dev), tcp_hdr(skb)->dest);
 	if (!stt_dev)
 		return NF_ACCEPT;
 
@@ -1556,10 +1558,12 @@ static int stt_start(struct net *net)
 	err = nf_register_hook(&nf_hook_ops);
 #endif
 	if (err)
-		goto free_percpu;
+		goto dec_n_tunnel;
 	sn->n_tunnels++;
 	return 0;
 
+dec_n_tunnel:
+	n_tunnels--;
 free_percpu:
 	for_each_possible_cpu(i) {
 		struct stt_percpu *stt_percpu = per_cpu_ptr(stt_percpu_data, i);
@@ -1644,6 +1648,7 @@ static int stt_open(struct net_device *dev)
 {
 	struct stt_dev *stt = netdev_priv(dev);
 	struct net *net = stt->net;
+	struct stt_net *sn = net_generic(net, stt_net_id);
 	int err;
 
 	err = stt_start(net);
@@ -1653,6 +1658,7 @@ static int stt_open(struct net_device *dev)
 	err = tcp_sock_create4(net, stt->dst_port, &stt->sock);
 	if (err)
 		return err;
+	list_add_rcu(&stt->up_next, &sn->stt_up_list);
 	return 0;
 }
 
@@ -1661,6 +1667,7 @@ static int stt_stop(struct net_device *dev)
 	struct stt_dev *stt_dev = netdev_priv(dev);
 	struct net *net = stt_dev->net;
 
+	list_del_rcu(&stt_dev->up_next);
 	tcp_sock_release(stt_dev->sock);
 	stt_dev->sock = NULL;
 	stt_cleanup(net);
@@ -1851,6 +1858,7 @@ static int stt_init_net(struct net *net)
 	struct stt_net *sn = net_generic(net, stt_net_id);
 
 	INIT_LIST_HEAD(&sn->stt_list);
+	INIT_LIST_HEAD(&sn->stt_up_list);
 	return 0;
 }
 

@@ -372,8 +372,8 @@ nl_sock_subscribe_packets(struct nl_sock *sock)
 
     error = nl_sock_subscribe_packet__(sock, true);
     if (error) {
-        VLOG_WARN("could not unsubscribe packets (%s)",
-                  ovs_strerror(errno));
+        VLOG_WARN("could not subscribe packets (%s)",
+                  ovs_strerror(error));
         return error;
     }
     sock->read_ioctl = OVS_IOCTL_READ_PACKET;
@@ -388,8 +388,8 @@ nl_sock_unsubscribe_packets(struct nl_sock *sock)
 
     int error = nl_sock_subscribe_packet__(sock, false);
     if (error) {
-        VLOG_WARN("could not subscribe to packets (%s)",
-                  ovs_strerror(errno));
+        VLOG_WARN("could not unsubscribe to packets (%s)",
+                  ovs_strerror(error));
         return error;
     }
 

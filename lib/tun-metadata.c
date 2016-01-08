@@ -132,6 +132,7 @@ table_free(struct tun_table *map) OVS_REQUIRES(tab_mutex)
         tun_metadata_del_entry(map, entry - map->entries);
     }
 
+    hmap_destroy(&map->key_hmap);
     free(map);
 }
 
@@ -592,6 +593,7 @@ tun_metadata_add_entry(struct tun_table *map, uint8_t idx, uint16_t opt_class,
 
         if (!cur_chain) {
             cur_chain = xzalloc(sizeof *cur_chain);
+            prev_chain->next = cur_chain;
         }
 
         err = tun_metadata_alloc_chain(map, len, cur_chain);
@@ -602,9 +604,6 @@ tun_metadata_add_entry(struct tun_table *map, uint8_t idx, uint16_t opt_class,
 
         len -= cur_chain->len;
 
-        if (prev_chain) {
-            prev_chain->next = cur_chain;
-        }
         prev_chain = cur_chain;
         cur_chain = NULL;
     }

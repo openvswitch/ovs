@@ -130,7 +130,7 @@ def diff_stats(old, new, delta):
         print("  %sconnected" % negate)
 
     if (old.last_connected != new.last_connected or
-        (new.msec_since_connect != None and
+        (new.msec_since_connect is not None and
          old.msec_since_connect != new.msec_since_connect - delta) or
         (old.total_connected_duration != new.total_connected_duration - delta
             and not (old.total_connected_duration == 0 and
@@ -139,7 +139,7 @@ def diff_stats(old, new, delta):
               % (new.msec_since_connect, new.total_connected_duration))
 
     if (old.last_disconnected != new.last_disconnected or
-        (new.msec_since_disconnect != None and
+        (new.msec_since_disconnect is not None and
          old.msec_since_disconnect != new.msec_since_disconnect - delta)):
         print("  disconnected at %d ms (%d ms ago)"
               % (new.last_disconnected, new.msec_since_disconnect))

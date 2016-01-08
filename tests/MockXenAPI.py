@@ -14,6 +14,7 @@
 
 import re
 
+
 def xapi_local():
     return Session()
 
@@ -97,6 +98,7 @@ class Pool(Table):
     def __init__(self):
         Table.__init__(self, Pool.__records)
 
+
 class VIF(Table):
     __records = ({"uuid": "6ab1b260-398e-49ba-827b-c7696108964c",
                   "other_config":
@@ -104,6 +106,7 @@ class VIF(Table):
 
     def __init__(self):
         Table.__init__(self, VIF.__records)
+
 
 class VM(Table):
     __records = ({"uuid": "fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8",

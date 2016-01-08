@@ -178,7 +178,7 @@ bundle_parse__(const char *s, char **save_ptr,
         bundle = ofpacts->header;
         bundle->n_slaves++;
     }
-    ofpact_update_len(ofpacts, &bundle->ofpact);
+    ofpact_finish(ofpacts, &bundle->ofpact);
 
     bundle->basis = atoi(basis);
 

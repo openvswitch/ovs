@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2033,12 +2033,14 @@ ofputil_append_meter_config(struct ovs_list *replies,
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
     size_t start_ofs = msg->size;
-    struct ofp13_meter_config *reply = ofpbuf_put_uninit(msg, sizeof *reply);
-    reply->flags = htons(mc->flags);
-    reply->meter_id = htonl(mc->meter_id);
+    struct ofp13_meter_config *reply;
 
+    ofpbuf_put_uninit(msg, sizeof *reply);
     ofputil_put_bands(mc->n_bands, mc->bands, msg);
 
+    reply = ofpbuf_at_assert(msg, start_ofs, sizeof *reply);
+    reply->flags = htons(mc->flags);
+    reply->meter_id = htonl(mc->meter_id);
     reply->length = htons(msg->size - start_ofs);
 
     ofpmp_postappend(replies, start_ofs);
@@ -2490,14 +2492,23 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
         qgcr10 = b.data;
         *port = u16_to_ofp(ntohs(qgcr10->port));
-        return 0;
+        break;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
         qgcr11 = b.data;
-        return ofputil_port_from_ofp11(qgcr11->port, port);
+        enum ofperr error = ofputil_port_from_ofp11(qgcr11->port, port);
+        if (error || *port == OFPP_ANY) {
+            return error;
+        }
+        break;
+
+    default:
+        OVS_NOT_REACHED();
     }
 
-    OVS_NOT_REACHED();
+    return (ofp_to_u16(*port) < ofp_to_u16(OFPP_MAX)
+            ? 0
+            : OFPERR_OFPQOFC_BAD_PORT);
 }
 
 /* Constructs and returns the beginning of a reply to
@@ -2574,15 +2585,10 @@ ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
         opq10->queue_id = htonl(oqc->queue_id);
         len_ofs = (char *) &opq10->len - (char *) reply->data;
     } else {
-        struct ofp11_queue_get_config_reply *qgcr11;
         struct ofp12_packet_queue *opq12;
-        ovs_be32 port;
-
-        qgcr11 = reply->msg;
-        port = qgcr11->port;
 
         opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
-        opq12->port = port;
+        opq12->port = ofputil_port_to_ofp11(oqc->port);
         opq12->queue_id = htonl(oqc->queue_id);
         len_ofs = (char *) &opq12->len - (char *) reply->data;
     }
@@ -4066,6 +4072,84 @@ ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
 
     ofputil_put_phy_port(ofpmp_version(replies), pp, reply);
     ofpmp_postappend(replies, start_ofs);
+}
+
+/* ofputil_switch_config */
+
+/* Decodes 'oh', which must be an OFPT_GET_CONFIG_REPLY or OFPT_SET_CONFIG
+ * message, into 'config'.  Returns false if 'oh' contained any flags that
+ * aren't specified in its version of OpenFlow, true otherwise. */
+static bool
+ofputil_decode_switch_config(const struct ofp_header *oh,
+                             struct ofputil_switch_config *config)
+{
+    const struct ofp_switch_config *osc;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+    osc = ofpbuf_pull(&b, sizeof *osc);
+
+    config->frag = ntohs(osc->flags) & OFPC_FRAG_MASK;
+    config->miss_send_len = ntohs(osc->miss_send_len);
+
+    ovs_be16 valid_mask = htons(OFPC_FRAG_MASK);
+    if (oh->version < OFP13_VERSION) {
+        const ovs_be16 ttl_bit = htons(OFPC_INVALID_TTL_TO_CONTROLLER);
+        valid_mask |= ttl_bit;
+        config->invalid_ttl_to_controller = (osc->flags & ttl_bit) != 0;
+    } else {
+        config->invalid_ttl_to_controller = -1;
+    }
+
+    return !(osc->flags & ~valid_mask);
+}
+
+void
+ofputil_decode_get_config_reply(const struct ofp_header *oh,
+                                struct ofputil_switch_config *config)
+{
+    ofputil_decode_switch_config(oh, config);
+}
+
+enum ofperr
+ofputil_decode_set_config(const struct ofp_header *oh,
+                          struct ofputil_switch_config *config)
+{
+    return (ofputil_decode_switch_config(oh, config)
+            ? 0
+            : OFPERR_OFPSCFC_BAD_FLAGS);
+}
+
+static struct ofpbuf *
+ofputil_put_switch_config(const struct ofputil_switch_config *config,
+                          struct ofpbuf *b)
+{
+    const struct ofp_header *oh = b->data;
+    struct ofp_switch_config *osc = ofpbuf_put_zeros(b, sizeof *osc);
+    osc->flags = htons(config->frag);
+    if (config->invalid_ttl_to_controller > 0 && oh->version < OFP13_VERSION) {
+        osc->flags |= htons(OFPC_INVALID_TTL_TO_CONTROLLER);
+    }
+    osc->miss_send_len = htons(config->miss_send_len);
+    return b;
+}
+
+struct ofpbuf *
+ofputil_encode_get_config_reply(const struct ofp_header *request,
+                                const struct ofputil_switch_config *config)
+{
+    struct ofpbuf *b = ofpraw_alloc_reply(OFPRAW_OFPT_GET_CONFIG_REPLY,
+                                          request, 0);
+    return ofputil_put_switch_config(config, b);
+}
+
+struct ofpbuf *
+ofputil_encode_set_config(const struct ofputil_switch_config *config,
+                          enum ofp_version version)
+{
+    struct ofpbuf *b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, version, 0);
+    return ofputil_put_switch_config(config, b);
 }
 
 /* ofputil_switch_features */
@@ -6447,29 +6531,30 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
 }
 
 const char *
-ofputil_frag_handling_to_string(enum ofp_config_flags flags)
+ofputil_frag_handling_to_string(enum ofputil_frag_handling frag)
 {
-    switch (flags & OFPC_FRAG_MASK) {
-    case OFPC_FRAG_NORMAL:   return "normal";
-    case OFPC_FRAG_DROP:     return "drop";
-    case OFPC_FRAG_REASM:    return "reassemble";
-    case OFPC_FRAG_NX_MATCH: return "nx-match";
+    switch (frag) {
+    case OFPUTIL_FRAG_NORMAL:   return "normal";
+    case OFPUTIL_FRAG_DROP:     return "drop";
+    case OFPUTIL_FRAG_REASM:    return "reassemble";
+    case OFPUTIL_FRAG_NX_MATCH: return "nx-match";
     }
 
     OVS_NOT_REACHED();
 }
 
 bool
-ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
+ofputil_frag_handling_from_string(const char *s,
+                                  enum ofputil_frag_handling *frag)
 {
     if (!strcasecmp(s, "normal")) {
-        *flags = OFPC_FRAG_NORMAL;
+        *frag = OFPUTIL_FRAG_NORMAL;
     } else if (!strcasecmp(s, "drop")) {
-        *flags = OFPC_FRAG_DROP;
+        *frag = OFPUTIL_FRAG_DROP;
     } else if (!strcasecmp(s, "reassemble")) {
-        *flags = OFPC_FRAG_REASM;
+        *frag = OFPUTIL_FRAG_REASM;
     } else if (!strcasecmp(s, "nx-match")) {
-        *flags = OFPC_FRAG_NX_MATCH;
+        *frag = OFPUTIL_FRAG_NX_MATCH;
     } else {
         return false;
     }
@@ -8880,7 +8965,9 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
             }
             break;
         default:
-            OVS_NOT_REACHED();
+            /* Returning BAD TYPE to be consistent
+             * though gm->type has been checked already. */
+            return OFPERR_OFPGMFC_BAD_TYPE;
         }
     }
 

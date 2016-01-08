@@ -30,8 +30,6 @@ import time
 import XenAPI
 
 import ovs.dirs
-from ovs.db import error
-from ovs.db import types
 import ovs.daemon
 import ovs.db.idl
 import ovs.unixctl
@@ -83,11 +81,13 @@ def get_network_by_bridge(br_name):
                 " XAPI session could not be initialized" % br_name)
         return None
 
-    recs = session.xenapi.network.get_all_records_where('field "bridge"="%s"' % br_name)
+    recs = session.xenapi.network.get_all_records_where(
+            'field "bridge"="%s"' % br_name)
     if len(recs) > 0:
         return recs.values()[0]
 
     return None
+
 
 # There are possibilities when multiple xs-network-uuids are set for a bridge.
 # In cases like that, we should choose the bridge-id associated with the bridge
@@ -102,6 +102,7 @@ def get_single_bridge_id(bridge_ids, br_name, default=None):
     vlog.warn("Failed to get a single bridge id from Xapi.")
     xapi_down = True
     return default
+
 
 # By default, the "bridge-id" external id in the Bridge table is the
 # same as "xs-network-uuids".  This may be overridden by defining a
@@ -267,7 +268,7 @@ def main():
     while True:
         unixctl_server.run()
         if exiting:
-            break;
+            break
 
         idl.run()
         if not xapi_down and not flush_cache and seqno == idl.change_seqno:

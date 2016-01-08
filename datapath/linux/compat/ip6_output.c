@@ -90,7 +90,7 @@ static u32 rpl_ip_idents_reserve(u32 hash, int segs)
 	return atomic_add_return(segs + delta, p_id) - segs;
 }
 
-static u32 __ipv6_select_ident(struct net *net, u32 hashrnd,
+static u32 rpl___ipv6_select_ident(struct net *net, u32 hashrnd,
 			       const struct in6_addr *dst,
 			       const struct in6_addr *src)
 {
@@ -111,7 +111,6 @@ static u32 __ipv6_select_ident(struct net *net, u32 hashrnd,
 	return id;
 }
 
-/* XXX: Exported in 3.19. */
 static __be32 rpl_ipv6_select_ident(struct net *net,
 			     const struct in6_addr *daddr,
 			     const struct in6_addr *saddr)
@@ -121,7 +120,7 @@ static __be32 rpl_ipv6_select_ident(struct net *net,
 
 	net_get_random_once(&ip6_idents_hashrnd, sizeof(ip6_idents_hashrnd));
 
-	id = __ipv6_select_ident(net, ip6_idents_hashrnd, daddr, saddr);
+	id = rpl___ipv6_select_ident(net, ip6_idents_hashrnd, daddr, saddr);
 	return htonl(id);
 }
 

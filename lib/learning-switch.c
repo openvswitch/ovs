@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,7 +191,6 @@ lswitch_handshake(struct lswitch *sw)
         /* OpenFlow 1.3 and later by default drop packets that miss in the flow
          * table.  Set up a flow to send packets to the controller by
          * default. */
-        struct ofputil_flow_mod fm;
         struct ofpact_output output;
         struct ofpbuf *msg;
         int error;
@@ -200,24 +199,17 @@ lswitch_handshake(struct lswitch *sw)
         output.port = OFPP_CONTROLLER;
         output.max_len = OFP_DEFAULT_MISS_SEND_LEN;
 
-        match_init_catchall(&fm.match);
-        fm.priority = 0;
-        fm.cookie = 0;
-        fm.cookie_mask = 0;
-        fm.new_cookie = 0;
-        fm.modify_cookie = false;
-        fm.table_id = 0;
-        fm.command = OFPFC_ADD;
-        fm.idle_timeout = 0;
-        fm.hard_timeout = 0;
-        fm.importance = 0;
-        fm.buffer_id = UINT32_MAX;
-        fm.out_port = OFPP_NONE;
-        fm.out_group = OFPG_ANY;
-        fm.flags = 0;
-        fm.ofpacts = &output.ofpact;
-        fm.ofpacts_len = sizeof output;
-        fm.delete_reason = 0;
+        struct ofputil_flow_mod fm = {
+            .match = MATCH_CATCHALL_INITIALIZER,
+            .priority = 0,
+            .table_id = 0,
+            .command = OFPFC_ADD,
+            .buffer_id = UINT32_MAX,
+            .out_port = OFPP_NONE,
+            .out_group = OFPG_ANY,
+            .ofpacts = &output.ofpact,
+            .ofpacts_len = sizeof output,
+        };
 
         msg = ofputil_encode_flow_mod(&fm, protocol);
         error = rconn_send(sw->rconn, msg, NULL);
@@ -469,7 +461,6 @@ static void
 send_features_request(struct lswitch *sw)
 {
     struct ofpbuf *b;
-    struct ofp_switch_config *osc;
     int ofp_version = rconn_get_version(sw->rconn);
 
     ovs_assert(ofp_version > 0 && ofp_version < 0xff);
@@ -479,10 +470,10 @@ send_features_request(struct lswitch *sw)
     queue_tx(sw, b);
 
     /* Send OFPT_SET_CONFIG. */
-    b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, ofp_version, sizeof *osc);
-    osc = ofpbuf_put_zeros(b, sizeof *osc);
-    osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
-    queue_tx(sw, b);
+    struct ofputil_switch_config config = {
+        .miss_send_len = OFP_DEFAULT_MISS_SEND_LEN
+    };
+    queue_tx(sw, ofputil_encode_set_config(&config, ofp_version));
 }
 
 static void
@@ -650,7 +641,6 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         enqueue->port = out_port;
         enqueue->queue = queue_id;
     }
-    ofpact_pad(&ofpacts);
 
     /* Prepare packet_out in case we need one. */
     po.buffer_id = pi.buffer_id;
@@ -667,23 +657,22 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 
     /* Send the packet, and possibly the whole flow, to the output port. */
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
-        struct ofputil_flow_mod fm;
-        struct ofpbuf *buffer;
-
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
-        memset(&fm, 0, sizeof fm);
+        struct ofputil_flow_mod fm = {
+            .priority = 1, /* Must be > 0 because of table-miss flow entry. */
+            .table_id = 0xff,
+            .command = OFPFC_ADD,
+            .idle_timeout = sw->max_idle,
+            .buffer_id = pi.buffer_id,
+            .out_port = OFPP_NONE,
+            .ofpacts = ofpacts.data,
+            .ofpacts_len = ofpacts.size,
+        };
         match_init(&fm.match, &flow, &sw->wc);
         ofputil_normalize_match_quiet(&fm.match);
-        fm.priority = 1; /* Must be > 0 because of table-miss flow entry. */
-        fm.table_id = 0xff;
-        fm.command = OFPFC_ADD;
-        fm.idle_timeout = sw->max_idle;
-        fm.buffer_id = pi.buffer_id;
-        fm.out_port = OFPP_NONE;
-        fm.ofpacts = ofpacts.data;
-        fm.ofpacts_len = ofpacts.size;
-        buffer = ofputil_encode_flow_mod(&fm, sw->protocol);
+
+        struct ofpbuf *buffer = ofputil_encode_flow_mod(&fm, sw->protocol);
 
         queue_tx(sw, buffer);
 

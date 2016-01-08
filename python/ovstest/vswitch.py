@@ -15,9 +15,6 @@
 """
 vswitch module allows its callers to interact with OVS DB.
 """
-import exceptions
-import subprocess
-
 import util
 
 
@@ -35,6 +32,7 @@ def ovs_vsctl_del_bridge(bridge):
     """
     ret, _out, _err = util.start_process(["ovs-vsctl", "del-br", bridge])
     return ret
+
 
 def ovs_vsctl_del_pbridge(bridge, iface):
     """

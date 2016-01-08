@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,7 +303,7 @@ struct ofproto_dpif {
     /* Special OpenFlow rules. */
     struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
     struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
-    struct rule_dpif *drop_frags_rule; /* Used in OFPC_FRAG_DROP mode. */
+    struct rule_dpif *drop_frags_rule; /* Used in OFPUTIL_FRAG_DROP mode. */
 
     /* Bridging. */
     struct netflow *netflow;
@@ -1407,7 +1407,6 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     controller->max_len = UINT16_MAX;
     controller->controller_id = 0;
     controller->reason = OFPR_NO_MATCH;
-    ofpact_pad(&ofpacts);
 
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
                                    &ofproto->miss_rule);
@@ -3903,13 +3902,13 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
     /* We always unwildcard nw_frag (for IP), so they
      * need not be unwildcarded here. */
     if (flow->nw_frag & FLOW_NW_FRAG_ANY
-        && ofproto->up.frag_handling != OFPC_FRAG_NX_MATCH) {
-        if (ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
+        && ofproto->up.frag_handling != OFPUTIL_FRAG_NX_MATCH) {
+        if (ofproto->up.frag_handling == OFPUTIL_FRAG_NORMAL) {
             /* We must pretend that transport ports are unavailable. */
             flow->tp_src = htons(0);
             flow->tp_dst = htons(0);
         } else {
-            /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
+            /* Must be OFPUTIL_FRAG_DROP (we don't have OFPUTIL_FRAG_REASM).
              * Use the drop_frags_rule (which cannot disappear). */
             rule = ofproto->drop_frags_rule;
             if (stats) {
@@ -4401,10 +4400,10 @@ get_datapath_version(const struct ofproto *ofproto_)
 
 static bool
 set_frag_handling(struct ofproto *ofproto_,
-                  enum ofp_config_flags frag_handling)
+                  enum ofputil_frag_handling frag_handling)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    if (frag_handling != OFPC_FRAG_REASM) {
+    if (frag_handling != OFPUTIL_FRAG_REASM) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
         return true;
     } else {
@@ -5660,22 +5659,17 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     struct rule_dpif *rule;
     int error;
 
-    ofm.fm.match = *match;
-    ofm.fm.priority = priority;
-    ofm.fm.new_cookie = htonll(0);
-    ofm.fm.cookie = htonll(0);
-    ofm.fm.cookie_mask = htonll(0);
-    ofm.fm.modify_cookie = false;
-    ofm.fm.table_id = TBL_INTERNAL;
-    ofm.fm.command = OFPFC_ADD;
-    ofm.fm.idle_timeout = idle_timeout;
-    ofm.fm.hard_timeout = 0;
-    ofm.fm.importance = 0;
-    ofm.fm.buffer_id = 0;
-    ofm.fm.out_port = 0;
-    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    ofm.fm.ofpacts = ofpacts->data;
-    ofm.fm.ofpacts_len = ofpacts->size;
+    ofm.fm = (struct ofputil_flow_mod) {
+        .match = *match,
+        .priority = priority,
+        .table_id = TBL_INTERNAL,
+        .command = OFPFC_ADD,
+        .idle_timeout = idle_timeout,
+        .flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY,
+        .ofpacts = ofpacts->data,
+        .ofpacts_len = ofpacts->size,
+        .delete_reason = OVS_OFPRR_NONE,
+    };
 
     error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {
@@ -5704,15 +5698,13 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     struct ofproto_flow_mod ofm;
     int error;
 
-    ofm.fm.match = *match;
-    ofm.fm.priority = priority;
-    ofm.fm.new_cookie = htonll(0);
-    ofm.fm.cookie = htonll(0);
-    ofm.fm.cookie_mask = htonll(0);
-    ofm.fm.modify_cookie = false;
-    ofm.fm.table_id = TBL_INTERNAL;
-    ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
-    ofm.fm.command = OFPFC_DELETE_STRICT;
+    ofm.fm = (struct ofputil_flow_mod) {
+        .match = *match,
+        .priority = priority,
+        .table_id = TBL_INTERNAL,
+        .flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY,
+        .command = OFPFC_DELETE_STRICT,
+    };
 
     error = ofproto_flow_mod(&ofproto->up, &ofm);
     if (error) {

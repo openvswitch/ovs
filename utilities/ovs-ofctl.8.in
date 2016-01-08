@@ -244,6 +244,17 @@ statistics are printed for all queues on \fIport\fR; if only
 \fIport\fR is omitted, then statistics are printed for \fIqueue\fR on
 every port where it exists.
 .
+.IP "\fBqueue\-get\-config \fIswitch \fR[\fIport\fR]"
+Prints to the console information about all of the queues configured
+on \fIport\fR within \fIswitch\fR.  If \fIport\fR is \fBANY\fR or if
+it is omitted, prints information about queues on every port.  The
+OpenFlow specification says that only physical ports have queues; in
+particular, \fBLOCAL\fR is not valid for \fIport\fR.
+.IP
+This command has limited usefulness, because ports often have no
+configured queues and because the OpenFlow protocol provides only very
+limited information about the configuration of a queue.
+.
 .SS "OpenFlow 1.1+ Group Table Commands"
 .
 The following commands work only with switches that support OpenFlow
@@ -513,6 +524,8 @@ If \fBinvalid_ttl\fR is passed, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
 \fBINVALID_TTL_TO_CONTROLLER\fR, so that \fBovs\-ofctl monitor\fR can
 receive ``packet-in'' messages when TTL reaches zero on \fBdec_ttl\fR action.
+Only OpenFlow 1.1 and 1.2 support \fBinvalid_ttl\fR; Open vSwitch also
+implements it for OpenFlow 1.0 as an extension.
 .IP
 \fBwatch:\fR[\fB\fIspec\fR...] causes \fBovs\-ofctl\fR to send a
 ``monitor request'' Nicira extension message to the switch at
@@ -1105,7 +1118,11 @@ When \fBdl_type\fR specifies either ARP or RARP, \fBarp_sha\fR and
 address is specified as 6 pairs of hexadecimal digits delimited by colons
 (e.g. \fB00:0A:E4:25:6B:B0\fR), with a wildcard mask following the slash.
 .
-
+.IP \fBarp_op=\fIopcode\fR
+When \fBdl_type\fR specifies either ARP or RARP, \fBarp_op\fR matches the
+ARP opcode.  Only ARP opcodes between 1 and 255 should be specified for
+matching.
+.
 .IP \fBipv6_src=\fIipv6\fR[\fB/\fInetmask\fR]
 .IQ \fBipv6_dst=\fIipv6\fR[\fB/\fInetmask\fR]
 When \fBdl_type\fR is 0x86dd (possibly via shorthand, e.g., \fBipv6\fR

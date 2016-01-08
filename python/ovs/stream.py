@@ -350,8 +350,8 @@ class UnixStream(Stream):
     @staticmethod
     def _open(suffix, dscp):
         connect_path = suffix
-        return  ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
-                                                 True, None, connect_path)
+        return ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
+                                                True, None, connect_path)
 Stream.register_method("unix", UnixStream)
 
 

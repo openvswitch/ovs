@@ -50,6 +50,23 @@ EXTRA_DIST += \
 	debian/openvswitch-vtep.init \
 	debian/openvswitch-vtep.install \
 	debian/openvswitch-vtep.manpages \
+	debian/ovn-central.dirs \
+	debian/ovn-central.init \
+	debian/ovn-central.install \
+	debian/ovn-central.manpages \
+	debian/ovn-central.postinst \
+	debian/ovn-central.postrm \
+	debian/ovn-central.template \
+	debian/ovn-common.install \
+	debian/ovn-common.manpages \
+    debian/ovn-docker.install \
+	debian/ovn-host.dirs \
+	debian/ovn-host.init \
+	debian/ovn-host.install \
+	debian/ovn-host.manpages \
+	debian/ovn-host.postinst \
+	debian/ovn-host.postrm \
+	debian/ovn-host.template \
 	debian/ovs-monitor-ipsec \
 	debian/python-openvswitch.dirs \
 	debian/python-openvswitch.install \
@@ -57,6 +74,9 @@ EXTRA_DIST += \
 	debian/rules.modules \
 	debian/ifupdown.sh \
 	debian/source/format
+
+FLAKE8_PYFILES += \
+	debian/ovs-monitor-ipsec
 
 check-debian-changelog-version:
 	@DEB_VERSION=`echo '$(VERSION)' | sed 's/pre/~pre/'`;		     \
