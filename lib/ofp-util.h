@@ -1299,12 +1299,17 @@ enum ofperr ofputil_decode_tlv_table_reply(const struct ofp_header *,
 void ofputil_uninit_tlv_table(struct ovs_list *mappings);
 
 enum ofputil_async_msg_type {
+    /* Standard asynchronous messages. */
     OAM_PACKET_IN,              /* OFPT_PACKET_IN or NXT_PACKET_IN. */
     OAM_PORT_STATUS,            /* OFPT_PORT_STATUS. */
     OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED. */
     OAM_ROLE_STATUS,            /* OFPT_ROLE_STATUS. */
     OAM_TABLE_STATUS,           /* OFPT_TABLE_STATUS. */
     OAM_REQUESTFORWARD,         /* OFPT_REQUESTFORWARD. */
+
+    /* Extension asynchronous messages (none yet--coming soon!). */
+#define OAM_EXTENSIONS 0        /* Bitmap of all extensions. */
+
     OAM_N_TYPES
 };
 const char *ofputil_async_msg_type_to_string(enum ofputil_async_msg_type);
@@ -1320,8 +1325,10 @@ enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
                                             const struct ofputil_async_cfg *,
                                             struct ofputil_async_cfg *);
 
-struct ofpbuf *ofputil_encode_get_async_config(
+struct ofpbuf *ofputil_encode_get_async_reply(
     const struct ofp_header *, const struct ofputil_async_cfg *);
+struct ofpbuf *ofputil_encode_set_async_config(
+    const struct ofputil_async_cfg *, uint32_t oams, enum ofp_version);
 
 struct ofputil_async_cfg ofputil_async_cfg_default(enum ofp_version);
 

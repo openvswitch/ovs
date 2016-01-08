@@ -9614,7 +9614,8 @@ ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
         decode_legacy_async_masks(msg->flow_removed_mask, OAM_FLOW_REMOVED,
                                   oh->version, ac);
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
-               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY ||
+               raw == OFPRAW_NXT_SET_ASYNC_CONFIG2) {
         *ac = *basis;
         while (b.size > 0) {
             struct ofpbuf property;
@@ -9695,8 +9696,8 @@ ofputil_put_async_config__(const struct ofputil_async_cfg *ac,
 /* Encodes and returns a reply to the OFPT_GET_ASYNC_REQUEST in 'oh' that
  * states that the asynchronous message configuration is 'ac'. */
 struct ofpbuf *
-ofputil_encode_get_async_config(const struct ofp_header *oh,
-                                const struct ofputil_async_cfg *ac)
+ofputil_encode_get_async_reply(const struct ofp_header *oh,
+                               const struct ofputil_async_cfg *ac)
 {
     struct ofpbuf *buf;
 
@@ -9710,6 +9711,31 @@ ofputil_encode_get_async_config(const struct ofp_header *oh,
     return reply;
 
     return buf;
+}
+
+/* Encodes and returns a message, in a format appropriate for OpenFlow version
+ * 'ofp_version', that sets the asynchronous message configuration to 'ac'.
+ *
+ * Specify 'oams' as a bitmap of OAM_* that indicate the asynchronous messages
+ * to configure.  OF1.0 through OF1.3 can't natively configure a subset of
+ * messages, so more messages than requested may be configured.  OF1.0 through
+ * OF1.3 also can't configure OVS extension OAM_* values, so if 'oam' includes
+ * any extensions then this function encodes an Open vSwitch extension message
+ * that does support configuring OVS extension OAM_*. */
+struct ofpbuf *
+ofputil_encode_set_async_config(const struct ofputil_async_cfg *ac,
+                                uint32_t oams, enum ofp_version ofp_version)
+{
+    enum ofpraw raw = (ofp_version >= OFP14_VERSION ? OFPRAW_OFPT14_SET_ASYNC
+                       : oams & OAM_EXTENSIONS ? OFPRAW_NXT_SET_ASYNC_CONFIG2
+                       : ofp_version >= OFP13_VERSION ? OFPRAW_OFPT13_SET_ASYNC
+                       : OFPRAW_NXT_SET_ASYNC_CONFIG);
+    struct ofpbuf *request = ofpraw_alloc(raw, ofp_version, 0);
+    ofputil_put_async_config__(ac, request,
+                               (raw == OFPRAW_OFPT14_SET_ASYNC ||
+                                raw == OFPRAW_NXT_SET_ASYNC_CONFIG2),
+                               ofp_version, oams);
+    return request;
 }
 
 struct ofputil_async_cfg
