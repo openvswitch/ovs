@@ -238,6 +238,8 @@ enum ofpraw {
     OFPRAW_OFPT13_SET_ASYNC,
     /* NXT 1.0+ (19): struct nx_async_config. */
     OFPRAW_NXT_SET_ASYNC_CONFIG,
+    /* NXT 1.0-1.3 (27): uint8_t[8][]. */
+    OFPRAW_NXT_SET_ASYNC_CONFIG2,
     /* OFPT 1.4+ (28): uint8_t[8][]. */
     OFPRAW_OFPT14_SET_ASYNC,
 
@@ -560,6 +562,7 @@ enum ofptype {
     OFPTYPE_GET_ASYNC_REPLY,      /* OFPRAW_OFPT13_GET_ASYNC_REPLY.
                                    * OFPRAW_OFPT14_GET_ASYNC_REPLY. */
     OFPTYPE_SET_ASYNC_CONFIG,     /* OFPRAW_NXT_SET_ASYNC_CONFIG.
+                                   * OFPRAW_NXT_SET_ASYNC_CONFIG2.
                                    * OFPRAW_OFPT13_SET_ASYNC.
                                    * OFPRAW_OFPT14_SET_ASYNC. */
 
