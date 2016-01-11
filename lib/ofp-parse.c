@@ -899,7 +899,7 @@ parse_ofp_table_vacancy(struct ofputil_table_mod *tm, const char *setting)
 {
     char *save_ptr = NULL;
     char *vac_up, *vac_down;
-    char *value = strdup(setting);
+    char *value = xstrdup(setting);
     char *ret_msg;
     int vacancy_up, vacancy_down;
 
