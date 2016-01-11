@@ -140,7 +140,6 @@ static inline void *dp_packet_try_pull(struct dp_packet *, size_t);
 
 void *dp_packet_steal_data(struct dp_packet *);
 
-char *dp_packet_to_string(const struct dp_packet *, size_t maxbytes);
 static inline bool dp_packet_equal(const struct dp_packet *,
                                    const struct dp_packet *);
 
