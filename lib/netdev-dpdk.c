@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2126,7 +2126,7 @@ process_vhost_flags(char *flag, char *default_val, int size,
      */
     if (!strcmp(argv[1], flag) && (strlen(argv[2]) <= size)) {
         changed = 1;
-        *new_val = strdup(argv[2]);
+        *new_val = xstrdup(argv[2]);
         VLOG_INFO("User-provided %s in use: %s", flag, *new_val);
     } else {
         VLOG_INFO("No %s provided - defaulting to %s", flag, default_val);
@@ -2159,10 +2159,10 @@ dpdk_init(int argc, char **argv)
     }
 
 #ifdef VHOST_CUSE
-    if (process_vhost_flags("-cuse_dev_name", strdup("vhost-net"),
+    if (process_vhost_flags("-cuse_dev_name", xstrdup("vhost-net"),
                             PATH_MAX, argv, &cuse_dev_name)) {
 #else
-    if (process_vhost_flags("-vhost_sock_dir", strdup(ovs_rundir()),
+    if (process_vhost_flags("-vhost_sock_dir", xstrdup(ovs_rundir()),
                             NAME_MAX, argv, &vhost_sock_dir)) {
         struct stat s;
         int err;
