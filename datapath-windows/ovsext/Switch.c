@@ -588,7 +588,6 @@ OvsExtNetPnPEvent(NDIS_HANDLE filterModuleContext,
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_SWITCH_CONTEXT switchContext = (POVS_SWITCH_CONTEXT)filterModuleContext;
-    BOOLEAN switchActive;
 
     OVS_LOG_TRACE("Enter: filterModuleContext: %p, NetEvent: %d",
                   filterModuleContext, (netPnPEvent->NetPnPEvent).NetEvent);
@@ -597,24 +596,17 @@ OvsExtNetPnPEvent(NDIS_HANDLE filterModuleContext,
      * an asynchronous notification of the switch completing activation.
      */
     if (netPnPEvent->NetPnPEvent.NetEvent == NetEventSwitchActivate) {
-        status = OvsQuerySwitchActivationComplete(switchContext, &switchActive);
-        if (status != NDIS_STATUS_SUCCESS) {
-            switchContext->isActivateFailed = TRUE;
-        } else {
-            ASSERT(switchContext->isActivated == FALSE);
-            if (switchContext->isActivated == FALSE && switchActive == TRUE) {
-                status = OvsActivateSwitch(switchContext);
-                OVS_LOG_TRACE("OvsExtNetPnPEvent: activated switch: %p "
-                              "status: %s", switchContext,
-                              status ? "TRUE" : "FALSE");
-            }
+        ASSERT(switchContext->isActivated == FALSE);
+        if (switchContext->isActivated == FALSE) {
+            status = OvsActivateSwitch(switchContext);
+            OVS_LOG_TRACE("OvsExtNetPnPEvent: activated switch: %p "
+                          "status: %s", switchContext,
+                          status ? "TRUE" : "FALSE");
         }
     }
 
-    if (status == NDIS_STATUS_SUCCESS) {
-        status = NdisFNetPnPEvent(switchContext->NdisFilterHandle,
-                                  netPnPEvent);
-    }
+    status = NdisFNetPnPEvent(switchContext->NdisFilterHandle,
+                              netPnPEvent);
     OVS_LOG_TRACE("Exit: OvsExtNetPnPEvent");
 
     return status;
