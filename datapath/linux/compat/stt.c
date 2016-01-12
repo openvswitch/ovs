@@ -1586,12 +1586,6 @@ static void stt_cleanup(struct net *net)
 	sn->n_tunnels--;
 	if (sn->n_tunnels)
 		goto out;
-#ifdef HAVE_NF_REGISTER_NET_HOOK
-	nf_unregister_net_hook(net, &nf_hook_ops);
-#else
-	nf_unregister_hook(&nf_hook_ops);
-#endif
-
 out:
 	n_tunnels--;
 	if (n_tunnels)
@@ -1668,6 +1662,7 @@ static int stt_stop(struct net_device *dev)
 	struct net *net = stt_dev->net;
 
 	list_del_rcu(&stt_dev->up_next);
+	synchronize_net();
 	tcp_sock_release(stt_dev->sock);
 	stt_dev->sock = NULL;
 	stt_cleanup(net);
@@ -1869,6 +1864,14 @@ static void stt_exit_net(struct net *net)
 	struct net_device *dev, *aux;
 	LIST_HEAD(list);
 
+#ifdef HAVE_NF_REGISTER_NET_HOOK
+	/* Ideally this should be done from stt_stop(), But on some kernels
+	 * nf-unreg operation needs RTNL-lock, which can cause deallock.
+	 * So it is done from here. */
+	if (!list_empty(&nf_hook_ops.list))
+		nf_unregister_net_hook(net, &nf_hook_ops);
+#endif
+
 	rtnl_lock();
 
 	/* gather any stt devices that were moved into this ns */
@@ -1908,6 +1911,7 @@ int stt_init_module(void)
 	if (rc)
 		goto out2;
 
+	INIT_LIST_HEAD(&nf_hook_ops.list);
 	pr_info("STT tunneling driver\n");
 	return 0;
 out2:
@@ -1918,6 +1922,10 @@ out1:
 
 void stt_cleanup_module(void)
 {
+#ifndef HAVE_NF_REGISTER_NET_HOOK
+	if (!list_empty(&nf_hook_ops.list))
+		nf_unregister_hook(&nf_hook_ops);
+#endif
 	rtnl_link_unregister(&stt_link_ops);
 	unregister_pernet_subsys(&stt_net_ops);
 }
