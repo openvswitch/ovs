@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2015 Nicira, Inc.
+# Copyright (C) 2007-2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -183,6 +183,7 @@ SUFFIXES += .in
 SUFFIXES += .xml
 %: %.xml
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/xml2nroff $< > $@.tmp \
+		-I $(srcdir) \
 		--version=$(VERSION) \
 		PKIDIR='$(PKIDIR)' \
 		LOGDIR='$(LOGDIR)' \
