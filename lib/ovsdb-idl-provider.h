@@ -23,6 +23,25 @@
 #include "shash.h"
 #include "uuid.h"
 
+enum pmu_operation {
+    PMU_UPDATE,
+    PMU_INSERT,
+    PMU_DELETE
+};
+
+/* PMU: Partial Map Update */
+struct pmu {
+    struct ovsdb_datum *new_datum;
+    enum pmu_operation operation;
+    struct pmu *next;
+};
+
+/* PMUL: Partial Map Update List */
+struct pmul {
+    struct pmu *first;
+    struct pmu *last;
+};
+
 struct ovsdb_idl_row {
     struct hmap_node hmap_node; /* In struct ovsdb_idl_table's 'rows'. */
     struct uuid uuid;           /* Row "_uuid" field. */
@@ -42,7 +61,8 @@ struct ovsdb_idl_row {
     struct ovs_list track_node; /* Rows modified/added/deleted by IDL */
     unsigned long int *updated; /* Bitmap of columns updated by IDL */
 
-    unsigned long int *partial_maps; /* Bitmap of columns containing partial maps */
+    unsigned long int *partial_map_written; /* Bitmap of columns containing partial maps */
+    struct pmul **partial_map_lists; /* List of lists of partial updates. */
 };
 
 struct ovsdb_idl_column {
