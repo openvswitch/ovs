@@ -1279,63 +1279,6 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
     return true;
 }
 
-#if 0
-ovsdb_idl_row_apply_diff(struct ovsdb_idl_row *row,
-                         const struct json *diff_json)
-{
-    struct ovsdb_idl_table *table = row->table;
-    const struct ovsdb_idl_table_class *class = table->class;
-    struct shash_node *node;
-    bool changed = false;
-
-    SHASH_FOR_EACH (node, json_object(diff_json)) {
-        const char *column_name = node->name;
-        const struct ovsdb_idl_column *column;
-        struct ovsdb_datum diff;
-        struct ovsdb_error *error;
-
-        column = shash_find_data(&table->columns, column_name);
-        if (!column) {
-            VLOG_WARN_RL(&syntax_rl, "unknown column %s updating row "UUID_FMT,
-                         column_name, UUID_ARGS(&row->uuid));
-            continue;
-        }
-
-        error = ovsdb_transient_datum_from_json(&diff, &column->type,
-                                                node->data);
-        if (!error) {
-            unsigned int column_idx = column - table->class->columns;
-            struct ovsdb_datum *old = &row->old[column_idx];
-            struct ovsdb_datum new;
-            struct ovsdb_error *error;
-
-            error = ovsdb_datum_apply_diff(&new, old, &diff, &column->type);
-            if (error) {
-                VLOG_WARN_RL(&syntax_rl, "update2 failed to modify column "
-                             "%s row "UUID_FMT, column_name,
-                             UUID_ARGS(&row->uuid));
-                ovsdb_error_destroy(error);
-            } else {
-                ovsdb_datum_swap(old, &new);
-                ovsdb_datum_destroy(&new, &column->type);
-                if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
-                    changed = true;
-                }
-            }
-            ovsdb_datum_destroy(&diff, &column->type);
-        } else {
-            char *s = ovsdb_error_to_string(error);
-            VLOG_WARN_RL(&syntax_rl, "error parsing column %s in row "UUID_FMT
-                         " in table %s: %s", column_name,
-                         UUID_ARGS(&row->uuid), table->class->name, s);
-            free(s);
-            ovsdb_error_destroy(error);
-        }
-    }
-    return changed;
-}
-#endif
-
 /* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
  * otherwise.
  *
