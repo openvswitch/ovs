@@ -1746,8 +1746,6 @@ same IP message.
 Currently, connection tracking is only available on Linux kernels with the
 nf_conntrack module loaded.
 .
-.RE
-.
 .IP \fBdec_ttl\fR
 .IQ \fBdec_ttl(\fIid1\fR[\fB,\fIid2\fR]...\fB)\fR
 Decrement TTL of IPv4 packet or hop limit of IPv6 packet.  If the
