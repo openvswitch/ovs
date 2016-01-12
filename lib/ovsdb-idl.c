@@ -775,6 +775,29 @@ ovsdb_idl_track_get_next(const struct ovsdb_idl_row *row)
     return NULL;
 }
 
+/* Returns true if a tracked 'column' in 'row' was updated by IDL, false
+ * otherwise. The tracking data is cleared by ovsdb_idl_track_clear()
+ *
+ * Function returns false if 'column' is not tracked (see
+ * ovsdb_idl_track_add_column()).
+ */
+bool
+ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
+                           const struct ovsdb_idl_column *column)
+{
+    const struct ovsdb_idl_table_class *class;
+    size_t column_idx;
+
+    class = row->table->class;
+    column_idx = column - class->columns;
+
+    if (row->updated && bitmap_is_set(row->updated, column_idx)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 /* Flushes the tracked rows. Client calls this function after calling
  * ovsdb_idl_run() and read all tracked rows with the ovsdb_idl_track_get_*()
  * functions. This is usually done at the end of the client's processing
@@ -792,6 +815,10 @@ ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
             struct ovsdb_idl_row *row, *next;
 
             LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
+                if (row->updated) {
+                    free(row->updated);
+                    row->updated = NULL;
+                }
                 list_remove(&row->track_node);
                 list_init(&row->track_node);
                 if (ovsdb_idl_row_is_orphan(row)) {
@@ -1257,6 +1284,7 @@ ovsdb_idl_row_apply_diff(struct ovsdb_idl_row *row,
                          const struct json *diff_json)
 {
     struct ovsdb_idl_table *table = row->table;
+    const struct ovsdb_idl_table_class *class = table->class;
     struct shash_node *node;
     bool changed = false;
 
@@ -1374,6 +1402,10 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                             list_push_front(&row->table->track_list,
                                             &row->track_node);
                         }
+                        if (!row->updated) {
+                            row->updated = bitmap_allocate(class->n_columns);
+                        }
+                        bitmap_set1(row->updated, column_idx);
                     }
                 }
             } else {

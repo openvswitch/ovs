@@ -150,7 +150,7 @@ def printCIDLHeader(schemaFile):
         print "};"
 
         # Column indexes.
-        printEnum(["%s_COL_%s" % (structName.upper(), columnName.upper())
+        printEnum("%s_column_id" % structName.lower(), ["%s_COL_%s" % (structName.upper(), columnName.upper())
                    for columnName in sorted(table.columns)]
                   + ["%s_N_COLUMNS" % structName.upper()])
 
@@ -189,6 +189,7 @@ const struct %(s)s *%(s)s_track_get_next(const struct %(s)s *);
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
+bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
 ''' % {'s': structName, 'S': structName.upper()}
 
         for columnName, column in sorted(table.columns.iteritems()):
@@ -217,7 +218,7 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
         print
 
     # Table indexes.
-    printEnum(["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
+    printEnum("%stable_id" % prefix.lower(), ["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
     print
     for tableName in schema.tables:
         print "#define %(p)stable_%(t)s (%(p)stable_classes[%(P)sTABLE_%(T)s])" % {
@@ -233,11 +234,11 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
     print "\nconst char * %sget_db_version(void);" % prefix
     print "\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()}
 
-def printEnum(members):
+def printEnum(type, members):
     if len(members) == 0:
         return
 
-    print "\nenum {";
+    print "\nenum %s {" % type
     for member in members[:-1]:
         print "    %s," % member
     print "    %s" % members[-1]
@@ -522,6 +523,12 @@ struct %(s)s *
 %(s)s_insert(struct ovsdb_idl_txn *txn)
 {
     return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_classes[%(P)sTABLE_%(T)s], NULL));
+}
+
+bool
+%(s)s_is_updated(const struct %(s)s *row, enum %(s)s_column_id column)
+{
+    return ovsdb_idl_track_is_updated(&row->header_, &%(s)s_columns[column]);
 }''' % {'s': structName,
         'p': prefix,
         'P': prefix.upper(),
