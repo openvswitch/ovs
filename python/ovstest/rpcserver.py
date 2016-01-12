@@ -359,9 +359,9 @@ def start_rpc_server(port):
     try:
         print "Starting RPC server\n"
         sys.stdout.flush()
-         # If this server was started from ovs-test client then we must flush
-         # STDOUT so that client would know that server is ready to accept
-         # XML RPC connections.
+        # If this server was started from ovs-test client then we must flush
+        # STDOUT so that client would know that server is ready to accept
+        # XML RPC connections.
         reactor.run()
     finally:
         rpc_server.cleanup()

@@ -444,7 +444,6 @@ ofpacts_pull(struct ofpbuf *ofpacts)
 {
     size_t ofs;
 
-    ofpact_pad(ofpacts);
     ofs = ofpacts->size;
     ofpbuf_pull(ofpacts, ofs);
 
@@ -1094,7 +1093,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     }
 
     bundle = ofpacts->header;
-    ofpact_update_len(ofpacts, &bundle->ofpact);
+    ofpact_finish(ofpacts, &bundle->ofpact);
 
     if (!error) {
         error = bundle_check(bundle, OFPP_MAX, NULL);
@@ -2934,7 +2933,7 @@ decode_OFPAT_RAW_DEC_NW_TTL(struct ofpbuf *out)
     ids->n_controllers = 1;
     ofpbuf_put(out, &id, sizeof id);
     ids = out->header;
-    ofpact_update_len(out, &ids->ofpact);
+    ofpact_finish(out, &ids->ofpact);
     return error;
 }
 
@@ -2971,7 +2970,7 @@ decode_NXAST_RAW_DEC_TTL_CNT_IDS(const struct nx_action_cnt_ids *nac_ids,
         ids = out->header;
     }
 
-    ofpact_update_len(out, &ids->ofpact);
+    ofpact_finish(out, &ids->ofpact);
 
     return 0;
 }
@@ -3010,7 +3009,7 @@ parse_noargs_dec_ttl(struct ofpbuf *ofpacts)
     ofpbuf_put(ofpacts, &id, sizeof id);
     ids = ofpacts->header;
     ids->n_controllers++;
-    ofpact_update_len(ofpacts, &ids->ofpact);
+    ofpact_finish(ofpacts, &ids->ofpact);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -3037,7 +3036,7 @@ parse_DEC_TTL(char *arg, struct ofpbuf *ofpacts,
             return xstrdup("dec_ttl_cnt_ids: expected at least one controller "
                            "id.");
         }
-        ofpact_update_len(ofpacts, &ids->ofpact);
+        ofpact_finish(ofpacts, &ids->ofpact);
     }
     return NULL;
 }
@@ -4055,7 +4054,7 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
             get_subfield(spec->n_bits, &p, &spec->dst);
         }
     }
-    ofpact_update_len(ofpacts, &learn->ofpact);
+    ofpact_finish(ofpacts, &learn->ofpact);
 
     if (!is_all_zeros(p, (char *) end - (char *) p)) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -4376,10 +4375,10 @@ decode_NXAST_RAW_NOTE(const struct nx_action_note *nan,
     unsigned int length;
 
     length = ntohs(nan->len) - offsetof(struct nx_action_note, note);
-    note = ofpact_put(out, OFPACT_NOTE,
-                      offsetof(struct ofpact_note, data) + length);
+    note = ofpact_put_NOTE(out);
     note->length = length;
-    memcpy(note->data, nan->note, length);
+    ofpbuf_put(out, nan->note, length);
+    ofpact_finish(out, out->header);
 
     return 0;
 }
@@ -4427,7 +4426,7 @@ parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
 
         arg += 2;
     }
-    ofpact_update_len(ofpacts, &note->ofpact);
+    ofpact_finish(ofpacts, &note->ofpact);
     return NULL;
 }
 
@@ -4834,7 +4833,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
     out->header = &conntrack->ofpact;
-    ofpact_update_len(out, &conntrack->ofpact);
+    ofpact_finish(out, &conntrack->ofpact);
 
     if (conntrack->ofpact.len > sizeof(*conntrack)
         && !(conntrack->flags & NX_CT_F_COMMIT)) {
@@ -4930,7 +4929,6 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
             const size_t nat_offset = ofpacts_pull(ofpacts);
 
             error = parse_NAT(value, ofpacts, usable_protocols);
-            ofpact_pad(ofpacts);
             /* Update CT action pointer and length. */
             ofpacts->header = ofpbuf_push_uninit(ofpacts, nat_offset);
             oc = ofpacts->header;
@@ -4946,7 +4944,6 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
             error = ofpacts_parse_copy(value, ofpacts, &usable_protocols2,
                                        false, OFPACT_CT);
             *usable_protocols &= usable_protocols2;
-            ofpact_pad(ofpacts);
             ofpacts->header = ofpbuf_push_uninit(ofpacts, exec_offset);
             oc = ofpacts->header;
         } else {
@@ -4957,7 +4954,7 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
         }
     }
 
-    ofpact_update_len(ofpacts, &oc->ofpact);
+    ofpact_finish(ofpacts, &oc->ofpact);
     ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
 }
@@ -5622,8 +5619,6 @@ ofpacts_decode(const void *actions, size_t actions_len,
             return error;
         }
     }
-
-    ofpact_pad(ofpacts);
     return 0;
 }
 
@@ -6297,10 +6292,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
         struct ofpact_nest *on;
         const struct ofp_action_header *actions;
         size_t actions_len;
-        size_t start;
-
-        ofpact_pad(ofpacts);
-        start = ofpacts->size;
+        size_t start = ofpacts->size;
         ofpact_put(ofpacts, OFPACT_WRITE_ACTIONS,
                    offsetof(struct ofpact_nest, actions));
         get_actions_from_instruction(insts[OVSINST_OFPIT11_WRITE_ACTIONS],
@@ -6730,16 +6722,20 @@ ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
             : 0);
 }
 
-static const struct mf_field *
-ofpact_get_mf_field(enum ofpact_type type, const void *ofpact)
+/* Returns the destination field that 'ofpact' would write to, or NULL
+ * if the action would not write to an mf_field. */
+const struct mf_field *
+ofpact_get_mf_dst(const struct ofpact *ofpact)
 {
-    if (type == OFPACT_SET_FIELD) {
-        const struct ofpact_set_field *orl = ofpact;
+    if (ofpact->type == OFPACT_SET_FIELD) {
+        const struct ofpact_set_field *orl;
 
+        orl = CONTAINER_OF(ofpact, struct ofpact_set_field, ofpact);
         return orl->field;
-    } else if (type == OFPACT_REG_MOVE) {
-        const struct ofpact_reg_move *orm = ofpact;
+    } else if (ofpact->type == OFPACT_REG_MOVE) {
+        const struct ofpact_reg_move *orm;
 
+        orm = CONTAINER_OF(ofpact, struct ofpact_reg_move, ofpact);
         return orm->dst.field;
     }
 
@@ -6764,7 +6760,7 @@ field_requires_ct(enum mf_field_id field)
 static enum ofperr
 ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 {
-    const struct mf_field *field = ofpact_get_mf_field(a->type, a);
+    const struct mf_field *field = ofpact_get_mf_dst(a);
 
     if (field && field_requires_ct(field->id) && outer_action != OFPACT_CT) {
         VLOG_WARN("cannot set CT fields outside of ct action");
@@ -7266,7 +7262,6 @@ ofpact_put(struct ofpbuf *ofpacts, enum ofpact_type type, size_t len)
 {
     struct ofpact *ofpact;
 
-    ofpact_pad(ofpacts);
     ofpacts->header = ofpbuf_put_uninit(ofpacts, len);
     ofpact = ofpacts->header;
     ofpact_init(ofpact, type, len);
@@ -7282,41 +7277,18 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
     ofpact->len = len;
 }
 
-/* Updates 'ofpact->len' to the number of bytes in the tail of 'ofpacts'
- * starting at 'ofpact'.
- *
- * This is the correct way to update a variable-length ofpact's length after
- * adding the variable-length part of the payload.  (See the large comment
- * near the end of ofp-actions.h for more information.) */
+/* Finishes composing a variable-length action (begun using
+ * ofpact_put_<NAME>()), by padding the action to a multiple of OFPACT_ALIGNTO
+ * bytes and updating its embedded length field.  See the large comment near
+ * the end of ofp-actions.h for more information. */
 void
-ofpact_update_len(struct ofpbuf *ofpacts, struct ofpact *ofpact)
+ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
     ovs_assert(ofpact == ofpacts->header);
     ofpact->len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;
-}
-
-/* Pads out 'ofpacts' to a multiple of OFPACT_ALIGNTO bytes in length.  Each
- * ofpact_put_<ENUM>() calls this function automatically beforehand, but the
- * client must call this itself after adding the final ofpact to an array of
- * them.
- *
- * (The consequences of failing to call this function are probably not dire.
- * OFPACT_FOR_EACH will calculate a pointer beyond the end of the ofpacts, but
- * not dereference it.  That's undefined behavior, technically, but it will not
- * cause a real problem on common systems.  Still, it seems better to call
- * it.) */
-void
-ofpact_pad(struct ofpbuf *ofpacts)
-{
-    unsigned int pad = PAD_SIZE(ofpacts->size, OFPACT_ALIGNTO);
-    if (pad) {
-        ofpbuf_put_zeros(ofpacts, pad);
-    }
+    ofpbuf_padto(ofpacts, OFPACT_ALIGN(ofpacts->size));
 }
 
-
-
-
 static char * OVS_WARN_UNUSED_RESULT
 ofpact_parse(enum ofpact_type type, char *value, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols)
@@ -7420,7 +7392,6 @@ ofpacts_parse__(char *str, struct ofpbuf *ofpacts,
         }
         prev_inst = inst;
     }
-    ofpact_pad(ofpacts);
 
     if (drop && ofpacts->size) {
         return xstrdup("\"drop\" must not be accompanied by any other action "

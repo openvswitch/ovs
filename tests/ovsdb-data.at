@@ -731,10 +731,10 @@ OVSDB_CHECK_POSITIVE([string map of 1 boolean to integer],
 OVSDB_CHECK_POSITIVE_CPY([JSON map of 1 uuid to real],
   [[parse-data '{"key": "uuid", "value": "real", "min": 1, "max": 5}' \
     '["map", [[["uuid", "cad8542b-6ee1-486b-971b-7dcbf6e14979"], 1.0],
-	      [["uuid", "6b94b968-2702-4f64-9457-314a34d69b8c"], 2.0],
-	      [["uuid", "d2c4a168-24de-47eb-a8a3-c1abfc814979"], 3.0],
-	      [["uuid", "25bfa475-d072-4f60-8be1-00f48643e9cb"], 4.0],
-	      [["uuid", "1c92b8ca-d5e4-4628-a85d-1dc2d099a99a"], 5.0]]]']],
+              [["uuid", "6b94b968-2702-4f64-9457-314a34d69b8c"], 2.0],
+              [["uuid", "d2c4a168-24de-47eb-a8a3-c1abfc814979"], 3.0],
+              [["uuid", "25bfa475-d072-4f60-8be1-00f48643e9cb"], 4.0],
+              [["uuid", "1c92b8ca-d5e4-4628-a85d-1dc2d099a99a"], 5.0]]]']],
   [[["map",[[["uuid","1c92b8ca-d5e4-4628-a85d-1dc2d099a99a"],5],[["uuid","25bfa475-d072-4f60-8be1-00f48643e9cb"],4],[["uuid","6b94b968-2702-4f64-9457-314a34d69b8c"],2],[["uuid","cad8542b-6ee1-486b-971b-7dcbf6e14979"],1],[["uuid","d2c4a168-24de-47eb-a8a3-c1abfc814979"],3]]]]])
 
 OVSDB_CHECK_POSITIVE([string map of 1 uuid to real],
@@ -749,15 +749,15 @@ OVSDB_CHECK_POSITIVE([string map of 1 uuid to real],
 OVSDB_CHECK_POSITIVE_CPY([JSON map of 10 string to string],
   [[parse-data '{"key": "string", "value": "string", "min": 1, "max": 10}' \
     '["map", [["2 gills", "1 chopin"],
-	      ["2 chopins", "1 pint"],
-	      ["2 pints", "1 quart"],
-	      ["2 quarts", "1 pottle"],
-	      ["2 pottles", "1 gallon"],
-	      ["2 gallons", "1 peck"],
-	      ["2 pecks", "1 demibushel"],
-	      ["2 demibushel", "1 firkin"],
-	      ["2 firkins", "1 kilderkin"],
-	      ["2 kilderkins", "1 barrel"]]]']],
+              ["2 chopins", "1 pint"],
+              ["2 pints", "1 quart"],
+              ["2 quarts", "1 pottle"],
+              ["2 pottles", "1 gallon"],
+              ["2 gallons", "1 peck"],
+              ["2 pecks", "1 demibushel"],
+              ["2 demibushel", "1 firkin"],
+              ["2 firkins", "1 kilderkin"],
+              ["2 kilderkins", "1 barrel"]]]']],
    [[["map",[["2 chopins","1 pint"],["2 demibushel","1 firkin"],["2 firkins","1 kilderkin"],["2 gallons","1 peck"],["2 gills","1 chopin"],["2 kilderkins","1 barrel"],["2 pecks","1 demibushel"],["2 pints","1 quart"],["2 pottles","1 gallon"],["2 quarts","1 pottle"]]]]])
 
 OVSDB_CHECK_POSITIVE([string map of 10 string to string],
@@ -783,3 +783,83 @@ OVSDB_CHECK_NEGATIVE([duplicate integer key not allowed in string map],
   [[parse-data-strings '{"key": "integer", "value": "boolean", "max": 5}' \
     '1=true 2=false 1=false']],
   [map contains duplicate key])
+
+OVSDB_CHECK_POSITIVE([generate and apply diff -- integer],
+  [[diff-data '["integer"]' '[0]' '[2]']],
+  [[diff: 2
+apply diff: 2
+OK]])
+
+OVSDB_CHECK_POSITIVE([generate and apply diff -- boolean],
+  [[diff-data '["boolean"]' '[true]' '[false]']],
+  [[diff: false
+apply diff: false
+OK]])
+
+OVSDB_CHECK_POSITIVE([generate and apply diff -- string],
+  [[diff-data '["string"]' '["AAA"]' '["BBB"]']],
+  [[diff: "BBB"
+apply diff: "BBB"
+OK]])
+
+dnl Test set modifications.
+OVSDB_CHECK_POSITIVE([generate and apply diff -- set],
+  [[diff-data '{"key": "integer", "min":0, "max": 3}' \
+  '["set", [0, 1]]'  '["set", [1,2]]' \
+  '["set", [0, 1]]'  '["set", [1]]' \
+  '["set", []]'  '["set", [0, 1]]' \
+  '["set", [0, 1]]'  '["set", []]'
+  ]],
+  [[diff: ["set",[0,2]]
+apply diff: ["set",[1,2]]
+OK
+diff: 0
+apply diff: 1
+OK
+diff: ["set",[0,1]]
+apply diff: ["set",[0,1]]
+OK
+diff: ["set",[0,1]]
+apply diff: ["set",[]]
+OK]])
+
+dnl Test set modifications causes data to violate set size constrain.
+OVSDB_CHECK_NEGATIVE([generate and apply diff -- set -- size error],
+  [[diff-data '{"key": "integer", "min":0, "max": 3}' \
+  '["set", [0, 1]]'  '["set", [1, 2, 3, 4]]']],
+  [[ovsdb error: Datum crated by diff has size error]])
+
+dnl Test set modifications.
+OVSDB_CHECK_POSITIVE([generate and apply diff -- map],
+  [[diff-data '{"key": "string", "value": "string", "min":0, "max": 3}' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", [["2 pints", "1 quart"]]]' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", [["2 gills", "1 chopin"]]]' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", []]' \
+  '["map", []]'  '["map", [["2 pints", "1 quart"]]]' \
+  '["map", [["2 gills", "1 chopin"]]]'  '["map", [["2 gills", "1 gallon"]]]' \
+  ]],
+  [[diff: ["map",[["2 gills","1 chopin"],["2 pints","1 quart"]]]
+apply diff: ["map",[["2 pints","1 quart"]]]
+OK
+diff: ["map",[]]
+apply diff: ["map",[["2 gills","1 chopin"]]]
+OK
+diff: ["map",[["2 gills","1 chopin"]]]
+apply diff: ["map",[]]
+OK
+diff: ["map",[["2 pints","1 quart"]]]
+apply diff: ["map",[["2 pints","1 quart"]]]
+OK
+diff: ["map",[["2 gills","1 gallon"]]]
+apply diff: ["map",[["2 gills","1 gallon"]]]
+OK]])
+
+OVSDB_CHECK_NEGATIVE([generate and apply diff with map -- size error],
+  [[diff-data '{"key": "string", "value": "string", "min":0, "max": 3}' \
+  '["map", [["2 gills", "1 chopin"]]]' \
+  '["map", [["2 gills", "1 gallon"],
+            ["2 pints", "1 quart"],
+            ["2 quarts", "1 pottle"],
+            ["2 gallons", "1 peck"]]]' \
+  ]],
+  [[ovsdb error: Datum crated by diff has size error]])

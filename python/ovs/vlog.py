@@ -51,7 +51,7 @@ def get_level(level_str):
     return LEVELS.get(level_str.lower())
 
 
-class Vlog:
+class Vlog(object):
     __inited = False
     __msg_num = 0
     __start_time = 0
@@ -130,7 +130,7 @@ class Vlog:
         matches = formatting.match(match)
         # Do we need to apply padding?
         if not matches.group(1) and replace != "":
-            replace = replace.center(len(replace)+2)
+            replace = replace.center(len(replace) + 2)
         # Does the field have a minimum width
         if matches.group(2):
             min_width = int(matches.group(2))

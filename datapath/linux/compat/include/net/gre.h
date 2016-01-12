@@ -1,10 +1,24 @@
 #ifndef __LINUX_GRE_WRAPPER_H
 #define __LINUX_GRE_WRAPPER_H
 
+#include <linux/version.h>
 #include <linux/skbuff.h>
 #include <net/ip_tunnels.h>
 
-#include <linux/version.h>
+#ifdef HAVE_METADATA_DST
+#include_next <net/gre.h>
+
+static inline int rpl_ipgre_init(void)
+{
+	return 0;
+}
+static inline void rpl_ipgre_fini(void)
+{}
+
+#define gre_fb_xmit dev_queue_xmit
+
+#else
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37) || \
    defined(HAVE_GRE_CISCO_REGISTER)
 #include_next <net/gre.h>
@@ -28,81 +42,28 @@ int rpl_gre_cisco_register(struct gre_cisco_protocol *proto);
 #define gre_cisco_unregister rpl_gre_cisco_unregister
 int rpl_gre_cisco_unregister(struct gre_cisco_protocol *proto);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#ifndef GRE_HEADER_SECTION
 struct gre_base_hdr {
 	__be16 flags;
 	__be16 protocol;
 };
 #define GRE_HEADER_SECTION 4
+#endif
 
-static inline __be16 gre_flags_to_tnl_flags(__be16 flags)
-{
-	__be16 tflags = 0;
-
-	if (flags & GRE_CSUM)
-		tflags |= TUNNEL_CSUM;
-	if (flags & GRE_ROUTING)
-		tflags |= TUNNEL_ROUTING;
-	if (flags & GRE_KEY)
-		tflags |= TUNNEL_KEY;
-	if (flags & GRE_SEQ)
-		tflags |= TUNNEL_SEQ;
-	if (flags & GRE_STRICT)
-		tflags |= TUNNEL_STRICT;
-	if (flags & GRE_REC)
-		tflags |= TUNNEL_REC;
-	if (flags & GRE_VERSION)
-		tflags |= TUNNEL_VERSION;
-
-	return tflags;
-}
-
-static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
-{
-	__be16 flags = 0;
-
-	if (tflags & TUNNEL_CSUM)
-		flags |= GRE_CSUM;
-	if (tflags & TUNNEL_ROUTING)
-		flags |= GRE_ROUTING;
-	if (tflags & TUNNEL_KEY)
-		flags |= GRE_KEY;
-	if (tflags & TUNNEL_SEQ)
-		flags |= GRE_SEQ;
-	if (tflags & TUNNEL_STRICT)
-		flags |= GRE_STRICT;
-	if (tflags & TUNNEL_REC)
-		flags |= GRE_REC;
-	if (tflags & TUNNEL_VERSION)
-		flags |= GRE_VERSION;
-
-	return flags;
-}
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0) */
 #endif /* HAVE_GRE_CISCO_REGISTER */
 
-#define gre_handle_offloads rpl_gre_handle_offloads
-struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum);
+int rpl_ipgre_init(void);
+void rpl_ipgre_fini(void);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
+#define gretap_fb_dev_create rpl_gretap_fb_dev_create
+struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
+					u8 name_assign_type);
 
-#define gre_build_header rpl_gre_build_header
-void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
-		          int hdr_len);
+#define gre_fb_xmit rpl_gre_fb_xmit
+netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
+#endif /* HAVE_METADATA_DST */
 
-#define ip_gre_calc_hlen rpl_ip_gre_calc_hlen
-static inline int ip_gre_calc_hlen(__be16 o_flags)
-{
-	int addend = 4;
-
-	if (o_flags & TUNNEL_CSUM)
-		addend += 4;
-	if (o_flags & TUNNEL_KEY)
-		addend += 4;
-	if (o_flags & TUNNEL_SEQ)
-		addend += 4;
-	return addend;
-}
-#endif
+#define ipgre_init rpl_ipgre_init
+#define ipgre_fini rpl_ipgre_fini
 
 #endif

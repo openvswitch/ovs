@@ -37,7 +37,7 @@ struct tun_meta_entry {
     bool valid;                 /* True if allocated to a class and type. */
 };
 
-/* Maps from Geneve option class+type to positions in a struct tun_metadata's
+/* Maps from TLV option class+type to positions in a struct tun_metadata's
  * 'opts' array.  */
 struct tun_table {
     /* TUN_METADATA<i> is stored in element <i>. */
@@ -132,6 +132,7 @@ table_free(struct tun_table *map) OVS_REQUIRES(tab_mutex)
         tun_metadata_del_entry(map, entry - map->entries);
     }
 
+    hmap_destroy(&map->key_hmap);
     free(map);
 }
 
@@ -149,21 +150,21 @@ tun_metadata_init(void)
 }
 
 enum ofperr
-tun_metadata_table_mod(struct ofputil_geneve_table_mod *gtm)
+tun_metadata_table_mod(struct ofputil_tlv_table_mod *ttm)
 {
     struct tun_table *old_map, *new_map;
-    struct ofputil_geneve_map *ofp_map;
+    struct ofputil_tlv_map *ofp_map;
     enum ofperr err = 0;
 
     ovs_mutex_lock(&tab_mutex);
 
     old_map = ovsrcu_get_protected(struct tun_table *, &metadata_tab);
 
-    switch (gtm->command) {
-    case NXGTMC_ADD:
+    switch (ttm->command) {
+    case NXTTMC_ADD:
         new_map = table_alloc(old_map);
 
-        LIST_FOR_EACH (ofp_map, list_node, &gtm->mappings) {
+        LIST_FOR_EACH (ofp_map, list_node, &ttm->mappings) {
             err = tun_metadata_add_entry(new_map, ofp_map->index,
                                          ofp_map->option_class,
                                          ofp_map->option_type,
@@ -175,15 +176,15 @@ tun_metadata_table_mod(struct ofputil_geneve_table_mod *gtm)
         }
         break;
 
-    case NXGTMC_DELETE:
+    case NXTTMC_DELETE:
         new_map = table_alloc(old_map);
 
-        LIST_FOR_EACH (ofp_map, list_node, &gtm->mappings) {
+        LIST_FOR_EACH (ofp_map, list_node, &ttm->mappings) {
             tun_metadata_del_entry(new_map, ofp_map->index);
         }
         break;
 
-    case NXGTMC_CLEAR:
+    case NXTTMC_CLEAR:
         new_map = table_alloc(NULL);
         break;
 
@@ -200,18 +201,18 @@ out:
 }
 
 void
-tun_metadata_table_request(struct ofputil_geneve_table_reply *gtr)
+tun_metadata_table_request(struct ofputil_tlv_table_reply *ttr)
 {
     struct tun_table *map = ovsrcu_get(struct tun_table *, &metadata_tab);
     int i;
 
-    gtr->max_option_space = TUN_METADATA_TOT_OPT_SIZE;
-    gtr->max_fields = TUN_METADATA_NUM_OPTS;
-    list_init(&gtr->mappings);
+    ttr->max_option_space = TUN_METADATA_TOT_OPT_SIZE;
+    ttr->max_fields = TUN_METADATA_NUM_OPTS;
+    list_init(&ttr->mappings);
 
     for (i = 0; i < TUN_METADATA_NUM_OPTS; i++) {
         struct tun_meta_entry *entry = &map->entries[i];
-        struct ofputil_geneve_map *map;
+        struct ofputil_tlv_map *map;
 
         if (!entry->valid) {
             continue;
@@ -223,7 +224,7 @@ tun_metadata_table_request(struct ofputil_geneve_table_reply *gtr)
         map->option_len = entry->loc.len;
         map->index = i;
 
-        list_push_back(&gtr->mappings, &map->list_node);
+        list_push_back(&ttr->mappings, &map->list_node);
     }
 }
 
@@ -570,12 +571,12 @@ tun_metadata_add_entry(struct tun_table *map, uint8_t idx, uint16_t opt_class,
 
     entry = &map->entries[idx];
     if (entry->valid) {
-        return OFPERR_NXGTMFC_ALREADY_MAPPED;
+        return OFPERR_NXTTMFC_ALREADY_MAPPED;
     }
 
     entry->key = tun_meta_key(htons(opt_class), type);
     if (tun_meta_find_key(&map->key_hmap, entry->key)) {
-        return OFPERR_NXGTMFC_DUP_ENTRY;
+        return OFPERR_NXTTMFC_DUP_ENTRY;
     }
 
     entry->valid = true;
@@ -592,19 +593,17 @@ tun_metadata_add_entry(struct tun_table *map, uint8_t idx, uint16_t opt_class,
 
         if (!cur_chain) {
             cur_chain = xzalloc(sizeof *cur_chain);
+            prev_chain->next = cur_chain;
         }
 
         err = tun_metadata_alloc_chain(map, len, cur_chain);
         if (err) {
             tun_metadata_del_entry(map, idx);
-            return OFPERR_NXGTMFC_TABLE_FULL;
+            return OFPERR_NXTTMFC_TABLE_FULL;
         }
 
         len -= cur_chain->len;
 
-        if (prev_chain) {
-            prev_chain->next = cur_chain;
-        }
         prev_chain = cur_chain;
         cur_chain = NULL;
     }
@@ -859,7 +858,7 @@ tun_metadata_to_geneve_header(const struct flow_tnl *flow,
 
     ovs_assert(!(flow->flags & FLOW_TNL_F_UDPIF));
 
-    ofpbuf_use_stack(&b, opts, GENEVE_TOT_OPT_SIZE);
+    ofpbuf_use_stack(&b, opts, TLV_TOT_OPT_SIZE);
     tun_metadata_to_geneve__(&flow->metadata, &b, crit_opt);
 
     return b.size;

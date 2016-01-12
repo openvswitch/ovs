@@ -202,6 +202,10 @@ ovs_prefetch_range(const void *start, size_t size)
 /* Yields the size of MEMBER within STRUCT. */
 #define MEMBER_SIZEOF(STRUCT, MEMBER) (sizeof(((STRUCT *) NULL)->MEMBER))
 
+/* Yields the offset of the end of MEMBER within STRUCT. */
+#define OFFSETOFEND(STRUCT, MEMBER) \
+        (offsetof(STRUCT, MEMBER) + MEMBER_SIZEOF(STRUCT, MEMBER))
+
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
@@ -574,9 +578,7 @@ ovs_u128_is_zero(const ovs_u128 *val)
 static inline bool
 ovs_u128_is_ones(const ovs_u128 *val)
 {
-    ovs_u128 ones = OVS_U128_MAX;
-
-    return ovs_u128_equals(val, &ones);
+    return ovs_u128_equals(val, &OVS_U128_MAX);
 }
 
 /* Returns non-zero if the parameters have equal value. */

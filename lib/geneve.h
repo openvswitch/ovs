@@ -19,8 +19,8 @@
 
 #include "openvswitch/types.h"
 
-#define GENEVE_MAX_OPT_SIZE 124
-#define GENEVE_TOT_OPT_SIZE 252
+#define TLV_MAX_OPT_SIZE 124
+#define TLV_TOT_OPT_SIZE 252
 
 #define GENEVE_CRIT_OPT_TYPE (1 << 7)
 

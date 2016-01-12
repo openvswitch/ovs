@@ -951,6 +951,12 @@ lport_is_enabled(const struct nbrec_logical_port *lport)
 }
 
 static bool
+lport_is_up(const struct nbrec_logical_port *lport)
+{
+    return !lport->up || *lport->up;
+}
+
+static bool
 has_stateful_acl(struct ovn_datapath *od)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
@@ -964,9 +970,11 @@ has_stateful_acl(struct ovn_datapath *od)
 }
 
 static void
-build_acls(struct ovn_datapath *od, struct hmap *lflows)
+build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 {
     bool has_stateful = has_stateful_acl(od);
+    struct ovn_port *op;
+    struct ds match_in, match_out;
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
@@ -983,6 +991,30 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
      * send all IP packets through the conntrack action, which handles
      * defragmentation, in order to match L4 headers. */
     if (has_stateful) {
+        HMAP_FOR_EACH (op, key_node, ports) {
+            if (op->od == od && !strcmp(op->nbs->type, "router")) {
+                /* Can't use ct() for router ports. Consider the following configuration:
+                lp1(10.0.0.2) on hostA--ls1--lr0--ls2--lp2(10.0.1.2) on hostB,
+                For a ping from lp1 to lp2, First, the response will go through ct()
+                with a zone for lp2 in the ls2 ingress pipeline on hostB.
+                That ct zone knows about this connection. Next, it goes through ct()
+                with the zone for the router port in the egress pipeline of ls2 on hostB.
+                This zone does not know about the connection, as the icmp request
+                went through the logical router on hostA, not hostB. This would only work
+                with distributed conntrack state across all chassis. */
+
+                ds_init(&match_in);
+                ds_init(&match_out);
+                ds_put_format(&match_in, "ip && inport == %s", op->json_key);
+                ds_put_format(&match_out, "ip && outport == %s", op->json_key);
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110, ds_cstr(&match_in), "next;");
+                ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110, ds_cstr(&match_out), "next;");
+
+                ds_destroy(&match_in);
+                ds_destroy(&match_out);
+            }
+        }
+
         /* Ingress and Egress Pre-ACL Table (Priority 100).
          *
          * Regardless of whether the ACL is "from-lport" or "to-lport",
@@ -1100,7 +1132,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        build_acls(od, lflows);
+        build_acls(od, lflows, ports);
     }
 
     /* Logical switch ingress table 0: Admission control framework (priority
@@ -1143,6 +1175,53 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC, 50,
                       ds_cstr(&match), "next;");
         ds_destroy(&match);
+    }
+
+    /* Ingress table 3: Destination lookup, ARP reply for known IPs.
+     * (priority 150). */
+    HMAP_FOR_EACH (op, key_node, ports) {
+        if (!op->nbs) {
+            continue;
+        }
+
+        /*
+         * Add ARP reply flows if either the
+         *  - port is up or
+         *  - port type is router
+         */
+        if (!lport_is_up(op->nbs) && strcmp(op->nbs->type, "router")) {
+            continue;
+        }
+
+        for (size_t i = 0; i < op->nbs->n_addresses; i++) {
+            struct eth_addr ea;
+            ovs_be32 ip;
+
+            if (ovs_scan(op->nbs->addresses[i],
+                         ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+                         ETH_ADDR_SCAN_ARGS(ea), IP_SCAN_ARGS(&ip))) {
+                char *match = xasprintf(
+                    "arp.tpa == "IP_FMT" && arp.op == 1", IP_ARGS(ip));
+                char *actions = xasprintf(
+                    "eth.dst = eth.src; "
+                    "eth.src = "ETH_ADDR_FMT"; "
+                    "arp.op = 2; /* ARP reply */ "
+                    "arp.tha = arp.sha; "
+                    "arp.sha = "ETH_ADDR_FMT"; "
+                    "arp.tpa = arp.spa; "
+                    "arp.spa = "IP_FMT"; "
+                    "outport = inport; "
+                    "inport = \"\"; /* Allow sending out inport. */ "
+                    "output;",
+                    ETH_ADDR_ARGS(ea),
+                    ETH_ADDR_ARGS(ea),
+                    IP_ARGS(ip));
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, 150,
+                              match, actions);
+                free(match);
+                free(actions);
+            }
+        }
     }
 
     /* Ingress table 3: Destination lookup, broadcast and multicast handling
@@ -1799,6 +1878,7 @@ int
 main(int argc, char *argv[])
 {
     extern struct vlog_module VLM_reconnect;
+    unsigned int ovnnb_seqno, ovnsb_seqno;
     int res = EXIT_SUCCESS;
     struct unixctl_server *unixctl;
     int retval;
@@ -1868,6 +1948,9 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
 
+    ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl_loop.idl);
+    ovnsb_seqno = ovsdb_idl_get_seqno(ovnsb_idl_loop.idl);
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -1878,8 +1961,14 @@ main(int argc, char *argv[])
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        ovnnb_db_run(&ctx);
-        ovnsb_db_run(&ctx);
+        if (ovnnb_seqno != ovsdb_idl_get_seqno(ctx.ovnnb_idl)) {
+            ovnnb_seqno = ovsdb_idl_get_seqno(ctx.ovnnb_idl);
+            ovnnb_db_run(&ctx);
+        }
+        if (ovnsb_seqno != ovsdb_idl_get_seqno(ctx.ovnsb_idl)) {
+            ovnsb_seqno = ovsdb_idl_get_seqno(ctx.ovnsb_idl);
+            ovnsb_db_run(&ctx);
+        }
 
         unixctl_server_run(unixctl);
         unixctl_server_wait(unixctl);

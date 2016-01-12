@@ -54,6 +54,7 @@
 #include "ofproto/ofproto-dpif-sflow.h"
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
+#include "packets.h"
 #include "ovs-router.h"
 #include "tnl-ports.h"
 #include "tunnel.h"
@@ -2698,21 +2699,24 @@ process_special(struct xlate_ctx *ctx, const struct xport *xport)
 
 static int
 tnl_route_lookup_flow(const struct flow *oflow,
-                      ovs_be32 *ip, struct xport **out_port)
+                      struct in6_addr *ip, struct xport **out_port)
 {
     char out_dev[IFNAMSIZ];
     struct xbridge *xbridge;
     struct xlate_cfg *xcfg;
-    ovs_be32 gw;
+    struct in6_addr gw;
+    struct in6_addr dst;
 
-    if (!ovs_router_lookup4(oflow->tunnel.ip_dst, out_dev, &gw)) {
+    dst = flow_tnl_dst(&oflow->tunnel);
+    if (!ovs_router_lookup(&dst, out_dev, &gw)) {
         return -ENOENT;
     }
 
-    if (gw) {
+    if (ipv6_addr_is_set(&gw) &&
+        (!IN6_IS_ADDR_V4MAPPED(&gw) || in6_addr_get_mapped_ipv4(&gw))) {
         *ip = gw;
     } else {
-        *ip = oflow->tunnel.ip_dst;
+        *ip = dst;
     }
 
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
@@ -2753,6 +2757,19 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
 }
 
 static void
+tnl_send_nd_request(struct xlate_ctx *ctx, const struct xport *out_dev,
+                     const struct eth_addr eth_src,
+                     struct in6_addr * ipv6_src, struct in6_addr * ipv6_dst)
+{
+    struct dp_packet packet;
+
+    dp_packet_init(&packet, 0);
+    compose_nd(&packet, eth_src, ipv6_src, ipv6_dst);
+    compose_table_xlate(ctx, out_dev, &packet);
+    dp_packet_uninit(&packet);
+}
+
+static void
 tnl_send_arp_request(struct xlate_ctx *ctx, const struct xport *out_dev,
                      const struct eth_addr eth_src,
                      ovs_be32 ip_src, ovs_be32 ip_dst)
@@ -2773,18 +2790,24 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
 {
     struct ovs_action_push_tnl tnl_push_data;
     struct xport *out_dev = NULL;
-    ovs_be32 s_ip, d_ip = 0;
+    ovs_be32 s_ip = 0, d_ip = 0;
+    struct in6_addr s_ip6 = in6addr_any;
+    struct in6_addr d_ip6 = in6addr_any;
     struct eth_addr smac;
     struct eth_addr dmac;
     int err;
+    char buf_sip6[INET6_ADDRSTRLEN];
+    char buf_dip6[INET6_ADDRSTRLEN];
 
-    err = tnl_route_lookup_flow(flow, &d_ip, &out_dev);
+    err = tnl_route_lookup_flow(flow, &d_ip6, &out_dev);
     if (err) {
         xlate_report(ctx, "native tunnel routing failed");
         return err;
     }
-    xlate_report(ctx, "tunneling to "IP_FMT" via %s",
-                 IP_ARGS(d_ip), netdev_get_name(out_dev->netdev));
+
+    xlate_report(ctx, "tunneling to %s via %s",
+                 ipv6_string_mapped(buf_dip6, &d_ip6),
+                 netdev_get_name(out_dev->netdev));
 
     /* Use mac addr of bridge port of the peer. */
     err = netdev_get_etheraddr(out_dev->netdev, &smac);
@@ -2793,35 +2816,51 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
         return err;
     }
 
-    err = netdev_get_in4(out_dev->netdev, (struct in_addr *) &s_ip, NULL);
+    d_ip = in6_addr_get_mapped_ipv4(&d_ip6);
+    if (d_ip) {
+        err = netdev_get_in4(out_dev->netdev, (struct in_addr *) &s_ip, NULL);
+        if (err) {
+            xlate_report(ctx, "tunnel output device lacks IPv4 address");
+            return err;
+        }
+        in6_addr_set_mapped_ipv4(&s_ip6, s_ip);
+    } else {
+        err = netdev_get_in6(out_dev->netdev, &s_ip6);
+        if (err) {
+            xlate_report(ctx, "tunnel output device lacks IPv6 address");
+            return err;
+        }
+    }
+
+    err = tnl_neigh_lookup(out_dev->xbridge->name, &d_ip6, &dmac);
     if (err) {
-        xlate_report(ctx, "tunnel output device lacks IPv4 address");
+        xlate_report(ctx, "neighbor cache miss for %s on bridge %s, "
+                     "sending %s request",
+                     buf_dip6, out_dev->xbridge->name, d_ip ? "ARP" : "ND");
+        if (d_ip) {
+            tnl_send_arp_request(ctx, out_dev, smac, s_ip, d_ip);
+        } else {
+            tnl_send_nd_request(ctx, out_dev, smac, &s_ip6, &d_ip6);
+        }
         return err;
     }
 
-    err = tnl_arp_lookup(out_dev->xbridge->name, d_ip, &dmac);
-    if (err) {
-        xlate_report(ctx, "ARP cache miss for "IP_FMT" on bridge %s, "
-                     "sending ARP request",
-                     IP_ARGS(d_ip), out_dev->xbridge->name);
-        tnl_send_arp_request(ctx, out_dev, smac, s_ip, d_ip);
-        return err;
-    }
     if (ctx->xin->xcache) {
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_NEIGH);
         ovs_strlcpy(entry->u.tnl_neigh_cache.br_name, out_dev->xbridge->name,
                     sizeof entry->u.tnl_neigh_cache.br_name);
-        in6_addr_set_mapped_ipv4(&entry->u.tnl_neigh_cache.d_ipv6, d_ip);
+        entry->u.tnl_neigh_cache.d_ipv6 = d_ip6;
     }
 
-    xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" "IP_FMT
-                 " to "ETH_ADDR_FMT" "IP_FMT,
-                 ETH_ADDR_ARGS(smac), IP_ARGS(s_ip),
-                 ETH_ADDR_ARGS(dmac), IP_ARGS(d_ip));
+    xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" %s"
+                 " to "ETH_ADDR_FMT" %s",
+                 ETH_ADDR_ARGS(smac), ipv6_string_mapped(buf_sip6, &s_ip6),
+                 ETH_ADDR_ARGS(dmac), buf_dip6);
+
     err = tnl_port_build_header(xport->ofport, flow,
-                                dmac, smac, s_ip, &tnl_push_data);
+                                dmac, smac, &s_ip6, &tnl_push_data);
     if (err) {
         return err;
     }
@@ -3023,7 +3062,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (xport->is_tunnel) {
-        ovs_be32 dst;
+        struct in6_addr dst;
          /* Save tunnel metadata so that changes made due to
           * the Logical (tunnel) Port are not visible for any further
           * matches, while explicit set actions on tunnel metadata are.
@@ -3034,8 +3073,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */
         }
-        dst = in6_addr_get_mapped_ipv4(&ctx->orig_tunnel_ipv6_dst);
-        if (flow->tunnel.ip_dst == dst) {
+        dst = flow_tnl_dst(&flow->tunnel);
+        if (ipv6_addr_equals(&dst, &ctx->orig_tunnel_ipv6_dst)) {
             xlate_report(ctx, "Not tunneling to our own address");
             goto out; /* restore flow_nw_tos */
         }
@@ -3533,13 +3572,12 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
+    xlate_commit_actions(ctx);
     if (!ctx->xin->packet) {
         return;
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-
-    xlate_commit_actions(ctx);
 
     odp_execute_actions(NULL, &packet, 1, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
@@ -4062,7 +4100,6 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
     }
 
     ofpbuf_put(&ctx->action_set, on->actions, on_len);
-    ofpact_pad(&ctx->action_set);
 }
 
 static void
@@ -5017,6 +5054,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .xin = xin,
         .xout = xout,
         .base_flow = *flow,
+        .orig_tunnel_ipv6_dst = flow_tnl_dst(&flow->tunnel),
         .xbridge = xbridge,
         .stack = OFPBUF_STUB_INITIALIZER(stack_stub),
         .rule = xin->rule,
@@ -5049,7 +5087,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .action_set_has_group = false,
         .action_set = OFPBUF_STUB_INITIALIZER(action_set_stub),
     };
-    in6_addr_set_mapped_ipv4(&ctx.orig_tunnel_ipv6_dst, flow->tunnel.ip_dst);
 
     /* 'base_flow' reflects the packet as it came in, but we need it to reflect
      * the packet as the datapath will treat it for output actions:

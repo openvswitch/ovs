@@ -43,6 +43,8 @@ scripts_SCRIPTS += \
 docs += vtep/README.ovs-vtep.md
 EXTRA_DIST += vtep/ovs-vtep
 
+FLAKE8_PYFILES += vtep/ovs-vtep
+
 # VTEP schema and IDL
 EXTRA_DIST += vtep/vtep.ovsschema
 pkgdata_DATA += vtep/vtep.ovsschema

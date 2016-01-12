@@ -39,23 +39,13 @@ const struct in6_addr in6addr_all_hosts = IN6ADDR_ALL_HOSTS_INIT;
 struct in6_addr
 flow_tnl_dst(const struct flow_tnl *tnl)
 {
-    struct in6_addr addr;
-    if (tnl->ip_dst) {
-        in6_addr_set_mapped_ipv4(&addr, tnl->ip_dst);
-        return addr;
-    }
-    return tnl->ipv6_dst;
+    return tnl->ip_dst ? in6_addr_mapped_ipv4(tnl->ip_dst) : tnl->ipv6_dst;
 }
 
 struct in6_addr
 flow_tnl_src(const struct flow_tnl *tnl)
 {
-    struct in6_addr addr;
-    if (tnl->ip_src) {
-        in6_addr_set_mapped_ipv4(&addr, tnl->ip_src);
-        return addr;
-    }
-    return tnl->ipv6_src;
+    return tnl->ip_src ? in6_addr_mapped_ipv4(tnl->ip_src) : tnl->ipv6_src;
 }
 
 /* Parses 's' as a 16-digit hexadecimal number representing a datapath ID.  On
@@ -426,6 +416,14 @@ ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *s)
     }
 }
 
+/* Parses string 's', which must be an IP address.  Stores the IP address into
+ * '*ip'.  Returns true if successful, otherwise false. */
+bool
+ip_parse(const char *s, ovs_be32 *ip)
+{
+    return inet_pton(AF_INET, s, ip) == 1;
+}
+
 /* Parses string 's', which must be an IP address with an optional netmask or
  * CIDR prefix length.  Stores the IP address into '*ip' and the netmask into
  * '*mask'.  (If 's' does not contain a netmask, 255.255.255.255 is
@@ -449,7 +447,7 @@ ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
                              "32", s);
         }
         *mask = be32_prefix_mask(prefix);
-    } else if (ovs_scan(s, IP_SCAN_FMT"%n", IP_SCAN_ARGS(ip), &n) && !s[n]) {
+    } else if (ip_parse(s, ip)) {
         *mask = OVS_BE32_MAX;
     } else {
         return xasprintf("%s: invalid IP address", s);
@@ -457,6 +455,93 @@ ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
     return NULL;
 }
 
+/* Similar to ip_parse_masked(), but the mask, if present, must be a CIDR mask
+ * and is returned as a prefix length in '*plen'. */
+char * OVS_WARN_UNUSED_RESULT
+ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
+{
+    ovs_be32 mask;
+    char *error;
+
+    error = ip_parse_masked(s, ip, &mask);
+    if (error) {
+        return error;
+    }
+
+    if (!ip_is_cidr(mask)) {
+        return xasprintf("%s: CIDR network required", s);
+    }
+    *plen = ip_count_cidr_bits(mask);
+    return NULL;
+}
+
+/* Parses string 's', which must be an IPv6 address.  Stores the IPv6 address
+ * into '*ip'.  Returns true if successful, otherwise false. */
+bool
+ipv6_parse(const char *s, struct in6_addr *ip)
+{
+    return inet_pton(AF_INET6, s, ip) == 1;
+}
+
+/* Parses string 's', which must be an IPv6 address with an optional netmask or
+ * CIDR prefix length.  Stores the IPv6 address into '*ip' and the netmask into
+ * '*mask'.  (If 's' does not contain a netmask, all-one-bits is assumed.)
+ *
+ * Returns NULL if successful, otherwise an error message that the caller must
+ * free(). */
+char * OVS_WARN_UNUSED_RESULT
+ipv6_parse_masked(const char *s, struct in6_addr *ip, struct in6_addr *mask)
+{
+    char ipv6_s[IPV6_SCAN_LEN + 1];
+    int prefix;
+    int n;
+
+    if (ovs_scan(s, IPV6_SCAN_FMT"%n", ipv6_s, &n) && ipv6_parse(ipv6_s, ip)) {
+        s += n;
+        if (!*s) {
+            *mask = in6addr_exact;
+        } else if (ovs_scan(s, "/%d%n", &prefix, &n) && !s[n]) {
+            if (prefix <= 0 || prefix > 128) {
+                return xasprintf("%s: IPv6 network prefix bits not between 0 "
+                                 "and 128", s);
+            }
+            *mask = ipv6_create_mask(prefix);
+        } else if (ovs_scan(s, "/"IPV6_SCAN_FMT"%n", ipv6_s, &n)
+                   && !s[n]
+                   && ipv6_parse(ipv6_s, mask)) {
+            /* OK. */
+        } else {
+            return xasprintf("%s: syntax error expecting IPv6 prefix length "
+                             "or mask", s);
+        }
+        return NULL;
+    }
+    return xasprintf("%s: invalid IPv6 address", s);
+}
+
+/* Similar to ipv6_parse_masked(), but the mask, if present, must be a CIDR
+ * mask and is returned as a prefix length in '*plen'. */
+char * OVS_WARN_UNUSED_RESULT
+ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
+{
+    struct in6_addr mask;
+    char *error;
+
+    error = ipv6_parse_masked(s, ip, &mask);
+    if (error) {
+        return error;
+    }
+
+    if (!ipv6_is_cidr(&mask)) {
+        return xasprintf("%s: IPv6 CIDR network required", s);
+    }
+    *plen = ipv6_count_cidr_bits(&mask);
+    return NULL;
+}
+
+/* Stores the string representation of the IPv6 address 'addr' into the
+ * character array 'addr_str', which must be at least INET6_ADDRSTRLEN
+ * bytes long. */
 void
 ipv6_format_addr(const struct in6_addr *addr, struct ds *s)
 {
@@ -620,43 +705,6 @@ ipv6_is_cidr(const struct in6_addr *netmask)
     }
 
     return true;
-}
-
-/* Parses string 's', which must be an IPv6 address with an optional
- * CIDR prefix length.  Stores the IP address into '*ipv6' and the CIDR
- * prefix in '*prefix'.  (If 's' does not contain a CIDR length, all-ones
- * is assumed.)
- *
- * Returns NULL if successful, otherwise an error message that the caller must
- * free(). */
-char * OVS_WARN_UNUSED_RESULT
-ipv6_parse_masked(const char *s, struct in6_addr *ipv6, struct in6_addr *mask)
-{
-    char ipv6_s[IPV6_SCAN_LEN + 1];
-    char mask_s[IPV6_SCAN_LEN + 1];
-    int prefix;
-    int n;
-
-    if (ovs_scan(s, IPV6_SCAN_FMT"/"IPV6_SCAN_FMT"%n", ipv6_s, mask_s, &n)
-        && inet_pton(AF_INET6, ipv6_s, ipv6) == 1
-        && inet_pton(AF_INET6, mask_s, mask) == 1
-        && !s[n]) {
-        /* OK. */
-    } else if (ovs_scan(s, IPV6_SCAN_FMT"/%d%n", ipv6_s, &prefix, &n)
-        && inet_pton(AF_INET6, ipv6_s, ipv6) == 1
-        && !s[n]) {
-        if (prefix <= 0 || prefix > 128) {
-            return xasprintf("%s: prefix bits not between 0 and 128", s);
-        }
-        *mask = ipv6_create_mask(prefix);
-    } else if (ovs_scan(s, IPV6_SCAN_FMT"%n", ipv6_s, &n)
-               && inet_pton(AF_INET6, ipv6_s, ipv6) == 1
-               && !s[n]) {
-        *mask = in6addr_exact;
-    } else {
-        return xasprintf("%s: invalid IP address", s);
-    }
-    return NULL;
 }
 
 /* Populates 'b' with an Ethernet II packet headed with the given 'eth_dst',
@@ -1177,6 +1225,36 @@ compose_arp(struct dp_packet *b, uint16_t arp_op,
     dp_packet_set_l3(b, arp);
 }
 
+void
+compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
+           struct in6_addr * ipv6_src, struct in6_addr * ipv6_dst)
+{
+    struct in6_addr sn_addr;
+    struct eth_addr eth_dst;
+    struct ovs_nd_msg *ns;
+    struct ovs_nd_opt *nd_opt;
+
+    in6_addr_solicited_node(&sn_addr, ipv6_dst);
+    ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
+
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6,
+                IPV6_HEADER_LEN + ICMP6_HEADER_LEN + ND_OPT_LEN);
+    packet_set_ipv6(b, IPPROTO_ICMPV6,
+                    ALIGNED_CAST(ovs_be32 *, ipv6_src->s6_addr),
+                    ALIGNED_CAST(ovs_be32 *, sn_addr.s6_addr),
+                    0, 0, 255);
+
+    ns = dp_packet_l4(b);
+    nd_opt = &ns->options[0];
+
+    ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
+    ns->icmph.icmp6_code = 0;
+
+    nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
+    packet_set_nd(b, ALIGNED_CAST(ovs_be32 *, ipv6_dst->s6_addr),
+                  eth_src, eth_addr_zero);
+}
+
 uint32_t
 packet_csum_pseudoheader(const struct ip_header *ip)
 {
@@ -1191,3 +1269,26 @@ packet_csum_pseudoheader(const struct ip_header *ip)
     return partial;
 }
 
+#ifndef __CHECKER__
+uint32_t
+packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
+{
+    uint32_t partial = 0;
+
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[0])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[1])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[2])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[3])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[0])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[1])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[2])));
+    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[3])));
+
+    partial = csum_add16(partial, 0);
+    partial = csum_add16(partial, ip6->ip6_plen);
+    partial = csum_add16(partial, 0);
+    partial = csum_add16(partial, ip6->ip6_nxt);
+
+    return partial;
+}
+#endif

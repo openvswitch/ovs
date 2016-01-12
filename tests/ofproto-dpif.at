@@ -3354,7 +3354,7 @@ mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:50,dl_dst=50:54:00:00:00:07,
 ])
 
 dnl Modified MPLS controller action.
-dnl In this test, the input packet in vlan-tagged, which should be stripped
+dnl In this test, the input packet is vlan-tagged, which should be stripped
 dnl before we push the MPLS and VLAN tags.
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 65534 -m -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
@@ -3425,7 +3425,7 @@ mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:52,dl_dst=52:54:00:00:00:07,
 ])
 
 dnl Modified MPLS controller action.
-dnl In this test, the input packet in vlan-tagged, which should be stripped
+dnl In this test, the input packet is vlan-tagged, which should be stripped
 dnl before we push the MPLS and VLAN tags.
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 65534 -m -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
@@ -3496,7 +3496,7 @@ mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:54,dl_dst=50:54:00:00:00:07,
 ])
 
 dnl Modified MPLS controller action.
-dnl In this test, the input packet in vlan-tagged, which should be stripped
+dnl In this test, the input packet is vlan-tagged, which should be stripped
 dnl before we push the MPLS and VLAN tags.
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 65534 -m -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
@@ -3567,7 +3567,7 @@ mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:56,dl_dst=50:54:00:00:00:07,
 ])
 
 dnl Modified MPLS controller action.
-dnl In this test, the input packet in vlan-tagged, which should be stripped
+dnl In this test, the input packet is vlan-tagged, which should be stripped
 dnl before we push the MPLS and VLAN tags.
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 -m 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
@@ -3601,7 +3601,7 @@ mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:57,dl_dst=50:54:00:00:00:07,
 ])
 
 dnl Modified MPLS controller action.
-dnl In this test, the input packet in vlan-tagged, which should be stripped
+dnl In this test, the input packet is vlan-tagged, which should be stripped
 dnl before we push the MPLS and VLAN tags.
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 65534 -m -P nxm --detach --pidfile 2> ofctl_monitor.log])
 
@@ -3635,7 +3635,7 @@ mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:58,dl_dst=50:54:00:00:00:07,
 ])
 
 dnl Modified MPLS controller action.
-dnl In this test, the input packet in vlan-tagged, which should be modified
+dnl In this test, the input packet is vlan-tagged, which should be modified
 dnl before we push MPLS and VLAN tags.
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 monitor br0 65534 -m -P nxm --detach --pidfile 2> ofctl_monitor.log])
 

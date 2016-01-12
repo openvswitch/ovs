@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2012 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -22,15 +22,16 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
-#include <linux/netdev_features.h>
 #include <linux/skbuff.h>
-#include <linux/version.h>
+#include <linux/percpu.h>
+#include <linux/u64_stats_sync.h>
+#include <linux/netdev_features.h>
 
 #include <net/dst.h>
 #include <net/xfrm.h>
+#include <net/rtnetlink.h>
 
 #include "datapath.h"
-#include "vlan.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
@@ -45,42 +46,30 @@ static struct internal_dev *internal_dev_priv(struct net_device *netdev)
 	return netdev_priv(netdev);
 }
 
-/* This function is only called by the kernel network layer.*/
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-static struct rtnl_link_stats64 *internal_dev_get_stats(struct net_device *netdev,
-							struct rtnl_link_stats64 *stats)
-{
-#else
-static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev)
-{
-	struct net_device_stats *stats = &netdev->stats;
-#endif
-	struct vport *vport = ovs_internal_dev_get_vport(netdev);
-	struct ovs_vport_stats vport_stats;
-
-	ovs_vport_get_stats(vport, &vport_stats);
-
-	/* The tx and rx stats need to be swapped because the
-	 * switch and host OS have opposite perspectives.
-	 */
-	stats->rx_packets	= vport_stats.tx_packets;
-	stats->tx_packets	= vport_stats.rx_packets;
-	stats->rx_bytes		= vport_stats.tx_bytes;
-	stats->tx_bytes		= vport_stats.rx_bytes;
-	stats->rx_errors	= vport_stats.tx_errors;
-	stats->tx_errors	= vport_stats.rx_errors;
-	stats->rx_dropped	= vport_stats.tx_dropped;
-	stats->tx_dropped	= vport_stats.rx_dropped;
-
-	return stats;
-}
-
 /* Called with rcu_read_lock_bh. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
+	int len, err;
+
+	len = skb->len;
 	rcu_read_lock();
-	ovs_vport_receive(internal_dev_priv(netdev)->vport, skb, NULL);
+	err = ovs_vport_receive(internal_dev_priv(netdev)->vport, skb, NULL);
 	rcu_read_unlock();
+
+	if (likely(!err)) {
+#ifdef HAVE_DEV_TSTATS
+		struct pcpu_sw_netstats *tstats;
+
+		tstats = this_cpu_ptr((struct pcpu_sw_netstats __percpu *)netdev->tstats);
+
+		u64_stats_update_begin(&tstats->syncp);
+		tstats->tx_bytes += len;
+		tstats->tx_packets++;
+		u64_stats_update_end(&tstats->syncp);
+#endif
+	} else {
+		netdev->stats.tx_errors++;
+	}
 	return 0;
 }
 
@@ -132,17 +121,32 @@ static void internal_dev_destructor(struct net_device *dev)
 	free_netdev(dev);
 }
 
+#ifdef HAVE_DEV_TSTATS
+static int internal_dev_init(struct net_device *dev)
+{
+	dev->tstats = (typeof(dev->tstats)) netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
+	if (!dev->tstats)
+		return -ENOMEM;
+	return 0;
+}
+
+static void internal_dev_uninit(struct net_device *dev)
+{
+	free_percpu(dev->tstats);
+}
+#endif
+
 static const struct net_device_ops internal_dev_netdev_ops = {
+#ifdef HAVE_DEV_TSTATS
+	.ndo_init = internal_dev_init,
+	.ndo_uninit = internal_dev_uninit,
+	.ndo_get_stats64 = ip_tunnel_get_stats64,
+#endif
 	.ndo_open = internal_dev_open,
 	.ndo_stop = internal_dev_stop,
 	.ndo_start_xmit = internal_dev_xmit,
 	.ndo_set_mac_address = eth_mac_addr,
 	.ndo_change_mtu = internal_dev_change_mtu,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-	.ndo_get_stats64 = internal_dev_get_stats,
-#else
-	.ndo_get_stats = internal_dev_sys_stats,
-#endif
 };
 
 static struct rtnl_link_ops internal_dev_link_ops __read_mostly = {
@@ -156,7 +160,7 @@ static void do_setup(struct net_device *netdev)
 	netdev->netdev_ops = &internal_dev_netdev_ops;
 
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
-	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
+	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_OPENVSWITCH;
 	netdev->destructor = internal_dev_destructor;
 	netdev->ethtool_ops = &internal_dev_ethtool_ops;
 	netdev->rtnl_link_ops = &internal_dev_link_ops;
@@ -169,62 +173,56 @@ static void do_setup(struct net_device *netdev)
 	netdev->vlan_features = netdev->features;
 	netdev->features |= NETIF_F_HW_VLAN_CTAG_TX;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
-	netdev->hw_features = netdev->features & ~NETIF_F_LLTX;
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
 	netdev->hw_enc_features = netdev->features;
 #endif
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+	netdev->hw_features = netdev->features & ~NETIF_F_LLTX;
+#endif
 	eth_hw_addr_random(netdev);
 }
 
 static struct vport *internal_dev_create(const struct vport_parms *parms)
 {
 	struct vport *vport;
-	struct netdev_vport *netdev_vport;
 	struct internal_dev *internal_dev;
 	int err;
 
-	vport = ovs_vport_alloc(sizeof(struct netdev_vport),
-				&ovs_internal_vport_ops, parms);
+	vport = ovs_vport_alloc(0, &ovs_internal_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;
 	}
 
-	netdev_vport = netdev_vport_priv(vport);
-
-	netdev_vport->dev = alloc_netdev(sizeof(struct internal_dev),
-					 parms->name, NET_NAME_UNKNOWN, do_setup);
-	if (!netdev_vport->dev) {
+	vport->dev = alloc_netdev(sizeof(struct internal_dev),
+				  parms->name, NET_NAME_UNKNOWN, do_setup);
+	if (!vport->dev) {
 		err = -ENOMEM;
 		goto error_free_vport;
 	}
 
-	dev_net_set(netdev_vport->dev, ovs_dp_get_net(vport->dp));
-	internal_dev = internal_dev_priv(netdev_vport->dev);
+	dev_net_set(vport->dev, ovs_dp_get_net(vport->dp));
+	internal_dev = internal_dev_priv(vport->dev);
 	internal_dev->vport = vport;
 
 	/* Restrict bridge port to current netns. */
 	if (vport->port_no == OVSP_LOCAL)
-		netdev_vport->dev->features |= NETIF_F_NETNS_LOCAL;
+		vport->dev->features |= NETIF_F_NETNS_LOCAL;
 
 	rtnl_lock();
-	err = register_netdevice(netdev_vport->dev);
+	err = register_netdevice(vport->dev);
 	if (err)
 		goto error_free_netdev;
 
-	dev_set_promiscuity(netdev_vport->dev, 1);
+	dev_set_promiscuity(vport->dev, 1);
 	rtnl_unlock();
-	netif_start_queue(netdev_vport->dev);
+	netif_start_queue(vport->dev);
 
 	return vport;
 
 error_free_netdev:
 	rtnl_unlock();
-	free_netdev(netdev_vport->dev);
+	free_netdev(vport->dev);
 error_free_vport:
 	ovs_vport_free(vport);
 error:
@@ -233,26 +231,27 @@ error:
 
 static void internal_dev_destroy(struct vport *vport)
 {
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-
-	netif_stop_queue(netdev_vport->dev);
+	netif_stop_queue(vport->dev);
 	rtnl_lock();
-	dev_set_promiscuity(netdev_vport->dev, -1);
+	dev_set_promiscuity(vport->dev, -1);
 
 	/* unregister_netdevice() waits for an RCU grace period. */
-	unregister_netdevice(netdev_vport->dev);
+	unregister_netdevice(vport->dev);
 
 	rtnl_unlock();
 }
 
-static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
+static netdev_tx_t internal_dev_recv(struct sk_buff *skb)
 {
-	struct net_device *netdev = netdev_vport_priv(vport)->dev;
-	int len;
+	struct net_device *netdev = skb->dev;
+#ifdef HAVE_DEV_TSTATS
+	struct pcpu_sw_netstats *stats;
+#endif
 
 	if (unlikely(!(netdev->flags & IFF_UP))) {
 		kfree_skb(skb);
-		return 0;
+		netdev->stats.rx_dropped++;
+		return NETDEV_TX_OK;
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
@@ -260,7 +259,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 		if (unlikely(!vlan_insert_tag_set_proto(skb,
 							skb->vlan_proto,
 							skb_vlan_tag_get(skb))))
-			return 0;
+			return NETDEV_TX_OK;
 
 		if (skb->ip_summed == CHECKSUM_COMPLETE)
 			skb->csum = csum_add(skb->csum,
@@ -271,27 +270,30 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 	}
 #endif
 
-	len = skb->len;
-
 	skb_dst_drop(skb);
 	nf_reset(skb);
 	secpath_reset(skb);
 
-	skb->dev = netdev;
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, netdev);
 	skb_postpull_rcsum(skb, eth_hdr(skb), ETH_HLEN);
 
-	netif_rx(skb);
+#ifdef HAVE_DEV_TSTATS
+	stats = this_cpu_ptr((struct pcpu_sw_netstats __percpu *)netdev->tstats);
+	u64_stats_update_begin(&stats->syncp);
+	stats->rx_packets++;
+	stats->rx_bytes += skb->len;
+	u64_stats_update_end(&stats->syncp);
+#endif
 
-	return len;
+	netif_rx(skb);
+	return NETDEV_TX_OK;
 }
 
 static struct vport_ops ovs_internal_vport_ops = {
 	.type		= OVS_VPORT_TYPE_INTERNAL,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
-	.get_name	= ovs_netdev_get_name,
 	.send		= internal_dev_recv,
 };
 

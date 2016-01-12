@@ -1020,6 +1020,10 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 flow->tunnel.ip_src, match->wc.masks.tunnel.ip_src);
     nxm_put_32m(b, MFF_TUN_DST, oxm,
                 flow->tunnel.ip_dst, match->wc.masks.tunnel.ip_dst);
+    nxm_put_ipv6(b, MFF_TUN_IPV6_SRC, oxm,
+                 &flow->tunnel.ipv6_src, &match->wc.masks.tunnel.ipv6_src);
+    nxm_put_ipv6(b, MFF_TUN_IPV6_DST, oxm,
+                 &flow->tunnel.ipv6_dst, &match->wc.masks.tunnel.ipv6_dst);
     nxm_put_16m(b, MFF_TUN_GBP_ID, oxm,
                 flow->tunnel.gbp_id, match->wc.masks.tunnel.gbp_id);
     nxm_put_8m(b, MFF_TUN_GBP_FLAGS, oxm,

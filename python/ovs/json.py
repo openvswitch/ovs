@@ -153,7 +153,7 @@ def from_string(s):
 
 
 class Parser(object):
-    ## Maximum height of parsing stack. ##
+    # Maximum height of parsing stack. #
     MAX_HEIGHT = 1000
 
     def __init__(self, check_trailer=False):
@@ -579,7 +579,7 @@ class Parser(object):
         elif self.parse_state != Parser.__parse_end:
             self.__error("unexpected end of input")
 
-        if self.error == None:
+        if self.error is None:
             assert len(self.stack) == 1
             return self.stack.pop()
         else:

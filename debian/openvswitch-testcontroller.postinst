@@ -21,14 +21,6 @@ set -e
 case "$1" in
     configure)
         cd /etc/openvswitch-testcontroller
-
-        # If cacert.pem is a symlink to the old location for cacert.pem,
-        # remove it so that we can symlink it to the new location.
-        if test -h cacert.pem && \
-           test X"`readlink cacert.pem`" = X/usr/share/openvswitch/pki/switchca/cacert.pem; then
-            rm -f cacert.pem
-        fi
-
         if ! test -e cacert.pem; then
             ln -s /var/lib/openvswitch/pki/switchca/cacert.pem cacert.pem
         fi

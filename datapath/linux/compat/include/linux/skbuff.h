@@ -15,24 +15,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 #endif
 
 #include_next <linux/skbuff.h>
-
 #include <linux/jhash.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
-#define SKB_GSO_GRE 0
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-#define SKB_GSO_UDP_TUNNEL 0
-#endif
-
-#ifndef HAVE_SKB_GSO_GRE_CSUM
-#define SKB_GSO_GRE_CSUM 0
-#endif
-
-#ifndef HAVE_SKB_GSO_UDP_TUNNEL_CSUM
-#define SKB_GSO_UDP_TUNNEL_CSUM 0
-#endif
 
 #ifndef HAVE_IGNORE_DF_RENAME
 #define ignore_df local_df
@@ -388,19 +371,31 @@ static inline void skb_postpull_rcsum(struct sk_buff *skb,
 	if (skb->ip_summed == CHECKSUM_COMPLETE)
 		skb->csum = csum_sub(skb->csum, csum_partial(start, len, 0));
 	else if (skb->ip_summed == CHECKSUM_PARTIAL &&
-			skb_checksum_start_offset(skb) <= len)
+			skb_checksum_start_offset(skb) < 0)
 		skb->ip_summed = CHECKSUM_NONE;
 }
 
 #define skb_pull_rcsum rpl_skb_pull_rcsum
 static inline unsigned char *skb_pull_rcsum(struct sk_buff *skb, unsigned int len)
 {
+	unsigned char *data = skb->data;
+
 	BUG_ON(len > skb->len);
-	skb->len -= len;
-	BUG_ON(skb->len < skb->data_len);
-	skb_postpull_rcsum(skb, skb->data, len);
-	return skb->data += len;
+	__skb_pull(skb, len);
+	skb_postpull_rcsum(skb, data, len);
+	return skb->data;
 }
 
 #endif
+
+#ifndef HAVE_SKB_SCRUB_PACKET_XNET
+#define skb_scrub_packet rpl_skb_scrub_packet
+void rpl_skb_scrub_packet(struct sk_buff *skb, bool xnet);
+#endif
+
+#define skb_pop_mac_header rpl_skb_pop_mac_header
+static inline void skb_pop_mac_header(struct sk_buff *skb)
+{
+	skb->mac_header = skb->network_header;
+}
 #endif

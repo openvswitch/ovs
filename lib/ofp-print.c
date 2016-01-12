@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -496,25 +496,39 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_switch_config(struct ds *string, const struct ofp_switch_config *osc)
+ofp_print_switch_config(struct ds *string,
+                        const struct ofputil_switch_config *config)
 {
-    enum ofp_config_flags flags;
+    ds_put_format(string, " frags=%s",
+                  ofputil_frag_handling_to_string(config->frag));
 
-    flags = ntohs(osc->flags);
-
-    ds_put_format(string, " frags=%s", ofputil_frag_handling_to_string(flags));
-    flags &= ~OFPC_FRAG_MASK;
-
-    if (flags & OFPC_INVALID_TTL_TO_CONTROLLER) {
+    if (config->invalid_ttl_to_controller > 0) {
         ds_put_format(string, " invalid_ttl_to_controller");
-        flags &= ~OFPC_INVALID_TTL_TO_CONTROLLER;
     }
 
-    if (flags) {
-        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
-    }
+    ds_put_format(string, " miss_send_len=%"PRIu16"\n", config->miss_send_len);
+}
 
-    ds_put_format(string, " miss_send_len=%"PRIu16"\n", ntohs(osc->miss_send_len));
+static void
+ofp_print_set_config(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_switch_config config;
+    enum ofperr error;
+
+    error = ofputil_decode_set_config(oh, &config);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+    ofp_print_switch_config(string, &config);
+}
+
+static void
+ofp_print_get_config_reply(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_switch_config config;
+    ofputil_decode_get_config_reply(oh, &config);
+    ofp_print_switch_config(string, &config);
 }
 
 static void print_wild(struct ds *string, const char *leader, int is_wild,
@@ -3010,7 +3024,6 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
 {
     int error;
     struct ofputil_bundle_add_msg badd;
-    char *msg;
 
     error = ofputil_decode_bundle_add(oh, &badd, NULL);
     if (error) {
@@ -3024,16 +3037,14 @@ ofp_print_bundle_add(struct ds *s, const struct ofp_header *oh, int verbosity)
     ofp_print_bit_names(s, badd.flags, bundle_flags_to_name, ' ');
 
     ds_put_char(s, '\n');
-    msg = ofp_to_string(badd.msg, ntohs(badd.msg->length), verbosity);
-    if (msg) {
-        ds_put_cstr(s, msg);
-    }
+    char *msg = ofp_to_string(badd.msg, ntohs(badd.msg->length), verbosity);
+    ds_put_and_free_cstr(s, msg);
 }
 
 static void
-print_geneve_table(struct ds *s, struct ovs_list *mappings)
+print_tlv_table(struct ds *s, struct ovs_list *mappings)
 {
-    struct ofputil_geneve_map *map;
+    struct ofputil_tlv_map *map;
 
     ds_put_cstr(s, " mapping table:\n");
     ds_put_cstr(s, " class\ttype\tlength\tmatch field\n");
@@ -3048,12 +3059,12 @@ print_geneve_table(struct ds *s, struct ovs_list *mappings)
 }
 
 static void
-ofp_print_geneve_table_mod(struct ds *s, const struct ofp_header *oh)
+ofp_print_tlv_table_mod(struct ds *s, const struct ofp_header *oh)
 {
     int error;
-    struct ofputil_geneve_table_mod gtm;
+    struct ofputil_tlv_table_mod ttm;
 
-    error = ofputil_decode_geneve_table_mod(oh, &gtm);
+    error = ofputil_decode_tlv_table_mod(oh, &ttm);
     if (error) {
         ofp_print_error(s, error);
         return;
@@ -3061,34 +3072,34 @@ ofp_print_geneve_table_mod(struct ds *s, const struct ofp_header *oh)
 
     ds_put_cstr(s, "\n ");
 
-    switch (gtm.command) {
-    case NXGTMC_ADD:
+    switch (ttm.command) {
+    case NXTTMC_ADD:
         ds_put_cstr(s, "ADD");
         break;
-    case NXGTMC_DELETE:
+    case NXTTMC_DELETE:
         ds_put_cstr(s, "DEL");
         break;
-    case NXGTMC_CLEAR:
+    case NXTTMC_CLEAR:
         ds_put_cstr(s, "CLEAR");
         break;
     }
 
-    if (gtm.command != NXGTMC_CLEAR) {
-        print_geneve_table(s, &gtm.mappings);
+    if (ttm.command != NXTTMC_CLEAR) {
+        print_tlv_table(s, &ttm.mappings);
     }
 
-    ofputil_uninit_geneve_table(&gtm.mappings);
+    ofputil_uninit_tlv_table(&ttm.mappings);
 }
 
 static void
-ofp_print_geneve_table_reply(struct ds *s, const struct ofp_header *oh)
+ofp_print_tlv_table_reply(struct ds *s, const struct ofp_header *oh)
 {
     int error;
-    struct ofputil_geneve_table_reply gtr;
-    struct ofputil_geneve_map *map;
+    struct ofputil_tlv_table_reply ttr;
+    struct ofputil_tlv_map *map;
     int allocated_space = 0;
 
-    error = ofputil_decode_geneve_table_reply(oh, &gtr);
+    error = ofputil_decode_tlv_table_reply(oh, &ttr);
     if (error) {
         ofp_print_error(s, error);
         return;
@@ -3096,17 +3107,17 @@ ofp_print_geneve_table_reply(struct ds *s, const struct ofp_header *oh)
 
     ds_put_char(s, '\n');
 
-    LIST_FOR_EACH (map, list_node, &gtr.mappings) {
+    LIST_FOR_EACH (map, list_node, &ttr.mappings) {
         allocated_space += map->option_len;
     }
 
     ds_put_format(s, " max option space=%"PRIu32" max fields=%"PRIu16"\n",
-                  gtr.max_option_space, gtr.max_fields);
+                  ttr.max_option_space, ttr.max_fields);
     ds_put_format(s, " allocated option space=%d\n", allocated_space);
     ds_put_char(s, '\n');
-    print_geneve_table(s, &gtr.mappings);
+    print_tlv_table(s, &ttr.mappings);
 
-    ofputil_uninit_geneve_table(&gtr.mappings);
+    ofputil_uninit_tlv_table(&ttr.mappings);
 }
 
 /* This function will print the request forward message. The reason for
@@ -3215,8 +3226,11 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
 
     case OFPTYPE_GET_CONFIG_REPLY:
+        ofp_print_get_config_reply(string, oh);
+        break;
+
     case OFPTYPE_SET_CONFIG:
-        ofp_print_switch_config(string, ofpmsg_body(oh));
+        ofp_print_set_config(string, oh);
         break;
 
     case OFPTYPE_PACKET_IN:
@@ -3410,15 +3424,15 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         ofp_print_bundle_add(string, msg, verbosity);
         break;
 
-    case OFPTYPE_NXT_GENEVE_TABLE_MOD:
-        ofp_print_geneve_table_mod(string, msg);
+    case OFPTYPE_NXT_TLV_TABLE_MOD:
+        ofp_print_tlv_table_mod(string, msg);
         break;
 
-    case OFPTYPE_NXT_GENEVE_TABLE_REQUEST:
+    case OFPTYPE_NXT_TLV_TABLE_REQUEST:
         break;
 
-    case OFPTYPE_NXT_GENEVE_TABLE_REPLY:
-        ofp_print_geneve_table_reply(string, msg);
+    case OFPTYPE_NXT_TLV_TABLE_REPLY:
+        ofp_print_tlv_table_reply(string, msg);
         break;
 
     }

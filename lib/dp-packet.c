@@ -431,21 +431,6 @@ dp_packet_steal_data(struct dp_packet *b)
     return p;
 }
 
-/* Returns a string that describes some of 'b''s metadata plus a hex dump of up
- * to 'maxbytes' from the start of the buffer. */
-char *
-dp_packet_to_string(const struct dp_packet *b, size_t maxbytes)
-{
-    struct ds s;
-
-    ds_init(&s);
-    ds_put_format(&s, "size=%"PRIu32", allocated=%"PRIu32", head=%"PRIuSIZE", tail=%"PRIuSIZE"\n",
-                  dp_packet_size(b), dp_packet_get_allocated(b),
-                  dp_packet_headroom(b), dp_packet_tailroom(b));
-    ds_put_hex_dump(&s, dp_packet_data(b), MIN(dp_packet_size(b), maxbytes), 0, false);
-    return ds_cstr(&s);
-}
-
 static inline void
 dp_packet_adjust_layer_offset(uint16_t *offset, int increment)
 {

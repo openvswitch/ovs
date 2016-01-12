@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -26,12 +26,12 @@
 #include <linux/skbuff.h>
 #include <linux/u64_stats_sync.h>
 #include <net/net_namespace.h>
+#include <net/ip_tunnels.h>
 
 #include "compat.h"
 #include "flow.h"
 #include "flow_table.h"
 #include "vlan.h"
-#include "vport.h"
 
 #define DP_MAX_PORTS           USHRT_MAX
 #define DP_VPORT_HASH_BUCKETS  1024
@@ -95,14 +95,14 @@ struct datapath {
 
 /**
  * struct ovs_skb_cb - OVS data in skb CB
- * @egress_tun_info: Tunnel information about this packet on egress path.
- * NULL if the packet is not being tunneled.
  * @input_vport: The original vport packet came in on. This value is cached
  * when a packet is received by OVS.
+ * @mru: The maximum received fragement size; 0 if the packet is not
+ * fragmented.
  */
 struct ovs_skb_cb {
-	struct ovs_tunnel_info  *egress_tun_info;
 	struct vport		*input_vport;
+	u16			mru;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 
@@ -115,26 +115,30 @@ struct ovs_skb_cb {
  * then no packet is sent and the packet is accounted in the datapath's @n_lost
  * counter.
  * @egress_tun_info: If nonnull, becomes %OVS_PACKET_ATTR_EGRESS_TUN_KEY.
+ * @mru: If not zero, Maximum received IP fragment size.
  */
 struct dp_upcall_info {
-	const struct ovs_tunnel_info *egress_tun_info;
+	struct ip_tunnel_info *egress_tun_info;
+	const void *egress_tun_opts;
 	const struct nlattr *userdata;
 	const struct nlattr *actions;
 	int actions_len;
 	u32 portid;
 	u8 cmd;
+	u16 mru;
 };
 
 /**
  * struct ovs_net - Per net-namespace data for ovs.
  * @dps: List of datapaths to enable dumping them all out.
  * Protected by genl_mutex.
- * @vport_net: Per network namespace data for vport.
  */
 struct ovs_net {
 	struct list_head dps;
 	struct work_struct dp_notify_work;
-	struct vport_net vport_net;
+
+	/* Module reference for configuring conntrack. */
+	bool xt_label;
 };
 
 extern int ovs_net_id;
@@ -203,6 +207,10 @@ void ovs_dp_notify_wq(struct work_struct *work);
 
 int action_fifos_init(void);
 void action_fifos_exit(void);
+
+/* 'KEY' must not have any bits set outside of the 'MASK' */
+#define OVS_MASKED(OLD, KEY, MASK) ((KEY) | ((OLD) & ~(MASK)))
+#define OVS_SET_MASKED(OLD, KEY, MASK) ((OLD) = OVS_MASKED(OLD, KEY, MASK))
 
 #define OVS_NLERR(logging_allowed, fmt, ...)			\
 do {								\

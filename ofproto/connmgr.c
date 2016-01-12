@@ -2062,7 +2062,6 @@ connmgr_flushed(struct connmgr *mgr)
 
         ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
         ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
-        ofpact_pad(&ofpacts);
 
         match_init_catchall(&match);
         ofproto_add_flow(mgr->ofproto, &match, 0, ofpacts.data,

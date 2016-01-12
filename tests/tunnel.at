@@ -419,7 +419,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
                     ofport_request=2 ofport_request=2])
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=8}->tun_metadata1"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=8}->tun_metadata1"])
 
 AT_DATA([flows.txt], [dnl
 in_port=2,actions=set_field:0xa->tun_metadata0,set_field:0x1234567890abcdef->tun_metadata1,1
@@ -449,9 +449,9 @@ Datapath actions: 2
 
 dnl Check mapping table constraints
 AT_CHECK([ovs-ofctl del-flows br0])
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2,{class=0xffff,type=3,len=124}->tun_metadata3"], [1], [ignore],
-[OFPT_ERROR (xid=0x4): NXGTMFC_TABLE_FULL
-NXT_GENEVE_TABLE_MOD (xid=0x4):
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2,{class=0xffff,type=3,len=124}->tun_metadata3"], [1], [ignore],
+[OFPT_ERROR (xid=0x4): NXTTMFC_TABLE_FULL
+NXT_TLV_TABLE_MOD (xid=0x4):
  ADD mapping table:
  class	type	length	match field
  -----	----	------	-----------
@@ -468,11 +468,11 @@ AT_CHECK([ovs-ofctl add-flow br0 "tun_metadata0=0x1234567890abcdef1234567890abcd
 ])
 
 dnl Allocation and match with fragmented address space
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2"])
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=4,len=112}->tun_metadata4"])
-AT_CHECK([ovs-ofctl del-geneve-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=3,len=8}->tun_metadata3"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=2,len=124}->tun_metadata2"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=4,len=112}->tun_metadata4"])
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=3,len=4}->tun_metadata3"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=3,len=8}->tun_metadata3"])
 
 AT_CHECK([ovs-ofctl add-flow br0 tun_metadata3=0x1234567890abcdef,actions=2])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=3,len=8,0x1234567890abcdef}),flags(df|key)),in_port(6081),skb_mark(0),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
@@ -481,7 +481,7 @@ AT_CHECK([tail -2 stdout], [0],
 Datapath actions: 2
 ])
 
-AT_CHECK([ovs-ofctl del-geneve-map br0])
+AT_CHECK([ovs-ofctl del-tlv-map br0])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -493,7 +493,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
                     ofport_request=2 ofport_request=2])
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 
-AT_CHECK([ovs-ofctl add-geneve-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=0}->tun_metadata1,{class=0xffff,type=2,len=4}->tun_metadata2"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=0}->tun_metadata1,{class=0xffff,type=2,len=4}->tun_metadata2"])
 
 AT_DATA([flows.txt], [dnl
 priority=1,tun_metadata0,actions=2

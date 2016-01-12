@@ -15,19 +15,19 @@
  */
 
 #include "precomp.h"
-#include "NetProto.h"
-#include "Switch.h"
-#include "Vport.h"
-#include "Flow.h"
-#include "Stt.h"
-#include "IpHelper.h"
-#include "Checksum.h"
-#include "User.h"
-#include "PacketIO.h"
-#include "Flow.h"
-#include "PacketParser.h"
+
 #include "Atomic.h"
+#include "Checksum.h"
+#include "Flow.h"
+#include "IpHelper.h"
+#include "NetProto.h"
+#include "PacketIO.h"
+#include "PacketParser.h"
+#include "Stt.h"
+#include "Switch.h"
+#include "User.h"
 #include "Util.h"
+#include "Vport.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -176,7 +176,6 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
             default:
                 OVS_LOG_ERROR("Unknown LSO transmit type:%d",
                               lsoInfo.Transmit.Type);
-                return NDIS_STATUS_FAILURE;
         }
     }
 
@@ -698,23 +697,23 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST curNbl, SttHdr *sttHdr)
     switch (protoType) {
         case (STT_PROTO_IPV4 | STT_PROTO_TCP):
             /* TCP/IPv4 */
-	        csumInfo.Transmit.IsIPv4 = 1;
-	        csumInfo.Transmit.TcpChecksum = 1;
-	        break;
+            csumInfo.Transmit.IsIPv4 = 1;
+            csumInfo.Transmit.TcpChecksum = 1;
+            break;
         case STT_PROTO_TCP:
-	        /* TCP/IPv6 */
-	        csumInfo.Transmit.IsIPv6 = 1;
-	        csumInfo.Transmit.TcpChecksum = 1;
-	        break;
+            /* TCP/IPv6 */
+            csumInfo.Transmit.IsIPv6 = 1;
+            csumInfo.Transmit.TcpChecksum = 1;
+            break;
         case STT_PROTO_IPV4:
-	        /* UDP/IPv4 */
-	        csumInfo.Transmit.IsIPv4 = 1;
-	        csumInfo.Transmit.UdpChecksum = 1;
-	        break;
+            /* UDP/IPv4 */
+            csumInfo.Transmit.IsIPv4 = 1;
+            csumInfo.Transmit.UdpChecksum = 1;
+            break;
         default:
-	        /* UDP/IPv6 */
-	        csumInfo.Transmit.IsIPv6 = 1;
-	        csumInfo.Transmit.UdpChecksum = 1;
+            /* UDP/IPv6 */
+            csumInfo.Transmit.IsIPv6 = 1;
+            csumInfo.Transmit.UdpChecksum = 1;
     }
     NET_BUFFER_LIST_INFO(curNbl,
                          TcpIpChecksumNetBufferListInfo) = csumInfo.Value;

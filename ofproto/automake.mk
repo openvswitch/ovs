@@ -82,3 +82,5 @@ ofproto/ipfix-entities.def: ofproto/ipfix.xml ofproto/ipfix-gen-entities
 
 # IPFIX enterprise entity definition macros.
 EXTRA_DIST += ofproto/ipfix-enterprise-entities.def
+
+FLAKE8_PYFILES += ofproto/ipfix-gen-entities

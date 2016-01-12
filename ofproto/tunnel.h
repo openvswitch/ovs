@@ -54,6 +54,7 @@ int tnl_port_build_header(const struct ofport_dpif *ofport,
                           const struct flow *tnl_flow,
                           const struct eth_addr dmac,
                           const struct eth_addr smac,
-                          ovs_be32 ip_src, struct ovs_action_push_tnl *data);
+                          const struct in6_addr *ipv6_src,
+                          struct ovs_action_push_tnl *data);
 
 #endif /* tunnel.h */

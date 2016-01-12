@@ -214,6 +214,14 @@ Examples of common tags follow.
 
         Reported-at: http://openvswitch.org/pipermail/dev/2014-June/040952.html
 
+    Submitted-at: <URL>
+
+        If a patch was submitted somewhere other than the Open vSwitch
+        development mailing list, such as a GitHub pull request, this header can
+        be used to reference the source.
+
+        Submitted-at: https://github.com/openvswitch/ovs/pull/92
+
     VMware-BZ: #1234567
     ONF-JIRA: EXT-12345
 
@@ -230,6 +238,16 @@ Examples of common tags follow.
         These are obsolete forms of VMware-BZ: that can still be seen
         in old change log entries.  (They are obsolete because they do
         not tell the reader what bug tracker is referred to.)
+
+    Fixes: 63bc9fb1c69f (“packets: Reorder CS_* flags to remove gap.”)
+
+        If you would like to record which commit introduced a bug being fixed,
+        you may do that with a “Fixes” header.  This assists in determining
+        which OVS releases have the bug, so the patch can be applied to all
+        affected versions.  The easiest way to generate the header in the
+        proper format is with this git command:
+
+        git log -1 --pretty=format:"Fixes: %h (\"%s\")" --abbrev=12 COMMIT_REF
 
 Developer's Certificate of Origin
 ---------------------------------

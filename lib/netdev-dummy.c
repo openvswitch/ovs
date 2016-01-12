@@ -116,6 +116,7 @@ struct netdev_dummy {
     FILE *tx_pcap, *rxq_pcap OVS_GUARDED;
 
     struct in_addr address, netmask;
+    struct in6_addr ipv6;
     struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
 };
 
@@ -730,6 +731,18 @@ netdev_dummy_get_in4(const struct netdev *netdev_,
 }
 
 static int
+netdev_dummy_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    *in6 = netdev->ipv6;
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return ipv6_addr_is_set(in6) ? 0 : EADDRNOTAVAIL;
+}
+
+static int
 netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
@@ -738,6 +751,18 @@ netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     netdev->address = address;
     netdev->netmask = netmask;
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    netdev->ipv6 = *in6;
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -1133,7 +1158,7 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_get_in4,       /* get_in4 */
     NULL,                       /* set_in4 */
-    NULL,                       /* get_in6 */
+    netdev_dummy_get_in6,       /* get_in6 */
     NULL,                       /* add_router */
     NULL,                       /* get_next_hop */
     NULL,                       /* get_status */
@@ -1401,28 +1426,49 @@ netdev_dummy_ip4addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct netdev *netdev = netdev_from_name(argv[1]);
 
     if (netdev && is_dummy_class(netdev->netdev_class)) {
-        struct in_addr ip;
-        uint16_t plen;
+        struct in_addr ip, mask;
+        char *error;
 
-        if (ovs_scan(argv[2], IP_SCAN_FMT"/%"SCNi16,
-                     IP_SCAN_ARGS(&ip.s_addr), &plen)) {
-            struct in_addr mask;
-
-            mask.s_addr = be32_prefix_mask(plen);
+        error = ip_parse_masked(argv[2], &ip.s_addr, &mask.s_addr);
+        if (!error) {
             netdev_dummy_set_in4(netdev, ip, mask);
             unixctl_command_reply(conn, "OK");
         } else {
-            unixctl_command_reply(conn, "Invalid parameters");
+            unixctl_command_reply_error(conn, error);
+            free(error);
         }
+    } else {
+        unixctl_command_reply_error(conn, "Unknown Dummy Interface");
+    }
 
+    netdev_close(netdev);
+}
+
+static void
+netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[], void *aux OVS_UNUSED)
+{
+    struct netdev *netdev = netdev_from_name(argv[1]);
+
+    if (netdev && is_dummy_class(netdev->netdev_class)) {
+        char ip6_s[IPV6_SCAN_LEN + 1];
+        struct in6_addr ip6;
+
+        if (ovs_scan(argv[2], IPV6_SCAN_FMT, ip6_s) &&
+            inet_pton(AF_INET6, ip6_s, &ip6) == 1) {
+            netdev_dummy_set_in6(netdev, &ip6);
+            unixctl_command_reply(conn, "OK");
+        } else {
+            unixctl_command_reply_error(conn, "Invalid parameters");
+        }
         netdev_close(netdev);
     } else {
         unixctl_command_reply_error(conn, "Unknown Dummy Interface");
-        netdev_close(netdev);
-        return;
     }
 
+    netdev_close(netdev);
 }
+
 
 static void
 netdev_dummy_override(const char *type)
@@ -1457,6 +1503,9 @@ netdev_dummy_register(enum dummy_level level)
     unixctl_command_register("netdev-dummy/ip4addr",
                              "[netdev] ipaddr/mask-prefix-len", 2, 2,
                              netdev_dummy_ip4addr, NULL);
+    unixctl_command_register("netdev-dummy/ip6addr",
+                             "[netdev] ip6addr", 2, 2,
+                             netdev_dummy_ip6addr, NULL);
 
     if (level == DUMMY_OVERRIDE_ALL) {
         struct sset types;

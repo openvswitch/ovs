@@ -12,6 +12,11 @@ enum {
 };
 #endif /* !HAVE_BOOL_TYPE */
 
+#ifndef offsetofend
+#define offsetofend(TYPE, MEMBER) \
+	(offsetof(TYPE, MEMBER)	+ sizeof(((TYPE *)0)->MEMBER))
+#endif
+
 #endif /* __KERNEL__ */
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -395,6 +395,66 @@ do_default_data(struct ovs_cmdl_context *ctx OVS_UNUSED)
             }
         }
     }
+}
+
+static void
+do_diff_data(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_type type;
+    struct json *json;
+    struct ovsdb_datum new, old, diff, reincarnation;
+
+    json = unbox_json(parse_json(ctx->argv[1]));
+    check_ovsdb_error(ovsdb_type_from_json(&type, json));
+    json_destroy(json);
+
+    /* Arguments in pairs of 'old' and 'new'. */
+    for (int i = 2; i < ctx->argc - 1; i+=2) {
+        struct ovsdb_error *error;
+
+        json = unbox_json(parse_json(ctx->argv[i]));
+        check_ovsdb_error(ovsdb_datum_from_json(&old, &type, json, NULL));
+        json_destroy(json);
+
+        json = unbox_json(parse_json(ctx->argv[i+1]));
+        check_ovsdb_error(ovsdb_transient_datum_from_json(&new, &type, json));
+        json_destroy(json);
+
+        /* Generate the diff.  */
+        ovsdb_datum_diff(&diff, &old, &new, &type);
+
+        /* Apply diff to 'old' to create'reincarnation'. */
+        error = ovsdb_datum_apply_diff(&reincarnation, &old, &diff, &type);
+        if (error) {
+            char *string = ovsdb_error_to_string(error);
+            ovsdb_error_destroy(error);
+            ovs_fatal(0, "%s", string);
+        }
+
+        /* Test to make sure 'new' equals 'reincarnation'.  */
+        if (!ovsdb_datum_equals(&new, &reincarnation, &type)) {
+            ovs_fatal(0, "failed to apply diff");
+        }
+
+        /* Print diff */
+        json = ovsdb_datum_to_json(&diff, &type);
+        printf ("diff: ");
+        print_and_free_json(json);
+
+        /* Print reincarnation */
+        json = ovsdb_datum_to_json(&reincarnation, &type);
+        printf ("apply diff: ");
+        print_and_free_json(json);
+
+        ovsdb_datum_destroy(&new, &type);
+        ovsdb_datum_destroy(&old, &type);
+        ovsdb_datum_destroy(&diff, &type);
+        ovsdb_datum_destroy(&reincarnation, &type);
+
+        printf("OK\n");
+    }
+
+    ovsdb_type_destroy(&type);
 }
 
 static void
@@ -2053,6 +2113,7 @@ static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io },
     { "default-atoms", NULL, 0, 0, do_default_atoms },
     { "default-data", NULL, 0, 0, do_default_data },
+    { "diff-data", NULL, 3, INT_MAX, do_diff_data},
     { "parse-atomic-type", NULL, 1, 1, do_parse_atomic_type },
     { "parse-base-type", NULL, 1, 1, do_parse_base_type },
     { "parse-type", NULL, 1, 1, do_parse_type },

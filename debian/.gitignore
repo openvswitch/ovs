@@ -18,5 +18,9 @@
 /openvswitch-test
 /openvswitch-testcontroller
 /openvswitch-vtep
+/ovn-common
+/ovn-host
+/ovn-central
+/ovn-docker
 /python-openvswitch
 /tmp

@@ -29,28 +29,14 @@
 
 /* Context maintained during actions_parse(). */
 struct action_context {
-/* Input. */
-
+    const struct action_params *ap; /* Parameters. */
     struct lexer *lexer;        /* Lexer for pulling more tokens. */
-    const struct simap *ports;  /* Map from port name to number. */
-    const struct shash *symtab; /* Symbol table. */
-
-    /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
-     * OpenFlow flow table (ptable).  These members describe the mapping and
-     * data related to flow tables. */
-    uint8_t n_tables;           /* Number of flow tables. */
-    uint8_t first_ptable;       /* First OpenFlow table. */
-    uint8_t cur_ltable;         /* 0 <= cur_ltable < n_tables. */
-    uint8_t output_ptable;      /* OpenFlow table for 'output' to resubmit. */
-    const struct simap *ct_zones; /* Map from port name to conntrack zone. */
-
-/* State. */
     char *error;                /* Error, if any, otherwise NULL. */
-
-/* Output. */
     struct ofpbuf *ofpacts;     /* Actions. */
     struct expr *prereqs;       /* Prerequisites to apply to match. */
 };
+
+static bool parse_action(struct action_context *);
 
 static bool
 action_error_handle_common(struct action_context *ctx)
@@ -122,7 +108,7 @@ parse_set_action(struct action_context *ctx)
     struct expr *prereqs;
     char *error;
 
-    error = expr_parse_assignment(ctx->lexer, ctx->symtab, ctx->ports,
+    error = expr_parse_assignment(ctx->lexer, ctx->ap->symtab, ctx->ap->ports,
                                   ctx->ofpacts, &prereqs);
     if (error) {
         action_error(ctx, "%s", error);
@@ -154,7 +140,7 @@ action_get_int(struct action_context *ctx, int *value)
 static void
 parse_next_action(struct action_context *ctx)
 {
-    if (!ctx->n_tables) {
+    if (!ctx->ap->n_tables) {
         action_error(ctx, "\"next\" action not allowed here.");
     } else if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
         int ltable;
@@ -167,20 +153,34 @@ parse_next_action(struct action_context *ctx)
             return;
         }
 
-        if (ltable >= ctx->n_tables) {
+        if (ltable >= ctx->ap->n_tables) {
             action_error(ctx, "\"next\" argument must be in range 0 to %d.",
-                         ctx->n_tables - 1);
+                         ctx->ap->n_tables - 1);
             return;
         }
 
-        emit_resubmit(ctx, ctx->first_ptable + ltable);
+        emit_resubmit(ctx, ctx->ap->first_ptable + ltable);
     } else {
-        if (ctx->cur_ltable < ctx->n_tables) {
-            emit_resubmit(ctx, ctx->first_ptable + ctx->cur_ltable + 1);
+        if (ctx->ap->cur_ltable < ctx->ap->n_tables) {
+            emit_resubmit(ctx,
+                          ctx->ap->first_ptable + ctx->ap->cur_ltable + 1);
         } else {
             action_error(ctx, "\"next\" action not allowed in last table.");
         }
     }
+}
+
+/* Parses 'prerequisite' as an expression in the context of 'ctx', then adds it
+ * as a conjunction with the existing 'ctx->prereqs'. */
+static void
+add_prerequisite(struct action_context *ctx, const char *prerequisite)
+{
+    struct expr *expr;
+    char *error;
+
+    expr = expr_parse_string(prerequisite, ctx->ap->symtab, &error);
+    ovs_assert(!error);
+    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
 }
 
 static void
@@ -191,8 +191,8 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 
     /* If "recirc" is set, we automatically go to the next table. */
     if (recirc_next) {
-        if (ctx->cur_ltable < ctx->n_tables) {
-            ct->recirc_table = ctx->first_ptable + ctx->cur_ltable + 1;
+        if (ctx->ap->cur_ltable < ctx->ap->n_tables) {
+            ct->recirc_table = ctx->ap->first_ptable + ctx->ap->cur_ltable + 1;
         } else {
             action_error(ctx, "\"ct_next\" action not allowed in last table.");
             return;
@@ -209,12 +209,43 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
     ct->alg = 0;
 
     /* CT only works with IP, so set up a prerequisite. */
-    struct expr *expr;
-    char *error;
+    add_prerequisite(ctx, "ip");
+}
 
-    expr = expr_parse_string("ip", ctx->symtab, &error);
-    ovs_assert(!error);
-    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
+static bool
+parse_action(struct action_context *ctx)
+{
+    if (ctx->lexer->token.type != LEX_T_ID) {
+        action_syntax_error(ctx, NULL);
+        return false;
+    }
+
+    enum lex_type lookahead = lexer_lookahead(ctx->lexer);
+    if (lookahead == LEX_T_EQUALS || lookahead == LEX_T_EXCHANGE
+        || lookahead == LEX_T_LSQUARE) {
+        parse_set_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "next")) {
+        parse_next_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "output")) {
+        emit_resubmit(ctx, ctx->ap->output_ptable);
+    } else if (lexer_match_id(ctx->lexer, "ip.ttl")) {
+        if (lexer_match(ctx->lexer, LEX_T_DECREMENT)) {
+            add_prerequisite(ctx, "ip");
+            ofpact_put_DEC_TTL(ctx->ofpacts);
+        } else {
+            action_syntax_error(ctx, "expecting `--'");
+        }
+    } else if (lexer_match_id(ctx->lexer, "ct_next")) {
+        emit_ct(ctx, true, false);
+    } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
+        emit_ct(ctx, false, true);
+    } else {
+        action_syntax_error(ctx, "expecting action");
+    }
+    if (!lexer_match(ctx->lexer, LEX_T_SEMICOLON)) {
+        action_syntax_error(ctx, "expecting ';'");
+    }
+    return !ctx->error;
 }
 
 static void
@@ -234,39 +265,7 @@ parse_actions(struct action_context *ctx)
     }
 
     while (ctx->lexer->token.type != LEX_T_END) {
-        if (ctx->lexer->token.type != LEX_T_ID) {
-            action_syntax_error(ctx, NULL);
-            break;
-        }
-
-        enum lex_type lookahead = lexer_lookahead(ctx->lexer);
-        if (lookahead == LEX_T_EQUALS || lookahead == LEX_T_EXCHANGE
-            || lookahead == LEX_T_LSQUARE) {
-            parse_set_action(ctx);
-        } else if (lexer_match_id(ctx->lexer, "next")) {
-            parse_next_action(ctx);
-        } else if (lexer_match_id(ctx->lexer, "output")) {
-            emit_resubmit(ctx, ctx->output_ptable);
-        } else if (lexer_match_id(ctx->lexer, "ip.ttl")) {
-            if (lexer_match(ctx->lexer, LEX_T_DECREMENT)) {
-                struct expr *e = expr_parse_string("ip", ctx->symtab,
-                                                   &ctx->error);
-                ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, e);
-                ofpact_put_DEC_TTL(ctx->ofpacts);
-            } else {
-                action_syntax_error(ctx, "expecting `--'");
-            }
-        } else if (lexer_match_id(ctx->lexer, "ct_next")) {
-            emit_ct(ctx, true, false);
-        } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
-            emit_ct(ctx, false, true);
-        } else {
-            action_syntax_error(ctx, "expecting action");
-        }
-        if (!lexer_match(ctx->lexer, LEX_T_SEMICOLON)) {
-            action_syntax_error(ctx, "expecting ';'");
-        }
-        if (ctx->error) {
+        if (!parse_action(ctx)) {
             return;
         }
     }
@@ -276,35 +275,7 @@ parse_actions(struct action_context *ctx)
  * Logical_Flow table in ovn-sb(5), and appends the parsed versions of the
  * actions to 'ofpacts' as "struct ofpact"s.
  *
- * 'symtab' provides a table of "struct expr_symbol"s to support (as one would
- * provide to expr_parse()).
- *
- * 'ports' must be a map from strings (presumably names of ports) to integers
- * (as one would provide to expr_to_matches()).  Strings used in the actions
- * that are not in 'ports' are translated to zero.
- *
- * 'ct_zones' provides a map from a port name to its connection tracking zone.
- *
- * OVN maps each logical flow table (ltable), one-to-one, onto a physical
- * OpenFlow flow table (ptable).  A number of parameters describe this mapping
- * and data related to flow tables:
- *
- *     - 'first_ptable' and 'n_tables' define the range of OpenFlow tables to
- *       which the logical "next" action should be able to jump.  Logical table
- *       0 maps to OpenFlow table 'first_ptable', logical table 1 to
- *       'first_ptable + 1', and so on.  If 'n_tables' is 0 then "next" is
- *       disallowed entirely.
- *
- *     - 'cur_ltable' is an offset from 'first_ptable' (e.g. 0 <= cur_ltable <
- *       n_ptables) of the logical flow that contains the actions.  If
- *       cur_ltable + 1 < n_tables, then this defines the default table that
- *       "next" will jump to.
- *
- * 'next_table_id' should be the OpenFlow table to which the "next" action will
- * resubmit, or 0 to disable "next".
- *
- *     - 'output_ptable' should be the OpenFlow table to which the logical
- *       "output" action will resubmit
+ * 'ap' provides most of the parameters for translation.
  *
  * Some actions add extra requirements (prerequisites) to the flow's match.  If
  * so, this function sets '*prereqsp' to the actions' prerequisites; otherwise,
@@ -317,27 +288,18 @@ parse_actions(struct action_context *ctx)
  * 'lexer'.
   */
 char * OVS_WARN_UNUSED_RESULT
-actions_parse(struct lexer *lexer, const struct shash *symtab,
-              const struct simap *ports, const struct simap *ct_zones,
-              uint8_t first_ptable, uint8_t n_tables, uint8_t cur_ltable,
-              uint8_t output_ptable, struct ofpbuf *ofpacts,
-              struct expr **prereqsp)
+actions_parse(struct lexer *lexer, const struct action_params *ap,
+              struct ofpbuf *ofpacts, struct expr **prereqsp)
 {
     size_t ofpacts_start = ofpacts->size;
 
-    struct action_context ctx;
-    ctx.lexer = lexer;
-    ctx.symtab = symtab;
-    ctx.ports = ports;
-    ctx.ct_zones = ct_zones;
-    ctx.first_ptable = first_ptable;
-    ctx.n_tables = n_tables;
-    ctx.cur_ltable = cur_ltable;
-    ctx.output_ptable = output_ptable;
-    ctx.error = NULL;
-    ctx.ofpacts = ofpacts;
-    ctx.prereqs = NULL;
-
+    struct action_context ctx = {
+        .ap = ap,
+        .lexer = lexer,
+        .error = NULL,
+        .ofpacts = ofpacts,
+        .prereqs = NULL,
+    };
     parse_actions(&ctx);
 
     if (!ctx.error) {
@@ -353,20 +315,15 @@ actions_parse(struct lexer *lexer, const struct shash *symtab,
 
 /* Like actions_parse(), but the actions are taken from 's'. */
 char * OVS_WARN_UNUSED_RESULT
-actions_parse_string(const char *s, const struct shash *symtab,
-                     const struct simap *ports, const struct simap *ct_zones,
-                     uint8_t first_table, uint8_t n_tables, uint8_t cur_table,
-                     uint8_t output_table, struct ofpbuf *ofpacts,
-                     struct expr **prereqsp)
+actions_parse_string(const char *s, const struct action_params *ap,
+                     struct ofpbuf *ofpacts, struct expr **prereqsp)
 {
     struct lexer lexer;
     char *error;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    error = actions_parse(&lexer, symtab, ports, ct_zones, first_table,
-                          n_tables, cur_table, output_table, ofpacts,
-                          prereqsp);
+    error = actions_parse(&lexer, ap, ofpacts, prereqsp);
     lexer_destroy(&lexer);
 
     return error;

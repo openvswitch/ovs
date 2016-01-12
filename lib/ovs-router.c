@@ -86,10 +86,9 @@ ovs_router_lookup(const struct in6_addr *ip6_dst, char output_bridge[],
 bool
 ovs_router_lookup4(ovs_be32 ip_dst, char output_bridge[], ovs_be32 *gw)
 {
-    struct in6_addr ip6_dst;
+    struct in6_addr ip6_dst = in6_addr_mapped_ipv4(ip_dst);
     struct in6_addr gw6;
 
-    in6_addr_set_mapped_ipv4(&ip6_dst, ip_dst);
     if (ovs_router_lookup(&ip6_dst, output_bridge, &gw6)) {
         *gw = in6_addr_get_mapped_ipv4(&gw6);
         return true;
@@ -200,79 +199,48 @@ rt_entry_delete(uint8_t priority, const struct in6_addr *ip6_dst, uint8_t plen)
 static bool
 scan_ipv6_route(const char *s, struct in6_addr *addr, unsigned int *plen)
 {
-    struct in6_addr mask;
-    char *error;
-
-    error = ipv6_parse_masked(s, addr, &mask);
+    char *error = ipv6_parse_cidr(s, addr, plen);
     if (error) {
         free(error);
         return false;
     }
-
-    if (!ipv6_is_cidr(&mask)) {
-        return false;
-    }
-
-    *plen = ipv6_count_cidr_bits(&mask);
-
     return true;
 }
 
 static bool
 scan_ipv4_route(const char *s, ovs_be32 *addr, unsigned int *plen)
 {
-    int len, max_plen, n;
-    int slen = strlen(s);
-    uint8_t *ip = (uint8_t *)addr;
-
-    *addr = htonl(0);
-    if (!ovs_scan(s, "%"SCNu8"%n", &ip[0], &n)) {
+    char *error = ip_parse_cidr(s, addr, plen);
+    if (error) {
+        free(error);
         return false;
     }
-    len = n;
-    max_plen = 8;
-    for (int i = 1; i < 4; i++) {
-        if (ovs_scan(s + len, ".%"SCNu8"%n", &ip[i], &n)) {
-            len += n;
-            max_plen += 8;
-        } else {
-            break;
-        }
-    }
-    if (len == slen && max_plen == 32) {
-        *plen = 32;
-        return true;
-    }
-    if (ovs_scan(s + len, "/%u%n", plen, &n)
-        && len + n == slen && *plen <= max_plen) {
-        return true;
-    }
-    return false;
+    return true;
 }
 
 static void
 ovs_router_add(struct unixctl_conn *conn, int argc,
               const char *argv[], void *aux OVS_UNUSED)
 {
-    ovs_be32 ip, gw;
+    ovs_be32 ip;
     unsigned int plen;
     struct in6_addr ip6;
     struct in6_addr gw6;
 
     if (scan_ipv4_route(argv[1], &ip, &plen)) {
-        if (argc > 3) {
-            inet_pton(AF_INET, argv[3], (struct in_addr *)&gw);
-        } else {
-            gw = 0;
+        ovs_be32 gw = 0;
+        if (argc > 3 && !ip_parse(argv[3], &gw)) {
+            unixctl_command_reply_error(conn, "Invalid gateway");
+            return;
         }
         in6_addr_set_mapped_ipv4(&ip6, ip);
         in6_addr_set_mapped_ipv4(&gw6, gw);
         plen += 96;
     } else if (scan_ipv6_route(argv[1], &ip6, &plen)) {
-        if (argc > 3) {
-            inet_pton(AF_INET6, argv[3], &gw6);
-        } else {
-            gw6 = in6addr_any;
+        gw6 = in6addr_any;
+        if (argc > 3 && !ipv6_parse(argv[3], &gw6)) {
+            unixctl_command_reply_error(conn, "Invalid IPv6 gateway");
+            return;
         }
     } else {
         unixctl_command_reply_error(conn, "Invalid parameters");

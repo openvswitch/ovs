@@ -84,7 +84,7 @@ struct bond_slave {
     void *aux;                  /* Client-provided handle for this slave. */
 
     struct netdev *netdev;      /* Network device, owned by the client. */
-    unsigned int change_seq;    /* Tracks changes in 'netdev'. */
+    uint64_t change_seq;        /* Tracks changes in 'netdev'. */
     ofp_port_t  ofp_port;       /* OpenFlow port number. */
     char *name;                 /* Name (a copy of netdev_get_name(netdev)). */
 

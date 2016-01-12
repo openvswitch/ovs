@@ -18,6 +18,7 @@
 #define OVSDB_MONITOR_H
 
 struct ovsdb_monitor;
+struct ovsdb_jsonrpc_monitor;
 
 enum ovsdb_monitor_selection {
     OJMS_INITIAL = 1 << 0,      /* All rows when monitor is created. */
@@ -26,6 +27,15 @@ enum ovsdb_monitor_selection {
     OJMS_MODIFY = 1 << 3        /* Modified rows. */
 };
 
+
+enum ovsdb_monitor_version {
+      OVSDB_MONITOR_V1,         /* RFC 7047 "monitor" method. */
+      OVSDB_MONITOR_V2,         /* Extension to RFC 7047, see ovsdb-server
+                                   man page for details. */
+
+      /* Last entry.  */
+      OVSDB_MONITOR_VERSION_MAX
+};
 
 struct ovsdb_monitor *ovsdb_monitor_create(struct ovsdb *db,
                        struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
@@ -55,7 +65,9 @@ ovsdb_monitor_table_check_duplicates(struct ovsdb_monitor *,
                           const struct ovsdb_table *);
 
 struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
-                                bool initial, uint64_t *unflushed_transaction);
+                                      bool initial,
+                                      uint64_t *unflushed_transaction,
+                                      enum ovsdb_monitor_version version);
 
 void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
                                     const struct ovsdb_table *table,

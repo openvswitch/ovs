@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2012 Nicira, Inc.
+ * Copyright (c) 2007-2015 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -22,8 +22,10 @@
 #include <linux/in.h>
 #include <linux/in_route.h>
 #include <linux/netlink.h>
+#include <net/ip.h>
 #include <net/route.h>
 #include <net/xfrm.h>
+#include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 
 #ifdef HAVE_GENL_MULTICAST_GROUP_WITH_ID
 #define GROUP_ID(grp)	((grp)->id)
@@ -43,47 +45,52 @@
 #define inet_sport(sk)	(inet_sk(sk)->inet_sport)
 #endif
 
-static inline struct rtable *find_route(struct net *net,
-					__be32 *saddr, __be32 daddr,
-					u8 ipproto, u8 tos, u32 skb_mark)
-{
-	struct rtable *rt;
-	/* Tunnel configuration keeps DSCP part of TOS bits, But Linux
-	 * router expect RT_TOS bits only.
-	 */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-	struct flowi fl = { .nl_u = { .ip4_u = {
-					.daddr = daddr,
-					.saddr = *saddr,
-					.tos   = RT_TOS(tos) } },
-					.mark = skb_mark,
-					.proto = ipproto };
-
-	if (unlikely(ip_route_output_key(net, &rt, &fl)))
-		return ERR_PTR(-EADDRNOTAVAIL);
-	*saddr = fl.nl_u.ip4_u.saddr;
-	return rt;
-#else
-	struct flowi4 fl = { .daddr = daddr,
-			     .saddr = *saddr,
-			     .flowi4_tos = RT_TOS(tos),
-			     .flowi4_mark = skb_mark,
-			     .flowi4_proto = ipproto };
-
-	rt = ip_route_output_key(net, &fl);
-	*saddr = fl.saddr;
-	return rt;
-#endif
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
 static inline bool skb_encapsulation(struct sk_buff *skb)
 {
 	return skb->encapsulation;
 }
 #else
 #define skb_encapsulation(skb) false
+#endif
+
+#ifdef OVS_FRAGMENT_BACKPORT
+int __init ip6_output_init(void);
+void ip6_output_exit(void);
+
+static inline int __init compat_init(void)
+{
+	int err;
+
+	err = ipfrag_init();
+	if (err)
+		return err;
+
+	err = nf_ct_frag6_init();
+	if (err)
+		goto error_ipfrag_exit;
+
+	err = ip6_output_init();
+	if (err)
+		goto error_frag6_exit;
+
+	return 0;
+
+error_frag6_exit:
+	nf_ct_frag6_cleanup();
+error_ipfrag_exit:
+	rpl_ipfrag_fini();
+	return err;
+}
+static inline void compat_exit(void)
+{
+	ip6_output_exit();
+	nf_ct_frag6_cleanup();
+	rpl_ipfrag_fini();
+}
+#else
+static inline int __init compat_init(void) { return 0; }
+static inline void compat_exit(void) { }
 #endif
 
 #endif /* compat.h */

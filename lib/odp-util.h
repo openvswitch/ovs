@@ -178,6 +178,11 @@ struct odp_support {
     bool ct_zone;
     bool ct_mark;
     bool ct_label;
+
+    /* If true, it means that the datapath supports the NAT bits in
+     * 'ct_state'.  The above 'ct_state' member must be true for this
+     * to make sense */
+    bool ct_state_nat;
 };
 
 struct odp_flow_key_parms {
@@ -235,7 +240,7 @@ enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
                                           size_t mask_key_len,
                                           const struct nlattr *flow_key,
                                           size_t flow_key_len,
-                                          struct flow *mask,
+                                          struct flow_wildcards *mask,
                                           const struct flow *flow);
 
 enum odp_key_fitness odp_flow_key_to_flow_udpif(const struct nlattr *, size_t,
@@ -244,7 +249,7 @@ enum odp_key_fitness odp_flow_key_to_mask_udpif(const struct nlattr *mask_key,
                                                 size_t mask_key_len,
                                                 const struct nlattr *flow_key,
                                                 size_t flow_key_len,
-                                                struct flow *mask,
+                                                struct flow_wildcards *mask,
                                                 const struct flow *flow);
 
 const char *odp_key_fitness_to_string(enum odp_key_fitness);

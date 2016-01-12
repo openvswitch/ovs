@@ -79,6 +79,7 @@ static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
 static unixctl_cb_func ovsdb_server_perf_counters_clear;
 static unixctl_cb_func ovsdb_server_perf_counters_show;
+static unixctl_cb_func ovsdb_server_disable_monitor2;
 
 struct server_config {
     struct sset *remotes;
@@ -258,6 +259,9 @@ main(int argc, char *argv[])
     shash_init(&all_dbs);
     server_config.all_dbs = &all_dbs;
     server_config.jsonrpc = jsonrpc;
+
+    perf_counters_init();
+
     SSET_FOR_EACH (db_filename, &db_filenames) {
         error = open_db(&server_config, db_filename);
         if (error) {
@@ -296,8 +300,6 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    perf_counters_init();
-
     if (!run_command) {
         /* ovsdb-server is usually a long-running process, in which case it
          * makes plenty of sense to log the version, but --run makes
@@ -328,6 +330,11 @@ main(int argc, char *argv[])
                              ovsdb_server_perf_counters_show, NULL);
     unixctl_command_register("ovsdb-server/perf-counters-clear", "", 0, 0,
                              ovsdb_server_perf_counters_clear, NULL);
+
+    /* Simulate the behavior of OVS release prior to version 2.5 that
+     * does not support the monitor2 method.  */
+    unixctl_command_register("ovsdb-server/disable-monitor2", "", 0, 0,
+                             ovsdb_server_disable_monitor2, jsonrpc);
 
     main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
 
@@ -1049,6 +1056,20 @@ ovsdb_server_perf_counters_clear(struct unixctl_conn *conn, int argc OVS_UNUSED,
                                  void *arg_ OVS_UNUSED)
 {
     perf_counters_clear();
+    unixctl_command_reply(conn, NULL);
+}
+
+/* "ovsdb-server/disable-monitor2": makes ovsdb-server drop all of its
+ * JSON-RPC connections and reconnect. New sessions will not recognize
+ * the 'monitor2' method.   */
+static void
+ovsdb_server_disable_monitor2(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                              const char *argv[] OVS_UNUSED, void *jsonrpc_)
+{
+    struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
+
+    ovsdb_jsonrpc_disable_monitor2();
+    ovsdb_jsonrpc_server_reconnect(jsonrpc);
     unixctl_command_reply(conn, NULL);
 }
 

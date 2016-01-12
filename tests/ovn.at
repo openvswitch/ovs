@@ -516,6 +516,7 @@ AT_BANNER([OVN end-to-end tests])
 
 # 3 hypervisors, one logical switch, 3 logical ports per hypervisor
 AT_SETUP([ovn -- 3 HVs, 1 LS, 3 lports/HV])
+AT_KEYWORDS([ovnarp])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -537,9 +538,9 @@ for i in 1 2 3; do
         ovs-vsctl add-port br-int vif$i$j -- set Interface vif$i$j external-ids:iface-id=lp$i$j options:tx_pcap=hv$i/vif$i$j-tx.pcap options:rxq_pcap=hv$i/vif$i$j-rx.pcap ofport-request=$i$j
         ovn-nbctl lport-add lsw0 lp$i$j
         if test $j = 1; then
-            ovn-nbctl lport-set-addresses lp$i$j f0:00:00:00:00:$i$j unknown
+            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j" unknown
         else
-            ovn-nbctl lport-set-addresses lp$i$j f0:00:00:00:00:$i$j
+            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j"
             ovn-nbctl lport-set-port-security lp$i$j f0:00:00:00:00:$i$j
         fi
     done
@@ -558,6 +559,12 @@ ovn_populate_arp
 sleep 1
 ovn-sbctl dump-flows -- list multicast_group
 
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv${1%?}
+}
+
 # test_packet INPORT DST SRC ETHTYPE OUTPORT...
 #
 # This shell function causes a packet to be received on INPORT.  The packet's
@@ -575,12 +582,50 @@ for i in 1 2 3; do
 done
 test_packet() {
     local inport=$1 packet=$2$3$4; shift; shift; shift; shift
-    hv=hv`echo $inport | sed 's/^\(.\).*/\1/'`
+    hv=`vif_to_hv $inport`
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
         echo $packet | trim_zeros >> $outport.expected
     done
+}
+
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an lport number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
+    local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+    hv=`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $request
+
+    if test X$reply_ha == X; then
+        # Expect to receive the broadcast ARP on the other logical switch ports
+        # if no reply is expected.
+        local i j
+        for i in 1 2 3; do
+            for j in 1 2 3; do
+                if test $i$j != $inport; then
+                    echo $request >> $i$j.expected
+                fi
+            done
+        done
+    else
+        # Expect to receive the reply, if any.
+        local reply=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+        echo $reply >> $inport.expected
+    fi
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
 }
 
 # Send packets between all pairs of source and destination ports:
@@ -605,6 +650,10 @@ test_packet() {
 # 7. The lswitch drops unicast packets that violate an ACL.
 #
 # 8. The lswitch drops multicast and broadcast packets that violate an ACL.
+#
+# 9. ARP requests to known IPs are responded directly.
+#
+# 10. No response to ARP requests for unknown IPs.
 for is in 1 2 3; do
     for js in 1 2 3; do
         s=$is$js
@@ -641,6 +690,12 @@ for is in 1 2 3; do
                 bcast="$bcast $unicast"
                 bacl2="$bacl2 $acl2"
                 bacl3="$bacl3 $acl3"
+
+                sip=`ip_to_hex 192 168 0 $i$j`
+                tip=`ip_to_hex 192 168 0 $id$jd`
+                tip_unknown=`ip_to_hex 11 11 11 11`
+                test_arp $s f000000000$s $sip $tip f000000000$d            #9
+                test_arp $s f000000000$s $sip $tip_unknown                 #10
             done
         done
 
@@ -680,6 +735,141 @@ for i in 1 2 3; do
         echo
     done
 done
+AT_CLEANUP
+
+# 2 hypervisors, 2 logical ports per HV
+# 2 locally attached networks, 1 port per HV on each network
+AT_SETUP([ovn -- 2 HVs, 2 lports/HV, localnet ports])
+AT_KEYWORDS([ovn-localnet])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# We model each logical port connectivity to a locally attached
+# physical network with its own logical switch.  One port is
+# for the VIF, and the other port is a special 'localnet' port.
+
+net_add n1
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+
+    for j in 1 2; do
+        ovs-vsctl add-port br-int vif$i$j -- \
+            set Interface vif$i$j external-ids:iface-id=lp$i$j \
+                                  options:tx_pcap=hv$i/vif$i$j-tx.pcap \
+                                  options:rxq_pcap=hv$i/vif$i$j-rx.pcap \
+                                  ofport-request=$i$j
+
+        lswitch_name=phys-lp$i$j
+        lport_name=lp$i$j
+        ln_port_name=phys-ln-$i$j
+
+        ovn-nbctl lswitch-add $lswitch_name
+
+        if test $j -eq 1; then
+            ovn-nbctl lport-add $lswitch_name $ln_port_name
+        else
+            ovn-nbctl lport-add $lswitch_name $ln_port_name "" 101
+        fi
+        ovn-nbctl lport-set-addresses $ln_port_name unknown
+        ovn-nbctl lport-set-type $ln_port_name localnet
+        ovn-nbctl lport-set-options $ln_port_name network_name=phys
+
+        ovn-nbctl lport-add $lswitch_name $lport_name
+        ovn-nbctl lport-set-addresses $lport_name f0:00:00:00:00:$i$j
+        ovn-nbctl lport-set-port-security $lport_name f0:00:00:00:00:$i$j
+
+        OVS_WAIT_UNTIL([test x`ovn-nbctl lport-get-up $lport_name` = xup])
+    done
+done
+
+ovn_populate_arp
+
+# XXX This is now the 3rd copy of these functions in this file ...
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv${1%?}
+}
+#
+# test_packet INPORT DST SRC ETHTYPE OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as lport numbers, e.g. 11 for vif11.
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2; do
+    for j in 1 2; do
+        : > $i$j.expected
+    done
+done
+test_packet() {
+    local inport=$1 src=$2 dst=$3 eth=$4; shift; shift; shift; shift
+    local packet=${src}${dst}${eth}
+    hv=`vif_to_hv $inport`
+    vif=vif$inport
+    as $hv ovs-appctl netdev-dummy/receive $vif $packet
+    for outport; do
+        echo $packet | trim_zeros >> $outport.expected
+    done
+}
+
+# lp11 and lp21 are on the same network. (phys, untagged)
+test_packet 11 f00000000021 f00000000011 1121 21
+test_packet 21 f00000000011 f00000000021 2111 11
+
+# lp12 and lp22 are on the same network. (phys, VLAN 101)
+test_packet 12 f00000000022 f00000000012 1222 22
+test_packet 22 f00000000012 f00000000022 2212 12
+
+# Ports that should not be able to communicate
+test_packet 11 f00000000012 f00000000011 1112
+test_packet 11 f00000000022 f00000000011 1122
+test_packet 21 f00000000012 f00000000021 2112
+test_packet 21 f00000000022 f00000000021 2122
+test_packet 12 f00000000011 f00000000012 1211
+test_packet 12 f00000000021 f00000000012 1221
+test_packet 22 f00000000011 f00000000022 2211
+test_packet 22 f00000000021 f00000000022 2221
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 1
+
+# Dump a bunch of info helpful for debugging if there's a failure.
+
+echo "------ OVN dump ------"
+ovn-nbctl show
+ovn-sbctl show
+
+echo "------ hv1 dump ------"
+as hv1 ovs-vsctl show
+as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+echo "------ hv2 dump ------"
+as hv2 ovs-vsctl show
+as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2; do
+    for j in 1 2; do
+        file=hv$i/vif$i$j-tx.pcap
+        echo $file
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
+        sort $i$j.expected > expout
+        AT_CHECK([sort $i$j.packets], [0], [expout])
+        echo
+    done
+done
+
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
@@ -883,6 +1073,9 @@ for i in 1 2 3; do
     done
 done
 
+ovn-nbctl set Logical_Port lrp33-attachment \
+    addresses='"00:00:00:00:ff:33 192.168.33.254"'
+
 # Physical network:
 #
 # Three hypervisors hv[123].
@@ -1041,13 +1234,15 @@ test_arp() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $request
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
 
-    # Expect to receive the broadcast ARP on the other logical switch ports.
-    # (OVN should probably suppress these.)
+    # Expect to receive the broadcast ARP on the other logical switch ports if
+    # IP address is not configured to the lswitch patch port.
     local i=`vif_to_ls $inport`
     local j k
     for j in 1 2 3; do
         for k in 1 2 3; do
-            if test $i$j$k != $inport; then
+            # 192.168.33.254 is configured to the lswtich patch port for lrp33,
+            # so no ARP flooding expected for it.
+            if test $i$j$k != $inport && test $tpa != `ip_to_hex 192 168 33 254`; then
                 echo $request >> $i$j$k.expected
             fi
         done

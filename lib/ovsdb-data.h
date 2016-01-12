@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,6 +161,11 @@ struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
                                           const struct json *,
                                           struct ovsdb_symbol_table *)
     OVS_WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_transient_datum_from_json(
+                                          struct ovsdb_datum *,
+                                          const struct ovsdb_type *,
+                                          const struct json *)
+    OVS_WARN_UNUSED_RESULT;
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
 
@@ -210,6 +215,18 @@ void ovsdb_datum_subtract(struct ovsdb_datum *a,
                           const struct ovsdb_type *a_type,
                           const struct ovsdb_datum *b,
                           const struct ovsdb_type *b_type);
+
+/* Generate and apply diffs */
+void ovsdb_datum_diff(struct ovsdb_datum *diff,
+                      const struct ovsdb_datum *old,
+                      const struct ovsdb_datum *new,
+                      const struct ovsdb_type *type);
+
+struct ovsdb_error *ovsdb_datum_apply_diff(struct ovsdb_datum *new,
+                                           const struct ovsdb_datum *old,
+                                           const struct ovsdb_datum *diff,
+                                           const struct ovsdb_type *type)
+OVS_WARN_UNUSED_RESULT;
 
 /* Raw operations that may not maintain the invariants. */
 void ovsdb_datum_remove_unsafe(struct ovsdb_datum *, size_t idx,

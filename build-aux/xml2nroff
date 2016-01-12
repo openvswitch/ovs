@@ -14,15 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import date
 import getopt
-import os
 import sys
 import xml.dom.minidom
 
-from build.nroff import *
+import build.nroff
 
 argv0 = sys.argv[0]
+
 
 def usage():
     print """\
@@ -40,17 +39,24 @@ The following options are also available:
 """ % {'argv0': argv0}
     sys.exit(0)
 
-def manpage_to_nroff(xml_file, subst, version=None):
-    f = open(xml_file)
-    input = []
-    for line in f:
-        for k, v in subst.iteritems():
-            line = line.replace(k, v)
-        input += [line]
-    doc = xml.dom.minidom.parseString(''.join(input)).documentElement
-    d = date.fromtimestamp(os.stat(xml_file).st_mtime)
 
-    if version == None:
+def manpage_to_nroff(xml_file, subst, version=None):
+    with open(xml_file) as f:
+        content = f.read()
+    for k, v in subst.iteritems():
+        content = content.replace(k, v)
+    doc = xml.dom.minidom.parseString(content).documentElement
+
+    xi_nodes = doc.getElementsByTagName("xi:include")
+    for node in xi_nodes:
+        with open(node.getAttribute("href")) as xi_f:
+            content = xi_f.read()
+        for k, v in subst.iteritems():
+            content = content.replace(k, v)
+        xi_doc = xml.dom.minidom.parseString(content).documentElement
+        doc.replaceChild(xi_doc, node)
+
+    if version is None:
         version = "UNKNOWN"
     program = doc.attributes['program'].nodeValue
     title = doc.attributes['title'].nodeValue
@@ -73,25 +79,13 @@ def manpage_to_nroff(xml_file, subst, version=None):
 .  I "\\$1"
 .  RE
 ..
-''' % (text_to_nroff(program), text_to_nroff(section),
-       text_to_nroff(title), text_to_nroff(version))
+''' % (build.nroff.text_to_nroff(program), build.nroff.text_to_nroff(section),
+       build.nroff.text_to_nroff(title), build.nroff.text_to_nroff(version))
 
-    s += block_xml_to_nroff(doc.childNodes) + "\n"
+    s += build.nroff.block_xml_to_nroff(doc.childNodes) + "\n"
 
     return s
 
-def usage():
-    print """\
-%(argv0)s: converts XML in a somewhat HTML-like format to nroff
-usage: %(argv0)s [OPTIONS] XML
-where XML is documentation in a somewhat HTML-like XML format.
-The manpage, in nroff "man" format, is output on stdout.
-
-The following options are also available:
-  --version=VERSION           use VERSION to display on document footer
-  -h, --help                  display this help message\
-""" % {'argv0': argv0}
-    sys.exit(0)
 
 if __name__ == "__main__":
     try:
@@ -129,7 +123,7 @@ if __name__ == "__main__":
 
     try:
         s = manpage_to_nroff(args[0], subst, version)
-    except error.Error, e:
+    except build.nroff.error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
     for line in s.splitlines():

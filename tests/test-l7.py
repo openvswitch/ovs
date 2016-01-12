@@ -50,7 +50,7 @@ def get_ftpd():
 
 def main():
     SERVERS = {
-        'http':  [TCPServer,   SimpleHTTPRequestHandler, 80],
+        'http': [TCPServer, SimpleHTTPRequestHandler, 80],
         'http6': [TCPServerV6, SimpleHTTPRequestHandler, 80],
     }
 

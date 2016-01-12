@@ -130,8 +130,7 @@ mcast_snooping_lookup4(const struct mcast_snooping *ms, ovs_be32 ip4,
                       uint16_t vlan)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    struct in6_addr addr;
-    in6_addr_set_mapped_ipv4(&addr, ip4);
+    struct in6_addr addr = in6_addr_mapped_ipv4(ip4);
     return mcast_snooping_lookup(ms, &addr, vlan);
 }
 
@@ -434,8 +433,7 @@ mcast_snooping_add_group4(struct mcast_snooping *ms, ovs_be32 ip4,
                          uint16_t vlan, void *port)
     OVS_REQ_WRLOCK(ms->rwlock)
 {
-    struct in6_addr addr;
-    in6_addr_set_mapped_ipv4(&addr, ip4);
+    struct in6_addr addr = in6_addr_mapped_ipv4(ip4);
     return mcast_snooping_add_group(ms, &addr, vlan, port);
 }
 
@@ -588,8 +586,7 @@ bool
 mcast_snooping_leave_group4(struct mcast_snooping *ms, ovs_be32 ip4,
                            uint16_t vlan, void *port)
 {
-    struct in6_addr addr;
-    in6_addr_set_mapped_ipv4(&addr, ip4);
+    struct in6_addr addr = in6_addr_mapped_ipv4(ip4);
     return mcast_snooping_leave_group(ms, &addr, vlan, port);
 }
 

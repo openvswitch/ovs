@@ -126,8 +126,14 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
 
         match.wc.masks.dl_type = OVS_BE16_MAX;
         match.wc.masks.nw_proto = 0xff;
-        match.wc.masks.nw_frag = 0xff;      /* XXX: No fragments support. */
-        match.wc.masks.tp_dst = OVS_BE16_MAX;
+         /* XXX: No fragments support. */
+        match.wc.masks.nw_frag = FLOW_NW_FRAG_MASK;
+
+        /* 'udp_port' is zero for non-UDP tunnels (e.g. GRE). In this case it
+         * doesn't make sense to match on UDP port numbers. */
+        if (udp_port) {
+            match.wc.masks.tp_dst = OVS_BE16_MAX;
+        }
         if (IN6_IS_ADDR_V4MAPPED(addr)) {
             match.wc.masks.nw_dst = OVS_BE32_MAX;
         } else {
@@ -166,8 +172,7 @@ tnl_port_map_insert(odp_port_t port,
 
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
         if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4;
-            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
             map_insert(p->port, ip_dev->mac, &addr4,
                        p->udp_port, p->dev_name);
         }
@@ -226,8 +231,7 @@ tnl_port_map_delete(ovs_be16 udp_port)
     }
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
         if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4;
-            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
             map_delete(ip_dev->mac, &addr4, udp_port);
         }
         if (ipv6_addr_is_set(&ip_dev->addr6)) {
@@ -328,8 +332,7 @@ map_insert_ipdev(struct ip_device *ip_dev)
 
     LIST_FOR_EACH(p, node, &port_list) {
         if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4;
-            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
             map_insert(p->port, ip_dev->mac, &addr4,
                        p->udp_port, p->dev_name);
         }
@@ -387,8 +390,7 @@ delete_ipdev(struct ip_device *ip_dev)
 
     LIST_FOR_EACH(p, node, &port_list) {
         if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4;
-            in6_addr_set_mapped_ipv4(&addr4, ip_dev->addr4);
+            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
             map_delete(ip_dev->mac, &addr4, p->udp_port);
         }
         if (ipv6_addr_is_set(&ip_dev->addr6)) {

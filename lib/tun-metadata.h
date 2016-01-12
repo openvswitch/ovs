@@ -29,8 +29,8 @@ struct flow_tnl;
 struct match;
 struct mf_field;
 union mf_value;
-struct ofputil_geneve_table_mod;
-struct ofputil_geneve_table_reply;
+struct ofputil_tlv_table_mod;
+struct ofputil_tlv_table_reply;
 struct tun_table;
 
 #define TUN_METADATA_NUM_OPTS 64
@@ -70,7 +70,7 @@ struct tun_metadata {
 
     union {
         uint8_t u8[TUN_METADATA_TOT_OPT_SIZE]; /* Values from tunnel TLVs. */
-        struct geneve_opt gnv[GENEVE_TOT_OPT_SIZE / sizeof(struct geneve_opt)];
+        struct geneve_opt gnv[TLV_TOT_OPT_SIZE / sizeof(struct geneve_opt)];
     } opts;
 };
 BUILD_ASSERT_DECL(offsetof(struct tun_metadata, opts) % 8 == 0);
@@ -113,8 +113,8 @@ struct tun_metadata_allocation {
 
 void tun_metadata_init(void);
 
-enum ofperr tun_metadata_table_mod(struct ofputil_geneve_table_mod *);
-void tun_metadata_table_request(struct ofputil_geneve_table_reply *);
+enum ofperr tun_metadata_table_mod(struct ofputil_tlv_table_mod *);
+void tun_metadata_table_request(struct ofputil_tlv_table_reply *);
 
 void tun_metadata_read(const struct flow_tnl *,
                        const struct mf_field *, union mf_value *);

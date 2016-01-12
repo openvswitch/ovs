@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 M3S, Srl - Italy
+ * Copyright (c) 2011-2015 M3S, Srl - Italy
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
  * Authors:
  *         Martino Fornasa <mf@fornasa.it>
  *         Daniele Venturino <daniele.venturino@m3s.it>
+ *         Carlo Andreotti <c.andreotti@m3s.it>
  *
  * References to IEEE 802.1D-2004 standard are enclosed in square brackets.
  * E.g. [17.3], [Table 17-1], etc.
@@ -185,6 +186,7 @@ rstp_unref(struct rstp *rstp)
 
         list_remove(&rstp->node);
         ovs_mutex_unlock(&rstp_mutex);
+        hmap_destroy(&rstp->ports);
         free(rstp->name);
         free(rstp);
     }

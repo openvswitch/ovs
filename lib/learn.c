@@ -161,7 +161,6 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
             break;
         }
     }
-    ofpact_pad(ofpacts);
 
     fm->ofpacts = ofpacts->data;
     fm->ofpacts_len = ofpacts->size;
@@ -380,7 +379,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             }
         }
     }
-    ofpact_update_len(ofpacts, &learn->ofpact);
+    ofpact_finish(ofpacts, &learn->ofpact);
 
     return NULL;
 }

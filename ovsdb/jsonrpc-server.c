@@ -22,6 +22,7 @@
 #include "bitmap.h"
 #include "column.h"
 #include "dynamic-string.h"
+#include "monitor.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-error.h"
@@ -37,13 +38,16 @@
 #include "timeval.h"
 #include "transaction.h"
 #include "trigger.h"
-#include "monitor.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_jsonrpc_server);
 
 struct ovsdb_jsonrpc_remote;
 struct ovsdb_jsonrpc_session;
+
+/* Set false to defeature monitor2, causing jsonrpc to respond to monitor2
+ * method with an error.  */
+static bool monitor2_enable__ = true;
 
 /* Message rate-limiting. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -81,7 +85,7 @@ static void ovsdb_jsonrpc_trigger_complete_done(
 /* Monitors. */
 static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_create(
     struct ovsdb_jsonrpc_session *, struct ovsdb *, struct json *params,
-    const struct json *request_id);
+    enum ovsdb_monitor_version, const struct json *request_id);
 static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_cancel(
     struct ovsdb_jsonrpc_session *,
     struct json_array *params,
@@ -844,11 +848,15 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
         if (!reply) {
             reply = execute_transaction(s, db, request);
         }
-    } else if (!strcmp(request->method, "monitor")) {
+    } else if (!strcmp(request->method, "monitor") ||
+               (monitor2_enable__ && !strcmp(request->method, "monitor2"))) {
         struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
+            int l = strlen(request->method) - strlen("monitor");
+            enum ovsdb_monitor_version version = l ? OVSDB_MONITOR_V2
+                                                   : OVSDB_MONITOR_V1;
             reply = ovsdb_jsonrpc_monitor_create(s, db, request->params,
-                                                 request->id);
+                                                 version, request->id);
         }
     } else if (!strcmp(request->method, "monitor_cancel")) {
         reply = ovsdb_jsonrpc_monitor_cancel(s, json_array(request->params),
@@ -1039,6 +1047,7 @@ struct ovsdb_jsonrpc_monitor {
     struct ovsdb_monitor *dbmon;
     uint64_t unflushed;         /* The first transaction that has not been
                                        flushed to the jsonrpc remote client. */
+    enum ovsdb_monitor_version version;
 };
 
 static struct ovsdb_jsonrpc_monitor *
@@ -1154,6 +1163,7 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
 static struct jsonrpc_msg *
 ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                              struct json *params,
+                             enum ovsdb_monitor_version version,
                              const struct json *request_id)
 {
     struct ovsdb_jsonrpc_monitor *m = NULL;
@@ -1185,6 +1195,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     m->db = db;
     m->dbmon = ovsdb_monitor_create(db, m);
     m->unflushed = 0;
+    m->version = version;
     hmap_insert(&s->monitors, &m->node, json_hash(monitor_id, 0));
     m->monitor_id = json_clone(monitor_id);
 
@@ -1294,7 +1305,8 @@ static struct json *
 ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
                                      bool initial)
 {
-    return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed);
+    return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed,
+                                    m->version);
 }
 
 static bool
@@ -1320,6 +1332,27 @@ ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m)
     free(m);
 }
 
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_create_notify(const struct ovsdb_jsonrpc_monitor *m,
+                            struct json *params)
+{
+    const char *method;
+
+    switch(m->version) {
+    case OVSDB_MONITOR_V1:
+        method = "update";
+        break;
+    case OVSDB_MONITOR_V2:
+        method = "update2";
+        break;
+    case OVSDB_MONITOR_VERSION_MAX:
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    return jsonrpc_create_notify(method, params);
+}
+
 static void
 ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
 {
@@ -1334,8 +1367,15 @@ ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
             struct json *params;
 
             params = json_array_create_2(json_clone(m->monitor_id), json);
-            msg = jsonrpc_create_notify("update", params);
+            msg = ovsdb_jsonrpc_create_notify(m, params);
             jsonrpc_session_send(s->js, msg);
         }
     }
+}
+
+void
+ovsdb_jsonrpc_disable_monitor2(void)
+{
+    /* Once disabled, it is not possible to re-enable it. */
+    monitor2_enable__ = false;
 }

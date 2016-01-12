@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -332,27 +332,21 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         OVS_NOT_REACHED();
     }
 
-    match_init_catchall(&fm->match);
-    fm->priority = OFP_DEFAULT_PRIORITY;
-    fm->cookie = htonll(0);
-    fm->cookie_mask = htonll(0);
+    *fm = (struct ofputil_flow_mod) {
+        .match = MATCH_CATCHALL_INITIALIZER,
+        .priority = OFP_DEFAULT_PRIORITY,
+        .table_id = 0xff,
+        .command = command,
+        .buffer_id = UINT32_MAX,
+        .out_port = OFPP_ANY,
+        .out_group = OFPG_ANY,
+        .delete_reason = OFPRR_DELETE,
+    };
+    /* For modify, by default, don't update the cookie. */
     if (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT) {
-        /* For modify, by default, don't update the cookie. */
         fm->new_cookie = OVS_BE64_MAX;
-    } else{
-        fm->new_cookie = htonll(0);
     }
-    fm->modify_cookie = false;
-    fm->table_id = 0xff;
-    fm->command = command;
-    fm->idle_timeout = OFP_FLOW_PERMANENT;
-    fm->hard_timeout = OFP_FLOW_PERMANENT;
-    fm->buffer_id = UINT32_MAX;
-    fm->out_port = OFPP_ANY;
-    fm->flags = 0;
-    fm->importance = 0;
-    fm->out_group = OFPG_ANY;
-    fm->delete_reason = OFPRR_DELETE;
+
     if (fields & F_ACTIONS) {
         act_str = extract_actions(string);
         if (!act_str) {
@@ -899,34 +893,46 @@ parse_ofp_table_vacancy(struct ofputil_table_mod *tm, const char *setting)
 {
     char *save_ptr = NULL;
     char *vac_up, *vac_down;
-    char *value = strdup(setting);
+    char *value = xstrdup(setting);
+    char *ret_msg;
     int vacancy_up, vacancy_down;
 
     strtok_r(value, ":", &save_ptr);
     vac_down = strtok_r(NULL, ",", &save_ptr);
     if (!vac_down) {
-        return xasprintf("Vacancy down value missing");
+        ret_msg = xasprintf("Vacancy down value missing");
+        goto exit;
     }
     if (!str_to_int(vac_down, 0, &vacancy_down) ||
         vacancy_down < 0 || vacancy_down > 100) {
-        return xasprintf("Invalid vacancy down value \"%s\"", vac_down);
+        ret_msg = xasprintf("Invalid vacancy down value \"%s\"", vac_down);
+        goto exit;
     }
     vac_up = strtok_r(NULL, ",", &save_ptr);
     if (!vac_up) {
-        return xasprintf("Vacancy up value missing");
+        ret_msg = xasprintf("Vacancy up value missing");
+        goto exit;
     }
     if (!str_to_int(vac_up, 0, &vacancy_up) ||
         vacancy_up < 0 || vacancy_up > 100) {
-        return xasprintf("Invalid vacancy up value \"%s\"", vac_up);
+        ret_msg = xasprintf("Invalid vacancy up value \"%s\"", vac_up);
+        goto exit;
     }
     if (vacancy_down > vacancy_up) {
-        return xasprintf("Invalid vacancy range, vacancy up should be greater"
-                         " than vacancy down ""(%s)",
-                         ofperr_to_string(OFPERR_OFPBPC_BAD_VALUE));
+        ret_msg = xasprintf("Invalid vacancy range, vacancy up should be "
+                            "greater than vacancy down (%s)",
+                            ofperr_to_string(OFPERR_OFPBPC_BAD_VALUE));
+        goto exit;
     }
+
+    free(value);
     tm->table_vacancy.vacancy_down = vacancy_down;
     tm->table_vacancy.vacancy_up = vacancy_up;
     return NULL;
+
+exit:
+    free(value);
+    return ret_msg;
 }
 
 /* Convert 'table_id' and 'setting' (as described for the "mod-table" command
@@ -1045,6 +1051,7 @@ parse_ofp_flow_mod_file(const char *file_name, int command,
         error = parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command,
                                        &usable);
         if (error) {
+            char *err_msg;
             size_t i;
 
             for (i = 0; i < *n_fms; i++) {
@@ -1059,7 +1066,9 @@ parse_ofp_flow_mod_file(const char *file_name, int command,
                 fclose(stream);
             }
 
-            return xasprintf("%s:%d: %s", file_name, line_number, error);
+            err_msg = xasprintf("%s:%d: %s", file_name, line_number, error);
+            free(error);
+            return err_msg;
         }
         *usable_protocols &= usable; /* Each line can narrow the set. */
         *n_fms += 1;
@@ -1664,30 +1673,30 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
 }
 
 char * OVS_WARN_UNUSED_RESULT
-parse_ofp_geneve_table_mod_str(struct ofputil_geneve_table_mod *gtm,
+parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *ttm,
                                uint16_t command, const char *s,
                                enum ofputil_protocol *usable_protocols)
 {
     *usable_protocols = OFPUTIL_P_NXM_OXM_ANY;
 
-    gtm->command = command;
-    list_init(&gtm->mappings);
+    ttm->command = command;
+    list_init(&ttm->mappings);
 
     while (*s) {
-        struct ofputil_geneve_map *map = xmalloc(sizeof *map);
+        struct ofputil_tlv_map *map = xmalloc(sizeof *map);
         int n;
 
         if (*s == ',') {
             s++;
         }
 
-        list_push_back(&gtm->mappings, &map->list_node);
+        list_push_back(&ttm->mappings, &map->list_node);
 
         if (!ovs_scan(s, "{class=%"SCNi16",type=%"SCNi8",len=%"SCNi8"}->tun_metadata%"SCNi16"%n",
                       &map->option_class, &map->option_type, &map->option_len,
                       &map->index, &n)) {
-            ofputil_uninit_geneve_table(&gtm->mappings);
-            return xstrdup("invalid geneve mapping");
+            ofputil_uninit_tlv_table(&ttm->mappings);
+            return xstrdup("invalid tlv mapping");
         }
 
         s += n;

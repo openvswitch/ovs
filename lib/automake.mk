@@ -51,6 +51,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/crc32c.h \
 	lib/csum.c \
 	lib/csum.h \
+	lib/ct-dpif.c \
+	lib/ct-dpif.h \
 	lib/daemon.c \
 	lib/daemon.h \
 	lib/daemon-private.h \
@@ -343,6 +345,8 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/if-notifier.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
+	lib/netlink-conntrack.c \
+	lib/netlink-conntrack.h \
 	lib/netlink-notifier.c \
 	lib/netlink-notifier.h \
 	lib/netlink-protocol.h \

@@ -130,7 +130,7 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 		if (mpls)
 			features &= NETIF_F_SG;
 
-		if (netif_needs_gso(skb->dev, skb, features)) {
+		if (netif_needs_gso(skb, features)) {
 			struct sk_buff *nskb;
 
 			nskb = skb_gso_segment(skb, features);

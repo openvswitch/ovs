@@ -408,12 +408,6 @@ do_ca_cert_bootstrap(struct stream *stream)
     /* SSL_CTX_add_client_CA makes a copy of cert's relevant data. */
     SSL_CTX_add_client_CA(ctx, cert);
 
-    /* SSL_CTX_use_certificate() takes ownership of the certificate passed in.
-     * 'cert' is owned by sslv->ssl, so we need to duplicate it. */
-    cert = X509_dup(cert);
-    if (!cert) {
-        out_of_memory();
-    }
     SSL_CTX_set_cert_store(ctx, X509_STORE_new());
     if (SSL_CTX_load_verify_locations(ctx, ca_cert.file_name, NULL) != 1) {
         VLOG_ERR("SSL_CTX_load_verify_locations: %s",
@@ -806,7 +800,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     }
 
     port = ss_get_port(&ss);
-    snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
+    snprintf(bound_name, sizeof bound_name, "pssl:%"PRIu16":%s",
              port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
 
     pssl = xmalloc(sizeof *pssl);
@@ -856,7 +850,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
         return error;
     }
 
-    snprintf(name, sizeof name, "tcp:%s:%"PRIu16,
+    snprintf(name, sizeof name, "ssl:%s:%"PRIu16,
              ss_format_address(&ss, addrbuf, sizeof addrbuf),
              ss_get_port(&ss));
     return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING,

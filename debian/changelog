@@ -1,9 +1,49 @@
-openvswitch (2.4.90-1) unstable; urgency=low
+openvswitch (2.5.90-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-    - Nothing yet!  Try NEWS...
+   - Nothing yet!  Try NEWS...
 
- -- Open vSwitch team <dev@openvswitch.org>  Wed, 17 Jun 2015 16:09:32 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Thu, 03 Dec 2015 23:17:44 -0700
+
+openvswitch (2.5.0-1) unstable; urgency=low
+   [ Open vSwitch team ]
+   * New upstream version
+   - Dropped support for Python older than version 2.7.  As a consequence,
+     using Open vSwitch 2.5 or later on XenServer 6.5 or earlier (which
+     have Python 2.4) requires first installing Python 2.7.
+   - OpenFlow:
+     * Group chaining (where one OpenFlow group triggers another) is
+       now supported.
+     * OpenFlow 1.4+ "importance" is now considered for flow eviction.
+     * OpenFlow 1.4+ OFPTC_EVICTION is now implemented.
+     * OpenFlow 1.4+ OFPTC_VACANCY_EVENTS is now implemented.
+     * OpenFlow 1.4+ OFPMP_TABLE_DESC is now implemented.
+     * Allow modifying the ICMPv4/ICMPv6 type and code fields.
+     * OpenFlow 1.4+ OFPT_SET_ASYNC_CONFIG and OFPT_GET_ASYNC_CONFIG are
+       now implemented.
+   - ovs-ofctl:
+     * New "out_group" keyword for OpenFlow 1.1+ matching on output group.
+   - Tunnels:
+     * Geneve tunnels can now match and set options and the OAM bit.
+     * The nonstandard GRE64 tunnel extension has been dropped.
+   - Support Multicast Listener Discovery (MLDv1 and MLDv2).
+   - Add 'symmetric_l3l4' and 'symmetric_l3l4+udp' hash functions.
+   - sFlow agent now reports tunnel and MPLS structures.
+   - New 'check-system-userspace', 'check-kmod' and 'check-kernel' Makefile
+     targets to run a new system testsuite.  These tests can be run inside
+     a Vagrant box.  See INSTALL.md for details
+   - Mark --syslog-target argument as deprecated.  It will be removed in
+     the next OVS release.
+   - Added --user option to all daemons
+   - Add support for connection tracking through the new "ct" action
+     and "ct_state"/"ct_zone"/"ct_mark"/"ct_label" match fields.  Only
+     available on Linux kernels with the connection tracking module loaded.
+   - Add experimental version of OVN.  OVN, the Open Virtual Network, is a
+     system to support virtual network abstraction.  OVN complements the
+     existing capabilities of OVS to add native support for virtual network
+     abstractions, such as virtual L2 and L3 overlays and security groups.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Thu, 03 Dec 2015 23:17:44 -0700
 
 openvswitch (2.4.0-1) unstable; urgency=low
    [ Open vSwitch team ]

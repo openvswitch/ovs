@@ -151,7 +151,7 @@ addr_is_ipv6(const char *host_name)
 int
 lookup_ip(const char *host_name, struct in_addr *addr)
 {
-    if (!inet_pton(AF_INET, host_name, addr)) {
+    if (!ip_parse(host_name, &addr->s_addr)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
         return ENOENT;
@@ -165,7 +165,7 @@ lookup_ip(const char *host_name, struct in_addr *addr)
 int
 lookup_ipv6(const char *host_name, struct in6_addr *addr)
 {
-    if (inet_pton(AF_INET6, host_name, addr) != 1) {
+    if (!ipv6_parse(host_name, addr)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IPv6 address", host_name);
         return ENOENT;
@@ -188,7 +188,7 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
     struct addrinfo *result;
     struct addrinfo hints;
 
-    if (inet_pton(AF_INET, host_name, addr)) {
+    if (ip_parse(host_name, &addr->s_addr)) {
         return 0;
     }
 
@@ -371,14 +371,14 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
 
         sin6->sin6_family = AF_INET6;
         sin6->sin6_port = htons(port);
-        if (!inet_pton(AF_INET6, host_s, sin6->sin6_addr.s6_addr)) {
+        if (!ipv6_parse(host_s, &sin6->sin6_addr)) {
             VLOG_ERR("%s: bad IPv6 address \"%s\"", s, host_s);
             goto exit;
         }
     } else {
         sin->sin_family = AF_INET;
         sin->sin_port = htons(port);
-        if (!inet_pton(AF_INET, host_s, &sin->sin_addr.s_addr)) {
+        if (!ip_parse(host_s, &sin->sin_addr.s_addr)) {
             VLOG_ERR("%s: bad IPv4 address \"%s\"", s, host_s);
             goto exit;
         }

@@ -116,6 +116,7 @@ struct sockaddr_in6 {
      (X)->s6_addr[10] == 0xff &&                \
      (X)->s6_addr[11] == 0xff)
 
+#define INET_ADDRSTRLEN 16
 #define INET6_ADDRSTRLEN 46
 
 #define IPV6_TCLASS   67

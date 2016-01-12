@@ -34,6 +34,7 @@
 
 #include "compat.h"
 #include "gso.h"
+#include "vport-netdev.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
@@ -44,11 +45,11 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	struct iphdr *iph;
 	int err;
 
-	nf_reset(skb);
-	secpath_reset(skb);
+	skb_scrub_packet(skb, xnet);
+
 	skb_clear_hash(skb);
-	skb_dst_drop(skb);
 	skb_dst_set(skb, &rt_dst(rt));
+
 #if 0
 	/* Do not clear ovs_skb_cb.  It will be done in gso code. */
 	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
@@ -71,6 +72,9 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 
 #ifdef HAVE_IP_SELECT_IDENT_USING_DST_ENTRY
 	__ip_select_ident(iph, &rt_dst(rt), (skb_shinfo(skb)->gso_segs ?: 1) - 1);
+#elif defined(HAVE_IP_SELECT_IDENT_USING_NET)
+	__ip_select_ident(dev_net(rt->dst.dev), iph,
+			  skb_shinfo(skb)->gso_segs ?: 1);
 #else
 	__ip_select_ident(iph, skb_shinfo(skb)->gso_segs ?: 1);
 #endif
@@ -84,7 +88,7 @@ EXPORT_SYMBOL_GPL(rpl_iptunnel_xmit);
 
 struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 					     bool csum_help, int gso_type_mask,
-				             void (*fix_segment)(struct sk_buff *))
+					     void (*fix_segment)(struct sk_buff *))
 {
 	int err;
 
@@ -180,3 +184,84 @@ bool ovs_skb_is_encapsulated(struct sk_buff *skb)
 	return ovs_skb_get_inner_protocol(skb) || skb_encapsulation(skb);
 }
 EXPORT_SYMBOL_GPL(ovs_skb_is_encapsulated);
+
+/* derived from ip_tunnel_rcv(). */
+void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
+		       struct metadata_dst *tun_dst)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+	struct pcpu_sw_netstats *tstats;
+
+	tstats = this_cpu_ptr((struct pcpu_sw_netstats __percpu *)dev->tstats);
+	u64_stats_update_begin(&tstats->syncp);
+	tstats->rx_packets++;
+	tstats->rx_bytes += skb->len;
+	u64_stats_update_end(&tstats->syncp);
+#endif
+
+	skb_reset_mac_header(skb);
+	skb_scrub_packet(skb, false);
+	skb->protocol = eth_type_trans(skb, dev);
+	skb_postpull_rcsum(skb, eth_hdr(skb), ETH_HLEN);
+
+	ovs_skb_dst_set(skb, (struct dst_entry *)tun_dst);
+
+#ifndef HAVE_METADATA_DST
+	netdev_port_receive(skb, &tun_dst->u.tun_info);
+#else
+	netif_rx(skb);
+#endif
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+#ifndef HAVE_PCPU_SW_NETSTATS
+#define netdev_stats_to_stats64 rpl_netdev_stats_to_stats64
+static void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
+				    const struct net_device_stats *netdev_stats)
+{
+#if BITS_PER_LONG == 64
+	BUILD_BUG_ON(sizeof(*stats64) != sizeof(*netdev_stats));
+	memcpy(stats64, netdev_stats, sizeof(*stats64));
+#else
+	size_t i, n = sizeof(*stats64) / sizeof(u64);
+	const unsigned long *src = (const unsigned long *)netdev_stats;
+	u64 *dst = (u64 *)stats64;
+
+	BUILD_BUG_ON(sizeof(*netdev_stats) / sizeof(unsigned long) !=
+		     sizeof(*stats64) / sizeof(u64));
+	for (i = 0; i < n; i++)
+		dst[i] = src[i];
+#endif
+}
+
+struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
+						struct rtnl_link_stats64 *tot)
+{
+	int i;
+
+	netdev_stats_to_stats64(tot, &dev->stats);
+
+	for_each_possible_cpu(i) {
+		const struct pcpu_sw_netstats *tstats =
+						   per_cpu_ptr((struct pcpu_sw_netstats __percpu *)dev->tstats, i);
+		u64 rx_packets, rx_bytes, tx_packets, tx_bytes;
+		unsigned int start;
+
+		do {
+			start = u64_stats_fetch_begin_irq(&tstats->syncp);
+			rx_packets = tstats->rx_packets;
+			tx_packets = tstats->tx_packets;
+			rx_bytes = tstats->rx_bytes;
+			tx_bytes = tstats->tx_bytes;
+		} while (u64_stats_fetch_retry_irq(&tstats->syncp, start));
+
+		tot->rx_packets += rx_packets;
+		tot->tx_packets += tx_packets;
+		tot->rx_bytes   += rx_bytes;
+		tot->tx_bytes   += tx_bytes;
+	}
+
+	return tot;
+}
+#endif
+#endif

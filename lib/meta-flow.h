@@ -368,6 +368,41 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_TUN_DST,
 
+    /* "tun_ipv6_src".
+     *
+     * The IPv6 source address in the outer IP header of a tunneled packet.
+     *
+     * For non-tunneled packets, the value is 0.
+     *
+     * Type: be128.
+     * Maskable: bitwise.
+     * Formatting: IPv6.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_IPV6_SRC(109) since v2.5.
+     * OXM: none.
+     * Prefix lookup member: tunnel.ipv6_src.
+     */
+    MFF_TUN_IPV6_SRC,
+
+    /* "tun_ipv6_dst".
+     *
+     * The IPv6 destination address in the outer IP header of a tunneled
+     * packet.
+     *
+     * For non-tunneled packets, the value is 0.
+     *
+     * Type: be128.
+     * Maskable: bitwise.
+     * Formatting: IPv6.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: NXM_NX_TUN_IPV6_DST(110) since v2.5.
+     * OXM: none.
+     * Prefix lookup member: tunnel.ipv6_dst.
+     */
+    MFF_TUN_IPV6_DST,
+
     /* "tun_flags".
      *
      * Flags representing aspects of tunnel behavior.
@@ -1853,7 +1888,7 @@ union mf_value {
     uint8_t u8;
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == 128);
-BUILD_ASSERT_DECL(sizeof(union mf_value) >= GENEVE_MAX_OPT_SIZE);
+BUILD_ASSERT_DECL(sizeof(union mf_value) >= TLV_MAX_OPT_SIZE);
 
 /* A const mf_value with all bits initialized to ones. */
 extern const union mf_value exact_match_mask;

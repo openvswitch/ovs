@@ -156,7 +156,7 @@ A: The following table lists the Linux kernel versions against which the
 |    2.1.x     | 2.6.32 to 3.11
 |    2.3.x     | 2.6.32 to 3.14
 |    2.4.x     | 2.6.32 to 4.0
-|    2.5.x     | 2.6.32 to 4.2
+|    2.5.x     | 2.6.32 to 4.3
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
@@ -164,6 +164,73 @@ A: The following table lists the Linux kernel versions against which the
    Open vSwitch userspace is not sensitive to the Linux kernel version.
    It should build against almost any kernel, certainly against 2.6.32
    and later.
+
+### Q: Are all features available with all datapaths?
+
+A: Open vSwitch supports different datapaths on different platforms.  Each
+   datapath has a different feature set: the following tables try to summarize
+   the status.
+
+   Supported datapaths:
+
+   * *Linux upstream*: The datapath implemented by the kernel module shipped
+                       with Linux upstream.  Since features have been gradually
+                       introduced into the kernel, the table mentions the first
+                       Linux release whose OVS module supports the feature.
+
+   * *Linux OVS tree*: The datapath implemented by the Linux kernel module
+                       distributed with the OVS source tree. Some features of
+                       this module rely on functionality not available in older
+                       kernels: in this case the minumum Linux version (against
+                       which the feature can be compiled) is listed.
+
+   * *Userspace*: Also known as DPDK, dpif-netdev or dummy datapath. It is the
+                  only datapath that works on NetBSD and FreeBSD.
+
+   * *Hyper-V*: Also known as the Windows datapath.
+
+   The following table lists the datapath supported features from
+   an Open vSwitch user's perspective.
+
+Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
+----------------------|:--------------:|:--------------:|:---------:|:-------:|
+Connection tracking   |      4.3       |       3.10     |    NO     |   NO    |
+Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
+Tunnel - STT          |      NO        |       3.5      |    NO     |   YES   |
+Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
+Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
+Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
+QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
+QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
+sFlow                 |      YES       |       YES      |    YES    |   NO    |
+Set action            |      YES       |       YES      |    YES    | PARTIAL |
+NIC Bonding           |      YES       |       YES      |    YES    |   NO    |
+Multiple VTEPs        |      YES       |       YES      |    YES    |   NO    |
+
+   **Notes:**
+   * Only a limited set of flow fields is modifiable via the set action by the
+     Hyper-V datapath.
+   * The Hyper-V datapath only supports one physical NIC per datapath. This is
+     why bonding is not supported.
+   * The Hyper-V datapath can have at most one IP address configured as a
+     tunnel endpoint.
+
+   The following table lists features that do not *directly* impact an
+   Open vSwitch user, e.g. because their absence can be hidden by the ofproto
+   layer (usually this comes with a performance penalty).
+
+Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
+----------------------|:--------------:|:--------------:|:---------:|:-------:|
+SCTP flows            |      3.12      |       YES      |    YES    |   YES   |
+MPLS                  |      3.19      |       YES      |    YES    |   NO    |
+UFID                  |      4.0       |       YES      |    YES    |   NO    |
+Megaflows             |      3.12      |       YES      |    YES    |   NO    |
+Masked set action     |      4.0       |       YES      |    YES    |   NO    |
+Recirculation         |      3.19      |       YES      |    YES    |   NO    |
+TCP flags matching    |      3.13      |       YES      |    YES    |   NO    |
+Validate flow actions |      YES       |       YES      |    N/A    |   NO    |
+Multiple datapaths    |      YES       |       YES      |    YES    |   NO    |
+Tunnel TSO - STT      |      N/A       |       YES      |    NO     |   YES   |
 
 ### Q: I get an error like this when I configure Open vSwitch:
 

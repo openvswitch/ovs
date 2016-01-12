@@ -245,6 +245,90 @@ notifications (see below) to the request, it must be unique among all
 active monitors.  \fBovsdb\-server\fR rejects attempt to create two
 monitors with the same identifier.
 .
+.IP "4.1.12. Monitor2"
+A new monitor method added in Open vSwitch version 2.5. Monitor2 allows
+for more efficient update notifications (described below).
+.IP
+The monitor method described in Section 4.1.5 also applies to
+monitor2, with the following exceptions.
+.
+.RS
+.IP \(bu
+RPC request method becomes "monitor2".
+.IP \(bu
+Replay result follows <table-updates2>, described in Section 4.1.13.
+.IP \(bu
+Subsequent changes are sent to the client using the "update2" monitor
+notification, described in Section 4.1.13
+.RE
+.
+.IP
+Both monitor and monitor2 sessions can exist concurrently. However,
+monitor and monitor2 shares the same <json-value> parameter space; it
+must be unique among all monitor and monitor2 sessions.
+.
+.IP "4.1.13. Update2 notification"
+The "update2" notification is sent by the server to the client to report
+changes in tables that are being monitored following a "monitor2" request
+as described above. The notification has the following members:
+.
+.RS
+.nf
+"method": "update2"
+"params": [<json-value>, <table-updates2>]
+"id": null
+.fi
+.RE
+.
+.IP
+The <json-value> in "params" is the same as the value passed as the
+<json-value>  in "params" for the corresponding "monitor" request.
+<table-updates2> is an object that maps from a table name to a <table-update2>.
+A <table-update2> is an object that maps from row's UUID to a <row-update2> object. A <row-update2> is an object with one of the following members:
+.
+.RS
+.IP "\(dqinitial\(dq: <row>"
+present for "initial" updates
+.IP "\(dqinsert\(dq: <row>"
+present for "insert" updates
+.IP "\(dqdelete\(dq: <row>"
+present for "delete" updates
+.IP "\(dqmodify\(dq: <row>"
+present for "modify" updates
+.RE
+.
+.IP
+The format of <row> is described in Section 5.1.
+.
+.IP
+<row> is always a null object for a "delete" update. In "initial" and
+"insert" updates, <row> omits columns whose values equal the default
+value of the column type.
+.
+.IP
+For a "modify" update, <row> contains only the columns that are modified.
+<row> stores the difference between the old and new value for those columns,
+as described below.
+.
+.IP
+For columns with single value, the difference is the value of the new
+column.
+.
+.IP
+The difference between two sets are all elements that only belong
+to one of the sets.
+.
+.IP
+The difference between two maps are all key-value pairs whose keys
+appears in only one of the maps, plus the key-value pairs whose keys
+appear in both maps but with different values.  For the latter
+elements, <row> includes the value from the new column.
+.
+.IP
+Initial views of rows are not presented in update2 notifications,
+but in the response object to the monitor2 request. The formatting of the
+<table-updates2> object, however, is the same in either case.
+.
 .IP "5.1. Notation"
 For <condition>, RFC 7047 only allows the use of \fB!=\fR, \fB==\fR,
 \fBincludes\fR, and \fBexcludes\fR operators with set types.  Open

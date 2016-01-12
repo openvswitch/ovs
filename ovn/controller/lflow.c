@@ -24,6 +24,7 @@
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "packets.h"
 #include "simap.h"
 
 VLOG_DEFINE_THIS_MODULE(lflow);
@@ -60,12 +61,19 @@ symtab_init(void)
 
     /* Connection tracking state. */
     expr_symtab_add_field(&symtab, "ct_state", MFF_CT_STATE, NULL, false);
-    expr_symtab_add_predicate(&symtab, "ct.trk", "ct_state[7]");
-    expr_symtab_add_subfield(&symtab, "ct.new", "ct.trk", "ct_state[0]");
-    expr_symtab_add_subfield(&symtab, "ct.est", "ct.trk", "ct_state[1]");
-    expr_symtab_add_subfield(&symtab, "ct.rel", "ct.trk", "ct_state[2]");
-    expr_symtab_add_subfield(&symtab, "ct.inv", "ct.trk", "ct_state[5]");
-    expr_symtab_add_subfield(&symtab, "ct.rpl", "ct.trk", "ct_state[6]");
+    char ct_state_str[16];
+    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_TRACKED_BIT);
+    expr_symtab_add_predicate(&symtab, "ct.trk", ct_state_str);
+    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_NEW_BIT);
+    expr_symtab_add_subfield(&symtab, "ct.new", "ct.trk", ct_state_str);
+    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_ESTABLISHED_BIT);
+    expr_symtab_add_subfield(&symtab, "ct.est", "ct.trk", ct_state_str);
+    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_RELATED_BIT);
+    expr_symtab_add_subfield(&symtab, "ct.rel", "ct.trk", ct_state_str);
+    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_REPLY_DIR_BIT);
+    expr_symtab_add_subfield(&symtab, "ct.rpl", "ct.trk", ct_state_str);
+    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_INVALID_BIT);
+    expr_symtab_add_subfield(&symtab, "ct.inv", "ct.trk", ct_state_str);
 
     /* Data fields. */
     expr_symtab_add_field(&symtab, "eth.src", MFF_ETH_SRC, NULL, false);
@@ -297,10 +305,17 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
         char *error;
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-        error = actions_parse_string(lflow->actions, &symtab, &ldp->ports,
-                                     ct_zones, first_ptable, LOG_PIPELINE_LEN,
-                                     lflow->table_id, output_ptable,
-                                     &ofpacts, &prereqs);
+        struct action_params ap = {
+            .symtab = &symtab,
+            .ports = &ldp->ports,
+            .ct_zones = ct_zones,
+
+            .n_tables = LOG_PIPELINE_LEN,
+            .first_ptable = first_ptable,
+            .cur_ltable = lflow->table_id,
+            .output_ptable = output_ptable,
+        };
+        error = actions_parse_string(lflow->actions, &ap, &ofpacts, &prereqs);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",

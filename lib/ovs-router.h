@@ -17,6 +17,8 @@
 #ifndef OVS_TNL_ROUTER_H
 #define OVS_TNL_ROUTER_H 1
 
+#include <netinet/in.h>
+
 #include "util.h"
 
 #ifdef  __cplusplus

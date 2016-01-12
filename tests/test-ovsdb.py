@@ -23,7 +23,7 @@ from ovs.db import error
 import ovs.db.idl
 import ovs.db.schema
 from ovs.db import data
-from ovs.db import types
+import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
@@ -37,8 +37,8 @@ def unbox_json(json):
 
 
 def do_default_atoms():
-    for type_ in types.ATOMIC_TYPES:
-        if type_ == types.VoidType:
+    for type_ in ovs.db.types.ATOMIC_TYPES:
+        if type_ == ovs.db.types.VoidType:
             continue
 
         sys.stdout.write("%s: " % type_.to_string())
@@ -54,15 +54,16 @@ def do_default_atoms():
 def do_default_data():
     any_errors = False
     for n_min in 0, 1:
-        for key in types.ATOMIC_TYPES:
-            if key == types.VoidType:
+        for key in ovs.db.types.ATOMIC_TYPES:
+            if key == ovs.db.types.VoidType:
                 continue
-            for value in types.ATOMIC_TYPES:
-                if value == types.VoidType:
+            for value in ovs.db.types.ATOMIC_TYPES:
+                if value == ovs.db.types.VoidType:
                     valueBase = None
                 else:
-                    valueBase = types.BaseType(value)
-                type_ = types.Type(types.BaseType(key), valueBase, n_min, 1)
+                    valueBase = ovs.db.types.BaseType(value)
+                type_ = ovs.db.types.Type(ovs.db.types.BaseType(key),
+                                          valueBase, n_min, 1)
                 assert type_.is_valid()
 
                 sys.stdout.write("key %s, value %s, n_min %d: "
@@ -80,25 +81,25 @@ def do_default_data():
 
 def do_parse_atomic_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    atomic_type = types.AtomicType.from_json(type_json)
+    atomic_type = ovs.db.types.AtomicType.from_json(type_json)
     print ovs.json.to_string(atomic_type.to_json(), sort_keys=True)
 
 
 def do_parse_base_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    base_type = types.BaseType.from_json(type_json)
+    base_type = ovs.db.types.BaseType.from_json(type_json)
     print ovs.json.to_string(base_type.to_json(), sort_keys=True)
 
 
 def do_parse_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    type_ = types.Type.from_json(type_json)
+    type_ = ovs.db.types.Type.from_json(type_json)
     print ovs.json.to_string(type_.to_json(), sort_keys=True)
 
 
 def do_parse_atoms(type_string, *atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    base = types.BaseType.from_json(type_json)
+    base = ovs.db.types.BaseType.from_json(type_json)
     for atom_string in atom_strings:
         atom_json = unbox_json(ovs.json.from_string(atom_string))
         try:
@@ -110,7 +111,7 @@ def do_parse_atoms(type_string, *atom_strings):
 
 def do_parse_data(type_string, *data_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    type_ = types.Type.from_json(type_json)
+    type_ = ovs.db.types.Type.from_json(type_json)
     for datum_string in data_strings:
         datum_json = unbox_json(ovs.json.from_string(datum_string))
         datum = data.Datum.from_json(type_, datum_json)
@@ -119,7 +120,7 @@ def do_parse_data(type_string, *data_strings):
 
 def do_sort_atoms(type_string, atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    base = types.BaseType.from_json(type_json)
+    base = ovs.db.types.BaseType.from_json(type_json)
     atoms = [data.Atom.from_json(base, atom_json)
              for atom_json in unbox_json(ovs.json.from_string(atom_strings))]
     print ovs.json.to_string([data.Atom.to_json(atom)
@@ -389,7 +390,6 @@ def idl_set(idl, commands, step):
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
     if commands and commands[0].startswith("?"):
-        monitor = {}
         readonly = {}
         for x in commands[0][1:].split("?"):
             readonly = []
@@ -587,7 +587,7 @@ def main(argv):
 
     command_name = args[0]
     args = args[1:]
-    if not command_name in commands:
+    if command_name not in commands:
         sys.stderr.write("%s: unknown command \"%s\" "
                          "(use --help for help)\n" % (ovs.util.PROGRAM_NAME,
                                                       command_name))

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,8 +61,8 @@ struct handler {
 };
 
 /* In the absence of a multiple-writer multiple-reader datastructure for
- * storing ukeys, we use a large number of cmaps, each with its own lock for
- * writing. */
+ * storing udpif_keys ("ukeys"), we use a large number of cmaps, each with its
+ * own lock for writing. */
 #define N_UMAPS 512 /* per udpif. */
 struct umap {
     struct ovs_mutex mutex;            /* Take for writing to the following. */
@@ -70,7 +70,29 @@ struct umap {
 };
 
 /* A thread that processes datapath flows, updates OpenFlow statistics, and
- * updates or removes them if necessary. */
+ * updates or removes them if necessary.
+ *
+ * Revalidator threads operate in two phases: "dump" and "sweep". In between
+ * each phase, all revalidators sync up so that all revalidator threads are
+ * either in one phase or the other, but not a combination.
+ *
+ *     During the dump phase, revalidators fetch flows from the datapath and
+ *     attribute the statistics to OpenFlow rules. Each datapath flow has a
+ *     corresponding ukey which caches the most recently seen statistics. If
+ *     a flow needs to be deleted (for example, because it is unused over a
+ *     period of time), revalidator threads may delete the flow during the
+ *     dump phase. The datapath is not guaranteed to reliably dump all flows
+ *     from the datapath, and there is no mapping between datapath flows to
+ *     revalidators, so a particular flow may be handled by zero or more
+ *     revalidators during a single dump phase. To avoid duplicate attribution
+ *     of statistics, ukeys are never deleted during this phase.
+ *
+ *     During the sweep phase, each revalidator takes ownership of a different
+ *     slice of umaps and sweeps through all ukeys in those umaps to figure out
+ *     whether they need to be deleted. During this phase, revalidators may
+ *     fetch individual flows which were not dumped during the dump phase to
+ *     validate them and attribute statistics.
+ */
 struct revalidator {
     struct udpif *udpif;               /* Parent udpif. */
     pthread_t thread;                  /* Thread ID. */
@@ -1878,7 +1900,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, ukey->key,
-                             ukey->key_len, &dp_mask.masks, &flow)
+                             ukey->key_len, &dp_mask, &flow)
         == ODP_FIT_ERROR) {
         goto exit;
     }
@@ -1959,8 +1981,10 @@ modify_op_init(struct ukey_op *op, struct udpif_key *ukey)
                      &op->dop.u.flow_put.actions_len);
 }
 
+/* Executes datapath operations 'ops' and attributes stats retrieved from the
+ * datapath as part of those operations. */
 static void
-push_ukey_ops__(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
+push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
 {
     struct dpif_op *opsp[REVALIDATE_MAX_BATCH];
     size_t i;
@@ -2044,16 +2068,20 @@ push_ukey_ops__(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
     }
 }
 
+/* Executes datapath operations 'ops', attributes stats retrieved from the
+ * datapath, and deletes ukeys corresponding to deleted flows. */
 static void
 push_ukey_ops(struct udpif *udpif, struct umap *umap,
               struct ukey_op *ops, size_t n_ops)
 {
     int i;
 
-    push_ukey_ops__(udpif, ops, n_ops);
+    push_dp_ops(udpif, ops, n_ops);
     ovs_mutex_lock(&umap->mutex);
     for (i = 0; i < n_ops; i++) {
-        ukey_delete(umap, ops[i].ukey);
+        if (ops[i].dop.type == DPIF_OP_FLOW_DEL) {
+            ukey_delete(umap, ops[i].ukey);
+        }
     }
     ovs_mutex_unlock(&umap->mutex);
 }
@@ -2196,7 +2224,8 @@ revalidate(struct revalidator *revalidator)
         }
 
         if (n_ops) {
-            push_ukey_ops__(udpif, ops, n_ops);
+            /* Push datapath ops but defer ukey deletion to 'sweep' phase. */
+            push_dp_ops(udpif, ops, n_ops);
         }
         ovsrcu_quiesce();
     }
@@ -2238,9 +2267,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
         size_t n_ops = 0;
 
         CMAP_FOR_EACH(ukey, cmap_node, &umap->cmap) {
-            bool flow_exists, seq_mismatch;
-            struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
-            enum reval_result result;
+            bool flow_exists;
 
             /* Handler threads could be holding a ukey lock while it installs a
              * new flow, so don't hang around waiting for access to it. */
@@ -2248,36 +2275,44 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
                 continue;
             }
             flow_exists = ukey->flow_exists;
-            seq_mismatch = (ukey->dump_seq != dump_seq
-                            && ukey->reval_seq != reval_seq);
+            if (flow_exists) {
+                struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
+                bool seq_mismatch = (ukey->dump_seq != dump_seq
+                                     && ukey->reval_seq != reval_seq);
+                enum reval_result result;
 
-            if (purge) {
-                result = UKEY_DELETE;
-            } else if (!seq_mismatch) {
-                result = UKEY_KEEP;
-            } else {
-                struct dpif_flow_stats stats;
-                COVERAGE_INC(revalidate_missed_dp_flow);
-                memset(&stats, 0, sizeof stats);
-                result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
-                                         reval_seq, &recircs);
-            }
-            if (result != UKEY_KEEP) {
-                /* Takes ownership of 'recircs'. */
-                reval_op_init(&ops[n_ops++], result, udpif, ukey, &recircs,
-                              &odp_actions);
+                if (purge) {
+                    result = UKEY_DELETE;
+                } else if (!seq_mismatch) {
+                    result = UKEY_KEEP;
+                } else {
+                    struct dpif_flow_stats stats;
+                    COVERAGE_INC(revalidate_missed_dp_flow);
+                    memset(&stats, 0, sizeof stats);
+                    result = revalidate_ukey(udpif, ukey, &stats, &odp_actions,
+                                             reval_seq, &recircs);
+                }
+                if (result != UKEY_KEEP) {
+                    /* Clears 'recircs' if filled by revalidate_ukey(). */
+                    reval_op_init(&ops[n_ops++], result, udpif, ukey, &recircs,
+                                  &odp_actions);
+                }
             }
             ovs_mutex_unlock(&ukey->mutex);
 
-            if (n_ops == REVALIDATE_MAX_BATCH) {
-                push_ukey_ops(udpif, umap, ops, n_ops);
-                n_ops = 0;
-            }
-
             if (!flow_exists) {
+                /* The common flow deletion case involves deletion of the flow
+                 * during the dump phase and ukey deletion here. */
                 ovs_mutex_lock(&umap->mutex);
                 ukey_delete(umap, ukey);
                 ovs_mutex_unlock(&umap->mutex);
+            }
+
+            if (n_ops == REVALIDATE_MAX_BATCH) {
+                /* Update/delete missed flows and clean up corresponding ukeys
+                 * if necessary. */
+                push_ukey_ops(udpif, umap, ops, n_ops);
+                n_ops = 0;
             }
         }
 

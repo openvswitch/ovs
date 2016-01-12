@@ -43,7 +43,7 @@ def get_interface_mtu(iface):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     indata = iface + ('\0' * (32 - len(iface)))
     try:
-        outdata = fcntl.ioctl(s.fileno(), 0x8921, indata) #  socket.SIOCGIFMTU
+        outdata = fcntl.ioctl(s.fileno(), 0x8921, indata)  # socket.SIOCGIFMTU
         mtu = struct.unpack("16si12x", outdata)[1]
     except:
         return 0
@@ -60,7 +60,7 @@ def get_interface(address):
     names = array.array('B', '\0' * bytes)
     outbytes = struct.unpack('iL', fcntl.ioctl(
         s.fileno(),
-        0x8912, # SIOCGIFCONF
+        0x8912,  # SIOCGIFCONF
         struct.pack('iL', bytes, names.buffer_info()[0])
     ))[0]
     namestr = names.tostring()
@@ -80,9 +80,9 @@ def uname():
 def start_process(args):
     try:
         p = subprocess.Popen(args,
-            stdin = subprocess.PIPE,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE)
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
         out, err = p.communicate()
         return (p.returncode, out, err)
     except exceptions.OSError:
@@ -186,7 +186,7 @@ def start_local_server(port):
     p = subprocess.Popen(["ovs-test", "-s", str(port)],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                          preexec_fn=sigint_intercept)
-    fcntl.fcntl( p.stdout.fileno(),fcntl.F_SETFL,
+    fcntl.fcntl(p.stdout.fileno(), fcntl.F_SETFL,
         fcntl.fcntl(p.stdout.fileno(), fcntl.F_GETFL) | os.O_NONBLOCK)
 
     while p.poll() is None:

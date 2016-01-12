@@ -78,7 +78,7 @@ struct ofproto {
     char *sw_desc;              /* Software version (NULL for default). */
     char *serial_desc;          /* Serial number (NULL for default). */
     char *dp_desc;              /* Datapath description (NULL for default). */
-    enum ofp_config_flags frag_handling; /* One of OFPC_*.  */
+    enum ofputil_frag_handling frag_handling;
 
     /* Datapath. */
     struct hmap ports;          /* Contains "struct ofport"s. */
@@ -1235,22 +1235,22 @@ struct ofproto_class {
      * which takes one of the following values, with the corresponding
      * meanings:
      *
-     *  - OFPC_FRAG_NORMAL: The switch should treat IP fragments the same way
-     *    as other packets, omitting TCP and UDP port numbers (always setting
-     *    them to 0).
+     *  - OFPUTIL_FRAG_NORMAL: The switch should treat IP fragments the same
+     *    way as other packets, omitting TCP and UDP port numbers (always
+     *    setting them to 0).
      *
-     *  - OFPC_FRAG_DROP: The switch should drop all IP fragments without
+     *  - OFPUTIL_FRAG_DROP: The switch should drop all IP fragments without
      *    passing them through the flow table.
      *
-     *  - OFPC_FRAG_REASM: The switch should reassemble IP fragments before
+     *  - OFPUTIL_FRAG_REASM: The switch should reassemble IP fragments before
      *    passing packets through the flow table.
      *
-     *  - OFPC_FRAG_NX_MATCH (a Nicira extension): Similar to OFPC_FRAG_NORMAL,
-     *    except that TCP and UDP port numbers should be included in fragments
-     *    with offset 0.
+     *  - OFPUTIL_FRAG_NX_MATCH (a Nicira extension): Similar to
+     *    OFPUTIL_FRAG_NORMAL, except that TCP and UDP port numbers should be
+     *    included in fragments with offset 0.
      *
      * Implementations are not required to support every mode.
-     * OFPC_FRAG_NORMAL is the default mode when an ofproto is created.
+     * OFPUTIL_FRAG_NORMAL is the default mode when an ofproto is created.
      *
      * At the time of the call to ->set_frag_handling(), the current mode is
      * available in 'ofproto->frag_handling'.  ->set_frag_handling() returns
@@ -1260,7 +1260,7 @@ struct ofproto_class {
      * reflect the new mode.
      */
     bool (*set_frag_handling)(struct ofproto *ofproto,
-                              enum ofp_config_flags frag_handling);
+                              enum ofputil_frag_handling frag_handling);
 
     /* Implements the OpenFlow OFPT_PACKET_OUT command.  The datapath should
      * execute the 'ofpacts_len' bytes of "struct ofpacts" in 'ofpacts'.

@@ -38,6 +38,4 @@ int tnl_neigh_lookup(const char dev_name[], const struct in6_addr *dst,
 void tnl_neigh_cache_init(void);
 void tnl_neigh_cache_run(void);
 
-int tnl_arp_lookup(const char dev_name[], ovs_be32 dst, struct eth_addr *mac);
-
 #endif

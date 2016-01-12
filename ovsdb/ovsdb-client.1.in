@@ -33,6 +33,11 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR
+[\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
+.br
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
 [\fB\-\-format=\fIformat\fR]
@@ -108,6 +113,7 @@ specified, only that table is retrieved.  If at least one \fIcolumn\fR
 is specified, only those columns are retrieved.
 .
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+.IQ "\fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of \fItable\fR in
 \fIdatabase\fR.  By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If at least one
@@ -130,16 +136,25 @@ each group.  Whether multiple groups or only a single group is
 specified, any given column may only be mentioned once on the command
 line.
 .IP
-If \fB\-\-detach\fR is used with \fBmonitor\fR, then \fBovsdb\-client\fR
-detaches after it has successfully received and printed the initial
-contents of \fItable\fR.
+If \fB\-\-detach\fR is used with \fBmonitor\fR or \fBmointor2\fR, then
+\fBovsdb\-client\fR detaches after it has successfully received and
+printed the initial contents of \fItable\fR.
+.IP
+The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
+session with the server. The \fBmonitor2\fR command uses RFC 7047
+extension "monitor2" method. See \fBovsdb\-server\fR(1) for details.
 .
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
+.IQ "\fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
 Connects to \fIserver\fR and monitors the contents of all tables in
 \fIdatabase\fR.  Prints initial values and all kinds of changes to all
 columns in the database.  The \fB\-\-detach\fR option causes
 \fBovsdb\-client\fR to detach after it successfully receives and
 prints the initial database contents.
+.IP
+The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
+session with the server. The \fBmonitor2\fR command uses RFC 7047
+extension "monitor2" method. See \fBovsdb\-server\fR(1) for details.
 .
 .SH OPTIONS
 .SS "Output Formatting Options"
@@ -150,14 +165,14 @@ The following options controlling output formatting:
 .so lib/table.man
 .
 .IP "\fB\-\-timestamp\fR"
-For the \fBmonitor\fR command, adds a timestamp to each table
-update.  Most output formats add the timestamp on a line of its own
+For the \fBmonitor\fR and \fBmonitor2\fR commands, add a timestamp to each
+table update.  Most output formats add the timestamp on a line of its own
 just above the table.  The JSON output format puts the timestamp in a
 member of the top-level JSON object named \fBtime\fR.
 .
 .SS "Daemon Options"
-The daemon options apply only to the \fBmonitor\fR command.  With any
-other command, they have no effect.
+The daemon options apply only to the \fBmonitor\fR and \fBmonitor2\fR commands.
+With any other command, they have no effect.
 .ds DD
 .so lib/daemon.man
 .SS "Logging Options"

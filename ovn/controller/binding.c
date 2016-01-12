@@ -144,17 +144,23 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         /* We have no integration bridge, therefore no local logical ports.
          * We'll remove our chassis from all port binding records below. */
     }
-    update_ct_zones(&lports, ct_zones, ct_zone_bitmap);
     sset_clone(&all_lports, &lports);
 
     ovsdb_idl_txn_add_comment(
         ctx->ovnsb_idl_txn,"ovn-controller: updating port bindings for '%s'",
         chassis_id);
 
+    /* Run through each binding record to see if it is resident on this
+     * chassis and update the binding accordingly.  This includes both
+     * directly connected logical ports and children of those ports. */
     SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
         if (sset_find_and_delete(&lports, binding_rec->logical_port) ||
                 (binding_rec->parent_port && binding_rec->parent_port[0] &&
                  sset_contains(&all_lports, binding_rec->parent_port))) {
+            if (binding_rec->parent_port && binding_rec->parent_port[0]) {
+                /* Add child logical port to the set of all local ports. */
+                sset_add(&all_lports, binding_rec->logical_port);
+            }
             if (binding_rec->chassis == chassis_rec) {
                 continue;
             }
@@ -173,6 +179,9 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     SSET_FOR_EACH (name, &lports) {
         VLOG_DBG("No port binding record for lport %s", name);
     }
+
+    update_ct_zones(&all_lports, ct_zones, ct_zone_bitmap);
+
     sset_destroy(&lports);
     sset_destroy(&all_lports);
 }

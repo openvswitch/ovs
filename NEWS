@@ -1,4 +1,12 @@
-Post-v2.4.0
+Post-v2.5.0
+---------------------
+   - ovsdb-server:
+     * New "monitor2" and "update2" extensions to RFC 7047.
+   - OpenFlow:
+     * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
+
+
+v2.5.0 - xx xxx xxxx
 ---------------------
    - Dropped support for Python older than version 2.7.  As a consequence,
      using Open vSwitch 2.5 or later on XenServer 6.5 or earlier (which
@@ -11,26 +19,31 @@ Post-v2.4.0
      * OpenFlow 1.4+ OFPTC_VACANCY_EVENTS is now implemented.
      * OpenFlow 1.4+ OFPMP_TABLE_DESC is now implemented.
      * Allow modifying the ICMPv4/ICMPv6 type and code fields.
+     * OpenFlow 1.4+ OFPT_SET_ASYNC_CONFIG and OFPT_GET_ASYNC_CONFIG are
+       now implemented.
    - ovs-ofctl:
      * New "out_group" keyword for OpenFlow 1.1+ matching on output group.
-   - Support for matching/generating options as well as the OAM bit with
-     Geneve tunnels.
+   - Tunnels:
+     * Geneve tunnels can now match and set options and the OAM bit.
+     * The nonstandard GRE64 tunnel extension has been dropped.
    - Support Multicast Listener Discovery (MLDv1 and MLDv2).
    - Add 'symmetric_l3l4' and 'symmetric_l3l4+udp' hash functions.
    - sFlow agent now reports tunnel and MPLS structures.
-   - Added OpenFlow 1.4+ OFPT_SET_ASYNC_CONFIG and OFPT_GET_ASYNC_CONFIG
-     that allows controllers to have more precise control over OpenFlow1.4
-     asynchronous messages.
    - New 'check-system-userspace', 'check-kmod' and 'check-kernel' Makefile
      targets to run a new system testsuite.  These tests can be run inside
      a Vagrant box.  See INSTALL.md for details
-   - Dropped support for GRE64 tunnel.
    - Mark --syslog-target argument as deprecated.  It will be removed in
      the next OVS release.
    - Added --user option to all daemons
    - Add support for connection tracking through the new "ct" action
      and "ct_state"/"ct_zone"/"ct_mark"/"ct_label" match fields.  Only
      available on Linux kernels with the connection tracking module loaded.
+   - Add experimental version of OVN.  OVN, the Open Virtual Network, is a
+     system to support virtual network abstraction.  OVN complements the
+     existing capabilities of OVS to add native support for virtual network
+     abstractions, such as virtual L2 and L3 overlays and security groups.
+   - RHEL packaging:
+     * DPDK ports may now be created via network scripts (see README.RHEL).
 
 
 v2.4.0 - 20 Aug 2015

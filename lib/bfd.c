@@ -939,7 +939,7 @@ bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 static bool
 bfd_lookup_ip(const char *host_name, struct in_addr *addr)
 {
-    if (!inet_pton(AF_INET, host_name, addr)) {
+    if (!ip_parse(host_name, &addr->s_addr)) {
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
         return false;
     }

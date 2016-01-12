@@ -2220,9 +2220,10 @@ iface_refresh_netdev_status(struct iface *iface)
 
     error = netdev_get_etheraddr(iface->netdev, &mac);
     if (!error) {
-        char mac_string[32];
+        char mac_string[ETH_ADDR_STRLEN + 1];
 
-        sprintf(mac_string, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+        snprintf(mac_string, sizeof mac_string,
+                 ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
         ovsrec_interface_set_mac_in_use(iface->cfg, mac_string);
     } else {
         ovsrec_interface_set_mac_in_use(iface->cfg, NULL);
@@ -3438,8 +3439,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* If there's no local interface or no IP address, give up. */
     local_iface = iface_from_ofp_port(br, OFPP_LOCAL);
-    if (!local_iface || !c->local_ip
-        || !inet_pton(AF_INET, c->local_ip, &ip)) {
+    if (!local_iface || !c->local_ip || !ip_parse(c->local_ip, &ip.s_addr)) {
         return;
     }
 
@@ -3449,7 +3449,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* Configure the IP address and netmask. */
     if (!c->local_netmask
-        || !inet_pton(AF_INET, c->local_netmask, &mask)
+        || !ip_parse(c->local_netmask, &mask.s_addr)
         || !mask.s_addr) {
         mask.s_addr = guess_netmask(ip.s_addr);
     }
@@ -3460,7 +3460,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* Configure the default gateway. */
     if (c->local_gateway
-        && inet_pton(AF_INET, c->local_gateway, &gateway)
+        && ip_parse(c->local_gateway, &gateway.s_addr)
         && gateway.s_addr) {
         if (!netdev_add_router(netdev, gateway)) {
             VLOG_INFO("bridge %s: configured gateway "IP_FMT,

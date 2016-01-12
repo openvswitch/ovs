@@ -17,6 +17,9 @@ struct rpl_pernet_operations {
 #define register_pernet_device rpl_register_pernet_gen_device
 #define unregister_pernet_device rpl_unregister_pernet_gen_device
 
+#define register_pernet_subsys rpl_register_pernet_gen_device
+#define unregister_pernet_subsys rpl_unregister_pernet_gen_device
+
 #define compat_init_net ovs_compat_init_net
 int ovs_compat_init_net(struct net *net, struct rpl_pernet_operations *pnet);
 #define compat_exit_net ovs_compat_exit_net
@@ -51,7 +54,7 @@ static void rpl_unregister_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_p
 #define DEFINE_COMPAT_PNET_REG_FUNC(TYPE)
 #endif /* 2.6.33 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
+#ifndef HAVE_POSSIBLE_NET_T
 typedef struct {
 #ifdef CONFIG_NET_NS
 	struct net *net;

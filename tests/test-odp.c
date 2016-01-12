@@ -109,6 +109,7 @@ parse_keys(bool wc_keys)
 
     next:
         ofpbuf_uninit(&odp_key);
+        ofpbuf_uninit(&odp_mask);
     }
     ds_destroy(&in);
 
@@ -197,7 +198,7 @@ parse_filter(char *filter_parse)
 
             odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
             odp_flow_key_to_mask(odp_mask.data, odp_mask.size, odp_key.data,
-                                 odp_key.size, &wc.masks, &flow);
+                                 odp_key.size, &wc, &flow);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);
