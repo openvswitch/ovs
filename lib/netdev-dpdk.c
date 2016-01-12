@@ -242,7 +242,7 @@ struct netdev_rxq_dpdk {
     int port_id;
 };
 
-static bool thread_is_pmd(void);
+static bool dpdk_thread_is_pmd(void);
 
 static int netdev_dpdk_construct(struct netdev *);
 
@@ -1180,7 +1180,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
     /* If we are on a non pmd thread we have to use the mempool mutex, because
      * every non pmd thread shares the same mempool cache */
 
-    if (!thread_is_pmd()) {
+    if (!dpdk_thread_is_pmd()) {
         ovs_mutex_lock(&nonpmd_mempool_mutex);
     }
 
@@ -1224,7 +1224,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
         dpdk_queue_flush(dev, qid);
     }
 
-    if (!thread_is_pmd()) {
+    if (!dpdk_thread_is_pmd()) {
         ovs_mutex_unlock(&nonpmd_mempool_mutex);
     }
 }
@@ -2306,7 +2306,7 @@ pmd_thread_setaffinity_cpu(unsigned cpu)
 }
 
 static bool
-thread_is_pmd(void)
+dpdk_thread_is_pmd(void)
 {
     return rte_lcore_id() != NON_PMD_CORE_ID;
 }
