@@ -216,7 +216,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
     OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
-    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE -mssse3"
+    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
+    OVS_ENABLE_OPTION([-mssse3])
 
     # DPDK pmd drivers are not linked unless --whole-archive is used.
     #
