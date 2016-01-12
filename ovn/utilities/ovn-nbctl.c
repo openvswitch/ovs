@@ -330,13 +330,15 @@ Logical port commands:\n\
                             Set options related to the type of LPORT\n\
   lport-get-options LPORT   Get the type specific options for LPORT\n\
 \n\
+%s\
+\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, nbctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(), nbctl_default_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=nbctl:syslog:warn\n");

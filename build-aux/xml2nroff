@@ -47,6 +47,15 @@ def manpage_to_nroff(xml_file, subst, version=None):
         content = content.replace(k, v)
     doc = xml.dom.minidom.parseString(content).documentElement
 
+    xi_nodes = doc.getElementsByTagName("xi:include")
+    for node in xi_nodes:
+        with open(node.getAttribute("href")) as xi_f:
+            content = xi_f.read()
+        for k, v in subst.iteritems():
+            content = content.replace(k, v)
+        xi_doc = xml.dom.minidom.parseString(content).documentElement
+        doc.replaceChild(xi_doc, node)
+
     if version is None:
         version = "UNKNOWN"
     program = doc.attributes['program'].nodeValue
