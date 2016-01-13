@@ -747,16 +747,16 @@ enum OVS_PACKED_ENUM mf_field_id {
      *   - Established (0x02): This is part of an already existing connection.
      *   - Related (0x04): This is a separate connection that is related to an
      *                     existing connection.
-     *   - Invalid (0x20): This flow could not be associated with a connection.
+     *   - Reply (0x08): This flow is in the reply direction, ie it did not
+     *                   initiate the connection.
+     *   - Invalid (0x10): This flow could not be associated with a connection.
      *                     This could be set for a variety of reasons,
      *                     including (but not limited to):
      *                     - L3/L4 protocol handler is not loaded/unavailable.
      *                     - L3/L4 protocol handler determines that the packet
      *                       is malformed or invalid for the current FSM stage.
      *                     - Packets are unexpected length for protocol.
-     *   - Reply (0x40): This flow is in the reply direction, ie it did not
-     *                   initiate the connection.
-     *   - Tracked (0x80): Connection tracking has occurred.
+     *   - Tracked (0x20): Connection tracking has occurred.
      *
      * The "Tracked" bit corresponds to the packet_state as described in the
      * description of NXAST_CT action. The remaining bits correspond to
