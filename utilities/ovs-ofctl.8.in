@@ -1358,14 +1358,20 @@ flow.
 .IP
 The following flags describe the state of the tracking:
 .RS
-.IP "\fB0x80: trk\fR"
-This packet is tracked, meaning that it has previously traversed the connection
-tracker. If this flag is not set, then no other flags will be set. If this flag
-is set, then the packet is tracked and other flags may also be set.
-.IP "\fB0x40: rpl\fR"
+.IP "\fB0x01: new\fR"
+This is the beginning of a new connection. This flag may only be present for
+uncommitted connections.
+.IP "\fB0x02: est\fR"
+This is part of an already existing connection. This flag may only be present
+for committed connections.
+.IP "\fB0x04: rel\fR"
+This is a connection that is related to an existing connection, for
+instance ICMP "destination unreachable" messages or FTP data connections. This
+flag may only be present for committed connections.
+.IP "\fB0x08: rpl\fR"
 The flow is in the reply direction, meaning it did not initiate the
 connection. This flag may only be present for committed connections.
-.IP "\fB0x20: inv\fR"
+.IP "\fB0x10: inv\fR"
 The state is invalid, meaning that the connection tracker couldn't identify the
 connection. This flag is a catch-all for any problems that the connection
 tracker may have, for example:
@@ -1379,16 +1385,10 @@ modules are not loaded.
 .PP
 - Packets are unexpected length for protocol.
 .RE
-.IP "\fB0x01: new\fR"
-This is the beginning of a new connection. This flag may only be present for
-uncommitted connections.
-.IP "\fB0x02: est\fR"
-This is part of an already existing connection. This flag may only be present
-for committed connections.
-.IP "\fB0x04: rel\fR"
-This is a connection that is related to an existing connection, for
-instance ICMP "destination unreachable" messages or FTP data connections. This
-flag may only be present for committed connections.
+.IP "\fB0x20: trk\fR"
+This packet is tracked, meaning that it has previously traversed the connection
+tracker. If this flag is not set, then no other flags will be set. If this flag
+is set, then the packet is tracked and other flags may also be set.
 .PP
 This field was introduced in Open vSwitch 2.5.
 .RE
