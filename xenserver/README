@@ -95,6 +95,7 @@ debugging.  The sources for the extensions are in
             * ovs-bugtool-coverage-show
             * ovs-bugtool-memory-show
             * ovs-bugtool-vsctl-show
+            * ovs-bugtool-conntrack-dump
 
     system-configuration/openvswitch.xml
 
@@ -167,6 +168,10 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-vsctl-show
 
         Script to show a brief overview of the database contents.
+
+    ovs-bugtool-conntrack-dump
+
+        Script to show all the connection entries in the tracker.
 
     ovs-bugtool-daemons-ver
 

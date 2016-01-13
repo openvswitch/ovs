@@ -28,7 +28,9 @@ bugtool_scripts = \
 	utilities/bugtool/ovs-bugtool-ovs-ofctl-show \
 	utilities/bugtool/ovs-bugtool-ovs-ofctl-dump-flows \
 	utilities/bugtool/ovs-bugtool-ovs-appctl-dpif \
-	utilities/bugtool/ovs-bugtool-bond-show
+	utilities/bugtool/ovs-bugtool-bond-show \
+	utilities/bugtool/ovs-bugtool-conntrack-dump
+
 scripts_SCRIPTS += $(bugtool_scripts)
 
 bugtoolpluginsdir = $(pkgdatadir)/bugtool-plugins
