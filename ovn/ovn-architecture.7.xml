@@ -1017,7 +1017,7 @@
 
     <!-- Keep the following in sync with ovn/controller/physical.h. -->
     OVN transmits the logical ingress and logical egress ports in a TLV with
-    class 0xffff, type 0, and a 32-bit value encoded as follows, from MSB to
+    class 0x0102, type 0, and a 32-bit value encoded as follows, from MSB to
     LSB:
   </p>
 
