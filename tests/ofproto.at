@@ -3135,25 +3135,25 @@ check_async () {
     shift
 
     # OFPGC_ADD
-    ovs-appctl -t `pwd`/c2 ofctl/send 050f0010000000020000000000000001
+    ovs-appctl -t `pwd`/c2 ofctl/send "050f0020000000020000000000000001 00100000 ffffffffffffffff 00000000"
     if test X"$1" = X"OFPGC_ADD"; then shift;
         echo >>expout2 "send: OFPT_GROUP_MOD (OF1.4):
- ADD group_id=1,type=all"
+ ADD group_id=1,type=all,bucket=actions=drop"
         echo >>expout1 "OFPT_REQUESTFORWARD (OF1.5): reason=group_mod
- ADD group_id=1,type=all"
+ ADD group_id=1,type=all,bucket=bucket_id:0,actions=drop"
         echo >>expout3 "OFPT_REQUESTFORWARD (OF1.4): reason=group_mod
- ADD group_id=1,type=all"
+ ADD group_id=1,type=all,bucket=actions=drop"
     fi
 
     # OFPGC_MODIFY
-    ovs-appctl -t `pwd`/c2 ofctl/send 050f0010000000020001010000000001
+    ovs-appctl -t `pwd`/c2 ofctl/send "050f0020000000020001010000000001 00100000 ffffffffffffffff 00000000"
     if test X"$1" = X"OFPGC_MODIFY"; then shift;
         echo >>expout2 "send: OFPT_GROUP_MOD (OF1.4):
- MOD group_id=1,type=select"
+ MOD group_id=1,type=select,bucket=weight:0,actions=drop"
         echo >>expout1 "OFPT_REQUESTFORWARD (OF1.5): reason=group_mod
- MOD group_id=1,type=select"
+ MOD group_id=1,type=select,bucket=bucket_id:0,weight:0,actions=drop"
         echo >>expout3 "OFPT_REQUESTFORWARD (OF1.4): reason=group_mod
- MOD group_id=1,type=select"
+ MOD group_id=1,type=select,bucket=weight:0,actions=drop"
     fi
 
     ovs-appctl -t `pwd`/c1 ofctl/barrier
