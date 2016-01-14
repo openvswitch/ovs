@@ -405,11 +405,13 @@ print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
             ds_put_format(s, "            tag: %"PRIu64"\n", lport->tag[0]);
         }
         if (lport->n_addresses) {
-            ds_put_cstr(s, "            addresses:");
+            ds_put_cstr(s, "            addresses: [");
             for (size_t j = 0; j < lport->n_addresses; j++) {
-                ds_put_format(s, " %s", lport->addresses[j]);
+                ds_put_format(s, "%s\"%s\"",
+                        j == 0 ? "" : ", ",
+                        lport->addresses[j]);
             }
-            ds_put_char(s, '\n');
+            ds_put_cstr(s, "]\n");
         }
     }
 }
