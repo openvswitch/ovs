@@ -31,7 +31,7 @@ m4_define([OVN_CONTROLLER_VTEP_START],
    AT_CAPTURE_FILE([ovsdb-server.log])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd --enable-dummy --disable-system --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd --enable-dummy=system --disable-system --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '
