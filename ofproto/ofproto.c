@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2015 Nicira, Inc.
+ * Copyright (c) 2009-2016 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -291,7 +291,8 @@ static bool ofproto_group_exists__(const struct ofproto *ofproto,
 static bool ofproto_group_exists(const struct ofproto *ofproto,
                                  uint32_t group_id)
     OVS_EXCLUDED(ofproto->groups_rwlock);
-static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
+static enum ofperr add_group(struct ofproto *,
+                             const struct ofputil_group_mod *);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr do_bundle_flow_mod_start(struct ofproto *,
                                             struct ofputil_flow_mod *,
@@ -6197,7 +6198,7 @@ handle_queue_get_config_request(struct ofconn *ofconn,
 }
 
 static enum ofperr
-init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
+init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
            struct ofgroup **ofgroup)
 {
     enum ofperr error;
@@ -6223,7 +6224,9 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
     *CONST_CAST(long long int *, &((*ofgroup)->modified)) = now;
     ovs_refcount_init(&(*ofgroup)->ref_count);
 
-    list_move(&(*ofgroup)->buckets, &gm->buckets);
+    list_init(&(*ofgroup)->buckets);
+    ofputil_bucket_clone_list(&(*ofgroup)->buckets, &gm->buckets, NULL);
+
     *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
         list_size(&(*ofgroup)->buckets);
 
@@ -6243,7 +6246,7 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
  * 'ofproto''s group table.  Returns 0 on success or an OpenFlow error code on
  * failure. */
 static enum ofperr
-add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
+add_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
 {
     struct ofgroup *ofgroup;
     enum ofperr error;
@@ -6391,7 +6394,7 @@ copy_buckets_for_remove_bucket(const struct ofgroup *ofgroup,
  * ofproto's ofgroup hash map. Thus, the group is never altered while users of
  * the xlate module hold a pointer to the group. */
 static enum ofperr
-modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
+modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
 {
     struct ofgroup *ofgroup, *new_ofgroup, *retiring;
     enum ofperr error;
@@ -6535,28 +6538,37 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     switch (gm.command) {
     case OFPGC11_ADD:
-        return add_group(ofproto, &gm);
+        error = add_group(ofproto, &gm);
+        break;
 
     case OFPGC11_MODIFY:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     case OFPGC11_DELETE:
         delete_group(ofproto, gm.group_id);
-        return 0;
+        error = 0;
+        break;
 
     case OFPGC15_INSERT_BUCKET:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     case OFPGC15_REMOVE_BUCKET:
-        return modify_group(ofproto, &gm);
+        error = modify_group(ofproto, &gm);
+        break;
 
     default:
         if (gm.command > OFPGC11_DELETE) {
             VLOG_WARN_RL(&rl, "%s: Invalid group_mod command type %d",
                          ofproto->name, gm.command);
         }
-        return OFPERR_OFPGMFC_BAD_COMMAND;
+        error = OFPERR_OFPGMFC_BAD_COMMAND;
+        break;
     }
+    ofputil_bucket_list_destroy(&gm.buckets);
+
+    return error;
 }
 
 enum ofputil_table_miss
