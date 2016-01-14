@@ -3923,12 +3923,9 @@ geneve_to_attr(struct ofpbuf *a, const void *data_)
         SCAN_FIELD_NESTED__(NAME, TYPE, SCAN_AS, 0, FUNC)
 
 #define SCAN_PUT(ATTR, FUNC)                            \
-        if (!mask || !is_all_zeros(&smask, sizeof smask)) { \
-            SCAN_PUT_ATTR(key, ATTR, skey, FUNC);       \
-            if (mask) {                                 \
-                SCAN_PUT_ATTR(mask, ATTR, smask, FUNC); \
-            }                                           \
-        }
+        SCAN_PUT_ATTR(key, ATTR, skey, FUNC);           \
+        if (mask)                                       \
+            SCAN_PUT_ATTR(mask, ATTR, smask, FUNC);     \
 
 #define SCAN_END(ATTR)                                  \
         SCAN_FINISH();                                  \
