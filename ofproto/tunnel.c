@@ -373,7 +373,7 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
                                   FLOW_TNL_F_CSUM |
                                   FLOW_TNL_F_KEY);
         wc->masks.tunnel.ip_tos = UINT8_MAX;
-        wc->masks.tunnel.ip_ttl = UINT8_MAX;
+        wc->masks.tunnel.ip_ttl = 0;
         /* The tp_src and tp_dst members in flow_tnl are set to be always
          * wildcarded, not to unwildcard them here. */
         wc->masks.tunnel.tp_src = 0;
