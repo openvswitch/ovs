@@ -35,10 +35,8 @@ struct simap;
 
 /* OVN Geneve option information.
  *
- * These are placeholders until OVS is assigned a Geneve option class.
- *
  * Keep these in sync with the documentation in ovn-architecture(7). */
-#define OVN_GENEVE_CLASS 0xffff  /* Geneve experimental class. */
+#define OVN_GENEVE_CLASS 0x0102  /* Assigned Geneve class for OVN. */
 #define OVN_GENEVE_TYPE 0
 #define OVN_GENEVE_LEN 4
 
