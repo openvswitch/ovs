@@ -92,9 +92,9 @@ class Message(object):
             return "\"params\" must be JSON array"
 
         pattern = {Message.T_REQUEST: 0x11001,
-                   Message.T_NOTIFY:  0x11000,
-                   Message.T_REPLY:   0x00101,
-                   Message.T_ERROR:   0x00011}.get(self.type)
+                   Message.T_NOTIFY: 0x11000,
+                   Message.T_REPLY: 0x00101,
+                   Message.T_ERROR: 0x00011}.get(self.type)
         if pattern is None:
             return "invalid JSON-RPC message type %s" % self.type
 
@@ -490,7 +490,7 @@ class Session(object):
                 request.id = "echo"
                 self.rpc.send(request)
         else:
-            assert action == None
+            assert action is None
 
     def wait(self, poller):
         if self.rpc is not None:

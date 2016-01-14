@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
+
 import getopt
 import re
 import os
@@ -23,7 +25,7 @@ from ovs.db import error
 import ovs.db.idl
 import ovs.db.schema
 from ovs.db import data
-from ovs.db import types
+import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
@@ -37,8 +39,8 @@ def unbox_json(json):
 
 
 def do_default_atoms():
-    for type_ in types.ATOMIC_TYPES:
-        if type_ == types.VoidType:
+    for type_ in ovs.db.types.ATOMIC_TYPES:
+        if type_ == ovs.db.types.VoidType:
             continue
 
         sys.stdout.write("%s: " % type_.to_string())
@@ -54,15 +56,16 @@ def do_default_atoms():
 def do_default_data():
     any_errors = False
     for n_min in 0, 1:
-        for key in types.ATOMIC_TYPES:
-            if key == types.VoidType:
+        for key in ovs.db.types.ATOMIC_TYPES:
+            if key == ovs.db.types.VoidType:
                 continue
-            for value in types.ATOMIC_TYPES:
-                if value == types.VoidType:
+            for value in ovs.db.types.ATOMIC_TYPES:
+                if value == ovs.db.types.VoidType:
                     valueBase = None
                 else:
-                    valueBase = types.BaseType(value)
-                type_ = types.Type(types.BaseType(key), valueBase, n_min, 1)
+                    valueBase = ovs.db.types.BaseType(value)
+                type_ = ovs.db.types.Type(ovs.db.types.BaseType(key),
+                                          valueBase, n_min, 1)
                 assert type_.is_valid()
 
                 sys.stdout.write("key %s, value %s, n_min %d: "
@@ -80,69 +83,69 @@ def do_default_data():
 
 def do_parse_atomic_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    atomic_type = types.AtomicType.from_json(type_json)
-    print ovs.json.to_string(atomic_type.to_json(), sort_keys=True)
+    atomic_type = ovs.db.types.AtomicType.from_json(type_json)
+    print(ovs.json.to_string(atomic_type.to_json(), sort_keys=True))
 
 
 def do_parse_base_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    base_type = types.BaseType.from_json(type_json)
-    print ovs.json.to_string(base_type.to_json(), sort_keys=True)
+    base_type = ovs.db.types.BaseType.from_json(type_json)
+    print(ovs.json.to_string(base_type.to_json(), sort_keys=True))
 
 
 def do_parse_type(type_string):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    type_ = types.Type.from_json(type_json)
-    print ovs.json.to_string(type_.to_json(), sort_keys=True)
+    type_ = ovs.db.types.Type.from_json(type_json)
+    print(ovs.json.to_string(type_.to_json(), sort_keys=True))
 
 
 def do_parse_atoms(type_string, *atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    base = types.BaseType.from_json(type_json)
+    base = ovs.db.types.BaseType.from_json(type_json)
     for atom_string in atom_strings:
         atom_json = unbox_json(ovs.json.from_string(atom_string))
         try:
             atom = data.Atom.from_json(base, atom_json)
-            print ovs.json.to_string(atom.to_json())
-        except error.Error, e:
-            print e.args[0].encode("utf8")
+            print(ovs.json.to_string(atom.to_json()))
+        except error.Error as e:
+            print(e.args[0].encode("utf8"))
 
 
 def do_parse_data(type_string, *data_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    type_ = types.Type.from_json(type_json)
+    type_ = ovs.db.types.Type.from_json(type_json)
     for datum_string in data_strings:
         datum_json = unbox_json(ovs.json.from_string(datum_string))
         datum = data.Datum.from_json(type_, datum_json)
-        print ovs.json.to_string(datum.to_json())
+        print(ovs.json.to_string(datum.to_json()))
 
 
 def do_sort_atoms(type_string, atom_strings):
     type_json = unbox_json(ovs.json.from_string(type_string))
-    base = types.BaseType.from_json(type_json)
+    base = ovs.db.types.BaseType.from_json(type_json)
     atoms = [data.Atom.from_json(base, atom_json)
              for atom_json in unbox_json(ovs.json.from_string(atom_strings))]
-    print ovs.json.to_string([data.Atom.to_json(atom)
-                              for atom in sorted(atoms)])
+    print(ovs.json.to_string([data.Atom.to_json(atom)
+                              for atom in sorted(atoms)]))
 
 
 def do_parse_column(name, column_string):
     column_json = unbox_json(ovs.json.from_string(column_string))
     column = ovs.db.schema.ColumnSchema.from_json(column_json, name)
-    print ovs.json.to_string(column.to_json(), sort_keys=True)
+    print(ovs.json.to_string(column.to_json(), sort_keys=True))
 
 
 def do_parse_table(name, table_string, default_is_root_string='false'):
     default_is_root = default_is_root_string == 'true'
     table_json = unbox_json(ovs.json.from_string(table_string))
     table = ovs.db.schema.TableSchema.from_json(table_json, name)
-    print ovs.json.to_string(table.to_json(default_is_root), sort_keys=True)
+    print(ovs.json.to_string(table.to_json(default_is_root), sort_keys=True))
 
 
 def do_parse_schema(schema_string):
     schema_json = unbox_json(ovs.json.from_string(schema_string))
     schema = ovs.db.schema.DbSchema.from_json(schema_json)
-    print ovs.json.to_string(schema.to_json(), sort_keys=True)
+    print(ovs.json.to_string(schema.to_json(), sort_keys=True))
 
 
 def print_idl(idl, step):
@@ -348,7 +351,7 @@ def idl_set(idl, commands, step):
             txn.abort()
             break
         elif name == "destroy":
-            print "%03d: destroy" % step
+            print("%03d: destroy" % step)
             sys.stdout.flush()
             txn.abort()
             return
@@ -389,7 +392,6 @@ def idl_set(idl, commands, step):
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
     if commands and commands[0].startswith("?"):
-        monitor = {}
         readonly = {}
         for x in commands[0][1:].split("?"):
             readonly = []
@@ -484,7 +486,7 @@ def do_idl(schema_file, remote, *commands):
 
 
 def usage():
-    print """\
+    print("""\
 %(program_name)s: test utility for Open vSwitch database Python bindings
 usage: %(program_name)s [OPTIONS] COMMAND ARG...
 
@@ -539,7 +541,7 @@ idl SCHEMA SERVER [?T1:C1,C2...[?T2:C1,C2,...]...] [TRANSACTION...]
 The following options are also available:
   -t, --timeout=SECS          give up after SECS seconds
   -h, --help                  display this help message\
-""" % {'program_name': ovs.util.PROGRAM_NAME}
+""" % {'program_name': ovs.util.PROGRAM_NAME})
     sys.exit(0)
 
 
@@ -548,7 +550,7 @@ def main(argv):
         options, args = getopt.gnu_getopt(argv[1:], 't:h',
                                           ['timeout',
                                            'help'])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
 
@@ -587,7 +589,7 @@ def main(argv):
 
     command_name = args[0]
     args = args[1:]
-    if not command_name in commands:
+    if command_name not in commands:
         sys.stderr.write("%s: unknown command \"%s\" "
                          "(use --help for help)\n" % (ovs.util.PROGRAM_NAME,
                                                       command_name))
@@ -617,6 +619,6 @@ def main(argv):
 if __name__ == '__main__':
     try:
         main(sys.argv)
-    except error.Error, e:
+    except error.Error as e:
         sys.stderr.write("%s\n" % e)
         sys.exit(1)

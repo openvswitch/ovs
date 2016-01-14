@@ -31,7 +31,7 @@ class UdpListener(DatagramProtocol):
     def __init__(self):
         self.stats = []
 
-    def datagramReceived(self, data, (_1, _2)):
+    def datagramReceived(self, data, _1_2):
         """This function is called each time datagram is received"""
         try:
             self.stats.append(struct.unpack_from("Q", data, 0))
@@ -60,14 +60,14 @@ class UdpSender(DatagramProtocol):
     def startProtocol(self):
         self.looper = LoopingCall(self.sendData)
         period = self.duration / float(self.count)
-        self.looper.start(period , now = False)
+        self.looper.start(period, now=False)
 
     def stopProtocol(self):
         if (self.looper is not None):
             self.looper.stop()
             self.looper = None
 
-    def datagramReceived(self, data, (host, port)):
+    def datagramReceived(self, data, host_port):
         pass
 
     def sendData(self):

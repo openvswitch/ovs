@@ -17,7 +17,7 @@ import sys
 
 from ovs.db import error
 import ovs.db.parser
-from ovs.db import types
+import ovs.db.types
 
 
 def _check_id(name, json):
@@ -101,7 +101,8 @@ class DbSchema(object):
         return DbSchema.from_json(self.to_json())
 
     def __follow_ref_table(self, column, base, base_name):
-        if not base or base.type != types.UuidType or not base.ref_table_name:
+        if (not base or base.type != ovs.db.types.UuidType
+                or not base.ref_table_name):
             return
 
         base.ref_table = self.tables.get(base.ref_table_name)
@@ -181,7 +182,7 @@ class TableSchema(object):
         indexes_json = parser.get_optional("indexes", [list], [])
         parser.finish()
 
-        if max_rows == None:
+        if max_rows is None:
             max_rows = sys.maxint
         elif max_rows <= 0:
             raise error.Error("maxRows must be at least 1", json)
@@ -257,7 +258,8 @@ class ColumnSchema(object):
         parser = ovs.db.parser.Parser(json, "schema for column %s" % name)
         mutable = parser.get_optional("mutable", [bool], True)
         ephemeral = parser.get_optional("ephemeral", [bool], False)
-        type_ = types.Type.from_json(parser.get("type", [dict, str, unicode]))
+        type_ = ovs.db.types.Type.from_json(parser.get("type",
+                                                       [dict, str, unicode]))
         parser.finish()
 
         return ColumnSchema(name, mutable, not ephemeral, type_)

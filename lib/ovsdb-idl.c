@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -775,6 +775,29 @@ ovsdb_idl_track_get_next(const struct ovsdb_idl_row *row)
     return NULL;
 }
 
+/* Returns true if a tracked 'column' in 'row' was updated by IDL, false
+ * otherwise. The tracking data is cleared by ovsdb_idl_track_clear()
+ *
+ * Function returns false if 'column' is not tracked (see
+ * ovsdb_idl_track_add_column()).
+ */
+bool
+ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
+                           const struct ovsdb_idl_column *column)
+{
+    const struct ovsdb_idl_table_class *class;
+    size_t column_idx;
+
+    class = row->table->class;
+    column_idx = column - class->columns;
+
+    if (row->updated && bitmap_is_set(row->updated, column_idx)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 /* Flushes the tracked rows. Client calls this function after calling
  * ovsdb_idl_run() and read all tracked rows with the ovsdb_idl_track_get_*()
  * functions. This is usually done at the end of the client's processing
@@ -792,6 +815,10 @@ ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
             struct ovsdb_idl_row *row, *next;
 
             LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
+                if (row->updated) {
+                    free(row->updated);
+                    row->updated = NULL;
+                }
                 list_remove(&row->track_node);
                 list_init(&row->track_node);
                 if (ovsdb_idl_row_is_orphan(row)) {
@@ -1252,62 +1279,6 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
     return true;
 }
 
-#if 0
-ovsdb_idl_row_apply_diff(struct ovsdb_idl_row *row,
-                         const struct json *diff_json)
-{
-    struct ovsdb_idl_table *table = row->table;
-    struct shash_node *node;
-    bool changed = false;
-
-    SHASH_FOR_EACH (node, json_object(diff_json)) {
-        const char *column_name = node->name;
-        const struct ovsdb_idl_column *column;
-        struct ovsdb_datum diff;
-        struct ovsdb_error *error;
-
-        column = shash_find_data(&table->columns, column_name);
-        if (!column) {
-            VLOG_WARN_RL(&syntax_rl, "unknown column %s updating row "UUID_FMT,
-                         column_name, UUID_ARGS(&row->uuid));
-            continue;
-        }
-
-        error = ovsdb_transient_datum_from_json(&diff, &column->type,
-                                                node->data);
-        if (!error) {
-            unsigned int column_idx = column - table->class->columns;
-            struct ovsdb_datum *old = &row->old[column_idx];
-            struct ovsdb_datum new;
-            struct ovsdb_error *error;
-
-            error = ovsdb_datum_apply_diff(&new, old, &diff, &column->type);
-            if (error) {
-                VLOG_WARN_RL(&syntax_rl, "update2 failed to modify column "
-                             "%s row "UUID_FMT, column_name,
-                             UUID_ARGS(&row->uuid));
-                ovsdb_error_destroy(error);
-            } else {
-                ovsdb_datum_swap(old, &new);
-                ovsdb_datum_destroy(&new, &column->type);
-                if (table->modes[column_idx] & OVSDB_IDL_ALERT) {
-                    changed = true;
-                }
-            }
-            ovsdb_datum_destroy(&diff, &column->type);
-        } else {
-            char *s = ovsdb_error_to_string(error);
-            VLOG_WARN_RL(&syntax_rl, "error parsing column %s in row "UUID_FMT
-                         " in table %s: %s", column_name,
-                         UUID_ARGS(&row->uuid), table->class->name, s);
-            free(s);
-            ovsdb_error_destroy(error);
-        }
-    }
-    return changed;
-}
-#endif
-
 /* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
  * otherwise.
  *
@@ -1320,6 +1291,7 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                        enum ovsdb_idl_change change)
 {
     struct ovsdb_idl_table *table = row->table;
+    const struct ovsdb_idl_table_class *class = table->class;
     struct shash_node *node;
     bool changed = false;
     bool apply_diff = diff_json != NULL;
@@ -1374,6 +1346,10 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                             list_push_front(&row->table->track_list,
                                             &row->track_node);
                         }
+                        if (!row->updated) {
+                            row->updated = bitmap_allocate(class->n_columns);
+                        }
+                        bitmap_set1(row->updated, column_idx);
                     }
                 }
             } else {

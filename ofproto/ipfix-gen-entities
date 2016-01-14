@@ -7,11 +7,14 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
+from __future__ import print_function
+
 import getopt
 import re
 import sys
 import xml.sax
 import xml.sax.handler
+
 
 class IpfixEntityHandler(xml.sax.handler.ContentHandler):
 
@@ -47,16 +50,16 @@ class IpfixEntityHandler(xml.sax.handler.ContentHandler):
         self.current_record = dict()
 
     def startDocument(self):
-        print """\
+        print("""\
 /* IPFIX entities. */
 #ifndef IPFIX_ENTITY
 #define IPFIX_ENTITY(ENUM, ID, SIZE, NAME)
 #endif
-"""
+""")
 
     def endDocument(self):
-        print """
-#undef IPFIX_ENTITY"""
+        print("""
+#undef IPFIX_ENTITY""")
 
     def startElement(self, name, attrs):
         if name in self.RECORD_FIELDS:
@@ -82,19 +85,21 @@ class IpfixEntityHandler(xml.sax.handler.ContentHandler):
             self.current_record['dataTypeSize'] = self.DATA_TYPE_SIZE.get(
                 self.current_record['dataType'], 0)
 
-            print 'IPFIX_ENTITY(%(enumName)s, %(elementId)s, ' \
-                  '%(dataTypeSize)i, %(name)s)' % self.current_record
+            print('IPFIX_ENTITY(%(enumName)s, %(elementId)s, '
+                  '%(dataTypeSize)i, %(name)s)' % self.current_record)
             self.current_record.clear()
 
     def characters(self, content):
         if self.current_field_name is not None:
             self.current_field_value.append(content)
 
+
 def print_ipfix_entity_macros(xml_file):
     xml.sax.parse(xml_file, IpfixEntityHandler())
 
+
 def usage(name):
-    print """\
+    print("""\
 %(name)s: IPFIX entity definition generator
 Prints C macros defining IPFIX entities from the standard IANA file at
 <http://www.iana.org/assignments/ipfix/ipfix.xml>
@@ -104,36 +109,31 @@ where XML is the standard IANA XML file defining IPFIX entities
 The following options are also available:
   -h, --help                  display this help message
   -V, --version               display version information\
-""" % {'name': name}
+""" % {'name': name})
     sys.exit(0)
 
 if __name__ == '__main__':
-#    try:
-        try:
-            options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
-                                              ['help', 'version'])
-        except getopt.GetoptError, geo:
-            sys.stderr.write('%s: %s\n' % (sys.argv[0], geo.msg))
-            sys.exit(1)
+    try:
+        options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
+                                          ['help', 'version'])
+    except getopt.GetoptError as geo:
+        sys.stderr.write('%s: %s\n' % (sys.argv[0], geo.msg))
+        sys.exit(1)
 
-        for key, value in options:
-            if key in ['-h', '--help']:
-                usage()
-            elif key in ['-V', '--version']:
-                print 'ipfix-gen-entities (Open vSwitch)'
-            else:
-                sys.exit(0)
+    for key, value in options:
+        if key in ['-h', '--help']:
+            usage()
+        elif key in ['-V', '--version']:
+            print('ipfix-gen-entities (Open vSwitch)')
+        else:
+            sys.exit(0)
 
-        if len(args) != 1:
-            sys.stderr.write('%s: exactly 1 non-option arguments required '
-                             '(use --help for help)\n' % sys.argv[0])
-            sys.exit(1)
+    if len(args) != 1:
+        sys.stderr.write('%s: exactly 1 non-option arguments required '
+                         '(use --help for help)\n' % sys.argv[0])
+        sys.exit(1)
 
-        print_ipfix_entity_macros(args[0])
-
-#    except Exception, e:
-#        sys.stderr.write('%s: %s\n' % (sys.argv[0], e))
-#        sys.exit(1)
+    print_ipfix_entity_macros(args[0])
 
 # Local variables:
 # mode: python

@@ -20,6 +20,7 @@ import sys
 
 import ovs.socket_util
 
+
 def main(argv):
     if len(argv) not in (2, 3):
         sys.stderr.write("usage: %s SOCKETNAME1 [SOCKETNAME2]", argv[0])
@@ -51,6 +52,7 @@ def main(argv):
         sys.stderr.write("%s: connect failed (%s)" % (sockname2,
                                                       os.strerror(error)))
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main(sys.argv)

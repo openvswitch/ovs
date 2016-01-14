@@ -1,3 +1,17 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import print_function
+
 import math
 import time
 
@@ -16,11 +30,11 @@ def do_udp_tests(receiver, sender, tbwidth, duration, port_sizes):
 
     udpformat = '{0:>15} {1:>15} {2:>15} {3:>15} {4:>15}'
 
-    print ("UDP test from %s:%u to %s:%u with target bandwidth %s" %
+    print("UDP test from %s:%u to %s:%u with target bandwidth %s" %
                             (sender[0], sender[1], receiver[0], receiver[1],
                              util.bandwidth_to_string(tbwidth)))
-    print udpformat.format("Datagram Size", "Snt Datagrams", "Rcv Datagrams",
-                            "Datagram Loss", "Bandwidth")
+    print(udpformat.format("Datagram Size", "Snt Datagrams", "Rcv Datagrams",
+                            "Datagram Loss", "Bandwidth"))
 
     for size in port_sizes:
         listen_handle = NO_HANDLE
@@ -30,8 +44,8 @@ def do_udp_tests(receiver, sender, tbwidth, duration, port_sizes):
 
             listen_handle = server1.create_udp_listener(receiver[3])
             if listen_handle == NO_HANDLE:
-                print ("Server could not open UDP listening socket on port"
-                        " %u. Try to restart the server.\n" % receiver[3])
+                print("Server could not open UDP listening socket on port"
+                      " %u. Try to restart the server.\n" % receiver[3])
                 return
             send_handle = server2.create_udp_sender(
                                             (util.ip_from_cidr(receiver[2]),
@@ -49,14 +63,14 @@ def do_udp_tests(receiver, sender, tbwidth, duration, port_sizes):
                                                         snt_packets) / 100
             bwidth = (rcv_packets * size) / duration
 
-            print udpformat.format(size, snt_packets, rcv_packets,
-                          '%.2f%%' % loss, util.bandwidth_to_string(bwidth))
+            print(udpformat.format(size, snt_packets, rcv_packets,
+                          '%.2f%%' % loss, util.bandwidth_to_string(bwidth)))
         finally:
             if listen_handle != NO_HANDLE:
                 server1.close_udp_listener(listen_handle)
             if send_handle != NO_HANDLE:
                 server2.close_udp_sender(send_handle)
-    print "\n"
+    print("\n")
 
 
 def do_tcp_tests(receiver, sender, duration):
@@ -65,17 +79,17 @@ def do_tcp_tests(receiver, sender, duration):
     server2 = util.rpc_client(sender[0], sender[1])
 
     tcpformat = '{0:>15} {1:>15} {2:>15}'
-    print "TCP test from %s:%u to %s:%u (full speed)" % (sender[0], sender[1],
-                                                    receiver[0], receiver[1])
-    print tcpformat.format("Snt Bytes", "Rcv Bytes", "Bandwidth")
+    print("TCP test from %s:%u to %s:%u (full speed)" % (sender[0], sender[1],
+                                                    receiver[0], receiver[1]))
+    print(tcpformat.format("Snt Bytes", "Rcv Bytes", "Bandwidth"))
 
     listen_handle = NO_HANDLE
     send_handle = NO_HANDLE
     try:
         listen_handle = server1.create_tcp_listener(receiver[3])
         if listen_handle == NO_HANDLE:
-            print ("Server was unable to open TCP listening socket on port"
-                    " %u. Try to restart the server.\n" % receiver[3])
+            print("Server was unable to open TCP listening socket on port"
+                  " %u. Try to restart the server.\n" % receiver[3])
             return
         send_handle = server2.create_tcp_sender(util.ip_from_cidr(receiver[2]),
                                                 receiver[3], duration)
@@ -87,14 +101,14 @@ def do_tcp_tests(receiver, sender, duration):
 
         bwidth = rcv_bytes / duration
 
-        print tcpformat.format(snt_bytes, rcv_bytes,
-                               util.bandwidth_to_string(bwidth))
+        print(tcpformat.format(snt_bytes, rcv_bytes,
+                               util.bandwidth_to_string(bwidth)))
     finally:
         if listen_handle != NO_HANDLE:
             server1.close_tcp_listener(listen_handle)
         if send_handle != NO_HANDLE:
             server2.close_tcp_sender(send_handle)
-    print "\n"
+    print("\n")
 
 
 def do_l3_tests(node1, node2, bandwidth, duration, ps, type):
@@ -137,7 +151,6 @@ def do_l3_tests(node1, node2, bandwidth, duration, ps, type):
     finally:
         for server in servers_with_bridges:
             server.del_bridge(DEFAULT_TEST_BRIDGE)
-
 
 
 def do_vlan_tests(node1, node2, bandwidth, duration, ps, tag):

@@ -16,6 +16,8 @@
 rpcserver is an XML RPC server that allows RPC client to initiate tests
 """
 
+from __future__ import print_function
+
 import exceptions
 import sys
 import xmlrpclib
@@ -357,11 +359,11 @@ def start_rpc_server(port):
     rpc_server = TestArena()
     reactor.listenTCP(port, server.Site(rpc_server))
     try:
-        print "Starting RPC server\n"
+        print("Starting RPC server\n")
         sys.stdout.flush()
-         # If this server was started from ovs-test client then we must flush
-         # STDOUT so that client would know that server is ready to accept
-         # XML RPC connections.
+        # If this server was started from ovs-test client then we must flush
+        # STDOUT so that client would know that server is ready to accept
+        # XML RPC connections.
         reactor.run()
     finally:
         rpc_server.cleanup()

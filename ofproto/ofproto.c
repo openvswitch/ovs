@@ -544,7 +544,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->sw_desc = NULL;
     ofproto->serial_desc = NULL;
     ofproto->dp_desc = NULL;
-    ofproto->frag_handling = OFPC_FRAG_NORMAL;
+    ofproto->frag_handling = OFPUTIL_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
     hmap_init(&ofproto->ofport_usage);
     shash_init(&ofproto->port_by_name);
@@ -3249,23 +3249,13 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofp_switch_config *osc;
-    enum ofp_config_flags flags;
-    struct ofpbuf *buf;
+    struct ofputil_switch_config config;
+    config.frag = ofconn_get_ofproto(ofconn)->frag_handling;
+    config.invalid_ttl_to_controller
+        = ofconn_get_invalid_ttl_to_controller(ofconn);
+    config.miss_send_len = ofconn_get_miss_send_len(ofconn);
 
-    /* Send reply. */
-    buf = ofpraw_alloc_reply(OFPRAW_OFPT_GET_CONFIG_REPLY, oh, 0);
-    osc = ofpbuf_put_uninit(buf, sizeof *osc);
-    flags = ofproto->frag_handling;
-    /* OFPC_INVALID_TTL_TO_CONTROLLER is deprecated in OF 1.3 */
-    if (oh->version < OFP13_VERSION
-        && ofconn_get_invalid_ttl_to_controller(ofconn)) {
-        flags |= OFPC_INVALID_TTL_TO_CONTROLLER;
-    }
-    osc->flags = htons(flags);
-    osc->miss_send_len = htons(ofconn_get_miss_send_len(ofconn));
-    ofconn_send_reply(ofconn, buf);
+    ofconn_send_reply(ofconn, ofputil_encode_get_config_reply(oh, &config));
 
     return 0;
 }
@@ -3273,16 +3263,20 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    const struct ofp_switch_config *osc = ofpmsg_body(oh);
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    uint16_t flags = ntohs(osc->flags);
+    struct ofputil_switch_config config;
+    enum ofperr error;
+
+    error = ofputil_decode_set_config(oh, &config);
+    if (error) {
+        return error;
+    }
 
     if (ofconn_get_type(ofconn) != OFCONN_PRIMARY
         || ofconn_get_role(ofconn) != OFPCR12_ROLE_SLAVE) {
-        enum ofp_config_flags cur = ofproto->frag_handling;
-        enum ofp_config_flags next = flags & OFPC_FRAG_MASK;
+        enum ofputil_frag_handling cur = ofproto->frag_handling;
+        enum ofputil_frag_handling next = config.frag;
 
-        ovs_assert((cur & OFPC_FRAG_MASK) == cur);
         if (cur != next) {
             if (ofproto->ofproto_class->set_frag_handling(ofproto, next)) {
                 ofproto->frag_handling = next;
@@ -3293,12 +3287,13 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
             }
         }
     }
-    /* OFPC_INVALID_TTL_TO_CONTROLLER is deprecated in OF 1.3 */
-    ofconn_set_invalid_ttl_to_controller(ofconn,
-             (oh->version < OFP13_VERSION
-              && flags & OFPC_INVALID_TTL_TO_CONTROLLER));
 
-    ofconn_set_miss_send_len(ofconn, ntohs(osc->miss_send_len));
+    if (config.invalid_ttl_to_controller >= 0) {
+        ofconn_set_invalid_ttl_to_controller(ofconn,
+                                             config.invalid_ttl_to_controller);
+    }
+
+    ofconn_set_miss_send_len(ofconn, config.miss_send_len);
 
     return 0;
 }
@@ -6230,30 +6225,12 @@ handle_group_features_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
-static enum ofperr
-handle_queue_get_config_request(struct ofconn *ofconn,
-                                const struct ofp_header *oh)
+static void
+put_queue_config(struct ofport *ofport, struct ofpbuf *reply)
 {
-   struct ofproto *p = ofconn_get_ofproto(ofconn);
    struct netdev_queue_dump queue_dump;
-   struct ofport *ofport;
    unsigned int queue_id;
-   struct ofpbuf *reply;
    struct smap details;
-   ofp_port_t request;
-   enum ofperr error;
-
-   error = ofputil_decode_queue_get_config_request(oh, &request);
-   if (error) {
-       return error;
-   }
-
-   ofport = ofproto_get_port(p, request);
-   if (!ofport) {
-      return OFPERR_OFPQOFC_BAD_PORT;
-   }
-
-   reply = ofputil_encode_queue_get_config_reply(oh);
 
    smap_init(&details);
    NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump, ofport->netdev) {
@@ -6261,13 +6238,42 @@ handle_queue_get_config_request(struct ofconn *ofconn,
 
        /* None of the existing queues have compatible properties, so we
         * hard-code omitting min_rate and max_rate. */
+       queue.port = ofport->ofp_port;
        queue.queue_id = queue_id;
        queue.min_rate = UINT16_MAX;
        queue.max_rate = UINT16_MAX;
        ofputil_append_queue_get_config_reply(reply, &queue);
    }
    smap_destroy(&details);
+}
 
+static enum ofperr
+handle_queue_get_config_request(struct ofconn *ofconn,
+                                const struct ofp_header *oh)
+{
+   struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+   ofp_port_t port;
+   enum ofperr error;
+
+   error = ofputil_decode_queue_get_config_request(oh, &port);
+   if (error) {
+       return error;
+   }
+
+   struct ofpbuf *reply = ofputil_encode_queue_get_config_reply(oh);
+   struct ofport *ofport;
+   if (port == OFPP_ANY) {
+       HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
+           put_queue_config(ofport, reply);
+       }
+   } else {
+       ofport = ofproto_get_port(ofproto, port);
+       if (!ofport) {
+           ofpbuf_delete(reply);
+           return OFPERR_OFPQOFC_BAD_PORT;
+       }
+       put_queue_config(ofport, reply);
+   }
    ofconn_send_reply(ofconn, reply);
 
    return 0;

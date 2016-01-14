@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="utf-8"?>
+<p>
+  <p><var>Database Values</var></p>
+
+  <p>
+    Each column in the database accepts a fixed type of data.  The
+    currently defined basic types, and their representations, are:
+  </p>
+
+  <dl>
+    <dt>integer</dt>
+    <dd>
+      A decimal integer in the range -2**63 to 2**63-1, inclusive.
+    </dd>
+
+    <dt>real</dt>
+    <dd>
+      A floating-point number.
+    </dd>
+
+    <dt>Boolean</dt>
+    <dd>
+      True or false, written <code>true</code> or <code>false</code>, respectively.
+    </dd>
+
+    <dt>string</dt>
+    <dd>
+      An arbitrary Unicode string, except that null bytes are not allowed.
+      Quotes are optional for most strings that begin with an English letter
+      or underscore and consist only of letters, underscores, hyphens, and
+      periods.  However, <code>true</code> and <code>false</code> and strings that match
+      the syntax of UUIDs (see below) must be enclosed in double quotes to
+      distinguish them from other basic types.  When double quotes are used,
+      the syntax is that of strings in JSON, e.g. backslashes may be used to
+      escape special characters.  The empty string must be represented as a
+      pair of double quotes (<code>&quot;&quot;</code>).
+    </dd>
+
+    <dt>UUID</dt>
+    <dd>
+      Either a universally unique identifier in the style of RFC 4122,
+      e.g. <code>f81d4fae-7dec-11d0-a765-00a0c91e6bf6</code>, or an <code>@</code><var>name</var>
+      defined by a <code>get</code> or <code>create</code> command within the same <code>ovn-nbctl</code>
+      invocation.
+    </dd>
+
+  </dl>
+
+  <p>
+    Multiple values in a single column may be separated by spaces or a
+    single comma.  When multiple values are present, duplicates are not
+    allowed, and order is not important.  Conversely, some database
+    columns can have an empty set of values, represented as <code>[]</code>, and
+    square brackets may optionally enclose other non-empty sets or single
+    values as well.
+  </p>
+
+  <p>
+    A few database columns are ``maps&apos;&apos; of key-value pairs, where the key
+    and the value are each some fixed database type.  These are specified
+    in the form <var>key</var><code>=</code><var>value</var>, where <var>key</var> and <var>value</var>
+    follow the syntax for the column's key type and value type,
+    respectively.  When multiple pairs are present (separated by spaces or
+    a comma), duplicate keys are not allowed, and again the order is not
+    important.  Duplicate values are allowed.  An empty map is represented
+    as <code>{}</code>.  Curly braces may optionally enclose non-empty maps as
+    well (but use quotes to prevent the shell from expanding
+    <code>other-config={0=x,1=y}</code> into <code>other-config=0=x
+    other-config=1=y</code>, which may not have the desired effect).
+  </p>
+
+  <p><var>Database Command Syntax</var></p>
+
+  <dl>
+    <dt>[<code>--if-exists</code>] [<code>--columns=</code><var>column</var>[<code>,</code><var>column</var>]...] <code>list</code> <var>table</var> [<var>record</var>]...</dt>
+    <dd>
+      <p>
+        Lists the data in each specified <var>record</var>.  If no
+        records are specified, lists all the records in <var>table</var>.
+      </p>
+      <p>
+        If <code>--columns</code> is specified, only the requested columns are
+        listed, in the specified order.  Otherwise, all columns are listed, in
+        alphabetical order by column name.
+      </p>
+      <p>
+        Without <code>--if-exists</code>, it is an error if any specified
+        <var>record</var> does not exist.  With <code>--if-exists</code>, the command
+        ignores any <var>record</var> that does not exist, without producing any
+        output.
+      </p>
+    </dd>
+
+    <dt>[<code>--columns=</code><var>column</var>[<code>,</code><var>column</var>]...] <code>find</code> <var>table</var> [<var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>]...</dt>
+    <dd>
+      <p>
+        Lists the data in each record in <var>table</var> whose <var>column</var> equals
+        <var>value</var> or, if <var>key</var> is specified, whose <var>column</var> contains
+        a <var>key</var> with the specified <var>value</var>.  The following operators
+        may be used where <code>=</code> is written in the syntax summary:
+      </p>
+      <dl>
+        <dt><code>= != &lt; &gt; &lt;= &gt;=</code></dt>
+        <dd>
+          <p>
+          Selects records in which <var>column</var>[<code>:</code><var>key</var>] equals, does not
+          equal, is less than, is greater than, is less than or equal to, or is
+          greater than or equal to <var>value</var>, respectively.</p>
+          <p>Consider <var>column</var>[<code>:</code><var>key</var>] and <var>value</var> as sets of
+          elements.  Identical sets are considered equal.  Otherwise, if the
+          sets have different numbers of elements, then the set with more
+          elements is considered to be larger.  Otherwise, consider a element
+          from each set pairwise, in increasing order within each set.  The
+          first pair that differs determines the result.  (For a column that
+          contains key-value pairs, first all the keys are compared, and values
+          are considered only if the two sets contain identical keys.)
+          </p>
+        </dd>
+
+        <dt><code>{=} {!=}</code></dt>
+        <dd>
+          Test for set equality or inequality, respectively.
+        </dd>
+
+        <dt><code>{&lt;=}</code></dt>
+        <dd>
+          Selects records in which <var>column</var>[<code>:</code><var>key</var>] is a subset of
+          <var>value</var>.  For example, <code>flood-vlans{&lt;=}1,2</code> selects records in
+          which the <code>flood-vlans</code> column is the empty set or contains 1 or 2
+          or both.
+        </dd>
+
+        <dt><code>{&lt;}</code></dt>
+        <dd>
+          Selects records in which <var>column</var>[<code>:</code><var>key</var>] is a proper
+          subset of <var>value</var>.  For example, <code>flood-vlans{&lt;}1,2</code> selects
+          records in which the <code>flood-vlans</code> column is the empty set or
+          contains 1 or 2 but not both.
+        </dd>
+
+        <dt><code>{&gt;=} {&gt;}</code></dt>
+        <dd>
+          Same as <code>{&lt;=}</code> and <code>{&lt;}</code>, respectively, except that the
+          relationship is reversed.  For example, <code>flood-vlans{&gt;=}1,2</code>
+          selects records in which the <code>flood-vlans</code> column contains both 1
+          and 2.
+        </dd>
+
+      </dl>
+
+      <p>
+        For arithmetic operators (<code>= != &lt; &gt; &lt;= &gt;=</code>), when <var>key</var> is
+        specified but a particular record's <var>column</var> does not contain
+        <var>key</var>, the record is always omitted from the results.  Thus, the
+        condition <code>other-config:mtu!=1500</code> matches records that have a
+        <code>mtu</code> key whose value is not 1500, but not those that lack an
+        <code>mtu</code> key.
+      </p>
+
+      <p>
+        For the set operators, when <var>key</var> is specified but a particular
+        record's <var>column</var> does not contain <var>key</var>, the comparison is
+        done against an empty set.  Thus, the condition
+        <code>other-config:mtu{!=}1500</code> matches records that have a <code>mtu</code>
+        key whose value is not 1500 and those that lack an <code>mtu</code> key.
+      </p>
+
+      <p>
+        Don't forget to escape <code>&lt;</code> or <code>></code> from interpretation by the
+        shell.
+      </p>
+
+      <p>
+        If <code>--columns</code> is specified, only the requested columns are
+        listed, in the specified order.  Otherwise all columns are listed, in
+        alphabetical order by column name.
+      </p>
+
+      <p>
+        The UUIDs shown for rows created in the same <code>ovn-nbctl</code>
+        invocation will be wrong.
+      </p>
+
+    </dd>
+
+    <dt>[<code>--if-exists</code>] [<code>--id=@</code><var>name</var>] <code>get</code> <var>table record</var> [<var>column</var>[<code>:</code><var>key</var>]]...</dt>
+    <dd>
+      <p>
+        Prints the value of each specified <var>column</var> in the given
+        <var>record</var> in <var>table</var>.  For map columns, a <var>key</var> may
+        optionally be specified, in which case the value associated with
+        <var>key</var> in the column is printed, instead of the entire map.
+      </p>
+      <p>
+        Without <code>--if-exists</code>, it is an error if <var>record</var> does not
+        exist or <var>key</var> is specified, if <var>key</var> does not exist in
+        <var>record</var>.  With <code>--if-exists</code>, a missing <var>record</var>
+        yields no output and a missing <var>key</var> prints a blank line.
+      </p>
+      <p>
+        If <code>@</code><var>name</var> is specified, then the UUID for <var>record</var> may be
+        referred to by that name later in the same <code>ovn-nbctl</code>
+        invocation in contexts where a UUID is expected.
+      </p>
+      <p>
+        Both <code>--id</code> and the <var>column</var> arguments are optional, but
+        usually at least one or the other should be specified.  If both are
+        omitted, then <code>get</code> has no effect except to verify that
+        <var>record</var> exists in <var>table</var>.
+      </p>
+      <p>
+        <code>--id</code> and <code>--if-exists</code> cannot be used together.
+      </p>
+    </dd>
+
+    <dt>[<code>--if-exists</code>] <code>set</code> <var>table record column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>...</dt>
+    <dd>
+      <p>
+        Sets the value of each specified <var>column</var> in the given
+        <var>record</var> in <var>table</var> to <var>value</var>.  For map columns, a
+        <var>key</var> may optionally be specified, in which case the value
+        associated with <var>key</var> in that column is changed (or added, if none
+        exists), instead of the entire map.
+      </p>
+      <p>
+        Without <code>--if-exists</code>, it is an error if <var>record</var> does not
+        exist.  With <code>--if-exists</code>, this command does nothing if
+        <var>record</var> does not exist.
+      </p>
+    </dd>
+    <dt>[<code>--if-exists</code>] <code>add</code> <var>table record column</var> [<var>key</var><code>=</code>]<var>value</var>...</dt>
+    <dd>
+      <p>
+        Adds the specified value or key-value pair to <var>column</var> in
+        <var>record</var> in <var>table</var>.  If <var>column</var> is a map, then <var>key</var>
+        is required, otherwise it is prohibited.  If <var>key</var> already exists
+        in a map column, then the current <var>value</var> is not replaced (use the
+        <code>set</code> command to replace an existing value).
+      </p>
+      <p>
+        Without <code>--if-exists</code>, it is an error if <var>record</var> does not
+        exist.  With <code>--if-exists</code>, this command does nothing if
+        <var>record</var> does not exist.
+      </p>
+    </dd>
+
+    <dt>
+      <p>
+        [<code>--if-exists</code>] <code>remove</code> <var>table record column value</var>...
+      </p>
+      <p>
+        [<code>--if-exists</code>] <code>remove</code> <var>table record column key</var>...
+      </p>
+      <p>
+        [<code>--if-exists</code>] <code>remov</code> <var>table record column key</var><code>=</code><var>value</var>...
+      </p>
+    </dt>
+    <dd>
+      <p>
+        Removes the specified values or key-value pairs from <var>column</var> in
+        <var>record</var> in <var>table</var>.  The first form applies to columns that
+        are not maps: each specified <var>value</var> is removed from the column.
+        The second and third forms apply to map columns: if only a <var>key</var>
+        is specified, then any key-value pair with the given <var>key</var> is
+        removed, regardless of its value; if a <var>value</var> is given then a
+        pair is removed only if both key and value match.
+      </p>
+      <p>
+        It is not an error if the column does not contain the specified key or
+        value or pair.
+      </p>
+      <p>
+        Without <code>--if-exists</code>, it is an error if <var>record</var> does not
+        exist.  With <code>--if-exists</code>, this command does nothing if
+        <var>record</var> does not exist.
+      </p>
+    </dd>
+
+    <dt>[<code>--if-exists</code>] <code>clear</code> <var>table record column</var>...</dt>
+    <dd>
+      <p>
+        Sets each <var>column</var> in <var>record</var> in <var>table</var> to the empty set
+        or empty map, as appropriate.  This command applies only to columns
+        that are allowed to be empty.
+      </p>
+      <p>
+        Without <code>--if-exists</code>, it is an error if <var>record</var> does not
+        exist.  With <code>--if-exists</code>, this command does nothing if
+        <var>record</var> does not exist.
+      </p>
+    </dd>
+
+    <dt>[<code>--id=@</code><var>name</var>] <code>create</code> <var>table column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>...</dt>
+    <dd>
+      <p>
+        Creates a new record in <var>table</var> and sets the initial values of
+        each <var>column</var>.  Columns not explicitly set will receive their
+        default values.  Outputs the UUID of the new row.
+      </p>
+      <p>
+        If <code>@</code><var>name</var> is specified, then the UUID for the new row may be
+        referred to by that name elsewhere in the same <code>\*(PN</code>
+        invocation in contexts where a UUID is expected.  Such references may
+        precede or follow the <code>create</code> command.
+      </p>
+      <dl>
+        <dt>Caution (ovs-vsctl as exmaple)</dt>
+        <dd>
+          Records in the Open vSwitch database are significant only when they
+          can be reached directly or indirectly from the <code>Open_vSwitch</code>
+          table.  Except for records in the <code>QoS</code> or <code>Queue</code> tables,
+          records that are not reachable from the <code>Open_vSwitch</code> table are
+          automatically deleted from the database.  This deletion happens
+          immediately, without waiting for additional <code>ovs-vsctl</code> commands
+          or other database activity.  Thus, a <code>create</code> command must
+          generally be accompanied by additional commands <var>within the same</var>
+          <code>ovs-vsctl</code> <var>invocation</var> to add a chain of references to the
+          newly created record from the top-level <code>Open_vSwitch</code> record.
+          The <code>EXAMPLES</code> section gives some examples that show how to do
+          this.
+        </dd>
+      </dl>
+    </dd>
+
+    <dt>[<code>--if-exists</code>] <code>destroy</code> <var>table record</var>...</dt>
+    <dd>
+      Deletes each specified <var>record</var> from <var>table</var>.  Unless
+      <code>--if-exists</code> is specified, each <var>record</var>s must exist.
+    </dd>
+
+    <dt><code>--all destroy</code> <var>table</var></dt>
+    <dd>
+      <p>
+        Deletes all records from the <var>table</var>.
+      </p>
+      <dl>
+        <dt>Caution (ovs-vsctl as exmaple)</dt>
+        <dd>
+          The <code>destroy</code> command is only useful for records in the <code>QoS</code>
+          or <code>Queue</code> tables.  Records in other tables are automatically
+          deleted from the database when they become unreachable from the
+          <code>Open_vSwitch</code> table.  This means that deleting the last reference
+          to a record is sufficient for deleting the record itself.  For records
+          in these tables, <code>destroy</code> is silently ignored.  See the
+          <code>EXAMPLES</code> section below for more information.
+        </dd>
+      </dl>
+    </dd>
+
+    <dt><code>wait-until</code> <var>table record</var> [<var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var>]...</dt>
+    <dd>
+      <p>
+        Waits until <var>table</var> contains a record named <var>record</var> whose
+        <var>column</var> equals <var>value</var> or, if <var>key</var> is specified, whose
+        <var>column</var> contains a <var>key</var> with the specified <var>value</var>.  Any
+        of the operators <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, or <code>&gt;=</code> may
+        be substituted for <code>=</code> to test for inequality, less than, greater
+        than, less than or equal to, or greater than or equal to,
+        respectively.  (Don't forget to escape <code>&lt;</code> or <code>&gt;</code> from
+        interpretation by the shell.)
+      </p>
+      <p>
+        If no <var>column</var>[<code>:</code><var>key</var>]<code>=</code><var>value</var> arguments are given,
+        this command waits only until <var>record</var> exists.  If more than one
+        such argument is given, the command waits until all of them are
+        satisfied.
+      </p>
+      <dl>
+        <dt>Caution (ovs-vsctl as exmaple)</dt>
+        <dd>
+          Usually <code>wait-until</code> should be placed at the beginning of a set
+          of <code>ovs-vsctl</code> commands.  For example, <code>wait-until bridge br0
+          -- get bridge br0 datapath_id</code> waits until a bridge named
+          <code>br0</code> is created, then prints its <code>datapath_id</code> column,
+          whereas <code>get bridge br0 datapath_id -- wait-until bridge br0</code>
+          will abort if no bridge named <code>br0</code> exists when <code>ovs-vsctl</code>
+          initially connects to the database.
+        </dd>
+      </dl>
+      <p>
+        Consider specifying <code>--timeout=0</code> along with
+        <code>--wait-until</code>, to prevent <code>ovn-nbctl</code> from terminating
+        after waiting only at most 5 seconds.
+      </p>
+    </dd>
+
+    <dt><code>comment</code> [<var>arg</var>]...</dt>
+    <dd>
+    <p>
+      This command has no effect on behavior, but any database log record
+      created by the command will include the command and its arguments.
+    </p>
+    </dd>
+
+  </dl>
+</p>

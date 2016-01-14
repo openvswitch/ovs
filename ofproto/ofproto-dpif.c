@@ -303,7 +303,7 @@ struct ofproto_dpif {
     /* Special OpenFlow rules. */
     struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
     struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
-    struct rule_dpif *drop_frags_rule; /* Used in OFPC_FRAG_DROP mode. */
+    struct rule_dpif *drop_frags_rule; /* Used in OFPUTIL_FRAG_DROP mode. */
 
     /* Bridging. */
     struct netflow *netflow;
@@ -3902,13 +3902,13 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
     /* We always unwildcard nw_frag (for IP), so they
      * need not be unwildcarded here. */
     if (flow->nw_frag & FLOW_NW_FRAG_ANY
-        && ofproto->up.frag_handling != OFPC_FRAG_NX_MATCH) {
-        if (ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
+        && ofproto->up.frag_handling != OFPUTIL_FRAG_NX_MATCH) {
+        if (ofproto->up.frag_handling == OFPUTIL_FRAG_NORMAL) {
             /* We must pretend that transport ports are unavailable. */
             flow->tp_src = htons(0);
             flow->tp_dst = htons(0);
         } else {
-            /* Must be OFPC_FRAG_DROP (we don't have OFPC_FRAG_REASM).
+            /* Must be OFPUTIL_FRAG_DROP (we don't have OFPUTIL_FRAG_REASM).
              * Use the drop_frags_rule (which cannot disappear). */
             rule = ofproto->drop_frags_rule;
             if (stats) {
@@ -4400,10 +4400,10 @@ get_datapath_version(const struct ofproto *ofproto_)
 
 static bool
 set_frag_handling(struct ofproto *ofproto_,
-                  enum ofp_config_flags frag_handling)
+                  enum ofputil_frag_handling frag_handling)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    if (frag_handling != OFPC_FRAG_REASM) {
+    if (frag_handling != OFPUTIL_FRAG_REASM) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
         return true;
     } else {

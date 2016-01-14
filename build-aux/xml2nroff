@@ -1,6 +1,6 @@
 #! /usr/bin/python
 
-# Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,18 +34,38 @@ Each VAR, when enclosed by "@"s in the input, is replaced by its
 corresponding VALUE, with characters &<>"' in VALUE escaped.
 
 The following options are also available:
+  -I, --include=DIR           search DIR for include files (default: .)
   --version=VERSION           use VERSION to display on document footer
   -h, --help                  display this help message\
 """ % {'argv0': argv0}
     sys.exit(0)
 
 
-def manpage_to_nroff(xml_file, subst, version=None):
+def manpage_to_nroff(xml_file, subst, include_path, version=None):
     with open(xml_file) as f:
         content = f.read()
     for k, v in subst.iteritems():
         content = content.replace(k, v)
     doc = xml.dom.minidom.parseString(content).documentElement
+
+    xi_nodes = doc.getElementsByTagName("xi:include")
+    for node in xi_nodes:
+        fn = node.getAttribute("href")
+        content = None
+        for dir in include_path:
+            try:
+                with open("%s/%s" % (dir, fn)) as xi_f:
+                    content = xi_f.read()
+            except IOError:
+                pass
+        if not content:
+            sys.stderr.write("%s: could not open include file %s\n"
+                             % (argv0, fn))
+            sys.exit(1)
+        for k, v in subst.iteritems():
+            content = content.replace(k, v)
+        xi_doc = xml.dom.minidom.parseString(content).documentElement
+        doc.replaceChild(xi_doc, node)
 
     if version is None:
         version = "UNKNOWN"
@@ -80,8 +100,8 @@ def manpage_to_nroff(xml_file, subst, version=None):
 
 if __name__ == "__main__":
     try:
-        options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
-                                          ['version=', 'help'])
+        options, args = getopt.gnu_getopt(sys.argv[1:], 'hVI:',
+                                          ['version=', 'help', 'include='])
     except getopt.GetoptError, geo:
         sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
@@ -89,13 +109,18 @@ if __name__ == "__main__":
     er_diagram = None
     title = None
     version = None
+    include_path = []
     for key, value in options:
         if key == '--version':
             version = value
         elif key in ['-h', '--help']:
             usage()
+        elif key in ['-I', '--include']:
+            include_path.append(value)
         else:
             sys.exit(0)
+    if not include_path:
+        include_path = ['.']
 
     if len(args) < 1:
         sys.stderr.write("%s: exactly 1 non-option arguments required "
@@ -113,7 +138,7 @@ if __name__ == "__main__":
         subst['@%s@' % var] = value
 
     try:
-        s = manpage_to_nroff(args[0], subst, version)
+        s = manpage_to_nroff(args[0], subst, include_path, version)
     except build.nroff.error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)

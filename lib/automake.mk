@@ -421,7 +421,8 @@ EXTRA_DIST += \
 	lib/dh1024.pem \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
-	lib/dirs.c.in
+	lib/dirs.c.in \
+	lib/db-ctl-base.xml
 
 MAN_FRAGMENTS += \
 	lib/common.man \

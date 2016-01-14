@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ static struct ovs_list expired OVS_GUARDED_BY(mutex);
 static uint32_t next_id OVS_GUARDED_BY(mutex); /* Possible next free id. */
 
 #define RECIRC_POOL_STATIC_IDS 1024
+
+static void recirc_id_node_free(struct recirc_id_node *);
 
 void
 recirc_init(void)
@@ -88,7 +90,7 @@ recirc_run(void)
          * finished. */
         LIST_FOR_EACH_POP (node, exp_node, &expired) {
             cmap_remove(&id_map, &node->id_node, node->id);
-            ovsrcu_postpone(free, node);
+            ovsrcu_postpone(recirc_id_node_free, node);
         }
 
         if (!list_is_empty(&expiring)) {
@@ -222,6 +224,13 @@ recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
     }
 }
 
+static void
+recirc_state_free(struct recirc_state *state)
+{
+    ofpbuf_delete(state->stack);
+    free(state->ofpacts);
+}
+
 /* Allocate a unique recirculation id for the given set of flow metadata.
  * The ID space is 2^^32, so there should never be a situation in which all
  * the IDs are used up.  We loop until we find a free one.
@@ -296,6 +305,13 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
         .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
     return recirc_alloc_id__(&state, recirc_metadata_hash(&state))->id;
+}
+
+static void
+recirc_id_node_free(struct recirc_id_node *node)
+{
+    recirc_state_free(CONST_CAST(struct recirc_state *, &node->state));
+    free(node);
 }
 
 void

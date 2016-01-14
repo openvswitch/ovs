@@ -408,12 +408,6 @@ do_ca_cert_bootstrap(struct stream *stream)
     /* SSL_CTX_add_client_CA makes a copy of cert's relevant data. */
     SSL_CTX_add_client_CA(ctx, cert);
 
-    /* SSL_CTX_use_certificate() takes ownership of the certificate passed in.
-     * 'cert' is owned by sslv->ssl, so we need to duplicate it. */
-    cert = X509_dup(cert);
-    if (!cert) {
-        out_of_memory();
-    }
     SSL_CTX_set_cert_store(ctx, X509_STORE_new());
     if (SSL_CTX_load_verify_locations(ctx, ca_cert.file_name, NULL) != 1) {
         VLOG_ERR("SSL_CTX_load_verify_locations: %s",

@@ -190,6 +190,7 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
     POVS_VXLAN_VPORT vportVxlan;
     UINT32 headRoom = OvsGetVxlanTunHdrSize();
     UINT32 packetLength;
+    ULONG mss = 0;
 
     /*
      * XXX: the assumption currently is that the NBL is owned by OVS, and
@@ -204,12 +205,23 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
 
         tsoInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
                                              TcpLargeSendNetBufferListInfo);
-        OVS_LOG_TRACE("MSS %u packet len %u", tsoInfo.LsoV1Transmit.MSS,
+        switch (tsoInfo.Transmit.Type) {
+            case NDIS_TCP_LARGE_SEND_OFFLOAD_V1_TYPE:
+                mss = tsoInfo.LsoV1Transmit.MSS;
+                break;
+            case NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE:
+                mss = tsoInfo.LsoV2Transmit.MSS;
+                break;
+            default:
+                OVS_LOG_ERROR("Unknown LSO transmit type:%d",
+                              tsoInfo.Transmit.Type);
+        }
+        OVS_LOG_TRACE("MSS %u packet len %u", mss,
                       packetLength);
-        if (tsoInfo.LsoV1Transmit.MSS) {
+        if (mss) {
             OVS_LOG_TRACE("l4Offset %d", layers->l4Offset);
             *newNbl = OvsTcpSegmentNBL(switchContext, curNbl, layers,
-                                       tsoInfo.LsoV1Transmit.MSS, headRoom);
+                                       mss, headRoom);
             if (*newNbl == NULL) {
                 OVS_LOG_ERROR("Unable to segment NBL");
                 return NDIS_STATUS_FAILURE;

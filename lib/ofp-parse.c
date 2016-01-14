@@ -893,34 +893,46 @@ parse_ofp_table_vacancy(struct ofputil_table_mod *tm, const char *setting)
 {
     char *save_ptr = NULL;
     char *vac_up, *vac_down;
-    char *value = strdup(setting);
+    char *value = xstrdup(setting);
+    char *ret_msg;
     int vacancy_up, vacancy_down;
 
     strtok_r(value, ":", &save_ptr);
     vac_down = strtok_r(NULL, ",", &save_ptr);
     if (!vac_down) {
-        return xasprintf("Vacancy down value missing");
+        ret_msg = xasprintf("Vacancy down value missing");
+        goto exit;
     }
     if (!str_to_int(vac_down, 0, &vacancy_down) ||
         vacancy_down < 0 || vacancy_down > 100) {
-        return xasprintf("Invalid vacancy down value \"%s\"", vac_down);
+        ret_msg = xasprintf("Invalid vacancy down value \"%s\"", vac_down);
+        goto exit;
     }
     vac_up = strtok_r(NULL, ",", &save_ptr);
     if (!vac_up) {
-        return xasprintf("Vacancy up value missing");
+        ret_msg = xasprintf("Vacancy up value missing");
+        goto exit;
     }
     if (!str_to_int(vac_up, 0, &vacancy_up) ||
         vacancy_up < 0 || vacancy_up > 100) {
-        return xasprintf("Invalid vacancy up value \"%s\"", vac_up);
+        ret_msg = xasprintf("Invalid vacancy up value \"%s\"", vac_up);
+        goto exit;
     }
     if (vacancy_down > vacancy_up) {
-        return xasprintf("Invalid vacancy range, vacancy up should be greater"
-                         " than vacancy down ""(%s)",
-                         ofperr_to_string(OFPERR_OFPBPC_BAD_VALUE));
+        ret_msg = xasprintf("Invalid vacancy range, vacancy up should be "
+                            "greater than vacancy down (%s)",
+                            ofperr_to_string(OFPERR_OFPBPC_BAD_VALUE));
+        goto exit;
     }
+
+    free(value);
     tm->table_vacancy.vacancy_down = vacancy_down;
     tm->table_vacancy.vacancy_up = vacancy_up;
     return NULL;
+
+exit:
+    free(value);
+    return ret_msg;
 }
 
 /* Convert 'table_id' and 'setting' (as described for the "mod-table" command
@@ -1039,6 +1051,7 @@ parse_ofp_flow_mod_file(const char *file_name, int command,
         error = parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command,
                                        &usable);
         if (error) {
+            char *err_msg;
             size_t i;
 
             for (i = 0; i < *n_fms; i++) {
@@ -1053,7 +1066,9 @@ parse_ofp_flow_mod_file(const char *file_name, int command,
                 fclose(stream);
             }
 
-            return xasprintf("%s:%d: %s", file_name, line_number, error);
+            err_msg = xasprintf("%s:%d: %s", file_name, line_number, error);
+            free(error);
+            return err_msg;
         }
         *usable_protocols &= usable; /* Each line can narrow the set. */
         *n_fms += 1;

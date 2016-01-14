@@ -161,7 +161,6 @@ OvsDoEncapGre(POVS_VPORT_ENTRY vport,
             default:
                 OVS_LOG_ERROR("Unknown LSO transmit type:%d",
                               tsoInfo.Transmit.Type);
-                return NDIS_STATUS_FAILURE;
         }
         OVS_LOG_TRACE("MSS %u packet len %u", mss,
                       packetLength);

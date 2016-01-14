@@ -75,6 +75,9 @@ EXTRA_DIST += \
 	debian/ifupdown.sh \
 	debian/source/format
 
+FLAKE8_PYFILES += \
+	debian/ovs-monitor-ipsec
+
 check-debian-changelog-version:
 	@DEB_VERSION=`echo '$(VERSION)' | sed 's/pre/~pre/'`;		     \
 	if $(FGREP) '($(DEB_VERSION)' $(srcdir)/debian/changelog >/dev/null; \

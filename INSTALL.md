@@ -129,6 +129,8 @@ installing the following to obtain better warnings:
 
   - clang, version 3.4 or later
 
+  - flake8 (for Python code)
+
 Also, you may find the ovs-dev script found in utilities/ovs-dev.py useful.
 
 Installation Requirements

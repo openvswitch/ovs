@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import re
+import sys
 
 from ovs.db import error
+
 
 def text_to_nroff(s, font=r'\fR'):
     def escape(match):
@@ -55,8 +57,10 @@ def text_to_nroff(s, font=r'\fR'):
     s = re.sub('(-[0-9]|--|[-"\'\\\\.])', escape, s)
     return s
 
+
 def escape_nroff_literal(s, font=r'\fB'):
     return font + r'%s\fR' % text_to_nroff(s, font)
+
 
 def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
     if node.nodeType == node.TEXT_NODE:
@@ -84,7 +88,8 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
             elif node.hasAttribute('db'):
                 s += node.attributes['db'].nodeValue
             else:
-                raise error.Error("'ref' lacks required attributes: %s" % node.attributes.keys())
+                raise error.Error("'ref' lacks required attributes: %s"
+                                  % node.attributes.keys())
             return s + font
         elif node.tagName in ['var', 'dfn', 'i']:
             s = r'\fI'
@@ -92,11 +97,13 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
                 s += inline_xml_to_nroff(child, r'\fI', to_upper, newline)
             return s + font
         else:
-            raise error.Error("element <%s> unknown or invalid here" % node.tagName)
+            raise error.Error("element <%s> unknown or invalid here"
+                              % node.tagName)
     elif node.nodeType == node.COMMENT_NODE:
         return ''
     else:
         raise error.Error("unknown node %s in inline xml" % node)
+
 
 def pre_to_nroff(nodes, para, font):
     # This puts 'font' at the beginning of each line so that leading and
@@ -107,6 +114,12 @@ def pre_to_nroff(nodes, para, font):
         s += inline_xml_to_nroff(node, font, False, '\n.br\n' + font)
     s += '\n.fi\n'
     return s
+
+
+def fatal(msg):
+    sys.stderr.write('%s\n' % msg)
+    sys.exit(1)
+
 
 def diagram_header_to_nroff(header_node):
     header_fields = []
@@ -134,7 +147,8 @@ def diagram_header_to_nroff(header_node):
 
     pic_s = ""
     for f in header_fields:
-        pic_s += "  %s: box \"%s\" width %s" % (f['tag'], f['name'], f['width'])
+        pic_s += "  %s: box \"%s\" width %s" % (f['tag'], f['name'],
+                                                f['width'])
         if f['fill'] == 'yes':
             pic_s += " fill"
         pic_s += '\n'
@@ -160,6 +174,7 @@ def diagram_header_to_nroff(header_node):
             text_s += " (%s)" % f['below']
         text_s += "\n"
     return pic_s, text_s
+
 
 def diagram_to_nroff(nodes, para):
     pic_s = ''
@@ -203,6 +218,7 @@ fillval = .2
 .RE
 \\}"""
 
+
 def block_xml_to_nroff(nodes, para='.PP'):
     s = ''
     for node in nodes:
@@ -228,7 +244,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         pass
                     elif (li_node.nodeType != node.TEXT_NODE
                           or not li_node.data.isspace()):
-                        raise error.Error("<%s> element may only have <li> children" % node.tagName)
+                        raise error.Error("<%s> element may only have "
+                                          "<li> children" % node.tagName)
                 s += ".RE\n"
             elif node.tagName == 'dl':
                 if s != "":
@@ -252,7 +269,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         continue
                     elif (li_node.nodeType != node.TEXT_NODE
                           or not li_node.data.isspace()):
-                        raise error.Error("<dl> element may only have <dt> and <dd> children")
+                        raise error.Error("<dl> element may only have "
+                                          "<dt> and <dd> children")
                     s += block_xml_to_nroff(li_node.childNodes, ".IP")
                 s += ".RE\n"
             elif node.tagName == 'p':

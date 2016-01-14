@@ -179,7 +179,7 @@ class Idl(object):
             if (msg.type == ovs.jsonrpc.Message.T_NOTIFY
                 and msg.method == "update"
                 and len(msg.params) == 2
-                and msg.params[0] == None):
+                and msg.params[0] is None):
                 # Database contents changed.
                 self.__parse_update(msg.params[1])
             elif (msg.type == ovs.jsonrpc.Message.T_REPLY
@@ -191,7 +191,7 @@ class Idl(object):
                     self._monitor_request_id = None
                     self.__clear()
                     self.__parse_update(msg.result)
-                except error.Error, e:
+                except error.Error as e:
                     vlog.err("%s: parse error in received schema: %s"
                               % (self._session.get_name(), e))
                     self.__error()
@@ -332,7 +332,7 @@ class Idl(object):
             and type(params) in (list, tuple)
             and params
             and params[0] == self.lock_name):
-            self.__update_has_lock(self, new_has_lock)
+            self.__update_has_lock(new_has_lock)
             if not new_has_lock:
                 self.is_lock_contended = True
 
@@ -354,7 +354,7 @@ class Idl(object):
     def __parse_update(self, update):
         try:
             self.__do_parse_update(update)
-        except error.Error, e:
+        except error.Error as e:
             vlog.err("%s: error parsing update: %s"
                      % (self._session.get_name(), e))
 
@@ -451,7 +451,7 @@ class Idl(object):
 
             try:
                 datum = ovs.db.data.Datum.from_json(column.type, datum_json)
-            except error.Error, e:
+            except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
                           % (column_name, table.name, e))
@@ -592,14 +592,15 @@ class Row(object):
 
         if ((self._table.name in self._idl.readonly) and
             (column_name in self._idl.readonly[self._table.name])):
-            vlog.warn("attempting to write to readonly column %s" % column_name)
+            vlog.warn("attempting to write to readonly column %s"
+                      % column_name)
             return
 
         column = self._table.columns[column_name]
         try:
             datum = ovs.db.data.Datum.from_python(column.type, value,
                                                   _row_to_uuid)
-        except error.Error, e:
+        except error.Error as e:
             # XXX rate-limit
             vlog.err("attempting to write bad value to column %s (%s)"
                      % (column_name, e))
@@ -618,7 +619,7 @@ class Row(object):
                 continue
             try:
                 datum = ovs.db.data.Datum.from_json(column.type, datum_json)
-            except error.Error, e:
+            except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
                           % (column_name, table.name, e))
@@ -749,17 +750,26 @@ class Transaction(object):
        of Idl.change_seqno.  (Transaction.commit_block() calls Idl.run().)"""
 
     # Status values that Transaction.commit() can return.
-    UNCOMMITTED = "uncommitted"  # Not yet committed or aborted.
-    UNCHANGED = "unchanged"      # Transaction didn't include any changes.
-    INCOMPLETE = "incomplete"    # Commit in progress, please wait.
-    ABORTED = "aborted"          # ovsdb_idl_txn_abort() called.
-    SUCCESS = "success"          # Commit successful.
-    TRY_AGAIN = "try again"      # Commit failed because a "verify" operation
-                                 # reported an inconsistency, due to a network
-                                 # problem, or other transient failure.  Wait
-                                 # for a change, then try again.
-    NOT_LOCKED = "not locked"    # Server hasn't given us the lock yet.
-    ERROR = "error"              # Commit failed due to a hard error.
+
+    # Not yet committed or aborted.
+    UNCOMMITTED = "uncommitted"
+    # Transaction didn't include any changes.
+    UNCHANGED = "unchanged"
+    # Commit in progress, please wait.
+    INCOMPLETE = "incomplete"
+    # ovsdb_idl_txn_abort() called.
+    ABORTED = "aborted"
+    # Commit successful.
+    SUCCESS = "success"
+    # Commit failed because a "verify" operation
+    # reported an inconsistency, due to a network
+    # problem, or other transient failure.  Wait
+    # for a change, then try again.
+    TRY_AGAIN = "try again"
+    # Server hasn't given us the lock yet.
+    NOT_LOCKED = "not locked"
+    # Commit failed due to a hard error.
+    ERROR = "error"
 
     @staticmethod
     def status_to_string(status):
@@ -1089,7 +1099,7 @@ class Transaction(object):
         self._inc_column = column
 
     def _fetch(self, row, column_name):
-        self._fetch_requests.append({"row":row, "column_name":column_name})
+        self._fetch_requests.append({"row": row, "column_name": column_name})
 
     def _write(self, row, column, datum):
         assert row._changes is not None
@@ -1108,7 +1118,8 @@ class Transaction(object):
         # transaction only does writes of existing values, without making any
         # real changes, we will drop the whole transaction later in
         # ovsdb_idl_txn_commit().)
-        if not column.alert and row._data and row._data.get(column.name) == datum:
+        if (not column.alert and row._data and
+                row._data.get(column.name) == datum):
             new_value = row._changes.get(column.name)
             if new_value is None or new_value == datum:
                 return
@@ -1221,7 +1232,7 @@ class Transaction(object):
             if len(fetched_rows) != 1:
                 # XXX rate-limit
                 vlog.warn('"select" reply "rows" has %d elements '
-                          'instead of 1' % len(rows))
+                          'instead of 1' % len(fetched_rows))
                 continue
             fetched_row = fetched_rows[0]
             if not Transaction.__check_json_type(fetched_row, (dict,),

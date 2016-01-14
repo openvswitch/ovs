@@ -887,7 +887,6 @@ lldp_create_dummy(void)
     lchassis->c_cap_enabled = LLDP_CAP_BRIDGE;
     lchassis->c_id_subtype = LLDP_CHASSISID_SUBTYPE_LLADDR;
     lchassis->c_id_len = ETH_ADDR_LEN;
-    lchassis->c_id = xmalloc(ETH_ADDR_LEN);
 
     list_init(&lchassis->c_mgmt);
     lchassis->c_ttl = LLDP_CHASSIS_TTL;
@@ -911,8 +910,6 @@ lldp_create_dummy(void)
     /* Auto Attach element tlv */
     hw->h_lport.p_element.type = LLDP_TLV_AA_ELEM_TYPE_CLIENT_VIRTUAL_SWITCH;
     hw->h_lport.p_element.mgmt_vlan = 0;
-    memcpy(&hw->h_lport.p_element.system_id.system_mac,
-           lchassis->c_id, lchassis->c_id_len);
     hw->h_lport.p_element.system_id.conn_type =
         LLDP_TLV_AA_ELEM_CONN_TYPE_SINGLE;
     hw->h_lport.p_element.system_id.rsvd = 0;
@@ -950,7 +947,7 @@ lldp_unref(struct lldp *lldp)
     free(lldp);
 }
 
-/* Unreference a specific LLDP instance.
+/* Reference a specific LLDP instance.
  */
 struct lldp *
 lldp_ref(const struct lldp *lldp_)
@@ -961,3 +958,32 @@ lldp_ref(const struct lldp *lldp_)
     }
     return lldp;
 }
+
+void
+lldp_destroy_dummy(struct lldp *lldp)
+{
+    struct lldpd_hardware *hw, *hw_next;
+    struct lldpd_chassis *chassis, *chassis_next;
+    struct lldpd *cfg;
+
+    if (!lldp) {
+        return;
+    }
+
+    cfg = lldp->lldpd;
+
+    LIST_FOR_EACH_SAFE (hw, hw_next, h_entries, &cfg->g_hardware) {
+        list_remove(&hw->h_entries);
+        free(hw->h_lport.p_lastframe);
+        free(hw);
+    }
+
+    LIST_FOR_EACH_SAFE (chassis, chassis_next, list, &cfg->g_chassis) {
+        list_remove(&chassis->list);
+        free(chassis);
+    }
+
+    free(lldp->lldpd);
+    free(lldp);
+}
+
