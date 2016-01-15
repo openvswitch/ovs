@@ -101,7 +101,6 @@ struct recirc_metadata {
     ovs_be64 metadata;            /* OpenFlow Metadata. */
     uint64_t regs[FLOW_N_XREGS];  /* Registers. */
     ofp_port_t in_port;           /* Incoming port. */
-    ofp_port_t actset_output;     /* Output port in action set. */
 };
 
 static inline void
@@ -113,7 +112,6 @@ recirc_metadata_from_flow(struct recirc_metadata *md,
     md->metadata = flow->metadata;
     memcpy(md->regs, flow->regs, sizeof md->regs);
     md->in_port = flow->in_port.ofp_port;
-    md->actset_output = flow->actset_output;
 }
 
 static inline void
@@ -128,7 +126,6 @@ recirc_metadata_to_flow(const struct recirc_metadata *md,
     flow->metadata = md->metadata;
     memcpy(flow->regs, md->regs, sizeof flow->regs);
     flow->in_port.ofp_port = md->in_port;
-    flow->actset_output = md->actset_output;
 }
 
 /* State that flow translation can save, to restore when recirculation

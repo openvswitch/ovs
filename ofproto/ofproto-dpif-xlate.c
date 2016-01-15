@@ -4074,12 +4074,9 @@ may_receive(const struct xport *xport, struct xlate_ctx *ctx)
 }
 
 static void
-xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
+xlate_write_actions__(struct xlate_ctx *ctx,
+                      const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    const struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
-    size_t on_len = ofpact_nest_get_action_len(on);
-    const struct ofpact *inner;
-
     /* Maintain actset_output depending on the contents of the action set:
      *
      *   - OFPP_UNSET, if there is no "output" action.
@@ -4090,10 +4087,11 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
      *   - OFPP_UNSET, if there is a "group" action.
      */
     if (!ctx->action_set_has_group) {
-        OFPACT_FOR_EACH (inner, on->actions, on_len) {
-            if (inner->type == OFPACT_OUTPUT) {
-                ctx->xin->flow.actset_output = ofpact_get_OUTPUT(inner)->port;
-            } else if (inner->type == OFPACT_GROUP) {
+        const struct ofpact *a;
+        OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+            if (a->type == OFPACT_OUTPUT) {
+                ctx->xin->flow.actset_output = ofpact_get_OUTPUT(a)->port;
+            } else if (a->type == OFPACT_GROUP) {
                 ctx->xin->flow.actset_output = OFPP_UNSET;
                 ctx->action_set_has_group = true;
                 break;
@@ -4101,7 +4099,13 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
         }
     }
 
-    ofpbuf_put(&ctx->action_set, on->actions, on_len);
+    ofpbuf_put(&ctx->action_set, ofpacts, ofpacts_len);
+}
+
+static void
+xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact_nest *a)
+{
+    xlate_write_actions__(ctx, a->actions, ofpact_nest_get_action_len(a));
 }
 
 static void
@@ -4723,7 +4727,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_WRITE_ACTIONS:
-            xlate_write_actions(ctx, a);
+            xlate_write_actions(ctx, ofpact_get_WRITE_ACTIONS(a));
             break;
 
         case OFPACT_WRITE_METADATA:
@@ -5175,20 +5179,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Restore action set, if any. */
         if (state->action_set_len) {
-            const struct ofpact *a;
-
             xlate_report_actions(&ctx, "- Restoring action set",
                                  state->action_set, state->action_set_len);
 
-            ofpbuf_put(&ctx.action_set,
-                       state->action_set, state->action_set_len);
-
-            OFPACT_FOR_EACH (a, state->action_set, state->action_set_len) {
-                if (a->type == OFPACT_GROUP) {
-                    ctx.action_set_has_group = true;
-                    break;
-                }
-            }
+            flow->actset_output = OFPP_UNSET;
+            xlate_write_actions__(&ctx, state->action_set,
+                                  state->action_set_len);
         }
 
         /* Restore recirculation actions.  If there are no actions, processing
