@@ -5033,7 +5033,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
     *xout = (struct xlate_out) {
         .slow = 0,
-        .fail_open = false,
         .recircs = RECIRC_REFS_EMPTY_INITIALIZER,
     };
 
@@ -5229,7 +5228,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             ctx.xin->resubmit_hook(ctx.xin, ctx.rule, 0);
         }
     }
-    xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
     /* Get the proximate input port of the packet.  (If xin->recirc,
      * flow->in_port is the ultimate input port of the packet.) */

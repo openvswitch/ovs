@@ -1756,7 +1756,6 @@ static void
 schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin,
                    enum ofp_packet_in_reason wire_reason)
 {
-    struct connmgr *mgr = ofconn->connmgr;
     uint16_t controller_max_len;
     struct ovs_list txq;
 
@@ -1774,8 +1773,6 @@ schedule_packet_in(struct ofconn *ofconn, struct ofproto_packet_in pin,
      * unbuffered.  This behaviour doesn't violate prior versions, too. */
     if (controller_max_len == UINT16_MAX) {
         pin.up.buffer_id = UINT32_MAX;
-    } else if (mgr->fail_open && fail_open_is_active(mgr->fail_open)) {
-        pin.up.buffer_id = pktbuf_get_null();
     } else if (!ofconn->pktbuf) {
         pin.up.buffer_id = UINT32_MAX;
     } else {

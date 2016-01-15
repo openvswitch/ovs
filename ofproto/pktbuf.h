@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2012, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ struct pktbuf *pktbuf_create(void);
 void pktbuf_destroy(struct pktbuf *);
 uint32_t pktbuf_save(struct pktbuf *, const void *buffer, size_t buffer_size,
                      ofp_port_t in_port);
-uint32_t pktbuf_get_null(void);
 enum ofperr pktbuf_retrieve(struct pktbuf *, uint32_t id,
                             struct dp_packet **bufferp, ofp_port_t *in_port);
 void pktbuf_discard(struct pktbuf *, uint32_t id);

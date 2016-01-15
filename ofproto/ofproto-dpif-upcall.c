@@ -1090,31 +1090,6 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     xlate_actions(&xin, &upcall->xout);
     upcall->xout_initialized = true;
 
-    /* Special case for fail-open mode.
-     *
-     * If we are in fail-open mode, but we are connected to a controller too,
-     * then we should send the packet up to the controller in the hope that it
-     * will try to set up a flow and thereby allow us to exit fail-open.
-     *
-     * See the top-level comment in fail-open.c for more information.
-     *
-     * Copy packets before they are modified by execution. */
-    if (upcall->xout.fail_open) {
-        const struct dp_packet *packet = upcall->packet;
-        struct ofproto_packet_in *pin;
-
-        pin = xmalloc(sizeof *pin);
-        pin->up.packet = xmemdup(dp_packet_data(packet), dp_packet_size(packet));
-        pin->up.packet_len = dp_packet_size(packet);
-        pin->up.reason = OFPR_NO_MATCH;
-        pin->up.table_id = 0;
-        pin->up.cookie = OVS_BE64_MAX;
-        flow_get_metadata(upcall->flow, &pin->up.flow_metadata);
-        pin->send_len = 0; /* Not used for flow table misses. */
-        pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
-        ofproto_dpif_send_packet_in(upcall->ofproto, pin);
-    }
-
     if (!upcall->xout.slow) {
         ofpbuf_use_const(&upcall->put_actions,
                          odp_actions->data, odp_actions->size);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ struct xlate_cache;
 
 struct xlate_out {
     enum slow_path_reason slow; /* 0 if fast path may be used. */
-    bool fail_open;             /* Initial rule is fail open? */
 
     struct recirc_refs recircs; /* Recirc action IDs on which references are
                                  * held. */
