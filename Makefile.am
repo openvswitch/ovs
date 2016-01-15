@@ -86,6 +86,7 @@ docs = \
 	IntegrationGuide.md \
 	MAINTAINERS.md \
 	OPENFLOW-1.1+.md \
+	PARTIAL-UPDATE-MAP-COLUMN.md \
 	PORTING.md \
 	README.md \
 	README-lisp.md \
