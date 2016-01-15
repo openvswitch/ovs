@@ -23,8 +23,10 @@
  * physical bridges, as directed by other-config:ovn-bridge-mappings. */
 
 struct controller_ctx;
+struct hmap;
 struct ovsrec_bridge;
 
-void patch_run(struct controller_ctx *, const struct ovsrec_bridge *br_int);
+void patch_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
+               struct hmap *local_datapaths);
 
 #endif /* ovn/patch.h */

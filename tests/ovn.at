@@ -740,7 +740,7 @@ AT_CLEANUP
 # 2 hypervisors, 4 logical ports per HV
 # 2 locally attached networks (one flat, one vlan tagged over same device)
 # 2 ports per HV on each network
-AT_SETUP([ovn -- 2 HVs, 2 lports/HV, localnet ports])
+AT_SETUP([ovn -- 2 HVs, 4 lports/HV, localnet ports])
 AT_KEYWORDS([ovn-localnet])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
@@ -830,9 +830,8 @@ test_packet 21 f00000000011 f00000000021 2111 11
 
 # lp11 and lp12 are on the same network (phys, untagged)
 # and on the same hypervisor
-# TODO this is broken.
-#test_packet 11 f00000000012 f00000000011 1112 12
-#test_packet 12 f00000000011 f00000000012 1211 11
+test_packet 11 f00000000012 f00000000011 1112 12
+test_packet 12 f00000000011 f00000000012 1211 11
 
 # lp13 and lp23 are on the same network (phys, VLAN 101)
 # and on different hypervisors
@@ -841,9 +840,8 @@ test_packet 23 f00000000013 f00000000023 2313 13
 
 # lp13 and lp14 are on the same network (phys, VLAN 101)
 # and on the same hypervisor
-# TODO this is broken.
-#test_packet 13 f00000000014 f00000000013 1314 14
-#test_packet 14 f00000000013 f00000000014 1413 13
+test_packet 13 f00000000014 f00000000013 1314 14
+test_packet 14 f00000000013 f00000000014 1413 13
 
 # Ports that should not be able to communicate
 test_packet 11 f00000000013 f00000000011 1113

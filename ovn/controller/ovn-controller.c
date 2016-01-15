@@ -285,11 +285,6 @@ main(int argc, char *argv[])
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
-        /* Map bridges to local nets from ovn-bridge-mappings */
-        if (br_int) {
-            patch_run(&ctx, br_int);
-        }
-
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
@@ -298,6 +293,8 @@ main(int argc, char *argv[])
         }
 
         if (br_int) {
+            patch_run(&ctx, br_int, &local_datapaths);
+
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             pinctrl_run(&ctx, br_int);
@@ -306,8 +303,7 @@ main(int argc, char *argv[])
             lflow_run(&ctx, &flow_table, &ct_zones);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &ct_zones, &flow_table,
-                             &local_datapaths);
+                             br_int, chassis_id, &ct_zones, &flow_table);
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
