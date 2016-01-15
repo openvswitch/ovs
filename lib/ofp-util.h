@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1325,14 +1325,20 @@ enum ofputil_async_msg_type {
 };
 const char *ofputil_async_msg_type_to_string(enum ofputil_async_msg_type);
 
-enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
-                                            uint32_t master[OAM_N_TYPES],
-                                            uint32_t slave[OAM_N_TYPES],
-                                            bool loose);
+struct ofputil_async_cfg {
+    uint32_t master[OAM_N_TYPES];
+    uint32_t slave[OAM_N_TYPES];
+};
+#define OFPUTIL_ASYNC_CFG_INIT (struct ofputil_async_cfg) { .master[0] = 0 }
 
-struct ofpbuf *ofputil_encode_get_async_config(const struct ofp_header *,
-                                               uint32_t master[OAM_N_TYPES],
-                                               uint32_t slave[OAM_N_TYPES]);
+enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
+                                            bool loose,
+                                            struct ofputil_async_cfg *);
+
+struct ofpbuf *ofputil_encode_get_async_config(
+    const struct ofp_header *, const struct ofputil_async_cfg *);
+
+struct ofputil_async_cfg ofputil_async_cfg_default(enum ofp_version);
 
 struct ofputil_requestforward {
     ovs_be32 xid;

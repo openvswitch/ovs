@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012, 2013, 2014 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013, 2014, 2016 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -280,6 +280,13 @@ enum ofp_packet_in_reason {
     OFPR_ACTION_SET,        /* Output to controller in action set */
     OFPR_GROUP,             /* Output to controller in group bucket */
     OFPR_PACKET_OUT,        /* Output to controller in packet-out */
+
+#define OFPR10_BITS                                                     \
+    ((1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION) | (1u << OFPR_INVALID_TTL))
+#define OFPR14_BITS                                                     \
+    (OFPR10_BITS |                                                      \
+     (1u << OFPR_ACTION_SET) | (1u << OFPR_GROUP) | (1u << OFPR_PACKET_OUT))
+
     OFPR_N_REASONS
 };
 
@@ -306,6 +313,16 @@ enum ofp_flow_removed_reason {
     OFPRR_METER_DELETE,         /* Meter was removed. */
     OFPRR_EVICTION,             /* Switch eviction to free resources. */
 
+#define OFPRR10_BITS                            \
+    ((1u << OFPRR_IDLE_TIMEOUT) |               \
+     (1u << OFPRR_HARD_TIMEOUT) |               \
+     (1u << OFPRR_DELETE))
+#define OFPRR14_BITS                            \
+    (OFPRR10_BITS |                             \
+     (1u << OFPRR_GROUP_DELETE) |               \
+     (1u << OFPRR_METER_DELETE) |               \
+     (1u << OFPRR_EVICTION))
+
     OVS_OFPRR_NONE              /* OVS internal_use only, keep last!. */
 };
 
@@ -314,6 +331,11 @@ enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added. */
     OFPPR_DELETE,           /* The port was removed. */
     OFPPR_MODIFY,           /* Some attribute of the port has changed. */
+
+#define OFPPR_BITS ((1u << OFPPR_ADD) |         \
+                    (1u << OFPPR_DELETE) |      \
+                    (1u << OFPPR_MODIFY))
+
     OFPPR_N_REASONS         /* Denotes number of reasons. */
 };
 
