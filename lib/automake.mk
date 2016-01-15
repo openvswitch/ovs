@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -195,6 +195,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/pcap-file.h \
 	lib/perf-counter.h \
 	lib/perf-counter.c \
+	lib/pktbuf.c \
+	lib/pktbuf.h \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
 	lib/process.c \

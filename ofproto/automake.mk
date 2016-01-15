@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2014, 2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -43,8 +43,6 @@ ofproto_libofproto_la_SOURCES = \
 	ofproto/ofproto-dpif-xlate.c \
 	ofproto/ofproto-dpif-xlate.h \
 	ofproto/ofproto-provider.h \
-	ofproto/pktbuf.c \
-	ofproto/pktbuf.h \
 	ofproto/pinsched.c \
 	ofproto/pinsched.h \
 	ofproto/tunnel.c \
