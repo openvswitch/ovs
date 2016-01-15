@@ -2810,11 +2810,17 @@ send: OFPT_SET_ASYNC (OF1.3) (xid=0x2):
        PACKET_IN: (off)
      PORT_STATUS: (off)
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 
  slave:
        PACKET_IN: no_match
      PORT_STATUS: (off)
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 dnl
 OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:0

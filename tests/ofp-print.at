@@ -2637,20 +2637,30 @@ AT_CLEANUP
 
 AT_SETUP([OFPT_SET_ASYNC - OF1.3])
 AT_KEYWORDS([ofp-print])
+dnl This message has bit 12 set for the PACKET_IN messages (master and slave).
+dnl Those aren't supported bits so they get silently ignored on decoding.
+dnl That seems reasonable because OF1.3 doesn't define any error codes for
+dnl OFPT_SET_ASYNC.
 AT_CHECK([ovs-ofctl ofp-print "\
 04 1c 00 20 00 00 00 00 00 00 10 05 00 00 10 07 \
 00 00 00 03 00 00 00 07 00 00 00 00 00 00 00 03 \
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.3) (xid=0x0):
  master:
-       PACKET_IN: no_match invalid_ttl 12
+       PACKET_IN: no_match invalid_ttl
      PORT_STATUS: add delete
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 
  slave:
-       PACKET_IN: no_match action invalid_ttl 12
+       PACKET_IN: no_match action invalid_ttl
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 ])
 AT_CLEANUP
 
@@ -2838,6 +2848,8 @@ AT_CLEANUP
 
 AT_SETUP([NXT_SET_ASYNC_CONFIG])
 AT_KEYWORDS([ofp-print])
+dnl This message has bit 12 set for the PACKET_IN messages (master and slave).
+dnl Those aren't supported bits so they get silently ignored on decoding.
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 28 00 00 00 00 00 00 23 20 00 00 00 13 \
 00 00 10 05 00 00 10 07 00 00 00 03 00 00 00 07 \
@@ -2845,14 +2857,20 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 NXT_SET_ASYNC_CONFIG (xid=0x0):
  master:
-       PACKET_IN: no_match invalid_ttl 12
+       PACKET_IN: no_match invalid_ttl
      PORT_STATUS: add delete
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 
  slave:
-       PACKET_IN: no_match action invalid_ttl 12
+       PACKET_IN: no_match action invalid_ttl
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 ])
 AT_CLEANUP
 
