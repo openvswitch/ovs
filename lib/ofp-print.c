@@ -2063,107 +2063,41 @@ ofp_async_config_reason_to_string(uint32_t reason,
 
 #define OFP_ASYNC_CONFIG_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 static void
-ofp_print_nxt_set_async_config(struct ds *string,
-                               const struct ofp_header *oh)
+ofp_print_set_async_config(struct ds *string, const struct ofp_header *oh,
+                           enum ofptype type)
 {
-    int i, j;
-    enum ofpraw raw;
+    struct ofputil_async_cfg basis = OFPUTIL_ASYNC_CFG_INIT;
+    struct ofputil_async_cfg ac;
 
-    ofpraw_decode(&raw, oh);
+    bool is_reply = type == OFPTYPE_GET_ASYNC_REPLY;
+    enum ofperr error = ofputil_decode_set_async_config(oh, is_reply,
+                                                        &basis, &ac);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
 
-    if (raw == OFPRAW_OFPT13_SET_ASYNC ||
-        raw == OFPRAW_NXT_SET_ASYNC_CONFIG ||
-        raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
-        const struct nx_async_config *nac = ofpmsg_body(oh);
+    for (int i = 0; i < 2; i++) {
+        ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+        for (uint32_t type = 0; type < OAM_N_TYPES; type++) {
+            ds_put_format(string, "%16s:",
+                          ofputil_async_msg_type_to_string(type));
 
-        for (i = 0; i < 2; i++) {
-
-            ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
-
-            ds_put_cstr(string, "       PACKET_IN:");
-            for (j = 0; j < 32; j++) {
-                if (nac->packet_in_mask[i] & htonl(1u << j)) {
-                    char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
+            uint32_t role = i == 0 ? ac.master[type] : ac.slave[type];
+            for (int j = 0; j < 32; j++) {
+                if (role & (1u << j)) {
+                    char reasonbuf[OFP_ASYNC_CONFIG_REASON_BUFSIZE];
                     const char *reason;
 
-                    reason = ofputil_packet_in_reason_to_string(j, reasonbuf,
-                                                            sizeof reasonbuf);
+                    reason = ofp_async_config_reason_to_string(
+                        j, type, reasonbuf, sizeof reasonbuf);
                     ds_put_format(string, " %s", reason);
                 }
             }
-            if (!nac->packet_in_mask[i]) {
+            if (!role) {
                 ds_put_cstr(string, " (off)");
             }
             ds_put_char(string, '\n');
-
-            ds_put_cstr(string, "     PORT_STATUS:");
-            for (j = 0; j < 32; j++) {
-                if (nac->port_status_mask[i] & htonl(1u << j)) {
-                    char reasonbuf[OFP_PORT_REASON_BUFSIZE];
-                    const char *reason;
-
-                    reason = ofp_port_reason_to_string(j, reasonbuf,
-                                                       sizeof reasonbuf);
-                    ds_put_format(string, " %s", reason);
-                }
-            }
-            if (!nac->port_status_mask[i]) {
-                ds_put_cstr(string, " (off)");
-            }
-            ds_put_char(string, '\n');
-
-            ds_put_cstr(string, "    FLOW_REMOVED:");
-            for (j = 0; j < 32; j++) {
-                if (nac->flow_removed_mask[i] & htonl(1u << j)) {
-                    char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
-                    const char *reason;
-
-                    reason = ofp_flow_removed_reason_to_string(j, reasonbuf,
-                                                           sizeof reasonbuf);
-                    ds_put_format(string, " %s", reason);
-                }
-            }
-            if (!nac->flow_removed_mask[i]) {
-                ds_put_cstr(string, " (off)");
-            }
-            ds_put_char(string, '\n');
-        }
-    } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
-               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
-        struct ofputil_async_cfg basis = OFPUTIL_ASYNC_CFG_INIT;
-        struct ofputil_async_cfg ac;
-
-        bool is_reply = raw == OFPRAW_OFPT14_GET_ASYNC_REPLY;
-        enum ofperr error = ofputil_decode_set_async_config(oh, is_reply,
-                                                            &basis, &ac);
-        if (error) {
-            ofp_print_error(string, error);
-            return;
-        }
-
-        for (i = 0; i < 2; i++) {
-            ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
-            for (uint32_t type = 0; type < OAM_N_TYPES; type++) {
-                ds_put_format(string, "%16s:",
-                              ofputil_async_msg_type_to_string(type));
-
-                uint32_t role = i == 0 ? ac.master[type] : ac.slave[type];
-                for (j = 0; j < 32; j++) {
-                    if (role & (1u << j)) {
-                        char reasonbuf[OFP_ASYNC_CONFIG_REASON_BUFSIZE];
-                        const char *reason;
-
-                        reason = ofp_async_config_reason_to_string(j, type,
-                                                                   reasonbuf,
-                                                           sizeof reasonbuf);
-                        ds_put_format(string, " %s", reason);
-                    }
-                }
-                if (!role) {
-                    ds_put_cstr(string, " (off)");
-                }
-                ds_put_char(string, '\n');
-            }
         }
     }
 }
@@ -3137,8 +3071,9 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     const void *msg = oh;
 
     ofp_header_to_string__(oh, raw, string);
-    switch (ofptype_from_ofpraw(raw)) {
 
+    enum ofptype type = ofptype_from_ofpraw(raw);
+    switch (type) {
     case OFPTYPE_GROUP_STATS_REQUEST:
         ofp_print_stats(string, oh);
         ofp_print_ofpst_group_request(string, oh);
@@ -3373,7 +3308,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_SET_ASYNC_CONFIG:
-        ofp_print_nxt_set_async_config(string, oh);
+        ofp_print_set_async_config(string, oh, type);
         break;
     case OFPTYPE_GET_ASYNC_REQUEST:
         break;

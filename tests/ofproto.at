@@ -3845,11 +3845,17 @@ OFPT_GET_ASYNC_REPLY (OF1.3):
        PACKET_IN: no_match action
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard delete
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 
  slave:
        PACKET_IN: (off)
      PORT_STATUS: add delete modify
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 OFPT_BARRIER_REPLY (OF1.3):
 ])
 
