@@ -9485,7 +9485,7 @@ ofputil_async_msg_type_to_string(enum ofputil_async_msg_type type)
 }
 
 /* Decodes the OpenFlow "set async config" request and "get async config
- * reply" message in '*oh' into an abstract form in 'master' and 'slave'.
+ * reply" message in '*oh' into an abstract form in 'ac'.
  *
  * If 'loose' is true, this function ignores properties and values that it does
  * not understand, as a controller would want to do when interpreting
@@ -9501,10 +9501,8 @@ ofputil_async_msg_type_to_string(enum ofputil_async_msg_type type)
  * Returns error code OFPERR_OFPACFC_UNSUPPORTED if the configuration is not
  * supported.*/
 enum ofperr
-ofputil_decode_set_async_config(const struct ofp_header *oh,
-                                uint32_t master[OAM_N_TYPES],
-                                uint32_t slave[OAM_N_TYPES],
-                                bool loose)
+ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
+                                struct ofputil_async_cfg *ac)
 {
     enum ofpraw raw;
     struct ofpbuf b;
@@ -9517,14 +9515,13 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
         raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
         const struct nx_async_config *msg = ofpmsg_body(oh);
 
-        master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
-        master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
-        master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
+        ac->master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
+        ac->master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
+        ac->master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
 
-        slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
-        slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
-        slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
-
+        ac->slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
+        ac->slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
+        ac->slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
 
@@ -9553,51 +9550,51 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
 
             switch (type) {
             case OFPACPT_PACKET_IN_SLAVE:
-                slave[OAM_PACKET_IN] = mask;
+                ac->slave[OAM_PACKET_IN] = mask;
                 break;
 
             case OFPACPT_PACKET_IN_MASTER:
-                master[OAM_PACKET_IN] = mask;
+                ac->master[OAM_PACKET_IN] = mask;
                 break;
 
             case OFPACPT_PORT_STATUS_SLAVE:
-                slave[OAM_PORT_STATUS] = mask;
+                ac->slave[OAM_PORT_STATUS] = mask;
                 break;
 
             case OFPACPT_PORT_STATUS_MASTER:
-                master[OAM_PORT_STATUS] = mask;
+                ac->master[OAM_PORT_STATUS] = mask;
                 break;
 
             case OFPACPT_FLOW_REMOVED_SLAVE:
-                slave[OAM_FLOW_REMOVED] = mask;
+                ac->slave[OAM_FLOW_REMOVED] = mask;
                 break;
 
             case OFPACPT_FLOW_REMOVED_MASTER:
-                master[OAM_FLOW_REMOVED] = mask;
+                ac->master[OAM_FLOW_REMOVED] = mask;
                 break;
 
             case OFPACPT_ROLE_STATUS_SLAVE:
-                slave[OAM_ROLE_STATUS] = mask;
+                ac->slave[OAM_ROLE_STATUS] = mask;
                 break;
 
             case OFPACPT_ROLE_STATUS_MASTER:
-                master[OAM_ROLE_STATUS] = mask;
+                ac->master[OAM_ROLE_STATUS] = mask;
                 break;
 
             case OFPACPT_TABLE_STATUS_SLAVE:
-                slave[OAM_TABLE_STATUS] = mask;
+                ac->slave[OAM_TABLE_STATUS] = mask;
                 break;
 
             case OFPACPT_TABLE_STATUS_MASTER:
-                master[OAM_TABLE_STATUS] = mask;
+                ac->master[OAM_TABLE_STATUS] = mask;
                 break;
 
             case OFPACPT_REQUESTFORWARD_SLAVE:
-                slave[OAM_REQUESTFORWARD] = mask;
+                ac->slave[OAM_REQUESTFORWARD] = mask;
                 break;
 
             case OFPACPT_REQUESTFORWARD_MASTER:
-                master[OAM_REQUESTFORWARD] = mask;
+                ac->master[OAM_REQUESTFORWARD] = mask;
                 break;
 
             default:
@@ -9667,8 +9664,7 @@ ofputil_get_async_reply(struct ofpbuf *buf, const uint32_t master_mask,
  * as a reply to get async config request. */
 struct ofpbuf *
 ofputil_encode_get_async_config(const struct ofp_header *oh,
-                                uint32_t master[OAM_N_TYPES],
-                                uint32_t slave[OAM_N_TYPES])
+                                const struct ofputil_async_cfg *ac)
 {
     struct ofpbuf *buf;
     uint32_t type;
@@ -9681,18 +9677,35 @@ ofputil_encode_get_async_config(const struct ofp_header *oh,
         struct nx_async_config *msg;
         msg = ofpbuf_put_zeros(buf, sizeof *msg);
 
-        msg->packet_in_mask[0] = htonl(master[OAM_PACKET_IN]);
-        msg->port_status_mask[0] = htonl(master[OAM_PORT_STATUS]);
-        msg->flow_removed_mask[0] = htonl(master[OAM_FLOW_REMOVED]);
+        msg->packet_in_mask[0] = htonl(ac->master[OAM_PACKET_IN]);
+        msg->port_status_mask[0] = htonl(ac->master[OAM_PORT_STATUS]);
+        msg->flow_removed_mask[0] = htonl(ac->master[OAM_FLOW_REMOVED]);
 
-        msg->packet_in_mask[1] = htonl(slave[OAM_PACKET_IN]);
-        msg->port_status_mask[1] = htonl(slave[OAM_PORT_STATUS]);
-        msg->flow_removed_mask[1] = htonl(slave[OAM_FLOW_REMOVED]);
+        msg->packet_in_mask[1] = htonl(ac->slave[OAM_PACKET_IN]);
+        msg->port_status_mask[1] = htonl(ac->slave[OAM_PORT_STATUS]);
+        msg->flow_removed_mask[1] = htonl(ac->slave[OAM_FLOW_REMOVED]);
     } else if (oh->version == OFP14_VERSION) {
         for (type = 0; type < OAM_N_TYPES; type++) {
-            ofputil_get_async_reply(buf, master[type], slave[type], type);
+            ofputil_get_async_reply(buf, ac->master[type], ac->slave[type],
+                                    type);
         }
     }
 
     return buf;
+}
+
+struct ofputil_async_cfg
+ofputil_async_cfg_default(enum ofp_version version)
+{
+    return (struct ofputil_async_cfg) {
+        .master[OAM_PACKET_IN]
+            = ((version >= OFP14_VERSION ? OFPR14_BITS : OFPR10_BITS)
+               & ~(1u << OFPR_INVALID_TTL)),
+
+        .master[OAM_FLOW_REMOVED]
+            = (version >= OFP14_VERSION ? OFPRR14_BITS : OFPRR10_BITS),
+
+        .master[OAM_PORT_STATUS] = OFPPR_BITS,
+        .slave[OAM_PORT_STATUS] = OFPPR_BITS,
+    };
 }

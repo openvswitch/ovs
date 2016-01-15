@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,11 +134,8 @@ int ofconn_get_miss_send_len(const struct ofconn *);
 void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 
 void ofconn_set_async_config(struct ofconn *,
-                             const uint32_t master_masks[OAM_N_TYPES],
-                             const uint32_t slave_masks[OAM_N_TYPES]);
-void ofconn_get_async_config(struct ofconn *,
-                             uint32_t *master_masks,
-                             uint32_t *slave_masks);
+                             const struct ofputil_async_cfg *);
+struct ofputil_async_cfg ofconn_get_async_config(const struct ofconn *);
 
 void ofconn_send_reply(const struct ofconn *, struct ofpbuf *);
 void ofconn_send_replies(const struct ofconn *, struct ovs_list *);

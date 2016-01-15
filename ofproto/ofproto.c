@@ -5403,16 +5403,15 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    struct ofputil_async_cfg ac = OFPUTIL_ASYNC_CFG_INIT;
     enum ofperr error;
-    uint32_t master[OAM_N_TYPES] = {0};
-    uint32_t slave[OAM_N_TYPES] = {0};
 
-    error = ofputil_decode_set_async_config(oh, master, slave, false);
+    error = ofputil_decode_set_async_config(oh, false, &ac);
     if (error) {
         return error;
     }
 
-    ofconn_set_async_config(ofconn, master, slave);
+    ofconn_set_async_config(ofconn, &ac);
     if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&
         !ofconn_get_miss_send_len(ofconn)) {
         ofconn_set_miss_send_len(ofconn, OFP_DEFAULT_MISS_SEND_LEN);
@@ -5424,14 +5423,8 @@ handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_nxt_get_async_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofpbuf *buf;
-    uint32_t master[OAM_N_TYPES];
-    uint32_t slave[OAM_N_TYPES];
-
-    ofconn_get_async_config(ofconn, master, slave);
-
-    buf = ofputil_encode_get_async_config(oh, master, slave);
-    ofconn_send_reply(ofconn, buf);
+    struct ofputil_async_cfg ac = ofconn_get_async_config(ofconn);
+    ofconn_send_reply(ofconn, ofputil_encode_get_async_config(oh, &ac));
 
     return 0;
 }
