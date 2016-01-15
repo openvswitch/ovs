@@ -457,11 +457,11 @@ struct xc_entry {
     } u;
 };
 
-#define XC_ENTRY_FOR_EACH(entry, entries, xcache)               \
-    entries = xcache->entries;                                  \
-    for (entry = ofpbuf_try_pull(&entries, sizeof *entry);      \
-         entry;                                                 \
-         entry = ofpbuf_try_pull(&entries, sizeof *entry))
+#define XC_ENTRY_FOR_EACH(ENTRY, ENTRIES, XCACHE)               \
+    ENTRIES = XCACHE->entries;                                  \
+    for (ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY);      \
+         ENTRY;                                                 \
+         ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY))
 
 struct xlate_cache {
     struct ofpbuf entries;
