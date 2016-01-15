@@ -138,7 +138,8 @@ put_stack(enum mf_field_id field, struct ofpact_stack *stack)
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
-             const struct simap *ct_zones, struct hmap *flow_table)
+             const struct simap *ct_zones, struct hmap *flow_table,
+             struct hmap *local_datapaths)
 {
     struct simap localvif_to_ofport = SIMAP_INITIALIZER(&localvif_to_ofport);
     struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
@@ -235,10 +236,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     };
     /* Maps from network name to "struct localnet_bindings". */
     struct shash localnet_inputs = SHASH_INITIALIZER(&localnet_inputs);
-
-    /* Contains bare "struct hmap_node"s whose hash values are the tunnel_key
-     * of datapaths with at least one local port binding. */
-    struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
 
     /* Set up flows in table 0 for physical-to-logical translation and in table
      * 64 for logical-to-physical translation. */
@@ -359,15 +356,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 b->binding = binding;
                 list_insert(&ln_vlan->bindings, &b->list_elem);
             } else {
-                struct hmap_node *ld;
-                ld = hmap_first_with_hash(&local_datapaths,
-                                          binding->datapath->tunnel_key);
-                if (!ld) {
-                    ld = xmalloc(sizeof *ld);
-                    hmap_insert(&local_datapaths, ld,
-                                binding->datapath->tunnel_key);
-                }
-
                 ofpbuf_clear(&ofpacts);
                 match_init_catchall(&match);
                 match_set_in_port(&match, ofport);
@@ -762,7 +750,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             struct binding_elem *b;
             LIST_FOR_EACH_POP (b, list_elem, &ln_vlan->bindings) {
                 struct hmap_node *ld;
-                ld = hmap_first_with_hash(&local_datapaths,
+                ld = hmap_first_with_hash(local_datapaths,
                                           b->binding->datapath->tunnel_key);
                 if (ld) {
                     /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
@@ -799,13 +787,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         free(ln_bindings);
     }
     shash_destroy(&localnet_inputs);
-
-    struct hmap_node *node;
-    while ((node = hmap_first(&local_datapaths))) {
-        hmap_remove(&local_datapaths, node);
-        free(node);
-    }
-    hmap_destroy(&local_datapaths);
 
     simap_destroy(&localnet_to_ofport);
 }
