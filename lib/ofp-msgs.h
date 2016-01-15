@@ -148,7 +148,7 @@ enum ofpraw {
     OFPRAW_OFPT11_PACKET_IN,
     /* OFPT 1.2 (10): struct ofp12_packet_in, uint8_t[]. */
     OFPRAW_OFPT12_PACKET_IN,
-    /* OFPT 1.3+ (10): struct ofp13_packet_in, uint8_t[]. */
+    /* OFPT 1.3+ (10): struct ofp12_packet_in, ovs_be64, uint8_t[]. */
     OFPRAW_OFPT13_PACKET_IN,
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,

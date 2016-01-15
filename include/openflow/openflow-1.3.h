@@ -46,7 +46,7 @@
  *                                 - new field: auxiliary_id
  *                                 - removed: ofp_ports at the end
  *
- * OFPT_PACKET_IN          = 10   (ofp13_packet_in) new field: cookie
+ * OFPT_PACKET_IN          = 10   (appends an ovs_be64 to ofp12_packet_in)
  *
  * OpenFlow 1.3 adds following new message types:
  *
@@ -351,24 +351,5 @@ struct ofp13_async_config {
     ovs_be32 flow_removed_mask[2];/* Bitmasks of OFPRR_* values. */
 };
 OFP_ASSERT(sizeof(struct ofp13_async_config) == 24);
-
-
-/* Packet received on port (datapath -> controller). */
-struct ofp13_packet_in {
-    struct ofp12_packet_in pi;
-    ovs_be64 cookie;          /* Cookie of the flow entry that was looked up */
-    /* Followed by:
-     *   - Match
-     *   - Exactly 2 all-zero padding bytes, then
-     *   - An Ethernet frame whose length is inferred from header.length.
-     * The padding bytes preceding the Ethernet frame ensure that the IP
-     * header (if any) following the Ethernet header is 32-bit aligned.
-     */
-    /* struct ofp12_match match; */
-    /* uint8_t pad[2];         Align to 64 bit + 16 bit */
-    /* uint8_t data[0];        Ethernet frame */
-};
-OFP_ASSERT(sizeof(struct ofp13_packet_in) == 16);
-
 
 #endif /* openflow/openflow-1.3.h */

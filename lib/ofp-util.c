@@ -3324,18 +3324,11 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT13_PACKET_IN || raw == OFPRAW_OFPT12_PACKET_IN) {
-        const struct ofp13_packet_in *opi;
-        int error;
-        size_t packet_in_size;
-
-        if (raw == OFPRAW_OFPT12_PACKET_IN) {
-            packet_in_size = sizeof (struct ofp12_packet_in);
-        } else {
-            packet_in_size = sizeof (struct ofp13_packet_in);
-        }
-
-        opi = ofpbuf_pull(&b, packet_in_size);
-        error = oxm_pull_match_loose(&b, &pin->flow_metadata);
+        const struct ofp12_packet_in *opi = ofpbuf_pull(&b, sizeof *opi);
+        const ovs_be64 *cookie = (raw == OFPRAW_OFPT13_PACKET_IN
+                                  ? ofpbuf_pull(&b, sizeof *cookie)
+                                  : NULL);
+        enum ofperr error = oxm_pull_match_loose(&b, &pin->flow_metadata);
         if (error) {
             return error;
         }
@@ -3344,13 +3337,13 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
-        pin->reason = opi->pi.reason;
-        pin->table_id = opi->pi.table_id;
-        pin->buffer_id = ntohl(opi->pi.buffer_id);
-        pin->total_len = ntohs(opi->pi.total_len);
+        pin->reason = opi->reason;
+        pin->table_id = opi->table_id;
+        pin->buffer_id = ntohl(opi->buffer_id);
+        pin->total_len = ntohs(opi->total_len);
 
-        if (raw == OFPRAW_OFPT13_PACKET_IN) {
-            pin->cookie = opi->cookie;
+        if (cookie) {
+            pin->cookie = *cookie;
         }
 
         pin->packet = b.data;
@@ -3489,41 +3482,31 @@ static struct ofpbuf *
 ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
                                enum ofputil_protocol protocol)
 {
-    struct ofp13_packet_in *opi;
-    enum ofpraw packet_in_raw;
-    enum ofp_version packet_in_version;
-    size_t packet_in_size;
-    struct ofpbuf *packet;
-
-    if (protocol == OFPUTIL_P_OF12_OXM) {
-        packet_in_raw = OFPRAW_OFPT12_PACKET_IN;
-        packet_in_version = OFP12_VERSION;
-        packet_in_size = sizeof (struct ofp12_packet_in);
-    } else {
-        packet_in_raw = OFPRAW_OFPT13_PACKET_IN;
-        packet_in_version = ofputil_protocol_to_ofp_version(protocol);
-        packet_in_size = sizeof (struct ofp13_packet_in);
-    }
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+    enum ofpraw raw = (version >= OFP13_VERSION
+                       ? OFPRAW_OFPT13_PACKET_IN
+                       : OFPRAW_OFPT12_PACKET_IN);
+    struct ofpbuf *msg;
 
     /* The final argument is just an estimate of the space required. */
-    packet = ofpraw_alloc_xid(packet_in_raw, packet_in_version,
-                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
-    ofpbuf_put_zeros(packet, packet_in_size);
-    oxm_put_match(packet, &pin->flow_metadata,
-                  ofputil_protocol_to_ofp_version(protocol));
-    ofpbuf_put_zeros(packet, 2);
-    ofpbuf_put(packet, pin->packet, pin->packet_len);
+    msg = ofpraw_alloc_xid(raw, version,
+                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
 
-    opi = packet->msg;
-    opi->pi.buffer_id = htonl(pin->buffer_id);
-    opi->pi.total_len = htons(pin->total_len);
-    opi->pi.reason = pin->reason;
-    opi->pi.table_id = pin->table_id;
-    if (protocol != OFPUTIL_P_OF12_OXM) {
-        opi->cookie = pin->cookie;
+    struct ofp12_packet_in *opi = ofpbuf_put_zeros(msg, sizeof *opi);
+    opi->buffer_id = htonl(pin->buffer_id);
+    opi->total_len = htons(pin->total_len);
+    opi->reason = pin->reason;
+    opi->table_id = pin->table_id;
+    if (version >= OFP13_VERSION) {
+        ovs_be64 cookie = pin->cookie;
+        ofpbuf_put(msg, &cookie, sizeof cookie);
     }
 
-    return packet;
+    oxm_put_match(msg, &pin->flow_metadata, version);
+    ofpbuf_put_zeros(msg, 2);
+    ofpbuf_put(msg, pin->packet, pin->packet_len);
+
+    return msg;
 }
 
 /* Converts abstract ofputil_packet_in 'pin' into a PACKET_IN message
