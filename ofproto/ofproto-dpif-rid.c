@@ -126,7 +126,7 @@ recirc_id_node_find(uint32_t id)
 }
 
 static uint32_t
-recirc_metadata_hash(const struct recirc_state *state)
+recirc_state_hash(const struct recirc_state *state)
 {
     uint32_t hash;
 
@@ -160,7 +160,7 @@ recirc_metadata_hash(const struct recirc_state *state)
 }
 
 static bool
-recirc_metadata_equal(const struct recirc_state *a,
+recirc_state_equal(const struct recirc_state *a,
                       const struct recirc_state *b)
 {
     return (a->table_id == b->table_id
@@ -186,7 +186,7 @@ recirc_find_equal(const struct recirc_state *target, uint32_t hash)
     struct recirc_id_node *node;
 
     CMAP_FOR_EACH_WITH_HASH (node, metadata_node, hash, &metadata_map) {
-        if (recirc_metadata_equal(&node->state, target)) {
+        if (recirc_state_equal(&node->state, target)) {
             return node;
         }
     }
@@ -277,7 +277,7 @@ recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
 uint32_t
 recirc_find_id(const struct recirc_state *target)
 {
-    uint32_t hash = recirc_metadata_hash(target);
+    uint32_t hash = recirc_state_hash(target);
     struct recirc_id_node *node = recirc_find_equal(target, hash);
     return node ? node->id : 0;
 }
@@ -287,7 +287,7 @@ recirc_find_id(const struct recirc_state *target)
 uint32_t
 recirc_alloc_id_ctx(const struct recirc_state *state)
 {
-    uint32_t hash = recirc_metadata_hash(state);
+    uint32_t hash = recirc_state_hash(state);
     struct recirc_id_node *node = recirc_ref_equal(state, hash);
     if (!node) {
         node = recirc_alloc_id__(state, hash);
@@ -307,7 +307,7 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
         .ofproto = ofproto,
         .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
-    return recirc_alloc_id__(&state, recirc_metadata_hash(&state))->id;
+    return recirc_alloc_id__(&state, recirc_state_hash(&state))->id;
 }
 
 static void
