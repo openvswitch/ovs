@@ -167,9 +167,10 @@
           The presence of this key identifies a patch port as one created by
           <code>ovn-controller</code> to connect the integration bridge and
           another bridge to implement a <code>localnet</code> logical port.
-          Its value is the name of the physical network that the port
-          implements.  See <code>external_ids:ovn-bridge-mappings</code>,
-          above, for more information.
+          Its value is the name of the logical port with type=localnet that
+          the port implements.
+          See <code>external_ids:ovn-bridge-mappings</code>, above,
+          for more information.
         </p>
 
         <p>
