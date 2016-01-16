@@ -20,27 +20,9 @@
 #include "list.h"
 #include "ovsdb-idl.h"
 #include "ovsdb-types.h"
+#include "ovsdb-pmu.h"
 #include "shash.h"
 #include "uuid.h"
-
-enum pmu_operation {
-    PMU_UPDATE,
-    PMU_INSERT,
-    PMU_DELETE
-};
-
-/* PMU: Partial Map Update */
-struct pmu {
-    struct ovsdb_datum *new_datum;
-    enum pmu_operation operation;
-    struct pmu *next;
-};
-
-/* PMUL: Partial Map Update List */
-struct pmul {
-    struct pmu *first;
-    struct pmu *last;
-};
 
 struct ovsdb_idl_row {
     struct hmap_node hmap_node; /* In struct ovsdb_idl_table's 'rows'. */

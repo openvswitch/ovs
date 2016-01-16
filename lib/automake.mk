@@ -187,6 +187,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovsdb-idl.h \
 	lib/ovsdb-parser.c \
 	lib/ovsdb-parser.h \
+	lib/ovsdb-pmu.c \
+	lib/ovsdb-pmu.h \
 	lib/ovsdb-types.c \
 	lib/ovsdb-types.h \
 	lib/packets.c \
@@ -515,4 +517,3 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(DBDIR)
-
