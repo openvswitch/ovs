@@ -148,6 +148,10 @@ recirc_metadata_hash(const struct recirc_state *state)
     }
     hash = hash_int(state->mirrors, hash);
     hash = hash_int(state->action_set_len, hash);
+    if (state->action_set_len) {
+        hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->action_set),
+                            state->action_set_len, hash);
+    }
     if (state->ofpacts_len) {
         hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
                             state->ofpacts_len, hash);
@@ -168,9 +172,10 @@ recirc_metadata_equal(const struct recirc_state *a,
             && !memcmp(a->stack, b->stack, a->n_stack * sizeof *a->stack)
             && a->mirrors == b->mirrors
             && a->conntracked == b->conntracked
-            && a->action_set_len == b->action_set_len
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
-                             b->ofpacts, b->ofpacts_len));
+                             b->ofpacts, b->ofpacts_len)
+            && ofpacts_equal(a->action_set, a->action_set_len,
+                             b->action_set, b->action_set_len));
 }
 
 /* Lockless RCU protected lookup.  If node is needed accross RCU quiescent
@@ -216,6 +221,9 @@ recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
     new->ofpacts = (new->ofpacts_len
                     ? xmemdup(new->ofpacts, new->ofpacts_len)
                     : NULL);
+    new->action_set = (new->action_set_len
+                       ? xmemdup(new->action_set, new->action_set_len)
+                       : NULL);
 }
 
 static void
@@ -223,6 +231,7 @@ recirc_state_free(struct recirc_state *state)
 {
     free(state->stack);
     free(state->ofpacts);
+    free(state->action_set);
 }
 
 /* Allocate a unique recirculation id for the given set of flow metadata.

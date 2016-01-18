@@ -3630,9 +3630,11 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
         .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
         .mirrors = ctx->mirrors,
         .conntracked = ctx->conntracked,
+        .ofpacts = ((struct ofpact *) ctx->action_set.data
+                    + ctx->recirc_action_offset / sizeof(struct ofpact)),
+        .ofpacts_len = ctx->action_set.size - ctx->recirc_action_offset,
+        .action_set = ctx->action_set.data,
         .action_set_len = ctx->recirc_action_offset,
-        .ofpacts_len = ctx->action_set.size,
-        .ofpacts = ctx->action_set.data,
     };
 
     /* Allocate a unique recirc id for the given metadata state in the
@@ -5176,11 +5178,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             const struct ofpact *a;
 
             xlate_report_actions(&ctx, "- Restoring action set",
-                                 state->ofpacts, state->action_set_len);
+                                 state->action_set, state->action_set_len);
 
-            ofpbuf_put(&ctx.action_set, state->ofpacts, state->action_set_len);
+            ofpbuf_put(&ctx.action_set,
+                       state->action_set, state->action_set_len);
 
-            OFPACT_FOR_EACH(a, state->ofpacts, state->action_set_len) {
+            OFPACT_FOR_EACH (a, state->action_set, state->action_set_len) {
                 if (a->type == OFPACT_GROUP) {
                     ctx.action_set_has_group = true;
                     break;
@@ -5190,11 +5193,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Restore recirculation actions.  If there are no actions, processing
          * will start with a lookup in the table set above. */
-        if (state->ofpacts_len > state->action_set_len) {
-            xin->ofpacts_len = state->ofpacts_len - state->action_set_len;
-            xin->ofpacts = state->ofpacts +
-                state->action_set_len / sizeof *state->ofpacts;
-
+        xin->ofpacts = state->ofpacts;
+        xin->ofpacts_len = state->ofpacts_len;
+        if (state->ofpacts_len) {
             xlate_report_actions(&ctx, "- Restoring actions",
                                  xin->ofpacts, xin->ofpacts_len);
         }
