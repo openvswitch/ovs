@@ -3672,6 +3672,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
 
+    ofpbuf_clear(ofpacts);
     if (raw == OFPRAW_OFPT11_PACKET_OUT) {
         enum ofperr error;
         const struct ofp11_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
@@ -6265,6 +6266,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         ofpraw_pull_assert(msg);
     }
 
+    ofpbuf_clear(ofpacts);
     if (!msg->size) {
         return EOF;
     }
