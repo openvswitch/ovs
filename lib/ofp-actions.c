@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -5631,11 +5631,8 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
                                 enum ofpact_type outer_action)
 {
     const struct ofp_action_header *actions;
+    size_t orig_size = ofpacts->size;
     enum ofperr error;
-
-    if (!outer_action) {
-        ofpbuf_clear(ofpacts);
-    }
 
     if (actions_len % OFP_ACTION_ALIGN != 0) {
         VLOG_WARN_RL(&rl, "OpenFlow message actions length %u is not a "
@@ -5653,21 +5650,21 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
 
     error = ofpacts_decode(actions, actions_len, version, ofpacts);
     if (error) {
-        ofpbuf_clear(ofpacts);
+        ofpacts->size = orig_size;
         return error;
     }
 
     error = ofpacts_verify(ofpacts->data, ofpacts->size, allowed_ovsinsts,
                            outer_action);
     if (error) {
-        ofpbuf_clear(ofpacts);
+        ofpacts->size = orig_size;
     }
     return error;
 }
 
-/* Attempts to convert 'actions_len' bytes of OpenFlow actions from the
- * front of 'openflow' into ofpacts.  On success, replaces any existing content
- * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
+/* Attempts to convert 'actions_len' bytes of OpenFlow actions from the front
+ * of 'openflow' into ofpacts.  On success, appends the converted actions to
+ * 'ofpacts'; on failure, 'ofpacts' is unchanged (but might be reallocated) .
  * Returns 0 if successful, otherwise an OpenFlow error.
  *
  * Actions are processed according to their OpenFlow version which
@@ -6229,14 +6226,13 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
     const struct ofp11_instruction *insts[N_OVS_INSTRUCTIONS];
     enum ofperr error;
 
+    ofpbuf_clear(ofpacts);
     if (version == OFP10_VERSION) {
         return ofpacts_pull_openflow_actions__(openflow, instructions_len,
                                                version,
                                                (1u << N_OVS_INSTRUCTIONS) - 1,
                                                ofpacts, 0);
     }
-
-    ofpbuf_clear(ofpacts);
 
     if (instructions_len % OFP11_INSTRUCTION_ALIGN != 0) {
         VLOG_WARN_RL(&rl, "OpenFlow message instructions length %u is not a "
