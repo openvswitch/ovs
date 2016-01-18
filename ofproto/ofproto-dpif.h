@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -178,6 +178,8 @@ int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
                                    struct rule **rulep);
 int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
+
+const struct uuid *ofproto_dpif_get_uuid(const struct ofproto_dpif *);
 
 /* struct rule_dpif has struct rule as it's first member. */
 #define RULE_CAST(RULE) ((struct rule *)RULE)

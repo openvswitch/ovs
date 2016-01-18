@@ -506,6 +506,8 @@ static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port,
 
 static struct xbridge *xbridge_lookup(struct xlate_cfg *,
                                       const struct ofproto_dpif *);
+static struct xbridge *xbridge_lookup_by_uuid(struct xlate_cfg *,
+                                              const struct uuid *);
 static struct xbundle *xbundle_lookup(struct xlate_cfg *,
                                       const struct ofbundle *);
 static struct xport *xport_lookup(struct xlate_cfg *,
@@ -1227,6 +1229,19 @@ xbridge_lookup(struct xlate_cfg *xcfg, const struct ofproto_dpif *ofproto)
     HMAP_FOR_EACH_IN_BUCKET (xbridge, hmap_node, hash_pointer(ofproto, 0),
                              xbridges) {
         if (xbridge->ofproto == ofproto) {
+            return xbridge;
+        }
+    }
+    return NULL;
+}
+
+static struct xbridge *
+xbridge_lookup_by_uuid(struct xlate_cfg *xcfg, const struct uuid *uuid)
+{
+    struct xbridge *xbridge;
+
+    HMAP_FOR_EACH (xbridge, hmap_node, &xcfg->xbridges) {
+        if (uuid_equals(ofproto_dpif_get_uuid(xbridge->ofproto), uuid)) {
             return xbridge;
         }
     }
@@ -3624,7 +3639,7 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 
     struct recirc_state state = {
         .table_id = table,
-        .ofproto = ctx->xbridge->ofproto,
+        .ofproto_uuid = *ofproto_dpif_get_uuid(ctx->xbridge->ofproto),
         .metadata = md,
         .stack = ctx->stack.data,
         .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
@@ -5138,10 +5153,11 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         /* Set the bridge for post-recirculation processing if needed. */
-        if (ctx.xbridge->ofproto != state->ofproto) {
+        if (!uuid_equals(ofproto_dpif_get_uuid(ctx.xbridge->ofproto),
+                         &state->ofproto_uuid)) {
             struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
             const struct xbridge *new_bridge
-                = xbridge_lookup(xcfg, state->ofproto);
+                = xbridge_lookup_by_uuid(xcfg, &state->ofproto_uuid);
 
             if (OVS_UNLIKELY(!new_bridge)) {
                 /* Drop the packet if the bridge cannot be found. */

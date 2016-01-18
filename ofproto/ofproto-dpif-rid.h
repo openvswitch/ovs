@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "ofp-actions.h"
 #include "ofproto-dpif-mirror.h"
 #include "ovs-thread.h"
+#include "uuid.h"
 
 struct ofproto_dpif;
 struct rule;
@@ -135,7 +136,7 @@ struct recirc_state {
     uint8_t table_id;
 
     /* Pipeline context for post-recirculation processing. */
-    struct ofproto_dpif *ofproto; /* Post-recirculation bridge. */
+    struct uuid ofproto_uuid;     /* Post-recirculation bridge. */
     struct recirc_metadata metadata; /* Flow metadata. */
     union mf_subvalue *stack;     /* Stack if any. */
     size_t n_stack;

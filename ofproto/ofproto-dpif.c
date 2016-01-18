@@ -296,6 +296,10 @@ struct ofproto_dpif {
     struct ofproto up;
     struct dpif_backer *backer;
 
+    /* Unique identifier for this instantiation of this bridge in this running
+     * process.  */
+    struct uuid uuid;
+
     ATOMIC(cls_version_t) tables_version;  /* For classifier lookups. */
 
     uint64_t dump_seq; /* Last read of udpif_dump_seq(). */
@@ -1312,6 +1316,7 @@ construct(struct ofproto *ofproto_)
         return error;
     }
 
+    uuid_generate(&ofproto->uuid);
     atomic_init(&ofproto->tables_version, CLS_MIN_VERSION);
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
@@ -5711,6 +5716,12 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     }
 
     return 0;
+}
+
+const struct uuid *
+ofproto_dpif_get_uuid(const struct ofproto_dpif *ofproto)
+{
+    return &ofproto->uuid;
 }
 
 const struct ofproto_class ofproto_dpif_class = {

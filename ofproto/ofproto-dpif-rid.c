@@ -130,7 +130,7 @@ recirc_state_hash(const struct recirc_state *state)
 {
     uint32_t hash;
 
-    hash = hash_pointer(state->ofproto, 0);
+    hash = uuid_hash(&state->ofproto_uuid);
     hash = hash_int(state->table_id, hash);
     if (flow_tnl_dst_is_set(state->metadata.tunnel)) {
         /* We may leave remainder bytes unhashed, but that is unlikely as
@@ -164,7 +164,7 @@ recirc_state_equal(const struct recirc_state *a,
                       const struct recirc_state *b)
 {
     return (a->table_id == b->table_id
-            && a->ofproto == b->ofproto
+            && uuid_equals(&a->ofproto_uuid, &b->ofproto_uuid)
             && flow_tnl_equal(a->metadata.tunnel, b->metadata.tunnel)
             && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
                        sizeof a->metadata - sizeof a->metadata.tunnel)
@@ -304,7 +304,7 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
     tunnel.ipv6_dst = in6addr_any;
     struct recirc_state state = {
         .table_id = TBL_INTERNAL,
-        .ofproto = ofproto,
+        .ofproto_uuid = *ofproto_dpif_get_uuid(ofproto),
         .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
     return recirc_alloc_id__(&state, recirc_state_hash(&state))->id;
@@ -357,8 +357,9 @@ recirc_free_ofproto(struct ofproto_dpif *ofproto, const char *ofproto_name)
 {
     struct recirc_id_node *n;
 
+    const struct uuid *ofproto_uuid = ofproto_dpif_get_uuid(ofproto);
     CMAP_FOR_EACH (n, metadata_node, &metadata_map) {
-        if (n->state.ofproto == ofproto) {
+        if (uuid_equals(&n->state.ofproto_uuid, ofproto_uuid)) {
             VLOG_ERR("recirc_id %"PRIu32
                      " left allocated when ofproto (%s)"
                      " is destructed", n->id, ofproto_name);
