@@ -354,12 +354,9 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
         return;
     }
 
-    switch (type) {
-    case OFPTYPE_ECHO_REQUEST:
+    if (type == OFPTYPE_ECHO_REQUEST) {
         process_echo_request(sw, msg->data);
-        break;
-
-    case OFPTYPE_FEATURES_REPLY:
+    } else if (type == OFPTYPE_FEATURES_REPLY) {
         if (sw->state == S_FEATURES_REPLY) {
             if (!process_switch_features(sw, msg->data)) {
                 sw->state = S_SWITCHING;
@@ -367,93 +364,15 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
                 rconn_disconnect(sw->rconn);
             }
         }
-        break;
-
-    case OFPTYPE_PACKET_IN:
+    } else if (type == OFPTYPE_PACKET_IN) {
         process_packet_in(sw, msg->data);
-        break;
-
-    case OFPTYPE_FLOW_REMOVED:
+    } else if (type == OFPTYPE_FLOW_REMOVED) {
         /* Nothing to do. */
-        break;
-
-    case OFPTYPE_HELLO:
-    case OFPTYPE_ERROR:
-    case OFPTYPE_ECHO_REPLY:
-    case OFPTYPE_FEATURES_REQUEST:
-    case OFPTYPE_GET_CONFIG_REQUEST:
-    case OFPTYPE_GET_CONFIG_REPLY:
-    case OFPTYPE_SET_CONFIG:
-    case OFPTYPE_PORT_STATUS:
-    case OFPTYPE_PACKET_OUT:
-    case OFPTYPE_FLOW_MOD:
-    case OFPTYPE_GROUP_MOD:
-    case OFPTYPE_PORT_MOD:
-    case OFPTYPE_TABLE_MOD:
-    case OFPTYPE_BARRIER_REQUEST:
-    case OFPTYPE_BARRIER_REPLY:
-    case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
-    case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
-    case OFPTYPE_DESC_STATS_REQUEST:
-    case OFPTYPE_DESC_STATS_REPLY:
-    case OFPTYPE_FLOW_STATS_REQUEST:
-    case OFPTYPE_FLOW_STATS_REPLY:
-    case OFPTYPE_AGGREGATE_STATS_REQUEST:
-    case OFPTYPE_AGGREGATE_STATS_REPLY:
-    case OFPTYPE_TABLE_STATS_REQUEST:
-    case OFPTYPE_TABLE_STATS_REPLY:
-    case OFPTYPE_PORT_STATS_REQUEST:
-    case OFPTYPE_PORT_STATS_REPLY:
-    case OFPTYPE_QUEUE_STATS_REQUEST:
-    case OFPTYPE_QUEUE_STATS_REPLY:
-    case OFPTYPE_PORT_DESC_STATS_REQUEST:
-    case OFPTYPE_PORT_DESC_STATS_REPLY:
-    case OFPTYPE_ROLE_REQUEST:
-    case OFPTYPE_ROLE_REPLY:
-    case OFPTYPE_ROLE_STATUS:
-    case OFPTYPE_REQUESTFORWARD:
-    case OFPTYPE_SET_FLOW_FORMAT:
-    case OFPTYPE_FLOW_MOD_TABLE_ID:
-    case OFPTYPE_SET_PACKET_IN_FORMAT:
-    case OFPTYPE_FLOW_AGE:
-    case OFPTYPE_SET_CONTROLLER_ID:
-    case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
-    case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
-    case OFPTYPE_FLOW_MONITOR_CANCEL:
-    case OFPTYPE_FLOW_MONITOR_PAUSED:
-    case OFPTYPE_FLOW_MONITOR_RESUMED:
-    case OFPTYPE_GET_ASYNC_REQUEST:
-    case OFPTYPE_GET_ASYNC_REPLY:
-    case OFPTYPE_SET_ASYNC_CONFIG:
-    case OFPTYPE_METER_MOD:
-    case OFPTYPE_GROUP_STATS_REQUEST:
-    case OFPTYPE_GROUP_STATS_REPLY:
-    case OFPTYPE_GROUP_DESC_STATS_REQUEST:
-    case OFPTYPE_GROUP_DESC_STATS_REPLY:
-    case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
-    case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
-    case OFPTYPE_METER_STATS_REQUEST:
-    case OFPTYPE_METER_STATS_REPLY:
-    case OFPTYPE_METER_CONFIG_STATS_REQUEST:
-    case OFPTYPE_METER_CONFIG_STATS_REPLY:
-    case OFPTYPE_METER_FEATURES_STATS_REQUEST:
-    case OFPTYPE_METER_FEATURES_STATS_REPLY:
-    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
-    case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
-    case OFPTYPE_TABLE_DESC_REQUEST:
-    case OFPTYPE_TABLE_DESC_REPLY:
-    case OFPTYPE_BUNDLE_CONTROL:
-    case OFPTYPE_BUNDLE_ADD_MESSAGE:
-    case OFPTYPE_NXT_TLV_TABLE_MOD:
-    case OFPTYPE_NXT_TLV_TABLE_REQUEST:
-    case OFPTYPE_NXT_TLV_TABLE_REPLY:
-    default:
-        if (VLOG_IS_DBG_ENABLED()) {
-            char *s = ofp_to_string(msg->data, msg->size, 2);
-            VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
-                        sw->datapath_id, s);
-            free(s);
-        }
+    } else if (VLOG_IS_DBG_ENABLED()) {
+        char *s = ofp_to_string(msg->data, msg->size, 2);
+        VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
+                    sw->datapath_id, s);
+        free(s);
     }
 }
 
