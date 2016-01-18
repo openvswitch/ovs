@@ -146,10 +146,10 @@ struct recirc_state {
     bool conntracked;             /* Conntrack occurred prior to recirc. */
 
     /* Actions to be translated on recirculation. */
-    uint32_t action_set_len;      /* How much of 'ofpacts' consists of an
-                                   * action set? */
-    uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */
-    struct ofpact *ofpacts;       /* Sequence of "struct ofpacts". */
+    struct ofpact *ofpacts;
+    size_t ofpacts_len;           /* Size of 'ofpacts', in bytes. */
+    struct ofpact *action_set;
+    size_t action_set_len;        /* Size of 'action_set', in bytes. */
 };
 
 /* This maps a recirculation ID to saved state that flow translation can
