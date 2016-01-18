@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -630,6 +630,18 @@ oxm_pull_match_loose(struct ofpbuf *b, struct match *match)
     return oxm_pull_match__(b, false, match);
 }
 
+/* Parses the OXM match description in the 'oxm_len' bytes in 'oxm'.  Stores
+ * the result in 'match'.
+ *
+ * Fails with an error when encountering unknown OXM headers.
+ *
+ * Returns 0 if successful, otherwise an OpenFlow error code. */
+enum ofperr
+oxm_decode_match(const void *oxm, size_t oxm_len, struct match *match)
+{
+    return nx_pull_raw(oxm, oxm_len, true, match, NULL, NULL);
+}
+
 /* Verify an array of OXM TLVs treating value of each TLV as a mask,
  * disallowing masks in each TLV and ignoring pre-requisites. */
 enum ofperr
@@ -1099,7 +1111,7 @@ nx_put_match(struct ofpbuf *b, const struct match *match,
 }
 
 /* Appends to 'b' an struct ofp11_match_header followed by the OXM format that
- * expresses 'cr', plus enough zero bytes to pad the data appended out to a
+ * expresses 'match', plus enough zero bytes to pad the data appended out to a
  * multiple of 8.
  *
  * OXM differs slightly among versions of OpenFlow.  Specify the OpenFlow
@@ -1128,6 +1140,20 @@ oxm_put_match(struct ofpbuf *b, const struct match *match,
     omh->length = htons(match_len);
 
     return match_len;
+}
+
+/* Appends to 'b' the OXM formats that expresses 'match', without header or
+ * padding.
+ *
+ * OXM differs slightly among versions of OpenFlow.  Specify the OpenFlow
+ * version in use as 'version'.
+ *
+ * This function can cause 'b''s data to be reallocated. */
+void
+oxm_put_raw(struct ofpbuf *b, const struct match *match,
+            enum ofp_version version)
+{
+    nx_put_raw(b, version, match, 0, 0);
 }
 
 /* Appends to 'b' the nx_match format that expresses the tlv corresponding
