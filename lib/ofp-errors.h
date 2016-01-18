@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -590,37 +590,46 @@ enum ofperr {
 /* ## OFPET_BAD_PROPERTY ## */
 /* ## ------------------ ## */
 
-    /* OF1.3(13,2), OF1.4+(14,0).  Unknown property type.
+    /* NX1.0-1.1(13,2), NX1.2(25), OF1.3(13,2), OF1.4+(14,0).  Unknown property
+     * type.
      *
      * [Known as OFPTFFC_BAD_TYPE in OF1.3.] */
     OFPERR_OFPBPC_BAD_TYPE,
 
-    /* OF1.3(13,3), OF1.4+(14,1).  Length problem in property.
+    /* NX1.0-1.1(13,3), NX1.2(26), OF1.3(13,3), OF1.4+(14,1).  Length problem
+     * in property.
      *
      * [Known as OFPTFFC_BAD_LEN in OF1.3.] */
     OFPERR_OFPBPC_BAD_LEN,
 
-    /* OF1.3(13,4), OF1.4+(14,2).  Unsupported property value.
+    /* NX1.0-1.1(13,4), NX1.2(27), OF1.3(13,4), OF1.4+(14,2).  Unsupported
+     * property value.
      *
      * [Known as OFPTFFC_BAD_ARGUMENT in OF1.3.] */
     OFPERR_OFPBPC_BAD_VALUE,
 
-    /* ONF1.3(4443), OF1.4+(14,3).  Can't handle this many properties. */
+    /* NX1.0-1.1(14,3), NX1.2(28), ONF1.3(4443), OF1.4+(14,3).  Can't handle
+     * this many properties. */
     OFPERR_OFPBPC_TOO_MANY,
 
-    /* ONF1.3(4444), OF1.4+(14,4).  A property type was duplicated. */
+    /* NX1.0-1.1(14,4), NX1.2(29), ONF1.3(4444), OF1.4+(14,4).  A property type
+     * was duplicated. */
     OFPERR_OFPBPC_DUP_TYPE,
 
-    /* ONF1.3(4445), OF1.4+(14,5).  Unknown experimenter id specified. */
+    /* NX1.0-1.1(14,5), NX1.2(30), ONF1.3(4445), OF1.4+(14,5).  Unknown
+     * experimenter id specified. */
     OFPERR_OFPBPC_BAD_EXPERIMENTER,
 
-    /* ONF1.3(4446), OF1.4+(14,6).  Unknown exp_type for experimenter id. */
+    /* NX1.0-1.1(14,6), NX1.2(31), ONF1.3(4446), OF1.4+(14,6).  Unknown
+     * exp_type for experimenter id. */
     OFPERR_OFPBPC_BAD_EXP_TYPE,
 
-    /* ONF1.3(4447), OF1.4+(14,7).  Unknown value for experimenter id. */
+    /* NX1.0-1.1(14,7), NX1.2(32), ONF1.3(4447), OF1.4+(14,7).  Unknown value
+     * for experimenter id. */
     OFPERR_OFPBPC_BAD_EXP_VALUE,
 
-    /* ONF1.3(4448), OF1.4+(14,8).  Permissions error. */
+    /* NX1.0-1.1(14,8), NX1.2(33), ONF1.3(4448), OF1.4+(14,8).  Permissions
+     * error. */
     OFPERR_OFPBPC_EPERM,
 
 /* ## -------------------------- ## */
