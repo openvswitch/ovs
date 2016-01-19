@@ -2130,9 +2130,12 @@ ofp_print_nxt_set_async_config(struct ds *string,
         }
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
-        struct ofputil_async_cfg ac = OFPUTIL_ASYNC_CFG_INIT;
+        struct ofputil_async_cfg basis = OFPUTIL_ASYNC_CFG_INIT;
+        struct ofputil_async_cfg ac;
+
         bool is_reply = raw == OFPRAW_OFPT14_GET_ASYNC_REPLY;
-        enum ofperr error = ofputil_decode_set_async_config(oh, is_reply, &ac);
+        enum ofperr error = ofputil_decode_set_async_config(oh, is_reply,
+                                                            &basis, &ac);
         if (error) {
             ofp_print_error(string, error);
             return;

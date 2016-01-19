@@ -1317,6 +1317,7 @@ struct ofputil_async_cfg {
 
 enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
                                             bool loose,
+                                            const struct ofputil_async_cfg *,
                                             struct ofputil_async_cfg *);
 
 struct ofpbuf *ofputil_encode_get_async_config(
