@@ -97,6 +97,8 @@ To use Open vSwitch...
 
 - ...without using a kernel module, read [INSTALL.userspace.md].
 
+- ...with SELinux, read [INSTALL.SELinux.md].
+
 For answers to common questions, read [FAQ.md].
 
 To learn how to set up SSL support for Open vSwitch, read [INSTALL.SSL.md].
