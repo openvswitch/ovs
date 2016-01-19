@@ -208,12 +208,12 @@ enum ofpraw {
 
     /* OFPT 1.0 (20): struct ofp10_queue_get_config_request. */
     OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST,
-    /* OFPT 1.1+ (22): struct ofp11_queue_get_config_request. */
+    /* OFPT 1.1-1.3 (22): struct ofp11_queue_get_config_request. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
 
     /* OFPT 1.0 (21): struct ofp10_queue_get_config_reply, uint8_t[8][]. */
     OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY,
-    /* OFPT 1.1+ (23): struct ofp11_queue_get_config_reply, uint8_t[8][]. */
+    /* OFPT 1.1-1.3 (23): struct ofp11_queue_get_config_reply, uint8_t[8][]. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
 
     /* OFPT 1.2+ (24): struct ofp12_role_request. */
@@ -396,6 +396,11 @@ enum ofpraw {
     /* OFPST 1.4+ (13): uint8_t[8][]. */
     OFPRAW_OFPST14_PORT_DESC_REPLY,
 
+    /* OFPST 1.4+ (15): struct ofp14_queue_desc_request. */
+    OFPRAW_OFPST14_QUEUE_DESC_REQUEST,
+    /* OFPST 1.4+ (15): uint8_t[8][]. */
+    OFPRAW_OFPST14_QUEUE_DESC_REPLY,
+
     /* OFPST 1.4+ (16): uint8_t[8][]. */
     OFPRAW_OFPST14_FLOW_MONITOR_REQUEST,
     /* NXST 1.0 (2): uint8_t[8][]. */
@@ -537,9 +542,11 @@ enum ofptype {
 
     /* Queue Configuration messages. */
     OFPTYPE_QUEUE_GET_CONFIG_REQUEST, /* OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST.
-                                       * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST. */
+                                       * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST.
+                                       * OFPRAW_OFPST14_QUEUE_DESC_REQUEST. */
     OFPTYPE_QUEUE_GET_CONFIG_REPLY, /* OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY.
-                                     * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY. */
+                                     * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY.
+                                     * OFPRAW_OFPST14_QUEUE_DESC_REPLY. */
 
     /* Controller role change request messages. */
     OFPTYPE_ROLE_REQUEST,         /* OFPRAW_OFPT12_ROLE_REQUEST.

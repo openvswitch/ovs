@@ -986,14 +986,16 @@ int ofputil_decode_table_stats_reply(struct ofpbuf *reply,
 
 /* Queue configuration request. */
 struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,
-                                                       ofp_port_t port);
+                                                       ofp_port_t port,
+                                                       uint32_t queue);
 enum ofperr ofputil_decode_queue_get_config_request(const struct ofp_header *,
-                                                    ofp_port_t *port);
+                                                    ofp_port_t *port,
+                                                    uint32_t *queue);
 
 /* Queue configuration reply. */
 struct ofputil_queue_config {
     ofp_port_t port;
-    uint32_t queue_id;
+    uint32_t queue;
 
     /* Each of these optional values is expressed in tenths of a percent.
      * Values greater than 1000 indicate that the feature is disabled.
@@ -1002,13 +1004,11 @@ struct ofputil_queue_config {
     uint16_t max_rate;
 };
 
-struct ofpbuf *ofputil_encode_queue_get_config_reply(
-    const struct ofp_header *request);
+void ofputil_start_queue_get_config_reply(const struct ofp_header *request,
+                                          struct ovs_list *replies);
 void ofputil_append_queue_get_config_reply(
-    struct ofpbuf *reply, const struct ofputil_queue_config *);
+    const struct ofputil_queue_config *, struct ovs_list *replies);
 
-enum ofperr ofputil_decode_queue_get_config_reply(struct ofpbuf *reply,
-                                                  ofp_port_t *);
 int ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
                                         struct ofputil_queue_config *);
 

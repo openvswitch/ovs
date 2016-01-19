@@ -253,14 +253,14 @@ AT_CLEANUP
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.1)])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [2])
-AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
+AT_CHECK([ovs-ofctl -O OpenFlow11 queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
-OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.1): port=1
 queue 0:
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10], [0],
-  [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
-OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2) (xid=0x2): port=10
+AT_CHECK([ovs-ofctl -O OpenFlow11 queue-get-config br0 10 | STRIP_XIDS], [0],
+  [OFPT_ERROR (OF1.1): OFPQOFC_BAD_PORT
+OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.1): port=10
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -280,9 +280,39 @@ queue 0:
 queue 0:
 queue 0:
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10], [0],
-  [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
-OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2) (xid=0x2): port=10
+AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10 | STRIP_XIDS], [0],
+  [OFPT_ERROR (OF1.2): OFPQOFC_BAD_PORT
+OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2): port=10
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - queue configuration - (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 any | STRIP_XIDS], [0],
+  [OFPST_QUEUE_DESC reply (OF1.4): port=1
+queue 0:
+port=LOCAL
+queue 0:
+port=2
+queue 0:
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 1 | STRIP_XIDS], [0],
+  [OFPST_QUEUE_DESC reply (OF1.4): port=1
+queue 0:
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 10 | STRIP_XIDS], [0],
+  [OFPT_ERROR (OF1.4): OFPQOFC_BAD_PORT
+OFPST_QUEUE_DESC request (OF1.4): port=10
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 1 2 | STRIP_XIDS], [0],
+  [OFPT_ERROR (OF1.4): OFPQOFC_BAD_QUEUE
+OFPST_QUEUE_DESC request (OF1.4): port=1 queue=2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

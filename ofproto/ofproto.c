@@ -6227,57 +6227,89 @@ handle_group_features_stats_request(struct ofconn *ofconn,
 }
 
 static void
-put_queue_config(struct ofport *ofport, struct ofpbuf *reply)
+put_queue_get_config_reply(struct ofport *port, uint32_t queue,
+                           struct ovs_list *replies)
 {
-   struct netdev_queue_dump queue_dump;
-   unsigned int queue_id;
-   struct smap details;
+    struct ofputil_queue_config qc;
 
-   smap_init(&details);
-   NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump, ofport->netdev) {
-       struct ofputil_queue_config queue;
+    /* None of the existing queues have compatible properties, so we hard-code
+     * omitting min_rate and max_rate. */
+    qc.port = port->ofp_port;
+    qc.queue = queue;
+    qc.min_rate = UINT16_MAX;
+    qc.max_rate = UINT16_MAX;
+    ofputil_append_queue_get_config_reply(&qc, replies);
+}
 
-       /* None of the existing queues have compatible properties, so we
-        * hard-code omitting min_rate and max_rate. */
-       queue.port = ofport->ofp_port;
-       queue.queue_id = queue_id;
-       queue.min_rate = UINT16_MAX;
-       queue.max_rate = UINT16_MAX;
-       ofputil_append_queue_get_config_reply(reply, &queue);
-   }
-   smap_destroy(&details);
+static int
+handle_queue_get_config_request_for_port(struct ofport *port, uint32_t queue,
+                                         struct ovs_list *replies)
+{
+    struct smap details = SMAP_INITIALIZER(&details);
+    if (queue != OFPQ_ALL) {
+        int error = netdev_get_queue(port->netdev, queue, &details);
+        switch (error) {
+        case 0:
+            put_queue_get_config_reply(port, queue, replies);
+            break;
+        case EOPNOTSUPP:
+        case EINVAL:
+            return OFPERR_OFPQOFC_BAD_QUEUE;
+        default:
+            return OFPERR_NXQOFC_QUEUE_ERROR;
+        }
+    } else {
+        struct netdev_queue_dump queue_dump;
+        uint32_t queue_id;
+
+        NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump,
+                               port->netdev) {
+            put_queue_get_config_reply(port, queue_id, replies);
+        }
+    }
+    smap_destroy(&details);
+    return 0;
 }
 
 static enum ofperr
 handle_queue_get_config_request(struct ofconn *ofconn,
                                 const struct ofp_header *oh)
 {
-   struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-   ofp_port_t port;
-   enum ofperr error;
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ovs_list replies;
+    struct ofport *port;
+    ofp_port_t req_port;
+    uint32_t req_queue;
+    enum ofperr error;
 
-   error = ofputil_decode_queue_get_config_request(oh, &port);
-   if (error) {
-       return error;
-   }
+    error = ofputil_decode_queue_get_config_request(oh, &req_port, &req_queue);
+    if (error) {
+        return error;
+    }
 
-   struct ofpbuf *reply = ofputil_encode_queue_get_config_reply(oh);
-   struct ofport *ofport;
-   if (port == OFPP_ANY) {
-       HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
-           put_queue_config(ofport, reply);
-       }
-   } else {
-       ofport = ofproto_get_port(ofproto, port);
-       if (!ofport) {
-           ofpbuf_delete(reply);
-           return OFPERR_OFPQOFC_BAD_PORT;
-       }
-       put_queue_config(ofport, reply);
-   }
-   ofconn_send_reply(ofconn, reply);
+    ofputil_start_queue_get_config_reply(oh, &replies);
+    if (req_port == OFPP_ANY) {
+        error = OFPERR_OFPQOFC_BAD_QUEUE;
+        HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
+            if (!handle_queue_get_config_request_for_port(port, req_queue,
+                                                          &replies)) {
+                error = 0;
+            }
+        }
+    } else {
+        port = ofproto_get_port(ofproto, req_port);
+        error = (port
+                 ? handle_queue_get_config_request_for_port(port, req_queue,
+                                                            &replies)
+                 : OFPERR_OFPQOFC_BAD_PORT);
+    }
+    if (!error) {
+        ofconn_send_replies(ofconn, &replies);
+    } else {
+        ofpbuf_list_delete(&replies);
+    }
 
-   return 0;
+    return error;
 }
 
 static enum ofperr

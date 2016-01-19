@@ -1232,12 +1232,14 @@ static void
 ofctl_queue_get_config(struct ovs_cmdl_context *ctx)
 {
     const char *vconn_name = ctx->argv[1];
-    const char *port_name = ctx->argc >= 3 ? ctx->argv[2] : NULL;
-    ofp_port_t port = (port_name
-                       ? str_to_port_no(vconn_name, port_name)
-                       : OFPP_ANY);
-
+    const char *port_name = ctx->argc > 2 ? ctx->argv[2] : "any";
+    ofp_port_t port = str_to_port_no(vconn_name, port_name);
+    const char *queue_name = ctx->argc > 3 ? ctx->argv[3] : "all";
+    uint32_t queue = (!strcasecmp(queue_name, "all")
+                      ? OFPQ_ALL
+                      : atoi(queue_name));
     struct vconn *vconn;
+
     enum ofputil_protocol protocol = open_vconn(vconn_name, &vconn);
     enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
     if (port == OFPP_ANY && version == OFP10_VERSION) {
@@ -1257,14 +1259,14 @@ ofctl_queue_get_config(struct ovs_cmdl_context *ctx)
             if (ofp_to_u16(pp.port_no) < ofp_to_u16(OFPP_MAX)) {
                 dump_transaction(vconn2,
                                  ofputil_encode_queue_get_config_request(
-                                     version2, pp.port_no));
+                                     version2, pp.port_no, queue));
             }
         }
         port_iterator_destroy(&pi);
         vconn_close(vconn2);
     } else {
         dump_transaction(vconn, ofputil_encode_queue_get_config_request(
-                             version, port));
+                             version, port, queue));
     }
     vconn_close(vconn);
 }
@@ -3883,8 +3885,8 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_dump_aggregate },
     { "queue-stats", "switch [port [queue]]",
       1, 3, ofctl_queue_stats },
-    { "queue-get-config", "switch [port]",
-      1, 2, ofctl_queue_get_config },
+    { "queue-get-config", "switch [port [queue]]",
+      1, 3, ofctl_queue_get_config },
     { "add-flow", "switch flow",
       2, 2, ofctl_add_flow },
     { "add-flows", "switch file",

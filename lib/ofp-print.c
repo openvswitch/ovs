@@ -1086,8 +1086,9 @@ ofp_print_queue_get_config_request(struct ds *string,
 {
     enum ofperr error;
     ofp_port_t port;
+    uint32_t queue;
 
-    error = ofputil_decode_queue_get_config_request(oh, &port);
+    error = ofputil_decode_queue_get_config_request(oh, &port, &queue);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1095,6 +1096,11 @@ ofp_print_queue_get_config_request(struct ds *string,
 
     ds_put_cstr(string, " port=");
     ofputil_format_port(port, string);
+
+    if (queue != OFPQ_ALL) {
+        ds_put_cstr(string, " queue=");
+        ofp_print_queue_name(string, queue);
+    }
 }
 
 static void
@@ -1111,21 +1117,12 @@ static void
 ofp_print_queue_get_config_reply(struct ds *string,
                                  const struct ofp_header *oh)
 {
-    enum ofperr error;
     struct ofpbuf b;
-    ofp_port_t port;
+    ofp_port_t port = 0;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofputil_decode_queue_get_config_reply(&b, &port);
-    if (error) {
-        ofp_print_error(string, error);
-        return;
-    }
 
-    ds_put_cstr(string, " port=");
-    ofputil_format_port(port, string);
-    ds_put_char(string, '\n');
-
+    ds_put_char(string, ' ');
     for (;;) {
         struct ofputil_queue_config queue;
         int retval;
@@ -1135,10 +1132,19 @@ ofp_print_queue_get_config_reply(struct ds *string,
             if (retval != EOF) {
                 ofp_print_error(string, retval);
             }
+            ds_chomp(string, ' ');
             break;
         }
 
-        ds_put_format(string, "queue %"PRIu32":", queue.queue_id);
+        if (queue.port != port) {
+            port = queue.port;
+
+            ds_put_cstr(string, "port=");
+            ofputil_format_port(port, string);
+            ds_put_char(string, '\n');
+        }
+
+        ds_put_format(string, "queue %"PRIu32":", queue.queue);
         print_queue_rate(string, "min_rate", queue.min_rate);
         print_queue_rate(string, "max_rate", queue.max_rate);
         ds_put_char(string, '\n');
