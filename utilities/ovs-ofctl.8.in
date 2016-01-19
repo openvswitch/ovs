@@ -244,12 +244,12 @@ statistics are printed for all queues on \fIport\fR; if only
 \fIport\fR is omitted, then statistics are printed for \fIqueue\fR on
 every port where it exists.
 .
-.IP "\fBqueue\-get\-config \fIswitch \fR[\fIport\fR]"
-Prints to the console information about all of the queues configured
-on \fIport\fR within \fIswitch\fR.  If \fIport\fR is \fBANY\fR or if
-it is omitted, prints information about queues on every port.  The
-OpenFlow specification says that only physical ports have queues; in
-particular, \fBLOCAL\fR is not valid for \fIport\fR.
+.IP "\fBqueue\-get\-config \fIswitch [\fIport \fR[\fIqueue\fR]]"
+Prints to the console the configuration of \fIqueue\fR on \fIport\fR
+in \fIswitch\fR.  If \fIport\fR is omitted or \fBANY\fR, reports
+queues for all port.  If \fIqueue\fR is omitted or \fBANY\fR, reports
+all queues.  For OpenFlow 1.3 and earlier, the output always includes
+all queues, ignoring \fIqueue\fR if specified.
 .IP
 This command has limited usefulness, because ports often have no
 configured queues and because the OpenFlow protocol provides only very

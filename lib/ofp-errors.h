@@ -504,6 +504,9 @@ enum ofperr {
     /* OF1.0(5,2), OF1.1+(9,2).  Permissions error. */
     OFPERR_OFPQOFC_EPERM,
 
+    /* NX1.4+(23).  System error retrieving queue details. */
+    OFPERR_NXQOFC_QUEUE_ERROR,
+
 /* ## -------------------------- ## */
 /* ## OFPET_SWITCH_CONFIG_FAILED ## */
 /* ## -------------------------- ## */

@@ -219,6 +219,31 @@ struct ofp14_queue_stats {
 OFP_ASSERT(sizeof(struct ofp14_queue_stats) == 48);
 
 
+/* ## ---------------- ## */
+/* ## ofp14_queue_desc ## */
+/* ## ---------------- ## */
+
+struct ofp14_queue_desc_request {
+    ovs_be32 port;              /* All ports if OFPP_ANY. */
+    ovs_be32 queue;             /* All queues if OFPQ_ALL. */
+};
+OFP_ASSERT(sizeof(struct ofp14_queue_desc_request) == 8);
+
+/* Body of reply to OFPMP_QUEUE_DESC request. */
+struct ofp14_queue_desc {
+    ovs_be32 port_no;           /* Port this queue is attached to. */
+    ovs_be32 queue_id;          /* ID for the specific queue. */
+    ovs_be16 len;               /* Length in bytes of this queue desc. */
+    uint8_t pad[6];             /* 64-bit alignment. */
+};
+OFP_ASSERT(sizeof(struct ofp14_queue_desc) == 16);
+
+enum ofp14_queue_desc_prop_type {
+    OFPQDPT14_MIN_RATE = 1,
+    OFPQDPT14_MAX_RATE = 2,
+    OFPQDPT14_EXPERIMENTER = 0xffff
+};
+
 /* ## -------------- ## */
 /* ## Miscellaneous. ## */
 /* ## -------------- ## */

@@ -2343,10 +2343,14 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
 }
 
 /* Constructs and returns an OFPT_QUEUE_GET_CONFIG request for the specified
- * 'port', suitable for OpenFlow version 'version'. */
+ * 'port' and 'queue', suitable for OpenFlow version 'version'.
+ *
+ * 'queue' is honored only for OpenFlow 1.4 and later; older versions always
+ * request all queues. */
 struct ofpbuf *
 ofputil_encode_queue_get_config_request(enum ofp_version version,
-                                        ofp_port_t port)
+                                        ofp_port_t port,
+                                        uint32_t queue)
 {
     struct ofpbuf *request;
 
@@ -2357,13 +2361,21 @@ ofputil_encode_queue_get_config_request(enum ofp_version version,
                                version, 0);
         qgcr10 = ofpbuf_put_zeros(request, sizeof *qgcr10);
         qgcr10->port = htons(ofp_to_u16(port));
-    } else {
+    } else if (version < OFP14_VERSION) {
         struct ofp11_queue_get_config_request *qgcr11;
 
         request = ofpraw_alloc(OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
                                version, 0);
         qgcr11 = ofpbuf_put_zeros(request, sizeof *qgcr11);
         qgcr11->port = ofputil_port_to_ofp11(port);
+    } else {
+        struct ofp14_queue_desc_request *qdr14;
+
+        request = ofpraw_alloc(OFPRAW_OFPST14_QUEUE_DESC_REQUEST,
+                               version, 0);
+        qdr14 = ofpbuf_put_zeros(request, sizeof *qdr14);
+        qdr14->port = ofputil_port_to_ofp11(port);
+        qdr14->queue = htonl(queue);
     }
 
     return request;
@@ -2374,10 +2386,11 @@ ofputil_encode_queue_get_config_request(enum ofp_version version,
  * code. */
 enum ofperr
 ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
-                                        ofp_port_t *port)
+                                        ofp_port_t *port, uint32_t *queue)
 {
     const struct ofp10_queue_get_config_request *qgcr10;
     const struct ofp11_queue_get_config_request *qgcr11;
+    const struct ofp14_queue_desc_request *qdr14;
     enum ofpraw raw;
     struct ofpbuf b;
 
@@ -2388,15 +2401,22 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
         qgcr10 = b.data;
         *port = u16_to_ofp(ntohs(qgcr10->port));
+        *queue = OFPQ_ALL;
         break;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
         qgcr11 = b.data;
+        *queue = OFPQ_ALL;
         enum ofperr error = ofputil_port_from_ofp11(qgcr11->port, port);
         if (error || *port == OFPP_ANY) {
             return error;
         }
         break;
+
+    case OFPRAW_OFPST14_QUEUE_DESC_REQUEST:
+        qdr14 = b.data;
+        *queue = ntohl(qdr14->queue);
+        return ofputil_port_from_ofp11(qdr14->port, port);
 
     default:
         OVS_NOT_REACHED();
@@ -2408,45 +2428,49 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
 }
 
 /* Constructs and returns the beginning of a reply to
- * OFPT_QUEUE_GET_CONFIG_REQUEST 'oh'.  The caller may append information about
- * individual queues with ofputil_append_queue_get_config_reply(). */
-struct ofpbuf *
-ofputil_encode_queue_get_config_reply(const struct ofp_header *oh)
+ * OFPT_QUEUE_GET_CONFIG_REQUEST or OFPMP_QUEUE_DESC request 'oh'.  The caller
+ * may append information about individual queues with
+ * ofputil_append_queue_get_config_reply(). */
+void
+ofputil_start_queue_get_config_reply(const struct ofp_header *request,
+                                     struct ovs_list *replies)
 {
-    struct ofp10_queue_get_config_reply *qgcr10;
-    struct ofp11_queue_get_config_reply *qgcr11;
     struct ofpbuf *reply;
     enum ofperr error;
-    struct ofpbuf b;
-    enum ofpraw raw;
     ofp_port_t port;
+    uint32_t queue;
 
-    error = ofputil_decode_queue_get_config_request(oh, &port);
+    error = ofputil_decode_queue_get_config_request(request, &port, &queue);
     ovs_assert(!error);
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
-
+    enum ofpraw raw = ofpraw_decode_assert(request);
     switch ((int) raw) {
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
         reply = ofpraw_alloc_reply(OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY,
-                                   oh, 0);
-        qgcr10 = ofpbuf_put_zeros(reply, sizeof *qgcr10);
+                                   request, 0);
+        struct ofp10_queue_get_config_reply *qgcr10
+            = ofpbuf_put_zeros(reply, sizeof *qgcr10);
         qgcr10->port = htons(ofp_to_u16(port));
         break;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
         reply = ofpraw_alloc_reply(OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
-                                   oh, 0);
-        qgcr11 = ofpbuf_put_zeros(reply, sizeof *qgcr11);
+                                   request, 0);
+        struct ofp11_queue_get_config_reply *qgcr11
+            = ofpbuf_put_zeros(reply, sizeof *qgcr11);
         qgcr11->port = ofputil_port_to_ofp11(port);
+        break;
+
+    case OFPRAW_OFPST14_QUEUE_DESC_REQUEST:
+        reply = ofpraw_alloc_stats_reply(request, 0);
         break;
 
     default:
         OVS_NOT_REACHED();
     }
 
-    return reply;
+    list_init(replies);
+    list_push_back(replies, &reply->list_node);
 }
 
 static void
@@ -2463,64 +2487,58 @@ put_ofp10_queue_rate(struct ofpbuf *reply,
     }
 }
 
-/* Appends a queue description for 'queue_id' to the
- * OFPT_QUEUE_GET_CONFIG_REPLY already in 'oh'. */
-void
-ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
-                                      const struct ofputil_queue_config *oqc)
+static void
+put_ofp14_queue_rate(struct ofpbuf *reply,
+                     enum ofp14_queue_desc_prop_type type, uint16_t rate)
 {
-    const struct ofp_header *oh = reply->data;
-    size_t start_ofs, len_ofs;
+    if (rate != UINT16_MAX) {
+        ofpprop_put_u16(reply, type, rate);
+    }
+}
+
+void
+ofputil_append_queue_get_config_reply(const struct ofputil_queue_config *qc,
+                                      struct ovs_list *replies)
+{
+    enum ofp_version ofp_version = ofpmp_version(replies);
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    size_t start_ofs = reply->size;
+    size_t len_ofs;
     ovs_be16 *len;
 
-    start_ofs = reply->size;
-    if (oh->version < OFP12_VERSION) {
-        struct ofp10_packet_queue *opq10;
+    if (ofp_version < OFP14_VERSION) {
+        if (ofp_version < OFP12_VERSION) {
+            struct ofp10_packet_queue *opq10;
 
-        opq10 = ofpbuf_put_zeros(reply, sizeof *opq10);
-        opq10->queue_id = htonl(oqc->queue_id);
-        len_ofs = (char *) &opq10->len - (char *) reply->data;
+            opq10 = ofpbuf_put_zeros(reply, sizeof *opq10);
+            opq10->queue_id = htonl(qc->queue);
+            len_ofs = (char *) &opq10->len - (char *) reply->data;
+        } else {
+            struct ofp12_packet_queue *opq12;
+
+            opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
+            opq12->port = ofputil_port_to_ofp11(qc->port);
+            opq12->queue_id = htonl(qc->queue);
+            len_ofs = (char *) &opq12->len - (char *) reply->data;
+        }
+
+        put_ofp10_queue_rate(reply, OFPQT10_MIN_RATE, qc->min_rate);
+        put_ofp10_queue_rate(reply, OFPQT11_MAX_RATE, qc->max_rate);
     } else {
-        struct ofp12_packet_queue *opq12;
-
-        opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
-        opq12->port = ofputil_port_to_ofp11(oqc->port);
-        opq12->queue_id = htonl(oqc->queue_id);
-        len_ofs = (char *) &opq12->len - (char *) reply->data;
+        struct ofp14_queue_desc *oqd = ofpbuf_put_zeros(reply, sizeof *oqd);
+        oqd->port_no = ofputil_port_to_ofp11(qc->port);
+        oqd->queue_id = htonl(qc->queue);
+        len_ofs = (char *) &oqd->len - (char *) reply->data;
+        put_ofp14_queue_rate(reply, OFPQDPT14_MIN_RATE, qc->min_rate);
+        put_ofp14_queue_rate(reply, OFPQDPT14_MAX_RATE, qc->max_rate);
     }
-
-    put_ofp10_queue_rate(reply, OFPQT10_MIN_RATE, oqc->min_rate);
-    put_ofp10_queue_rate(reply, OFPQT11_MAX_RATE, oqc->max_rate);
 
     len = ofpbuf_at(reply, len_ofs, sizeof *len);
     *len = htons(reply->size - start_ofs);
-}
 
-/* Decodes the initial part of an OFPT_QUEUE_GET_CONFIG_REPLY from 'reply' and
- * stores in '*port' the port that the reply is about.  The caller may call
- * ofputil_pull_queue_get_config_reply() to obtain information about individual
- * queues included in the reply.  Returns 0 if successful, otherwise an
- * ofperr.*/
-enum ofperr
-ofputil_decode_queue_get_config_reply(struct ofpbuf *reply, ofp_port_t *port)
-{
-    const struct ofp10_queue_get_config_reply *qgcr10;
-    const struct ofp11_queue_get_config_reply *qgcr11;
-    enum ofpraw raw;
-
-    raw = ofpraw_pull_assert(reply);
-    switch ((int) raw) {
-    case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY:
-        qgcr10 = ofpbuf_pull(reply, sizeof *qgcr10);
-        *port = u16_to_ofp(ntohs(qgcr10->port));
-        return 0;
-
-    case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY:
-        qgcr11 = ofpbuf_pull(reply, sizeof *qgcr11);
-        return ofputil_port_from_ofp11(qgcr11->port, port);
+    if (ofp_version >= OFP14_VERSION) {
+        ofpmp_postappend(replies, start_ofs);
     }
-
-    OVS_NOT_REACHED();
 }
 
 static enum ofperr
@@ -2538,65 +2556,65 @@ parse_ofp10_queue_rate(const struct ofp10_queue_prop_header *hdr,
     }
 }
 
-/* Decodes information about a queue from the OFPT_QUEUE_GET_CONFIG_REPLY in
- * 'reply' and stores it in '*queue'.  ofputil_decode_queue_get_config_reply()
- * must already have pulled off the main header.
- *
- * This function returns EOF if the last queue has already been decoded, 0 if a
- * queue was successfully decoded into '*queue', or an ofperr if there was a
- * problem decoding 'reply'. */
-int
-ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
-                                    struct ofputil_queue_config *queue)
+static int
+ofputil_pull_queue_get_config_reply10(struct ofpbuf *msg,
+                                      struct ofputil_queue_config *queue)
 {
-    const struct ofp_header *oh;
-    unsigned int opq_len;
-    unsigned int len;
+    const struct ofp_header *oh = msg->header;
+    unsigned int opq_len;       /* Length of protocol-specific queue header. */
+    unsigned int len;           /* Total length of queue + properties. */
 
-    if (!reply->size) {
-        return EOF;
+    /* Obtain the port number from the message header. */
+    if (oh->version == OFP10_VERSION) {
+        const struct ofp10_queue_get_config_reply *oqgcr10 = msg->msg;
+        queue->port = u16_to_ofp(ntohs(oqgcr10->port));
+    } else {
+        const struct ofp11_queue_get_config_reply *oqgcr11 = msg->msg;
+        enum ofperr error = ofputil_port_from_ofp11(oqgcr11->port,
+                                                    &queue->port);
+        if (error) {
+            return error;
+        }
     }
 
-    queue->min_rate = UINT16_MAX;
-    queue->max_rate = UINT16_MAX;
-
-    oh = reply->header;
+    /* Pull off the queue header and get the queue number and length. */
     if (oh->version < OFP12_VERSION) {
         const struct ofp10_packet_queue *opq10;
-
-        opq10 = ofpbuf_try_pull(reply, sizeof *opq10);
+        opq10 = ofpbuf_try_pull(msg, sizeof *opq10);
         if (!opq10) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
-        queue->queue_id = ntohl(opq10->queue_id);
+        queue->queue = ntohl(opq10->queue_id);
         len = ntohs(opq10->len);
         opq_len = sizeof *opq10;
     } else {
         const struct ofp12_packet_queue *opq12;
-
-        opq12 = ofpbuf_try_pull(reply, sizeof *opq12);
+        opq12 = ofpbuf_try_pull(msg, sizeof *opq12);
         if (!opq12) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
-        queue->queue_id = ntohl(opq12->queue_id);
+        queue->queue = ntohl(opq12->queue_id);
         len = ntohs(opq12->len);
         opq_len = sizeof *opq12;
     }
 
-    if (len < opq_len || len > reply->size + opq_len || len % 8) {
+    /* Length check. */
+    if (len < opq_len || len > msg->size + opq_len || len % 8) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
     len -= opq_len;
 
+    /* Pull properties.  The format of these properties differs from used in
+     * OF1.4+ so we can't use the common property functions. */
     while (len > 0) {
         const struct ofp10_queue_prop_header *hdr;
         unsigned int property;
         unsigned int prop_len;
         enum ofperr error = 0;
 
-        hdr = ofpbuf_at_assert(reply, 0, sizeof *hdr);
+        hdr = ofpbuf_at_assert(msg, 0, sizeof *hdr);
         prop_len = ntohs(hdr->len);
-        if (prop_len < sizeof *hdr || prop_len > reply->size || prop_len % 8) {
+        if (prop_len < sizeof *hdr || prop_len > msg->size || prop_len % 8) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
@@ -2618,10 +2636,105 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
             return error;
         }
 
-        ofpbuf_pull(reply, prop_len);
+        ofpbuf_pull(msg, prop_len);
         len -= prop_len;
     }
     return 0;
+}
+
+static int
+ofputil_pull_queue_get_config_reply14(struct ofpbuf *msg,
+                                      struct ofputil_queue_config *queue)
+{
+    struct ofp14_queue_desc *oqd14 = ofpbuf_try_pull(msg, sizeof *oqd14);
+    if (!oqd14) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    enum ofperr error = ofputil_port_from_ofp11(oqd14->port_no, &queue->port);
+    if (error) {
+        return error;
+    }
+    queue->queue = ntohl(oqd14->queue_id);
+
+    /* Length check. */
+    unsigned int len = ntohs(oqd14->len);
+    if (len < sizeof *oqd14 || len > msg->size + sizeof *oqd14 || len % 8) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    len -= sizeof *oqd14;
+
+    struct ofpbuf properties;
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        uint64_t type;
+
+        error = ofpprop_pull(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPQDPT14_MIN_RATE:
+            error = ofpprop_parse_u16(&payload, &queue->min_rate);
+            break;
+
+        case OFPQDPT14_MAX_RATE:
+            error = ofpprop_parse_u16(&payload, &queue->max_rate);
+            break;
+
+        default:
+            error = OFPPROP_UNKNOWN(true, "queue desc", type);
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
+/* Decodes information about a queue from the OFPT_QUEUE_GET_CONFIG_REPLY in
+ * 'reply' and stores it in '*queue'.  ofputil_decode_queue_get_config_reply()
+ * must already have pulled off the main header.
+ *
+ * This function returns EOF if the last queue has already been decoded, 0 if a
+ * queue was successfully decoded into '*queue', or an ofperr if there was a
+ * problem decoding 'reply'. */
+int
+ofputil_pull_queue_get_config_reply(struct ofpbuf *msg,
+                                    struct ofputil_queue_config *queue)
+{
+    enum ofpraw raw;
+    if (!msg->header) {
+        /* Pull OpenFlow header. */
+        raw = ofpraw_pull_assert(msg);
+
+        /* Pull protocol-specific ofp_queue_get_config_reply header (OF1.4
+         * doesn't have one at all). */
+        if (raw == OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY) {
+            ofpbuf_pull(msg, sizeof(struct ofp10_queue_get_config_reply));
+        } else if (raw == OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY) {
+            ofpbuf_pull(msg, sizeof(struct ofp11_queue_get_config_reply));
+        } else {
+            ovs_assert(raw == OFPRAW_OFPST14_QUEUE_DESC_REPLY);
+        }
+    } else {
+        raw = ofpraw_decode_assert(msg->header);
+    }
+
+    queue->min_rate = UINT16_MAX;
+    queue->max_rate = UINT16_MAX;
+
+    if (!msg->size) {
+        return EOF;
+    } else if (raw == OFPRAW_OFPST14_QUEUE_DESC_REPLY) {
+        return ofputil_pull_queue_get_config_reply14(msg, queue);
+    } else {
+        return ofputil_pull_queue_get_config_reply10(msg, queue);
+    }
 }
 
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE

@@ -2546,6 +2546,15 @@ OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2) (xid=0x1): port=1
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_QUEUE_DESC request - OF1.4])
+AT_KEYWORDS([ofp-print OFPT_QUEUE_GET_CONFIG_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 12 00 18 00 00 00 01 00 0f 00 00 00 00 00 00 \
+00 00 00 01 00 00 00 02"], [0],
+  [OFPST_QUEUE_DESC request (OF1.4) (xid=0x1): port=1 queue=2
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "01 15 00 40 00 00 00 01 \
@@ -2588,6 +2597,41 @@ AT_CHECK([ovs-ofctl ofp-print "03 17 00 50 00 00 00 01 \
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2) (xid=0x1): port=1
 queue 21845: min_rate:50.0% max_rate:75.0%
 queue 17476:
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.3])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "04 17 00 50 00 00 00 01 \
+00 00 00 01 00 00 00 00 \
+00 00 55 55 00 00 00 01 00 30 00 00 00 00 00 00 \
+00 01 00 10 00 00 00 00 01 f4 00 00 00 00 00 00 \
+00 02 00 10 00 00 00 00 02 ee 00 00 00 00 00 00 \
+00 00 44 44 00 08 00 01 00 10 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.3) (xid=0x1): port=1
+queue 21845: min_rate:50.0% max_rate:75.0%
+queue 17476:
+])
+AT_CLEANUP
+
+# OF1.4 renamed OFPT_QUEUE_GET_CONFIG_REPLY to OFPST_QUEUE_DESC.
+AT_SETUP([OFPST_QUEUE_DESC reply - OF1.4])
+AT_KEYWORDS([ofp-print OFPT_QUEUE_GET_CONFIG_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 48 00 00 00 01 00 0f 00 00 00 00 00 00 \
+
+00 00 00 01 00 00 55 55 00 20 00 00 00 00 00 00 \
+00 01 00 08 01 f4 00 00 \
+00 02 00 08 02 ee 00 00 \
+
+00 00 00 02 00 00 44 44 00 18 00 00 00 00 00 00 \
+00 02 00 08 00 64 00 00 \
+"], [0], [dnl
+OFPST_QUEUE_DESC reply (OF1.4) (xid=0x1): port=1
+queue 21845: min_rate:50.0% max_rate:75.0%
+port=2
+queue 17476: max_rate:10.0%
 ])
 AT_CLEANUP
 

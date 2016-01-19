@@ -194,8 +194,8 @@ OpenFlow 1.4 features are listed in the previous section.
     Many on-wire structures got TLVs.
     Already implemented: port desc properties, port mod properties,
                          port stats properties, table mod properties,
-                         queue stats, unified property errors.
-    Remaining required: set-async, queue desc
+                         queue stats, unified property errors, queue desc.
+    Remaining required: set-async
     Remaining optional: table desc, table-status
     [EXT-262]
     [required for OF1.4+]
