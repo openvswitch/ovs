@@ -46,6 +46,7 @@ BuildRequires: systemd-units openssl openssl-devel
 BuildRequires: python python-twisted-core python-zope-interface PyQt4
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
+BuildRequires: checkpolicy, selinux-policy-devel
 # make check dependencies
 BuildRequires: procps-ng
 %if %{with libcapng}
@@ -71,6 +72,15 @@ Obsoletes: openvswitch-controller <= 0:2.1.0-1
 Open vSwitch provides standard network bridging functions and
 support for the OpenFlow protocol for remote per-flow control of
 traffic.
+
+%package selinux-policy
+Summary: Open vSwitch SELinux policy
+License: ASL 2.0
+BuildArch: noarch
+Requires: selinux-policy-targeted
+
+%description selinux-policy
+Tailored Open vSwitch SELinux policy
 
 %package -n python-openvswitch
 Summary: Open vSwitch python bindings
@@ -130,6 +140,8 @@ overlays and security groups.
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
 
 make %{?_smp_mflags}
+cd selinux
+make -f %{_datadir}/selinux/devel/Makefile
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -170,6 +182,9 @@ install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
+
+install -p -m 644 -D selinux/openvswitch-custom.pp \
+        $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-benchmark \
@@ -246,6 +261,9 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
+%post selinux-policy
+/usr/sbin/semodule -i %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp &> /dev/null || :
+
 %postun
 %if 0%{?systemd_postun_with_restart:1}
     %systemd_postun_with_restart %{name}.service
@@ -271,6 +289,15 @@ rm -rf $RPM_BUILD_ROOT
         /bin/systemctl try-restart ovn-northd.service >/dev/null 2>&1 || :
     fi
 %endif
+
+%postun selinux-policy
+if [ $1 -eq 0 ] ; then
+  /usr/sbin/semodule -r openvswitch-custom &> /dev/null || :
+fi
+
+%files selinux-policy
+%defattr(-,root,root)
+%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 %files -n python-openvswitch
 %{python_sitelib}/ovs
