@@ -5403,10 +5403,11 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofputil_async_cfg ac = OFPUTIL_ASYNC_CFG_INIT;
+    struct ofputil_async_cfg basis = ofconn_get_async_config(ofconn);
+    struct ofputil_async_cfg ac;
     enum ofperr error;
 
-    error = ofputil_decode_set_async_config(oh, false, &ac);
+    error = ofputil_decode_set_async_config(oh, false, &basis, &ac);
     if (error) {
         return error;
     }

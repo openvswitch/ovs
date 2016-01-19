@@ -9572,6 +9572,11 @@ decode_legacy_async_masks(const ovs_be32 masks[2],
 /* Decodes the OpenFlow "set async config" request and "get async config
  * reply" message in '*oh' into an abstract form in 'ac'.
  *
+ * Some versions of the "set async config" request change only some of the
+ * settings and leave the others alone.  This function uses 'basis' as the
+ * initial state for decoding these.  Other versions of the request change all
+ * the settings; this function ignores 'basis' when decoding these.
+ *
  * If 'loose' is true, this function ignores properties and values that it does
  * not understand, as a controller would want to do when interpreting
  * capabilities provided by a switch.  If 'loose' is false, this function
@@ -9587,6 +9592,7 @@ decode_legacy_async_masks(const ovs_be32 masks[2],
  * supported.*/
 enum ofperr
 ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
+                                const struct ofputil_async_cfg *basis,
                                 struct ofputil_async_cfg *ac)
 {
     enum ofpraw raw;
@@ -9600,6 +9606,7 @@ ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
         raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
         const struct nx_async_config *msg = ofpmsg_body(oh);
 
+        *ac = OFPUTIL_ASYNC_CFG_INIT;
         decode_legacy_async_masks(msg->packet_in_mask, OAM_PACKET_IN,
                                   oh->version, ac);
         decode_legacy_async_masks(msg->port_status_mask, OAM_PORT_STATUS,
@@ -9608,6 +9615,7 @@ ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
                                   oh->version, ac);
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
+        *ac = *basis;
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
