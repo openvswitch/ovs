@@ -1,0 +1,9 @@
+module openvswitch-custom 1.0;
+
+require {
+        type openvswitch_t;
+        class netlink_socket { setopt getopt create connect getattr write read };
+}
+
+#============= openvswitch_t ==============
+allow openvswitch_t self:netlink_socket { setopt getopt create connect getattr write read };

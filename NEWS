@@ -29,6 +29,8 @@ Post-v2.5.0
    - python:
      * Added support for Python 3.4+ in addition to existing support
        for 2.7+.
+   - SELinux:
+     * Introduced SELinux policy package.
 
 v2.5.0 - xx xxx xxxx
 ---------------------
