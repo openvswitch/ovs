@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -263,8 +263,7 @@ flow_equal(const struct flow *a, const struct flow *b)
 static inline size_t
 flow_hash(const struct flow *flow, uint32_t basis)
 {
-    return hash_words64((const uint64_t *)flow,
-                        sizeof *flow / sizeof(uint64_t), basis);
+    return hash_bytes64((const uint64_t *)flow, sizeof *flow, basis);
 }
 
 static inline uint16_t

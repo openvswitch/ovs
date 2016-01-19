@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,8 +118,8 @@ alloc_xid(void)
 static uint32_t
 ofphdrs_hash(const struct ofphdrs *hdrs)
 {
-    BUILD_ASSERT_DECL(sizeof *hdrs == 12);
-    return hash_words((const uint32_t *) hdrs, 3, 0);
+    BUILD_ASSERT_DECL(sizeof *hdrs % 4 == 0);
+    return hash_bytes32((const uint32_t *) hdrs, sizeof *hdrs, 0);
 }
 
 static bool

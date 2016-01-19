@@ -135,25 +135,22 @@ recirc_metadata_hash(const struct recirc_state *state)
     if (flow_tnl_dst_is_set(state->metadata.tunnel)) {
         /* We may leave remainder bytes unhashed, but that is unlikely as
          * the tunnel is not in the datapath format. */
-        hash = hash_words64((const uint64_t *) state->metadata.tunnel,
-                            flow_tnl_size(state->metadata.tunnel)
-                            / sizeof(uint64_t), hash);
+        hash = hash_bytes64((const uint64_t *) state->metadata.tunnel,
+                            flow_tnl_size(state->metadata.tunnel), hash);
     }
     hash = hash_boolean(state->conntracked, hash);
-    hash = hash_words64((const uint64_t *) &state->metadata.metadata,
-                        (sizeof state->metadata - sizeof state->metadata.tunnel)
-                        / sizeof(uint64_t),
+    hash = hash_bytes64((const uint64_t *) &state->metadata.metadata,
+                        sizeof state->metadata - sizeof state->metadata.tunnel,
                         hash);
     if (state->stack && state->stack->size != 0) {
-        hash = hash_words64((const uint64_t *) state->stack->data,
-                            state->stack->size / sizeof(uint64_t), hash);
+        hash = hash_bytes64((const uint64_t *) state->stack->data,
+                            state->stack->size, hash);
     }
     hash = hash_int(state->mirrors, hash);
     hash = hash_int(state->action_set_len, hash);
     if (state->ofpacts_len) {
-        hash = hash_words64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
-                            state->ofpacts_len / sizeof(uint64_t),
-                            hash);
+        hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
+                            state->ofpacts_len, hash);
     }
     return hash;
 }

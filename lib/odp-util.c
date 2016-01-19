@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -4529,8 +4529,7 @@ uint32_t
 odp_flow_key_hash(const struct nlattr *key, size_t key_len)
 {
     BUILD_ASSERT_DECL(!(NLA_ALIGNTO % sizeof(uint32_t)));
-    return hash_words(ALIGNED_CAST(const uint32_t *, key),
-                      key_len / sizeof(uint32_t), 0);
+    return hash_bytes32(ALIGNED_CAST(const uint32_t *, key), key_len, 0);
 }
 
 static void
