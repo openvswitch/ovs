@@ -33,8 +33,8 @@
 union user_action_cookie;
 struct dpif_flow_stats;
 struct ofproto;
+struct ofproto_async_msg;
 struct ofproto_dpif;
-struct ofproto_packet_in;
 struct ofport_dpif;
 struct dpif_backer;
 struct OVS_LOCKABLE rule_dpif;
@@ -157,8 +157,8 @@ int ofproto_dpif_execute_actions__(struct ofproto_dpif *, const struct flow *,
                                    struct rule_dpif *, const struct ofpact *,
                                    size_t ofpacts_len, int recurse,
                                    int resubmits, struct dp_packet *);
-void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
-                                 struct ofproto_packet_in *);
+void ofproto_dpif_send_async_msg(struct ofproto_dpif *,
+                                 struct ofproto_async_msg *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);
 int ofproto_dpif_send_packet(const struct ofport_dpif *, struct dp_packet *);
 void ofproto_dpif_flow_mod(struct ofproto_dpif *,

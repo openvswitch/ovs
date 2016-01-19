@@ -3568,7 +3568,6 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
                           uint16_t controller_id)
 {
-    struct ofproto_packet_in *pin;
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
@@ -3592,21 +3591,24 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 
     size_t packet_len = dp_packet_size(packet);
 
-    pin = xmalloc(sizeof *pin);
-    *pin = (struct ofproto_packet_in) {
+    struct ofproto_async_msg *am = xmalloc(sizeof *am);
+    *am = (struct ofproto_async_msg) {
         .controller_id = controller_id,
-        .up = {
-            .packet = dp_packet_steal_data(packet),
-            .len = packet_len,
-            .reason = reason,
-            .table_id = ctx->table_id,
-            .cookie = ctx->rule_cookie,
+        .oam = OAM_PACKET_IN,
+        .pin = {
+            .up = {
+                .packet = dp_packet_steal_data(packet),
+                .len = packet_len,
+                .reason = reason,
+                .table_id = ctx->table_id,
+                .cookie = ctx->rule_cookie,
+            },
+            .max_len = len,
         },
-        .max_len = len,
     };
-    flow_get_metadata(&ctx->xin->flow, &pin->up.flow_metadata);
+    flow_get_metadata(&ctx->xin->flow, &am->pin.up.flow_metadata);
 
-    ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
+    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
     dp_packet_delete(packet);
 }
 
@@ -4141,8 +4143,8 @@ recirc_put_unroll_xlate(struct xlate_ctx *ctx)
 
 /* Copy remaining actions to the action_set to be executed after recirculation.
  * UNROLL_XLATE action is inserted, if not already done so, before actions that
- * may generate PACKET_INs from the current table and without matching another
- * rule. */
+ * may generate asynchronous messages from the current table and without
+ * matching another rule. */
 static void
 recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                       struct xlate_ctx *ctx)
@@ -4151,7 +4153,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         switch (a->type) {
-            /* May generate PACKET INs. */
+            /* May generate asynchronous messages. */
         case OFPACT_OUTPUT_REG:
         case OFPACT_GROUP:
         case OFPACT_OUTPUT:
