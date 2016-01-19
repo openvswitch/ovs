@@ -341,9 +341,9 @@ struct ofproto_dpif {
     uint64_t change_seq;           /* Connectivity status changes. */
 
     /* Work queues. */
-    struct guarded_list pins;      /* Contains "struct ofputil_packet_in"s. */
-    struct seq *pins_seq;          /* For notifying 'pins' reception. */
-    uint64_t pins_seqno;
+    struct guarded_list ams;      /* Contains "struct ofproto_async_msgs"s. */
+    struct seq *ams_seq;          /* For notifying 'ams' reception. */
+    uint64_t ams_seqno;
 };
 
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
@@ -400,20 +400,19 @@ ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
     ofproto_flow_mod(&ofproto->up, &ofm);
 }
 
-/* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
- * Takes ownership of 'pin' and pin->packet. */
+/* Appends 'am' to the queue of asynchronous messages to be sent to the
+ * controller.  Takes ownership of 'am' and any data it points to. */
 void
-ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
-                            struct ofproto_packet_in *pin)
+ofproto_dpif_send_async_msg(struct ofproto_dpif *ofproto,
+                            struct ofproto_async_msg *am)
 {
-    if (!guarded_list_push_back(&ofproto->pins, &pin->list_node, 1024)) {
+    if (!guarded_list_push_back(&ofproto->ams, &am->list_node, 1024)) {
         COVERAGE_INC(packet_in_overflow);
-        free(CONST_CAST(void *, pin->up.packet));
-        free(pin);
+        ofproto_async_msg_free(am);
     }
 
     /* Wakes up main thread for packet-in I/O. */
-    seq_change(ofproto->pins_seq);
+    seq_change(ofproto->ams_seq);
 }
 
 /* The default "table-miss" behaviour for OpenFlow1.3+ is to drop the
@@ -1329,7 +1328,7 @@ construct(struct ofproto *ofproto_)
     ovs_mutex_init_adaptive(&ofproto->stats_mutex);
     ovs_mutex_init(&ofproto->vsp_mutex);
 
-    guarded_list_init(&ofproto->pins);
+    guarded_list_init(&ofproto->ams);
 
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
@@ -1339,8 +1338,8 @@ construct(struct ofproto *ofproto_)
     sset_init(&ofproto->port_poll_set);
     ofproto->port_poll_errno = 0;
     ofproto->change_seq = 0;
-    ofproto->pins_seq = seq_create();
-    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
+    ofproto->ams_seq = seq_create();
+    ofproto->ams_seqno = seq_read(ofproto->ams_seq);
 
 
     SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
@@ -1444,10 +1443,10 @@ static void
 destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofproto_packet_in *pin;
+    struct ofproto_async_msg *am;
     struct rule_dpif *rule;
     struct oftable *table;
-    struct ovs_list pins;
+    struct ovs_list ams;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     xlate_txn_start();
@@ -1467,12 +1466,11 @@ destruct(struct ofproto *ofproto_)
     }
     ofproto_group_delete_all(&ofproto->up);
 
-    guarded_list_pop_all(&ofproto->pins, &pins);
-    LIST_FOR_EACH_POP (pin, list_node, &pins) {
-        free(CONST_CAST(void *, pin->up.packet));
-        free(pin);
+    guarded_list_pop_all(&ofproto->ams, &ams);
+    LIST_FOR_EACH_POP (am, list_node, &ams) {
+        ofproto_async_msg_free(am);
     }
-    guarded_list_destroy(&ofproto->pins);
+    guarded_list_destroy(&ofproto->ams);
 
     recirc_free_ofproto(ofproto, ofproto->up.name);
 
@@ -1495,7 +1493,7 @@ destruct(struct ofproto *ofproto_)
     ovs_mutex_destroy(&ofproto->stats_mutex);
     ovs_mutex_destroy(&ofproto->vsp_mutex);
 
-    seq_destroy(ofproto->pins_seq);
+    seq_destroy(ofproto->ams_seq);
 
     close_dpif_backer(ofproto->backer);
 }
@@ -1514,23 +1512,22 @@ run(struct ofproto *ofproto_)
         mcast_snooping_mdb_flush(ofproto->ms);
     }
 
-    /* Always updates the ofproto->pins_seqno to avoid frequent wakeup during
+    /* Always updates the ofproto->ams_seqno to avoid frequent wakeup during
      * flow restore.  Even though nothing is processed during flow restore,
-     * all queued 'pins' will be handled immediately when flow restore
+     * all queued 'ams' will be handled immediately when flow restore
      * completes. */
-    ofproto->pins_seqno = seq_read(ofproto->pins_seq);
+    ofproto->ams_seqno = seq_read(ofproto->ams_seq);
 
     /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
     if (!ofproto_get_flow_restore_wait()) {
-        struct ofproto_packet_in *pin;
-        struct ovs_list pins;
+        struct ofproto_async_msg *am;
+        struct ovs_list ams;
 
-        guarded_list_pop_all(&ofproto->pins, &pins);
-        LIST_FOR_EACH_POP (pin, list_node, &pins) {
-            connmgr_send_packet_in(ofproto->up.connmgr, pin);
-            free(CONST_CAST(void *, pin->up.packet));
-            free(pin);
+        guarded_list_pop_all(&ofproto->ams, &ams);
+        LIST_FOR_EACH_POP (am, list_node, &ams) {
+            connmgr_send_async_msg(ofproto->up.connmgr, am);
+            ofproto_async_msg_free(am);
         }
     }
 
@@ -1641,7 +1638,7 @@ wait(struct ofproto *ofproto_)
     }
 
     seq_wait(udpif_dump_seq(ofproto->backer->udpif), ofproto->dump_seq);
-    seq_wait(ofproto->pins_seq, ofproto->pins_seqno);
+    seq_wait(ofproto->ams_seq, ofproto->ams_seqno);
 }
 
 static void

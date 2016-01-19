@@ -1653,31 +1653,32 @@ connmgr_send_flow_removed(struct connmgr *mgr,
  *
  * The caller doesn't need to fill in pin->buffer_id or pin->total_len. */
 void
-connmgr_send_packet_in(struct connmgr *mgr,
-                       const struct ofproto_packet_in *pin)
+connmgr_send_async_msg(struct connmgr *mgr,
+                       const struct ofproto_async_msg *am)
 {
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
         if (protocol == OFPUTIL_P_NONE || !rconn_is_connected(ofconn->rconn)
-            || ofconn->controller_id != pin->controller_id
-            || !ofconn_receives_async_msg(ofconn, OAM_PACKET_IN,
-                                          pin->up.reason)) {
+            || ofconn->controller_id != am->controller_id
+            || !ofconn_receives_async_msg(ofconn, am->oam,
+                                          am->pin.up.reason)) {
             continue;
         }
 
         struct ofpbuf *msg = ofputil_encode_packet_in(
-            &pin->up, protocol, ofconn->packet_in_format,
-            pin->max_len >= 0 ? pin->max_len : ofconn->miss_send_len,
+            &am->pin.up, protocol, ofconn->packet_in_format,
+            am->pin.max_len >= 0 ? am->pin.max_len : ofconn->miss_send_len,
             ofconn->pktbuf);
 
         struct ovs_list txq;
-        bool is_miss = (pin->up.reason == OFPR_NO_MATCH ||
-                        pin->up.reason == OFPR_EXPLICIT_MISS ||
-                        pin->up.reason == OFPR_IMPLICIT_MISS);
+        bool is_miss = (am->pin.up.reason == OFPR_NO_MATCH ||
+                        am->pin.up.reason == OFPR_EXPLICIT_MISS ||
+                        am->pin.up.reason == OFPR_IMPLICIT_MISS);
         pinsched_send(ofconn->schedulers[is_miss],
-                      pin->up.flow_metadata.flow.in_port.ofp_port, msg, &txq);
+                      am->pin.up.flow_metadata.flow.in_port.ofp_port,
+                      msg, &txq);
         do_send_packet_ins(ofconn, &txq);
     }
 }
@@ -2241,4 +2242,11 @@ ofmonitor_wait(struct connmgr *mgr)
         }
     }
     ovs_mutex_unlock(&ofproto_mutex);
+}
+
+void
+ofproto_async_msg_free(struct ofproto_async_msg *am)
+{
+    free(CONST_CAST(void *, am->pin.up.packet));
+    free(am);
 }

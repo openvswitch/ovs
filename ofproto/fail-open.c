@@ -125,19 +125,23 @@ send_bogus_packet_ins(struct fail_open *fo)
     eth_addr_nicira_random(&mac);
     compose_rarp(&b, mac);
 
-    struct ofproto_packet_in pin = {
-        .up = {
-            .packet = dp_packet_data(&b),
-            .len = dp_packet_size(&b),
-            .flow_metadata = MATCH_CATCHALL_INITIALIZER,
-            .flow_metadata.flow.in_port.ofp_port = OFPP_LOCAL,
-            .flow_metadata.wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX),
-            .reason = OFPR_NO_MATCH,
-            .cookie = OVS_BE64_MAX,
-        },
-        .max_len = UINT16_MAX,
+    struct ofproto_async_msg am = {
+        .oam = OAM_PACKET_IN,
+        .pin = {
+            .up = {
+                .packet = dp_packet_data(&b),
+                .len = dp_packet_size(&b),
+                .flow_metadata = MATCH_CATCHALL_INITIALIZER,
+                .flow_metadata.flow.in_port.ofp_port = OFPP_LOCAL,
+                .flow_metadata.wc.masks.in_port.ofp_port
+                    = u16_to_ofp(UINT16_MAX),
+                .reason = OFPR_NO_MATCH,
+                .cookie = OVS_BE64_MAX,
+            },
+            .max_len = UINT16_MAX,
+        }
     };
-    connmgr_send_packet_in(fo->connmgr, &pin);
+    connmgr_send_async_msg(fo->connmgr, &am);
 
     dp_packet_uninit(&b);
 }

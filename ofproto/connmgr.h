@@ -54,13 +54,21 @@ enum ofconn_type {
     OFCONN_SERVICE              /* A service connection, e.g. "ovs-ofctl". */
 };
 
-/* A packet_in, with extra members to assist in queuing and routing it. */
-struct ofproto_packet_in {
-    struct ofputil_packet_in up;
+/* An asynchronous message that might need to be queued between threads. */
+struct ofproto_async_msg {
     struct ovs_list list_node;  /* For queuing. */
     uint16_t controller_id;     /* Controller ID to send to. */
-    int max_len;                /* From action, or -1 if none. */
+
+    enum ofputil_async_msg_type oam;
+    union {
+        /* OAM_PACKET_IN. */
+        struct {
+            struct ofputil_packet_in up;
+            int max_len;                /* From action, or -1 if none. */
+        } pin;
+    };
 };
+void ofproto_async_msg_free(struct ofproto_async_msg *);
 
 /* Basics. */
 struct connmgr *connmgr_create(struct ofproto *ofproto,
@@ -140,8 +148,8 @@ void connmgr_send_port_status(struct connmgr *, struct ofconn *source,
                               const struct ofputil_phy_port *, uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *);
-void connmgr_send_packet_in(struct connmgr *,
-                            const struct ofproto_packet_in *);
+void connmgr_send_async_msg(struct connmgr *,
+                            const struct ofproto_async_msg *);
 void ofconn_send_role_status(struct ofconn *ofconn, uint32_t role,
                              uint8_t reason);
 
