@@ -24,6 +24,21 @@
 #include "openvswitch/vlog.h"
 #include "util.h"
 
+struct ofp_prop_be16 {
+    ovs_be16 type;
+    ovs_be16 len;
+    ovs_be16 value;
+    uint8_t pad[2];
+};
+BUILD_ASSERT_DECL(sizeof(struct ofp_prop_be16) == 8);
+
+struct ofp_prop_be32 {
+    ovs_be16 type;
+    ovs_be16 len;
+    ovs_be32 value;
+};
+BUILD_ASSERT_DECL(sizeof(struct ofp_prop_be32) == 8);
+
 static uint32_t
 ofpprop_type_to_exp_id(uint64_t type)
 {
@@ -113,6 +128,68 @@ ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property, uint64_t *typep)
     return ofpprop_pull__(msg, property, 8, 0xffff, typep);
 }
 
+/* Attempts to parse 'property' as a property containing a 16-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_be16(const struct ofpbuf *property, ovs_be16 *value)
+{
+    /* OpenFlow uses 8-byte properties for 16-bit values, which doesn't really
+     * make sense.  Be forgiving by allowing any size payload as long as it's
+     * at least big enough.  */
+    ovs_be16 *p = property->msg;
+    if (ofpbuf_msgsize(property) < sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    *value = *p;
+    return 0;
+}
+
+/* Attempts to parse 'property' as a property containing a 32-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_be32(const struct ofpbuf *property, ovs_be32 *value)
+{
+    ovs_be32 *p = property->msg;
+    if (ofpbuf_msgsize(property) != sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    *value = *p;
+    return 0;
+}
+
+/* Attempts to parse 'property' as a property containing a 16-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_u16(const struct ofpbuf *property, uint16_t *value)
+{
+    /* OpenFlow uses 8-byte properties for 16-bit values, which doesn't really
+     * make sense.  Be forgiving by allowing any size payload as long as it's
+     * at least big enough.  */
+    ovs_be16 *p = property->msg;
+    if (ofpbuf_msgsize(property) < sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    *value = ntohs(*p);
+    return 0;
+}
+
+/* Attempts to parse 'property' as a property containing a 32-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_u32(const struct ofpbuf *property, uint32_t *value)
+{
+    ovs_be32 *p = property->msg;
+    if (ofpbuf_msgsize(property) != sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    *value = ntohl(*p);
+    return 0;
+}
+
 /* Adds a property with the given 'type' and 'len'-byte contents 'value' to
  * 'msg', padding the property out to a multiple of 8 bytes. */
 void
@@ -123,6 +200,45 @@ ofpprop_put(struct ofpbuf *msg, uint64_t type, const void *value, size_t len)
     ofpprop_end(msg, start_ofs);
 }
 
+/* Adds a property with the given 'type' and 16-bit 'value' to 'msg'. */
+void
+ofpprop_put_be16(struct ofpbuf *msg, uint64_t type, ovs_be16 value)
+{
+    if (!ofpprop_is_experimenter(type)) {
+        /* The OpenFlow specs consistently (at least they're consistent!)  give
+         * properties with a 16-bit integer value a length of 8, not 6, so add
+         * two bytes of padding.  */
+        ovs_be16 padded_value[2] = { value, 0 };
+        ofpprop_put(msg, type, padded_value, sizeof padded_value);
+    } else {
+        /* There's no precedent but let's assume that this is generally done
+         * sanely. */
+        ofpprop_put(msg, type, &value, sizeof value);
+    }
+}
+
+/* Adds a property with the given 'type' and 32-bit 'value' to 'msg'. */
+void
+ofpprop_put_be32(struct ofpbuf *msg, uint64_t type, ovs_be32 value)
+{
+    ofpprop_put(msg, type, &value, sizeof value);
+}
+
+/* Adds a property with the given 'type' and 16-bit 'value' to 'msg'. */
+void
+ofpprop_put_u16(struct ofpbuf *msg, uint64_t type, uint16_t value)
+{
+    ofpprop_put_be16(msg, type, htons(value));
+}
+
+/* Adds a property with the given 'type' and 32-bit 'value' to 'msg'. */
+void
+ofpprop_put_u32(struct ofpbuf *msg, uint64_t type, uint32_t value)
+{
+    ofpprop_put_be32(msg, type, htonl(value));
+}
+
+/* Adds a property header to 'msg' for each 1-bit in 'bitmap'. */
 /* Appends a property to 'msg' whose type is 'type' and whose contents is a
  * series of property headers, one for each 1-bit in 'bitmap'. */
 void

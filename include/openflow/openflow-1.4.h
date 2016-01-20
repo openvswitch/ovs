@@ -94,15 +94,6 @@ enum ofp14_port_mod_prop_type {
     OFPPMPT14_EXPERIMENTER      = 0xFFFF, /* Experimenter property. */
 };
 
-/* Ethernet port mod property. */
-struct ofp14_port_mod_prop_ethernet {
-    ovs_be16      type;       /* OFPPMPT14_ETHERNET. */
-    ovs_be16      length;     /* Length in bytes of this property. */
-    ovs_be32      advertise;  /* Bitmap of OFPPF_*.  Zero all bits to prevent
-                                 any action taking place. */
-};
-OFP_ASSERT(sizeof(struct ofp14_port_mod_prop_ethernet) == 8);
-
 struct ofp14_port_mod {
     ovs_be32 port_no;
     uint8_t pad[4];
@@ -136,13 +127,6 @@ enum ofp14_table_reason {
     OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
     OFPTR_N_REASONS            /* Denotes number of reasons. */
 };
-
-struct ofp14_table_mod_prop_eviction {
-    ovs_be16         type;    /* OFPTMPT14_EVICTION. */
-    ovs_be16         length;  /* Length in bytes of this property. */
-    ovs_be32         flags;   /* Bitmap of OFPTMPEF14_* flags */
-};
-OFP_ASSERT(sizeof(struct ofp14_table_mod_prop_eviction) == 8);
 
 struct ofp14_table_mod_prop_vacancy {
     ovs_be16         type;   /* OFPTMPT14_VACANCY. */
@@ -272,17 +256,6 @@ enum ofp14_async_config_prop_type {
     OFPTFPT_EXPERIMENTER_SLAVE    = 0xFFFE, /* Experimenter for slave. */
     OFPTFPT_EXPERIMENTER_MASTER   = 0xFFFF, /* Experimenter for master. */
 };
-
-/* Various reason based properties */
-struct ofp14_async_config_prop_reasons {
-    /* 'type' is one of OFPACPT_PACKET_IN_*, OFPACPT_PORT_STATUS_*,
-     * OFPACPT_FLOW_REMOVED_*, OFPACPT_ROLE_STATUS_*,
-     * OFPACPT_TABLE_STATUS_*, OFPACPT_REQUESTFORWARD_*. */
-    ovs_be16    type;
-    ovs_be16    length; /* Length in bytes of this property. */
-    ovs_be32    mask;   /* Bitmasks of reason values. */
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config_prop_reasons) == 8);
 
 /* Experimenter async config property */
 struct ofp14_async_config_prop_experimenter {
