@@ -2561,6 +2561,21 @@ queue 17476:
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "02 17 00 40 00 00 00 01 \
+00 00 00 01 00 00 00 00 \
+00 00 55 55 00 28 00 00 \
+00 01 00 10 00 00 00 00 01 f4 00 00 00 00 00 00 \
+00 02 00 10 00 00 00 00 02 ee 00 00 00 00 00 00 \
+00 00 44 44 00 08 00 00 \
+"], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.1) (xid=0x1): port=1
+queue 21845: min_rate:50.0% max_rate:75.0%
+queue 17476:
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.2])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "03 17 00 50 00 00 00 01 \

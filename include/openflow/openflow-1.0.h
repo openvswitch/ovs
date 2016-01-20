@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,6 +136,41 @@ struct ofp10_packet_queue {
      * ofp_queue_prop_header, to fill out a total of 'len' bytes. */
 };
 OFP_ASSERT(sizeof(struct ofp10_packet_queue) == 8);
+
+/* Queue properties for OF1.0 to OF1.3.
+ *
+ * OF1.4+ use the same numbers but rename them and change the property formats
+ * in incompatible ways, so there's not much benefit to sharing the names. */
+enum ofp10_queue_properties {
+    /* Introduced in OF1.0. */
+    OFPQT10_MIN_RATE = 1,          /* Minimum datarate guaranteed. */
+
+    /* Introduced in OF1.1. */
+    OFPQT11_MAX_RATE = 2,          /* Maximum guaranteed rate. */
+    OFPQT11_EXPERIMENTER = 0xffff, /* Experimenter defined property. */
+};
+
+/* Description for a queue in OpenFlow 1.0 to 1.3.
+ *
+ * OF1.4+ also use a TLV format but an incompatible one. */
+struct ofp10_queue_prop_header {
+    ovs_be16 property; /* One of OFPQT*. */
+    ovs_be16 len;      /* Length of property, including this header. */
+    uint8_t pad[4];    /* 64-bit alignemnt. */
+};
+OFP_ASSERT(sizeof(struct ofp10_queue_prop_header) == 8);
+
+/* Min-Rate and Max-Rate queue property description (OFPQT10_MIN and
+ * OFPQT11_MAX).
+ *
+ * OF1.4+ use similar TLVs but they are incompatible due to different padding.
+ */
+struct ofp10_queue_prop_rate {
+    struct ofp10_queue_prop_header prop_header;
+    ovs_be16 rate;        /* In 1/10 of a percent; >1000 -> disabled. */
+    uint8_t pad[6];       /* 64-bit alignment */
+};
+OFP_ASSERT(sizeof(struct ofp10_queue_prop_rate) == 16);
 
 /* Query for port queue configuration. */
 struct ofp10_queue_get_config_request {

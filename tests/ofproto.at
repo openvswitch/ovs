@@ -252,6 +252,20 @@ OFPT_QUEUE_GET_CONFIG_REQUEST (xid=0x2): port=10
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - queue configuration - (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10], [0],
+  [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
+OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2) (xid=0x2): port=10
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [2])
