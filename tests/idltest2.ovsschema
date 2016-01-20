@@ -80,6 +80,28 @@
           }
         }
       }
-    }
+    },
+    "simple2" : {
+        "columns" : {
+            "name" : {
+                "type": "string"
+            },
+            "smap" : {
+                "type": { "key" : "string",
+                          "value": "string",
+                          "min": 0,
+                          "max": "unlimited"
+                        }
+            },
+            "imap": {
+                "type" : { "key": { "type" : "integer",
+                                    "minInteger" : 0,
+                                    "maxInteger" : 4095},
+                            "value": { "type" : "string"},
+                          "min": 0, "max": "unlimited"
+                          }
+                }
+            }
+        }
   }
 }

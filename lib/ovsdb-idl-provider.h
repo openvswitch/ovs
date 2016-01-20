@@ -20,7 +20,7 @@
 #include "list.h"
 #include "ovsdb-idl.h"
 #include "ovsdb-types.h"
-#include "ovsdb-pmu.h"
+#include "ovsdb-map-op.h"
 #include "shash.h"
 #include "uuid.h"
 
@@ -37,14 +37,14 @@ struct ovsdb_idl_row {
     unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
     unsigned long int *written; /* Bitmap of columns from "new" to write. */
     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
+    unsigned long int *map_op_written; /* Bitmap of columns with pending map
+                                        * operations. */
+    struct map_op_list **map_op_lists; /* List of lists of map operations. */
 
     /* Tracking data */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_node; /* Rows modified/added/deleted by IDL */
     unsigned long int *updated; /* Bitmap of columns updated by IDL */
-
-    unsigned long int *partial_map_written; /* Bitmap of columns containing partial maps */
-    struct pmul **partial_map_lists; /* List of lists of partial updates. */
 };
 
 struct ovsdb_idl_column {

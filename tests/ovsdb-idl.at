@@ -776,3 +776,37 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 014: updated columns: ba i ia r ra s
 015: done
 ]])
+
+m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl partial update map column positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-map-column unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-column, initially populated],
+[['["idltest", {"op":"insert", "table":"simple2",
+                "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
+],
+[],
+[[000: Getting records
+001: name=myString1 smap=[[key1 : value1],[key2 : value2]] imap=[]
+002: After insert element
+003: name=String2 smap=[[key1 : myList1],[key2 : value2]] imap=[[3 : myids2]]
+004: After insert duplicated element
+005: name=String2 smap=[[key1 : myList1],[key2 : value2]] imap=[[3 : myids2]]
+006: After delete element
+007: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
+008: After trying to delete a deleted element
+009: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
+010: End test
+]])
+
