@@ -215,13 +215,6 @@ struct ofp13_table_stats {
 };
 OFP_ASSERT(sizeof(struct ofp13_table_stats) == 24);
 
-/* Common header for all Table Feature Properties */
-struct ofp13_table_feature_prop_header {
-    ovs_be16    type;   /* One of OFPTFPT_*. */
-    ovs_be16    length; /* Length in bytes of this property. */
-};
-OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_header) == 4);
-
 /* Body for ofp_multipart_request of type OFPMP_TABLE_FEATURES./
  * Body of reply to OFPMP_TABLE_FEATURES request. */
 struct ofp13_table_features {
@@ -268,82 +261,6 @@ enum ofp13_table_feature_prop_type {
     OFPTFPT13_EXPERIMENTER         = 0xFFFE, /* Experimenter property. */
     OFPTFPT13_EXPERIMENTER_MISS    = 0xFFFF, /* Experimenter for table-miss. */
 };
-
-/* Instructions property */
-struct ofp13_table_feature_prop_instructions {
-    ovs_be16    type;    /* One of OFPTFPT13_INSTRUCTIONS,
-                            OFPTFPT13_INSTRUCTIONS_MISS. */
-    ovs_be16    length;  /* Length in bytes of this property. */
-    /* Followed by:
-     *   - Exactly (length - 4) bytes containing the instruction ids, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-    /* struct ofp11_instruction instruction_ids[0];  List of instructions
-                                                     without any data */
-};
-OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_instructions) == 4);
-
-/* Next Tables property */
-struct ofp13_table_feature_prop_next_tables {
-    ovs_be16    type;   /* One of OFPTFPT13_NEXT_TABLES,
-                           OFPTFPT13_NEXT_TABLES_MISS. */
-    ovs_be16    length; /* Length in bytes of this property. */
-    /* Followed by:
-     *   - Exactly (length - 4) bytes containing the table_ids, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-    /* uint8_t     next_table_ids[0]; */
-};
-OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_next_tables) == 4);
-
-/* Actions property */
-struct ofp13_table_feature_prop_actions {
-    ovs_be16    type;   /* One of OFPTFPT13_WRITE_ACTIONS,
-                           OFPTFPT13_WRITE_ACTIONS_MISS,
-                           OFPTFPT13_APPLY_ACTIONS,
-                           OFPTFPT13_APPLY_ACTIONS_MISS. */
-    ovs_be16    length; /* Length in bytes of this property. */
-    /* Followed by:
-     *   - Exactly (length - 4) bytes containing the action_ids, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-    /* struct ofp_action_header action_ids[0];     List of actions
-                                                   without any data */
-};
-OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_actions) == 4);
-
-
-/* Match, Wildcard or Set-Field property */
-struct ofp13_table_feature_prop_oxm {
-    ovs_be16    type;   /* One of OFPTFPT13_MATCH, OFPTFPT13_WILDCARDS,
-                           OFPTFPT13_WRITE_SETFIELD,
-                           OFPTFPT13_WRITE_SETFIELD_MISS,
-                           OFPTFPT13_APPLY_SETFIELD,
-                           OFPTFPT13_APPLY_SETFIELD_MISS. */
-    ovs_be16    length; /* Length in bytes of this property. */
-    /* Followed by:
-     *   - Exactly (length - 4) bytes containing the oxm_ids, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-    /* ovs_be32    oxm_ids[0];     Array of OXM headers */
-};
-OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_oxm) == 4);
-
-/* Experimenter table feature property */
-struct ofp13_table_feature_prop_experimenter {
-    ovs_be16    type;     /* One of OFPTFPT13_EXPERIMENTER,
-                             OFPTFPT13_EXPERIMENTER_MISS. */
-    ovs_be16    length;   /* Length in bytes of this property. */
-    ovs_be32    experimenter; /* Experimenter ID which takes the same form
-                                 as in struct ofp_experimenter_header. */
-    ovs_be32    exp_type;     /* Experimenter defined. */
-    /* Followed by:
-     *   - Exactly (length - 12) bytes containing the experimenter data, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-    /* ovs_be32    experimenter_data[0]; */
-};
-OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_experimenter) == 12);
 
 /* Body of reply to OFPMP13_PORT request. If a counter is unsupported, set
  * the field to all ones. */
