@@ -57,7 +57,8 @@ struct uuid;
 
 void lflow_init(void);
 void lflow_run(struct controller_ctx *, struct hmap *flow_table,
-               const struct simap *ct_zones);
+               const struct simap *ct_zones,
+               struct hmap *local_datapaths);
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

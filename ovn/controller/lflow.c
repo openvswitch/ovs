@@ -157,6 +157,11 @@ symtab_init(void)
 
 /* Logical datapaths and logical port numbers. */
 
+enum ldp_type {
+    LDP_TYPE_ROUTER,
+    LDP_TYPE_SWITCH,
+};
+
 /* A logical datapath.
  *
  * 'ports' maps 'logical_port' names to 'tunnel_key' values in the OVN_SB
@@ -166,6 +171,7 @@ struct logical_datapath {
     struct uuid uuid;           /* UUID from Datapath_Binding row. */
     uint32_t tunnel_key;        /* 'tunnel_key' from Datapath_Binding row. */
     struct simap ports;         /* Logical port name to port number. */
+    enum ldp_type type;         /* Type of logical datapath */
 };
 
 /* Contains "struct logical_datapath"s. */
@@ -197,6 +203,8 @@ ldp_create(const struct sbrec_datapath_binding *binding)
                 uuid_hash(&binding->header_.uuid));
     ldp->uuid = binding->header_.uuid;
     ldp->tunnel_key = binding->tunnel_key;
+    const char *ls = smap_get(&binding->external_ids, "logical-switch");
+    ldp->type = ls ? LDP_TYPE_SWITCH : LDP_TYPE_ROUTER;
     simap_init(&ldp->ports);
     return ldp;
 }
@@ -267,7 +275,8 @@ lflow_init(void)
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
 lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
-          const struct simap *ct_zones)
+          const struct simap *ct_zones,
+          struct hmap *local_datapaths)
 {
     struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
@@ -286,8 +295,29 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
             continue;
         }
 
-        /* Determine translation of logical table IDs to physical table IDs. */
         bool ingress = !strcmp(lflow->pipeline, "ingress");
+
+        if (ldp->type == LDP_TYPE_SWITCH && !ingress) {
+            /* For a logical switch datapath, local_datapaths tells us if there
+             * are any local ports for this datapath.  If not, processing
+             * logical flows for the egress pipeline of this datapath is
+             * unnecessary.
+             *
+             * We still need the ingress pipeline because even if there are no
+             * local ports, we still may need to execute the ingress pipeline
+             * after a packet leaves a logical router.  Further optimization
+             * is possible, but not based on what we know with local_datapaths
+             * right now.
+             */
+
+            struct hmap_node *ld;
+            ld = hmap_first_with_hash(local_datapaths, ldp->tunnel_key);
+            if (!ld) {
+                continue;
+            }
+        }
+
+        /* Determine translation of logical table IDs to physical table IDs. */
         uint8_t first_ptable = (ingress
                                 ? OFTABLE_LOG_INGRESS_PIPELINE
                                 : OFTABLE_LOG_EGRESS_PIPELINE);
