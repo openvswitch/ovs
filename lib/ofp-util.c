@@ -209,12 +209,17 @@ end_property(struct ofpbuf *msg, size_t start_ofs)
     ofpbuf_padto(msg, ROUND_UP(msg->size, 8));
 }
 
+/* Appends a property to 'msg' whose type is 'type' and whose contents is a
+ * series of property headers, one for each 1-bit in 'bitmap'. */
 static void
-put_bitmap_properties(struct ofpbuf *msg, uint64_t bitmap)
+put_bitmap_property(struct ofpbuf *msg, uint16_t type, uint64_t bitmap)
 {
+    size_t start_ofs = start_property(msg, type);
+
     for (; bitmap; bitmap = zero_rightmost_1bit(bitmap)) {
         start_property(msg, rightmost_1bit_idx(bitmap));
     }
+    end_property(msg, start_ofs);
 }
 
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
@@ -4932,14 +4937,9 @@ put_table_action_features(struct ofpbuf *reply,
                           enum ofp13_table_feature_prop_type set_fields_type,
                           int miss_offset, enum ofp_version version)
 {
-    size_t start_ofs;
-
-    start_ofs = start_property(reply, actions_type + miss_offset);
-    put_bitmap_properties(reply,
-                          ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
-                                                          version)));
-    end_property(reply, start_ofs);
-
+    put_bitmap_property(reply, actions_type + miss_offset,
+                        ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
+                                                        version)));
     put_fields_property(reply, &taf->set_fields, NULL,
                         set_fields_type + miss_offset, version);
 }
@@ -4952,11 +4952,9 @@ put_table_instruction_features(
     size_t start_ofs;
     uint8_t table_id;
 
-    start_ofs = start_property(reply, OFPTFPT13_INSTRUCTIONS + miss_offset);
-    put_bitmap_properties(reply,
-                          ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
-                                                           version)));
-    end_property(reply, start_ofs);
+    put_bitmap_property(reply, OFPTFPT13_INSTRUCTIONS + miss_offset,
+                        ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
+                                                         version)));
 
     start_ofs = start_property(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
     BITMAP_FOR_EACH_1 (table_id, 255, tif->next) {
