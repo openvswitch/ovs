@@ -2554,11 +2554,11 @@ ofputil_encode_queue_get_config_reply(const struct ofp_header *oh)
 }
 
 static void
-put_queue_rate(struct ofpbuf *reply, enum ofp_queue_properties property,
-               uint16_t rate)
+put_ofp10_queue_rate(struct ofpbuf *reply,
+                     enum ofp10_queue_properties property, uint16_t rate)
 {
     if (rate != UINT16_MAX) {
-        struct ofp_queue_prop_rate *oqpr;
+        struct ofp10_queue_prop_rate *oqpr;
 
         oqpr = ofpbuf_put_zeros(reply, sizeof *oqpr);
         oqpr->prop_header.property = htons(property);
@@ -2593,8 +2593,8 @@ ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
         len_ofs = (char *) &opq12->len - (char *) reply->data;
     }
 
-    put_queue_rate(reply, OFPQT_MIN_RATE, oqc->min_rate);
-    put_queue_rate(reply, OFPQT_MAX_RATE, oqc->max_rate);
+    put_ofp10_queue_rate(reply, OFPQT10_MIN_RATE, oqc->min_rate);
+    put_ofp10_queue_rate(reply, OFPQT11_MAX_RATE, oqc->max_rate);
 
     len = ofpbuf_at(reply, len_ofs, sizeof *len);
     *len = htons(reply->size - start_ofs);
@@ -2628,12 +2628,13 @@ ofputil_decode_queue_get_config_reply(struct ofpbuf *reply, ofp_port_t *port)
 }
 
 static enum ofperr
-parse_queue_rate(const struct ofp_queue_prop_header *hdr, uint16_t *rate)
+parse_ofp10_queue_rate(const struct ofp10_queue_prop_header *hdr,
+                       uint16_t *rate)
 {
-    const struct ofp_queue_prop_rate *oqpr;
+    const struct ofp10_queue_prop_rate *oqpr;
 
     if (hdr->len == htons(sizeof *oqpr)) {
-        oqpr = (const struct ofp_queue_prop_rate *) hdr;
+        oqpr = (const struct ofp10_queue_prop_rate *) hdr;
         *rate = ntohs(oqpr->rate);
         return 0;
     } else {
@@ -2692,7 +2693,7 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
     len -= opq_len;
 
     while (len > 0) {
-        const struct ofp_queue_prop_header *hdr;
+        const struct ofp10_queue_prop_header *hdr;
         unsigned int property;
         unsigned int prop_len;
         enum ofperr error = 0;
@@ -2705,12 +2706,12 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
 
         property = ntohs(hdr->property);
         switch (property) {
-        case OFPQT_MIN_RATE:
-            error = parse_queue_rate(hdr, &queue->min_rate);
+        case OFPQT10_MIN_RATE:
+            error = parse_ofp10_queue_rate(hdr, &queue->min_rate);
             break;
 
-        case OFPQT_MAX_RATE:
-            error = parse_queue_rate(hdr, &queue->max_rate);
+        case OFPQT11_MAX_RATE:
+            error = parse_ofp10_queue_rate(hdr, &queue->max_rate);
             break;
 
         default:
