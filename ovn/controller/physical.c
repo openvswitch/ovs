@@ -279,7 +279,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             if (ofport && binding->tag) {
                 tag = *binding->tag;
             }
-        } else if (binding->parent_port) {
+        } else if (binding->parent_port && *binding->parent_port) {
             if (!binding->tag) {
                 continue;
             }
@@ -542,7 +542,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                          &remote_ofpacts);
                 put_resubmit(OFTABLE_DROP_LOOPBACK, &remote_ofpacts);
             } else if (simap_contains(&localvif_to_ofport,
-                               port->parent_port
+                               (port->parent_port && *port->parent_port)
                                ? port->parent_port : port->logical_port)) {
                 put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
                 put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
