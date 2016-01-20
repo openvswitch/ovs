@@ -178,58 +178,53 @@ OFPST_PORT_DESC reply (OF1.5):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-dnl This is really bare-bones.
-dnl It at least checks request and reply serialization and deserialization.
-AT_SETUP([ofproto - queue stats - (OpenFlow 1.0)])
+dnl CHECK_QUEUE_STATS(label, option, format)
+m4_define([CHECK_QUEUE_STATS], [
+AT_SETUP([ofproto - queue stats - (OpenFlow $1)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -vwarn queue-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
-OFPST_QUEUE reply: 0 queues
-])
-AT_CHECK([ovs-ofctl -vwarn queue-stats br0 ANY 5], [0],
-  [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (xid=0x2): port=ANY queue=5
-])
-AT_CHECK([ovs-ofctl -vwarn queue-stats br0 10], [0],
-  [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (xid=0x2): port=10 queue=ALL
-])
-OVS_VSWITCHD_STOP
-AT_CLEANUP
 
-AT_SETUP([ofproto - queue stats - (OpenFlow 1.2)])
-OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn queue-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
-OFPST_QUEUE reply (OF1.2): 0 queues
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 | STRIP_XIDS], [0],
+  [OFPST_QUEUE reply$3: 1 queues
+  port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn queue-stats br0 ALL 5], [0],
-  [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (OF1.2) (xid=0x2): port=ANY queue=5
-])
-AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn queue-stats br0 10], [0],
-  [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (OF1.2) (xid=0x2): port=10 queue=ALL
-])
-OVS_VSWITCHD_STOP
-AT_CLEANUP
 
-AT_SETUP([ofproto - queue stats - (OpenFlow 1.4)])
-OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
-OFPST_QUEUE reply (OF1.4): 0 queues
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL | STRIP_XIDS], [0],
+  [OFPST_QUEUE reply$3: 1 queues
+  port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0 ALL 5], [0],
-  [OFPT_ERROR (OF1.4) (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (OF1.4) (xid=0x2): port=ANY queue=5
+
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL 0 | STRIP_XIDS], [0],
+  [OFPST_QUEUE reply$3: 1 queues
+  port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn queue-stats br0 10], [0],
-  [OFPT_ERROR (OF1.4) (xid=0x2): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (OF1.4) (xid=0x2): port=10 queue=ALL
+
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 ANY 0 | STRIP_XIDS], [0],
+  [OFPST_QUEUE reply$3: 1 queues
+  port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
+])
+
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL 5 | STRIP_XIDS], [0],
+  [OFPT_ERROR$3: OFPQOFC_BAD_QUEUE
+OFPST_QUEUE request$3: port=LOCAL queue=5
+])
+
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 ANY 5 | STRIP_XIDS], [0],
+  [OFPT_ERROR$3: OFPQOFC_BAD_QUEUE
+OFPST_QUEUE request$3: port=ANY queue=5
+])
+
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 10 | STRIP_XIDS], [0],
+  [OFPT_ERROR$3: OFPQOFC_BAD_PORT
+OFPST_QUEUE request$3: port=10 queue=ALL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+])
+CHECK_QUEUE_STATS([1.0], [OpenFlow10], [])
+CHECK_QUEUE_STATS([1.1], [OpenFlow11], [ (OF1.1)])
+CHECK_QUEUE_STATS([1.2], [OpenFlow12], [ (OF1.2)])
+CHECK_QUEUE_STATS([1.3], [OpenFlow13], [ (OF1.3)])
+CHECK_QUEUE_STATS([1.4], [OpenFlow14], [ (OF1.4)])
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
@@ -239,11 +234,14 @@ ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-ofctl queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY: port=1
+queue 0:
 ])
 AT_CHECK([ovs-ofctl queue-get-config br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY: port=1
 OFPT_QUEUE_GET_CONFIG_REPLY: port=2
+queue 0:
+queue 0:
 ])
 AT_CHECK([ovs-ofctl queue-get-config br0 10], [0],
   [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_PORT
@@ -258,6 +256,7 @@ ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
+queue 0:
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10], [0],
   [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT
@@ -272,10 +271,14 @@ ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
+queue 0:
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 ANY], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=ANY
+queue 0:
+queue 0:
+queue 0:
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10], [0],
   [OFPT_ERROR (OF1.2) (xid=0x2): OFPQOFC_BAD_PORT

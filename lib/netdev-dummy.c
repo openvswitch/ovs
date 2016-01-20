@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1058,6 +1058,92 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 static int
+netdev_dummy_get_queue(const struct netdev *netdev OVS_UNUSED,
+                       unsigned int queue_id, struct smap *details OVS_UNUSED)
+{
+    if (queue_id == 0) {
+        return 0;
+    } else {
+        return EINVAL;
+    }
+}
+
+static void
+netdev_dummy_init_queue_stats(struct netdev_queue_stats *stats)
+{
+    *stats = (struct netdev_queue_stats) {
+        .tx_bytes = UINT64_MAX,
+        .tx_packets = UINT64_MAX,
+        .tx_errors = UINT64_MAX,
+        .created = LLONG_MIN,
+    };
+}
+
+static int
+netdev_dummy_get_queue_stats(const struct netdev *netdev OVS_UNUSED,
+                             unsigned int queue_id,
+                             struct netdev_queue_stats *stats)
+{
+    if (queue_id == 0) {
+        netdev_dummy_init_queue_stats(stats);
+        return 0;
+    } else {
+        return EINVAL;
+    }
+}
+
+struct netdev_dummy_queue_state {
+    unsigned int next_queue;
+};
+
+static int
+netdev_dummy_queue_dump_start(const struct netdev *netdev OVS_UNUSED,
+                              void **statep)
+{
+    struct netdev_dummy_queue_state *state = xmalloc(sizeof *state);
+    state->next_queue = 0;
+    *statep = state;
+    return 0;
+}
+
+static int
+netdev_dummy_queue_dump_next(const struct netdev *netdev OVS_UNUSED,
+                             void *state_,
+                             unsigned int *queue_id,
+                             struct smap *details OVS_UNUSED)
+{
+    struct netdev_dummy_queue_state *state = state_;
+    if (state->next_queue == 0) {
+        *queue_id = 0;
+        state->next_queue++;
+        return 0;
+    } else {
+        return EOF;
+    }
+}
+
+static int
+netdev_dummy_queue_dump_done(const struct netdev *netdev OVS_UNUSED,
+                             void *state)
+{
+    free(state);
+    return 0;
+}
+
+static int
+netdev_dummy_dump_queue_stats(const struct netdev *netdev OVS_UNUSED,
+                              void (*cb)(unsigned int queue_id,
+                                         struct netdev_queue_stats *,
+                                         void *aux),
+                              void *aux)
+{
+    struct netdev_queue_stats stats;
+    netdev_dummy_init_queue_stats(&stats);
+    cb(0, &stats, aux);
+    return 0;
+}
+
+static int
 netdev_dummy_get_ifindex(const struct netdev *netdev)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
@@ -1147,14 +1233,14 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* get_qos_capabilities */
     NULL,                       /* get_qos */
     NULL,                       /* set_qos */
-    NULL,                       /* get_queue */
+    netdev_dummy_get_queue,
     NULL,                       /* set_queue */
     NULL,                       /* delete_queue */
-    NULL,                       /* get_queue_stats */
-    NULL,                       /* queue_dump_start */
-    NULL,                       /* queue_dump_next */
-    NULL,                       /* queue_dump_done */
-    NULL,                       /* dump_queue_stats */
+    netdev_dummy_get_queue_stats,
+    netdev_dummy_queue_dump_start,
+    netdev_dummy_queue_dump_next,
+    netdev_dummy_queue_dump_done,
+    netdev_dummy_dump_queue_stats,
 
     netdev_dummy_get_in4,       /* get_in4 */
     NULL,                       /* set_in4 */
