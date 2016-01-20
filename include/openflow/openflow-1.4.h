@@ -125,7 +125,7 @@ enum ofp14_table_mod_prop_eviction_flag {
 enum ofp14_table_reason {
     OFPTR_VACANCY_DOWN = 3,    /* Vacancy down threshold event. */
     OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
-    OFPTR_N_REASONS            /* Denotes number of reasons. */
+#define OFPTR_BITS ((1u << OFPTR_VACANCY_DOWN) | (1u << OFPTR_VACANCY_UP))
 };
 
 struct ofp14_table_mod_prop_vacancy {
@@ -253,27 +253,6 @@ enum ofp14_requestforward_reason {
     OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
     OFPRFR_METER_MOD = 1,      /* Forward meter mod requests. */
     OFPRFR_N_REASONS           /* Denotes number of reasons. */
-};
-
-/* Async Config property types.
-* Low order bit cleared indicates a property for the slave role.
-* Low order bit set indicates a property for the master/equal role.
-*/
-enum ofp14_async_config_prop_type {
-    OFPACPT_PACKET_IN_SLAVE       = 0, /* Packet-in mask for slave. */
-    OFPACPT_PACKET_IN_MASTER      = 1, /* Packet-in mask for master. */
-    OFPACPT_PORT_STATUS_SLAVE     = 2, /* Port-status mask for slave. */
-    OFPACPT_PORT_STATUS_MASTER    = 3, /* Port-status mask for master. */
-    OFPACPT_FLOW_REMOVED_SLAVE    = 4, /* Flow removed mask for slave. */
-    OFPACPT_FLOW_REMOVED_MASTER   = 5, /* Flow removed mask for master. */
-    OFPACPT_ROLE_STATUS_SLAVE     = 6, /* Role status mask for slave. */
-    OFPACPT_ROLE_STATUS_MASTER    = 7, /* Role status mask for master. */
-    OFPACPT_TABLE_STATUS_SLAVE    = 8, /* Table status mask for slave. */
-    OFPACPT_TABLE_STATUS_MASTER   = 9, /* Table status mask for master. */
-    OFPACPT_REQUESTFORWARD_SLAVE  = 10, /* RequestForward mask for slave. */
-    OFPACPT_REQUESTFORWARD_MASTER = 11, /* RequestForward mask for master. */
-    OFPTFPT_EXPERIMENTER_SLAVE    = 0xFFFE, /* Experimenter for slave. */
-    OFPTFPT_EXPERIMENTER_MASTER   = 0xFFFF, /* Experimenter for master. */
 };
 
 /* Role status event message. */

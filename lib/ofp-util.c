@@ -63,56 +63,6 @@ static ovs_be32 ofputil_encode_table_config(enum ofputil_table_miss,
                                             enum ofputil_table_vacancy,
                                             enum ofp_version);
 
-static enum ofperr
-ofputil_check_mask(uint16_t type, uint32_t mask)
-{
-    switch (type) {
-    case OFPACPT_PACKET_IN_SLAVE:
-    case OFPACPT_PACKET_IN_MASTER:
-        if (mask > MAXIMUM_MASK_PACKET_IN) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_FLOW_REMOVED_SLAVE:
-    case OFPACPT_FLOW_REMOVED_MASTER:
-        if (mask > MAXIMUM_MASK_FLOW_REMOVED) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_PORT_STATUS_SLAVE:
-    case OFPACPT_PORT_STATUS_MASTER:
-        if (mask > MAXIMUM_MASK_PORT_STATUS) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_ROLE_STATUS_SLAVE:
-    case OFPACPT_ROLE_STATUS_MASTER:
-        if (mask > MAXIMUM_MASK_ROLE_STATUS) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_TABLE_STATUS_SLAVE:
-    case OFPACPT_TABLE_STATUS_MASTER:
-        if ((mask < MINIMUM_MASK_TABLE_STATUS && mask != 0) |
-            (mask > MAXIMUM_MASK_TABLE_STATUS)) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_REQUESTFORWARD_SLAVE:
-    case OFPACPT_REQUESTFORWARD_MASTER:
-        if (mask > MAXIMUM_MASK_REQUESTFORWARD) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-    }
-    return 0;
-}
-
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
  * an IP netmask with a 1 in each bit that must match and a 0 in each bit that
  * is wildcarded.
@@ -9484,6 +9434,141 @@ ofputil_async_msg_type_to_string(enum ofputil_async_msg_type type)
     }
 }
 
+struct ofp14_async_prop {
+    uint64_t prop_type;
+    enum ofputil_async_msg_type oam;
+    bool master;
+    uint32_t allowed10, allowed14;
+};
+
+#define AP_PAIR(SLAVE_PROP_TYPE, OAM, A10, A14) \
+    { SLAVE_PROP_TYPE,       OAM, false, A10, (A14) ? (A14) : (A10) },  \
+    { (SLAVE_PROP_TYPE + 1), OAM, true,  A10, (A14) ? (A14) : (A10) }
+
+static const struct ofp14_async_prop async_props[] = {
+    AP_PAIR( 0, OAM_PACKET_IN,      OFPR10_BITS, OFPR14_BITS),
+    AP_PAIR( 2, OAM_PORT_STATUS,    (1 << OFPPR_N_REASONS) - 1, 0),
+    AP_PAIR( 4, OAM_FLOW_REMOVED,   (1 << OVS_OFPRR_NONE) - 1, 0),
+    AP_PAIR( 6, OAM_ROLE_STATUS,    (1 << OFPCRR_N_REASONS) - 1, 0),
+    AP_PAIR( 8, OAM_TABLE_STATUS,   OFPTR_BITS, 0),
+    AP_PAIR(10, OAM_REQUESTFORWARD, (1 << OFPRFR_N_REASONS) - 1, 0),
+};
+
+#define FOR_EACH_ASYNC_PROP(VAR)                                \
+    for (const struct ofp14_async_prop *VAR = async_props;      \
+         VAR < &async_props[ARRAY_SIZE(async_props)]; VAR++)
+
+static const struct ofp14_async_prop *
+get_ofp14_async_config_prop_by_prop_type(uint64_t prop_type)
+{
+    FOR_EACH_ASYNC_PROP (ap) {
+        if (prop_type == ap->prop_type) {
+            return ap;
+        }
+    }
+    return NULL;
+}
+
+static const struct ofp14_async_prop *
+get_ofp14_async_config_prop_by_oam(enum ofputil_async_msg_type oam,
+                                   bool master)
+{
+    FOR_EACH_ASYNC_PROP (ap) {
+        if (ap->oam == oam && ap->master == master) {
+            return ap;
+        }
+    }
+    return NULL;
+}
+
+static uint32_t
+ofp14_async_prop_allowed(const struct ofp14_async_prop *prop,
+                         enum ofp_version version)
+{
+    return version >= OFP14_VERSION ? prop->allowed14 : prop->allowed10;
+}
+
+static ovs_be32
+encode_async_mask(const struct ofputil_async_cfg *src,
+                  const struct ofp14_async_prop *ap,
+                  enum ofp_version version)
+{
+    uint32_t mask = ap->master ? src->master[ap->oam] : src->slave[ap->oam];
+    return htonl(mask & ofp14_async_prop_allowed(ap, version));
+}
+
+static enum ofperr
+decode_async_mask(ovs_be32 src,
+                  const struct ofp14_async_prop *ap, enum ofp_version version,
+                  bool loose, struct ofputil_async_cfg *dst)
+{
+    uint32_t mask = ntohl(src);
+    uint32_t allowed = ofp14_async_prop_allowed(ap, version);
+    if (mask & ~allowed) {
+        OFPPROP_LOG(&bad_ofmsg_rl, loose,
+                    "bad value %#x for %s (allowed mask %#x)",
+                    mask, ofputil_async_msg_type_to_string(ap->oam),
+                    allowed);
+        mask &= allowed;
+        if (!loose) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+    }
+
+    uint32_t *array = ap->master ? dst->master : dst->slave;
+    array[ap->oam] = mask;
+    return 0;
+}
+
+static enum ofperr
+parse_async_tlv(const struct ofpbuf *property,
+                const struct ofp14_async_prop *ap,
+                struct ofputil_async_cfg *ac,
+                enum ofp_version version, bool loose)
+{
+    enum ofperr error;
+    ovs_be32 mask;
+
+    error  = ofpprop_parse_be32(property, &mask);
+    if (error) {
+        return error;
+    }
+
+    if (ofpprop_is_experimenter(ap->prop_type)) {
+        /* For experimenter properties, whether a property is for the master or
+         * slave role is indicated by both 'type' and 'exp_type' in struct
+         * ofp_prop_experimenter.  Check that these are consistent. */
+        const struct ofp_prop_experimenter *ope = property->data;
+        bool should_be_master = ope->type == htons(0xffff);
+        if (should_be_master != ap->master) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "async property type %#"PRIx16" "
+                         "indicates %s role but exp_type %"PRIu32" indicates "
+                         "%s role",
+                         ntohs(ope->type),
+                         should_be_master ? "master" : "slave",
+                         ntohl(ope->exp_type),
+                         ap->master ? "master" : "slave");
+            return OFPERR_OFPBPC_BAD_EXP_TYPE;
+        }
+    }
+
+    return decode_async_mask(mask, ap, version, loose, ac);
+}
+
+static void
+decode_legacy_async_masks(const ovs_be32 masks[2],
+                          enum ofputil_async_msg_type oam,
+                          enum ofp_version version,
+                          struct ofputil_async_cfg *dst)
+{
+    for (int i = 0; i < 2; i++) {
+        bool master = i == 0;
+        const struct ofp14_async_prop *ap
+            = get_ofp14_async_config_prop_by_oam(oam, master);
+        decode_async_mask(masks[i], ap, version, true, dst);
+    }
+}
+
 /* Decodes the OpenFlow "set async config" request and "get async config
  * reply" message in '*oh' into an abstract form in 'ac'.
  *
@@ -9515,90 +9600,35 @@ ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
         raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
         const struct nx_async_config *msg = ofpmsg_body(oh);
 
-        ac->master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
-        ac->master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
-        ac->master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
-
-        ac->slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
-        ac->slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
-        ac->slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
+        decode_legacy_async_masks(msg->packet_in_mask, OAM_PACKET_IN,
+                                  oh->version, ac);
+        decode_legacy_async_masks(msg->port_status_mask, OAM_PORT_STATUS,
+                                  oh->version, ac);
+        decode_legacy_async_masks(msg->flow_removed_mask, OAM_FLOW_REMOVED,
+                                  oh->version, ac);
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
-
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
             uint64_t type;
-            uint32_t mask;
 
             error = ofpprop_pull__(&b, &property, 8, 0xfffe, &type);
             if (error) {
                 return error;
             }
 
-            error = ofpprop_parse_u32(&property, &mask);
+            const struct ofp14_async_prop *ap
+                = get_ofp14_async_config_prop_by_prop_type(type);
+            error = (ap
+                     ? parse_async_tlv(&property, ap, ac, oh->version, loose)
+                     : OFPPROP_UNKNOWN(loose, "async config", type));
             if (error) {
-                return error;
-            }
-
-            if (!loose) {
-                error = ofputil_check_mask(type, mask);
-                if (error) {
-                    return error;
+                /* Most messages use OFPBPC_BAD_TYPE but async has its own (who
+                 * knows why, it's OpenFlow. */
+                if (error == OFPERR_OFPBPC_BAD_TYPE) {
+                    error = OFPERR_OFPACFC_UNSUPPORTED;
                 }
-             }
-
-            switch (type) {
-            case OFPACPT_PACKET_IN_SLAVE:
-                ac->slave[OAM_PACKET_IN] = mask;
-                break;
-
-            case OFPACPT_PACKET_IN_MASTER:
-                ac->master[OAM_PACKET_IN] = mask;
-                break;
-
-            case OFPACPT_PORT_STATUS_SLAVE:
-                ac->slave[OAM_PORT_STATUS] = mask;
-                break;
-
-            case OFPACPT_PORT_STATUS_MASTER:
-                ac->master[OAM_PORT_STATUS] = mask;
-                break;
-
-            case OFPACPT_FLOW_REMOVED_SLAVE:
-                ac->slave[OAM_FLOW_REMOVED] = mask;
-                break;
-
-            case OFPACPT_FLOW_REMOVED_MASTER:
-                ac->master[OAM_FLOW_REMOVED] = mask;
-                break;
-
-            case OFPACPT_ROLE_STATUS_SLAVE:
-                ac->slave[OAM_ROLE_STATUS] = mask;
-                break;
-
-            case OFPACPT_ROLE_STATUS_MASTER:
-                ac->master[OAM_ROLE_STATUS] = mask;
-                break;
-
-            case OFPACPT_TABLE_STATUS_SLAVE:
-                ac->slave[OAM_TABLE_STATUS] = mask;
-                break;
-
-            case OFPACPT_TABLE_STATUS_MASTER:
-                ac->master[OAM_TABLE_STATUS] = mask;
-                break;
-
-            case OFPACPT_REQUESTFORWARD_SLAVE:
-                ac->slave[OAM_REQUESTFORWARD] = mask;
-                break;
-
-            case OFPACPT_REQUESTFORWARD_MASTER:
-                ac->master[OAM_REQUESTFORWARD] = mask;
-                break;
-
-            default:
-                error = loose ? 0 : OFPERR_OFPACFC_UNSUPPORTED;
                 return error;
             }
         }
@@ -9608,88 +9638,68 @@ ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
     return 0;
 }
 
-/* Append all asynchronous configuration properties in GET_ASYNC_REPLY
- * message, describing if various set of asynchronous messages are enabled
- * or not. */
-static enum ofperr
-ofputil_get_async_reply(struct ofpbuf *buf, const uint32_t master_mask,
-                        const uint32_t slave_mask, const uint32_t type)
+static void
+encode_legacy_async_masks(const struct ofputil_async_cfg *ac,
+                          enum ofputil_async_msg_type oam,
+                          enum ofp_version version,
+                          ovs_be32 masks[2])
 {
-    int role;
-
-    for (role = 0; role < 2; role++) {
-        enum ofp14_async_config_prop_type prop_type;
-
-        switch (type) {
-        case OAM_PACKET_IN:
-            prop_type = (role ? OFPACPT_PACKET_IN_SLAVE
-                              : OFPACPT_PACKET_IN_MASTER);
-            break;
-
-        case OAM_PORT_STATUS:
-            prop_type = (role ? OFPACPT_PORT_STATUS_SLAVE
-                              : OFPACPT_PORT_STATUS_MASTER);
-            break;
-
-        case OAM_FLOW_REMOVED:
-            prop_type = (role ? OFPACPT_FLOW_REMOVED_SLAVE
-                              : OFPACPT_FLOW_REMOVED_MASTER);
-            break;
-
-        case OAM_ROLE_STATUS:
-            prop_type = (role ? OFPACPT_ROLE_STATUS_SLAVE
-                              : OFPACPT_ROLE_STATUS_MASTER);
-            break;
-
-        case OAM_TABLE_STATUS:
-            prop_type = (role ? OFPACPT_TABLE_STATUS_SLAVE
-                              : OFPACPT_TABLE_STATUS_MASTER);
-            break;
-
-        case OAM_REQUESTFORWARD:
-            prop_type = (role ? OFPACPT_REQUESTFORWARD_SLAVE
-                              : OFPACPT_REQUESTFORWARD_MASTER);
-            break;
-
-        default:
-            return OFPERR_OFPBRC_BAD_TYPE;
-        }
-        ofpprop_put_u32(buf, prop_type, role ? slave_mask : master_mask);
+    for (int i = 0; i < 2; i++) {
+        bool master = i == 0;
+        const struct ofp14_async_prop *ap
+            = get_ofp14_async_config_prop_by_oam(oam, master);
+        masks[i] = encode_async_mask(ac, ap, version);
     }
-
-    return 0;
 }
 
-/* Returns a OpenFlow message that encodes 'asynchronous configuration' properly
- * as a reply to get async config request. */
+static void
+ofputil_put_async_config__(const struct ofputil_async_cfg *ac,
+                           struct ofpbuf *buf, bool tlv,
+                           enum ofp_version version, uint32_t oams)
+{
+    if (!tlv) {
+        struct nx_async_config *msg = ofpbuf_put_zeros(buf, sizeof *msg);
+        encode_legacy_async_masks(ac, OAM_PACKET_IN, version,
+                                  msg->packet_in_mask);
+        encode_legacy_async_masks(ac, OAM_PORT_STATUS, version,
+                                  msg->port_status_mask);
+        encode_legacy_async_masks(ac, OAM_FLOW_REMOVED, version,
+                                  msg->flow_removed_mask);
+    } else {
+        FOR_EACH_ASYNC_PROP (ap) {
+            if (oams & (1u << ap->oam)) {
+                size_t ofs = buf->size;
+                ofpprop_put_be32(buf, ap->prop_type,
+                                 encode_async_mask(ac, ap, version));
+
+                /* For experimenter properties, we need to use type 0xfffe for
+                 * master and 0xffff for slaves. */
+                if (ofpprop_is_experimenter(ap->prop_type)) {
+                    struct ofp_prop_experimenter *ope
+                        = ofpbuf_at_assert(buf, ofs, sizeof *ope);
+                    ope->type = ap->master ? htons(0xffff) : htons(0xfffe);
+                }
+            }
+        }
+    }
+}
+
+/* Encodes and returns a reply to the OFPT_GET_ASYNC_REQUEST in 'oh' that
+ * states that the asynchronous message configuration is 'ac'. */
 struct ofpbuf *
 ofputil_encode_get_async_config(const struct ofp_header *oh,
                                 const struct ofputil_async_cfg *ac)
 {
     struct ofpbuf *buf;
-    uint32_t type;
 
-    buf = ofpraw_alloc_reply((oh->version < OFP14_VERSION
-                              ? OFPRAW_OFPT13_GET_ASYNC_REPLY
-                              : OFPRAW_OFPT14_GET_ASYNC_REPLY), oh, 0);
-
-    if (oh->version < OFP14_VERSION) {
-        struct nx_async_config *msg;
-        msg = ofpbuf_put_zeros(buf, sizeof *msg);
-
-        msg->packet_in_mask[0] = htonl(ac->master[OAM_PACKET_IN]);
-        msg->port_status_mask[0] = htonl(ac->master[OAM_PORT_STATUS]);
-        msg->flow_removed_mask[0] = htonl(ac->master[OAM_FLOW_REMOVED]);
-
-        msg->packet_in_mask[1] = htonl(ac->slave[OAM_PACKET_IN]);
-        msg->port_status_mask[1] = htonl(ac->slave[OAM_PORT_STATUS]);
-        msg->flow_removed_mask[1] = htonl(ac->slave[OAM_FLOW_REMOVED]);
-    } else if (oh->version == OFP14_VERSION) {
-        for (type = 0; type < OAM_N_TYPES; type++) {
-            ofputil_get_async_reply(buf, ac->master[type], ac->slave[type],
-                                    type);
-        }
-    }
+    enum ofpraw raw = (oh->version < OFP14_VERSION
+                       ? OFPRAW_OFPT13_GET_ASYNC_REPLY
+                       : OFPRAW_OFPT14_GET_ASYNC_REPLY);
+    struct ofpbuf *reply = ofpraw_alloc_reply(raw, oh, 0);
+    ofputil_put_async_config__(ac, reply,
+                               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY,
+                               oh->version, UINT32_MAX);
+    return reply;
 
     return buf;
 }

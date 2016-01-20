@@ -2892,6 +2892,9 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 05 00 08 00 00 00 05 \
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_INVALID***
+], [stderr])
+AT_CHECK([sed 's/.*|//' stderr], [0],
+  [bad value 0x40 for PACKET_IN (allowed mask 0x3f)
 ])
 AT_CLEANUP
 
@@ -2904,6 +2907,9 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 05 00 08 00 00 00 05\
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_UNSUPPORTED***
+], [stderr])
+AT_CHECK([sed 's/.*|//' stderr], [0],
+  [unknown async config property type 17
 ])
 AT_CLEANUP
 

@@ -2003,7 +2003,6 @@ ofp_table_reason_to_string(enum ofp14_table_reason reason,
     case OFPTR_VACANCY_UP:
         return "vacancy_up";
 
-    case OFPTR_N_REASONS:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
