@@ -266,12 +266,12 @@ process_counter_sample(struct sflow_xdr *x)
 	printf(" actorOper=0x%"PRIx32, state.v.actorOper);
 	printf(" partnerAdmin=0x%"PRIx32, state.v.partnerAdmin);
 	printf(" partnerOper=0x%"PRIx32, state.v.partnerOper);
-	printf(" LACPUDsRx=%"PRIu32, sflowxdr_next(x));
+	printf(" LACPDUsRx=%"PRIu32, sflowxdr_next(x));
 	printf(" markerPDUsRx=%"PRIu32, sflowxdr_next(x));
 	printf(" markerRespPDUsRx=%"PRIu32, sflowxdr_next(x));
 	printf(" unknownRx=%"PRIu32, sflowxdr_next(x));
 	printf(" illegalRx=%"PRIu32, sflowxdr_next(x));
-	printf(" LACPUDsTx=%"PRIu32, sflowxdr_next(x));
+	printf(" LACPDUsTx=%"PRIu32, sflowxdr_next(x));
 	printf(" markerPDUsTx=%"PRIu32, sflowxdr_next(x));
 	printf(" markerRespPDUsTx=%"PRIu32, sflowxdr_next(x));
         printf("\n");

@@ -5110,12 +5110,12 @@ LACPCOUNTERS
 	actorOper=0xbf
 	partnerAdmin=0x0
 	partnerOper=0x2
-	LACPUDsRx=0
+	LACPDUsRx=0
 	markerPDUsRx=4294967295
 	markerRespPDUsRx=4294967295
 	unknownRx=4294967295
 	illegalRx=0
-	LACPUDsTx=1
+	LACPDUsTx=1
 	markerPDUsTx=4294967295
 	markerRespPDUsTx=4294967295
 ])
