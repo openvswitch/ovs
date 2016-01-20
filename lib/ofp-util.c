@@ -3785,7 +3785,7 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
         error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
@@ -3798,9 +3798,7 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
             break;
 
         default:
-            OFPPROP_LOG(&bad_ofmsg_rl, true,
-                        "unknown port property %"PRIu16, type);
-            error = 0;
+            error = OFPPROP_UNKNOWN(true, "port", type);
             break;
         }
 
@@ -4390,7 +4388,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
-            uint16_t type;
+            uint64_t type;
 
             error = ofpprop_pull(&b, &property, &type);
             if (error) {
@@ -4403,15 +4401,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
                 break;
 
             default:
-                OFPPROP_LOG(&bad_ofmsg_rl, loose,
-                            "unknown port_mod property %"PRIu16, type);
-                if (loose) {
-                    error = 0;
-                } else if (type == OFPPMPT14_EXPERIMENTER) {
-                    error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
-                } else {
-                    error = OFPERR_OFPBRC_BAD_TYPE;
-                }
+                error = OFPPROP_UNKNOWN(loose, "port_mod", type);
                 break;
             }
 
@@ -4496,13 +4486,13 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
 
 static enum ofperr
 pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
-                            uint16_t *typep)
+                            uint64_t *typep)
 {
     enum ofperr error;
 
     error = ofpprop_pull(msg, payload, typep);
     if (payload && !error) {
-        ofpbuf_pull(payload, sizeof(struct ofp_prop_header));
+        ofpbuf_pull(payload, (uint8_t *)msg->msg - (uint8_t *)msg->header);
     }
     return error;
 }
@@ -4514,10 +4504,10 @@ parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
     uint32_t types = 0;
 
     while (payload->size > 0) {
-        uint16_t type;
         enum ofperr error;
+        uint64_t type;
 
-        error = ofpprop_pull__(payload, NULL, 1, &type);
+        error = ofpprop_pull__(payload, NULL, 1, 0x10000, &type);
         if (error) {
             return error;
         }
@@ -4537,7 +4527,7 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
     while (payload->size > 0) {
         enum ovs_instruction_type inst;
         enum ofperr error;
-        uint16_t ofpit;
+        uint64_t ofpit;
 
         /* OF1.3 and OF1.4 aren't clear about padding in the instruction IDs.
          * It seems clear that they aren't padded to 8 bytes, though, because
@@ -4548,7 +4538,7 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
          *
          * Anyway, we just assume they're all glommed together on byte
          * boundaries. */
-        error = ofpprop_pull__(payload, NULL, 1, &ofpit);
+        error = ofpprop_pull__(payload, NULL, 1, 0x10000, &ofpit);
         if (error) {
             return error;
         }
@@ -4682,7 +4672,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
         error = pull_table_feature_property(&properties, &payload, &type);
         if (error) {
@@ -4752,9 +4742,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         case OFPTFPT13_EXPERIMENTER:
         case OFPTFPT13_EXPERIMENTER_MISS:
         default:
-            OFPPROP_LOG(&bad_ofmsg_rl, loose,
-                        "unknown table features property %"PRIu16, type);
-            error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
+            error = OFPPROP_UNKNOWN(loose, "table features", type);
             break;
         }
         if (error) {
@@ -4977,7 +4965,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
         error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
@@ -4994,9 +4982,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
             break;
 
         default:
-            OFPPROP_LOG(&bad_ofmsg_rl, true,
-                        "unknown table_desc property %"PRIu16, type);
-            error = 0;
+            error = OFPPROP_UNKNOWN(true, "table_desc", type);
             break;
         }
 
@@ -5266,7 +5252,7 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
-            uint16_t type;
+            uint64_t type;
 
             error = ofpprop_pull(&b, &property, &type);
             if (error) {
@@ -7187,7 +7173,7 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
         error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
@@ -7200,9 +7186,7 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
             break;
 
         default:
-            OFPPROP_LOG(&bad_ofmsg_rl, true,
-                        "unknown port stats property %"PRIu16, type);
-            error = 0;
+            error = OFPPROP_UNKNOWN(true, "port stats", type);
             break;
         }
 
@@ -8128,7 +8112,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         while (properties.size > 0) {
             struct ofpbuf payload;
-            uint16_t type;
+            uint64_t type;
 
             err = ofpprop_pull(&properties, &payload, &type);
             if (err) {
@@ -8151,9 +8135,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
                 break;
 
             default:
-                OFPPROP_LOG(&bad_ofmsg_rl, false,
-                            "unknown group bucket property %"PRIu16, type);
-                err = OFPERR_OFPBPC_BAD_TYPE;
+                err = OFPPROP_UNKNOWN(false, "group bucket", type);
                 break;
             }
 
@@ -8295,67 +8277,6 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
 }
 
 static enum ofperr
-parse_group_prop_ntr(struct ofpbuf *payload, uint32_t exp_type,
-                     enum ofp11_group_type group_type,
-                     enum ofp15_group_mod_command group_cmd,
-                     struct ofputil_group_props *gp)
-{
-    enum ofperr error;
-
-    switch (exp_type) {
-    case NTRT_SELECTION_METHOD:
-        error = parse_group_prop_ntr_selection_method(payload, group_type,
-                                                      group_cmd, gp);
-        break;
-
-    default:
-        OFPPROP_LOG(&bad_ofmsg_rl, false,
-                    "unknown group property ntr experimenter type %"PRIu32,
-                    exp_type);
-        error = OFPERR_OFPBPC_BAD_TYPE;
-        break;
-    }
-
-    return error;
-}
-
-static enum ofperr
-parse_ofp15_group_prop_exp(struct ofpbuf *payload,
-                           enum ofp11_group_type group_type,
-                           enum ofp15_group_mod_command group_cmd,
-                           struct ofputil_group_props *gp)
-{
-    struct ofp_prop_experimenter *prop = payload->data;
-    uint16_t experimenter;
-    uint32_t exp_type;
-    enum ofperr error;
-
-    if (payload->size < sizeof *prop) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    experimenter = ntohl(prop->experimenter);
-    exp_type = ntohl(prop->exp_type);
-
-    switch (experimenter) {
-    case NTR_VENDOR_ID:
-    case NTR_COMPAT_VENDOR_ID:
-        error = parse_group_prop_ntr(payload, exp_type, group_type,
-                                     group_cmd, gp);
-        break;
-
-    default:
-        OFPPROP_LOG(&bad_ofmsg_rl, false,
-                    "unknown group property experimenter %"PRIu16,
-                    experimenter);
-        error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
-        break;
-    }
-
-    return error;
-}
-
-static enum ofperr
 parse_ofp15_group_properties(struct ofpbuf *msg,
                              enum ofp11_group_type group_type,
                              enum ofp15_group_mod_command group_cmd,
@@ -8370,7 +8291,7 @@ parse_ofp15_group_properties(struct ofpbuf *msg,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
         error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
@@ -8378,15 +8299,14 @@ parse_ofp15_group_properties(struct ofpbuf *msg,
         }
 
         switch (type) {
-        case OFPGPT15_EXPERIMENTER:
-            error = parse_ofp15_group_prop_exp(&payload, group_type,
-                                               group_cmd, gp);
+        case OFPPROP_EXP(NTR_VENDOR_ID, NTRT_SELECTION_METHOD):
+        case OFPPROP_EXP(NTR_COMPAT_VENDOR_ID, NTRT_SELECTION_METHOD):
+            error = parse_group_prop_ntr_selection_method(&payload, group_type,
+                                                          group_cmd, gp);
             break;
 
         default:
-            OFPPROP_LOG(&bad_ofmsg_rl, false,
-                        "unknown group property %"PRIu16, type);
-            error = OFPERR_OFPBPC_BAD_TYPE;
+            error = OFPPROP_UNKNOWN(false, "group", type);
             break;
         }
 
@@ -9600,9 +9520,9 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
             struct ofp14_async_config_prop_reasons *msg;
             struct ofpbuf property;
             enum ofperr error;
-            uint16_t type;
+            uint64_t type;
 
-            error = ofpprop_pull(&b, &property, &type);
+            error = ofpprop_pull__(&b, &property, 8, 0xfffe, &type);
             if (error) {
                 return error;
             }
