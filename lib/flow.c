@@ -199,6 +199,23 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     }                                           \
 }
 
+#define miniflow_push_uint8_(MF, OFS, VALUE)            \
+{                                                       \
+    MINIFLOW_ASSERT(MF.data < MF.end);                  \
+                                                        \
+    if ((OFS) % 8 == 0) {                               \
+        miniflow_set_map(MF, OFS / 8);                  \
+        *(uint8_t *)MF.data = VALUE;                    \
+    } else if ((OFS) % 8 == 7) {                        \
+        miniflow_assert_in_map(MF, OFS / 8);            \
+        *((uint8_t *)MF.data + 7) = VALUE;              \
+        MF.data++;                                      \
+    } else {                                            \
+        miniflow_assert_in_map(MF, OFS / 8);            \
+        *((uint8_t *)MF.data + ((OFS) % 8)) = VALUE;    \
+    }                                                   \
+}
+
 #define miniflow_pad_to_64_(MF, OFS)                            \
 {                                                               \
     MINIFLOW_ASSERT((OFS) % 8 != 0);                            \
@@ -210,6 +227,9 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 #define miniflow_push_be16_(MF, OFS, VALUE)                     \
     miniflow_push_uint16_(MF, OFS, (OVS_FORCE uint16_t)VALUE);
+
+#define miniflow_push_be8_(MF, OFS, VALUE)                     \
+    miniflow_push_uint8_(MF, OFS, (OVS_FORCE uint8_t)VALUE);
 
 #define miniflow_set_maps(MF, OFS, N_WORDS)                     \
 {                                                               \
@@ -261,6 +281,9 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 #define miniflow_push_be16(MF, FIELD, VALUE)                        \
     miniflow_push_be16_(MF, offsetof(struct flow, FIELD), VALUE)
+
+#define miniflow_push_uint8(MF, FIELD, VALUE)                      \
+    miniflow_push_uint8_(MF, offsetof(struct flow, FIELD), VALUE)
 
 #define miniflow_pad_to_64(MF, FIELD)                       \
     miniflow_pad_to_64_(MF, OFFSETOFEND(struct flow, FIELD))
