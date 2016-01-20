@@ -223,12 +223,6 @@ OFP_ASSERT(sizeof(struct ofp14_queue_stats) == 48);
 /* ## Miscellaneous. ## */
 /* ## -------------- ## */
 
-/* Common header for all async config Properties */
-struct ofp14_async_config_prop_header {
-    ovs_be16    type;       /* One of OFPACPT_*. */
-    ovs_be16    length;     /* Length in bytes of this property. */
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config_prop_header) == 4);
 /* Request forward reason */
 enum ofp14_requestforward_reason {
     OFPRFR_GROUP_MOD = 0,      /* Forward group mod requests. */
@@ -257,29 +251,6 @@ enum ofp14_async_config_prop_type {
     OFPTFPT_EXPERIMENTER_MASTER   = 0xFFFF, /* Experimenter for master. */
 };
 
-/* Experimenter async config property */
-struct ofp14_async_config_prop_experimenter {
-    ovs_be16        type;       /* One of OFPTFPT_EXPERIMENTER_SLAVE,
-                                   OFPTFPT_EXPERIMENTER_MASTER. */
-    ovs_be16        length;     /* Length in bytes of this property. */
-    ovs_be32        experimenter;  /* Experimenter ID which takes the same
-                                      form as in struct
-                                      ofp_experimenter_header. */
-    ovs_be32        exp_type;      /* Experimenter defined. */
-    /* Followed by:
-     *   - Exactly (length - 12) bytes containing the experimenter data, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config_prop_experimenter) == 12);
-
-/* Common header for all Role Properties */
-struct ofp14_role_prop_header {
-    ovs_be16 type;   /* One of OFPRPT_*. */
-    ovs_be16 length; /* Length in bytes of this property. */
-};
-OFP_ASSERT(sizeof(struct ofp14_role_prop_header) == 4);
-
 /* Role status event message. */
 struct ofp14_role_status {
     ovs_be32 role;              /* One of OFPCR_ROLE_*. */
@@ -304,21 +275,6 @@ enum ofp14_controller_role_reason {
 enum ofp14_role_prop_type {
     OFPRPT_EXPERIMENTER         = 0xFFFF, /* Experimenter property. */
 };
-
-/* Experimenter role property */
-struct ofp14_role_prop_experimenter {
-    ovs_be16        type;       /* One of OFPRPT_EXPERIMENTER. */
-    ovs_be16        length;     /* Length in bytes of this property. */
-    ovs_be32        experimenter; /* Experimenter ID which takes the same
-                                     form as in struct
-                                     ofp_experimenter_header. */
-    ovs_be32        exp_type;     /* Experimenter defined. */
-    /* Followed by:
-     *   - Exactly (length - 12) bytes containing the experimenter data, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-};
-OFP_ASSERT(sizeof(struct ofp14_role_prop_experimenter) == 12);
 
 /* Group/Meter request forwarding. */
 struct ofp14_requestforward {
