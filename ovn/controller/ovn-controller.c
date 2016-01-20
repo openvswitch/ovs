@@ -300,7 +300,7 @@ main(int argc, char *argv[])
             pinctrl_run(&ctx, br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            lflow_run(&ctx, &flow_table, &ct_zones);
+            lflow_run(&ctx, &flow_table, &ct_zones, &local_datapaths);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis_id, &ct_zones, &flow_table);
