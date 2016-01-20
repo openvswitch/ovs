@@ -274,6 +274,7 @@ enum ofp_capabilities {
 
 /* Why is this packet being sent to the controller? */
 enum ofp_packet_in_reason {
+    /* Standard reasons. */
     OFPR_NO_MATCH,          /* No matching flow. */
     OFPR_ACTION,            /* Action explicitly output to controller. */
     OFPR_INVALID_TTL,       /* Packet has invalid TTL. */
@@ -286,6 +287,10 @@ enum ofp_packet_in_reason {
 #define OFPR14_BITS                                                     \
     (OFPR10_BITS |                                                      \
      (1u << OFPR_ACTION_SET) | (1u << OFPR_GROUP) | (1u << OFPR_PACKET_OUT))
+
+    /* Nonstandard reason--not exposed via OpenFlow. */
+    OFPR_EXPLICIT_MISS,
+    OFPR_IMPLICIT_MISS,
 
     OFPR_N_REASONS
 };

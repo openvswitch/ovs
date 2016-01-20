@@ -100,9 +100,11 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
 {
     char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
     struct ofputil_packet_in pin;
+    uint32_t buffer_id;
+    size_t total_len;
     int error;
 
-    error = ofputil_decode_packet_in(&pin, oh);
+    error = ofputil_decode_packet_in(oh, &pin, &total_len, &buffer_id);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -116,35 +118,36 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
     }
 
-    ds_put_format(string, " total_len=%"PRIuSIZE" ", pin.total_len);
+    ds_put_format(string, " total_len=%"PRIuSIZE" ", total_len);
 
     match_format(&pin.flow_metadata, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_format(string, " (via %s)",
-                  ofputil_packet_in_reason_to_string(pin.reason, reasonbuf,
+                  ofputil_packet_in_reason_to_string(pin.reason,
+                                                     reasonbuf,
                                                      sizeof reasonbuf));
 
-    ds_put_format(string, " data_len=%"PRIuSIZE, pin.packet_len);
-    if (pin.buffer_id == UINT32_MAX) {
+    ds_put_format(string, " data_len=%"PRIuSIZE, pin.len);
+    if (buffer_id == UINT32_MAX) {
         ds_put_format(string, " (unbuffered)");
-        if (pin.total_len != pin.packet_len) {
+        if (total_len != pin.len) {
             ds_put_format(string, " (***total_len != data_len***)");
         }
     } else {
-        ds_put_format(string, " buffer=0x%08"PRIx32, pin.buffer_id);
-        if (pin.total_len < pin.packet_len) {
+        ds_put_format(string, " buffer=0x%08"PRIx32, buffer_id);
+        if (total_len < pin.len) {
             ds_put_format(string, " (***total_len < data_len***)");
         }
     }
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
-        char *packet = ofp_packet_to_string(pin.packet, pin.packet_len);
+        char *packet = ofp_packet_to_string(pin.packet, pin.len);
         ds_put_cstr(string, packet);
         free(packet);
     }
     if (verbosity > 2) {
-        ds_put_hex_dump(string, pin.packet, pin.packet_len, 0, false);
+        ds_put_hex_dump(string, pin.packet, pin.len, 0, false);
     }
 }
 
@@ -2091,7 +2094,9 @@ ofp_print_set_async_config(struct ds *string, const struct ofp_header *oh,
 
                     reason = ofp_async_config_reason_to_string(
                         j, type, reasonbuf, sizeof reasonbuf);
-                    ds_put_format(string, " %s", reason);
+                    if (reason[0]) {
+                        ds_put_format(string, " %s", reason);
+                    }
                 }
             }
             if (!role) {
