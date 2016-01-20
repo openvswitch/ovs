@@ -225,6 +225,16 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     MF.data++;                                                  \
 }
 
+#define miniflow_pad_from_64_(MF, OFS)                          \
+{                                                               \
+    MINIFLOW_ASSERT(MF.data < MF.end);                          \
+                                                                \
+    MINIFLOW_ASSERT((OFS) % 8 != 0);                            \
+    miniflow_set_map(MF, OFS / 8);                              \
+                                                                \
+    memset((uint8_t *)MF.data, 0, (OFS) % 8);                   \
+}
+
 #define miniflow_push_be16_(MF, OFS, VALUE)                     \
     miniflow_push_uint16_(MF, OFS, (OVS_FORCE uint16_t)VALUE);
 
@@ -287,6 +297,9 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 #define miniflow_pad_to_64(MF, FIELD)                       \
     miniflow_pad_to_64_(MF, OFFSETOFEND(struct flow, FIELD))
+
+#define miniflow_pad_from_64(MF, FIELD)                       \
+    miniflow_pad_from_64_(MF, offsetof(struct flow, FIELD))
 
 #define miniflow_push_words(MF, FIELD, VALUEP, N_WORDS)                 \
     miniflow_push_words_(MF, offsetof(struct flow, FIELD), VALUEP, N_WORDS)
