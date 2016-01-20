@@ -21,19 +21,39 @@
 #include "byte-order.h"
 #include "ofpbuf.h"
 #include "ofp-errors.h"
+#include "openvswitch/vlog.h"
 #include "util.h"
+
+static uint32_t
+ofpprop_type_to_exp_id(uint64_t type)
+{
+    return type >> 32;
+}
+
+static uint32_t
+ofpprop_type_to_exp_type(uint64_t type)
+{
+    return type & UINT32_MAX;
+}
 
 /* Pulls a property, beginning with struct ofp_prop_header, from the beginning
  * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
  * nonnull, the entire property, including the header, in '*property'.  Returns
  * 0 if successful, otherwise an OpenFlow error code.
  *
+ * This function treats property types 'min_exp' and larger as introducing
+ * experimenter properties.  For most kinds of properties, 0xffff is the
+ * appropriate value for 'min_exp', because 0xffff is the only property type
+ * used for experimenters, but async config properties also use 0xfffe.  Use
+ * 0x10000 (or higher) if experimenter properties are not supported.
+ *
  * This function pulls the property's stated size padded out to a multiple of
  * 'alignment' bytes.  The common case in OpenFlow is an 'alignment' of 8, so
  * you can use ofpprop_pull() for that case. */
 enum ofperr
 ofpprop_pull__(struct ofpbuf *msg, struct ofpbuf *property,
-               unsigned int alignment, uint16_t *typep)
+               unsigned int alignment, unsigned int min_exp,
+               uint64_t *typep)
 {
     struct ofp_prop_header *oph;
     unsigned int padded_len;
@@ -50,9 +70,31 @@ ofpprop_pull__(struct ofpbuf *msg, struct ofpbuf *property,
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
-    *typep = ntohs(oph->type);
+    uint16_t type = ntohs(oph->type);
+    if (type < min_exp) {
+        *typep = type;
+    } else {
+        struct ofp_prop_experimenter *ope = msg->data;
+        if (len < sizeof *ope) {
+            return OFPERR_OFPBPC_BAD_LEN;
+        }
+
+        if (!ope->experimenter) {
+            /* Reject experimenter 0 because it yields ambiguity with standard
+             * property types. */
+            return OFPERR_OFPBPC_BAD_EXPERIMENTER;
+        }
+
+        *typep = OFPPROP_EXP(ntohl(ope->experimenter), ntohl(ope->exp_type));
+    }
+
     if (property) {
         ofpbuf_use_const(property, msg->data, len);
+        property->header = property->data;
+        property->msg = ((uint8_t *) property->data
+                         + (type < min_exp
+                            ? sizeof(struct ofp_prop_header)
+                            : sizeof(struct ofp_prop_experimenter)));
     }
     ofpbuf_pull(msg, padded_len);
     return 0;
@@ -66,15 +108,15 @@ ofpprop_pull__(struct ofpbuf *msg, struct ofpbuf *property,
  * This function pulls the property's stated size padded out to a multiple of
  * 8 bytes, which is the common case for OpenFlow properties. */
 enum ofperr
-ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property, uint16_t *typep)
+ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property, uint64_t *typep)
 {
-    return ofpprop_pull__(msg, property, 8, typep);
+    return ofpprop_pull__(msg, property, 8, 0xffff, typep);
 }
 
 /* Adds a property with the given 'type' and 'len'-byte contents 'value' to
  * 'msg', padding the property out to a multiple of 8 bytes. */
 void
-ofpprop_put(struct ofpbuf *msg, uint16_t type, const void *value, size_t len)
+ofpprop_put(struct ofpbuf *msg, uint64_t type, const void *value, size_t len)
 {
     size_t start_ofs = ofpprop_start(msg, type);
     ofpbuf_put(msg, value, len);
@@ -84,7 +126,7 @@ ofpprop_put(struct ofpbuf *msg, uint16_t type, const void *value, size_t len)
 /* Appends a property to 'msg' whose type is 'type' and whose contents is a
  * series of property headers, one for each 1-bit in 'bitmap'. */
 void
-ofpprop_put_bitmap(struct ofpbuf *msg, uint16_t type, uint64_t bitmap)
+ofpprop_put_bitmap(struct ofpbuf *msg, uint64_t type, uint64_t bitmap)
 {
     size_t start_ofs = ofpprop_start(msg, type);
 
@@ -99,14 +141,21 @@ ofpprop_put_bitmap(struct ofpbuf *msg, uint16_t type, uint64_t bitmap)
  * ofpprop_end().  Returns the offset of the beginning of the property (to pass
  * to ofpprop_end() later). */
 size_t
-ofpprop_start(struct ofpbuf *msg, uint16_t type)
+ofpprop_start(struct ofpbuf *msg, uint64_t type)
 {
     size_t start_ofs = msg->size;
-    struct ofp_prop_header *oph;
-
-    oph = ofpbuf_put_uninit(msg, sizeof *oph);
-    oph->type = htons(type);
-    oph->len = htons(4);        /* May be updated later by ofpprop_end(). */
+    if (!ofpprop_is_experimenter(type)) {
+        struct ofp_prop_header *oph = ofpbuf_put_uninit(msg, sizeof *oph);
+        oph->type = htons(type);
+        oph->len = htons(4);
+    } else {
+        struct ofp_prop_experimenter *ope
+            = ofpbuf_put_uninit(msg, sizeof *ope);
+        ope->type = htons(0xffff);
+        ope->len = htons(12);
+        ope->experimenter = htonl(ofpprop_type_to_exp_id(type));
+        ope->exp_type = htonl(ofpprop_type_to_exp_type(type));
+    }
     return start_ofs;
 }
 
@@ -122,5 +171,33 @@ ofpprop_end(struct ofpbuf *msg, size_t start_ofs)
     oph = ofpbuf_at_assert(msg, start_ofs, sizeof *oph);
     oph->len = htons(msg->size - start_ofs);
     ofpbuf_padto(msg, ROUND_UP(msg->size, 8));
+}
+
+enum ofperr
+ofpprop_unknown(struct vlog_module *module, bool loose, const char *msg,
+                uint64_t type)
+{
+    bool is_experimenter = ofpprop_is_experimenter(type);
+
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    enum vlog_level level = loose ? VLL_DBG : VLL_WARN;
+    if (!is_experimenter) {
+        vlog_rate_limit(module, level, &rl, "unknown %s property type %"PRId64,
+                        msg, type);
+    } else {
+        vlog_rate_limit(module, level, &rl,
+                        "unknown %s property type for exp_id 0x%"PRIx32", "
+                        "exp_type %"PRId32, msg,
+                        ofpprop_type_to_exp_id(type),
+                        ofpprop_type_to_exp_type(type));
+    }
+
+    /* There's an error OFPBPC_BAD_EXPERIMENTER that we could use for
+     * experimenter IDs that we don't know at all, but that seems like a
+     * difficult distinction and OFPERR_OFPBPC_BAD_EXP_TYPE communicates the
+     * problem quite well. */
+    return (loose ? 0
+            : is_experimenter ? OFPERR_OFPBPC_BAD_EXP_TYPE
+            : OFPERR_OFPBPC_BAD_TYPE);
 }
 

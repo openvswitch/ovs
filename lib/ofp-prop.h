@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,30 +20,68 @@
 /* OpenFlow 1.3+ property support
  * ==============================
  *
- * Several OpenFlow 1.3+ messages use properties that take the common form
- * shown by "struct ofp_prop_header".  This module provides support for
- * serializing and deserializing properties in this format.
+ * Several OpenFlow 1.3+ messages use type-length-value (TLV) properties that
+ * take the common form shown by "struct ofp_prop_header".  This module
+ * provides support for serializing and deserializing properties in this
+ * format.
+ *
+ *
+ * Property types
+ * --------------
+ *
+ * This module uses uint64_t values to identify property types
+ *
+ *     - OpenFlow assigns 16-bit type values to its own standardized
+ *       properties.  ofpprop uses these values directly in uint64_t.
+ *
+ *       The 16-bit value 0xffff (and for some kinds of properties  0xfffe) is
+ *       reserved as a kind of escape to introduce an "experimenter" property
+ *       (see below).
+ *
+ *     - Vendor-specific "experimenter" properties have a 32-bit "experimenter
+ *       ID" (generally an Ethernet OUI) and a 32-bit experimenter-defined
+ *       "exp_type".  ofpprop encodes these with the experimenter ID in the
+ *       high 32 bits and exp_type in the low 32 bits.  (All existing
+ *       experimenter IDs are nonzero, so this is unambiguous.)  Use
+ *       OFPPROP_EXP to encode these property types.
  */
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "ofp-errors.h"
 #include "openvswitch/types.h"
 
 struct ofpbuf;
+struct vlog_module;
+
+/* Given an OpenFlow experimenter ID (e.g. NX_VENDOR_ID) 'exp_id' and type
+ * 'exp_type', yields the code that ofpprop_pull() would use to identify the
+ * given experimenter property. */
+#define OFPPROP_EXP(EXP_ID, EXP_TYPE) \
+    (((uint64_t) (EXP_ID) << 32) | (EXP_TYPE))
+
+/* Returns true if 'type' represents an experimenter property type,
+ * false if it represents a standard property type.*/
+static inline bool
+ofpprop_is_experimenter(uint64_t type)
+{
+    return type > UINT16_MAX;
+}
 
 /* Deserializing properties.  */
 enum ofperr ofpprop_pull__(struct ofpbuf *msg, struct ofpbuf *property,
-                           unsigned int alignment, uint16_t *typep);
+                           unsigned int alignment, unsigned int min_exp,
+                           uint64_t *typep);
 enum ofperr ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property,
-                         uint16_t *typep);
+                         uint64_t *typep);
 
 /* Serializing properties. */
-void ofpprop_put(struct ofpbuf *, uint16_t type,
+void ofpprop_put(struct ofpbuf *, uint64_t type,
                  const void *value, size_t len);
-void ofpprop_put_bitmap(struct ofpbuf *, uint16_t type, uint64_t bitmap);
+void ofpprop_put_bitmap(struct ofpbuf *, uint64_t type, uint64_t bitmap);
 
-size_t ofpprop_start(struct ofpbuf *, uint16_t type);
+size_t ofpprop_start(struct ofpbuf *, uint64_t type);
 void ofpprop_end(struct ofpbuf *, size_t start_ofs);
 
 /* Logging errors while deserializing properties.
@@ -67,5 +105,10 @@ void ofpprop_end(struct ofpbuf *, size_t start_ofs);
  * level. */
 #define OFPPROP_LOG(RL, LOOSE, ...)                         \
     VLOG_RL(RL, (LOOSE) ? VLL_DBG : VLL_WARN, __VA_ARGS__)
+
+enum ofperr ofpprop_unknown(struct vlog_module *, bool loose, const char *msg,
+                            uint64_t type);
+#define OFPPROP_UNKNOWN(LOOSE, MSG, TYPE) \
+    ofpprop_unknown(THIS_MODULE, LOOSE, MSG, TYPE)
 
 #endif /* ofp-prop.h */
