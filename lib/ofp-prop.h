@@ -76,9 +76,18 @@ enum ofperr ofpprop_pull__(struct ofpbuf *msg, struct ofpbuf *property,
 enum ofperr ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property,
                          uint64_t *typep);
 
+enum ofperr ofpprop_parse_be16(const struct ofpbuf *, ovs_be16 *value);
+enum ofperr ofpprop_parse_be32(const struct ofpbuf *, ovs_be32 *value);
+enum ofperr ofpprop_parse_u16(const struct ofpbuf *, uint16_t *value);
+enum ofperr ofpprop_parse_u32(const struct ofpbuf *, uint32_t *value);
+
 /* Serializing properties. */
 void ofpprop_put(struct ofpbuf *, uint64_t type,
                  const void *value, size_t len);
+void ofpprop_put_be16(struct ofpbuf *, uint64_t type, ovs_be16 value);
+void ofpprop_put_be32(struct ofpbuf *, uint64_t type, ovs_be32 value);
+void ofpprop_put_u16(struct ofpbuf *, uint64_t type, uint16_t value);
+void ofpprop_put_u32(struct ofpbuf *, uint64_t type, uint32_t value);
 void ofpprop_put_bitmap(struct ofpbuf *, uint64_t type, uint64_t bitmap);
 
 size_t ofpprop_start(struct ofpbuf *, uint64_t type);

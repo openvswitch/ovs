@@ -4327,14 +4327,14 @@ static enum ofperr
 parse_port_mod_ethernet_property(struct ofpbuf *property,
                                  struct ofputil_port_mod *pm)
 {
-    struct ofp14_port_mod_prop_ethernet *eth = property->data;
+    ovs_be32 advertise;
+    enum ofperr error;
 
-    if (property->size != sizeof *eth) {
-        return OFPERR_OFPBRC_BAD_LEN;
+    error = ofpprop_parse_be32(property, &advertise);
+    if (!error) {
+        pm->advertise = netdev_port_features_from_ofp11(advertise);
     }
-
-    pm->advertise = netdev_port_features_from_ofp11(eth->advertise);
-    return 0;
+    return error;
 }
 
 /* Decodes the OpenFlow "port mod" message in '*oh' into an abstract form in
@@ -4457,10 +4457,9 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
     }
     case OFP14_VERSION:
     case OFP15_VERSION: {
-        struct ofp14_port_mod_prop_ethernet *eth;
         struct ofp14_port_mod *opm;
 
-        b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, sizeof *eth);
+        b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, 0);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
         opm->port_no = ofputil_port_to_ofp11(pm->port_no);
         opm->hw_addr = pm->hw_addr;
@@ -4468,10 +4467,8 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->mask = htonl(pm->mask & OFPPC11_ALL);
 
         if (pm->advertise) {
-            eth = ofpbuf_put_zeros(b, sizeof *eth);
-            eth->type = htons(OFPPMPT14_ETHERNET);
-            eth->length = htons(sizeof *eth);
-            eth->advertise = netdev_port_features_to_ofp11(pm->advertise);
+            ofpprop_put_be32(b, OFPPMPT14_ETHERNET,
+                             netdev_port_features_to_ofp11(pm->advertise));
         }
         break;
     }
@@ -4492,7 +4489,7 @@ pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
 
     error = ofpprop_pull(msg, payload, typep);
     if (payload && !error) {
-        ofpbuf_pull(payload, (uint8_t *)msg->msg - (uint8_t *)msg->header);
+        ofpbuf_pull(payload, (char *)payload->msg - (char *)payload->header);
     }
     return error;
 }
@@ -4889,20 +4886,6 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
 }
 
 static enum ofperr
-parse_table_desc_eviction_property(struct ofpbuf *property,
-                                   struct ofputil_table_desc *td)
-{
-    struct ofp14_table_mod_prop_eviction *ote = property->data;
-
-    if (property->size != sizeof *ote) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    td->eviction_flags = ntohl(ote->flags);
-    return 0;
-}
-
-static enum ofperr
 parse_table_desc_vacancy_property(struct ofpbuf *property,
                                   struct ofputil_table_desc *td)
 {
@@ -4974,7 +4957,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
 
         switch (type) {
         case OFPTMPT14_EVICTION:
-            error = parse_table_desc_eviction_property(&payload, td);
+            error = ofpprop_parse_u32(&payload, &td->eviction_flags);
             break;
 
         case OFPTMPT14_VACANCY:
@@ -5025,12 +5008,7 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
     start_otd = reply->size;
     ofpbuf_put_zeros(reply, sizeof *otd);
     if (td->eviction_flags != UINT32_MAX) {
-        struct ofp14_table_mod_prop_eviction *ote;
-
-        ote = ofpbuf_put_zeros(reply, sizeof *ote);
-        ote->type = htons(OFPTMPT14_EVICTION);
-        ote->length = htons(sizeof *ote);
-        ote->flags = htonl(td->eviction_flags);
+        ofpprop_put_u32(reply, OFPTMPT14_EVICTION, td->eviction_flags);
     }
     if (td->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
         struct ofp14_table_mod_prop_vacancy *otv;
@@ -5101,20 +5079,6 @@ ofputil_decode_table_vacancy(ovs_be32 config, enum ofp_version version)
     return (version < OFP14_VERSION ? OFPUTIL_TABLE_VACANCY_DEFAULT
             : config & htonl(OFPTC14_VACANCY_EVENTS) ? OFPUTIL_TABLE_VACANCY_ON
             : OFPUTIL_TABLE_VACANCY_OFF);
-}
-
-static enum ofperr
-parse_table_mod_eviction_property(struct ofpbuf *property,
-                                  struct ofputil_table_mod *tm)
-{
-    struct ofp14_table_mod_prop_eviction *ote = property->data;
-
-    if (property->size != sizeof *ote) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    tm->eviction_flags = ntohl(ote->flags);
-    return 0;
 }
 
 /* Given 'config', taken from an OpenFlow 'version' message that specifies
@@ -5261,7 +5225,7 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
 
             switch (type) {
             case OFPTMPT14_EVICTION:
-                error = parse_table_mod_eviction_property(&property, pm);
+                error = ofpprop_parse_u32(&property, &pm->eviction);
                 break;
 
             case OFPTMPT14_VACANCY:
@@ -5315,7 +5279,6 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
     case OFP14_VERSION:
     case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
-        struct ofp14_table_mod_prop_eviction *ote;
         struct ofp14_table_mod_prop_vacancy *otv;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
@@ -5325,10 +5288,7 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
                                                   tm->vacancy, ofp_version);
 
         if (tm->eviction_flags != UINT32_MAX) {
-            ote = ofpbuf_put_zeros(b, sizeof *ote);
-            ote->type = htons(OFPTMPT14_EVICTION);
-            ote->length = htons(sizeof *ote);
-            ote->flags = htonl(tm->eviction_flags);
+            ofpprop_put_u32(b, OFPTMPT14_EVICTION, tm->eviction_flags);
         }
         if (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
             otv = ofpbuf_put_zeros(b, sizeof *otv);
@@ -7782,34 +7742,6 @@ ofputil_put_ofp11_bucket(const struct ofputil_bucket *bucket,
 }
 
 static void
-ofputil_put_ofp15_group_bucket_prop_weight(ovs_be16 weight,
-                                           struct ofpbuf *openflow)
-{
-    size_t start_ofs;
-    struct ofp15_group_bucket_prop_weight *prop;
-
-    start_ofs = ofpprop_start(openflow, OFPGBPT15_WEIGHT);
-    ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
-    prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
-    prop->weight = weight;
-    ofpprop_end(openflow, start_ofs);
-}
-
-static void
-ofputil_put_ofp15_group_bucket_prop_watch(ovs_be32 watch, uint16_t type,
-                                          struct ofpbuf *openflow)
-{
-    size_t start_ofs;
-    struct ofp15_group_bucket_prop_watch *prop;
-
-    start_ofs = ofpprop_start(openflow, type);
-    ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
-    prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
-    prop->watch = watch;
-    ofpprop_end(openflow, start_ofs);
-}
-
-static void
 ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
                          uint32_t bucket_id, enum ofp11_group_type group_type,
                          struct ofpbuf *openflow, enum ofp_version ofp_version)
@@ -7826,20 +7758,14 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
     actions_len = openflow->size - actions_start;
 
     if (group_type == OFPGT11_SELECT) {
-        ofputil_put_ofp15_group_bucket_prop_weight(htons(bucket->weight),
-                                                   openflow);
+        ofpprop_put_u16(openflow, OFPGBPT15_WEIGHT, bucket->weight);
     }
     if (bucket->watch_port != OFPP_ANY) {
-        ovs_be32 port = ofputil_port_to_ofp11(bucket->watch_port);
-        ofputil_put_ofp15_group_bucket_prop_watch(port,
-                                                  OFPGBPT15_WATCH_PORT,
-                                                  openflow);
+        ofpprop_put_be32(openflow, OFPGBPT15_WATCH_PORT,
+                         ofputil_port_to_ofp11(bucket->watch_port));
     }
     if (bucket->watch_group != OFPG_ANY) {
-        ovs_be32 group = htonl(bucket->watch_group);
-        ofputil_put_ofp15_group_bucket_prop_watch(group,
-                                                  OFPGBPT15_WATCH_GROUP,
-                                                  openflow);
+        ofpprop_put_u32(openflow, OFPGBPT15_WATCH_GROUP, bucket->watch_group);
     }
 
     ob = ofpbuf_at_assert(openflow, start, sizeof *ob);
@@ -8019,40 +7945,6 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
 }
 
 static enum ofperr
-parse_ofp15_group_bucket_prop_weight(const struct ofpbuf *payload,
-                                     ovs_be16 *weight)
-{
-    struct ofp15_group_bucket_prop_weight *prop = payload->data;
-
-    if (payload->size != sizeof *prop) {
-        OFPPROP_LOG(&bad_ofmsg_rl, false, "OpenFlow bucket weight property "
-                    "length %u is not valid", payload->size);
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    *weight = prop->weight;
-
-    return 0;
-}
-
-static enum ofperr
-parse_ofp15_group_bucket_prop_watch(const struct ofpbuf *payload,
-                                    ovs_be32 *watch)
-{
-    struct ofp15_group_bucket_prop_watch *prop = payload->data;
-
-    if (payload->size != sizeof *prop) {
-        OFPPROP_LOG(&bad_ofmsg_rl, false, "OpenFlow bucket watch port or "
-                    "group property length %u is not valid", payload->size);
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    *watch = prop->watch;
-
-    return 0;
-}
-
-static enum ofperr
 ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
                            enum ofp_version version, uint8_t group_type,
                            struct ovs_list *buckets)
@@ -8121,17 +8013,15 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 
             switch (type) {
             case OFPGBPT15_WEIGHT:
-                err = parse_ofp15_group_bucket_prop_weight(&payload, &weight);
+                err = ofpprop_parse_be16(&payload, &weight);
                 break;
 
             case OFPGBPT15_WATCH_PORT:
-                err = parse_ofp15_group_bucket_prop_watch(&payload,
-                                                          &watch_port);
+                err = ofpprop_parse_be32(&payload, &watch_port);
                 break;
 
             case OFPGBPT15_WATCH_GROUP:
-                err = parse_ofp15_group_bucket_prop_watch(&payload,
-                                                          &watch_group);
+                err = ofpprop_parse_be32(&payload, &watch_group);
                 break;
 
             default:
@@ -9517,24 +9407,23 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
 
         while (b.size > 0) {
-            struct ofp14_async_config_prop_reasons *msg;
             struct ofpbuf property;
             enum ofperr error;
             uint64_t type;
+            uint32_t mask;
 
             error = ofpprop_pull__(&b, &property, 8, 0xfffe, &type);
             if (error) {
                 return error;
             }
 
-            msg = property.data;
-
-            if (property.size != sizeof *msg) {
-                return OFPERR_OFPBRC_BAD_LEN;
+            error = ofpprop_parse_u32(&property, &mask);
+            if (error) {
+                return error;
             }
 
             if (!loose) {
-                error = ofputil_check_mask(type, ntohl(msg->mask));
+                error = ofputil_check_mask(type, mask);
                 if (error) {
                     return error;
                 }
@@ -9542,51 +9431,51 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
 
             switch (type) {
             case OFPACPT_PACKET_IN_SLAVE:
-                slave[OAM_PACKET_IN] = ntohl(msg->mask);
+                slave[OAM_PACKET_IN] = mask;
                 break;
 
             case OFPACPT_PACKET_IN_MASTER:
-                master[OAM_PACKET_IN] = ntohl(msg->mask);
+                master[OAM_PACKET_IN] = mask;
                 break;
 
             case OFPACPT_PORT_STATUS_SLAVE:
-                slave[OAM_PORT_STATUS] = ntohl(msg->mask);
+                slave[OAM_PORT_STATUS] = mask;
                 break;
 
             case OFPACPT_PORT_STATUS_MASTER:
-                master[OAM_PORT_STATUS] = ntohl(msg->mask);
+                master[OAM_PORT_STATUS] = mask;
                 break;
 
             case OFPACPT_FLOW_REMOVED_SLAVE:
-                slave[OAM_FLOW_REMOVED] = ntohl(msg->mask);
+                slave[OAM_FLOW_REMOVED] = mask;
                 break;
 
             case OFPACPT_FLOW_REMOVED_MASTER:
-                master[OAM_FLOW_REMOVED] = ntohl(msg->mask);
+                master[OAM_FLOW_REMOVED] = mask;
                 break;
 
             case OFPACPT_ROLE_STATUS_SLAVE:
-                slave[OAM_ROLE_STATUS] = ntohl(msg->mask);
+                slave[OAM_ROLE_STATUS] = mask;
                 break;
 
             case OFPACPT_ROLE_STATUS_MASTER:
-                master[OAM_ROLE_STATUS] = ntohl(msg->mask);
+                master[OAM_ROLE_STATUS] = mask;
                 break;
 
             case OFPACPT_TABLE_STATUS_SLAVE:
-                slave[OAM_TABLE_STATUS] = ntohl(msg->mask);
+                slave[OAM_TABLE_STATUS] = mask;
                 break;
 
             case OFPACPT_TABLE_STATUS_MASTER:
-                master[OAM_TABLE_STATUS] = ntohl(msg->mask);
+                master[OAM_TABLE_STATUS] = mask;
                 break;
 
             case OFPACPT_REQUESTFORWARD_SLAVE:
-                slave[OAM_REQUESTFORWARD] = ntohl(msg->mask);
+                slave[OAM_REQUESTFORWARD] = mask;
                 break;
 
             case OFPACPT_REQUESTFORWARD_MASTER:
-                master[OAM_REQUESTFORWARD] = ntohl(msg->mask);
+                master[OAM_REQUESTFORWARD] = mask;
                 break;
 
             default:
@@ -9610,46 +9499,43 @@ ofputil_get_async_reply(struct ofpbuf *buf, const uint32_t master_mask,
     int role;
 
     for (role = 0; role < 2; role++) {
-        struct ofp14_async_config_prop_reasons *msg;
-
-        msg = ofpbuf_put_zeros(buf, sizeof *msg);
+        enum ofp14_async_config_prop_type prop_type;
 
         switch (type) {
         case OAM_PACKET_IN:
-            msg->type = (role ? htons(OFPACPT_PACKET_IN_SLAVE)
-                              : htons(OFPACPT_PACKET_IN_MASTER));
+            prop_type = (role ? OFPACPT_PACKET_IN_SLAVE
+                              : OFPACPT_PACKET_IN_MASTER);
             break;
 
         case OAM_PORT_STATUS:
-            msg->type = (role ? htons(OFPACPT_PORT_STATUS_SLAVE)
-                              : htons(OFPACPT_PORT_STATUS_MASTER));
+            prop_type = (role ? OFPACPT_PORT_STATUS_SLAVE
+                              : OFPACPT_PORT_STATUS_MASTER);
             break;
 
         case OAM_FLOW_REMOVED:
-            msg->type = (role ? htons(OFPACPT_FLOW_REMOVED_SLAVE)
-                              : htons(OFPACPT_FLOW_REMOVED_MASTER));
+            prop_type = (role ? OFPACPT_FLOW_REMOVED_SLAVE
+                              : OFPACPT_FLOW_REMOVED_MASTER);
             break;
 
         case OAM_ROLE_STATUS:
-            msg->type = (role ? htons(OFPACPT_ROLE_STATUS_SLAVE)
-                              : htons(OFPACPT_ROLE_STATUS_MASTER));
+            prop_type = (role ? OFPACPT_ROLE_STATUS_SLAVE
+                              : OFPACPT_ROLE_STATUS_MASTER);
             break;
 
         case OAM_TABLE_STATUS:
-            msg->type = (role ? htons(OFPACPT_TABLE_STATUS_SLAVE)
-                              : htons(OFPACPT_TABLE_STATUS_MASTER));
+            prop_type = (role ? OFPACPT_TABLE_STATUS_SLAVE
+                              : OFPACPT_TABLE_STATUS_MASTER);
             break;
 
         case OAM_REQUESTFORWARD:
-            msg->type = (role ? htons(OFPACPT_REQUESTFORWARD_SLAVE)
-                              : htons(OFPACPT_REQUESTFORWARD_MASTER));
+            prop_type = (role ? OFPACPT_REQUESTFORWARD_SLAVE
+                              : OFPACPT_REQUESTFORWARD_MASTER);
             break;
 
         default:
             return OFPERR_OFPBRC_BAD_TYPE;
         }
-        msg->length = htons(sizeof *msg);
-        msg->mask = (role ? htonl(slave_mask) : htonl(master_mask));
+        ofpprop_put_u32(buf, prop_type, role ? slave_mask : master_mask);
     }
 
     return 0;
