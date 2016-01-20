@@ -140,22 +140,6 @@ enum ofputil_protocol {
                        OFPUTIL_P_ANY_OXM)
 };
 
-    /* Valid value of mask for asynchronous messages. */
-#define MAXIMUM_MASK_PACKET_IN ((1 << OFPR_N_REASONS) - 1)
-
-#define MAXIMUM_MASK_FLOW_REMOVED ((1 << OVS_OFPRR_NONE) - 1)
-
-#define MAXIMUM_MASK_PORT_STATUS ((1 << OFPPR_N_REASONS) - 1)
-
-#define MAXIMUM_MASK_ROLE_STATUS ((1 << OFPCRR_N_REASONS) - 1)
-
-#define MINIMUM_MASK_TABLE_STATUS (1 << OFPTR_VACANCY_DOWN)
-
-#define MAXIMUM_MASK_TABLE_STATUS ((1 << OFPTR_N_REASONS) - \
-                                   MINIMUM_MASK_TABLE_STATUS)
-
-#define MAXIMUM_MASK_REQUESTFORWARD ((1 << OFPRFR_N_REASONS) - 1)
-
 /* Protocols to use for flow dumps, from most to least preferred. */
 extern enum ofputil_protocol ofputil_flow_dump_protocols[];
 extern size_t ofputil_n_flow_dump_protocols;
