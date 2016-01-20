@@ -53,6 +53,7 @@
 #include "openvswitch/types.h"
 
 struct ofpbuf;
+struct uuid;
 struct vlog_module;
 
 /* Given an OpenFlow experimenter ID (e.g. NX_VENDOR_ID) 'exp_id' and type
@@ -78,17 +79,26 @@ enum ofperr ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property,
 
 enum ofperr ofpprop_parse_be16(const struct ofpbuf *, ovs_be16 *value);
 enum ofperr ofpprop_parse_be32(const struct ofpbuf *, ovs_be32 *value);
+enum ofperr ofpprop_parse_be64(const struct ofpbuf *, ovs_be64 *value);
+enum ofperr ofpprop_parse_u8(const struct ofpbuf *, uint8_t *value);
 enum ofperr ofpprop_parse_u16(const struct ofpbuf *, uint16_t *value);
 enum ofperr ofpprop_parse_u32(const struct ofpbuf *, uint32_t *value);
+enum ofperr ofpprop_parse_u64(const struct ofpbuf *, uint64_t *value);
+enum ofperr ofpprop_parse_uuid(const struct ofpbuf *, struct uuid *);
 
 /* Serializing properties. */
 void ofpprop_put(struct ofpbuf *, uint64_t type,
                  const void *value, size_t len);
 void ofpprop_put_be16(struct ofpbuf *, uint64_t type, ovs_be16 value);
 void ofpprop_put_be32(struct ofpbuf *, uint64_t type, ovs_be32 value);
+void ofpprop_put_be64(struct ofpbuf *, uint64_t type, ovs_be64 value);
+void ofpprop_put_u8(struct ofpbuf *, uint64_t type, uint8_t value);
 void ofpprop_put_u16(struct ofpbuf *, uint64_t type, uint16_t value);
 void ofpprop_put_u32(struct ofpbuf *, uint64_t type, uint32_t value);
+void ofpprop_put_u64(struct ofpbuf *, uint64_t type, uint64_t value);
 void ofpprop_put_bitmap(struct ofpbuf *, uint64_t type, uint64_t bitmap);
+void ofpprop_put_flag(struct ofpbuf *, uint64_t type);
+void ofpprop_put_uuid(struct ofpbuf *, uint64_t type, const struct uuid *);
 
 size_t ofpprop_start(struct ofpbuf *, uint64_t type);
 void ofpprop_end(struct ofpbuf *, size_t start_ofs);

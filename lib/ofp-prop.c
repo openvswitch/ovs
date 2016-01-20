@@ -23,6 +23,7 @@
 #include "ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
+#include "uuid.h"
 
 struct ofp_prop_be16 {
     ovs_be16 type;
@@ -53,8 +54,10 @@ ofpprop_type_to_exp_type(uint64_t type)
 
 /* Pulls a property, beginning with struct ofp_prop_header, from the beginning
  * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an OpenFlow error code.
+ * nonnull, the entire property, including the header, in '*property'.  Points
+ * 'property->header' to the property header (which could be ofp_prop_header or
+ * ofp_prop_experimenter) and 'property->msg' to just past it.  Returns 0 if
+ * successful, otherwise an OpenFlow error code.
  *
  * This function treats property types 'min_exp' and larger as introducing
  * experimenter properties.  For most kinds of properties, 0xffff is the
@@ -117,11 +120,17 @@ ofpprop_pull__(struct ofpbuf *msg, struct ofpbuf *property,
 
 /* Pulls a property, beginning with struct ofp_prop_header, from the beginning
  * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code.
+ * nonnull, the entire property, including the header, in '*property'.  Points
+ * 'property->header' to the property header (which could be ofp_prop_header or
+ * ofp_prop_experimenter) and 'property->msg' to just past it.  Returns 0 if
+ * successful, otherwise an error code.
  *
- * This function pulls the property's stated size padded out to a multiple of
- * 8 bytes, which is the common case for OpenFlow properties. */
+ * This function treats property type 0xffff as introducing an experimenter
+ * property.  Use ofpprop_pull__() instead if some other behavior is needed.
+ *
+ * This function pulls the property's stated size padded out to a multiple of 8
+ * bytes, which is the common case for OpenFlow properties.  Use
+ * ofpprop_pull__() instead if some other behavior is needed.*/
 enum ofperr
 ofpprop_pull(struct ofpbuf *msg, struct ofpbuf *property, uint64_t *typep)
 {
@@ -159,6 +168,41 @@ ofpprop_parse_be32(const struct ofpbuf *property, ovs_be32 *value)
     return 0;
 }
 
+/* Attempts to parse 'property' as a property containing a 64-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_be64(const struct ofpbuf *property, ovs_be64 *value)
+{
+    ovs_be64 *p;
+    size_t be64_offset = ROUND_UP(ofpbuf_headersize(property), 8);
+    if (property->size != be64_offset + sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    p = ALIGNED_CAST(ovs_be64 *, (char *) property->data + be64_offset);
+    *value = *p;
+    return 0;
+}
+
+/* Attempts to parse 'property' as a property containing a 8-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_u8(const struct ofpbuf *property, uint8_t *value)
+{
+    /* OpenFlow 1.5 and earlier don't have any 8-bit properties, but it uses
+     * 8-byte properties for 16-bit values, which doesn't really make sense.
+     * Be forgiving by allowing any size payload as long as it's at least big
+     * enough. */
+    uint8_t *p = property->msg;
+    if (ofpbuf_msgsize(property) < sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    *value = *p;
+    return 0;
+}
+
 /* Attempts to parse 'property' as a property containing a 16-bit value.  If
  * successful, stores the value into '*value' and returns 0; otherwise returns
  * an OpenFlow error. */
@@ -187,6 +231,37 @@ ofpprop_parse_u32(const struct ofpbuf *property, uint32_t *value)
         return OFPERR_OFPBPC_BAD_LEN;
     }
     *value = ntohl(*p);
+    return 0;
+}
+
+/* Attempts to parse 'property' as a property containing a 64-bit value.  If
+ * successful, stores the value into '*value' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_u64(const struct ofpbuf *property, uint64_t *value)
+{
+    ovs_be64 *p;
+    size_t be64_offset = ROUND_UP(ofpbuf_headersize(property), 8);
+    if (property->size != be64_offset + sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    p = ALIGNED_CAST(ovs_be64 *, (char *) property->data + be64_offset);
+    *value = ntohll(*p);
+    return 0;
+}
+
+/* Attempts to parse 'property' as a property containing a UUID.  If
+ * successful, stores the value into '*uuid' and returns 0; otherwise returns
+ * an OpenFlow error. */
+enum ofperr
+ofpprop_parse_uuid(const struct ofpbuf *property, struct uuid *uuid)
+{
+    struct uuid *p = property->msg;
+    if (ofpbuf_msgsize(property) != sizeof *p) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    *uuid = *p;
     return 0;
 }
 
@@ -224,6 +299,25 @@ ofpprop_put_be32(struct ofpbuf *msg, uint64_t type, ovs_be32 value)
     ofpprop_put(msg, type, &value, sizeof value);
 }
 
+/* Adds a property with the given 'type' and 64-bit 'value' to 'msg'. */
+void
+ofpprop_put_be64(struct ofpbuf *msg, uint64_t type, ovs_be64 value)
+{
+    size_t start = ofpprop_start(msg, type);
+    ofpbuf_put_zeros(msg, 4);
+    ofpbuf_put(msg, &value, sizeof value);
+    ofpprop_end(msg, start);
+}
+
+/* Adds a property with the given 'type' and 8-bit 'value' to 'msg'. */
+void
+ofpprop_put_u8(struct ofpbuf *msg, uint64_t type, uint8_t value)
+{
+    /* There's no precedent for 8-bit properties in OpenFlow 1.5 and earlier
+     * but let's assume they're done sanely. */
+    ofpprop_put(msg, type, &value, 1);
+}
+
 /* Adds a property with the given 'type' and 16-bit 'value' to 'msg'. */
 void
 ofpprop_put_u16(struct ofpbuf *msg, uint64_t type, uint16_t value)
@@ -238,7 +332,13 @@ ofpprop_put_u32(struct ofpbuf *msg, uint64_t type, uint32_t value)
     ofpprop_put_be32(msg, type, htonl(value));
 }
 
-/* Adds a property header to 'msg' for each 1-bit in 'bitmap'. */
+/* Adds a property with the given 'type' and 64-bit 'value' to 'msg'. */
+void
+ofpprop_put_u64(struct ofpbuf *msg, uint64_t type, uint64_t value)
+{
+    ofpprop_put_be64(msg, type, htonll(value));
+}
+
 /* Appends a property to 'msg' whose type is 'type' and whose contents is a
  * series of property headers, one for each 1-bit in 'bitmap'. */
 void
@@ -250,6 +350,24 @@ ofpprop_put_bitmap(struct ofpbuf *msg, uint64_t type, uint64_t bitmap)
         ofpprop_start(msg, rightmost_1bit_idx(bitmap));
     }
     ofpprop_end(msg, start_ofs);
+}
+
+/* Appends a content-free property with the given 'type' to 'msg'.
+ *
+ * (The idea is that the presence of the property acts as a flag.) */
+void
+ofpprop_put_flag(struct ofpbuf *msg, uint64_t type)
+{
+    size_t start = ofpprop_start(msg, type);
+    ofpprop_end(msg, start);
+}
+
+/* Appends a property to 'msg' with the given 'type' and 'uuid' as its
+ * value. */
+void
+ofpprop_put_uuid(struct ofpbuf *msg, uint64_t type, const struct uuid *uuid)
+{
+    ofpprop_put(msg, type, uuid, sizeof *uuid);
 }
 
 /* Appends a header for a property of type 'type' to 'msg'.  The caller should

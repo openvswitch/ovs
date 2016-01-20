@@ -194,6 +194,14 @@ static inline size_t ofpbuf_tailroom(const struct ofpbuf *b)
     return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
 }
 
+/* Returns the number of bytes from 'b->header' to 'b->msg', that is, the
+ * length of 'b''s header. */
+static inline size_t
+ofpbuf_headersize(const struct ofpbuf *b)
+{
+    return (char *)b->msg - (char *)b->header;
+}
+
 /* Returns the number of bytes from 'b->msg' to 'b->data + b->size', that is,
  * the length of the used space in 'b' starting from 'msg'. */
 static inline size_t
