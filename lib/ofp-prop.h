@@ -89,6 +89,7 @@ enum ofperr ofpprop_parse_uuid(const struct ofpbuf *, struct uuid *);
 /* Serializing properties. */
 void ofpprop_put(struct ofpbuf *, uint64_t type,
                  const void *value, size_t len);
+void *ofpprop_put_zeros(struct ofpbuf *, uint64_t type, size_t len);
 void ofpprop_put_be16(struct ofpbuf *, uint64_t type, ovs_be16 value);
 void ofpprop_put_be32(struct ofpbuf *, uint64_t type, ovs_be32 value);
 void ofpprop_put_be64(struct ofpbuf *, uint64_t type, ovs_be64 value);

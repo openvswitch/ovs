@@ -275,6 +275,28 @@ ofpprop_put(struct ofpbuf *msg, uint64_t type, const void *value, size_t len)
     ofpprop_end(msg, start_ofs);
 }
 
+/* Adds a property with the given 'type' to 'msg', consisting of a struct
+ * ofp_prop_header or ofp_prop_experimenter followed by enough zero bytes to
+ * total 'len' bytes, followed by padding to bring the property up to a
+ * multiple of 8 bytes.  Returns the property header. */
+void *
+ofpprop_put_zeros(struct ofpbuf *msg, uint64_t type, size_t len)
+{
+    void *header = ofpbuf_put_zeros(msg, ROUND_UP(len, 8));
+    if (!ofpprop_is_experimenter(type)) {
+        struct ofp_prop_header *oph = header;
+        oph->type = htons(type);
+        oph->len = htons(len);
+    } else {
+        struct ofp_prop_experimenter *ope = header;
+        ope->type = htons(0xffff);
+        ope->len = htons(len);
+        ope->experimenter = htonl(ofpprop_type_to_exp_id(type));
+        ope->exp_type = htonl(ofpprop_type_to_exp_type(type));
+    }
+    return header;
+}
+
 /* Adds a property with the given 'type' and 16-bit 'value' to 'msg'. */
 void
 ofpprop_put_be16(struct ofpbuf *msg, uint64_t type, ovs_be16 value)

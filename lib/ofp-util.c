@@ -3868,9 +3868,7 @@ ofputil_put_ofp14_port(const struct ofputil_phy_port *pp,
     op->config = htonl(pp->config & OFPPC11_ALL);
     op->state = htonl(pp->state & OFPPS11_ALL);
 
-    eth = ofpbuf_put_zeros(b, sizeof *eth);
-    eth->type = htons(OFPPDPT14_ETHERNET);
-    eth->length = htons(sizeof *eth);
+    eth = ofpprop_put_zeros(b, OFPPDPT14_ETHERNET, sizeof *eth);
     eth->curr = netdev_port_features_to_ofp11(pp->curr);
     eth->advertised = netdev_port_features_to_ofp11(pp->advertised);
     eth->supported = netdev_port_features_to_ofp11(pp->supported);
@@ -5013,9 +5011,7 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
     if (td->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
         struct ofp14_table_mod_prop_vacancy *otv;
 
-        otv = ofpbuf_put_zeros(reply, sizeof *otv);
-        otv->type = htons(OFPTMPT14_VACANCY);
-        otv->length = htons(sizeof *otv);
+        otv = ofpprop_put_zeros(reply, OFPTMPT14_VACANCY, sizeof *otv);
         otv->vacancy_down = td->table_vacancy.vacancy_down;
         otv->vacancy_up = td->table_vacancy.vacancy_up;
         otv->vacancy = td->table_vacancy.vacancy;
@@ -5279,7 +5275,6 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
     case OFP14_VERSION:
     case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
-        struct ofp14_table_mod_prop_vacancy *otv;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
@@ -5291,9 +5286,9 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
             ofpprop_put_u32(b, OFPTMPT14_EVICTION, tm->eviction_flags);
         }
         if (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
-            otv = ofpbuf_put_zeros(b, sizeof *otv);
-            otv->type = htons(OFPTMPT14_VACANCY);
-            otv->length = htons(sizeof *otv);
+            struct ofp14_table_mod_prop_vacancy *otv;
+
+            otv = ofpprop_put_zeros(b, OFPTMPT14_VACANCY, sizeof *otv);
             otv->vacancy_down = tm->table_vacancy.vacancy_down;
             otv->vacancy_up = tm->table_vacancy.vacancy_up;
         }
@@ -6961,10 +6956,7 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
     ps14->rx_errors = htonll(ops->stats.rx_errors);
     ps14->tx_errors = htonll(ops->stats.tx_errors);
 
-    eth = ofpbuf_put_uninit(reply, sizeof *eth);
-    eth->type = htons(OFPPSPT14_ETHERNET);
-    eth->length = htons(sizeof *eth);
-    memset(eth->pad, 0, sizeof eth->pad);
+    eth = ofpprop_put_zeros(reply, OFPPSPT14_ETHERNET, sizeof *eth);
     eth->rx_frame_err = htonll(ops->stats.rx_frame_errors);
     eth->rx_over_err = htonll(ops->stats.rx_over_errors);
     eth->rx_crc_err = htonll(ops->stats.rx_crc_errors);
