@@ -60,7 +60,7 @@ struct deferred_action {
 struct ovs_frag_data {
 	unsigned long dst;
 	struct vport *vport;
-	struct ovs_skb_cb cb;
+	struct ovs_gso_cb cb;
 	__be16 inner_protocol;
 	__u16 vlan_tci;
 	__be16 vlan_proto;
@@ -637,7 +637,7 @@ static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 	}
 
 	__skb_dst_copy(skb, data->dst);
-	*OVS_CB(skb) = data->cb;
+	*OVS_GSO_CB(skb) = data->cb;
 	ovs_skb_set_inner_protocol(skb, data->inner_protocol);
 	skb->vlan_tci = data->vlan_tci;
 	skb->vlan_proto = data->vlan_proto;
@@ -674,7 +674,7 @@ static void prepare_frag(struct vport *vport, struct sk_buff *skb)
 	data = get_pcpu_ptr(ovs_frag_data_storage);
 	data->dst = (unsigned long) skb_dst(skb);
 	data->vport = vport;
-	data->cb = *OVS_CB(skb);
+	data->cb = *OVS_GSO_CB(skb);
 	data->inner_protocol = ovs_skb_get_inner_protocol(skb);
 	data->vlan_tci = skb->vlan_tci;
 	data->vlan_proto = skb->vlan_proto;

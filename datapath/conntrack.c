@@ -30,6 +30,7 @@
 #include "conntrack.h"
 #include "flow.h"
 #include "flow_netlink.h"
+#include "gso.h"
 
 struct ovs_ct_len_tbl {
 	size_t maxlen;
@@ -310,7 +311,7 @@ static int ovs_ct_helper(struct sk_buff *skb, u16 proto)
 static int handle_fragments(struct net *net, struct sw_flow_key *key,
 			    u16 zone, struct sk_buff *skb)
 {
-	struct ovs_skb_cb ovs_cb = *OVS_CB(skb);
+	struct ovs_gso_cb ovs_cb = *OVS_GSO_CB(skb);
 
 	if (!skb->dev) {
 		OVS_NLERR(true, "%s: skb has no dev; dropping", __func__);
@@ -326,7 +327,7 @@ static int handle_fragments(struct net *net, struct sw_flow_key *key,
 		if (err)
 			return err;
 
-		ovs_cb.mru = IPCB(skb)->frag_max_size;
+		ovs_cb.dp_cb.mru = IPCB(skb)->frag_max_size;
 #if IS_ENABLED(CONFIG_NF_DEFRAG_IPV6)
 	} else if (key->eth.type == htons(ETH_P_IPV6)) {
 		enum ip6_defrag_users user = IP6_DEFRAG_CONNTRACK_IN + zone;
@@ -352,7 +353,7 @@ static int handle_fragments(struct net *net, struct sw_flow_key *key,
 		skb_morph(skb, reasm);
 		skb->next = reasm->next;
 		consume_skb(reasm);
-		ovs_cb.mru = IP6CB(skb)->frag_max_size;
+		ovs_cb.dp_cb.mru = IP6CB(skb)->frag_max_size;
 #endif /* IP frag support */
 	} else {
 		kfree_skb(skb);
@@ -362,7 +363,7 @@ static int handle_fragments(struct net *net, struct sw_flow_key *key,
 	key->ip.frag = OVS_FRAG_TYPE_NONE;
 	skb_clear_hash(skb);
 	skb->ignore_df = 1;
-	*OVS_CB(skb) = ovs_cb;
+	*OVS_GSO_CB(skb) = ovs_cb;
 
 	return 0;
 }
