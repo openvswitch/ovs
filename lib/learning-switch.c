@@ -512,6 +512,8 @@ static void
 process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 {
     struct ofputil_packet_in pi;
+    size_t total_len;
+    uint32_t buffer_id;
     uint32_t queue_id;
     ofp_port_t out_port;
 
@@ -524,7 +526,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     struct dp_packet pkt;
     struct flow flow;
 
-    error = ofputil_decode_packet_in(&pi, oh);
+    error = ofputil_decode_packet_in(oh, &pi, &total_len, &buffer_id);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to decode packet-in: %s",
                      ofperr_to_string(error));
@@ -538,8 +540,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         return;
     }
 
-    /* Extract flow data from 'opi' into 'flow'. */
-    dp_packet_use_const(&pkt, pi.packet, pi.packet_len);
+    /* Extract flow data from 'pi' into 'flow'. */
+    dp_packet_use_const(&pkt, pi.packet, pi.len);
     flow_extract(&pkt, &flow);
     flow.in_port.ofp_port = pi.flow_metadata.flow.in_port.ofp_port;
     flow.tunnel.tun_id = pi.flow_metadata.flow.tunnel.tun_id;
@@ -562,8 +564,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     }
 
     /* Prepare packet_out in case we need one. */
-    po.buffer_id = pi.buffer_id;
-    if (po.buffer_id == UINT32_MAX) {
+    po.buffer_id = buffer_id;
+    if (buffer_id == UINT32_MAX) {
         po.packet = dp_packet_data(&pkt);
         po.packet_len = dp_packet_size(&pkt);
     } else {
@@ -583,7 +585,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
             .table_id = 0xff,
             .command = OFPFC_ADD,
             .idle_timeout = sw->max_idle,
-            .buffer_id = pi.buffer_id,
+            .buffer_id = buffer_id,
             .out_port = OFPP_NONE,
             .ofpacts = ofpacts.data,
             .ofpacts_len = ofpacts.size,
@@ -596,13 +598,13 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         queue_tx(sw, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
-        if (pi.buffer_id == UINT32_MAX && out_port != OFPP_NONE) {
+        if (buffer_id == UINT32_MAX && out_port != OFPP_NONE) {
             queue_tx(sw, ofputil_encode_packet_out(&po, sw->protocol));
         }
     } else {
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        if (pi.buffer_id != UINT32_MAX || out_port != OFPP_NONE) {
+        if (buffer_id != UINT32_MAX || out_port != OFPP_NONE) {
             queue_tx(sw, ofputil_encode_packet_out(&po, sw->protocol));
         }
     }

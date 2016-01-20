@@ -35,6 +35,7 @@
 struct ofpbuf;
 union ofp_action;
 struct ofpact_set_field;
+struct pktbuf;
 
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
@@ -411,25 +412,25 @@ enum ofperr ofputil_decode_flow_removed(struct ofputil_flow_removed *,
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
                                            enum ofputil_protocol);
 
-/* Abstract packet-in message. */
+/* Abstract packet-in message.
+ *
+ * This omits the 'total_len' and 'buffer_id' fields, which we handle
+ * differently for encoding and decoding.*/
 struct ofputil_packet_in {
     /* Packet data and metadata.
      *
-     * To save bandwidth, in some cases a switch may send only the first
-     * several bytes of a packet, indicated by 'packet_len < total_len'.  When
-     * the full packet is included, 'packet_len == total_len'. */
-    const void *packet;
-    size_t packet_len;          /* Number of bytes in 'packet'. */
-    size_t total_len;           /* Size of packet, pre-truncation. */
-    struct match flow_metadata;
-
-    /* Identifies a buffer in the switch that contains the full packet, to
-     * allow the controller to reference it later without having to send the
-     * entire packet back to the switch.
+     * On encoding, the full packet should be supplied, but depending on its
+     * other parameters ofputil_encode_packet_in() might send only the first
+     * part of the packet.
      *
-     * UINT32_MAX indicates that the packet is not buffered in the switch.  A
-     * switch should only use UINT32_MAX when it sends the entire packet. */
-    uint32_t buffer_id;
+     * On decoding, the 'len' bytes in 'packet' might only be the first part of
+     * the original packet.  ofputil_decode_packet_in() reports the full
+     * original length of the packet using its 'total_len' output parameter. */
+    const void *packet;         /* The packet. */
+    size_t len;                 /* Length of 'packet' in bytes. */
+
+    /* Input port and other metadata for packet. */
+    struct match flow_metadata;
 
     /* Reason that the packet-in is being sent. */
     enum ofp_packet_in_reason reason;    /* One of OFPR_*. */
@@ -442,11 +443,14 @@ struct ofputil_packet_in {
     ovs_be64 cookie;                     /* Flow's cookie. */
 };
 
-enum ofperr ofputil_decode_packet_in(struct ofputil_packet_in *,
-                                     const struct ofp_header *);
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
                                         enum ofputil_protocol protocol,
-                                        enum nx_packet_in_format);
+                                        enum nx_packet_in_format,
+                                        uint16_t max_len, struct pktbuf *);
+
+enum ofperr ofputil_decode_packet_in(const struct ofp_header *,
+                                     struct ofputil_packet_in *,
+                                     size_t *total_len, uint32_t *buffer_id);
 
 enum { OFPUTIL_PACKET_IN_REASON_BUFSIZE = INT_STRLEN(int) + 1 };
 const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason,

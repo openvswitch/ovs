@@ -3378,7 +3378,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Get payload. */
     if (po.buffer_id != UINT32_MAX) {
         error = ofconn_pktbuf_retrieve(ofconn, po.buffer_id, &payload, NULL);
-        if (error || !payload) {
+        if (error) {
             goto exit_free_ofpacts;
         }
     } else {

@@ -1406,7 +1406,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     controller = ofpact_put_CONTROLLER(&ofpacts);
     controller->max_len = UINT16_MAX;
     controller->controller_id = 0;
-    controller->reason = OFPR_NO_MATCH;
+    controller->reason = OFPR_IMPLICIT_MISS;
 
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
                                    &ofproto->miss_rule);

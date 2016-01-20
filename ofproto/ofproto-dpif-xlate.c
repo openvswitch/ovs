@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3582,33 +3582,30 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     odp_execute_actions(NULL, &packet, 1, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
 
-    pin = xmalloc(sizeof *pin);
-    pin->up.packet_len = dp_packet_size(packet);
-    pin->up.packet = dp_packet_steal_data(packet);
-    pin->up.reason = reason;
-    pin->up.table_id = ctx->table_id;
-    pin->up.cookie = ctx->rule_cookie;
+    /* A packet sent by an action in a table-miss rule is considered an
+     * explicit table miss.  OpenFlow before 1.3 doesn't have that concept so
+     * it will get translated back to OFPR_ACTION for those versions. */
+    if (reason == OFPR_ACTION
+        && ctx->rule && rule_dpif_is_table_miss(ctx->rule)) {
+        reason = OFPR_EXPLICIT_MISS;
+    }
 
+    size_t packet_len = dp_packet_size(packet);
+
+    pin = xmalloc(sizeof *pin);
+    *pin = (struct ofproto_packet_in) {
+        .controller_id = controller_id,
+        .up = {
+            .packet = dp_packet_steal_data(packet),
+            .len = packet_len,
+            .reason = reason,
+            .table_id = ctx->table_id,
+            .cookie = ctx->rule_cookie,
+        },
+        .max_len = len,
+    };
     flow_get_metadata(&ctx->xin->flow, &pin->up.flow_metadata);
 
-    pin->controller_id = controller_id;
-    pin->send_len = len;
-    /* If a rule is a table-miss rule then this is
-     * a table-miss handled by a table-miss rule.
-     *
-     * Else, if rule is internal and has a controller action,
-     * the later being implied by the rule being processed here,
-     * then this is a table-miss handled without a table-miss rule.
-     *
-     * Otherwise this is not a table-miss. */
-    pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
-    if (ctx->rule) {
-        if (rule_dpif_is_table_miss(ctx->rule)) {
-            pin->miss_type = OFPROTO_PACKET_IN_MISS_FLOW;
-        } else if (rule_dpif_is_internal(ctx->rule)) {
-            pin->miss_type = OFPROTO_PACKET_IN_MISS_WITHOUT_FLOW;
-        }
-    }
     ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
     dp_packet_delete(packet);
 }
