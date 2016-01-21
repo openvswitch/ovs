@@ -197,7 +197,11 @@ usage(void)
            "    connect to SERVER and dump the contents of the database\n"
            "    as seen initially by the IDL implementation and after\n"
            "    executing each TRANSACTION.  (Each TRANSACTION must modify\n"
-           "    the database or this command will hang.)\n",
+           "    the database or this command will hang.)\n"
+           "  idl-partial-update-map-column SERVER \n"
+           "    connect to SERVER and executes different operations to\n"
+           "    test the capacity of updating elements inside a map column\n"
+           "    displaying the information on the table after each operation.\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
