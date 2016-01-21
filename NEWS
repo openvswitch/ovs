@@ -7,6 +7,10 @@ Post-v2.5.0
      * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
+   - DPDK:
+     * New option "n_rxq" for PMD interfaces.
+       Old 'other_config:n-dpdk-rxqs' is no longer supported.
+
 
 v2.5.0 - xx xxx xxxx
 ---------------------

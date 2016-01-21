@@ -482,9 +482,6 @@ extern unsigned ofproto_max_idle;
  * ofproto-dpif implementation. */
 extern size_t n_handlers, n_revalidators;
 
-/* Number of rx queues to be created for each dpdk interface. */
-extern size_t n_dpdk_rxqs;
-
 /* Cpu mask for pmd threads. */
 extern char *pmd_cpu_mask;
 

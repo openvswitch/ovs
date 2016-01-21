@@ -167,15 +167,6 @@
         </p>
       </column>
 
-      <column name="other_config" key="n-dpdk-rxqs"
-              type='{"type": "integer", "minInteger": 1}'>
-        <p>
-          Specifies the maximum number of rx queues to be created for each dpdk
-          interface.  If not specified or specified to 0, one rx queue will
-          be created for each dpdk interface by default.
-        </p>
-      </column>
-
       <column name="other_config" key="pmd-cpu-mask">
         <p>
           Specifies CPU mask for setting the cpu affinity of PMD (Poll
@@ -2194,6 +2185,21 @@
         <code>peer</code> option must specify this <ref table="Interface"/>'s
         name.  That is, the two patch interfaces must have reversed <ref
         column="name"/> and <code>peer</code> values.
+      </column>
+    </group>
+
+    <group title="PMD (Poll Mode Driver) Options">
+      <p>
+        Only PMD netdevs support these options.
+      </p>
+
+      <column name="options" key="n_rxqs"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Specifies the maximum number of rx queues to be created for PMD
+          netdev.  If not specified or specified to 0, one rx queue will
+          be created by default.
+        </p>
       </column>
     </group>
 

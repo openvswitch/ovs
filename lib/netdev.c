@@ -106,6 +106,12 @@ netdev_n_rxq(const struct netdev *netdev)
     return netdev->n_rxq;
 }
 
+int
+netdev_requested_n_rxq(const struct netdev *netdev)
+{
+    return netdev->requested_n_rxq;
+}
+
 bool
 netdev_is_pmd(const struct netdev *netdev)
 {
@@ -376,6 +382,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 /* By default enable one tx and rx queue per netdev. */
                 netdev->n_txq = netdev->netdev_class->send ? 1 : 0;
                 netdev->n_rxq = netdev->netdev_class->rxq_alloc ? 1 : 0;
+                netdev->requested_n_rxq = netdev->n_rxq;
 
                 list_init(&netdev->saved_flags_list);
 

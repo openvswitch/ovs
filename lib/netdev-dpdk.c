@@ -614,6 +614,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
 
     netdev_->n_txq = NR_QUEUE;
     netdev_->n_rxq = NR_QUEUE;
+    netdev_->requested_n_rxq = NR_QUEUE;
     netdev->real_n_txq = NR_QUEUE;
 
     if (type == DPDK_DEV_ETH) {
@@ -769,15 +770,30 @@ netdev_dpdk_dealloc(struct netdev *netdev_)
 }
 
 static int
-netdev_dpdk_get_config(const struct netdev *netdev_, struct smap *args)
+netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev_);
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
 
-    smap_add_format(args, "configured_rx_queues", "%d", netdev_->n_rxq);
-    smap_add_format(args, "requested_tx_queues", "%d", netdev_->n_txq);
+    smap_add_format(args, "requested_rx_queues", "%d", netdev->requested_n_rxq);
+    smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
+    smap_add_format(args, "requested_tx_queues", "%d", netdev->n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", dev->real_n_txq);
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+    netdev->requested_n_rxq = MAX(smap_get_int(args, "n_rxq",
+                                               netdev->requested_n_rxq), 1);
+    netdev_change_seq_changed(netdev);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -2127,7 +2143,7 @@ unlock_dpdk:
     DESTRUCT,                                                 \
     netdev_dpdk_dealloc,                                      \
     netdev_dpdk_get_config,                                   \
-    NULL,                       /* netdev_dpdk_set_config */  \
+    netdev_dpdk_set_config,                                   \
     NULL,                       /* get_tunnel_config */       \
     NULL,                       /* build header */            \
     NULL,                       /* push header */             \

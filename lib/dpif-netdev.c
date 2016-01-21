@@ -221,9 +221,7 @@ struct dp_netdev {
      * 'struct dp_netdev_pmd_thread' in 'per_pmd_key'. */
     ovsthread_key_t per_pmd_key;
 
-    /* Number of rx queues for each dpdk interface and the cpu mask
-     * for pin of pmd threads. */
-    size_t n_dpdk_rxqs;
+    /* Cpu mask for pin of pmd threads. */
     char *pmd_cmask;
     uint64_t last_tnl_conf_seq;
 };
@@ -254,6 +252,8 @@ struct dp_netdev_port {
     struct netdev_rxq **rxq;
     struct ovs_refcount ref_cnt;
     char *type;                 /* Port type as requested by user. */
+    int latest_requested_n_rxq; /* Latest requested from netdev number
+                                   of rx queues. */
 };
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
@@ -866,7 +866,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     ovsthread_key_create(&dp->per_pmd_key, NULL);
 
     dp_netdev_set_nonpmd(dp);
-    dp->n_dpdk_rxqs = NR_QUEUE;
 
     ovs_mutex_lock(&dp->port_mutex);
     error = do_add_port(dp, name, "internal", ODPP_LOCAL);
@@ -1094,7 +1093,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         /* There can only be ovs_numa_get_n_cores() pmd threads,
          * so creates a txq for each, and one extra for the non
          * pmd threads. */
-        error = netdev_set_multiq(netdev, n_cores + 1, dp->n_dpdk_rxqs);
+        error = netdev_set_multiq(netdev, n_cores + 1,
+                                  netdev_requested_n_rxq(netdev));
         if (error && (error != EOPNOTSUPP)) {
             VLOG_ERR("%s, cannot set multiq", devname);
             return errno;
@@ -1105,6 +1105,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->netdev = netdev;
     port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
     port->type = xstrdup(type);
+    port->latest_requested_n_rxq = netdev_requested_n_rxq(netdev);
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
         error = netdev_rxq_open(netdev, &port->rxq[i], i);
         if (error
@@ -2408,32 +2409,42 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 /* Returns true if the configuration for rx queues or cpu mask
  * is changed. */
 static bool
-pmd_config_changed(const struct dp_netdev *dp, size_t rxqs, const char *cmask)
+pmd_config_changed(const struct dp_netdev *dp, const char *cmask)
 {
-    if (dp->n_dpdk_rxqs != rxqs) {
-        return true;
-    } else {
-        if (dp->pmd_cmask != NULL && cmask != NULL) {
-            return strcmp(dp->pmd_cmask, cmask);
-        } else {
-            return (dp->pmd_cmask != NULL || cmask != NULL);
+    struct dp_netdev_port *port;
+
+    CMAP_FOR_EACH (port, node, &dp->ports) {
+        struct netdev *netdev = port->netdev;
+        int requested_n_rxq = netdev_requested_n_rxq(netdev);
+        if (netdev_is_pmd(netdev)
+            && port->latest_requested_n_rxq != requested_n_rxq) {
+            return true;
         }
+    }
+
+    if (dp->pmd_cmask != NULL && cmask != NULL) {
+        return strcmp(dp->pmd_cmask, cmask);
+    } else {
+        return (dp->pmd_cmask != NULL || cmask != NULL);
     }
 }
 
 /* Resets pmd threads if the configuration for 'rxq's or cpu mask changes. */
 static int
-dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
+dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    if (pmd_config_changed(dp, n_rxqs, cmask)) {
+    if (pmd_config_changed(dp, cmask)) {
         struct dp_netdev_port *port;
 
         dp_netdev_destroy_all_pmds(dp);
 
         CMAP_FOR_EACH (port, node, &dp->ports) {
-            if (netdev_is_pmd(port->netdev)) {
+            struct netdev *netdev = port->netdev;
+            int requested_n_rxq = netdev_requested_n_rxq(netdev);
+            if (netdev_is_pmd(port->netdev)
+                && port->latest_requested_n_rxq != requested_n_rxq) {
                 int i, err;
 
                 /* Closes the existing 'rxq's. */
@@ -2445,14 +2456,14 @@ dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
                 /* Sets the new rx queue config.  */
                 err = netdev_set_multiq(port->netdev,
                                         ovs_numa_get_n_cores() + 1,
-                                        n_rxqs);
+                                        requested_n_rxq);
                 if (err && (err != EOPNOTSUPP)) {
                     VLOG_ERR("Failed to set dpdk interface %s rx_queue to:"
                              " %u", netdev_get_name(port->netdev),
-                             n_rxqs);
+                             requested_n_rxq);
                     return err;
                 }
-
+                port->latest_requested_n_rxq = requested_n_rxq;
                 /* If the set_multiq() above succeeds, reopens the 'rxq's. */
                 port->rxq = xrealloc(port->rxq, sizeof *port->rxq
                                      * netdev_n_rxq(port->netdev));
@@ -2461,8 +2472,6 @@ dpif_netdev_pmd_set(struct dpif *dpif, unsigned int n_rxqs, const char *cmask)
                 }
             }
         }
-        dp->n_dpdk_rxqs = n_rxqs;
-
         /* Reconfigures the cpu mask. */
         ovs_numa_set_cpu_mask(cmask);
         free(dp->pmd_cmask);

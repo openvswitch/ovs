@@ -318,11 +318,9 @@ struct dpif_class {
     int (*handlers_set)(struct dpif *dpif, uint32_t n_handlers);
 
     /* If 'dpif' creates its own I/O polling threads, refreshes poll threads
-     * configuration.  'n_rxqs' configures the number of rx_queues, which
-     * are distributed among threads.  'cmask' configures the cpu mask
-     * for setting the polling threads' cpu affinity. */
-    int (*poll_threads_set)(struct dpif *dpif, unsigned int n_rxqs,
-                            const char *cmask);
+     * configuration.  'cmask' configures the cpu mask for setting the polling
+     * threads' cpu affinity. */
+    int (*poll_threads_set)(struct dpif *dpif, const char *cmask);
 
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
      * priority value used for setting packet priority. */

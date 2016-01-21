@@ -294,9 +294,9 @@ Performance Tuning:
 
   3. DPDK port Rx Queues
 
-	`ovs-vsctl set Open_vSwitch . other_config:n-dpdk-rxqs=<integer>`
+	`ovs-vsctl set Interface <DPDK interface> options:n_rxq=<integer>`
 
-	The command above sets the number of rx queues for each DPDK interface.
+	The command above sets the number of rx queues for DPDK interface.
 	The rx queues are assigned to pmd threads on the same NUMA node in a
 	round-robin fashion.  For more information, please refer to the
 	Open_vSwitch TABLE section in
@@ -568,9 +568,16 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    ```
 
 3. Optional: Enable multiqueue support
-   QEMU needs to be configured with multiple queues and the number queues
-   must be less or equal to Open vSwitch other_config:n-dpdk-rxqs.
-   The $q below is the number of queues.
+   The vhost-user interface must be configured in Open vSwitch with the
+   desired amount of queues with:
+
+   ```
+   ovs-vsctl set Interface vhost-user-2 options:n_rxq=<requested queues>
+   ```
+
+   QEMU needs to be configured as well.
+   The $q below should match the queues requested in OVS (if $q is more,
+   packets will not be received).
    The $v is the number of vectors, which is '$q x 2 + 2'.
 
    ```
