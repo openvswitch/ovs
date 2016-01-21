@@ -4828,9 +4828,14 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->odp_actions = odp_actions;
 
     /* Do recirc lookup. */
-    xin->recirc = flow->recirc_id
-        ? recirc_id_node_find(flow->recirc_id)
-        : NULL;
+    xin->recirc = NULL;
+    if (flow->recirc_id) {
+        const struct recirc_id_node *node
+            = recirc_id_node_find(flow->recirc_id);
+        if (node) {
+            xin->recirc = &node->state;
+        }
+    }
 }
 
 void
@@ -5138,7 +5143,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     COVERAGE_INC(xlate_actions);
 
     if (xin->recirc) {
-        const struct recirc_state *state = &xin->recirc->state;
+        const struct recirc_state *state = xin->recirc;
 
         xlate_report(&ctx, "Restoring state post-recirculation:");
 

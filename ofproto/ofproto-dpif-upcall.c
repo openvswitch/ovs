@@ -1074,8 +1074,8 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
              * upcalls using recirculation ID for which no context can be
              * found).  We may still execute the flow's actions even if we
              * don't install the flow. */
-            upcall->recirc = xin.recirc;
-            upcall->have_recirc_ref = recirc_id_node_try_ref_rcu(xin.recirc);
+            upcall->recirc = recirc_id_node_from_state(xin.recirc);
+            upcall->have_recirc_ref = recirc_id_node_try_ref_rcu(upcall->recirc);
         }
     } else {
         /* For non-miss upcalls, we are either executing actions (one of which

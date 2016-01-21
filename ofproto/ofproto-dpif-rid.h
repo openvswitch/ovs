@@ -184,6 +184,12 @@ void recirc_free_ofproto(struct ofproto_dpif *, const char *ofproto_name);
 
 const struct recirc_id_node *recirc_id_node_find(uint32_t recirc_id);
 
+static inline struct recirc_id_node *
+recirc_id_node_from_state(const struct recirc_state *state)
+{
+    return CONTAINER_OF(state, struct recirc_id_node, state);
+}
+
 static inline bool recirc_id_node_try_ref_rcu(const struct recirc_id_node *n_)
 {
     struct recirc_id_node *node = CONST_CAST(struct recirc_id_node *, n_);
