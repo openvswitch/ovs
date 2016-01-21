@@ -399,7 +399,7 @@ cmd_rate(struct ovs_cmdl_context *ctx OVS_UNUSED)
         long long int now;
         long long int may_open;
         int delay;
-        int error;
+        int retval;
         int j;
 
         if (max_rate > 0) {
@@ -458,8 +458,8 @@ cmd_rate(struct ovs_cmdl_context *ctx OVS_UNUSED)
             delay = 1000;
         }
 
-        error = do_poll(fds, n_fds, delay);
-        if (error) {
+        retval = do_poll(fds, n_fds, delay);
+        if (retval < 0) {
             ovs_fatal(errno, "poll");
         }
 
@@ -587,10 +587,10 @@ cmd_latency(struct ovs_cmdl_context *ctx OVS_UNUSED)
         }
 
         while (n_fds > 0) {
-            int error;
+            int retval;
 
-            error = do_poll(fds, n_fds, -1);
-            if (error) {
+            retval = do_poll(fds, n_fds, -1);
+            if (retval < 0) {
                 ovs_fatal(errno, "poll");
             }
 
