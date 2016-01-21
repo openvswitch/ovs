@@ -142,6 +142,7 @@ bool netdev_is_reserved_name(const char *name);
 
 int netdev_n_txq(const struct netdev *netdev);
 int netdev_n_rxq(const struct netdev *netdev);
+int netdev_requested_n_rxq(const struct netdev *netdev);
 bool netdev_is_pmd(const struct netdev *netdev);
 
 /* Open and close. */

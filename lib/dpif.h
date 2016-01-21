@@ -836,8 +836,7 @@ void dpif_register_upcall_cb(struct dpif *, upcall_callback *, void *aux);
 
 int dpif_recv_set(struct dpif *, bool enable);
 int dpif_handlers_set(struct dpif *, uint32_t n_handlers);
-int dpif_poll_threads_set(struct dpif *, unsigned int n_rxqs,
-                          const char *cmask);
+int dpif_poll_threads_set(struct dpif *, const char *cmask);
 int dpif_recv(struct dpif *, uint32_t handler_id, struct dpif_upcall *,
               struct ofpbuf *);
 void dpif_recv_purge(struct dpif *);

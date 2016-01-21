@@ -52,9 +52,13 @@ struct netdev {
      * 'netdev''s flags, features, ethernet address, or carrier changes. */
     uint64_t change_seq;
 
-    /* The following are protected by 'netdev_mutex' (internal to netdev.c). */
+    /* The core netdev code initializes these at netdev construction and only
+     * provide read-only access to its client.  Netdev implementations may
+     * modify them. */
     int n_txq;
     int n_rxq;
+    /* Number of rx queues requested by user. */
+    int requested_n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
