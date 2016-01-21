@@ -142,7 +142,7 @@ struct xlate_in {
 
     /* The recirculation context related to this translation, as returned by
      * xlate_lookup. */
-    const struct recirc_id_node *recirc;
+    const struct recirc_state *recirc;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
