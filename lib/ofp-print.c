@@ -458,7 +458,8 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     enum ofperr error;
     struct ofpbuf b;
 
-    error = ofputil_decode_switch_features(oh, &features, &b);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    error = ofputil_pull_switch_features(&b, &features);
     if (error) {
         ofp_print_error(string, error);
         return;

@@ -4186,23 +4186,18 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
     }
 }
 
-/* Decodes an OpenFlow 1.0 or 1.1 "switch_features" structure 'osf' into an
- * abstract representation in '*features'.  Initializes '*b' to iterate over
- * the OpenFlow port structures following 'osf' with later calls to
- * ofputil_pull_phy_port().  Returns 0 if successful, otherwise an
- * OFPERR_* value.  */
+/* Pulls an OpenFlow "switch_features" structure from 'b' and decodes it into
+ * an abstract representation in '*features', readying 'b' to iterate over the
+ * OpenFlow port structures following 'osf' with later calls to
+ * ofputil_pull_phy_port().  Returns 0 if successful, otherwise an OFPERR_*
+ * value.  */
 enum ofperr
-ofputil_decode_switch_features(const struct ofp_header *oh,
-                               struct ofputil_switch_features *features,
-                               struct ofpbuf *b)
+ofputil_pull_switch_features(struct ofpbuf *b,
+                             struct ofputil_switch_features *features)
 {
-    const struct ofp_switch_features *osf;
-    enum ofpraw raw;
-
-    ofpbuf_use_const(b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(b);
-
-    osf = ofpbuf_pull(b, sizeof *osf);
+    const struct ofp_header *oh = b->data;
+    enum ofpraw raw = ofpraw_pull_assert(b);
+    const struct ofp_switch_features *osf = ofpbuf_pull(b, sizeof *osf);
     features->datapath_id = ntohll(osf->datapath_id);
     features->n_buffers = ntohl(osf->n_buffers);
     features->n_tables = osf->n_tables;

@@ -590,9 +590,8 @@ struct ofputil_switch_features {
     uint64_t ofpacts;           /* Bitmap of OFPACT_* bits. */
 };
 
-enum ofperr ofputil_decode_switch_features(const struct ofp_header *,
-                                           struct ofputil_switch_features *,
-                                           struct ofpbuf *);
+enum ofperr ofputil_pull_switch_features(struct ofpbuf *,
+                                         struct ofputil_switch_features *);
 
 struct ofpbuf *ofputil_encode_switch_features(
     const struct ofputil_switch_features *, enum ofputil_protocol,
