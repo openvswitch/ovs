@@ -846,7 +846,6 @@ port_iterator_fetch_features(struct port_iterator *pi)
     run(vconn_transact(pi->vconn, rq, &pi->reply),
         "talking to %s", vconn_get_name(pi->vconn));
 
-    const struct ofp_header *oh = pi->reply->data;
     enum ofptype type;
     if (ofptype_decode(&type, pi->reply->data)
         || type != OFPTYPE_FEATURES_REPLY) {
@@ -865,8 +864,7 @@ port_iterator_fetch_features(struct port_iterator *pi)
     }
 
     struct ofputil_switch_features features;
-    enum ofperr error = ofputil_decode_switch_features(oh, &features,
-                                                       pi->reply);
+    enum ofperr error = ofputil_pull_switch_features(pi->reply, &features);
     if (error) {
         ovs_fatal(0, "%s: failed to decode features reply (%s)",
                   vconn_get_name(pi->vconn), ofperr_to_string(error));
