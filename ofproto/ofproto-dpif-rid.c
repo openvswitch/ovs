@@ -142,9 +142,9 @@ recirc_metadata_hash(const struct recirc_state *state)
     hash = hash_bytes64((const uint64_t *) &state->metadata.metadata,
                         sizeof state->metadata - sizeof state->metadata.tunnel,
                         hash);
-    if (state->stack && state->stack->size != 0) {
-        hash = hash_bytes64((const uint64_t *) state->stack->data,
-                            state->stack->size, hash);
+    if (state->stack && state->n_stack) {
+        hash = hash_bytes64((const uint64_t *) state->stack,
+                            state->n_stack * sizeof *state->stack, hash);
     }
     hash = hash_int(state->mirrors, hash);
     hash = hash_int(state->action_set_len, hash);
@@ -164,9 +164,8 @@ recirc_metadata_equal(const struct recirc_state *a,
             && flow_tnl_equal(a->metadata.tunnel, b->metadata.tunnel)
             && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
                        sizeof a->metadata - sizeof a->metadata.tunnel)
-            && (((!a->stack || !a->stack->size) &&
-                 (!b->stack || !b->stack->size))
-                || (a->stack && b->stack && ofpbuf_equal(a->stack, b->stack)))
+            && a->n_stack == b->n_stack
+            && !memcmp(a->stack, b->stack, a->n_stack * sizeof *a->stack)
             && a->mirrors == b->mirrors
             && a->conntracked == b->conntracked
             && a->action_set_len == b->action_set_len
@@ -211,20 +210,18 @@ recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
     flow_tnl_copy__(tunnel, old->metadata.tunnel);
     new->metadata.tunnel = tunnel;
 
-    if (new->stack) {
-        new->stack = new->stack->size ? ofpbuf_clone(new->stack) : NULL;
-    }
-    if (new->ofpacts) {
-        new->ofpacts = (new->ofpacts_len
-                        ? xmemdup(new->ofpacts, new->ofpacts_len)
-                        : NULL);
-    }
+    new->stack = (new->n_stack
+                  ? xmemdup(new->stack, new->n_stack * sizeof *new->stack)
+                  : NULL);
+    new->ofpacts = (new->ofpacts_len
+                    ? xmemdup(new->ofpacts, new->ofpacts_len)
+                    : NULL);
 }
 
 static void
 recirc_state_free(struct recirc_state *state)
 {
-    ofpbuf_delete(state->stack);
+    free(state->stack);
     free(state->ofpacts);
 }
 

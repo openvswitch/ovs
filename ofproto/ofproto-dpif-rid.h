@@ -140,7 +140,8 @@ struct recirc_state {
     /* Pipeline context for post-recirculation processing. */
     struct ofproto_dpif *ofproto; /* Post-recirculation bridge. */
     struct recirc_metadata metadata; /* Flow metadata. */
-    struct ofpbuf *stack;         /* Stack if any. */
+    union mf_subvalue *stack;     /* Stack if any. */
+    size_t n_stack;
     mirror_mask_t mirrors;        /* Mirrors already output. */
     bool conntracked;             /* Conntrack occurred prior to recirc. */
 
