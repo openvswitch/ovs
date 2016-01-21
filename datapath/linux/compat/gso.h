@@ -170,7 +170,10 @@ static inline void ovs_skb_dst_set(struct sk_buff *skb, void *dst)
 
 static inline struct ip_tunnel_info *ovs_skb_tunnel_info(struct sk_buff *skb)
 {
-	return &OVS_GSO_CB(skb)->tun_dst->u.tun_info;
+	if (likely(OVS_GSO_CB(skb)->tun_dst))
+		return &OVS_GSO_CB(skb)->tun_dst->u.tun_info;
+	else
+		return NULL;
 }
 
 static inline void ovs_skb_dst_drop(struct sk_buff *skb)
