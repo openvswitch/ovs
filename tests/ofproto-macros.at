@@ -235,11 +235,20 @@ ovn_populate_arp() {
 strip_xids () {
     sed 's/ (xid=0x[[0-9a-fA-F]]*)//'
 }
+
+# Changes all 'used:...' to say 'used:0.0', to make output easier to compare.
+strip_used () {
+    sed 's/used:[[0-9]]\.[[0-9]]*/used:0.0/'
+}
+
+# Strips 'ufid:...' from output, to make it easier to compare.
+# (ufids are random.)
+strip_ufid () {
+    sed 's/ufid:[[-0-9a-f]]* //'
+}
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
-m4_define([STRIP_USED], [[sed 's/used:[0-9]\.[0-9]*/used:0.0/']])
-m4_define([STRIP_UFID], [[sed 's/ufid:[-0-9a-f]* //']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
 # _OVS_VSWITCHD_START([vswitchd-aux-args])
