@@ -248,7 +248,6 @@ strip_ufid () {
 }
 m4_divert_pop([PREPARE_TESTS])
 
-m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
 # _OVS_VSWITCHD_START([vswitchd-aux-args])
