@@ -876,8 +876,7 @@ priority=100,in_port=2,icmp,ct_state=+trk+rel,ct_mark=1,action=1
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
-dnl We pass "-q 1" here to handle openbsd-style nc that can't quit immediately.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc -q 1 -u 10.1.1.2 10000"])
+NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort | grep -v drop], [0], [dnl
@@ -1681,8 +1680,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
-dnl We pass "-q 1" here to handle openbsd-style nc that can't quit immediately.
-NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc -q 1 -u 10.1.1.2 10000"])
+NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip | sort | grep -v drop], [0], [dnl

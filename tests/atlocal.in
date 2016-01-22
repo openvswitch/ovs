@@ -117,3 +117,10 @@ if test "$HAVE_PYTHON" = "yes" \
 else
     HAVE_PYFTPDLIB="no"
 fi
+
+# Determine correct netcat option to quit on stdin EOF
+if nc --version 2>&1 | grep -q nmap.org; then
+    NC_EOF_OPT="--send-only"
+else
+    NC_EOF_OPT="-q 1"
+fi
