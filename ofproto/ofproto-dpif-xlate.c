@@ -4165,8 +4165,7 @@ recirc_put_unroll_xlate(struct xlate_ctx *ctx)
 
 /* Copy remaining actions to the action_set to be executed after recirculation.
  * UNROLL_XLATE action is inserted, if not already done so, before actions that
- * may generate asynchronous messages from the current table and without
- * matching another rule. */
+ * may depend on the current table ID or flow cookie. */
 static void
 recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                       struct xlate_ctx *ctx)
@@ -4175,17 +4174,25 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         switch (a->type) {
-            /* May generate asynchronous messages. */
         case OFPACT_OUTPUT_REG:
         case OFPACT_GROUP:
         case OFPACT_OUTPUT:
         case OFPACT_CONTROLLER:
         case OFPACT_DEC_MPLS_TTL:
         case OFPACT_DEC_TTL:
+            /* These actions may generate asynchronous messages, which include
+             * table ID and flow cookie information. */
             recirc_put_unroll_xlate(ctx);
             break;
 
-            /* These may not generate PACKET INs. */
+        case OFPACT_RESUBMIT:
+            if (ofpact_get_RESUBMIT(a)->table_id == 0xff) {
+                /* This resubmit action is relative to the current table, so we
+                 * need to track what table that is.*/
+                recirc_put_unroll_xlate(ctx);
+            }
+            break;
+
         case OFPACT_SET_TUNNEL:
         case OFPACT_REG_MOVE:
         case OFPACT_SET_FIELD:
@@ -4193,8 +4200,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_STACK_POP:
         case OFPACT_LEARN:
         case OFPACT_WRITE_METADATA:
-        case OFPACT_RESUBMIT:        /* May indirectly generate PACKET INs, */
-        case OFPACT_GOTO_TABLE:      /* but from a different table and rule. */
+        case OFPACT_GOTO_TABLE:
         case OFPACT_ENQUEUE:
         case OFPACT_SET_VLAN_VID:
         case OFPACT_SET_VLAN_PCP:
@@ -4228,11 +4234,12 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_CT:
         case OFPACT_NAT:
+            /* These may not generate PACKET INs. */
             break;
 
-            /* These need not be copied for restoration. */
         case OFPACT_NOTE:
         case OFPACT_CONJUNCTION:
+            /* These need not be copied for restoration. */
             continue;
         }
         /* Copy the action over. */
