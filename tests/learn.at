@@ -327,7 +327,7 @@ NXST_FLOW reply:
 
 # Check that the first packet went out port 2 and the rest out port 3.
 AT_CHECK(
-  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=1, bytes=60, drop=0, errs=0, coll=0
@@ -378,7 +378,7 @@ done
 # Check that the first packet of each flow went out port 2 and the rest out
 # port 3.
 AT_CHECK(
-  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=2, bytes=120, drop=0, errs=0, coll=0
@@ -464,7 +464,7 @@ done
 # Check that the first packet of each flow went out port 2 and the rest out
 # port 3.
 AT_CHECK(
-  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=3, bytes=180, drop=0, errs=0, coll=0

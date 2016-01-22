@@ -32,7 +32,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - feature request, config request])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
@@ -82,7 +82,7 @@ dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - port stats - (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn dump-ports br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_PORT reply: 1 ports
   port LOCAL: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=0, bytes=0, drop=0, errs=0, coll=0
@@ -93,7 +93,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - port stats - (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-ports br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_PORT reply (OF1.2): 1 ports
   port LOCAL: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=0, bytes=0, drop=0, errs=0, coll=0
@@ -104,7 +104,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - port stats - (OpenFlow 1.4)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-ports br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/'],
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/'],
   [0], [dnl
 OFPST_PORT reply (OF1.4): 1 ports
   port LOCAL: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
@@ -119,7 +119,7 @@ dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - port-desc stats (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn dump-ports-desc br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_PORT_DESC reply:
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     PORT_DOWN
@@ -134,7 +134,7 @@ dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - port-desc stats (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-ports-desc br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_PORT_DESC reply (OF1.2):
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     PORT_DOWN
@@ -148,7 +148,7 @@ AT_SETUP([ofproto - port-desc stats (OpenFlow 1.5)])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-ports-desc br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/00:0./00:0x/'], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed 's/00:0./00:0x/'], [0], [dnl
 OFPST_PORT_DESC reply (OF1.5):
  1(p1): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
@@ -168,7 +168,7 @@ OFPST_PORT_DESC reply (OF1.5):
      speed: 0 Mbps now, 0 Mbps max
 ])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-ports-desc br0 2], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/00:0./00:0x/'], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed 's/00:0./00:0x/'], [0], [dnl
 OFPST_PORT_DESC reply (OF1.5):
  2(p2): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
@@ -183,37 +183,37 @@ m4_define([CHECK_QUEUE_STATS], [
 AT_SETUP([ofproto - queue stats - (OpenFlow $1)])
 OVS_VSWITCHD_START
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 | strip_xids], [0],
   [OFPST_QUEUE reply$3: 1 queues
   port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL | strip_xids], [0],
   [OFPST_QUEUE reply$3: 1 queues
   port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL 0 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL 0 | strip_xids], [0],
   [OFPST_QUEUE reply$3: 1 queues
   port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 ANY 0 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 ANY 0 | strip_xids], [0],
   [OFPST_QUEUE reply$3: 1 queues
   port LOCAL queue 0: bytes=?, pkts=?, errors=?, duration=?
 ])
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL 5 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 LOCAL 5 | strip_xids], [0],
   [OFPT_ERROR$3: OFPQOFC_BAD_QUEUE
 OFPST_QUEUE request$3: port=LOCAL queue=5
 ])
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 ANY 5 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 ANY 5 | strip_xids], [0],
   [OFPT_ERROR$3: OFPQOFC_BAD_QUEUE
 OFPST_QUEUE request$3: port=ANY queue=5
 ])
 
-AT_CHECK([ovs-ofctl -O $2 queue-stats br0 10 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O $2 queue-stats br0 10 | strip_xids], [0],
   [OFPT_ERROR$3: OFPQOFC_BAD_PORT
 OFPST_QUEUE request$3: port=10 queue=ALL
 ])
@@ -232,12 +232,12 @@ AT_SETUP([ofproto - queue configuration - (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl queue-get-config br0 1], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY: port=1
 queue 0:
 ])
 AT_CHECK([ovs-ofctl queue-get-config br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY: port=1
 OFPT_QUEUE_GET_CONFIG_REPLY: port=2
 queue 0:
@@ -254,11 +254,11 @@ AT_SETUP([ofproto - queue configuration - (OpenFlow 1.1)])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl -O OpenFlow11 queue-get-config br0 1], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.1): port=1
 queue 0:
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow11 queue-get-config br0 10 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O OpenFlow11 queue-get-config br0 10 | strip_xids], [0],
   [OFPT_ERROR (OF1.1): OFPQOFC_BAD_PORT
 OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.1): port=10
 ])
@@ -269,18 +269,18 @@ AT_SETUP([ofproto - queue configuration - (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
 queue 0:
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 ANY], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=ANY
 queue 0:
 queue 0:
 queue 0:
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 10 | strip_xids], [0],
   [OFPT_ERROR (OF1.2): OFPQOFC_BAD_PORT
 OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2): port=10
 ])
@@ -291,7 +291,7 @@ AT_SETUP([ofproto - queue configuration - (OpenFlow 1.4)])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 
-AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 any | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 any | strip_xids], [0],
   [OFPST_QUEUE_DESC reply (OF1.4): port=1
 queue 0:
 port=LOCAL
@@ -300,17 +300,17 @@ port=2
 queue 0:
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 1 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 1 | strip_xids], [0],
   [OFPST_QUEUE_DESC reply (OF1.4): port=1
 queue 0:
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 10 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 10 | strip_xids], [0],
   [OFPT_ERROR (OF1.4): OFPQOFC_BAD_PORT
 OFPST_QUEUE_DESC request (OF1.4): port=10
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 1 2 | STRIP_XIDS], [0],
+AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 1 2 | strip_xids], [0],
   [OFPT_ERROR (OF1.4): OFPQOFC_BAD_QUEUE
 OFPST_QUEUE_DESC request (OF1.4): port=1 queue=2
 ])
@@ -347,26 +347,26 @@ group_id=1235,type=all,bucket=actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0 ], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
  group_id=1234,type=all,bucket=actions=output:10
  group_id=1235,type=all,bucket=actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
  group_id=1235,type=all,bucket=actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
  group_id=1235,type=all,bucket=actions=output:10
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn del-groups br0], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
 ])
 
@@ -405,27 +405,27 @@ group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=outpu
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
  group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
  group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
 ])
 OVS_VSWITCHD_STOP
@@ -482,7 +482,7 @@ group_id=1234,type=all
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all
 ])
@@ -490,7 +490,7 @@ OFPST_GROUP_DESC reply (OF1.5):
 # Add two buckets, using "last".
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
@@ -500,7 +500,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 --strict del-groups br0 group_id=1234])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 group_id=1234,type=all])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
@@ -508,7 +508,7 @@ OFPST_GROUP_DESC reply (OF1.5):
 # Add two more buckets before the existing ones.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
 ])
@@ -516,14 +516,14 @@ OFPST_GROUP_DESC reply (OF1.5):
 # Add another bucket at the end.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
 
 # Verify that duplicate bucket IDs are rejected.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15], [1], [], [stderr])
-AT_CHECK([STRIP_XIDS stderr | sed '/truncated/,$d'], [0], [dnl
+AT_CHECK([strip_xids < stderr | sed '/truncated/,$d'], [0], [dnl
 OFPT_ERROR (OF1.5): OFPGMFC_BUCKET_EXISTS
 OFPT_GROUP_MOD (OF1.5):
 ])
@@ -532,7 +532,7 @@ OFPT_GROUP_MOD (OF1.5):
 # Add another bucket just before bucket 15.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
@@ -544,7 +544,7 @@ group_id=1234,command_bucket_id=11,bucket=bucket_id:12,actions=output:12,bucket=
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 - < buckets.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
@@ -552,7 +552,7 @@ OFPST_GROUP_DESC reply (OF1.5):
 # Add yet two more buckets.
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21
 ])
@@ -577,25 +577,25 @@ group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:16,actions=output:16
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=first])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:16,actions=output:16
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=13])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
@@ -604,7 +604,7 @@ group_id=1234
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 - < buckets.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.5):
  group_id=1234,type=all
 ])
@@ -645,7 +645,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1235'],
 #
 # This 'sed' command captures the error message but drops details.
 AT_CHECK([sed '/truncated/d
-/^000000.0/d' stderr | STRIP_XIDS], [0],
+/^000000.0/d' stderr | strip_xids], [0],
   [OFPT_ERROR (OF1.1): OFPBAC_BAD_OUT_GROUP
 OFPT_FLOW_MOD (OF1.1):
 ])
@@ -658,7 +658,7 @@ AT_SETUP([ofproto - group description])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10], [0], [stdout])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
  group_id=1234,type=all,bucket=actions=output:10
 ])
@@ -671,7 +671,7 @@ AT_SETUP([ofproto - group description])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_DESC reply (OF1.1):
  group_id=1234,type=all,bucket=actions=output:10
 ])
@@ -683,7 +683,7 @@ dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - group features])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-features br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPST_GROUP_FEATURES reply (OF1.2):
  Group table:
     Types:  0xf
@@ -715,12 +715,12 @@ group_id=1235,type=all,bucket=output:10
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1234'])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
  group_id=1234,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.1):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-group-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
  group_id=1234,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
  group_id=1235,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.1):
@@ -739,12 +739,12 @@ group_id=1235,type=all,bucket=output:10
 AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn add-flow br0 'tcp actions=group:1234'])
 AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
  group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.3):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-group-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
  group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
  group_id=1235,duration=?s,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.3):
@@ -763,12 +763,12 @@ group_id=1235,type=all,bucket=output:10
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-flow br0 'tcp actions=group:1234'])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
  group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.5):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-group-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
  group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
  group_id=1235,duration=?s,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.5):
@@ -808,7 +808,7 @@ do
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
     AT_CHECK([ovs-ofctl -vwarn mod-port br0 br0 $command])
     AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
-    AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
+    AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
@@ -840,7 +840,7 @@ do
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
     AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn mod-port br0 br0 $command])
     AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn show br0], [0], [stdout])
-    AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
+    AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY (OF1.2): dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
@@ -871,7 +871,7 @@ do
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
     AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn mod-port br0 br0 $command])
     AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn show br0], [0], [stdout])
-    AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
+    AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY (OF1.4): dpid:fedcba9876543210
 n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
@@ -899,7 +899,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  table=1, in_port=4 actions=output:3
 NXST_FLOW reply:
 ])
-AT_CHECK([ovs-ofctl dump-aggregate br0 table=0 | STRIP_XIDS], [0], [dnl
+AT_CHECK([ovs-ofctl dump-aggregate br0 table=0 | strip_xids], [0], [dnl
 NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
 ])
 AT_CHECK([ovs-ofctl del-flows br0])
@@ -921,7 +921,7 @@ AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip | sort], [0], [dn
  table=1, in_port=4 actions=output:3
 OFPST_FLOW reply:
 ])
-AT_CHECK([ovs-ofctl -F openflow10 dump-aggregate br0 table=0 | STRIP_XIDS], [0], [dnl
+AT_CHECK([ovs-ofctl -F openflow10 dump-aggregate br0 table=0 | strip_xids], [0], [dnl
 OFPST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
 ])
 AT_CHECK([ovs-ofctl -F openflow10 del-flows br0])
@@ -978,7 +978,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0], [dn
  table=1, in_port=4 actions=output:3
 OFPST_FLOW reply (OF1.1):
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow11 dump-aggregate br0 table=0 | STRIP_XIDS], [0], [dnl
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-aggregate br0 table=0 | strip_xids], [0], [dnl
 OFPST_AGGREGATE reply (OF1.1): packet_count=0 byte_count=0 flow_count=2
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0])
@@ -1058,14 +1058,14 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0x3, in_port=3 actions=output:1
 NXST_FLOW reply:
 ])
-AT_CHECK([ovs-ofctl dump-aggregate br0 table=0 | STRIP_XIDS], [0], [dnl
+AT_CHECK([ovs-ofctl dump-aggregate br0 table=0 | strip_xids], [0], [dnl
 NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=3
 ])
 AT_CHECK([ovs-ofctl dump-flows br0 cookie=0x3/-1 | ofctl_strip | sort], [0], [dnl
  cookie=0x3, in_port=3 actions=output:1
 NXST_FLOW reply:
 ])
-AT_CHECK([ovs-ofctl dump-aggregate br0 cookie=0x3/-1 | STRIP_XIDS], [0], [dnl
+AT_CHECK([ovs-ofctl dump-aggregate br0 cookie=0x3/-1 | strip_xids], [0], [dnl
 NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=1
 ])
 OVS_VSWITCHD_STOP
@@ -3087,9 +3087,9 @@ done
 # Check output.
 for i in 1 2; do
     cp expout$i expout
-    AT_CHECK([grep -v '^send:' monitor$i.log | STRIP_XIDS], [0], [expout])
+    AT_CHECK([grep -v '^send:' monitor$i.log | strip_xids], [0], [expout])
     cp experr$i expout
-    AT_CHECK([grep '^send:' monitor$i.log | STRIP_XIDS], [0], [expout])
+    AT_CHECK([grep '^send:' monitor$i.log | strip_xids], [0], [expout])
 done
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -3153,9 +3153,9 @@ done
 # Check output.
 for i in 1 2; do
     cp expout$i expout
-    AT_CHECK([grep -v '^send:' monitor$i.log | STRIP_XIDS], [0], [expout])
+    AT_CHECK([grep -v '^send:' monitor$i.log | strip_xids], [0], [expout])
     cp experr$i expout
-    AT_CHECK([grep '^send:' monitor$i.log | STRIP_XIDS], [0], [expout])
+    AT_CHECK([grep '^send:' monitor$i.log | strip_xids], [0], [expout])
 done
 OVS_VSWITCHD_STOP
 AT_CLEANUP

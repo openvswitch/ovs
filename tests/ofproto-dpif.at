@@ -474,7 +474,7 @@ for i in `seq 0 2`;
 )
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
  group_id=1234,ref_count=1,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.2):
 ])
@@ -495,7 +495,7 @@ for i in `seq 0 2`;
 )
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
  group_id=1234,ref_count=1,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=3,byte_count=180
 OFPST_GROUP reply (OF1.2):
 ])
@@ -5616,7 +5616,7 @@ done
 AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
  cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
 ])
@@ -5639,7 +5639,7 @@ AT_CHECK([ovs-vsctl set Open_vSwitch . other-config:n-revalidator-threads=2])
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
+AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
  cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
 ])
