@@ -1298,6 +1298,8 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
 
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 
+    free(rows);
+    free(classes);
     exit(exit_code);
 }
 
