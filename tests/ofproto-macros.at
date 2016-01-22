@@ -230,9 +230,13 @@ ovn_populate_arp() {
         done
     done
 }
+
+# Strips 'xid=0x1234' from ovs-ofctl output.
+strip_xids () {
+    sed 's/ (xid=0x[[0-9a-fA-F]]*)//'
+}
 m4_divert_pop([PREPARE_TESTS])
 
-m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([STRIP_USED], [[sed 's/used:[0-9]\.[0-9]*/used:0.0/']])
 m4_define([STRIP_UFID], [[sed 's/ufid:[-0-9a-f]* //']])
