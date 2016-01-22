@@ -1,24 +1,35 @@
 AT_BANNER([dpif-netdev])
 
+m4_divert_push([PREPARE_TESTS])
+[
 # Strips out uninteresting parts of flow output, as well as parts
 # that vary from one run to another (e.g., timing and bond actions).
-m4_define([STRIP_XOUT], [[sed '
+strip_xout () {
+    sed '
     s/ufid:[-0-9a-f]* //
     s/used:[0-9]*\.[0-9]*/used:0.0/
     s/actions:.*/actions: <del>/
     s/packets:[0-9]*/packets:0/
     s/bytes:[0-9]*/bytes:0/
-' | sort]])
-m4_define([FILTER_FLOW_INSTALL], [[
-grep 'flow_add' | sed '
-    s/.*flow_add: //
-' | sort | uniq]])
-m4_define([FILTER_FLOW_DUMP], [[
-grep 'flow_dump ' | sed '
-    s/.*flow_dump //
-    s/used:[0-9]*\.[0-9]*/used:0.0/
-' | sort | uniq]])
-m4_define([STRIP_METADATA], [[sed 's/metadata=0x[0-9a-f]*/metadata=0x0/']])
+' | sort
+}
+
+filter_flow_install () {
+    grep 'flow_add' | sed 's/.*flow_add: //' | sort | uniq
+}
+
+filter_flow_dump () {
+    grep 'flow_dump ' | sed '
+	s/.*flow_dump //
+	s/used:[0-9]*\.[0-9]*/used:0.0/
+    ' | sort | uniq
+}
+
+strip_metadata () {
+    sed 's/metadata=0x[0-9a-f]*/metadata=0x0/'
+}
+]
+m4_divert_pop([PREPARE_TESTS])
 
 AT_SETUP([dpif-netdev - dummy interface])
 # Create br0 with interfaces p1 and p7
@@ -44,7 +55,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),eth(src=50:54:00:00:00:
 ovs-appctl time/warp 100
 sleep 1  # wait for forwarders process packets
 
-AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
 recirc_id=0,ip,in_port=2,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 recirc_id=0,ip,in_port=7,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
@@ -68,7 +79,7 @@ sleep 1
 AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 ])
 
@@ -81,7 +92,7 @@ sleep 1
 AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_INSTALL | STRIP_XOUT], [0], [dnl
+AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 pkt_mark=0,recirc_id=0,dp_hash=0,skb_priority=0,ct_state=0,ct_zone=0,ct_mark=0,ct_label=0,icmp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0, actions: <del>
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 ])
@@ -105,7 +116,7 @@ sleep 1
 AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_DUMP | STRIP_XOUT], [0], [dnl
+AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
 skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
 
@@ -120,7 +131,7 @@ sleep 1
 AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([cat ovs-vswitchd.log | FILTER_FLOW_DUMP | STRIP_XOUT], [0], [dnl
+AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
 skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
