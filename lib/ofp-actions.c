@@ -4493,10 +4493,10 @@ parse_UNROLL_XLATE(char *arg OVS_UNUSED, struct ofpbuf *ofpacts OVS_UNUSED,
 }
 
 static void
-format_UNROLL_XLATE(const struct ofpact_unroll_xlate *a OVS_UNUSED,
-                    struct ds *s)
+format_UNROLL_XLATE(const struct ofpact_unroll_xlate *a, struct ds *s)
 {
-    ds_put_cstr(s, "unroll_xlate");
+    ds_put_format(s, "unroll_xlate(table=%"PRIu8", cookie=%"PRIu64")",
+                  a->rule_table_id, ntohll(a->rule_cookie));
 }
 
 /* Action structure for NXAST_SAMPLE.
