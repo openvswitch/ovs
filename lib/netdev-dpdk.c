@@ -2020,7 +2020,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
                  unsigned int *eth_port_id)
 {
     struct dpdk_ring *ivshmem;
-    char ring_name[10];
+    char ring_name[RTE_RING_NAMESIZE];
     int err;
 
     ivshmem = dpdk_rte_mzalloc(sizeof *ivshmem);
@@ -2029,7 +2029,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
     }
 
     /* XXX: Add support for multiquque ring. */
-    err = snprintf(ring_name, 10, "%s_tx", dev_name);
+    err = snprintf(ring_name, sizeof(ring_name), "%s_tx", dev_name);
     if (err < 0) {
         return -err;
     }
@@ -2042,7 +2042,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return ENOMEM;
     }
 
-    err = snprintf(ring_name, 10, "%s_rx", dev_name);
+    err = snprintf(ring_name, sizeof(ring_name), "%s_rx", dev_name);
     if (err < 0) {
         return -err;
     }
