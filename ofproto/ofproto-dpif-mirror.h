@@ -30,6 +30,7 @@ struct mbridge *mbridge_ref(const struct mbridge *);
 void mbridge_unref(struct mbridge *);
 bool mbridge_has_mirrors(struct mbridge *);
 bool mbridge_need_revalidate(struct mbridge *);
+void mbridge_revalidate(struct mbridge *, bool revalidate);
 
 void mbridge_register_bundle(struct mbridge *, struct ofbundle *);
 void mbridge_unregister_bundle(struct mbridge *, struct ofbundle *);

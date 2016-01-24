@@ -139,6 +139,11 @@ mbridge_need_revalidate(struct mbridge *mbridge)
 }
 
 void
+mbridge_revalidate(struct mbridge *mbridge, bool revalidate){
+    mbridge->need_revalidate = revalidate;
+}
+
+void
 mbridge_register_bundle(struct mbridge *mbridge, struct ofbundle *ofbundle)
 {
     struct mbundle *mbundle;
@@ -166,7 +171,7 @@ mbridge_unregister_bundle(struct mbridge *mbridge, struct ofbundle *ofbundle)
                 mirror_destroy(mbridge, m->aux);
             } else if (hmapx_find_and_delete(&m->srcs, mbundle)
                        || hmapx_find_and_delete(&m->dsts, mbundle)) {
-                mbridge->need_revalidate = true;
+                mbridge_revalidate(mbridge, true);
             }
         }
     }
