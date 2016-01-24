@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3297,7 +3297,6 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
                struct packet_batch batches[], size_t *n_batches)
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
-    struct netdev_flow_key key;
     size_t i, n_missed = 0, n_dropped = 0;
 
     for (i = 0; i < cnt; i++) {
@@ -3314,19 +3313,19 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
             OVS_PREFETCH(dp_packet_data(packets[i+1]));
         }
 
-        miniflow_extract(packets[i], &key.mf);
-        key.len = 0; /* Not computed yet. */
-        key.hash = dpif_netdev_packet_get_rss_hash(packets[i], &key.mf);
+        struct netdev_flow_key *key = &keys[n_missed];
+        miniflow_extract(packets[i], &key->mf);
+        key->len = 0; /* Not computed yet. */
+        key->hash = dpif_netdev_packet_get_rss_hash(packets[i], &key->mf);
 
-        flow = emc_lookup(flow_cache, &key);
+        flow = emc_lookup(flow_cache, key);
         if (OVS_LIKELY(flow)) {
-            dp_netdev_queue_batches(packets[i], flow, &key.mf, batches,
+            dp_netdev_queue_batches(packets[i], flow, &key->mf, batches,
                                     n_batches);
         } else {
             /* Exact match cache missed. Group missed packets together at
              * the beginning of the 'packets' array.  */
-            packets[n_missed] = packets[i];
-            keys[n_missed++] = key;
+            packets[n_missed++] = packets[i];
         }
     }
 
