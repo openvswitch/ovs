@@ -1979,6 +1979,25 @@ A: When a switch sends a packet to an OpenFlow controller using a
    buffering that the OpenFlow specification requires implementations
    to document.
 
+### Q: How does OVS divide flows among buckets in an OpenFlow "select" group?
+
+A: In Open vSwitch 2.3 and earlier, Open vSwitch used the destination
+   Ethernet address to choose a bucket in a select group.
+
+   Open vSwitch 2.4 and later by default hashes the source and
+   destination Ethernet address, VLAN ID, Ethernet type, IPv4/v6
+   source and destination address and protocol, and for TCP and SCTP
+   only, the source and destination ports.  The hash is "symmetric",
+   meaning that exchanging source and destination addresses does not
+   change the bucket selection.
+
+   Select groups in Open vSwitch 2.4 and later can be configured to
+   use a different hash function, using a Netronome extension to the
+   OpenFlow 1.5+ group_mod message.  For more information, see
+   Documentation/group-selection-method-property.txt in the Open
+   vSwitch source tree.  (OpenFlow 1.5 support in Open vSwitch is still
+   experimental.)
+
 
 Development
 -----------
