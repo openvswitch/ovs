@@ -189,6 +189,13 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         } else if (binding_rec->chassis == chassis_rec) {
             sbrec_port_binding_set_chassis(binding_rec, NULL);
+        } else if (!binding_rec->chassis
+                   && !strcmp(binding_rec->type, "localnet")) {
+            /* localnet ports will never be bound to a chassis, but we want
+             * to list them in all_lports because we want to allocate
+             * a conntrack zone ID for each one, as we'll be creating
+             * a patch port for each one. */
+            sset_add(&all_lports, binding_rec->logical_port);
         }
     }
 
