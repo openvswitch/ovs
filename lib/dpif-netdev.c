@@ -3275,13 +3275,11 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
 {
     struct packet_batch *batch = flow->batch;
 
-    if (OVS_LIKELY(batch)) {
-        packet_batch_update(batch, pkt, mf);
-        return;
+    if (OVS_UNLIKELY(!batch)) {
+        batch = &batches[(*n_batches)++];
+        packet_batch_init(batch, flow);
     }
 
-    batch = &batches[(*n_batches)++];
-    packet_batch_init(batch, flow);
     packet_batch_update(batch, pkt, mf);
 }
 
