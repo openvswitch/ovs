@@ -46,7 +46,9 @@ v2.5.0 - xx xxx xxxx
      abstractions, such as virtual L2 and L3 overlays and security groups.
    - RHEL packaging:
      * DPDK ports may now be created via network scripts (see README.RHEL).
-   - Requires DPDK 2.2
+   - DPDK:
+     * Requires DPDK 2.2
+     * Added multiqueue support to vhost-user
 
 
 v2.4.0 - 20 Aug 2015
