@@ -3285,14 +3285,6 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
     packet_batch_update(batch, pkt, mf);
 }
 
-static inline void
-dp_packet_swap(struct dp_packet **a, struct dp_packet **b)
-{
-    struct dp_packet *tmp = *a;
-    *a = *b;
-    *b = tmp;
-}
-
 /* Try to process all ('cnt') the 'packets' using only the exact match cache
  * 'flow_cache'. If a flow is not found for a packet 'packets[i]', the
  * miniflow is copied into 'keys' and the packet pointer is moved at the
@@ -3333,10 +3325,9 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
             dp_netdev_queue_batches(packets[i], flow, &key.mf, batches,
                                     n_batches);
         } else {
-            if (i != n_missed) {
-                dp_packet_swap(&packets[i], &packets[n_missed]);
-            }
-
+            /* Exact match cache missed. Group missed packets together at
+             * the beginning of the 'packets' array.  */
+            packets[n_missed] = packets[i];
             keys[n_missed++] = key;
         }
     }
