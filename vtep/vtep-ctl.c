@@ -2044,6 +2044,18 @@ static const struct ctl_table_class tables[] = {
      {{NULL, NULL, NULL},
       {NULL, NULL, NULL}}},
 
+    {&vteprec_table_logical_router,
+     {{&vteprec_table_logical_router, &vteprec_logical_router_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&vteprec_table_arp_sources_local,
+     {{NULL, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&vteprec_table_arp_sources_remote,
+     {{NULL, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
 
