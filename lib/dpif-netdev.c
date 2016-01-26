@@ -3308,13 +3308,14 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
     struct netdev_flow_key key;
-    size_t i, notfound_cnt = 0;
+    size_t i, n_missed = 0, n_dropped = 0;
 
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
 
         if (OVS_UNLIKELY(dp_packet_size(packets[i]) < ETH_HEADER_LEN)) {
             dp_packet_delete(packets[i]);
+            n_dropped++;
             continue;
         }
 
@@ -3332,17 +3333,17 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
             dp_netdev_queue_batches(packets[i], flow, &key.mf, batches,
                                     n_batches);
         } else {
-            if (i != notfound_cnt) {
-                dp_packet_swap(&packets[i], &packets[notfound_cnt]);
+            if (i != n_missed) {
+                dp_packet_swap(&packets[i], &packets[n_missed]);
             }
 
-            keys[notfound_cnt++] = key;
+            keys[n_missed++] = key;
         }
     }
 
-    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT, cnt - notfound_cnt);
+    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT, cnt - n_dropped - n_missed);
 
-    return notfound_cnt;
+    return n_missed;
 }
 
 static inline void
