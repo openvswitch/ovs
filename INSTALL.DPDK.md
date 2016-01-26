@@ -567,6 +567,18 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    -numa node,memdev=mem -mem-prealloc
    ```
 
+3. Optional: Enable multiqueue support
+   QEMU needs to be configured with multiple queues and the number queues
+   must be less or equal to Open vSwitch other_config:n-dpdk-rxqs.
+   The $q below is the number of queues.
+   The $v is the number of vectors, which is '$q x 2 + 2'.
+
+   ```
+   -chardev socket,id=char2,path=/usr/local/var/run/openvswitch/vhost-user-2
+   -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce,queues=$q
+   -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
+   ```
+
 DPDK vhost-cuse:
 ----------------
 

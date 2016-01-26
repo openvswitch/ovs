@@ -221,11 +221,8 @@ struct netdev_dpdk {
      * If the numbers match, 'txq_needs_locking' is false, otherwise it is
      * true and we will take a spinlock on transmission */
     int real_n_txq;
+    int real_n_rxq;
     bool txq_needs_locking;
-
-    /* Spinlock for vhost transmission.  Other DPDK devices use spinlocks in
-     * dpdk_tx_queue */
-    rte_spinlock_t vhost_tx_lock;
 
     /* virtio-net structure for vhost device */
     OVSRCU_TYPE(struct virtio_net *) virtio_dev;
@@ -654,13 +651,10 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
 static int
 vhost_construct_helper(struct netdev *netdev_) OVS_REQUIRES(dpdk_mutex)
 {
-    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
-
     if (rte_eal_init_ret) {
         return rte_eal_init_ret;
     }
 
-    rte_spinlock_init(&netdev->vhost_tx_lock);
     return netdev_dpdk_init(netdev_, -1, DPDK_DEV_VHOST);
 }
 
@@ -834,7 +828,7 @@ netdev_dpdk_set_multiq(struct netdev *netdev_, unsigned int n_txq,
 }
 
 static int
-netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
+netdev_dpdk_vhost_cuse_set_multiq(struct netdev *netdev_, unsigned int n_txq,
                              unsigned int n_rxq)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
@@ -850,6 +844,32 @@ netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
     netdev->up.n_txq = n_txq;
     netdev->real_n_txq = 1;
     netdev->up.n_rxq = 1;
+    netdev->txq_needs_locking = netdev->real_n_txq != netdev->up.n_txq;
+
+    ovs_mutex_unlock(&netdev->mutex);
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    return err;
+}
+
+static int
+netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
+                             unsigned int n_rxq)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    int err = 0;
+
+    if (netdev->up.n_txq == n_txq && netdev->up.n_rxq == n_rxq) {
+        return err;
+    }
+
+    ovs_mutex_lock(&dpdk_mutex);
+    ovs_mutex_lock(&netdev->mutex);
+
+    rte_free(netdev->tx_q);
+    netdev->up.n_txq = n_txq;
+    netdev->up.n_rxq = n_rxq;
+    netdev_dpdk_alloc_txq(netdev, netdev->up.n_txq);
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -989,14 +1009,18 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq_,
     struct netdev *netdev = rx->up.netdev;
     struct netdev_dpdk *vhost_dev = netdev_dpdk_cast(netdev);
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(vhost_dev);
-    int qid = 1;
+    int qid = rxq_->queue_id;
     uint16_t nb_rx = 0;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
         return EAGAIN;
     }
 
-    nb_rx = rte_vhost_dequeue_burst(virtio_dev, qid,
+    if (rxq_->queue_id >= vhost_dev->real_n_rxq) {
+        return EOPNOTSUPP;
+    }
+
+    nb_rx = rte_vhost_dequeue_burst(virtio_dev, qid * VIRTIO_QNUM + VIRTIO_TXQ,
                                     vhost_dev->dpdk_mp->mp,
                                     (struct rte_mbuf **)packets,
                                     NETDEV_MAX_BURST);
@@ -1060,8 +1084,9 @@ netdev_dpdk_vhost_update_tx_counters(struct netdev_stats *stats,
 }
 
 static void
-__netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
-                         int cnt, bool may_steal)
+__netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
+                         struct dp_packet **pkts, int cnt,
+                         bool may_steal)
 {
     struct netdev_dpdk *vhost_dev = netdev_dpdk_cast(netdev);
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(vhost_dev);
@@ -1076,13 +1101,16 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
         goto out;
     }
 
-    /* There is vHost TX single queue, So we need to lock it for TX. */
-    rte_spinlock_lock(&vhost_dev->vhost_tx_lock);
+    if (vhost_dev->txq_needs_locking) {
+        qid = qid % vhost_dev->real_n_txq;
+        rte_spinlock_lock(&vhost_dev->tx_q[qid].tx_lock);
+    }
 
     do {
+        int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
         unsigned int tx_pkts;
 
-        tx_pkts = rte_vhost_enqueue_burst(virtio_dev, VIRTIO_RXQ,
+        tx_pkts = rte_vhost_enqueue_burst(virtio_dev, vhost_qid,
                                           cur_pkts, cnt);
         if (OVS_LIKELY(tx_pkts)) {
             /* Packets have been sent.*/
@@ -1101,7 +1129,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
              * Unable to enqueue packets to vhost interface.
              * Check available entries before retrying.
              */
-            while (!rte_vring_available_entries(virtio_dev, VIRTIO_RXQ)) {
+            while (!rte_vring_available_entries(virtio_dev, vhost_qid)) {
                 if (OVS_UNLIKELY((rte_get_timer_cycles() - start) > timeout)) {
                     expired = 1;
                     break;
@@ -1113,7 +1141,10 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, struct dp_packet **pkts,
             }
         }
     } while (cnt);
-    rte_spinlock_unlock(&vhost_dev->vhost_tx_lock);
+
+    if (vhost_dev->txq_needs_locking) {
+        rte_spinlock_unlock(&vhost_dev->tx_q[qid].tx_lock);
+    }
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
     netdev_dpdk_vhost_update_tx_counters(&vhost_dev->stats, pkts, total_pkts,
@@ -1218,7 +1249,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
     }
 
     if (dev->type == DPDK_DEV_VHOST) {
-        __netdev_dpdk_vhost_send(netdev, (struct dp_packet **) mbufs, newcnt, true);
+        __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) mbufs, newcnt, true);
     } else {
         dpdk_queue_pkts(dev, qid, mbufs, newcnt);
         dpdk_queue_flush(dev, qid);
@@ -1230,7 +1261,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
 }
 
 static int
-netdev_dpdk_vhost_send(struct netdev *netdev, int qid OVS_UNUSED, struct dp_packet **pkts,
+netdev_dpdk_vhost_send(struct netdev *netdev, int qid, struct dp_packet **pkts,
                  int cnt, bool may_steal)
 {
     if (OVS_UNLIKELY(pkts[0]->source != DPBUF_DPDK)) {
@@ -1243,7 +1274,7 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid OVS_UNUSED, struct dp_pack
             }
         }
     } else {
-        __netdev_dpdk_vhost_send(netdev, pkts, cnt, may_steal);
+        __netdev_dpdk_vhost_send(netdev, qid, pkts, cnt, may_steal);
     }
     return 0;
 }
@@ -1763,8 +1794,39 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
 static void
 set_irq_status(struct virtio_net *dev)
 {
-    dev->virtqueue[VIRTIO_RXQ]->used->flags = VRING_USED_F_NO_NOTIFY;
-    dev->virtqueue[VIRTIO_TXQ]->used->flags = VRING_USED_F_NO_NOTIFY;
+    uint32_t i;
+    uint64_t idx;
+
+    for (i = 0; i < dev->virt_qp_nb; i++) {
+        idx = i * VIRTIO_QNUM;
+        rte_vhost_enable_guest_notification(dev, idx + VIRTIO_RXQ, 0);
+        rte_vhost_enable_guest_notification(dev, idx + VIRTIO_TXQ, 0);
+    }
+}
+
+
+static int
+netdev_dpdk_vhost_set_queues(struct netdev_dpdk *netdev, struct virtio_net *dev)
+{
+    uint32_t qp_num;
+
+    qp_num = dev->virt_qp_nb;
+    if (qp_num > netdev->up.n_rxq) {
+        VLOG_ERR("vHost Device '%s' %"PRIu64" can't be added - "
+                 "too many queues %d > %d", dev->ifname, dev->device_fh,
+                 qp_num, netdev->up.n_rxq);
+        return -1;
+    }
+
+    netdev->real_n_rxq = qp_num;
+    netdev->real_n_txq = qp_num;
+    if (netdev->up.n_txq > netdev->real_n_txq) {
+        netdev->txq_needs_locking = true;
+    } else {
+        netdev->txq_needs_locking = false;
+    }
+
+    return 0;
 }
 
 /*
@@ -1781,12 +1843,17 @@ new_device(struct virtio_net *dev)
     LIST_FOR_EACH(netdev, list_node, &dpdk_list) {
         if (strncmp(dev->ifname, netdev->vhost_id, IF_NAME_SZ) == 0) {
             ovs_mutex_lock(&netdev->mutex);
+            if (netdev_dpdk_vhost_set_queues(netdev, dev)) {
+                ovs_mutex_unlock(&netdev->mutex);
+                ovs_mutex_unlock(&dpdk_mutex);
+                return -1;
+            }
             ovsrcu_set(&netdev->virtio_dev, dev);
-            ovs_mutex_unlock(&netdev->mutex);
             exists = true;
             dev->flags |= VIRTIO_DEV_RUNNING;
             /* Disable notifications. */
             set_irq_status(dev);
+            ovs_mutex_unlock(&netdev->mutex);
             break;
         }
     }
@@ -2241,7 +2308,7 @@ static const struct netdev_class OVS_UNUSED dpdk_vhost_cuse_class =
         dpdk_vhost_cuse_class_init,
         netdev_dpdk_vhost_cuse_construct,
         netdev_dpdk_vhost_destruct,
-        netdev_dpdk_vhost_set_multiq,
+        netdev_dpdk_vhost_cuse_set_multiq,
         netdev_dpdk_vhost_send,
         netdev_dpdk_vhost_get_carrier,
         netdev_dpdk_vhost_get_stats,
