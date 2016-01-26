@@ -434,7 +434,7 @@ struct dp_netdev_pmd_thread {
                                     /* threads on same numa node. */
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
-    int tx_qid;                     /* Queue id used by this pmd thread to
+    atomic_int tx_qid;              /* Queue id used by this pmd thread to
                                      * send packets on all netdevs */
 
     struct ovs_mutex poll_mutex;    /* Mutex for poll_list. */
@@ -1282,6 +1282,13 @@ get_port_by_name(struct dp_netdev *dp,
         }
     }
     return ENOENT;
+}
+
+static int
+get_n_pmd_threads(struct dp_netdev *dp)
+{
+    /* There is one non pmd thread in dp->poll_threads */
+    return cmap_count(&dp->poll_threads) - 1;
 }
 
 static int
@@ -2820,16 +2827,6 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos)
     return next;
 }
 
-static int
-core_id_to_qid(unsigned core_id)
-{
-    if (core_id != NON_PMD_CORE_ID) {
-        return core_id;
-    } else {
-        return ovs_numa_get_n_cores();
-    }
-}
-
 /* Configures the 'pmd' based on the input argument. */
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
@@ -2838,9 +2835,13 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->dp = dp;
     pmd->index = index;
     pmd->core_id = core_id;
-    pmd->tx_qid = core_id_to_qid(core_id);
     pmd->numa_id = numa_id;
     pmd->poll_cnt = 0;
+
+    atomic_init(&pmd->tx_qid,
+                (core_id == NON_PMD_CORE_ID)
+                ? ovs_numa_get_n_cores()
+                : get_n_pmd_threads(dp));
 
     ovs_refcount_init(&pmd->ref_cnt);
     latch_init(&pmd->exit_latch);
@@ -2919,17 +2920,40 @@ dp_netdev_destroy_all_pmds(struct dp_netdev *dp)
     }
 }
 
-/* Deletes all pmd threads on numa node 'numa_id'. */
+/* Deletes all pmd threads on numa node 'numa_id' and
+ * fixes tx_qids of other threads to keep them sequential. */
 static void
 dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
 {
     struct dp_netdev_pmd_thread *pmd;
+    int n_pmds_on_numa, n_pmds;
+    int *free_idx, k = 0;
+
+    n_pmds_on_numa = get_n_pmd_threads_on_numa(dp, numa_id);
+    free_idx = xmalloc(n_pmds_on_numa * sizeof *free_idx);
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         if (pmd->numa_id == numa_id) {
+            atomic_read_relaxed(&pmd->tx_qid, &free_idx[k]);
+            k++;
             dp_netdev_del_pmd(dp, pmd);
         }
     }
+
+    n_pmds = get_n_pmd_threads(dp);
+    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        int old_tx_qid;
+
+        atomic_read_relaxed(&pmd->tx_qid, &old_tx_qid);
+
+        if (old_tx_qid >= n_pmds) {
+            int new_tx_qid = free_idx[--k];
+
+            atomic_store_relaxed(&pmd->tx_qid, new_tx_qid);
+        }
+    }
+
+    free(free_idx);
 }
 
 /* Returns PMD thread from this numa node with fewer rx queues to poll.
@@ -3571,7 +3595,11 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
     case OVS_ACTION_ATTR_OUTPUT:
         p = dp_netdev_lookup_port(dp, u32_to_odp(nl_attr_get_u32(a)));
         if (OVS_LIKELY(p)) {
-            netdev_send(p->netdev, pmd->tx_qid, packets, cnt, may_steal);
+            int tx_qid;
+
+            atomic_read_relaxed(&pmd->tx_qid, &tx_qid);
+
+            netdev_send(p->netdev, tx_qid, packets, cnt, may_steal);
             return;
         }
         break;
