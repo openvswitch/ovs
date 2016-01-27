@@ -52,6 +52,35 @@ struct ofp_vendor_header {
 };
 OFP_ASSERT(sizeof(struct ofp_vendor_header) == 16);
 
+/* Statistics request or reply message. */
+struct ofp10_stats_msg {
+    struct ofp_header header;
+    ovs_be16 type;              /* One of the OFPST_* constants. */
+    ovs_be16 flags;             /* Requests: always 0.
+                                 * Replies: 0 or OFPSF_REPLY_MORE. */
+};
+OFP_ASSERT(sizeof(struct ofp10_stats_msg) == 12);
+
+/* Vendor extension stats message. */
+struct ofp10_vendor_stats_msg {
+    struct ofp10_stats_msg osm; /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+    /* Followed by vendor-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp10_vendor_stats_msg) == 16);
+
+struct ofp11_stats_msg {
+    struct ofp_header header;
+    ovs_be16 type;              /* One of the OFPST_* constants. */
+    ovs_be16 flags;             /* OFPSF_REQ_* flags (none yet defined). */
+    uint8_t pad[4];
+    /* Followed by the body of the request. */
+};
+OFP_ASSERT(sizeof(struct ofp11_stats_msg) == 16);
+
 /* Vendor extension stats message. */
 struct ofp11_vendor_stats_msg {
     struct ofp11_stats_msg osm; /* Type OFPST_VENDOR. */
@@ -68,6 +97,16 @@ struct ofp11_vendor_stats_msg {
     /* Followed by vendor-defined additional data. */
 };
 OFP_ASSERT(sizeof(struct ofp11_vendor_stats_msg) == 24);
+
+/* Header for Nicira vendor stats request and reply messages in OpenFlow
+ * 1.0. */
+struct nicira10_stats_msg {
+    struct ofp10_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* One of NXST_* below. */
+    uint8_t pad[4];             /* Align to 64-bits. */
+};
+OFP_ASSERT(sizeof(struct nicira10_stats_msg) == 24);
+
 /* A thin abstraction of OpenFlow headers:
  *
  *   - 'version' and 'type' come straight from struct ofp_header, so these are

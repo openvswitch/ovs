@@ -331,15 +331,6 @@ struct ofp10_flow_removed {
 };
 OFP_ASSERT(sizeof(struct ofp10_flow_removed) == 80);
 
-/* Statistics request or reply message. */
-struct ofp10_stats_msg {
-    struct ofp_header header;
-    ovs_be16 type;              /* One of the OFPST_* constants. */
-    ovs_be16 flags;             /* Requests: always 0.
-                                 * Replies: 0 or OFPSF_REPLY_MORE. */
-};
-OFP_ASSERT(sizeof(struct ofp10_stats_msg) == 12);
-
 /* Stats request of type OFPST_AGGREGATE or OFPST_FLOW. */
 struct ofp10_flow_stats_request {
     struct ofp10_match match; /* Fields to match. */
@@ -443,16 +434,5 @@ struct ofp10_queue_stats {
     ovs_32aligned_be64 tx_errors;  /* # of packets dropped due to overrun. */
 };
 OFP_ASSERT(sizeof(struct ofp10_queue_stats) == 32);
-
-/* Vendor extension stats message. */
-struct ofp10_vendor_stats_msg {
-    struct ofp10_stats_msg osm; /* Type OFPST_VENDOR. */
-    ovs_be32 vendor;            /* Vendor ID:
-                                 * - MSB 0: low-order bytes are IEEE OUI.
-                                 * - MSB != 0: defined by OpenFlow
-                                 *   consortium. */
-    /* Followed by vendor-defined arbitrary additional data. */
-};
-OFP_ASSERT(sizeof(struct ofp10_vendor_stats_msg) == 16);
 
 #endif /* openflow/openflow-1.0.h */
