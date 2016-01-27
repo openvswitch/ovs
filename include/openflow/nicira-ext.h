@@ -68,14 +68,6 @@ struct nx_vendor_error {
 
 /* Nicira vendor requests and replies. */
 
-/* Header for Nicira vendor requests and replies. */
-struct nicira_header {
-    struct ofp_header header;
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* See the NXT numbers in ofp-msgs.h. */
-};
-OFP_ASSERT(sizeof(struct nicira_header) == 16);
-
 /* Header for Nicira vendor stats request and reply messages in OpenFlow
  * 1.0. */
 struct nicira10_stats_msg {
@@ -84,14 +76,6 @@ struct nicira10_stats_msg {
     uint8_t pad[4];             /* Align to 64-bits. */
 };
 OFP_ASSERT(sizeof(struct nicira10_stats_msg) == 24);
-
-/* Header for Nicira vendor stats request and reply messages in OpenFlow
- * 1.1. */
-struct nicira11_stats_msg {
-    struct ofp11_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* One of NXST_* below. */
-};
-OFP_ASSERT(sizeof(struct nicira11_stats_msg) == 24);
 
 /* Fields to use when hashing flows. */
 enum nx_hash_fields {
