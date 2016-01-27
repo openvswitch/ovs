@@ -18,6 +18,7 @@ openvswitch_sources += \
 	linux/compat/net_namespace.c \
 	linux/compat/nf_conntrack_core.c \
 	linux/compat/nf_conntrack_reasm.c \
+	linux/compat/reassembly.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/socket.c \
