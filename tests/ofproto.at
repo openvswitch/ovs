@@ -146,7 +146,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - port-desc stats (OpenFlow 1.5)])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-ports-desc br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout | sed 's/00:0./00:0x/'], [0], [dnl
 OFPST_PORT_DESC reply (OF1.5):
@@ -230,7 +230,7 @@ dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.0)])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2])
+add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY: port=1
@@ -252,7 +252,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.1)])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2])
+add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl -O OpenFlow11 queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.1): port=1
@@ -267,7 +267,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.2)])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2])
+add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl -O OpenFlow12 queue-get-config br0 1], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2): port=1
@@ -289,7 +289,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - queue configuration - (OpenFlow 1.4)])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2])
+add_of_ports br0 1 2
 
 AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 any | STRIP_XIDS], [0],
   [OFPST_QUEUE_DESC reply (OF1.4): port=1
@@ -3257,7 +3257,7 @@ dnl controllers despite the spec) as meaning a packet that was generated
 dnl by the controller.
 AT_SETUP([ofproto - packet-out from controller (OpenFlow 1.0)])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1])
+add_of_ports br0 1
 
 # Start a monitor listening for packet-ins.
 AT_CHECK([ovs-ofctl -P openflow10 monitor br0 --detach --no-chdir --pidfile])
@@ -3864,7 +3864,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - ofport_request])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2], [3])
+add_of_ports br0 1 2 3
 
 set_and_check_specific_ofports () {
     ovs-vsctl set Interface p1 ofport_request="$1" -- \

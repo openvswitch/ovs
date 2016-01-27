@@ -8,7 +8,7 @@ AT_SETUP([bridge - ports that disappear get added back])
 OVS_VSWITCHD_START
 
 # Add some ports and make sure that they show up in the datapath.
-ADD_OF_PORTS([br0], 1, 2)
+add_of_ports br0 1 2
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:

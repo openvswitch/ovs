@@ -316,6 +316,21 @@ check_logs () {
 /|ERR|/p
 /|EMER|/p" ${logs}
 }
+
+# add_of_ports BRIDGE PNUM...
+#
+# Creates dummy interfaces in BRIDGE named pPNUM, OpenFlow port number
+# PNUM, and datapath port number PNUM (the latter is a consequence of
+# the dummy implementation, which tries to assign datapath port
+# numbers based on port names).
+add_of_ports () {
+    local args
+    local br=$1; shift
+    for $pnum; do
+        AS_VAR_APPEND([args], [" -- $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
+    done
+    ovs-vsctl $args
+}
 m4_divert_pop([PREPARE_TESTS])
 
 # OVS_VSWITCHD_STOP([WHITELIST])
@@ -335,17 +350,6 @@ m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
   [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off], [0], [dnl
 Tunnel push-pop off
 ])])
-
-# ADD_OF_PORTS(BRIDGE, OF_PORT[, OF_PORT...])
-#
-# Creates a dummy interface with an OpenFlow port number of OF_PORT and
-# name of p{OF_PORT}.  The dummy implementation will treat the OF_PORT
-# as the datapath port number, which as the effect of making the
-# OpenFlow and datapath numbers the same.
-m4_define([ADD_OF_PORTS],
- [ovs-vsctl m4_foreach([of_port], m4_cdr($@),
-    [ \
-    -- add-port $1 p[]of_port -- set Interface p[]of_port type=dummy ofport_request=of_port])])
 
 # WAIT_FOR_DUMMY_PORTS(NETDEV_DUMMY_PORT[, NETDEV_DUMMY_PORT...])
 #
