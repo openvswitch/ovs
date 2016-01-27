@@ -4492,8 +4492,30 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_RESUBMIT:
+            /* Recirculation complicates resubmit.  There are two cases:
+             *
+             *     - If mpls_pop has been executed, then the flow table lookup
+             *       as part of resubmit might depend on fields that can only
+             *       be obtained via recirculation, so the resubmit itself
+             *       triggers recirculation and we need to make sure that the
+             *       resubmit is executed again after recirculation.
+             *       Therefore, in this case we trigger recirculation and let
+             *       the code following this "switch" append the resubmit to
+             *       the post-recirculation actions.
+             *
+             *     - Otherwise, some action in the flow entry found by resubmit
+             *       might trigger recirculation.  If that happens, then we do
+             *       not want to execute the resubmit again after
+             *       recirculation, so we want to skip back to the head of the
+             *       loop to avoid that, only adding any actions that follow
+             *       the resubmit to the post-recirculation actions.
+             */
+            if (ctx->was_mpls) {
+                ctx_trigger_recirculation(ctx);
+                break;
+            }
             xlate_ofpact_resubmit(ctx, ofpact_get_RESUBMIT(a));
-            break;
+            continue;
 
         case OFPACT_SET_TUNNEL:
             flow->tunnel.tun_id = htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
