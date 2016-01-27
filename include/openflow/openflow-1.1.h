@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012, 2013, 2014 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013, 2014, 2016 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -381,15 +381,6 @@ struct ofp11_queue_get_config_reply {
     /* struct ofp_packet_queue queues[0];  List of configured queues. */
 };
 OFP_ASSERT(sizeof(struct ofp11_queue_get_config_reply) == 8);
-
-struct ofp11_stats_msg {
-    struct ofp_header header;
-    ovs_be16 type;              /* One of the OFPST_* constants. */
-    ovs_be16 flags;             /* OFPSF_REQ_* flags (none yet defined). */
-    uint8_t pad[4];
-    /* Followed by the body of the request. */
-};
-OFP_ASSERT(sizeof(struct ofp11_stats_msg) == 16);
 
 /* Stats request of type OFPST_FLOW. */
 struct ofp11_flow_stats_request {

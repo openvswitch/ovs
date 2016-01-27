@@ -68,15 +68,6 @@ struct nx_vendor_error {
 
 /* Nicira vendor requests and replies. */
 
-/* Header for Nicira vendor stats request and reply messages in OpenFlow
- * 1.0. */
-struct nicira10_stats_msg {
-    struct ofp10_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* One of NXST_* below. */
-    uint8_t pad[4];             /* Align to 64-bits. */
-};
-OFP_ASSERT(sizeof(struct nicira10_stats_msg) == 24);
-
 /* Fields to use when hashing flows. */
 enum nx_hash_fields {
     /* Ethernet source address (NXM_OF_ETH_SRC) only. */
