@@ -2,6 +2,7 @@
 #define __NET_IP6_ROUTE_WRAPPER
 
 #include <net/route.h>
+#include <net/ip.h>                /* For OVS_VPORT_OUTPUT_PARAMS */
 #include <net/ipv6.h>
 
 #include_next<net/ip6_route.h>
