@@ -428,17 +428,6 @@ struct ofp_hello_elem_header {
 };
 OFP_ASSERT(sizeof(struct ofp_hello_elem_header) == 4);
 
-/* Vendor extension. */
-struct ofp_vendor_header {
-    struct ofp_header header;   /* Type OFPT_VENDOR or OFPT_EXPERIMENTER. */
-    ovs_be32 vendor;            /* Vendor ID:
-                                 * - MSB 0: low-order bytes are IEEE OUI.
-                                 * - MSB != 0: defined by OpenFlow
-                                 *   consortium. */
-    /* Vendor-defined arbitrary additional data. */
-};
-OFP_ASSERT(sizeof(struct ofp_vendor_header) == 12);
-
 /* Table numbering. Tables can use any number up to OFPT_MAX. */
 enum ofp_table {
     /* Last usable table number. */

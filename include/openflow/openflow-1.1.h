@@ -391,17 +391,6 @@ struct ofp11_stats_msg {
 };
 OFP_ASSERT(sizeof(struct ofp11_stats_msg) == 16);
 
-/* Vendor extension stats message. */
-struct ofp11_vendor_stats_msg {
-    struct ofp11_stats_msg osm; /* Type OFPST_VENDOR. */
-    ovs_be32 vendor;            /* Vendor ID:
-                                 * - MSB 0: low-order bytes are IEEE OUI.
-                                 * - MSB != 0: defined by OpenFlow
-                                 *   consortium. */
-    /* Followed by vendor-defined arbitrary additional data. */
-};
-OFP_ASSERT(sizeof(struct ofp11_vendor_stats_msg) == 20);
-
 /* Stats request of type OFPST_FLOW. */
 struct ofp11_flow_stats_request {
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats),

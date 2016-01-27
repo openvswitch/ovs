@@ -60,9 +60,14 @@ struct ovs_list;
  *
  * where the syntax of each part is:
  *
- *    - type: One of OFPT (standard OpenFlow message), OFPST (standard OpenFlow
- *      statistics message), NXT (Nicira extension message), or NXST (Nicira
- *      extension statistics message).
+ *    - type: One of the following:
+ *
+ *          * OFPT: standard OpenFlow message.
+ *          * OFPST: standard OpenFlow statistics or multipart message.
+ *          * NXT: Nicira extension message.
+ *          * NXST: Nicira extension statistics or multipart message.
+ *          * ONFT: Open Networking Foundation extension message.
+ *          * ONFST: Open Networking Foundation multipart message.
  *
  *      As new vendors implement extensions it will make sense to expand the
  *      dictionary of possible types.
@@ -73,9 +78,9 @@ struct ovs_list;
  *    - number:
  *         For OFPT, the 'type' in struct ofp_header.
  *         For OFPST, the 'type' in struct ofp_stats_msg or ofp11_stats_msg.
- *         For NXT, the 'subtype' in struct nicira_header.
- *         For NXST, the 'subtype' in struct nicira10_stats_msg or
- *           nicira11_stats_msg.
+ *         For NXT or ONFT, the 'subtype' in struct ofp_vendor_header.
+ *         For NXST or ONFST, the 'subtype' in an appropriate vendor stats
+ *         struct.
  *
  *    - arguments: The types of data that follow the OpenFlow headers (the
  *      message "body").  This can be "void" if the message has no body.
