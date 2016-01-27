@@ -3,7 +3,7 @@ AT_BANNER([VLAN splinters])
 AT_SETUP([VLAN splinters])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([], [], [=override])
-ADD_OF_PORTS([br0], 1, 2, 3, 4)
+add_of_ports br0 1 2 3 4
 AT_CHECK([ovs-vsctl \
   -- set Bridge br0 fail-mode=standalone flood_vlans=0,9,11,15 \
   -- set port br0 tag=0 \

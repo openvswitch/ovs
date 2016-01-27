@@ -395,7 +395,7 @@ OVS_VSWITCHD_START([dnl
         options:remote_ip=5.5.5.5 ofport_request=5])
 
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
-ADD_OF_PORTS([br0], [90])
+add_of_ports br0 90
 AT_DATA([flows.txt], [dnl
 in_port=90 actions=resubmit:1,resubmit:2,resubmit:3,resubmit:4,resubmit:5
 in_port=1 actions=set_field:42->tun_id,output:1

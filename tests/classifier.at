@@ -30,7 +30,7 @@ m4_foreach(
 AT_BANNER([flow classifier lookup segmentation])
 AT_SETUP([flow classifier - lookup segmentation])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2], [3])
+add_of_ports br0 1 2 3
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 priority=16,tcp,nw_dst=10.1.0.0/255.255.0.0,action=output(3)
 table=0 in_port=1 priority=32,tcp,nw_dst=10.1.2.15,action=output(2)
@@ -68,7 +68,7 @@ AT_CLEANUP
 AT_BANNER([flow classifier prefix lookup])
 AT_SETUP([flow classifier - prefix lookup])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2], [3])
+add_of_ports br0 1 2 3
 AT_CHECK([ovs-vsctl set Bridge br0 flow_tables:0=@N1 -- --id=@N1 create Flow_Table name=t0], [0], [ignore], [])
 AT_DATA([flows.txt], [dnl
 table=0 in_port=1 priority=16,tcp,nw_dst=10.1.0.0/255.255.0.0,action=output(3)
@@ -133,7 +133,7 @@ AT_BANNER([conjunctive match])
 
 AT_SETUP([single conjunctive match])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3, 4, 5)
+add_of_ports br0 1 2 3 4 5
 AT_DATA([flows.txt], [dnl
 conj_id=1,actions=3
 priority=100,ip,ip_src=10.0.0.1,actions=conjunction(1,1/2)
@@ -170,7 +170,7 @@ AT_CLEANUP
 
 AT_SETUP([multiple conjunctive match])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3, 4, 5)
+add_of_ports br0 1 2 3 4 5
 AT_DATA([flows.txt], [dnl
 conj_id=1,actions=1
 conj_id=2,actions=2
@@ -246,7 +246,7 @@ AT_CLEANUP
 # priority flow.  This test checks this special case.
 AT_SETUP([conjunctive match priority fallback])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3, 4, 5, 6, 7)
+add_of_ports br0 1 2 3 4 5 6 7
 AT_DATA([flows.txt], [dnl
 conj_id=1,actions=1
 conj_id=3,actions=3

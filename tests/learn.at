@@ -302,7 +302,7 @@ AT_CLEANUP
 # flow.
 AT_SETUP([learning action - self-modifying flow])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
@@ -344,7 +344,7 @@ AT_CLEANUP
 # attributed correctly.
 AT_SETUP([learning action - self-modifying flow with idle_timeout])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
@@ -402,7 +402,7 @@ AT_CLEANUP
 # attributed correctly.
 AT_SETUP([learning action - self-modifying flow with hard_timeout])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
