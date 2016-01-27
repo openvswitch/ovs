@@ -168,7 +168,7 @@ dnl ----------------------------------------------------------------------
 dnl OVSDB server before release version 2.5 does not support the monitor2
 dnl method.  This test defeatures the OVSDB server to simulate an older
 dnl OVSDB server and make sure ovs-vswitchd can still work with it
-AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2)])
+AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2])
 OVS_VSWITCHD_START
 
 dnl defeature OVSDB server -- no monitor2
