@@ -273,6 +273,18 @@ lflow_init(void)
     symtab_init();
 }
 
+static bool
+lookup_port_cb(const void *ldp_, const char *port_name, unsigned int *portp)
+{
+    const struct logical_datapath *ldp = ldp_;
+    const struct simap_node *node = simap_find(&ldp->ports, port_name);
+    if (!node) {
+        return false;
+    }
+    *portp = node->data;
+    return true;
+}
+
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
@@ -348,7 +360,8 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
         struct action_params ap = {
             .symtab = &symtab,
-            .ports = &ldp->ports,
+            .lookup_port = lookup_port_cb,
+            .aux = ldp,
             .ct_zones = ct_zones,
 
             .n_tables = LOG_PIPELINE_LEN,
@@ -389,7 +402,8 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
 
         expr = expr_simplify(expr);
         expr = expr_normalize(expr);
-        uint32_t n_conjs = expr_to_matches(expr, &ldp->ports, &matches);
+        uint32_t n_conjs = expr_to_matches(expr, lookup_port_cb, ldp,
+                                           &matches);
         expr_destroy(expr);
 
         /* Prepare the OpenFlow matches for adding to the flow table. */

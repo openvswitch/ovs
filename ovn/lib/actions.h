@@ -17,6 +17,7 @@
 #ifndef OVN_ACTIONS_H
 #define OVN_ACTIONS_H 1
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
 #include "util.h"
@@ -47,10 +48,11 @@ struct action_params {
      * expr_parse()). */
     const struct shash *symtab;
 
-     /* 'ports' must be a map from strings (presumably names of ports) to
-      * integers (as one would provide to expr_to_matches()).  Strings used in
-      * the actions that are not in 'ports' are translated to zero. */
-    const struct simap *ports;
+    /* Looks up logical port 'port_name'.  If found, stores its port number in
+     * '*portp' and returns true; otherwise, returns false. */
+    bool (*lookup_port)(const void *aux, const char *port_name,
+                        unsigned int *portp);
+    const void *aux;
 
     /* A map from a port name to its connection tracking zone. */
     const struct simap *ct_zones;

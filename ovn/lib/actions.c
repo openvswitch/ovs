@@ -108,7 +108,8 @@ parse_set_action(struct action_context *ctx)
     struct expr *prereqs;
     char *error;
 
-    error = expr_parse_assignment(ctx->lexer, ctx->ap->symtab, ctx->ap->ports,
+    error = expr_parse_assignment(ctx->lexer, ctx->ap->symtab,
+                                  ctx->ap->lookup_port, ctx->ap->aux,
                                   ctx->ofpacts, &prereqs);
     if (error) {
         action_error(ctx, "%s", error);
