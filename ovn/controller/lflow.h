@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 
 struct controller_ctx;
 struct hmap;
+struct lport_index;
+struct mcgroup_index;
 struct simap;
 struct uuid;
 
@@ -56,9 +58,11 @@ struct uuid;
 #define LOG_PIPELINE_LEN 16
 
 void lflow_init(void);
-void lflow_run(struct controller_ctx *, struct hmap *flow_table,
+void lflow_run(struct controller_ctx *, const struct lport_index *,
+               const struct mcgroup_index *,
+               const struct hmap *local_datapaths, 
                const struct simap *ct_zones,
-               struct hmap *local_datapaths);
+               struct hmap *flow_table);
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

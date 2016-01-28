@@ -23,32 +23,32 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "binding.h"
+#include "chassis.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "encaps.h"
+#include "fatal-signal.h"
+#include "hmap.h"
+#include "lflow.h"
+#include "lib/vswitch-idl.h"
+#include "lport.h"
+#include "ofctrl.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
-#include "poll-loop.h"
-#include "fatal-signal.h"
-#include "lib/hmap.h"
-#include "lib/vswitch-idl.h"
-#include "smap.h"
-#include "stream.h"
-#include "stream-ssl.h"
-#include "unixctl.h"
-#include "util.h"
-
-#include "ofctrl.h"
-#include "pinctrl.h"
-#include "binding.h"
-#include "chassis.h"
-#include "encaps.h"
 #include "patch.h"
 #include "physical.h"
-#include "lflow.h"
+#include "pinctrl.h"
+#include "poll-loop.h"
+#include "smap.h"
+#include "stream-ssl.h"
+#include "stream.h"
+#include "unixctl.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(main);
 
@@ -295,12 +295,18 @@ main(int argc, char *argv[])
         if (br_int) {
             patch_run(&ctx, br_int, &local_datapaths);
 
+            struct lport_index lports;
+            struct mcgroup_index mcgroups;
+            lport_index_init(&lports, ctx.ovnsb_idl);
+            mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
+
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             pinctrl_run(br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            lflow_run(&ctx, &flow_table, &ct_zones, &local_datapaths);
+            lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
+                      &ct_zones, &flow_table);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis_id, &ct_zones, &flow_table,
@@ -308,6 +314,8 @@ main(int argc, char *argv[])
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
+            mcgroup_index_destroy(&mcgroups);
+            lport_index_destroy(&lports);
         }
 
         struct local_datapath *cur_node, *next_node;
