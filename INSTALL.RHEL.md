@@ -7,6 +7,10 @@ on a generic Linux host, see [INSTALL.md] instead.
 
 We have tested these instructions with RHEL 5.6 and RHEL 6.0.
 
+For RHEL 7.x (or derivatives, such as CentOS 7.x), you should follow
+the instructions in [INSTALL.Fedora.md].  The Fedora spec files are
+used for RHEL 7.x.
+
 Building Open vSwitch for RHEL
 ------------------------------
 
