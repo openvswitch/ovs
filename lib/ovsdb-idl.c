@@ -453,6 +453,14 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 ovsdb_idl_send_monitor_request(idl);
                 idl->state = IDL_S_MONITOR_REQUESTED;
             }
+        } else if (msg->type == JSONRPC_ERROR
+                   && idl->state == IDL_S_SCHEMA_REQUESTED
+                   && idl->request_id
+                   && json_equal(idl->request_id, msg->id)) {
+                json_destroy(idl->request_id);
+                idl->request_id = NULL;
+                VLOG_ERR("%s: requested schema not found",
+                         jsonrpc_session_get_name(idl->session));
         } else if ((msg->type == JSONRPC_ERROR
                     || msg->type == JSONRPC_REPLY)
                    && ovsdb_idl_txn_process_reply(idl, msg)) {
