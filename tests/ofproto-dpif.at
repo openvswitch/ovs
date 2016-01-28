@@ -6697,7 +6697,7 @@ OVS_WAIT_UNTIL([grep "monitor thread created" ovs-vswitchd.log])
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=false])
 # check log.
 OVS_WAIT_UNTIL([grep "monitor thread terminated" ovs-vswitchd.log])
-AT_CHECK([cat ovs-vswitchd.log | sed -e '/^.*ofproto_dpif_monitor.*$/d' > ovs-vswitchd.log])
+AT_CHECK([sed -e '/^.*ofproto_dpif_monitor.*$/d' < ovs-vswitchd.log > tmp && mv tmp ovs-vswitchd.log && ovs-appctl vlog/reopen])
 
 # enable cfm on p0.
 AT_CHECK([ovs-vsctl set interface p0 cfm_mpid=10])
@@ -6707,7 +6707,7 @@ OVS_WAIT_UNTIL([grep "monitor thread created" ovs-vswitchd.log])
 AT_CHECK([ovs-vsctl remove interface p0 cfm_mpid 10])
 # check log.
 OVS_WAIT_UNTIL([grep "monitor thread terminated" ovs-vswitchd.log])
-AT_CHECK([cat ovs-vswitchd.log | sed -e '/^.*ofproto_dpif_monitor.*$/d' > ovs-vswitchd.log])
+AT_CHECK([sed -e '/^.*ofproto_dpif_monitor.*$/d' < ovs-vswitchd.log > tmp && mv tmp ovs-vswitchd.log && ovs-appctl vlog/reopen])
 
 # enable both bfd and cfm on p0.
 AT_CHECK([ovs-vsctl set interface p0 bfd:enable=true cfm_mpid=10])
