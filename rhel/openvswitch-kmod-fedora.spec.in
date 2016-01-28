@@ -7,6 +7,8 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
+%global debug_package %{nil}
+
 #%define kernel 3.1.5-1.fc16.x86_64
 #define kernel %{kernel_source}
 %{?kversion:%define kernel %kversion}
@@ -34,28 +36,32 @@ traffic. This package contains the kernel modules.
 %setup -q -n openvswitch-%{version}
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{kernel}/build --enable-ssl
+%configure --with-linux=/lib/modules/%{kernel}/build --enable-ssl
 make %{_smp_mflags} -C datapath/linux
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make -C datapath/linux modules_install
-
-install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{kernel}/kernel/extra/openvswitch
-find datapath/linux -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{kernel}/kernel/extra/openvswitch \;
+make INSTALL_MOD_PATH=$RPM_BUILD_ROOT -C datapath/linux modules_install
+mkdir -p $RPM_BUILD_ROOT/etc/depmod.d
+for module in $RPM_BUILD_ROOT/lib/modules/%{kernel}/extra/*.ko
+do
+    modname="$(basename ${module})"
+    echo "override ${modname%.ko} * extra" >> \
+        $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
+done
 
 %clean
 rm -rf $RPM_BUILD_ROOT
-
-%preun
 
 %post
 # Ensure that modprobe will find our modules.
 depmod %{kernel}
 
 %files
-%defattr(-,root,root)
-/lib/modules/%{kernel}/kernel/extra/openvswitch/*.ko
+%defattr(0644,root,root)
+/lib/modules/%{kernel}/extra/*.ko
+/etc/depmod.d/kmod-openvswitch.conf
+%exclude /lib/modules/%{kernel}/modules.*
 
 %changelog
 * Wed Sep 21 2011 Kyle Mestery <kmestery@cisco.com>
