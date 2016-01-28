@@ -612,7 +612,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,comman
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=all])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=1], [1], [], [stderr])
-AT_CHECK([cat stderr | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < stderr], [0], [dnl
 OFPT_ERROR (OF1.5): OFPGMFC_UNKNOWN_BUCKET
 OFPT_GROUP_MOD (OF1.5):
  REMOVE_BUCKET command_bucket_id:1,group_id=1234
@@ -4210,7 +4210,7 @@ NXST_FLOW reply:
 
 dnl Check logs for OpenFlow trace
 # Prevent race.
-OVS_WAIT_UNTIL([cat ovs-vswitchd.log | vconn_sub | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
+OVS_WAIT_UNTIL([vconn_sub < ovs-vswitchd.log | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
 AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06

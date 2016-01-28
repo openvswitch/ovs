@@ -2905,7 +2905,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLO
 
 dnl Check logs for OpenFlow trace
 # Prevent race.
-OVS_WAIT_UNTIL([cat ovs-vswitchd.log | vconn_sub | test `grep -- "|vconn|DBG|unix: sent (Success): OFPST_FLOW reply" | wc -l` -ge 2])
+OVS_WAIT_UNTIL([vconn_sub < ovs-vswitchd.log | test `grep -- "|vconn|DBG|unix: sent (Success): OFPST_FLOW reply" | wc -l` -ge 2])
 # AT_CHECK([sed -n "s/^.*\(|vconn|DBG|.*xid=.*:\).*$/\1/p" ovs-vswitchd.log], [0], [dnl
 AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
 vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):

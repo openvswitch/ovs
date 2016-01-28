@@ -3205,7 +3205,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 00 00 88 47 00 00
@@ -3238,7 +3238,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
@@ -3273,7 +3273,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:00:02,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 02 88 48 00 00
@@ -3331,7 +3331,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:50,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 50 81 00 20 63
@@ -3368,7 +3368,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:51,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 51 81 00 20 63
@@ -3402,7 +3402,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:52,dl_dst=52:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  52 54 00 00 00 07 40 44-44 44 54 52 81 00 20 63
@@ -3439,7 +3439,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:53,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 53 81 00 20 63
@@ -3473,7 +3473,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:54,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 54 81 00 20 63
@@ -3510,7 +3510,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:55,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 55 81 00 20 63
@@ -3544,7 +3544,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:56,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 56 81 00 20 63
@@ -3581,7 +3581,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:57,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 57 81 00 20 63
@@ -3615,7 +3615,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:58,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 58 81 00 20 63
@@ -3649,7 +3649,7 @@ done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 ovs-appctl -t ovs-ofctl exit
 
-AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:59,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 59 81 00 20 63
@@ -7115,7 +7115,7 @@ AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0],
 recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:300, used:0.0s, actions:push_vlan(vid=4,pcp=0),100
 ])
 
-AT_CHECK([cat ovs-vswitchd.log | grep 'modify' | strip_ufid ], [0], [dnl
+AT_CHECK([grep 'modify' ovs-vswitchd.log | strip_ufid ], [0], [dnl
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:push_vlan(vid=4,pcp=0),100
 ])
 OVS_VSWITCHD_STOP
@@ -7186,7 +7186,7 @@ recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99/0x0,pcp=7/0x0),encap(eth_ty
 
 # Check that the new flow matches the CFI bit, while both vid and pcp
 # are wildcarded.
-AT_CHECK([cat ovs-vswitchd.log | grep '\(modify\)\|\(flow_add\)' | strip_ufid ], [0], [dnl
+AT_CHECK([grep '\(modify\)\|\(flow_add\)' ovs-vswitchd.log | strip_ufid ], [0], [dnl
 dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0x0000,dl_type=0x1234, actions:100
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
