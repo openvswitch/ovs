@@ -76,7 +76,7 @@ AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 
-AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
+AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
@@ -89,7 +89,7 @@ AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 
-AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
+AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
@@ -113,7 +113,7 @@ AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 
-AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
+AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
 AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
@@ -128,7 +128,7 @@ AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using 
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 
-AT_CHECK([cat ovs-vswitchd.log | grep -A 1 'miss upcall' | tail -n 1], [0], [dnl
+AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
 AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl

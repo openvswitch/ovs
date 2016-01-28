@@ -232,7 +232,7 @@ AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
 AT_CHECK([ovs-appctl -t ovsdb-server exit])
 
 # A default facility of LOG_LOCAL0 while writing to file.
-AT_CHECK([cat ovsdb-server.log | head -1 | awk '{print $1}'], [0], [<133>1
+AT_CHECK([head -1 ovsdb-server.log | awk '{print $1}'], [0], [<133>1
 ])
 rm ovsdb-server.log
 
@@ -240,7 +240,7 @@ AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
           --remote=punix:$OVS_RUNDIR/db.sock -vPATTERN:file:"<%B>1 %A %m" \
           -vFACILITY:daemon --log-file], [0], [], [stderr])
 
-AT_CHECK([cat ovsdb-server.log | head -1 | awk '{print $1}'], [0], [<29>1
+AT_CHECK([head -1 ovsdb-server.log | awk '{print $1}'], [0], [<29>1
 ])
 
 AT_CHECK([ovs-appctl -t ovsdb-server vlog/set FACILITY:invalid], [2], [],
@@ -252,7 +252,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server vlog/set FACILITY:local7])
 AT_CHECK([ovs-appctl -t ovsdb-server vlog/set ANY:file:DBG])
 AT_CHECK([ovs-appctl -t ovsdb-server exit])
 
-AT_CHECK([cat ovsdb-server.log | tail -1 | awk '{print $1}'], [0], [<191>1
+AT_CHECK([tail -1 ovsdb-server.log | awk '{print $1}'], [0], [<191>1
 ])
 AT_CLEANUP
 
