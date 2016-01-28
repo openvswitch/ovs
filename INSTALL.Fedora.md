@@ -61,6 +61,9 @@ $HOME/rpmbuild/SOURCES.
 
    This produces one RPM: "openvswitch".
 
+   To enable DPDK support in the resulting openvswitch package,
+   add `--with dpdk` to the build command.
+
    The above command automatically runs the Open vSwitch unit tests.
    To disable the unit tests, run:
 

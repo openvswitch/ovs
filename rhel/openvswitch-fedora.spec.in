@@ -16,6 +16,8 @@
 # If libcap-ng isn't available and there is no need for running OVS
 # as regular user, specify the '--without libcapng'
 %bcond_without libcapng
+# To enable DPDK support, specify '--with dpdk' when building
+%bcond_with dpdk
 
 # Enable PIE, bz#955181
 %global _hardened_build 1
@@ -48,6 +50,10 @@ BuildRequires: groff graphviz
 BuildRequires: procps-ng
 %if %{with libcapng}
 BuildRequires: libcap-ng libcap-ng-devel
+%endif
+%if %{with dpdk}
+BuildRequires: dpdk-devel >= 2.2.0
+Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 
 Requires: openssl iproute module-init-tools
@@ -116,6 +122,9 @@ overlays and security groups.
 	--enable-libcapng \
 %else
 	--disable-libcapng \
+%endif
+%if %{with dpdk}
+	--with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
 %endif
 	--enable-ssl \
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
