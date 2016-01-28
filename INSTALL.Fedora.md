@@ -5,7 +5,8 @@ This document describes how to build and install Open vSwitch on a Fedora
 Linux host.  If you want to install Open vSwitch on a generic Linux host,
 see [INSTALL.md] instead.
 
-We have tested these instructions with Fedora 16 and Fedora 17.
+We have tested these instructions with Fedora 23. These instructions are also
+used for RHEL 7.x and its derivatives, such as CentOS 7.x.
 
 Building Open vSwitch for Fedora
 --------------------------------
@@ -26,7 +27,7 @@ Fedora.  The command "rpmbuild --showrc" will show the configuration
 for each of those directories. Alternatively, the command "rpm --eval
  '%{_topdir}'" shows the current configuration for the top level
 directory and the command "rpm --eval '%{_sourcedir}'" does the same
-for the sources directory.  On Fedora 17, the default RPM _topdir is
+for the sources directory.  On Fedora 23, the default RPM _topdir is
 $HOME/rpmbuild and the default RPM sources directory is
 $HOME/rpmbuild/SOURCES.
 
@@ -66,7 +67,7 @@ $HOME/rpmbuild/SOURCES.
 
        `rpmbuild -bb --without check rhel/openvswitch-fedora.spec`
 
-5. On Fedora 17, to build the Open vSwitch kernel module, run:
+5. On Fedora 23, to build the Open vSwitch kernel module, run:
 
 	`rpmbuild -bb rhel/openvswitch-kmod-fedora.spec`
 
@@ -74,9 +75,9 @@ $HOME/rpmbuild/SOURCES.
 
 	```
 	rpmbuild -bb \
-		-D "kversion 2.6.32-131.6.1.el6.x86_64" \
+		-D "kversion 4.3.3-300.fc23.x86_64” \
 		-D "kflavors default debug kdump" \
-		rhel/openvswitch-kmod-rhel6.spec
+		rhel/openvswitch-kmod-fedora.spec
 	```
 
     This produces an "kmod-openvswitch" RPM for each kernel variant,
