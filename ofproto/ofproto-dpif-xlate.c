@@ -4163,16 +4163,14 @@ recirc_put_unroll_xlate(struct xlate_ctx *ctx)
 }
 
 
-/* Copy remaining actions to the action_set to be executed after recirculation.
- * UNROLL_XLATE action is inserted, if not already done so, before actions that
- * may depend on the current table ID or flow cookie. */
+/* Copy actions 'a' through 'end' to the action_set to be executed after
+ * recirculation.  UNROLL_XLATE action is inserted, if not already done so,
+ * before actions that may depend on the current table ID or flow cookie. */
 static void
-recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
+recirc_unroll_actions(const struct ofpact *a, const struct ofpact *end,
                       struct xlate_ctx *ctx)
 {
-    const struct ofpact *a;
-
-    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+    for (; a < end; a = ofpact_next(a)) {
         switch (a->type) {
         case OFPACT_OUTPUT_REG:
         case OFPACT_GROUP:
@@ -4439,9 +4437,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             /* Check if need to store the remaining actions for later
              * execution. */
             if (exit_recirculates(ctx)) {
-                recirc_unroll_actions(a, OFPACT_ALIGN(ofpacts_len -
-                                                      ((uint8_t *)a -
-                                                       (uint8_t *)ofpacts)),
+                recirc_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len),
                                       ctx);
             }
             break;
@@ -4817,10 +4813,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         /* Check if need to store this and the remaining actions for later
          * execution. */
         if (!ctx->error && ctx->exit && ctx_first_recirculation_action(ctx)) {
-            recirc_unroll_actions(a, OFPACT_ALIGN(ofpacts_len -
-                                                  ((uint8_t *)a -
-                                                   (uint8_t *)ofpacts)),
-                                  ctx);
+            recirc_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len), ctx);
             break;
         }
     }
