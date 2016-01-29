@@ -119,7 +119,7 @@ TRY_LOCK_FUNCTION(rwlock, trywrlock);
         l->where = WHERE; \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error)) { \
-            ovs_abort(error, "pthread_%s_%sfailed", #TYPE, #FUN); \
+            ovs_abort(error, "pthread_%s_%s failed", #TYPE, #FUN); \
         } \
     }
 UNLOCK_FUNCTION(mutex, unlock, "<unlocked>");
