@@ -122,6 +122,19 @@ int rpl_ip_defrag(struct sk_buff *skb, u32 user);
 int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
 #else /* OVS_FRAGMENT_BACKPORT */
+
+/* We have no good way to detect the presence of upstream commit 8282f27449bf
+ * ("inet: frag: Always orphan skbs inside ip_defrag()"), but it should be
+ * always included in kernels 4.5+. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+static inline int rpl_ip_defrag(struct sk_buff *skb, u32 user)
+{
+	skb_orphan(skb);
+	ip_defrag(skb, user);
+}
+#define ip_defrag rpl_ip_defrag
+#endif
+
 static inline int rpl_ipfrag_init(void) { return 0; }
 static inline void rpl_ipfrag_fini(void) { }
 #endif /* OVS_FRAGMENT_BACKPORT */
