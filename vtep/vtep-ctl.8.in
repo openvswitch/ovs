@@ -195,6 +195,31 @@ combination on the physical switch \fIpswitch\fR.
 List the logical switch bindings for \fIport\fR on the physical switch
 \fIpswitch\fR.
 .
+.SS "Logical Router Commands"
+These commands examine and manipulate logical routers.
+.
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-lr \fIlrouter\fR"
+Creates a new logical router named \fIlrouter\fR.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a router that
+exists is an error.  With \fB\-\-may\-exist\fR, this command does
+nothing if \fIlrouter\fR already exists.
+.
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-lr \fIlrouter\fR"
+Deletes \fIlrouter\fR.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete a router that does
+not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
+delete a router that does not exist has no effect.
+.
+.IP "\fBlist\-lr\fR"
+Lists all existing logical routers on standard output, one per line.
+.
+.IP "\fBlr\-exists \fIlrouter\fR"
+Tests whether \fIlrouter\fR exists.  If so, \fBvtep\-ctl\fR exits
+successfully with exit code 0.  If not, \fBvtep\-ctl\fR exits
+unsuccessfully with exit code 2.
+
 .SS "Local MAC Binding Commands"
 These commands examine and manipulate local MAC bindings for the logical
 switch.  The local maps are written by the VTEP to refer to MACs it has
