@@ -12,7 +12,7 @@ lightly and, in the worst case, must be revocable if the trust
 placed in an individual was inappropriate.
 
 This document suggests guidelines for granting and revoking commit
-access. It is intended provide a framework for evaluation of such
+access. It is intended to provide a framework for evaluation of such
 decisions without specifying deterministic rules that wouldn't be
 sensitive to the nuance of specific situations. In the end the
 decision to grant or revoke committer privileges is a judgment call
@@ -26,8 +26,8 @@ demonstrated the following in their interaction with the project:
 
 - Contribution of significant new features through the patch
 submission process where:
-- Submissions are free of obvious critical defects
-- Submissions do not typically require many iterations of
+-- Submissions are free of obvious critical defects
+-- Submissions do not typically require many iterations of
 improvement to be accepted
 - Consistent participation in code review of other's patches,
 including existing committers, with comments consistent with the
@@ -43,16 +43,16 @@ the project's direction as viewed by current committers.
 The process to grant commit access to a candidate is simple:
 
 - An existing committer nominates the candidate by sending an
-emailing to all existing committers with information
+email to all existing committers with information
 substantiating the contributions of the candidate in the areas
 described above.
 - All existing committers discuss the pros and cons of granting
 commit access to the candidate in the email thread.
 - When the discussion has converged or a reasonable time has
-elapsed without discussion developing (e.g a few business days)
+elapsed without discussion developing (e.g. a few business days)
 the nominator calls for a final decision on the candidate with a
 followup email to the thread.
-- Each committer may vote yes, no, or to abstain by replying to the
+- Each committer may vote yes, no, or abstain by replying to the
 email thread. A failure to reply is an implicit abstention.
 - After votes from all existing committers have been collected or a
 reasonable time has elapsed for them to be provided (e.g. a
@@ -62,7 +62,7 @@ majority of the existing committers and zero no votes. Since a
 no vote is effectively a veto of the candidate it should be
 accompanied by a reason for the vote.
 - The nominator summarizes the result of the vote in an email to
-the all existing committers.
+all existing committers.
 - If the vote to grant commit access passed, the candidate is
 contacted with an invitation to become a committer to the project
 which asks them to agree to the committer expectations
@@ -83,8 +83,8 @@ future. The process in this case is:
 months any other committer to the project may identify that
 committer as a candidate for revocation of commit access due to
 inactivity.
-- The plans of the candidate for revocation should be consulted in
-a private email to the candidate.
+- The plans of revocation should be sent in a private email to the
+candidate.
 - If the candidate for removal states plans to continue
 participating no action is taken and this process terminates.
 - If the candidate replies they no longer require commit
@@ -133,10 +133,10 @@ resolved. If not,
 the detrimental behavior requesting a vote on revocation of
 commit rights. Cite the discussion among all committers and
 describe all the reasons why it was not resolved satisfactorily.
-This email should be careful written with the knowledge that the
+This email should be carefully written with the knowledge that the
 reasoning it contains may be published to the larger community
 to justify the decision.
-- Each committer may vote yes, no, or to abstain by replying to the
+- Each committer may vote yes, no, or abstain by replying to the
 email thread. A failure to reply is an implicit abstention.
 - After all votes have been collected or a reasonable time has
 elapsed for them to be provided (e.g. a couple of business days)
@@ -147,12 +147,12 @@ thirds of the existing committers.
 - if the proposal passes then counter-arguments for the reasoning in
 no votes should also be documented along with the initial reasons
 the revocation was proposed. Ideally there should be no new
-counter-arguments supplied in a no vote all concerns should
+counter-arguments supplied in a no vote as all concerns should
 have surfaced in the discussion before the vote.
 - The original person to propose revocation summarizes the result
 of the vote in an email to all existing committers excepting the
 candidate for removal.
-- If the vote to revoke commit access passes access is removed and
+- If the vote to revoke commit access passes, access is removed and
 the candidate for revocation is informed of that fact and the
 reasons for it as documented in the email requesting the
 revocation vote.
@@ -230,9 +230,10 @@ Invitation to Accepted Committer
 Due to your sustained contributions to the Open vSwitch (OVS)
 project we would like to provide you with commit access to the
 project repository. Developers with commit access must agree to
-fulfill specific responsibilities described on the web site at:
+fulfill specific responsibilities described in the source
+repository:
 
-/development/committer-responsibilities
+Documentation/committer-responsibilities
 
 Please let us know if you would like to accept commit access and if
 so that you agree to fulfill these responsibilities. Once we
@@ -255,7 +256,7 @@ removed.
 Notification of Commit Removal for Inactivity
 ------------------------------------------------
 Committer <candidate> has been inactive for <duration>. <He/she>
-<stated no commit access is required/failed to respond to the
+<stated no commit access is required/failed to respond> to the
 formal proposal to remove access on <date>. Commit access has
 now been removed.
 
@@ -331,7 +332,7 @@ The counter-arguments for each of these reasons are:
 Notification of Commit Revocation for Detrimental Behavior
 ----------------------------------------------------------
 After private discussion with you and careful consideration of the
-situation the other committers to the Open vSwitch (OVS) project
+situation, the other committers to the Open vSwitch (OVS) project
 have concluded that it is in the best interest of the project that
 your commit access to the project repositories be revoked and this
 has now occurred.
@@ -342,4 +343,4 @@ The reasons for this decision are:
 
 While your goals and those of the project no longer appear to be
 aligned we greatly appreciate all the work you have done for the
-project and wish you continued success in your future work
+project and wish you continued success in your future work.
