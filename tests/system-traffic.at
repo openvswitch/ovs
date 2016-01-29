@@ -1309,8 +1309,8 @@ AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=10,arp,action=normal
 priority=100,in_port=1,icmp,action=ct(commit,zone=9),LOCAL
-priority=100,in_port=LOCAL,ct_state=-trk,icmp,action=ct(table=0,zone=9)
-priority=100,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
+priority=100,in_port=LOCAL,icmp,action=ct(table=1,zone=9)
+table=1,priority=100,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
