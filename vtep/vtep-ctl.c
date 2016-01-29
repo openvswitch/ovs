@@ -87,6 +87,9 @@ static void do_vtep_ctl(const char *args, struct ctl_command *, size_t n,
 static struct vtep_ctl_lswitch *find_lswitch(struct vtep_ctl_context *,
                                              const char *name,
                                              bool must_exist);
+static struct vtep_ctl_lrouter *find_lrouter(struct vtep_ctl_context *,
+                                             const char *name,
+                                             bool must_exist);
 
 int
 main(int argc, char *argv[])
@@ -334,6 +337,12 @@ Logical Switch commands:\n\
   unbind-ls PS PORT VLAN      unbind logical switch on VLAN from PORT\n\
   list-bindings PS PORT       list bindings for PORT on PS\n\
 \n\
+Logical Router commands:\n\
+  add-lr LR                   create a new logical router named LR\n\
+  del-lr LR                   delete LR\n\
+  list-lr                     print the names of all the logical routers\n\
+  lr-exists LR                exit 2 if LR does not exist\n\
+\n\
 MAC binding commands:\n\
   add-ucast-local LS MAC [ENCAP] IP   add ucast local entry in LS\n\
   del-ucast-local LS MAC              del ucast local entry from LS\n\
@@ -437,6 +446,8 @@ struct vtep_ctl_context {
                              * struct vtep_ctl_lswitch. */
     struct shash plocs;     /* Maps from "<encap>+<dst_ip>" to
                              * struct vteprec_physical_locator. */
+    struct shash lrouters;  /* Maps from logical router name to
+                             * struct vtep_ctl_lrouter. */
 };
 
 /* Casts 'base' into 'struct vtep_ctl_context'. */
@@ -466,6 +477,11 @@ struct vtep_ctl_lswitch {
     struct shash ucast_remote;  /* Maps from mac to vteprec_ucast_macs_remote.*/
     struct shash mcast_local;   /* Maps from mac to vtep_ctl_mcast_mac. */
     struct shash mcast_remote;  /* Maps from mac to vtep_ctl_mcast_mac. */
+};
+
+struct vtep_ctl_lrouter {
+    const struct vteprec_logical_router *lr_cfg;
+    char *name;
 };
 
 struct vtep_ctl_mcast_mac {
@@ -648,6 +664,28 @@ del_cached_ls_binding(struct vtep_ctl_port *port, const char *vlan)
     shash_find_and_delete(&port->bindings, vlan);
 }
 
+static struct vtep_ctl_lrouter *
+add_lrouter_to_cache(struct vtep_ctl_context *vtepctl_ctx,
+                     const struct vteprec_logical_router *lr_cfg)
+{
+    struct vtep_ctl_lrouter *lr = xmalloc(sizeof *lr);
+    lr->lr_cfg = lr_cfg;
+    lr->name = xstrdup(lr_cfg->name);
+    shash_add(&vtepctl_ctx->lrouters, lr->name, lr);
+    return lr;
+}
+
+static void
+del_cached_lrouter(struct vtep_ctl_context *ctx, struct vtep_ctl_lrouter *lr)
+{
+    if (lr->lr_cfg) {
+        vteprec_logical_router_delete(lr->lr_cfg);
+    }
+    shash_find_and_delete(&ctx->lrouters, lr->name);
+    free(lr->name);
+    free(lr);
+}
+
 static struct vteprec_physical_locator *
 find_ploc(struct vtep_ctl_context *vtepctl_ctx, const char *encap,
           const char *dst_ip)
@@ -792,6 +830,13 @@ vtep_ctl_context_invalidate_cache(struct ctl_context *ctx)
     }
     shash_destroy(&vtepctl_ctx->lswitches);
     shash_destroy(&vtepctl_ctx->plocs);
+
+    SHASH_FOR_EACH (node, &vtepctl_ctx->lrouters) {
+        struct vtep_ctl_lrouter *lr = node->data;
+        free(lr->name);
+        free(lr);
+    }
+    shash_destroy(&vtepctl_ctx->lrouters);
 }
 
 static void
@@ -807,6 +852,8 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_port_col_vlan_bindings);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_logical_switch_col_name);
+
+    ovsdb_idl_add_column(ctx->idl, &vteprec_logical_router_col_name);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_ucast_macs_local_col_MAC);
     ovsdb_idl_add_column(ctx->idl, &vteprec_ucast_macs_local_col_locator);
@@ -848,12 +895,14 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
     struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
     const struct vteprec_global *vtep_global = vtepctl_ctx->vtep_global;
     const struct vteprec_logical_switch *ls_cfg;
+    const struct vteprec_logical_router *lr_cfg;
     const struct vteprec_ucast_macs_local *ucast_local_cfg;
     const struct vteprec_ucast_macs_remote *ucast_remote_cfg;
     const struct vteprec_mcast_macs_local *mcast_local_cfg;
     const struct vteprec_mcast_macs_remote *mcast_remote_cfg;
     const struct vteprec_tunnel *tunnel_cfg;
     struct sset pswitches, ports, lswitches;
+    struct sset lrouters;
     size_t i;
 
     if (vtepctl_ctx->cache_valid) {
@@ -865,6 +914,7 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
     shash_init(&vtepctl_ctx->ports);
     shash_init(&vtepctl_ctx->lswitches);
     shash_init(&vtepctl_ctx->plocs);
+    shash_init(&vtepctl_ctx->lrouters);
 
     sset_init(&pswitches);
     sset_init(&ports);
@@ -901,6 +951,17 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
         add_lswitch_to_cache(vtepctl_ctx, ls_cfg);
     }
     sset_destroy(&lswitches);
+
+    sset_init(&lrouters);
+    VTEPREC_LOGICAL_ROUTER_FOR_EACH (lr_cfg, ctx->idl) {
+        if (!sset_add(&lrouters, lr_cfg->name)) {
+            VLOG_WARN("%s: database contains duplicate logical router name",
+                      lr_cfg->name);
+            continue;
+        }
+        add_lrouter_to_cache(vtepctl_ctx, lr_cfg);
+    }
+    sset_destroy(&lrouters);
 
     VTEPREC_UCAST_MACS_LOCAL_FOR_EACH (ucast_local_cfg, ctx->idl) {
         struct vtep_ctl_lswitch *ls;
@@ -1461,6 +1522,94 @@ cmd_unbind_ls(struct ctl_context *ctx)
     commit_ls_bindings(port);
 
     vtep_ctl_context_invalidate_cache(ctx);
+}
+
+static struct vtep_ctl_lrouter *
+find_lrouter(struct vtep_ctl_context *vtepctl_ctx,
+             const char *name, bool must_exist)
+{
+    struct vtep_ctl_lrouter *lr;
+
+    ovs_assert(vtepctl_ctx->cache_valid);
+
+    lr = shash_find_data(&vtepctl_ctx->lrouters, name);
+    if (must_exist && !lr) {
+        ctl_fatal("no logical router named %s", name);
+    }
+    return lr;
+}
+
+static void
+cmd_add_lr(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    const char *lr_name = ctx->argv[1];
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+    struct vteprec_logical_router *lr;
+
+    vtep_ctl_context_populate_cache(ctx);
+    if (find_lrouter(vtepctl_ctx, lr_name, false)) {
+        if (!may_exist) {
+            ctl_fatal("cannot create logical router %s because it "
+                      "already exists", lr_name);
+        }
+        return;
+    }
+
+    lr = vteprec_logical_router_insert(ctx->txn);
+    vteprec_logical_router_set_name(lr, lr_name);
+
+    vtep_ctl_context_invalidate_cache(ctx);
+}
+
+static void
+del_lrouter(struct vtep_ctl_context *vtepctl_ctx, struct vtep_ctl_lrouter *lr)
+{
+    del_cached_lrouter(vtepctl_ctx, lr);
+}
+
+static void
+cmd_del_lr(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    struct vtep_ctl_lrouter *lr;
+
+    vtep_ctl_context_populate_cache(ctx);
+    lr = find_lrouter(vtepctl_ctx, ctx->argv[1], must_exist);
+    if (lr) {
+        del_lrouter(vtepctl_ctx, lr);
+    }
+}
+
+static void
+cmd_list_lr(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    struct shash_node *node;
+    struct svec lrouters;
+
+    vtep_ctl_context_populate_cache(ctx);
+
+    svec_init(&lrouters);
+    SHASH_FOR_EACH (node, &vtepctl_ctx->lrouters) {
+        struct vtep_ctl_lrouter *lr = node->data;
+
+        svec_add(&lrouters, lr->name);
+    }
+    output_sorted(&lrouters, &ctx->output);
+    svec_destroy(&lrouters);
+}
+
+static void
+cmd_lr_exists(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+
+    vtep_ctl_context_populate_cache(ctx);
+    if (!find_lrouter(vtepctl_ctx, ctx->argv[1], false)) {
+        vtep_ctl_exit(2);
+    }
 }
 
 static void
@@ -2311,6 +2460,12 @@ static const struct ctl_command_syntax vtep_commands[] = {
     {"list-bindings", 2, 2, NULL, pre_get_info, cmd_list_bindings, NULL, "", RO},
     {"bind-ls", 4, 4, NULL, pre_get_info, cmd_bind_ls, NULL, "", RO},
     {"unbind-ls", 3, 3, NULL, pre_get_info, cmd_unbind_ls, NULL, "", RO},
+
+    /* Logical Router commands. */
+    {"add-lr", 1, 1, NULL, pre_get_info, cmd_add_lr, NULL, "--may-exist", RW},
+    {"del-lr", 1, 1, NULL, pre_get_info, cmd_del_lr, NULL, "--if-exists", RW},
+    {"list-lr", 0, 0, NULL, pre_get_info, cmd_list_lr, NULL, "", RO},
+    {"lr-exists", 1, 1, NULL, pre_get_info, cmd_lr_exists, NULL, "", RO},
 
     /* MAC binding commands. */
     {"add-ucast-local", 3, 4, NULL, pre_get_info, cmd_add_ucast_local, NULL,
