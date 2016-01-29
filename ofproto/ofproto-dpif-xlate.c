@@ -258,31 +258,28 @@ struct xlate_ctx {
     * members.  When a need for recirculation is identified, the translation
     * process:
     *
-    * 1. Sets 'recirc_action_offset' to the current size of 'action_set'.  The
-    *    action set is part of what needs to be preserved, so this allows the
-    *    action set and the additional state to share the 'action_set' buffer.
-    *    Later steps can tell that setup for recirculation is in progress from
-    *    the nonnegative value of 'recirc_action_offset'.
+    * 1. Sets 'recirculating' to true.
     *
     * 2. Sets 'exit' to true to tell later steps that we're exiting from the
     *    translation process.
     *
-    * 3. Adds an OFPACT_UNROLL_XLATE action to 'action_set'.  This action
-    *    holds the current table ID and cookie so that they can be restored
-    *    during a post-recirculation upcall translation.
+    * 3. Adds an OFPACT_UNROLL_XLATE action to 'recirculate_actions', and
+    *    points recirculate_actions.header to the action to make it easy to
+    *    find it later.  This action holds the current table ID and cookie so
+    *    that they can be restored during a post-recirculation upcall
+    *    translation.
     *
     * 4. Adds the action that prompted recirculation and any actions following
-    *    it within the same flow to 'action_set', so that they can be executed
-    *    during a post-recirculation upcall translation.
+    *    it within the same flow to 'recirculate_actions', so that they can be
+    *    executed during a post-recirculation upcall translation.
     *
     * 5. Returns.
     *
     * 6. The action that prompted recirculation might be nested in a stack of
     *    nested "resubmit"s that have actions remaining.  Each of these notices
-    *    that we're exiting (from 'exit') and that recirculation setup is in
-    *    progress (from 'recirc_action_offset') and responds by adding more
-    *    OFPACT_UNROLL_XLATE actions to 'action_set', as necessary, and any
-    *    actions that were yet unprocessed.
+    *    that we're exiting and recirculating and responds by adding more
+    *    OFPACT_UNROLL_XLATE actions to 'recirculate_actions', as necessary,
+    *    and any actions that were yet unprocessed.
     *
     * The caller stores all the state produced by this process associated with
     * the recirculation ID.  For post-recirculation upcall translation, the
@@ -290,10 +287,8 @@ struct xlate_ctx {
     * process yielded a set of ofpacts that can be translated directly, so it
     * is not much of a special case at that point.
     */
-    int recirc_action_offset;   /* Offset in 'action_set' to actions to be
-                                 * executed after recirculation, or -1. */
-    int last_unroll_offset;     /* Offset in 'action_set' to the latest unroll
-                                 * action, or -1. */
+    bool recirculating;
+    struct ofpbuf recirculate_actions;
 
     /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
      * This is a trigger for recirculation in cases where translating an action
@@ -351,30 +346,22 @@ static void
 ctx_trigger_recirculation(struct xlate_ctx *ctx)
 {
     ctx->exit = true;
-    ctx->recirc_action_offset = ctx->action_set.size;
+    ctx->recirculating = true;
 }
 
 static bool
 ctx_first_recirculation_action(const struct xlate_ctx *ctx)
 {
-    return ctx->recirc_action_offset == ctx->action_set.size;
-}
-
-static inline bool
-exit_recirculates(const struct xlate_ctx *ctx)
-{
-    /* When recirculating the 'recirc_action_offset' has a non-negative value.
-     */
-    return ctx->recirc_action_offset >= 0;
+    return !ctx->recirculate_actions.size;
 }
 
 static void
 ctx_cancel_recirculation(struct xlate_ctx *ctx)
 {
-    if (exit_recirculates(ctx)) {
-        ctx->action_set.size = ctx->recirc_action_offset;
-        ctx->recirc_action_offset = -1;
-        ctx->last_unroll_offset = -1;
+    if (ctx->recirculating) {
+        ctx->recirculating = false;
+        ofpbuf_clear(&ctx->recirculate_actions);
+        ctx->recirculate_actions.header = NULL;
     }
 }
 
@@ -2995,15 +2982,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         if (!process_special(ctx, peer) && may_receive(peer, ctx)) {
             if (xport_stp_forward_state(peer) && xport_rstp_forward_state(peer)) {
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
-                if (ctx->action_set.size) {
-                    /* Translate action set only if not dropping the packet and
-                     * not recirculating. */
-                    if (!exit_recirculates(ctx)) {
-                        xlate_action_set(ctx);
-                    }
+                if (!ctx->recirculating) {
+                    xlate_action_set(ctx);
                 }
-                /* Check if need to recirculate. */
-                if (exit_recirculates(ctx)) {
+                if (ctx->recirculating) {
                     compose_recirculate_action(ctx);
                 }
             } else {
@@ -3333,7 +3315,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
     ofpbuf_uninit(&action_list);
 
     /* Check if need to recirculate. */
-    if (exit_recirculates(ctx)) {
+    if (ctx->recirculating) {
         compose_recirculate_action(ctx);
     }
 
@@ -3641,7 +3623,7 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 
     recirc_metadata_from_flow(&md, &ctx->xin->flow);
 
-    ovs_assert(ctx->recirc_action_offset >= 0);
+    ovs_assert(ctx->recirculating);
 
     struct recirc_state state = {
         .table_id = table,
@@ -3651,11 +3633,10 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
         .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
         .mirrors = ctx->mirrors,
         .conntracked = ctx->conntracked,
-        .ofpacts = ((struct ofpact *) ctx->action_set.data
-                    + ctx->recirc_action_offset / sizeof(struct ofpact)),
-        .ofpacts_len = ctx->action_set.size - ctx->recirc_action_offset,
+        .ofpacts = ctx->recirculate_actions.data,
+        .ofpacts_len = ctx->recirculate_actions.size,
         .action_set = ctx->action_set.data,
-        .action_set_len = ctx->recirc_action_offset,
+        .action_set_len = ctx->action_set.size,
     };
 
     /* Allocate a unique recirc id for the given metadata state in the
@@ -3677,7 +3658,7 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
     ctx_cancel_recirculation(ctx);
 }
 
-/* Called only when ctx->recirc_action_offset is set. */
+/* Called only when we're recirculating. */
 static void
 compose_recirculate_action(struct xlate_ctx *ctx)
 {
@@ -3692,7 +3673,7 @@ compose_recirculate_action(struct xlate_ctx *ctx)
 static void
 compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
 {
-    ctx->recirc_action_offset = ctx->action_set.size;
+    ctx->recirculating = true;
     compose_recirculate_action__(ctx, table);
 }
 
@@ -4146,30 +4127,25 @@ xlate_action_set(struct xlate_ctx *ctx)
 static void
 recirc_put_unroll_xlate(struct xlate_ctx *ctx)
 {
-    struct ofpact_unroll_xlate *unroll;
-
-    unroll = ctx->last_unroll_offset < 0
-        ? NULL
-        : ALIGNED_CAST(struct ofpact_unroll_xlate *,
-                       (char *)ctx->action_set.data + ctx->last_unroll_offset);
+    struct ofpact_unroll_xlate *unroll = ctx->recirculate_actions.header;
 
     /* Restore the table_id and rule cookie for a potential PACKET
      * IN if needed. */
     if (!unroll ||
         (ctx->table_id != unroll->rule_table_id
          || ctx->rule_cookie != unroll->rule_cookie)) {
-
-        ctx->last_unroll_offset = ctx->action_set.size;
-        unroll = ofpact_put_UNROLL_XLATE(&ctx->action_set);
+        unroll = ofpact_put_UNROLL_XLATE(&ctx->recirculate_actions);
         unroll->rule_table_id = ctx->table_id;
         unroll->rule_cookie = ctx->rule_cookie;
+        ctx->recirculate_actions.header = unroll;
     }
 }
 
 
-/* Copy actions 'a' through 'end' to the action_set to be executed after
- * recirculation.  UNROLL_XLATE action is inserted, if not already done so,
- * before actions that may depend on the current table ID or flow cookie. */
+/* Copy actions 'a' through 'end' to ctx->recirculate_actions, which will be
+ * executed after recirculation.  UNROLL_XLATE action is inserted, if not
+ * already done so, before actions that may depend on the current table ID or
+ * flow cookie. */
 static void
 recirc_unroll_actions(const struct ofpact *a, const struct ofpact *end,
                       struct xlate_ctx *ctx)
@@ -4245,7 +4221,7 @@ recirc_unroll_actions(const struct ofpact *a, const struct ofpact *end,
             continue;
         }
         /* Copy the action over. */
-        ofpbuf_put(&ctx->action_set, a, OFPACT_ALIGN(a->len));
+        ofpbuf_put(&ctx->recirculate_actions, a, OFPACT_ALIGN(a->len));
     }
 }
 
@@ -4440,7 +4416,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         if (ctx->exit) {
             /* Check if need to store the remaining actions for later
              * execution. */
-            if (exit_recirculates(ctx)) {
+            if (ctx->recirculating) {
                 recirc_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len),
                                       ctx);
             }
@@ -5094,6 +5070,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     union mf_subvalue stack_stub[1024 / sizeof(union mf_subvalue)];
     uint64_t action_set_stub[1024 / 8];
+    uint64_t recirculate_actions_stub[1024 / 8];
     struct flow_wildcards scratch_wc;
     uint64_t actions_stub[256 / 8];
     struct ofpbuf scratch_actions = OFPBUF_STUB_INITIALIZER(actions_stub);
@@ -5123,8 +5100,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .error = XLATE_OK,
         .mirrors = 0,
 
-        .recirc_action_offset = -1,
-        .last_unroll_offset = -1,
+        .recirculating = false,
+        .recirculate_actions = OFPBUF_STUB_INITIALIZER(recirculate_actions_stub),
 
         .was_mpls = false,
         .conntracked = false,
@@ -5339,29 +5316,25 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             }
 
             /* We've let OFPP_NORMAL and the learning action look at the
-             * packet, so drop it now if forwarding is disabled. */
+             * packet, so cancel all actions and recirculation if forwarding is
+             * disabled. */
             if (in_port && (!xport_stp_forward_state(in_port) ||
                             !xport_rstp_forward_state(in_port))) {
-                /* Drop all actions added by do_xlate_actions() above. */
                 ctx.odp_actions->size = sample_actions_len;
-
-                /* Undo changes that may have been done for recirculation. */
                 ctx_cancel_recirculation(&ctx);
-            } else if (ctx.action_set.size) {
-                /* Translate action set only if not dropping the packet and
-                 * not recirculating. */
-                if (!exit_recirculates(&ctx)) {
-                    xlate_action_set(&ctx);
-                }
+                ofpbuf_clear(&ctx.action_set);
             }
-            /* Check if need to recirculate. */
-            if (exit_recirculates(&ctx)) {
+
+            if (!ctx.recirculating) {
+                xlate_action_set(&ctx);
+            }
+            if (ctx.recirculating) {
                 compose_recirculate_action(&ctx);
             }
         }
 
         /* Output only fully processed packets. */
-        if (!exit_recirculates(&ctx)
+        if (!ctx.recirculating
             && xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
@@ -5411,6 +5384,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 exit:
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
+    ofpbuf_uninit(&ctx.recirculate_actions);
     ofpbuf_uninit(&scratch_actions);
 
     /* Make sure we return a "drop flow" in case of an error. */
