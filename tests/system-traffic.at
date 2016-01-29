@@ -1165,6 +1165,41 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv4 fragmentation expiry])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+
+dnl Only allow non-fragmented messages and 1st fragments of each message
+priority=100,in_port=1,icmp,ip_frag=no,action=ct(commit,zone=9),2
+priority=100,in_port=1,icmp,ip_frag=firstaction=ct(commit,zone=9),2
+priority=100,in_port=2,ct_state=-trk,icmp,action=ct(table=0,zone=9)
+priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Basic connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv4 fragmentation connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 1 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - IPv4 fragmentation + vlan])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1244,6 +1279,50 @@ dnl Ipv6 larger fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 fragmentation expiry])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+
+dnl Only allow non-fragmented messages and 1st fragments of each message
+priority=10,in_port=1,ipv6,ip_frag=first,action=ct(commit,zone=9),2
+priority=10,in_port=1,ipv6,ip_frag=no,action=ct(commit,zone=9),2
+priority=10,in_port=2,ct_state=-trk,ipv6,action=ct(table=0,zone=9)
+priority=10,in_port=2,ct_state=+trk+est-new,ipv6,action=1
+
+dnl Neighbour Discovery
+priority=100,icmp6,icmp_type=135,action=normal
+priority=100,icmp6,icmp_type=136,action=normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Without this sleep, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+sleep 2;
+
+dnl Basic connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Send an IPv6 fragment. Some time later, it should expire.
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 1 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+dnl At this point, the kernel will either crash or everything is OK.
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
