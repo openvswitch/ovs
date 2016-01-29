@@ -238,7 +238,7 @@ project repository. Developers with commit access must agree to
 fulfill specific responsibilities described in the source
 repository:
 
-[committer-responsibilities](committer-responsibilities)
+[Documentation/committer-responsibilities.md](committer-responsibilities.md)
 
 Please let us know if you would like to accept commit access and if
 so that you agree to fulfill these responsibilities. Once we
