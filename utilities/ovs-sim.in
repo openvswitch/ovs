@@ -70,7 +70,7 @@ fi
 
 # Put built tools early in $PATH.
 PATH=$sim_builddir/ovsdb:$sim_builddir/vswitchd:$sim_builddir/utilities:$PATH
-PATH=$sim_builddir/ovn:$sim_srcdir/ovn:$sim_builddir/ovn/controller:$sim_builddir/ovn/northd:$sim_builddir/ovn/utilities:$PATH
+PATH=$sim_builddir/ovn/controller:$sim_builddir/ovn/northd:$sim_builddir/ovn/utilities:$PATH
 export PATH
 
 rm -rf sandbox
