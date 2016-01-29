@@ -368,6 +368,16 @@ exit_recirculates(const struct xlate_ctx *ctx)
     return ctx->recirc_action_offset >= 0;
 }
 
+static void
+ctx_cancel_recirculation(struct xlate_ctx *ctx)
+{
+    if (exit_recirculates(ctx)) {
+        ctx->action_set.size = ctx->recirc_action_offset;
+        ctx->recirc_action_offset = -1;
+        ctx->last_unroll_offset = -1;
+    }
+}
+
 static void compose_recirculate_action(struct xlate_ctx *ctx);
 
 /* A controller may use OFPP_NONE as the ingress port to indicate that
@@ -3009,11 +3019,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 ctx->odp_actions->size = old_size;
 
                 /* Undo changes that may have been done for recirculation. */
-                if (exit_recirculates(ctx)) {
-                    ctx->action_set.size = ctx->recirc_action_offset;
-                    ctx->recirc_action_offset = -1;
-                    ctx->last_unroll_offset = -1;
-                }
+                ctx_cancel_recirculation(ctx);
             }
         }
 
@@ -3668,9 +3674,7 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
 
     /* Undo changes done by recirculation. */
-    ctx->action_set.size = ctx->recirc_action_offset;
-    ctx->recirc_action_offset = -1;
-    ctx->last_unroll_offset = -1;
+    ctx_cancel_recirculation(ctx);
 }
 
 /* Called only when ctx->recirc_action_offset is set. */
@@ -5342,11 +5346,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 ctx.odp_actions->size = sample_actions_len;
 
                 /* Undo changes that may have been done for recirculation. */
-                if (exit_recirculates(&ctx)) {
-                    ctx.action_set.size = ctx.recirc_action_offset;
-                    ctx.recirc_action_offset = -1;
-                    ctx.last_unroll_offset = -1;
-                }
+                ctx_cancel_recirculation(&ctx);
             } else if (ctx.action_set.size) {
                 /* Translate action set only if not dropping the packet and
                  * not recirculating. */
