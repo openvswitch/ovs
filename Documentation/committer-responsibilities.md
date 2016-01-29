@@ -4,7 +4,8 @@ Expectations for Developers with Open vSwitch Repo Access
 Prerequisites
 -------------
 
-Be familiar with CodingStyle and CONTRIBUTING.
+Be familiar with [CodingStyle.md](../CodingStyle.md) and
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Review
 ------
@@ -68,9 +69,10 @@ occasionally does, bring it up on the mailing list. If you explain
 the use of "Signed-off-by:" to a new developer, explain not just how but
 why, since the intended meaning of "Signed-off-by:" is more important
 than the syntax. As part of your explanation, quote or provide a URL
-to the Developer's Certificate of Origin in CONTRIBUTING.
+to the Developer's Certificate of Origin in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Use Reported-by: and Tested-by: tags in commit messages to indicate
 the source of a bug report.
 
-Keep the AUTHORS file up to date.
+Keep the [AUTHORS](../AUTHORS) file up to date.
