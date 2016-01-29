@@ -190,7 +190,7 @@ to install into, e.g., /usr and /var instead of /usr/local and
 By default, static libraries are built and linked against. If you
 want to use shared libraries instead:
 
-      % ./configure --enable-shared
+      `% ./configure --enable-shared`
 
 To use a specific C compiler for compiling Open vSwitch user
 programs, also specify it on the configure command line, like so:
@@ -213,7 +213,7 @@ Note that these CFLAGS are not applied when building the Linux
 kernel module.  Custom CFLAGS for the kernel module are supplied
 using the EXTRA_CFLAGS variable when running make.  So, for example:
 
-      `% make EXTRA_CFLAGS="-Wno-error=date-time"
+      `% make EXTRA_CFLAGS="-Wno-error=date-time"`
 
 To build the Linux kernel module, so that you can run the
 kernel-based switch, pass the location of the kernel build
@@ -254,7 +254,7 @@ from a single source directory, e.g. to try out both GCC and Clang
 builds, or to build kernel modules for more than one Linux version.
 Here is an example:
 
-      `% mkdir _gcc && (cd _gcc && ../configure CC=gcc)`  
+      `% mkdir _gcc && (cd _gcc && ../configure CC=gcc)`
       `% mkdir _clang && (cd _clang && ../configure CC=clang)`
 
 
@@ -272,7 +272,7 @@ Building the Sources
    If you used a separate build directory, run make or gmake from that
    directory, e.g.:
 
-      `% make -C _gcc`  
+      `% make -C _gcc`
       `% make -C _clang`
 
    For improved warnings if you installed "sparse" (see "Prerequisites"),
@@ -292,7 +292,7 @@ Building the Sources
 
 5. If you built kernel modules, you may install and load them, e.g.:
 
-      `% make modules_install`  
+      `% make modules_install`
       `% /sbin/modprobe openvswitch`
 
    To verify that the modules have been loaded, run "/sbin/lsmod" and
@@ -349,7 +349,7 @@ will work, do not set this.
 
 6. Initialize the configuration database using ovsdb-tool, e.g.:
 
-      `% mkdir -p /usr/local/etc/openvswitch`  
+      `% mkdir -p /usr/local/etc/openvswitch`
       `% ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema`
 
 Startup
@@ -363,12 +363,14 @@ explained above), to listen on a Unix domain socket, to connect to any
 managers specified in the database itself, and to use the SSL
 configuration in the database:
 
+      ```
       % ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
                      --remote=db:Open_vSwitch,Open_vSwitch,manager_options \
                      --private-key=db:Open_vSwitch,SSL,private_key \
                      --certificate=db:Open_vSwitch,SSL,certificate \
                      --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert \
                      --pidfile --detach
+      ```
 
 (If you built Open vSwitch without SSL support, then omit
 --private-key, --certificate, and --bootstrap-ca-cert.)
@@ -377,20 +379,20 @@ Then initialize the database using ovs-vsctl.  This is only
 necessary the first time after you create the database with
 ovsdb-tool (but running it at any time is harmless):
 
-      % ovs-vsctl --no-wait init
+      `% ovs-vsctl --no-wait init`
 
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:
 
-      % ovs-vswitchd --pidfile --detach
+      `% ovs-vswitchd --pidfile --detach`
 
 Now you may use ovs-vsctl to set up bridges and other Open vSwitch
 features.  For example, to create a bridge named br0 and add ports
 eth0 and vif1.0 to it:
 
-      % ovs-vsctl add-br br0
-      % ovs-vsctl add-port br0 eth0
-      % ovs-vsctl add-port br0 vif1.0
+      `% ovs-vsctl add-br br0`
+      `% ovs-vsctl add-port br0 eth0`
+      `% ovs-vsctl add-port br0 vif1.0`
 
 Please refer to ovs-vsctl(8) for more details.
 
