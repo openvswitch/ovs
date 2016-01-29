@@ -682,6 +682,7 @@ int rpl_ip_defrag(struct sk_buff *skb, u32 user)
 	struct ipq *qp;
 
 	IP_INC_STATS_BH(net, IPSTATS_MIB_REASMREQDS);
+	skb_orphan(skb);
 
 	/* Lookup (or create) queue header */
 	qp = ip_find(net, ip_hdr(skb), user, vif);
