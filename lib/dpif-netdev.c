@@ -3297,6 +3297,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
                struct packet_batch batches[], size_t *n_batches)
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
+    struct netdev_flow_key *key = &keys[0];
     size_t i, n_missed = 0, n_dropped = 0;
 
     for (i = 0; i < cnt; i++) {
@@ -3314,7 +3315,6 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
             OVS_PREFETCH(dp_packet_data(packets[i+1]));
         }
 
-        struct netdev_flow_key *key = &keys[n_missed];
         miniflow_extract(packet, &key->mf);
         key->len = 0; /* Not computed yet. */
         key->hash = dpif_netdev_packet_get_rss_hash(packet, &key->mf);
@@ -3326,7 +3326,8 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
         } else {
             /* Exact match cache missed. Group missed packets together at
              * the beginning of the 'packets' array.  */
-            packets[n_missed++] = packet;
+            packets[n_missed] = packet;
+            key = &keys[n_missed++];
         }
     }
 
