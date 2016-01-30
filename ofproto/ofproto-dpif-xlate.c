@@ -4787,12 +4787,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_GOTO_TABLE: {
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
 
-            /* Allow ctx->table_id == TBL_INTERNAL, which will be greater
-             * than ogt->table_id. This is to allow goto_table actions that
-             * triggered recirculation: ctx->table_id will be TBL_INTERNAL
-             * after recirculation. */
-            ovs_assert(ctx->table_id == TBL_INTERNAL
-                       || ctx->table_id < ogt->table_id);
+            ovs_assert(ctx->table_id < ogt->table_id);
+
             xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
                                ogt->table_id, true, true);
             break;
