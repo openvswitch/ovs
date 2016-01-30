@@ -84,7 +84,7 @@ docs = \
 	INSTALL.userspace.md \
 	INSTALL.Windows.md \
 	IntegrationGuide.md \
-	MAINTAINERS \
+	MAINTAINERS.md \
 	OPENFLOW-1.1+.md \
 	PORTING.md \
 	README.md \
