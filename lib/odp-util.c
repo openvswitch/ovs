@@ -475,7 +475,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       IP_ARGS(get_16aligned_be32(&ip->ip_dst)),
                       ip->ip_proto, ip->ip_tos,
                       ip->ip_ttl,
-                      ip->ip_frag_off);
+                      ntohs(ip->ip_frag_off));
         l4 = (ip + 1);
     } else {
         const struct ip6_hdr *ip6;
@@ -914,16 +914,18 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
 
     if (eth->eth_type == htons(ETH_TYPE_IP)) {
         /* IPv4 */
+        uint16_t ip_frag_off;
         if (!ovs_scan_len(s, &n, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT",proto=%"SCNi8
                           ",tos=%"SCNi8",ttl=%"SCNi8",frag=0x%"SCNx16"),",
                           IP_SCAN_ARGS(&sip),
                           IP_SCAN_ARGS(&dip),
                           &ip->ip_proto, &ip->ip_tos,
-                          &ip->ip_ttl, &ip->ip_frag_off)) {
+                          &ip->ip_ttl, &ip_frag_off)) {
             return -EINVAL;
         }
         put_16aligned_be32(&ip->ip_src, sip);
         put_16aligned_be32(&ip->ip_dst, dip);
+        ip->ip_frag_off = htons(ip_frag_off);
         ip_len = sizeof *ip;
     } else {
         char sip6_s[IPV6_SCAN_LEN + 1];

@@ -76,28 +76,28 @@ dnl Check VXLAN tunnel push
 AT_CHECK([ovs-ofctl add-flow int-br action=2])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x7b)),out_port(100))
+  [Datapath actions: tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0x8000000,vni=0x7b)),out_port(100))
 ])
 
 dnl Check VXLAN tunnel push set tunnel id by flow and checksum
 AT_CHECK([ovs-ofctl add-flow int-br "actions=set_tunnel:124,4"])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=f8:bc:12:44:34:b7,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.93,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=4789,csum=0xffff),vxlan(flags=0x8000000,vni=0x7c)),out_port(100))
+  [Datapath actions: tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=f8:bc:12:44:34:b7,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.93,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0xffff),vxlan(flags=0x8000000,vni=0x7c)),out_port(100))
 ])
 
 dnl Check GRE tunnel push
 AT_CHECK([ovs-ofctl add-flow int-br action=3])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: tnl_push(tnl_port(3),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x40),gre((flags=0x2000,proto=0x6558),key=0x1c8)),out_port(100))
+  [Datapath actions: tnl_push(tnl_port(3),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x2000,proto=0x6558),key=0x1c8)),out_port(100))
 ])
 
 dnl Check Geneve tunnel push
 AT_CHECK([ovs-ofctl add-flow int-br "actions=set_field:1.1.2.92->tun_dst,5"])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: tnl_push(tnl_port(6081),header(size=50,type=5,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=6081,csum=0x0),geneve(vni=0x7b)),out_port(100))
+  [Datapath actions: tnl_push(tnl_port(6081),header(size=50,type=5,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=6081,csum=0x0),geneve(vni=0x7b)),out_port(100))
 ])
 
 dnl Check Geneve tunnel push with options
@@ -105,7 +105,7 @@ AT_CHECK([ovs-ofctl add-tlv-map int-br "{class=0xffff,type=0x80,len=4}->tun_meta
 AT_CHECK([ovs-ofctl add-flow int-br "actions=set_field:1.1.2.92->tun_dst,set_field:0xa->tun_metadata0,5"])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: tnl_push(tnl_port(6081),header(size=58,type=5,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x40),udp(src=0,dst=6081,csum=0x0),geneve(crit,vni=0x7b,options({class=0xffff,type=0x80,len=4,0xa}))),out_port(100))
+  [Datapath actions: tnl_push(tnl_port(6081),header(size=58,type=5,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=6081,csum=0x0),geneve(crit,vni=0x7b,options({class=0xffff,type=0x80,len=4,0xa}))),out_port(100))
 ])
 
 dnl Check decapsulation of GRE packet
