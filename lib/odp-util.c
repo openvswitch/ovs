@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -565,7 +565,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                   IP_ARGS(get_16aligned_be32(&ip->ip_dst)),
                   ip->ip_proto, ip->ip_tos,
                   ip->ip_ttl,
-                  ip->ip_frag_off);
+                  ntohs(ip->ip_frag_off));
 
     if (data->tnl_type == OVS_VPORT_TYPE_VXLAN) {
         const struct vxlanhdr *vxh;
@@ -872,6 +872,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     struct udp_header *udp;
     struct gre_base_hdr *greh;
     uint16_t gre_proto, gre_flags, dl_type, udp_src, udp_dst, csum;
+    uint16_t ip_frag_off;
     ovs_be32 sip, dip;
     uint32_t tnl_type = 0, header_len = 0;
     void *l3, *l4;
@@ -907,9 +908,10 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
                          IP_SCAN_ARGS(&sip),
                          IP_SCAN_ARGS(&dip),
                          &ip->ip_proto, &ip->ip_tos,
-                         &ip->ip_ttl, &ip->ip_frag_off)) {
+                         &ip->ip_ttl, &ip_frag_off)) {
         return -EINVAL;
     }
+    ip->ip_frag_off = htons(ip_frag_off);
     put_16aligned_be32(&ip->ip_src, sip);
     put_16aligned_be32(&ip->ip_dst, dip);
 
