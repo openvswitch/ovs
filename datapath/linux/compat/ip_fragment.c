@@ -25,7 +25,7 @@
 
 #include <linux/version.h>
 
-#ifdef OVS_FRAGMENT_BACKPORT
+#if !defined(HAVE_CORRECT_MRU_HANDLING) && defined(OVS_FRAGMENT_BACKPORT)
 
 #define pr_fmt(fmt) "IPv4: " fmt
 
@@ -747,4 +747,4 @@ void rpl_ipfrag_fini(void)
 	unregister_pernet_subsys(&ip4_frags_ops);
 }
 
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif /* !HAVE_CORRECT_MRU_HANDLING && OVS_FRAGMENT_BACKPORT */
