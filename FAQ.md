@@ -222,7 +222,7 @@ Multiple VTEPs        |      YES       |       YES      |    YES    |   NO    |
 Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 ----------------------|:--------------:|:--------------:|:---------:|:-------:|
 SCTP flows            |      3.12      |       YES      |    YES    |   YES   |
-MPLS                  |      3.19      |       YES      |    YES    |   NO    |
+MPLS                  |      3.19      |       YES      |    YES    |   YES   |
 UFID                  |      4.0       |       YES      |    YES    |   NO    |
 Megaflows             |      3.12      |       YES      |    YES    |   NO    |
 Masked set action     |      4.0       |       YES      |    YES    |   NO    |
