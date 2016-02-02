@@ -1671,6 +1671,7 @@ static void
 add_del_bridges(const struct ovsrec_open_vswitch *cfg)
 {
     struct bridge *br, *next;
+    struct shash_node *node;
     struct shash new_br;
     size_t i;
 
@@ -1701,8 +1702,8 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
     }
 
     /* Add new bridges. */
-    for (i = 0; i < cfg->n_bridges; i++) {
-        const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
+    SHASH_FOR_EACH(node, &new_br) {
+        const struct ovsrec_bridge *br_cfg = node->data;
         struct bridge *br = bridge_lookup(br_cfg->name);
         if (!br) {
             bridge_create(br_cfg);
