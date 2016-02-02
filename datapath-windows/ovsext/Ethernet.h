@@ -66,6 +66,8 @@ typedef enum {
     ETH_TYPE_CDP         = 0x2000,
     ETH_TYPE_802_1PQ     = 0x8100, // not really a DIX type, but used as such
     ETH_TYPE_LLC         = 0xFFFF, // 0xFFFF is IANA reserved, used to mark LLC
+    ETH_TYPE_MPLS        = 0x8847,
+    ETH_TYPE_MPLS_MCAST  = 0x8848,
 } Eth_DixType;
 
 typedef enum {

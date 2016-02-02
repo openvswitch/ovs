@@ -80,6 +80,8 @@ static NTSTATUS _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf,
                                        Icmp6Key *ipv6FlowPutIcmpKey);
 static NTSTATUS _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf,
                                       ArpKey *arpFlowPutKey);
+static NTSTATUS _MapFlowMplsKeyToNlKey(PNL_BUFFER nlBuf,
+                                       MplsKey *mplsFlowPutKey);
 
 static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
                                OvsFlowDumpOutput *dumpOutput,
@@ -108,7 +110,7 @@ const NL_POLICY nlFlowPolicy[] = {
 
 /* For Parsing nested OVS_FLOW_ATTR_KEY attributes.
  * Some of the attributes like OVS_KEY_ATTR_RECIRC_ID
- * & OVS_KEY_ATTR_MPLS are not supported yet. */
+ * are not supported yet. */
 
 const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_ENCAP] = {.type = NL_A_VAR_LEN, .optional = TRUE},
@@ -872,6 +874,13 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
         break;
         }
 
+        case ETH_TYPE_MPLS:
+        case ETH_TYPE_MPLS_MCAST: {
+        MplsKey *mplsFlowPutKey = &(flowKey->mplsKey);
+        rc = _MapFlowMplsKeyToNlKey(nlBuf, mplsFlowPutKey);
+        break;
+        }
+
         default:
         break;
     }
@@ -1194,6 +1203,31 @@ done:
 
 /*
  *----------------------------------------------------------------------------
+ *  _MapFlowMplsKeyToNlKey --
+ *    Maps _MapFlowMplsKeyToNlKey to OVS_KEY_ATTR_MPLS attribute.
+ *----------------------------------------------------------------------------
+ */
+static NTSTATUS
+_MapFlowMplsKeyToNlKey(PNL_BUFFER nlBuf, MplsKey *mplsFlowPutKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_key_mpls *mplsKey;
+
+    mplsKey = (struct ovs_key_mpls *)
+        NlMsgPutTailUnspecUninit(nlBuf, OVS_KEY_ATTR_MPLS, sizeof(*mplsKey));
+    if (!mplsKey) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    mplsKey->mpls_lse = mplsFlowPutKey->lse;
+
+done:
+    return rc;
+}
+
+/*
+ *----------------------------------------------------------------------------
  *  _MapNlToFlowPut --
  *    Maps input netlink message to OvsFlowPut.
  *----------------------------------------------------------------------------
@@ -1469,8 +1503,26 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
             arpFlowPutKey->pad[1] = 0;
             arpFlowPutKey->pad[2] = 0;
             destKey->l2.keyLen += OVS_ARP_KEY_SIZE;
-            break;
         }
+        break;
+    }
+    case ETH_TYPE_MPLS:
+    case ETH_TYPE_MPLS_MCAST: {
+
+        if (keyAttrs[OVS_KEY_ATTR_MPLS]) {
+            MplsKey *mplsFlowPutKey = &destKey->mplsKey;
+            const struct ovs_key_mpls *mplsKey;
+
+            mplsKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_MPLS]);
+
+            mplsFlowPutKey->lse = mplsKey->mpls_lse;
+            mplsFlowPutKey->pad[0] = 0;
+            mplsFlowPutKey->pad[1] = 0;
+            mplsFlowPutKey->pad[2] = 0;
+            mplsFlowPutKey->pad[3] = 0;
+            destKey->l2.keyLen += sizeof(MplsKey);
+        }
+        break;
     }
     }
 }
@@ -1734,10 +1786,10 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
             flow->l2.vlanTci = 0;
         }
         /*
-        * XXX
-        * Please note after this point, src mac and dst mac should
-        * not be accessed through eth
-        */
+         * XXX
+         * Please note after this point, src mac and dst mac should
+         * not be accessed through eth
+         */
         eth = (Eth_Header *)((UINT8 *)eth + offset);
     }
 
@@ -1866,6 +1918,44 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
                 memcpy(&arpKey->nwDst, arp->arp_tpa, 4);
                 memcpy(arpKey->arpSha, arp->arp_sha, ETH_ADDR_LENGTH);
                 memcpy(arpKey->arpTha, arp->arp_tha, ETH_ADDR_LENGTH);
+            }
+        }
+    } else if (OvsEthertypeIsMpls(flow->l2.dlType)) {
+        MPLSHdr mplsStorage;
+        const MPLSHdr *mpls;
+        MplsKey *mplsKey = &flow->mplsKey;
+        ((UINT64 *)mplsKey)[0] = 0;
+
+        /*
+         * In the presence of an MPLS label stack the end of the L2
+         * header and the beginning of the L3 header differ.
+         *
+         * A network packet may contain multiple MPLS labels, but we
+         * are only interested in the topmost label stack entry.
+         *
+         * Advance network header to the beginning of the L3 header.
+         * layers->l3Offset corresponds to the end of the L2 header.
+         */
+        for (UINT32 i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
+            mpls = OvsGetMpls(packet, layers->l3Offset, &mplsStorage);
+            if (!mpls) {
+                break;
+            }
+
+            /* Keep only the topmost MPLS label stack entry. */
+            if (i == 0) {
+                mplsKey->lse = mpls->lse;
+            }
+
+            layers->l3Offset += MPLS_HLEN;
+            layers->l4Offset += MPLS_HLEN;
+
+            if (mpls->lse & htonl(MPLS_BOS_MASK)) {
+                /*
+                 * Bottom of Stack bit is set, which means there are no
+                 * remaining MPLS labels in the packet.
+                 */
+                break;
             }
         }
     }

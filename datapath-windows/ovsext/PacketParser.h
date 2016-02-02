@@ -151,4 +151,11 @@ OvsGetIcmp(const NET_BUFFER_LIST *packet,
     return OvsGetPacketBytes(packet, sizeof *storage, ofs, storage);
 }
 
+static const MPLSHdr *
+OvsGetMpls(const NET_BUFFER_LIST *packet,
+           UINT32 ofs,
+           MPLSHdr *storage)
+{
+    return OvsGetPacketBytes(packet, sizeof *storage, ofs, storage);
+}
 #endif /* __PACKET_PARSER_H_ */

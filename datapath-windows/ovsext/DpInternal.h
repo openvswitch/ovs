@@ -20,6 +20,7 @@
 #include <netioapi.h>
 #define IFNAMSIZ IF_NAMESIZE
 #include "../ovsext/Netlink/Netlink.h"
+#include "Mpls.h"
 
 #define OVS_DP_NUMBER   ((uint32_t) 0)
 
@@ -125,7 +126,7 @@ typedef struct L2Key {
     uint8_t dlDst[6];            /* Ethernet destination address. */
     ovs_be16 vlanTci;            /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dlType;             /* Ethernet frame type. */
-} L2Key;  /* Size of 24 byte. */
+} L2Key; /* Size of 24 byte. */
 
 /* Number of packet attributes required to store OVS tunnel key. */
 #define NUM_PKT_ATTR_REQUIRED 3
@@ -147,16 +148,23 @@ typedef union OvsIPv4TunnelKey {
         };
     };
     uint64_t attr[NUM_PKT_ATTR_REQUIRED];
-} OvsIPv4TunnelKey;
+} OvsIPv4TunnelKey; /* Size of 24 byte. */
+
+typedef struct MplsKey {
+    ovs_be32 lse;                /* MPLS topmost label stack entry. */
+    uint8    pad[4];
+} MplsKey; /* Size of 8 bytes. */
 
 typedef __declspec(align(8)) struct OvsFlowKey {
     OvsIPv4TunnelKey tunKey;     /* 24 bytes */
     L2Key l2;                    /* 24 bytes */
     union {
+        /* These headers are mutually exclusive. */
         IpKey ipKey;             /* size 16 */
         ArpKey arpKey;           /* size 24 */
         Ipv6Key ipv6Key;         /* size 48 */
         Icmp6Key icmp6Key;       /* size 72 */
+        MplsKey mplsKey;         /* size 8 */
     };
 } OvsFlowKey;
 
