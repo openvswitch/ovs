@@ -55,6 +55,7 @@ static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
 #endif
 #endif
 
+#ifndef HAVE_CORRECT_MRU_HANDLING
 static unsigned int rpl_frag_percpu_counter_batch = 130000;
 #define frag_percpu_counter_batch rpl_frag_percpu_counter_batch
 
@@ -78,6 +79,7 @@ void rpl_inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f);
 
 void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f);
 #define inet_frag_destroy(q, f, work) rpl_inet_frag_destroy(q, f)
+#endif /* !HAVE_CORRECT_MRU_HANDLING */
 #endif /* OVS_FRAGMENT_BACKPORT */
 
 #endif /* inet_frag.h */
