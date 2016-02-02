@@ -690,10 +690,11 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
                  netdev->vhost_id);
     } else {
         fatal_signal_add_file_to_unlink(netdev->vhost_id);
+        VLOG_INFO("Socket %s created for vhost-user port %s\n",
+                  netdev->vhost_id, netdev_->name);
+        err = vhost_construct_helper(netdev_);
     }
 
-    VLOG_INFO("Socket %s created for vhost-user port %s\n", netdev->vhost_id, netdev_->name);
-    err = vhost_construct_helper(netdev_);
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
 }
