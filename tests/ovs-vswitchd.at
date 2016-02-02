@@ -163,3 +163,33 @@ OVS_WAIT_UNTIL([test -n "`grep ERR ovs-vswitchd.log | grep overwrite.file`"])
 
 OVS_VSWITCHD_STOP(["/Not adding Unix domain socket controller/d"])
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd - do not create sockets with unsafe names])
+OVS_VSWITCHD_START
+
+# On Unix systems, test for sockets with "test -S".
+#
+# On Windows systems, we simulate a socket with a regular file that contains
+# a TCP port number, so use "test -f" there instead.
+if test $IS_WIN32 = yes; then
+   S=f
+else
+   S=S
+fi
+
+# Create a bridge with an ordinary name and make sure that the management
+# socket gets creatd.
+AT_CHECK([ovs-vsctl add-br a -- set bridge a datapath-type=dummy])
+AT_CHECK([test -$S a.mgmt])
+
+# Create a bridge with an unsafe name and make sure that the management
+# socket does not get created.
+mkdir b
+AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [0],
+  [], [ovs-vsctl: Error detected while setting up 'b/c'.  See ovs-vswitchd log for details.
+])
+AT_CHECK([test ! -e b/c.mgmt])
+
+OVS_VSWITCHD_STOP(['/ignoring bridge with invalid name/d'])
+AT_CLEANUP
