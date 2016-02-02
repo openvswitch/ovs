@@ -84,8 +84,8 @@ OvsGetPacketBytes(const NET_BUFFER_LIST *nbl,
 
 NDIS_STATUS
 OvsParseIPv6(const NET_BUFFER_LIST *packet,
-          OvsFlowKey *key,
-          POVS_PACKET_HDR_INFO layers)
+             OvsFlowKey *key,
+             POVS_PACKET_HDR_INFO layers)
 {
     UINT16 ofs = layers->l3Offset;
     IPv6Hdr ipv6HdrStorage;
@@ -178,8 +178,8 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
 
 VOID
 OvsParseTcp(const NET_BUFFER_LIST *packet,
-         L4Key *flow,
-         POVS_PACKET_HDR_INFO layers)
+            L4Key *flow,
+            POVS_PACKET_HDR_INFO layers)
 {
     TCPHdr tcpStorage;
     const TCPHdr *tcp = OvsGetTcp(packet, layers->l4Offset, &tcpStorage);
@@ -208,8 +208,8 @@ OvsParseSctp(const NET_BUFFER_LIST *packet,
 
 VOID
 OvsParseUdp(const NET_BUFFER_LIST *packet,
-         L4Key *flow,
-         POVS_PACKET_HDR_INFO layers)
+            L4Key *flow,
+            POVS_PACKET_HDR_INFO layers)
 {
     UDPHdr udpStorage;
     const UDPHdr *udp = OvsGetUdp(packet, layers->l4Offset, &udpStorage);

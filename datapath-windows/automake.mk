@@ -31,6 +31,7 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/IpHelper.h \
 	datapath-windows/ovsext/Jhash.c \
 	datapath-windows/ovsext/Jhash.h \
+	datapath-windows/ovsext/Mpls.h \
 	datapath-windows/ovsext/NetProto.h \
 	datapath-windows/ovsext/Netlink/Netlink.c \
 	datapath-windows/ovsext/Netlink/Netlink.h \
