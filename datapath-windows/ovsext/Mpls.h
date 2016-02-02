@@ -53,4 +53,28 @@ OvsEthertypeIsMpls(ovs_be16 ethertype)
            ethertype == htons(ETH_TYPE_MPLS_MCAST);
 }
 
+/* Returns the number of MPLS LSEs present in 'a'
+ *
+ * Counts 'flow''s MPLS label stack entries (LESs) stopping at the first
+ * entry that has the bottom of stack (BOS) bit set. If no such entry exists,
+ * then zero is returned, meaning that the maximum number of supported
+ * MPLS LSEs exceeded.
+ */
+__inline UINT32
+OvsCountMplsLabels(PNL_ATTR a)
+{
+    const MPLSHdr *mpls = NlAttrGet(a);
+    UINT32 count = 0;
+    BOOLEAN bos = FALSE;
+
+    for (count = 0; count < FLOW_MAX_MPLS_LABELS; count++) {
+        if ((mpls + count)->lse & htonl(MPLS_BOS_MASK)) {
+            bos = TRUE;
+            break;
+        }
+    }
+
+    return bos ? ++count : 0;
+}
+
 #endif /* __MPLS_H_ */
