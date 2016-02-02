@@ -86,6 +86,8 @@ static NTSTATUS _MapFlowMplsKeyToNlKey(PNL_BUFFER nlBuf,
 static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
                                OvsFlowDumpOutput *dumpOutput,
                                UINT32 *replyLen);
+static NTSTATUS OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
+                                         PNL_ATTR keyAttr);
 
 
 #define OVS_FLOW_TABLE_SIZE 2048
@@ -313,13 +315,17 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     if (flowAttrs[OVS_FLOW_ATTR_PROBE]) {
-        OVS_LOG_ERROR("Attribute OVS_FLOW_ATTR_PROBE not supported");
-        goto done;
+        rc = OvsProbeSupportedFeature(msgIn, flowAttrs[OVS_FLOW_ATTR_KEY]);
+        if (rc != STATUS_SUCCESS) {
+            nlError = NlMapStatusToNlErr(rc);
+            goto done;
+        }
     }
 
     if ((rc = _MapNlToFlowPut(msgIn, flowAttrs[OVS_FLOW_ATTR_KEY],
-        flowAttrs[OVS_FLOW_ATTR_ACTIONS], flowAttrs[OVS_FLOW_ATTR_CLEAR],
-         &mappedFlow))
+                              flowAttrs[OVS_FLOW_ATTR_ACTIONS],
+                              flowAttrs[OVS_FLOW_ATTR_CLEAR],
+                              &mappedFlow))
         != STATUS_SUCCESS) {
         OVS_LOG_ERROR("Conversion to OvsFlowPut failed");
         goto done;
@@ -1254,7 +1260,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                            keyAttrs, ARRAY_SIZE(keyAttrs)))
                            != TRUE) {
         OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
-                       nlMsgHdr);
+                      nlMsgHdr);
         rc = STATUS_INVALID_PARAMETER;
         goto done;
     }
@@ -1272,7 +1278,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
-                           nlMsgHdr);
+                          nlMsgHdr);
             rc = STATUS_INVALID_PARAMETER;
             goto done;
         }
@@ -1290,7 +1296,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
     mappedFlow->dpNo = ovsHdr->dp_ifindex;
 
     _MapNlToFlowPutFlags(genlMsgHdr, flowAttrClear,
-                                mappedFlow);
+                         mappedFlow);
 
 done:
     return rc;
@@ -2519,6 +2525,58 @@ OvsTunKeyAttrSize(void)
          + NlAttrTotalSize(256)  /* OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS */
          + NlAttrTotalSize(2)    /* OVS_TUNNEL_KEY_ATTR_TP_SRC */
          + NlAttrTotalSize(2);   /* OVS_TUNNEL_KEY_ATTR_TP_DST */
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  OvsProbeSupportedFeature --
+ *    Verifies if the probed feature is supported.
+ * 
+ * Results:
+ *   STATUS_SUCCESS if the probed feature is supported.
+ *----------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
+                         PNL_ATTR keyAttr)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+
+    UINT32 keyAttrOffset = (UINT32)((PCHAR)keyAttr - (PCHAR)nlMsgHdr);
+    PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX] = { NULL };
+
+    /* Get flow keys attributes */
+    if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset, NlAttrLen(keyAttr),
+                           nlFlowKeyPolicy, ARRAY_SIZE(nlFlowKeyPolicy),
+                           keyAttrs, ARRAY_SIZE(keyAttrs)))
+                           != TRUE) {
+        OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
+                      nlMsgHdr);
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_MPLS] &&
+        keyAttrs[OVS_KEY_ATTR_ETHERTYPE]) {
+        ovs_be16 ethType = NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_ETHERTYPE]);
+
+        if (OvsEthertypeIsMpls(ethType)) {
+            if (!OvsCountMplsLabels(keyAttrs[OVS_KEY_ATTR_MPLS])) {
+                OVS_LOG_ERROR("Maximum supported MPLS labels exceeded.");
+                status = STATUS_INVALID_MESSAGE;
+            }
+        } else {
+            OVS_LOG_ERROR("Wrong ethertype for MPLS attribute.");
+            status = STATUS_INVALID_PARAMETER;
+        }
+    } else {
+        OVS_LOG_ERROR("Probed feature not supported.");
+        status = STATUS_INVALID_PARAMETER;
+    }
+
+done:
+    return status;
 }
 
 #pragma warning( pop )

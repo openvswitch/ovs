@@ -229,6 +229,9 @@ NlMapStatusToNlErr(NTSTATUS status)
     case STATUS_OBJECT_NAME_EXISTS:
       ret = NL_ERROR_EXIST;
       break;
+    case STATUS_INVALID_MESSAGE:
+      ret = NL_ERROR_BADMSG;
+      break;
     default:
       ret = NL_ERROR_OTHER;
       break;
