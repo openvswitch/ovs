@@ -130,7 +130,7 @@ void rpl_ipfrag_fini(void);
 static inline int rpl_ip_defrag(struct sk_buff *skb, u32 user)
 {
 	skb_orphan(skb);
-	ip_defrag(skb, user);
+	return ip_defrag(skb, user);
 }
 #define ip_defrag rpl_ip_defrag
 #endif
