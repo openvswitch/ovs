@@ -64,7 +64,7 @@
  */
 
 static int sysctl_ipfrag_max_dist __read_mostly = 64;
-static const char ip_frag_cache_name[] = "ip4-frags";
+static const char ip_frag_cache_name[] = "ovs-frag4";
 
 struct ipfrag_skb_cb
 {
