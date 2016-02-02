@@ -33,6 +33,7 @@
 #include "dirs.h"
 #include "dp-packet.h"
 #include "dpif-netdev.h"
+#include "fatal-signal.h"
 #include "list.h"
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
@@ -687,7 +688,10 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
     if (err) {
         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
                  netdev->vhost_id);
+    } else {
+        fatal_signal_add_file_to_unlink(netdev->vhost_id);
     }
+
     VLOG_INFO("Socket %s created for vhost-user port %s\n", netdev->vhost_id, netdev_->name);
     err = vhost_construct_helper(netdev_);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -745,6 +749,8 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
 
     if (rte_vhost_driver_unregister(dev->vhost_id)) {
         VLOG_ERR("Unable to remove vhost-user socket %s", dev->vhost_id);
+    } else {
+        fatal_signal_remove_file_to_unlink(dev->vhost_id);
     }
 
     ovs_mutex_lock(&dpdk_mutex);
