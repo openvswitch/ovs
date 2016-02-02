@@ -56,7 +56,7 @@
 
 #ifdef OVS_NF_DEFRAG6_BACKPORT
 
-static const char nf_frags_cache_name[] = "nf-frags";
+static const char nf_frags_cache_name[] = "ovs-frag6";
 
 struct nf_ct_frag6_skb_cb
 {
