@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1073,7 +1073,7 @@ log_msg(enum vlog_level level, const struct msg *p, const char *message,
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
-    if (vlog_should_drop(THIS_MODULE, level, &rl)) {
+    if (vlog_should_drop(&this_module, level, &rl)) {
         return;
     }
 

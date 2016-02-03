@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1583,7 +1583,7 @@ flow_message_log_level(int error)
 static bool
 should_log_flow_message(int error)
 {
-    return !vlog_should_drop(THIS_MODULE, flow_message_log_level(error),
+    return !vlog_should_drop(&this_module, flow_message_log_level(error),
                              error ? &error_rl : &dpmsg_rl);
 }
 
@@ -1616,7 +1616,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
         ds_put_cstr(&ds, ", actions:");
         format_odp_actions(&ds, actions, actions_len);
     }
-    vlog(THIS_MODULE, flow_message_log_level(error), "%s", ds_cstr(&ds));
+    vlog(&this_module, flow_message_log_level(error), "%s", ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
@@ -1696,7 +1696,7 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         }
         ds_put_format(&ds, " on packet %s", packet);
         ds_put_format(&ds, " mtu %d", execute->mtu);
-        vlog(THIS_MODULE, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
+        vlog(&this_module, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
         ds_destroy(&ds);
         free(packet);
     }

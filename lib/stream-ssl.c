@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -455,7 +455,7 @@ ssl_connect(struct stream *stream)
                                      : "SSL_accept"), retval, error, &unused);
                 shutdown(sslv->fd, SHUT_RDWR);
                 stream_report_content(sslv->head, sslv->n_head, STREAM_SSL,
-                                      THIS_MODULE, stream_get_name(stream));
+                                      &this_module, stream_get_name(stream));
                 return EPROTO;
             }
         } else if (bootstrap_ca_cert) {

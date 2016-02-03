@@ -269,7 +269,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             break;
 
         case OPT_NO_SYSLOG:
-            vlog_set_levels(&VLM_vsctl, VLF_SYSLOG, VLL_WARN);
+            vlog_set_levels(&this_module, VLF_SYSLOG, VLL_WARN);
             break;
 
         case OPT_NO_WAIT:
