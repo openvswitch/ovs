@@ -503,9 +503,15 @@
 
     <group title="Core Features">
       <column name="name">
-        Bridge identifier.  Should be alphanumeric and no more than about 8
-        bytes long.  Must be unique among the names of ports, interfaces, and
-        bridges on a host.
+        <p>
+          Bridge identifier.  Should be alphanumeric and no more than about 8
+          bytes long.  Must be unique among the names of ports, interfaces, and
+          bridges on a host.
+        </p>
+
+        <p>
+          Forward and backward slashes are prohibited in bridge names.
+        </p>
       </column>
 
       <column name="ports">

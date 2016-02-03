@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1695,9 +1695,12 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
 
-        if (strchr(br_cfg->name, '/')) {
+        if (strchr(br_cfg->name, '/') || strchr(br_cfg->name, '\\')) {
             /* Prevent remote ovsdb-server users from accessing arbitrary
-             * directories, e.g. consider a bridge named "../../../etc/". */
+             * directories, e.g. consider a bridge named "../../../etc/".
+             *
+             * Prohibiting "\" is only necessary on Windows but it's no great
+             * loss elsewhere. */
             VLOG_WARN_RL(&rl, "ignoring bridge with invalid name \"%s\"",
                          br_cfg->name);
         } else if (!shash_add_once(&new_br, br_cfg->name, br_cfg)) {
