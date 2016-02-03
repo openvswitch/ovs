@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,9 +85,6 @@ struct vlog_module {
     int min_level;                /* Minimum log level for any destination. */
     bool honor_rate_limits;       /* Set false to ignore rate limits. */
 };
-
-/* Global list of all logging modules */
-extern struct ovs_list vlog_modules;
 
 void vlog_insert_module(struct ovs_list *);
 
