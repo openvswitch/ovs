@@ -678,6 +678,28 @@ vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+vlog_unixctl_close(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                   const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
+{
+    ovs_mutex_lock(&log_file_mutex);
+    if (log_fd >= 0) {
+        close(log_fd);
+        log_fd = -1;
+
+        async_append_destroy(log_writer);
+        log_writer = NULL;
+
+        struct vlog_module *mp;
+        LIST_FOR_EACH (mp, list, &vlog_modules) {
+            update_min_level(mp);
+        }
+    }
+    ovs_mutex_unlock(&log_file_mutex);
+
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
 set_all_rate_limits(bool enable)
 {
     struct vlog_module *mp;
@@ -771,6 +793,8 @@ vlog_init(void)
                                  0, INT_MAX, vlog_disable_rate_limit, NULL);
         unixctl_command_register("vlog/reopen", "", 0, 0,
                                  vlog_unixctl_reopen, NULL);
+        unixctl_command_register("vlog/close", "", 0, 0,
+                                 vlog_unixctl_close, NULL);
 
         ovs_rwlock_rdlock(&pattern_rwlock);
         print_syslog_target_deprecation = syslog_fd >= 0;

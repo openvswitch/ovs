@@ -255,6 +255,80 @@ AT_CHECK([sed 's/.*|//' log], [0], [dnl
 ])
 AT_CLEANUP
 
+AT_SETUP([vlog - vlog/close - C])
+on_exit 'kill `cat test-unixctl.pid`'
+
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([log.old])
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+  [0], [], [stderr])
+AT_CHECK([vlog_filt stderr], [0], [opened log file
+])
+
+AT_CHECK([APPCTL -t test-unixctl log message])
+AT_CHECK([APPCTL -t test-unixctl log message2])
+
+# After closing the log file, message3 won't appear anywhere.
+AT_CHECK([APPCTL -t test-unixctl vlog/close])
+mv log log.old
+AT_CHECK([APPCTL -t test-unixctl log message3])
+
+# Closing the log file again is harmless.
+AT_CHECK([APPCTL -t test-unixctl vlog/close])
+AT_CHECK([APPCTL -t test-unixctl log message4])
+
+# After reopening the log file, further messages start appearing again.
+AT_CHECK([APPCTL -t test-unixctl vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl log message5])
+AT_CHECK([APPCTL -t test-unixctl exit])
+
+AT_CHECK([vlog_filt log.old], [0], [dnl
+opened log file
+Entering run loop.
+message
+message2
+])
+AT_CHECK([vlog_filt log], [0], [dnl
+opened log file
+message5
+])
+AT_CLEANUP
+
+AT_SETUP([vlog - vlog/close - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+on_exit 'kill `cat test-unixctl.py.pid`'
+
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([log.old])
+AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+
+AT_CHECK([APPCTL -t test-unixctl.py log message])
+AT_CHECK([APPCTL -t test-unixctl.py log message2])
+
+# After closing the log file, message3 won't appear anywhere.
+AT_CHECK([APPCTL -t test-unixctl.py vlog/close])
+mv log log.old
+AT_CHECK([APPCTL -t test-unixctl.py log message3])
+
+# Closing the log file again is harmless.
+AT_CHECK([APPCTL -t test-unixctl.py vlog/close])
+AT_CHECK([APPCTL -t test-unixctl.py log message4])
+
+# After reopening the log file, further messages start appearing again.
+AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl.py log message5])
+AT_CHECK([APPCTL -t test-unixctl.py exit])
+
+AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
+ Entering run loop.
+ message
+ message2
+])
+AT_CHECK([sed 's/.*|//' log], [0], [dnl
+ message5
+])
+AT_CLEANUP
+
 AT_SETUP([vlog - vlog/set and vlog/list - C])
 on_exit 'kill `cat test-unixctl.pid`'
 
