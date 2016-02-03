@@ -676,14 +676,26 @@ static int
 netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    const char *name = netdev_->name;
     int err;
+
+    /* 'name' is appended to 'vhost_sock_dir' and used to create a socket in
+     * the file system. '/' or '\' would traverse directories, so they're not
+     * acceptable in 'name'. */
+    if (strchr(name, '/') || strchr(name, '\\')) {
+        VLOG_ERR("\"%s\" is not a valid name for a vhost-user port. "
+                 "A valid name must not include '/' or '\\'",
+                 name);
+        return EINVAL;
+    }
 
     ovs_mutex_lock(&dpdk_mutex);
     /* Take the name of the vhost-user port and append it to the location where
      * the socket is to be created, then register the socket.
      */
     snprintf(netdev->vhost_id, sizeof(netdev->vhost_id), "%s/%s",
-            vhost_sock_dir, netdev_->name);
+             vhost_sock_dir, name);
+
     err = rte_vhost_driver_register(netdev->vhost_id);
     if (err) {
         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
@@ -691,7 +703,7 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
     } else {
         fatal_signal_add_file_to_unlink(netdev->vhost_id);
         VLOG_INFO("Socket %s created for vhost-user port %s\n",
-                  netdev->vhost_id, netdev_->name);
+                  netdev->vhost_id, name);
         err = vhost_construct_helper(netdev_);
     }
 

@@ -508,7 +508,8 @@ Adding DPDK vhost-user ports to the Switch:
 
 Following the steps above to create a bridge, you can now add DPDK vhost-user
 as a port to the vswitch. Unlike DPDK ring ports, DPDK vhost-user ports can
-have arbitrary names.
+have arbitrary names, except that forward and backward slashes are prohibited
+in the names.
 
   -  For vhost-user, the name of the port type is `dpdkvhostuser`
 
