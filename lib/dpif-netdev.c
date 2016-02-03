@@ -3357,7 +3357,10 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
             /* Exact match cache missed. Group missed packets together at
              * the beginning of the 'packets' array.  */
             packets[n_missed] = packet;
-            key = &keys[n_missed++];
+            /* 'key[n_missed]' contains the key of the current packet and it
+             * must be returned to the caller. The next key should be extracted
+             * to 'keys[n_missed + 1]'. */
+            key = &keys[++n_missed];
         }
     }
 
