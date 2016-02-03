@@ -1992,7 +1992,7 @@ ctl_fatal(const char *format, ...)
     message = xvasprintf(format, args);
     va_end(args);
 
-    vlog_set_levels(&VLM_db_ctl_base, VLF_CONSOLE, VLL_OFF);
+    vlog_set_levels(&this_module, VLF_CONSOLE, VLL_OFF);
     VLOG_ERR("%s", message);
     ovs_error(0, "%s", message);
     ctl_exit(EXIT_FAILURE);

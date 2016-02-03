@@ -170,46 +170,45 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
     OVS_PRINTF_FORMAT (4, 5);
 
-/* Creates and initializes a global instance of a module named MODULE, and
- * defines a static variable named THIS_MODULE that points to it, for use with
- * the convenience macros below. */
+/* Defines a logging module whose name is MODULE, which should generally be
+ * roughly the name of the source file, and makes it the module used by the
+ * logging convenience macros defined below. */
 #define VLOG_DEFINE_THIS_MODULE(MODULE)                                 \
-        /* This extra "extern" declaration makes sparse happy. */       \
-        extern struct vlog_module VLM_##MODULE;                         \
-        struct vlog_module VLM_##MODULE =                               \
-        {                                                               \
-            OVS_LIST_INITIALIZER(&VLM_##MODULE.list),                   \
+        static struct vlog_module this_module = {                       \
+            OVS_LIST_INITIALIZER(&this_module.list),                    \
             #MODULE,                                        /* name */  \
             { VLL_INFO, VLL_INFO, VLL_INFO },             /* levels */  \
             VLL_INFO,                                  /* min_level */  \
             true                               /* honor_rate_limits */  \
         };                                                              \
-        OVS_CONSTRUCTOR(init_##MODULE) {                                \
-                vlog_insert_module(&VLM_##MODULE.list);                 \
+        OVS_CONSTRUCTOR(init_this_module) {                             \
+            vlog_insert_module(&this_module.list);                      \
         }                                                               \
-        static struct vlog_module *const THIS_MODULE = &VLM_##MODULE
+                                                                        \
+        /* Prevent duplicate module names, via linker error.            \
+         * The extra "extern" declaration makes sparse happy. */        \
+        extern struct vlog_module *VLM_##MODULE;                        \
+        struct vlog_module *VLM_##MODULE = &this_module;
 
-/* Convenience macros.  These assume that THIS_MODULE points to a "struct
- * vlog_module" for the current module, as set up by e.g. the
- * VLOG_DEFINE_THIS_MODULE macro above.
+/* Macros for the current module as set up by VLOG_DEFINE_THIS_MODULE.
+ * These are usually what you want to use.
  *
  * Guaranteed to preserve errno.
  */
-#define VLOG_FATAL(...) vlog_fatal(THIS_MODULE, __VA_ARGS__)
-#define VLOG_ABORT(...) vlog_abort(THIS_MODULE, __VA_ARGS__)
+#define VLOG_FATAL(...) vlog_fatal(&this_module, __VA_ARGS__)
+#define VLOG_ABORT(...) vlog_abort(&this_module, __VA_ARGS__)
 #define VLOG_EMER(...) VLOG(VLL_EMER, __VA_ARGS__)
 #define VLOG_ERR(...) VLOG(VLL_ERR, __VA_ARGS__)
 #define VLOG_WARN(...) VLOG(VLL_WARN, __VA_ARGS__)
 #define VLOG_INFO(...) VLOG(VLL_INFO, __VA_ARGS__)
 #define VLOG_DBG(...) VLOG(VLL_DBG, __VA_ARGS__)
 
-/* More convenience macros, for testing whether a given level is enabled in
- * THIS_MODULE.  When constructing a log message is expensive, this enables it
- * to be skipped. */
-#define VLOG_IS_ERR_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_ERR)
-#define VLOG_IS_WARN_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_WARN)
-#define VLOG_IS_INFO_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_INFO)
-#define VLOG_IS_DBG_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_DBG)
+/* More convenience macros, for testing whether a given level is enabled.  When
+ * constructing a log message is expensive, this enables it to be skipped. */
+#define VLOG_IS_ERR_ENABLED() vlog_is_enabled(&this_module, VLL_ERR)
+#define VLOG_IS_WARN_ENABLED() vlog_is_enabled(&this_module, VLL_WARN)
+#define VLOG_IS_INFO_ENABLED() vlog_is_enabled(&this_module, VLL_INFO)
+#define VLOG_IS_DBG_ENABLED() vlog_is_enabled(&this_module, VLL_DBG)
 
 /* Convenience macros for rate-limiting.
  * Guaranteed to preserve errno.
@@ -224,10 +223,10 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 #define VLOG_ERR_BUF(ERRP, ...) VLOG_ERRP(ERRP, VLL_ERR, __VA_ARGS__)
 #define VLOG_WARN_BUF(ERRP, ...) VLOG_ERRP(ERRP, VLL_WARN, __VA_ARGS__)
 
-#define VLOG_DROP_ERR(RL) vlog_should_drop(THIS_MODULE, VLL_ERR, RL)
-#define VLOG_DROP_WARN(RL) vlog_should_drop(THIS_MODULE, VLL_WARN, RL)
-#define VLOG_DROP_INFO(RL) vlog_should_drop(THIS_MODULE, VLL_INFO, RL)
-#define VLOG_DROP_DBG(RL) vlog_should_drop(THIS_MODULE, VLL_DBG, RL)
+#define VLOG_DROP_ERR(RL) vlog_should_drop(&this_module, VLL_ERR, RL)
+#define VLOG_DROP_WARN(RL) vlog_should_drop(&this_module, VLL_WARN, RL)
+#define VLOG_DROP_INFO(RL) vlog_should_drop(&this_module, VLL_INFO, RL)
+#define VLOG_DROP_DBG(RL) vlog_should_drop(&this_module, VLL_DBG, RL)
 
 /* Macros for logging at most once per execution. */
 #define VLOG_ERR_ONCE(...) VLOG_ONCE(VLL_ERR, __VA_ARGS__)
@@ -267,22 +266,22 @@ void vlog_usage(void);
 #define VLOG(LEVEL, ...)                                \
     do {                                                \
         enum vlog_level level__ = LEVEL;                \
-        if (THIS_MODULE->min_level >= level__) {        \
-            vlog(THIS_MODULE, level__, __VA_ARGS__);    \
+        if (this_module.min_level >= level__) {         \
+            vlog(&this_module, level__, __VA_ARGS__);   \
         }                                               \
     } while (0)
-#define VLOG_RL(RL, LEVEL, ...)                                     \
-    do {                                                            \
-        enum vlog_level level__ = LEVEL;                            \
-        if (THIS_MODULE->min_level >= level__) {                    \
-            vlog_rate_limit(THIS_MODULE, level__, RL, __VA_ARGS__); \
-        }                                                           \
+#define VLOG_RL(RL, LEVEL, ...)                                         \
+    do {                                                                \
+        enum vlog_level level__ = LEVEL;                                \
+        if (this_module.min_level >= level__) {                         \
+            vlog_rate_limit(&this_module, level__, RL, __VA_ARGS__);    \
+        }                                                               \
     } while (0)
 #define VLOG_ONCE(LEVEL, ...)                                           \
     do {                                                                \
         static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER; \
         if (ovsthread_once_start(&once)) {                              \
-            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);                      \
+            vlog(&this_module, LEVEL, __VA_ARGS__);                     \
             ovsthread_once_done(&once);                                 \
         }                                                               \
     } while (0)

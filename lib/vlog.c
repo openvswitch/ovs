@@ -209,7 +209,8 @@ vlog_get_destination_val(const char *name)
     return i;
 }
 
-void vlog_insert_module(struct ovs_list *vlog)
+void
+vlog_insert_module(struct ovs_list *vlog)
 {
     list_insert(&vlog_modules, vlog);
 }

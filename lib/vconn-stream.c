@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ vconn_stream_close(struct vconn *vconn)
 
     if ((vconn->error == EPROTO || s->n_packets < 1) && s->rxbuf) {
         stream_report_content(s->rxbuf->data, s->rxbuf->size, STREAM_OPENFLOW,
-                              THIS_MODULE, vconn_get_name(vconn));
+                              &this_module, vconn_get_name(vconn));
     }
 
     stream_close(s->stream);

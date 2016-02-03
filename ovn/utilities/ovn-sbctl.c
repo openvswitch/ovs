@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             break;
 
         case OPT_NO_SYSLOG:
-            vlog_set_levels(&VLM_sbctl, VLF_SYSLOG, VLL_WARN);
+            vlog_set_levels(&this_module, VLF_SYSLOG, VLL_WARN);
             break;
 
         case OPT_DRY_RUN:
