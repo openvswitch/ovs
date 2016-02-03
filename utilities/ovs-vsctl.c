@@ -130,7 +130,6 @@ static size_t allocated_neoteric_ifaces;
 int
 main(int argc, char *argv[])
 {
-    extern struct vlog_module VLM_reconnect;
     struct ovsdb_idl *idl;
     struct ctl_command *commands;
     struct shash local_options;
@@ -141,7 +140,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
+    vlog_set_levels_from_string_assert("reconnect:warn");
     ovsrec_init();
 
     vsctl_cmd_init();
