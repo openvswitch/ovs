@@ -169,6 +169,11 @@ unsigned long cmap_find_batch(const struct cmap *cmap, unsigned long map,
  *       node being deleted may be visited once or not at all.  Other nodes
  *       will be visited once.)
  *
+ *     - If the cmap is changing, it is not safe to quiesce while iterating.
+ *       Even if the changes are done by the same thread that's performing the
+ *       iteration (Corollary: it is not safe to call cmap_remove() and quiesce
+ *       in the loop body).
+ *
  *
  * Example
  * =======
