@@ -341,7 +341,8 @@ static bool ukey_install_start(struct udpif *, struct udpif_key *ukey);
 static bool ukey_install_finish(struct udpif_key *ukey, int error);
 static bool ukey_install(struct udpif *udpif, struct udpif_key *ukey);
 static struct udpif_key *ukey_lookup(struct udpif *udpif,
-                                     const ovs_u128 *ufid);
+                                     const ovs_u128 *ufid,
+                                     const unsigned pmd_id);
 static int ukey_acquire(struct udpif *, const struct dpif_flow *,
                         struct udpif_key **result, int *error);
 static void ukey_delete__(struct udpif_key *);
@@ -1223,7 +1224,8 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
             }
             if (actions_len == 0) {
                 /* Lookup actions in userspace cache. */
-                struct udpif_key *ukey = ukey_lookup(udpif, upcall->ufid);
+                struct udpif_key *ukey = ukey_lookup(udpif, upcall->ufid,
+                                                     upcall->pmd_id);
                 if (ukey) {
                     ukey_get_actions(ukey, &actions, &actions_len);
                     dpif_sflow_read_actions(flow, actions, actions_len,
@@ -1398,19 +1400,20 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
 }
 
 static uint32_t
-get_ufid_hash(const ovs_u128 *ufid)
+get_ukey_hash(const ovs_u128 *ufid, const unsigned pmd_id)
 {
-    return ufid->u32[0];
+    return hash_2words(ufid->u32[0], pmd_id);
 }
 
 static struct udpif_key *
-ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid)
+ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid, const unsigned pmd_id)
 {
     struct udpif_key *ukey;
-    int idx = get_ufid_hash(ufid) % N_UMAPS;
+    int idx = get_ukey_hash(ufid, pmd_id) % N_UMAPS;
     struct cmap *cmap = &udpif->ukeys[idx].cmap;
 
-    CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node, get_ufid_hash(ufid), cmap) {
+    CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node,
+                             get_ukey_hash(ufid, pmd_id), cmap) {
         if (ovs_u128_equals(&ukey->ufid, ufid)) {
             return ukey;
         }
@@ -1456,7 +1459,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->ufid_present = ufid_present;
     ukey->ufid = *ufid;
     ukey->pmd_id = pmd_id;
-    ukey->hash = get_ufid_hash(&ukey->ufid);
+    ukey->hash = get_ukey_hash(&ukey->ufid, pmd_id);
 
     ovsrcu_init(&ukey->actions, NULL);
     ukey_set_actions(ukey, actions);
@@ -1589,7 +1592,7 @@ ukey_install_start(struct udpif *udpif, struct udpif_key *new_ukey)
     idx = new_ukey->hash % N_UMAPS;
     umap = &udpif->ukeys[idx];
     ovs_mutex_lock(&umap->mutex);
-    old_ukey = ukey_lookup(udpif, &new_ukey->ufid);
+    old_ukey = ukey_lookup(udpif, &new_ukey->ufid, new_ukey->pmd_id);
     if (old_ukey) {
         /* Uncommon case: A ukey is already installed with the same UFID. */
         if (old_ukey->key_len == new_ukey->key_len
@@ -1671,7 +1674,7 @@ ukey_acquire(struct udpif *udpif, const struct dpif_flow *flow,
     struct udpif_key *ukey;
     int retval;
 
-    ukey = ukey_lookup(udpif, &flow->ufid);
+    ukey = ukey_lookup(udpif, &flow->ufid, flow->pmd_id);
     if (ukey) {
         retval = ovs_mutex_trylock(&ukey->mutex);
     } else {
