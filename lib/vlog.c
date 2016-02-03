@@ -77,9 +77,6 @@ VLOG_LEVELS
  * used for LOG_LOCAL0. */
 BUILD_ASSERT_DECL(LOG_LOCAL0 == (16 << 3));
 
-/* The log modules. */
-static struct ovs_list vlog_modules = OVS_LIST_INITIALIZER(&vlog_modules);
-
 /* Protects the 'pattern' in all "struct destination"s, so that a race between
  * changing and reading the pattern does not cause an access to freed
  * memory. */
@@ -104,12 +101,17 @@ DEFINE_STATIC_PER_THREAD_DATA(unsigned int, msg_num, 0);
  *
  * All of the following is protected by 'log_file_mutex', which nests inside
  * pattern_rwlock. */
-static struct ovs_mutex log_file_mutex = OVS_MUTEX_INITIALIZER;
+static struct ovs_mutex log_file_mutex OVS_ACQ_AFTER(pattern_rwlock)
+    = OVS_MUTEX_INITIALIZER;
 static char *log_file_name OVS_GUARDED_BY(log_file_mutex) = NULL;
 static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 static bool log_async OVS_GUARDED_BY(log_file_mutex);
 static struct syslogger *syslogger = NULL;
+
+/* The log modules. */
+static struct ovs_list vlog_modules OVS_GUARDED_BY(log_file_mutex)
+    = OVS_LIST_INITIALIZER(&vlog_modules);
 
 /* Syslog export configuration. */
 static int syslog_fd OVS_GUARDED_BY(pattern_rwlock) = -1;
@@ -212,7 +214,9 @@ vlog_get_destination_val(const char *name)
 void
 vlog_insert_module(struct ovs_list *vlog)
 {
+    ovs_mutex_lock(&log_file_mutex);
     list_insert(&vlog_modules, vlog);
+    ovs_mutex_unlock(&log_file_mutex);
 }
 
 /* Returns the name for logging module 'module'. */
@@ -229,11 +233,14 @@ vlog_module_from_name(const char *name)
 {
     struct vlog_module *mp;
 
+    ovs_mutex_lock(&log_file_mutex);
     LIST_FOR_EACH (mp, list, &vlog_modules) {
         if (!strcasecmp(name, mp->name)) {
+            ovs_mutex_unlock(&log_file_mutex);
             return mp;
         }
     }
+    ovs_mutex_unlock(&log_file_mutex);
 
     return NULL;
 }
@@ -704,9 +711,11 @@ set_all_rate_limits(bool enable)
 {
     struct vlog_module *mp;
 
+    ovs_mutex_lock(&log_file_mutex);
     LIST_FOR_EACH (mp, list, &vlog_modules) {
         mp->honor_rate_limits = enable;
     }
+    ovs_mutex_unlock(&log_file_mutex);
 }
 
 static void
@@ -836,6 +845,7 @@ vlog_get_levels(void)
     ds_put_format(&s, "                 console    syslog    file\n");
     ds_put_format(&s, "                 -------    ------    ------\n");
 
+    ovs_mutex_lock(&log_file_mutex);
     LIST_FOR_EACH (mp, list, &vlog_modules) {
         struct ds line;
 
@@ -852,6 +862,7 @@ vlog_get_levels(void)
 
         svec_add_nocopy(&lines, ds_steal_cstr(&line));
     }
+    ovs_mutex_unlock(&log_file_mutex);
 
     svec_sort(&lines);
     SVEC_FOR_EACH (i, line, &lines) {
