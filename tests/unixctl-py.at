@@ -102,6 +102,7 @@ The available commands are:
   help
   log                     [[arg ...]]
   version
+  vlog/close
   vlog/list
   vlog/reopen
   vlog/set                spec
