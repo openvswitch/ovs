@@ -88,13 +88,6 @@ struct vlog_module {
 
 void vlog_insert_module(struct ovs_list *);
 
-/* Creates and initializes a global instance of a module named MODULE. */
-#define VLOG_DEFINE_MODULE(MODULE)                                      \
-        VLOG_DEFINE_MODULE__(MODULE)                                    \
-        OVS_CONSTRUCTOR(init_##MODULE) {                                \
-                vlog_insert_module(&VLM_##MODULE.list);                 \
-        }                                                               \
-
 const char *vlog_get_module_name(const struct vlog_module *);
 struct vlog_module *vlog_module_from_name(const char *name);
 
@@ -181,12 +174,24 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
  * defines a static variable named THIS_MODULE that points to it, for use with
  * the convenience macros below. */
 #define VLOG_DEFINE_THIS_MODULE(MODULE)                                 \
-        VLOG_DEFINE_MODULE(MODULE);                                     \
+        /* This extra "extern" declaration makes sparse happy. */       \
+        extern struct vlog_module VLM_##MODULE;                         \
+        struct vlog_module VLM_##MODULE =                               \
+        {                                                               \
+            OVS_LIST_INITIALIZER(&VLM_##MODULE.list),                   \
+            #MODULE,                                        /* name */  \
+            { VLL_INFO, VLL_INFO, VLL_INFO },             /* levels */  \
+            VLL_INFO,                                  /* min_level */  \
+            true                               /* honor_rate_limits */  \
+        };                                                              \
+        OVS_CONSTRUCTOR(init_##MODULE) {                                \
+                vlog_insert_module(&VLM_##MODULE.list);                 \
+        }                                                               \
         static struct vlog_module *const THIS_MODULE = &VLM_##MODULE
 
 /* Convenience macros.  These assume that THIS_MODULE points to a "struct
  * vlog_module" for the current module, as set up by e.g. the
- * VLOG_DEFINE_MODULE macro above.
+ * VLOG_DEFINE_THIS_MODULE macro above.
  *
  * Guaranteed to preserve errno.
  */
@@ -288,17 +293,6 @@ void vlog_usage(void);
             *(ERRP) = xasprintf(__VA_ARGS__);                           \
         }                                                               \
     } while (0)
-
-#define VLOG_DEFINE_MODULE__(MODULE)                                    \
-        extern struct vlog_module VLM_##MODULE;                         \
-        struct vlog_module VLM_##MODULE =                               \
-        {                                                               \
-            OVS_LIST_INITIALIZER(&VLM_##MODULE.list),                       \
-            #MODULE,                                        /* name */  \
-            { VLL_INFO, VLL_INFO, VLL_INFO },             /* levels */  \
-            VLL_INFO,                                  /* min_level */  \
-            true                               /* honor_rate_limits */  \
-        };
 
 #ifdef  __cplusplus
 }
