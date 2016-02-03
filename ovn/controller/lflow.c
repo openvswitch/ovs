@@ -308,6 +308,15 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
              * after a packet leaves a logical router.  Further optimization
              * is possible, but not based on what we know with local_datapaths
              * right now.
+             *
+             * A better approach would be a kind of "flood fill" algorithm:
+             *
+             *   1. Initialize set S to the logical datapaths that have a port
+             *      located on the hypervisor.
+             *
+             *   2. For each patch port P in a logical datapath in S, add the
+             *      logical datapath of the remote end of P to S.  Iterate
+             *      until S reaches a fixed point.
              */
 
             struct hmap_node *ld;
