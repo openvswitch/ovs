@@ -1798,7 +1798,7 @@ port_construct(struct ofport *port_)
 }
 
 static void
-port_destruct(struct ofport *port_)
+port_destruct(struct ofport *port_, bool del)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
@@ -1813,7 +1813,7 @@ port_destruct(struct ofport *port_)
 
     dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
                                               sizeof namebuf);
-    if (dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
+    if (del && dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
         /* The underlying device is still there, so delete it.  This
          * happens when the ofproto is being destroyed, since the caller
          * assumes that removal of attached ports will happen as part of

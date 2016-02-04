@@ -227,7 +227,7 @@ static bool ifaces_changed = false;
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
-static void bridge_destroy(struct bridge *);
+static void bridge_destroy(struct bridge *, bool del);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
 static unixctl_cb_func bridge_unixctl_reconnect;
@@ -500,7 +500,7 @@ bridge_exit(void)
 
     if_notifier_destroy(ifnotifier);
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
-        bridge_destroy(br);
+        bridge_destroy(br, false);
     }
     ovsdb_idl_destroy(idl);
 }
@@ -635,7 +635,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 VLOG_ERR("failed to create bridge %s: %s", br->name,
                          ovs_strerror(error));
                 shash_destroy(&br->wanted_ports);
-                bridge_destroy(br);
+                bridge_destroy(br, true);
             } else {
                 /* Trigger storing datapath version. */
                 seq_change(connectivity_seq_get());
@@ -1712,7 +1712,7 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
         br->cfg = shash_find_data(&new_br, br->name);
         if (!br->cfg || strcmp(br->type, ofproto_normalize_type(
                                    br->cfg->datapath_type))) {
-            bridge_destroy(br);
+            bridge_destroy(br, true);
         }
     }
 
@@ -2907,7 +2907,7 @@ bridge_run(void)
                     (long int) getpid());
 
         HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
-            bridge_destroy(br);
+            bridge_destroy(br, false);
         }
         /* Since we will not be running system_stats_run() in this process
          * with the current situation of multiple ovs-vswitchd daemons,
@@ -3192,7 +3192,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 }
 
 static void
-bridge_destroy(struct bridge *br)
+bridge_destroy(struct bridge *br, bool del)
 {
     if (br) {
         struct mirror *mirror, *next_mirror;
@@ -3206,7 +3206,7 @@ bridge_destroy(struct bridge *br)
         }
 
         hmap_remove(&all_bridges, &br->node);
-        ofproto_destroy(br->ofproto);
+        ofproto_destroy(br->ofproto, del);
         hmap_destroy(&br->ifaces);
         hmap_destroy(&br->ports);
         hmap_destroy(&br->iface_by_name);
