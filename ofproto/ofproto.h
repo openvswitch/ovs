@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -239,7 +239,7 @@ void ofproto_type_wait(const char *datapath_type);
 
 int ofproto_create(const char *datapath, const char *datapath_type,
                    struct ofproto **ofprotop);
-void ofproto_destroy(struct ofproto *);
+void ofproto_destroy(struct ofproto *, bool del);
 int ofproto_delete(const char *name, const char *type);
 
 int ofproto_run(struct ofproto *);

@@ -217,7 +217,7 @@ static void learned_cookies_flush(struct ofproto *, struct ovs_list *dead_cookie
 
 /* ofport. */
 static void ofport_destroy__(struct ofport *) OVS_EXCLUDED(ofproto_mutex);
-static void ofport_destroy(struct ofport *);
+static void ofport_destroy(struct ofport *, bool del);
 
 static int update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
@@ -1573,7 +1573,7 @@ ofproto_destroy_defer__(struct ofproto *ofproto)
 }
 
 void
-ofproto_destroy(struct ofproto *p)
+ofproto_destroy(struct ofproto *p, bool del)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofport *ofport, *next_ofport;
@@ -1592,7 +1592,7 @@ ofproto_destroy(struct ofproto *p)
 
     ofproto_flush__(p);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
-        ofport_destroy(ofport);
+        ofport_destroy(ofport, del);
     }
 
     HMAP_FOR_EACH_SAFE (usage, next_usage, hmap_node, &p->ofport_usage) {
@@ -2392,7 +2392,7 @@ ofport_remove(struct ofport *ofport)
 {
     connmgr_send_port_status(ofport->ofproto->connmgr, NULL, &ofport->pp,
                              OFPPR_DELETE);
-    ofport_destroy(ofport);
+    ofport_destroy(ofport, true);
 }
 
 /* If 'ofproto' contains an ofport named 'name', removes it from 'ofproto' and
@@ -2478,11 +2478,11 @@ ofport_destroy__(struct ofport *port)
 }
 
 static void
-ofport_destroy(struct ofport *port)
+ofport_destroy(struct ofport *port, bool del)
 {
     if (port) {
         dealloc_ofp_port(port->ofproto, port->ofp_port);
-        port->ofproto->ofproto_class->port_destruct(port);
+        port->ofproto->ofproto_class->port_destruct(port, del);
         ofport_destroy__(port);
      }
 }
