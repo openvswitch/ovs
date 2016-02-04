@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -896,12 +896,36 @@ struct ofproto_class {
      *     initialization, and construct and destruct ofports to reflect all of
      *     the changes.
      *
+     *   - On graceful shutdown, the base ofproto code will destruct all
+     *     the ports.
+     *
      * ->port_construct() returns 0 if successful, otherwise a positive errno
      * value.
+     *
+     *
+     * ->port_destruct()
+     * =================
+     *
+     * ->port_destruct() takes a 'del' parameter.  If the provider implements
+     * the datapath itself (e.g. dpif-netdev, it can ignore 'del'.  On the
+     * other hand, if the provider is an interface to an external datapath
+     * (e.g. to a kernel module that implement the datapath) then 'del' should
+     * influence destruction behavior in the following way:
+     *
+     *   - If 'del' is true, it should remove the port from the underlying
+     *     implementation.  This is the common case.
+     *
+     *   - If 'del' is false, it should leave the port in the underlying
+     *     implementation.  This is used when Open vSwitch is performing a
+     *     graceful shutdown and ensures that, across Open vSwitch restarts,
+     *     the underlying ports are not removed and recreated.  That makes an
+     *     important difference for, e.g., "internal" ports that have
+     *     configured IP addresses; without this distinction, the IP address
+     *     and other configured state for the port is lost.
      */
     struct ofport *(*port_alloc)(void);
     int (*port_construct)(struct ofport *ofport);
-    void (*port_destruct)(struct ofport *ofport);
+    void (*port_destruct)(struct ofport *ofport, bool del);
     void (*port_dealloc)(struct ofport *ofport);
 
     /* Called after 'ofport->netdev' is replaced by a new netdev object.  If
