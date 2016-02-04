@@ -1145,6 +1145,14 @@ ovsdb_monitor_destroy_callback(struct ovsdb_replica *replica)
     }
 }
 
+/* Add some memory usage statics for monitors into 'usage', for use with
+ * memory_report().  */
+void
+ovsdb_monitor_get_memory_usage(struct simap *usage)
+{
+    simap_put(usage, "monitors", hmap_count(&ovsdb_monitors));
+}
+
 static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class = {
     ovsdb_monitor_commit,
     ovsdb_monitor_destroy_callback,

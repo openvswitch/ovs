@@ -35,6 +35,7 @@
 #include "jsonrpc-server.h"
 #include "list.h"
 #include "memory.h"
+#include "monitor.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-types.h"
@@ -138,6 +139,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
 
             simap_init(&usage);
             ovsdb_jsonrpc_server_get_memory_usage(jsonrpc, &usage);
+            ovsdb_monitor_get_memory_usage(&usage);
             SHASH_FOR_EACH(node, all_dbs) {
                 struct db *db = node->data;
                 ovsdb_get_memory_usage(db->db, &usage);
