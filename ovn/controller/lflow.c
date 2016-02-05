@@ -285,7 +285,7 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
 
     const struct sbrec_logical_flow *lflow;
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-        /* Find the "struct logical_datapath" asssociated with this
+        /* Find the "struct logical_datapath" associated with this
          * Logical_Flow row.  If there's no such struct, that must be because
          * no logical ports are bound to that logical datapath, so there's no
          * point in maintaining any flows for it anyway, so skip it. */
