@@ -131,11 +131,13 @@ mbridge_has_mirrors(struct mbridge *mbridge)
 }
 
 /* Returns true if configurations changes in 'mbridge''s mirrors require
- * revalidation. */
+ * revalidation, and resets the revalidation flag to false. */
 bool
 mbridge_need_revalidate(struct mbridge *mbridge)
 {
-    return mbridge->need_revalidate;
+    bool need_revalidate = mbridge->need_revalidate;
+    mbridge->need_revalidate = false;
+    return need_revalidate;
 }
 
 void
