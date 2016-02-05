@@ -1510,6 +1510,7 @@ run(struct ofproto *ofproto_)
     uint64_t new_seq, new_dump_seq;
 
     if (mbridge_need_revalidate(ofproto->mbridge)) {
+        mbridge_revalidate(ofproto->mbridge, false);
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
         ovs_rwlock_wrlock(&ofproto->ml->rwlock);
         mac_learning_flush(ofproto->ml);
