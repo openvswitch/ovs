@@ -1888,6 +1888,7 @@ static void
 destroy_device(volatile struct virtio_net *dev)
 {
     struct netdev_dpdk *vhost_dev;
+    bool exists = false;
 
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (vhost_dev, list_node, &dpdk_list) {
@@ -1896,24 +1897,32 @@ destroy_device(volatile struct virtio_net *dev)
             ovs_mutex_lock(&vhost_dev->mutex);
             dev->flags &= ~VIRTIO_DEV_RUNNING;
             ovsrcu_set(&vhost_dev->virtio_dev, NULL);
+            exists = true;
             ovs_mutex_unlock(&vhost_dev->mutex);
-
-            /*
-             * Wait for other threads to quiesce before
-             * setting the virtio_dev to NULL.
-             */
-            ovsrcu_synchronize();
-            /*
-             * As call to ovsrcu_synchronize() will end the quiescent state,
-             * put thread back into quiescent state before returning.
-             */
-            ovsrcu_quiesce_start();
+            break;
         }
     }
+
     ovs_mutex_unlock(&dpdk_mutex);
 
-    VLOG_INFO("vHost Device '%s' %"PRIu64" has been removed", dev->ifname,
-              dev->device_fh);
+    if (exists == true) {
+        /*
+         * Wait for other threads to quiesce after setting the 'virtio_dev'
+         * to NULL, before returning.
+         */
+        ovsrcu_synchronize();
+        /*
+         * As call to ovsrcu_synchronize() will end the quiescent state,
+         * put thread back into quiescent state before returning.
+         */
+        ovsrcu_quiesce_start();
+        VLOG_INFO("vHost Device '%s' %"PRIu64" has been removed", dev->ifname,
+                  dev->device_fh);
+    } else {
+        VLOG_INFO("vHost Device '%s' %"PRIu64" not found", dev->ifname,
+                  dev->device_fh);
+    }
+
 }
 
 struct virtio_net *
