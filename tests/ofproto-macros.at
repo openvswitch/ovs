@@ -338,8 +338,8 @@ check_logs () {
 add_of_ports () {
     local args
     local br=$1; shift
-    for $pnum; do
-        AS_VAR_APPEND([args], [" -- $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
+    for pnum; do
+        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
     done
     ovs-vsctl $args
 }
