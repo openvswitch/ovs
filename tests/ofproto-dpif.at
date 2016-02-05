@@ -3942,6 +3942,7 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_all])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
@@ -3972,6 +3973,7 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_src])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
@@ -4000,6 +4002,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - mirroring, OFPP_NONE ingress port])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 ovs-vsctl \
@@ -4021,6 +4024,7 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_dst])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
@@ -4051,6 +4055,7 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_vlan])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
@@ -4086,6 +4091,7 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, output_port])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
@@ -4115,6 +4121,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - mirroring, output_vlan])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 ovs-vsctl \
@@ -4151,6 +4158,7 @@ AT_CLEANUP
 # This verifies that we don't get duplicate mirroring when mirror_packet()
 # might be invoked recursively, as a check against regression.
 AT_SETUP([ofproto-dpif - multiple VLAN output mirrors])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
@@ -4179,6 +4187,7 @@ AT_CLEANUP
 # Otherwise, post-recirculation the ingress and the output to port 4
 # would cause the packet to be mirrored to port 3 a second time.
 AT_SETUP([ofproto-dpif - mirroring with recirculation])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3 4
 ovs-vsctl \
@@ -6396,6 +6405,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif megaflow - mirroring, select_all])
+AT_KEYWORDS([mirror mirrors mirroring])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 add_of_ports br0 1 2 3
