@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "2177247725 10499",
+  "cksum": "1621458335 10585",
   "tables": {
     "Global": {
       "columns": {
@@ -188,8 +188,9 @@
               "enum": ["set", ["vxlan_over_ipv4"]],
               "type": "string"}},
           "mutable": false},
-        "dst_ip": {"type": "string", "mutable": false}},
-      "indexes": [["encapsulation_type", "dst_ip"]]},
+        "dst_ip": {"type": "string", "mutable": false},
+        "tunnel_key": {"type": {"key": "integer", "min": 0, "max": 1}}},
+      "indexes": [["encapsulation_type", "dst_ip", "tunnel_key"]]},
     "ACL_entry": {
       "columns": {
         "sequence": {"type": "integer"},
@@ -283,4 +284,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.4.1"}
+  "version": "1.5.0"}

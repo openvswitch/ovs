@@ -689,9 +689,10 @@
         </p>
 
         <p>
-          For <code>vxlan_over_ipv4</code> encapsulation, this column
-          is the VXLAN VNI that identifies a logical switch.  It must
-          be in the range 0 to 16,777,215.
+          For <code>vxlan_over_ipv4</code> encapsulation, when the tunnel key
+          per <ref table="Logical_Switch"/> model is in use, this column is the
+          VXLAN VNI that identifies a logical switch.  It must be in the range
+          0 to 16,777,215.
         </p>
       </column>
     </group>
@@ -993,24 +994,17 @@
     </p>
 
     <p>
-      For the <code>vxlan_over_ipv4</code> encapsulation, the only
-      encapsulation defined so far, all endpoints associated with a given <ref
-      table="Logical_Switch"/> must use a common tunnel key, which is carried
-      in the <ref table="Logical_Switch" column="tunnel_key"/> column of <ref
-      table="Logical_Switch"/>.
-    </p>
-
-    <p>
-      For some encapsulations yet to be defined, we expect <ref
-      table="Physical_Locator"/> to identify both an endpoint and a tunnel key.
-      When the first such encapsulation is defined, we expect to add a
-      ``tunnel_key'' column to <ref table="Physical_Locator"/> to allow the
-      tunnel key to be defined.
-    </p>
-
-    <p>
-      See the ``Per Logical-Switch Tunnel Key'' section in the <ref
-      table="Logical_Switch"/> table for further discussion of the model.
+      The <code>vxlan_over_ipv4</code> encapsulation, the only encapsulation
+      defined so far, can use either tunnel key model described in the ``Per
+      Logical-Switch Tunnel Key'' section in the <ref table="Logical_Switch"/>
+      table.  When the tunnel key per <ref table="Logical_Switch"/> model is in
+      use, the <ref table="Logical_Switch" column="tunnel_key"/> column in the
+      <ref table="Logical_Switch"/> table is filled with a VNI and the <ref
+      column="tunnel_key"/> column in this table is empty; in the
+      key-per-tunnel model, the opposite is true.  The former model is older,
+      and thus likely to be more widely supported.  See the ``Per
+      Logical-Switch Tunnel Key'' section in the <ref table="Logical_Switch"/>
+      table for further discussion of the model.
     </p>
 
     <column name="encapsulation_type">
@@ -1026,6 +1020,21 @@
       <p>
         We expect that this column could be used for IPv4 or IPv6 addresses in
         encapsulations to be introduced later.
+      </p>
+    </column>
+
+    <column name="tunnel_key">
+      <p>
+        This column is used only in the tunnel key per <ref
+        table="Logical_Switch"/>+<ref table="Physical_Locator"/> model (see
+        above).
+      </p>
+
+      <p>
+        For <code>vxlan_over_ipv4</code> encapsulation, when the <ref
+        table="Logical_Switch"/>+<ref table="Physical_Locator"/> model is in
+        use, this column is the VXLAN VNI.  It must be in the range 0 to
+        16,777,215.
       </p>
     </column>
 
