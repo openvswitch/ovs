@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010, 2013, 2014, 2015 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2013, 2014, 2015, 2016 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -173,12 +173,10 @@ touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 # remove unpackaged files
-rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-benchmark \
-        $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
+rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_bindir}/ovs-pcap \
         $RPM_BUILD_ROOT%{_bindir}/ovs-tcpundump \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
-        $RPM_BUILD_ROOT%{_mandir}/man1/ovs-benchmark.1 \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-pcap.1 \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-tcpundump.1 \
         $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8 \
