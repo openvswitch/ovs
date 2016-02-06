@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,6 +137,12 @@ enum upcall_type {
     SFLOW_UPCALL,               /* sFlow sample. */
     FLOW_SAMPLE_UPCALL,         /* Per-flow sampling. */
     IPFIX_UPCALL                /* Per-bridge sampling. */
+};
+
+enum reval_result {
+    UKEY_KEEP,
+    UKEY_DELETE,
+    UKEY_MODIFY
 };
 
 struct upcall {
@@ -1215,15 +1221,23 @@ should_revalidate(const struct udpif *udpif, uint64_t packets,
     return false;
 }
 
-static bool
+/* Verifies that the datapath actions of 'ukey' are still correct, and pushes
+ * 'stats' for it.
+ *
+ * Returns a recommended action for 'ukey', options include:
+ *      UKEY_DELETE The ukey should be deleted.
+ *      UKEY_KEEP   The ukey is fine as is.
+ *      UKEY_MODIFY The ukey's actions should be changed but is otherwise
+ *                  fine.  Callers should change the actions to those found
+ *                  in the caller supplied 'odp_actions' buffer. */
+static enum reval_result
 revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                 const struct nlattr *mask, size_t mask_len,
                 const struct nlattr *actions, size_t actions_len,
-                const struct dpif_flow_stats *stats)
+                const struct dpif_flow_stats *stats,
+                struct ofpbuf *odp_actions)
     OVS_REQUIRES(ukey->mutex)
 {
-    uint64_t odp_actions_stub[1024 / 8];
-    struct ofpbuf odp_actions;
     struct xlate_out xout, *xoutp;
     struct netflow *netflow;
     struct ofproto_dpif *ofproto;
@@ -1231,17 +1245,18 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     struct flow flow, dp_mask;
     uint32_t *dp32, *xout32;
     odp_port_t odp_in_port;
+    enum reval_result result;
     struct xlate_in xin;
     long long int last_used;
     int error;
     size_t i;
-    bool may_learn, ok;
+    bool may_learn;
 
-    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof(odp_actions_stub));
-    ok = false;
+    result = UKEY_DELETE;
     xoutp = NULL;
     netflow = NULL;
 
+    ofpbuf_clear(odp_actions);
     last_used = ukey->stats.used;
     push.used = stats->used;
     push.tcp_flags = stats->tcp_flags;
@@ -1254,21 +1269,20 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
 
     if (udpif->need_revalidate && last_used
         && !should_revalidate(udpif, push.n_packets, last_used)) {
-        ok = false;
         goto exit;
     }
 
     /* We will push the stats, so update the ukey stats cache. */
     ukey->stats = *stats;
     if (!push.n_packets && !udpif->need_revalidate) {
-        ok = true;
+        result = UKEY_KEEP;
         goto exit;
     }
 
     may_learn = push.n_packets > 0;
     if (ukey->xcache && !udpif->need_revalidate) {
         xlate_push_stats(ukey->xcache, may_learn, &push);
-        ok = true;
+        result = UKEY_KEEP;
         goto exit;
     }
 
@@ -1286,7 +1300,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     xlate_in_init(&xin, ofproto, &flow, NULL, push.tcp_flags, NULL,
-                  &odp_actions);
+                  odp_actions);
     xin.resubmit_stats = push.n_packets ? &push : NULL;
     xin.xcache = ukey->xcache;
     xin.may_learn = may_learn;
@@ -1295,18 +1309,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     xoutp = &xout;
 
     if (!udpif->need_revalidate) {
-        ok = true;
+        result = UKEY_KEEP;
         goto exit;
     }
 
     if (xout.slow) {
-        ofpbuf_clear(&odp_actions);
-        compose_slow_path(udpif, &xout, &flow, odp_in_port, &odp_actions);
-    }
-
-    if (actions_len != ofpbuf_size(&odp_actions)
-        || memcmp(ofpbuf_data(&odp_actions), actions, actions_len)) {
-        goto exit;
+        ofpbuf_clear(odp_actions);
+        compose_slow_path(udpif, &xout, &flow, odp_in_port, odp_actions);
     }
 
     if (odp_flow_key_to_mask(mask, mask_len, &dp_mask, &flow)
@@ -1326,35 +1335,65 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
             goto exit;
         }
     }
-    ok = true;
+
+    if (actions_len != ofpbuf_size(odp_actions)
+        || memcmp(ofpbuf_data(odp_actions), actions, actions_len)) {
+        /* The datapath mask was OK, but the actions seem to have changed.
+         * Let's modify it in place. */
+        result = UKEY_MODIFY;
+        goto exit;
+    }
+
+    result = UKEY_KEEP;
 
 exit:
     if (netflow) {
-        if (!ok) {
+        if (result == UKEY_DELETE) {
             netflow_flow_clear(netflow, &flow);
         }
         netflow_unref(netflow);
     }
     xlate_out_uninit(xoutp);
-    ofpbuf_uninit(&odp_actions);
-    return ok;
+    return result;
 }
 
 struct dump_op {
     struct udpif_key *ukey;
+    struct ofpbuf *buf;           /* Storage that is freed when op is done. */
     struct dpif_flow_stats stats; /* Stats for 'op'. */
     struct dpif_op op;            /* Flow del operation. */
 };
 
 static void
-dump_op_init(struct dump_op *op, const struct nlattr *key, size_t key_len,
-             struct udpif_key *ukey)
+delete_op_init(struct dump_op *op, const struct nlattr *key, size_t key_len,
+               struct udpif_key *ukey)
 {
     op->ukey = ukey;
+    op->buf = NULL;
     op->op.type = DPIF_OP_FLOW_DEL;
     op->op.u.flow_del.key = key;
     op->op.u.flow_del.key_len = key_len;
     op->op.u.flow_del.stats = &op->stats;
+}
+
+/* Takes ownership of 'buf'. */
+static void
+modify_op_init(struct dump_op *op, const struct nlattr *key, size_t key_len,
+               const struct nlattr *mask, size_t mask_len,
+               const struct nlattr *actions, size_t actions_len,
+               struct udpif_key *ukey, struct ofpbuf *buf)
+{
+    op->ukey = ukey;
+    op->buf = buf;
+    op->op.type = DPIF_OP_FLOW_PUT;
+    op->op.u.flow_put.flags = DPIF_FP_MODIFY;
+    op->op.u.flow_put.key = key;
+    op->op.u.flow_put.key_len = key_len;
+    op->op.u.flow_put.mask = mask;
+    op->op.u.flow_put.mask_len = mask_len;
+    op->op.u.flow_put.actions = actions;
+    op->op.u.flow_put.actions_len = actions_len;
+    op->op.u.flow_put.stats = NULL;
 }
 
 static void
@@ -1373,7 +1412,13 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
         struct dump_op *op = &ops[i];
         struct dpif_flow_stats *push, *stats, push_buf;
 
+        /* Only deleted flows need their stats pushed. */
+        if (op->op.type != DPIF_OP_FLOW_DEL) {
+            goto next;
+        }
+
         stats = op->op.u.flow_del.stats;
+
         if (op->ukey) {
             push = &push_buf;
             ovs_mutex_lock(&op->ukey->mutex);
@@ -1398,7 +1443,7 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
                 if (op->ukey->xcache) {
                     xlate_push_stats(op->ukey->xcache, may_learn, push);
                     ovs_mutex_unlock(&op->ukey->mutex);
-                    continue;
+                    goto next;
                 }
                 ovs_mutex_unlock(&op->ukey->mutex);
             }
@@ -1421,6 +1466,8 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
                 }
             }
         }
+next:
+        ofpbuf_delete(op->buf);   /* Free storage. */
     }
 }
 
@@ -1432,13 +1479,18 @@ push_dump_ops(struct revalidator *revalidator,
 
     push_dump_ops__(revalidator->udpif, ops, n_ops);
     for (i = 0; i < n_ops; i++) {
-        ukey_delete(revalidator, ops[i].ukey);
+        if (ops[i].op.type == DPIF_OP_FLOW_DEL) {
+            ukey_delete(revalidator, ops[i].ukey);
+        }
     }
 }
 
 static void
 revalidate(struct revalidator *revalidator)
 {
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
+
     struct udpif *udpif = revalidator->udpif;
 
     struct dump_op ops[REVALIDATE_MAX_BATCH];
@@ -1454,14 +1506,17 @@ revalidate(struct revalidator *revalidator)
     now = time_msec();
     atomic_read(&udpif->flow_limit, &flow_limit);
 
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
+
     dpif_flow_dump_state_init(udpif->dpif, &state);
     while (dpif_flow_dump_next(&udpif->dump, state, &key, &key_len, &mask,
                                &mask_len, &actions, &actions_len, &stats)) {
         struct udpif_key *ukey;
-        bool mark, may_destroy;
+        bool may_destroy;
         long long int used, max_idle;
         uint32_t hash;
         size_t n_flows;
+        enum reval_result result;
 
         hash = hash_bytes(key, key_len, udpif->secret);
         ukey = ukey_lookup(udpif, key, key_len, hash);
@@ -1506,15 +1561,21 @@ revalidate(struct revalidator *revalidator)
         }
 
         if ((used && used < now - max_idle) || n_flows > flow_limit * 2) {
-            mark = false;
+            result = UKEY_DELETE;
         } else {
-            mark = revalidate_ukey(udpif, ukey, mask, mask_len, actions,
-                                   actions_len, stats);
+            result = revalidate_ukey(udpif, ukey, mask, mask_len, actions,
+                                     actions_len, stats, &odp_actions);
         }
-        ukey->mark = ukey->flow_exists = mark;
+        ukey->mark = ukey->flow_exists = result != UKEY_DELETE;
 
-        if (!mark) {
-            dump_op_init(&ops[n_ops++], key, key_len, ukey);
+        if (result == UKEY_DELETE) {
+            delete_op_init(&ops[n_ops++], key, key_len, ukey);
+        } else if (result == UKEY_MODIFY) {
+            struct ofpbuf *actions_copy = ofpbuf_clone(&odp_actions);
+
+            modify_op_init(&ops[n_ops++], key, key_len, mask, mask_len,
+                           ofpbuf_data(actions_copy),
+                           ofpbuf_size(actions_copy), ukey, actions_copy);
         }
         ovs_mutex_unlock(&ukey->mutex);
 
@@ -1543,61 +1604,78 @@ revalidate(struct revalidator *revalidator)
     }
 
     dpif_flow_dump_state_uninit(udpif->dpif, state);
-}
-
-/* Called with exclusive access to 'revalidator' and 'ukey'. */
-static bool
-handle_missed_revalidation(struct revalidator *revalidator,
-                           struct udpif_key *ukey)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    struct udpif *udpif = revalidator->udpif;
-    struct nlattr *mask, *actions;
-    size_t mask_len, actions_len;
-    struct dpif_flow_stats stats;
-    struct ofpbuf *buf;
-    bool keep = false;
-
-    COVERAGE_INC(revalidate_missed_dp_flow);
-
-    if (!dpif_flow_get(udpif->dpif, ukey->key, ukey->key_len, &buf,
-                       &mask, &mask_len, &actions, &actions_len, &stats)) {
-        keep = revalidate_ukey(udpif, ukey, mask, mask_len, actions,
-                               actions_len, &stats);
-        ofpbuf_delete(buf);
-    }
-
-    return keep;
+    ofpbuf_uninit(&odp_actions);
 }
 
 static void
 revalidator_sweep__(struct revalidator *revalidator, bool purge)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
     struct dump_op ops[REVALIDATE_MAX_BATCH];
     struct udpif_key *ukey, *next;
     size_t n_ops;
 
     n_ops = 0;
 
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
+
     /* During garbage collection, this revalidator completely owns its ukeys
      * map, and therefore doesn't need to do any locking. */
     HMAP_FOR_EACH_SAFE (ukey, next, hmap_node, revalidator->ukeys) {
         if (ukey->flow_exists) {
             bool missed_flow = !ukey->mark;
+            enum reval_result result;
+            struct nlattr *mask;
+            size_t mask_len;
+            struct ofpbuf *buf = NULL;
 
             ukey->mark = false;
-            if (purge
-                || (missed_flow
-                    && revalidator->udpif->need_revalidate
-                    && !handle_missed_revalidation(revalidator, ukey))) {
-                struct dump_op *op = &ops[n_ops++];
+            result = purge ? UKEY_DELETE : UKEY_KEEP;
 
-                dump_op_init(op, ukey->key, ukey->key_len, ukey);
-                if (n_ops == REVALIDATE_MAX_BATCH) {
-                    push_dump_ops(revalidator, ops, n_ops);
-                    n_ops = 0;
+            if (missed_flow && revalidator->udpif->need_revalidate) {
+                struct udpif *udpif = revalidator->udpif;
+                struct nlattr *actions;
+                size_t actions_len;
+                struct dpif_flow_stats stats;
+
+                COVERAGE_INC(revalidate_missed_dp_flow);
+
+                if (dpif_flow_get(udpif->dpif, ukey->key, ukey->key_len, &buf,
+                                  &mask, &mask_len, &actions, &actions_len,
+                                  &stats)) {
+                    result = UKEY_DELETE;
+                } else {
+                    result = revalidate_ukey(udpif, ukey, mask, mask_len,
+                                             actions, actions_len, &stats,
+                                             &odp_actions);
                 }
+            }
+
+            if (result == UKEY_DELETE) {
+                delete_op_init(&ops[n_ops++], ukey->key, ukey->key_len, ukey);
+            } else if (result == UKEY_MODIFY) {
+                /* Append 'actions' to 'buf', properly adjusting 'mask' in
+                 * case this expands 'buf'. */
+                struct nlattr *actions;
+
+                buf->frame = mask;
+                actions = ofpbuf_put(buf, ofpbuf_data(&odp_actions),
+                                     ofpbuf_size(&odp_actions));
+                mask = buf->frame;
+
+                /* Takes ownership of 'buf'. */
+                modify_op_init(&ops[n_ops++], ukey->key, ukey->key_len, mask,
+                               mask_len, actions, ofpbuf_size(&odp_actions),
+                               ukey, buf);
+                buf = NULL;
+            }
+            ofpbuf_delete(buf);
+
+            if (n_ops == REVALIDATE_MAX_BATCH) {
+                push_dump_ops(revalidator, ops, n_ops);
+                n_ops = 0;
             }
         } else {
             ukey_delete(revalidator, ukey);
@@ -1607,6 +1685,7 @@ revalidator_sweep__(struct revalidator *revalidator, bool purge)
     if (n_ops) {
         push_dump_ops(revalidator, ops, n_ops);
     }
+    ofpbuf_uninit(&odp_actions);
 }
 
 static void
