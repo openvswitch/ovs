@@ -50,9 +50,6 @@ struct xlate_out {
     bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
-
-    uint64_t odp_actions_stub[256 / 8];
-    struct ofpbuf odp_actions;
 };
 
 struct xlate_in {
@@ -128,6 +125,10 @@ struct xlate_in {
      * This is normally null so the client has to set it manually after
      * calling xlate_in_init(). */
     struct xlate_cache *xcache;
+
+    /* If nonnull, flow translation puts the resulting datapath actions in this
+     * buffer.  If null, flow translation will not produce datapath actions. */
+    struct ofpbuf *odp_actions;
 };
 
 extern struct fat_rwlock xlate_rwlock;
@@ -173,10 +174,10 @@ void xlate_actions(struct xlate_in *, struct xlate_out *)
     OVS_EXCLUDED(xlate_rwlock);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, struct rule_dpif *,
-                   uint16_t tcp_flags, const struct ofpbuf *packet);
+                   uint16_t tcp_flags, const struct ofpbuf *packet,
+                   struct ofpbuf *odp_actions);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
-void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
 
 int xlate_send_packet(const struct ofport_dpif *, struct ofpbuf *);
 

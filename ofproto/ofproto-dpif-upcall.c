@@ -202,6 +202,9 @@ struct flow_miss {
     struct xlate_out xout;
 
     bool put;
+
+    struct ofpbuf odp_actions;     /* Datapath actions from xlate_actions(). */
+    uint64_t odp_actions_stub[1024 / 8]; /* Stub for odp_actions. */
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -533,6 +536,7 @@ udpif_upcall_handler(void *arg)
 
             HMAP_FOR_EACH (miss, hmap_node, &misses) {
                 xlate_out_uninit(&miss->xout);
+                ofpbuf_uninit(&miss->odp_actions);
             }
             hmap_clear(&misses);
             for (i = 0; i < n_upcalls; i++) {
@@ -827,6 +831,8 @@ read_upcalls(struct handler *handler,
                 miss->stats.tcp_flags = 0;
                 miss->odp_in_port = odp_in_port;
                 miss->put = false;
+                ofpbuf_use_stub(&miss->odp_actions, miss->odp_actions_stub,
+                                sizeof miss->odp_actions_stub);
                 n_misses++;
             } else {
                 miss = existing_miss;
@@ -918,7 +924,7 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
         struct xlate_in xin;
 
         xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL,
-                      miss->stats.tcp_flags, NULL);
+                      miss->stats.tcp_flags, NULL, &miss->odp_actions);
         xin.may_learn = true;
 
         if (miss->upcall_type == DPIF_UC_MISS) {
@@ -960,7 +966,8 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
         if (miss->xout.slow) {
             struct xlate_in xin;
 
-            xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL, 0, packet);
+            xlate_in_init(&xin, miss->ofproto, &miss->flow, NULL, 0, packet,
+                          NULL);
             xlate_actions_for_side_effects(&xin);
         }
 
@@ -974,7 +981,7 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
              * the packet contained no VLAN.  So, we must remove the
              * VLAN header from the packet before trying to execute the
              * actions. */
-            if (ofpbuf_size(&miss->xout.odp_actions)) {
+            if (ofpbuf_size(&miss->odp_actions)) {
                 eth_pop_vlan(packet);
             }
 
@@ -1019,8 +1026,8 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
             op->u.flow_put.stats = NULL;
 
             if (!miss->xout.slow) {
-                op->u.flow_put.actions = ofpbuf_data(&miss->xout.odp_actions);
-                op->u.flow_put.actions_len = ofpbuf_size(&miss->xout.odp_actions);
+                op->u.flow_put.actions = ofpbuf_data(&miss->odp_actions);
+                op->u.flow_put.actions_len = ofpbuf_size(&miss->odp_actions);
             } else {
                 struct ofpbuf buf;
 
@@ -1039,15 +1046,15 @@ handle_upcalls(struct handler *handler, struct hmap *misses,
          * upcall. */
         miss->flow.vlan_tci = flow_vlan_tci;
 
-        if (ofpbuf_size(&miss->xout.odp_actions)) {
+        if (ofpbuf_size(&miss->odp_actions)) {
 
             op = &ops[n_ops++];
             op->type = DPIF_OP_EXECUTE;
             op->u.execute.packet = packet;
             odp_key_to_pkt_metadata(miss->key, miss->key_len,
                                     &op->u.execute.md);
-            op->u.execute.actions = ofpbuf_data(&miss->xout.odp_actions);
-            op->u.execute.actions_len = ofpbuf_size(&miss->xout.odp_actions);
+            op->u.execute.actions = ofpbuf_data(&miss->odp_actions);
+            op->u.execute.actions_len = ofpbuf_size(&miss->odp_actions);
             op->u.execute.needs_help = (miss->xout.slow & SLOW_ACTION) != 0;
         }
     }
@@ -1215,12 +1222,12 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                 const struct dpif_flow_stats *stats)
     OVS_REQUIRES(ukey->mutex)
 {
-    uint64_t slow_path_buf[128 / 8];
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
     struct xlate_out xout, *xoutp;
     struct netflow *netflow;
     struct ofproto_dpif *ofproto;
     struct dpif_flow_stats push;
-    struct ofpbuf xout_actions;
     struct flow flow, dp_mask;
     uint32_t *dp32, *xout32;
     odp_port_t odp_in_port;
@@ -1230,6 +1237,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     size_t i;
     bool may_learn, ok;
 
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof(odp_actions_stub));
     ok = false;
     xoutp = NULL;
     netflow = NULL;
@@ -1277,7 +1285,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         ukey->xcache = xlate_cache_new();
     }
 
-    xlate_in_init(&xin, ofproto, &flow, NULL, push.tcp_flags, NULL);
+    xlate_in_init(&xin, ofproto, &flow, NULL, push.tcp_flags, NULL,
+                  &odp_actions);
     xin.resubmit_stats = push.n_packets ? &push : NULL;
     xin.xcache = ukey->xcache;
     xin.may_learn = may_learn;
@@ -1290,16 +1299,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
-    if (!xout.slow) {
-        ofpbuf_use_const(&xout_actions, ofpbuf_data(&xout.odp_actions),
-                         ofpbuf_size(&xout.odp_actions));
-    } else {
-        ofpbuf_use_stack(&xout_actions, slow_path_buf, sizeof slow_path_buf);
-        compose_slow_path(udpif, &xout, &flow, odp_in_port, &xout_actions);
+    if (xout.slow) {
+        ofpbuf_clear(&odp_actions);
+        compose_slow_path(udpif, &xout, &flow, odp_in_port, &odp_actions);
     }
 
-    if (actions_len != ofpbuf_size(&xout_actions)
-        || memcmp(ofpbuf_data(&xout_actions), actions, actions_len)) {
+    if (actions_len != ofpbuf_size(&odp_actions)
+        || memcmp(ofpbuf_data(&odp_actions), actions, actions_len)) {
         goto exit;
     }
 
@@ -1330,6 +1336,7 @@ exit:
         netflow_unref(netflow);
     }
     xlate_out_uninit(xoutp);
+    ofpbuf_uninit(&odp_actions);
     return ok;
 }
 
@@ -1402,7 +1409,7 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
                 struct xlate_in xin;
 
                 xlate_in_init(&xin, ofproto, &flow, NULL, push->tcp_flags,
-                              NULL);
+                              NULL, NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
                 xin.may_learn = may_learn;
                 xin.skip_wildcards = true;
