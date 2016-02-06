@@ -1621,10 +1621,15 @@ lookup_input_bundle(const struct xbridge *xbridge, ofp_port_t in_port,
     return NULL;
 }
 
+/* Mirrors the packet represented by 'ctx' to appropriate mirror destinations,
+ * given the packet is ingressing or egressing on 'xbundle', which has ingress
+ * or egress (as appropriate) mirrors 'mirrors'. */
 static void
 mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
               mirror_mask_t mirrors)
 {
+    /* Figure out what VLAN the packet is in (because mirrors can select
+     * packets on basis of VLAN). */
     bool warn = ctx->xin->packet != NULL;
     uint16_t vid = vlan_tci_to_vid(ctx->xin->flow.vlan_tci);
     if (!input_vid_is_valid(vid, xbundle, warn)) {
@@ -1640,9 +1645,6 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         return;
     }
 
-    /* Record these mirrors so that we don't mirror to them again. */
-    ctx->mirrors |= mirrors;
-
     if (ctx->xin->resubmit_stats) {
         mirror_update_stats(xbridge->mbridge, mirrors,
                             ctx->xin->resubmit_stats->n_packets,
@@ -1656,27 +1658,36 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         entry->u.mirror.mirrors = mirrors;
     }
 
+    /* 'mirrors' is a bit-mask of candidates for mirroring.  Iterate as long as
+     * some candidates remain.  */
     while (mirrors) {
         const unsigned long *vlans;
         mirror_mask_t dup_mirrors;
         struct ofbundle *out;
         int out_vlan;
 
+        /* Get the details of the mirror represented by the rightmost 1-bit. */
         bool has_mirror = mirror_get(xbridge->mbridge, raw_ctz(mirrors),
                                      &vlans, &dup_mirrors, &out, &out_vlan);
         ovs_assert(has_mirror);
 
+        /* If this mirror selects on the basis of VLAN, and it does not select
+         * 'vlan', then discard this mirror and go on to the next one. */
         if (vlans) {
             ctx->wc->masks.vlan_tci |= htons(VLAN_CFI | VLAN_VID_MASK);
         }
-
         if (vlans && !bitmap_is_set(vlans, vlan)) {
             mirrors = zero_rightmost_1bit(mirrors);
             continue;
         }
 
-        mirrors &= ~dup_mirrors;
+        /* Record the mirror, and the mirrors that output to the same
+         * destination, so that we don't mirror to them again.  This must be
+         * done now to ensure that output_normal(), below, doesn't recursively
+         * output to the same mirrors. */
         ctx->mirrors |= dup_mirrors;
+
+        /* Send the packet to the mirror. */
         if (out) {
             struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
             struct xbundle *out_xbundle = xbundle_lookup(xcfg, out);
@@ -1694,6 +1705,10 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
                 }
             }
         }
+
+        /* output_normal() could have recursively output (to different
+         * mirrors), so make sure that we don't send duplicates. */
+        mirrors &= ~ctx->mirrors;
     }
 }
 
