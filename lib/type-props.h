@@ -23,10 +23,10 @@
 #define TYPE_IS_SIGNED(TYPE) ((TYPE) 1 > (TYPE) -1)
 #define TYPE_VALUE_BITS(TYPE) (sizeof(TYPE) * CHAR_BIT - TYPE_IS_SIGNED(TYPE))
 #define TYPE_MINIMUM(TYPE) (TYPE_IS_SIGNED(TYPE) \
-                            ? ~(TYPE)0 << TYPE_VALUE_BITS(TYPE) \
+                            ? ~(TYPE)0 << (sizeof(TYPE) * 8 - 1) \
                             : 0)
 #define TYPE_MAXIMUM(TYPE) (TYPE_IS_SIGNED(TYPE) \
-                            ? ~(~(TYPE)0 << TYPE_VALUE_BITS(TYPE)) \
+                            ? ~(~(TYPE)0 << (sizeof(TYPE) * 8 - 1)) \
                             : (TYPE)-1)
 
 /* Number of decimal digits required to format an integer of the given TYPE.
