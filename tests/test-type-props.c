@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,10 @@ main (void)
 {
     char max_s[128];
     char min_s[128];
+
+#ifndef __CHECKER__             /* sparse hates sizeof(bool). */
+    TEST_TYPE(_Bool, 0, 1, 0);
+#endif
 
     TEST_TYPE(char, CHAR_MIN, CHAR_MAX, (CHAR_MIN < 0));
 
