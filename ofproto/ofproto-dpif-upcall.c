@@ -1417,6 +1417,10 @@ push_dump_ops__(struct udpif *udpif, struct dump_op *ops, size_t n_ops)
             goto next;
         }
 
+        if (op->op.error) {
+            /* flow_del error, no flow stats. */
+            goto next;
+        }
         stats = op->op.u.flow_del.stats;
 
         if (op->ukey) {
