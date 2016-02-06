@@ -59,7 +59,6 @@ EXTRA_DIST += \
 	utilities/qemu-wrap.py
 MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
-	utilities/ovs-benchmark.1.in \
 	utilities/ovs-testcontroller.8.in \
 	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8.in \
@@ -78,7 +77,6 @@ MAN_FRAGMENTS += utilities/ovs-vlan-bugs.man
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
-	utilities/ovs-benchmark.1 \
 	utilities/ovs-check-dead-ifs \
 	utilities/ovs-testcontroller.8 \
 	utilities/ovs-dpctl.8 \
@@ -106,7 +104,6 @@ DISTCLEANFILES += \
 
 man_MANS += \
 	utilities/ovs-appctl.8 \
-	utilities/ovs-benchmark.1 \
 	utilities/ovs-ctl.8 \
 	utilities/ovs-testcontroller.8 \
 	utilities/ovs-dpctl.8 \
@@ -148,10 +145,6 @@ noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.la
 endif
-
-bin_PROGRAMS += utilities/ovs-benchmark
-utilities_ovs_benchmark_SOURCES = utilities/ovs-benchmark.c
-utilities_ovs_benchmark_LDADD = lib/libopenvswitch.la
 
 FLAKE8_PYFILES += utilities/ovs-pcap.in
 
