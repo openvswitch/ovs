@@ -4144,6 +4144,32 @@ AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# This verifies that we don't get duplicate mirroring when mirror_packet()
+# might be invoked recursively, as a check against regression.
+AT_SETUP([ofproto-dpif - multiple VLAN output mirrors])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        -- set Bridge br0 fail-mode=standalone mirrors=@m1,@m2 \
+	-- --id=@m1 create Mirror name=m1 select_all=true output_vlan=500 \
+	-- --id=@m2 create Mirror name=m2 select_all=true output_vlan=501 \
+	-- set Port br0 tag=0 \
+	-- set Port p1 tag=0 \
+	-- set Port p2 tag=500 \
+	-- set Port p3 tag=501
+
+flow='in_port=1'
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout | sed 's/Datapath actions: //
+s/,/\
+/g' | sort], [0], [100
+2
+3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # This test verifies that mirror state is preserved across recirculation.
 #
 # Otherwise, post-recirculation the ingress and the output to port 4
