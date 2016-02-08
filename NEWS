@@ -15,6 +15,9 @@ Post-v2.5.0
    - DPDK:
      * New option "n_rxq" for PMD interfaces.
        Old 'other_config:n-dpdk-rxqs' is no longer supported.
+     * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
+       assignment.
+     * Type of log messages from PMD threads changed from INFO to DBG.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
    - ovs-appctl:
