@@ -43,6 +43,7 @@
 #include "flow.h"
 #include "cmap.h"
 #include "coverage.h"
+#include "hmapx.h"
 #include "latch.h"
 #include "list.h"
 #include "match.h"
@@ -1177,7 +1178,10 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     if (netdev_is_pmd(netdev)) {
         int numa_id = netdev_get_numa_id(netdev);
         struct dp_netdev_pmd_thread *pmd;
+        struct hmapx to_reload;
+        struct hmapx_node *node;
 
+        hmapx_init(&to_reload);
         /* Cannot create pmd threads for invalid numa node. */
         ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
 
@@ -1193,8 +1197,14 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
             ovs_mutex_lock(&pmd->poll_mutex);
             dp_netdev_add_rxq_to_pmd(pmd, port, port->rxq[i]);
             ovs_mutex_unlock(&pmd->poll_mutex);
+
+            hmapx_add(&to_reload, pmd);
+        }
+        HMAPX_FOR_EACH (node, &to_reload) {
+            pmd = (struct dp_netdev_pmd_thread *) node->data;
             dp_netdev_reload_pmd__(pmd);
         }
+        hmapx_destroy(&to_reload);
     }
     seq_change(dp->port_seq);
 
