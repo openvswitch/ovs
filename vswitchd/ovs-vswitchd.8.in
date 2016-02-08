@@ -256,6 +256,9 @@ measuring infrastructure.
 Resets to zero the per pmd thread performance numbers shown by the
 \fBdpif-netdev/pmd-stats-show\fR command.  It will NOT reset datapath or
 bridge statistics, only the values shown by the above command.
+.IP "\fBdpif-netdev/pmd-rxq-show\fR [\fIdp\fR]"
+For each pmd thread of the datapath \fIdp\fR shows list of queue-ids with
+port names, which this thread polls.
 .
 .so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man
