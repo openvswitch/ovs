@@ -567,8 +567,9 @@ get_dp_netdev(const struct dpif *dpif)
 }
 
 enum pmd_info_type {
-    PMD_INFO_SHOW_STATS,  /* show how cpu cycles are spent */
-    PMD_INFO_CLEAR_STATS  /* set the cycles count to 0 */
+    PMD_INFO_SHOW_STATS,  /* Show how cpu cycles are spent. */
+    PMD_INFO_CLEAR_STATS, /* Set the cycles count to 0. */
+    PMD_INFO_SHOW_RXQ     /* Show poll-lists of pmd threads. */
 };
 
 static void
@@ -677,6 +678,35 @@ pmd_info_clear_stats(struct ds *reply OVS_UNUSED,
 }
 
 static void
+pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
+{
+    if (pmd->core_id != NON_PMD_CORE_ID) {
+        struct rxq_poll *poll;
+        const char *prev_name = NULL;
+
+        ds_put_format(reply, "pmd thread numa_id %d core_id %u:\n",
+                      pmd->numa_id, pmd->core_id);
+
+        ovs_mutex_lock(&pmd->poll_mutex);
+        LIST_FOR_EACH (poll, node, &pmd->poll_list) {
+            const char *name = netdev_get_name(poll->port->netdev);
+
+            if (!prev_name || strcmp(name, prev_name)) {
+                if (prev_name) {
+                    ds_put_cstr(reply, "\n");
+                }
+                ds_put_format(reply, "\tport: %s\tqueue-id:",
+                              netdev_get_name(poll->port->netdev));
+            }
+            ds_put_format(reply, " %d", netdev_rxq_get_queue_id(poll->rx));
+            prev_name = name;
+        }
+        ovs_mutex_unlock(&pmd->poll_mutex);
+        ds_put_cstr(reply, "\n");
+    }
+}
+
+static void
 dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
                      void *aux)
 {
@@ -702,22 +732,26 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     }
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        unsigned long long stats[DP_N_STATS];
-        uint64_t cycles[PMD_N_CYCLES];
-        int i;
+        if (type == PMD_INFO_SHOW_RXQ) {
+            pmd_info_show_rxq(&reply, pmd);
+        } else {
+            unsigned long long stats[DP_N_STATS];
+            uint64_t cycles[PMD_N_CYCLES];
+            int i;
 
-        /* Read current stats and cycle counters */
-        for (i = 0; i < ARRAY_SIZE(stats); i++) {
-            atomic_read_relaxed(&pmd->stats.n[i], &stats[i]);
-        }
-        for (i = 0; i < ARRAY_SIZE(cycles); i++) {
-            atomic_read_relaxed(&pmd->cycles.n[i], &cycles[i]);
-        }
+            /* Read current stats and cycle counters */
+            for (i = 0; i < ARRAY_SIZE(stats); i++) {
+                atomic_read_relaxed(&pmd->stats.n[i], &stats[i]);
+            }
+            for (i = 0; i < ARRAY_SIZE(cycles); i++) {
+                atomic_read_relaxed(&pmd->cycles.n[i], &cycles[i]);
+            }
 
-        if (type == PMD_INFO_CLEAR_STATS) {
-            pmd_info_clear_stats(&reply, pmd, stats, cycles);
-        } else if (type == PMD_INFO_SHOW_STATS) {
-            pmd_info_show_stats(&reply, pmd, stats, cycles);
+            if (type == PMD_INFO_CLEAR_STATS) {
+                pmd_info_clear_stats(&reply, pmd, stats, cycles);
+            } else if (type == PMD_INFO_SHOW_STATS) {
+                pmd_info_show_stats(&reply, pmd, stats, cycles);
+            }
         }
     }
 
@@ -731,7 +765,8 @@ static int
 dpif_netdev_init(void)
 {
     static enum pmd_info_type show_aux = PMD_INFO_SHOW_STATS,
-                              clear_aux = PMD_INFO_CLEAR_STATS;
+                              clear_aux = PMD_INFO_CLEAR_STATS,
+                              poll_aux = PMD_INFO_SHOW_RXQ;
 
     unixctl_command_register("dpif-netdev/pmd-stats-show", "[dp]",
                              0, 1, dpif_netdev_pmd_info,
@@ -739,6 +774,9 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/pmd-stats-clear", "[dp]",
                              0, 1, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
+    unixctl_command_register("dpif-netdev/pmd-rxq-show", "[dp]",
+                             0, 1, dpif_netdev_pmd_info,
+                             (void *)&poll_aux);
     return 0;
 }
 
@@ -2673,8 +2711,9 @@ reload:
 
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
-       VLOG_INFO("Core %d processing port \'%s\'\n", pmd->core_id,
-                 netdev_get_name(poll_list[i].port->netdev));
+       VLOG_DBG("Core %d processing port \'%s\' with queue-id %d\n",
+                pmd->core_id, netdev_get_name(poll_list[i].port->netdev),
+                netdev_rxq_get_queue_id(poll_list[i].rx));
     }
 
     /* Signal here to make sure the pmd finishes

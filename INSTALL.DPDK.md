@@ -272,9 +272,12 @@ Performance Tuning:
 
 	NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
 
-	The OVS log can be checked to confirm that the port/rxq assignment to
-	pmd threads is as required. This can also be checked with the following
-	commands:
+	The following command can be used to confirm that the port/rxq assignment
+	to pmd threads is as required:
+
+	`ovs-appctl dpif-netdev/pmd-rxq-show`
+
+	This can also be checked with:
 
 	```
 	top -H

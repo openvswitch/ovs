@@ -1,5 +1,9 @@
-v2.5.1 - 26 Feb 2016
+v2.5.1 - xx xxx xxxx
 ---------------------
+   - DPDK:
+     * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
+       assignment.
+     * Type of log messages from PMD threads changed from INFO to DBG.
 
 
 v2.5.0 - 26 Feb 2016

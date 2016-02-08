@@ -1800,6 +1800,12 @@ netdev_rxq_get_name(const struct netdev_rxq *rx)
     return netdev_get_name(netdev_rxq_get_netdev(rx));
 }
 
+int
+netdev_rxq_get_queue_id(const struct netdev_rxq *rx)
+{
+    return rx->queue_id;
+}
+
 static void
 restore_all_flags(void *aux OVS_UNUSED)
 {
