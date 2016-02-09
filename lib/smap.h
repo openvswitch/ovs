@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2012, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,11 +33,17 @@ struct smap_node {
 
 #define SMAP_INITIALIZER(SMAP) { HMAP_INITIALIZER(&(SMAP)->map) }
 
-#define SMAP_FOR_EACH(SMAP_NODE, SMAP) \
-    HMAP_FOR_EACH (SMAP_NODE, node, &(SMAP)->map)
+#define SMAP_FOR_EACH(SMAP_NODE, SMAP)                                  \
+    HMAP_FOR_EACH_INIT (SMAP_NODE, node, &(SMAP)->map,                  \
+                        BUILD_ASSERT_TYPE(SMAP_NODE, struct smap_node *), \
+                        BUILD_ASSERT_TYPE(SMAP, struct smap *))
 
-#define SMAP_FOR_EACH_SAFE(SMAP_NODE, NEXT, SMAP) \
-    HMAP_FOR_EACH_SAFE (SMAP_NODE, NEXT, node, &(SMAP)->map)
+#define SMAP_FOR_EACH_SAFE(SMAP_NODE, NEXT, SMAP)           \
+    HMAP_FOR_EACH_SAFE_INIT (                               \
+        SMAP_NODE, NEXT, node, &(SMAP)->map,                \
+        BUILD_ASSERT_TYPE(SMAP_NODE, struct smap_node *),   \
+        BUILD_ASSERT_TYPE(NEXT, struct smap_node *),        \
+        BUILD_ASSERT_TYPE(SMAP, struct smap *))
 
 /* Initializer for an immutable struct smap 'SMAP' that contains a single
  * 'KEY'-'VALUE' pair, e.g.
