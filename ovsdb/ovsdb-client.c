@@ -145,6 +145,7 @@ main(int argc, char *argv[])
 
     if (argc - optind < command->min_args ||
         argc - optind > command->max_args) {
+        free(database);
         VLOG_FATAL("invalid syntax for '%s' (use --help for help)",
                     command->name);
     }
