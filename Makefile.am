@@ -408,7 +408,7 @@ if LINUX_ENABLED
 endif
 
 dist-docs:
-	VERSION=$(VERSION) $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
+	VERSION=$(VERSION) MAKE='$(MAKE)' $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
 .PHONY: dist-docs
 
 include Documentation/automake.mk
