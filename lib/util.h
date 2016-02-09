@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,22 @@
 #endif
 OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 
+/* This is a void expression that issues a compiler error if POINTER cannot be
+ * compared for equality with the given pointer TYPE.  This generally means
+ * that POINTER is a qualified or unqualified TYPE.  However,
+ * BUILD_ASSERT_TYPE(POINTER, void *) will accept any pointer to object type,
+ * because any pointer to object can be compared for equality with "void *".
+ *
+ * POINTER can be any expression.  The use of "sizeof" ensures that the
+ * expression is not actually evaluated, so that any side effects of the
+ * expression do not occur.
+ *
+ * The cast to int is present only to suppress an "expression using sizeof
+ * bool" warning from "sparse" (see
+ * http://permalink.gmane.org/gmane.comp.parsers.sparse/2967). */
+#define BUILD_ASSERT_TYPE(POINTER, TYPE) \
+    ((void) sizeof ((int) ((POINTER) == (TYPE) (POINTER))))
+
 /* Casts 'pointer' to 'type' and issues a compiler warning if the cast changes
  * anything other than an outermost "const" or "volatile" qualifier.
  *
@@ -86,7 +102,7 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
  * bool" warning from "sparse" (see
  * http://permalink.gmane.org/gmane.comp.parsers.sparse/2967). */
 #define CONST_CAST(TYPE, POINTER)                               \
-    ((void) sizeof ((int) ((POINTER) == (TYPE) (POINTER))),     \
+    (BUILD_ASSERT_TYPE(POINTER, TYPE),                          \
      (TYPE) (POINTER))
 
 extern char *program_name;
