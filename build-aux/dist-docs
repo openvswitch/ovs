@@ -73,6 +73,7 @@ do
     case $file in
 	*.md)
 	    cp "$srcdir/$file" "$distdir/$file.txt"
+	    ln -s $(basename "$file.txt") "$distdir/$file"
 	    (cat <<EOF
 <html><head>
   <meta charset="UTF-8"></head>
