@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -728,7 +728,9 @@ netdev_set_multiq(struct netdev *netdev, unsigned int n_txq,
  * If the function returns a non-zero value, some of the packets might have
  * been sent anyway.
  *
- * To retain ownership of 'buffer' caller can set may_steal to false.
+ * If 'may_steal' is false, the caller retains ownership of all the packets.
+ * If 'may_steal' is true, the caller transfers ownership of all the packets
+ * to the network device, regardless of success.
  *
  * The network device is expected to maintain one or more packet
  * transmission queues, so that the caller does not ordinarily have to
@@ -742,11 +744,17 @@ int
 netdev_send(struct netdev *netdev, int qid, struct dp_packet **buffers,
             int cnt, bool may_steal)
 {
-    int error;
+    if (!netdev->netdev_class->send) {
+        if (may_steal) {
+            for (int i = 0; i < cnt; i++) {
+                dp_packet_delete(buffers[i]);
+            }
+        }
+        return EOPNOTSUPP;
+    }
 
-    error = (netdev->netdev_class->send
-             ? netdev->netdev_class->send(netdev, qid, buffers, cnt, may_steal)
-             : EOPNOTSUPP);
+    int error = netdev->netdev_class->send(netdev, qid, buffers, cnt,
+                                           may_steal);
     if (!error) {
         COVERAGE_INC(netdev_sent);
     }
