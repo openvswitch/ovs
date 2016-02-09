@@ -1296,6 +1296,10 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
     }
     json_destroy(json);
 
+    for (i = 0; i < n_classes; i++) {
+        ovsdb_row_destroy(classes[i].example);
+    }
+
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 
     free(rows);
