@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define SHASH_H 1
 
 #include "hmap.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -35,11 +36,17 @@ struct shash {
 
 #define SHASH_INITIALIZER(SHASH) { HMAP_INITIALIZER(&(SHASH)->map) }
 
-#define SHASH_FOR_EACH(SHASH_NODE, SHASH) \
-    HMAP_FOR_EACH (SHASH_NODE, node, &(SHASH)->map)
+#define SHASH_FOR_EACH(SHASH_NODE, SHASH)                               \
+    HMAP_FOR_EACH_INIT (SHASH_NODE, node, &(SHASH)->map,                \
+                        BUILD_ASSERT_TYPE(SHASH_NODE, struct shash_node *), \
+                        BUILD_ASSERT_TYPE(SHASH, struct shash *))
 
-#define SHASH_FOR_EACH_SAFE(SHASH_NODE, NEXT, SHASH) \
-    HMAP_FOR_EACH_SAFE (SHASH_NODE, NEXT, node, &(SHASH)->map)
+#define SHASH_FOR_EACH_SAFE(SHASH_NODE, NEXT, SHASH)        \
+    HMAP_FOR_EACH_SAFE_INIT (                               \
+        SHASH_NODE, NEXT, node, &(SHASH)->map,              \
+        BUILD_ASSERT_TYPE(SHASH_NODE, struct shash_node *), \
+        BUILD_ASSERT_TYPE(NEXT, struct shash_node *),       \
+        BUILD_ASSERT_TYPE(SHASH, struct shash *))
 
 void shash_init(struct shash *);
 void shash_destroy(struct shash *);
