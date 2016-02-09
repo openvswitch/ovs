@@ -70,23 +70,38 @@ for file
 do
     title=`head -1 "$srcdir/$file"`
     dir=$distdir/`dirname $file`; test -d "$dir" || mkdir "$dir"
-    cp "$srcdir/$file" "$distdir/$file.txt"
-    (cat <<EOF
+    case $file in
+	*.md)
+	    cp "$srcdir/$file" "$distdir/$file.txt"
+	    (cat <<EOF
 <html><head>
   <meta charset="UTF-8"></head>
   <link rel="stylesheet" type="text/css" href="style.css">
   <title>$file (Open vSwitch $VERSION)</title>
 </head><body>
 EOF
-     markdown "$distdir/$file.txt"
-     echo "</body></html>") > "$distdir/$file.html"
-    cat <<EOF
+	     markdown "$distdir/$file.txt"
+	     echo "</body></html>") > "$distdir/$file.html"
+	    cat <<EOF
 <tr>
   <td>$file</td>
   <td>$title</td>
   <td><a href="$file.html">HTML</a>, <a href="$file.txt">plain text</a></td>
 </tr>
 EOF
+	    ;;
+
+	*)
+	    cp "$srcdir/$file" "$distdir/$file"
+	    cat <<EOF
+<tr>
+  <td>$file</td>
+  <td>$title</td>
+  <td><a href="$file">plain text</a></td>
+</tr>
+EOF
+	    ;;
+    esac
 done >&3
 
 # Add header for manpages to index.html.
