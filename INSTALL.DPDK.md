@@ -898,17 +898,17 @@ Restrictions:
     this with smaller page sizes.
 
   Platform and Network Interface:
-  - Currently it is not possible to use an Intel XL710 Network Interface as a
-    DPDK port type on a platform with more than 64 logical cores. This is
-    related to how DPDK reports the number of TX queues that may be used by
-    a DPDK application with an XL710. The maximum number of TX queues supported
-    by a DPDK application for an XL710 is 64. If a user attempts to add an
-    XL710 interface as a DPDK port type to a system as described above the
-    port addition will fail as OVS will attempt to initialize a TX queue greater
-    than 64. This issue is expected to be resolved in a future DPDK release.
-    As a workaround a user can disable hyper-threading to reduce the overall
-    core count of the system to be less than or equal to 64 when using an XL710
-    interface with DPDK.
+  - By default with DPDK 2.2, a maximum of 64 TX queues can be used with an
+    Intel XL710 Network Interface on a platform with more than 64 logical
+    cores. If a user attempts to add an XL710 interface as a DPDK port type to
+    a system as described above, an error will be reported that initialization
+    failed for the 65th queue. OVS will then roll back to the previous
+    successful queue initialization and use that value as the total number of
+    TX queues available with queue locking. If a user wishes to use more than
+    64 queues and avoid locking, then the
+    `CONFIG_RTE_LIBRTE_I40E_QUEUE_NUM_PER_PF` config parameter in DPDK must be
+    increased to the desired number of queues. Both DPDK and OVS must be
+    recompiled for this change to take effect.
 
   vHost and QEMU v2.4.0+:
   - For versions of QEMU v2.4.0 and later, it is currently not possible to
