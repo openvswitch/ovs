@@ -24,10 +24,10 @@ search_path () {
     save_IFS=$IFS
     IFS=:
     for dir in $PATH; do
-	IFS=$save_IFS
-	if test -x "$dir/$1"; then
-	    return 0
-	fi
+        IFS=$save_IFS
+        if test -x "$dir/$1"; then
+            return 0
+        fi
     done
     IFS=$save_IFS
     echo >&2 "$0: $1 not found in \$PATH, please install and try again"
@@ -71,37 +71,37 @@ do
     title=`head -1 "$srcdir/$file"`
     dir=$distdir/`dirname $file`; test -d "$dir" || mkdir "$dir"
     case $file in
-	*.md)
-	    cp "$srcdir/$file" "$distdir/$file.txt"
-	    ln -s $(basename "$file.txt") "$distdir/$file"
-	    (cat <<EOF
+        *.md)
+            cp "$srcdir/$file" "$distdir/$file.txt"
+            ln -s $(basename "$file.txt") "$distdir/$file"
+            (cat <<EOF
 <html><head>
   <meta charset="UTF-8"></head>
   <link rel="stylesheet" type="text/css" href="style.css">
   <title>$file (Open vSwitch $VERSION)</title>
 </head><body>
 EOF
-	     markdown "$distdir/$file.txt"
-	     echo "</body></html>") > "$distdir/$file.html"
-	    cat <<EOF
+             markdown "$distdir/$file.txt"
+             echo "</body></html>") > "$distdir/$file.html"
+            cat <<EOF
 <tr>
   <td>$file</td>
   <td>$title</td>
   <td><a href="$file.html">HTML</a>, <a href="$file.txt">plain text</a></td>
 </tr>
 EOF
-	    ;;
+            ;;
 
-	*)
-	    cp "$srcdir/$file" "$distdir/$file"
-	    cat <<EOF
+        *)
+            cp "$srcdir/$file" "$distdir/$file"
+            cat <<EOF
 <tr>
   <td>$file</td>
   <td>$title</td>
   <td><a href="$file">plain text</a></td>
 </tr>
 EOF
-	    ;;
+            ;;
     esac
 done >&3
 
