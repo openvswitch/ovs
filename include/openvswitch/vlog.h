@@ -181,7 +181,7 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
             VLL_INFO,                                  /* min_level */  \
             true                               /* honor_rate_limits */  \
         };                                                              \
-        OVS_CONSTRUCTOR(init_this_module) {                             \
+        OVS_CONSTRUCTOR(init_this_module_##MODULE) {                    \
             vlog_insert_module(&this_module.list);                      \
         }                                                               \
                                                                         \
