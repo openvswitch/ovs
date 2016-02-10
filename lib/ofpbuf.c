@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,10 +389,10 @@ ofpbuf_put(struct ofpbuf *b, const void *p, size_t size)
     return dst;
 }
 
-/* Parses as many pairs of hex digits as possible (possibly separated by
- * spaces) from the beginning of 's', appending bytes for their values to 'b'.
- * Returns the first character of 's' that is not the first of a pair of hex
- * digits.  If 'n' is nonnull, stores the number of bytes added to 'b' in
+/* Parses as many pairs of hex digits as possible (possibly separated by spaces
+ * or periods) from the beginning of 's', appending bytes for their values to
+ * 'b'.  Returns the first character of 's' that is not the first of a pair of
+ * hex digits.  If 'n' is nonnull, stores the number of bytes added to 'b' in
  * '*n'. */
 char *
 ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
@@ -402,7 +402,7 @@ ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
         uint8_t byte;
         bool ok;
 
-        s += strspn(s, " \t\r\n");
+        s += strspn(s, " .\t\r\n");
         byte = hexits_value(s, 2, &ok);
         if (!ok) {
             if (n) {
