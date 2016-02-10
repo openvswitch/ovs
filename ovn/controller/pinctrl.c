@@ -62,14 +62,11 @@ get_switch_config(struct rconn *swconn)
 }
 
 static void
-set_switch_config(struct rconn *swconn, const struct ofp_switch_config *config)
+set_switch_config(struct rconn *swconn,
+                  const struct ofputil_switch_config *config)
 {
-    struct ofpbuf *request;
-
-    request =
-        ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, rconn_get_version(swconn), 0);
-    ofpbuf_put(request, config, sizeof *config);
-
+    enum ofp_version version = rconn_get_version(swconn);
+    struct ofpbuf *request = ofputil_encode_set_config(config, version);
     queue_msg(request);
 }
 
@@ -98,13 +95,9 @@ pinctrl_recv(struct controller_ctx *ctx, const struct ofp_header *oh,
     if (type == OFPTYPE_ECHO_REQUEST) {
         queue_msg(make_echo_reply(oh));
     } else if (type == OFPTYPE_GET_CONFIG_REPLY) {
-        struct ofpbuf rq_buf;
-        struct ofp_switch_config *config_, config;
+        struct ofputil_switch_config config;
 
-        ofpbuf_use_const(&rq_buf, oh, ntohs(oh->length));
-        ofpraw_pull_assert(&rq_buf);
-        config_ = ofpbuf_pull(&rq_buf, sizeof *config_);
-        config = *config_;
+        ofputil_decode_get_config_reply(oh, &config);
         config.miss_send_len = htons(UINT16_MAX);
         set_switch_config(swconn, &config);
     } else if (type == OFPTYPE_PACKET_IN) {
