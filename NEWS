@@ -14,6 +14,9 @@ Post-v2.5.0
      bitrot.
    - ovs-appctl:
      * New "vlog/close" command.
+   - ovsdb-server:
+     * Remove max number of sessions limit, to enable connection scaling
+       testing.
 
 
 v2.5.0 - xx xxx xxxx

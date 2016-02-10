@@ -101,7 +101,7 @@ static struct json *ovsdb_jsonrpc_monitor_compose_update(
 
 struct ovsdb_jsonrpc_server {
     struct ovsdb_server up;
-    unsigned int n_sessions, max_sessions;
+    unsigned int n_sessions;
     struct shash remotes;      /* Contains "struct ovsdb_jsonrpc_remote *"s. */
 };
 
@@ -130,7 +130,6 @@ ovsdb_jsonrpc_server_create(void)
 {
     struct ovsdb_jsonrpc_server *server = xzalloc(sizeof *server);
     ovsdb_server_init(&server->up);
-    server->max_sessions = 330;   /* Random limit. */
     shash_init(&server->remotes);
     return server;
 }
@@ -324,25 +323,19 @@ ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
         struct ovsdb_jsonrpc_remote *remote = node->data;
 
         if (remote->listener) {
-            if (svr->n_sessions < svr->max_sessions) {
-                struct stream *stream;
-                int error;
+            struct stream *stream;
+            int error;
 
-                error = pstream_accept(remote->listener, &stream);
-                if (!error) {
-                    struct jsonrpc_session *js;
-                    js = jsonrpc_session_open_unreliably(jsonrpc_open(stream),
-                                                         remote->dscp);
-                    ovsdb_jsonrpc_session_create(remote, js);
-                } else if (error != EAGAIN) {
-                    VLOG_WARN_RL(&rl, "%s: accept failed: %s",
-                                 pstream_get_name(remote->listener),
-                                 ovs_strerror(error));
-                }
-            } else {
-                VLOG_WARN_RL(&rl, "%s: connection exceeded maximum (%d)",
+            error = pstream_accept(remote->listener, &stream);
+            if (!error) {
+                struct jsonrpc_session *js;
+                js = jsonrpc_session_open_unreliably(jsonrpc_open(stream),
+                                                     remote->dscp);
+                ovsdb_jsonrpc_session_create(remote, js);
+            } else if (error != EAGAIN) {
+                VLOG_WARN_RL(&rl, "%s: accept failed: %s",
                              pstream_get_name(remote->listener),
-                             svr->max_sessions);
+                             ovs_strerror(error));
             }
         }
 
@@ -358,7 +351,7 @@ ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *svr)
     SHASH_FOR_EACH (node, &svr->remotes) {
         struct ovsdb_jsonrpc_remote *remote = node->data;
 
-        if (remote->listener && svr->n_sessions < svr->max_sessions) {
+        if (remote->listener) {
             pstream_wait(remote->listener);
         }
 
