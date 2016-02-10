@@ -137,16 +137,29 @@ static int ip_tunnel_bind_dev(struct net_device *dev)
 	return mtu;
 }
 
-int rpl_ip_tunnel_change_mtu(struct net_device *dev, int new_mtu)
+int rpl___ip_tunnel_change_mtu(struct net_device *dev, int new_mtu, bool strict)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	int t_hlen = tunnel->hlen + sizeof(struct iphdr);
+	int max_mtu = 0xFFF8 - dev->hard_header_len - t_hlen;
 
-	if (new_mtu < 68 ||
-	    new_mtu > 0xFFF8 - dev->hard_header_len - t_hlen)
+	if (new_mtu < 68)
 		return -EINVAL;
+
+	if (new_mtu > max_mtu) {
+		if (strict)
+			return -EINVAL;
+
+		new_mtu = max_mtu;
+	}
+
 	dev->mtu = new_mtu;
 	return 0;
+}
+
+int rpl_ip_tunnel_change_mtu(struct net_device *dev, int new_mtu)
+{
+	return rpl___ip_tunnel_change_mtu(dev, new_mtu, true);
 }
 
 static void ip_tunnel_dev_free(struct net_device *dev)

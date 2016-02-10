@@ -354,6 +354,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [IPSKB_FRAG_PMTU],
                   [OVS_DEFINE([HAVE_CORRECT_MRU_HANDLING])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h], [__ip_tunnel_change_mtu])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [hashfn.*const],
                   [OVS_DEFINE([HAVE_INET_FRAGS_CONST])])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [last_in],
