@@ -123,6 +123,7 @@ const PVOID NlAttrGet(const PNL_ATTR nla);
 const PVOID NlAttrGetUnspec(const PNL_ATTR nla, UINT32 size);
 BE64 NlAttrGetBe64(const PNL_ATTR nla);
 BE32 NlAttrGetBe32(const PNL_ATTR nla);
+BE16 NlAttrGetBe16(const PNL_ATTR nla);
 UINT8 NlAttrGetU8(const PNL_ATTR nla);
 UINT16 NlAttrGetU16(const PNL_ATTR nla);
 UINT32 NlAttrGetU32(const PNL_ATTR nla);

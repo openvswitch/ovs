@@ -15,7 +15,9 @@
 import copy
 import errno
 import os
-import types
+
+import six
+from six.moves import range
 
 import ovs.dirs
 import ovs.jsonrpc
@@ -27,7 +29,7 @@ import ovs.vlog
 
 Message = ovs.jsonrpc.Message
 vlog = ovs.vlog.Vlog("unixctl_server")
-strtypes = types.StringTypes
+strtypes = six.string_types
 
 
 class UnixctlConnection(object):
@@ -123,7 +125,7 @@ class UnixctlConnection(object):
                     break
 
             if error is None:
-                unicode_params = [unicode(p) for p in params]
+                unicode_params = [six.text_type(p) for p in params]
                 command.callback(self, unicode_params, command.aux)
 
         if error:

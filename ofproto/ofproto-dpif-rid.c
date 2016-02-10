@@ -126,55 +126,56 @@ recirc_id_node_find(uint32_t id)
 }
 
 static uint32_t
-recirc_metadata_hash(const struct recirc_state *state)
+recirc_state_hash(const struct recirc_state *state)
 {
     uint32_t hash;
 
-    hash = hash_pointer(state->ofproto, 0);
+    hash = uuid_hash(&state->ofproto_uuid);
     hash = hash_int(state->table_id, hash);
     if (flow_tnl_dst_is_set(state->metadata.tunnel)) {
         /* We may leave remainder bytes unhashed, but that is unlikely as
          * the tunnel is not in the datapath format. */
-        hash = hash_words64((const uint64_t *) state->metadata.tunnel,
-                            flow_tnl_size(state->metadata.tunnel)
-                            / sizeof(uint64_t), hash);
+        hash = hash_bytes64((const uint64_t *) state->metadata.tunnel,
+                            flow_tnl_size(state->metadata.tunnel), hash);
     }
     hash = hash_boolean(state->conntracked, hash);
-    hash = hash_words64((const uint64_t *) &state->metadata.metadata,
-                        (sizeof state->metadata - sizeof state->metadata.tunnel)
-                        / sizeof(uint64_t),
+    hash = hash_bytes64((const uint64_t *) &state->metadata.metadata,
+                        sizeof state->metadata - sizeof state->metadata.tunnel,
                         hash);
-    if (state->stack && state->stack->size != 0) {
-        hash = hash_words64((const uint64_t *) state->stack->data,
-                            state->stack->size / sizeof(uint64_t), hash);
+    if (state->stack && state->n_stack) {
+        hash = hash_bytes64((const uint64_t *) state->stack,
+                            state->n_stack * sizeof *state->stack, hash);
     }
     hash = hash_int(state->mirrors, hash);
     hash = hash_int(state->action_set_len, hash);
+    if (state->action_set_len) {
+        hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->action_set),
+                            state->action_set_len, hash);
+    }
     if (state->ofpacts_len) {
-        hash = hash_words64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
-                            state->ofpacts_len / sizeof(uint64_t),
-                            hash);
+        hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
+                            state->ofpacts_len, hash);
     }
     return hash;
 }
 
 static bool
-recirc_metadata_equal(const struct recirc_state *a,
+recirc_state_equal(const struct recirc_state *a,
                       const struct recirc_state *b)
 {
     return (a->table_id == b->table_id
-            && a->ofproto == b->ofproto
+            && uuid_equals(&a->ofproto_uuid, &b->ofproto_uuid)
             && flow_tnl_equal(a->metadata.tunnel, b->metadata.tunnel)
             && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
                        sizeof a->metadata - sizeof a->metadata.tunnel)
-            && (((!a->stack || !a->stack->size) &&
-                 (!b->stack || !b->stack->size))
-                || (a->stack && b->stack && ofpbuf_equal(a->stack, b->stack)))
+            && a->n_stack == b->n_stack
+            && !memcmp(a->stack, b->stack, a->n_stack * sizeof *a->stack)
             && a->mirrors == b->mirrors
             && a->conntracked == b->conntracked
-            && a->action_set_len == b->action_set_len
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
-                             b->ofpacts, b->ofpacts_len));
+                             b->ofpacts, b->ofpacts_len)
+            && ofpacts_equal(a->action_set, a->action_set_len,
+                             b->action_set, b->action_set_len));
 }
 
 /* Lockless RCU protected lookup.  If node is needed accross RCU quiescent
@@ -185,7 +186,7 @@ recirc_find_equal(const struct recirc_state *target, uint32_t hash)
     struct recirc_id_node *node;
 
     CMAP_FOR_EACH_WITH_HASH (node, metadata_node, hash, &metadata_map) {
-        if (recirc_metadata_equal(&node->state, target)) {
+        if (recirc_state_equal(&node->state, target)) {
             return node;
         }
     }
@@ -214,21 +215,23 @@ recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
     flow_tnl_copy__(tunnel, old->metadata.tunnel);
     new->metadata.tunnel = tunnel;
 
-    if (new->stack) {
-        new->stack = new->stack->size ? ofpbuf_clone(new->stack) : NULL;
-    }
-    if (new->ofpacts) {
-        new->ofpacts = (new->ofpacts_len
-                        ? xmemdup(new->ofpacts, new->ofpacts_len)
-                        : NULL);
-    }
+    new->stack = (new->n_stack
+                  ? xmemdup(new->stack, new->n_stack * sizeof *new->stack)
+                  : NULL);
+    new->ofpacts = (new->ofpacts_len
+                    ? xmemdup(new->ofpacts, new->ofpacts_len)
+                    : NULL);
+    new->action_set = (new->action_set_len
+                       ? xmemdup(new->action_set, new->action_set_len)
+                       : NULL);
 }
 
 static void
 recirc_state_free(struct recirc_state *state)
 {
-    ofpbuf_delete(state->stack);
+    free(state->stack);
     free(state->ofpacts);
+    free(state->action_set);
 }
 
 /* Allocate a unique recirculation id for the given set of flow metadata.
@@ -274,7 +277,7 @@ recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
 uint32_t
 recirc_find_id(const struct recirc_state *target)
 {
-    uint32_t hash = recirc_metadata_hash(target);
+    uint32_t hash = recirc_state_hash(target);
     struct recirc_id_node *node = recirc_find_equal(target, hash);
     return node ? node->id : 0;
 }
@@ -284,7 +287,7 @@ recirc_find_id(const struct recirc_state *target)
 uint32_t
 recirc_alloc_id_ctx(const struct recirc_state *state)
 {
-    uint32_t hash = recirc_metadata_hash(state);
+    uint32_t hash = recirc_state_hash(state);
     struct recirc_id_node *node = recirc_ref_equal(state, hash);
     if (!node) {
         node = recirc_alloc_id__(state, hash);
@@ -301,10 +304,10 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
     tunnel.ipv6_dst = in6addr_any;
     struct recirc_state state = {
         .table_id = TBL_INTERNAL,
-        .ofproto = ofproto,
+        .ofproto_uuid = *ofproto_dpif_get_uuid(ofproto),
         .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
-    return recirc_alloc_id__(&state, recirc_metadata_hash(&state))->id;
+    return recirc_alloc_id__(&state, recirc_state_hash(&state))->id;
 }
 
 static void
@@ -354,8 +357,9 @@ recirc_free_ofproto(struct ofproto_dpif *ofproto, const char *ofproto_name)
 {
     struct recirc_id_node *n;
 
+    const struct uuid *ofproto_uuid = ofproto_dpif_get_uuid(ofproto);
     CMAP_FOR_EACH (n, metadata_node, &metadata_map) {
-        if (n->state.ofproto == ofproto) {
+        if (uuid_equals(&n->state.ofproto_uuid, ofproto_uuid)) {
             VLOG_ERR("recirc_id %"PRIu32
                      " left allocated when ofproto (%s)"
                      " is destructed", n->id, ofproto_name);

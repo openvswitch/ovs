@@ -1406,13 +1406,12 @@ dpif_print_packet(struct dpif *dpif, struct dpif_upcall *upcall)
 /* If 'dpif' creates its own I/O polling threads, refreshes poll threads
  * configuration. */
 int
-dpif_poll_threads_set(struct dpif *dpif, unsigned int n_rxqs,
-                      const char *cmask)
+dpif_poll_threads_set(struct dpif *dpif, const char *cmask)
 {
     int error = 0;
 
     if (dpif->dpif_class->poll_threads_set) {
-        error = dpif->dpif_class->poll_threads_set(dpif, n_rxqs, cmask);
+        error = dpif->dpif_class->poll_threads_set(dpif, cmask);
         if (error) {
             log_operation(dpif, "poll_threads_set", error);
         }

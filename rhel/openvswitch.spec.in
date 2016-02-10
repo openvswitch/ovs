@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch on Red Hat Enterprise Linux.
 
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -22,7 +22,7 @@ License: ASL 2.0
 Release: 1
 Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
-Requires: logrotate, python >= 2.7
+Requires: logrotate, python >= 2.7, python-six
 BuildRequires: openssl-devel
 
 %bcond_without check
@@ -132,7 +132,6 @@ exit 0
 /etc/sysconfig/network-scripts/ifup-ovs
 /etc/sysconfig/network-scripts/ifdown-ovs
 /usr/bin/ovs-appctl
-/usr/bin/ovs-benchmark
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-dpctl-top
 /usr/bin/ovs-docker
@@ -149,7 +148,6 @@ exit 0
 /usr/sbin/ovs-bugtool
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
-/usr/share/man/man1/ovs-benchmark.1.gz
 /usr/share/man/man1/ovs-pcap.1.gz
 /usr/share/man/man1/ovs-tcpundump.1.gz
 /usr/share/man/man1/ovsdb-client.1.gz

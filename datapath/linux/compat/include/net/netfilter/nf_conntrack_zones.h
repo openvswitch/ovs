@@ -7,7 +7,7 @@
 #include_next <net/netfilter/nf_conntrack_zones.h>
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#ifndef HAVE_NF_CT_ZONE_INIT
 
 #include <linux/kconfig.h>
 #include <linux/types.h>
@@ -99,5 +99,5 @@ static inline bool nf_ct_zone_equal_any(const struct nf_conn *a,
 	return nf_ct_zone(a)->id == b->id;
 }
 #endif /* IS_ENABLED(CONFIG_NF_CONNTRACK) */
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0) */
+#endif /* HAVE_NF_CT_ZONE_INIT */
 #endif /* _NF_CONNTRACK_ZONES_WRAPPER_H */

@@ -136,7 +136,7 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 #define ASSERT_FLOWMAP_NOT_SET(FM, IDX)                                 \
 {                                                                       \
     MINIFLOW_ASSERT(!((FM)->bits[(IDX) / MAP_T_BITS] &                  \
-                      (FLOWMAP_MAX << ((IDX) % MAP_T_BITS))));          \
+                      (MAP_MAX << ((IDX) % MAP_T_BITS))));              \
     for (size_t i = (IDX) / MAP_T_BITS + 1; i < FLOWMAP_UNITS; i++) {   \
         MINIFLOW_ASSERT(!(FM)->bits[i]);                                \
     }                                                                   \
@@ -148,8 +148,8 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     flowmap_set(&MF.map, (OFS), 1);          \
 }
 
-#define miniflow_assert_in_map(MF, OFS)             \
-    MINIFLOW_ASSERT(FLOWMAP_IS_SET(MF.map, (OFS))); \
+#define miniflow_assert_in_map(MF, OFS)              \
+    MINIFLOW_ASSERT(flowmap_is_set(&MF.map, (OFS))); \
     ASSERT_FLOWMAP_NOT_SET(&MF.map, (OFS) + 1)
 
 #define miniflow_push_uint64_(MF, OFS, VALUE)              \

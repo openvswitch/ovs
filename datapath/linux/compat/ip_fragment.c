@@ -25,7 +25,7 @@
 
 #include <linux/version.h>
 
-#ifdef OVS_FRAGMENT_BACKPORT
+#if !defined(HAVE_CORRECT_MRU_HANDLING) && defined(OVS_FRAGMENT_BACKPORT)
 
 #define pr_fmt(fmt) "IPv4: " fmt
 
@@ -64,7 +64,7 @@
  */
 
 static int sysctl_ipfrag_max_dist __read_mostly = 64;
-static const char ip_frag_cache_name[] = "ip4-frags";
+static const char ip_frag_cache_name[] = "ovs-frag4";
 
 struct ipfrag_skb_cb
 {
@@ -78,7 +78,7 @@ struct ipfrag_skb_cb
 struct ipq {
 	union {
 		struct inet_frag_queue q;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 		struct ovs_inet_frag_queue oq;
 #endif
 	};
@@ -682,6 +682,7 @@ int rpl_ip_defrag(struct sk_buff *skb, u32 user)
 	struct ipq *qp;
 
 	IP_INC_STATS_BH(net, IPSTATS_MIB_REASMREQDS);
+	skb_orphan(skb);
 
 	/* Lookup (or create) queue header */
 	qp = ip_find(net, ip_hdr(skb), user, vif);
@@ -730,7 +731,7 @@ int __init rpl_ipfrag_init(void)
 	ip4_frags.qsize = sizeof(struct ipq);
 	ip4_frags.match = ip4_frag_match;
 	ip4_frags.frag_expire = ip_expire;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	ip4_frags.frags_cache_name = ip_frag_cache_name;
 #endif
 	if (inet_frags_init(&ip4_frags)) {
@@ -746,4 +747,4 @@ void rpl_ipfrag_fini(void)
 	unregister_pernet_subsys(&ip4_frags_ops);
 }
 
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif /* !HAVE_CORRECT_MRU_HANDLING && OVS_FRAGMENT_BACKPORT */

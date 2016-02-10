@@ -15,6 +15,9 @@
 import errno
 import os
 import socket
+import sys
+
+import six
 
 import ovs.poller
 import ovs.socket_util
@@ -58,7 +61,7 @@ class Stream(object):
 
     @staticmethod
     def _find_method(name):
-        for method, cls in Stream._SOCKET_METHODS.items():
+        for method, cls in six.iteritems(Stream._SOCKET_METHODS):
             if name.startswith(method):
                 return cls
         return None
@@ -121,7 +124,7 @@ class Stream(object):
         raise NotImplementedError("This method must be overrided by subclass")
 
     @staticmethod
-    def open_block((error, stream)):
+    def open_block(error_stream):
         """Blocks until a Stream completes its connection attempt, either
         succeeding or failing.  (error, stream) should be the tuple returned by
         Stream.open().  Returns a tuple of the same form.
@@ -129,6 +132,8 @@ class Stream(object):
         Typical usage:
         error, stream = Stream.open_block(Stream.open("unix:/tmp/socket"))"""
 
+        # Py3 doesn't support tuple parameter unpacking - PEP 3113
+        error, stream = error_stream
         if not error:
             while True:
                 error = stream.connect()
@@ -198,7 +203,7 @@ class Stream(object):
 
         try:
             return (0, self.socket.recv(n))
-        except socket.error, e:
+        except socket.error as e:
             return (ovs.socket_util.get_exception_errno(e), "")
 
     def send(self, buf):
@@ -219,8 +224,13 @@ class Stream(object):
             return 0
 
         try:
+            # Python 3 has separate types for strings and bytes.  We must have
+            # bytes here.
+            if (sys.version_info[0] >= 3
+                    and not isinstance(buf, six.binary_type)):
+                buf = six.binary_type(buf, 'utf-8')
             return self.socket.send(buf)
-        except socket.error, e:
+        except socket.error as e:
             return -ovs.socket_util.get_exception_errno(e)
 
     def run(self):
@@ -293,7 +303,7 @@ class PassiveStream(object):
 
         try:
             sock.listen(10)
-        except socket.error, e:
+        except socket.error as e:
             vlog.err("%s: listen: %s" % (name, os.strerror(e.error)))
             sock.close()
             return e.error, None
@@ -321,7 +331,7 @@ class PassiveStream(object):
                 sock, addr = self.socket.accept()
                 ovs.socket_util.set_nonblocking(sock)
                 return 0, Stream(sock, "unix:%s" % addr, 0)
-            except socket.error, e:
+            except socket.error as e:
                 error = ovs.socket_util.get_exception_errno(e)
                 if error != errno.EAGAIN:
                     # XXX rate-limit

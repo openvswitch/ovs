@@ -94,15 +94,6 @@ enum ofp14_port_mod_prop_type {
     OFPPMPT14_EXPERIMENTER      = 0xFFFF, /* Experimenter property. */
 };
 
-/* Ethernet port mod property. */
-struct ofp14_port_mod_prop_ethernet {
-    ovs_be16      type;       /* OFPPMPT14_ETHERNET. */
-    ovs_be16      length;     /* Length in bytes of this property. */
-    ovs_be32      advertise;  /* Bitmap of OFPPF_*.  Zero all bits to prevent
-                                 any action taking place. */
-};
-OFP_ASSERT(sizeof(struct ofp14_port_mod_prop_ethernet) == 8);
-
 struct ofp14_port_mod {
     ovs_be32 port_no;
     uint8_t pad[4];
@@ -134,15 +125,8 @@ enum ofp14_table_mod_prop_eviction_flag {
 enum ofp14_table_reason {
     OFPTR_VACANCY_DOWN = 3,    /* Vacancy down threshold event. */
     OFPTR_VACANCY_UP   = 4,    /* Vacancy up threshold event. */
-    OFPTR_N_REASONS            /* Denotes number of reasons. */
+#define OFPTR_BITS ((1u << OFPTR_VACANCY_DOWN) | (1u << OFPTR_VACANCY_UP))
 };
-
-struct ofp14_table_mod_prop_eviction {
-    ovs_be16         type;    /* OFPTMPT14_EVICTION. */
-    ovs_be16         length;  /* Length in bytes of this property. */
-    ovs_be32         flags;   /* Bitmap of OFPTMPEF14_* flags */
-};
-OFP_ASSERT(sizeof(struct ofp14_table_mod_prop_eviction) == 8);
 
 struct ofp14_table_mod_prop_vacancy {
     ovs_be16         type;   /* OFPTMPT14_VACANCY. */
@@ -235,26 +219,34 @@ struct ofp14_queue_stats {
 OFP_ASSERT(sizeof(struct ofp14_queue_stats) == 48);
 
 
+/* ## ---------------- ## */
+/* ## ofp14_queue_desc ## */
+/* ## ---------------- ## */
+
+struct ofp14_queue_desc_request {
+    ovs_be32 port;              /* All ports if OFPP_ANY. */
+    ovs_be32 queue;             /* All queues if OFPQ_ALL. */
+};
+OFP_ASSERT(sizeof(struct ofp14_queue_desc_request) == 8);
+
+/* Body of reply to OFPMP_QUEUE_DESC request. */
+struct ofp14_queue_desc {
+    ovs_be32 port_no;           /* Port this queue is attached to. */
+    ovs_be32 queue_id;          /* ID for the specific queue. */
+    ovs_be16 len;               /* Length in bytes of this queue desc. */
+    uint8_t pad[6];             /* 64-bit alignment. */
+};
+OFP_ASSERT(sizeof(struct ofp14_queue_desc) == 16);
+
+enum ofp14_queue_desc_prop_type {
+    OFPQDPT14_MIN_RATE = 1,
+    OFPQDPT14_MAX_RATE = 2,
+    OFPQDPT14_EXPERIMENTER = 0xffff
+};
+
 /* ## -------------- ## */
 /* ## Miscellaneous. ## */
 /* ## -------------- ## */
-
-/* Common header for all async config Properties */
-struct ofp14_async_config_prop_header {
-    ovs_be16    type;       /* One of OFPACPT_*. */
-    ovs_be16    length;     /* Length in bytes of this property. */
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config_prop_header) == 4);
-
-/* Asynchronous message configuration.
- * OFPT_GET_ASYNC_REPLY or OFPT_SET_ASYNC.
- */
-struct ofp14_async_config {
-    struct ofp_header header;
-    /* Async config Property list - 0 or more */
-    struct ofp14_async_config_prop_header properties[0];
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config) == 8);
 
 /* Request forward reason */
 enum ofp14_requestforward_reason {
@@ -262,61 +254,6 @@ enum ofp14_requestforward_reason {
     OFPRFR_METER_MOD = 1,      /* Forward meter mod requests. */
     OFPRFR_N_REASONS           /* Denotes number of reasons. */
 };
-
-/* Async Config property types.
-* Low order bit cleared indicates a property for the slave role.
-* Low order bit set indicates a property for the master/equal role.
-*/
-enum ofp14_async_config_prop_type {
-    OFPACPT_PACKET_IN_SLAVE       = 0, /* Packet-in mask for slave. */
-    OFPACPT_PACKET_IN_MASTER      = 1, /* Packet-in mask for master. */
-    OFPACPT_PORT_STATUS_SLAVE     = 2, /* Port-status mask for slave. */
-    OFPACPT_PORT_STATUS_MASTER    = 3, /* Port-status mask for master. */
-    OFPACPT_FLOW_REMOVED_SLAVE    = 4, /* Flow removed mask for slave. */
-    OFPACPT_FLOW_REMOVED_MASTER   = 5, /* Flow removed mask for master. */
-    OFPACPT_ROLE_STATUS_SLAVE     = 6, /* Role status mask for slave. */
-    OFPACPT_ROLE_STATUS_MASTER    = 7, /* Role status mask for master. */
-    OFPACPT_TABLE_STATUS_SLAVE    = 8, /* Table status mask for slave. */
-    OFPACPT_TABLE_STATUS_MASTER   = 9, /* Table status mask for master. */
-    OFPACPT_REQUESTFORWARD_SLAVE  = 10, /* RequestForward mask for slave. */
-    OFPACPT_REQUESTFORWARD_MASTER = 11, /* RequestForward mask for master. */
-    OFPTFPT_EXPERIMENTER_SLAVE    = 0xFFFE, /* Experimenter for slave. */
-    OFPTFPT_EXPERIMENTER_MASTER   = 0xFFFF, /* Experimenter for master. */
-};
-
-/* Various reason based properties */
-struct ofp14_async_config_prop_reasons {
-    /* 'type' is one of OFPACPT_PACKET_IN_*, OFPACPT_PORT_STATUS_*,
-     * OFPACPT_FLOW_REMOVED_*, OFPACPT_ROLE_STATUS_*,
-     * OFPACPT_TABLE_STATUS_*, OFPACPT_REQUESTFORWARD_*. */
-    ovs_be16    type;
-    ovs_be16    length; /* Length in bytes of this property. */
-    ovs_be32    mask;   /* Bitmasks of reason values. */
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config_prop_reasons) == 8);
-
-/* Experimenter async config property */
-struct ofp14_async_config_prop_experimenter {
-    ovs_be16        type;       /* One of OFPTFPT_EXPERIMENTER_SLAVE,
-                                   OFPTFPT_EXPERIMENTER_MASTER. */
-    ovs_be16        length;     /* Length in bytes of this property. */
-    ovs_be32        experimenter;  /* Experimenter ID which takes the same
-                                      form as in struct
-                                      ofp_experimenter_header. */
-    ovs_be32        exp_type;      /* Experimenter defined. */
-    /* Followed by:
-     *   - Exactly (length - 12) bytes containing the experimenter data, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-};
-OFP_ASSERT(sizeof(struct ofp14_async_config_prop_experimenter) == 12);
-
-/* Common header for all Role Properties */
-struct ofp14_role_prop_header {
-    ovs_be16 type;   /* One of OFPRPT_*. */
-    ovs_be16 length; /* Length in bytes of this property. */
-};
-OFP_ASSERT(sizeof(struct ofp14_role_prop_header) == 4);
 
 /* Role status event message. */
 struct ofp14_role_status {
@@ -342,21 +279,6 @@ enum ofp14_controller_role_reason {
 enum ofp14_role_prop_type {
     OFPRPT_EXPERIMENTER         = 0xFFFF, /* Experimenter property. */
 };
-
-/* Experimenter role property */
-struct ofp14_role_prop_experimenter {
-    ovs_be16        type;       /* One of OFPRPT_EXPERIMENTER. */
-    ovs_be16        length;     /* Length in bytes of this property. */
-    ovs_be32        experimenter; /* Experimenter ID which takes the same
-                                     form as in struct
-                                     ofp_experimenter_header. */
-    ovs_be32        exp_type;     /* Experimenter defined. */
-    /* Followed by:
-     *   - Exactly (length - 12) bytes containing the experimenter data, then
-     *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
-     *     bytes of all-zero bytes */
-};
-OFP_ASSERT(sizeof(struct ofp14_role_prop_experimenter) == 12);
 
 /* Group/Meter request forwarding. */
 struct ofp14_requestforward {

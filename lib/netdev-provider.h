@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,9 +52,13 @@ struct netdev {
      * 'netdev''s flags, features, ethernet address, or carrier changes. */
     uint64_t change_seq;
 
-    /* The following are protected by 'netdev_mutex' (internal to netdev.c). */
+    /* The core netdev code initializes these at netdev construction and only
+     * provide read-only access to its client.  Netdev implementations may
+     * modify them. */
     int n_txq;
     int n_rxq;
+    /* Number of rx queues requested by user. */
+    int requested_n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
@@ -305,7 +309,9 @@ struct netdev_class {
      * If the function returns a non-zero value, some of the packets might have
      * been sent anyway.
      *
-     * To retain ownership of 'buffers' caller can set may_steal to false.
+     * If 'may_steal' is false, the caller retains ownership of all the
+     * packets.  If 'may_steal' is true, the caller transfers ownership of all
+     * the packets to the network device, regardless of success.
      *
      * The network device is expected to maintain one or more packet
      * transmission queues, so that the caller does not ordinarily have to

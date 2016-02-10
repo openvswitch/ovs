@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2015 Nicira, Inc.
+# Copyright (C) 2007-2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -84,6 +84,7 @@ docs = \
 	INSTALL.userspace.md \
 	INSTALL.Windows.md \
 	IntegrationGuide.md \
+	MAINTAINERS.md \
 	OPENFLOW-1.1+.md \
 	PORTING.md \
 	README.md \
@@ -183,6 +184,7 @@ SUFFIXES += .in
 SUFFIXES += .xml
 %: %.xml
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/xml2nroff $< > $@.tmp \
+		-I $(srcdir) \
 		--version=$(VERSION) \
 		PKIDIR='$(PKIDIR)' \
 		LOGDIR='$(LOGDIR)' \
@@ -343,20 +345,30 @@ endif
 if HAVE_FLAKE8
 ALL_LOCAL += flake8-check
 # http://flake8.readthedocs.org/en/latest/warnings.html
-# E121 continuation line under-indented for hanging indent (only from flake8 v2.0)
-# E123 closing bracket does not match indentation of opening bracket's line
-# E125 continuation line with same indent as next logical line (only from flake8 v2.0)
-# E126 continuation line over-indented for hanging indent
-# E127 continuation line over-indented for visual indent
-# E128 continuation line under-indented for visual indent
-# E129 visually indented line with same indent as next logical line
-# E131 continuation line unaligned for hanging indent
-# F811 redefinition of unused <name> from line <N> (only from flake8 v2.0)
-# W503 line break before binary operator
+# All warnings explicitly selected or ignored should be listed below.
+#
+# E***, W*** -- warnings from pep8
+#   E121 continuation line under-indented for hanging indent (only from flake8 v2.0)
+#   E123 closing bracket does not match indentation of opening bracket's line
+#   E125 continuation line with same indent as next logical line (only from flake8 v2.0)
+#   E126 continuation line over-indented for hanging indent
+#   E127 continuation line over-indented for visual indent
+#   E128 continuation line under-indented for visual indent
+#   E129 visually indented line with same indent as next logical line
+#   E131 continuation line unaligned for hanging indent
+#   W503 line break before binary operator
+# F*** -- warnings native to flake8
+#   F811 redefinition of unused <name> from line <N> (only from flake8 v2.0)
 # D*** -- warnings from flake8-docstrings plugin
 # H*** -- warnings from flake8 hacking plugin (custom style checks beyond PEP8)
+#   H231 Python 3.x incompatible 'except x,y:' construct
+#   H232 Python 3.x incompatible octal 077 should be written as 0o77
+#   H233 Python 3.x incompatible use of print operator
+#   H238 old style class declaration, use new style (inherit from `object`)
 flake8-check: $(FLAKE8_PYFILES)
-	$(AM_V_GEN) if flake8 $^ --ignore=E121,E123,E125,E126,E127,E128,E129,E131,F811,W503,D,H ${FLAKE8_FLAGS}; then touch $@; else exit 1; fi
+	$(AM_V_GEN) if flake8 $^ --select=H231,H232,H233,H238 ${FLAKE8_FLAGS} && \
+		flake8 $^ --ignore=E121,E123,E125,E126,E127,E128,E129,E131,W503,F811,D,H ${FLAKE8_FLAGS}; then \
+		touch $@; else exit 1; fi
 endif
 
 include $(srcdir)/manpages.mk
@@ -396,7 +408,7 @@ if LINUX_ENABLED
 endif
 
 dist-docs:
-	VERSION=$(VERSION) $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
+	VERSION=$(VERSION) MAKE='$(MAKE)' $(srcdir)/build-aux/dist-docs $(srcdir) $(docs)
 .PHONY: dist-docs
 
 include Documentation/automake.mk

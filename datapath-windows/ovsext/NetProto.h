@@ -19,7 +19,9 @@
 
 #include "precomp.h"
 #include "Ethernet.h"
+#include "Mpls.h"
 
+#define ETH_HEADER_LENGTH  14
 #define ETH_ADDR_LENGTH    6
 /*
  * There is a more inclusive definition of ethernet header (Eth_Header) in

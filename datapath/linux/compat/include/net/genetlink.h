@@ -67,7 +67,7 @@ static inline int rpl_genl_unregister_family(struct genl_family *family)
 static inline int genl_set_err(struct genl_family *family, struct net *net,
 			       u32 portid, u32 group, int code)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+#ifdef HAVE_VOID_NETLINK_SET_ERR
 	netlink_set_err(net->genl_sock, portid, group, code);
 	return 0;
 #else

@@ -1037,7 +1037,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 0f 00 20 00 00 00 03 00 03 50 54 00 00 00 01 \
 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1051,7 +1051,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.1) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.1) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1065,7 +1065,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.2) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.2) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1079,7 +1079,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 00 00 00 00 00 \
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.3) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.3) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: UNCHANGED
@@ -1093,7 +1093,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
 00 00 00 08 00 00 00 01
 " 3], [0], [dnl
-OFPT_PORT_MOD (OF1.4) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD
@@ -1755,7 +1755,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 14 00 00 00 01 00 05 00 00 ff fc 00 00 \
 ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (xid=0x1):port=ANY queue=ALL
+OFPST_QUEUE request (xid=0x1): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1765,7 +1765,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 02 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.1) (xid=0x2):port=ANY queue=ALL
+OFPST_QUEUE request (OF1.1) (xid=0x2): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1775,7 +1775,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 03 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.2) (xid=0x2):port=ANY queue=ALL
+OFPST_QUEUE request (OF1.2) (xid=0x2): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1785,7 +1785,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 04 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.3) (xid=0x2):port=ANY queue=ALL
+OFPST_QUEUE request (OF1.3) (xid=0x2): port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -2546,6 +2546,15 @@ OFPT_QUEUE_GET_CONFIG_REQUEST (OF1.2) (xid=0x1): port=1
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_QUEUE_DESC request - OF1.4])
+AT_KEYWORDS([ofp-print OFPT_QUEUE_GET_CONFIG_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 12 00 18 00 00 00 01 00 0f 00 00 00 00 00 00 \
+00 00 00 01 00 00 00 02"], [0],
+  [OFPST_QUEUE_DESC request (OF1.4) (xid=0x1): port=1 queue=2
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "01 15 00 40 00 00 00 01 \
@@ -2556,6 +2565,21 @@ AT_CHECK([ovs-ofctl ofp-print "01 15 00 40 00 00 00 01 \
 00 00 44 44 00 08 00 00 \
 "], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (xid=0x1): port=1
+queue 21845: min_rate:50.0% max_rate:75.0%
+queue 17476:
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "02 17 00 40 00 00 00 01 \
+00 00 00 01 00 00 00 00 \
+00 00 55 55 00 28 00 00 \
+00 01 00 10 00 00 00 00 01 f4 00 00 00 00 00 00 \
+00 02 00 10 00 00 00 00 02 ee 00 00 00 00 00 00 \
+00 00 44 44 00 08 00 00 \
+"], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.1) (xid=0x1): port=1
 queue 21845: min_rate:50.0% max_rate:75.0%
 queue 17476:
 ])
@@ -2576,22 +2600,67 @@ queue 17476:
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_QUEUE_GET_CONFIG_REPLY - OF1.3])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "04 17 00 50 00 00 00 01 \
+00 00 00 01 00 00 00 00 \
+00 00 55 55 00 00 00 01 00 30 00 00 00 00 00 00 \
+00 01 00 10 00 00 00 00 01 f4 00 00 00 00 00 00 \
+00 02 00 10 00 00 00 00 02 ee 00 00 00 00 00 00 \
+00 00 44 44 00 08 00 01 00 10 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_QUEUE_GET_CONFIG_REPLY (OF1.3) (xid=0x1): port=1
+queue 21845: min_rate:50.0% max_rate:75.0%
+queue 17476:
+])
+AT_CLEANUP
+
+# OF1.4 renamed OFPT_QUEUE_GET_CONFIG_REPLY to OFPST_QUEUE_DESC.
+AT_SETUP([OFPST_QUEUE_DESC reply - OF1.4])
+AT_KEYWORDS([ofp-print OFPT_QUEUE_GET_CONFIG_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 13 00 48 00 00 00 01 00 0f 00 00 00 00 00 00 \
+
+00 00 00 01 00 00 55 55 00 20 00 00 00 00 00 00 \
+00 01 00 08 01 f4 00 00 \
+00 02 00 08 02 ee 00 00 \
+
+00 00 00 02 00 00 44 44 00 18 00 00 00 00 00 00 \
+00 02 00 08 00 64 00 00 \
+"], [0], [dnl
+OFPST_QUEUE_DESC reply (OF1.4) (xid=0x1): port=1
+queue 21845: min_rate:50.0% max_rate:75.0%
+port=2
+queue 17476: max_rate:10.0%
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_SET_ASYNC - OF1.3])
 AT_KEYWORDS([ofp-print])
+dnl This message has bit 12 set for the PACKET_IN messages (master and slave).
+dnl Those aren't supported bits so they get silently ignored on decoding.
+dnl That seems reasonable because OF1.3 doesn't define any error codes for
+dnl OFPT_SET_ASYNC.
 AT_CHECK([ovs-ofctl ofp-print "\
 04 1c 00 20 00 00 00 00 00 00 10 05 00 00 10 07 \
 00 00 00 03 00 00 00 07 00 00 00 00 00 00 00 03 \
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.3) (xid=0x0):
  master:
-       PACKET_IN: no_match invalid_ttl 12
+       PACKET_IN: no_match invalid_ttl
      PORT_STATUS: add delete
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 
  slave:
-       PACKET_IN: no_match action invalid_ttl 12
+       PACKET_IN: no_match action invalid_ttl
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 ])
 AT_CLEANUP
 
@@ -2779,6 +2848,8 @@ AT_CLEANUP
 
 AT_SETUP([NXT_SET_ASYNC_CONFIG])
 AT_KEYWORDS([ofp-print])
+dnl This message has bit 12 set for the PACKET_IN messages (master and slave).
+dnl Those aren't supported bits so they get silently ignored on decoding.
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 28 00 00 00 00 00 00 23 20 00 00 00 13 \
 00 00 10 05 00 00 10 07 00 00 00 03 00 00 00 07 \
@@ -2786,14 +2857,20 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 NXT_SET_ASYNC_CONFIG (xid=0x0):
  master:
-       PACKET_IN: no_match invalid_ttl 12
+       PACKET_IN: no_match invalid_ttl
      PORT_STATUS: add delete
     FLOW_REMOVED: (off)
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 
  slave:
-       PACKET_IN: no_match action invalid_ttl 12
+       PACKET_IN: no_match action invalid_ttl
      PORT_STATUS: add delete modify
     FLOW_REMOVED: idle hard
+     ROLE_STATUS: (off)
+    TABLE_STATUS: (off)
+  REQUESTFORWARD: (off)
 ])
 AT_CLEANUP
 
@@ -2833,6 +2910,9 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 05 00 08 00 00 00 05 \
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_INVALID***
+], [stderr])
+AT_CHECK([sed 's/.*|//' stderr], [0],
+  [bad value 0x40 for PACKET_IN (allowed mask 0x3f)
 ])
 AT_CLEANUP
 
@@ -2845,6 +2925,9 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 05 00 08 00 00 00 05\
 "], [0], [dnl
 OFPT_SET_ASYNC (OF1.4) (xid=0x2): ***decode error: OFPACFC_UNSUPPORTED***
+], [stderr])
+AT_CHECK([sed 's/.*|//' stderr], [0],
+  [unknown async config property type 17
 ])
 AT_CLEANUP
 
@@ -3383,7 +3466,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x3):
  bundle_id=0x1 flags=atomic
-OFPT_PORT_MOD (OF1.4) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD

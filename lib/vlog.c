@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ VLOG_LEVELS
 BUILD_ASSERT_DECL(LOG_LOCAL0 == (16 << 3));
 
 /* The log modules. */
-struct ovs_list vlog_modules = OVS_LIST_INITIALIZER(&vlog_modules);
+static struct ovs_list vlog_modules = OVS_LIST_INITIALIZER(&vlog_modules);
 
 /* Protects the 'pattern' in all "struct destination"s, so that a race between
  * changing and reading the pattern does not cause an access to freed

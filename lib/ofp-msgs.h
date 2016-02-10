@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ enum ofpraw {
     OFPRAW_OFPT11_PACKET_IN,
     /* OFPT 1.2 (10): struct ofp12_packet_in, uint8_t[]. */
     OFPRAW_OFPT12_PACKET_IN,
-    /* OFPT 1.3+ (10): struct ofp13_packet_in, uint8_t[]. */
+    /* OFPT 1.3+ (10): struct ofp12_packet_in, ovs_be64, uint8_t[]. */
     OFPRAW_OFPT13_PACKET_IN,
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,
@@ -208,12 +208,12 @@ enum ofpraw {
 
     /* OFPT 1.0 (20): struct ofp10_queue_get_config_request. */
     OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST,
-    /* OFPT 1.1+ (22): struct ofp11_queue_get_config_request. */
+    /* OFPT 1.1-1.3 (22): struct ofp11_queue_get_config_request. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
 
     /* OFPT 1.0 (21): struct ofp10_queue_get_config_reply, uint8_t[8][]. */
     OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY,
-    /* OFPT 1.1+ (23): struct ofp11_queue_get_config_reply, uint8_t[8][]. */
+    /* OFPT 1.1-1.3 (23): struct ofp11_queue_get_config_reply, uint8_t[8][]. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
 
     /* OFPT 1.2+ (24): struct ofp12_role_request. */
@@ -232,13 +232,15 @@ enum ofpraw {
     OFPRAW_OFPT14_GET_ASYNC_REQUEST,
     /* OFPT 1.3 (27): struct ofp13_async_config. */
     OFPRAW_OFPT13_GET_ASYNC_REPLY,
-    /* OFPT 1.4+ (27): struct ofp14_async_config, uint8_t[8][]. */
+    /* OFPT 1.4+ (27): uint8_t[8][]. */
     OFPRAW_OFPT14_GET_ASYNC_REPLY,
     /* OFPT 1.3 (28): struct ofp13_async_config. */
     OFPRAW_OFPT13_SET_ASYNC,
     /* NXT 1.0+ (19): struct nx_async_config. */
     OFPRAW_NXT_SET_ASYNC_CONFIG,
-    /* OFPT 1.4+ (28): struct ofp14_async_config, uint8_t[8][]. */
+    /* NXT 1.0-1.3 (27): uint8_t[8][]. */
+    OFPRAW_NXT_SET_ASYNC_CONFIG2,
+    /* OFPT 1.4+ (28): uint8_t[8][]. */
     OFPRAW_OFPT14_SET_ASYNC,
 
     /* OFPT 1.3+ (29): struct ofp13_meter_mod, uint8_t[8][]. */
@@ -396,6 +398,11 @@ enum ofpraw {
     /* OFPST 1.4+ (13): uint8_t[8][]. */
     OFPRAW_OFPST14_PORT_DESC_REPLY,
 
+    /* OFPST 1.4+ (15): struct ofp14_queue_desc_request. */
+    OFPRAW_OFPST14_QUEUE_DESC_REQUEST,
+    /* OFPST 1.4+ (15): uint8_t[8][]. */
+    OFPRAW_OFPST14_QUEUE_DESC_REPLY,
+
     /* OFPST 1.4+ (16): uint8_t[8][]. */
     OFPRAW_OFPST14_FLOW_MONITOR_REQUEST,
     /* NXST 1.0 (2): uint8_t[8][]. */
@@ -537,9 +544,11 @@ enum ofptype {
 
     /* Queue Configuration messages. */
     OFPTYPE_QUEUE_GET_CONFIG_REQUEST, /* OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST.
-                                       * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST. */
+                                       * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST.
+                                       * OFPRAW_OFPST14_QUEUE_DESC_REQUEST. */
     OFPTYPE_QUEUE_GET_CONFIG_REPLY, /* OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY.
-                                     * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY. */
+                                     * OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY.
+                                     * OFPRAW_OFPST14_QUEUE_DESC_REPLY. */
 
     /* Controller role change request messages. */
     OFPTYPE_ROLE_REQUEST,         /* OFPRAW_OFPT12_ROLE_REQUEST.
@@ -553,6 +562,7 @@ enum ofptype {
     OFPTYPE_GET_ASYNC_REPLY,      /* OFPRAW_OFPT13_GET_ASYNC_REPLY.
                                    * OFPRAW_OFPT14_GET_ASYNC_REPLY. */
     OFPTYPE_SET_ASYNC_CONFIG,     /* OFPRAW_NXT_SET_ASYNC_CONFIG.
+                                   * OFPRAW_NXT_SET_ASYNC_CONFIG2.
                                    * OFPRAW_OFPT13_SET_ASYNC.
                                    * OFPRAW_OFPT14_SET_ASYNC. */
 

@@ -36,10 +36,12 @@
 #include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-msgs.h"
+#include "ofp-prop.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/netronome-ext.h"
 #include "packets.h"
+#include "pktbuf.h"
 #include "random.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
@@ -61,161 +63,6 @@ static ovs_be32 ofputil_encode_table_config(enum ofputil_table_miss,
                                             enum ofputil_table_eviction,
                                             enum ofputil_table_vacancy,
                                             enum ofp_version);
-
-struct ofp_prop_header {
-    ovs_be16 type;
-    ovs_be16 len;
-};
-
-struct ofp_prop_experimenter {
-    ovs_be16 type;          /* OFP*_EXPERIMENTER. */
-    ovs_be16 length;        /* Length in bytes of this property. */
-    ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
-                             * in struct ofp_experimenter_header. */
-    ovs_be32 exp_type;      /* Experimenter defined. */
-};
-
-/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
- * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code.
- *
- * This function pulls the property's stated size padded out to a multiple of
- * 'alignment' bytes.  The common case in OpenFlow is an 'alignment' of 8, so
- * you can use ofputil_pull_property() for that case. */
-static enum ofperr
-ofputil_pull_property__(struct ofpbuf *msg, struct ofpbuf *property,
-                        unsigned int alignment, uint16_t *typep)
-{
-    struct ofp_prop_header *oph;
-    unsigned int padded_len;
-    unsigned int len;
-
-    if (msg->size < sizeof *oph) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    oph = msg->data;
-    len = ntohs(oph->len);
-    padded_len = ROUND_UP(len, alignment);
-    if (len < sizeof *oph || padded_len > msg->size) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    *typep = ntohs(oph->type);
-    if (property) {
-        ofpbuf_use_const(property, msg->data, len);
-    }
-    ofpbuf_pull(msg, padded_len);
-    return 0;
-}
-
-/* Pulls a property, beginning with struct ofp_prop_header, from the beginning
- * of 'msg'.  Stores the type of the property in '*typep' and, if 'property' is
- * nonnull, the entire property, including the header, in '*property'.  Returns
- * 0 if successful, otherwise an error code.
- *
- * This function pulls the property's stated size padded out to a multiple of
- * 8 bytes, which is the common case for OpenFlow properties. */
-static enum ofperr
-ofputil_pull_property(struct ofpbuf *msg, struct ofpbuf *property,
-                      uint16_t *typep)
-{
-    return ofputil_pull_property__(msg, property, 8, typep);
-}
-
-static void OVS_PRINTF_FORMAT(2, 3)
-log_property(bool loose, const char *message, ...)
-{
-    enum vlog_level level = loose ? VLL_DBG : VLL_WARN;
-    if (!vlog_should_drop(THIS_MODULE, level, &bad_ofmsg_rl)) {
-        va_list args;
-
-        va_start(args, message);
-        vlog_valist(THIS_MODULE, level, message, args);
-        va_end(args);
-    }
-}
-
-static enum ofperr
-ofputil_check_mask(uint16_t type, uint32_t mask)
-{
-    switch (type) {
-    case OFPACPT_PACKET_IN_SLAVE:
-    case OFPACPT_PACKET_IN_MASTER:
-        if (mask > MAXIMUM_MASK_PACKET_IN) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_FLOW_REMOVED_SLAVE:
-    case OFPACPT_FLOW_REMOVED_MASTER:
-        if (mask > MAXIMUM_MASK_FLOW_REMOVED) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_PORT_STATUS_SLAVE:
-    case OFPACPT_PORT_STATUS_MASTER:
-        if (mask > MAXIMUM_MASK_PORT_STATUS) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_ROLE_STATUS_SLAVE:
-    case OFPACPT_ROLE_STATUS_MASTER:
-        if (mask > MAXIMUM_MASK_ROLE_STATUS) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_TABLE_STATUS_SLAVE:
-    case OFPACPT_TABLE_STATUS_MASTER:
-        if ((mask < MINIMUM_MASK_TABLE_STATUS && mask != 0) |
-            (mask > MAXIMUM_MASK_TABLE_STATUS)) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-
-    case OFPACPT_REQUESTFORWARD_SLAVE:
-    case OFPACPT_REQUESTFORWARD_MASTER:
-        if (mask > MAXIMUM_MASK_REQUESTFORWARD) {
-            return OFPERR_OFPACFC_INVALID;
-        }
-        break;
-    }
-    return 0;
-}
-
-static size_t
-start_property(struct ofpbuf *msg, uint16_t type)
-{
-    size_t start_ofs = msg->size;
-    struct ofp_prop_header *oph;
-
-    oph = ofpbuf_put_uninit(msg, sizeof *oph);
-    oph->type = htons(type);
-    oph->len = htons(4);        /* May be updated later by end_property(). */
-    return start_ofs;
-}
-
-static void
-end_property(struct ofpbuf *msg, size_t start_ofs)
-{
-    struct ofp_prop_header *oph;
-
-    oph = ofpbuf_at_assert(msg, start_ofs, sizeof *oph);
-    oph->len = htons(msg->size - start_ofs);
-    ofpbuf_padto(msg, ROUND_UP(msg->size, 8));
-}
-
-static void
-put_bitmap_properties(struct ofpbuf *msg, uint64_t bitmap)
-{
-    for (; bitmap; bitmap = zero_rightmost_1bit(bitmap)) {
-        start_property(msg, rightmost_1bit_idx(bitmap));
-    }
-}
 
 /* Given the wildcard bit count in the least-significant 6 of 'wcbits', returns
  * an IP netmask with a 1 in each bit that must match and a 0 in each bit that
@@ -2447,10 +2294,14 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
 }
 
 /* Constructs and returns an OFPT_QUEUE_GET_CONFIG request for the specified
- * 'port', suitable for OpenFlow version 'version'. */
+ * 'port' and 'queue', suitable for OpenFlow version 'version'.
+ *
+ * 'queue' is honored only for OpenFlow 1.4 and later; older versions always
+ * request all queues. */
 struct ofpbuf *
 ofputil_encode_queue_get_config_request(enum ofp_version version,
-                                        ofp_port_t port)
+                                        ofp_port_t port,
+                                        uint32_t queue)
 {
     struct ofpbuf *request;
 
@@ -2461,13 +2312,21 @@ ofputil_encode_queue_get_config_request(enum ofp_version version,
                                version, 0);
         qgcr10 = ofpbuf_put_zeros(request, sizeof *qgcr10);
         qgcr10->port = htons(ofp_to_u16(port));
-    } else {
+    } else if (version < OFP14_VERSION) {
         struct ofp11_queue_get_config_request *qgcr11;
 
         request = ofpraw_alloc(OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
                                version, 0);
         qgcr11 = ofpbuf_put_zeros(request, sizeof *qgcr11);
         qgcr11->port = ofputil_port_to_ofp11(port);
+    } else {
+        struct ofp14_queue_desc_request *qdr14;
+
+        request = ofpraw_alloc(OFPRAW_OFPST14_QUEUE_DESC_REQUEST,
+                               version, 0);
+        qdr14 = ofpbuf_put_zeros(request, sizeof *qdr14);
+        qdr14->port = ofputil_port_to_ofp11(port);
+        qdr14->queue = htonl(queue);
     }
 
     return request;
@@ -2478,10 +2337,11 @@ ofputil_encode_queue_get_config_request(enum ofp_version version,
  * code. */
 enum ofperr
 ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
-                                        ofp_port_t *port)
+                                        ofp_port_t *port, uint32_t *queue)
 {
     const struct ofp10_queue_get_config_request *qgcr10;
     const struct ofp11_queue_get_config_request *qgcr11;
+    const struct ofp14_queue_desc_request *qdr14;
     enum ofpraw raw;
     struct ofpbuf b;
 
@@ -2492,15 +2352,22 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
         qgcr10 = b.data;
         *port = u16_to_ofp(ntohs(qgcr10->port));
+        *queue = OFPQ_ALL;
         break;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
         qgcr11 = b.data;
+        *queue = OFPQ_ALL;
         enum ofperr error = ofputil_port_from_ofp11(qgcr11->port, port);
         if (error || *port == OFPP_ANY) {
             return error;
         }
         break;
+
+    case OFPRAW_OFPST14_QUEUE_DESC_REQUEST:
+        qdr14 = b.data;
+        *queue = ntohl(qdr14->queue);
+        return ofputil_port_from_ofp11(qdr14->port, port);
 
     default:
         OVS_NOT_REACHED();
@@ -2512,53 +2379,57 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
 }
 
 /* Constructs and returns the beginning of a reply to
- * OFPT_QUEUE_GET_CONFIG_REQUEST 'oh'.  The caller may append information about
- * individual queues with ofputil_append_queue_get_config_reply(). */
-struct ofpbuf *
-ofputil_encode_queue_get_config_reply(const struct ofp_header *oh)
+ * OFPT_QUEUE_GET_CONFIG_REQUEST or OFPMP_QUEUE_DESC request 'oh'.  The caller
+ * may append information about individual queues with
+ * ofputil_append_queue_get_config_reply(). */
+void
+ofputil_start_queue_get_config_reply(const struct ofp_header *request,
+                                     struct ovs_list *replies)
 {
-    struct ofp10_queue_get_config_reply *qgcr10;
-    struct ofp11_queue_get_config_reply *qgcr11;
     struct ofpbuf *reply;
     enum ofperr error;
-    struct ofpbuf b;
-    enum ofpraw raw;
     ofp_port_t port;
+    uint32_t queue;
 
-    error = ofputil_decode_queue_get_config_request(oh, &port);
+    error = ofputil_decode_queue_get_config_request(request, &port, &queue);
     ovs_assert(!error);
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
-
+    enum ofpraw raw = ofpraw_decode_assert(request);
     switch ((int) raw) {
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
         reply = ofpraw_alloc_reply(OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY,
-                                   oh, 0);
-        qgcr10 = ofpbuf_put_zeros(reply, sizeof *qgcr10);
+                                   request, 0);
+        struct ofp10_queue_get_config_reply *qgcr10
+            = ofpbuf_put_zeros(reply, sizeof *qgcr10);
         qgcr10->port = htons(ofp_to_u16(port));
         break;
 
     case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST:
         reply = ofpraw_alloc_reply(OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
-                                   oh, 0);
-        qgcr11 = ofpbuf_put_zeros(reply, sizeof *qgcr11);
+                                   request, 0);
+        struct ofp11_queue_get_config_reply *qgcr11
+            = ofpbuf_put_zeros(reply, sizeof *qgcr11);
         qgcr11->port = ofputil_port_to_ofp11(port);
+        break;
+
+    case OFPRAW_OFPST14_QUEUE_DESC_REQUEST:
+        reply = ofpraw_alloc_stats_reply(request, 0);
         break;
 
     default:
         OVS_NOT_REACHED();
     }
 
-    return reply;
+    list_init(replies);
+    list_push_back(replies, &reply->list_node);
 }
 
 static void
-put_queue_rate(struct ofpbuf *reply, enum ofp_queue_properties property,
-               uint16_t rate)
+put_ofp10_queue_rate(struct ofpbuf *reply,
+                     enum ofp10_queue_properties property, uint16_t rate)
 {
     if (rate != UINT16_MAX) {
-        struct ofp_queue_prop_rate *oqpr;
+        struct ofp10_queue_prop_rate *oqpr;
 
         oqpr = ofpbuf_put_zeros(reply, sizeof *oqpr);
         oqpr->prop_header.property = htons(property);
@@ -2567,73 +2438,68 @@ put_queue_rate(struct ofpbuf *reply, enum ofp_queue_properties property,
     }
 }
 
-/* Appends a queue description for 'queue_id' to the
- * OFPT_QUEUE_GET_CONFIG_REPLY already in 'oh'. */
-void
-ofputil_append_queue_get_config_reply(struct ofpbuf *reply,
-                                      const struct ofputil_queue_config *oqc)
+static void
+put_ofp14_queue_rate(struct ofpbuf *reply,
+                     enum ofp14_queue_desc_prop_type type, uint16_t rate)
 {
-    const struct ofp_header *oh = reply->data;
-    size_t start_ofs, len_ofs;
+    if (rate != UINT16_MAX) {
+        ofpprop_put_u16(reply, type, rate);
+    }
+}
+
+void
+ofputil_append_queue_get_config_reply(const struct ofputil_queue_config *qc,
+                                      struct ovs_list *replies)
+{
+    enum ofp_version ofp_version = ofpmp_version(replies);
+    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    size_t start_ofs = reply->size;
+    size_t len_ofs;
     ovs_be16 *len;
 
-    start_ofs = reply->size;
-    if (oh->version < OFP12_VERSION) {
-        struct ofp10_packet_queue *opq10;
+    if (ofp_version < OFP14_VERSION) {
+        if (ofp_version < OFP12_VERSION) {
+            struct ofp10_packet_queue *opq10;
 
-        opq10 = ofpbuf_put_zeros(reply, sizeof *opq10);
-        opq10->queue_id = htonl(oqc->queue_id);
-        len_ofs = (char *) &opq10->len - (char *) reply->data;
+            opq10 = ofpbuf_put_zeros(reply, sizeof *opq10);
+            opq10->queue_id = htonl(qc->queue);
+            len_ofs = (char *) &opq10->len - (char *) reply->data;
+        } else {
+            struct ofp12_packet_queue *opq12;
+
+            opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
+            opq12->port = ofputil_port_to_ofp11(qc->port);
+            opq12->queue_id = htonl(qc->queue);
+            len_ofs = (char *) &opq12->len - (char *) reply->data;
+        }
+
+        put_ofp10_queue_rate(reply, OFPQT10_MIN_RATE, qc->min_rate);
+        put_ofp10_queue_rate(reply, OFPQT11_MAX_RATE, qc->max_rate);
     } else {
-        struct ofp12_packet_queue *opq12;
-
-        opq12 = ofpbuf_put_zeros(reply, sizeof *opq12);
-        opq12->port = ofputil_port_to_ofp11(oqc->port);
-        opq12->queue_id = htonl(oqc->queue_id);
-        len_ofs = (char *) &opq12->len - (char *) reply->data;
+        struct ofp14_queue_desc *oqd = ofpbuf_put_zeros(reply, sizeof *oqd);
+        oqd->port_no = ofputil_port_to_ofp11(qc->port);
+        oqd->queue_id = htonl(qc->queue);
+        len_ofs = (char *) &oqd->len - (char *) reply->data;
+        put_ofp14_queue_rate(reply, OFPQDPT14_MIN_RATE, qc->min_rate);
+        put_ofp14_queue_rate(reply, OFPQDPT14_MAX_RATE, qc->max_rate);
     }
-
-    put_queue_rate(reply, OFPQT_MIN_RATE, oqc->min_rate);
-    put_queue_rate(reply, OFPQT_MAX_RATE, oqc->max_rate);
 
     len = ofpbuf_at(reply, len_ofs, sizeof *len);
     *len = htons(reply->size - start_ofs);
-}
 
-/* Decodes the initial part of an OFPT_QUEUE_GET_CONFIG_REPLY from 'reply' and
- * stores in '*port' the port that the reply is about.  The caller may call
- * ofputil_pull_queue_get_config_reply() to obtain information about individual
- * queues included in the reply.  Returns 0 if successful, otherwise an
- * ofperr.*/
-enum ofperr
-ofputil_decode_queue_get_config_reply(struct ofpbuf *reply, ofp_port_t *port)
-{
-    const struct ofp10_queue_get_config_reply *qgcr10;
-    const struct ofp11_queue_get_config_reply *qgcr11;
-    enum ofpraw raw;
-
-    raw = ofpraw_pull_assert(reply);
-    switch ((int) raw) {
-    case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY:
-        qgcr10 = ofpbuf_pull(reply, sizeof *qgcr10);
-        *port = u16_to_ofp(ntohs(qgcr10->port));
-        return 0;
-
-    case OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY:
-        qgcr11 = ofpbuf_pull(reply, sizeof *qgcr11);
-        return ofputil_port_from_ofp11(qgcr11->port, port);
+    if (ofp_version >= OFP14_VERSION) {
+        ofpmp_postappend(replies, start_ofs);
     }
-
-    OVS_NOT_REACHED();
 }
 
 static enum ofperr
-parse_queue_rate(const struct ofp_queue_prop_header *hdr, uint16_t *rate)
+parse_ofp10_queue_rate(const struct ofp10_queue_prop_header *hdr,
+                       uint16_t *rate)
 {
-    const struct ofp_queue_prop_rate *oqpr;
+    const struct ofp10_queue_prop_rate *oqpr;
 
     if (hdr->len == htons(sizeof *oqpr)) {
-        oqpr = (const struct ofp_queue_prop_rate *) hdr;
+        oqpr = (const struct ofp10_queue_prop_rate *) hdr;
         *rate = ntohs(oqpr->rate);
         return 0;
     } else {
@@ -2641,76 +2507,76 @@ parse_queue_rate(const struct ofp_queue_prop_header *hdr, uint16_t *rate)
     }
 }
 
-/* Decodes information about a queue from the OFPT_QUEUE_GET_CONFIG_REPLY in
- * 'reply' and stores it in '*queue'.  ofputil_decode_queue_get_config_reply()
- * must already have pulled off the main header.
- *
- * This function returns EOF if the last queue has already been decoded, 0 if a
- * queue was successfully decoded into '*queue', or an ofperr if there was a
- * problem decoding 'reply'. */
-int
-ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
-                                    struct ofputil_queue_config *queue)
+static int
+ofputil_pull_queue_get_config_reply10(struct ofpbuf *msg,
+                                      struct ofputil_queue_config *queue)
 {
-    const struct ofp_header *oh;
-    unsigned int opq_len;
-    unsigned int len;
+    const struct ofp_header *oh = msg->header;
+    unsigned int opq_len;       /* Length of protocol-specific queue header. */
+    unsigned int len;           /* Total length of queue + properties. */
 
-    if (!reply->size) {
-        return EOF;
+    /* Obtain the port number from the message header. */
+    if (oh->version == OFP10_VERSION) {
+        const struct ofp10_queue_get_config_reply *oqgcr10 = msg->msg;
+        queue->port = u16_to_ofp(ntohs(oqgcr10->port));
+    } else {
+        const struct ofp11_queue_get_config_reply *oqgcr11 = msg->msg;
+        enum ofperr error = ofputil_port_from_ofp11(oqgcr11->port,
+                                                    &queue->port);
+        if (error) {
+            return error;
+        }
     }
 
-    queue->min_rate = UINT16_MAX;
-    queue->max_rate = UINT16_MAX;
-
-    oh = reply->header;
+    /* Pull off the queue header and get the queue number and length. */
     if (oh->version < OFP12_VERSION) {
         const struct ofp10_packet_queue *opq10;
-
-        opq10 = ofpbuf_try_pull(reply, sizeof *opq10);
+        opq10 = ofpbuf_try_pull(msg, sizeof *opq10);
         if (!opq10) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
-        queue->queue_id = ntohl(opq10->queue_id);
+        queue->queue = ntohl(opq10->queue_id);
         len = ntohs(opq10->len);
         opq_len = sizeof *opq10;
     } else {
         const struct ofp12_packet_queue *opq12;
-
-        opq12 = ofpbuf_try_pull(reply, sizeof *opq12);
+        opq12 = ofpbuf_try_pull(msg, sizeof *opq12);
         if (!opq12) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
-        queue->queue_id = ntohl(opq12->queue_id);
+        queue->queue = ntohl(opq12->queue_id);
         len = ntohs(opq12->len);
         opq_len = sizeof *opq12;
     }
 
-    if (len < opq_len || len > reply->size + opq_len || len % 8) {
+    /* Length check. */
+    if (len < opq_len || len > msg->size + opq_len || len % 8) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
     len -= opq_len;
 
+    /* Pull properties.  The format of these properties differs from used in
+     * OF1.4+ so we can't use the common property functions. */
     while (len > 0) {
-        const struct ofp_queue_prop_header *hdr;
+        const struct ofp10_queue_prop_header *hdr;
         unsigned int property;
         unsigned int prop_len;
         enum ofperr error = 0;
 
-        hdr = ofpbuf_at_assert(reply, 0, sizeof *hdr);
+        hdr = ofpbuf_at_assert(msg, 0, sizeof *hdr);
         prop_len = ntohs(hdr->len);
-        if (prop_len < sizeof *hdr || prop_len > reply->size || prop_len % 8) {
+        if (prop_len < sizeof *hdr || prop_len > msg->size || prop_len % 8) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
         property = ntohs(hdr->property);
         switch (property) {
-        case OFPQT_MIN_RATE:
-            error = parse_queue_rate(hdr, &queue->min_rate);
+        case OFPQT10_MIN_RATE:
+            error = parse_ofp10_queue_rate(hdr, &queue->min_rate);
             break;
 
-        case OFPQT_MAX_RATE:
-            error = parse_queue_rate(hdr, &queue->max_rate);
+        case OFPQT11_MAX_RATE:
+            error = parse_ofp10_queue_rate(hdr, &queue->max_rate);
             break;
 
         default:
@@ -2721,10 +2587,105 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
             return error;
         }
 
-        ofpbuf_pull(reply, prop_len);
+        ofpbuf_pull(msg, prop_len);
         len -= prop_len;
     }
     return 0;
+}
+
+static int
+ofputil_pull_queue_get_config_reply14(struct ofpbuf *msg,
+                                      struct ofputil_queue_config *queue)
+{
+    struct ofp14_queue_desc *oqd14 = ofpbuf_try_pull(msg, sizeof *oqd14);
+    if (!oqd14) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    enum ofperr error = ofputil_port_from_ofp11(oqd14->port_no, &queue->port);
+    if (error) {
+        return error;
+    }
+    queue->queue = ntohl(oqd14->queue_id);
+
+    /* Length check. */
+    unsigned int len = ntohs(oqd14->len);
+    if (len < sizeof *oqd14 || len > msg->size + sizeof *oqd14 || len % 8) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    len -= sizeof *oqd14;
+
+    struct ofpbuf properties;
+    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        uint64_t type;
+
+        error = ofpprop_pull(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case OFPQDPT14_MIN_RATE:
+            error = ofpprop_parse_u16(&payload, &queue->min_rate);
+            break;
+
+        case OFPQDPT14_MAX_RATE:
+            error = ofpprop_parse_u16(&payload, &queue->max_rate);
+            break;
+
+        default:
+            error = OFPPROP_UNKNOWN(true, "queue desc", type);
+            break;
+        }
+
+        if (error) {
+            return error;
+        }
+    }
+
+    return 0;
+}
+
+/* Decodes information about a queue from the OFPT_QUEUE_GET_CONFIG_REPLY in
+ * 'reply' and stores it in '*queue'.  ofputil_decode_queue_get_config_reply()
+ * must already have pulled off the main header.
+ *
+ * This function returns EOF if the last queue has already been decoded, 0 if a
+ * queue was successfully decoded into '*queue', or an ofperr if there was a
+ * problem decoding 'reply'. */
+int
+ofputil_pull_queue_get_config_reply(struct ofpbuf *msg,
+                                    struct ofputil_queue_config *queue)
+{
+    enum ofpraw raw;
+    if (!msg->header) {
+        /* Pull OpenFlow header. */
+        raw = ofpraw_pull_assert(msg);
+
+        /* Pull protocol-specific ofp_queue_get_config_reply header (OF1.4
+         * doesn't have one at all). */
+        if (raw == OFPRAW_OFPT10_QUEUE_GET_CONFIG_REPLY) {
+            ofpbuf_pull(msg, sizeof(struct ofp10_queue_get_config_reply));
+        } else if (raw == OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY) {
+            ofpbuf_pull(msg, sizeof(struct ofp11_queue_get_config_reply));
+        } else {
+            ovs_assert(raw == OFPRAW_OFPST14_QUEUE_DESC_REPLY);
+        }
+    } else {
+        raw = ofpraw_decode_assert(msg->header);
+    }
+
+    queue->min_rate = UINT16_MAX;
+    queue->max_rate = UINT16_MAX;
+
+    if (!msg->size) {
+        return EOF;
+    } else if (raw == OFPRAW_OFPST14_QUEUE_DESC_REPLY) {
+        return ofputil_pull_queue_get_config_reply14(msg, queue);
+    } else {
+        return ofputil_pull_queue_get_config_reply10(msg, queue);
+    }
 }
 
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
@@ -3351,9 +3312,18 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     return msg;
 }
 
+/* Decodes the packet-in message starting at 'oh' into '*pin'.  Populates
+ * 'pin->packet' and 'pin->len' with the part of the packet actually included
+ * in the message, and '*total_len' with the original length of the packet
+ * (which is larger than 'packet->len' if only part of the packet was
+ * included).  Stores the packet's buffer ID in '*buffer_id' (UINT32_MAX if it
+ * was not buffered).
+ *
+ * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-ofputil_decode_packet_in(struct ofputil_packet_in *pin,
-                         const struct ofp_header *oh)
+ofputil_decode_packet_in(const struct ofp_header *oh,
+                         struct ofputil_packet_in *pin,
+                         size_t *total_len, uint32_t *buffer_id)
 {
     enum ofpraw raw;
     struct ofpbuf b;
@@ -3364,18 +3334,11 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT13_PACKET_IN || raw == OFPRAW_OFPT12_PACKET_IN) {
-        const struct ofp13_packet_in *opi;
-        int error;
-        size_t packet_in_size;
-
-        if (raw == OFPRAW_OFPT12_PACKET_IN) {
-            packet_in_size = sizeof (struct ofp12_packet_in);
-        } else {
-            packet_in_size = sizeof (struct ofp13_packet_in);
-        }
-
-        opi = ofpbuf_pull(&b, packet_in_size);
-        error = oxm_pull_match_loose(&b, &pin->flow_metadata);
+        const struct ofp12_packet_in *opi = ofpbuf_pull(&b, sizeof *opi);
+        const ovs_be64 *cookie = (raw == OFPRAW_OFPT13_PACKET_IN
+                                  ? ofpbuf_pull(&b, sizeof *cookie)
+                                  : NULL);
+        enum ofperr error = oxm_pull_match_loose(&b, &pin->flow_metadata);
         if (error) {
             return error;
         }
@@ -3384,30 +3347,30 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
-        pin->reason = opi->pi.reason;
-        pin->table_id = opi->pi.table_id;
-        pin->buffer_id = ntohl(opi->pi.buffer_id);
-        pin->total_len = ntohs(opi->pi.total_len);
-
-        if (raw == OFPRAW_OFPT13_PACKET_IN) {
-            pin->cookie = opi->cookie;
+        pin->reason = opi->reason;
+        pin->table_id = opi->table_id;
+        *buffer_id = ntohl(opi->buffer_id);
+        *total_len = ntohs(opi->total_len);
+        if (cookie) {
+            pin->cookie = *cookie;
         }
 
         pin->packet = b.data;
-        pin->packet_len = b.size;
+        pin->len = b.size;
     } else if (raw == OFPRAW_OFPT10_PACKET_IN) {
         const struct ofp10_packet_in *opi;
 
         opi = ofpbuf_pull(&b, offsetof(struct ofp10_packet_in, data));
 
         pin->packet = opi->data;
-        pin->packet_len = b.size;
+        pin->len = b.size;
 
         match_init_catchall(&pin->flow_metadata);
-        match_set_in_port(&pin->flow_metadata, u16_to_ofp(ntohs(opi->in_port)));
+        match_set_in_port(&pin->flow_metadata,
+                          u16_to_ofp(ntohs(opi->in_port)));
         pin->reason = opi->reason;
-        pin->buffer_id = ntohl(opi->buffer_id);
-        pin->total_len = ntohs(opi->total_len);
+        *buffer_id = ntohl(opi->buffer_id);
+        *total_len = ntohs(opi->total_len);
     } else if (raw == OFPRAW_OFPT11_PACKET_IN) {
         const struct ofp11_packet_in *opi;
         ofp_port_t in_port;
@@ -3416,16 +3379,16 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         opi = ofpbuf_pull(&b, sizeof *opi);
 
         pin->packet = b.data;
-        pin->packet_len = b.size;
+        pin->len = b.size;
 
-        pin->buffer_id = ntohl(opi->buffer_id);
+        *buffer_id = ntohl(opi->buffer_id);
         error = ofputil_port_from_ofp11(opi->in_port, &in_port);
         if (error) {
             return error;
         }
         match_init_catchall(&pin->flow_metadata);
         match_set_in_port(&pin->flow_metadata, in_port);
-        pin->total_len = ntohs(opi->total_len);
+        *total_len = ntohs(opi->total_len);
         pin->reason = opi->reason;
         pin->table_id = opi->table_id;
     } else if (raw == OFPRAW_NXT_PACKET_IN) {
@@ -3447,11 +3410,11 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->table_id = npi->table_id;
         pin->cookie = npi->cookie;
 
-        pin->buffer_id = ntohl(npi->buffer_id);
-        pin->total_len = ntohs(npi->total_len);
+        *buffer_id = ntohl(npi->buffer_id);
+        *total_len = ntohs(npi->total_len);
 
         pin->packet = b.data;
-        pin->packet_len = b.size;
+        pin->len = b.size;
     } else {
         OVS_NOT_REACHED();
     }
@@ -3459,149 +3422,189 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     return 0;
 }
 
-static struct ofpbuf *
-ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin)
+static int
+encode_packet_in_reason(enum ofp_packet_in_reason reason,
+                        enum ofp_version version)
 {
-    struct ofp10_packet_in *opi;
-    struct ofpbuf *packet;
+    switch (reason) {
+    case OFPR_NO_MATCH:
+    case OFPR_ACTION:
+    case OFPR_INVALID_TTL:
+        return reason;
 
-    packet = ofpraw_alloc_xid(OFPRAW_OFPT10_PACKET_IN, OFP10_VERSION,
-                              htonl(0), pin->packet_len);
-    opi = ofpbuf_put_zeros(packet, offsetof(struct ofp10_packet_in, data));
-    opi->total_len = htons(pin->total_len);
-    opi->in_port = htons(ofp_to_u16(pin->flow_metadata.flow.in_port.ofp_port));
-    opi->reason = pin->reason;
-    opi->buffer_id = htonl(pin->buffer_id);
+    case OFPR_ACTION_SET:
+    case OFPR_GROUP:
+    case OFPR_PACKET_OUT:
+        return version < OFP14_VERSION ? OFPR_ACTION : reason;
 
-    ofpbuf_put(packet, pin->packet, pin->packet_len);
+    case OFPR_EXPLICIT_MISS:
+        return version < OFP13_VERSION ? OFPR_ACTION : OFPR_NO_MATCH;
 
-    return packet;
+    case OFPR_IMPLICIT_MISS:
+        return OFPR_NO_MATCH;
+
+    case OFPR_N_REASONS:
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 static struct ofpbuf *
-ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin)
+ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin,
+                               uint32_t buffer_id)
+{
+    struct ofp10_packet_in *opi;
+    struct ofpbuf *msg;
+
+    msg = ofpraw_alloc_xid(OFPRAW_OFPT10_PACKET_IN, OFP10_VERSION,
+                           htonl(0), pin->len);
+    opi = ofpbuf_put_zeros(msg, offsetof(struct ofp10_packet_in, data));
+    opi->total_len = htons(pin->len);
+    opi->in_port = htons(ofp_to_u16(pin->flow_metadata.flow.in_port.ofp_port));
+    opi->reason = encode_packet_in_reason(pin->reason, OFP10_VERSION);
+    opi->buffer_id = htonl(buffer_id);
+
+    return msg;
+}
+
+static struct ofpbuf *
+ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
+                            uint32_t buffer_id)
 {
     struct nx_packet_in *npi;
-    struct ofpbuf *packet;
+    struct ofpbuf *msg;
     size_t match_len;
 
     /* The final argument is just an estimate of the space required. */
-    packet = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
-                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
-    ofpbuf_put_zeros(packet, sizeof *npi);
-    match_len = nx_put_match(packet, &pin->flow_metadata, 0, 0);
-    ofpbuf_put_zeros(packet, 2);
-    ofpbuf_put(packet, pin->packet, pin->packet_len);
+    msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
+                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->len);
+    ofpbuf_put_zeros(msg, sizeof *npi);
+    match_len = nx_put_match(msg, &pin->flow_metadata, 0, 0);
+    ofpbuf_put_zeros(msg, 2);
 
-    npi = packet->msg;
-    npi->buffer_id = htonl(pin->buffer_id);
-    npi->total_len = htons(pin->total_len);
-    npi->reason = pin->reason;
+    npi = msg->msg;
+    npi->buffer_id = htonl(buffer_id);
+    npi->total_len = htons(pin->len);
+    npi->reason = encode_packet_in_reason(pin->reason, OFP10_VERSION);
     npi->table_id = pin->table_id;
     npi->cookie = pin->cookie;
     npi->match_len = htons(match_len);
 
-    return packet;
+    return msg;
 }
 
 static struct ofpbuf *
-ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin)
+ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin,
+                               uint32_t buffer_id)
 {
     struct ofp11_packet_in *opi;
-    struct ofpbuf *packet;
+    struct ofpbuf *msg;
 
-    packet = ofpraw_alloc_xid(OFPRAW_OFPT11_PACKET_IN, OFP11_VERSION,
-                              htonl(0), pin->packet_len);
-    opi = ofpbuf_put_zeros(packet, sizeof *opi);
-    opi->buffer_id = htonl(pin->buffer_id);
-    opi->in_port = ofputil_port_to_ofp11(pin->flow_metadata.flow.in_port.ofp_port);
+    msg = ofpraw_alloc_xid(OFPRAW_OFPT11_PACKET_IN, OFP11_VERSION,
+                           htonl(0), pin->len);
+    opi = ofpbuf_put_zeros(msg, sizeof *opi);
+    opi->buffer_id = htonl(buffer_id);
+    opi->in_port = ofputil_port_to_ofp11(
+        pin->flow_metadata.flow.in_port.ofp_port);
     opi->in_phy_port = opi->in_port;
-    opi->total_len = htons(pin->total_len);
-    opi->reason = pin->reason;
+    opi->total_len = htons(pin->len);
+    opi->reason = encode_packet_in_reason(pin->reason, OFP11_VERSION);
     opi->table_id = pin->table_id;
 
-    ofpbuf_put(packet, pin->packet, pin->packet_len);
-
-    return packet;
+    return msg;
 }
 
 static struct ofpbuf *
 ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
-                               enum ofputil_protocol protocol)
+                               enum ofp_version version,
+                               uint32_t buffer_id)
 {
-    struct ofp13_packet_in *opi;
-    enum ofpraw packet_in_raw;
-    enum ofp_version packet_in_version;
-    size_t packet_in_size;
-    struct ofpbuf *packet;
-
-    if (protocol == OFPUTIL_P_OF12_OXM) {
-        packet_in_raw = OFPRAW_OFPT12_PACKET_IN;
-        packet_in_version = OFP12_VERSION;
-        packet_in_size = sizeof (struct ofp12_packet_in);
-    } else {
-        packet_in_raw = OFPRAW_OFPT13_PACKET_IN;
-        packet_in_version = ofputil_protocol_to_ofp_version(protocol);
-        packet_in_size = sizeof (struct ofp13_packet_in);
-    }
+    enum ofpraw raw = (version >= OFP13_VERSION
+                       ? OFPRAW_OFPT13_PACKET_IN
+                       : OFPRAW_OFPT12_PACKET_IN);
+    struct ofpbuf *msg;
 
     /* The final argument is just an estimate of the space required. */
-    packet = ofpraw_alloc_xid(packet_in_raw, packet_in_version,
-                              htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
-    ofpbuf_put_zeros(packet, packet_in_size);
-    oxm_put_match(packet, &pin->flow_metadata,
-                  ofputil_protocol_to_ofp_version(protocol));
-    ofpbuf_put_zeros(packet, 2);
-    ofpbuf_put(packet, pin->packet, pin->packet_len);
+    msg = ofpraw_alloc_xid(raw, version,
+                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->len);
 
-    opi = packet->msg;
-    opi->pi.buffer_id = htonl(pin->buffer_id);
-    opi->pi.total_len = htons(pin->total_len);
-    opi->pi.reason = pin->reason;
-    opi->pi.table_id = pin->table_id;
-    if (protocol != OFPUTIL_P_OF12_OXM) {
-        opi->cookie = pin->cookie;
+    struct ofp12_packet_in *opi = ofpbuf_put_zeros(msg, sizeof *opi);
+    opi->buffer_id = htonl(buffer_id);
+    opi->total_len = htons(pin->len);
+    opi->reason = encode_packet_in_reason(pin->reason, version);
+    opi->table_id = pin->table_id;
+
+    if (version >= OFP13_VERSION) {
+        ovs_be64 cookie = pin->cookie;
+        ofpbuf_put(msg, &cookie, sizeof cookie);
     }
 
-    return packet;
+    oxm_put_match(msg, &pin->flow_metadata, version);
+    ofpbuf_put_zeros(msg, 2);
+
+    return msg;
 }
 
-/* Converts abstract ofputil_packet_in 'pin' into a PACKET_IN message
- * in the format specified by 'packet_in_format'.  */
+/* Converts abstract ofputil_packet_in 'pin' into a PACKET_IN message for
+ * 'protocol', using the packet-in format specified by 'packet_in_format'.
+ *
+ * If 'pkt_buf' is nonnull and 'max_len' allows the packet to be buffered, this
+ * function will attempt to obtain a buffer ID from 'pktbuf' and truncate the
+ * packet to 'max_len' bytes.  Otherwise, or if 'pktbuf' doesn't have a free
+ * buffer, it will send the whole packet without buffering. */
 struct ofpbuf *
 ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
                          enum ofputil_protocol protocol,
-                         enum nx_packet_in_format packet_in_format)
+                         enum nx_packet_in_format packet_in_format,
+                         uint16_t max_len, struct pktbuf *pktbuf)
 {
-    struct ofpbuf *packet;
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
 
+    /* Get buffer ID. */
+    ofp_port_t in_port = pin->flow_metadata.flow.in_port.ofp_port;
+    uint32_t buffer_id = (max_len != OFPCML12_NO_BUFFER && pktbuf
+                          ? pktbuf_save(pktbuf, pin->packet,
+                                        pin->len, in_port)
+                          : UINT32_MAX);
+
+    struct ofpbuf *msg;
     switch (protocol) {
     case OFPUTIL_P_OF10_STD:
     case OFPUTIL_P_OF10_STD_TID:
     case OFPUTIL_P_OF10_NXM:
     case OFPUTIL_P_OF10_NXM_TID:
-        packet = (packet_in_format == NXPIF_NXM
-                  ? ofputil_encode_nx_packet_in(pin)
-                  : ofputil_encode_ofp10_packet_in(pin));
+        msg = (packet_in_format == NXPIF_NXM
+               ? ofputil_encode_nx_packet_in(pin, buffer_id)
+               : ofputil_encode_ofp10_packet_in(pin, buffer_id));
         break;
 
     case OFPUTIL_P_OF11_STD:
-        packet = ofputil_encode_ofp11_packet_in(pin);
+        msg = ofputil_encode_ofp11_packet_in(pin, buffer_id);
         break;
 
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
     case OFPUTIL_P_OF15_OXM:
-        packet = ofputil_encode_ofp12_packet_in(pin, protocol);
+        msg = ofputil_encode_ofp12_packet_in(pin, version, buffer_id);
         break;
 
     default:
         OVS_NOT_REACHED();
     }
 
-    ofpmsg_update_length(packet);
-    return packet;
+    /* Append some of the packet:
+     *
+     *    - If not buffered, the whole thing.
+     *
+     *    - Otherwise, no more than 'max_len' bytes. */
+    ofpbuf_put(msg, pin->packet,
+               (buffer_id == UINT32_MAX
+                ? pin->len
+                : MIN(max_len, pin->len)));
+
+    ofpmsg_update_length(msg);
+    return msg;
 }
 
 /* Returns a string form of 'reason'.  The return value is either a statically
@@ -3624,6 +3627,9 @@ ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason reason,
         return "group";
     case OFPR_PACKET_OUT:
         return "packet_out";
+    case OFPR_EXPLICIT_MISS:
+    case OFPR_IMPLICIT_MISS:
+        return "";
 
     case OFPR_N_REASONS:
     default:
@@ -3671,6 +3677,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
 
+    ofpbuf_clear(ofpacts);
     if (raw == OFPRAW_OFPT11_PACKET_OUT) {
         enum ofperr error;
         const struct ofp11_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
@@ -3887,9 +3894,9 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
@@ -3900,8 +3907,7 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
             break;
 
         default:
-            log_property(true, "unknown port property %"PRIu16, type);
-            error = 0;
+            error = OFPPROP_UNKNOWN(true, "port", type);
             break;
         }
 
@@ -3971,9 +3977,7 @@ ofputil_put_ofp14_port(const struct ofputil_phy_port *pp,
     op->config = htonl(pp->config & OFPPC11_ALL);
     op->state = htonl(pp->state & OFPPS11_ALL);
 
-    eth = ofpbuf_put_zeros(b, sizeof *eth);
-    eth->type = htons(OFPPDPT14_ETHERNET);
-    eth->length = htons(sizeof *eth);
+    eth = ofpprop_put_zeros(b, OFPPDPT14_ETHERNET, sizeof *eth);
     eth->curr = netdev_port_features_to_ofp11(pp->curr);
     eth->advertised = netdev_port_features_to_ofp11(pp->advertised);
     eth->supported = netdev_port_features_to_ofp11(pp->supported);
@@ -4182,23 +4186,18 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
     }
 }
 
-/* Decodes an OpenFlow 1.0 or 1.1 "switch_features" structure 'osf' into an
- * abstract representation in '*features'.  Initializes '*b' to iterate over
- * the OpenFlow port structures following 'osf' with later calls to
- * ofputil_pull_phy_port().  Returns 0 if successful, otherwise an
- * OFPERR_* value.  */
+/* Pulls an OpenFlow "switch_features" structure from 'b' and decodes it into
+ * an abstract representation in '*features', readying 'b' to iterate over the
+ * OpenFlow port structures following 'osf' with later calls to
+ * ofputil_pull_phy_port().  Returns 0 if successful, otherwise an OFPERR_*
+ * value.  */
 enum ofperr
-ofputil_decode_switch_features(const struct ofp_header *oh,
-                               struct ofputil_switch_features *features,
-                               struct ofpbuf *b)
+ofputil_pull_switch_features(struct ofpbuf *b,
+                             struct ofputil_switch_features *features)
 {
-    const struct ofp_switch_features *osf;
-    enum ofpraw raw;
-
-    ofpbuf_use_const(b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(b);
-
-    osf = ofpbuf_pull(b, sizeof *osf);
+    const struct ofp_header *oh = b->data;
+    enum ofpraw raw = ofpraw_pull_assert(b);
+    const struct ofp_switch_features *osf = ofpbuf_pull(b, sizeof *osf);
     features->datapath_id = ntohll(osf->datapath_id);
     features->n_buffers = ntohl(osf->n_buffers);
     features->n_tables = osf->n_tables;
@@ -4430,14 +4429,14 @@ static enum ofperr
 parse_port_mod_ethernet_property(struct ofpbuf *property,
                                  struct ofputil_port_mod *pm)
 {
-    struct ofp14_port_mod_prop_ethernet *eth = property->data;
+    ovs_be32 advertise;
+    enum ofperr error;
 
-    if (property->size != sizeof *eth) {
-        return OFPERR_OFPBRC_BAD_LEN;
+    error = ofpprop_parse_be32(property, &advertise);
+    if (!error) {
+        pm->advertise = netdev_port_features_from_ofp11(advertise);
     }
-
-    pm->advertise = netdev_port_features_from_ofp11(eth->advertise);
-    return 0;
+    return error;
 }
 
 /* Decodes the OpenFlow "port mod" message in '*oh' into an abstract form in
@@ -4491,9 +4490,9 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
-            uint16_t type;
+            uint64_t type;
 
-            error = ofputil_pull_property(&b, &property, &type);
+            error = ofpprop_pull(&b, &property, &type);
             if (error) {
                 return error;
             }
@@ -4504,14 +4503,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
                 break;
 
             default:
-                log_property(loose, "unknown port_mod property %"PRIu16, type);
-                if (loose) {
-                    error = 0;
-                } else if (type == OFPPMPT14_EXPERIMENTER) {
-                    error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
-                } else {
-                    error = OFPERR_OFPBRC_BAD_TYPE;
-                }
+                error = OFPPROP_UNKNOWN(loose, "port_mod", type);
                 break;
             }
 
@@ -4567,10 +4559,9 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
     }
     case OFP14_VERSION:
     case OFP15_VERSION: {
-        struct ofp14_port_mod_prop_ethernet *eth;
         struct ofp14_port_mod *opm;
 
-        b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, sizeof *eth);
+        b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, 0);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
         opm->port_no = ofputil_port_to_ofp11(pm->port_no);
         opm->hw_addr = pm->hw_addr;
@@ -4578,10 +4569,8 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->mask = htonl(pm->mask & OFPPC11_ALL);
 
         if (pm->advertise) {
-            eth = ofpbuf_put_zeros(b, sizeof *eth);
-            eth->type = htons(OFPPMPT14_ETHERNET);
-            eth->length = htons(sizeof *eth);
-            eth->advertise = netdev_port_features_to_ofp11(pm->advertise);
+            ofpprop_put_be32(b, OFPPMPT14_ETHERNET,
+                             netdev_port_features_to_ofp11(pm->advertise));
         }
         break;
     }
@@ -4596,13 +4585,13 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
 
 static enum ofperr
 pull_table_feature_property(struct ofpbuf *msg, struct ofpbuf *payload,
-                            uint16_t *typep)
+                            uint64_t *typep)
 {
     enum ofperr error;
 
-    error = ofputil_pull_property(msg, payload, typep);
+    error = ofpprop_pull(msg, payload, typep);
     if (payload && !error) {
-        ofpbuf_pull(payload, sizeof(struct ofp_prop_header));
+        ofpbuf_pull(payload, (char *)payload->msg - (char *)payload->header);
     }
     return error;
 }
@@ -4614,10 +4603,10 @@ parse_action_bitmap(struct ofpbuf *payload, enum ofp_version ofp_version,
     uint32_t types = 0;
 
     while (payload->size > 0) {
-        uint16_t type;
         enum ofperr error;
+        uint64_t type;
 
-        error = ofputil_pull_property__(payload, NULL, 1, &type);
+        error = ofpprop_pull__(payload, NULL, 1, 0x10000, &type);
         if (error) {
             return error;
         }
@@ -4637,7 +4626,7 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
     while (payload->size > 0) {
         enum ovs_instruction_type inst;
         enum ofperr error;
-        uint16_t ofpit;
+        uint64_t ofpit;
 
         /* OF1.3 and OF1.4 aren't clear about padding in the instruction IDs.
          * It seems clear that they aren't padded to 8 bytes, though, because
@@ -4648,7 +4637,7 @@ parse_instruction_ids(struct ofpbuf *payload, bool loose, uint32_t *insts)
          *
          * Anyway, we just assume they're all glommed together on byte
          * boundaries. */
-        error = ofputil_pull_property__(payload, NULL, 1, &ofpit);
+        error = ofpprop_pull__(payload, NULL, 1, 0x10000, &ofpit);
         if (error) {
             return error;
         }
@@ -4782,7 +4771,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
         error = pull_table_feature_property(&properties, &payload, &type);
         if (error) {
@@ -4852,9 +4841,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         case OFPTFPT13_EXPERIMENTER:
         case OFPTFPT13_EXPERIMENTER_MISS:
         default:
-            log_property(loose, "unknown table features property %"PRIu16,
-                         type);
-            error = loose ? 0 : OFPERR_OFPBPC_BAD_TYPE;
+            error = OFPPROP_UNKNOWN(loose, "table features", type);
             break;
         }
         if (error) {
@@ -4915,12 +4902,12 @@ put_fields_property(struct ofpbuf *reply,
     size_t start_ofs;
     int field;
 
-    start_ofs = start_property(reply, property);
+    start_ofs = ofpprop_start(reply, property);
     BITMAP_FOR_EACH_1 (field, MFF_N_IDS, fields->bm) {
         nx_put_header(reply, field, version,
                       masks && bitmap_is_set(masks->bm, field));
     }
-    end_property(reply, start_ofs);
+    ofpprop_end(reply, start_ofs);
 }
 
 static void
@@ -4930,14 +4917,9 @@ put_table_action_features(struct ofpbuf *reply,
                           enum ofp13_table_feature_prop_type set_fields_type,
                           int miss_offset, enum ofp_version version)
 {
-    size_t start_ofs;
-
-    start_ofs = start_property(reply, actions_type + miss_offset);
-    put_bitmap_properties(reply,
-                          ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
-                                                          version)));
-    end_property(reply, start_ofs);
-
+    ofpprop_put_bitmap(reply, actions_type + miss_offset,
+                       ntohl(ofpact_bitmap_to_openflow(taf->ofpacts,
+                                                       version)));
     put_fields_property(reply, &taf->set_fields, NULL,
                         set_fields_type + miss_offset, version);
 }
@@ -4950,17 +4932,15 @@ put_table_instruction_features(
     size_t start_ofs;
     uint8_t table_id;
 
-    start_ofs = start_property(reply, OFPTFPT13_INSTRUCTIONS + miss_offset);
-    put_bitmap_properties(reply,
-                          ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
-                                                           version)));
-    end_property(reply, start_ofs);
+    ofpprop_put_bitmap(reply, OFPTFPT13_INSTRUCTIONS + miss_offset,
+                       ntohl(ovsinst_bitmap_to_openflow(tif->instructions,
+                                                        version)));
 
-    start_ofs = start_property(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
+    start_ofs = ofpprop_start(reply, OFPTFPT13_NEXT_TABLES + miss_offset);
     BITMAP_FOR_EACH_1 (table_id, 255, tif->next) {
         ofpbuf_put(reply, &table_id, 1);
     }
-    end_property(reply, start_ofs);
+    ofpprop_end(reply, start_ofs);
 
     put_table_action_features(reply, &tif->write,
                               OFPTFPT13_WRITE_ACTIONS,
@@ -5005,20 +4985,6 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
     otf = ofpbuf_at_assert(reply, start_ofs, sizeof *otf);
     otf->length = htons(reply->size - start_ofs);
     ofpmp_postappend(replies, start_ofs);
-}
-
-static enum ofperr
-parse_table_desc_eviction_property(struct ofpbuf *property,
-                                   struct ofputil_table_desc *td)
-{
-    struct ofp14_table_mod_prop_eviction *ote = property->data;
-
-    if (property->size != sizeof *ote) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    td->eviction_flags = ntohl(ote->flags);
-    return 0;
 }
 
 static enum ofperr
@@ -5084,16 +5050,16 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
 
         switch (type) {
         case OFPTMPT14_EVICTION:
-            error = parse_table_desc_eviction_property(&payload, td);
+            error = ofpprop_parse_u32(&payload, &td->eviction_flags);
             break;
 
         case OFPTMPT14_VACANCY:
@@ -5101,8 +5067,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
             break;
 
         default:
-            log_property(true, "unknown table_desc property %"PRIu16, type);
-            error = 0;
+            error = OFPPROP_UNKNOWN(true, "table_desc", type);
             break;
         }
 
@@ -5145,19 +5110,12 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
     start_otd = reply->size;
     ofpbuf_put_zeros(reply, sizeof *otd);
     if (td->eviction_flags != UINT32_MAX) {
-        struct ofp14_table_mod_prop_eviction *ote;
-
-        ote = ofpbuf_put_zeros(reply, sizeof *ote);
-        ote->type = htons(OFPTMPT14_EVICTION);
-        ote->length = htons(sizeof *ote);
-        ote->flags = htonl(td->eviction_flags);
+        ofpprop_put_u32(reply, OFPTMPT14_EVICTION, td->eviction_flags);
     }
     if (td->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
         struct ofp14_table_mod_prop_vacancy *otv;
 
-        otv = ofpbuf_put_zeros(reply, sizeof *otv);
-        otv->type = htons(OFPTMPT14_VACANCY);
-        otv->length = htons(sizeof *otv);
+        otv = ofpprop_put_zeros(reply, OFPTMPT14_VACANCY, sizeof *otv);
         otv->vacancy_down = td->table_vacancy.vacancy_down;
         otv->vacancy_up = td->table_vacancy.vacancy_up;
         otv->vacancy = td->table_vacancy.vacancy;
@@ -5189,20 +5147,20 @@ parse_table_mod_vacancy_property(struct ofpbuf *property,
     tm->table_vacancy.vacancy_down = otv->vacancy_down;
     tm->table_vacancy.vacancy_up = otv->vacancy_up;
     if (tm->table_vacancy.vacancy_down > tm->table_vacancy.vacancy_up) {
-        log_property(false, "Value of vacancy_down is greater than "
-                     "vacancy_up");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "Value of vacancy_down is greater than vacancy_up");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
     if (tm->table_vacancy.vacancy_down > 100 ||
         tm->table_vacancy.vacancy_up > 100) {
-        log_property(false, "Vacancy threshold percentage should not be"
-                     "greater than 100");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "Vacancy threshold percentage "
+                    "should not be greater than 100");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
     tm->table_vacancy.vacancy = otv->vacancy;
     if (tm->table_vacancy.vacancy) {
-        log_property(false, "Vacancy value should be zero for table-mod "
-                     "messages");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "Vacancy value should be zero for table-mod messages");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
     return 0;
@@ -5221,20 +5179,6 @@ ofputil_decode_table_vacancy(ovs_be32 config, enum ofp_version version)
     return (version < OFP14_VERSION ? OFPUTIL_TABLE_VACANCY_DEFAULT
             : config & htonl(OFPTC14_VACANCY_EVENTS) ? OFPUTIL_TABLE_VACANCY_ON
             : OFPUTIL_TABLE_VACANCY_OFF);
-}
-
-static enum ofperr
-parse_table_mod_eviction_property(struct ofpbuf *property,
-                                  struct ofputil_table_mod *tm)
-{
-    struct ofp14_table_mod_prop_eviction *ote = property->data;
-
-    if (property->size != sizeof *ote) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    tm->eviction_flags = ntohl(ote->flags);
-    return 0;
 }
 
 /* Given 'config', taken from an OpenFlow 'version' message that specifies
@@ -5372,16 +5316,16 @@ ofputil_decode_table_mod(const struct ofp_header *oh,
         while (b.size > 0) {
             struct ofpbuf property;
             enum ofperr error;
-            uint16_t type;
+            uint64_t type;
 
-            error = ofputil_pull_property(&b, &property, &type);
+            error = ofpprop_pull(&b, &property, &type);
             if (error) {
                 return error;
             }
 
             switch (type) {
             case OFPTMPT14_EVICTION:
-                error = parse_table_mod_eviction_property(&property, pm);
+                error = ofpprop_parse_u32(&property, &pm->eviction);
                 break;
 
             case OFPTMPT14_VACANCY:
@@ -5435,8 +5379,6 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
     case OFP14_VERSION:
     case OFP15_VERSION: {
         struct ofp14_table_mod *otm;
-        struct ofp14_table_mod_prop_eviction *ote;
-        struct ofp14_table_mod_prop_vacancy *otv;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
         otm = ofpbuf_put_zeros(b, sizeof *otm);
@@ -5445,15 +5387,12 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
                                                   tm->vacancy, ofp_version);
 
         if (tm->eviction_flags != UINT32_MAX) {
-            ote = ofpbuf_put_zeros(b, sizeof *ote);
-            ote->type = htons(OFPTMPT14_EVICTION);
-            ote->length = htons(sizeof *ote);
-            ote->flags = htonl(tm->eviction_flags);
+            ofpprop_put_u32(b, OFPTMPT14_EVICTION, tm->eviction_flags);
         }
         if (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
-            otv = ofpbuf_put_zeros(b, sizeof *otv);
-            otv->type = htons(OFPTMPT14_VACANCY);
-            otv->length = htons(sizeof *otv);
+            struct ofp14_table_mod_prop_vacancy *otv;
+
+            otv = ofpprop_put_zeros(b, OFPTMPT14_VACANCY, sizeof *otv);
             otv->vacancy_down = tm->table_vacancy.vacancy_down;
             otv->vacancy_up = tm->table_vacancy.vacancy_up;
         }
@@ -6264,6 +6203,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         ofpraw_pull_assert(msg);
     }
 
+    ofpbuf_clear(ofpacts);
     if (!msg->size) {
         return EOF;
     }
@@ -7120,10 +7060,7 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
     ps14->rx_errors = htonll(ops->stats.rx_errors);
     ps14->tx_errors = htonll(ops->stats.tx_errors);
 
-    eth = ofpbuf_put_uninit(reply, sizeof *eth);
-    eth->type = htons(OFPPSPT14_ETHERNET);
-    eth->length = htons(sizeof *eth);
-    memset(eth->pad, 0, sizeof eth->pad);
+    eth = ofpprop_put_zeros(reply, OFPPSPT14_ETHERNET, sizeof *eth);
     eth->rx_frame_err = htonll(ops->stats.rx_frame_errors);
     eth->rx_over_err = htonll(ops->stats.rx_over_errors);
     eth->rx_crc_err = htonll(ops->stats.rx_crc_errors);
@@ -7292,9 +7229,9 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
@@ -7305,8 +7242,7 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
             break;
 
         default:
-            log_property(true, "unknown port stats property %"PRIu16, type);
-            error = 0;
+            error = OFPPROP_UNKNOWN(true, "port stats", type);
             break;
         }
 
@@ -7902,34 +7838,6 @@ ofputil_put_ofp11_bucket(const struct ofputil_bucket *bucket,
 }
 
 static void
-ofputil_put_ofp15_group_bucket_prop_weight(ovs_be16 weight,
-                                           struct ofpbuf *openflow)
-{
-    size_t start_ofs;
-    struct ofp15_group_bucket_prop_weight *prop;
-
-    start_ofs = start_property(openflow, OFPGBPT15_WEIGHT);
-    ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
-    prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
-    prop->weight = weight;
-    end_property(openflow, start_ofs);
-}
-
-static void
-ofputil_put_ofp15_group_bucket_prop_watch(ovs_be32 watch, uint16_t type,
-                                          struct ofpbuf *openflow)
-{
-    size_t start_ofs;
-    struct ofp15_group_bucket_prop_watch *prop;
-
-    start_ofs = start_property(openflow, type);
-    ofpbuf_put_zeros(openflow, sizeof *prop - sizeof(struct ofp_prop_header));
-    prop = ofpbuf_at_assert(openflow, start_ofs, sizeof *prop);
-    prop->watch = watch;
-    end_property(openflow, start_ofs);
-}
-
-static void
 ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
                          uint32_t bucket_id, enum ofp11_group_type group_type,
                          struct ofpbuf *openflow, enum ofp_version ofp_version)
@@ -7946,20 +7854,14 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
     actions_len = openflow->size - actions_start;
 
     if (group_type == OFPGT11_SELECT) {
-        ofputil_put_ofp15_group_bucket_prop_weight(htons(bucket->weight),
-                                                   openflow);
+        ofpprop_put_u16(openflow, OFPGBPT15_WEIGHT, bucket->weight);
     }
     if (bucket->watch_port != OFPP_ANY) {
-        ovs_be32 port = ofputil_port_to_ofp11(bucket->watch_port);
-        ofputil_put_ofp15_group_bucket_prop_watch(port,
-                                                  OFPGBPT15_WATCH_PORT,
-                                                  openflow);
+        ofpprop_put_be32(openflow, OFPGBPT15_WATCH_PORT,
+                         ofputil_port_to_ofp11(bucket->watch_port));
     }
     if (bucket->watch_group != OFPG_ANY) {
-        ovs_be32 group = htonl(bucket->watch_group);
-        ofputil_put_ofp15_group_bucket_prop_watch(group,
-                                                  OFPGBPT15_WATCH_GROUP,
-                                                  openflow);
+        ofpprop_put_u32(openflow, OFPGBPT15_WATCH_GROUP, bucket->watch_group);
     }
 
     ob = ofpbuf_at_assert(openflow, start, sizeof *ob);
@@ -7985,7 +7887,7 @@ ofputil_put_group_prop_ntr_selection_method(enum ofp_version ofp_version,
     prop->exp_type = htonl(NTRT_SELECTION_METHOD);
     strcpy(prop->selection_method, gp->selection_method);
     prop->selection_method_param = htonll(gp->selection_method_param);
-    end_property(openflow, start);
+    ofpprop_end(openflow, start);
 }
 
 static void
@@ -8139,40 +8041,6 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
 }
 
 static enum ofperr
-parse_ofp15_group_bucket_prop_weight(const struct ofpbuf *payload,
-                                     ovs_be16 *weight)
-{
-    struct ofp15_group_bucket_prop_weight *prop = payload->data;
-
-    if (payload->size != sizeof *prop) {
-        log_property(false, "OpenFlow bucket weight property length "
-                     "%u is not valid", payload->size);
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    *weight = prop->weight;
-
-    return 0;
-}
-
-static enum ofperr
-parse_ofp15_group_bucket_prop_watch(const struct ofpbuf *payload,
-                                    ovs_be32 *watch)
-{
-    struct ofp15_group_bucket_prop_watch *prop = payload->data;
-
-    if (payload->size != sizeof *prop) {
-        log_property(false, "OpenFlow bucket watch port or group "
-                     "property length %u is not valid", payload->size);
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    *watch = prop->watch;
-
-    return 0;
-}
-
-static enum ofperr
 ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
                            enum ofp_version version, uint8_t group_type,
                            struct ovs_list *buckets)
@@ -8232,32 +8100,28 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         while (properties.size > 0) {
             struct ofpbuf payload;
-            uint16_t type;
+            uint64_t type;
 
-            err = ofputil_pull_property(&properties, &payload, &type);
+            err = ofpprop_pull(&properties, &payload, &type);
             if (err) {
                 goto err;
             }
 
             switch (type) {
             case OFPGBPT15_WEIGHT:
-                err = parse_ofp15_group_bucket_prop_weight(&payload, &weight);
+                err = ofpprop_parse_be16(&payload, &weight);
                 break;
 
             case OFPGBPT15_WATCH_PORT:
-                err = parse_ofp15_group_bucket_prop_watch(&payload,
-                                                          &watch_port);
+                err = ofpprop_parse_be32(&payload, &watch_port);
                 break;
 
             case OFPGBPT15_WATCH_GROUP:
-                err = parse_ofp15_group_bucket_prop_watch(&payload,
-                                                          &watch_group);
+                err = ofpprop_parse_be32(&payload, &watch_group);
                 break;
 
             default:
-                log_property(false, "unknown group bucket property %"PRIu16,
-                             type);
-                err = OFPERR_OFPBPC_BAD_TYPE;
+                err = OFPPROP_UNKNOWN(false, "group bucket", type);
                 break;
             }
 
@@ -8327,8 +8191,8 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     case OFPGT11_ALL:
     case OFPGT11_INDIRECT:
     case OFPGT11_FF:
-        log_property(false, "ntr selection method property is only allowed "
-                     "for select groups");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method property is "
+                    "only allowed for select groups");
         return OFPERR_OFPBPC_BAD_VALUE;
     default:
         OVS_NOT_REACHED();
@@ -8341,29 +8205,31 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     case OFPGC15_DELETE:
     case OFPGC15_INSERT_BUCKET:
     case OFPGC15_REMOVE_BUCKET:
-        log_property(false, "ntr selection method property is only allowed "
-                     "for add and delete group modifications");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method property is "
+                    "only allowed for add and delete group modifications");
         return OFPERR_OFPBPC_BAD_VALUE;
     default:
         OVS_NOT_REACHED();
     }
 
     if (payload->size < sizeof *prop) {
-        log_property(false, "ntr selection method property length "
-                     "%u is not valid", payload->size);
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method property "
+                    "length %u is not valid", payload->size);
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
     method_len = strnlen(prop->selection_method, NTR_MAX_SELECTION_METHOD_LEN);
 
     if (method_len == NTR_MAX_SELECTION_METHOD_LEN) {
-        log_property(false, "ntr selection method is not null terminated");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "ntr selection method is not null terminated");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
     if (strcmp("hash", prop->selection_method)) {
-        log_property(false, "ntr selection method '%s' is not supported",
-                     prop->selection_method);
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "ntr selection method '%s' is not supported",
+                    prop->selection_method);
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
@@ -8371,8 +8237,8 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     gp->selection_method_param = ntohll(prop->selection_method_param);
 
     if (!method_len && gp->selection_method_param) {
-        log_property(false, "ntr selection method parameter is non-zero but "
-                     "selection method is empty");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method parameter is "
+                    "non-zero but selection method is empty");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
@@ -8380,78 +8246,20 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
 
     fields_len = ntohs(prop->length) - sizeof *prop;
     if (!method_len && fields_len) {
-        log_property(false, "ntr selection method parameter is zero "
-                     "but fields are provided");
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method parameter is "
+                    "zero but fields are provided");
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
     error = oxm_pull_field_array(payload->data, fields_len,
                                  &gp->fields);
     if (error) {
-        log_property(false, "ntr selection method fields are invalid");
+        OFPPROP_LOG(&bad_ofmsg_rl, false,
+                    "ntr selection method fields are invalid");
         return error;
     }
 
     return 0;
-}
-
-static enum ofperr
-parse_group_prop_ntr(struct ofpbuf *payload, uint32_t exp_type,
-                     enum ofp11_group_type group_type,
-                     enum ofp15_group_mod_command group_cmd,
-                     struct ofputil_group_props *gp)
-{
-    enum ofperr error;
-
-    switch (exp_type) {
-    case NTRT_SELECTION_METHOD:
-        error = parse_group_prop_ntr_selection_method(payload, group_type,
-                                                      group_cmd, gp);
-        break;
-
-    default:
-        log_property(false, "unknown group property ntr experimenter type "
-                     "%"PRIu32, exp_type);
-        error = OFPERR_OFPBPC_BAD_TYPE;
-        break;
-    }
-
-    return error;
-}
-
-static enum ofperr
-parse_ofp15_group_prop_exp(struct ofpbuf *payload,
-                           enum ofp11_group_type group_type,
-                           enum ofp15_group_mod_command group_cmd,
-                           struct ofputil_group_props *gp)
-{
-    struct ofp_prop_experimenter *prop = payload->data;
-    uint16_t experimenter;
-    uint32_t exp_type;
-    enum ofperr error;
-
-    if (payload->size < sizeof *prop) {
-        return OFPERR_OFPBPC_BAD_LEN;
-    }
-
-    experimenter = ntohl(prop->experimenter);
-    exp_type = ntohl(prop->exp_type);
-
-    switch (experimenter) {
-    case NTR_VENDOR_ID:
-    case NTR_COMPAT_VENDOR_ID:
-        error = parse_group_prop_ntr(payload, exp_type, group_type,
-                                     group_cmd, gp);
-        break;
-
-    default:
-        log_property(false, "unknown group property experimenter %"PRIu16,
-                     experimenter);
-        error = OFPERR_OFPBPC_BAD_EXPERIMENTER;
-        break;
-    }
-
-    return error;
 }
 
 static enum ofperr
@@ -8469,22 +8277,22 @@ parse_ofp15_group_properties(struct ofpbuf *msg,
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint16_t type;
+        uint64_t type;
 
-        error = ofputil_pull_property(&properties, &payload, &type);
+        error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
 
         switch (type) {
-        case OFPGPT15_EXPERIMENTER:
-            error = parse_ofp15_group_prop_exp(&payload, group_type,
-                                               group_cmd, gp);
+        case OFPPROP_EXP(NTR_VENDOR_ID, NTRT_SELECTION_METHOD):
+        case OFPPROP_EXP(NTR_COMPAT_VENDOR_ID, NTRT_SELECTION_METHOD):
+            error = parse_group_prop_ntr_selection_method(&payload, group_type,
+                                                          group_cmd, gp);
             break;
 
         default:
-            log_property(false, "unknown group property %"PRIu16, type);
-            error = OFPERR_OFPBPC_BAD_TYPE;
+            error = OFPPROP_UNKNOWN(false, "group", type);
             break;
         }
 
@@ -9650,8 +9458,174 @@ ofputil_uninit_tlv_table(struct ovs_list *mappings)
     }
 }
 
+const char *
+ofputil_async_msg_type_to_string(enum ofputil_async_msg_type type)
+{
+    switch (type) {
+    case OAM_PACKET_IN:      return "PACKET_IN";
+    case OAM_PORT_STATUS:    return "PORT_STATUS";
+    case OAM_FLOW_REMOVED:   return "FLOW_REMOVED";
+    case OAM_ROLE_STATUS:    return "ROLE_STATUS";
+    case OAM_TABLE_STATUS:   return "TABLE_STATUS";
+    case OAM_REQUESTFORWARD: return "REQUESTFORWARD";
+
+    case OAM_N_TYPES:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+struct ofp14_async_prop {
+    uint64_t prop_type;
+    enum ofputil_async_msg_type oam;
+    bool master;
+    uint32_t allowed10, allowed14;
+};
+
+#define AP_PAIR(SLAVE_PROP_TYPE, OAM, A10, A14) \
+    { SLAVE_PROP_TYPE,       OAM, false, A10, (A14) ? (A14) : (A10) },  \
+    { (SLAVE_PROP_TYPE + 1), OAM, true,  A10, (A14) ? (A14) : (A10) }
+
+static const struct ofp14_async_prop async_props[] = {
+    AP_PAIR( 0, OAM_PACKET_IN,      OFPR10_BITS, OFPR14_BITS),
+    AP_PAIR( 2, OAM_PORT_STATUS,    (1 << OFPPR_N_REASONS) - 1, 0),
+    AP_PAIR( 4, OAM_FLOW_REMOVED,   (1 << OVS_OFPRR_NONE) - 1, 0),
+    AP_PAIR( 6, OAM_ROLE_STATUS,    (1 << OFPCRR_N_REASONS) - 1, 0),
+    AP_PAIR( 8, OAM_TABLE_STATUS,   OFPTR_BITS, 0),
+    AP_PAIR(10, OAM_REQUESTFORWARD, (1 << OFPRFR_N_REASONS) - 1, 0),
+};
+
+#define FOR_EACH_ASYNC_PROP(VAR)                                \
+    for (const struct ofp14_async_prop *VAR = async_props;      \
+         VAR < &async_props[ARRAY_SIZE(async_props)]; VAR++)
+
+static const struct ofp14_async_prop *
+get_ofp14_async_config_prop_by_prop_type(uint64_t prop_type)
+{
+    FOR_EACH_ASYNC_PROP (ap) {
+        if (prop_type == ap->prop_type) {
+            return ap;
+        }
+    }
+    return NULL;
+}
+
+static const struct ofp14_async_prop *
+get_ofp14_async_config_prop_by_oam(enum ofputil_async_msg_type oam,
+                                   bool master)
+{
+    FOR_EACH_ASYNC_PROP (ap) {
+        if (ap->oam == oam && ap->master == master) {
+            return ap;
+        }
+    }
+    return NULL;
+}
+
+static uint32_t
+ofp14_async_prop_allowed(const struct ofp14_async_prop *prop,
+                         enum ofp_version version)
+{
+    return version >= OFP14_VERSION ? prop->allowed14 : prop->allowed10;
+}
+
+static ovs_be32
+encode_async_mask(const struct ofputil_async_cfg *src,
+                  const struct ofp14_async_prop *ap,
+                  enum ofp_version version)
+{
+    uint32_t mask = ap->master ? src->master[ap->oam] : src->slave[ap->oam];
+    return htonl(mask & ofp14_async_prop_allowed(ap, version));
+}
+
+static enum ofperr
+decode_async_mask(ovs_be32 src,
+                  const struct ofp14_async_prop *ap, enum ofp_version version,
+                  bool loose, struct ofputil_async_cfg *dst)
+{
+    uint32_t mask = ntohl(src);
+    uint32_t allowed = ofp14_async_prop_allowed(ap, version);
+    if (mask & ~allowed) {
+        OFPPROP_LOG(&bad_ofmsg_rl, loose,
+                    "bad value %#x for %s (allowed mask %#x)",
+                    mask, ofputil_async_msg_type_to_string(ap->oam),
+                    allowed);
+        mask &= allowed;
+        if (!loose) {
+            return OFPERR_OFPACFC_INVALID;
+        }
+    }
+
+    if (ap->oam == OAM_PACKET_IN) {
+        if (mask & (1u << OFPR_NO_MATCH)) {
+            mask |= 1u << OFPR_EXPLICIT_MISS;
+            if (version < OFP13_VERSION) {
+                mask |= 1u << OFPR_IMPLICIT_MISS;
+            }
+        }
+    }
+
+    uint32_t *array = ap->master ? dst->master : dst->slave;
+    array[ap->oam] = mask;
+    return 0;
+}
+
+static enum ofperr
+parse_async_tlv(const struct ofpbuf *property,
+                const struct ofp14_async_prop *ap,
+                struct ofputil_async_cfg *ac,
+                enum ofp_version version, bool loose)
+{
+    enum ofperr error;
+    ovs_be32 mask;
+
+    error  = ofpprop_parse_be32(property, &mask);
+    if (error) {
+        return error;
+    }
+
+    if (ofpprop_is_experimenter(ap->prop_type)) {
+        /* For experimenter properties, whether a property is for the master or
+         * slave role is indicated by both 'type' and 'exp_type' in struct
+         * ofp_prop_experimenter.  Check that these are consistent. */
+        const struct ofp_prop_experimenter *ope = property->data;
+        bool should_be_master = ope->type == htons(0xffff);
+        if (should_be_master != ap->master) {
+            VLOG_WARN_RL(&bad_ofmsg_rl, "async property type %#"PRIx16" "
+                         "indicates %s role but exp_type %"PRIu32" indicates "
+                         "%s role",
+                         ntohs(ope->type),
+                         should_be_master ? "master" : "slave",
+                         ntohl(ope->exp_type),
+                         ap->master ? "master" : "slave");
+            return OFPERR_OFPBPC_BAD_EXP_TYPE;
+        }
+    }
+
+    return decode_async_mask(mask, ap, version, loose, ac);
+}
+
+static void
+decode_legacy_async_masks(const ovs_be32 masks[2],
+                          enum ofputil_async_msg_type oam,
+                          enum ofp_version version,
+                          struct ofputil_async_cfg *dst)
+{
+    for (int i = 0; i < 2; i++) {
+        bool master = i == 0;
+        const struct ofp14_async_prop *ap
+            = get_ofp14_async_config_prop_by_oam(oam, master);
+        decode_async_mask(masks[i], ap, version, true, dst);
+    }
+}
+
 /* Decodes the OpenFlow "set async config" request and "get async config
- * reply" message in '*oh' into an abstract form in 'master' and 'slave'.
+ * reply" message in '*oh' into an abstract form in 'ac'.
+ *
+ * Some versions of the "set async config" request change only some of the
+ * settings and leave the others alone.  This function uses 'basis' as the
+ * initial state for decoding these.  Other versions of the request change all
+ * the settings; this function ignores 'basis' when decoding these.
  *
  * If 'loose' is true, this function ignores properties and values that it does
  * not understand, as a controller would want to do when interpreting
@@ -9667,10 +9641,9 @@ ofputil_uninit_tlv_table(struct ovs_list *mappings)
  * Returns error code OFPERR_OFPACFC_UNSUPPORTED if the configuration is not
  * supported.*/
 enum ofperr
-ofputil_decode_set_async_config(const struct ofp_header *oh,
-                                uint32_t master[OAM_N_TYPES],
-                                uint32_t slave[OAM_N_TYPES],
-                                bool loose)
+ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
+                                const struct ofputil_async_cfg *basis,
+                                struct ofputil_async_cfg *ac)
 {
     enum ofpraw raw;
     struct ofpbuf b;
@@ -9683,92 +9656,38 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
         raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
         const struct nx_async_config *msg = ofpmsg_body(oh);
 
-        master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
-        master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
-        master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
-
-        slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
-        slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
-        slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
-
+        *ac = OFPUTIL_ASYNC_CFG_INIT;
+        decode_legacy_async_masks(msg->packet_in_mask, OAM_PACKET_IN,
+                                  oh->version, ac);
+        decode_legacy_async_masks(msg->port_status_mask, OAM_PORT_STATUS,
+                                  oh->version, ac);
+        decode_legacy_async_masks(msg->flow_removed_mask, OAM_FLOW_REMOVED,
+                                  oh->version, ac);
     } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
-               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
-
+               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY ||
+               raw == OFPRAW_NXT_SET_ASYNC_CONFIG2) {
+        *ac = *basis;
         while (b.size > 0) {
-            struct ofp14_async_config_prop_reasons *msg;
             struct ofpbuf property;
             enum ofperr error;
-            uint16_t type;
+            uint64_t type;
 
-            error = ofputil_pull_property(&b, &property, &type);
+            error = ofpprop_pull__(&b, &property, 8, 0xfffe, &type);
             if (error) {
                 return error;
             }
 
-            msg = property.data;
-
-            if (property.size != sizeof *msg) {
-                return OFPERR_OFPBRC_BAD_LEN;
-            }
-
-            if (!loose) {
-                error = ofputil_check_mask(type, ntohl(msg->mask));
-                if (error) {
-                    return error;
+            const struct ofp14_async_prop *ap
+                = get_ofp14_async_config_prop_by_prop_type(type);
+            error = (ap
+                     ? parse_async_tlv(&property, ap, ac, oh->version, loose)
+                     : OFPPROP_UNKNOWN(loose, "async config", type));
+            if (error) {
+                /* Most messages use OFPBPC_BAD_TYPE but async has its own (who
+                 * knows why, it's OpenFlow. */
+                if (error == OFPERR_OFPBPC_BAD_TYPE) {
+                    error = OFPERR_OFPACFC_UNSUPPORTED;
                 }
-             }
-
-            switch (type) {
-            case OFPACPT_PACKET_IN_SLAVE:
-                slave[OAM_PACKET_IN] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_PACKET_IN_MASTER:
-                master[OAM_PACKET_IN] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_PORT_STATUS_SLAVE:
-                slave[OAM_PORT_STATUS] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_PORT_STATUS_MASTER:
-                master[OAM_PORT_STATUS] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_FLOW_REMOVED_SLAVE:
-                slave[OAM_FLOW_REMOVED] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_FLOW_REMOVED_MASTER:
-                master[OAM_FLOW_REMOVED] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_ROLE_STATUS_SLAVE:
-                slave[OAM_ROLE_STATUS] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_ROLE_STATUS_MASTER:
-                master[OAM_ROLE_STATUS] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_TABLE_STATUS_SLAVE:
-                slave[OAM_TABLE_STATUS] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_TABLE_STATUS_MASTER:
-                master[OAM_TABLE_STATUS] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_REQUESTFORWARD_SLAVE:
-                slave[OAM_REQUESTFORWARD] = ntohl(msg->mask);
-                break;
-
-            case OFPACPT_REQUESTFORWARD_MASTER:
-                master[OAM_REQUESTFORWARD] = ntohl(msg->mask);
-                break;
-
-            default:
-                error = loose ? 0 : OFPERR_OFPACFC_UNSUPPORTED;
                 return error;
             }
         }
@@ -9778,91 +9697,118 @@ ofputil_decode_set_async_config(const struct ofp_header *oh,
     return 0;
 }
 
-/* Append all asynchronous configuration properties in GET_ASYNC_REPLY
- * message, describing if various set of asynchronous messages are enabled
- * or not. */
-static enum ofperr
-ofputil_get_async_reply(struct ofpbuf *buf, const uint32_t master_mask,
-                        const uint32_t slave_mask, const uint32_t type)
+static void
+encode_legacy_async_masks(const struct ofputil_async_cfg *ac,
+                          enum ofputil_async_msg_type oam,
+                          enum ofp_version version,
+                          ovs_be32 masks[2])
 {
-    int role;
-
-    for (role = 0; role < 2; role++) {
-        struct ofp14_async_config_prop_reasons *msg;
-
-        msg = ofpbuf_put_zeros(buf, sizeof *msg);
-
-        switch (type) {
-        case OAM_PACKET_IN:
-            msg->type = (role ? htons(OFPACPT_PACKET_IN_SLAVE)
-                              : htons(OFPACPT_PACKET_IN_MASTER));
-            break;
-
-        case OAM_PORT_STATUS:
-            msg->type = (role ? htons(OFPACPT_PORT_STATUS_SLAVE)
-                              : htons(OFPACPT_PORT_STATUS_MASTER));
-            break;
-
-        case OAM_FLOW_REMOVED:
-            msg->type = (role ? htons(OFPACPT_FLOW_REMOVED_SLAVE)
-                              : htons(OFPACPT_FLOW_REMOVED_MASTER));
-            break;
-
-        case OAM_ROLE_STATUS:
-            msg->type = (role ? htons(OFPACPT_ROLE_STATUS_SLAVE)
-                              : htons(OFPACPT_ROLE_STATUS_MASTER));
-            break;
-
-        case OAM_TABLE_STATUS:
-            msg->type = (role ? htons(OFPACPT_TABLE_STATUS_SLAVE)
-                              : htons(OFPACPT_TABLE_STATUS_MASTER));
-            break;
-
-        case OAM_REQUESTFORWARD:
-            msg->type = (role ? htons(OFPACPT_REQUESTFORWARD_SLAVE)
-                              : htons(OFPACPT_REQUESTFORWARD_MASTER));
-            break;
-
-        default:
-            return OFPERR_OFPBRC_BAD_TYPE;
-        }
-        msg->length = htons(sizeof *msg);
-        msg->mask = (role ? htonl(slave_mask) : htonl(master_mask));
+    for (int i = 0; i < 2; i++) {
+        bool master = i == 0;
+        const struct ofp14_async_prop *ap
+            = get_ofp14_async_config_prop_by_oam(oam, master);
+        masks[i] = encode_async_mask(ac, ap, version);
     }
-
-    return 0;
 }
 
-/* Returns a OpenFlow message that encodes 'asynchronous configuration' properly
- * as a reply to get async config request. */
-struct ofpbuf *
-ofputil_encode_get_async_config(const struct ofp_header *oh,
-                                uint32_t master[OAM_N_TYPES],
-                                uint32_t slave[OAM_N_TYPES])
+static void
+ofputil_put_async_config__(const struct ofputil_async_cfg *ac,
+                           struct ofpbuf *buf, bool tlv,
+                           enum ofp_version version, uint32_t oams)
 {
-    struct ofpbuf *buf;
-    uint32_t type;
+    if (!tlv) {
+        struct nx_async_config *msg = ofpbuf_put_zeros(buf, sizeof *msg);
+        encode_legacy_async_masks(ac, OAM_PACKET_IN, version,
+                                  msg->packet_in_mask);
+        encode_legacy_async_masks(ac, OAM_PORT_STATUS, version,
+                                  msg->port_status_mask);
+        encode_legacy_async_masks(ac, OAM_FLOW_REMOVED, version,
+                                  msg->flow_removed_mask);
+    } else {
+        FOR_EACH_ASYNC_PROP (ap) {
+            if (oams & (1u << ap->oam)) {
+                size_t ofs = buf->size;
+                ofpprop_put_be32(buf, ap->prop_type,
+                                 encode_async_mask(ac, ap, version));
 
-    buf = ofpraw_alloc_reply((oh->version < OFP14_VERSION
-                              ? OFPRAW_OFPT13_GET_ASYNC_REPLY
-                              : OFPRAW_OFPT14_GET_ASYNC_REPLY), oh, 0);
-
-    if (oh->version < OFP14_VERSION) {
-        struct nx_async_config *msg;
-        msg = ofpbuf_put_zeros(buf, sizeof *msg);
-
-        msg->packet_in_mask[0] = htonl(master[OAM_PACKET_IN]);
-        msg->port_status_mask[0] = htonl(master[OAM_PORT_STATUS]);
-        msg->flow_removed_mask[0] = htonl(master[OAM_FLOW_REMOVED]);
-
-        msg->packet_in_mask[1] = htonl(slave[OAM_PACKET_IN]);
-        msg->port_status_mask[1] = htonl(slave[OAM_PORT_STATUS]);
-        msg->flow_removed_mask[1] = htonl(slave[OAM_FLOW_REMOVED]);
-    } else if (oh->version == OFP14_VERSION) {
-        for (type = 0; type < OAM_N_TYPES; type++) {
-            ofputil_get_async_reply(buf, master[type], slave[type], type);
+                /* For experimenter properties, we need to use type 0xfffe for
+                 * master and 0xffff for slaves. */
+                if (ofpprop_is_experimenter(ap->prop_type)) {
+                    struct ofp_prop_experimenter *ope
+                        = ofpbuf_at_assert(buf, ofs, sizeof *ope);
+                    ope->type = ap->master ? htons(0xffff) : htons(0xfffe);
+                }
+            }
         }
     }
+}
+
+/* Encodes and returns a reply to the OFPT_GET_ASYNC_REQUEST in 'oh' that
+ * states that the asynchronous message configuration is 'ac'. */
+struct ofpbuf *
+ofputil_encode_get_async_reply(const struct ofp_header *oh,
+                               const struct ofputil_async_cfg *ac)
+{
+    struct ofpbuf *buf;
+
+    enum ofpraw raw = (oh->version < OFP14_VERSION
+                       ? OFPRAW_OFPT13_GET_ASYNC_REPLY
+                       : OFPRAW_OFPT14_GET_ASYNC_REPLY);
+    struct ofpbuf *reply = ofpraw_alloc_reply(raw, oh, 0);
+    ofputil_put_async_config__(ac, reply,
+                               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY,
+                               oh->version, UINT32_MAX);
+    return reply;
 
     return buf;
+}
+
+/* Encodes and returns a message, in a format appropriate for OpenFlow version
+ * 'ofp_version', that sets the asynchronous message configuration to 'ac'.
+ *
+ * Specify 'oams' as a bitmap of OAM_* that indicate the asynchronous messages
+ * to configure.  OF1.0 through OF1.3 can't natively configure a subset of
+ * messages, so more messages than requested may be configured.  OF1.0 through
+ * OF1.3 also can't configure OVS extension OAM_* values, so if 'oam' includes
+ * any extensions then this function encodes an Open vSwitch extension message
+ * that does support configuring OVS extension OAM_*. */
+struct ofpbuf *
+ofputil_encode_set_async_config(const struct ofputil_async_cfg *ac,
+                                uint32_t oams, enum ofp_version ofp_version)
+{
+    enum ofpraw raw = (ofp_version >= OFP14_VERSION ? OFPRAW_OFPT14_SET_ASYNC
+                       : oams & OAM_EXTENSIONS ? OFPRAW_NXT_SET_ASYNC_CONFIG2
+                       : ofp_version >= OFP13_VERSION ? OFPRAW_OFPT13_SET_ASYNC
+                       : OFPRAW_NXT_SET_ASYNC_CONFIG);
+    struct ofpbuf *request = ofpraw_alloc(raw, ofp_version, 0);
+    ofputil_put_async_config__(ac, request,
+                               (raw == OFPRAW_OFPT14_SET_ASYNC ||
+                                raw == OFPRAW_NXT_SET_ASYNC_CONFIG2),
+                               ofp_version, oams);
+    return request;
+}
+
+struct ofputil_async_cfg
+ofputil_async_cfg_default(enum ofp_version version)
+{
+    /* We enable all of the OF1.4 reasons regardless of 'version' because the
+     * reasons added in OF1.4 just are just refinements of the OFPR_ACTION
+     * introduced in OF1.0, breaking it into more specific categories.  When we
+     * encode these for earlier OpenFlow versions, we translate them into
+     * OFPR_ACTION.  */
+    uint32_t pin = OFPR14_BITS & ~(1u << OFPR_INVALID_TTL);
+    pin |= 1u << OFPR_EXPLICIT_MISS;
+    if (version <= OFP12_VERSION) {
+        pin |= 1u << OFPR_IMPLICIT_MISS;
+    }
+
+    return (struct ofputil_async_cfg) {
+        .master[OAM_PACKET_IN] = pin,
+
+        .master[OAM_FLOW_REMOVED]
+            = (version >= OFP14_VERSION ? OFPRR14_BITS : OFPRR10_BITS),
+
+        .master[OAM_PORT_STATUS] = OFPPR_BITS,
+        .slave[OAM_PORT_STATUS] = OFPPR_BITS,
+    };
 }

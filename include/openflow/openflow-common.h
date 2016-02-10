@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012, 2013, 2014 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013, 2014, 2016 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -209,28 +209,33 @@ enum ofp_port_features {
     OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
 };
 
-enum ofp_queue_properties {
-    OFPQT_MIN_RATE = 1,          /* Minimum datarate guaranteed. */
-    OFPQT_MAX_RATE = 2,          /* Maximum guaranteed rate. */
-    OFPQT_EXPERIMENTER = 0xffff, /* Experimenter defined property. */
+/* Generic OpenFlow property header, as used by various messages in OF1.3+, and
+ * especially in OF1.4.
+ *
+ * The OpenFlow specs prefer to define a new structure with a specialized name
+ * each time this property structure comes up: struct
+ * ofp_port_desc_prop_header, struct ofp_controller_status_prop_header, struct
+ * ofp_table_mod_prop_header, and more.  They're all the same, so it's easier
+ * to unify them.
+ */
+struct ofp_prop_header {
+    ovs_be16 type;
+    ovs_be16 len;
 };
+OFP_ASSERT(sizeof(struct ofp_prop_header) == 4);
 
-/* Common description for a queue. */
-struct ofp_queue_prop_header {
-    ovs_be16 property; /* One of OFPQT_. */
-    ovs_be16 len;      /* Length of property, including this header. */
-    uint8_t pad[4];    /* 64-bit alignemnt. */
+/* Generic OpenFlow experimenter property header.
+ *
+ * Again the OpenFlow specs define this over and over again and it's easier to
+ * unify them. */
+struct ofp_prop_experimenter {
+    ovs_be16 type;          /* Generally 0xffff (in one case 0xfffe). */
+    ovs_be16 len;           /* Length in bytes of this property. */
+    ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
+                             * in struct ofp_experimenter_header. */
+    ovs_be32 exp_type;      /* Experimenter defined. */
 };
-OFP_ASSERT(sizeof(struct ofp_queue_prop_header) == 8);
-
-/* Min-Rate and Max-Rate queue property description (OFPQT_MIN and
- * OFPQT_MAX). */
-struct ofp_queue_prop_rate {
-    struct ofp_queue_prop_header prop_header;
-    ovs_be16 rate;        /* In 1/10 of a percent; >1000 -> disabled. */
-    uint8_t pad[6];       /* 64-bit alignment */
-};
-OFP_ASSERT(sizeof(struct ofp_queue_prop_rate) == 16);
+OFP_ASSERT(sizeof(struct ofp_prop_experimenter) == 12);
 
 /* Switch features. */
 struct ofp_switch_features {
@@ -269,12 +274,24 @@ enum ofp_capabilities {
 
 /* Why is this packet being sent to the controller? */
 enum ofp_packet_in_reason {
+    /* Standard reasons. */
     OFPR_NO_MATCH,          /* No matching flow. */
     OFPR_ACTION,            /* Action explicitly output to controller. */
     OFPR_INVALID_TTL,       /* Packet has invalid TTL. */
     OFPR_ACTION_SET,        /* Output to controller in action set */
     OFPR_GROUP,             /* Output to controller in group bucket */
     OFPR_PACKET_OUT,        /* Output to controller in packet-out */
+
+#define OFPR10_BITS                                                     \
+    ((1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION) | (1u << OFPR_INVALID_TTL))
+#define OFPR14_BITS                                                     \
+    (OFPR10_BITS |                                                      \
+     (1u << OFPR_ACTION_SET) | (1u << OFPR_GROUP) | (1u << OFPR_PACKET_OUT))
+
+    /* Nonstandard reason--not exposed via OpenFlow. */
+    OFPR_EXPLICIT_MISS,
+    OFPR_IMPLICIT_MISS,
+
     OFPR_N_REASONS
 };
 
@@ -301,6 +318,16 @@ enum ofp_flow_removed_reason {
     OFPRR_METER_DELETE,         /* Meter was removed. */
     OFPRR_EVICTION,             /* Switch eviction to free resources. */
 
+#define OFPRR10_BITS                            \
+    ((1u << OFPRR_IDLE_TIMEOUT) |               \
+     (1u << OFPRR_HARD_TIMEOUT) |               \
+     (1u << OFPRR_DELETE))
+#define OFPRR14_BITS                            \
+    (OFPRR10_BITS |                             \
+     (1u << OFPRR_GROUP_DELETE) |               \
+     (1u << OFPRR_METER_DELETE) |               \
+     (1u << OFPRR_EVICTION))
+
     OVS_OFPRR_NONE              /* OVS internal_use only, keep last!. */
 };
 
@@ -309,6 +336,11 @@ enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added. */
     OFPPR_DELETE,           /* The port was removed. */
     OFPPR_MODIFY,           /* Some attribute of the port has changed. */
+
+#define OFPPR_BITS ((1u << OFPPR_ADD) |         \
+                    (1u << OFPPR_DELETE) |      \
+                    (1u << OFPPR_MODIFY))
+
     OFPPR_N_REASONS         /* Denotes number of reasons. */
 };
 

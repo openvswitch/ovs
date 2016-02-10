@@ -18,6 +18,7 @@
 #include "patch.h"
 
 #include "hash.h"
+#include "lib/hmap.h"
 #include "lib/vswitch-idl.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
@@ -95,27 +96,6 @@ create_patch_port(struct controller_ctx *ctx,
     free(ports);
 }
 
-/* Creates a pair of patch ports that connect bridges 'b1' and 'b2', using a
- * port named 'name1' and 'name2' in each respective bridge.
- * external-ids:'key' in each port is initialized to 'value'.
- *
- * If one or both of the ports already exists, leaves it there and removes it
- * from 'existing_ports'. */
-static void
-create_patch_ports(struct controller_ctx *ctx,
-                   const char *key, const char *value,
-                   const struct ovsrec_bridge *b1,
-                   const struct ovsrec_bridge *b2,
-                   struct shash *existing_ports)
-{
-    char *name1 = patch_port_name(b1->name, b2->name);
-    char *name2 = patch_port_name(b2->name, b1->name);
-    create_patch_port(ctx, key, value, b1, name1, b2, name2, existing_ports);
-    create_patch_port(ctx, key, value, b2, name2, b1, name1, existing_ports);
-    free(name2);
-    free(name1);
-}
-
 static void
 remove_port(struct controller_ctx *ctx,
             const struct ovsrec_port *port)
@@ -153,7 +133,8 @@ remove_port(struct controller_ctx *ctx,
 static void
 add_bridge_mappings(struct controller_ctx *ctx,
                     const struct ovsrec_bridge *br_int,
-                    struct shash *existing_ports)
+                    struct shash *existing_ports,
+                    struct hmap *local_datapaths)
 {
     /* Get ovn-bridge-mappings. */
     const char *mappings_cfg = "";
@@ -166,7 +147,8 @@ add_bridge_mappings(struct controller_ctx *ctx,
         }
     }
 
-    /* Create patch ports. */
+    /* Parse bridge mappings. */
+    struct shash bridge_mappings = SHASH_INITIALIZER(&bridge_mappings);
     char *cur, *next, *start;
     next = start = xstrdup(mappings_cfg);
     while ((cur = strsep(&next, ",")) && *cur) {
@@ -187,10 +169,53 @@ add_bridge_mappings(struct controller_ctx *ctx,
             continue;
         }
 
-        create_patch_ports(ctx, "ovn-localnet-port", network,
-                           br_int, ovs_bridge, existing_ports);
+        shash_add(&bridge_mappings, network, ovs_bridge);
     }
     free(start);
+
+    const struct sbrec_port_binding *binding;
+    SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+        if (strcmp(binding->type, "localnet")) {
+            /* Not a binding for a localnet port. */
+            continue;
+        }
+
+        struct hmap_node *ld;
+        ld = hmap_first_with_hash(local_datapaths,
+                                  binding->datapath->tunnel_key);
+        if (!ld) {
+            /* This localnet port is on a datapath with no
+             * logical ports bound to this chassis, so there's no need
+             * to create patch ports for it. */
+            continue;
+        }
+
+        const char *network = smap_get(&binding->options, "network_name");
+        if (!network) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_ERR_RL(&rl, "localnet port '%s' has no network name.",
+                         binding->logical_port);
+            continue;
+        }
+        struct ovsrec_bridge *br_ln = shash_find_data(&bridge_mappings, network);
+        if (!br_ln) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_ERR_RL(&rl, "bridge not found for localnet port '%s' "
+                    "with network name '%s'", binding->logical_port, network);
+            continue;
+        }
+
+        char *name1 = patch_port_name(br_int->name, binding->logical_port);
+        char *name2 = patch_port_name(binding->logical_port, br_int->name);
+        create_patch_port(ctx, "ovn-localnet-port", binding->logical_port,
+                          br_int, name1, br_ln, name2, existing_ports);
+        create_patch_port(ctx, "ovn-localnet-port", binding->logical_port,
+                          br_ln, name2, br_int, name1, existing_ports);
+        free(name1);
+        free(name2);
+    }
+
+    shash_destroy(&bridge_mappings);
 }
 
 /* Add one OVS patch port for each OVN logical patch port.
@@ -241,7 +266,8 @@ add_logical_patch_ports(struct controller_ctx *ctx,
 }
 
 void
-patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
+patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+          struct hmap *local_datapaths)
 {
     if (!ctx->ovs_idl_txn) {
         return;
@@ -260,7 +286,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int)
     /* Create in the database any patch ports that should exist.  Remove from
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
-    add_bridge_mappings(ctx, br_int, &existing_ports);
+    add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths);
     add_logical_patch_ports(ctx, br_int, &existing_ports);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the

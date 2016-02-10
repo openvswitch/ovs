@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import types
+import six
 
 import ovs.util
 
 commands = {}
-strtypes = types.StringTypes
+strtypes = six.string_types
 
 
 class _UnixctlCommand(object):
@@ -61,7 +61,7 @@ def command_register(name, usage, min_args, max_args, callback, aux):
     assert isinstance(usage, strtypes)
     assert isinstance(min_args, int)
     assert isinstance(max_args, int)
-    assert isinstance(callback, types.FunctionType)
+    assert callable(callback)
 
     if name not in commands:
         commands[name] = _UnixctlCommand(usage, min_args, max_args, callback,

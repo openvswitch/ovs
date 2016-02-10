@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 struct ofpbuf;
 union ofp_action;
 struct ofpact_set_field;
+struct pktbuf;
 
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
@@ -139,22 +140,6 @@ enum ofputil_protocol {
                        OFPUTIL_P_OF11_STD |     \
                        OFPUTIL_P_ANY_OXM)
 };
-
-    /* Valid value of mask for asynchronous messages. */
-#define MAXIMUM_MASK_PACKET_IN ((1 << OFPR_N_REASONS) - 1)
-
-#define MAXIMUM_MASK_FLOW_REMOVED ((1 << OVS_OFPRR_NONE) - 1)
-
-#define MAXIMUM_MASK_PORT_STATUS ((1 << OFPPR_N_REASONS) - 1)
-
-#define MAXIMUM_MASK_ROLE_STATUS ((1 << OFPCRR_N_REASONS) - 1)
-
-#define MINIMUM_MASK_TABLE_STATUS (1 << OFPTR_VACANCY_DOWN)
-
-#define MAXIMUM_MASK_TABLE_STATUS ((1 << OFPTR_N_REASONS) - \
-                                   MINIMUM_MASK_TABLE_STATUS)
-
-#define MAXIMUM_MASK_REQUESTFORWARD ((1 << OFPRFR_N_REASONS) - 1)
 
 /* Protocols to use for flow dumps, from most to least preferred. */
 extern enum ofputil_protocol ofputil_flow_dump_protocols[];
@@ -427,25 +412,25 @@ enum ofperr ofputil_decode_flow_removed(struct ofputil_flow_removed *,
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
                                            enum ofputil_protocol);
 
-/* Abstract packet-in message. */
+/* Abstract packet-in message.
+ *
+ * This omits the 'total_len' and 'buffer_id' fields, which we handle
+ * differently for encoding and decoding.*/
 struct ofputil_packet_in {
     /* Packet data and metadata.
      *
-     * To save bandwidth, in some cases a switch may send only the first
-     * several bytes of a packet, indicated by 'packet_len < total_len'.  When
-     * the full packet is included, 'packet_len == total_len'. */
-    const void *packet;
-    size_t packet_len;          /* Number of bytes in 'packet'. */
-    size_t total_len;           /* Size of packet, pre-truncation. */
-    struct match flow_metadata;
-
-    /* Identifies a buffer in the switch that contains the full packet, to
-     * allow the controller to reference it later without having to send the
-     * entire packet back to the switch.
+     * On encoding, the full packet should be supplied, but depending on its
+     * other parameters ofputil_encode_packet_in() might send only the first
+     * part of the packet.
      *
-     * UINT32_MAX indicates that the packet is not buffered in the switch.  A
-     * switch should only use UINT32_MAX when it sends the entire packet. */
-    uint32_t buffer_id;
+     * On decoding, the 'len' bytes in 'packet' might only be the first part of
+     * the original packet.  ofputil_decode_packet_in() reports the full
+     * original length of the packet using its 'total_len' output parameter. */
+    const void *packet;         /* The packet. */
+    size_t len;                 /* Length of 'packet' in bytes. */
+
+    /* Input port and other metadata for packet. */
+    struct match flow_metadata;
 
     /* Reason that the packet-in is being sent. */
     enum ofp_packet_in_reason reason;    /* One of OFPR_*. */
@@ -458,11 +443,14 @@ struct ofputil_packet_in {
     ovs_be64 cookie;                     /* Flow's cookie. */
 };
 
-enum ofperr ofputil_decode_packet_in(struct ofputil_packet_in *,
-                                     const struct ofp_header *);
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
                                         enum ofputil_protocol protocol,
-                                        enum nx_packet_in_format);
+                                        enum nx_packet_in_format,
+                                        uint16_t max_len, struct pktbuf *);
+
+enum ofperr ofputil_decode_packet_in(const struct ofp_header *,
+                                     struct ofputil_packet_in *,
+                                     size_t *total_len, uint32_t *buffer_id);
 
 enum { OFPUTIL_PACKET_IN_REASON_BUFSIZE = INT_STRLEN(int) + 1 };
 const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason,
@@ -602,9 +590,8 @@ struct ofputil_switch_features {
     uint64_t ofpacts;           /* Bitmap of OFPACT_* bits. */
 };
 
-enum ofperr ofputil_decode_switch_features(const struct ofp_header *,
-                                           struct ofputil_switch_features *,
-                                           struct ofpbuf *);
+enum ofperr ofputil_pull_switch_features(struct ofpbuf *,
+                                         struct ofputil_switch_features *);
 
 struct ofpbuf *ofputil_encode_switch_features(
     const struct ofputil_switch_features *, enum ofputil_protocol,
@@ -986,14 +973,16 @@ int ofputil_decode_table_stats_reply(struct ofpbuf *reply,
 
 /* Queue configuration request. */
 struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,
-                                                       ofp_port_t port);
+                                                       ofp_port_t port,
+                                                       uint32_t queue);
 enum ofperr ofputil_decode_queue_get_config_request(const struct ofp_header *,
-                                                    ofp_port_t *port);
+                                                    ofp_port_t *port,
+                                                    uint32_t *queue);
 
 /* Queue configuration reply. */
 struct ofputil_queue_config {
     ofp_port_t port;
-    uint32_t queue_id;
+    uint32_t queue;
 
     /* Each of these optional values is expressed in tenths of a percent.
      * Values greater than 1000 indicate that the feature is disabled.
@@ -1002,13 +991,11 @@ struct ofputil_queue_config {
     uint16_t max_rate;
 };
 
-struct ofpbuf *ofputil_encode_queue_get_config_reply(
-    const struct ofp_header *request);
+void ofputil_start_queue_get_config_reply(const struct ofp_header *request,
+                                          struct ovs_list *replies);
 void ofputil_append_queue_get_config_reply(
-    struct ofpbuf *reply, const struct ofputil_queue_config *);
+    const struct ofputil_queue_config *, struct ovs_list *replies);
 
-enum ofperr ofputil_decode_queue_get_config_reply(struct ofpbuf *reply,
-                                                  ofp_port_t *);
 int ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
                                         struct ofputil_queue_config *);
 
@@ -1315,24 +1302,38 @@ enum ofperr ofputil_decode_tlv_table_reply(const struct ofp_header *,
 void ofputil_uninit_tlv_table(struct ovs_list *mappings);
 
 enum ofputil_async_msg_type {
+    /* Standard asynchronous messages. */
     OAM_PACKET_IN,              /* OFPT_PACKET_IN or NXT_PACKET_IN. */
     OAM_PORT_STATUS,            /* OFPT_PORT_STATUS. */
-    OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or
-                                 * NXT_FLOW_REMOVED. */
+    OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED. */
     OAM_ROLE_STATUS,            /* OFPT_ROLE_STATUS. */
     OAM_TABLE_STATUS,           /* OFPT_TABLE_STATUS. */
     OAM_REQUESTFORWARD,         /* OFPT_REQUESTFORWARD. */
+
+    /* Extension asynchronous messages (none yet--coming soon!). */
+#define OAM_EXTENSIONS 0        /* Bitmap of all extensions. */
+
     OAM_N_TYPES
 };
+const char *ofputil_async_msg_type_to_string(enum ofputil_async_msg_type);
+
+struct ofputil_async_cfg {
+    uint32_t master[OAM_N_TYPES];
+    uint32_t slave[OAM_N_TYPES];
+};
+#define OFPUTIL_ASYNC_CFG_INIT (struct ofputil_async_cfg) { .master[0] = 0 }
 
 enum ofperr ofputil_decode_set_async_config(const struct ofp_header *,
-                                            uint32_t master[OAM_N_TYPES],
-                                            uint32_t slave[OAM_N_TYPES],
-                                            bool loose);
+                                            bool loose,
+                                            const struct ofputil_async_cfg *,
+                                            struct ofputil_async_cfg *);
 
-struct ofpbuf *ofputil_encode_get_async_config(const struct ofp_header *,
-                                               uint32_t master[OAM_N_TYPES],
-                                               uint32_t slave[OAM_N_TYPES]);
+struct ofpbuf *ofputil_encode_get_async_reply(
+    const struct ofp_header *, const struct ofputil_async_cfg *);
+struct ofpbuf *ofputil_encode_set_async_config(
+    const struct ofputil_async_cfg *, uint32_t oams, enum ofp_version);
+
+struct ofputil_async_cfg ofputil_async_cfg_default(enum ofp_version);
 
 struct ofputil_requestforward {
     ovs_be32 xid;

@@ -80,10 +80,14 @@ static NTSTATUS _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf,
                                        Icmp6Key *ipv6FlowPutIcmpKey);
 static NTSTATUS _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf,
                                       ArpKey *arpFlowPutKey);
+static NTSTATUS _MapFlowMplsKeyToNlKey(PNL_BUFFER nlBuf,
+                                       MplsKey *mplsFlowPutKey);
 
 static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
                                OvsFlowDumpOutput *dumpOutput,
                                UINT32 *replyLen);
+static NTSTATUS OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
+                                         PNL_ATTR keyAttr);
 
 
 #define OVS_FLOW_TABLE_SIZE 2048
@@ -108,7 +112,7 @@ const NL_POLICY nlFlowPolicy[] = {
 
 /* For Parsing nested OVS_FLOW_ATTR_KEY attributes.
  * Some of the attributes like OVS_KEY_ATTR_RECIRC_ID
- * & OVS_KEY_ATTR_MPLS are not supported yet. */
+ * are not supported yet. */
 
 const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_ENCAP] = {.type = NL_A_VAR_LEN, .optional = TRUE},
@@ -311,13 +315,17 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     if (flowAttrs[OVS_FLOW_ATTR_PROBE]) {
-        OVS_LOG_ERROR("Attribute OVS_FLOW_ATTR_PROBE not supported");
-        goto done;
+        rc = OvsProbeSupportedFeature(msgIn, flowAttrs[OVS_FLOW_ATTR_KEY]);
+        if (rc != STATUS_SUCCESS) {
+            nlError = NlMapStatusToNlErr(rc);
+            goto done;
+        }
     }
 
     if ((rc = _MapNlToFlowPut(msgIn, flowAttrs[OVS_FLOW_ATTR_KEY],
-        flowAttrs[OVS_FLOW_ATTR_ACTIONS], flowAttrs[OVS_FLOW_ATTR_CLEAR],
-         &mappedFlow))
+                              flowAttrs[OVS_FLOW_ATTR_ACTIONS],
+                              flowAttrs[OVS_FLOW_ATTR_CLEAR],
+                              &mappedFlow))
         != STATUS_SUCCESS) {
         OVS_LOG_ERROR("Conversion to OvsFlowPut failed");
         goto done;
@@ -872,6 +880,13 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
         break;
         }
 
+        case ETH_TYPE_MPLS:
+        case ETH_TYPE_MPLS_MCAST: {
+        MplsKey *mplsFlowPutKey = &(flowKey->mplsKey);
+        rc = _MapFlowMplsKeyToNlKey(nlBuf, mplsFlowPutKey);
+        break;
+        }
+
         default:
         break;
     }
@@ -1194,6 +1209,31 @@ done:
 
 /*
  *----------------------------------------------------------------------------
+ *  _MapFlowMplsKeyToNlKey --
+ *    Maps _MapFlowMplsKeyToNlKey to OVS_KEY_ATTR_MPLS attribute.
+ *----------------------------------------------------------------------------
+ */
+static NTSTATUS
+_MapFlowMplsKeyToNlKey(PNL_BUFFER nlBuf, MplsKey *mplsFlowPutKey)
+{
+    NTSTATUS rc = STATUS_SUCCESS;
+    struct ovs_key_mpls *mplsKey;
+
+    mplsKey = (struct ovs_key_mpls *)
+        NlMsgPutTailUnspecUninit(nlBuf, OVS_KEY_ATTR_MPLS, sizeof(*mplsKey));
+    if (!mplsKey) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    mplsKey->mpls_lse = mplsFlowPutKey->lse;
+
+done:
+    return rc;
+}
+
+/*
+ *----------------------------------------------------------------------------
  *  _MapNlToFlowPut --
  *    Maps input netlink message to OvsFlowPut.
  *----------------------------------------------------------------------------
@@ -1220,7 +1260,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                            keyAttrs, ARRAY_SIZE(keyAttrs)))
                            != TRUE) {
         OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
-                       nlMsgHdr);
+                      nlMsgHdr);
         rc = STATUS_INVALID_PARAMETER;
         goto done;
     }
@@ -1238,7 +1278,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
             OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
-                           nlMsgHdr);
+                          nlMsgHdr);
             rc = STATUS_INVALID_PARAMETER;
             goto done;
         }
@@ -1256,7 +1296,7 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
     mappedFlow->dpNo = ovsHdr->dp_ifindex;
 
     _MapNlToFlowPutFlags(genlMsgHdr, flowAttrClear,
-                                mappedFlow);
+                         mappedFlow);
 
 done:
     return rc;
@@ -1469,8 +1509,26 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
             arpFlowPutKey->pad[1] = 0;
             arpFlowPutKey->pad[2] = 0;
             destKey->l2.keyLen += OVS_ARP_KEY_SIZE;
-            break;
         }
+        break;
+    }
+    case ETH_TYPE_MPLS:
+    case ETH_TYPE_MPLS_MCAST: {
+
+        if (keyAttrs[OVS_KEY_ATTR_MPLS]) {
+            MplsKey *mplsFlowPutKey = &destKey->mplsKey;
+            const struct ovs_key_mpls *mplsKey;
+
+            mplsKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_MPLS]);
+
+            mplsFlowPutKey->lse = mplsKey->mpls_lse;
+            mplsFlowPutKey->pad[0] = 0;
+            mplsFlowPutKey->pad[1] = 0;
+            mplsFlowPutKey->pad[2] = 0;
+            mplsFlowPutKey->pad[3] = 0;
+            destKey->l2.keyLen += sizeof(MplsKey);
+        }
+        break;
     }
     }
 }
@@ -1734,10 +1792,10 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
             flow->l2.vlanTci = 0;
         }
         /*
-        * XXX
-        * Please note after this point, src mac and dst mac should
-        * not be accessed through eth
-        */
+         * XXX
+         * Please note after this point, src mac and dst mac should
+         * not be accessed through eth
+         */
         eth = (Eth_Header *)((UINT8 *)eth + offset);
     }
 
@@ -1866,6 +1924,44 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
                 memcpy(&arpKey->nwDst, arp->arp_tpa, 4);
                 memcpy(arpKey->arpSha, arp->arp_sha, ETH_ADDR_LENGTH);
                 memcpy(arpKey->arpTha, arp->arp_tha, ETH_ADDR_LENGTH);
+            }
+        }
+    } else if (OvsEthertypeIsMpls(flow->l2.dlType)) {
+        MPLSHdr mplsStorage;
+        const MPLSHdr *mpls;
+        MplsKey *mplsKey = &flow->mplsKey;
+        ((UINT64 *)mplsKey)[0] = 0;
+
+        /*
+         * In the presence of an MPLS label stack the end of the L2
+         * header and the beginning of the L3 header differ.
+         *
+         * A network packet may contain multiple MPLS labels, but we
+         * are only interested in the topmost label stack entry.
+         *
+         * Advance network header to the beginning of the L3 header.
+         * layers->l3Offset corresponds to the end of the L2 header.
+         */
+        for (UINT32 i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
+            mpls = OvsGetMpls(packet, layers->l3Offset, &mplsStorage);
+            if (!mpls) {
+                break;
+            }
+
+            /* Keep only the topmost MPLS label stack entry. */
+            if (i == 0) {
+                mplsKey->lse = mpls->lse;
+            }
+
+            layers->l3Offset += MPLS_HLEN;
+            layers->l4Offset += MPLS_HLEN;
+
+            if (mpls->lse & htonl(MPLS_BOS_MASK)) {
+                /*
+                 * Bottom of Stack bit is set, which means there are no
+                 * remaining MPLS labels in the packet.
+                 */
+                break;
             }
         }
     }
@@ -2429,6 +2525,58 @@ OvsTunKeyAttrSize(void)
          + NlAttrTotalSize(256)  /* OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS */
          + NlAttrTotalSize(2)    /* OVS_TUNNEL_KEY_ATTR_TP_SRC */
          + NlAttrTotalSize(2);   /* OVS_TUNNEL_KEY_ATTR_TP_DST */
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  OvsProbeSupportedFeature --
+ *    Verifies if the probed feature is supported.
+ * 
+ * Results:
+ *   STATUS_SUCCESS if the probed feature is supported.
+ *----------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
+                         PNL_ATTR keyAttr)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+
+    UINT32 keyAttrOffset = (UINT32)((PCHAR)keyAttr - (PCHAR)nlMsgHdr);
+    PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX] = { NULL };
+
+    /* Get flow keys attributes */
+    if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset, NlAttrLen(keyAttr),
+                           nlFlowKeyPolicy, ARRAY_SIZE(nlFlowKeyPolicy),
+                           keyAttrs, ARRAY_SIZE(keyAttrs)))
+                           != TRUE) {
+        OVS_LOG_ERROR("Key Attr Parsing failed for msg: %p",
+                      nlMsgHdr);
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_MPLS] &&
+        keyAttrs[OVS_KEY_ATTR_ETHERTYPE]) {
+        ovs_be16 ethType = NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_ETHERTYPE]);
+
+        if (OvsEthertypeIsMpls(ethType)) {
+            if (!OvsCountMplsLabels(keyAttrs[OVS_KEY_ATTR_MPLS])) {
+                OVS_LOG_ERROR("Maximum supported MPLS labels exceeded.");
+                status = STATUS_INVALID_MESSAGE;
+            }
+        } else {
+            OVS_LOG_ERROR("Wrong ethertype for MPLS attribute.");
+            status = STATUS_INVALID_PARAMETER;
+        }
+    } else {
+        OVS_LOG_ERROR("Probed feature not supported.");
+        status = STATUS_INVALID_PARAMETER;
+    }
+
+done:
+    return status;
 }
 
 #pragma warning( pop )

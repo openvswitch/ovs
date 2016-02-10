@@ -186,6 +186,7 @@ rstp_unref(struct rstp *rstp)
 
         list_remove(&rstp->node);
         ovs_mutex_unlock(&rstp_mutex);
+        hmap_destroy(&rstp->ports);
         free(rstp->name);
         free(rstp);
     }

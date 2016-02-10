@@ -14,7 +14,7 @@
 #endif
 
 #ifdef OVS_FRAGMENT_BACKPORT
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_LAST_IN
 #define q_flags(q) (q->last_in)
 #define qp_flags(qp) (qp->q.last_in)
 #else
@@ -22,6 +22,7 @@
 #define qp_flags(qp) (qp->q.flags)
 #endif
 
+#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 /**
  * struct ovs_inet_frag_queue - fragment queue
  *
@@ -36,15 +37,25 @@ struct ovs_inet_frag_queue {
 
 static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	return (q_flags(q) & INET_FRAG_FIRST_IN) && q->fragments != NULL;
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	struct ovs_inet_frag_queue *ofq = (struct ovs_inet_frag_queue *)q;
 	return !hlist_unhashed(&ofq->list_evictor);
+#else
+	return (q_flags(q) & INET_FRAG_FIRST_IN) && q->fragments != NULL;
 #endif
 }
 #define inet_frag_evicting rpl_inet_frag_evicting
+#else /* HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR */
+#ifndef HAVE_INET_FRAG_EVICTING
+static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
+{
+	return !hlist_unhashed(&q->list_evictor);
+}
+#define inet_frag_evicting rpl_inet_frag_evicting
+#endif
+#endif
 
+#ifndef HAVE_CORRECT_MRU_HANDLING
 static unsigned int rpl_frag_percpu_counter_batch = 130000;
 #define frag_percpu_counter_batch rpl_frag_percpu_counter_batch
 
@@ -68,6 +79,7 @@ void rpl_inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f);
 
 void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f);
 #define inet_frag_destroy(q, f, work) rpl_inet_frag_destroy(q, f)
+#endif /* !HAVE_CORRECT_MRU_HANDLING */
 #endif /* OVS_FRAGMENT_BACKPORT */
 
 #endif /* inet_frag.h */

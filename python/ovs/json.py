@@ -13,8 +13,10 @@
 # limitations under the License.
 
 import re
-import StringIO
 import sys
+
+import six
+from six.moves import range
 
 __pychecker__ = 'no-stringiter'
 
@@ -54,15 +56,18 @@ class _Serializer(object):
             self.stream.write(u"false")
         elif obj is True:
             self.stream.write(u"true")
-        elif type(obj) in (int, long):
+        elif isinstance(obj, six.integer_types):
             self.stream.write(u"%d" % obj)
-        elif type(obj) == float:
+        elif isinstance(obj, float):
             self.stream.write("%.15g" % obj)
-        elif type(obj) == unicode:
+        elif isinstance(obj, six.text_type):
+            # unicode() on Python 2, or str() in Python 3 (always unicode)
             self.__serialize_string(obj)
-        elif type(obj) == str:
-            self.__serialize_string(unicode(obj))
-        elif type(obj) == dict:
+        elif isinstance(obj, str):
+            # This is for Python 2, where this comes out to unicode(str()).
+            # For Python 3, it's str(str()), but it's harmless.
+            self.__serialize_string(six.text_type(obj))
+        elif isinstance(obj, dict):
             self.stream.write(u"{")
 
             self.depth += 1
@@ -71,12 +76,12 @@ class _Serializer(object):
             if self.sort_keys:
                 items = sorted(obj.items())
             else:
-                items = obj.iteritems()
+                items = six.iteritems(obj)
             for i, (key, value) in enumerate(items):
                 if i > 0:
                     self.stream.write(u",")
                     self.__indent_line()
-                self.__serialize_string(unicode(key))
+                self.__serialize_string(six.text_type(key))
                 self.stream.write(u":")
                 if self.pretty:
                     self.stream.write(u' ')
@@ -84,7 +89,7 @@ class _Serializer(object):
 
             self.stream.write(u"}")
             self.depth -= 1
-        elif type(obj) in (list, tuple):
+        elif isinstance(obj, (list, tuple)):
             self.stream.write(u"[")
             self.depth += 1
 
@@ -116,7 +121,7 @@ def to_file(obj, name, pretty=False, sort_keys=True):
 
 
 def to_string(obj, pretty=False, sort_keys=True):
-    output = StringIO.StringIO()
+    output = six.StringIO()
     to_stream(obj, output, pretty, sort_keys)
     s = output.getvalue()
     output.close()
@@ -141,12 +146,16 @@ def from_file(name):
 
 
 def from_string(s):
-    try:
-        s = unicode(s, 'utf-8')
-    except UnicodeDecodeError, e:
-        seq = ' '.join(["0x%2x" % ord(c)
-                        for c in e.object[e.start:e.end] if ord(c) >= 0x80])
-        return ("not a valid UTF-8 string: invalid UTF-8 sequence %s" % seq)
+    if not isinstance(s, six.text_type):
+        # We assume the input is a string.  We will only hit this case for a
+        # str in Python 2 which is not unicode, so we need to go ahead and
+        # decode it.
+        try:
+            s = six.text_type(s, 'utf-8')
+        except UnicodeDecodeError as e:
+            seq = ' '.join(["0x%2x" % ord(c)
+                           for c in e.object[e.start:e.end] if ord(c) >= 0x80])
+            return "not a valid UTF-8 string: invalid UTF-8 sequence %s" % seq
     p = Parser(check_trailer=True)
     p.feed(s)
     return p.finish()
@@ -245,7 +254,7 @@ class Parser(object):
         if m:
             sign, integer, fraction, exp = m.groups()
             if (exp is not None and
-                (long(exp) > sys.maxint or long(exp) < -sys.maxint - 1)):
+                (int(exp) > sys.maxsize or int(exp) < -sys.maxsize - 1)):
                 self.__error("exponent outside valid range")
                 return
 
@@ -261,7 +270,7 @@ class Parser(object):
             if fraction is not None:
                 pow10 -= len(fraction)
             if exp is not None:
-                pow10 += long(exp)
+                pow10 += int(exp)
 
             if significand == 0:
                 self.__parser_input(0)
@@ -399,7 +408,7 @@ class Parser(object):
                 inp = inp[6:]
             else:
                 code_point = c0
-            out += unichr(code_point)
+            out += six.unichr(code_point)
         self.__parser_input('string', out)
 
     def __lex_string_escape(self, c):
@@ -489,7 +498,7 @@ class Parser(object):
 
     def __put_value(self, value):
         top = self.stack[-1]
-        if type(top) == dict:
+        if isinstance(top, dict):
             top[self.member_name] = value
         else:
             top.append(value)
@@ -518,13 +527,16 @@ class Parser(object):
         else:
             self.stack.pop()
             top = self.stack[-1]
-            if type(top) == list:
+            if isinstance(top, list):
                 self.parse_state = Parser.__parse_array_next
             else:
                 self.parse_state = Parser.__parse_object_next
 
     def __parse_value(self, token, string, next_state):
-        if token in [False, None, True] or type(token) in [int, long, float]:
+        number_types = list(six.integer_types)
+        number_types.extend([float])
+        number_types = tuple(number_types)
+        if token in [False, None, True] or isinstance(token, number_types):
             self.__put_value(token)
         elif token == 'string':
             self.__put_value(string)

@@ -518,7 +518,7 @@ class Reconnect(object):
         """Causes the next call to poller.block() to wake up when self.run()
         should be called."""
         timeout = self.timeout(now)
-        if timeout >= 0:
+        if timeout is not None and timeout >= 0:
             poller.timer_wait(timeout)
 
     def timeout(self, now):

@@ -426,7 +426,9 @@ do_diff_data(struct ovs_cmdl_context *ctx)
         /* Apply diff to 'old' to create'reincarnation'. */
         error = ovsdb_datum_apply_diff(&reincarnation, &old, &diff, &type);
         if (error) {
-            ovs_fatal(0, "%s", ovsdb_error_to_string(error));
+            char *string = ovsdb_error_to_string(error);
+            ovsdb_error_destroy(error);
+            ovs_fatal(0, "%s", string);
         }
 
         /* Test to make sure 'new' equals 'reincarnation'.  */
@@ -1296,6 +1298,8 @@ do_query_distinct(struct ovs_cmdl_context *ctx)
 
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 
+    free(rows);
+    free(classes);
     exit(exit_code);
 }
 
@@ -1671,6 +1675,66 @@ compare_link1(const void *a_, const void *b_)
 }
 
 static void
+print_idl_row_updated_simple(const struct idltest_simple *s, int step)
+{
+    size_t i;
+    bool updated = false;
+
+    for (i = 0; i < IDLTEST_SIMPLE_N_COLUMNS; i++) {
+        if (idltest_simple_is_updated(s, i)) {
+            if (!updated) {
+                printf("%03d: updated columns:", step);
+                updated = true;
+            }
+            printf(" %s", idltest_simple_columns[i].name);
+        }
+    }
+    if (updated) {
+        printf("\n");
+    }
+}
+
+static void
+print_idl_row_updated_link1(const struct idltest_link1 *l1, int step)
+{
+    size_t i;
+    bool updated = false;
+
+    for (i = 0; i < IDLTEST_LINK1_N_COLUMNS; i++) {
+        if (idltest_link1_is_updated(l1, i)) {
+            if (!updated) {
+                printf("%03d: updated columns:", step);
+                updated = true;
+            }
+            printf(" %s", idltest_link1_columns[i].name);
+        }
+    }
+    if (updated) {
+        printf("\n");
+    }
+}
+
+static void
+print_idl_row_updated_link2(const struct idltest_link2 *l2, int step)
+{
+    size_t i;
+    bool updated = false;
+
+    for (i = 0; i < IDLTEST_LINK2_N_COLUMNS; i++) {
+        if (idltest_link2_is_updated(l2, i)) {
+            if (!updated) {
+                printf("%03d: updated columns:", step);
+                updated = true;
+            }
+            printf(" %s", idltest_link2_columns[i].name);
+        }
+    }
+    if (updated) {
+        printf("\n");
+    }
+}
+
+static void
 print_idl_row_simple(const struct idltest_simple *s, int step)
 {
     size_t i;
@@ -1698,6 +1762,7 @@ print_idl_row_simple(const struct idltest_simple *s, int step)
         printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
     }
     printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
+    print_idl_row_updated_simple(s, step);
 }
 
 static void
@@ -1722,6 +1787,7 @@ print_idl_row_link1(const struct idltest_link1 *l1, int step)
         printf("%"PRId64, l1->l2->i);
     }
     printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
+    print_idl_row_updated_link1(l1, step);
 }
 
 static void
@@ -1732,6 +1798,7 @@ print_idl_row_link2(const struct idltest_link2 *l2, int step)
         printf("%"PRId64, l2->l1->i);
     }
     printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
+    print_idl_row_updated_link2(l2, step);
 }
 
 static void

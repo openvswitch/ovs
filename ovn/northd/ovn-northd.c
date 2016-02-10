@@ -951,6 +951,12 @@ lport_is_enabled(const struct nbrec_logical_port *lport)
 }
 
 static bool
+lport_is_up(const struct nbrec_logical_port *lport)
+{
+    return !lport->up || *lport->up;
+}
+
+static bool
 has_stateful_acl(struct ovn_datapath *od)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
@@ -1175,6 +1181,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
      * (priority 150). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
+            continue;
+        }
+
+        /*
+         * Add ARP reply flows if either the
+         *  - port is up or
+         *  - port type is router
+         */
+        if (!lport_is_up(op->nbs) && strcmp(op->nbs->type, "router")) {
             continue;
         }
 
@@ -1862,8 +1877,6 @@ add_column_noalert(struct ovsdb_idl *idl,
 int
 main(int argc, char *argv[])
 {
-    extern struct vlog_module VLM_reconnect;
-    unsigned int ovnnb_seqno, ovnsb_seqno;
     int res = EXIT_SUCCESS;
     struct unixctl_server *unixctl;
     int retval;
@@ -1872,8 +1885,6 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     set_program_name(argv[0]);
     service_start(&argc, &argv);
-    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
     parse_options(argc, argv);
 
     daemonize_start(false);
@@ -1933,9 +1944,6 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
 
-    ovnnb_seqno = ovsdb_idl_get_seqno(ovnnb_idl_loop.idl);
-    ovnsb_seqno = ovsdb_idl_get_seqno(ovnsb_idl_loop.idl);
-
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -1946,14 +1954,8 @@ main(int argc, char *argv[])
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        if (ovnnb_seqno != ovsdb_idl_get_seqno(ctx.ovnnb_idl)) {
-            ovnnb_seqno = ovsdb_idl_get_seqno(ctx.ovnnb_idl);
-            ovnnb_db_run(&ctx);
-        }
-        if (ovnsb_seqno != ovsdb_idl_get_seqno(ctx.ovnsb_idl)) {
-            ovnsb_seqno = ovsdb_idl_get_seqno(ctx.ovnsb_idl);
-            ovnsb_db_run(&ctx);
-        }
+        ovnnb_db_run(&ctx);
+        ovnsb_db_run(&ctx);
 
         unixctl_server_run(unixctl);
         unixctl_server_wait(unixctl);

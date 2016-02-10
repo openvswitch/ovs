@@ -33,6 +33,7 @@
 #include "ovn/lib/ovn-sb-idl.h"
 #include "poll-loop.h"
 #include "fatal-signal.h"
+#include "lib/hmap.h"
 #include "lib/vswitch-idl.h"
 #include "smap.h"
 #include "stream.h"
@@ -277,27 +278,29 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
+        /* Contains bare "struct hmap_node"s whose hash values are the tunnel_key
+         * of datapaths with at least one local port binding. */
+        struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
+
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
-
-        /* Map bridges to local nets from ovn-bridge-mappings */
-        if (br_int) {
-            patch_run(&ctx, br_int);
-        }
 
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &ct_zones, ct_zone_bitmap);
+            binding_run(&ctx, br_int, chassis_id, &ct_zones, ct_zone_bitmap,
+                    &local_datapaths);
         }
 
         if (br_int) {
+            patch_run(&ctx, br_int, &local_datapaths);
+
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             pinctrl_run(&ctx, br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            lflow_run(&ctx, &flow_table, &ct_zones);
+            lflow_run(&ctx, &flow_table, &ct_zones, &local_datapaths);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis_id, &ct_zones, &flow_table);
@@ -305,6 +308,18 @@ main(int argc, char *argv[])
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
         }
+
+        /* local_datapaths contains bare hmap_node instances.
+         * We use this wrapper so that we can make use of
+         * HMAP_FOR_EACH_SAFE to tear down the hmap. */
+        struct {
+            struct hmap_node node;
+        } *cur_node, *next_node;
+        HMAP_FOR_EACH_SAFE (cur_node, next_node, node, &local_datapaths) {
+            hmap_remove(&local_datapaths, &cur_node->node);
+            free(cur_node);
+        }
+        hmap_destroy(&local_datapaths);
 
         unixctl_server_run(unixctl);
 

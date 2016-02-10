@@ -72,7 +72,12 @@ static inline unsigned int rpl_ip_skb_dst_mtu(const struct sk_buff *skb)
 #define OVS_VPORT_OUTPUT_PARAMS struct sk_buff *skb
 #endif
 
-#ifdef OVS_FRAGMENT_BACKPORT
+/* Prior to upstream commit d6b915e29f4a ("ip_fragment: don't forward
+ * defragmented DF packet"), IPCB(skb)->frag_max_size was not always populated
+ * correctly, which would lead to reassembled packets not being refragmented.
+ * So, we backport all of ip_defrag() in these cases.
+ */
+#if !defined(HAVE_CORRECT_MRU_HANDLING) && defined(OVS_FRAGMENT_BACKPORT)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
 static inline bool ip_defrag_user_in_between(u32 user,
@@ -81,7 +86,7 @@ static inline bool ip_defrag_user_in_between(u32 user,
 {
 	return user >= lower_bond && user <= upper_bond;
 }
-#endif
+#endif /* < v4.2 */
 
 #ifndef HAVE_IP_DO_FRAGMENT
 static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
@@ -111,20 +116,28 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 #define ip_do_fragment rpl_ip_do_fragment
 #endif /* IP_DO_FRAGMENT */
 
-/* Prior to upstream commit d6b915e29f4a ("ip_fragment: don't forward
- * defragmented DF packet"), IPCB(skb)->frag_max_size was not always populated
- * correctly, which would lead to reassembled packets not being refragmented.
- * So, we backport all of ip_defrag() in these cases.
- */
 int rpl_ip_defrag(struct sk_buff *skb, u32 user);
 #define ip_defrag rpl_ip_defrag
 
 int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
-#else /* OVS_FRAGMENT_BACKPORT */
+#else /* HAVE_CORRECT_MRU_HANDLING || !OVS_FRAGMENT_BACKPORT */
+
+/* We have no good way to detect the presence of upstream commit 8282f27449bf
+ * ("inet: frag: Always orphan skbs inside ip_defrag()"), but it should be
+ * always included in kernels 4.5+. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
+static inline int rpl_ip_defrag(struct sk_buff *skb, u32 user)
+{
+	skb_orphan(skb);
+	return ip_defrag(skb, user);
+}
+#define ip_defrag rpl_ip_defrag
+#endif
+
 static inline int rpl_ipfrag_init(void) { return 0; }
 static inline void rpl_ipfrag_fini(void) { }
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif /* HAVE_CORRECT_MRU_HANDLING && OVS_FRAGMENT_BACKPORT */
 #define ipfrag_init rpl_ipfrag_init
 #define ipfrag_fini rpl_ipfrag_fini
 

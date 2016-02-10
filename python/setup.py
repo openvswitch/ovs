@@ -19,7 +19,7 @@ VERSION = "unknown"
 
 try:
     # Try to set the version from the generated ovs/version.py
-    execfile("ovs/version.py")
+    exec(open("ovs/version.py").read())
 except IOError:
     print("Ensure version.py is created by running make python/ovs/version.py",
           file=sys.stderr)

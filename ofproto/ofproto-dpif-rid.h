@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "ofp-actions.h"
 #include "ofproto-dpif-mirror.h"
 #include "ovs-thread.h"
+#include "uuid.h"
 
 struct ofproto_dpif;
 struct rule;
@@ -101,7 +102,6 @@ struct recirc_metadata {
     ovs_be64 metadata;            /* OpenFlow Metadata. */
     uint64_t regs[FLOW_N_XREGS];  /* Registers. */
     ofp_port_t in_port;           /* Incoming port. */
-    ofp_port_t actset_output;     /* Output port in action set. */
 };
 
 static inline void
@@ -113,7 +113,6 @@ recirc_metadata_from_flow(struct recirc_metadata *md,
     md->metadata = flow->metadata;
     memcpy(md->regs, flow->regs, sizeof md->regs);
     md->in_port = flow->in_port.ofp_port;
-    md->actset_output = flow->actset_output;
 }
 
 static inline void
@@ -128,7 +127,6 @@ recirc_metadata_to_flow(const struct recirc_metadata *md,
     flow->metadata = md->metadata;
     memcpy(flow->regs, md->regs, sizeof flow->regs);
     flow->in_port.ofp_port = md->in_port;
-    flow->actset_output = md->actset_output;
 }
 
 /* State that flow translation can save, to restore when recirculation
@@ -138,17 +136,18 @@ struct recirc_state {
     uint8_t table_id;
 
     /* Pipeline context for post-recirculation processing. */
-    struct ofproto_dpif *ofproto; /* Post-recirculation bridge. */
+    struct uuid ofproto_uuid;     /* Post-recirculation bridge. */
     struct recirc_metadata metadata; /* Flow metadata. */
-    struct ofpbuf *stack;         /* Stack if any. */
+    union mf_subvalue *stack;     /* Stack if any. */
+    size_t n_stack;
     mirror_mask_t mirrors;        /* Mirrors already output. */
     bool conntracked;             /* Conntrack occurred prior to recirc. */
 
     /* Actions to be translated on recirculation. */
-    uint32_t action_set_len;      /* How much of 'ofpacts' consists of an
-                                   * action set? */
-    uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */
-    struct ofpact *ofpacts;       /* Sequence of "struct ofpacts". */
+    struct ofpact *ofpacts;
+    size_t ofpacts_len;           /* Size of 'ofpacts', in bytes. */
+    struct ofpact *action_set;
+    size_t action_set_len;        /* Size of 'action_set', in bytes. */
 };
 
 /* This maps a recirculation ID to saved state that flow translation can
@@ -184,6 +183,12 @@ void recirc_free_id(uint32_t recirc_id);
 void recirc_free_ofproto(struct ofproto_dpif *, const char *ofproto_name);
 
 const struct recirc_id_node *recirc_id_node_find(uint32_t recirc_id);
+
+static inline struct recirc_id_node *
+recirc_id_node_from_state(const struct recirc_state *state)
+{
+    return CONTAINER_OF(state, struct recirc_id_node, state);
+}
 
 static inline bool recirc_id_node_try_ref_rcu(const struct recirc_id_node *n_)
 {

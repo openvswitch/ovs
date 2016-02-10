@@ -34,6 +34,7 @@ import ovs.daemon
 import ovs.db.idl
 import ovs.unixctl
 import ovs.unixctl.server
+import six
 
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 session = None
@@ -67,7 +68,7 @@ def init_session():
     try:
         session = XenAPI.xapi_local()
         session.xenapi.login_with_password("", "")
-    except XenAPI.Failure, e:
+    except XenAPI.Failure as e:
         session = None
         vlog.warn("Couldn't login to XAPI (%s)" % e)
         return False
@@ -84,7 +85,7 @@ def get_network_by_bridge(br_name):
     recs = session.xenapi.network.get_all_records_where(
             'field "bridge"="%s"' % br_name)
     if len(recs) > 0:
-        return recs.values()[0]
+        return next(six.itervalues(recs))
 
     return None
 
@@ -294,7 +295,7 @@ def main():
         txn = ovs.db.idl.Transaction(idl)
 
         new_bridges = {}
-        for row in idl.tables["Bridge"].rows.itervalues():
+        for row in six.itervalues(idl.tables["Bridge"].rows):
             bridge_id = bridges.get(row.name)
             if bridge_id is None:
                 # Configure the new bridge.
@@ -319,12 +320,12 @@ def main():
         bridges = new_bridges
 
         iface_by_name = {}
-        for row in idl.tables["Interface"].rows.itervalues():
+        for row in six.itervalues(idl.tables["Interface"].rows):
             iface_by_name[row.name] = row
 
         new_iface_ids = {}
         new_vm_ids = {}
-        for row in idl.tables["Interface"].rows.itervalues():
+        for row in six.itervalues(idl.tables["Interface"].rows):
             # Match up paired vif and tap devices.
             if row.name.startswith("vif"):
                 vif = row

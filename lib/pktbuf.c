@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 VLOG_DEFINE_THIS_MODULE(pktbuf);
 
 COVERAGE_DEFINE(pktbuf_buffer_unknown);
-COVERAGE_DEFINE(pktbuf_null_cookie);
 COVERAGE_DEFINE(pktbuf_retrieved);
 COVERAGE_DEFINE(pktbuf_reuse_error);
 
@@ -128,40 +127,12 @@ pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
     return make_id(p - pb->packets, p->cookie);
 }
 
-/*
- * Allocates and returns a "null" packet buffer id.  The returned packet buffer
- * id is considered valid by pktbuf_retrieve(), but it is not associated with
- * actual buffered data.
- *
- * This function is always successful.
- *
- * This is useful in one special case: with the current OpenFlow design, the
- * "fail-open" code cannot always know whether a connection to a controller is
- * actually valid until it receives a OFPT_PACKET_OUT or OFPT_FLOW_MOD request,
- * but at that point the packet in question has already been forwarded (since
- * we are still in "fail-open" mode).  If the packet was buffered in the usual
- * way, then the OFPT_PACKET_OUT or OFPT_FLOW_MOD would cause a duplicate
- * packet in the network.  Null packet buffer ids identify such a packet that
- * has already been forwarded, so that Open vSwitch can quietly ignore the
- * request to re-send it.  (After that happens, the switch exits fail-open
- * mode.)
- *
- * See the top-level comment in fail-open.c for an overview.
- */
-uint32_t
-pktbuf_get_null(void)
-{
-    return make_id(0, COOKIE_MAX);
-}
-
 /* Attempts to retrieve a saved packet with the given 'id' from 'pb'.  Returns
  * 0 if successful, otherwise an OpenFlow error code.
  *
- * On success, ordinarily stores the buffered packet in '*bufferp' and the
- * OpenFlow port number on which the packet was received in '*in_port'.  The
- * caller becomes responsible for freeing the buffer.  However, if 'id'
- * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
- * NULL in '*bufferp' and OFPP_NONE in '*in_port'.
+ * On success, stores the buffered packet in '*bufferp' and the OpenFlow port
+ * number on which the packet was received in '*in_port'.  The caller becomes
+ * responsible for freeing the buffer.
  *
  * 'in_port' may be NULL if the input port is not of interest.
  *
@@ -204,16 +175,11 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct dp_packet **bufferp,
             VLOG_WARN_RL(&rl, "attempt to reuse buffer %08"PRIx32, id);
             error = OFPERR_OFPBRC_BUFFER_EMPTY;
         }
-    } else if (id >> PKTBUF_BITS != COOKIE_MAX) {
+    } else {
         COVERAGE_INC(pktbuf_buffer_unknown);
         VLOG_WARN_RL(&rl, "cookie mismatch: %08"PRIx32" != %08"PRIx32,
                      id, (id & PKTBUF_MASK) | (p->cookie << PKTBUF_BITS));
         error = OFPERR_OFPBRC_BUFFER_UNKNOWN;
-    } else {
-        COVERAGE_INC(pktbuf_null_cookie);
-        VLOG_INFO_RL(&rl, "Received null cookie %08"PRIx32" (this is normal "
-                     "if the switch was recently in fail-open mode)", id);
-        error = 0;
     }
 error:
     *bufferp = NULL;

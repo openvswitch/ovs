@@ -16,7 +16,8 @@ Build-Depends: graphviz,
                python-all (>= 2.7),
                python-qt4,
                python-twisted-conch,
-               python-zopeinterface
+               python-zopeinterface,
+               python-six
 Standards-Version: 3.9.3
 Homepage: http://openvswitch.org/
 
@@ -57,8 +58,8 @@ Description: Open vSwitch datapath module source - DKMS version
 Package: openvswitch-common
 Architecture: linux-any
 Depends: openssl,
-         python,
-         python (>= 2.7) | python-argparse,
+         python (>= 2.7),
+         python-six,
          ${misc:Depends},
          ${shlibs:Depends}
 Suggests: ethtool

@@ -302,7 +302,7 @@ AT_CLEANUP
 # flow.
 AT_SETUP([learning action - self-modifying flow])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
@@ -327,7 +327,7 @@ NXST_FLOW reply:
 
 # Check that the first packet went out port 2 and the rest out port 3.
 AT_CHECK(
-  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=1, bytes=60, drop=0, errs=0, coll=0
@@ -344,7 +344,7 @@ AT_CLEANUP
 # attributed correctly.
 AT_SETUP([learning action - self-modifying flow with idle_timeout])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
@@ -378,7 +378,7 @@ done
 # Check that the first packet of each flow went out port 2 and the rest out
 # port 3.
 AT_CHECK(
-  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=2, bytes=120, drop=0, errs=0, coll=0
@@ -402,7 +402,7 @@ AT_CLEANUP
 # attributed correctly.
 AT_SETUP([learning action - self-modifying flow with hard_timeout])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], 1, 2, 3)
+add_of_ports br0 1 2 3
 
 ovs-appctl time/stop
 # Set up flow table for TCPv4 port learning.
@@ -464,7 +464,7 @@ done
 # Check that the first packet of each flow went out port 2 and the rest out
 # port 3.
 AT_CHECK(
-  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=3, bytes=180, drop=0, errs=0, coll=0

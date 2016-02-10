@@ -13,7 +13,7 @@
 
 #include <linux/version.h>
 
-#ifdef OVS_FRAGMENT_BACKPORT
+#if !defined(HAVE_CORRECT_MRU_HANDLING) && defined(OVS_FRAGMENT_BACKPORT)
 
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -61,7 +61,7 @@ inet_frag_hashfn(const struct inet_frags *f, struct inet_frag_queue *q)
 	return f->hashfn(q) & (INETFRAGS_HASHSZ - 1);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 static bool inet_frag_may_rebuild(struct inet_frags *f)
 {
 	return time_after(jiffies,
@@ -130,7 +130,7 @@ static bool inet_fragq_should_evict(const struct inet_frag_queue *q)
 static unsigned int
 inet_evict_bucket(struct inet_frags *f, struct inet_frag_bucket *hb)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 	struct ovs_inet_frag_queue *ofq;
 #endif
 	struct inet_frag_queue *fq;
@@ -147,23 +147,23 @@ inet_evict_bucket(struct inet_frags *f, struct inet_frag_bucket *hb)
 		if (!del_timer(&fq->timer))
 			continue;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
+#ifdef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
+		hlist_add_head(&fq->list_evictor, &expired);
+#else
 		ofq = (struct ovs_inet_frag_queue *)fq;
 		hlist_add_head(&ofq->list_evictor, &expired);
-#else
-		hlist_add_head(&fq->list_evictor, &expired);
 #endif
 		++evicted;
 	}
 
 	spin_unlock(&hb->chain_lock);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
-	hlist_for_each_entry_safe(ofq, n, &expired, list_evictor)
-		f->frag_expire((unsigned long) &ofq->fq);
-#else
+#ifdef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
 	hlist_for_each_entry_safe(fq, n, &expired, list_evictor)
 		f->frag_expire((unsigned long) fq);
+#else
+	hlist_for_each_entry_safe(ofq, n, &expired, list_evictor)
+		f->frag_expire((unsigned long) &ofq->fq);
 #endif
 
 	return evicted;
@@ -207,7 +207,7 @@ int inet_frags_init(struct inet_frags *f)
 {
 	int i;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	INIT_WORK(&f->frags_work, inet_frag_worker);
 #endif
 
@@ -218,16 +218,16 @@ int inet_frags_init(struct inet_frags *f)
 		INIT_HLIST_HEAD(&hb->chain);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	rwlock_init(&f->lock);
-	f->secret_timer.expires = jiffies + f->secret_interval;
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	seqlock_init(&f->rnd_seqlock);
 	f->last_rebuild_jiffies = 0;
 	f->frags_cachep = kmem_cache_create(f->frags_cache_name, f->qsize, 0, 0,
 					    NULL);
 	if (!f->frags_cachep)
 		return -ENOMEM;
+#else
+	rwlock_init(&f->lock);
+	f->secret_timer.expires = jiffies + f->secret_interval;
 #endif
 
 	return 0;
@@ -235,7 +235,7 @@ int inet_frags_init(struct inet_frags *f)
 
 void inet_frags_fini(struct inet_frags *f)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	cancel_work_sync(&f->frags_work);
 	kmem_cache_destroy(f->frags_cachep);
 #endif
@@ -243,14 +243,7 @@ void inet_frags_fini(struct inet_frags *f)
 
 int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
-{
-	read_lock_bh(&f->lock);
-	inet_frag_evictor(nf, f, true);
-	read_unlock_bh(&f->lock);
-}
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
 {
 	unsigned int seq;
@@ -268,11 +261,18 @@ evict_again:
 	    percpu_counter_sum(&nf->mem))
 		goto evict_again;
 }
+#else
+void inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f)
+{
+	read_lock_bh(&f->lock);
+	inet_frag_evictor(nf, f, true);
+	read_unlock_bh(&f->lock);
+}
 #endif
 
 static struct inet_frag_bucket *
 get_frag_bucket_locked(struct inet_frag_queue *fq, struct inet_frags *f)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 __acquires(f->lock)
 #endif
 __acquires(hb->chain_lock)
@@ -280,7 +280,7 @@ __acquires(hb->chain_lock)
 	struct inet_frag_bucket *hb;
 	unsigned int hash;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 	read_lock(&f->lock);
 #else
 	unsigned int seq;
@@ -293,7 +293,7 @@ __acquires(hb->chain_lock)
 
 	spin_lock(&hb->chain_lock);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifndef HAVE_INET_FRAGS_WITH_RWLOCK
 	if (read_seqretry(&f->rnd_seqlock, seq)) {
 		spin_unlock(&hb->chain_lock);
 		goto restart;
@@ -304,7 +304,7 @@ __acquires(hb->chain_lock)
 }
 
 static inline void fq_unlink(struct inet_frag_queue *fq, struct inet_frags *f)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 __releases(f->lock)
 #endif
 __releases(hb->chain_lock)
@@ -316,7 +316,7 @@ __releases(hb->chain_lock)
 	q_flags(fq) |= INET_FRAG_COMPLETE;
 	spin_unlock(&hb->chain_lock);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 	read_unlock(&f->lock);
 #endif
 }
@@ -363,10 +363,10 @@ void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f)
 
 	if (f->destructor)
 		f->destructor(q);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	kfree(q);
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	kmem_cache_free(f->frags_cachep, q);
+#else
+	kfree(q);
 #endif
 
 	sub_frag_mem_limit(nf, sum);
@@ -374,7 +374,14 @@ void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f)
 
 int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
+	int i;
+
+	for (i = 0; i < INETFRAGS_HASHSZ ; i++)
+		inet_evict_bucket(f, &f->hash[i]);
+
+	return 0;
+#else
 	struct inet_frag_queue *q;
 	int work, evicted = 0;
 
@@ -406,13 +413,6 @@ int inet_frag_evictor(struct netns_frags *nf, struct inet_frags *f, bool force)
 	}
 
 	return evicted;
-#else
-	int i;
-
-	for (i = 0; i < INETFRAGS_HASHSZ ; i++)
-		inet_evict_bucket(f, &f->hash[i]);
-
-	return 0;
 #endif
 }
 
@@ -433,7 +433,7 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 		if (qp->net == nf && f->match(qp, arg)) {
 			atomic_inc(&qp->refcnt);
 			spin_unlock(&hb->chain_lock);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 			read_unlock(&f->lock);
 #endif
 			q_flags(qp_in) |= INET_FRAG_COMPLETE;
@@ -450,7 +450,7 @@ static struct inet_frag_queue *inet_frag_intern(struct netns_frags *nf,
 	hlist_add_head(&qp->list, &hb->chain);
 
 	spin_unlock(&hb->chain_lock);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
 	read_unlock(&f->lock);
 #endif
 
@@ -464,16 +464,16 @@ static struct inet_frag_queue *inet_frag_alloc(struct netns_frags *nf,
 	struct inet_frag_queue *q;
 
 	if (frag_mem_limit(nf) > nf->high_thresh) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 		inet_frag_schedule_worker(f);
 #endif
 		return NULL;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	q = kzalloc(f->qsize, GFP_ATOMIC);
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	q = kmem_cache_zalloc(f->frags_cachep, GFP_ATOMIC);
+#else
+	q = kzalloc(f->qsize, GFP_ATOMIC);
 #endif
 	if (!q)
 		return NULL;
@@ -510,12 +510,12 @@ struct inet_frag_queue *inet_frag_find(struct netns_frags *nf,
 	struct inet_frag_queue *q;
 	int depth = 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
-	if (frag_mem_limit(nf) > nf->high_thresh)
-		inet_frag_evictor(nf, f, false);
-#else
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	if (frag_mem_limit(nf) > nf->low_thresh)
 		inet_frag_schedule_worker(f);
+#else
+	if (frag_mem_limit(nf) > nf->high_thresh)
+		inet_frag_evictor(nf, f, false);
 #endif
 
 	hash &= (INETFRAGS_HASHSZ - 1);
@@ -535,7 +535,7 @@ struct inet_frag_queue *inet_frag_find(struct netns_frags *nf,
 	if (depth <= INETFRAGS_MAXDEPTH)
 		return inet_frag_create(nf, f, key);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0)
+#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	if (inet_frag_may_rebuild(f)) {
 		if (!f->rebuild)
 			f->rebuild = true;
@@ -557,4 +557,4 @@ void inet_frag_maybe_warn_overflow(struct inet_frag_queue *q,
 		net_dbg_ratelimited("%s%s", prefix, msg);
 }
 
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif /* !HAVE_CORRECT_MRU_HANDLING && OVS_FRAGMENT_BACKPORT */

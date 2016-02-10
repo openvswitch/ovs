@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
 import re
 import uuid
+
+import six
 
 import ovs.poller
 import ovs.socket_util
@@ -62,6 +65,7 @@ def returnUnchanged(x):
     return x
 
 
+@functools.total_ordering
 class Atom(object):
     def __init__(self, type_, value=None):
         self.type = type_
@@ -69,6 +73,16 @@ class Atom(object):
             self.value = value
         else:
             self.value = type_.default_atom()
+
+    def __eq__(self, other):
+        if not isinstance(other, Atom) or self.type != other.type:
+            return NotImplemented
+        return True if self.value == other.value else False
+
+    def __lt__(self, other):
+        if not isinstance(other, Atom) or self.type != other.type:
+            return NotImplemented
+        return True if self.value < other.value else False
 
     def __cmp__(self, other):
         if not isinstance(other, Atom) or self.type != other.type:
@@ -106,12 +120,16 @@ class Atom(object):
     def from_json(base, json, symtab=None):
         type_ = base.type
         json = ovs.db.parser.float_to_int(json)
-        if ((type_ == ovs.db.types.IntegerType and type(json) in [int, long])
+        real_types = list(six.integer_types)
+        real_types.extend([float])
+        real_types = tuple(real_types)
+        if ((type_ == ovs.db.types.IntegerType
+                and isinstance(json, six.integer_types))
             or (type_ == ovs.db.types.RealType
-                and type(json) in [int, long, float])
-            or (type_ == ovs.db.types.BooleanType and type(json) == bool)
+                and isinstance(json, real_types))
+            or (type_ == ovs.db.types.BooleanType and isinstance(json, bool))
             or (type_ == ovs.db.types.StringType
-                and type(json) in [str, unicode])):
+                and isinstance(json, six.string_types))):
             atom = Atom(type_, json)
         elif type_ == ovs.db.types.UuidType:
             atom = Atom(type_, ovs.ovsuuid.from_json(json, symtab))
@@ -123,7 +141,7 @@ class Atom(object):
     @staticmethod
     def from_python(base, value):
         value = ovs.db.parser.float_to_int(value)
-        if type(value) in base.type.python_types:
+        if isinstance(value, base.type.python_types):
             atom = Atom(base.type, value)
         else:
             raise error.Error("expected %s, got %s" % (base.type, type(value)))
@@ -235,13 +253,13 @@ class Atom(object):
 
     @staticmethod
     def new(x):
-        if type(x) in [int, long]:
+        if isinstance(x, six.integer_types):
             t = ovs.db.types.IntegerType
-        elif type(x) == float:
+        elif isinstance(x, float):
             t = ovs.db.types.RealType
-        elif x in [False, True]:
+        elif isinstance(x, bool):
             t = ovs.db.types.BooleanType
-        elif type(x) in [str, unicode]:
+        elif isinstance(x, six.string_types):
             t = ovs.db.types.StringType
         elif isinstance(x, uuid):
             t = ovs.db.types.UuidType
@@ -250,10 +268,21 @@ class Atom(object):
         return Atom(t, x)
 
 
+@functools.total_ordering
 class Datum(object):
     def __init__(self, type_, values={}):
         self.type = type_
         self.values = values
+
+    def __eq__(self, other):
+        if not isinstance(other, Datum):
+            return NotImplemented
+        return True if self.values == other.values else False
+
+    def __lt__(self, other):
+        if not isinstance(other, Datum):
+            return NotImplemented
+        return True if self.values < other.values else False
 
     def __cmp__(self, other):
         if not isinstance(other, Datum):
@@ -293,7 +322,7 @@ class Datum(object):
         This function is not commonly useful because the most ordinary way to
         obtain a datum is ultimately via Datum.from_json() or Atom.from_json(),
         which check constraints themselves."""
-        for keyAtom, valueAtom in self.values.iteritems():
+        for keyAtom, valueAtom in six.iteritems(self.values):
             keyAtom.check_constraints(self.type.key)
             if valueAtom is not None:
                 valueAtom.check_constraints(self.type.value)
@@ -311,7 +340,7 @@ class Datum(object):
         that this function accepts."""
         is_map = type_.is_map()
         if (is_map or
-            (type(json) == list and len(json) > 0 and json[0] == "set")):
+            (isinstance(json, list) and len(json) > 0 and json[0] == "set")):
             if is_map:
                 class_ = "map"
             else:
@@ -354,7 +383,7 @@ class Datum(object):
             return ["map", [[k.to_json(), v.to_json()]
                             for k, v in sorted(self.values.items())]]
         elif len(self.values) == 1:
-            key = self.values.keys()[0]
+            key = next(six.iterkeys(self.values))
             return key.to_json()
         else:
             return ["set", [k.to_json() for k in sorted(self.values.keys())]]
@@ -388,9 +417,9 @@ class Datum(object):
 
     def as_list(self):
         if self.type.is_map():
-            return [[k.value, v.value] for k, v in self.values.iteritems()]
+            return [[k.value, v.value] for k, v in six.iteritems(self.values)]
         else:
-            return [k.value for k in self.values.iterkeys()]
+            return [k.value for k in six.iterkeys(self.values)]
 
     def as_dict(self):
         return dict(self.values)
@@ -398,10 +427,10 @@ class Datum(object):
     def as_scalar(self):
         if len(self.values) == 1:
             if self.type.is_map():
-                k, v = self.values.iteritems()[0]
+                k, v = next(six.iteritems(self.values))
                 return [k.value, v.value]
             else:
-                return self.values.keys()[0].value
+                return next(six.iterkeys(self.values)).value
         else:
             return None
 
@@ -448,7 +477,7 @@ class Datum(object):
                 return value
         elif self.type.is_map():
             value = {}
-            for k, v in self.values.iteritems():
+            for k, v in six.iteritems(self.values):
                 dk = uuid_to_row(k.value, self.type.key)
                 dv = uuid_to_row(v.value, self.type.value)
                 if dk is not None and dv is not None:
@@ -475,12 +504,12 @@ class Datum(object):
         Raises ovs.db.error.Error if 'value' is not in an appropriate form for
         'type_'."""
         d = {}
-        if type(value) == dict:
-            for k, v in value.iteritems():
+        if isinstance(value, dict):
+            for k, v in six.iteritems(value):
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 va = Atom.from_python(type_.value, row_to_uuid(v))
                 d[ka] = va
-        elif type(value) in (list, tuple):
+        elif isinstance(value, (list, tuple)):
             for k in value:
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 d[ka] = None

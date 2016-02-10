@@ -879,6 +879,19 @@ add_monitored_table(int argc, char *argv[],
 }
 
 static void
+destroy_monitored_table(struct monitored_table *mts, size_t n)
+{
+    int i;
+
+    for (i = 0; i < n; i++) {
+        struct monitored_table *mt = &mts[i];
+        ovsdb_column_set_destroy(&mt->columns);
+    }
+
+    free(mts);
+}
+
+static void
 do_monitor__(struct jsonrpc *rpc, const char *database,
              enum ovsdb_monitor_version version,
              int argc, char *argv[])
@@ -1024,6 +1037,11 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
         unixctl_server_wait(unixctl);
         poll_block();
     }
+
+    json_destroy(request_id);
+    unixctl_server_destroy(unixctl);
+    ovsdb_schema_destroy(schema);
+    destroy_monitored_table(mts, n_mts);
 }
 
 static void

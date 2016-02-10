@@ -533,7 +533,6 @@ ovsdb_jsonrpc_session_get_memory_usage(const struct ovsdb_jsonrpc_session *s,
                                        struct simap *usage)
 {
     simap_increase(usage, "triggers", hmap_count(&s->triggers));
-    simap_increase(usage, "monitors", hmap_count(&s->monitors));
     simap_increase(usage, "backlog", jsonrpc_session_get_backlog(s->js));
 }
 

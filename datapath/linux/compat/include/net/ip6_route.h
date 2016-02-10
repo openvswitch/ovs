@@ -2,6 +2,7 @@
 #define __NET_IP6_ROUTE_WRAPPER
 
 #include <net/route.h>
+#include <net/ip.h>                /* For OVS_VPORT_OUTPUT_PARAMS */
 #include <net/ipv6.h>
 
 #include_next<net/ip6_route.h>
@@ -29,18 +30,19 @@ struct dst_entry *rpl_ip6_route_output(struct net *net, const struct sock *sk,
 
 #endif /* 2.6.39 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#ifndef HAVE_NF_IPV6_OPS_FRAGMENT
+#ifdef OVS_FRAGMENT_BACKPORT
+int rpl_ip6_fragment(struct sock *sk, struct sk_buff *skb,
+		     int (*output)(OVS_VPORT_OUTPUT_PARAMS));
+#else
 static inline int rpl_ip6_fragment(struct sock *sk, struct sk_buff *skb,
 				   int (*output)(struct sk_buff *))
 {
 	kfree_skb(skb);
 	return -ENOTSUPP;
 }
-#define ip6_fragment rpl_ip6_fragment
-#elif defined(OVS_FRAGMENT_BACKPORT)
-int rpl_ip6_fragment(struct sock *sk, struct sk_buff *skb,
-		     int (*output)(OVS_VPORT_OUTPUT_PARAMS));
-#define ip6_fragment rpl_ip6_fragment
 #endif /* OVS_FRAGMENT_BACKPORT */
+#define ip6_fragment rpl_ip6_fragment
+#endif /* HAVE_NF_IPV6_OPS_FRAGMENT */
 
 #endif /* _NET_IP6_ROUTE_WRAPPER */

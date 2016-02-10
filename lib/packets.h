@@ -163,6 +163,14 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
     md->in_port.odp_port = port;
 }
 
+/* This function prefetches the cachelines touched by pkt_metadata_init()
+ * For performance reasons the two functions should be kept in sync. */
+static inline void
+pkt_metadata_prefetch_init(struct pkt_metadata *md)
+{
+    ovs_prefetch_range(md, offsetof(struct pkt_metadata, tunnel.ip_src));
+}
+
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
 #define ETH_ADDR_LEN           6

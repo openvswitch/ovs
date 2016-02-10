@@ -217,9 +217,9 @@ static void learned_cookies_flush(struct ofproto *, struct ovs_list *dead_cookie
 
 /* ofport. */
 static void ofport_destroy__(struct ofport *) OVS_EXCLUDED(ofproto_mutex);
-static void ofport_destroy(struct ofport *);
+static void ofport_destroy(struct ofport *, bool del);
 
-static void update_port(struct ofproto *, const char *devname);
+static int update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
@@ -297,7 +297,8 @@ static bool ofproto_group_exists__(const struct ofproto *ofproto,
 static bool ofproto_group_exists(const struct ofproto *ofproto,
                                  uint32_t group_id)
     OVS_EXCLUDED(ofproto->groups_rwlock);
-static enum ofperr add_group(struct ofproto *, struct ofputil_group_mod *);
+static enum ofperr add_group(struct ofproto *,
+                             const struct ofputil_group_mod *);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr ofproto_flow_mod_start(struct ofproto *,
                                           struct ofproto_flow_mod *)
@@ -336,7 +337,6 @@ unsigned ofproto_flow_limit = OFPROTO_FLOW_LIMIT_DEFAULT;
 unsigned ofproto_max_idle = OFPROTO_MAX_IDLE_DEFAULT;
 
 size_t n_handlers, n_revalidators;
-size_t n_dpdk_rxqs;
 char *pmd_cpu_mask;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
@@ -777,12 +777,6 @@ ofproto_port_set_mcast_snooping(struct ofproto *ofproto, void *aux,
     return (ofproto->ofproto_class->set_mcast_snooping_port
             ? ofproto->ofproto_class->set_mcast_snooping_port(ofproto, aux, s)
             : EOPNOTSUPP);
-}
-
-void
-ofproto_set_n_dpdk_rxqs(int n_rxqs)
-{
-    n_dpdk_rxqs = MAX(n_rxqs, 0);
 }
 
 void
@@ -1579,7 +1573,7 @@ ofproto_destroy_defer__(struct ofproto *ofproto)
 }
 
 void
-ofproto_destroy(struct ofproto *p)
+ofproto_destroy(struct ofproto *p, bool del)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofport *ofport, *next_ofport;
@@ -1598,7 +1592,7 @@ ofproto_destroy(struct ofproto *p)
 
     ofproto_flush__(p);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
-        ofport_destroy(ofport);
+        ofport_destroy(ofport, del);
     }
 
     HMAP_FOR_EACH_SAFE (usage, next_usage, hmap_node, &p->ofport_usage) {
@@ -1961,7 +1955,7 @@ ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
 
         simap_put(&ofproto->ofp_requests, netdev_name,
                   ofp_to_u16(ofp_port));
-        update_port(ofproto, netdev_name);
+        error = update_port(ofproto, netdev_name);
     }
     if (ofp_portp) {
         *ofp_portp = OFPP_NONE;
@@ -2345,7 +2339,7 @@ ofport_equal(const struct ofputil_phy_port *a,
 /* Adds an ofport to 'p' initialized based on the given 'netdev' and 'opp'.
  * The caller must ensure that 'p' does not have a conflicting ofport (that is,
  * one with the same name or port number). */
-static void
+static int
 ofport_install(struct ofproto *p,
                struct netdev *netdev, const struct ofputil_phy_port *pp)
 {
@@ -2379,7 +2373,7 @@ ofport_install(struct ofproto *p,
         goto error;
     }
     connmgr_send_port_status(p->connmgr, NULL, pp, OFPPR_ADD);
-    return;
+    return 0;
 
 error:
     VLOG_WARN_RL(&rl, "%s: could not add port %s (%s)",
@@ -2389,6 +2383,7 @@ error:
     } else {
         netdev_close(netdev);
     }
+    return error;
 }
 
 /* Removes 'ofport' from 'p' and destroys it. */
@@ -2397,7 +2392,7 @@ ofport_remove(struct ofport *ofport)
 {
     connmgr_send_port_status(ofport->ofproto->connmgr, NULL, &ofport->pp,
                              OFPPR_DELETE);
-    ofport_destroy(ofport);
+    ofport_destroy(ofport, true);
 }
 
 /* If 'ofproto' contains an ofport named 'name', removes it from 'ofproto' and
@@ -2483,11 +2478,11 @@ ofport_destroy__(struct ofport *port)
 }
 
 static void
-ofport_destroy(struct ofport *port)
+ofport_destroy(struct ofport *port, bool del)
 {
     if (port) {
         dealloc_ofp_port(port->ofproto, port->ofp_port);
-        port->ofproto->ofproto_class->port_destruct(port);
+        port->ofproto->ofproto_class->port_destruct(port, del);
         ofport_destroy__(port);
      }
 }
@@ -2570,13 +2565,14 @@ ofproto_port_get_stats(const struct ofport *port, struct netdev_stats *stats)
     return error;
 }
 
-static void
+static int
 update_port(struct ofproto *ofproto, const char *name)
 {
     struct ofproto_port ofproto_port;
     struct ofputil_phy_port pp;
     struct netdev *netdev;
     struct ofport *port;
+    int error = 0;
 
     COVERAGE_INC(ofproto_update_port);
 
@@ -2616,13 +2612,15 @@ update_port(struct ofproto *ofproto, const char *name)
                 ofport_remove(port);
             }
             ofport_remove_with_name(ofproto, name);
-            ofport_install(ofproto, netdev, &pp);
+            error = ofport_install(ofproto, netdev, &pp);
         }
     } else {
         /* Any port named 'name' is gone now. */
         ofport_remove_with_name(ofproto, name);
     }
     ofproto_port_destroy(&ofproto_port);
+
+    return error;
 }
 
 static int
@@ -3377,7 +3375,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Get payload. */
     if (po.buffer_id != UINT32_MAX) {
         error = ofconn_pktbuf_retrieve(ofconn, po.buffer_id, &payload, NULL);
-        if (error || !payload) {
+        if (error) {
             goto exit_free_ofpacts;
         }
     } else {
@@ -5402,16 +5400,16 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    struct ofputil_async_cfg basis = ofconn_get_async_config(ofconn);
+    struct ofputil_async_cfg ac;
     enum ofperr error;
-    uint32_t master[OAM_N_TYPES] = {0};
-    uint32_t slave[OAM_N_TYPES] = {0};
 
-    error = ofputil_decode_set_async_config(oh, master, slave, false);
+    error = ofputil_decode_set_async_config(oh, false, &basis, &ac);
     if (error) {
         return error;
     }
 
-    ofconn_set_async_config(ofconn, master, slave);
+    ofconn_set_async_config(ofconn, &ac);
     if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&
         !ofconn_get_miss_send_len(ofconn)) {
         ofconn_set_miss_send_len(ofconn, OFP_DEFAULT_MISS_SEND_LEN);
@@ -5423,14 +5421,8 @@ handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_nxt_get_async_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofpbuf *buf;
-    uint32_t master[OAM_N_TYPES];
-    uint32_t slave[OAM_N_TYPES];
-
-    ofconn_get_async_config(ofconn, master, slave);
-
-    buf = ofputil_encode_get_async_config(oh, master, slave);
-    ofconn_send_reply(ofconn, buf);
+    struct ofputil_async_cfg ac = ofconn_get_async_config(ofconn);
+    ofconn_send_reply(ofconn, ofputil_encode_get_async_reply(oh, &ac));
 
     return 0;
 }
@@ -6226,61 +6218,93 @@ handle_group_features_stats_request(struct ofconn *ofconn,
 }
 
 static void
-put_queue_config(struct ofport *ofport, struct ofpbuf *reply)
+put_queue_get_config_reply(struct ofport *port, uint32_t queue,
+                           struct ovs_list *replies)
 {
-   struct netdev_queue_dump queue_dump;
-   unsigned int queue_id;
-   struct smap details;
+    struct ofputil_queue_config qc;
 
-   smap_init(&details);
-   NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump, ofport->netdev) {
-       struct ofputil_queue_config queue;
+    /* None of the existing queues have compatible properties, so we hard-code
+     * omitting min_rate and max_rate. */
+    qc.port = port->ofp_port;
+    qc.queue = queue;
+    qc.min_rate = UINT16_MAX;
+    qc.max_rate = UINT16_MAX;
+    ofputil_append_queue_get_config_reply(&qc, replies);
+}
 
-       /* None of the existing queues have compatible properties, so we
-        * hard-code omitting min_rate and max_rate. */
-       queue.port = ofport->ofp_port;
-       queue.queue_id = queue_id;
-       queue.min_rate = UINT16_MAX;
-       queue.max_rate = UINT16_MAX;
-       ofputil_append_queue_get_config_reply(reply, &queue);
-   }
-   smap_destroy(&details);
+static int
+handle_queue_get_config_request_for_port(struct ofport *port, uint32_t queue,
+                                         struct ovs_list *replies)
+{
+    struct smap details = SMAP_INITIALIZER(&details);
+    if (queue != OFPQ_ALL) {
+        int error = netdev_get_queue(port->netdev, queue, &details);
+        switch (error) {
+        case 0:
+            put_queue_get_config_reply(port, queue, replies);
+            break;
+        case EOPNOTSUPP:
+        case EINVAL:
+            return OFPERR_OFPQOFC_BAD_QUEUE;
+        default:
+            return OFPERR_NXQOFC_QUEUE_ERROR;
+        }
+    } else {
+        struct netdev_queue_dump queue_dump;
+        uint32_t queue_id;
+
+        NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &queue_dump,
+                               port->netdev) {
+            put_queue_get_config_reply(port, queue_id, replies);
+        }
+    }
+    smap_destroy(&details);
+    return 0;
 }
 
 static enum ofperr
 handle_queue_get_config_request(struct ofconn *ofconn,
                                 const struct ofp_header *oh)
 {
-   struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-   ofp_port_t port;
-   enum ofperr error;
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ovs_list replies;
+    struct ofport *port;
+    ofp_port_t req_port;
+    uint32_t req_queue;
+    enum ofperr error;
 
-   error = ofputil_decode_queue_get_config_request(oh, &port);
-   if (error) {
-       return error;
-   }
+    error = ofputil_decode_queue_get_config_request(oh, &req_port, &req_queue);
+    if (error) {
+        return error;
+    }
 
-   struct ofpbuf *reply = ofputil_encode_queue_get_config_reply(oh);
-   struct ofport *ofport;
-   if (port == OFPP_ANY) {
-       HMAP_FOR_EACH (ofport, hmap_node, &ofproto->ports) {
-           put_queue_config(ofport, reply);
-       }
-   } else {
-       ofport = ofproto_get_port(ofproto, port);
-       if (!ofport) {
-           ofpbuf_delete(reply);
-           return OFPERR_OFPQOFC_BAD_PORT;
-       }
-       put_queue_config(ofport, reply);
-   }
-   ofconn_send_reply(ofconn, reply);
+    ofputil_start_queue_get_config_reply(oh, &replies);
+    if (req_port == OFPP_ANY) {
+        error = OFPERR_OFPQOFC_BAD_QUEUE;
+        HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
+            if (!handle_queue_get_config_request_for_port(port, req_queue,
+                                                          &replies)) {
+                error = 0;
+            }
+        }
+    } else {
+        port = ofproto_get_port(ofproto, req_port);
+        error = (port
+                 ? handle_queue_get_config_request_for_port(port, req_queue,
+                                                            &replies)
+                 : OFPERR_OFPQOFC_BAD_PORT);
+    }
+    if (!error) {
+        ofconn_send_replies(ofconn, &replies);
+    } else {
+        ofpbuf_list_delete(&replies);
+    }
 
-   return 0;
+    return error;
 }
 
 static enum ofperr
-init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
+init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
            struct ofgroup **ofgroup)
 {
     enum ofperr error;
@@ -6306,7 +6330,9 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
     *CONST_CAST(long long int *, &((*ofgroup)->modified)) = now;
     ovs_refcount_init(&(*ofgroup)->ref_count);
 
-    list_move(&(*ofgroup)->buckets, &gm->buckets);
+    list_init(&(*ofgroup)->buckets);
+    ofputil_bucket_clone_list(&(*ofgroup)->buckets, &gm->buckets, NULL);
+
     *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
         list_size(&(*ofgroup)->buckets);
 
@@ -6326,7 +6352,7 @@ init_group(struct ofproto *ofproto, struct ofputil_group_mod *gm,
  * 'ofproto''s group table.  Returns 0 on success or an OpenFlow error code on
  * failure. */
 static enum ofperr
-add_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
+add_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
 {
     struct ofgroup *ofgroup;
     enum ofperr error;
@@ -6474,7 +6500,7 @@ copy_buckets_for_remove_bucket(const struct ofgroup *ofgroup,
  * ofproto's ofgroup hash map. Thus, the group is never altered while users of
  * the xlate module hold a pointer to the group. */
 static enum ofperr
-modify_group(struct ofproto *ofproto, struct ofputil_group_mod *gm)
+modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
 {
     struct ofgroup *ofgroup, *new_ofgroup, *retiring;
     enum ofperr error;
@@ -6643,7 +6669,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
             VLOG_INFO_RL(&rl, "%s: Invalid group_mod command type %d",
                          ofproto->name, gm.command);
         }
-        return OFPERR_OFPGMFC_BAD_COMMAND;
+        error = OFPERR_OFPGMFC_BAD_COMMAND;
     }
 
     if (!error) {
@@ -6653,6 +6679,8 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         rf.group_mod = &gm;
         connmgr_send_requestforward(ofproto->connmgr, ofconn, &rf);
     }
+    ofputil_bucket_list_destroy(&gm.buckets);
+
     return error;
 }
 

@@ -20,6 +20,7 @@
 #include "Event.h"
 #include "Flow.h"
 #include "Gre.h"
+#include "Mpls.h"
 #include "NetProto.h"
 #include "PacketIO.h"
 #include "Stt.h"
@@ -1031,28 +1032,29 @@ OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
 
 /*
  * --------------------------------------------------------------------------
- * OvsPopVlanInPktBuf --
- *     Function to pop a VLAN tag when the tag is in the packet buffer.
+ * OvsPopFieldInPacketBuf --
+ *     Function to pop a specified field of length 'shiftLength' located at
+ *     'shiftOffset' from the ethernet header. The data on the left of the
+ *     'shiftOffset' is right shifted.
+ *
+ *     Returns a pointer to the new start in 'bufferData'.
  * --------------------------------------------------------------------------
  */
 static __inline NDIS_STATUS
-OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
+OvsPopFieldInPacketBuf(OvsForwardingContext *ovsFwdCtx,
+                       UINT32 shiftOffset,
+                       UINT32 shiftLength,
+                       PUINT8 *bufferData)
 {
     PNET_BUFFER curNb;
     PMDL curMdl;
     PUINT8 bufferStart;
-    ULONG dataLength = sizeof (DL_EUI48) + sizeof (DL_EUI48);
     UINT32 packetLen, mdlLen;
     PNET_BUFFER_LIST newNbl;
     NDIS_STATUS status;
+    PUINT8 tempBuffer[ETH_HEADER_LENGTH];
 
-    /*
-     * Declare a dummy vlanTag structure since we need to compute the size
-     * of shiftLength. The NDIS one is a unionized structure.
-     */
-    NDIS_PACKET_8021Q_INFO vlanTag = {0};
-    ULONG shiftLength = sizeof (vlanTag.TagHeader);
-    PUINT8 tempBuffer[sizeof (DL_EUI48) + sizeof (DL_EUI48)];
+    ASSERT(shiftOffset > ETH_ADDR_LENGTH);
 
     newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                                0, 0, TRUE /* copy NBL info */);
@@ -1064,8 +1066,8 @@ OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
     /* Complete the original NBL and create a copy to modify. */
     OvsCompleteNBLForwardingCtx(ovsFwdCtx, L"OVS-Dropped due to copy");
 
-    status = OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
-                                  newNbl, ovsFwdCtx->srcVportNo, 0,
+    status = OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext, newNbl,
+                                  ovsFwdCtx->srcVportNo, 0,
                                   NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
                                   NULL, &ovsFwdCtx->layers, FALSE);
     if (status != NDIS_STATUS_SUCCESS) {
@@ -1083,15 +1085,141 @@ OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
         return NDIS_STATUS_RESOURCES;
     }
     mdlLen -= NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
-    /* Bail out if L2 + VLAN header is not contiguous in the first buffer. */
-    if (MIN(packetLen, mdlLen) < sizeof (EthHdr) + shiftLength) {
+    /* Bail out if L2 + shiftLength is not contiguous in the first buffer. */
+    if (MIN(packetLen, mdlLen) < sizeof(EthHdr) + shiftLength) {
         ASSERT(FALSE);
         return NDIS_STATUS_FAILURE;
     }
     bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
-    RtlCopyMemory(tempBuffer, bufferStart, dataLength);
-    RtlCopyMemory(bufferStart + shiftLength, tempBuffer, dataLength);
+    RtlCopyMemory(tempBuffer, bufferStart, shiftOffset);
+    RtlCopyMemory(bufferStart + shiftLength, tempBuffer, shiftOffset);
     NdisAdvanceNetBufferDataStart(curNb, shiftLength, FALSE, NULL);
+
+    if (bufferData) {
+        *bufferData = bufferStart + shiftLength;
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPopVlanInPktBuf --
+ *     Function to pop a VLAN tag when the tag is in the packet buffer.
+ * --------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsPopVlanInPktBuf(OvsForwardingContext *ovsFwdCtx)
+{
+    /*
+     * Declare a dummy vlanTag structure since we need to compute the size
+     * of shiftLength. The NDIS one is a unionized structure.
+     */
+    NDIS_PACKET_8021Q_INFO vlanTag = {0};
+    UINT32 shiftLength = sizeof(vlanTag.TagHeader);
+    UINT32 shiftOffset = sizeof(DL_EUI48) + sizeof(DL_EUI48);
+
+    return OvsPopFieldInPacketBuf(ovsFwdCtx, shiftOffset, shiftLength, NULL);
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsActionMplsPop --
+ *     Function to pop the first MPLS label from the current packet.
+ * --------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsActionMplsPop(OvsForwardingContext *ovsFwdCtx,
+                 ovs_be16 ethertype)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
+    EthHdr *ethHdr = NULL;
+
+    status = OvsPopFieldInPacketBuf(ovsFwdCtx, sizeof(*ethHdr),
+                                    MPLS_HLEN, (PUINT8*)&ethHdr);
+    if (status == NDIS_STATUS_SUCCESS) {
+        if (ethHdr && OvsEthertypeIsMpls(ethHdr->Type)) {
+            ethHdr->Type = ethertype;
+        }
+
+        layers->l3Offset -= MPLS_HLEN;
+        layers->l4Offset -= MPLS_HLEN;
+    }
+
+    return status;
+}
+
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsActionMplsPush --
+ *     Function to push the MPLS label into the current packet.
+ * --------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsActionMplsPush(OvsForwardingContext *ovsFwdCtx,
+                  const struct ovs_action_push_mpls *mpls)
+{
+    NDIS_STATUS status;
+    PNET_BUFFER curNb = NULL;
+    PMDL curMdl = NULL;
+    PUINT8 bufferStart = NULL;
+    OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
+    EthHdr *ethHdr = NULL;
+    MPLSHdr *mplsHdr = NULL;
+    UINT32 mdlLen = 0, curMdlOffset = 0;
+    PNET_BUFFER_LIST newNbl;
+
+    newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                               layers->l3Offset, MPLS_HLEN, TRUE);
+    if (!newNbl) {
+        ovsActionStats.noCopiedNbl++;
+        return NDIS_STATUS_RESOURCES;
+    }
+    OvsCompleteNBLForwardingCtx(ovsFwdCtx,
+                                L"Complete after partial copy.");
+
+    status = OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
+                                  newNbl, ovsFwdCtx->srcVportNo, 0,
+                                  NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
+                                  NULL, &ovsFwdCtx->layers, FALSE);
+    if (status != NDIS_STATUS_SUCCESS) {
+        OvsCompleteNBLForwardingCtx(ovsFwdCtx,
+                                    L"OVS-Dropped due to resources");
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    curNb = NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl);
+    ASSERT(curNb->Next == NULL);
+
+    status = NdisRetreatNetBufferDataStart(curNb, MPLS_HLEN, 0, NULL);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return status;
+    }
+
+    curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+    NdisQueryMdl(curMdl, &bufferStart, &mdlLen, LowPagePriority);
+    if (!curMdl) {
+        ovsActionStats.noResource++;
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    curMdlOffset = NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+    mdlLen -= curMdlOffset;
+    ASSERT(mdlLen >= MPLS_HLEN);
+
+    ethHdr = (EthHdr *)(bufferStart + curMdlOffset);
+    RtlMoveMemory(ethHdr, (UINT8*)ethHdr + MPLS_HLEN, sizeof(*ethHdr));
+    ethHdr->Type = mpls->mpls_ethertype;
+
+    mplsHdr = (MPLSHdr *)(ethHdr + 1);
+    mplsHdr->lse = mpls->mpls_lse;
+
+    layers->l3Offset += MPLS_HLEN;
+    layers->l4Offset += MPLS_HLEN;
 
     return NDIS_STATUS_SUCCESS;
 }
@@ -1520,6 +1648,50 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
                     goto dropit;
                 }
             }
+            break;
+        }
+
+        case OVS_ACTION_ATTR_PUSH_MPLS:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            status = OvsActionMplsPush(&ovsFwdCtx,
+                                       (struct ovs_action_push_mpls *)NlAttrGet
+                                       ((const PNL_ATTR)a));
+            if (status != NDIS_STATUS_SUCCESS) {
+                dropReason = L"OVS-push MPLS action failed";
+                goto dropit;
+            }
+            layers->l3Offset += MPLS_HLEN;
+            layers->l4Offset += MPLS_HLEN;
+            break;
+        }
+
+        case OVS_ACTION_ATTR_POP_MPLS:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            status = OvsActionMplsPop(&ovsFwdCtx, NlAttrGetBe16(a));
+            if (status != NDIS_STATUS_SUCCESS) {
+                dropReason = L"OVS-pop MPLS action failed";
+                goto dropit;
+            }
+            layers->l3Offset -= MPLS_HLEN;
+            layers->l4Offset -= MPLS_HLEN;
             break;
         }
 

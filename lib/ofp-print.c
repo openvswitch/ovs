@@ -100,9 +100,11 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
 {
     char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
     struct ofputil_packet_in pin;
+    uint32_t buffer_id;
+    size_t total_len;
     int error;
 
-    error = ofputil_decode_packet_in(&pin, oh);
+    error = ofputil_decode_packet_in(oh, &pin, &total_len, &buffer_id);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -116,35 +118,36 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
     }
 
-    ds_put_format(string, " total_len=%"PRIuSIZE" ", pin.total_len);
+    ds_put_format(string, " total_len=%"PRIuSIZE" ", total_len);
 
     match_format(&pin.flow_metadata, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_format(string, " (via %s)",
-                  ofputil_packet_in_reason_to_string(pin.reason, reasonbuf,
+                  ofputil_packet_in_reason_to_string(pin.reason,
+                                                     reasonbuf,
                                                      sizeof reasonbuf));
 
-    ds_put_format(string, " data_len=%"PRIuSIZE, pin.packet_len);
-    if (pin.buffer_id == UINT32_MAX) {
+    ds_put_format(string, " data_len=%"PRIuSIZE, pin.len);
+    if (buffer_id == UINT32_MAX) {
         ds_put_format(string, " (unbuffered)");
-        if (pin.total_len != pin.packet_len) {
+        if (total_len != pin.len) {
             ds_put_format(string, " (***total_len != data_len***)");
         }
     } else {
-        ds_put_format(string, " buffer=0x%08"PRIx32, pin.buffer_id);
-        if (pin.total_len < pin.packet_len) {
+        ds_put_format(string, " buffer=0x%08"PRIx32, buffer_id);
+        if (total_len < pin.len) {
             ds_put_format(string, " (***total_len < data_len***)");
         }
     }
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
-        char *packet = ofp_packet_to_string(pin.packet, pin.packet_len);
+        char *packet = ofp_packet_to_string(pin.packet, pin.len);
         ds_put_cstr(string, packet);
         free(packet);
     }
     if (verbosity > 2) {
-        ds_put_hex_dump(string, pin.packet, pin.packet_len, 0, false);
+        ds_put_hex_dump(string, pin.packet, pin.len, 0, false);
     }
 }
 
@@ -455,7 +458,8 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     enum ofperr error;
     struct ofpbuf b;
 
-    error = ofputil_decode_switch_features(oh, &features, &b);
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    error = ofputil_pull_switch_features(&b, &features);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -934,7 +938,7 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
-    ds_put_cstr(string, "port: ");
+    ds_put_cstr(string, " port: ");
     ofputil_format_port(pm.port_no, string);
     ds_put_format(string, ": addr:"ETH_ADDR_FMT"\n",
                   ETH_ADDR_ARGS(pm.hw_addr));
@@ -1086,8 +1090,9 @@ ofp_print_queue_get_config_request(struct ds *string,
 {
     enum ofperr error;
     ofp_port_t port;
+    uint32_t queue;
 
-    error = ofputil_decode_queue_get_config_request(oh, &port);
+    error = ofputil_decode_queue_get_config_request(oh, &port, &queue);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1095,6 +1100,11 @@ ofp_print_queue_get_config_request(struct ds *string,
 
     ds_put_cstr(string, " port=");
     ofputil_format_port(port, string);
+
+    if (queue != OFPQ_ALL) {
+        ds_put_cstr(string, " queue=");
+        ofp_print_queue_name(string, queue);
+    }
 }
 
 static void
@@ -1111,21 +1121,12 @@ static void
 ofp_print_queue_get_config_reply(struct ds *string,
                                  const struct ofp_header *oh)
 {
-    enum ofperr error;
     struct ofpbuf b;
-    ofp_port_t port;
+    ofp_port_t port = 0;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofputil_decode_queue_get_config_reply(&b, &port);
-    if (error) {
-        ofp_print_error(string, error);
-        return;
-    }
 
-    ds_put_cstr(string, " port=");
-    ofputil_format_port(port, string);
-    ds_put_char(string, '\n');
-
+    ds_put_char(string, ' ');
     for (;;) {
         struct ofputil_queue_config queue;
         int retval;
@@ -1135,10 +1136,19 @@ ofp_print_queue_get_config_reply(struct ds *string,
             if (retval != EOF) {
                 ofp_print_error(string, retval);
             }
+            ds_chomp(string, ' ');
             break;
         }
 
-        ds_put_format(string, "queue %"PRIu32":", queue.queue_id);
+        if (queue.port != port) {
+            port = queue.port;
+
+            ds_put_cstr(string, "port=");
+            ofputil_format_port(port, string);
+            ds_put_char(string, '\n');
+        }
+
+        ds_put_format(string, "queue %"PRIu32":", queue.queue);
         print_queue_rate(string, "min_rate", queue.min_rate);
         print_queue_rate(string, "max_rate", queue.max_rate);
         ds_put_char(string, '\n');
@@ -1714,7 +1724,7 @@ ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
-    ds_put_cstr(string, "port=");
+    ds_put_cstr(string, " port=");
     ofputil_format_port(oqsr.port_no, string);
 
     ds_put_cstr(string, " queue=");
@@ -1997,7 +2007,6 @@ ofp_table_reason_to_string(enum ofp14_table_reason reason,
     case OFPTR_VACANCY_UP:
         return "vacancy_up";
 
-    case OFPTR_N_REASONS:
     default:
         snprintf(reasonbuf, bufsize, "%d", (int) reason);
         return reasonbuf;
@@ -2058,135 +2067,43 @@ ofp_async_config_reason_to_string(uint32_t reason,
 
 #define OFP_ASYNC_CONFIG_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 static void
-ofp_print_nxt_set_async_config(struct ds *string,
-                               const struct ofp_header *oh)
+ofp_print_set_async_config(struct ds *string, const struct ofp_header *oh,
+                           enum ofptype type)
 {
-    int i, j;
-    enum ofpraw raw;
+    struct ofputil_async_cfg basis = OFPUTIL_ASYNC_CFG_INIT;
+    struct ofputil_async_cfg ac;
 
-    ofpraw_decode(&raw, oh);
+    bool is_reply = type == OFPTYPE_GET_ASYNC_REPLY;
+    enum ofperr error = ofputil_decode_set_async_config(oh, is_reply,
+                                                        &basis, &ac);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
 
-    if (raw == OFPRAW_OFPT13_SET_ASYNC ||
-        raw == OFPRAW_NXT_SET_ASYNC_CONFIG ||
-        raw == OFPRAW_OFPT13_GET_ASYNC_REPLY) {
-        const struct nx_async_config *nac = ofpmsg_body(oh);
+    for (int i = 0; i < 2; i++) {
+        ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+        for (uint32_t type = 0; type < OAM_N_TYPES; type++) {
+            ds_put_format(string, "%16s:",
+                          ofputil_async_msg_type_to_string(type));
 
-        for (i = 0; i < 2; i++) {
-
-            ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
-
-            ds_put_cstr(string, "       PACKET_IN:");
-            for (j = 0; j < 32; j++) {
-                if (nac->packet_in_mask[i] & htonl(1u << j)) {
-                    char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
+            uint32_t role = i == 0 ? ac.master[type] : ac.slave[type];
+            for (int j = 0; j < 32; j++) {
+                if (role & (1u << j)) {
+                    char reasonbuf[OFP_ASYNC_CONFIG_REASON_BUFSIZE];
                     const char *reason;
 
-                    reason = ofputil_packet_in_reason_to_string(j, reasonbuf,
-                                                            sizeof reasonbuf);
-                    ds_put_format(string, " %s", reason);
-                }
-            }
-            if (!nac->packet_in_mask[i]) {
-                ds_put_cstr(string, " (off)");
-            }
-            ds_put_char(string, '\n');
-
-            ds_put_cstr(string, "     PORT_STATUS:");
-            for (j = 0; j < 32; j++) {
-                if (nac->port_status_mask[i] & htonl(1u << j)) {
-                    char reasonbuf[OFP_PORT_REASON_BUFSIZE];
-                    const char *reason;
-
-                    reason = ofp_port_reason_to_string(j, reasonbuf,
-                                                       sizeof reasonbuf);
-                    ds_put_format(string, " %s", reason);
-                }
-            }
-            if (!nac->port_status_mask[i]) {
-                ds_put_cstr(string, " (off)");
-            }
-            ds_put_char(string, '\n');
-
-            ds_put_cstr(string, "    FLOW_REMOVED:");
-            for (j = 0; j < 32; j++) {
-                if (nac->flow_removed_mask[i] & htonl(1u << j)) {
-                    char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
-                    const char *reason;
-
-                    reason = ofp_flow_removed_reason_to_string(j, reasonbuf,
-                                                           sizeof reasonbuf);
-                    ds_put_format(string, " %s", reason);
-                }
-            }
-            if (!nac->flow_removed_mask[i]) {
-                ds_put_cstr(string, " (off)");
-            }
-            ds_put_char(string, '\n');
-        }
-    } else if (raw == OFPRAW_OFPT14_SET_ASYNC ||
-               raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
-        enum ofperr error = 0;
-        uint32_t role[2][OAM_N_TYPES] = {{0}};
-        uint32_t type;
-
-        if (raw == OFPRAW_OFPT14_GET_ASYNC_REPLY) {
-            error = ofputil_decode_set_async_config(oh, role[0], role[1], true);
-        }
-        else if (raw == OFPRAW_OFPT14_SET_ASYNC) {
-            error = ofputil_decode_set_async_config(oh, role[0], role[1],
-                                                    false);
-        }
-        if (error) {
-            ofp_print_error(string, error);
-            return;
-        }
-
-        for (i = 0; i < 2; i++) {
-
-            ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
-            for (type = 0; type < OAM_N_TYPES; type++) {
-                switch (type) {
-                case OAM_PACKET_IN:
-                    ds_put_cstr(string, "       PACKET_IN:");
-                    break;
-
-                case OAM_PORT_STATUS:
-                    ds_put_cstr(string, "     PORT_STATUS:");
-                    break;
-
-                case OAM_FLOW_REMOVED:
-                    ds_put_cstr(string, "    FLOW_REMOVED:");
-                    break;
-
-                case OAM_ROLE_STATUS:
-                    ds_put_cstr(string, "     ROLE_STATUS:");
-                    break;
-
-                case OAM_TABLE_STATUS:
-                    ds_put_cstr(string, "    TABLE_STATUS:");
-                    break;
-
-                case OAM_REQUESTFORWARD:
-                    ds_put_cstr(string, "  REQUESTFORWARD:");
-                    break;
-                }
-
-                for (j = 0; j < 32; j++) {
-                    if (role[i][type] & (1u << j)) {
-                        char reasonbuf[OFP_ASYNC_CONFIG_REASON_BUFSIZE];
-                        const char *reason;
-
-                        reason = ofp_async_config_reason_to_string(j, type,
-                                                                   reasonbuf,
-                                                           sizeof reasonbuf);
+                    reason = ofp_async_config_reason_to_string(
+                        j, type, reasonbuf, sizeof reasonbuf);
+                    if (reason[0]) {
                         ds_put_format(string, " %s", reason);
                     }
                 }
-                if (!role[i][type]) {
-                    ds_put_cstr(string, " (off)");
-                }
-                ds_put_char(string, '\n');
             }
+            if (!role) {
+                ds_put_cstr(string, " (off)");
+            }
+            ds_put_char(string, '\n');
         }
     }
 }
@@ -3160,8 +3077,9 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     const void *msg = oh;
 
     ofp_header_to_string__(oh, raw, string);
-    switch (ofptype_from_ofpraw(raw)) {
 
+    enum ofptype type = ofptype_from_ofpraw(raw);
+    switch (type) {
     case OFPTYPE_GROUP_STATS_REQUEST:
         ofp_print_stats(string, oh);
         ofp_print_ofpst_group_request(string, oh);
@@ -3396,7 +3314,7 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_SET_ASYNC_CONFIG:
-        ofp_print_nxt_set_async_config(string, oh);
+        ofp_print_set_async_config(string, oh, type);
         break;
     case OFPTYPE_GET_ASYNC_REQUEST:
         break;

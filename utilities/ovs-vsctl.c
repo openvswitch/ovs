@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,6 @@ static size_t allocated_neoteric_ifaces;
 int
 main(int argc, char *argv[])
 {
-    extern struct vlog_module VLM_reconnect;
     struct ovsdb_idl *idl;
     struct ctl_command *commands;
     struct shash local_options;
@@ -141,7 +140,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
+    vlog_set_levels_from_string_assert("reconnect:warn");
     ovsrec_init();
 
     vsctl_cmd_init();
@@ -2468,6 +2467,44 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
     }
 }
 
+static char *
+vsctl_parent_process_info(void)
+{
+#ifdef __linux__
+    pid_t parent_pid;
+    char *procfile;
+    struct ds s;
+    FILE *f;
+
+    parent_pid = getppid();
+    procfile = xasprintf("/proc/%d/cmdline", parent_pid);
+
+    f = fopen(procfile, "r");
+    if (!f) {
+        VLOG_WARN("%s: open failed (%s)", procfile, ovs_strerror(errno));
+        free(procfile);
+        return NULL;
+    }
+    free(procfile);
+
+    ds_init(&s);
+    for (;;) {
+        int c = getc(f);
+        if (!c || c == EOF) {
+            break;
+        }
+        ds_put_char(&s, c);
+    }
+    fclose(f);
+
+    ds_put_format(&s, " (pid %d)", parent_pid);
+
+    return ds_steal_cstr(&s);
+#else
+    return NULL;
+#endif
+}
+
 static void
 do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
          struct ovsdb_idl *idl)
@@ -2481,13 +2518,21 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
     struct shash_node *node;
     int64_t next_cfg = 0;
     char *error = NULL;
+    char *ppid_info = NULL;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
     if (dry_run) {
         ovsdb_idl_txn_set_dry_run(txn);
     }
 
-    ovsdb_idl_txn_add_comment(txn, "ovs-vsctl: %s", args);
+    ppid_info = vsctl_parent_process_info();
+    if (ppid_info) {
+        ovsdb_idl_txn_add_comment(txn, "ovs-vsctl (invoked by %s): %s",
+                                  ppid_info, args);
+        free(ppid_info);
+    } else {
+        ovsdb_idl_txn_add_comment(txn, "ovs-vsctl: %s", args);
+    }
 
     ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {

@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 2.1
+Required: DPDK 2.2
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -24,7 +24,7 @@ on Debian/Ubuntu)
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-2.1
+     export DPDK_DIR=/usr/src/dpdk-2.2
      cd $DPDK_DIR
      ```
 
@@ -294,9 +294,9 @@ Performance Tuning:
 
   3. DPDK port Rx Queues
 
-	`ovs-vsctl set Open_vSwitch . other_config:n-dpdk-rxqs=<integer>`
+	`ovs-vsctl set Interface <DPDK interface> options:n_rxq=<integer>`
 
-	The command above sets the number of rx queues for each DPDK interface.
+	The command above sets the number of rx queues for DPDK interface.
 	The rx queues are assigned to pmd threads on the same NUMA node in a
 	round-robin fashion.  For more information, please refer to the
 	Open_vSwitch TABLE section in
@@ -473,7 +473,7 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-DPDK 2.1 supports two types of vhost:
+DPDK 2.2 supports two types of vhost:
 
 1. vhost-user
 2. vhost-cuse
@@ -494,7 +494,7 @@ with OVS.
 DPDK vhost-user Prerequisites:
 -------------------------
 
-1. DPDK 2.1 with vhost support enabled as documented in the "Building and
+1. DPDK 2.2 with vhost support enabled as documented in the "Building and
    Installing section"
 
 2. QEMU version v2.1.0+
@@ -567,6 +567,25 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    -numa node,memdev=mem -mem-prealloc
    ```
 
+3. Optional: Enable multiqueue support
+   The vhost-user interface must be configured in Open vSwitch with the
+   desired amount of queues with:
+
+   ```
+   ovs-vsctl set Interface vhost-user-2 options:n_rxq=<requested queues>
+   ```
+
+   QEMU needs to be configured as well.
+   The $q below should match the queues requested in OVS (if $q is more,
+   packets will not be received).
+   The $v is the number of vectors, which is '$q x 2 + 2'.
+
+   ```
+   -chardev socket,id=char2,path=/usr/local/var/run/openvswitch/vhost-user-2
+   -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce,queues=$q
+   -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
+   ```
+
 DPDK vhost-cuse:
 ----------------
 
@@ -576,7 +595,7 @@ with OVS.
 DPDK vhost-cuse Prerequisites:
 -------------------------
 
-1. DPDK 2.1 with vhost support enabled as documented in the "Building and
+1. DPDK 2.2 with vhost support enabled as documented in the "Building and
    Installing section"
    As an additional step, you must enable vhost-cuse in DPDK by setting the
    following additional flag in `config/common_linuxapp`:

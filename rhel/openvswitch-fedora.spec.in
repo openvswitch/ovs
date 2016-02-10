@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010, 2013, 2014, 2015 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2013, 2014, 2015, 2016 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -16,6 +16,8 @@
 # If libcap-ng isn't available and there is no need for running OVS
 # as regular user, specify the '--without libcapng'
 %bcond_without libcapng
+# To enable DPDK support, specify '--with dpdk' when building
+%bcond_with dpdk
 
 # Enable PIE, bz#955181
 %global _hardened_build 1
@@ -41,13 +43,17 @@ Source: http://openvswitch.org/releases/%{name}-%{version}.tar.gz
 
 BuildRequires: autoconf automake libtool
 BuildRequires: systemd-units openssl openssl-devel
-BuildRequires: python python-twisted-core python-zope-interface PyQt4
+BuildRequires: python python-twisted-core python-zope-interface PyQt4 python-six
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
 # make check dependencies
 BuildRequires: procps-ng
 %if %{with libcapng}
 BuildRequires: libcap-ng libcap-ng-devel
+%endif
+%if %{with dpdk}
+BuildRequires: dpdk-devel >= 2.2.0
+Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 
 Requires: openssl iproute module-init-tools
@@ -71,6 +77,7 @@ Summary: Open vSwitch python bindings
 License: ASL 2.0
 BuildArch: noarch
 Requires: python
+Requires: python-six
 
 %description -n python-openvswitch
 Python bindings for the Open vSwitch database
@@ -116,6 +123,9 @@ overlays and security groups.
 	--enable-libcapng \
 %else
 	--disable-libcapng \
+%endif
+%if %{with dpdk}
+	--with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
 %endif
 	--enable-ssl \
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
@@ -163,12 +173,10 @@ touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 # remove unpackaged files
-rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-benchmark \
-        $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
+rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_bindir}/ovs-pcap \
         $RPM_BUILD_ROOT%{_bindir}/ovs-tcpundump \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
-        $RPM_BUILD_ROOT%{_mandir}/man1/ovs-benchmark.1 \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-pcap.1 \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-tcpundump.1 \
         $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8 \

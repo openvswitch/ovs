@@ -14,6 +14,8 @@
 
 import re
 
+import six
+
 from ovs.db import error
 
 
@@ -21,7 +23,7 @@ class Parser(object):
     def __init__(self, json, name):
         self.name = name
         self.json = json
-        if type(json) != dict:
+        if not isinstance(json, dict):
             self.__raise_error("Object expected.")
         self.used = set()
 
@@ -31,7 +33,10 @@ class Parser(object):
             member = float_to_int(self.json[name])
             if is_identifier(member) and "id" in types:
                 return member
-            if len(types) and type(member) not in types:
+            try:
+                if len(types) and not isinstance(member, tuple(types)):
+                    self.__raise_error("Type mismatch for member '%s'." % name)
+            except TypeError:
                 self.__raise_error("Type mismatch for member '%s'." % name)
             return member
         else:
@@ -65,7 +70,7 @@ class Parser(object):
 
 def float_to_int(x):
     # XXX still needed?
-    if type(x) == float:
+    if isinstance(x, float):
         integer = int(x)
         if integer == x and -2 ** 53 <= integer < 2 ** 53:
             return integer
@@ -76,34 +81,38 @@ id_re = re.compile("[_a-zA-Z][_a-zA-Z0-9]*$")
 
 
 def is_identifier(s):
-    return type(s) in [str, unicode] and id_re.match(s)
+    return isinstance(s, six.string_types) and id_re.match(s)
 
 
 def json_type_to_string(type_):
+    number_types = list(six.integer_types)
+    number_types.extend([float])
+    number_types = tuple(number_types)
     if type_ is None:
         return "null"
-    elif type_ == bool:
+    elif issubclass(type_, bool):
         return "boolean"
-    elif type_ == dict:
+    elif issubclass(type_, dict):
         return "object"
-    elif type_ == list:
+    elif issubclass(type_, list):
         return "array"
-    elif type_ in [int, long, float]:
+    elif issubclass(type_, number_types):
         return "number"
-    elif type_ in [str, unicode]:
+    elif issubclass(type_, six.string_types):
         return "string"
     else:
         return "<invalid>"
 
 
 def unwrap_json(json, name, types, desc):
-    if (type(json) not in (list, tuple) or len(json) != 2 or json[0] != name or
-        type(json[1]) not in types):
+    if (not isinstance(json, (list, tuple))
+            or len(json) != 2 or json[0] != name
+            or not isinstance(json[1], tuple(types))):
         raise error.Error('expected ["%s", <%s>]' % (name, desc), json)
     return json[1]
 
 
 def parse_json_pair(json):
-    if type(json) != list or len(json) != 2:
+    if not isinstance(json, list) or len(json) != 2:
         raise error.Error("expected 2-element array", json)
     return json

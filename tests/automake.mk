@@ -112,7 +112,7 @@ SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
-AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):ovn:ovn/controller-vtep:ovn/northd:ovn/utilities:ovn/controller
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):ovn/controller-vtep:ovn/northd:ovn/utilities:ovn/controller
 
 check-local: tests/atconfig tests/atlocal $(TESTSUITE)
 	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS)
@@ -170,6 +170,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-stp \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-unix-socket \
+	tests/valgrind/test-unixctl \
 	tests/valgrind/test-uuid \
 	tests/valgrind/test-vconn
 
@@ -313,6 +314,7 @@ tests_ovstest_SOURCES = \
 	tests/test-sflow.c \
 	tests/test-sha1.c \
 	tests/test-stp.c \
+	tests/test-unixctl.c \
 	tests/test-util.c \
 	tests/test-uuid.c \
 	tests/test-bitmap.c \

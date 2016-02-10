@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
+
 import argparse
 import errno
 import os
@@ -127,7 +129,7 @@ def do_request(name, method, params_string):
         sys.stderr.write("error waiting for reply: %s\n" % os.strerror(error))
         sys.exit(1)
 
-    print ovs.json.to_string(msg.to_json())
+    print(ovs.json.to_string(msg.to_json()))
 
     rpc.close()
 

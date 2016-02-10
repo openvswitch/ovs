@@ -216,7 +216,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
     OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
-    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE -mssse3"
+    OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
+    OVS_ENABLE_OPTION([-mssse3])
 
     # DPDK pmd drivers are not linked unless --whole-archive is used.
     #
@@ -350,8 +351,23 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_do_fragment])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_skb_dst_mtu])
+
+  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [IPSKB_FRAG_PMTU],
+                  [OVS_DEFINE([HAVE_CORRECT_MRU_HANDLING])])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [hashfn.*const],
                   [OVS_DEFINE([HAVE_INET_FRAGS_CONST])])
+  OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [last_in],
+                  [OVS_DEFINE([HAVE_INET_FRAGS_LAST_IN])])
+  OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frag_evicting])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
+                        [frags_work])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
+                        [rwlock])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frag_queue],
+                        [list_evictor])
+  OVS_GREP_IFELSE([$KSRC/include/net/inetpeer.h], [vif],
+                  [OVS_DEFINE([HAVE_INETPEER_VIF_SUPPORT])])
+
   OVS_GREP_IFELSE([$KSRC/include/net/dst_metadata.h], [metadata_dst])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/net.h], [sock_create_kern.*net],
@@ -380,10 +396,20 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_register_net_hook])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
+                        [fragment], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
 
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
                   [tmpl_alloc.*conntrack_zone],
                   [OVS_DEFINE([HAVE_NF_CT_TMPL_ALLOC_TAKES_STRUCT_ZONE])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_zones.h],
+                  [nf_ct_zone_init])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
+                  [nf_connlabels_get])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
+                  [nf_ct_frag6_consume_orig])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
+                  [nf_ct_frag6_output])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32_max])
@@ -457,6 +483,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/checksum.h], [csum_unfold])
 
   OVS_GREP_IFELSE([$KSRC/include/net/dst.h], [dst_discard_sk])
+  OVS_GREP_IFELSE([$KSRC/include/net/dst.h], [__skb_dst_copy])
 
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_has_listeners])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [mcgrp_offset])
@@ -489,6 +516,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_in_addr])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_find_nested])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_is_last])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netlink.h], [void.*netlink_set_err],
+                  [OVS_DEFINE([HAVE_VOID_NETLINK_SET_ERR])])
 
   OVS_GREP_IFELSE([$KSRC/include/net/sctp/checksum.h], [sctp_compute_cksum])
 
@@ -522,7 +551,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
                   [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
 
-  if test "$version" = 4 && test "$patchlevel" -le 2; then
+  dnl Conntrack support, and therefore, IP fragment handling backport, should
+  dnl only be enabled on kernels 3.10+. In future when OVS drops support for
+  dnl kernels older than 3.10, this macro could be removed from the codebase.
+  if test "$version" = 4; then
         OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
   elif test "$version" = 3 && test "$patchlevel" -ge 10; then
         OVS_DEFINE([OVS_FRAGMENT_BACKPORT])

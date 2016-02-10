@@ -17,6 +17,7 @@
 #include "binding.h"
 
 #include "lib/bitmap.h"
+#include "lib/hmap.h"
 #include "lib/sset.h"
 #include "lib/util.h"
 #include "lib/vswitch-idl.h"
@@ -117,10 +118,24 @@ update_ct_zones(struct sset *lports, struct simap *ct_zones,
     }
 }
 
+static void
+add_local_datapath(struct hmap *local_datapaths,
+        const struct sbrec_port_binding *binding_rec)
+{
+    struct hmap_node *ld;
+    ld = hmap_first_with_hash(local_datapaths,
+                              binding_rec->datapath->tunnel_key);
+    if (!ld) {
+        ld = xmalloc(sizeof *ld);
+        hmap_insert(local_datapaths, ld,
+                    binding_rec->datapath->tunnel_key);
+    }
+}
+
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const char *chassis_id, struct simap *ct_zones,
-            unsigned long *ct_zone_bitmap)
+            unsigned long *ct_zone_bitmap, struct hmap *local_datapaths)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
@@ -161,6 +176,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 /* Add child logical port to the set of all local ports. */
                 sset_add(&all_lports, binding_rec->logical_port);
             }
+            add_local_datapath(local_datapaths, binding_rec);
             if (binding_rec->chassis == chassis_rec) {
                 continue;
             }
@@ -173,6 +189,13 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         } else if (binding_rec->chassis == chassis_rec) {
             sbrec_port_binding_set_chassis(binding_rec, NULL);
+        } else if (!binding_rec->chassis
+                   && !strcmp(binding_rec->type, "localnet")) {
+            /* localnet ports will never be bound to a chassis, but we want
+             * to list them in all_lports because we want to allocate
+             * a conntrack zone ID for each one, as we'll be creating
+             * a patch port for each one. */
+            sset_add(&all_lports, binding_rec->logical_port);
         }
     }
 

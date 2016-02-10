@@ -15,6 +15,8 @@
 import errno
 import os
 
+import six
+
 import ovs.json
 import ovs.poller
 import ovs.reconnect
@@ -88,7 +90,7 @@ class Message(object):
             return "%s %s have \"%s\"" % (type_name, verb, name)
 
     def is_valid(self):
-        if self.params is not None and type(self.params) != list:
+        if self.params is not None and not isinstance(self.params, list):
             return "\"params\" must be JSON array"
 
         pattern = {Message.T_REQUEST: 0x11001,
@@ -107,7 +109,7 @@ class Message(object):
 
     @staticmethod
     def from_json(json):
-        if type(json) != dict:
+        if not isinstance(json, dict):
             return "message is not a JSON object"
 
         # Make a copy to avoid modifying the caller's dict.
@@ -115,7 +117,7 @@ class Message(object):
 
         if "method" in json:
             method = json.pop("method")
-            if type(method) not in [str, unicode]:
+            if not isinstance(method, six.string_types):
                 return "method is not a JSON string"
         else:
             method = None
@@ -262,6 +264,15 @@ class Connection(object):
         while True:
             if not self.input:
                 error, data = self.stream.recv(4096)
+                # Python 3 has separate types for strings and bytes.  We
+                # received bytes from a socket.  We expect it to be string
+                # data, so we convert it here as soon as possible.
+                if (data and not error
+                        and not isinstance(data, six.string_types)):
+                    try:
+                        data = data.decode('utf-8')
+                    except UnicodeError:
+                        error = errno.EILSEQ
                 if error:
                     if error == errno.EAGAIN:
                         return error, None
@@ -318,7 +329,7 @@ class Connection(object):
     def __process_msg(self):
         json = self.parser.finish()
         self.parser = None
-        if type(json) in [str, unicode]:
+        if isinstance(json, six.string_types):
             # XXX rate-limit
             vlog.warn("%s: error parsing stream: %s" % (self.name, json))
             self.error(errno.EPROTO)

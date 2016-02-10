@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -475,7 +475,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       IP_ARGS(get_16aligned_be32(&ip->ip_dst)),
                       ip->ip_proto, ip->ip_tos,
                       ip->ip_ttl,
-                      ip->ip_frag_off);
+                      ntohs(ip->ip_frag_off));
         l4 = (ip + 1);
     } else {
         const struct ip6_hdr *ip6;
@@ -1064,16 +1064,18 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
 
     if (eth->eth_type == htons(ETH_TYPE_IP)) {
         /* IPv4 */
+        uint16_t ip_frag_off;
         if (!ovs_scan_len(s, &n, "ipv4(src="IP_SCAN_FMT",dst="IP_SCAN_FMT",proto=%"SCNi8
                           ",tos=%"SCNi8",ttl=%"SCNi8",frag=0x%"SCNx16"),",
                           IP_SCAN_ARGS(&sip),
                           IP_SCAN_ARGS(&dip),
                           &ip->ip_proto, &ip->ip_tos,
-                          &ip->ip_ttl, &ip->ip_frag_off)) {
+                          &ip->ip_ttl, &ip_frag_off)) {
             return -EINVAL;
         }
         put_16aligned_be32(&ip->ip_src, sip);
         put_16aligned_be32(&ip->ip_dst, dip);
+        ip->ip_frag_off = htons(ip_frag_off);
         ip_len = sizeof *ip;
     } else {
         char sip6_s[IPV6_SCAN_LEN + 1];
@@ -3923,12 +3925,9 @@ geneve_to_attr(struct ofpbuf *a, const void *data_)
         SCAN_FIELD_NESTED__(NAME, TYPE, SCAN_AS, 0, FUNC)
 
 #define SCAN_PUT(ATTR, FUNC)                            \
-        if (!mask || !is_all_zeros(&smask, sizeof smask)) { \
-            SCAN_PUT_ATTR(key, ATTR, skey, FUNC);       \
-            if (mask) {                                 \
-                SCAN_PUT_ATTR(mask, ATTR, smask, FUNC); \
-            }                                           \
-        }
+        SCAN_PUT_ATTR(key, ATTR, skey, FUNC);           \
+        if (mask)                                       \
+            SCAN_PUT_ATTR(mask, ATTR, smask, FUNC);     \
 
 #define SCAN_END(ATTR)                                  \
         SCAN_FINISH();                                  \
@@ -4532,8 +4531,7 @@ uint32_t
 odp_flow_key_hash(const struct nlattr *key, size_t key_len)
 {
     BUILD_ASSERT_DECL(!(NLA_ALIGNTO % sizeof(uint32_t)));
-    return hash_words(ALIGNED_CAST(const uint32_t *, key),
-                      key_len / sizeof(uint32_t), 0);
+    return hash_bytes32(ALIGNED_CAST(const uint32_t *, key), key_len, 0);
 }
 
 static void

@@ -15,6 +15,9 @@
 import re
 import uuid
 
+import six
+from six.moves import range
+
 from ovs.db import error
 import ovs.db.parser
 
@@ -38,16 +41,16 @@ def from_string(s):
 
 def from_json(json, symtab=None):
     try:
-        s = ovs.db.parser.unwrap_json(json, "uuid", [str, unicode], "string")
+        s = ovs.db.parser.unwrap_json(json, "uuid", six.string_types, "string")
         if not uuidRE.match(s):
             raise error.Error("\"%s\" is not a valid UUID" % s, json)
         return uuid.UUID(s)
-    except error.Error, e:
+    except error.Error as e:
         if not symtab:
             raise e
         try:
             name = ovs.db.parser.unwrap_json(json, "named-uuid",
-                                             [str, unicode], "string")
+                                             six.string_types, "string")
         except error.Error:
             raise e
 

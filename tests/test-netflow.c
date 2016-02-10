@@ -233,6 +233,9 @@ test_netflow_main(int argc, char *argv[])
         unixctl_server_wait(server);
         poll_block();
     }
+
+    ofpbuf_uninit(&buf);
+    unixctl_server_destroy(server);
 }
 
 static void

@@ -33,6 +33,8 @@ init:
 
     cd C:\openvswitch
 
+    python -m pip install six --disable-pip-version-check
+
 build_script:
 - '"C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\VsDevCmd"'
 - C:\MinGW\msys\1.0\bin\bash -lc "echo \"C:/MinGW /mingw\" > /etc/fstab"

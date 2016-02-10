@@ -16,10 +16,12 @@
 rpcserver is an XML RPC server that allows RPC client to initiate tests
 """
 
+from __future__ import print_function
+
 import exceptions
 import sys
-import xmlrpclib
 
+import six.moves.xmlrpc_client
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from twisted.web import xmlrpc
@@ -106,7 +108,8 @@ class TestArena(xmlrpc.XMLRPC):
         Returns the ovs-test server IP address that the other ovs-test server
         with the given ip will see.
         """
-        server1 = xmlrpclib.Server("http://%s:%u/" % (his_ip, his_port))
+        server1 = six.moves.xmlrpc_client.Server("http://%s:%u/" %
+                                                 (his_ip, his_port))
         return server1.get_my_address()
 
     def xmlrpc_create_udp_listener(self, port):
@@ -357,7 +360,7 @@ def start_rpc_server(port):
     rpc_server = TestArena()
     reactor.listenTCP(port, server.Site(rpc_server))
     try:
-        print "Starting RPC server\n"
+        print("Starting RPC server\n")
         sys.stdout.flush()
         # If this server was started from ovs-test client then we must flush
         # STDOUT so that client would know that server is ready to accept

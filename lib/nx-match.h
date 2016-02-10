@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ char *mf_parse_subfield__(struct mf_subfield *sf, const char **s)
 char *mf_parse_subfield(struct mf_subfield *, const char *s)
     OVS_WARN_UNUSED_RESULT;
 
+/* Decoding matches. */
 enum ofperr nx_pull_match(struct ofpbuf *, unsigned int match_len,
                           struct match *,
                           ovs_be64 *cookie, ovs_be64 *cookie_mask);
@@ -55,11 +56,15 @@ enum ofperr nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
                                 ovs_be64 *cookie_mask);
 enum ofperr oxm_pull_match(struct ofpbuf *, struct match *);
 enum ofperr oxm_pull_match_loose(struct ofpbuf *, struct match *);
+enum ofperr oxm_decode_match(const void *, size_t, struct match *);
 enum ofperr oxm_pull_field_array(const void *, size_t fields_len,
                                  struct field_array *);
+
+/* Encoding matches. */
 int nx_put_match(struct ofpbuf *, const struct match *,
                  ovs_be64 cookie, ovs_be64 cookie_mask);
 int oxm_put_match(struct ofpbuf *, const struct match *, enum ofp_version);
+void oxm_put_raw(struct ofpbuf *, const struct match *, enum ofp_version);
 void oxm_format_field_array(struct ds *, const struct field_array *);
 int oxm_put_field_array(struct ofpbuf *, const struct field_array *,
                         enum ofp_version version);

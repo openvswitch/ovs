@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,7 +227,7 @@ static bool ifaces_changed = false;
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
 static void bridge_create(const struct ovsrec_bridge *);
-static void bridge_destroy(struct bridge *);
+static void bridge_destroy(struct bridge *, bool del);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
 static unixctl_cb_func bridge_unixctl_reconnect;
@@ -500,7 +500,7 @@ bridge_exit(void)
 
     if_notifier_destroy(ifnotifier);
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
-        bridge_destroy(br);
+        bridge_destroy(br, false);
     }
     ovsdb_idl_destroy(idl);
 }
@@ -581,8 +581,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                                         OFPROTO_FLOW_LIMIT_DEFAULT));
     ofproto_set_max_idle(smap_get_int(&ovs_cfg->other_config, "max-idle",
                                       OFPROTO_MAX_IDLE_DEFAULT));
-    ofproto_set_n_dpdk_rxqs(smap_get_int(&ovs_cfg->other_config,
-                                         "n-dpdk-rxqs", 0));
     ofproto_set_cpu_mask(smap_get(&ovs_cfg->other_config, "pmd-cpu-mask"));
 
     ofproto_set_threads(
@@ -635,7 +633,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 VLOG_ERR("failed to create bridge %s: %s", br->name,
                          ovs_strerror(error));
                 shash_destroy(&br->wanted_ports);
-                bridge_destroy(br);
+                bridge_destroy(br, true);
             } else {
                 /* Trigger storing datapath version. */
                 seq_change(connectivity_seq_get());
@@ -1686,6 +1684,7 @@ static void
 add_del_bridges(const struct ovsrec_open_vswitch *cfg)
 {
     struct bridge *br, *next;
+    struct shash_node *node;
     struct shash new_br;
     size_t i;
 
@@ -1695,9 +1694,12 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
 
-        if (strchr(br_cfg->name, '/')) {
+        if (strchr(br_cfg->name, '/') || strchr(br_cfg->name, '\\')) {
             /* Prevent remote ovsdb-server users from accessing arbitrary
-             * directories, e.g. consider a bridge named "../../../etc/". */
+             * directories, e.g. consider a bridge named "../../../etc/".
+             *
+             * Prohibiting "\" is only necessary on Windows but it's no great
+             * loss elsewhere. */
             VLOG_WARN_RL(&rl, "ignoring bridge with invalid name \"%s\"",
                          br_cfg->name);
         } else if (!shash_add_once(&new_br, br_cfg->name, br_cfg)) {
@@ -1711,13 +1713,13 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
         br->cfg = shash_find_data(&new_br, br->name);
         if (!br->cfg || strcmp(br->type, ofproto_normalize_type(
                                    br->cfg->datapath_type))) {
-            bridge_destroy(br);
+            bridge_destroy(br, true);
         }
     }
 
     /* Add new bridges. */
-    for (i = 0; i < cfg->n_bridges; i++) {
-        const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
+    SHASH_FOR_EACH(node, &new_br) {
+        const struct ovsrec_bridge *br_cfg = node->data;
         struct bridge *br = bridge_lookup(br_cfg->name);
         if (!br) {
             bridge_create(br_cfg);
@@ -2907,7 +2909,7 @@ bridge_run(void)
                     (long int) getpid());
 
         HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
-            bridge_destroy(br);
+            bridge_destroy(br, false);
         }
         /* Since we will not be running system_stats_run() in this process
          * with the current situation of multiple ovs-vswitchd daemons,
@@ -3192,7 +3194,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 }
 
 static void
-bridge_destroy(struct bridge *br)
+bridge_destroy(struct bridge *br, bool del)
 {
     if (br) {
         struct mirror *mirror, *next_mirror;
@@ -3206,7 +3208,7 @@ bridge_destroy(struct bridge *br)
         }
 
         hmap_remove(&all_bridges, &br->node);
-        ofproto_destroy(br->ofproto);
+        ofproto_destroy(br->ofproto, del);
         hmap_destroy(&br->ifaces);
         hmap_destroy(&br->ports);
         hmap_destroy(&br->iface_by_name);

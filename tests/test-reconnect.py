@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
+
 import errno
 import sys
 
@@ -74,11 +76,11 @@ def do_run(arg):
     if action is None:
         pass
     elif action == ovs.reconnect.CONNECT:
-        print "  should connect"
+        print("  should connect")
     elif action == ovs.reconnect.DISCONNECT:
-        print "  should disconnect"
+        print("  should disconnect")
     elif action == ovs.reconnect.PROBE:
-        print "  should send probe"
+        print("  should send probe")
     else:
         assert False
 
@@ -91,11 +93,11 @@ def do_advance(arg):
 def do_timeout(_):
     global now
     timeout = r.timeout(now)
-    if timeout >= 0:
-        print "  advance %d ms" % timeout
+    if timeout is not None and timeout >= 0:
+        print("  advance %d ms" % timeout)
         now += timeout
     else:
-        print "  no timeout"
+        print("  no timeout")
 
 
 def do_set_max_tries(arg):
@@ -183,7 +185,7 @@ def main():
     r = ovs.reconnect.Reconnect(now)
     r.set_name("remote")
     prev = r.get_stats(now)
-    print "### t=%d ###" % now
+    print("### t=%d ###" % now)
     old_time = now
     old_max_tries = r.get_max_tries()
     while True:
@@ -191,7 +193,7 @@ def main():
         if line == "":
             break
 
-        print line[:-1]
+        print(line[:-1])
         if line[0] == "#":
             continue
 
@@ -207,15 +209,15 @@ def main():
         commands[command](op)
 
         if old_time != now:
-            print
-            print "### t=%d ###" % now
+            print()
+            print("### t=%d ###" % now)
 
         cur = r.get_stats(now)
         diff_stats(prev, cur, now - old_time)
         prev = cur
         if r.get_max_tries() != old_max_tries:
             old_max_tries = r.get_max_tries()
-            print "  %d tries left" % old_max_tries
+            print("  %d tries left" % old_max_tries)
 
         old_time = now
 

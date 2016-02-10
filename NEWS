@@ -4,6 +4,14 @@ Post-v2.5.0
      * New "monitor2" and "update2" extensions to RFC 7047.
    - OpenFlow:
      * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
+     * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
+   - ovs-ofctl:
+     * queue-get-config command now allows a queue ID to be specified.
+   - DPDK:
+     * New option "n_rxq" for PMD interfaces.
+       Old 'other_config:n-dpdk-rxqs' is no longer supported.
+   - ovs-benchmark: This utility has been removed due to lack of use and
+     bitrot.
 
 
 v2.5.0 - xx xxx xxxx
@@ -44,6 +52,9 @@ v2.5.0 - xx xxx xxxx
      abstractions, such as virtual L2 and L3 overlays and security groups.
    - RHEL packaging:
      * DPDK ports may now be created via network scripts (see README.RHEL).
+   - DPDK:
+     * Requires DPDK 2.2
+     * Added multiqueue support to vhost-user
 
 
 v2.4.0 - 20 Aug 2015

@@ -85,7 +85,7 @@ class _SelectSelect(object):
             events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
                                                         POLLHUP |
                                                         POLLNVAL)
-        return events_dict.items()
+        return list(events_dict.items())
 
 
 SelectPoll = _SelectSelect
@@ -168,7 +168,7 @@ class Poller(object):
             try:
                 events = self.poll.poll(self.timeout)
                 self.__log_wakeup(events)
-            except select.error, e:
+            except select.error as e:
                 # XXX rate-limit
                 error, msg = e
                 if error != errno.EINTR:

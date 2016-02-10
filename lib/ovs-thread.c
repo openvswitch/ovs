@@ -119,7 +119,7 @@ TRY_LOCK_FUNCTION(rwlock, trywrlock);
         l->where = WHERE; \
         error = pthread_##TYPE##_##FUN(&l->lock); \
         if (OVS_UNLIKELY(error)) { \
-            ovs_abort(error, "pthread_%s_%sfailed", #TYPE, #FUN); \
+            ovs_abort(error, "pthread_%s_%s failed", #TYPE, #FUN); \
         } \
     }
 UNLOCK_FUNCTION(mutex, unlock, "<unlocked>");
@@ -340,6 +340,25 @@ ovsthread_wrapper(void *aux_)
     return aux.start(aux.arg);
 }
 
+static void
+set_min_stack_size(pthread_attr_t *attr, size_t min_stacksize)
+{
+    size_t stacksize;
+    int error;
+
+    error = pthread_attr_getstacksize(attr, &stacksize);
+    if (error) {
+        ovs_abort(error, "pthread_attr_getstacksize failed");
+    }
+
+    if (stacksize < min_stacksize) {
+        error = pthread_attr_setstacksize(attr, min_stacksize);
+        if (error) {
+            ovs_abort(error, "pthread_attr_setstacksize failed");
+        }
+    }
+}
+
 /* Starts a thread that calls 'start(arg)'.  Sets the thread's name to 'name'
  * (suffixed by its ovsthread_id()).  Returns the new thread's pthread_t. */
 pthread_t
@@ -358,10 +377,20 @@ ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
     aux->arg = arg;
     ovs_strlcpy(aux->name, name, sizeof aux->name);
 
+    /* Some small systems use a default stack size as small as 80 kB, but OVS
+     * requires approximately 384 kB according to the following analysis:
+     * http://openvswitch.org/pipermail/dev/2016-January/065049.html
+     *
+     * We use 512 kB to give us some margin of error. */
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    set_min_stack_size(&attr, 512 * 1024);
+
     error = pthread_create(&thread, NULL, ovsthread_wrapper, aux);
     if (error) {
         ovs_abort(error, "pthread_create failed");
     }
+    pthread_attr_destroy(&attr);
     return thread;
 }
 
@@ -584,6 +613,15 @@ count_cpu_cores(void)
 
     return n_cores > 0 ? n_cores : 0;
 }
+
+/* Returns 'true' if current thread is PMD thread. */
+bool
+thread_is_pmd(void)
+{
+    const char *name = get_subprogram_name();
+    return !strncmp(name, "pmd", 3);
+}
+
 
 /* ovsthread_key. */
 

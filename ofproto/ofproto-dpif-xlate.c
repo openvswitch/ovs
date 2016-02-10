@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -457,11 +457,11 @@ struct xc_entry {
     } u;
 };
 
-#define XC_ENTRY_FOR_EACH(entry, entries, xcache)               \
-    entries = xcache->entries;                                  \
-    for (entry = ofpbuf_try_pull(&entries, sizeof *entry);      \
-         entry;                                                 \
-         entry = ofpbuf_try_pull(&entries, sizeof *entry))
+#define XC_ENTRY_FOR_EACH(ENTRY, ENTRIES, XCACHE)               \
+    ENTRIES = XCACHE->entries;                                  \
+    for (ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY);      \
+         ENTRY;                                                 \
+         ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY))
 
 struct xlate_cache {
     struct ofpbuf entries;
@@ -506,6 +506,8 @@ static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port,
 
 static struct xbridge *xbridge_lookup(struct xlate_cfg *,
                                       const struct ofproto_dpif *);
+static struct xbridge *xbridge_lookup_by_uuid(struct xlate_cfg *,
+                                              const struct uuid *);
 static struct xbundle *xbundle_lookup(struct xlate_cfg *,
                                       const struct ofbundle *);
 static struct xport *xport_lookup(struct xlate_cfg *,
@@ -1227,6 +1229,19 @@ xbridge_lookup(struct xlate_cfg *xcfg, const struct ofproto_dpif *ofproto)
     HMAP_FOR_EACH_IN_BUCKET (xbridge, hmap_node, hash_pointer(ofproto, 0),
                              xbridges) {
         if (xbridge->ofproto == ofproto) {
+            return xbridge;
+        }
+    }
+    return NULL;
+}
+
+static struct xbridge *
+xbridge_lookup_by_uuid(struct xlate_cfg *xcfg, const struct uuid *uuid)
+{
+    struct xbridge *xbridge;
+
+    HMAP_FOR_EACH (xbridge, hmap_node, &xcfg->xbridges) {
+        if (uuid_equals(ofproto_dpif_get_uuid(xbridge->ofproto), uuid)) {
             return xbridge;
         }
     }
@@ -3568,7 +3583,6 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
                           uint16_t controller_id)
 {
-    struct ofproto_packet_in *pin;
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
@@ -3582,34 +3596,34 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     odp_execute_actions(NULL, &packet, 1, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
 
-    pin = xmalloc(sizeof *pin);
-    pin->up.packet_len = dp_packet_size(packet);
-    pin->up.packet = dp_packet_steal_data(packet);
-    pin->up.reason = reason;
-    pin->up.table_id = ctx->table_id;
-    pin->up.cookie = ctx->rule_cookie;
-
-    flow_get_metadata(&ctx->xin->flow, &pin->up.flow_metadata);
-
-    pin->controller_id = controller_id;
-    pin->send_len = len;
-    /* If a rule is a table-miss rule then this is
-     * a table-miss handled by a table-miss rule.
-     *
-     * Else, if rule is internal and has a controller action,
-     * the later being implied by the rule being processed here,
-     * then this is a table-miss handled without a table-miss rule.
-     *
-     * Otherwise this is not a table-miss. */
-    pin->miss_type = OFPROTO_PACKET_IN_NO_MISS;
-    if (ctx->rule) {
-        if (rule_dpif_is_table_miss(ctx->rule)) {
-            pin->miss_type = OFPROTO_PACKET_IN_MISS_FLOW;
-        } else if (rule_dpif_is_internal(ctx->rule)) {
-            pin->miss_type = OFPROTO_PACKET_IN_MISS_WITHOUT_FLOW;
-        }
+    /* A packet sent by an action in a table-miss rule is considered an
+     * explicit table miss.  OpenFlow before 1.3 doesn't have that concept so
+     * it will get translated back to OFPR_ACTION for those versions. */
+    if (reason == OFPR_ACTION
+        && ctx->rule && rule_dpif_is_table_miss(ctx->rule)) {
+        reason = OFPR_EXPLICIT_MISS;
     }
-    ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
+
+    size_t packet_len = dp_packet_size(packet);
+
+    struct ofproto_async_msg *am = xmalloc(sizeof *am);
+    *am = (struct ofproto_async_msg) {
+        .controller_id = controller_id,
+        .oam = OAM_PACKET_IN,
+        .pin = {
+            .up = {
+                .packet = dp_packet_steal_data(packet),
+                .len = packet_len,
+                .reason = reason,
+                .table_id = ctx->table_id,
+                .cookie = ctx->rule_cookie,
+            },
+            .max_len = len,
+        },
+    };
+    flow_get_metadata(&ctx->xin->flow, &am->pin.up.flow_metadata);
+
+    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
     dp_packet_delete(packet);
 }
 
@@ -3625,14 +3639,17 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 
     struct recirc_state state = {
         .table_id = table,
-        .ofproto = ctx->xbridge->ofproto,
+        .ofproto_uuid = *ofproto_dpif_get_uuid(ctx->xbridge->ofproto),
         .metadata = md,
-        .stack = &ctx->stack,
+        .stack = ctx->stack.data,
+        .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
         .mirrors = ctx->mirrors,
         .conntracked = ctx->conntracked,
+        .ofpacts = ((struct ofpact *) ctx->action_set.data
+                    + ctx->recirc_action_offset / sizeof(struct ofpact)),
+        .ofpacts_len = ctx->action_set.size - ctx->recirc_action_offset,
+        .action_set = ctx->action_set.data,
         .action_set_len = ctx->recirc_action_offset,
-        .ofpacts_len = ctx->action_set.size,
-        .ofpacts = ctx->action_set.data,
     };
 
     /* Allocate a unique recirc id for the given metadata state in the
@@ -4072,12 +4089,9 @@ may_receive(const struct xport *xport, struct xlate_ctx *ctx)
 }
 
 static void
-xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
+xlate_write_actions__(struct xlate_ctx *ctx,
+                      const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    const struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
-    size_t on_len = ofpact_nest_get_action_len(on);
-    const struct ofpact *inner;
-
     /* Maintain actset_output depending on the contents of the action set:
      *
      *   - OFPP_UNSET, if there is no "output" action.
@@ -4088,10 +4102,11 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
      *   - OFPP_UNSET, if there is a "group" action.
      */
     if (!ctx->action_set_has_group) {
-        OFPACT_FOR_EACH (inner, on->actions, on_len) {
-            if (inner->type == OFPACT_OUTPUT) {
-                ctx->xin->flow.actset_output = ofpact_get_OUTPUT(inner)->port;
-            } else if (inner->type == OFPACT_GROUP) {
+        const struct ofpact *a;
+        OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+            if (a->type == OFPACT_OUTPUT) {
+                ctx->xin->flow.actset_output = ofpact_get_OUTPUT(a)->port;
+            } else if (a->type == OFPACT_GROUP) {
                 ctx->xin->flow.actset_output = OFPP_UNSET;
                 ctx->action_set_has_group = true;
                 break;
@@ -4099,7 +4114,13 @@ xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact *a)
         }
     }
 
-    ofpbuf_put(&ctx->action_set, on->actions, on_len);
+    ofpbuf_put(&ctx->action_set, ofpacts, ofpacts_len);
+}
+
+static void
+xlate_write_actions(struct xlate_ctx *ctx, const struct ofpact_nest *a)
+{
+    xlate_write_actions__(ctx, a->actions, ofpact_nest_get_action_len(a));
 }
 
 static void
@@ -4144,8 +4165,7 @@ recirc_put_unroll_xlate(struct xlate_ctx *ctx)
 
 /* Copy remaining actions to the action_set to be executed after recirculation.
  * UNROLL_XLATE action is inserted, if not already done so, before actions that
- * may generate PACKET_INs from the current table and without matching another
- * rule. */
+ * may depend on the current table ID or flow cookie. */
 static void
 recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                       struct xlate_ctx *ctx)
@@ -4154,17 +4174,25 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         switch (a->type) {
-            /* May generate PACKET INs. */
         case OFPACT_OUTPUT_REG:
         case OFPACT_GROUP:
         case OFPACT_OUTPUT:
         case OFPACT_CONTROLLER:
         case OFPACT_DEC_MPLS_TTL:
         case OFPACT_DEC_TTL:
+            /* These actions may generate asynchronous messages, which include
+             * table ID and flow cookie information. */
             recirc_put_unroll_xlate(ctx);
             break;
 
-            /* These may not generate PACKET INs. */
+        case OFPACT_RESUBMIT:
+            if (ofpact_get_RESUBMIT(a)->table_id == 0xff) {
+                /* This resubmit action is relative to the current table, so we
+                 * need to track what table that is.*/
+                recirc_put_unroll_xlate(ctx);
+            }
+            break;
+
         case OFPACT_SET_TUNNEL:
         case OFPACT_REG_MOVE:
         case OFPACT_SET_FIELD:
@@ -4172,8 +4200,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_STACK_POP:
         case OFPACT_LEARN:
         case OFPACT_WRITE_METADATA:
-        case OFPACT_RESUBMIT:        /* May indirectly generate PACKET INs, */
-        case OFPACT_GOTO_TABLE:      /* but from a different table and rule. */
+        case OFPACT_GOTO_TABLE:
         case OFPACT_ENQUEUE:
         case OFPACT_SET_VLAN_VID:
         case OFPACT_SET_VLAN_PCP:
@@ -4207,11 +4234,12 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_CT:
         case OFPACT_NAT:
+            /* These may not generate PACKET INs. */
             break;
 
-            /* These need not be copied for restoration. */
         case OFPACT_NOTE:
         case OFPACT_CONJUNCTION:
+            /* These need not be copied for restoration. */
             continue;
         }
         /* Copy the action over. */
@@ -4547,8 +4575,30 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_RESUBMIT:
+            /* Recirculation complicates resubmit.  There are two cases:
+             *
+             *     - If mpls_pop has been executed, then the flow table lookup
+             *       as part of resubmit might depend on fields that can only
+             *       be obtained via recirculation, so the resubmit itself
+             *       triggers recirculation and we need to make sure that the
+             *       resubmit is executed again after recirculation.
+             *       Therefore, in this case we trigger recirculation and let
+             *       the code following this "switch" append the resubmit to
+             *       the post-recirculation actions.
+             *
+             *     - Otherwise, some action in the flow entry found by resubmit
+             *       might trigger recirculation.  If that happens, then we do
+             *       not want to execute the resubmit again after
+             *       recirculation, so we want to skip back to the head of the
+             *       loop to avoid that, only adding any actions that follow
+             *       the resubmit to the post-recirculation actions.
+             */
+            if (ctx->was_mpls) {
+                ctx_trigger_recirculation(ctx);
+                break;
+            }
             xlate_ofpact_resubmit(ctx, ofpact_get_RESUBMIT(a));
-            break;
+            continue;
 
         case OFPACT_SET_TUNNEL:
             flow->tunnel.tun_id = htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
@@ -4721,7 +4771,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_WRITE_ACTIONS:
-            xlate_write_actions(ctx, a);
+            xlate_write_actions(ctx, ofpact_get_WRITE_ACTIONS(a));
             break;
 
         case OFPACT_WRITE_METADATA:
@@ -4737,12 +4787,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_GOTO_TABLE: {
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
 
-            /* Allow ctx->table_id == TBL_INTERNAL, which will be greater
-             * than ogt->table_id. This is to allow goto_table actions that
-             * triggered recirculation: ctx->table_id will be TBL_INTERNAL
-             * after recirculation. */
-            ovs_assert(ctx->table_id == TBL_INTERNAL
-                       || ctx->table_id < ogt->table_id);
+            ovs_assert(ctx->table_id < ogt->table_id);
+
             xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
                                ogt->table_id, true, true);
             break;
@@ -4807,9 +4853,14 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->odp_actions = odp_actions;
 
     /* Do recirc lookup. */
-    xin->recirc = flow->recirc_id
-        ? recirc_id_node_find(flow->recirc_id)
-        : NULL;
+    xin->recirc = NULL;
+    if (flow->recirc_id) {
+        const struct recirc_id_node *node
+            = recirc_id_node_find(flow->recirc_id);
+        if (node) {
+            xin->recirc = &node->state;
+        }
+    }
 }
 
 void
@@ -5033,7 +5084,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
     *xout = (struct xlate_out) {
         .slow = 0,
-        .fail_open = false,
         .recircs = RECIRC_REFS_EMPTY_INITIALIZER,
     };
 
@@ -5118,7 +5168,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     COVERAGE_INC(xlate_actions);
 
     if (xin->recirc) {
-        const struct recirc_state *state = &xin->recirc->state;
+        const struct recirc_state *state = xin->recirc;
 
         xlate_report(&ctx, "Restoring state post-recirculation:");
 
@@ -5133,10 +5183,11 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         /* Set the bridge for post-recirculation processing if needed. */
-        if (ctx.xbridge->ofproto != state->ofproto) {
+        if (!uuid_equals(ofproto_dpif_get_uuid(ctx.xbridge->ofproto),
+                         &state->ofproto_uuid)) {
             struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
             const struct xbridge *new_bridge
-                = xbridge_lookup(xcfg, state->ofproto);
+                = xbridge_lookup_by_uuid(xcfg, &state->ofproto_uuid);
 
             if (OVS_UNLIKELY(!new_bridge)) {
                 /* Drop the packet if the bridge cannot be found. */
@@ -5165,7 +5216,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Restore stack, if any. */
         if (state->stack) {
-            ofpbuf_put(&ctx.stack, state->stack->data, state->stack->size);
+            ofpbuf_put(&ctx.stack, state->stack,
+                       state->n_stack * sizeof *state->stack);
         }
 
         /* Restore mirror state. */
@@ -5173,28 +5225,19 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Restore action set, if any. */
         if (state->action_set_len) {
-            const struct ofpact *a;
-
             xlate_report_actions(&ctx, "- Restoring action set",
-                                 state->ofpacts, state->action_set_len);
+                                 state->action_set, state->action_set_len);
 
-            ofpbuf_put(&ctx.action_set, state->ofpacts, state->action_set_len);
-
-            OFPACT_FOR_EACH(a, state->ofpacts, state->action_set_len) {
-                if (a->type == OFPACT_GROUP) {
-                    ctx.action_set_has_group = true;
-                    break;
-                }
-            }
+            flow->actset_output = OFPP_UNSET;
+            xlate_write_actions__(&ctx, state->action_set,
+                                  state->action_set_len);
         }
 
         /* Restore recirculation actions.  If there are no actions, processing
          * will start with a lookup in the table set above. */
-        if (state->ofpacts_len > state->action_set_len) {
-            xin->ofpacts_len = state->ofpacts_len - state->action_set_len;
-            xin->ofpacts = state->ofpacts +
-                state->action_set_len / sizeof *state->ofpacts;
-
+        xin->ofpacts = state->ofpacts;
+        xin->ofpacts_len = state->ofpacts_len;
+        if (state->ofpacts_len) {
             xlate_report_actions(&ctx, "- Restoring actions",
                                  xin->ofpacts, xin->ofpacts_len);
         }
@@ -5229,7 +5272,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             ctx.xin->resubmit_hook(ctx.xin, ctx.rule, 0);
         }
     }
-    xout->fail_open = ctx.rule && rule_dpif_is_fail_open(ctx.rule);
 
     /* Get the proximate input port of the packet.  (If xin->recirc,
      * flow->in_port is the ultimate input port of the packet.) */

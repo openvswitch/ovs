@@ -103,5 +103,6 @@ int aa_mapping_unregister(void *aux);
 
 /* Used by unit tests */
 struct lldp * lldp_create_dummy(void);
+void lldp_destroy_dummy(struct lldp *);
 
 #endif /* OVS_LLDP_H */

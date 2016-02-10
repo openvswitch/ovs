@@ -83,6 +83,7 @@
     <ClInclude Include="Gre.h" />
     <ClInclude Include="IpHelper.h" />
     <ClInclude Include="Jhash.h" />
+    <ClInclude Include="Mpls.h" />
     <ClInclude Include="Netlink/Netlink.h" />
     <ClInclude Include="Netlink/NetlinkBuf.h" />
     <ClInclude Include="Netlink/NetlinkProto.h" />

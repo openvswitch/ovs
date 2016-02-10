@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,7 @@ void *ofpbuf_push(struct ofpbuf *b, const void *, size_t);
 
 static inline size_t ofpbuf_headroom(const struct ofpbuf *);
 static inline size_t ofpbuf_tailroom(const struct ofpbuf *);
+static inline size_t ofpbuf_msgsize(const struct ofpbuf *);
 void ofpbuf_prealloc_headroom(struct ofpbuf *, size_t);
 void ofpbuf_prealloc_tailroom(struct ofpbuf *, size_t);
 void ofpbuf_trim(struct ofpbuf *);
@@ -191,6 +192,22 @@ static inline size_t ofpbuf_headroom(const struct ofpbuf *b)
 static inline size_t ofpbuf_tailroom(const struct ofpbuf *b)
 {
     return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
+}
+
+/* Returns the number of bytes from 'b->header' to 'b->msg', that is, the
+ * length of 'b''s header. */
+static inline size_t
+ofpbuf_headersize(const struct ofpbuf *b)
+{
+    return (char *)b->msg - (char *)b->header;
+}
+
+/* Returns the number of bytes from 'b->msg' to 'b->data + b->size', that is,
+ * the length of the used space in 'b' starting from 'msg'. */
+static inline size_t
+ofpbuf_msgsize(const struct ofpbuf *b)
+{
+    return (char *)ofpbuf_tail(b) - (char *)b->msg;
 }
 
 /* Clears any data from 'b'. */

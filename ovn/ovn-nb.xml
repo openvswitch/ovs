@@ -285,6 +285,11 @@
               if any, uses this information to avoid issuing ARP requests for
               logical switch ports.
             </p>
+
+            <p>
+              Note that the order here is important. The Ethernet address must
+              be listed before the IP address.
+            </p>
           </dd>
 
           <dt><code>unknown</code></dt>

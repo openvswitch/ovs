@@ -168,7 +168,7 @@ dnl ----------------------------------------------------------------------
 dnl OVSDB server before release version 2.5 does not support the monitor2
 dnl method.  This test defeatures the OVSDB server to simulate an older
 dnl OVSDB server and make sure ovs-vswitchd can still work with it
-AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2)])
+AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2])
 OVS_VSWITCHD_START
 
 dnl defeature OVSDB server -- no monitor2
@@ -186,4 +186,34 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 		p1 2/2: (dummy)
 ])
 OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd - do not create sockets with unsafe names])
+OVS_VSWITCHD_START
+
+# On Unix systems, test for sockets with "test -S".
+#
+# On Windows systems, we simulate a socket with a regular file that contains
+# a TCP port number, so use "test -f" there instead.
+if test $IS_WIN32 = yes; then
+   S=f
+else
+   S=S
+fi
+
+# Create a bridge with an ordinary name and make sure that the management
+# socket gets creatd.
+AT_CHECK([ovs-vsctl add-br a -- set bridge a datapath-type=dummy])
+AT_CHECK([test -$S a.mgmt])
+
+# Create a bridge with an unsafe name and make sure that the management
+# socket does not get created.
+mkdir b
+AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [0],
+  [], [ovs-vsctl: Error detected while setting up 'b/c'.  See ovs-vswitchd log for details.
+])
+AT_CHECK([test ! -e b/c.mgmt])
+
+OVS_VSWITCHD_STOP(['/ignoring bridge with invalid name/d'])
 AT_CLEANUP

@@ -148,13 +148,6 @@ check 2 = F:400000 Di F F F F F F
 AT_CHECK([ovstest test-rstp test-rstp-ieee802.1d-2004-fig17.7], [0], [])
 AT_CLEANUP
 
-# Strips out uninteresting parts of flow output, as well as parts
-# that vary from one run to another (e.g., timing and bond actions).
-m4_define([STRIP_USED], [[sed '
-    s/used:[0-9]*\.[0-9]*/used:0.0/
-    s/duration=[0-9.]*s*/duration=Xs/
-    s/idle_age=[0-9]*,/idle_age=X,/
-']])
 m4_define([FILTER_STP_TOPOLOGY], [[
 grep 'STP state changed' | sed '
     s/.*ofproto_dpif|.*|//

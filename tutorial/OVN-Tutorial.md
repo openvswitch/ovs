@@ -675,7 +675,7 @@ tracker.  This populates the connection state fields so that we can apply policy
 as appropriate.
 
     table=0(switch_out_pre_acl), priority=  100, match=(ip), action=(ct_next;)
-    table=1(switch_in_pre_acl), priority=    0, match=(1), action=(next;)
+    table=1(switch_out_pre_acl), priority=    0, match=(1), action=(next;)
 
 In `switch_out_acl`, we allow packets associated with existing connections.  We
 drop packets that are deemed to be invalid (such as non-SYN TCP packet not

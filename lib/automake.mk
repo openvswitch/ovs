@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -150,6 +150,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-parse.h \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
+	lib/ofp-prop.c \
+	lib/ofp-prop.h \
 	lib/ofp-util.c \
 	lib/ofp-util.h \
 	lib/ofp-version-opt.h \
@@ -193,6 +195,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/pcap-file.h \
 	lib/perf-counter.h \
 	lib/perf-counter.c \
+	lib/pktbuf.c \
+	lib/pktbuf.h \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
 	lib/process.c \
@@ -421,7 +425,8 @@ EXTRA_DIST += \
 	lib/dh1024.pem \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
-	lib/dirs.c.in
+	lib/dirs.c.in \
+	lib/db-ctl-base.xml
 
 MAN_FRAGMENTS += \
 	lib/common.man \

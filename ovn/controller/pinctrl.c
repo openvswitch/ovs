@@ -78,8 +78,10 @@ process_packet_in(struct controller_ctx *ctx OVS_UNUSED,
                   const struct ofp_header *msg)
 {
     struct ofputil_packet_in pin;
+    uint32_t buffer_id;
+    size_t total_len;
 
-    if (ofputil_decode_packet_in(&pin, msg) != 0) {
+    if (ofputil_decode_packet_in(msg, &pin, &total_len, &buffer_id) != 0) {
         return;
     }
     if (pin.reason != OFPR_ACTION) {

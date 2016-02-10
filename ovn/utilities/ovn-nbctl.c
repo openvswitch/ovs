@@ -25,6 +25,7 @@
 #include "fatal-signal.h"
 #include "json.h"
 #include "ovn/lib/ovn-nb-idl.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "smap.h"
@@ -72,7 +73,6 @@ static void do_nbctl(const char *args, struct ctl_command *, size_t n,
 int
 main(int argc, char *argv[])
 {
-    extern struct vlog_module VLM_reconnect;
     struct ovsdb_idl *idl;
     struct ctl_command *commands;
     struct shash local_options;
@@ -83,7 +83,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(&VLM_reconnect, VLF_ANY_DESTINATION, VLL_WARN);
+    vlog_set_levels_from_string_assert("reconnect:warn");
     nbrec_init();
 
     nbctl_cmd_init();
@@ -330,13 +330,15 @@ Logical port commands:\n\
                             Set options related to the type of LPORT\n\
   lport-get-options LPORT   Get the type specific options for LPORT\n\
 \n\
+%s\
+\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, nbctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(), nbctl_default_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=nbctl:syslog:warn\n");
@@ -404,11 +406,13 @@ print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
             ds_put_format(s, "            tag: %"PRIu64"\n", lport->tag[0]);
         }
         if (lport->n_addresses) {
-            ds_put_cstr(s, "            addresses:");
+            ds_put_cstr(s, "            addresses: [");
             for (size_t j = 0; j < lport->n_addresses; j++) {
-                ds_put_format(s, " %s", lport->addresses[j]);
+                ds_put_format(s, "%s\"%s\"",
+                        j == 0 ? "" : ", ",
+                        lport->addresses[j]);
             }
-            ds_put_char(s, '\n');
+            ds_put_cstr(s, "]\n");
         }
     }
 }
@@ -661,6 +665,21 @@ nbctl_lport_set_addresses(struct ctl_context *ctx)
     lport = lport_by_name_or_uuid(ctx, id);
     if (!lport) {
         return;
+    }
+
+    int i;
+    for (i = 2; i < ctx->argc; i++) {
+        struct eth_addr ea;
+
+        if (strcmp(ctx->argv[i], "unknown")
+            && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
+                         ETH_ADDR_SCAN_ARGS(ea))) {
+            VLOG_ERR("Invalid address format (%s). See ovn-nb(5). "
+                     "Hint: An Ethernet address must be "
+                     "listed before an IP address, together as a single "
+                     "argument.", ctx->argv[i]);
+            return;
+        }
     }
 
     nbrec_logical_port_set_addresses(lport,

@@ -3,7 +3,7 @@
 
 #include_next <net/netfilter/nf_conntrack_expect.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0)
+#ifndef HAVE_NF_CT_ZONE_INIT
 
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_zones.h>
@@ -17,5 +17,5 @@ rpl___nf_ct_expect_find(struct net *net,
 }
 #define __nf_ct_expect_find rpl___nf_ct_expect_find
 
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4,3,0) */
+#endif /* HAVE_NF_CT_ZONE_INIT */
 #endif /* _NF_CONNTRACK_EXPECT_WRAPPER_H */

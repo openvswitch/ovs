@@ -96,13 +96,29 @@ discover_numa_and_core(void)
 {
     int n_cpus = 0;
     int i;
+    DIR *dir;
+    bool numa_supported = true;
+
+    /* Check if NUMA supported on this system. */
+    dir = opendir("/sys/devices/system/node");
+
+    if (!dir && errno == ENOENT) {
+        numa_supported = false;
+    }
+    if (dir) {
+        closedir(dir);
+    }
 
     for (i = 0; i < MAX_NUMA_NODES; i++) {
-        DIR *dir;
         char* path;
 
-        /* Constructs the path to node /sys/devices/system/nodeX. */
-        path = xasprintf("/sys/devices/system/node/node%d", i);
+        if (numa_supported) {
+            /* Constructs the path to node /sys/devices/system/nodeX. */
+            path = xasprintf("/sys/devices/system/node/node%d", i);
+        } else {
+            path = xasprintf("/sys/devices/system/cpu/");
+        }
+
         dir = opendir(path);
 
         /* Creates 'struct numa_node' if the 'dir' is non-null. */
@@ -132,14 +148,14 @@ discover_numa_and_core(void)
             }
             VLOG_INFO("Discovered %"PRIuSIZE" CPU cores on NUMA node %d",
                       list_size(&n->cores), n->numa_id);
-            free(path);
             closedir(dir);
-        } else {
-            if (errno != ENOENT) {
-                VLOG_WARN("opendir(%s) failed (%s)", path,
-                          ovs_strerror(errno));
-            }
-            free(path);
+        } else if (errno != ENOENT) {
+            VLOG_WARN("opendir(%s) failed (%s)", path,
+                      ovs_strerror(errno));
+        }
+
+        free(path);
+        if (!dir || !numa_supported) {
             break;
         }
     }

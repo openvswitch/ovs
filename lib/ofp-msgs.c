@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,8 +118,8 @@ alloc_xid(void)
 static uint32_t
 ofphdrs_hash(const struct ofphdrs *hdrs)
 {
-    BUILD_ASSERT_DECL(sizeof *hdrs == 12);
-    return hash_words((const uint32_t *) hdrs, 3, 0);
+    BUILD_ASSERT_DECL(sizeof *hdrs % 4 == 0);
+    return hash_bytes32((const uint32_t *) hdrs, sizeof *hdrs, 0);
 }
 
 static bool
@@ -381,9 +381,9 @@ ofpraw_decode_assert(const struct ofp_header *oh)
  *
  * In addition to setting '*rawp', this function pulls off the OpenFlow header
  * (including the stats headers, vendor header, and any subtype header) with
- * ofpbuf_pull().  It also sets 'msg->frame' to the start of the OpenFlow
- * header and 'msg->msg' just beyond the headers (that is, to the final value of
- * msg->data). */
+ * ofpbuf_pull().  It also sets 'msg->header' to the start of the OpenFlow
+ * header and 'msg->msg' just beyond the headers (that is, to the final value
+ * of msg->data). */
 enum ofperr
 ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
 {
@@ -512,8 +512,8 @@ static void ofpraw_put__(enum ofpraw, uint8_t version, ovs_be32 xid,
  * Each 'raw' value is valid only for certain OpenFlow versions.  The caller
  * must specify a valid (raw, version) pair.
  *
- * In the returned ofpbuf, 'frame' points to the beginning of the
- * OpenFlow header and 'l3' points just after it, to where the
+ * In the returned ofpbuf, 'header' points to the beginning of the
+ * OpenFlow header and 'msg' points just after it, to where the
  * message's body will start.  The caller must actually allocate the
  * body into the space reserved for it, e.g. with ofpbuf_put_uninit().
  *
@@ -559,8 +559,8 @@ ofpraw_alloc_reply(enum ofpraw raw, const struct ofp_header *request,
  * value.  Every stats request has a corresponding reply, so the (raw, version)
  * pairing pitfalls of the other ofpraw_alloc_*() functions don't apply here.
  *
- * In the returned ofpbuf, 'frame' points to the beginning of the
- * OpenFlow header and 'l3' points just after it, to where the
+ * In the returned ofpbuf, 'header' points to the beginning of the
+ * OpenFlow header and 'msg' points just after it, to where the
  * message's body will start.  The caller must actually allocate the
  * body into the space reserved for it, e.g. with ofpbuf_put_uninit().
  *
@@ -592,9 +592,9 @@ ofpraw_alloc_stats_reply(const struct ofp_header *request,
  * Each 'raw' value is valid only for certain OpenFlow versions.  The caller
  * must specify a valid (raw, version) pair.
  *
- * Upon return, 'buf->frame' points to the beginning of the OpenFlow header and
- * 'buf->msg' points just after it, to where the message's body will start.  The
- * caller must actually allocating the body into the space reserved for it,
+ * Upon return, 'buf->header' points to the beginning of the OpenFlow header
+ * and 'buf->msg' points just after it, to where the message's body will start.
+ * The caller must actually allocating the body into the space reserved for it,
  * e.g. with ofpbuf_put_uninit(). */
 void
 ofpraw_put(enum ofpraw raw, uint8_t version, struct ofpbuf *buf)
@@ -632,8 +632,8 @@ ofpraw_put_reply(enum ofpraw raw, const struct ofp_header *request,
  * value.  Every stats request has a corresponding reply, so the (raw, version)
  * pairing pitfalls of the other ofpraw_alloc_*() functions don't apply here.
  *
- * In the returned ofpbuf, 'frame' points to the beginning of the
- * OpenFlow header and 'l3' points just after it, to where the
+ * In the returned ofpbuf, 'header' points to the beginning of the
+ * OpenFlow header and 'msg' points just after it, to where the
  * message's body will start.  The caller must actually allocate the
  * body into the space reserved for it, e.g. with ofpbuf_put_uninit().
  *
@@ -801,9 +801,9 @@ ofptype_decode(enum ofptype *typep, const struct ofp_header *oh)
  *
  * In addition to setting '*typep', this function pulls off the OpenFlow header
  * (including the stats headers, vendor header, and any subtype header) with
- * ofpbuf_pull().  It also sets 'msg->frame' to the start of the OpenFlow
- * header and 'msg->msg' just beyond the headers (that is, to the final value of
- * msg->data). */
+ * ofpbuf_pull().  It also sets 'msg->header' to the start of the OpenFlow
+ * header and 'msg->msg' just beyond the headers (that is, to the final value
+ * of msg->data). */
 enum ofperr
 ofptype_pull(enum ofptype *typep, struct ofpbuf *buf)
 {

@@ -702,13 +702,6 @@
       </p>
 
       <p>
-        It's possible that a single ingress physical port maps to multiple
-        logical ports with a type of <code>localnet</code>. The logical datapath
-        and logical input port fields will be reset and the packet will be
-        resubmitted to table 16 multiple times.
-      </p>
-
-      <p>
         Packets that originate from a container nested within a VM are treated
         in a slightly different way.  The originating container can be
         distinguished based on the VIF-specific VLAN ID, so the
@@ -1017,7 +1010,7 @@
 
     <!-- Keep the following in sync with ovn/controller/physical.h. -->
     OVN transmits the logical ingress and logical egress ports in a TLV with
-    class 0xffff, type 0, and a 32-bit value encoded as follows, from MSB to
+    class 0x0102, type 0, and a 32-bit value encoded as follows, from MSB to
     LSB:
   </p>
 

@@ -49,21 +49,30 @@ patch
 # Initially there should be no patch ports.
 check_patches
 
-# Configure two ovn-bridge mappings to create two patch ports.
+# Configure two ovn-bridge mappings, but no patch ports should be created yet
 AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1])
-check_patches \
-    'br-eth0 patch-br-eth0-to-br-int patch-br-int-to-br-eth0' \
-    'br-int  patch-br-int-to-br-eth0 patch-br-eth0-to-br-int' \
-    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
-    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int'
+check_patches
 
-# Change the mapping and the patch ports should change.
-AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth2,physnet2:br-eth1])
+# Create a localnet port, but we should still have no patch ports, as they
+# won't be created until there's a localnet port on a logical switch with
+# another logical port bound to this chassis.
+ovn-sbctl \
+    -- --id=@dp101 create Datapath_Binding tunnel_key=101 \
+    -- create Port_Binding datapath=@dp101 logical_port=localnet1 tunnel_key=1 \
+        type=localnet options:network_name=physnet1
+check_patches
+
+# Create a localnet port on a logical switch with a port bound to this chassis.
+# Now we should get some patch ports created.
+ovn-sbctl \
+    -- --id=@dp102 create Datapath_Binding tunnel_key=102 \
+    -- create Port_Binding datapath=@dp102 logical_port=localnet2 tunnel_key=1 \
+        type=localnet options:network_name=physnet1 \
+    -- create Port_Binding datapath=@dp102 logical_port=localvif2 tunnel_key=2
+ovs-vsctl add-port br-int localvif2 -- set Interface localvif2 external_ids:iface-id=localvif2
 check_patches \
-    'br-eth2 patch-br-eth2-to-br-int patch-br-int-to-br-eth2' \
-    'br-int  patch-br-int-to-br-eth2 patch-br-eth2-to-br-int' \
-    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
-    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int'
+    'br-int  patch-br-int-to-localnet2 patch-localnet2-to-br-int' \
+    'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2'
 
 # Add logical patch ports.
 AT_CHECK([ovn-sbctl \
@@ -77,10 +86,8 @@ AT_CHECK([ovn-sbctl \
 <3>
 ])
 check_patches \
-    'br-eth2 patch-br-eth2-to-br-int patch-br-int-to-br-eth2' \
-    'br-int  patch-br-int-to-br-eth2 patch-br-eth2-to-br-int' \
-    'br-eth1 patch-br-eth1-to-br-int patch-br-int-to-br-eth1' \
-    'br-int  patch-br-int-to-br-eth1 patch-br-eth1-to-br-int' \
+    'br-int  patch-br-int-to-localnet2 patch-localnet2-to-br-int' \
+    'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2' \
     'br-int  patch-foo-to-bar        patch-bar-to-foo' \
     'br-int  patch-bar-to-foo        patch-foo-to-bar'
 

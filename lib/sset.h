@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,10 +95,13 @@ const char **sset_sort(const struct sset *);
     ? NULL                                  \
     : (CONST_CAST(const char *, (SSET_NODE_FROM_HMAP_NODE(HMAP_NODE)->name)))
 #define SSET_NODE_FROM_NAME(NAME) CONTAINER_OF(NAME, struct sset_node, name)
-#define SSET_FIRST(SSET) SSET_NAME_FROM_HMAP_NODE(hmap_first(&(SSET)->map))
+#define SSET_FIRST(SSET)                                    \
+    (BUILD_ASSERT_TYPE(SSET, struct sset *),                \
+     SSET_NAME_FROM_HMAP_NODE(hmap_first(&(SSET)->map)))
 #define SSET_NEXT(SSET, NAME)                                           \
-    SSET_NAME_FROM_HMAP_NODE(                                           \
-        hmap_next(&(SSET)->map, &SSET_NODE_FROM_NAME(NAME)->hmap_node))
+    (BUILD_ASSERT_TYPE(SSET, struct sset *),                            \
+     SSET_NAME_FROM_HMAP_NODE(                                          \
+         hmap_next(&(SSET)->map, &SSET_NODE_FROM_NAME(NAME)->hmap_node)))
 
 #ifdef __cplusplus
 }

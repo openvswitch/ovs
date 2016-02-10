@@ -50,6 +50,7 @@
 /depcomp
 /distfiles
 /dist-docs
+/flake8-check
 /install-sh
 /libtool
 /manpage-check

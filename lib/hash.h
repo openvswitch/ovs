@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -322,6 +322,18 @@ hash_words64(const uint64_t p[], size_t n_words, uint32_t basis)
     return hash_words64__(p, n_words, basis);
 }
 #endif
+
+static inline uint32_t
+hash_bytes32(const uint32_t p[], size_t n_bytes, uint32_t basis)
+{
+    return hash_words(p, n_bytes / 4, basis);
+}
+
+static inline uint32_t
+hash_bytes64(const uint64_t p[], size_t n_bytes, uint32_t basis)
+{
+    return hash_words64(p, n_bytes / 8, basis);
+}
 
 static inline uint32_t hash_string(const char *s, uint32_t basis)
 {
