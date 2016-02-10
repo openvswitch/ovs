@@ -206,7 +206,7 @@
 #pragma section(".CRT$XCU",read)
 #define OVS_CONSTRUCTOR(f) \
     static void __cdecl f(void); \
-    __declspec(allocate(".CRT$XCU")) void (__cdecl*f##_)(void) = f; \
+    __declspec(allocate(".CRT$XCU")) static void (__cdecl*f##_)(void) = f; \
     static void __cdecl f(void)
 #else
 #define OVS_CONSTRUCTOR(f) \
