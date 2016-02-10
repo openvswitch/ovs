@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1339,6 +1339,10 @@ exhaustive N\n\
                          comma separated.  Default is all operators.\n\
    String vars:\n\
     --svars=N  Number of string vars to test, in range 0...4, default 2.\n\
+\n\
+parse-actions\n\
+  Parses OVN actions from stdin and prints the equivalent OpenFlow actions\n\
+  on stdout.\n\
 ",
            program_name, program_name);
     exit(EXIT_SUCCESS);
