@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,10 +44,13 @@ binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_interface);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_name);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_external_ids);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_ingress_policing_rate);
+    ovsdb_idl_add_column(ovs_idl,
+                         &ovsrec_interface_col_ingress_policing_burst);
 }
 
 static void
-get_local_iface_ids(const struct ovsrec_bridge *br_int, struct sset *lports)
+get_local_iface_ids(const struct ovsrec_bridge *br_int, struct shash *lports)
 {
     int i;
 
@@ -68,7 +71,7 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int, struct sset *lports)
             if (!iface_id) {
                 continue;
             }
-            sset_add(lports, iface_id);
+            shash_add(lports, iface_id, iface_rec);
         }
     }
 }
@@ -132,6 +135,17 @@ add_local_datapath(struct hmap *local_datapaths,
     }
 }
 
+static void
+update_qos(const struct ovsrec_interface *iface_rec,
+           const struct sbrec_port_binding *pb)
+{
+    int rate = smap_get_int(&pb->options, "policing_rate", 0);
+    int burst = smap_get_int(&pb->options, "policing_burst", 0);
+
+    ovsrec_interface_set_ingress_policing_rate(iface_rec, MAX(0, rate));
+    ovsrec_interface_set_ingress_policing_burst(iface_rec, MAX(0, burst));
+}
+
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const char *chassis_id, struct simap *ct_zones,
@@ -139,8 +153,6 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
-    struct sset lports, all_lports;
-    const char *name;
 
     if (!ctx->ovnsb_idl_txn) {
         return;
@@ -151,15 +163,19 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         return;
     }
 
-    sset_init(&lports);
-    sset_init(&all_lports);
+    struct shash lports = SHASH_INITIALIZER(&lports);
     if (br_int) {
         get_local_iface_ids(br_int, &lports);
     } else {
         /* We have no integration bridge, therefore no local logical ports.
          * We'll remove our chassis from all port binding records below. */
     }
-    sset_clone(&all_lports, &lports);
+
+    struct sset all_lports = SSET_INITIALIZER(&all_lports);
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &lports) {
+        sset_add(&all_lports, node->name);
+    }
 
     ovsdb_idl_txn_add_comment(
         ctx->ovnsb_idl_txn,"ovn-controller: updating port bindings for '%s'",
@@ -169,14 +185,19 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
     SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
-        if (sset_find_and_delete(&lports, binding_rec->logical_port) ||
-                (binding_rec->parent_port && binding_rec->parent_port[0] &&
-                 sset_contains(&all_lports, binding_rec->parent_port))) {
+        const struct ovsrec_interface *iface_rec
+            = shash_find_and_delete(&lports, binding_rec->logical_port);
+        if (iface_rec
+            || (binding_rec->parent_port && binding_rec->parent_port[0] &&
+                sset_contains(&all_lports, binding_rec->parent_port))) {
             if (binding_rec->parent_port && binding_rec->parent_port[0]) {
                 /* Add child logical port to the set of all local ports. */
                 sset_add(&all_lports, binding_rec->logical_port);
             }
             add_local_datapath(local_datapaths, binding_rec);
+            if (iface_rec && ctx->ovs_idl_txn) {
+                update_qos(iface_rec, binding_rec);
+            }
             if (binding_rec->chassis == chassis_rec) {
                 continue;
             }
@@ -199,13 +220,13 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         }
     }
 
-    SSET_FOR_EACH (name, &lports) {
-        VLOG_DBG("No port binding record for lport %s", name);
+    SHASH_FOR_EACH (node, &lports) {
+        VLOG_DBG("No port binding record for lport %s", node->name);
     }
 
     update_ct_zones(&all_lports, ct_zones, ct_zone_bitmap);
 
-    sset_destroy(&lports);
+    shash_destroy(&lports);
     sset_destroy(&all_lports);
 }
 
