@@ -98,7 +98,7 @@ pinctrl_recv(struct controller_ctx *ctx, const struct ofp_header *oh,
         struct ofputil_switch_config config;
 
         ofputil_decode_get_config_reply(oh, &config);
-        config.miss_send_len = htons(UINT16_MAX);
+        config.miss_send_len = UINT16_MAX;
         set_switch_config(swconn, &config);
     } else if (type == OFPTYPE_PACKET_IN) {
         process_packet_in(ctx, oh);
