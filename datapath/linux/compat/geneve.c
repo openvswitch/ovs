@@ -742,6 +742,17 @@ static netdev_tx_t geneve_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
+static int geneve_change_mtu(struct net_device *dev, int new_mtu)
+{
+	/* GENEVE overhead is not fixed, so we can't enforce a more
+	 * precise max MTU.
+	 */
+	if (new_mtu < 68 || new_mtu > IP_MAX_MTU)
+		return -EINVAL;
+	dev->mtu = new_mtu;
+	return 0;
+}
+
 static const struct net_device_ops geneve_netdev_ops = {
 #ifdef HAVE_DEV_TSTATS
 	.ndo_init		= geneve_init,
@@ -751,7 +762,7 @@ static const struct net_device_ops geneve_netdev_ops = {
 	.ndo_open		= geneve_open,
 	.ndo_stop		= geneve_stop,
 	.ndo_start_xmit		= geneve_dev_xmit,
-	.ndo_change_mtu		= eth_change_mtu,
+	.ndo_change_mtu		= geneve_change_mtu,
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_set_mac_address	= eth_mac_addr,
 };
