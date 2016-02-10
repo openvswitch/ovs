@@ -392,7 +392,7 @@ Performance Tuning:
 	This behavior is typically supported and enabled by default, however
 	in the case where the user knows that rx mergeable buffers are not needed
 	i.e. jumbo frames are not needed, it can be forced off by adding
-	rx_mrgbuf=off to the QEMU command line options. By not reserving multiple
+	mrg_rxbuf=off to the QEMU command line options. By not reserving multiple
 	chains of descriptors it will make more individual virtio descriptors
 	available for rx to the guest using dpdkvhost ports and this can improve
 	performance.
