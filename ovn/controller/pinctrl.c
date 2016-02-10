@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2015 Red Hat, Inc.
+/* Copyright (c) 2015, 2016 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,7 @@ pinctrl_recv(struct controller_ctx *ctx, const struct ofp_header *oh,
         struct ofp_switch_config *config_, config;
 
         ofpbuf_use_const(&rq_buf, oh, ntohs(oh->length));
+        ofpraw_pull_assert(&rq_buf);
         config_ = ofpbuf_pull(&rq_buf, sizeof *config_);
         config = *config_;
         config.miss_send_len = htons(UINT16_MAX);
