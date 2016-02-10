@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -446,10 +446,13 @@ ds_last(const struct ds *ds)
     return ds->length > 0 ? (unsigned char) ds->string[ds->length - 1] : EOF;
 }
 
-void
+bool
 ds_chomp(struct ds *ds, int c)
 {
     if (ds->length > 0 && ds->string[ds->length - 1] == (char) c) {
         ds->string[--ds->length] = '\0';
+        return true;
+    } else {
+        return false;
     }
 }
