@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -194,6 +194,13 @@
 #define OVS_ALIGNED_STRUCT(N, TAG) __declspec(align(N)) struct TAG
 #endif
 
+/* Supplies code to be run at startup time before invoking main().
+ * Use as:
+ *
+ *     OVS_CONSTRUCTOR(my_constructor) {
+ *         ...some code...
+ *     }
+ */
 #ifdef _MSC_VER
 #define CCALL __cdecl
 #pragma section(".CRT$XCU",read)
