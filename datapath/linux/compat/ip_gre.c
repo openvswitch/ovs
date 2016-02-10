@@ -613,6 +613,14 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 #endif
 	if (err < 0)
 		goto out;
+
+	/* openvswitch users expect packet sizes to be unrestricted,
+	 * so set the largest MTU we can.
+	 */
+	err = __ip_tunnel_change_mtu(dev, IP_MAX_MTU, false);
+	if (err)
+		goto out;
+
 	return dev;
 out:
 	free_netdev(dev);
