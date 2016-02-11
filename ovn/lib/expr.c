@@ -1749,6 +1749,7 @@ crush_and_string(struct expr *expr, const struct expr_symbol *symbol)
         sub->cmp.string = xstrdup(string);
         list_push_back(&expr->andor, &sub->node);
     }
+    sset_destroy(&result);
     return expr_fix(expr);
 }
 
