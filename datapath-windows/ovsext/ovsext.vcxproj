@@ -73,7 +73,6 @@
     <ClInclude Include="..\include\OvsDpInterfaceExt.h" />
     <ClInclude Include="Atomic.h" />
     <ClInclude Include="BufferMgmt.h" />
-    <ClInclude Include="Checksum.h" />
     <ClInclude Include="Datapath.h" />
     <ClInclude Include="Debug.h" />
     <ClInclude Include="DpInternal.h" />
@@ -89,6 +88,7 @@
     <ClInclude Include="Netlink/NetlinkProto.h" />
     <ClInclude Include="Netlink\NetlinkError.h" />
     <ClInclude Include="NetProto.h" />
+    <ClInclude Include="Offload.h" />
     <ClInclude Include="Oid.h" />
     <ClInclude Include="PacketIO.h" />
     <ClInclude Include="PacketParser.h" />
@@ -169,7 +169,6 @@
   <ItemGroup>
     <ClCompile Include="Actions.c" />
     <ClCompile Include="BufferMgmt.c" />
-    <ClCompile Include="Checksum.c" />
     <ClCompile Include="Debug.c" />
     <ClCompile Include="Driver.c" />
     <ClCompile Include="Event.c" />
@@ -180,6 +179,7 @@
     <ClCompile Include="Netlink/Netlink.c" />
     <ClCompile Include="Netlink/NetlinkBuf.c" />
     <ClCompile Include="Datapath.c" />
+    <ClCompile Include="Offload.c" />
     <ClCompile Include="Oid.c" />
     <ClCompile Include="PacketIO.c" />
     <ClCompile Include="PacketParser.c" />
