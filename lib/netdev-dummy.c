@@ -622,12 +622,15 @@ dummy_netdev_get_conn_state(struct dummy_packet_conn *conn)
 }
 
 static void
-netdev_dummy_run(const struct netdev_class *netdev_class OVS_UNUSED)
+netdev_dummy_run(const struct netdev_class *netdev_class)
 {
     struct netdev_dummy *dev;
 
     ovs_mutex_lock(&dummy_list_mutex);
     LIST_FOR_EACH (dev, list_node, &dummy_list) {
+        if (netdev_get_class(&dev->up) != netdev_class) {
+            continue;
+        }
         ovs_mutex_lock(&dev->mutex);
         dummy_packet_conn_run(dev);
         ovs_mutex_unlock(&dev->mutex);
@@ -636,12 +639,15 @@ netdev_dummy_run(const struct netdev_class *netdev_class OVS_UNUSED)
 }
 
 static void
-netdev_dummy_wait(const struct netdev_class *netdev_class OVS_UNUSED)
+netdev_dummy_wait(const struct netdev_class *netdev_class)
 {
     struct netdev_dummy *dev;
 
     ovs_mutex_lock(&dummy_list_mutex);
     LIST_FOR_EACH (dev, list_node, &dummy_list) {
+        if (netdev_get_class(&dev->up) != netdev_class) {
+            continue;
+        }
         ovs_mutex_lock(&dev->mutex);
         dummy_packet_conn_wait(&dev->conn);
         ovs_mutex_unlock(&dev->mutex);
@@ -1380,6 +1386,9 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 static const struct netdev_class dummy_class =
     NETDEV_DUMMY_CLASS("dummy", false, NULL);
 
+static const struct netdev_class dummy_internal_class =
+    NETDEV_DUMMY_CLASS("dummy-internal", false, NULL);
+
 static const struct netdev_class dummy_pmd_class =
     NETDEV_DUMMY_CLASS("dummy-pmd", true,
                        netdev_dummy_reconfigure);
@@ -1751,6 +1760,7 @@ netdev_dummy_register(enum dummy_level level)
         netdev_dummy_override("system");
     }
     netdev_register_provider(&dummy_class);
+    netdev_register_provider(&dummy_internal_class);
     netdev_register_provider(&dummy_pmd_class);
 
     netdev_vport_tunnel_register();

@@ -5657,7 +5657,7 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p1 1/1: (gre: key=5, local_ip=2.2.2.2, remote_ip=1.1.1.1)
 		p2 2/2: (dummy)
 ])
@@ -5829,10 +5829,10 @@ AT_CHECK([ovs-vsctl -- add-port int-br t1 -- set Interface t1 type=gre \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy: ifindex=1010)
 	int-br:
-		int-br 65534/2: (dummy)
+		int-br 65534/2: (dummy-internal)
 		t1 4/4: (gre: key=456, remote_ip=1.1.2.92)
 		vm1 5/3: (dummy: ifindex=2011)
 ])
@@ -6573,11 +6573,11 @@ add_of_ports br1 3
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(dummy-pmd: \).*)/\1<cleared>)/'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p1 1/1: (dummy-pmd: <cleared>)
 		p2 2/2: (dummy-pmd: <cleared>)
 	br1:
-		br1 65534/101: (dummy)
+		br1 65534/101: (dummy-internal)
 		p3 3/3: (dummy)
 ])
 OVS_VSWITCHD_STOP
@@ -6757,11 +6757,11 @@ sleep 1  # wait for log writer
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:13 missed:2
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p2 2/2: (dummy)
 		pbr0 1/none: (patch: peer=pbr1)
 	br1:
-		br1 65534/101: (dummy)
+		br1 65534/101: (dummy-internal)
 		p3 3/3: (dummy)
 		pbr1 1/none: (patch: peer=pbr0)
 ])
@@ -6822,11 +6822,11 @@ OVS_WAIT_UNTIL([test `grep flow_add ovs-vswitchd.log | wc -l` -ge 1])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:1
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p2 2/2: (dummy)
 		pbr0 1/none: (patch: peer=pbr1)
 	br1:
-		br1 65534/101: (dummy)
+		br1 65534/101: (dummy-internal)
 		p3 3/3: (dummy)
 		pbr1 1/none: (patch: peer=pbr0)
 ])

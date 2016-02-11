@@ -17,10 +17,10 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy)
 	int-br:
-		int-br 65534/2: (dummy)
+		int-br 65534/2: (dummy-internal)
 		t1 3/3: (gre: key=456, remote_ip=2001:cafe::92)
 		t2 2/4789: (vxlan: key=123, remote_ip=2001:cafe::92)
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=2001:cafe::93)

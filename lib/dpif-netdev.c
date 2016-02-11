@@ -908,7 +908,7 @@ static const char *
 dpif_netdev_port_open_type(const struct dpif_class *class, const char *type)
 {
     return strcmp(type, "internal") ? type
-                  : dpif_netdev_class_is_dummy(class) ? "dummy"
+                  : dpif_netdev_class_is_dummy(class) ? "dummy-internal"
                   : "tap";
 }
 

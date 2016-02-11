@@ -70,7 +70,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
 ])
 
@@ -88,7 +88,7 @@ AT_CHECK([ovs-vsctl set interface p0 options:n_rxq=8])
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
 ])
 
@@ -112,7 +112,7 @@ CHECK_PMD_THREADS_CREATED()
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
 ])
 
@@ -164,7 +164,7 @@ sleep 1
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
 ])
 
