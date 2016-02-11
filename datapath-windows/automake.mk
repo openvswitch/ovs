@@ -12,8 +12,6 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Atomic.h \
 	datapath-windows/ovsext/BufferMgmt.c \
 	datapath-windows/ovsext/BufferMgmt.h \
-	datapath-windows/ovsext/Checksum.c \
-	datapath-windows/ovsext/Checksum.h \
 	datapath-windows/ovsext/Datapath.c \
 	datapath-windows/ovsext/Datapath.h \
 	datapath-windows/ovsext/Debug.c \
@@ -39,6 +37,8 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Netlink/NetlinkBuf.h \
 	datapath-windows/ovsext/Netlink/NetlinkError.h \
 	datapath-windows/ovsext/Netlink/NetlinkProto.h \
+	datapath-windows/ovsext/Offload.c \
+	datapath-windows/ovsext/Offload.h \
 	datapath-windows/ovsext/Oid.c \
 	datapath-windows/ovsext/Oid.h \
 	datapath-windows/ovsext/PacketIO.c \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2014, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,23 +22,23 @@
 
 #include "precomp.h"
 
-#include "Switch.h"
-#include "Vport.h"
-#include "Event.h"
-#include "User.h"
 #include "Datapath.h"
-#include "PacketIO.h"
-#include "Checksum.h"
-#include "NetProto.h"
+#include "Debug.h"
+#include "Event.h"
 #include "Flow.h"
-#include "TunnelIntf.h"
 #include "Jhash.h"
+#include "NetProto.h"
+#include "Offload.h"
+#include "PacketIO.h"
+#include "Switch.h"
+#include "TunnelIntf.h"
+#include "User.h"
+#include "Vport.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_USER
-#include "Debug.h"
 
 POVS_PACKET_QUEUE_ELEM OvsGetNextPacket(POVS_OPEN_INSTANCE instance);
 extern PNDIS_SPIN_LOCK gOvsCtrlLock;

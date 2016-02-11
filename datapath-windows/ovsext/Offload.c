@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2014, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@
  */
 
 #include "precomp.h"
-#include "Checksum.h"
+#include "Debug.h"
 #include "Flow.h"
+#include "Offload.h"
+#include "PacketParser.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_CHECKSUM
-#include "Debug.h"
-#include "PacketParser.h"
 
 #ifndef htons
 #define htons(_x) (((UINT16)(_x) >> 8) + (((UINT16)(_x) << 8) & 0xff00))
@@ -593,4 +593,111 @@ OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl, BOOLEAN udpCsumZero)
     }
 
     return NDIS_STATUS_SUCCESS;
+}
+
+
+/*
+ * OvsApplySWChecksumOnNB --
+ *
+ * This function calculates and sets the required sofware offloads given by
+ * csumInfo for a given NBL(nbl) with a single NB.
+ *
+ */
+NDIS_STATUS
+OvsApplySWChecksumOnNB(POVS_PACKET_HDR_INFO layers,
+                       PNET_BUFFER_LIST nbl,
+                       PNDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo)
+{
+    PNET_BUFFER curNb;
+    PMDL curMdl;
+    PUINT8 bufferStart;
+    UINT32 packetLength = 0;
+    ASSERT(nbl != NULL);
+
+    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    ASSERT(curNb->Next == NULL);
+    packetLength = NET_BUFFER_DATA_LENGTH(curNb);
+    curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+    bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
+                                                       LowPagePriority);
+    if (!bufferStart) {
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+
+    if (layers->isIPv4) {
+        IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
+
+        if (csumInfo->Transmit.IpHeaderChecksum) {
+            ip->check = 0;
+            ip->check = IPChecksum((UINT8 *)ip, 4 * ip->ihl, 0);
+        }
+
+        if (layers->isTcp && csumInfo->Transmit.TcpChecksum) {
+            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+            TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
+            tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                          IPPROTO_TCP, csumLength);
+            tcp->check = CalculateChecksumNB(curNb, csumLength,
+                                             (UINT32)(layers->l4Offset));
+        } else if (layers->isUdp && csumInfo->Transmit.UdpChecksum) {
+            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+            UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+            udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                          IPPROTO_UDP, csumLength);
+            udp->check = CalculateChecksumNB(curNb, csumLength,
+                                             (UINT32)(layers->l4Offset));
+        }
+    } else if (layers->isIPv6) {
+        IPv6Hdr *ip = (IPv6Hdr *)(bufferStart + layers->l3Offset);
+
+        if (layers->isTcp && csumInfo->Transmit.TcpChecksum) {
+            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+            TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
+            tcp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
+                                            (UINT32 *) &ip->daddr,
+                                            IPPROTO_TCP, csumLength);
+            tcp->check = CalculateChecksumNB(curNb, csumLength,
+                                             (UINT32)(layers->l4Offset));
+        } else if (layers->isUdp && csumInfo->Transmit.UdpChecksum) {
+            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+            UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+            udp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
+                                            (UINT32 *) &ip->daddr,
+                                            IPPROTO_UDP, csumLength);
+            udp->check = CalculateChecksumNB(curNb, csumLength,
+                                             (UINT32)(layers->l4Offset));
+        }
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ * OVSGetTcpMSS --
+ *
+ * This function returns the maximum segment size of the given NBL. It takes
+ * into consideration both LSO v1 and v2.
+ */
+ULONG
+OVSGetTcpMSS(PNET_BUFFER_LIST nbl)
+{
+    NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
+    ASSERT(nbl != NULL);
+
+    lsoInfo.Value = NET_BUFFER_LIST_INFO(nbl,
+                                         TcpLargeSendNetBufferListInfo);
+    switch (lsoInfo.Transmit.Type) {
+        case NDIS_TCP_LARGE_SEND_OFFLOAD_V1_TYPE:
+            return lsoInfo.LsoV1Transmit.MSS;
+            break;
+        case NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE:
+            return lsoInfo.LsoV2Transmit.MSS;
+            break;
+        default:
+            OVS_LOG_ERROR("Unknown LSO transmit type:%d",
+                          lsoInfo.Transmit.Type);
+            return 0;
+    }
 }

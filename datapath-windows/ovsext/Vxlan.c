@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2014, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,20 @@
  */
 
 #include "precomp.h"
+
 #include "Atomic.h"
-#include "NetProto.h"
-#include "Switch.h"
-#include "Vport.h"
+#include "Debug.h"
 #include "Flow.h"
-#include "Vxlan.h"
+#include "Flow.h"
 #include "IpHelper.h"
-#include "Checksum.h"
-#include "User.h"
+#include "NetProto.h"
+#include "Offload.h"
 #include "PacketIO.h"
-#include "Flow.h"
 #include "PacketParser.h"
+#include "Switch.h"
+#include "User.h"
+#include "Vport.h"
+#include "Vxlan.h"
 
 #pragma warning( push )
 #pragma warning( disable:4127 )
@@ -36,7 +38,6 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_VXLAN
-#include "Debug.h"
 
 /* Helper macro to check if a VXLAN ID is valid. */
 #define VXLAN_ID_IS_VALID(vxlanID) (0 < (vxlanID) && (vxlanID) <= 0xffffff)
@@ -201,21 +202,8 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
 
     if (layers->isTcp) {
-        NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO tsoInfo;
+        mss = OVSGetTcpMSS(curNbl);
 
-        tsoInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
-                                             TcpLargeSendNetBufferListInfo);
-        switch (tsoInfo.Transmit.Type) {
-            case NDIS_TCP_LARGE_SEND_OFFLOAD_V1_TYPE:
-                mss = tsoInfo.LsoV1Transmit.MSS;
-                break;
-            case NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE:
-                mss = tsoInfo.LsoV2Transmit.MSS;
-                break;
-            default:
-                OVS_LOG_ERROR("Unknown LSO transmit type:%d",
-                              tsoInfo.Transmit.Type);
-        }
         OVS_LOG_TRACE("MSS %u packet len %u", mss,
                       packetLength);
         if (mss) {
@@ -242,70 +230,14 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
             OVS_LOG_ERROR("Unable to copy NBL");
             return NDIS_STATUS_FAILURE;
         }
-        /*
-         * To this point we do not have VXLAN offloading.
-         * Apply defined checksums
-         */
-        curNb = NET_BUFFER_LIST_FIRST_NB(*newNbl);
-        curMdl = NET_BUFFER_CURRENT_MDL(curNb);
-        bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl, LowPagePriority);
-        if (!bufferStart) {
-            status = NDIS_STATUS_RESOURCES;
-            goto ret_error;
-        }
-
         NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
         csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
                                               TcpIpChecksumNetBufferListInfo);
+        status = OvsApplySWChecksumOnNB(layers, *newNbl, &csumInfo);
 
-        bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
-
-        if (layers->isIPv4) {
-            IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
-
-            if (csumInfo.Transmit.IpHeaderChecksum) {
-                ip->check = 0;
-                ip->check = IPChecksum((UINT8 *)ip, 4 * ip->ihl, 0);
-            }
-
-            if (layers->isTcp && csumInfo.Transmit.TcpChecksum) {
-                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-                TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
-                tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
-                                              IPPROTO_TCP, csumLength);
-                tcp->check = CalculateChecksumNB(curNb, csumLength,
-                                                 (UINT32)(layers->l4Offset));
-            } else if (layers->isUdp && csumInfo.Transmit.UdpChecksum) {
-                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
-                udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
-                                              IPPROTO_UDP, csumLength);
-                udp->check = CalculateChecksumNB(curNb, csumLength,
-                                                 (UINT32)(layers->l4Offset));
-            }
-        } else if (layers->isIPv6) {
-            IPv6Hdr *ip = (IPv6Hdr *)(bufferStart + layers->l3Offset);
-
-            if (layers->isTcp && csumInfo.Transmit.TcpChecksum) {
-                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-                TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
-                tcp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
-                                                (UINT32 *) &ip->daddr,
-                                                IPPROTO_TCP, csumLength);
-                tcp->check = CalculateChecksumNB(curNb, csumLength,
-                                                 (UINT32)(layers->l4Offset));
-            } else if (layers->isUdp && csumInfo.Transmit.UdpChecksum) {
-                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
-                udp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
-                                                (UINT32 *) &ip->daddr,
-                                                IPPROTO_UDP, csumLength);
-                udp->check = CalculateChecksumNB(curNb, csumLength,
-                                                 (UINT32)(layers->l4Offset));
-            }
+        if (status != NDIS_STATUS_SUCCESS) {
+            goto ret_error;
         }
-        /* Clear out TcpIpChecksumNetBufferListInfo flag */
-        NET_BUFFER_LIST_INFO(*newNbl, TcpIpChecksumNetBufferListInfo) = 0;
     }
 
     curNbl = *newNbl;

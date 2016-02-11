@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 VMware, Inc.
+ * Copyright (c) 2015, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@
 #include "precomp.h"
 
 #include "Atomic.h"
-#include "Checksum.h"
+#include "Debug.h"
 #include "Flow.h"
 #include "IpHelper.h"
+#include "Jhash.h"
 #include "NetProto.h"
+#include "Offload.h"
 #include "PacketIO.h"
 #include "PacketParser.h"
 #include "Stt.h"
@@ -33,8 +35,7 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_STT
-#include "Debug.h"
-#include "Jhash.h"
+
 
 KSTART_ROUTINE OvsSttDefragCleaner;
 static PLIST_ENTRY OvsSttPktFragHash;
@@ -163,20 +164,7 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     BOOLEAN innerPartialChecksum = FALSE;
 
     if (layers->isTcp) {
-        lsoInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
-                TcpLargeSendNetBufferListInfo);
-
-        switch (lsoInfo.Transmit.Type) {
-            case NDIS_TCP_LARGE_SEND_OFFLOAD_V1_TYPE:
-                mss = lsoInfo.LsoV1Transmit.MSS;
-                break;
-            case NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE:
-                mss = lsoInfo.LsoV2Transmit.MSS;
-                break;
-            default:
-                OVS_LOG_ERROR("Unknown LSO transmit type:%d",
-                              lsoInfo.Transmit.Type);
-        }
+        mss = OVSGetTcpMSS(curNbl);
     }
 
     vportStt = (POVS_STT_VPORT) GetOvsVportPriv(vport);
