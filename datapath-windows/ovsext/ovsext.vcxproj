@@ -164,6 +164,10 @@
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">true</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">true</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">true</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">true</MultiProcessorCompilation>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
