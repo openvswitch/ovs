@@ -1931,6 +1931,7 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
         const MPLSHdr *mpls;
         MplsKey *mplsKey = &flow->mplsKey;
         ((UINT64 *)mplsKey)[0] = 0;
+        flow->l2.keyLen += OVS_MPLS_KEY_SIZE;
 
         /*
          * In the presence of an MPLS label stack the end of the L2
