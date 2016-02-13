@@ -1683,6 +1683,30 @@ static int stt_stop(struct net_device *dev)
 	return 0;
 }
 
+static int __stt_change_mtu(struct net_device *dev, int new_mtu, bool strict)
+{
+	int max_mtu = IP_MAX_MTU - STT_HEADER_LEN - sizeof(struct iphdr)
+		      - dev->hard_header_len;
+
+	if (new_mtu < 68)
+		return -EINVAL;
+
+	if (new_mtu > max_mtu) {
+		if (strict)
+			return -EINVAL;
+
+		new_mtu = max_mtu;
+	}
+
+	dev->mtu = new_mtu;
+	return 0;
+}
+
+static int stt_change_mtu(struct net_device *dev, int new_mtu)
+{
+	return __stt_change_mtu(dev, new_mtu, true);
+}
+
 static const struct net_device_ops stt_netdev_ops = {
 	.ndo_init               = stt_init,
 	.ndo_uninit             = stt_uninit,
@@ -1690,7 +1714,7 @@ static const struct net_device_ops stt_netdev_ops = {
 	.ndo_stop               = stt_stop,
 	.ndo_start_xmit         = stt_dev_xmit,
 	.ndo_get_stats64        = ip_tunnel_get_stats64,
-	.ndo_change_mtu         = eth_change_mtu,
+	.ndo_change_mtu         = stt_change_mtu,
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
 };
@@ -1781,6 +1805,10 @@ static int stt_configure(struct net *net, struct net_device *dev,
 
 	if (find_dev(net, dst_port))
 		return -EBUSY;
+
+	err = __stt_change_mtu(dev, IP_MAX_MTU, false);
+	if (err)
+		return err;
 
 	err = register_netdevice(dev);
 	if (err)
