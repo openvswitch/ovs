@@ -194,8 +194,7 @@ rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-pcap.1 \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-tcpundump.1 \
-        $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8 \
-        $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-save
+        $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8
 
 %check
 %if %{with check}
@@ -335,6 +334,7 @@ fi
 %{_datadir}/openvswitch/scripts/ovs-bugtool-*
 %{_datadir}/openvswitch/scripts/ovs-check-dead-ifs
 %{_datadir}/openvswitch/scripts/ovs-lib
+%{_datadir}/openvswitch/scripts/ovs-save
 %{_datadir}/openvswitch/scripts/ovs-vtep
 %{_datadir}/openvswitch/scripts/ovs-ctl
 %config %{_datadir}/openvswitch/vswitch.ovsschema
