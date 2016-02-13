@@ -114,6 +114,7 @@ struct lisphdr {
 };
 
 #define LISP_HLEN (sizeof(struct udphdr) + sizeof(struct lisphdr))
+#define LISP_MAX_MTU (IP_MAX_MTU - LISP_HLEN - sizeof(struct iphdr))
 
 static inline struct lisphdr *lisp_hdr(const struct sk_buff *skb)
 {
@@ -447,6 +448,15 @@ static netdev_tx_t lisp_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 #endif
 }
 
+static int lisp_change_mtu(struct net_device *dev, int new_mtu)
+{
+	if (new_mtu < 68 || new_mtu > LISP_MAX_MTU)
+		return -EINVAL;
+
+	dev->mtu = new_mtu;
+	return 0;
+}
+
 static const struct net_device_ops lisp_netdev_ops = {
 #ifdef HAVE_DEV_TSTATS
 	.ndo_init               = lisp_init,
@@ -456,7 +466,7 @@ static const struct net_device_ops lisp_netdev_ops = {
 	.ndo_open               = lisp_open,
 	.ndo_stop               = lisp_stop,
 	.ndo_start_xmit         = lisp_dev_xmit,
-	.ndo_change_mtu         = eth_change_mtu,
+	.ndo_change_mtu         = lisp_change_mtu,
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
 };
@@ -548,6 +558,10 @@ static int lisp_configure(struct net *net, struct net_device *dev,
 
 	if (find_dev(net, dst_port))
 		return -EBUSY;
+
+	err = lisp_change_mtu(dev, LISP_MAX_MTU);
+	if (err)
+		return err;
 
 	err = register_netdevice(dev);
 	if (err)
