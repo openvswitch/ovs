@@ -195,6 +195,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         goto error;
     }
     sock->rcvbuf = retval;
+    retval = 0;
 
     /* Connect to kernel (pid 0) as remote address. */
     memset(&remote, 0, sizeof remote);
