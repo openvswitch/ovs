@@ -147,11 +147,15 @@ dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
 AT_SETUP([test unix socket, long pathname - C])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-dnl Linux has a 108 byte limit; this is 150 bytes long.
-longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
-mkdir $longname
-cd $longname
-AT_CHECK([ovstest test-unix-socket ../$longname/socket socket])
+dnl Linux sockaddr_un has a 108-byte limit, so this needs to be longer.
+dnl Linux "ecryptfs" has a 143-byte limit, so we use that many bytes.
+longname=01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
+
+dnl Skip the test if the directory can't be created (presumably the file
+dnl system doesn't support such long names).
+AT_CHECK([mkdir $longname || exit 77])
+
+AT_CHECK([cd $longname && ovstest test-unix-socket ../$longname/socket socket])
 AT_CLEANUP
 
 AT_SETUP([test unix socket, short pathname - Python])
@@ -166,11 +170,15 @@ dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
 AT_SETUP([test unix socket, long pathname - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no || test "$IS_WIN32" = "yes"])
-dnl Linux has a 108 byte limit; this is 150 bytes long.
-longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
-mkdir $longname
-cd $longname
-AT_CHECK([$PYTHON $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
+dnl Linux sockaddr_un has a 108-byte limit, so this needs to be longer.
+dnl Linux "ecryptfs" has a 143-byte limit, so we use that many bytes.
+longname=01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
+
+dnl Skip the test if the directory can't be created (presumably the file
+dnl system doesn't support such long names).
+AT_CHECK([mkdir $longname || exit 77])
+
+AT_CHECK([cd $longname && $PYTHON $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
 AT_CLEANUP
 
 AT_SETUP([ovs_assert])
