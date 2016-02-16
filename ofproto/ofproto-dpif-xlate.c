@@ -210,36 +210,58 @@ struct xlate_ctx {
     bool exit;                  /* No further actions should be processed. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
-   /* These are used for non-bond recirculation.  The recirculation IDs are
-    * stored in xout and must be associated with a datapath flow (ukey),
-    * otherwise they will be freed when the xout is uninitialized.
+   /* Freezing Translation
+    * ====================
+    *
+    * At some point during translation, the code may recognize the need to halt
+    * and checkpoint the translation in a way that it can be restarted again
+    * later.  We call the checkpointing process "freezing" and the restarting
+    * process "thawing".
+    *
+    * The use cases for freezing are:
+    *
+    *     - "Recirculation", where the translation process discovers that it
+    *       doesn't have enough information to complete translation without
+    *       actually executing the actions that have already been translated,
+    *       which provides the additionally needed information.  In these
+    *       situations, translation freezes translation and assigns the frozen
+    *       data a unique "recirculation ID", which it associates with the data
+    *       in a table in userspace (see ofproto-dpif-rid.h).  It also adds a
+    *       OVS_ACTION_ATTR_RECIRC action specifying that ID to the datapath
+    *       actions.  When a packet hits that action, the datapath looks its
+    *       flow up again using the ID.  If there's a miss, it comes back to
+    *       userspace, which find the recirculation table entry for the ID,
+    *       thaws the associated frozen data, and continues translation from
+    *       that point given the additional information that is now known.
+    *
+    *       The archetypal example is MPLS.  As MPLS is implemented in
+    *       OpenFlow, the protocol that follows the last MPLS label becomes
+    *       known only when that label is popped by an OpenFlow action.  That
+    *       means that Open vSwitch can't extract the headers beyond the MPLS
+    *       labels until the pop action is executed.  Thus, at that point
+    *       translation uses the recirculation process to extract the headers
+    *       beyond the MPLS labels.
+    *
+    *       (OVS also uses OVS_ACTION_ATTR_RECIRC to implement hashing for
+    *       output to bonds.  OVS pre-populates all the datapath flows for bond
+    *       output in the datapath, though, which means that the elaborate
+    *       process of coming back to userspace for a second round of
+    *       translation isn't needed, and so bonds don't follow the above
+    *       process.)
     *
     *
-    * Steps in Recirculation Translation
-    * ==================================
+    * The main problem of freezing translation is preserving state, so that
+    * when the translation is thawed later it resumes from where it left off,
+    * without disruption.  In particular, actions must be preserved as follows:
     *
-    * At some point during translation, the code recognizes the need for
-    * recirculation.  For example, recirculation is necessary when, after
-    * popping the last MPLS label, an action or a match tries to examine or
-    * modify a field that has been newly revealed following the MPLS label.
+    *     - If we're freezing because an action needed more information, the
+    *       action that prompted it.
     *
-    * The simplest part of the work to be done is to commit existing changes to
-    * the packet, which produces datapath actions corresponding to the changes,
-    * and after this, add an OVS_ACTION_ATTR_RECIRC datapath action.
+    *     - Any actions remaining to be translated within the current flow.
     *
-    * The main problem here is preserving state.  When the datapath executes
-    * OVS_ACTION_ATTR_RECIRC, it will upcall to userspace to get a translation
-    * for the post-recirculation actions.  At this point userspace has to
-    * resume the translation where it left off, which means that it has to
-    * execute the following:
-    *
-    *     - The action that prompted recirculation, and any actions following
-    *       it within the same flow.
-    *
-    *     - If the action that prompted recirculation was invoked within a
-    *       NXAST_RESUBMIT, then any actions following the resubmit.  These
-    *       "resubmit"s can be nested, so this has to go all the way up the
-    *       control stack.
+    *     - If translation was frozen within a NXAST_RESUBMIT, then any actions
+    *       following the resubmit action.  Resubmit actions can be nested, so
+    *       this has to go all the way up the control stack.
     *
     *     - The OpenFlow 1.1+ action set.
     *
@@ -248,47 +270,47 @@ struct xlate_ctx {
     *
     *     - Metadata fields (input port, registers, OF1.1+ metadata, ...).
     *
-    *     - Action set, stack
+    *     - The stack used by NXAST_STACK_PUSH and NXAST_STACK_POP actions.
     *
     *     - The table ID and cookie of the flow being translated at each level
-    *       of the control stack (since OFPAT_CONTROLLER actions send these to
-    *       the controller).
+    *       of the control stack, because these can become visible through
+    *       OFPAT_CONTROLLER actions (and other ways).
     *
     * Translation allows for the control of this state preservation via these
-    * members.  When a need for recirculation is identified, the translation
-    * process:
+    * members.  When a need to freeze translation is identified, the
+    * translation process:
     *
-    * 1. Sets 'recirculating' to true.
+    * 1. Sets 'freezing' to true.
     *
     * 2. Sets 'exit' to true to tell later steps that we're exiting from the
     *    translation process.
     *
-    * 3. Adds an OFPACT_UNROLL_XLATE action to 'recirculate_actions', and
-    *    points recirculate_actions.header to the action to make it easy to
-    *    find it later.  This action holds the current table ID and cookie so
-    *    that they can be restored during a post-recirculation upcall
-    *    translation.
+    * 3. Adds an OFPACT_UNROLL_XLATE action to 'frozen_actions', and points
+    *    frozen_actions.header to the action to make it easy to find it later.
+    *    This action holds the current table ID and cookie so that they can be
+    *    restored during a post-recirculation upcall translation.
     *
     * 4. Adds the action that prompted recirculation and any actions following
-    *    it within the same flow to 'recirculate_actions', so that they can be
+    *    it within the same flow to 'frozen_actions', so that they can be
     *    executed during a post-recirculation upcall translation.
     *
     * 5. Returns.
     *
     * 6. The action that prompted recirculation might be nested in a stack of
     *    nested "resubmit"s that have actions remaining.  Each of these notices
-    *    that we're exiting and recirculating and responds by adding more
-    *    OFPACT_UNROLL_XLATE actions to 'recirculate_actions', as necessary,
-    *    and any actions that were yet unprocessed.
+    *    that we're exiting and freezing and responds by adding more
+    *    OFPACT_UNROLL_XLATE actions to 'frozen_actions', as necessary,
+    *    followed by any actions that were yet unprocessed.
     *
-    * The caller stores all the state produced by this process associated with
-    * the recirculation ID.  For post-recirculation upcall translation, the
-    * caller passes it back in for the new translation to execute.  The
-    * process yielded a set of ofpacts that can be translated directly, so it
-    * is not much of a special case at that point.
+    * If we're freezing because of recirculation, the caller generates a
+    * recirculation ID and associates all the state produced by this process
+    * with it.  For post-recirculation upcall translation, the caller passes it
+    * back in for the new translation to execute.  The process yielded a set of
+    * ofpacts that can be translated directly, so it is not much of a special
+    * case at that point.
     */
-    bool recirculating;
-    struct ofpbuf recirculate_actions;
+    bool freezing;
+    struct ofpbuf frozen_actions;
 
     /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
      * This is a trigger for recirculation in cases where translating an action
@@ -298,7 +320,7 @@ struct xlate_ctx {
 
     /* True if conntrack has been performed on this packet during processing
      * on the current bridge. This is used to determine whether conntrack
-     * state from the datapath should be honored after recirculation. */
+     * state from the datapath should be honored after thawing. */
     bool conntracked;
 
     /* Pointer to an embedded NAT action in a conntrack action, or NULL. */
@@ -343,25 +365,25 @@ static void xlate_action_set(struct xlate_ctx *ctx);
 static void xlate_commit_actions(struct xlate_ctx *ctx);
 
 static void
-ctx_trigger_recirculation(struct xlate_ctx *ctx)
+ctx_trigger_freeze(struct xlate_ctx *ctx)
 {
     ctx->exit = true;
-    ctx->recirculating = true;
+    ctx->freezing = true;
 }
 
 static bool
-ctx_first_recirculation_action(const struct xlate_ctx *ctx)
+ctx_first_frozen_action(const struct xlate_ctx *ctx)
 {
-    return !ctx->recirculate_actions.size;
+    return !ctx->frozen_actions.size;
 }
 
 static void
-ctx_cancel_recirculation(struct xlate_ctx *ctx)
+ctx_cancel_freeze(struct xlate_ctx *ctx)
 {
-    if (ctx->recirculating) {
-        ctx->recirculating = false;
-        ofpbuf_clear(&ctx->recirculate_actions);
-        ctx->recirculate_actions.header = NULL;
+    if (ctx->freezing) {
+        ctx->freezing = false;
+        ofpbuf_clear(&ctx->frozen_actions);
+        ctx->frozen_actions.header = NULL;
     }
 }
 
@@ -2982,10 +3004,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         if (!process_special(ctx, peer) && may_receive(peer, ctx)) {
             if (xport_stp_forward_state(peer) && xport_rstp_forward_state(peer)) {
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
-                if (!ctx->recirculating) {
+                if (!ctx->freezing) {
                     xlate_action_set(ctx);
                 }
-                if (ctx->recirculating) {
+                if (ctx->freezing) {
                     compose_recirculate_action(ctx);
                 }
             } else {
@@ -3000,8 +3022,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 ctx->base_flow = old_base_flow;
                 ctx->odp_actions->size = old_size;
 
-                /* Undo changes that may have been done for recirculation. */
-                ctx_cancel_recirculation(ctx);
+                /* Undo changes that may have been done for freezing. */
+                ctx_cancel_freeze(ctx);
             }
         }
 
@@ -3025,9 +3047,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         /* The fact that the peer bridge exits (for any reason) does not mean
          * that the original bridge should exit.  Specifically, if the peer
-         * bridge recirculates (which typically modifies the packet), the
-         * original bridge must continue processing with the original, not the
-         * recirculated packet! */
+         * bridge freezes translation, the original bridge must continue
+         * processing with the original, not the frozen packet! */
         ctx->exit = false;
 
         /* Peer bridge errors do not propagate back. */
@@ -3239,7 +3260,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 {
     /* Check if we need to recirculate before matching in a table. */
     if (ctx->was_mpls) {
-        ctx_trigger_recirculation(ctx);
+        ctx_trigger_freeze(ctx);
         return;
     }
     if (xlate_resubmit_resource_check(ctx)) {
@@ -3315,7 +3336,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
     ofpbuf_uninit(&action_list);
 
     /* Check if need to recirculate. */
-    if (ctx->recirculating) {
+    if (ctx->freezing) {
         compose_recirculate_action(ctx);
     }
 
@@ -3341,9 +3362,8 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
 
     /* The fact that the group bucket exits (for any reason) does not mean that
      * the translation after the group action should exit.  Specifically, if
-     * the group bucket recirculates (which typically modifies the packet), the
-     * actions after the group action must continue processing with the
-     * original, not the recirculated packet! */
+     * the group bucket freezes translation, the actions after the group action
+     * must continue processing with the original, not the frozen packet! */
     ctx->exit = false;
 }
 
@@ -3618,14 +3638,14 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 static void
 compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 {
-    struct recirc_metadata md;
+    struct frozen_metadata md;
     uint32_t id;
 
-    recirc_metadata_from_flow(&md, &ctx->xin->flow);
+    frozen_metadata_from_flow(&md, &ctx->xin->flow);
 
-    ovs_assert(ctx->recirculating);
+    ovs_assert(ctx->freezing);
 
-    struct recirc_state state = {
+    struct frozen_state state = {
         .table_id = table,
         .ofproto_uuid = *ofproto_dpif_get_uuid(ctx->xbridge->ofproto),
         .metadata = md,
@@ -3633,8 +3653,8 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
         .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
         .mirrors = ctx->mirrors,
         .conntracked = ctx->conntracked,
-        .ofpacts = ctx->recirculate_actions.data,
-        .ofpacts_len = ctx->recirculate_actions.size,
+        .ofpacts = ctx->frozen_actions.data,
+        .ofpacts_len = ctx->frozen_actions.size,
         .action_set = ctx->action_set.data,
         .action_set_len = ctx->action_set.size,
     };
@@ -3654,11 +3674,11 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
 
-    /* Undo changes done by recirculation. */
-    ctx_cancel_recirculation(ctx);
+    /* Undo changes done by freezing. */
+    ctx_cancel_freeze(ctx);
 }
 
-/* Called only when we're recirculating. */
+/* Called only when we're freezing. */
 static void
 compose_recirculate_action(struct xlate_ctx *ctx)
 {
@@ -3673,7 +3693,7 @@ compose_recirculate_action(struct xlate_ctx *ctx)
 static void
 compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
 {
-    ctx->recirculating = true;
+    ctx->freezing = true;
     compose_recirculate_action__(ctx, table);
 }
 
@@ -4125,29 +4145,29 @@ xlate_action_set(struct xlate_ctx *ctx)
 }
 
 static void
-recirc_put_unroll_xlate(struct xlate_ctx *ctx)
+freeze_put_unroll_xlate(struct xlate_ctx *ctx)
 {
-    struct ofpact_unroll_xlate *unroll = ctx->recirculate_actions.header;
+    struct ofpact_unroll_xlate *unroll = ctx->frozen_actions.header;
 
     /* Restore the table_id and rule cookie for a potential PACKET
      * IN if needed. */
     if (!unroll ||
         (ctx->table_id != unroll->rule_table_id
          || ctx->rule_cookie != unroll->rule_cookie)) {
-        unroll = ofpact_put_UNROLL_XLATE(&ctx->recirculate_actions);
+        unroll = ofpact_put_UNROLL_XLATE(&ctx->frozen_actions);
         unroll->rule_table_id = ctx->table_id;
         unroll->rule_cookie = ctx->rule_cookie;
-        ctx->recirculate_actions.header = unroll;
+        ctx->frozen_actions.header = unroll;
     }
 }
 
 
-/* Copy actions 'a' through 'end' to ctx->recirculate_actions, which will be
- * executed after recirculation.  UNROLL_XLATE action is inserted, if not
- * already done so, before actions that may depend on the current table ID or
- * flow cookie. */
+/* Copy actions 'a' through 'end' to ctx->frozen_actions, which will be
+ * executed after thawing.  Inserts an UNROLL_XLATE action, if none is already
+ * present, before any action that may depend on the current table ID or flow
+ * cookie. */
 static void
-recirc_unroll_actions(const struct ofpact *a, const struct ofpact *end,
+freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
                       struct xlate_ctx *ctx)
 {
     for (; a < end; a = ofpact_next(a)) {
@@ -4160,14 +4180,14 @@ recirc_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_DEC_TTL:
             /* These actions may generate asynchronous messages, which include
              * table ID and flow cookie information. */
-            recirc_put_unroll_xlate(ctx);
+            freeze_put_unroll_xlate(ctx);
             break;
 
         case OFPACT_RESUBMIT:
             if (ofpact_get_RESUBMIT(a)->table_id == 0xff) {
                 /* This resubmit action is relative to the current table, so we
                  * need to track what table that is.*/
-                recirc_put_unroll_xlate(ctx);
+                freeze_put_unroll_xlate(ctx);
             }
             break;
 
@@ -4221,13 +4241,13 @@ recirc_unroll_actions(const struct ofpact *a, const struct ofpact *end,
             continue;
         }
         /* Copy the action over. */
-        ofpbuf_put(&ctx->recirculate_actions, a, OFPACT_ALIGN(a->len));
+        ofpbuf_put(&ctx->frozen_actions, a, OFPACT_ALIGN(a->len));
     }
 }
 
 #define CHECK_MPLS_RECIRCULATION()      \
     if (ctx->was_mpls) {                \
-        ctx_trigger_recirculation(ctx); \
+        ctx_trigger_freeze(ctx);        \
         break;                          \
     }
 #define CHECK_MPLS_RECIRCULATION_IF(COND) \
@@ -4416,8 +4436,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         if (ctx->exit) {
             /* Check if need to store the remaining actions for later
              * execution. */
-            if (ctx->recirculating) {
-                recirc_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len),
+            if (ctx->freezing) {
+                freeze_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len),
                                       ctx);
             }
             break;
@@ -4551,7 +4571,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_RESUBMIT:
-            /* Recirculation complicates resubmit.  There are two cases:
+            /* Freezing complicates resubmit.  There are two cases:
              *
              *     - If mpls_pop has been executed, then the flow table lookup
              *       as part of resubmit might depend on fields that can only
@@ -4563,14 +4583,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
              *       the post-recirculation actions.
              *
              *     - Otherwise, some action in the flow entry found by resubmit
-             *       might trigger recirculation.  If that happens, then we do
-             *       not want to execute the resubmit again after
-             *       recirculation, so we want to skip back to the head of the
-             *       loop to avoid that, only adding any actions that follow
-             *       the resubmit to the post-recirculation actions.
+             *       might trigger freezing.  If that happens, then we do not
+             *       want to execute the resubmit again during thawing, so we
+             *       want to skip back to the head of the loop to avoid that,
+             *       only adding any actions that follow the resubmit to the
+             *       frozen actions.
              */
             if (ctx->was_mpls) {
-                ctx_trigger_recirculation(ctx);
+                ctx_trigger_freeze(ctx);
                 break;
             }
             xlate_ofpact_resubmit(ctx, ofpact_get_RESUBMIT(a));
@@ -4785,15 +4805,15 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_DEBUG_RECIRC:
-            ctx_trigger_recirculation(ctx);
+            ctx_trigger_freeze(ctx);
             a = ofpact_next(a);
             break;
         }
 
         /* Check if need to store this and the remaining actions for later
          * execution. */
-        if (!ctx->error && ctx->exit && ctx_first_recirculation_action(ctx)) {
-            recirc_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len), ctx);
+        if (!ctx->error && ctx->exit && ctx_first_frozen_action(ctx)) {
+            freeze_unroll_actions(a, ofpact_end(ofpacts, ofpacts_len), ctx);
             break;
         }
     }
@@ -4826,12 +4846,12 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->odp_actions = odp_actions;
 
     /* Do recirc lookup. */
-    xin->recirc = NULL;
+    xin->frozen_state = NULL;
     if (flow->recirc_id) {
         const struct recirc_id_node *node
             = recirc_id_node_find(flow->recirc_id);
         if (node) {
-            xin->recirc = &node->state;
+            xin->frozen_state = &node->state;
         }
     }
 }
@@ -5070,7 +5090,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     union mf_subvalue stack_stub[1024 / sizeof(union mf_subvalue)];
     uint64_t action_set_stub[1024 / 8];
-    uint64_t recirculate_actions_stub[1024 / 8];
+    uint64_t frozen_actions_stub[1024 / 8];
     struct flow_wildcards scratch_wc;
     uint64_t actions_stub[256 / 8];
     struct ofpbuf scratch_actions = OFPBUF_STUB_INITIALIZER(actions_stub);
@@ -5100,8 +5120,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .error = XLATE_OK,
         .mirrors = 0,
 
-        .recirculating = false,
-        .recirculate_actions = OFPBUF_STUB_INITIALIZER(recirculate_actions_stub),
+        .freezing = false,
+        .frozen_actions = OFPBUF_STUB_INITIALIZER(frozen_actions_stub),
 
         .was_mpls = false,
         .conntracked = false,
@@ -5141,10 +5161,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     COVERAGE_INC(xlate_actions);
 
-    if (xin->recirc) {
-        const struct recirc_state *state = xin->recirc;
+    if (xin->frozen_state) {
+        const struct frozen_state *state = xin->frozen_state;
 
-        xlate_report(&ctx, "Restoring state post-recirculation:");
+        xlate_report(&ctx, "Thawing frozen state:");
 
         if (xin->ofpacts_len > 0 || ctx.rule) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -5166,16 +5186,16 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             if (OVS_UNLIKELY(!new_bridge)) {
                 /* Drop the packet if the bridge cannot be found. */
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-                VLOG_WARN_RL(&rl, "Recirculation bridge no longer exists.");
-                xlate_report(&ctx, "- Recirculation bridge no longer exists.");
+                VLOG_WARN_RL(&rl, "Frozen bridge no longer exists.");
+                xlate_report(&ctx, "- Frozen bridge no longer exists.");
                 ctx.error = XLATE_BRIDGE_NOT_FOUND;
                 goto exit;
             }
             ctx.xbridge = new_bridge;
         }
 
-        /* Set the post-recirculation table id.  Note: A table lookup is done
-         * only if there are no post-recirculation actions. */
+        /* Set the thawed table id.  Note: A table lookup is done only if there
+         * are no frozen actions. */
         ctx.table_id = state->table_id;
         xlate_report(&ctx, "- Resuming from table %"PRIu8, ctx.table_id);
 
@@ -5184,9 +5204,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         /* Restore pipeline metadata. May change flow's in_port and other
-         * metadata to the values that existed when recirculation was
-         * triggered. */
-        recirc_metadata_to_flow(&state->metadata, flow);
+         * metadata to the values that existed when freezing was triggered. */
+        frozen_metadata_to_flow(&state->metadata, flow);
 
         /* Restore stack, if any. */
         if (state->stack) {
@@ -5207,8 +5226,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                                   state->action_set_len);
         }
 
-        /* Restore recirculation actions.  If there are no actions, processing
-         * will start with a lookup in the table set above. */
+        /* Restore frozen actions.  If there are no actions, processing will
+         * start with a lookup in the table set above. */
         xin->ofpacts = state->ofpacts;
         xin->ofpacts_len = state->ofpacts_len;
         if (state->ofpacts_len) {
@@ -5247,13 +5266,13 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    /* Get the proximate input port of the packet.  (If xin->recirc,
+    /* Get the proximate input port of the packet.  (If xin->frozen_state,
      * flow->in_port is the ultimate input port of the packet.) */
     struct xport *in_port = get_ofp_port(xbridge,
                                          ctx.base_flow.in_port.ofp_port);
 
-    /* Tunnel stats only for non-recirculated packets. */
-    if (!xin->recirc && in_port && in_port->is_tunnel) {
+    /* Tunnel stats only for not-thawed packets. */
+    if (!xin->frozen_state && in_port && in_port->is_tunnel) {
         if (ctx.xin->resubmit_stats) {
             netdev_vport_inc_rx(in_port->netdev, ctx.xin->resubmit_stats);
             if (in_port->bfd) {
@@ -5269,11 +5288,11 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    if (!xin->recirc && process_special(&ctx, in_port)) {
+    if (!xin->frozen_state && process_special(&ctx, in_port)) {
         /* process_special() did all the processing for this packet.
          *
-         * We do not perform special processing on recirculated packets, as
-         * recirculated packets are not really received by the bridge.*/
+         * We do not perform special processing on thawed packets, since that
+         * was done before they were frozen and should not be redone. */
     } else if (in_port && in_port->xbundle
                && xbundle_mirror_out(xbridge, in_port->xbundle)) {
         if (ctx.xin->packet != NULL) {
@@ -5283,9 +5302,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                          ctx.xbridge->name, in_port->xbundle->name);
         }
     } else {
-        /* Sampling is done only for packets really received by the bridge. */
+        /* Sampling is done on initial reception; don't redo after thawing. */
         unsigned int user_cookie_offset = 0;
-        if (!xin->recirc) {
+        if (!xin->frozen_state) {
             user_cookie_offset = compose_sflow_action(&ctx);
             compose_ipfix_action(&ctx, ODPP_NONE);
         }
@@ -5316,25 +5335,25 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             }
 
             /* We've let OFPP_NORMAL and the learning action look at the
-             * packet, so cancel all actions and recirculation if forwarding is
+             * packet, so cancel all actions and freezing if forwarding is
              * disabled. */
             if (in_port && (!xport_stp_forward_state(in_port) ||
                             !xport_rstp_forward_state(in_port))) {
                 ctx.odp_actions->size = sample_actions_len;
-                ctx_cancel_recirculation(&ctx);
+                ctx_cancel_freeze(&ctx);
                 ofpbuf_clear(&ctx.action_set);
             }
 
-            if (!ctx.recirculating) {
+            if (!ctx.freezing) {
                 xlate_action_set(&ctx);
             }
-            if (ctx.recirculating) {
+            if (ctx.freezing) {
                 compose_recirculate_action(&ctx);
             }
         }
 
         /* Output only fully processed packets. */
-        if (!ctx.recirculating
+        if (!ctx.freezing
             && xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
@@ -5358,10 +5377,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.xout->slow |= SLOW_ACTION;
     }
 
-    /* Do netflow only for packets really received by the bridge and not sent
-     * to the controller.  We consider packets sent to the controller to be
-     * part of the control plane rather than the data plane. */
-    if (!xin->recirc && xbridge->netflow && !(xout->slow & SLOW_CONTROLLER)) {
+    /* Do netflow only for packets on initial reception, that are not sent to
+     * the controller.  We consider packets sent to the controller to be part
+     * of the control plane rather than the data plane. */
+    if (!xin->frozen_state
+        && xbridge->netflow
+        && !(xout->slow & SLOW_CONTROLLER)) {
         if (ctx.xin->resubmit_stats) {
             netflow_flow_update(xbridge->netflow, flow,
                                 ctx.nf_output_iface,
@@ -5384,7 +5405,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 exit:
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
-    ofpbuf_uninit(&ctx.recirculate_actions);
+    ofpbuf_uninit(&ctx.frozen_actions);
     ofpbuf_uninit(&scratch_actions);
 
     /* Make sure we return a "drop flow" in case of an error. */

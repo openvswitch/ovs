@@ -140,9 +140,8 @@ struct xlate_in {
      * set. */
     struct flow_wildcards *wc;
 
-    /* The recirculation context related to this translation, as returned by
-     * xlate_lookup. */
-    const struct recirc_state *recirc;
+    /* The frozen state to be resumed, as returned by xlate_lookup(). */
+    const struct frozen_state *frozen_state;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,

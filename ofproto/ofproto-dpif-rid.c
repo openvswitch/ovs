@@ -126,7 +126,7 @@ recirc_id_node_find(uint32_t id)
 }
 
 static uint32_t
-recirc_state_hash(const struct recirc_state *state)
+frozen_state_hash(const struct frozen_state *state)
 {
     uint32_t hash;
 
@@ -160,8 +160,7 @@ recirc_state_hash(const struct recirc_state *state)
 }
 
 static bool
-recirc_state_equal(const struct recirc_state *a,
-                      const struct recirc_state *b)
+frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
 {
     return (a->table_id == b->table_id
             && uuid_equals(&a->ofproto_uuid, &b->ofproto_uuid)
@@ -181,12 +180,12 @@ recirc_state_equal(const struct recirc_state *a,
 /* Lockless RCU protected lookup.  If node is needed accross RCU quiescent
  * state, caller should take a reference. */
 static struct recirc_id_node *
-recirc_find_equal(const struct recirc_state *target, uint32_t hash)
+recirc_find_equal(const struct frozen_state *target, uint32_t hash)
 {
     struct recirc_id_node *node;
 
     CMAP_FOR_EACH_WITH_HASH (node, metadata_node, hash, &metadata_map) {
-        if (recirc_state_equal(&node->state, target)) {
+        if (frozen_state_equal(&node->state, target)) {
             return node;
         }
     }
@@ -194,7 +193,7 @@ recirc_find_equal(const struct recirc_state *target, uint32_t hash)
 }
 
 static struct recirc_id_node *
-recirc_ref_equal(const struct recirc_state *target, uint32_t hash)
+recirc_ref_equal(const struct frozen_state *target, uint32_t hash)
 {
     struct recirc_id_node *node;
 
@@ -208,7 +207,7 @@ recirc_ref_equal(const struct recirc_state *target, uint32_t hash)
 }
 
 static void
-recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
+frozen_state_clone(struct frozen_state *new, const struct frozen_state *old,
                    struct flow_tnl *tunnel)
 {
     *new = *old;
@@ -227,7 +226,7 @@ recirc_state_clone(struct recirc_state *new, const struct recirc_state *old,
 }
 
 static void
-recirc_state_free(struct recirc_state *state)
+frozen_state_free(struct frozen_state *state)
 {
     free(state->stack);
     free(state->ofpacts);
@@ -239,7 +238,7 @@ recirc_state_free(struct recirc_state *state)
  * the IDs are used up.  We loop until we find a free one.
  * hash is recomputed if it is passed in as 0. */
 static struct recirc_id_node *
-recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
+recirc_alloc_id__(const struct frozen_state *state, uint32_t hash)
 {
     ovs_assert(state->action_set_len <= state->ofpacts_len);
 
@@ -247,7 +246,7 @@ recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
 
     node->hash = hash;
     ovs_refcount_init(&node->refcount);
-    recirc_state_clone(CONST_CAST(struct recirc_state *, &node->state), state,
+    frozen_state_clone(CONST_CAST(struct frozen_state *, &node->state), state,
                        &node->state_metadata_tunnel);
 
     ovs_mutex_lock(&mutex);
@@ -275,9 +274,9 @@ recirc_alloc_id__(const struct recirc_state *state, uint32_t hash)
 /* Look up an existing ID for the given flow's metadata and optional actions.
  */
 uint32_t
-recirc_find_id(const struct recirc_state *target)
+recirc_find_id(const struct frozen_state *target)
 {
-    uint32_t hash = recirc_state_hash(target);
+    uint32_t hash = frozen_state_hash(target);
     struct recirc_id_node *node = recirc_find_equal(target, hash);
     return node ? node->id : 0;
 }
@@ -285,9 +284,9 @@ recirc_find_id(const struct recirc_state *target)
 /* Allocate a unique recirculation id for the given set of flow metadata and
    optional actions. */
 uint32_t
-recirc_alloc_id_ctx(const struct recirc_state *state)
+recirc_alloc_id_ctx(const struct frozen_state *state)
 {
-    uint32_t hash = recirc_state_hash(state);
+    uint32_t hash = frozen_state_hash(state);
     struct recirc_id_node *node = recirc_ref_equal(state, hash);
     if (!node) {
         node = recirc_alloc_id__(state, hash);
@@ -302,18 +301,18 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
     struct flow_tnl tunnel;
     tunnel.ip_dst = htonl(0);
     tunnel.ipv6_dst = in6addr_any;
-    struct recirc_state state = {
+    struct frozen_state state = {
         .table_id = TBL_INTERNAL,
         .ofproto_uuid = *ofproto_dpif_get_uuid(ofproto),
         .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
-    return recirc_alloc_id__(&state, recirc_state_hash(&state))->id;
+    return recirc_alloc_id__(&state, frozen_state_hash(&state))->id;
 }
 
 static void
 recirc_id_node_free(struct recirc_id_node *node)
 {
-    recirc_state_free(CONST_CAST(struct recirc_state *, &node->state));
+    frozen_state_free(CONST_CAST(struct frozen_state *, &node->state));
     free(node);
 }
 

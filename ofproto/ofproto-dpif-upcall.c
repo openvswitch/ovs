@@ -1069,13 +1069,13 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     if (upcall->type == DPIF_UC_MISS) {
         xin.resubmit_stats = &stats;
 
-        if (xin.recirc) {
+        if (xin.frozen_state) {
             /* We may install a datapath flow only if we get a reference to the
              * recirculation context (otherwise we could have recirculation
              * upcalls using recirculation ID for which no context can be
              * found).  We may still execute the flow's actions even if we
              * don't install the flow. */
-            upcall->recirc = recirc_id_node_from_state(xin.recirc);
+            upcall->recirc = recirc_id_node_from_state(xin.frozen_state);
             upcall->have_recirc_ref = recirc_id_node_try_ref_rcu(upcall->recirc);
         }
     } else {
