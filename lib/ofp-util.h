@@ -426,7 +426,7 @@ struct ofputil_packet_in {
      * On decoding, the 'len' bytes in 'packet' might only be the first part of
      * the original packet.  ofputil_decode_packet_in() reports the full
      * original length of the packet using its 'total_len' output parameter. */
-    const void *packet;         /* The packet. */
+    void *packet;               /* The packet. */
     size_t len;                 /* Length of 'packet' in bytes. */
 
     /* Input port and other metadata for packet. */

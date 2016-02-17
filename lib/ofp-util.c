@@ -3341,7 +3341,7 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
 
         opi = ofpbuf_pull(&b, offsetof(struct ofp10_packet_in, data));
 
-        pin->packet = opi->data;
+        pin->packet = CONST_CAST(uint8_t *, opi->data);
         pin->len = b.size;
 
         match_init_catchall(&pin->flow_metadata);
