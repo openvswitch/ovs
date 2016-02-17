@@ -2451,7 +2451,7 @@ xlate_normal(struct xlate_ctx *ctx)
         if (is_igmp(flow)) {
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
-                if (ctx->xin->may_learn) {
+                if (ctx->xin->may_learn && ctx->xin->packet) {
                     update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                                 in_xbundle, ctx->xin->packet);
                 }
@@ -2483,7 +2483,7 @@ xlate_normal(struct xlate_ctx *ctx)
             return;
         } else if (is_mld(flow)) {
             ctx->xout->slow |= SLOW_ACTION;
-            if (ctx->xin->may_learn) {
+            if (ctx->xin->may_learn && ctx->xin->packet) {
                 update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                             in_xbundle, ctx->xin->packet);
             }
