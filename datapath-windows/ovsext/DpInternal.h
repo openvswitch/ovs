@@ -174,6 +174,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
 #define OVS_IPV6_KEY_SIZE (sizeof (Ipv6Key))
 #define OVS_ARP_KEY_SIZE (sizeof (ArpKey))
 #define OVS_ICMPV6_KEY_SIZE (sizeof (Icmp6Key))
+#define OVS_MPLS_KEY_SIZE (sizeof (MplsKey))
 
 typedef struct OvsFlowStats {
     Ovs64AlignedU64 packetCount;

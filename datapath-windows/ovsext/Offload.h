@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2014, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __CHECKSUM_H_
-#define __CHECKSUM_H_ 1
+#ifndef __OFFLOAD_H_
+#define __OFFLOAD_H_ 1
 
 typedef union _OVS_PACKET_HDR_INFO *POVS_PACKET_HDR_INFO;
 
@@ -36,4 +36,12 @@ NDIS_STATUS OvsValidateIPChecksum(PNET_BUFFER_LIST curNbl,
 NDIS_STATUS OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl,
                                    BOOLEAN udpCsumZero);
 
-#endif /* __CHECKSUM_H_ */
+
+ULONG OVSGetTcpMSS(PNET_BUFFER_LIST nbl);
+
+NDIS_STATUS OvsApplySWChecksumOnNB(POVS_PACKET_HDR_INFO layers,
+                                   PNET_BUFFER_LIST nbl,
+                                   PNDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO
+                                                                     csumInfo);
+
+#endif /* __OFFLOAD_H_ */

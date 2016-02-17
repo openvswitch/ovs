@@ -1300,6 +1300,23 @@ tcp.flags = RST;
       </column>
     </group>
 
+    <group title="VMI (or VIF) Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/> having
+        (empty string)
+      </p>
+
+      <column name="options" key="policing_rate">
+        If set, indicates the maximum rate for data sent from this interface,
+        in kbps. Data exceeding this rate is dropped.
+      </column>
+
+      <column name="options" key="policing_burst">
+        If set, indicates the maximum burst size for data sent from this
+        interface, in kb.
+      </column>
+    </group>
+
     <group title="Nested Containers">
       <p>
         These columns support containers nested within a VM.  Specifically,

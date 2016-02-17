@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2014, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,6 @@ typedef union _OVS_BUFFER_CONTEXT {
     UINT64 value[MEM_ALIGN_SIZE(16) >> 3];
 } OVS_BUFFER_CONTEXT, *POVS_BUFFER_CONTEXT;
 
-
 typedef struct _OVS_NBL_POOL {
     NDIS_SWITCH_CONTEXT ndisContext;
     NDIS_HANDLE   ndisHandle;
@@ -83,11 +82,13 @@ typedef struct _OVS_NBL_POOL {
 
 
 NDIS_STATUS OvsInitBufferPool(PVOID context);
+
 VOID OvsCleanupBufferPool(PVOID context);
 
 PNET_BUFFER_LIST OvsAllocateFixSizeNBL(PVOID context,
                                        UINT32 size,
                                        UINT32 headRoom);
+
 PNET_BUFFER_LIST OvsAllocateVariableSizeNBL(PVOID context,
                                             UINT32 size,
                                             UINT32 headRoom);
@@ -106,20 +107,27 @@ PNET_BUFFER_LIST OvsPartialCopyToMultipleNBLs(PVOID context,
                                               UINT32 copySize,
                                               UINT32 headRoom,
                                               BOOLEAN copyNblInfo);
+
 PNET_BUFFER_LIST OvsFullCopyNBL(PVOID context, PNET_BUFFER_LIST nbl,
                                 UINT32 headRoom, BOOLEAN copyNblInfo);
+
 PNET_BUFFER_LIST OvsTcpSegmentNBL(PVOID context,
                                   PNET_BUFFER_LIST nbl,
                                   POVS_PACKET_HDR_INFO hdrInfo,
                                   UINT32 MSS,
                                   UINT32 headRoom);
+
 PNET_BUFFER_LIST OvsAllocateNBLFromBuffer(PVOID context,
                                           PVOID buffer,
                                           ULONG length);
-PNET_BUFFER_LIST OvsFullCopyToMultipleNBLs(PVOID context,
-    PNET_BUFFER_LIST nbl, UINT32 headRoom, BOOLEAN copyNblInfo);
+
+PNET_BUFFER_LIST OvsFullCopyToMultipleNBLs(PVOID context, PNET_BUFFER_LIST nbl,
+                                           UINT32 headRoom,
+                                           BOOLEAN copyNblInfo);
+
 PNET_BUFFER_LIST OvsCompleteNBL(PVOID context, PNET_BUFFER_LIST nbl,
                                 BOOLEAN updateRef);
+
 NDIS_STATUS OvsSetCtxSourcePortNo(PNET_BUFFER_LIST nbl, UINT32 portNo);
 
 NDIS_STATUS OvsGetCtxSourcePortNo(PNET_BUFFER_LIST nbl, UINT32 *portNo);

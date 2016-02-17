@@ -54,9 +54,14 @@ Lists the supported logging modules and their current levels.
 .IP "\fBvlog/list-pattern\fR"
 Lists logging patterns used for each destination.
 .
+.IP "\fBvlog/close\fR"
+Causes \fB\*(PN\fR to close its log file, if it is open.  (Use
+\fBvlog/reopen\fR to reopen it later.)
+.
 .IP "\fBvlog/reopen\fR"
-Causes \fB\*(PN\fR to close and reopen its log file.  (This is useful
-after rotating log files, to cause a new log file to be used.)
+Causes \fB\*(PN\fR to close its log file, if it is open, and then
+reopen it.  (This is useful after rotating log files, to cause a new
+log file to be used.)
 .IP
 This has no effect unless \fB\*(PN\fR was invoked with the
 \fB\-\-log\-file\fR option.

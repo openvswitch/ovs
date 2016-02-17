@@ -221,6 +221,9 @@ enum ofp_port_features {
 struct ofp_prop_header {
     ovs_be16 type;
     ovs_be16 len;
+    /* Followed by:
+     *     - 'len - 4' bytes of payload.
+     *     - PAD_SIZE(len, 8) bytes of zeros. */
 };
 OFP_ASSERT(sizeof(struct ofp_prop_header) == 4);
 
@@ -234,6 +237,9 @@ struct ofp_prop_experimenter {
     ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
                              * in struct ofp_experimenter_header. */
     ovs_be32 exp_type;      /* Experimenter defined. */
+    /* Followed by:
+     *     - 'len - 12' bytes of payload.
+     *     - PAD_SIZE(len, 8) bytes of zeros. */
 };
 OFP_ASSERT(sizeof(struct ofp_prop_experimenter) == 12);
 

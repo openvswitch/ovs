@@ -1749,6 +1749,7 @@ crush_and_string(struct expr *expr, const struct expr_symbol *symbol)
         sub->cmp.string = xstrdup(string);
         list_push_back(&expr->andor, &sub->node);
     }
+    sset_destroy(&result);
     return expr_fix(expr);
 }
 
@@ -1788,7 +1789,7 @@ crush_and_numeric(struct expr *expr, const struct expr_symbol *symbol)
                 expr_destroy(expr);
                 return new;
             }
-            free(new);
+            expr_destroy(new);
             break;
         }
     }
@@ -1826,7 +1827,7 @@ crush_and_numeric(struct expr *expr, const struct expr_symbol *symbol)
                                       &sub->cmp.value, &sub->cmp.mask)) {
                 list_push_back(&or->andor, &sub->node);
             } else {
-                free(sub);
+                expr_destroy(sub);
             }
         }
         free(disjuncts);
@@ -1973,7 +1974,7 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
         if (compare_cmps_3way(a, b)) {
             list_push_back(&expr->andor, &b->node);
         } else {
-            free(b);
+            expr_destroy(b);
         }
     }
     free(subs);

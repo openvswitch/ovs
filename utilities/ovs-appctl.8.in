@@ -265,10 +265,14 @@ Sets the RFC5424 facility of the log message. \fIfacility\fR can be one of
 \fBlocal2\fR, \fBlocal3\fR, \fBlocal4\fR, \fBlocal5\fR, \fBlocal6\fR or
 \fBlocal7\fR.
 .
+.IP "\fBvlog/close\fR"
+Causes the daemon to close its log file, if it is open.  (Use
+\fBvlog/reopen\fR to reopen it later.)
+.
 .IP "\fBvlog/reopen\fR"
-Causes the daemon to close and reopen its log file.  (This
-is useful after rotating log files, to cause a new log file to be
-used.)
+Causes the daemon to close its log file, if it is open, and then
+reopen it.  (This is useful after rotating log files, to cause a new
+log file to be used.)
 .IP
 This has no effect if the target application was not invoked with the
 \fB\-\-log\-file\fR option.

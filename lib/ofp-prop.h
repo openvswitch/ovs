@@ -129,6 +129,6 @@ void ofpprop_end(struct ofpbuf *, size_t start_ofs);
 enum ofperr ofpprop_unknown(struct vlog_module *, bool loose, const char *msg,
                             uint64_t type);
 #define OFPPROP_UNKNOWN(LOOSE, MSG, TYPE) \
-    ofpprop_unknown(THIS_MODULE, LOOSE, MSG, TYPE)
+    ofpprop_unknown(&this_module, LOOSE, MSG, TYPE)
 
 #endif /* ofp-prop.h */
