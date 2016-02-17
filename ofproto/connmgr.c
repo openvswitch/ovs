@@ -2247,6 +2247,6 @@ ofmonitor_wait(struct connmgr *mgr)
 void
 ofproto_async_msg_free(struct ofproto_async_msg *am)
 {
-    free(CONST_CAST(void *, am->pin.up.packet));
+    free(am->pin.up.packet);
     free(am);
 }
