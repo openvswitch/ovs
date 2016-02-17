@@ -3634,7 +3634,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         .pin = {
             .up = {
                 .packet = dp_packet_steal_data(packet),
-                .len = packet_len,
+                .packet_len = packet_len,
                 .reason = reason,
                 .table_id = ctx->table_id,
                 .cookie = ctx->rule_cookie,

@@ -540,7 +540,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     }
 
     /* Extract flow data from 'pi' into 'flow'. */
-    dp_packet_use_const(&pkt, pi.packet, pi.len);
+    dp_packet_use_const(&pkt, pi.packet, pi.packet_len);
     flow_extract(&pkt, &flow);
     flow.in_port.ofp_port = pi.flow_metadata.flow.in_port.ofp_port;
     flow.tunnel.tun_id = pi.flow_metadata.flow.tunnel.tun_id;

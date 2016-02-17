@@ -3327,7 +3327,7 @@ decode_nx_packet_in2(const struct ofp_header *oh,
         switch (type) {
         case NXPINT_PACKET:
             pin->packet = payload.msg;
-            pin->len = ofpbuf_msgsize(&payload);
+            pin->packet_len = ofpbuf_msgsize(&payload);
             break;
 
         case NXPINT_FULL_LEN: {
@@ -3370,12 +3370,12 @@ decode_nx_packet_in2(const struct ofp_header *oh,
         }
     }
 
-    if (!pin->len) {
+    if (!pin->packet_len) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "NXT_PACKET_IN2 lacks packet");
         return OFPERR_OFPBRC_BAD_LEN;
     } else if (!*total_len) {
-        *total_len = pin->len;
-    } else if (*total_len < pin->len) {
+        *total_len = pin->packet_len;
+    } else if (*total_len < pin->packet_len) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "NXT_PACKET_IN2 claimed full_len < len");
         return OFPERR_OFPBRC_BAD_LEN;
     }
@@ -3424,14 +3424,14 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
         }
 
         pin->packet = b.data;
-        pin->len = b.size;
+        pin->packet_len = b.size;
     } else if (raw == OFPRAW_OFPT10_PACKET_IN) {
         const struct ofp10_packet_in *opi;
 
         opi = ofpbuf_pull(&b, offsetof(struct ofp10_packet_in, data));
 
         pin->packet = CONST_CAST(uint8_t *, opi->data);
-        pin->len = b.size;
+        pin->packet_len = b.size;
 
         match_init_catchall(&pin->flow_metadata);
         match_set_in_port(&pin->flow_metadata,
@@ -3447,7 +3447,7 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
         opi = ofpbuf_pull(&b, sizeof *opi);
 
         pin->packet = b.data;
-        pin->len = b.size;
+        pin->packet_len = b.size;
 
         *buffer_id = ntohl(opi->buffer_id);
         error = ofputil_port_from_ofp11(opi->in_port, &in_port);
@@ -3482,7 +3482,7 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
         *total_len = ntohs(npi->total_len);
 
         pin->packet = b.data;
-        pin->len = b.size;
+        pin->packet_len = b.size;
     } else if (raw == OFPRAW_NXT_PACKET_IN2) {
         return decode_nx_packet_in2(oh, pin, total_len, buffer_id);
     } else {
@@ -3527,9 +3527,9 @@ ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin,
     struct ofpbuf *msg;
 
     msg = ofpraw_alloc_xid(OFPRAW_OFPT10_PACKET_IN, OFP10_VERSION,
-                           htonl(0), pin->len);
+                           htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(msg, offsetof(struct ofp10_packet_in, data));
-    opi->total_len = htons(pin->len);
+    opi->total_len = htons(pin->packet_len);
     opi->in_port = htons(ofp_to_u16(pin->flow_metadata.flow.in_port.ofp_port));
     opi->reason = encode_packet_in_reason(pin->reason, OFP10_VERSION);
     opi->buffer_id = htonl(buffer_id);
@@ -3547,14 +3547,14 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
 
     /* The final argument is just an estimate of the space required. */
     msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, version,
-                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->len);
+                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
     ofpbuf_put_zeros(msg, sizeof *npi);
     match_len = nx_put_match(msg, &pin->flow_metadata, 0, 0);
     ofpbuf_put_zeros(msg, 2);
 
     npi = msg->msg;
     npi->buffer_id = htonl(buffer_id);
-    npi->total_len = htons(pin->len);
+    npi->total_len = htons(pin->packet_len);
     npi->reason = encode_packet_in_reason(pin->reason, version);
     npi->table_id = pin->table_id;
     npi->cookie = pin->cookie;
@@ -3575,8 +3575,8 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in *pin,
 
     /* Add packet properties. */
     ofpprop_put(msg, NXPINT_PACKET, pin->packet, include_bytes);
-    if (include_bytes != pin->len) {
-        ofpprop_put_u32(msg, NXPINT_FULL_LEN, pin->len);
+    if (include_bytes != pin->packet_len) {
+        ofpprop_put_u32(msg, NXPINT_FULL_LEN, pin->packet_len);
     }
     if (buffer_id != UINT32_MAX) {
         ofpprop_put_u32(msg, NXPINT_BUFFER_ID, buffer_id);
@@ -3608,13 +3608,13 @@ ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin,
     struct ofpbuf *msg;
 
     msg = ofpraw_alloc_xid(OFPRAW_OFPT11_PACKET_IN, OFP11_VERSION,
-                           htonl(0), pin->len);
+                           htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(msg, sizeof *opi);
     opi->buffer_id = htonl(buffer_id);
     opi->in_port = ofputil_port_to_ofp11(
         pin->flow_metadata.flow.in_port.ofp_port);
     opi->in_phy_port = opi->in_port;
-    opi->total_len = htons(pin->len);
+    opi->total_len = htons(pin->packet_len);
     opi->reason = encode_packet_in_reason(pin->reason, OFP11_VERSION);
     opi->table_id = pin->table_id;
 
@@ -3633,11 +3633,11 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
 
     /* The final argument is just an estimate of the space required. */
     msg = ofpraw_alloc_xid(raw, version,
-                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->len);
+                           htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
 
     struct ofp12_packet_in *opi = ofpbuf_put_zeros(msg, sizeof *opi);
     opi->buffer_id = htonl(buffer_id);
-    opi->total_len = htons(pin->len);
+    opi->total_len = htons(pin->packet_len);
     opi->reason = encode_packet_in_reason(pin->reason, version);
     opi->table_id = pin->table_id;
 
@@ -3671,7 +3671,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     ofp_port_t in_port = pin->flow_metadata.flow.in_port.ofp_port;
     uint32_t buffer_id = (max_len != OFPCML12_NO_BUFFER && pktbuf
                           ? pktbuf_save(pktbuf, pin->packet,
-                                        pin->len, in_port)
+                                        pin->packet_len, in_port)
                           : UINT32_MAX);
 
     /* Calculate the number of bytes of the packet to include in the
@@ -3681,8 +3681,8 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
      *
      *    - Otherwise, no more than 'max_len' bytes. */
     size_t include_bytes = (buffer_id == UINT32_MAX
-                            ? pin->len
-                            : MIN(max_len, pin->len));
+                            ? pin->packet_len
+                            : MIN(max_len, pin->packet_len));
 
     struct ofpbuf *msg;
     switch (packet_in_format) {

@@ -427,7 +427,7 @@ struct ofputil_packet_in {
      * the original packet.  ofputil_decode_packet_in() reports the full
      * original length of the packet using its 'total_len' output parameter. */
     void *packet;               /* The packet. */
-    size_t len;                 /* Length of 'packet' in bytes. */
+    size_t packet_len;          /* Length of 'packet' in bytes. */
 
     /* Input port and other metadata for packet. */
     struct match flow_metadata;
