@@ -67,9 +67,11 @@
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
-/* --bundle: Use OpenFlow 1.4 bundle for making the flow table change atomic.
- * NOTE: Also the flow mod will use OpenFlow 1.4, so the semantics may be
- * different (see the comment in parse_options() for details).
+/* --bundle: Use OpenFlow 1.3+ bundle for making the flow table change atomic.
+ * NOTE: If OpenFlow 1.3 or higher is not selected with the '-O' option,
+ * OpenFlow 1.4 will be implicitly selected.  Also the flow mod will use
+ * OpenFlow 1.4, so the semantics may be different (see the comment in
+ * parse_options() for details).
  */
 static bool bundle = false;
 
@@ -308,13 +310,14 @@ parse_options(int argc, char *argv[])
     free(short_options);
 
     /* Implicit OpenFlow 1.4 with the '--bundle' option. */
-    if (bundle) {
+    if (bundle && !(get_allowed_ofp_versions() &
+                    ofputil_protocols_to_version_bitmap(OFPUTIL_P_OF13_UP))) {
         /* Add implicit allowance for OpenFlow 1.4. */
         add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                      OFPUTIL_P_OF14_OXM));
-        /* Remove all prior versions. */
+        /* Remove all versions that do not support bundles. */
         mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
-                                     OFPUTIL_P_OF14_UP));
+                                     OFPUTIL_P_OF13_UP));
     }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
@@ -1317,8 +1320,8 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 
     list_init(&requests);
 
-    /* Bundles need OpenFlow 1.4+. */
-    usable_protocols &= OFPUTIL_P_OF14_UP;
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
 
     for (i = 0; i < n_fms; i++) {

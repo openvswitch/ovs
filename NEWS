@@ -11,8 +11,12 @@ Post-v2.5.0
        traversal into a continuation for later resumption.
      * New extension message NXT_SET_ASYNC_CONFIG2 to allow OpenFlow 1.4-like
        control over asynchronous messages in earlier versions of OpenFlow.
+     * OpenFlow 1.3 Extension 230, adding OpenFlow Bundles support, is
+       now implemented.  Only flow mod and port mod messages are supported
+       in bundles.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
+     * '--bundle' option can now be used with OpenFlow 1.3.
    - DPDK:
      * New option "n_rxq" for PMD interfaces.
        Old 'other_config:n-dpdk-rxqs' is no longer supported.

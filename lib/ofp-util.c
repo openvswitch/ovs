@@ -9504,7 +9504,8 @@ ofputil_decode_bundle_ctrl(const struct ofp_header *oh,
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
-    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_CONTROL);
+    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_CONTROL
+               || raw == OFPRAW_ONFT13_BUNDLE_CONTROL);
 
     const struct ofp14_bundle_ctrl_msg *m = b.msg;
     msg->bundle_id = ntohl(m->bundle_id);
@@ -9525,12 +9526,14 @@ ofputil_encode_bundle_ctrl_request(enum ofp_version ofp_version,
     case OFP10_VERSION:
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION:
-        ovs_fatal(0, "bundles need OpenFlow 1.4 or later "
+        ovs_fatal(0, "bundles need OpenFlow 1.3 or later "
                      "(\'-O OpenFlow14\')");
+    case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
-        request = ofpraw_alloc(OFPRAW_OFPT14_BUNDLE_CONTROL, ofp_version, 0);
+        request = ofpraw_alloc(ofp_version == OFP13_VERSION
+                               ? OFPRAW_ONFT13_BUNDLE_CONTROL
+                               : OFPRAW_OFPT14_BUNDLE_CONTROL, ofp_version, 0);
         m = ofpbuf_put_zeros(request, sizeof *m);
 
         m->bundle_id = htonl(bc->bundle_id);
@@ -9551,7 +9554,9 @@ ofputil_encode_bundle_ctrl_reply(const struct ofp_header *oh,
     struct ofpbuf *buf;
     struct ofp14_bundle_ctrl_msg *m;
 
-    buf = ofpraw_alloc_reply(OFPRAW_OFPT14_BUNDLE_CONTROL, oh, 0);
+    buf = ofpraw_alloc_reply(oh->version == OFP13_VERSION
+                             ? OFPRAW_ONFT13_BUNDLE_CONTROL
+                             : OFPRAW_OFPT14_BUNDLE_CONTROL, oh, 0);
     m = ofpbuf_put_zeros(buf, sizeof *m);
 
     m->bundle_id = htonl(msg->bundle_id);
@@ -9662,7 +9667,8 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
-    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE);
+    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE
+               || raw == OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE);
 
     const struct ofp14_bundle_ctrl_msg *m = ofpbuf_pull(&b, sizeof *m);
     msg->bundle_id = ntohl(m->bundle_id);
@@ -9709,7 +9715,9 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     struct ofp14_bundle_ctrl_msg *m;
 
     /* Must use the same xid as the embedded message. */
-    request = ofpraw_alloc_xid(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
+    request = ofpraw_alloc_xid(ofp_version == OFP13_VERSION
+                               ? OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE
+                               : OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
                                msg->msg->xid, 0);
     m = ofpbuf_put_zeros(request, sizeof *m);
 
