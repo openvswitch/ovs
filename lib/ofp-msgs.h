@@ -264,9 +264,13 @@ enum ofpraw {
 
     /* OFPT 1.4+ (33): struct ofp14_bundle_ctrl_msg, uint8_t[8][]. */
     OFPRAW_OFPT14_BUNDLE_CONTROL,
+    /* ONFT 1.3 (2300): struct ofp14_bundle_ctrl_msg, uint8_t[8][]. */
+    OFPRAW_ONFT13_BUNDLE_CONTROL,
 
     /* OFPT 1.4+ (34): struct ofp14_bundle_ctrl_msg, uint8_t[]. */
     OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE,
+    /* ONFT 1.3 (2301): struct ofp14_bundle_ctrl_msg, uint8_t[]. */
+    OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE,
 
 /* Standard statistics. */
 
@@ -592,9 +596,11 @@ enum ofptype {
     /* Asynchronous messages. */
     OFPTYPE_TABLE_STATUS,          /* OFPRAW_OFPT14_TABLE_STATUS. */
 
-    OFPTYPE_BUNDLE_CONTROL,       /* OFPRAW_OFPT14_BUNDLE_CONTROL. */
+    OFPTYPE_BUNDLE_CONTROL,       /* OFPRAW_OFPT14_BUNDLE_CONTROL.
+                                   * OFPRAW_ONFT13_BUNDLE_CONTROL. */
 
-    OFPTYPE_BUNDLE_ADD_MESSAGE,   /* OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE. */
+    OFPTYPE_BUNDLE_ADD_MESSAGE,   /* OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE.
+                                   * OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE. */
 
     /* Statistics. */
     OFPTYPE_DESC_STATS_REQUEST,      /* OFPRAW_OFPST_DESC_REQUEST. */
