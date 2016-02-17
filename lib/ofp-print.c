@@ -127,27 +127,27 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                                                      reasonbuf,
                                                      sizeof reasonbuf));
 
-    ds_put_format(string, " data_len=%"PRIuSIZE, pin.len);
+    ds_put_format(string, " data_len=%"PRIuSIZE, pin.packet_len);
     if (buffer_id == UINT32_MAX) {
         ds_put_format(string, " (unbuffered)");
-        if (total_len != pin.len) {
+        if (total_len != pin.packet_len) {
             ds_put_format(string, " (***total_len != data_len***)");
         }
     } else {
         ds_put_format(string, " buffer=0x%08"PRIx32, buffer_id);
-        if (total_len < pin.len) {
+        if (total_len < pin.packet_len) {
             ds_put_format(string, " (***total_len < data_len***)");
         }
     }
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
-        char *packet = ofp_packet_to_string(pin.packet, pin.len);
+        char *packet = ofp_packet_to_string(pin.packet, pin.packet_len);
         ds_put_cstr(string, packet);
         free(packet);
     }
     if (verbosity > 2) {
-        ds_put_hex_dump(string, pin.packet, pin.len, 0, false);
+        ds_put_hex_dump(string, pin.packet, pin.packet_len, 0, false);
     }
 }
 
