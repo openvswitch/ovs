@@ -455,11 +455,8 @@ static void
 ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
 {
     struct ofputil_switch_features features;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofputil_pull_switch_features(&b, &features);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofperr error = ofputil_pull_switch_features(&b, &features);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1121,10 +1118,8 @@ static void
 ofp_print_queue_get_config_reply(struct ds *string,
                                  const struct ofp_header *oh)
 {
-    struct ofpbuf b;
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofp_port_t port = 0;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     ds_put_char(string, ' ');
     for (;;) {
@@ -1338,10 +1333,9 @@ ofp_print_meter_features_reply(struct ds *s, const struct ofp_header *oh)
 static void
 ofp_print_meter_config_reply(struct ds *s, const struct ofp_header *oh)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     struct ofpbuf bands;
-    struct ofpbuf b;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpbuf_init(&bands, 64);
     for (;;) {
         struct ofputil_meter_config mc;
@@ -1363,10 +1357,9 @@ ofp_print_meter_config_reply(struct ds *s, const struct ofp_header *oh)
 static void
 ofp_print_meter_stats_reply(struct ds *s, const struct ofp_header *oh)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     struct ofpbuf bands;
-    struct ofpbuf b;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpbuf_init(&bands, 64);
     for (;;) {
         struct ofputil_meter_stats ms;
@@ -1545,10 +1538,9 @@ ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
 static void
 ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     struct ofpbuf ofpacts;
-    struct ofpbuf b;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpbuf_init(&ofpacts, 64);
     for (;;) {
         struct ofputil_flow_stats fs;
@@ -1620,14 +1612,12 @@ static void
 ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
                            int verbosity)
 {
-    struct ofpbuf b;
-
     ds_put_format(string, " %"PRIuSIZE" ports\n", ofputil_count_port_stats(oh));
     if (verbosity < 1) {
         return;
     }
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
         struct ofputil_port_stats ps;
         int retval;
@@ -1673,9 +1663,7 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
 static void
 ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
     struct ofputil_table_features prev_features;
@@ -1735,14 +1723,12 @@ static void
 ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
-    struct ofpbuf b;
-
     ds_put_format(string, " %"PRIuSIZE" queues\n", ofputil_count_queue_stats(oh));
     if (verbosity < 1) {
         return;
     }
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
         struct ofputil_queue_stats qs;
         int retval;
@@ -1796,9 +1782,7 @@ static void
 ofp_print_ofpst_port_desc_reply(struct ds *string,
                                 const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
     ds_put_char(string, '\n');
     ofp_print_phy_ports(string, oh->version, &b);
@@ -2144,9 +2128,7 @@ static void
 ofp_print_nxst_flow_monitor_request(struct ds *string,
                                     const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
         struct ofputil_flow_monitor_request request;
         int retval;
@@ -2183,11 +2165,9 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
                                   const struct ofp_header *oh)
 {
     uint64_t ofpacts_stub[1024 / 8];
-    struct ofpbuf ofpacts;
-    struct ofpbuf b;
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     for (;;) {
         char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
         struct ofputil_flow_update update;
@@ -2389,9 +2369,7 @@ ofp_print_ofpst_group_desc_request(struct ds *string,
 static void
 ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
         struct ofputil_group_desc gd;
         int retval;
@@ -2431,11 +2409,7 @@ ofp_print_ofpst_group_request(struct ds *string, const struct ofp_header *oh)
 static void
 ofp_print_group_stats(struct ds *s, const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-    uint32_t bucket_i;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
         struct ofputil_group_stats gs;
         int retval;
@@ -2462,7 +2436,7 @@ ofp_print_group_stats(struct ds *s, const struct ofp_header *oh)
         ds_put_format(s, "packet_count=%"PRIu64",", gs.packet_count);
         ds_put_format(s, "byte_count=%"PRIu64"", gs.byte_count);
 
-        for (bucket_i = 0; bucket_i < gs.n_buckets; bucket_i++) {
+        for (uint32_t bucket_i = 0; bucket_i < gs.n_buckets; bucket_i++) {
             if (gs.bucket_stats[bucket_i].packet_count != UINT64_MAX) {
                 ds_put_format(s, ",bucket%"PRIu32":", bucket_i);
                 ds_put_format(s, "packet_count=%"PRIu64",", gs.bucket_stats[bucket_i].packet_count);
@@ -2832,9 +2806,7 @@ ofp_print_table_features(struct ds *s,
 static void
 ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
     struct ofputil_table_features prev;
     for (int i = 0; ; i++) {
@@ -2858,10 +2830,7 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
 static void
 ofp_print_table_desc_reply(struct ds *s, const struct ofp_header *oh)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     for (;;) {
         struct ofputil_table_desc td;
         int retval;

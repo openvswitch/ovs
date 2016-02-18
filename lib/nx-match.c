@@ -475,8 +475,6 @@ static enum ofperr
 nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
-    struct ofpbuf b;
-
     ovs_assert((cookie != NULL) == (cookie_mask != NULL));
 
     match_init_catchall(match);
@@ -484,7 +482,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
         *cookie = *cookie_mask = htonll(0);
     }
 
-    ofpbuf_use_const(&b, p, match_len);
+    struct ofpbuf b = ofpbuf_const_initializer(p, match_len);
     while (b.size) {
         const uint8_t *pos = b.data;
         const struct mf_field *field;
@@ -648,9 +646,7 @@ enum ofperr
 oxm_pull_field_array(const void *fields_data, size_t fields_len,
                      struct field_array *fa)
 {
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, fields_data, fields_len);
+    struct ofpbuf b = ofpbuf_const_initializer(fields_data, fields_len);
     while (b.size) {
         const uint8_t *pos = b.data;
         const struct mf_field *field;
@@ -1291,15 +1287,12 @@ static void format_nxm_field_name(struct ds *, uint64_t header);
 char *
 nx_match_to_string(const uint8_t *p, unsigned int match_len)
 {
-    struct ofpbuf b;
-    struct ds s;
-
     if (!match_len) {
         return xstrdup("<any>");
     }
 
-    ofpbuf_use_const(&b, p, match_len);
-    ds_init(&s);
+    struct ofpbuf b = ofpbuf_const_initializer(p, match_len);
+    struct ds s = DS_EMPTY_INITIALIZER;
     while (b.size) {
         union mf_value value;
         union mf_value mask;

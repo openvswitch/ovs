@@ -416,11 +416,9 @@ process_switch_features(struct lswitch *sw, struct ofp_header *oh)
 {
     struct ofputil_switch_features features;
     struct ofputil_phy_port port;
-    enum ofperr error;
-    struct ofpbuf b;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofputil_pull_switch_features(&b, &features);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofperr error = ofputil_pull_switch_features(&b, &features);
     if (error) {
         VLOG_ERR("received invalid switch feature reply (%s)",
                  ofperr_to_string(error));

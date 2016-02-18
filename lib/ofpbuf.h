@@ -64,8 +64,9 @@ struct ofpbuf {
     enum ofpbuf_source source;  /* Source of memory allocated as 'base'. */
 };
 
-/* An initializer for a struct ofpbuf that will be initially empty and
- * uses the space in STUB (which should be an array) as a stub.
+/* An initializer for a struct ofpbuf that will be initially empty and uses the
+ * space in STUB (which should be an array) as a stub.  This is the initializer
+ * form of ofpbuf_use_stub().
  *
  * Usage example:
  *
@@ -82,6 +83,27 @@ struct ofpbuf {
         .list_node = OVS_LIST_POISON,           \
         .source = OFPBUF_STUB,                  \
     }
+
+/* An initializer for a struct ofpbuf whose data starts at DATA and continues
+ * for SIZE bytes.  This is appropriate for an ofpbuf that will be used to
+ * inspect existing data, without moving it around or reallocating it, and
+ * generally without modifying it at all.  This is the initializer form of
+ * ofpbuf_use_const().
+ */
+static inline struct ofpbuf
+ofpbuf_const_initializer(const void *data, size_t size)
+{
+    return (struct ofpbuf) {
+        .base = CONST_CAST(void *, data),
+        .data = CONST_CAST(void *, data),
+        .size = size,
+        .allocated = size,
+        .header = NULL,
+        .msg = NULL,
+        .list_node = OVS_LIST_POISON,
+        .source = OFPBUF_STACK,
+    };
+}
 
 void ofpbuf_use_ds(struct ofpbuf *, const struct ds *);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);

@@ -1244,13 +1244,12 @@ version_bitmap_from_version(uint8_t ofp_version)
 bool
 ofputil_decode_hello(const struct ofp_header *oh, uint32_t *allowed_versions)
 {
-    struct ofpbuf msg;
-    bool ok = true;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpbuf_pull(&msg, sizeof *oh);
 
     *allowed_versions = version_bitmap_from_version(oh->version);
+
+    bool ok = true;
     while (msg.size) {
         const struct ofp_hello_elem_header *oheh;
         unsigned int len;
@@ -1545,14 +1544,12 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 {
     ovs_be16 raw_flags;
     enum ofperr error;
-    struct ofpbuf b;
-    enum ofpraw raw;
 
     /* Ignored for non-delete actions */
     fm->delete_reason = OFPRR_DELETE;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {
         /* Standard OpenFlow 1.1+ flow_mod. */
         const struct ofp11_flow_mod *ofm;
@@ -1773,12 +1770,9 @@ ofputil_decode_meter_mod(const struct ofp_header *oh,
                          struct ofputil_meter_mod *mm,
                          struct ofpbuf *bands)
 {
-    const struct ofp13_meter_mod *omm;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-    omm = ofpbuf_pull(&b, sizeof *omm);
+    const struct ofp13_meter_mod *omm = ofpbuf_pull(&b, sizeof *omm);
 
     /* Translate the message. */
     mm->command = ntohs(omm->command);
@@ -2342,11 +2336,8 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
     const struct ofp10_queue_get_config_request *qgcr10;
     const struct ofp11_queue_get_config_request *qgcr11;
     const struct ofp14_queue_desc_request *qdr14;
-    enum ofpraw raw;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
 
     switch ((int) raw) {
     case OFPRAW_OFPT10_QUEUE_GET_CONFIG_REQUEST:
@@ -2614,8 +2605,8 @@ ofputil_pull_queue_get_config_reply14(struct ofpbuf *msg,
     }
     len -= sizeof *oqd14;
 
-    struct ofpbuf properties;
-    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
+    struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
+                                                        len);
     while (properties.size > 0) {
         struct ofpbuf payload;
         uint64_t type;
@@ -2695,11 +2686,8 @@ enum ofperr
 ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
                                   const struct ofp_header *oh)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     switch ((int) raw) {
     case OFPRAW_OFPST10_FLOW_REQUEST:
         return ofputil_decode_ofpst10_flow_request(fsr, b.data, false);
@@ -3127,13 +3115,10 @@ enum ofperr
 ofputil_decode_aggregate_stats_reply(struct ofputil_aggregate_stats *stats,
                                      const struct ofp_header *reply)
 {
-    struct ofp_aggregate_stats_reply *asr;
-    struct ofpbuf msg;
-
-    ofpbuf_use_const(&msg, reply, ntohs(reply->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(reply, ntohs(reply->length));
     ofpraw_pull_assert(&msg);
 
-    asr = msg.msg;
+    struct ofp_aggregate_stats_reply *asr = msg.msg;
     stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
     stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
     stats->flow_count = ntohl(asr->flow_count);
@@ -3148,11 +3133,8 @@ enum ofperr
 ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
                             const struct ofp_header *oh)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_REMOVED) {
         const struct ofp12_flow_removed *ofr;
         enum ofperr error;
@@ -3325,14 +3307,11 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
                          struct ofputil_packet_in *pin,
                          size_t *total_len, uint32_t *buffer_id)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
     memset(pin, 0, sizeof *pin);
     pin->cookie = OVS_BE64_MAX;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT13_PACKET_IN || raw == OFPRAW_OFPT12_PACKET_IN) {
         const struct ofp12_packet_in *opi = ofpbuf_pull(&b, sizeof *opi);
         const ovs_be64 *cookie = (raw == OFPRAW_OFPT13_PACKET_IN
@@ -3671,11 +3650,8 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
                           const struct ofp_header *oh,
                           struct ofpbuf *ofpacts)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
 
     ofpbuf_clear(ofpacts);
     if (raw == OFPRAW_OFPT11_PACKET_OUT) {
@@ -3864,24 +3840,18 @@ parse_ofp14_port_ethernet_property(const struct ofpbuf *payload,
 static enum ofperr
 ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
 {
-    struct ofpbuf properties;
-    struct ofp14_port *op;
-    enum ofperr error;
-    size_t len;
-
-    op = ofpbuf_try_pull(msg, sizeof *op);
+    struct ofp14_port *op = ofpbuf_try_pull(msg, sizeof *op);
     if (!op) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
-    len = ntohs(op->length);
+    size_t len = ntohs(op->length);
     if (len < sizeof *op || len - sizeof *op > msg->size) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
     len -= sizeof *op;
-    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
 
-    error = ofputil_port_from_ofp11(op->port_no, &pp->port_no);
+    enum ofperr error = ofputil_port_from_ofp11(op->port_no, &pp->port_no);
     if (error) {
         return error;
     }
@@ -3891,6 +3861,8 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     pp->config = ntohl(op->config) & OFPPC11_ALL;
     pp->state = ntohl(op->state) & OFPPS11_ALL;
 
+    struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
+                                                        len);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
@@ -4019,11 +3991,9 @@ enum ofperr
 ofputil_decode_port_desc_stats_request(const struct ofp_header *request,
                                        ofp_port_t *port)
 {
-    struct ofpbuf b;
-    enum ofpraw raw;
-
-    ofpbuf_use_const(&b, request, ntohs(request->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(request,
+                                               ntohs(request->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPST10_PORT_DESC_REQUEST) {
         *port = OFPP_ANY;
         return 0;
@@ -4087,13 +4057,10 @@ static bool
 ofputil_decode_switch_config(const struct ofp_header *oh,
                              struct ofputil_switch_config *config)
 {
-    const struct ofp_switch_config *osc;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-    osc = ofpbuf_pull(&b, sizeof *osc);
 
+    const struct ofp_switch_config *osc = ofpbuf_pull(&b, sizeof *osc);
     config->frag = ntohs(osc->flags) & OFPC_FRAG_MASK;
     config->miss_send_len = ntohs(osc->miss_send_len);
 
@@ -4362,14 +4329,10 @@ enum ofperr
 ofputil_decode_port_status(const struct ofp_header *oh,
                            struct ofputil_port_status *ps)
 {
-    const struct ofp_port_status *ops;
-    struct ofpbuf b;
-    int retval;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-    ops = ofpbuf_pull(&b, sizeof *ops);
 
+    const struct ofp_port_status *ops = ofpbuf_pull(&b, sizeof *ops);
     if (ops->reason != OFPPR_ADD &&
         ops->reason != OFPPR_DELETE &&
         ops->reason != OFPPR_MODIFY) {
@@ -4377,7 +4340,7 @@ ofputil_decode_port_status(const struct ofp_header *oh,
     }
     ps->reason = ops->reason;
 
-    retval = ofputil_pull_phy_port(oh->version, &b, &ps->desc);
+    int retval = ofputil_pull_phy_port(oh->version, &b, &ps->desc);
     ovs_assert(retval != EOF);
     return retval;
 }
@@ -4445,12 +4408,8 @@ enum ofperr
 ofputil_decode_port_mod(const struct ofp_header *oh,
                         struct ofputil_port_mod *pm, bool loose)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
-
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT10_PORT_MOD) {
         const struct ofp10_port_mod *opm = b.data;
 
@@ -4721,33 +4680,26 @@ int
 ofputil_decode_table_features(struct ofpbuf *msg,
                               struct ofputil_table_features *tf, bool loose)
 {
-    const struct ofp_header *oh;
-    struct ofp13_table_features *otf;
-    struct ofpbuf properties;
-    unsigned int len;
-
     memset(tf, 0, sizeof *tf);
 
     if (!msg->header) {
         ofpraw_pull_assert(msg);
     }
-    oh = msg->header;
 
     if (!msg->size) {
         return EOF;
     }
 
+    const struct ofp_header *oh = msg->header;
+    struct ofp13_table_features *otf = msg->data;
     if (msg->size < sizeof *otf) {
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
-    otf = msg->data;
-    len = ntohs(otf->length);
+    unsigned int len = ntohs(otf->length);
     if (len < sizeof *otf || len % 8 || len > msg->size) {
         return OFPERR_OFPBPC_BAD_LEN;
     }
-    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
-    ofpbuf_pull(&properties, sizeof *otf);
 
     tf->table_id = otf->table_id;
     if (tf->table_id == OFPTT_ALL) {
@@ -4768,6 +4720,9 @@ ofputil_decode_table_features(struct ofpbuf *msg,
     }
     tf->max_entries = ntohl(otf->max_entries);
 
+    struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
+                                                        len);
+    ofpbuf_pull(&properties, sizeof *otf);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
@@ -5012,10 +4967,6 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
                           struct ofputil_table_desc *td,
                           enum ofp_version version)
 {
-    struct ofp14_table_desc *otd;
-    struct ofpbuf properties;
-    size_t length;
-
     memset(td, 0, sizeof *td);
 
     if (!msg->header) {
@@ -5026,7 +4977,7 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
         return EOF;
     }
 
-    otd = ofpbuf_try_pull(msg, sizeof *otd);
+    struct ofp14_table_desc *otd = ofpbuf_try_pull(msg, sizeof *otd);
     if (!otd) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFP14_TABLE_DESC reply has %"PRIu32" "
                      "leftover bytes at end", msg->size);
@@ -5034,19 +4985,20 @@ ofputil_decode_table_desc(struct ofpbuf *msg,
     }
 
     td->table_id = otd->table_id;
-    length = ntohs(otd->length);
+    size_t length = ntohs(otd->length);
     if (length < sizeof *otd || length - sizeof *otd > msg->size) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFP14_TABLE_DESC reply claims invalid "
                      "length %"PRIuSIZE, length);
         return OFPERR_OFPBRC_BAD_LEN;
     }
     length -= sizeof *otd;
-    ofpbuf_use_const(&properties, ofpbuf_pull(msg, length), length);
 
     td->eviction = ofputil_decode_table_eviction(otd->config, version);
     td->vacancy = ofputil_decode_table_vacancy(otd->config, version);
     td->eviction_flags = UINT32_MAX;
 
+    struct ofpbuf properties = ofpbuf_const_initializer(
+        ofpbuf_pull(msg, length), length);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
@@ -5290,17 +5242,14 @@ enum ofperr
 ofputil_decode_table_mod(const struct ofp_header *oh,
                          struct ofputil_table_mod *pm)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
     memset(pm, 0, sizeof *pm);
     pm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
     pm->eviction = OFPUTIL_TABLE_EVICTION_DEFAULT;
     pm->eviction_flags = UINT32_MAX;
     pm->vacancy = OFPUTIL_TABLE_VACANCY_DEFAULT;
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
 
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_TABLE_MOD) {
         const struct ofp11_table_mod *otm = b.data;
 
@@ -5414,12 +5363,8 @@ enum ofperr
 ofputil_decode_role_message(const struct ofp_header *oh,
                             struct ofputil_role_request *rr)
 {
-    struct ofpbuf b;
-    enum ofpraw raw;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
-
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT12_ROLE_REQUEST ||
         raw == OFPRAW_OFPT12_ROLE_REPLY) {
         const struct ofp12_role_request *orr = b.msg;
@@ -5533,15 +5478,11 @@ enum ofperr
 ofputil_decode_role_status(const struct ofp_header *oh,
                            struct ofputil_role_status *rs)
 {
-    struct ofpbuf b;
-    enum ofpraw raw;
-    const struct ofp14_role_status *r;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     ovs_assert(raw == OFPRAW_OFPT14_ROLE_STATUS);
 
-    r = b.msg;
+    const struct ofp14_role_status *r = b.msg;
     if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
         r->role != htonl(OFPCR12_ROLE_EQUAL) &&
         r->role != htonl(OFPCR12_ROLE_MASTER) &&
@@ -5600,10 +5541,7 @@ enum ofperr
 ofputil_decode_requestforward(const struct ofp_header *outer,
                               struct ofputil_requestforward *rf)
 {
-    struct ofpbuf b;
-    enum ofperr error;
-
-    ofpbuf_use_const(&b, outer, ntohs(outer->length));
+    struct ofpbuf b = ofpbuf_const_initializer(outer, ntohs(outer->length));
 
     /* Skip past outer message. */
     enum ofpraw outer_raw = ofpraw_pull_assert(&b);
@@ -5624,7 +5562,7 @@ ofputil_decode_requestforward(const struct ofp_header *outer,
 
     /* Parse inner message. */
     enum ofptype type;
-    error = ofptype_decode(&type, inner);
+    enum ofperr error = ofptype_decode(&type, inner);
     if (error) {
         return error;
     }
@@ -6434,13 +6372,11 @@ make_echo_request(enum ofp_version ofp_version)
 struct ofpbuf *
 make_echo_reply(const struct ofp_header *rq)
 {
-    struct ofpbuf rq_buf;
-    struct ofpbuf *reply;
-
-    ofpbuf_use_const(&rq_buf, rq, ntohs(rq->length));
+    struct ofpbuf rq_buf = ofpbuf_const_initializer(rq, ntohs(rq->length));
     ofpraw_pull_assert(&rq_buf);
 
-    reply = ofpraw_alloc_reply(OFPRAW_OFPT_ECHO_REPLY, rq, rq_buf.size);
+    struct ofpbuf *reply = ofpraw_alloc_reply(OFPRAW_OFPT_ECHO_REPLY,
+                                              rq, rq_buf.size);
     ofpbuf_put(reply, rq_buf.data, rq_buf.size);
     return reply;
 }
@@ -7189,24 +7125,18 @@ static enum ofperr
 ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
                               struct ofpbuf *msg)
 {
-    const struct ofp14_port_stats *ps14;
-    struct ofpbuf properties;
-    enum ofperr error;
-    size_t len;
-
-    ps14 = ofpbuf_try_pull(msg, sizeof *ps14);
+    const struct ofp14_port_stats *ps14 = ofpbuf_try_pull(msg, sizeof *ps14);
     if (!ps14) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
-    len = ntohs(ps14->length);
+    size_t len = ntohs(ps14->length);
     if (len < sizeof *ps14 || len - sizeof *ps14 > msg->size) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
     len -= sizeof *ps14;
-    ofpbuf_use_const(&properties, ofpbuf_pull(msg, len), len);
 
-    error = ofputil_port_from_ofp11(ps14->port_no, &ops->port_no);
+    enum ofperr error = ofputil_port_from_ofp11(ps14->port_no, &ops->port_no);
     if (error) {
         return error;
     }
@@ -7226,6 +7156,8 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
     ops->stats.rx_crc_errors = UINT64_MAX;
     ops->stats.collisions = UINT64_MAX;
 
+    struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
+                                                        len);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
@@ -7259,16 +7191,15 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
 size_t
 ofputil_count_port_stats(const struct ofp_header *oh)
 {
-    struct ofputil_port_stats ps;
-    struct ofpbuf b;
-    size_t n = 0;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-    while (!ofputil_decode_port_stats(&ps, &b)) {
-        n++;
+
+    for (size_t n = 0; ; n++) {
+        struct ofputil_port_stats ps;
+        if (ofputil_decode_port_stats(&ps, &b)) {
+            return n;
+        }
     }
-    return n;
 }
 
 /* Converts an OFPST_PORT_STATS reply in 'msg' into an abstract
@@ -7518,11 +7449,8 @@ ofputil_uninit_group_desc(struct ofputil_group_desc *gd)
 uint32_t
 ofputil_decode_group_desc_request(const struct ofp_header *oh)
 {
-    struct ofpbuf request;
-    enum ofpraw raw;
-
-    ofpbuf_use_const(&request, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&request);
+    struct ofpbuf request = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&request);
     if (raw == OFPRAW_OFPST11_GROUP_DESC_REQUEST) {
         return OFPG_ALL;
     } else if (raw == OFPRAW_OFPST15_GROUP_DESC_REQUEST) {
@@ -8052,7 +7980,6 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
         struct ofputil_bucket *bucket = NULL;
         struct ofpbuf ofpacts;
         enum ofperr err = OFPERR_OFPGMFC_BAD_BUCKET;
-        struct ofpbuf properties;
         size_t ob_len, actions_len, properties_len;
         ovs_be32 watch_port = ofputil_port_to_ofp11(OFPP_ANY);
         ovs_be32 watch_group = htonl(OFPG_ANY);
@@ -8095,9 +8022,8 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
         }
 
         properties_len = ob_len - sizeof *ob - actions_len;
-        ofpbuf_use_const(&properties, ofpbuf_pull(msg, properties_len),
-                         properties_len);
-
+        struct ofpbuf properties = ofpbuf_const_initializer(
+            ofpbuf_pull(msg, properties_len), properties_len);
         while (properties.size > 0) {
             struct ofpbuf payload;
             uint64_t type;
@@ -8269,11 +8195,8 @@ parse_ofp15_group_properties(struct ofpbuf *msg,
                              struct ofputil_group_props *gp,
                              size_t properties_len)
 {
-    struct ofpbuf properties;
-
-    ofpbuf_use_const(&properties, ofpbuf_pull(msg, properties_len),
-                     properties_len);
-
+    struct ofpbuf properties = ofpbuf_const_initializer(
+        ofpbuf_pull(msg, properties_len), properties_len);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
@@ -8692,16 +8615,13 @@ enum ofperr
 ofputil_decode_group_mod(const struct ofp_header *oh,
                          struct ofputil_group_mod *gm)
 {
-    enum ofp_version ofp_version = oh->version;
-    struct ofpbuf msg;
-    struct ofputil_bucket *bucket;
-    enum ofperr err;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
-    ofpraw_pull_assert(&msg);
-
     ofputil_init_group_properties(&gm->props);
 
+    enum ofp_version ofp_version = oh->version;
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    ofpraw_pull_assert(&msg);
+
+    enum ofperr err;
     switch (ofp_version)
     {
     case OFP11_VERSION:
@@ -8719,7 +8639,6 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     default:
         OVS_NOT_REACHED();
     }
-
     if (err) {
         return err;
     }
@@ -8753,6 +8672,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         return OFPERR_OFPGMFC_BAD_COMMAND;
     }
 
+    struct ofputil_bucket *bucket;
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
         if (bucket->weight && gm->type != OFPGT11_SELECT) {
             return OFPERR_OFPGMFC_INVALID_GROUP;
@@ -8859,16 +8779,15 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
 size_t
 ofputil_count_queue_stats(const struct ofp_header *oh)
 {
-    struct ofputil_queue_stats qs;
-    struct ofpbuf b;
-    size_t n = 0;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
-    while (!ofputil_decode_queue_stats(&qs, &b)) {
-        n++;
+
+    for (size_t n = 0; ; n++) {
+        struct ofputil_queue_stats qs;
+        if (ofputil_decode_queue_stats(&qs, &b)) {
+            return n;
+        }
     }
-    return n;
 }
 
 static enum ofperr
@@ -9089,15 +9008,11 @@ enum ofperr
 ofputil_decode_bundle_ctrl(const struct ofp_header *oh,
                            struct ofputil_bundle_ctrl_msg *msg)
 {
-    struct ofpbuf b;
-    enum ofpraw raw;
-    const struct ofp14_bundle_ctrl_msg *m;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_CONTROL);
 
-    m = b.msg;
+    const struct ofp14_bundle_ctrl_msg *m = b.msg;
     msg->bundle_id = ntohl(m->bundle_id);
     msg->type = ntohs(m->type);
     msg->flags = ntohs(m->flags);
@@ -9247,20 +9162,13 @@ ofputil_is_bundlable(enum ofptype type)
 enum ofperr
 ofputil_decode_bundle_add(const struct ofp_header *oh,
                           struct ofputil_bundle_add_msg *msg,
-                          enum ofptype *type_ptr)
+                          enum ofptype *typep)
 {
-    const struct ofp14_bundle_ctrl_msg *m;
-    struct ofpbuf b;
-    enum ofpraw raw;
-    size_t inner_len;
-    enum ofperr error;
-    enum ofptype type;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
     ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE);
 
-    m = ofpbuf_pull(&b, sizeof *m);
+    const struct ofp14_bundle_ctrl_msg *m = ofpbuf_pull(&b, sizeof *m);
     msg->bundle_id = ntohl(m->bundle_id);
     msg->flags = ntohs(m->flags);
 
@@ -9268,7 +9176,7 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     if (msg->msg->version != oh->version) {
         return OFPERR_NXBFC_BAD_VERSION;
     }
-    inner_len = ntohs(msg->msg->length);
+    size_t inner_len = ntohs(msg->msg->length);
     if (inner_len < sizeof(struct ofp_header) || inner_len > b.size) {
         return OFPERR_OFPBFC_MSG_BAD_LEN;
     }
@@ -9277,20 +9185,21 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
     }
 
     /* Reject unbundlable messages. */
-    if (!type_ptr) {
-        type_ptr = &type;
-    }
-    error = ofptype_decode(type_ptr, msg->msg);
+    enum ofptype type;
+    enum ofperr error = ofptype_decode(&type, msg->msg);
     if (error) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPT14_BUNDLE_ADD_MESSAGE contained "
                      "message is unparsable (%s)", ofperr_get_name(error));
         return OFPERR_OFPBFC_MSG_UNSUP; /* 'error' would be confusing. */
     }
 
-    if (!ofputil_is_bundlable(*type_ptr)) {
+    if (!ofputil_is_bundlable(type)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "%s message not allowed inside "
-                     "OFPT14_BUNDLE_ADD_MESSAGE", ofptype_get_name(*type_ptr));
+                     "OFPT14_BUNDLE_ADD_MESSAGE", ofptype_get_name(type));
         return OFPERR_OFPBFC_MSG_UNSUP;
+    }
+    if (typep) {
+        *typep = type;
     }
 
     return 0;
@@ -9389,13 +9298,10 @@ enum ofperr
 ofputil_decode_tlv_table_mod(const struct ofp_header *oh,
                                 struct ofputil_tlv_table_mod *ttm)
 {
-    struct ofpbuf msg;
-    struct nx_tlv_table_mod *nx_ttm;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
 
-    nx_ttm = ofpbuf_pull(&msg, sizeof *nx_ttm);
+    struct nx_tlv_table_mod *nx_ttm = ofpbuf_pull(&msg, sizeof *nx_ttm);
     ttm->command = ntohs(nx_ttm->command);
     if (ttm->command > NXTTMC_CLEAR) {
         VLOG_WARN_RL(&bad_ofmsg_rl,
@@ -9435,13 +9341,10 @@ enum ofperr
 ofputil_decode_tlv_table_reply(const struct ofp_header *oh,
                                   struct ofputil_tlv_table_reply *ttr)
 {
-    struct ofpbuf msg;
-    struct nx_tlv_table_reply *nx_ttr;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&msg);
 
-    nx_ttr = ofpbuf_pull(&msg, sizeof *nx_ttr);
+    struct nx_tlv_table_reply *nx_ttr = ofpbuf_pull(&msg, sizeof *nx_ttr);
     ttr->max_option_space = ntohl(nx_ttr->max_option_space);
     ttr->max_fields = ntohs(nx_ttr->max_fields);
 
@@ -9645,11 +9548,8 @@ ofputil_decode_set_async_config(const struct ofp_header *oh, bool loose,
                                 const struct ofputil_async_cfg *basis,
                                 struct ofputil_async_cfg *ac)
 {
-    enum ofpraw raw;
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    raw = ofpraw_pull_assert(&b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofpraw raw = ofpraw_pull_assert(&b);
 
     if (raw == OFPRAW_OFPT13_SET_ASYNC ||
         raw == OFPRAW_NXT_SET_ASYNC_CONFIG ||
