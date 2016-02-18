@@ -217,4 +217,7 @@ void ofmonitor_compose_refresh_updates(struct rule_collection *rules,
                                        struct ovs_list *msgs)
     OVS_REQUIRES(ofproto_mutex);
 
+void connmgr_send_table_status(struct connmgr *,
+                               const struct ofputil_table_desc *td,
+                               uint8_t reason);
 #endif /* connmgr.h */
