@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1801,15 +1801,12 @@ static void
 log_nlmsg(const char *function, int error,
           const void *message, size_t size, int protocol)
 {
-    struct ofpbuf buffer;
-    char *nlmsg;
-
     if (!VLOG_IS_DBG_ENABLED()) {
         return;
     }
 
-    ofpbuf_use_const(&buffer, message, size);
-    nlmsg = nlmsg_to_string(&buffer, protocol);
+    struct ofpbuf buffer = ofpbuf_const_initializer(message, size);
+    char *nlmsg = nlmsg_to_string(&buffer, protocol);
     VLOG_DBG_RL(&rl, "%s (%s): %s", function, ovs_strerror(error), nlmsg);
     free(nlmsg);
 }

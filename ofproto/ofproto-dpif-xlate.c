@@ -3335,19 +3335,17 @@ static void
 xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
 {
     uint64_t action_list_stub[1024 / 8];
-    struct ofpbuf action_list, action_set;
+    struct ofpbuf action_list = OFPBUF_STUB_INITIALIZER(action_list_stub);
+    struct ofpbuf action_set = ofpbuf_const_initializer(bucket->ofpacts,
+                                                        bucket->ofpacts_len);
     struct flow old_flow = ctx->xin->flow;
     bool old_was_mpls = ctx->was_mpls;
-
-    ofpbuf_use_const(&action_set, bucket->ofpacts, bucket->ofpacts_len);
-    ofpbuf_use_stub(&action_list, action_list_stub, sizeof action_list_stub);
 
     ofpacts_execute_action_set(&action_list, &action_set);
     ctx->recurse++;
     do_xlate_actions(action_list.data, action_list.size, ctx);
     ctx->recurse--;
 
-    ofpbuf_uninit(&action_set);
     ofpbuf_uninit(&action_list);
 
     /* Check if need to recirculate. */

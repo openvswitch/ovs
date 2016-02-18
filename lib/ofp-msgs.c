@@ -407,9 +407,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
 enum ofperr
 ofpraw_decode(enum ofpraw *raw, const struct ofp_header *oh)
 {
-    struct ofpbuf msg;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     return ofpraw_pull(raw, &msg);
 }
 

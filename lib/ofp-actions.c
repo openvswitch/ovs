@@ -889,18 +889,16 @@ decode_NXAST_RAW_OUTPUT_REG2(const struct nx_action_output_reg2 *naor,
                              struct ofpbuf *out)
 {
     struct ofpact_output_reg *output_reg;
-    enum ofperr error;
-    struct ofpbuf b;
-
     output_reg = ofpact_put_OUTPUT_REG(out);
     output_reg->ofpact.raw = NXAST_RAW_OUTPUT_REG2;
     output_reg->src.ofs = nxm_decode_ofs(naor->ofs_nbits);
     output_reg->src.n_bits = nxm_decode_n_bits(naor->ofs_nbits);
     output_reg->max_len = ntohs(naor->max_len);
 
-    ofpbuf_use_const(&b, naor, ntohs(naor->len));
+    struct ofpbuf b = ofpbuf_const_initializer(naor, ntohs(naor->len));
     ofpbuf_pull(&b, OBJECT_OFFSETOF(naor, pad));
-    error = nx_pull_header(&b, &output_reg->src.field, NULL);
+
+    enum ofperr error = nx_pull_header(&b, &output_reg->src.field, NULL);
     if (error) {
         return error;
     }
@@ -2011,20 +2009,17 @@ decode_copy_field__(ovs_be16 src_offset, ovs_be16 dst_offset, ovs_be16 n_bits,
                     const void *action, ovs_be16 action_len, size_t oxm_offset,
                     struct ofpbuf *ofpacts)
 {
-    struct ofpact_reg_move *move;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    move = ofpact_put_REG_MOVE(ofpacts);
+    struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
     move->ofpact.raw = ONFACT_RAW13_COPY_FIELD;
     move->src.ofs = ntohs(src_offset);
     move->src.n_bits = ntohs(n_bits);
     move->dst.ofs = ntohs(dst_offset);
     move->dst.n_bits = ntohs(n_bits);
 
-    ofpbuf_use_const(&b, action, ntohs(action_len));
+    struct ofpbuf b = ofpbuf_const_initializer(action, ntohs(action_len));
     ofpbuf_pull(&b, oxm_offset);
-    error = nx_pull_header(&b, &move->src.field, NULL);
+
+    enum ofperr error = nx_pull_header(&b, &move->src.field, NULL);
     if (error) {
         return error;
     }
@@ -2065,20 +2060,17 @@ decode_NXAST_RAW_REG_MOVE(const struct nx_action_reg_move *narm,
                           enum ofp_version ofp_version OVS_UNUSED,
                           struct ofpbuf *ofpacts)
 {
-    struct ofpact_reg_move *move;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    move = ofpact_put_REG_MOVE(ofpacts);
+    struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
     move->ofpact.raw = NXAST_RAW_REG_MOVE;
     move->src.ofs = ntohs(narm->src_ofs);
     move->src.n_bits = ntohs(narm->n_bits);
     move->dst.ofs = ntohs(narm->dst_ofs);
     move->dst.n_bits = ntohs(narm->n_bits);
 
-    ofpbuf_use_const(&b, narm, ntohs(narm->len));
+    struct ofpbuf b = ofpbuf_const_initializer(narm, ntohs(narm->len));
     ofpbuf_pull(&b, sizeof *narm);
-    error = nx_pull_header(&b, &move->src.field, NULL);
+
+    enum ofperr error = nx_pull_header(&b, &move->src.field, NULL);
     if (error) {
         return error;
     }
@@ -2242,16 +2234,12 @@ static enum ofperr
 decode_ofpat_set_field(const struct ofp12_action_set_field *oasf,
                        bool may_mask, struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    sf = ofpact_put_SET_FIELD(ofpacts);
-
-    ofpbuf_use_const(&b, oasf, ntohs(oasf->len));
+    struct ofpbuf b = ofpbuf_const_initializer(oasf, ntohs(oasf->len));
     ofpbuf_pull(&b, OBJECT_OFFSETOF(oasf, pad));
-    error = nx_pull_entry(&b, &sf->field, &sf->value,
-                          may_mask ? &sf->mask : NULL);
+
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+    enum ofperr error = nx_pull_entry(&b, &sf->field, &sf->value,
+                                      may_mask ? &sf->mask : NULL);
     if (error) {
         return (error == OFPERR_OFPBMC_BAD_MASK
                 ? OFPERR_OFPBAC_BAD_SET_MASK
@@ -2353,16 +2341,13 @@ decode_NXAST_RAW_REG_LOAD2(const struct nx_action_reg_load2 *narl,
                            enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *out)
 {
-    struct ofpact_set_field *sf;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    sf = ofpact_put_SET_FIELD(out);
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(out);
     sf->ofpact.raw = NXAST_RAW_REG_LOAD2;
 
-    ofpbuf_use_const(&b, narl, ntohs(narl->len));
+    struct ofpbuf b = ofpbuf_const_initializer(narl, ntohs(narl->len));
     ofpbuf_pull(&b, OBJECT_OFFSETOF(narl, pad));
-    error = nx_pull_entry(&b, &sf->field, &sf->value, &sf->mask);
+
+    enum ofperr error = nx_pull_entry(&b, &sf->field, &sf->value, &sf->mask);
     if (error) {
         return error;
     }
@@ -2799,14 +2784,12 @@ static enum ofperr
 decode_stack_action(const struct nx_action_stack *nasp,
                     struct ofpact_stack *stack_action)
 {
-    enum ofperr error;
-    struct ofpbuf b;
-
     stack_action->subfield.ofs = ntohs(nasp->offset);
 
-    ofpbuf_use_const(&b, nasp, sizeof *nasp);
+    struct ofpbuf b = ofpbuf_const_initializer(nasp, sizeof *nasp);
     ofpbuf_pull(&b, OBJECT_OFFSETOF(nasp, pad));
-    error = nx_pull_header(&b, &stack_action->subfield.field, NULL);
+    enum ofperr error = nx_pull_header(&b, &stack_action->subfield.field,
+                                       NULL);
     if (error) {
         return error;
     }
@@ -4791,13 +4774,10 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
                     enum ofp_version ofp_version, struct ofpbuf *out)
 {
     const size_t ct_offset = ofpacts_pull(out);
-    struct ofpact_conntrack *conntrack;
-    struct ofpbuf openflow;
-    int error = 0;
-
-    conntrack = ofpact_put_CT(out);
+    struct ofpact_conntrack *conntrack = ofpact_put_CT(out);
     conntrack->flags = ntohs(nac->flags);
-    error = decode_ct_zone(nac, conntrack);
+
+    int error = decode_ct_zone(nac, conntrack);
     if (error) {
         goto out;
     }
@@ -4806,7 +4786,8 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     ofpbuf_pull(out, sizeof(*conntrack));
 
-    ofpbuf_use_const(&openflow, nac + 1, ntohs(nac->len) - sizeof(*nac));
+    struct ofpbuf openflow = ofpbuf_const_initializer(
+        nac + 1, ntohs(nac->len) - sizeof(*nac));
     error = ofpacts_pull_openflow_actions__(&openflow, openflow.size,
                                             ofp_version,
                                             1u << OVSINST_OFPIT11_APPLY_ACTIONS,
@@ -5584,9 +5565,7 @@ static enum ofperr
 ofpacts_decode(const void *actions, size_t actions_len,
                enum ofp_version ofp_version, struct ofpbuf *ofpacts)
 {
-    struct ofpbuf openflow;
-
-    ofpbuf_use_const(&openflow, actions, actions_len);
+    struct ofpbuf openflow = ofpbuf_const_initializer(actions, actions_len);
     while (openflow.size) {
         const struct ofp_action_header *action = openflow.data;
         enum ofp_raw_action_type raw;

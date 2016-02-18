@@ -3549,21 +3549,19 @@ handle_table_features_request(struct ofconn *ofconn,
                               const struct ofp_header *request)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofputil_table_features *features;
-    struct ovs_list replies;
-    struct ofpbuf msg;
-    size_t i;
-
-    ofpbuf_use_const(&msg, request, ntohs(request->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(request,
+                                                 ntohs(request->length));
     ofpraw_pull_assert(&msg);
     if (msg.size || ofpmp_more(request)) {
         return OFPERR_OFPTFFC_EPERM;
     }
 
+    struct ofputil_table_features *features;
     query_tables(ofproto, &features, NULL);
 
+    struct ovs_list replies;
     ofpmp_init(&replies, request);
-    for (i = 0; i < ofproto->n_tables; i++) {
+    for (size_t i = 0; i < ofproto->n_tables; i++) {
         if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
             ofputil_append_table_features_reply(&features[i], &replies);
         }
@@ -5602,17 +5600,14 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofmonitor **monitors;
-    size_t n_monitors, allocated_monitors;
-    struct rule_collection rules;
-    struct ovs_list replies;
-    enum ofperr error;
-    struct ofpbuf b;
-    size_t i;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    monitors = NULL;
-    n_monitors = allocated_monitors = 0;
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+
+    struct ofmonitor **monitors = NULL;
+    size_t allocated_monitors = 0;
+    size_t n_monitors = 0;
+
+    enum ofperr error;
 
     ovs_mutex_lock(&ofproto_mutex);
     for (;;) {
@@ -5646,11 +5641,13 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
         monitors[n_monitors++] = m;
     }
 
+    struct rule_collection rules;
     rule_collection_init(&rules);
-    for (i = 0; i < n_monitors; i++) {
+    for (size_t i = 0; i < n_monitors; i++) {
         ofproto_collect_ofmonitor_initial_rules(monitors[i], &rules);
     }
 
+    struct ovs_list replies;
     ofpmp_init(&replies, oh);
     ofmonitor_compose_refresh_updates(&rules, &replies);
     ovs_mutex_unlock(&ofproto_mutex);
@@ -5663,7 +5660,7 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 
 error:
-    for (i = 0; i < n_monitors; i++) {
+    for (size_t i = 0; i < n_monitors; i++) {
         ofmonitor_destroy(monitors[i]);
     }
     free(monitors);

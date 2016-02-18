@@ -1987,18 +1987,16 @@ fetch_table_desc(struct vconn *vconn, struct ofputil_table_mod *tm,
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
             struct ofp_header *oh = reply->data;
-            enum ofptype type;
-            struct ofpbuf b;
-            uint16_t flags;
+            struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
-            ofpbuf_use_const(&b, oh, ntohs(oh->length));
+            enum ofptype type;
             if (ofptype_pull(&type, &b)
                 || type != OFPTYPE_TABLE_DESC_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));
             }
-            flags = ofpmp_flags(oh);
+            uint16_t flags = ofpmp_flags(oh);
             done = !(flags & OFPSF_REPLY_MORE);
             if (found) {
                 /* We've already found the table desc consisting of current
