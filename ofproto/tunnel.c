@@ -427,6 +427,14 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
             flow->tunnel.ipv6_dst = tnl_port->match.ipv6_dst;
         }
     }
+    if (ipv6_addr_is_set(&flow->tunnel.ipv6_dst) ||
+        ipv6_addr_is_set(&flow->tunnel.ipv6_src)) {
+        out_port = ODPP_NONE;
+        VLOG_WARN_RL(&rl, "port (%s): IPv6 tunnel endpoint is not supported",
+                     netdev_get_name(tnl_port->netdev));
+        goto out;
+    }
+
     flow->pkt_mark = tnl_port->match.pkt_mark;
 
     if (!cfg->out_key_flow) {
