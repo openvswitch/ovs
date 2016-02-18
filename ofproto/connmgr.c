@@ -1648,6 +1648,37 @@ connmgr_send_flow_removed(struct connmgr *mgr,
     }
 }
 
+/* Sends an OFPT_TABLE_STATUS message with 'reason' to appropriate controllers
+ * managed by 'mgr'. When the table state changes, the controller needs to be
+ * informed with the OFPT_TABLE_STATUS message. The reason values
+ * OFPTR_VACANCY_DOWN and OFPTR_VACANCY_UP identify a vacancy message. The
+ * vacancy events are generated when the remaining space in the flow table
+ * changes and crosses one of the vacancy thereshold specified by
+ * OFPT_TABLE_MOD. */
+void
+connmgr_send_table_status(struct connmgr *mgr,
+                          const struct ofputil_table_desc *td,
+                          uint8_t reason)
+{
+    struct ofputil_table_status ts;
+    struct ofconn *ofconn;
+
+    ts.reason = reason;
+    ts.desc = *td;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        if (ofconn_receives_async_msg(ofconn, OAM_TABLE_STATUS, reason)) {
+            struct ofpbuf *msg;
+
+            msg = ofputil_encode_table_status(&ts,
+                                              ofconn_get_protocol(ofconn));
+            if (msg) {
+                ofconn_send(ofconn, msg, NULL);
+            }
+        }
+    }
+}
+
 /* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
  * necessary according to their individual configurations. */
 void

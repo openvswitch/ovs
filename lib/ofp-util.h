@@ -1405,4 +1405,16 @@ enum ofperr ofputil_decode_requestforward(const struct ofp_header *,
                                           struct ofputil_requestforward *);
 void ofputil_destroy_requestforward(struct ofputil_requestforward *);
 
+/* Abstract ofp14_table_status. */
+struct ofputil_table_status {
+    enum ofp14_table_reason reason;     /* One of OFPTR_*. */
+    struct ofputil_table_desc desc;   /* New table config. */
+};
+
+enum ofperr ofputil_decode_table_status(const struct ofp_header *oh,
+                                        struct ofputil_table_status *ts);
+
+struct ofpbuf *
+ofputil_encode_table_status(const struct ofputil_table_status *ts,
+                            enum ofputil_protocol protocol);
 #endif /* ofp-util.h */

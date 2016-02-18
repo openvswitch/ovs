@@ -1140,6 +1140,28 @@ ofp_print_table_desc(struct ds *string, const struct ofputil_table_desc *td)
 }
 
 static void
+ofp_print_table_status_message(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_table_status ts;
+    enum ofperr error;
+
+    error = ofputil_decode_table_status(oh, &ts);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    if (ts.reason == OFPTR_VACANCY_DOWN) {
+        ds_put_format(string, " reason=VACANCY_DOWN");
+    } else if (ts.reason == OFPTR_VACANCY_UP) {
+        ds_put_format(string, " reason=VACANCY_UP");
+    }
+
+    ds_put_format(string, "\ntable_desc:-");
+    ofp_print_table_desc(string, &ts.desc);
+}
+
+static void
 ofp_print_queue_get_config_request(struct ds *string,
                                    const struct ofp_header *oh)
 {
@@ -3232,6 +3254,10 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_REQUESTFORWARD:
         ofp_print_requestforward(string, oh);
+        break;
+
+    case OFPTYPE_TABLE_STATUS:
+        ofp_print_table_status_message(string, oh);
         break;
 
     case OFPTYPE_METER_STATS_REQUEST:

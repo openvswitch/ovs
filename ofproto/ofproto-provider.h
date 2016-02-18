@@ -256,8 +256,11 @@ struct oftable {
 #define EVICTION_OPENFLOW (1 << 1) /* Set to 1 if OpenFlow enables eviction. */
     unsigned int eviction;
 
-    /* If true, vacancy events are enabled; otherwise they are disabled. */
-    bool vacancy_enabled;
+    /* If zero, vacancy events are disabled.  If nonzero, this is the type of
+       vacancy event that is enabled: either OFPTR_VACANCY_DOWN or
+       OFPTR_VACANCY_UP.  Only one type of vacancy event can be enabled at a
+       time. */
+    enum ofp14_table_reason vacancy_event;
 
     /* Non-zero values for vacancy_up and vacancy_down indicates that vacancy
      * is enabled by table-mod, else these values are set to zero when

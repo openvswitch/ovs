@@ -5,6 +5,7 @@ Post-v2.5.0
    - OpenFlow:
      * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
      * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
+     * OpenFlow 1.4+ OFPT_TABLE_STATUS is now supported.
      * New property-based packet-in message format NXT_PACKET_IN2 with support
        for arbitrary user-provided data and for serializing flow table
        traversal into a continuation for later resumption.

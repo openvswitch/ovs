@@ -9645,6 +9645,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_REQUESTFORWARD:
+    case OFPTYPE_TABLE_STATUS:
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
     case OFPTYPE_NXT_RESUME:
@@ -10206,4 +10207,90 @@ ofputil_async_cfg_default(enum ofp_version version)
         .master[OAM_PORT_STATUS] = OFPPR_BITS,
         .slave[OAM_PORT_STATUS] = OFPPR_BITS,
     };
+}
+
+static void
+ofputil_put_ofp14_table_desc(const struct ofputil_table_desc *td,
+                             struct ofpbuf *b, enum ofp_version version)
+{
+    struct ofp14_table_desc *otd;
+    struct ofp14_table_mod_prop_vacancy *otv;
+    size_t start_otd;
+
+    start_otd = b->size;
+    ofpbuf_put_zeros(b, sizeof *otd);
+
+    ofpprop_put_u32(b, OFPTMPT14_EVICTION, td->eviction_flags);
+
+    otv = ofpbuf_put_zeros(b, sizeof *otv);
+    otv->type = htons(OFPTMPT14_VACANCY);
+    otv->length = htons(sizeof *otv);
+    otv->vacancy_down = td->table_vacancy.vacancy_down;
+    otv->vacancy_up = td->table_vacancy.vacancy_up;
+    otv->vacancy = td->table_vacancy.vacancy;
+
+    otd = ofpbuf_at_assert(b, start_otd, sizeof *otd);
+    otd->length = htons(b->size - start_otd);
+    otd->table_id = td->table_id;
+    otd->config = ofputil_encode_table_config(OFPUTIL_TABLE_MISS_DEFAULT,
+                                              td->eviction, td->vacancy,
+                                              version);
+}
+
+/* Converts the abstract form of a "table status" message in '*ts' into an
+ * OpenFlow message suitable for 'protocol', and returns that encoded form in
+ * a buffer owned by the caller. */
+struct ofpbuf *
+ofputil_encode_table_status(const struct ofputil_table_status *ts,
+                            enum ofputil_protocol protocol)
+{
+    enum ofp_version version;
+    struct ofpbuf *b;
+
+    version = ofputil_protocol_to_ofp_version(protocol);
+    if (version >= OFP14_VERSION) {
+        enum ofpraw raw;
+        struct ofp14_table_status *ots;
+
+        raw = OFPRAW_OFPT14_TABLE_STATUS;
+        b = ofpraw_alloc_xid(raw, version, htonl(0), 0);
+        ots = ofpbuf_put_zeros(b, sizeof *ots);
+        ots->reason = ts->reason;
+        ofputil_put_ofp14_table_desc(&ts->desc, b, version);
+        ofpmsg_update_length(b);
+        return b;
+    } else {
+        return NULL;
+    }
+}
+
+/* Decodes the OpenFlow "table status" message in '*ots' into an abstract form
+ * in '*ts'.  Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_decode_table_status(const struct ofp_header *oh,
+                            struct ofputil_table_status *ts)
+{
+    const struct ofp14_table_status *ots;
+    struct ofpbuf b;
+    enum ofperr error;
+    enum ofpraw raw;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+    ots = ofpbuf_pull(&b, sizeof *ots);
+
+    if (raw == OFPRAW_OFPT14_TABLE_STATUS) {
+        if (ots->reason != OFPTR_VACANCY_DOWN
+            && ots->reason != OFPTR_VACANCY_UP) {
+            return OFPERR_OFPBPC_BAD_VALUE;
+        }
+        ts->reason = ots->reason;
+
+        error = ofputil_decode_table_desc(&b, &ts->desc, oh->version);
+        return error;
+    } else {
+        return OFPERR_OFPBRC_BAD_VERSION;
+    }
+
+    return 0;
 }
