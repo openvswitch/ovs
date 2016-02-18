@@ -1,4 +1,3 @@
-
 /* Copyright (c) 2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +13,8 @@
  * limitations under the License.
  */
 
-#ifndef DHCP_H
-#define DHCP_H 1
+#ifndef PINCTRL_H
+#define PINCTRL_H 1
 
 #include <stdint.h>
 
@@ -31,4 +30,4 @@ void pinctrl_run(struct controller_ctx *ctx,
 void pinctrl_wait(void);
 void pinctrl_destroy(void);
 
-#endif /* ovn/dhcp.h */
+#endif /* ovn/pinctrl.h */
