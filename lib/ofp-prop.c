@@ -265,6 +265,27 @@ ofpprop_parse_uuid(const struct ofpbuf *property, struct uuid *uuid)
     return 0;
 }
 
+/* Attempts to parse 'property' as a property that contains nested properties.
+ * If successful, stores the nested data into '*nested' and returns 0;
+ * otherwise returns an OpenFlow error.
+ *
+ * The only thing special about nested properties is that the property header
+ * is followed by 4 bytes of padding, so that the nested properties begin at an
+ * 8-byte aligned offset.  This function can be used in other situations where
+ * this is the case. */
+enum ofperr
+ofpprop_parse_nested(const struct ofpbuf *property, struct ofpbuf *nested)
+{
+    size_t nested_offset = ROUND_UP(ofpbuf_headersize(property), 8);
+    if (property->size < nested_offset) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    ofpbuf_use_const(nested, property->data, property->size);
+    ofpbuf_pull(nested, nested_offset);
+    return 0;
+}
+
 /* Adds a property with the given 'type' and 'len'-byte contents 'value' to
  * 'msg', padding the property out to a multiple of 8 bytes. */
 void
@@ -392,6 +413,18 @@ ofpprop_put_uuid(struct ofpbuf *msg, uint64_t type, const struct uuid *uuid)
     ofpprop_put(msg, type, uuid, sizeof *uuid);
 }
 
+/* Appends a property of type 'type' to 'msg' whose contents are padding to
+ * 8-byte alignment followed by 'nested'.  This is a suitable way to add nested
+ * properties to 'msg'. */
+void
+ofpprop_put_nested(struct ofpbuf *msg, uint64_t type,
+                   const struct ofpbuf *nested)
+{
+    size_t start = ofpprop_start_nested(msg, type);
+    ofpbuf_put(msg, nested->data, nested->size);
+    ofpprop_end(msg, start);
+}
+
 /* Appends a header for a property of type 'type' to 'msg'.  The caller should
  * add the contents of the property to 'msg', then finish it by calling
  * ofpprop_end().  Returns the offset of the beginning of the property (to pass
@@ -427,6 +460,22 @@ ofpprop_end(struct ofpbuf *msg, size_t start_ofs)
     oph = ofpbuf_at_assert(msg, start_ofs, sizeof *oph);
     oph->len = htons(msg->size - start_ofs);
     ofpbuf_padto(msg, ROUND_UP(msg->size, 8));
+}
+
+/* Appends a header for a property of type 'type' to 'msg', followed by padding
+ * suitable for putting nested properties into the property; that is, padding
+ * to an 8-byte alignment.
+ *
+ * This otherwise works like ofpprop_start().
+ *
+ * There's no need for ofpprop_end_nested(), because ofpprop_end() works fine
+ * for this case. */
+size_t
+ofpprop_start_nested(struct ofpbuf *msg, uint64_t type)
+{
+    size_t start_ofs = ofpprop_start(msg, type);
+    ofpbuf_padto(msg, ROUND_UP(msg->size, 8));
+    return start_ofs;
 }
 
 enum ofperr
