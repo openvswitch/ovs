@@ -1002,7 +1002,7 @@ ofconn_set_protocol(struct ofconn *ofconn, enum ofputil_protocol protocol)
 /* Returns the currently configured packet in format for 'ofconn', one of
  * NXPIF_*.
  *
- * The default, if no other format has been set, is NXPIF_OPENFLOW10. */
+ * The default, if no other format has been set, is NXPIF_STANDARD. */
 enum nx_packet_in_format
 ofconn_get_packet_in_format(struct ofconn *ofconn)
 {
@@ -1250,7 +1250,7 @@ ofconn_flush(struct ofconn *ofconn)
 
     ofconn->role = OFPCR12_ROLE_EQUAL;
     ofconn_set_protocol(ofconn, OFPUTIL_P_NONE);
-    ofconn->packet_in_format = NXPIF_OPENFLOW10;
+    ofconn->packet_in_format = NXPIF_STANDARD;
 
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     ofconn->packet_in_counter = rconn_packet_counter_create();

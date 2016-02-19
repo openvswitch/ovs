@@ -1424,18 +1424,38 @@ ofctl_del_flows(struct ovs_cmdl_context *ctx)
     ofctl_flow_mod(ctx->argc, ctx->argv, strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE);
 }
 
-static void
+static bool
 set_packet_in_format(struct vconn *vconn,
-                     enum nx_packet_in_format packet_in_format)
+                     enum nx_packet_in_format packet_in_format,
+                     bool must_succeed)
 {
     struct ofpbuf *spif;
 
     spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
                                              packet_in_format);
-    transact_noreply(vconn, spif);
-    VLOG_DBG("%s: using user-specified packet in format %s",
-             vconn_get_name(vconn),
-             ofputil_packet_in_format_to_string(packet_in_format));
+    if (must_succeed) {
+        transact_noreply(vconn, spif);
+    } else {
+        struct ofpbuf *reply;
+
+        run(vconn_transact_noreply(vconn, spif, &reply),
+            "talking to %s", vconn_get_name(vconn));
+        if (reply) {
+            char *s = ofp_to_string(reply->data, reply->size, 2);
+            VLOG_DBG("%s: failed to set packet in format to nx_packet_in, "
+                     "controller replied: %s.",
+                     vconn_get_name(vconn), s);
+            free(s);
+            ofpbuf_delete(reply);
+
+            return false;
+        } else {
+            VLOG_DBG("%s: using user-specified packet in format %s",
+                     vconn_get_name(vconn),
+                     ofputil_packet_in_format_to_string(packet_in_format));
+        }
+    }
+    return true;
 }
 
 static int
@@ -1770,36 +1790,18 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
     }
 
     if (preferred_packet_in_format >= 0) {
-        set_packet_in_format(vconn, preferred_packet_in_format);
+        /* A particular packet-in format was requested, so we must set it. */
+        set_packet_in_format(vconn, preferred_packet_in_format, true);
     } else {
-        enum ofp_version version = vconn_get_version(vconn);
-
-        switch (version) {
-        case OFP10_VERSION: {
-            struct ofpbuf *spif, *reply;
-
-            spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
-                                                     NXPIF_NXM);
-            run(vconn_transact_noreply(vconn, spif, &reply),
-                "talking to %s", vconn_get_name(vconn));
-            if (reply) {
-                char *s = ofp_to_string(reply->data, reply->size, 2);
-                VLOG_DBG("%s: failed to set packet in format to nxm, controller"
-                        " replied: %s. Falling back to the switch default.",
-                        vconn_get_name(vconn), s);
-                free(s);
-                ofpbuf_delete(reply);
+        /* Otherwise, we always prefer NXT_PACKET_IN2. */
+        if (!set_packet_in_format(vconn, NXPIF_NXT_PACKET_IN2, false)) {
+            /* We can't get NXT_PACKET_IN2.  For OpenFlow 1.0 only, request
+             * NXT_PACKET_IN.  (Before 2.6, Open vSwitch will accept a request
+             * for NXT_PACKET_IN with OF1.1+, but even after that it still
+             * sends packet-ins in the OpenFlow native format.) */
+            if (vconn_get_version(vconn) == OFP10_VERSION) {
+                set_packet_in_format(vconn, NXPIF_NXT_PACKET_IN, false);
             }
-            break;
-        }
-        case OFP11_VERSION:
-        case OFP12_VERSION:
-        case OFP13_VERSION:
-        case OFP14_VERSION:
-        case OFP15_VERSION:
-            break;
-        default:
-            OVS_NOT_REACHED();
         }
     }
 

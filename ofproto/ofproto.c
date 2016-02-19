@@ -5387,7 +5387,7 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
     uint32_t format;
 
     format = ntohl(msg->format);
-    if (format != NXPIF_OPENFLOW10 && format != NXPIF_NXM) {
+    if (!ofputil_packet_in_format_is_valid(format)) {
         return OFPERR_OFPBRC_EPERM;
     }
 
