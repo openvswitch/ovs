@@ -1,91 +1,120 @@
 How to Install Open vSwitch on Fedora Linux
 ===========================================
 
-This document describes how to build and install Open vSwitch on a Fedora
-Linux host.  If you want to install Open vSwitch on a generic Linux host,
-see [INSTALL.md] instead.
+This document provides instructions for building and installing Open vSwitch
+RPM packages on a Fedora Linux host.  Instructions for the installation of
+Open vSwitch on a Fedora Linux host without using RPM packages can be found
+in [INSTALL.md].
 
-We have tested these instructions with Fedora 23. These instructions are also
-used for RHEL 7.x and its derivatives, such as CentOS 7.x.
+These instructions have been tested with Fedora 23, and are also applicable
+for RHEL 7.x and its derivatives, including CentOS 7.x and Scientific Linux
+7.x.
 
-Building Open vSwitch for Fedora
---------------------------------
+Build Requirements
+------------------
+The tools and packages that are required for building Open vSwitch are
+documented in [INSTALL.md]. Specific packages (by package name) include:
 
-You may build from an Open vSwitch distribution tarball or from an
-Open vSwitch Git tree.
+  - rpm-build
+  - autoconf automake libtool
+  - systemd-units openssl openssl-devel
+  - python python-twisted-core python-zope-interface PyQt4 python-six
+  - desktop-file-utils
+  - groff graphviz
+  - procps-ng
 
-The default RPM build directory (_topdir) has five directories in
-the top-level:
-1. BUILD/ Where the software is unpacked and built.
-2. RPMS/ Where the newly created binary package files are written.
-3. SOURCES/ Contains the original sources, patches, and icon files.
-4. SPECS/ Contains the spec files for each package to be built.
-5. SRPMS/ Where the newly created source package files are written.
+And (optionally):
 
-Before you begin, note the RPM sources directory on your version of
-Fedora.  The command "rpmbuild --showrc" will show the configuration
-for each of those directories. Alternatively, the command "rpm --eval
- '%{_topdir}'" shows the current configuration for the top level
-directory and the command "rpm --eval '%{_sourcedir}'" does the same
-for the sources directory.  On Fedora 23, the default RPM _topdir is
-$HOME/rpmbuild and the default RPM sources directory is
-$HOME/rpmbuild/SOURCES.
+  - libcap-ng libcap-ng-devel
+  - dpdk-devel
 
-1. If you are building from a distribution tarball, skip to step 2.
-   Otherwise, you must be building from an Open vSwitch Git tree.
-   Create a distribution tarball from the root of the Git tree by
-   running:
+Building Open vSwitch RPMs for Fedora
+-------------------------------------
 
-       ```
-       ./boot.sh
-       ./configure
-       make dist
-	   ```
+RPMs may be built from an Open vSwitch distribution tarball or from an
+Open vSwitch Git tree. The build procedure for each scenario is described
+below.
 
-2. Now you have a distribution tarball, named something like
-   openvswitch-x.y.z.tar.gz.  Copy this file into the RPM sources
-   directory, e.g.:
+### Preparing to Build Open vSwitch RPMs with a GIT Tree
+From the top-level directory of the git tree, execute the following
+commands:
 
-       `cp openvswitch-x.y.z.tar.gz $HOME/rpmbuild/SOURCES`
+```
+./boot.sh
+./configure
+```
 
-3. Make another copy of the distribution tarball in a temporary
-   directory.  Then unpack the tarball and "cd" into its root, e.g.:
+### Preparing to Build Open vSwitch RPMs from a Tarball
+From a directory with appropriate permissions, execute the following commands
+(substituting the relevant Open vSwitch release version for "x.y.z"):
 
-       ```
-       tar xzf openvswitch-x.y.z.tar.gz
-       cd openvswitch-x.y.z
-	   ```
+```
+tar xzf openvswitch-x.y.z.tar.gz
+cd openvswitch-x.y.z
+./configure
+```
 
-4. To build Open vSwitch userspace, run:
+### Building the User-Space RPMs
+To build Open vSwitch user-space RPMs, after having completed the appropriate
+preparation steps described above, execute the following from the directory
+in which `./configure` was executed:
 
-       `rpmbuild -bb rhel/openvswitch-fedora.spec`
+```
+make rpm-fedora
+```
 
-   This produces one RPM: "openvswitch".
+This will create the RPMs `openvswitch`, `python-openvswitch`,
+`openvswitch-test`, `openvswitch-devel`, `openvswitch-ovn`,
+and `openvswitch-debuginfo`.
 
-   To enable DPDK support in the resulting openvswitch package,
-   add `--with dpdk` to the build command.
+To enable DPDK support in the openvswitch package,
+the `--with dpdk` option can be added:
 
-   The above command automatically runs the Open vSwitch unit tests.
-   To disable the unit tests, run:
+```
+make rpm-fedora RPMBUILD_OPT="--with dpdk"
+```
 
-       `rpmbuild -bb --without check rhel/openvswitch-fedora.spec`
+The above commands automatically run the Open vSwitch unit tests,
+which can take several minutes.  To reduce the build time by
+disabling the execution of these tests, the `--without check`
+option can be added:
 
-5. On Fedora 23, to build the Open vSwitch kernel module, run:
+```
+make rpm-fedora RPMBUILD_OPT="--without check"
+```
 
-	`rpmbuild -bb rhel/openvswitch-kmod-fedora.spec`
+### Building the Kernel OVS Tree Datapath RPM
+To build the Open vSwitch kernel module for the currently running
+kernel version, execute:
 
-    You might have to specify a kernel version and/or variants, e.g.:
+```
+make rpm-fedora-kmod
+```
 
-	```
-	rpmbuild -bb \
-		-D "kversion 4.3.3-300.fc23.x86_64” \
-		-D "kflavors default debug kdump" \
-		rhel/openvswitch-kmod-fedora.spec
-	```
+To build the Open vSwitch kernel module for another kernel version,
+the desired kernel version can be specified via the `kversion` macro.
+For example:
 
-    This produces an "kmod-openvswitch" RPM for each kernel variant,
-    in this example: "kmod-openvswitch", "kmod-openvswitch-debug", and
-    "kmod-openvswitch-kdump".
+```
+make rpm-fedora-kmod \
+     RPMBUILD_OPT='-D "kversion 4.3.4-300.fc23.x86_64"'
+```
+
+Installing Open vSwitch RPMs
+----------------------------
+RPM packages can be installed by using the command `rpm -i`. Package
+installation requires superuser privileges.
+
+The openvswitch-kmod RPM should be installed first if the Linux OVS tree datapath
+module is to be used. The openvswitch-kmod RPM should not be installed if
+only the in-tree Linux datapath or user-space datapath is needed. See [FAQ.md]
+for more information about the various Open vSwitch datapath options.
+
+In most cases only the `openvswitch` and (when using OVN) `openvswitch-ovn` RPMs
+will need to be installed. The `python-openvswitch`, `openvswitch-test`, `openvswitch-devel`,
+and `openvswitch-debuginfo` RPMs are optional unless required for a specific purpose.
+
+See [rhel/README.RHEL] for additional usage and configuration information.
 
 Reporting Bugs
 --------------
@@ -93,3 +122,5 @@ Reporting Bugs
 Please report problems to bugs@openvswitch.org.
 
 [INSTALL.md]:INSTALL.md
+[FAQ.md]:FAQ.md
+[README.RHEL]:rhel/README.RHEL
