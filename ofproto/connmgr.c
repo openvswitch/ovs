@@ -2248,5 +2248,6 @@ void
 ofproto_async_msg_free(struct ofproto_async_msg *am)
 {
     free(am->pin.up.packet);
+    free(am->pin.up.userdata);
     free(am);
 }

@@ -5,7 +5,8 @@ Post-v2.5.0
    - OpenFlow:
      * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
      * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
-     * New property-based packet-in message format NXT_PACKET_IN2.
+     * New property-based packet-in message format NXT_PACKET_IN2 with support
+       for arbitrary user-provided data.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
    - DPDK:

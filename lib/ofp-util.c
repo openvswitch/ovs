@@ -3361,6 +3361,11 @@ decode_nx_packet_in2(const struct ofp_header *oh,
                                      &pin->flow_metadata);
             break;
 
+        case NXPINT_USERDATA:
+            pin->userdata = payload.msg;
+            pin->userdata_len = ofpbuf_msgsize(&payload);
+            break;
+
         default:
             error = OFPPROP_UNKNOWN(true, "NX_PACKET_IN2", type);
             break;
@@ -3595,6 +3600,10 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in *pin,
     size_t start = ofpprop_start(msg, NXPINT_METADATA);
     oxm_put_raw(msg, &pin->flow_metadata, version);
     ofpprop_end(msg, start);
+
+    if (pin->userdata_len) {
+        ofpprop_put(msg, NXPINT_USERDATA, pin->userdata, pin->userdata_len);
+    }
 
     ofpmsg_update_length(msg);
     return msg;

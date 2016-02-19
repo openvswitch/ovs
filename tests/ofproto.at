@@ -3353,8 +3353,8 @@ OFPT_BARRIER_REPLY (OF1.1):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-dnl This test checks that metadata is encoded in NXT_PACKET_IN2.
-AT_SETUP([ofproto - packet-out with metadata (NXT_PACKET_IN2)])
+dnl This test checks that metadata and userdata are encoded in NXT_PACKET_IN2.
+AT_SETUP([ofproto - packet-out with metadata and userdata (NXT_PACKET_IN2)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
@@ -3365,7 +3365,7 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
 # Send a packet-out with a load action to set some metadata, and forward to controller
-AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), load(0xaa->NXM_NX_PKT_MARK[[]]), controller' '0001020304050010203040501234'])
+AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), load(0xaa->NXM_NX_PKT_MARK[[]]), controller(userdata=01.02.03.04.05)' '0001020304050010203040501234'])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
@@ -3373,6 +3373,7 @@ ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 NXT_PACKET_IN2: total_len=14 pkt_mark=0xaa,metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=14 (unbuffered)
+ userdata=01.02.03.04.05
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
 OFPT_BARRIER_REPLY:
 ])

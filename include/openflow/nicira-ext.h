@@ -254,6 +254,7 @@ enum nx_packet_in2_prop_type {
     /* Other. */
     NXPINT_REASON,              /* uint8_t, one of OFPR_*. */
     NXPINT_METADATA,            /* NXM or OXM for metadata fields. */
+    NXPINT_USERDATA,            /* From NXAST_CONTROLLER2 userdata. */
 };
 
 /* Configures the "role" of the sending controller.  The default role is:

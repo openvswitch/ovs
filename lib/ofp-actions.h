@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@
     /* Output. */                                                       \
     OFPACT(OUTPUT,          ofpact_output,      ofpact, "output")       \
     OFPACT(GROUP,           ofpact_group,       ofpact, "group")        \
-    OFPACT(CONTROLLER,      ofpact_controller,  ofpact, "controller")   \
+    OFPACT(CONTROLLER,      ofpact_controller,  userdata, "controller") \
     OFPACT(ENQUEUE,         ofpact_enqueue,     ofpact, "enqueue")      \
     OFPACT(OUTPUT_REG,      ofpact_output_reg,  ofpact, "output_reg")   \
     OFPACT(BUNDLE,          ofpact_bundle,      slaves, "bundle")       \
@@ -245,6 +245,11 @@ struct ofpact_controller {
     uint16_t max_len;           /* Maximum length to send to controller. */
     uint16_t controller_id;     /* Controller ID to send packet-in. */
     enum ofp_packet_in_reason reason; /* Reason to put in packet-in. */
+
+    /* Arbitrary data to include in the packet-in message (currently, only in
+     * NXT_PACKET_IN2). */
+    uint16_t userdata_len;
+    uint8_t userdata[];
 };
 
 /* OFPACT_ENQUEUE.

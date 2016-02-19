@@ -441,6 +441,10 @@ struct ofputil_packet_in {
      * that case, 'cookie' is UINT64_MAX. */
     uint8_t table_id;                    /* OpenFlow table ID. */
     ovs_be64 cookie;                     /* Flow's cookie. */
+
+    /* Arbitrary user-provided data. */
+    uint8_t *userdata;
+    size_t userdata_len;
 };
 
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,

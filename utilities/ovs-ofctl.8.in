@@ -1523,12 +1523,18 @@ default connection ID for each controller connection, and a given
 controller connection will only have a nonzero connection ID if its
 controller uses the \fBNXT_SET_CONTROLLER_ID\fR Nicira extension to
 OpenFlow.
+.IP "\fBuserdata=\fIhh\fR...\fR"
+Supplies the bytes represented as hex digits \fIhh\fR as additional
+data to the controller in the packet-in message.  Pairs of hex digits
+may be separated by periods for readability.
+.
 .RE
 .IP
-Any \fIreason\fR other than \fBaction\fR and any nonzero
-\fIcontroller-id\fR uses a Nicira vendor extension that, as of this
-writing, is only known to be implemented by Open vSwitch (version 1.6
-or later).
+If any \fIreason\fR other than \fBaction\fR or any nonzero
+\fIcontroller-id\fR is supplied, Open vSwitch extension
+\fBNXAST_CONTROLLER\fR, supported by Open vSwitch 1.6 and later, is
+used.  If \fBuserdata\fR is supplied, then \fBNXAST_CONTROLLER2\fR,
+supported by Open vSwitch 2.6 and later, is used.
 .
 .IP \fBcontroller\fR
 .IQ \fBcontroller\fR[\fB:\fInbytes\fR]
@@ -2868,8 +2874,10 @@ little reason to use it with those versions of OpenFlow).
 .
 .IP "\fBnxt_packet_in2\fR"
 This uses the \fBNXT_PACKET_IN2\fR message, which is extensible and
-should avoid the need to define new formats later.  Open vSwitch 2.6
-and later support this format.
+should avoid the need to define new formats later.  In particular,
+this format supports passing arbitrary user-provided data to a
+controller using the \fBuserdata\fB option on the \fBcontroller\fR
+action.  Open vSwitch 2.6 and later support this format.
 .
 .RE
 .IP
