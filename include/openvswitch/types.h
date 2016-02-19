@@ -19,6 +19,7 @@
 
 #include <sys/types.h>
 #include <stdint.h>
+#include "openvswitch/compiler.h"
 
 #ifdef __CHECKER__
 #define OVS_BITWISE __attribute__((bitwise))
@@ -104,7 +105,7 @@ typedef union {
  * So we use these static definitions rather than using initializer macros. */
 static const ovs_u128 OVS_U128_MAX = { { UINT32_MAX, UINT32_MAX,
                                          UINT32_MAX, UINT32_MAX } };
-static const ovs_be128 OVS_BE128_MAX = { { OVS_BE32_MAX, OVS_BE32_MAX,
+static const ovs_be128 OVS_BE128_MAX OVS_UNUSED = { { OVS_BE32_MAX, OVS_BE32_MAX,
                                            OVS_BE32_MAX, OVS_BE32_MAX } };
 
 /* A 64-bit value, in network byte order, that is only aligned on a 32-bit
