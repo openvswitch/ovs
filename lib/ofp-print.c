@@ -95,6 +95,17 @@ ofp_packet_to_string(const void *data, size_t len)
 }
 
 static void
+format_hex_arg(struct ds *s, const uint8_t *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (i) {
+            ds_put_char(s, '.');
+        }
+        ds_put_format(s, "%02"PRIx8, data[i]);
+    }
+}
+
+static void
 ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                     int verbosity)
 {
@@ -140,6 +151,12 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         }
     }
     ds_put_char(string, '\n');
+
+    if (pin.userdata_len) {
+        ds_put_cstr(string, " userdata=");
+        format_hex_arg(string, pin.userdata, pin.userdata_len);
+        ds_put_char(string, '\n');
+    }
 
     if (verbosity > 0) {
         char *packet = ofp_packet_to_string(pin.packet, pin.packet_len);

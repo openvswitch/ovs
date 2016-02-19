@@ -3602,7 +3602,8 @@ flood_packets(struct xlate_ctx *ctx, bool all)
 static void
 execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
-                          uint16_t controller_id)
+                          uint16_t controller_id,
+                          const uint8_t *userdata, size_t userdata_len)
 {
     struct dp_packet *packet;
 
@@ -3638,6 +3639,10 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                 .reason = reason,
                 .table_id = ctx->table_id,
                 .cookie = ctx->rule_cookie,
+                .userdata = (userdata_len
+                             ? xmemdup(userdata, userdata_len)
+                             : NULL),
+                .userdata_len = userdata_len,
             },
             .max_len = len,
         },
@@ -3775,7 +3780,7 @@ compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 
         for (i = 0; i < ids->n_controllers; i++) {
             execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL,
-                                      ids->cnt_ids[i]);
+                                      ids->cnt_ids[i], NULL, 0);
         }
 
         /* Stop processing for current table. */
@@ -3824,7 +3829,8 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
             set_mpls_lse_ttl(&flow->mpls_lse[0], ttl);
             return false;
         } else {
-            execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL, 0);
+            execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL, 0,
+                                      NULL, 0);
         }
     }
 
@@ -3862,7 +3868,7 @@ xlate_output_action(struct xlate_ctx *ctx,
                                   (ctx->in_group ? OFPR_GROUP
                                    : ctx->in_action_set ? OFPR_ACTION_SET
                                    : OFPR_ACTION),
-                                  0);
+                                  0, NULL, 0);
         break;
     case OFPP_NONE:
         break;
@@ -4473,7 +4479,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             controller = ofpact_get_CONTROLLER(a);
             execute_controller_action(ctx, controller->max_len,
                                       controller->reason,
-                                      controller->controller_id);
+                                      controller->controller_id,
+                                      controller->userdata,
+                                      controller->userdata_len);
             break;
 
         case OFPACT_ENQUEUE:
