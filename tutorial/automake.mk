@@ -30,7 +30,10 @@ EXTRA_DIST += \
 	tutorial/ovn/env5/packet1.sh \
 	tutorial/ovn/env5/packet2.sh \
 	tutorial/ovn/env6/setup.sh \
-	tutorial/ovn/env6/add-acls.sh
-
+	tutorial/ovn/env6/add-acls.sh \
+	tutorial/ovn/env7/add-container-ports.sh \
+	tutorial/ovn/env7/packet1.sh \
+	tutorial/ovn/env7/packet2.sh \
+	tutorial/ovn/env7/setup.sh
 sandbox: all
 	cd $(srcdir)/tutorial && MAKE=$(MAKE) ./ovs-sandbox -b $(abs_builddir) $(SANDBOXFLAGS)
