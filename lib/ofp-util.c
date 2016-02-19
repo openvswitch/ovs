@@ -1125,8 +1125,9 @@ bool
 ofputil_packet_in_format_is_valid(enum nx_packet_in_format packet_in_format)
 {
     switch (packet_in_format) {
-    case NXPIF_OPENFLOW10:
-    case NXPIF_NXM:
+    case NXPIF_STANDARD:
+    case NXPIF_NXT_PACKET_IN:
+    case NXPIF_NXT_PACKET_IN2:
         return true;
     }
 
@@ -1137,10 +1138,12 @@ const char *
 ofputil_packet_in_format_to_string(enum nx_packet_in_format packet_in_format)
 {
     switch (packet_in_format) {
-    case NXPIF_OPENFLOW10:
-        return "openflow10";
-    case NXPIF_NXM:
-        return "nxm";
+    case NXPIF_STANDARD:
+        return "standard";
+    case NXPIF_NXT_PACKET_IN:
+        return "nxt_packet_in";
+    case NXPIF_NXT_PACKET_IN2:
+        return "nxt_packet_in2";
     default:
         OVS_NOT_REACHED();
     }
@@ -1149,8 +1152,12 @@ ofputil_packet_in_format_to_string(enum nx_packet_in_format packet_in_format)
 int
 ofputil_packet_in_format_from_string(const char *s)
 {
-    return (!strcmp(s, "openflow10") ? NXPIF_OPENFLOW10
-            : !strcmp(s, "nxm") ? NXPIF_NXM
+    return (!strcmp(s, "standard") || !strcmp(s, "openflow10")
+            ? NXPIF_STANDARD
+            : !strcmp(s, "nxt_packet_in") || !strcmp(s, "nxm")
+            ? NXPIF_NXT_PACKET_IN
+            : !strcmp(s, "nxt_packet_in2")
+            ? NXPIF_NXT_PACKET_IN2
             : -1);
 }
 
@@ -3294,6 +3301,88 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     return msg;
 }
 
+/* The caller has done basic initialization of '*pin'; the other output
+ * arguments needs to be initialized. */
+static enum ofperr
+decode_nx_packet_in2(const struct ofp_header *oh,
+                     struct ofputil_packet_in *pin,
+                     size_t *total_len, uint32_t *buffer_id)
+{
+    *total_len = 0;
+    *buffer_id = UINT32_MAX;
+
+    struct ofpbuf properties;
+    ofpbuf_use_const(&properties, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&properties);
+
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        uint64_t type;
+
+        enum ofperr error = ofpprop_pull(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case NXPINT_PACKET:
+            pin->packet = payload.msg;
+            pin->len = ofpbuf_msgsize(&payload);
+            break;
+
+        case NXPINT_FULL_LEN: {
+            uint32_t u32;
+            error = ofpprop_parse_u32(&payload, &u32);
+            *total_len = u32;
+            break;
+        }
+
+        case NXPINT_BUFFER_ID:
+            error = ofpprop_parse_u32(&payload, buffer_id);
+            break;
+
+        case NXPINT_TABLE_ID:
+            error = ofpprop_parse_u8(&payload, &pin->table_id);
+            break;
+
+        case NXPINT_COOKIE:
+            error = ofpprop_parse_be64(&payload, &pin->cookie);
+            break;
+
+        case NXPINT_REASON: {
+            uint8_t reason;
+            error = ofpprop_parse_u8(&payload, &reason);
+            pin->reason = reason;
+            break;
+        }
+
+        case NXPINT_METADATA:
+            error = oxm_decode_match(payload.msg, ofpbuf_msgsize(&payload),
+                                     &pin->flow_metadata);
+            break;
+
+        default:
+            error = OFPPROP_UNKNOWN(true, "NX_PACKET_IN2", type);
+            break;
+        }
+        if (error) {
+            return error;
+        }
+    }
+
+    if (!pin->len) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "NXT_PACKET_IN2 lacks packet");
+        return OFPERR_OFPBRC_BAD_LEN;
+    } else if (!*total_len) {
+        *total_len = pin->len;
+    } else if (*total_len < pin->len) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "NXT_PACKET_IN2 claimed full_len < len");
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    return 0;
+}
+
 /* Decodes the packet-in message starting at 'oh' into '*pin'.  Populates
  * 'pin->packet' and 'pin->len' with the part of the packet actually included
  * in the message, and '*total_len' with the original length of the packet
@@ -3394,6 +3483,8 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
 
         pin->packet = b.data;
         pin->len = b.size;
+    } else if (raw == OFPRAW_NXT_PACKET_IN2) {
+        return decode_nx_packet_in2(oh, pin, total_len, buffer_id);
     } else {
         OVS_NOT_REACHED();
     }
@@ -3448,14 +3539,14 @@ ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin,
 
 static struct ofpbuf *
 ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
-                            uint32_t buffer_id)
+                            enum ofp_version version, uint32_t buffer_id)
 {
     struct nx_packet_in *npi;
     struct ofpbuf *msg;
     size_t match_len;
 
     /* The final argument is just an estimate of the space required. */
-    msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
+    msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, version,
                            htonl(0), NXM_TYPICAL_LEN + 2 + pin->len);
     ofpbuf_put_zeros(msg, sizeof *npi);
     match_len = nx_put_match(msg, &pin->flow_metadata, 0, 0);
@@ -3464,11 +3555,48 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
     npi = msg->msg;
     npi->buffer_id = htonl(buffer_id);
     npi->total_len = htons(pin->len);
-    npi->reason = encode_packet_in_reason(pin->reason, OFP10_VERSION);
+    npi->reason = encode_packet_in_reason(pin->reason, version);
     npi->table_id = pin->table_id;
     npi->cookie = pin->cookie;
     npi->match_len = htons(match_len);
 
+    return msg;
+}
+
+static struct ofpbuf *
+ofputil_encode_nx_packet_in2(const struct ofputil_packet_in *pin,
+                             enum ofp_version version, uint32_t buffer_id,
+                             size_t include_bytes)
+{
+    /* 'extra' is just an estimate of the space required. */
+    size_t extra = include_bytes + NXM_TYPICAL_LEN + 256;
+    struct ofpbuf *msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN2, version,
+                                          htonl(0), extra);
+
+    /* Add packet properties. */
+    ofpprop_put(msg, NXPINT_PACKET, pin->packet, include_bytes);
+    if (include_bytes != pin->len) {
+        ofpprop_put_u32(msg, NXPINT_FULL_LEN, pin->len);
+    }
+    if (buffer_id != UINT32_MAX) {
+        ofpprop_put_u32(msg, NXPINT_BUFFER_ID, buffer_id);
+    }
+
+    /* Add flow properties. */
+    ofpprop_put_u8(msg, NXPINT_TABLE_ID, pin->table_id);
+    if (pin->cookie != OVS_BE64_MAX) {
+        ofpprop_put_be64(msg, NXPINT_COOKIE, pin->cookie);
+    }
+
+    /* Add other properties. */
+    ofpprop_put_u8(msg, NXPINT_REASON,
+                   encode_packet_in_reason(pin->reason, version));
+
+    size_t start = ofpprop_start(msg, NXPINT_METADATA);
+    oxm_put_raw(msg, &pin->flow_metadata, version);
+    ofpprop_end(msg, start);
+
+    ofpmsg_update_length(msg);
     return msg;
 }
 
@@ -3546,42 +3674,56 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
                                         pin->len, in_port)
                           : UINT32_MAX);
 
+    /* Calculate the number of bytes of the packet to include in the
+     * packet-in:
+     *
+     *    - If not buffered, the whole thing.
+     *
+     *    - Otherwise, no more than 'max_len' bytes. */
+    size_t include_bytes = (buffer_id == UINT32_MAX
+                            ? pin->len
+                            : MIN(max_len, pin->len));
+
     struct ofpbuf *msg;
-    switch (protocol) {
-    case OFPUTIL_P_OF10_STD:
-    case OFPUTIL_P_OF10_STD_TID:
-    case OFPUTIL_P_OF10_NXM:
-    case OFPUTIL_P_OF10_NXM_TID:
-        msg = (packet_in_format == NXPIF_NXM
-               ? ofputil_encode_nx_packet_in(pin, buffer_id)
-               : ofputil_encode_ofp10_packet_in(pin, buffer_id));
+    switch (packet_in_format) {
+    case NXPIF_STANDARD:
+        switch (protocol) {
+        case OFPUTIL_P_OF10_STD:
+        case OFPUTIL_P_OF10_STD_TID:
+        case OFPUTIL_P_OF10_NXM:
+        case OFPUTIL_P_OF10_NXM_TID:
+            msg = ofputil_encode_ofp10_packet_in(pin, buffer_id);
+            break;
+
+        case OFPUTIL_P_OF11_STD:
+            msg = ofputil_encode_ofp11_packet_in(pin, buffer_id);
+            break;
+
+        case OFPUTIL_P_OF12_OXM:
+        case OFPUTIL_P_OF13_OXM:
+        case OFPUTIL_P_OF14_OXM:
+        case OFPUTIL_P_OF15_OXM:
+            msg = ofputil_encode_ofp12_packet_in(pin, version, buffer_id);
+            break;
+
+        default:
+            OVS_NOT_REACHED();
+        }
         break;
 
-    case OFPUTIL_P_OF11_STD:
-        msg = ofputil_encode_ofp11_packet_in(pin, buffer_id);
+    case NXPIF_NXT_PACKET_IN:
+        msg = ofputil_encode_nx_packet_in(pin, version, buffer_id);
         break;
 
-    case OFPUTIL_P_OF12_OXM:
-    case OFPUTIL_P_OF13_OXM:
-    case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM:
-        msg = ofputil_encode_ofp12_packet_in(pin, version, buffer_id);
-        break;
+    case NXPIF_NXT_PACKET_IN2:
+        return ofputil_encode_nx_packet_in2(pin, version, buffer_id,
+                                            include_bytes);
 
     default:
         OVS_NOT_REACHED();
     }
 
-    /* Append some of the packet:
-     *
-     *    - If not buffered, the whole thing.
-     *
-     *    - Otherwise, no more than 'max_len' bytes. */
-    ofpbuf_put(msg, pin->packet,
-               (buffer_id == UINT32_MAX
-                ? pin->len
-                : MIN(max_len, pin->len)));
-
+    ofpbuf_put(msg, pin->packet, include_bytes);
     ofpmsg_update_length(msg);
     return msg;
 }

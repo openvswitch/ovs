@@ -157,6 +157,8 @@ enum ofpraw {
     OFPRAW_OFPT13_PACKET_IN,
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,
+    /* NXT 1.0+ (30): uint8_t[8][]. */
+    OFPRAW_NXT_PACKET_IN2,
 
     /* OFPT 1.0 (11): struct ofp10_flow_removed. */
     OFPRAW_OFPT10_FLOW_REMOVED,
@@ -519,6 +521,7 @@ enum ofptype {
                                   * OFPRAW_OFPT11_PACKET_IN.
                                   * OFPRAW_OFPT12_PACKET_IN.
                                   * OFPRAW_OFPT13_PACKET_IN.
+                                  * OFPRAW_NXT_PACKET_IN2.
                                   * OFPRAW_NXT_PACKET_IN. */
     OFPTYPE_FLOW_REMOVED,        /* OFPRAW_OFPT10_FLOW_REMOVED.
                                   * OFPRAW_OFPT11_FLOW_REMOVED.

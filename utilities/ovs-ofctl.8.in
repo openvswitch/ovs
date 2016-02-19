@@ -2850,24 +2850,47 @@ specified flow formats, \fBovs\-ofctl\fR will report a fatal error.
 .
 .IP "\fB\-P \fIformat\fR"
 .IQ "\fB\-\-packet\-in\-format=\fIformat\fR"
-\fBovs\-ofctl\fR supports the following packet_in formats, in order of
+\fBovs\-ofctl\fR supports the following ``packet-in'' formats, in order of
 increasing capability:
 .RS
-.IP "\fBopenflow10\fR"
-This is the standard OpenFlow 1.0 packet in format. It should be supported by
-all OpenFlow switches.
+.IP "\fBstandard\fR"
+This uses the \fBOFPT_PACKET_IN\fR message, the standard ``packet-in''
+message for any given OpenFlow version.  Every OpenFlow switch that
+supports a given OpenFlow version supports this format.
 .
-.IP "\fBnxm\fR (Nicira Extended Match)"
-This packet_in format includes flow metadata encoded using the NXM format.
+.IP "\fBnxt_packet_in\fR"
+This uses the \fBNXT_PACKET_IN\fR message, which adds many of the
+capabilities of the OpenFlow 1.1 and later ``packet-in'' messages
+before those OpenFlow versions were available in Open vSwitch.  Open
+vSwitch 1.1 and later support this format.  Only Open vSwitch 2.6 and
+later, however, support it for OpenFlow 1.1 and later (but there is
+little reason to use it with those versions of OpenFlow).
+.
+.IP "\fBnxt_packet_in2\fR"
+This uses the \fBNXT_PACKET_IN2\fR message, which is extensible and
+should avoid the need to define new formats later.  Open vSwitch 2.6
+and later support this format.
 .
 .RE
 .IP
-Usually, \fBovs\-ofctl\fR prefers the \fBnxm\fR packet_in format, but will
-allow the switch to choose its default if \fBnxm\fR is unsupported.  When
-\fIformat\fR is one of the formats listed in the above table, \fBovs\-ofctl\fR
-will insist on the selected format.  If the switch does not support the
-requested format, \fBovs\-ofctl\fR will report a fatal error.  This option only
-affects the \fBmonitor\fR command.
+Without this option, \fBovs\-ofctl\fR prefers \fBnxt_packet_in2\fR if
+the switch supports it.  Otherwise, if OpenFlow 1.0 is in use,
+\fBovs\-ofctl\fR prefers \fBnxt_packet_in\fR if the switch supports
+it.  Otherwise, \fBovs\-ofctl\fR falls back to the \fBstandard\fR
+packet-in format.  When this option is specified, \fBovs\-ofctl\fR
+insists on the selected format.  If the switch does not support the
+requested format, \fBovs\-ofctl\fR will report a fatal error.
+.IP
+Before version 2.6, Open vSwitch called \fBstandard\fR format
+\fBopenflow10\fR and \fBnxt_packet_in\fR format \fBnxm\fR, and
+\fBovs\-ofctl\fR still accepts these names as synonyms.  (The name
+\fBopenflow10\fR was a misnomer because this format actually varies
+from one OpenFlow version to another; it is not consistently OpenFlow
+1.0 format.  Similarly, when \fBnxt_packet_in2\fR was introduced, the
+name \fBnxm\fR became confusing because it also uses OXM/NXM.)
+.
+.IP
+This option affects only the \fBmonitor\fR command.
 .
 .IP "\fB\-\-timestamp\fR"
 Print a timestamp before each received packet.  This option only
