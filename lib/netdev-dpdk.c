@@ -69,14 +69,14 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * The minimum mbuf size is limited to avoid scatter behaviour and drop in
  * performance for standard Ethernet MTU.
  */
-#define MTU_TO_MAX_LEN(mtu)  ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
-#define MBUF_SIZE_MTU(mtu)   (MTU_TO_MAX_LEN(mtu)        \
-                              + sizeof(struct dp_packet) \
-                              + RTE_PKTMBUF_HEADROOM)
-#define MBUF_SIZE_DRIVER     (2048                       \
-                              + sizeof (struct rte_mbuf) \
-                              + RTE_PKTMBUF_HEADROOM)
-#define MBUF_SIZE(mtu)       MAX(MBUF_SIZE_MTU(mtu), MBUF_SIZE_DRIVER)
+#define ETHER_HDR_MAX_LEN           (ETHER_HDR_LEN + ETHER_CRC_LEN + (2 * VLAN_HEADER_LEN))
+#define MTU_TO_FRAME_LEN(mtu)       ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
+#define MTU_TO_MAX_FRAME_LEN(mtu)   ((mtu) + ETHER_HDR_MAX_LEN)
+#define FRAME_LEN_TO_MTU(frame_len) ((frame_len)- ETHER_HDR_LEN - ETHER_CRC_LEN)
+#define MBUF_SIZE(mtu)              ( MTU_TO_MAX_FRAME_LEN(mtu)   \
+                                    + sizeof(struct dp_packet)    \
+                                    + RTE_PKTMBUF_HEADROOM)
+#define NETDEV_DPDK_MBUF_ALIGN      1024
 
 /* Max and min number of packets in the mempool.  OVS tries to allocate a
  * mempool with MAX_NB_MBUF: if this fails (because the system doesn't have
@@ -256,6 +256,22 @@ is_dpdk_class(const struct netdev_class *class)
     return class->construct == netdev_dpdk_construct;
 }
 
+/* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
+ * aligned at 1k or less. If a declared mbuf size is not a multiple of this
+ * value, insufficient buffers are allocated to accomodate the packet in its
+ * entirety. Furthermore, certain drivers need to ensure that there is also
+ * sufficient space in the Rx buffer to accommodate two VLAN tags (for QinQ
+ * frames). If the RX buffer is too small, then the driver enables scatter RX
+ * behaviour, which reduces performance. To prevent this, use a buffer size that
+ * is closest to 'mtu', but which satisfies the aforementioned criteria.
+ */
+static uint32_t
+dpdk_buf_size(int mtu)
+{
+    return ROUND_UP((MTU_TO_MAX_FRAME_LEN(mtu) + RTE_PKTMBUF_HEADROOM),
+                     NETDEV_DPDK_MBUF_ALIGN);
+}
+
 /* XXX: use dpdk malloc for entire OVS. in fact huge page should be used
  * for all other segments data, bss and text. */
 
@@ -282,34 +298,6 @@ free_dpdk_buf(struct dp_packet *p)
 }
 
 static void
-__rte_pktmbuf_init(struct rte_mempool *mp,
-                   void *opaque_arg OVS_UNUSED,
-                   void *_m,
-                   unsigned i OVS_UNUSED)
-{
-    struct rte_mbuf *m = _m;
-    uint32_t buf_len = mp->elt_size - sizeof(struct dp_packet);
-
-    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dp_packet));
-
-    memset(m, 0, mp->elt_size);
-
-    /* start of buffer is just after mbuf structure */
-    m->buf_addr = (char *)m + sizeof(struct dp_packet);
-    m->buf_physaddr = rte_mempool_virt2phy(mp, m) +
-                    sizeof(struct dp_packet);
-    m->buf_len = (uint16_t)buf_len;
-
-    /* keep some headroom between start of buffer and data */
-    m->data_off = RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
-
-    /* init some constant fields */
-    m->pool = mp;
-    m->nb_segs = 1;
-    m->port = 0xff;
-}
-
-static void
 ovs_rte_pktmbuf_init(struct rte_mempool *mp,
                      void *opaque_arg OVS_UNUSED,
                      void *_m,
@@ -317,7 +305,7 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 {
     struct rte_mbuf *m = _m;
 
-    __rte_pktmbuf_init(mp, opaque_arg, _m, i);
+    rte_pktmbuf_init(mp, opaque_arg, _m, i);
 
     dp_packet_init_dpdk((struct dp_packet *) m, m->buf_len);
 }
@@ -328,6 +316,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     struct dpdk_mp *dmp = NULL;
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     unsigned mp_size;
+    struct rte_pktmbuf_pool_private mbp_priv;
 
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
@@ -340,6 +329,8 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     dmp->socket_id = socket_id;
     dmp->mtu = mtu;
     dmp->refcount = 1;
+    mbp_priv.mbuf_data_room_size = MBUF_SIZE(mtu) - sizeof(struct dp_packet);
+    mbp_priv.mbuf_priv_size = sizeof (struct dp_packet) - sizeof (struct rte_mbuf);
 
     mp_size = MAX_NB_MBUF;
     do {
@@ -351,7 +342,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
         dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
                                      MP_CACHE_SZ,
                                      sizeof(struct rte_pktmbuf_pool_private),
-                                     rte_pktmbuf_pool_init, NULL,
+                                     rte_pktmbuf_pool_init, &mbp_priv,
                                      ovs_rte_pktmbuf_init, NULL,
                                      socket_id, 0);
     } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
@@ -591,6 +582,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
     int sid;
     int err = 0;
+    uint32_t buf_size;
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
@@ -611,9 +603,10 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     netdev->type = type;
     netdev->flags = 0;
     netdev->mtu = ETHER_MTU;
-    netdev->max_packet_len = MTU_TO_MAX_LEN(netdev->mtu);
+    netdev->max_packet_len = MTU_TO_FRAME_LEN(netdev->mtu);
 
-    netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, netdev->mtu);
+    buf_size = dpdk_buf_size(netdev->mtu);
+    netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, FRAME_LEN_TO_MTU(buf_size));
     if (!netdev->dpdk_mp) {
         err = ENOMEM;
         goto unlock;
@@ -1439,9 +1432,10 @@ static int
 netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int old_mtu, err;
+    int old_mtu, err, dpdk_mtu;
     struct dpdk_mp *old_mp;
     struct dpdk_mp *mp;
+    uint32_t buf_size;
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
@@ -1450,7 +1444,10 @@ netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
         goto out;
     }
 
-    mp = dpdk_mp_get(dev->socket_id, dev->mtu);
+    buf_size = dpdk_buf_size(mtu);
+    dpdk_mtu = FRAME_LEN_TO_MTU(buf_size);
+
+    mp = dpdk_mp_get(dev->socket_id, dpdk_mtu);
     if (!mp) {
         err = ENOMEM;
         goto out;
@@ -1462,14 +1459,14 @@ netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
     old_mp = dev->dpdk_mp;
     dev->dpdk_mp = mp;
     dev->mtu = mtu;
-    dev->max_packet_len = MTU_TO_MAX_LEN(dev->mtu);
+    dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
 
     err = dpdk_eth_dev_init(dev);
     if (err) {
         dpdk_mp_put(mp);
         dev->mtu = old_mtu;
         dev->dpdk_mp = old_mp;
-        dev->max_packet_len = MTU_TO_MAX_LEN(dev->mtu);
+        dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
         dpdk_eth_dev_init(dev);
         goto out;
     }
@@ -1758,7 +1755,7 @@ netdev_dpdk_get_status(const struct netdev *netdev_, struct smap *args)
     smap_add_format(args, "numa_id", "%d", rte_eth_dev_socket_id(dev->port_id));
     smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
     smap_add_format(args, "min_rx_bufsize", "%u", dev_info.min_rx_bufsize);
-    smap_add_format(args, "max_rx_pktlen", "%u", dev_info.max_rx_pktlen);
+    smap_add_format(args, "max_rx_pktlen", "%u", dev->max_packet_len);
     smap_add_format(args, "max_rx_queues", "%u", dev_info.max_rx_queues);
     smap_add_format(args, "max_tx_queues", "%u", dev_info.max_tx_queues);
     smap_add_format(args, "max_mac_addrs", "%u", dev_info.max_mac_addrs);
