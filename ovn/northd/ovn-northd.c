@@ -100,7 +100,8 @@ enum ovn_stage {
     PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
     PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,    1, "lr_in_ip_input")     \
     PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  2, "lr_in_ip_routing")   \
-    PIPELINE_STAGE(ROUTER, IN,  ARP,         3, "lr_in_arp")          \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE, 3, "lr_in_arp_resolve")  \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST, 4, "lr_in_arp_request")  \
                                                                       \
     /* Logical router egress stages. */                               \
     PIPELINE_STAGE(ROUTER, OUT, DELIVERY,    0, "lr_out_delivery")
@@ -241,6 +242,7 @@ struct ovn_datapath {
     struct ovs_list list;       /* In list of similar records. */
 
     /* Logical router data (digested from nbr). */
+    const struct ovn_port *gateway_port;
     ovs_be32 gateway;
 
     /* Logical switch data. */
@@ -390,17 +392,18 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
 
         od->gateway = 0;
         if (nbr->default_gw) {
-            ovs_be32 ip, mask;
-            char *error = ip_parse_masked(nbr->default_gw, &ip, &mask);
-            if (error || !ip || mask != OVS_BE32_MAX) {
-                static struct vlog_rate_limit rl
-                    = VLOG_RATE_LIMIT_INIT(5, 1);
+            ovs_be32 ip;
+            if (!ip_parse(nbr->default_gw, &ip) || !ip) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
                 VLOG_WARN_RL(&rl, "bad 'gateway' %s", nbr->default_gw);
-                free(error);
             } else {
                 od->gateway = ip;
             }
         }
+
+        /* Set the gateway port to NULL.  If there is a gateway, it will get
+         * filled in as we go through the ports later. */
+        od->gateway_port = NULL;
     }
 }
 
@@ -411,6 +414,11 @@ ovn_datapath_allocate_key(struct hmap *dp_tnlids)
     return allocate_tnlid(dp_tnlids, "datapath", (1u << 24) - 1, &hint);
 }
 
+/* Updates the southbound Datapath_Binding table so that it contains the
+ * logical switches and routers specified by the northbound database.
+ *
+ * Initializes 'datapaths' to contain a "struct ovn_datapath" for every logical
+ * switch and router. */
 static void
 build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
 {
@@ -619,6 +627,18 @@ join_logical_ports(struct northd_context *ctx,
                 op->mac = mac;
 
                 op->od = od;
+
+                /* If 'od' has a gateway and 'op' routes to it... */
+                if (od->gateway && !((op->network ^ od->gateway) & op->mask)) {
+                    /* ...and if 'op' is a longer match than the current
+                     * choice... */
+                    const struct ovn_port *gw = od->gateway_port;
+                    int len = gw ? ip_count_cidr_bits(gw->mask) : 0;
+                    if (ip_count_cidr_bits(op->mask) > len) {
+                        /* ...then it's the default gateway port. */
+                        od->gateway_port = op;
+                    }
+                }
             }
         }
     }
@@ -686,6 +706,12 @@ ovn_port_update_sbrec(const struct ovn_port *op)
     }
 }
 
+/* Updates the southbound Port_Binding table so that it contains the logical
+ * ports specified by the northbound database.
+ *
+ * Initializes 'ports' to contain a "struct ovn_port" for every logical port,
+ * using the "struct ovn_datapath"s in 'datapaths' to look up logical
+ * datapaths. */
 static void
 build_ports(struct northd_context *ctx, struct hmap *datapaths,
             struct hmap *ports)
@@ -1470,7 +1496,7 @@ lrport_is_enabled(const struct nbrec_logical_router_port *lrport)
 }
 
 static void
-add_route(struct hmap *lflows, struct ovn_datapath *od,
+add_route(struct hmap *lflows, const struct ovn_port *op,
           ovs_be32 network, ovs_be32 mask, ovs_be32 gateway)
 {
     char *match = xasprintf("ip4.dst == "IP_FMT"/"IP_FMT,
@@ -1483,11 +1509,17 @@ add_route(struct hmap *lflows, struct ovn_datapath *od,
     } else {
         ds_put_cstr(&actions, "ip4.dst");
     }
-    ds_put_cstr(&actions, "; next;");
+    ds_put_format(&actions,
+                  "; "
+                  "reg1 = "IP_FMT"; "
+                  "eth.src = "ETH_ADDR_FMT"; "
+                  "outport = %s; "
+                  "next;",
+                  IP_ARGS(op->ip), ETH_ADDR_ARGS(op->mac), op->json_key);
 
     /* The priority here is calculated to implement longest-prefix-match
      * routing. */
-    ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_ROUTING,
+    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING,
                   count_1bits(ntohl(mask)), match, ds_cstr(&actions));
     ds_destroy(&actions);
     free(match);
@@ -1551,6 +1583,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "ip4.src == 0.0.0.0/8 || "
                       "ip4.dst == 0.0.0.0/8",
                       "drop;");
+
+        /* ARP reply handling.  Use ARP replies to populate the logical
+         * router's ARP table. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 90, "arp.op == 2",
+                      "put_arp(inport, arp.spa, arp.sha);");
 
         /* Drop Ethernet local broadcast.  By definition this traffic should
          * not be forwarded.*/
@@ -1641,23 +1678,24 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     /* Logical router ingress table 2: IP Routing.
      *
      * A packet that arrives at this table is an IP packet that should be
-     * routed to the address in ip4.dst. This table sets reg0 to the next-hop
-     * IP address (leaving ip4.dst, the packet’s final destination, unchanged)
-     * and advances to the next table for ARP resolution. */
+     * routed to the address in ip4.dst. This table sets outport to the correct
+     * output port, eth.src to the output port's MAC address, and reg0 to the
+     * next-hop IP address (leaving ip4.dst, the packet’s final destination,
+     * unchanged), and advances to the next table for ARP resolution. */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbr) {
             continue;
         }
 
-        add_route(lflows, op->od, op->network, op->mask, 0);
+        add_route(lflows, op, op->network, op->mask, 0);
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;
         }
 
-        if (od->gateway) {
-            add_route(lflows, od, 0, 0, od->gateway);
+        if (od->gateway && od->gateway_port) {
+            add_route(lflows, od->gateway_port, 0, 0, od->gateway);
         }
     }
     /* XXX destination unreachable */
@@ -1702,16 +1740,15 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                             continue;
                         }
 
-                        char *match = xasprintf("reg0 == "IP_FMT, IP_ARGS(ip));
-                        char *actions = xasprintf("eth.src = "ETH_ADDR_FMT"; "
-                                                  "eth.dst = "ETH_ADDR_FMT"; "
-                                                  "outport = %s; "
-                                                  "output;",
-                                                  ETH_ADDR_ARGS(peer->mac),
-                                                  ETH_ADDR_ARGS(laddrs.ea),
-                                                  peer->json_key);
+                        char *match = xasprintf(
+                            "outport == %s && reg0 == "IP_FMT,
+                            peer->json_key, IP_ARGS(ip));
+                        char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; "
+                                                  "next;",
+                                                  ETH_ADDR_ARGS(laddrs.ea));
                         ovn_lflow_add(lflows, peer->od,
-                                      S_ROUTER_IN_ARP, 200, match, actions);
+                                      S_ROUTER_IN_ARP_RESOLVE,
+                                      100, match, actions);
                         free(actions);
                         free(match);
                         break;
@@ -1721,6 +1758,35 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 free(laddrs.ipv4_addrs);
             }
         }
+    }
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbr) {
+            continue;
+        }
+
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "1",
+                      "get_arp(outport, reg0); next;");
+    }
+
+    /* Local router ingress table 4: ARP request.
+     *
+     * In the common case where the Ethernet destination has been resolved,
+     * this table outputs the packet (priority 100).  Otherwise, it composes
+     * and sends an ARP request (priority 0). */
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbr) {
+            continue;
+        }
+
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_REQUEST, 100,
+                      "eth.dst == 00:00:00:00:00:00",
+                      "arp { "
+                      "eth.dst = ff:ff:ff:ff:ff:ff; "
+                      "arp.spa = reg1; "
+                      "arp.op = 1; " /* ARP request */
+                      "output; "
+                      "};");
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_REQUEST, 0, "1", "output;");
     }
 
     /* Logical router egress table 0: Delivery (priority 100).

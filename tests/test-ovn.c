@@ -1249,6 +1249,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             .first_ptable = 16,
             .cur_ltable = 10,
             .output_ptable = 64,
+            .arp_ptable = 65,
         };
         error = actions_parse_string(ds_cstr(&input), &ap, &ofpacts, &prereqs);
         if (!error) {

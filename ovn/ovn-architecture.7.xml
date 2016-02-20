@@ -733,32 +733,62 @@
         <code>ovn-controller</code>'s job is to translate them into equivalent
         OpenFlow (in particular it translates the table numbers:
         <code>Logical_Flow</code> tables 0 through 15 become OpenFlow tables 16
-        through 31).  For a given packet, the logical ingress pipeline
-        eventually executes zero or more <code>output</code> actions:
+        through 31).
       </p>
 
-      <ul>
-        <li>
-          If the pipeline executes no <code>output</code> actions at all, the
-          packet is effectively dropped.
-        </li>
+      <p>
+        Most OVN actions have fairly obvious implementations in OpenFlow (with
+        OVS extensions), e.g. <code>next;</code> is implemented as
+        <code>resubmit</code>, <code><var>field</var> =
+        <var>constant</var>;</code> as <code>set_field</code>.  A few are worth
+        describing in more detail:
+      </p>
 
-        <li>
-          Most commonly, the pipeline executes one <code>output</code> action,
-          which <code>ovn-controller</code> implements by resubmitting the
-          packet to table 32.
-        </li>
+      <dl>
+        <dt><code>output:</code></dt>
+        <dd>
+          Implemented by resubmitting the packet to table 32.  If the pipeline
+          executes more than one <code>output</code> action, then each one is
+          separately resubmitted to table 32.  This can be used to send
+          multiple copies of the packet to multiple ports.  (If the packet was
+          not modified between the <code>output</code> actions, and some of the
+          copies are destined to the same hypervisor, then using a logical
+          multicast output port would save bandwidth between hypervisors.)
+        </dd>
 
-        <li>
-          If the pipeline can execute more than one <code>output</code> action,
-          then each one is separately resubmitted to table 32.  This can be
-          used to send multiple copies of the packet to multiple ports.  (If
-          the packet was not modified between the <code>output</code> actions,
-          and some of the copies are destined to the same hypervisor, then
-          using a logical multicast output port would save bandwidth between
-          hypervisors.)
-        </li>
-      </ul>
+        <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
+        <dd>
+          <p>
+            Implemented by storing arguments into OpenFlow fields, then
+            resubmitting to table 65, which <code>ovn-controller</code>
+            populates with flows generated from the <code>MAC_Binding</code>
+            table in the OVN Southbound database.  If there is a match in table
+            65, then its actions store the bound MAC in the Ethernet
+            destination address field.
+          </p>
+
+          <p>
+            (The OpenFlow actions save and restore the OpenFlow fields used for
+            the arguments, so that the OVN actions do not have to be aware of
+            this temporary use.)
+          </p>
+        </dd>
+
+        <dt><code>put_arp(<var>P</var>, <var>A</var>, <var>E</var>);</code></dt>
+        <dd>
+          <p>
+            Implemented by storing the arguments into OpenFlow fields, then
+            outputting a packet to <code>ovn-controller</code>, which updates
+            the <code>MAC_Binding</code> table.
+          </p>
+
+          <p>
+            (The OpenFlow actions save and restore the OpenFlow fields used for
+            the arguments, so that the OVN actions do not have to be aware of
+            this temporary use.)
+          </p>
+        </dd>
+      </dl>
     </li>
 
     <li>

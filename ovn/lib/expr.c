@@ -2875,3 +2875,56 @@ expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
     *prereqsp = prereqs;
     return ctx.error;
 }
+
+char *
+expr_parse_field(struct lexer *lexer, int n_bits, bool rw,
+                 const struct shash *symtab,
+                 struct mf_subfield *sf, struct expr **prereqsp)
+{
+    struct expr *prereqs = NULL;
+    struct expr_context ctx;
+    ctx.lexer = lexer;
+    ctx.symtab = symtab;
+    ctx.error = NULL;
+    ctx.not = false;
+
+    struct expr_field field;
+    if (!parse_field(&ctx, &field)) {
+        goto exit;
+    }
+
+    const struct expr_field orig_field = field;
+    if (!expand_symbol(&ctx, rw, &field, &prereqs)) {
+        goto exit;
+    }
+    ovs_assert(field.n_bits == orig_field.n_bits);
+
+    if (n_bits != field.n_bits) {
+        if (n_bits && field.n_bits) {
+            expr_error(&ctx, "Cannot use %d-bit field %s[%d..%d] "
+                       "where %d-bit field is required.",
+                       orig_field.n_bits, orig_field.symbol->name,
+                       orig_field.ofs, orig_field.ofs + orig_field.n_bits - 1,
+                       n_bits);
+        } else if (n_bits) {
+            expr_error(&ctx, "Cannot use string field %s where numeric "
+                       "field is required.",
+                       orig_field.symbol->name);
+        } else {
+            expr_error(&ctx, "Cannot use numeric field %s where string "
+                       "field is required.",
+                       orig_field.symbol->name);
+        }
+    }
+
+exit:
+    if (!ctx.error) {
+        mf_subfield_from_expr_field(&field, sf);
+        *prereqsp = prereqs;
+    } else {
+        memset(sf, 0, sizeof *sf);
+        expr_destroy(prereqs);
+        *prereqsp = NULL;
+    }
+    return ctx.error;
+}

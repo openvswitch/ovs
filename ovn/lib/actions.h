@@ -34,6 +34,16 @@ enum action_opcode {
      * The actions, in OpenFlow 1.3 format, follow the action_header.
      */
     ACTION_OPCODE_ARP,
+
+    /* "put_arp(port, ip, mac)"
+     *
+     * Arguments are passed through the packet metadata and data, as follows:
+     *
+     *     MFF_REG0 = ip
+     *     MFF_LOG_INPORT = port
+     *     MFF_ETH_SRC = mac
+     */
+    ACTION_OPCODE_PUT_ARP,
 };
 
 /* Header. */
@@ -78,6 +88,7 @@ struct action_params {
     uint8_t first_ptable;       /* First OpenFlow table. */
     uint8_t cur_ltable;         /* 0 <= cur_ltable < n_tables. */
     uint8_t output_ptable;      /* OpenFlow table for 'output' to resubmit. */
+    uint8_t arp_ptable;         /* OpenFlow table for 'get_arp' to resubmit. */
 };
 
 char *actions_parse(struct lexer *, const struct action_params *,

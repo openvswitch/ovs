@@ -193,15 +193,13 @@ is_switch(const struct sbrec_datapath_binding *ldp)
 
 }
 
-/* Translates logical flows in the Logical_Flow table in the OVN_SB database
- * into OpenFlow flows.  See ovn-architecture(7) for more information. */
-void
-lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
-          const struct mcgroup_index *mcgroups,
-          const struct hmap *local_datapaths,
-          const struct simap *ct_zones, struct hmap *flow_table)
+/* Adds the logical flows from the Logical_Flow table to 'flow_table'. */
+static void
+add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
+                  const struct mcgroup_index *mcgroups,
+                  const struct hmap *local_datapaths,
+                  const struct simap *ct_zones, struct hmap *flow_table)
 {
-    struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
 
     const struct sbrec_logical_flow *lflow;
@@ -275,6 +273,7 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
             .first_ptable = first_ptable,
             .cur_ltable = lflow->table_id,
             .output_ptable = output_ptable,
+            .arp_ptable = OFTABLE_MAC_BINDING,
         };
         error = actions_parse_string(lflow->actions, &ap, &ofpacts, &prereqs);
         if (error) {
@@ -349,6 +348,79 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
         ofpbuf_uninit(&ofpacts);
         conj_id_ofs += n_conjs;
     }
+}
+
+static void
+put_load(const uint8_t *data, size_t len,
+         enum mf_field_id dst, int ofs, int n_bits,
+         struct ofpbuf *ofpacts)
+{
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+    sf->field = mf_from_id(dst);
+    sf->flow_has_vlan = false;
+
+    bitwise_copy(data, len, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+}
+
+/* Adds an OpenFlow flow to 'flow_table' for each MAC binding in the OVN
+ * southbound database, using 'lports' to resolve logical port names to
+ * numbers. */
+static void
+add_neighbor_flows(struct controller_ctx *ctx,
+                   const struct lport_index *lports, struct hmap *flow_table)
+{
+    struct ofpbuf ofpacts;
+    struct match match;
+    match_init_catchall(&match);
+    ofpbuf_init(&ofpacts, 0);
+
+    const struct sbrec_mac_binding *b;
+    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+        const struct sbrec_port_binding *pb
+            = lport_lookup_by_name(lports, b->logical_port);
+        if (!pb) {
+            continue;
+        }
+
+        struct eth_addr mac;
+        if (!eth_addr_from_string(b->mac, &mac)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'mac' %s", b->mac);
+            continue;
+        }
+
+        ovs_be32 ip;
+        if (!ip_parse(b->ip, &ip)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+            continue;
+        }
+
+        match_set_metadata(&match, htonll(pb->datapath->tunnel_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
+        match_set_reg(&match, 0, ntohl(ip));
+
+        ofpbuf_clear(&ofpacts);
+        put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
+
+        ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100,
+                        &match, &ofpacts);
+    }
+    ofpbuf_uninit(&ofpacts);
+}
+
+/* Translates logical flows in the Logical_Flow table in the OVN_SB database
+ * into OpenFlow flows.  See ovn-architecture(7) for more information. */
+void
+lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
+          const struct mcgroup_index *mcgroups,
+          const struct hmap *local_datapaths,
+          const struct simap *ct_zones, struct hmap *flow_table)
+{
+    add_logical_flows(ctx, lports, mcgroups, local_datapaths,
+                      ct_zones, flow_table);
+    add_neighbor_flows(ctx, lports, flow_table);
 }
 
 void

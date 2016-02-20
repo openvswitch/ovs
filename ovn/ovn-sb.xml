@@ -17,7 +17,7 @@
   <h2>Database Structure</h2>
 
   <p>
-    The OVN Southbound database contains three classes of data with
+    The OVN Southbound database contains classes of data with
     different properties, as described in the sections below.
   </p>
 
@@ -77,17 +77,17 @@
     data.
   </p>
 
-  <h3>Bindings data</h3>
+  <h3>Logical-physical bindings</h3>
 
   <p>
-    Bindings data link logical and physical components.  They show the current
+    These tables link logical and physical components.  They show the current
     placement of logical components (such as VMs and VIFs) onto chassis, and
     map logical entities to the values that represent them in tunnel
     encapsulations.
   </p>
 
   <p>
-    Bindings change frequently, at least every time a VM powers up or down
+    These tables change frequently, at least every time a VM powers up or down
     or migrates, and especially quickly in a container environment.  The
     amount of data per VM (or VIF) is small.
   </p>
@@ -101,6 +101,17 @@
   <p>
     The <ref table="Port_Binding"/> and <ref table="Datapath_Binding"/> tables
     contain binding data.
+  </p>
+
+  <h3>MAC bindings</h3>
+
+  <p>
+    The <ref table="MAC_Binding"/> table tracks the bindings from IP addresses
+    to Ethernet addresses that are dynamically discovered using ARP (for IPv4)
+    and neighbor discovery (for IPv6).  Usually, IP-to-MAC bindings for virtual
+    machines are statically populated into the <ref table="Port_Binding"/>
+    table, so <ref table="MAC_Binding"/> is primarily used to discover bindings
+    on physical networks.
   </p>
 
   <h2>Common Columns</h2>
@@ -943,6 +954,43 @@
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 
+        <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: logical port string field <var>P</var>, 32-bit
+            IP address field <var>A</var>.
+          </p>
+
+          <p>
+            Looks up <var>A</var> in <var>P</var>'s ARP table.  If an entry is
+            found, stores its Ethernet address in <code>eth.dst</code>,
+            otherwise stores <code>00:00:00:00:00:00</code> in
+            <code>eth.dst</code>.
+          </p>
+
+          <p><b>Example:</b> <code>get_arp(outport, ip4.dst);</code></p>
+        </dd>
+
+        <dt>
+          <code>put_arp(<var>P</var>, <var>A</var>, <var>E</var>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: logical port string field <var>P</var>, 32-bit
+            IP address field <var>A</var>, 48-bit Ethernet address field
+            <var>E</var>.
+          </p>
+
+          <p>
+            Adds or updates the entry for IP address <var>A</var> in logical
+            port <var>P</var>'s ARP table, setting its Ethernet address to
+            <var>E</var>.
+          </p>
+
+          <p><b>Example:</b> <code>put_arp(inport, arp.spa, arp.sha);</code></p>
+        </dd>
       </dl>
 
       <p>
@@ -1350,5 +1398,86 @@ tcp.flags = RST;
         </p>
       </column>
     </group>
+  </table>
+
+  <table name="MAC_Binding" title="IP to MAC bindings">
+    <p>
+      Each row in this table specifies a binding from an IP address to an
+      Ethernet address that has been discovered through ARP (for IPv4) or
+      neighbor discovery (for IPv6).  This table is primarily used to discover
+      bindings on physical networks, because IP-to-MAC bindings for virtual
+      machines are usually populated statically into the <ref
+      table="Port_Binding"/> table.
+    </p>
+
+    <p>
+      This table expresses a functional relationship: <ref
+      table="MAC_Binding"/>(<ref column="logical_port"/>, <ref column="ip"/>) =
+      <ref column="mac"/>.
+    </p>
+
+    <p>
+      In outline, the lifetime of a logical router's MAC binding looks like
+      this:
+    </p>
+
+    <ol>
+      <li>
+        On hypervisor 1, a logical router determines that a packet should be
+        forwarded to IP address <var>A</var> on one of its router ports.  It
+        uses its logical flow table to determine that <var>A</var> lacks a
+        static IP-to-MAC binding and the <code>get_arp</code> action to
+        determine that it lacks a dynamic IP-to-MAC binding.
+      </li>
+
+      <li>
+        Using an OVN logical <code>arp</code> action, the logical router
+        generates and sends a broadcast ARP request to the router port.  It
+        drops the IP packet.
+      </li>
+
+      <li>
+        The logical switch attached to the router port delivers the ARP request
+        to all of its ports.  (It might make sense to deliver it only to ports
+        that have no static IP-to-MAC bindings, but this could also be
+        surprising behavior.)
+      </li>
+
+      <li>
+        A host or VM on hypervisor 2 (which might be the same as hypervisor 1)
+        attached to the logical switch owns the IP address in question.  It
+        composes an ARP reply and unicasts it to the logical router port's
+        Ethernet address.
+      </li>
+
+      <li>
+        The logical switch delivers the ARP reply to the logical router port.
+      </li>
+
+      <li>
+        The logical router flow table executes a <code>put_arp</code> action.
+        To record the IP-to-MAC binding, <code>ovn-controller</code> adds a row
+        to the <ref table="MAC_Binding"/> table.
+      </li>
+
+      <li>
+        On hypervisor 1, <code>ovn-controller</code> receives the updated <ref
+        table="MAC_Binding"/> table from the OVN southbound database.  The next
+        packet destined to <var>A</var> through the logical router is sent
+        directly to the bound Ethernet address.
+      </li>
+    </ol>
+
+    <column name="logical_port">
+      The logical port on which the binding was discovered.
+    </column>
+
+    <column name="ip">
+      The bound IP address.
+    </column>
+
+    <column name="mac">
+      The Ethernet address to which the IP is bound.
+    </column>
   </table>
 </database>
