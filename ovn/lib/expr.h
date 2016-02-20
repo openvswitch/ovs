@@ -387,5 +387,8 @@ char *expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
                                                 unsigned int *portp),
                             const void *aux, struct ofpbuf *ofpacts,
                             struct expr **prereqsp);
+char *expr_parse_field(struct lexer *, int n_bits, bool rw,
+                       const struct shash *symtab, struct mf_subfield *,
+                       struct expr **prereqsp);
 
 #endif /* ovn/expr.h */

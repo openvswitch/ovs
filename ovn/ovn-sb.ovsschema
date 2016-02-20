@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.0.0",
-    "cksum": "1392129391 5060",
+    "version": "1.1.0",
+    "cksum": "1223981720 5320",
     "tables": {
         "Chassis": {
             "columns": {
@@ -99,6 +99,11 @@
                                  "min": 0,
                                  "max": "unlimited"}}},
             "indexes": [["datapath", "tunnel_key"], ["logical_port"]],
-            "isRoot": true}
-    }
-}
+            "isRoot": true},
+        "MAC_Binding": {
+            "columns": {
+                "logical_port": {"type": "string"},
+                "ip": {"type": "string"},
+                "mac": {"type": "string"}},
+            "indexes": [["logical_port", "ip"]],
+            "isRoot": true}}}

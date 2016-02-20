@@ -17,16 +17,23 @@
 
 #include "pinctrl.h"
 
+#include "coverage.h"
 #include "dirs.h"
 #include "dp-packet.h"
+#include "lport.h"
 #include "ofp-actions.h"
+#include "ovn/lib/actions.h"
+#include "ovn/lib/logical-fields.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ovn/lib/actions.h"
 #include "rconn.h"
 #include "openvswitch/vlog.h"
+#include "ovn-controller.h"
+#include "poll-loop.h"
 #include "socket-util.h"
+#include "timeval.h"
 #include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(pinctrl);
@@ -38,11 +45,23 @@ static struct rconn *swconn;
  * rconn_get_connection_seqno(rconn), 'swconn' has reconnected. */
 static unsigned int conn_seq_no;
 
+static void pinctrl_handle_put_arp(const struct flow *md,
+                                   const struct flow *headers);
+static void init_put_arps(void);
+static void destroy_put_arps(void);
+static void run_put_arps(struct controller_ctx *,
+                         const struct lport_index *lports);
+static void wait_put_arps(struct controller_ctx *);
+static void flush_put_arps(void);
+
+COVERAGE_DEFINE(pinctrl_drop_put_arp);
+
 void
 pinctrl_init(void)
 {
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     conn_seq_no = 0;
+    init_put_arps();
 }
 
 static ovs_be32
@@ -80,7 +99,8 @@ set_switch_config(struct rconn *swconn,
 }
 
 static void
-pinctrl_handle_arp(const struct flow *ip_flow, struct ofpbuf *userdata)
+pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
+                   struct ofpbuf *userdata)
 {
     /* This action only works for IP packets, and the switch should only send
      * us IP packets this way, but check here just to be sure. */
@@ -114,26 +134,36 @@ pinctrl_handle_arp(const struct flow *ip_flow, struct ofpbuf *userdata)
 
     /* Compose actions.
      *
-     * First, add actions to restore the metadata, then add actions from
-     * 'userdata'.
+     * First, copy metadata from 'md' into the packet-out via "set_field"
+     * actions, then add actions from 'userdata'.
      */
-    uint64_t ofpacts_stub[1024 / 8];
+    uint64_t ofpacts_stub[4096 / 8];
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
     enum ofp_version version = rconn_get_version(swconn);
 
-    for (int id = 0; id < MFF_N_IDS; id++) {
-        const struct mf_field *field = mf_from_id(id);
-
-        if (field->prereqs == MFP_NONE
-            && field->writable
-            && id != MFF_IN_PORT && id != MFF_IN_PORT_OXM
-            && mf_is_set(field, ip_flow))
-        {
+    enum mf_field_id md_fields[] = {
+#if FLOW_N_REGS == 8
+        MFF_REG0,
+        MFF_REG1,
+        MFF_REG2,
+        MFF_REG3,
+        MFF_REG4,
+        MFF_REG5,
+        MFF_REG6,
+        MFF_REG7,
+#else
+#error
+#endif
+        MFF_METADATA,
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(md_fields); i++) {
+        const struct mf_field *field = mf_from_id(md_fields[i]);
+        if (!mf_is_all_wild(field, &md->wc)) {
             struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
             sf->field = field;
             sf->flow_has_vlan = false;
-            mf_get_value(field, ip_flow, &sf->value);
-            bitwise_one(&sf->mask, sizeof sf->mask, 0, field->n_bits);
+            mf_get_value(field, &md->flow, &sf->value);
+            memset(&sf->mask, 0xff, field->n_bytes);
         }
     }
     enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
@@ -191,15 +221,18 @@ process_packet_in(const struct ofp_header *msg)
     struct flow headers;
     flow_extract(&packet, &headers);
 
-    const struct flow *md = &pin.flow_metadata.flow;
     switch (ntohl(ah->opcode)) {
     case ACTION_OPCODE_ARP:
-        pinctrl_handle_arp(&headers, &userdata);
+        pinctrl_handle_arp(&headers, &pin.flow_metadata, &userdata);
+        break;
+
+    case ACTION_OPCODE_PUT_ARP:
+        pinctrl_handle_put_arp(&pin.flow_metadata.flow, &headers);
         break;
 
     default:
-        VLOG_WARN_RL(&rl, "unrecognized packet-in command %#"PRIx32,
-                     md->regs[0]);
+        VLOG_WARN_RL(&rl, "unrecognized packet-in opcode %"PRIu32,
+                     ntohl(ah->opcode));
         break;
     }
 }
@@ -232,7 +265,8 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type)
 }
 
 void
-pinctrl_run(const struct ovsrec_bridge *br_int)
+pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
+            const struct ovsrec_bridge *br_int)
 {
     if (br_int) {
         char *target;
@@ -253,6 +287,7 @@ pinctrl_run(const struct ovsrec_bridge *br_int)
         if (conn_seq_no != rconn_get_connection_seqno(swconn)) {
             pinctrl_setup(swconn);
             conn_seq_no = rconn_get_connection_seqno(swconn);
+            flush_put_arps();
         }
 
         /* Process a limited number of messages per call. */
@@ -270,11 +305,14 @@ pinctrl_run(const struct ovsrec_bridge *br_int)
             ofpbuf_delete(msg);
         }
     }
+
+    run_put_arps(ctx, lports);
 }
 
 void
-pinctrl_wait(void)
+pinctrl_wait(struct controller_ctx *ctx)
 {
+    wait_put_arps(ctx);
     rconn_run_wait(swconn);
     rconn_recv_wait(swconn);
 }
@@ -283,4 +321,166 @@ void
 pinctrl_destroy(void)
 {
     rconn_destroy(swconn);
+    destroy_put_arps();
+}
+
+/* Implementation of the "put_arp" OVN action.  This action sends a packet to
+ * ovn-controller, using the flow as an API (see actions.h for details).  This
+ * code implements the action by updating the MAC_Binding table in the
+ * southbound database.
+ *
+ * This code could be a lot simpler if the database could always be updated,
+ * but in fact we can only update it when ctx->ovnsb_idl_txn is nonnull.  Thus,
+ * we buffer up a few put_arps (but we don't keep them longer than 1 second)
+ * and apply them whenever a database transaction is available. */
+
+/* Buffered "put_arp" operation. */
+struct put_arp {
+    struct hmap_node hmap_node; /* In 'put_arps'. */
+
+    long long int timestamp;    /* In milliseconds. */
+
+    /* Key. */
+    uint32_t dp_key;
+    uint32_t port_key;
+    ovs_be32 ip;
+
+    /* Value. */
+    struct eth_addr mac;
+};
+
+/* Contains "struct put_arp"s. */
+static struct hmap put_arps;
+
+static void
+init_put_arps(void)
+{
+    hmap_init(&put_arps);
+}
+
+static void
+destroy_put_arps(void)
+{
+    flush_put_arps();
+    hmap_destroy(&put_arps);
+}
+
+static struct put_arp *
+pinctrl_find_put_arp(uint32_t dp_key, uint32_t port_key, ovs_be32 ip,
+                     uint32_t hash)
+{
+    struct put_arp *pa;
+    HMAP_FOR_EACH_WITH_HASH (pa, hmap_node, hash, &put_arps) {
+        if (pa->dp_key == dp_key
+            && pa->port_key == port_key
+            && pa->ip == ip) {
+            return pa;
+        }
+    }
+    return NULL;
+}
+
+static void
+pinctrl_handle_put_arp(const struct flow *md, const struct flow *headers)
+{
+    uint32_t dp_key = ntohll(md->metadata);
+    uint32_t port_key = md->regs[MFF_LOG_INPORT - MFF_REG0];
+    ovs_be32 ip = htonl(md->regs[0]);
+    uint32_t hash = hash_3words(dp_key, port_key, (OVS_FORCE uint32_t) ip);
+    struct put_arp *pa = pinctrl_find_put_arp(dp_key, port_key, ip, hash);
+    if (!pa) {
+        if (hmap_count(&put_arps) >= 1000) {
+            COVERAGE_INC(pinctrl_drop_put_arp);
+            return;
+        }
+
+        pa = xmalloc(sizeof *pa);
+        hmap_insert(&put_arps, &pa->hmap_node, hash);
+        pa->dp_key = dp_key;
+        pa->port_key = port_key;
+        pa->ip = ip;
+    }
+    pa->timestamp = time_msec();
+    pa->mac = headers->dl_src;
+}
+
+static void
+run_put_arp(struct controller_ctx *ctx, const struct lport_index *lports,
+            const struct put_arp *pa)
+{
+    if (time_msec() > pa->timestamp + 1000) {
+        return;
+    }
+
+    /* Convert logical datapath and logical port key into lport. */
+    const struct sbrec_port_binding *pb
+        = lport_lookup_by_key(lports, pa->dp_key, pa->port_key);
+    if (!pb) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        VLOG_WARN_RL(&rl, "unknown logical port with datapath %"PRIu32" "
+                     "and port %"PRIu32, pa->dp_key, pa->port_key);
+        return;
+    }
+
+    /* Convert arguments to string form for database. */
+    char ip_string[INET_ADDRSTRLEN + 1];
+    snprintf(ip_string, sizeof ip_string, IP_FMT, IP_ARGS(pa->ip));
+
+    char mac_string[ETH_ADDR_STRLEN + 1];
+    snprintf(mac_string, sizeof mac_string,
+             ETH_ADDR_FMT, ETH_ADDR_ARGS(pa->mac));
+
+    /* Check for and update an existing IP-MAC binding for this logical
+     * port.
+     *
+     * XXX This is not very efficient. */
+    const struct sbrec_mac_binding *b;
+    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+        if (!strcmp(b->logical_port, pb->logical_port)
+            && !strcmp(b->ip, ip_string)) {
+            if (strcmp(b->mac, mac_string)) {
+                sbrec_mac_binding_set_mac(b, mac_string);
+            }
+            return;
+        }
+    }
+
+    /* Add new IP-MAC binding for this logical port. */
+    b = sbrec_mac_binding_insert(ctx->ovnsb_idl_txn);
+    sbrec_mac_binding_set_logical_port(b, pb->logical_port);
+    sbrec_mac_binding_set_ip(b, ip_string);
+    sbrec_mac_binding_set_mac(b, mac_string);
+}
+
+static void
+run_put_arps(struct controller_ctx *ctx, const struct lport_index *lports)
+{
+    if (!ctx->ovnsb_idl_txn) {
+        return;
+    }
+
+    const struct put_arp *pa;
+    HMAP_FOR_EACH (pa, hmap_node, &put_arps) {
+        run_put_arp(ctx, lports, pa);
+    }
+    flush_put_arps();
+}
+
+static void
+wait_put_arps(struct controller_ctx *ctx)
+{
+    if (ctx->ovnsb_idl_txn && !hmap_is_empty(&put_arps)) {
+        poll_immediate_wake();
+    }
+}
+
+static void
+flush_put_arps(void)
+{
+    struct put_arp *pa, *next;
+    HMAP_FOR_EACH_SAFE (pa, next, hmap_node, &put_arps) {
+        hmap_remove(&put_arps, &pa->hmap_node);
+        free(pa);
+    }
 }

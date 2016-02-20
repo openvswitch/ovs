@@ -53,6 +53,7 @@ struct uuid;
 #define OFTABLE_DROP_LOOPBACK        34
 #define OFTABLE_LOG_EGRESS_PIPELINE  48 /* First of LOG_PIPELINE_LEN tables. */
 #define OFTABLE_LOG_TO_PHY           64
+#define OFTABLE_MAC_BINDING          65
 
 /* The number of tables for the ingress and egress pipelines. */
 #define LOG_PIPELINE_LEN 16

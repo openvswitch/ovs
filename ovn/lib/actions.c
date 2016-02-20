@@ -184,6 +184,37 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
     ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
 }
 
+static size_t
+start_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
+{
+    size_t ofs = ofpacts->size;
+
+    struct ofpact_controller *oc = ofpact_put_CONTROLLER(ofpacts);
+    oc->max_len = UINT16_MAX;
+    oc->reason = OFPR_ACTION;
+
+    struct action_header ah = { .opcode = htonl(opcode) };
+    ofpbuf_put(ofpacts, &ah, sizeof ah);
+
+    return ofs;
+}
+
+static void
+finish_controller_op(struct ofpbuf *ofpacts, size_t ofs)
+{
+    struct ofpact_controller *oc = ofpbuf_at_assert(ofpacts, ofs, sizeof *oc);
+    ofpacts->header = oc;
+    oc->userdata_len = ofpacts->size - (ofs + sizeof *oc);
+    ofpact_finish(ofpacts, &oc->ofpact);
+}
+
+static void
+put_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
+{
+    size_t ofs = start_controller_op(ofpacts, opcode);
+    finish_controller_op(ofpacts, ofs);
+}
+
 static void
 parse_arp_action(struct action_context *ctx)
 {
@@ -214,22 +245,10 @@ parse_arp_action(struct action_context *ctx)
      * converted to OpenFlow, as its userdata.  ovn-controller will convert the
      * packet to an ARP and then send the packet and actions back to the switch
      * inside an OFPT_PACKET_OUT message. */
-    size_t oc_offset = ctx->ofpacts->size;
-    ofpact_put_CONTROLLER(ctx->ofpacts);
-
-    struct action_header ah = { .opcode = htonl(ACTION_OPCODE_ARP) };
-    ofpbuf_put(ctx->ofpacts, &ah, sizeof ah);
-
+    size_t oc_offset = start_controller_op(ctx->ofpacts, ACTION_OPCODE_ARP);
     ofpacts_put_openflow_actions(inner_ofpacts.data, inner_ofpacts.size,
                                  ctx->ofpacts, OFP13_VERSION);
-
-    struct ofpact_controller *oc = ofpbuf_at_assert(ctx->ofpacts, oc_offset,
-                                                    sizeof *oc);
-    ctx->ofpacts->header = oc;
-    oc->max_len = UINT16_MAX;
-    oc->reason = OFPR_ACTION;
-    oc->userdata_len = ctx->ofpacts->size - (oc_offset + sizeof *oc);
-    ofpact_finish(ctx->ofpacts, &oc->ofpact);
+    finish_controller_op(ctx->ofpacts, oc_offset);
 
     /* Restore prerequisites. */
     expr_destroy(ctx->prereqs);
@@ -238,6 +257,158 @@ parse_arp_action(struct action_context *ctx)
 
     /* Free memory. */
     ofpbuf_uninit(&inner_ofpacts);
+}
+
+static bool
+action_force_match(struct action_context *ctx, enum lex_type t)
+{
+    if (lexer_match(ctx->lexer, t)) {
+        return true;
+    } else {
+        struct lex_token token = { .type = t };
+        struct ds s = DS_EMPTY_INITIALIZER;
+        lex_token_format(&token, &s);
+
+        action_syntax_error(ctx, "expecting `%s'", ds_cstr(&s));
+
+        ds_destroy(&s);
+
+        return false;
+    }
+}
+
+static bool
+action_parse_field(struct action_context *ctx,
+                   int n_bits, struct mf_subfield *sf)
+{
+    struct expr *prereqs;
+    char *error;
+
+    error = expr_parse_field(ctx->lexer, n_bits, false, ctx->ap->symtab, sf,
+                             &prereqs);
+    if (error) {
+        action_error(ctx, "%s", error);
+        return false;
+    }
+
+    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+    return true;
+}
+
+static void
+init_stack(struct ofpact_stack *stack, enum mf_field_id field)
+{
+    stack->subfield.field = mf_from_id(field);
+    stack->subfield.ofs = 0;
+    stack->subfield.n_bits = stack->subfield.field->n_bits;
+}
+
+struct arg {
+    const struct mf_subfield *src;
+    enum mf_field_id dst;
+};
+
+static void
+setup_args(struct action_context *ctx,
+           const struct arg args[], size_t n_args)
+{
+    /* 1. Save all of the destinations that will be modified. */
+    for (const struct arg *a = args; a < &args[n_args]; a++) {
+        ovs_assert(a->src->n_bits == mf_from_id(a->dst)->n_bits);
+        if (a->src->field->id != a->dst) {
+            init_stack(ofpact_put_STACK_PUSH(ctx->ofpacts), a->dst);
+        }
+    }
+
+    /* 2. Push the sources, in reverse order. */
+    for (size_t i = n_args - 1; i < n_args; i--) {
+        const struct arg *a = &args[i];
+        if (a->src->field->id != a->dst) {
+            ofpact_put_STACK_PUSH(ctx->ofpacts)->subfield = *a->src;
+        }
+    }
+
+    /* 3. Pop the sources into the destinations. */
+    for (const struct arg *a = args; a < &args[n_args]; a++) {
+        if (a->src->field->id != a->dst) {
+            init_stack(ofpact_put_STACK_POP(ctx->ofpacts), a->dst);
+        }
+    }
+}
+
+static void
+restore_args(struct action_context *ctx,
+             const struct arg args[], size_t n_args)
+{
+    for (size_t i = n_args - 1; i < n_args; i--) {
+        const struct arg *a = &args[i];
+        if (a->src->field->id != a->dst) {
+            init_stack(ofpact_put_STACK_POP(ctx->ofpacts), a->dst);
+        }
+    }
+}
+
+static void
+put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
+         struct ofpbuf *ofpacts)
+{
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+    sf->field = mf_from_id(dst);
+    sf->flow_has_vlan = false;
+
+    ovs_be64 n_value = htonll(value);
+    bitwise_copy(&n_value, 8, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+}
+
+static void
+parse_get_arp_action(struct action_context *ctx)
+{
+    struct mf_subfield port, ip;
+
+    if (!action_force_match(ctx, LEX_T_LPAREN)
+        || !action_parse_field(ctx, 0, &port)
+        || !action_force_match(ctx, LEX_T_COMMA)
+        || !action_parse_field(ctx, 32, &ip)
+        || !action_force_match(ctx, LEX_T_RPAREN)) {
+        return;
+    }
+
+    const struct arg args[] = {
+        { &port, MFF_LOG_OUTPORT },
+        { &ip, MFF_REG0 },
+    };
+    setup_args(ctx, args, ARRAY_SIZE(args));
+
+    put_load(0, MFF_ETH_DST, 0, 48, ctx->ofpacts);
+    emit_resubmit(ctx, ctx->ap->arp_ptable);
+
+    restore_args(ctx, args, ARRAY_SIZE(args));
+}
+
+static void
+parse_put_arp_action(struct action_context *ctx)
+{
+    struct mf_subfield port, ip, mac;
+
+    if (!action_force_match(ctx, LEX_T_LPAREN)
+        || !action_parse_field(ctx, 0, &port)
+        || !action_force_match(ctx, LEX_T_COMMA)
+        || !action_parse_field(ctx, 32, &ip)
+        || !action_force_match(ctx, LEX_T_COMMA)
+        || !action_parse_field(ctx, 48, &mac)
+        || !action_force_match(ctx, LEX_T_RPAREN)) {
+        return;
+    }
+
+    const struct arg args[] = {
+        { &port, MFF_LOG_INPORT },
+        { &ip, MFF_REG0 },
+        { &mac, MFF_ETH_SRC }
+    };
+    setup_args(ctx, args, ARRAY_SIZE(args));
+    put_controller_op(ctx->ofpacts, ACTION_OPCODE_PUT_ARP);
+    restore_args(ctx, args, ARRAY_SIZE(args));
 }
 
 static void
@@ -298,6 +469,10 @@ parse_action(struct action_context *ctx)
         emit_ct(ctx, false, true);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
         parse_arp_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "get_arp")) {
+        parse_get_arp_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "put_arp")) {
+        parse_put_arp_action(ctx);
     } else {
         action_syntax_error(ctx, "expecting action");
     }

@@ -302,7 +302,7 @@ main(int argc, char *argv[])
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
-            pinctrl_run(br_int);
+            pinctrl_run(&ctx, &lports, br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
@@ -332,13 +332,12 @@ main(int argc, char *argv[])
             poll_immediate_wake();
         }
 
-        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
-        ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
-
         if (br_int) {
             ofctrl_wait();
-            pinctrl_wait();
+            pinctrl_wait(&ctx);
         }
+        ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
+        ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
         poll_block();
         if (should_service_stop()) {
             exiting = true;

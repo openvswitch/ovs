@@ -510,6 +510,21 @@ ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
 # arp
 arp { eth.dst = ff:ff:ff:ff:ff:ff; output; }; => actions=controller(userdata=00.00.00.00.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=ip4
 
+# get_arp
+get_arp(outport, ip4.dst); => actions=push:NXM_NX_REG0[],push:NXM_OF_IP_DST[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[], prereqs=eth.type == 0x800
+get_arp(inport, reg0); => actions=push:NXM_NX_REG7[],push:NXM_NX_REG0[],push:OXM_OF_PKT_REG0[32..63],push:NXM_NX_REG6[],pop:NXM_NX_REG7[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG7[], prereqs=1
+get_arp; => Syntax error at `;' expecting `('.
+get_arp(); => Syntax error at `)' expecting field name.
+get_arp(inport); => Syntax error at `)' expecting `,'.
+get_arp(inport ip4.dst); => Syntax error at `ip4.dst' expecting `,'.
+get_arp(inport, ip4.dst; => Syntax error at `;' expecting `)'.
+get_arp(inport, eth.dst); => Cannot use 48-bit field eth.dst[0..47] where 32-bit field is required.
+get_arp(inport, outport); => Cannot use string field outport where numeric field is required.
+get_arp(reg0, ip4.dst); => Cannot use numeric field reg0 where string field is required.
+
+# put_arp
+put_arp(inport, arp.spa, arp.sha); => actions=push:NXM_NX_REG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ARP_SHA[],push:NXM_OF_ARP_SPA[],pop:NXM_NX_REG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.01.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_REG0[], prereqs=eth.type == 0x806 && eth.type == 0x806
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
 ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
@@ -1126,9 +1141,13 @@ for i in 1 2 3; do
     ovn-nbctl lswitch-add ls$i
     for j in 1 2 3; do
         for k in 1 2 3; do
+	    # Add "unknown" to MAC addresses for lp?11, so packets for
+	    # MAC-IP bindings discovered via ARP later have somewhere to go.
+	    if test $j$k = 11; then unknown=unknown; else unknown=; fi
+
 	    ovn-nbctl \
 		-- lport-add ls$i lp$i$j$k \
-		-- lport-set-addresses lp$i$j$k "f0:00:00:00:0$i:$j$k 192.168.$i$j.$k"
+		-- lport-set-addresses lp$i$j$k "f0:00:00:00:0$i:$j$k 192.168.$i$j.$k" $unknown
         done
     done
 done
@@ -1218,7 +1237,7 @@ sleep 1
 # content has Ethernet destination DST and source SRC (each exactly 12 hex
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
-# OUTPORTs are specified as lport numbers, e.g. 11 for vif11.
+# OUTPORTs are specified as lport numbers, e.g. 123 for vif123.
 trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
 }
@@ -1254,6 +1273,8 @@ test_ip() {
 }
 
 as hv1 ovs-vsctl --columns=name,ofport list interface
+as hv1 ovn-sbctl list port_binding
+as hv1 ovn-sbctl list datapath_binding
 as hv1 ovn-sbctl dump-flows
 as hv1 ovs-ofctl dump-flows br-int
 
@@ -1292,6 +1313,48 @@ for is in 1 2 3; do
     done
 done
 
+# 3. Send an IP packet from every logical port to every other subnet,
+#    to an IP address that does not have a static IP-MAC binding.
+#    This should generate a broadcast ARP request for the destination
+#    IP address in the destination subnet.
+for is in 1 2 3; do
+    for js in 1 2 3; do
+	for ks in 1 2 3; do
+	    s=$is$js$ks
+	    smac=f00000000$s
+	    sip=`ip_to_hex 192 168 $is$js $ks`
+	    for id in 1 2 3; do
+		for jd in 1 2 3; do
+		    if test $is$js = $id$jd; then
+		        continue
+                    fi
+
+		    # Send the packet.
+		    dmac=00000000ff$is$js
+		    # Calculate a 4th octet for the destination that is
+		    # unique per $s, avoids the .1 .2 .3 and .254 IP addresses
+		    # that have static MAC bindings, and fits in the range
+		    # 0-255.
+		    o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
+		    dip=`ip_to_hex 192 168 $id$jd $o4`
+		    test_ip $s $smac $dmac $sip $dip
+
+		    # Every LP on the destination subnet's lswitch should
+		    # receive the ARP request.
+		    lrmac=00000000ff$id$jd
+		    lrip=`ip_to_hex 192 168 $id$jd 254`
+		    arp=ffffffffffff${lrmac}08060001080006040001${lrmac}${lrip}000000000000${dip}
+		    for jd2 in 1 2 3; do
+                        for kd in 1 2 3; do
+		            echo $arp | trim_zeros >> $id$jd2$kd.expected
+			done
+		    done
+		done
+            done
+        done
+    done
+done
+
 # test_arp INPORT SHA SPA TPA [REPLY_HA]
 #
 # Causes a packet to be received on INPORT.  The packet is an ARP
@@ -1315,7 +1378,7 @@ test_arp() {
     local j k
     for j in 1 2 3; do
         for k in 1 2 3; do
-            # 192.168.33.254 is configured to the lswtich patch port for lrp33,
+            # 192.168.33.254 is configured to the lswitch patch port for lrp33,
             # so no ARP flooding expected for it.
             if test $i$j$k != $inport && test $tpa != `ip_to_hex 192 168 33 254`; then
                 echo $request >> $i$j$k.expected
@@ -1333,14 +1396,14 @@ test_arp() {
 
 # Test router replies to ARP requests from all source ports:
 #
-# 3. Router replies to query for its MAC address from port's own IP address.
+# 4. Router replies to query for its MAC address from port's own IP address.
 #
-# 4. Router replies to query for its MAC address from any random IP address
+# 5. Router replies to query for its MAC address from any random IP address
 #    in its subnet.
 #
-# 5. Router replies to query for its MAC address from another subnet.
+# 6. Router replies to query for its MAC address from another subnet.
 #
-# 6. No reply to query for IP address other than router IP.
+# 7. No reply to query for IP address other than router IP.
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
@@ -1349,16 +1412,113 @@ for i in 1 2 3; do
 	    rip=`ip_to_hex 192 168 $i$j 254`   # Router IP
 	    rmac=00000000ff$i$j                # Router MAC
 	    otherip=`ip_to_hex 192 168 $i$j 55` # Some other IP in subnet
-	    test_arp $i$j$k $smac $sip        $rip        $rmac #3
-	    test_arp $i$j$k $smac $otherip    $rip        $rmac #4
-	    test_arp $i$j$k $smac 0a123456    $rip        $rmac #5
-	    test_arp $i$j$k $smac $sip        $otherip          #6
+	    test_arp $i$j$k $smac $sip        $rip        $rmac #4
+	    test_arp $i$j$k $smac $otherip    $rip        $rmac #5
+	    test_arp $i$j$k $smac 0a123456    $rip        $rmac #6
+	    test_arp $i$j$k $smac $sip        $otherip          #7
         done
     done
 done
+
 # Allow some time for packet forwarding.
 # XXX This can be improved.
 sleep 1
+
+# 8. Generate an ARP reply for each of the IP addresses ARPed for
+#    earlier as #3.
+#
+#    Here, the $s is the VIF that originated the ARP request and $d is
+#    the VIF that sends the ARP reply, which is somewhat backward but
+#    it means that $s and $d are the same as #3.
+: > mac_bindings.expected
+for is in 1 2 3; do
+    for js in 1 2 3; do
+	for ks in 1 2 3; do
+	    s=$is$js$ks
+	    for id in 1 2 3; do
+		for jd in 1 2 3; do
+		    if test $is$js = $id$jd; then
+		        continue
+                    fi
+
+		    kd=1
+		    d=$id$jd$kd
+
+		    o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
+		    host_ip=`ip_to_hex 192 168 $id$jd $o4`
+		    host_mac=8000000000$o4
+
+		    lrmac=00000000ff$id$jd
+		    lrip=`ip_to_hex 192 168 $id$jd 254`
+
+		    arp=${lrmac}${host_mac}08060001080006040002${host_mac}${host_ip}${lrmac}${lrip}
+
+		    echo
+		    echo
+		    echo
+                    hv=hv`vif_to_hv $d`
+		    as $hv ovs-appctl netdev-dummy/receive vif$d $arp
+		    #as $hv ovs-appctl ofproto/trace br-int in_port=$d $arp
+		    #as $hv ovs-ofctl dump-flows br-int table=19
+
+		    host_ip_pretty=192.168.$id$jd.$o4
+		    host_mac_pretty=80:00:00:00:00:$o4
+		    echo lrp$id$jd,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
+		done
+            done
+        done
+    done
+done
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 1
+
+# 9. Send an IP packet from every logical port to every other subnet.  These
+#    are the same packets already sent as #3, but now the destinations' IP-MAC
+#    bindings have been discovered via ARP, so instead of provoking an ARP
+#    request, these packets now get routed to their destinations (which don't
+#    have static MAC bindings, so they go to the port we've designated as
+#    accepting "unknown" MACs.)
+for is in 1 2 3; do
+    for js in 1 2 3; do
+	for ks in 1 2 3; do
+	    s=$is$js$ks
+	    smac=f00000000$s
+	    sip=`ip_to_hex 192 168 $is$js $ks`
+	    for id in 1 2 3; do
+		for jd in 1 2 3; do
+		    if test $is$js = $id$jd; then
+		        continue
+                    fi
+
+		    # Send the packet.
+		    dmac=00000000ff$is$js
+		    # Calculate a 4th octet for the destination that is
+		    # unique per $s, avoids the .1 .2 .3 and .254 IP addresses
+		    # that have static MAC bindings, and fits in the range
+		    # 0-255.
+		    o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
+		    dip=`ip_to_hex 192 168 $id$jd $o4`
+		    test_ip $s $smac $dmac $sip $dip
+
+		    # Expect the packet egress.
+		    host_mac=8000000000$o4
+		    outport=${id}11
+                    out_lrp=$id$jd
+                    echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 | trim_zeros >> $outport.expected
+		done
+            done
+        done
+    done
+done
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 1
+
+ovn-sbctl -f csv -d bare --no-heading \
+    -- --columns=logical_port,ip,mac list mac_binding > mac_bindings
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
@@ -1373,6 +1533,10 @@ for i in 1 2 3; do
         done
     done
 done
+
+# Check the MAC bindings against those expected.
+AT_CHECK_UNQUOTED([sort < mac_bindings], [0], [`sort < mac_bindings.expected`
+])
 
 # Gracefully terminate daemons
 for daemon in ovn-controller ovn-northd ovsdb-server; do
