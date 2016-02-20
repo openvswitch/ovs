@@ -4425,6 +4425,39 @@ packet_out(struct ofproto *ofproto_, struct dp_packet *packet,
                                  ofpacts_len, packet);
     return 0;
 }
+
+static enum ofperr
+nxt_resume(struct ofproto *ofproto_,
+           const struct ofputil_packet_in_private *pin)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    /* Translate pin into datapath actions. */
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions = OFPBUF_STUB_INITIALIZER(odp_actions_stub);
+    enum slow_path_reason slow;
+    enum ofperr error = xlate_resume(ofproto, pin, &odp_actions, &slow);
+
+    /* Steal 'pin->packet' and put it into a dp_packet. */
+    struct dp_packet packet;
+    dp_packet_init(&packet, pin->public.packet_len);
+    dp_packet_put(&packet, pin->public.packet, pin->public.packet_len);
+
+    /* Execute the datapath actions on the packet. */
+    struct dpif_execute execute = {
+        .actions = odp_actions.data,
+        .actions_len = odp_actions.size,
+        .needs_help = (slow & SLOW_ACTION) != 0,
+        .packet = &packet,
+    };
+    dpif_execute(ofproto->backer->dpif, &execute);
+
+    /* Clean up. */
+    ofpbuf_uninit(&odp_actions);
+    dp_packet_uninit(&packet);
+
+    return error;
+}
 
 /* NetFlow. */
 
@@ -5772,6 +5805,7 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_execute,
     set_frag_handling,
     packet_out,
+    nxt_resume,
     set_netflow,
     get_netflow_ids,
     set_sflow,

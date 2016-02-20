@@ -31,6 +31,7 @@
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 #include "type-props.h"
+#include "uuid.h"
 
 struct ofpbuf;
 union ofp_action;
@@ -447,14 +448,16 @@ struct ofputil_packet_in {
     size_t userdata_len;
 };
 
-struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
-                                        enum ofputil_protocol protocol,
-                                        enum nx_packet_in_format,
-                                        uint16_t max_len, struct pktbuf *);
+void ofputil_packet_in_destroy(struct ofputil_packet_in *);
 
-enum ofperr ofputil_decode_packet_in(const struct ofp_header *,
+enum ofperr ofputil_decode_packet_in(const struct ofp_header *, bool loose,
                                      struct ofputil_packet_in *,
-                                     size_t *total_len, uint32_t *buffer_id);
+                                     size_t *total_len, uint32_t *buffer_id,
+                                     struct ofpbuf *continuation);
+
+struct ofpbuf *ofputil_encode_resume(const struct ofputil_packet_in *pin,
+                                     const struct ofpbuf *continuation,
+                                     enum ofputil_protocol);
 
 enum { OFPUTIL_PACKET_IN_REASON_BUFSIZE = INT_STRLEN(int) + 1 };
 const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason,
@@ -462,6 +465,48 @@ const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason,
                                                size_t bufsize);
 bool ofputil_packet_in_reason_from_string(const char *,
                                           enum ofp_packet_in_reason *);
+
+/* A packet-in message, including continuation data.  The format of
+ * continuation data is subject to change and thus it is supposed to be opaque
+ * to any process other than ovs-vswitchd.  Therefore, only ovs-vswitchd should
+ * use ofputil_packet_in_private and the functions that operate on it. */
+struct ofputil_packet_in_private {
+    struct ofputil_packet_in public;
+
+    /* NXCPT_BRIDGE. */
+    struct uuid bridge;
+
+    /* NXCPT_STACK. */
+    union mf_subvalue *stack;
+    size_t n_stack;
+
+    /* NXCPT_MIRRORS. */
+    uint32_t mirrors;
+
+    /* NXCPT_CONNTRACKED. */
+    bool conntracked;
+
+    /* NXCPT_ACTIONS. */
+    struct ofpact *actions;
+    size_t actions_len;
+
+    /* NXCPT_ACTION_SET. */
+    struct ofpact *action_set;
+    size_t action_set_len;
+};
+
+struct ofpbuf *ofputil_encode_packet_in_private(
+    const struct ofputil_packet_in_private *,
+    enum ofputil_protocol protocol,
+    enum nx_packet_in_format,
+    uint16_t max_len, struct pktbuf *);
+
+enum ofperr ofputil_decode_packet_in_private(
+    const struct ofp_header *, bool loose,
+    struct ofputil_packet_in_private *,
+    size_t *total_len, uint32_t *buffer_id);
+
+void ofputil_packet_in_private_destroy(struct ofputil_packet_in_private *);
 
 /* Abstract packet-out message.
  *

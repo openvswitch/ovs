@@ -50,63 +50,6 @@ ovn-sb.xml includes a tentative specification for this action.
 IPv6 will probably need an action or actions for ND that is similar to
 the "arp" action, and an action for generating
 
-*** ovn-controller translation to OpenFlow
-
-The following two translation strategies come to mind.  Some of the
-new actions we might want to implement one way, some of them the
-other, depending on the details.
-
-*** Implementation strategies
-
-One way to do this is to define new actions as Open vSwitch extensions
-to OpenFlow, emit those actions in ovn-controller, and implement them
-in ovs-vswitchd (possibly pushing the implementations into the Linux
-and DPDK datapaths as well).  This is the only acceptable way for
-actions that need high performance.  None of these actions obviously
-need high performance, but it might be necessary to have fairness in
-handling e.g. a flood of incoming packets that require these actions.
-The main disadvantage of this approach is that it ties ovs-vswitchd
-(and the Linux kernel module) to supporting these actions essentially
-forever, which means that we'd want to make sure that they are
-general-purpose, well designed, maintainable, and supportable.
-
-The other way to do this is to send the packets across an OpenFlow
-channel to ovn-controller and have ovn-controller process them.  This
-is acceptable for actions that don't need high performance, and it
-means that we don't add anything permanently to ovs-vswitchd or the
-kernel (so we can be more casual about the design).  The big
-disadvantage is that it becomes necessary to add a way to resume the
-OpenFlow pipeline when it is interrupted in the middle by sending a
-packet to the controller.  This is not as simple as doing a new flow
-table lookup and resuming from that point.  Instead, it is equivalent
-to the (very complicated) recirculation logic in ofproto-dpif-xlate.c.
-Much of this logic can be translated into OpenFlow actions (e.g. the
-call stack and data stack), but some of it is entirely outside
-OpenFlow (e.g. the state of mirrors).  To implement it properly, it
-seems that we'll have to introduce a new Open vSwitch extension to
-OpenFlow, a "send-to-controller" action that causes extra data to be
-sent to the controller, where the extra data packages up the state
-necessary to resume the pipeline.  Maybe the bits of the state that
-can be represented in OpenFlow can be embedded in this extra data in a
-controller-readable form, but other bits we might want to be opaque.
-It's also likely that we'll want to change and extend the form of this
-opaque data over time, so this should be allowed for, e.g. by
-including a nonce in the extra data that is newly generated every time
-ovs-vswitchd starts.
-
-*** OpenFlow action definitions
-
-Define OpenFlow wire structures for each new OpenFlow action and
-implement them in lib/ofp-actions.[ch].
-
-*** OVS implementation
-
-Add code for action translation.  Possibly add datapath code for
-action implementation.  However, none of these new actions should
-require high-bandwidth processing so we could at least start with them
-implemented in userspace only.  (ARP field modification is already
-userspace-only and no one has complained yet.)
-
 ** IPv6
 
 *** ND versus ARP

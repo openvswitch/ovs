@@ -1326,6 +1326,9 @@ struct ofproto_class {
                               const struct ofpact *ofpacts,
                               size_t ofpacts_len);
 
+    enum ofperr (*nxt_resume)(struct ofproto *ofproto,
+                              const struct ofputil_packet_in_private *);
+
 /* ## ------------------------- ## */
 /* ## OFPP_NORMAL configuration ## */
 /* ## ------------------------- ## */

@@ -457,6 +457,9 @@ enum ofpraw {
 
     /* NXT 1.0+ (26): struct nx_tlv_table_reply, struct nx_tlv_map[]. */
     OFPRAW_NXT_TLV_TABLE_REPLY,
+
+    /* NXT 1.0+ (28): uint8_t[8][]. */
+    OFPRAW_NXT_RESUME,
 };
 
 /* Decoding messages into OFPRAW_* values. */
@@ -675,6 +678,7 @@ enum ofptype {
     OFPTYPE_NXT_TLV_TABLE_MOD, /* OFPRAW_NXT_TLV_TABLE_MOD. */
     OFPTYPE_NXT_TLV_TABLE_REQUEST, /* OFPRAW_NXT_TLV_TABLE_REQUEST. */
     OFPTYPE_NXT_TLV_TABLE_REPLY, /* OFPRAW_NXT_TLV_TABLE_REPLY. */
+    OFPTYPE_NXT_RESUME,          /* OFPRAW_NXT_RESUME. */
 
     /* Flow monitor extension. */
     OFPTYPE_FLOW_MONITOR_CANCEL,        /* OFPRAW_NXT_FLOW_MONITOR_CANCEL. */

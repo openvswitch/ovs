@@ -1649,9 +1649,7 @@ connmgr_send_flow_removed(struct connmgr *mgr,
 }
 
 /* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
- * necessary according to their individual configurations.
- *
- * The caller doesn't need to fill in pin->buffer_id or pin->total_len. */
+ * necessary according to their individual configurations. */
 void
 connmgr_send_async_msg(struct connmgr *mgr,
                        const struct ofproto_async_msg *am)
@@ -1663,21 +1661,21 @@ connmgr_send_async_msg(struct connmgr *mgr,
         if (protocol == OFPUTIL_P_NONE || !rconn_is_connected(ofconn->rconn)
             || ofconn->controller_id != am->controller_id
             || !ofconn_receives_async_msg(ofconn, am->oam,
-                                          am->pin.up.reason)) {
+                                          am->pin.up.public.reason)) {
             continue;
         }
 
-        struct ofpbuf *msg = ofputil_encode_packet_in(
+        struct ofpbuf *msg = ofputil_encode_packet_in_private(
             &am->pin.up, protocol, ofconn->packet_in_format,
             am->pin.max_len >= 0 ? am->pin.max_len : ofconn->miss_send_len,
             ofconn->pktbuf);
 
         struct ovs_list txq;
-        bool is_miss = (am->pin.up.reason == OFPR_NO_MATCH ||
-                        am->pin.up.reason == OFPR_EXPLICIT_MISS ||
-                        am->pin.up.reason == OFPR_IMPLICIT_MISS);
+        bool is_miss = (am->pin.up.public.reason == OFPR_NO_MATCH ||
+                        am->pin.up.public.reason == OFPR_EXPLICIT_MISS ||
+                        am->pin.up.public.reason == OFPR_IMPLICIT_MISS);
         pinsched_send(ofconn->schedulers[is_miss],
-                      am->pin.up.flow_metadata.flow.in_port.ofp_port,
+                      am->pin.up.public.flow_metadata.flow.in_port.ofp_port,
                       msg, &txq);
         do_send_packet_ins(ofconn, &txq);
     }
@@ -2247,7 +2245,10 @@ ofmonitor_wait(struct connmgr *mgr)
 void
 ofproto_async_msg_free(struct ofproto_async_msg *am)
 {
-    free(am->pin.up.packet);
-    free(am->pin.up.userdata);
+    free(am->pin.up.public.packet);
+    free(am->pin.up.public.userdata);
+    free(am->pin.up.stack);
+    free(am->pin.up.actions);
+    free(am->pin.up.action_set);
     free(am);
 }

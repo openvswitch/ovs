@@ -511,7 +511,6 @@ static void
 process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 {
     struct ofputil_packet_in pi;
-    size_t total_len;
     uint32_t buffer_id;
     uint32_t queue_id;
     ofp_port_t out_port;
@@ -525,7 +524,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     struct dp_packet pkt;
     struct flow flow;
 
-    error = ofputil_decode_packet_in(oh, &pi, &total_len, &buffer_id);
+    error = ofputil_decode_packet_in(oh, true, &pi, NULL, &buffer_id, NULL);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to decode packet-in: %s",
                      ofperr_to_string(error));

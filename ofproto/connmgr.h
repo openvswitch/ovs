@@ -63,7 +63,7 @@ struct ofproto_async_msg {
     union {
         /* OAM_PACKET_IN. */
         struct {
-            struct ofputil_packet_in up;
+            struct ofputil_packet_in_private up;
             int max_len;                /* From action, or -1 if none. */
         } pin;
     };
