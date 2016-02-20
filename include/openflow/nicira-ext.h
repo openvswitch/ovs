@@ -235,12 +235,106 @@ struct nx_packet_in {
 };
 OFP_ASSERT(sizeof(struct nx_packet_in) == 24);
 
-/* NXT_PACKET_IN2.
+/* NXT_PACKET_IN2
+ * ==============
  *
  * NXT_PACKET_IN2 is conceptually similar to OFPT_PACKET_IN but it is expressed
  * as an extensible set of properties instead of using a fixed structure.
  *
- * Added in Open vSwitch 2.6. */
+ * Added in Open vSwitch 2.6
+ *
+ *
+ * Continuations
+ * -------------
+ *
+ * When a "controller" action specifies the "pause" flag, the controller action
+ * freezes the packet's trip through Open vSwitch flow tables and serializes
+ * that state into the packet-in message as a "continuation".  The controller
+ * can later send the continuation back to the switch, which will restart the
+ * packet's traversal from the point where it was interrupted.  This permits an
+ * OpenFlow controller to interpose on a packet midway through processing in
+ * Open vSwitch.
+ *
+ * Continuations fit into packet processing this way:
+ *
+ * 1. A packet ingresses into Open vSwitch, which runs it through the OpenFlow
+ *    tables.
+ *
+ * 2. An OpenFlow flow executes a "controller" action that includes the "pause"
+ *    flag.  Open vSwitch serializes the packet processing state and sends it,
+ *    as an NXT_PACKET_IN2 that includes an additional NXPINT_CONTINUATION
+ *    property (the continuation), to the OpenFlow controller.
+ *
+ *    (The controller must use NXAST_CONTROLLER2 to generate the packet-in,
+ *    because only this form of the "controller" action has a "pause" flag.
+ *    Similarly, the controller must use NXT_SET_PACKET_IN_FORMAT to select
+ *    NXT_PACKET_IN2 as the packet-in format, because this is the only format
+ *    that supports continuation passing.)
+ *
+ * 3. The controller receives the NXT_PACKET_IN2 and processes it.  The
+ *    controller can interpret and, if desired, modify some of the contents of
+ *    the packet-in, such as the packet and the metadata being processed.
+ *
+ * 4. The controller sends the continuation back to the switch, using an
+ *    NXT_RESUME message.  Packet processing resumes where it left off.
+ *
+ * The controller might change the pipeline configuration concurrently with
+ * steps 2 through 4.  For example, it might add or remove OpenFlow flows.  If
+ * that happens, then the packet will experience a mix of processing from the
+ * two configurations, that is, the initial processing (before
+ * NXAST_CONTROLLER2) uses the initial flow table, and the later processing
+ * (after NXT_RESUME) uses the later flow table.  This means that the
+ * controller needs to take care to avoid incompatible pipeline changes while
+ * processing continuations.
+ *
+ * External side effects (e.g. "output") of OpenFlow actions processed before
+ * NXAST_CONTROLLER2 is encountered might be executed during step 2 or step 4,
+ * and the details may vary among Open vSwitch features and versions.  Thus, a
+ * controller that wants to make sure that side effects are executed must pass
+ * the continuation back to the switch, that is, must not skip step 4.
+ *
+ * Architecturally, continuations may be "stateful" or "stateless", that is,
+ * they may or may not refer to buffered state maintained in Open vSwitch.
+ * This means that a controller should not attempt to resume a given
+ * continuations more than once (because the switch might have discarded the
+ * buffered state after the first use).  For the same reason, continuations
+ * might become "stale" if the controller takes too long to resume them
+ * (because the switch might have discarded old buffered state).  Taken
+ * together with the previous note, this means that a controller should resume
+ * each continuation exactly once (and promptly).
+ *
+ * Without the information in NXPINT_CONTINUATION, the controller can (with
+ * careful design, and help from the flow cookie) determine where the packet is
+ * in the pipeline, but in the general case it can't determine what nested
+ * "resubmit"s that may be in progress, or what data is on the stack maintained
+ * by NXAST_STACK_PUSH and NXAST_STACK_POP actions, what is in the OpenFlow
+ * action set, etc.
+ *
+ * Continuations are expensive because they require a round trip between the
+ * switch and the controller.  Thus, they should not be used to implement
+ * processing that needs to happen at "line rate".
+ *
+ * The contents of NXPINT_CONTINUATION are private to the switch, may change
+ * unpredictably from one version of Open vSwitch to another, and are not
+ * documented here.  The contents are also tied to a given Open vSwitch process
+ * and bridge, so that restarting Open vSwitch or deleting and recreating a
+ * bridge will cause the corresponding NXT_RESUME to be rejected.
+ *
+ * In the current implementation, Open vSwitch forks the packet processing
+ * pipeline across patch ports.  Suppose, for example, that the pipeline for
+ * br0 outputs to a patch port whose peer belongs to br1, and that the pipeline
+ * for br1 executes a controller action with the "pause" flag.  This only
+ * pauses processing within br1, and processing in br0 continues and possibly
+ * completes with visible side effects, such as outputting to ports, before
+ * br1's controller receives or processes the continuation.  This
+ * implementation maintains the independence of separate bridges and, since
+ * processing in br1 cannot affect the behavior of br0 anyway, should not cause
+ * visible behavioral changes.
+ *
+ * A stateless implementation of continuations may ignore the "controller"
+ * action max_len, always sending the whole packet, because the full packet is
+ * required to continue traversal.
+ */
 enum nx_packet_in2_prop_type {
     /* Packet. */
     NXPINT_PACKET,              /* Raw packet data. */
@@ -255,6 +349,7 @@ enum nx_packet_in2_prop_type {
     NXPINT_REASON,              /* uint8_t, one of OFPR_*. */
     NXPINT_METADATA,            /* NXM or OXM for metadata fields. */
     NXPINT_USERDATA,            /* From NXAST_CONTROLLER2 userdata. */
+    NXPINT_CONTINUATION,        /* Private data for continuing processing. */
 };
 
 /* Configures the "role" of the sending controller.  The default role is:

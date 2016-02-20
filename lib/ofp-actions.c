@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -628,12 +628,16 @@ struct nx_action_controller {
 };
 OFP_ASSERT(sizeof(struct nx_action_controller) == 16);
 
-/* Properties for NXAST_CONTROLLER2. */
+/* Properties for NXAST_CONTROLLER2.
+ *
+ * For more information on the effect of NXAC2PT_PAUSE, see the large comment
+ * on NXT_PACKET_IN2 in nicira-ext.h */
 enum nx_action_controller2_prop_type {
     NXAC2PT_MAX_LEN,            /* ovs_be16 max bytes to send (default all). */
     NXAC2PT_CONTROLLER_ID,      /* ovs_be16 dest controller ID (default 0). */
     NXAC2PT_REASON,             /* uint8_t reason (OFPR_*), default 0. */
     NXAC2PT_USERDATA,           /* Data to copy into NXPINT_USERDATA. */
+    NXAC2PT_PAUSE,              /* Flag to pause pipeline to resume later. */
 };
 
 /* Action structure for NXAST_CONTROLLER2.
@@ -717,6 +721,10 @@ decode_NXAST_RAW_CONTROLLER2(const struct nx_action_controller2 *nac2,
             oc->userdata_len = ofpbuf_msgsize(&payload);
             break;
 
+        case NXAC2PT_PAUSE:
+            oc->pause = true;
+            break;
+
         default:
             error = OFPPROP_UNKNOWN(false, "NXAST_RAW_CONTROLLER2", type);
             break;
@@ -737,6 +745,7 @@ encode_CONTROLLER(const struct ofpact_controller *controller,
                   struct ofpbuf *out)
 {
     if (controller->userdata_len
+        || controller->pause
         || controller->ofpact.raw == NXAST_RAW_CONTROLLER2) {
         size_t start_ofs = out->size;
         put_NXAST_CONTROLLER2(out);
@@ -753,6 +762,9 @@ encode_CONTROLLER(const struct ofpact_controller *controller,
         if (controller->userdata_len != 0) {
             ofpprop_put(out, NXAC2PT_USERDATA, controller->userdata,
                         controller->userdata_len);
+        }
+        if (controller->pause) {
+            ofpprop_put_flag(out, NXAC2PT_PAUSE);
         }
         pad_ofpat(out, start_ofs);
     } else {
@@ -773,6 +785,7 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
     uint16_t controller_id = 0;
     uint16_t max_len = UINT16_MAX;
     const char *userdata = NULL;
+    bool pause = false;
 
     if (!arg[0]) {
         /* Use defaults. */
@@ -801,6 +814,8 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
                 }
             } else if (!strcmp(name, "userdata")) {
                 userdata = value;
+            } else if (!strcmp(name, "pause")) {
+                pause = true;
             } else {
                 return xasprintf("unknown key \"%s\" parsing controller "
                                  "action", name);
@@ -808,7 +823,7 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
         }
     }
 
-    if (reason == OFPR_ACTION && controller_id == 0 && !userdata) {
+    if (reason == OFPR_ACTION && controller_id == 0 && !userdata && !pause) {
         struct ofpact_output *output;
 
         output = ofpact_put_OUTPUT(ofpacts);
@@ -821,6 +836,7 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
         controller->max_len = max_len;
         controller->reason = reason;
         controller->controller_id = controller_id;
+        controller->pause = pause;
 
         if (userdata) {
             size_t start_ofs = ofpacts->size;
@@ -853,7 +869,8 @@ format_hex_arg(struct ds *s, const uint8_t *data, size_t len)
 static void
 format_CONTROLLER(const struct ofpact_controller *a, struct ds *s)
 {
-    if (a->reason == OFPR_ACTION && !a->controller_id && !a->userdata_len) {
+    if (a->reason == OFPR_ACTION && !a->controller_id && !a->userdata_len
+        && !a->pause) {
         ds_put_format(s, "CONTROLLER:%"PRIu16, a->max_len);
     } else {
         enum ofp_packet_in_reason reason = a->reason;
@@ -876,6 +893,9 @@ format_CONTROLLER(const struct ofpact_controller *a, struct ds *s)
             ds_put_cstr(s, "userdata=");
             format_hex_arg(s, a->userdata, a->userdata_len);
             ds_put_char(s, ',');
+        }
+        if (a->pause) {
+            ds_put_cstr(s, "pause,");
         }
         ds_chomp(s, ',');
         ds_put_char(s, ')');

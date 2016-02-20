@@ -300,9 +300,7 @@ m4_define([_OVS_VSWITCHD_START],
 # system's real Ethernet devices).
 m4_define([OVS_VSWITCHD_START],
   [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system])
-
-   dnl Add bridges, ports, etc.
-   AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
+   AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
 # check_logs scans through all *.log files (except '*.log' and testsuite.log)
@@ -329,18 +327,47 @@ check_logs () {
 /|EMER|/p" ${logs}
 }
 
-# add_of_ports BRIDGE PNUM...
+# add_of_br BRNUM [ARG...]
+add_of_br () {
+    local brnum=$1; shift
+    local br=br$brnum
+    local dpid=fedcba987654321$brnum
+    local mac=aa:55:aa:55:00:0$brnum
+    ovs-vsctl \
+        -- add-br $br \
+	-- set bridge $br datapath-type=dummy \
+			  fail-mode=secure \
+			  other-config:datapath-id=$dpid \
+			  other-config:hwaddr=$mac \
+			  protocols="[[OpenFlow10,OpenFlow11,OpenFlow12,\
+                                       OpenFlow13,OpenFlow14,OpenFlow15]]" \
+        -- "$@"
+}
+
+# add_of_ports [--pcap] BRIDGE PNUM...
 #
 # Creates dummy interfaces in BRIDGE named pPNUM, OpenFlow port number
 # PNUM, and datapath port number PNUM (the latter is a consequence of
 # the dummy implementation, which tries to assign datapath port
 # numbers based on port names).
+#
+# If --pcap is supplied then packets received from the interface will
+# be written to $port-rx.pcap and those sent to it to $port-tx.pcap.
 add_of_ports () {
     local args
+    local pcap=false
+    if test "$1" = --pcap; then
+        pcap=:
+	shift
+    fi
     local br=$1; shift
     for pnum; do
         AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
+	if $pcap; then
+	    AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
+	fi
     done
+    echo ovs-vsctl $args
     ovs-vsctl $args
 }
 m4_divert_pop([PREPARE_TESTS])

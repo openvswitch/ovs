@@ -4260,6 +4260,178 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 2
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl CHECK_CONTINUATION(TITLE, N_PORTS0, N_PORTS1, ACTIONS0, ACTIONS1, [EXTRA_SETUP])
+dnl
+dnl Checks the implementation of the continuation mechanism that allows the
+dnl packet processing pipeline to be paused and resumed.  Starts by creating
+dnl bridge br0 with N_PORTS0 ports numbered 1 through N_PORTS0, and adds the
+dnl flows listed in ACTIONS0 to that bridge.  Then, injects a packet at port 1
+dnl in the bridge, resuming each time the pipeline pauses, and expects a single
+dnl packet to be output at each port 2 through N_PORTS0.  Then, as long as
+dnl ACTIONS0 still contains at least one "pause" action, removes one of them
+dnl and repeats the process.
+dnl
+dnl If N_PORTS1 is nonzero, also creates a bridge br1 and adds ports numbered
+dnl N_PORTS0 + 1 to N_PORTS0 + N_PORTS1 to it, as well as flows ACTIONS1.
+dnl ACTIONS1 may also contain "pause" actions.  Packets are only ever injected
+dnl into port 1 on br0, so br1 only comes into action if a patch port (added
+dnl by EXTRA_SETUP) jumps from one bridge to another.
+dnl
+dnl EXTRA_SETUP is an optional list of extra commands to run after setting up
+dnl both bridges, e.g. to configure mirrors or patch ports.
+m4_define([CHECK_CONTINUATION], [dnl
+    AT_SETUP([ofproto-dpif - continuation - $1])
+    AT_KEYWORDS([continuations pause resume])
+    OVS_VSWITCHD_START
+
+    # count_matches STRING
+    #
+    # Prints on stdout the number of occurrences of STRING in stdin.
+    count_matches () {
+        sed -n ":start
+    s/$[1]//p
+    t start" | wc -l
+    }
+
+    add_of_ports --pcap br0 `seq 1 $2`
+    m4_if([$3], [0], [],
+      [add_of_br 1
+       add_of_ports --pcap br1 `seq m4_eval([$2 + 1]) m4_eval([$2 + $3])`])
+
+    AT_CAPTURE_FILE([ofctl_monitor0.log])
+    AT_CHECK([ovs-ofctl monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
+    m4_if([$3], [0], [],
+      [AT_CAPTURE_FILE([ofctl_monitor1.log])
+       AT_CHECK([ovs-ofctl monitor br1 resume --detach --no-chdir --pidfile=ovs-ofctl1.pid 2> ofctl_monitor1.log])])
+
+    actions0='$4'
+    actions1='$5'
+    $6
+    flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+    n_packets=0
+    n_resumes=0
+    while true; do
+        printf "\n\nactions for br0:\n%s\n" "$actions0"
+        m4_if([$3], [0], [], [printf "actions for br1:\n%s\n" "$actions1"])
+
+        # Add flows.
+        AT_CHECK([echo "$actions0" | sed 's/pause/controller(pause)/g' | ovs-ofctl -O OpenFlow13 add-flows br0 -])
+        m4_if([$3], [0], [],
+            [AT_CHECK([echo "$actions1" | sed 's/pause/controller(pause)/g' | ovs-ofctl -O OpenFlow13 add-flows br1 -])])
+
+        # Run a packet through the switch.
+        AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
+
+        # Wait for the expected number of packets to show up.
+        n_packets=`expr $n_packets + $2 - 1 + $3`
+        echo "waiting for $n_packets packets..."
+        OVS_WAIT_UNTIL([test $n_packets = `ovs-ofctl parse-pcap p*-tx.pcap | wc -l`])
+
+        # Wait for the expected number of NXT_RESUMEs to be logged.
+        n_resumes=$(expr $n_resumes + $(echo "$actions0 $actions1" | count_matches pause) )
+        echo "waiting for $n_resumes NXT_RESUMEs..."
+        OVS_WAIT_UNTIL([test $n_resumes = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+        # Eliminate one "pause" from the actions.
+        #
+        # If there were none left, then we're done.
+        next_actions0=`echo "$actions0" | sed '1,/pause/s/pause//'`
+        if test X"$actions0" = X"$next_actions0"; then
+            next_actions1=`echo "$actions1" | sed '1,/pause/s/pause//'`
+            if test X"$actions1" = X"$next_actions1"; then
+                break
+            else
+                actions1=$next_actions1
+            fi
+        else
+            actions0=$next_actions0
+        fi
+
+        # Delete all the flows and verify that there are none, so that we
+        # can be sure that our updated flow tables is actually in use
+        # later.
+        AT_CHECK([ovs-ofctl del-flows br0 && ovs-ofctl dump-flows br0 | strip_xids], [0],
+          [NXST_FLOW reply:
+])
+        m4_if([$3], [0], [],
+          [AT_CHECK([ovs-ofctl del-flows br1 && ovs-ofctl dump-flows br1 | strip_xids], [0],
+             [NXST_FLOW reply:
+])])
+    done
+    OVS_VSWITCHD_STOP
+    AT_CLEANUP
+])
+
+# Check that pause at the end of the pipeline works OK.
+#
+# (xlate_continuation() has a special case for no-op actions; this
+# fails without that special case.)
+CHECK_CONTINUATION([pause at end of pipeline], [2], [0], [actions=2 pause])
+
+# Check that remaining actions are preserved following resume.
+CHECK_CONTINUATION([actions], [7], [0],
+  [in_port=1 actions=pause 2 pause 3 pause 4 pause 5 pause 6 pause 7])
+
+# Check that multiple levels of resubmit continue following resume.
+#
+# The "resubmit:55", which is relative to the current table, is
+# particularly interesting because it checks that the notion of the
+# current table is correctly preserved.
+CHECK_CONTINUATION([resubmit], [10], [0],
+  [table=0 in_port=1  actions=pause 2 pause resubmit(,1) pause 10 pause
+   table=1 in_port=1  actions=pause 3 pause resubmit(,2) pause 9 pause
+   table=2 in_port=1  actions=pause 4 pause resubmit(,3) pause 8 pause
+   table=3 in_port=1  actions=pause 5 pause resubmit:55  pause 7 pause
+   table=3 in_port=55 actions=pause 6 pause])
+
+# Check that the action set is preserved across pause/resume.
+CHECK_CONTINUATION([action set], [3], [0],
+  [in_port=1 actions=1 pause resubmit(,1) pause 2
+   table=1 actions=write_actions(3)])
+
+# Check that metadata and the stack used by push and pop is preserved
+# across pause/resume.
+CHECK_CONTINUATION([data stack], [3], [0],
+  [in_port=1 actions=pause dnl
+                     set_field:1->reg0 dnl
+                     pause dnl
+                     set_field:2->reg1 dnl
+                     pause dnl
+                     output:NXM_NX_REG0[[]] dnl
+                     pause dnl
+                     push:NXM_NX_REG1[[]] dnl
+                     dnl
+                     pop:NXM_NX_REG2[[]] dnl
+                     pause dnl
+                     output:NXM_NX_REG2[[]] dnl
+                     pause dnl
+                     3])
+
+# Check that mirror output occurs once and once only, even if
+# separated by pause/resume.
+CHECK_CONTINUATION([mirroring], [5], [0],
+  [in_port=1 actions=pause 2 pause 3 pause 4 pause], [],
+  [ovs-vsctl \
+       set Bridge br0 mirrors=@m --\
+       --id=@p2 get Port p2 --\
+       --id=@p3 get Port p3 --\
+       --id=@p4 get Port p4 --\
+       --id=@p5 get Port p5 --\
+       --id=@m create Mirror name=mymirror select_dst_port=@p2,@p3,@p4 output_port=@p5])
+
+# Check that pause works in the presence of patch ports.
+CHECK_CONTINUATION([patch ports], [4], [1],
+  [table=0 in_port=1  actions=pause 2 resubmit(,1) pause 4
+   table=1 in_port=1  actions=pause 3 pause 10 pause],
+  [table=0 in_port=11 actions=pause 5 pause],
+  [ovs-vsctl \
+       -- add-port br0 patch10 \
+       -- set interface patch10 type=patch options:peer=patch11 \
+                                ofport_request=10 \
+       -- add-port br1 patch11 \
+       -- set interface patch11 type=patch options:peer=patch10 \
+                                ofport_request=11])
+
 # Two testcases below are for the ofproto/trace command
 # The first one tests all correct syntax:
 # ofproto/trace [dp_name] odp_flow [-generate|packet]

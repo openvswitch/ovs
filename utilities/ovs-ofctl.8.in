@@ -1505,7 +1505,7 @@ network device that has the same name as the bridge.
 Outputs the packet on the port from which it was received.
 .
 .IP \fBcontroller(\fIkey\fB=\fIvalue\fR...\fB)
-Sends the packet to the OpenFlow controller as a ``packet in''
+Sends the packet and its metadata to the OpenFlow controller as a ``packet in''
 message.  The supported key-value pairs are:
 .RS
 .IP "\fBmax_len=\fInbytes\fR"
@@ -1527,6 +1527,15 @@ OpenFlow.
 Supplies the bytes represented as hex digits \fIhh\fR as additional
 data to the controller in the packet-in message.  Pairs of hex digits
 may be separated by periods for readability.
+.IP "\fBpause\fR"
+Causes the switch to freeze the packet's trip through Open vSwitch
+flow tables and serializes that state into the packet-in message as a
+``continuation,'' an additional property in the \fBNXT_PACKET_IN2\fR
+message.  The controller can later send the continuation back to the
+switch in an \fBNXT_RESUME\fR message, which will restart the packet's
+traversal from the point where it was interrupted.  This permits an
+OpenFlow controller to interpose on a packet midway through processing
+in Open vSwitch.
 .
 .RE
 .IP

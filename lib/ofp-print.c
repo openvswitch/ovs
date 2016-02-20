@@ -110,62 +110,103 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                     int verbosity)
 {
     char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
-    struct ofputil_packet_in pin;
+    struct ofputil_packet_in_private pin;
+    const struct ofputil_packet_in *public = &pin.public;
     uint32_t buffer_id;
     size_t total_len;
-    int error;
+    enum ofperr error;
 
-    error = ofputil_decode_packet_in(oh, &pin, &total_len, &buffer_id);
+    error = ofputil_decode_packet_in_private(oh, true,
+                                             &pin, &total_len, &buffer_id);
     if (error) {
         ofp_print_error(string, error);
         return;
     }
 
-    if (pin.table_id) {
-        ds_put_format(string, " table_id=%"PRIu8, pin.table_id);
+    if (public->table_id) {
+        ds_put_format(string, " table_id=%"PRIu8, public->table_id);
     }
 
-    if (pin.cookie != OVS_BE64_MAX) {
-        ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
+    if (public->cookie != OVS_BE64_MAX) {
+        ds_put_format(string, " cookie=0x%"PRIx64, ntohll(public->cookie));
     }
 
     ds_put_format(string, " total_len=%"PRIuSIZE" ", total_len);
 
-    match_format(&pin.flow_metadata, string, OFP_DEFAULT_PRIORITY);
+    match_format(&public->flow_metadata, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_format(string, " (via %s)",
-                  ofputil_packet_in_reason_to_string(pin.reason,
+                  ofputil_packet_in_reason_to_string(public->reason,
                                                      reasonbuf,
                                                      sizeof reasonbuf));
 
-    ds_put_format(string, " data_len=%"PRIuSIZE, pin.packet_len);
+    ds_put_format(string, " data_len=%"PRIuSIZE, public->packet_len);
     if (buffer_id == UINT32_MAX) {
         ds_put_format(string, " (unbuffered)");
-        if (total_len != pin.packet_len) {
+        if (total_len != public->packet_len) {
             ds_put_format(string, " (***total_len != data_len***)");
         }
     } else {
         ds_put_format(string, " buffer=0x%08"PRIx32, buffer_id);
-        if (total_len < pin.packet_len) {
+        if (total_len < public->packet_len) {
             ds_put_format(string, " (***total_len < data_len***)");
         }
     }
     ds_put_char(string, '\n');
 
-    if (pin.userdata_len) {
+    if (public->userdata_len) {
         ds_put_cstr(string, " userdata=");
-        format_hex_arg(string, pin.userdata, pin.userdata_len);
+        format_hex_arg(string, pin.public.userdata, pin.public.userdata_len);
+        ds_put_char(string, '\n');
+    }
+
+    if (!uuid_is_zero(&pin.bridge)) {
+        ds_put_format(string, " continuation.bridge="UUID_FMT"\n",
+                      UUID_ARGS(&pin.bridge));
+    }
+
+    if (pin.n_stack) {
+        ds_put_cstr(string, " continuation.stack=");
+        for (size_t i = 0; i < pin.n_stack; i++) {
+            if (i) {
+                ds_put_char(string, ' ');
+            }
+            mf_subvalue_format(&pin.stack[i], string);
+        }
+    }
+
+    if (pin.mirrors) {
+        ds_put_format(string, " continuation.mirrors=0x%"PRIx32"\n",
+                      pin.mirrors);
+    }
+
+    if (pin.conntracked) {
+        ds_put_cstr(string, " continuation.conntracked=true\n");
+    }
+
+    if (pin.actions_len) {
+        ds_put_cstr(string, " continuation.actions=");
+        ofpacts_format(pin.actions, pin.actions_len, string);
+        ds_put_char(string, '\n');
+    }
+
+    if (pin.action_set_len) {
+        ds_put_cstr(string, " continuation.action_set=");
+        ofpacts_format(pin.action_set, pin.action_set_len, string);
         ds_put_char(string, '\n');
     }
 
     if (verbosity > 0) {
-        char *packet = ofp_packet_to_string(pin.packet, pin.packet_len);
+        char *packet = ofp_packet_to_string(public->packet,
+                                            public->packet_len);
         ds_put_cstr(string, packet);
         free(packet);
     }
     if (verbosity > 2) {
-        ds_put_hex_dump(string, pin.packet, pin.packet_len, 0, false);
+        ds_put_hex_dump(string, public->packet, public->packet_len, 0, false);
     }
+
+    ofputil_packet_in_private_destroy(&pin);
 }
 
 static void
@@ -3339,6 +3380,9 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         ofp_print_tlv_table_reply(string, msg);
         break;
 
+    case OFPTYPE_NXT_RESUME:
+        ofp_print_packet_in(string, msg, verbosity);
+        break;
     }
 }
 

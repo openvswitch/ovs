@@ -3304,9 +3304,10 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
 /* The caller has done basic initialization of '*pin'; the other output
  * arguments needs to be initialized. */
 static enum ofperr
-decode_nx_packet_in2(const struct ofp_header *oh,
+decode_nx_packet_in2(const struct ofp_header *oh, bool loose,
                      struct ofputil_packet_in *pin,
-                     size_t *total_len, uint32_t *buffer_id)
+                     size_t *total_len, uint32_t *buffer_id,
+                     struct ofpbuf *continuation)
 {
     *total_len = 0;
     *buffer_id = UINT32_MAX;
@@ -3366,8 +3367,14 @@ decode_nx_packet_in2(const struct ofp_header *oh,
             pin->userdata_len = ofpbuf_msgsize(&payload);
             break;
 
+        case NXPINT_CONTINUATION:
+            if (continuation) {
+                error = ofpprop_parse_nested(&payload, continuation);
+            }
+            break;
+
         default:
-            error = OFPPROP_UNKNOWN(true, "NX_PACKET_IN2", type);
+            error = OFPPROP_UNKNOWN(loose, "NX_PACKET_IN2", type);
             break;
         }
         if (error) {
@@ -3389,20 +3396,38 @@ decode_nx_packet_in2(const struct ofp_header *oh,
 }
 
 /* Decodes the packet-in message starting at 'oh' into '*pin'.  Populates
- * 'pin->packet' and 'pin->len' with the part of the packet actually included
- * in the message, and '*total_len' with the original length of the packet
- * (which is larger than 'packet->len' if only part of the packet was
- * included).  Stores the packet's buffer ID in '*buffer_id' (UINT32_MAX if it
+ * 'pin->packet' and 'pin->packet_len' with the part of the packet actually
+ * included in the message.  If 'total_lenp' is nonnull, populates
+ * '*total_lenp' with the original length of the packet (which is larger than
+ * 'packet->len' if only part of the packet was included).  If 'buffer_idp' is
+ * nonnull, stores the packet's buffer ID in '*buffer_idp' (UINT32_MAX if it
  * was not buffered).
+ *
+ * Populates 'continuation', if nonnull, with the continuation data from the
+ * packet-in (an empty buffer, if 'oh' did not contain continuation data).  The
+ * format of this data is supposed to be opaque to anything other than
+ * ovs-vswitchd, so that in any other process the only reasonable use of this
+ * data is to be copied into an NXT_RESUME message via ofputil_encode_resume().
+ *
+ * This function points 'pin->packet' into 'oh', so the caller should not free
+ * it separately from the original OpenFlow message.  This is also true for
+ * 'pin->userdata' (which could also end up NULL if there is no userdata).
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-ofputil_decode_packet_in(const struct ofp_header *oh,
+ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
                          struct ofputil_packet_in *pin,
-                         size_t *total_len, uint32_t *buffer_id)
+                         size_t *total_lenp, uint32_t *buffer_idp,
+                         struct ofpbuf *continuation)
 {
+    uint32_t buffer_id;
+    size_t total_len;
+
     memset(pin, 0, sizeof *pin);
     pin->cookie = OVS_BE64_MAX;
+    if (continuation) {
+        ofpbuf_use_const(continuation, NULL, 0);
+    }
 
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
@@ -3422,8 +3447,8 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
 
         pin->reason = opi->reason;
         pin->table_id = opi->table_id;
-        *buffer_id = ntohl(opi->buffer_id);
-        *total_len = ntohs(opi->total_len);
+        buffer_id = ntohl(opi->buffer_id);
+        total_len = ntohs(opi->total_len);
         if (cookie) {
             pin->cookie = *cookie;
         }
@@ -3442,8 +3467,8 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
         match_set_in_port(&pin->flow_metadata,
                           u16_to_ofp(ntohs(opi->in_port)));
         pin->reason = opi->reason;
-        *buffer_id = ntohl(opi->buffer_id);
-        *total_len = ntohs(opi->total_len);
+        buffer_id = ntohl(opi->buffer_id);
+        total_len = ntohs(opi->total_len);
     } else if (raw == OFPRAW_OFPT11_PACKET_IN) {
         const struct ofp11_packet_in *opi;
         ofp_port_t in_port;
@@ -3454,14 +3479,14 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
         pin->packet = b.data;
         pin->packet_len = b.size;
 
-        *buffer_id = ntohl(opi->buffer_id);
+        buffer_id = ntohl(opi->buffer_id);
         error = ofputil_port_from_ofp11(opi->in_port, &in_port);
         if (error) {
             return error;
         }
         match_init_catchall(&pin->flow_metadata);
         match_set_in_port(&pin->flow_metadata, in_port);
-        *total_len = ntohs(opi->total_len);
+        total_len = ntohs(opi->total_len);
         pin->reason = opi->reason;
         pin->table_id = opi->table_id;
     } else if (raw == OFPRAW_NXT_PACKET_IN) {
@@ -3483,15 +3508,26 @@ ofputil_decode_packet_in(const struct ofp_header *oh,
         pin->table_id = npi->table_id;
         pin->cookie = npi->cookie;
 
-        *buffer_id = ntohl(npi->buffer_id);
-        *total_len = ntohs(npi->total_len);
+        buffer_id = ntohl(npi->buffer_id);
+        total_len = ntohs(npi->total_len);
 
         pin->packet = b.data;
         pin->packet_len = b.size;
-    } else if (raw == OFPRAW_NXT_PACKET_IN2) {
-        return decode_nx_packet_in2(oh, pin, total_len, buffer_id);
+    } else if (raw == OFPRAW_NXT_PACKET_IN2 || raw == OFPRAW_NXT_RESUME) {
+        enum ofperr error = decode_nx_packet_in2(oh, loose, pin, &total_len,
+                                                 &buffer_id, continuation);
+        if (error) {
+            return error;
+        }
     } else {
         OVS_NOT_REACHED();
+    }
+
+    if (total_lenp) {
+        *total_lenp = total_len;
+    }
+    if (buffer_idp) {
+        *buffer_idp = buffer_id;
     }
 
     return 0;
@@ -3521,6 +3557,155 @@ encode_packet_in_reason(enum ofp_packet_in_reason reason,
     case OFPR_N_REASONS:
     default:
         OVS_NOT_REACHED();
+    }
+}
+
+/* Only NXT_PACKET_IN2 (not NXT_RESUME) should include NXCPT_USERDATA, so this
+ * function omits it.  The caller can add it itself if desired. */
+static void
+ofputil_put_packet_in(const struct ofputil_packet_in *pin,
+                      enum ofp_version version, uint32_t buffer_id,
+                      size_t include_bytes, struct ofpbuf *msg)
+{
+    /* Add packet properties. */
+    ofpprop_put(msg, NXPINT_PACKET, pin->packet, include_bytes);
+    if (include_bytes != pin->packet_len) {
+        ofpprop_put_u32(msg, NXPINT_FULL_LEN, pin->packet_len);
+    }
+    if (buffer_id != UINT32_MAX) {
+        ofpprop_put_u32(msg, NXPINT_BUFFER_ID, buffer_id);
+    }
+
+    /* Add flow properties. */
+    ofpprop_put_u8(msg, NXPINT_TABLE_ID, pin->table_id);
+    if (pin->cookie != OVS_BE64_MAX) {
+        ofpprop_put_be64(msg, NXPINT_COOKIE, pin->cookie);
+    }
+
+    /* Add other properties. */
+    ofpprop_put_u8(msg, NXPINT_REASON,
+                   encode_packet_in_reason(pin->reason, version));
+
+    size_t start = ofpprop_start(msg, NXPINT_METADATA);
+    oxm_put_raw(msg, &pin->flow_metadata, version);
+    ofpprop_end(msg, start);
+}
+
+static void
+put_actions_property(struct ofpbuf *msg, uint64_t prop_type,
+                     enum ofp_version version,
+                     const struct ofpact *actions, size_t actions_len)
+{
+    if (actions_len) {
+        size_t start = ofpprop_start_nested(msg, prop_type);
+        ofpacts_put_openflow_actions(actions, actions_len, msg, version);
+        ofpprop_end(msg, start);
+    }
+}
+
+enum nx_continuation_prop_type {
+    NXCPT_BRIDGE = 0x8000,
+    NXCPT_STACK,
+    NXCPT_MIRRORS,
+    NXCPT_CONNTRACKED,
+    NXCPT_TABLE_ID,
+    NXCPT_COOKIE,
+    NXCPT_ACTIONS,
+    NXCPT_ACTION_SET,
+};
+
+/* Only NXT_PACKET_IN2 (not NXT_RESUME) should include NXCPT_USERDATA, so this
+ * function omits it.  The caller can add it itself if desired. */
+static void
+ofputil_put_packet_in_private(const struct ofputil_packet_in_private *pin,
+                              enum ofp_version version, uint32_t buffer_id,
+                              size_t include_bytes, struct ofpbuf *msg)
+{
+    ofputil_put_packet_in(&pin->public, version, buffer_id,
+                          include_bytes, msg);
+
+    size_t continuation_ofs = ofpprop_start_nested(msg, NXPINT_CONTINUATION);
+    size_t inner_ofs = msg->size;
+
+    if (!uuid_is_zero(&pin->bridge)) {
+        ofpprop_put_uuid(msg, NXCPT_BRIDGE, &pin->bridge);
+    }
+
+    for (size_t i = 0; i < pin->n_stack; i++) {
+        const union mf_subvalue *s = &pin->stack[i];
+        size_t ofs;
+        for (ofs = 0; ofs < sizeof *s; ofs++) {
+            if (s->u8[ofs]) {
+                break;
+            }
+        }
+
+        ofpprop_put(msg, NXCPT_STACK, &s->u8[ofs], sizeof *s - ofs);
+    }
+
+    if (pin->mirrors) {
+        ofpprop_put_u32(msg, NXCPT_MIRRORS, pin->mirrors);
+    }
+
+    if (pin->conntracked) {
+        ofpprop_put_flag(msg, NXCPT_CONNTRACKED);
+    }
+
+    if (pin->actions_len) {
+        /* Divide 'pin->actions' into groups that begins with an
+         * unroll_xlate action.  For each group, emit a NXCPT_TABLE_ID and
+         * NXCPT_COOKIE property (if either has changed; each is initially
+         * assumed 0), then a NXCPT_ACTIONS property with the grouped
+         * actions.
+         *
+         * The alternative is to make OFPACT_UNROLL_XLATE public.  We can
+         * always do that later, since this is a private property. */
+        const struct ofpact *const end = ofpact_end(pin->actions,
+                                                    pin->actions_len);
+        const struct ofpact_unroll_xlate *unroll = NULL;
+        uint8_t table_id = 0;
+        ovs_be64 cookie = 0;
+
+        const struct ofpact *a;
+        for (a = pin->actions; ; a = ofpact_next(a)) {
+            if (a == end || a->type == OFPACT_UNROLL_XLATE) {
+                if (unroll) {
+                    if (table_id != unroll->rule_table_id) {
+                        ofpprop_put_u8(msg, NXCPT_TABLE_ID,
+                                       unroll->rule_table_id);
+                        table_id = unroll->rule_table_id;
+                    }
+                    if (cookie != unroll->rule_cookie) {
+                        ofpprop_put_be64(msg, NXCPT_COOKIE,
+                                         unroll->rule_cookie);
+                        cookie = unroll->rule_cookie;
+                    }
+                }
+
+                const struct ofpact *start
+                    = unroll ? ofpact_next(&unroll->ofpact) : pin->actions;
+                put_actions_property(msg, NXCPT_ACTIONS, version,
+                                     start, (a - start) * sizeof *a);
+
+                if (a == end) {
+                    break;
+                }
+                unroll = ofpact_get_UNROLL_XLATE(a);
+            }
+        }
+    }
+
+    if (pin->action_set_len) {
+        size_t start = ofpprop_start_nested(msg, NXCPT_ACTION_SET);
+        ofpacts_put_openflow_actions(pin->action_set,
+                                     pin->action_set_len, msg, version);
+        ofpprop_end(msg, start);
+    }
+
+    if (msg->size > inner_ofs) {
+        ofpprop_end(msg, continuation_ofs);
+    } else {
+        msg->size = continuation_ofs;
     }
 }
 
@@ -3569,40 +3754,24 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
 }
 
 static struct ofpbuf *
-ofputil_encode_nx_packet_in2(const struct ofputil_packet_in *pin,
+ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
                              enum ofp_version version, uint32_t buffer_id,
                              size_t include_bytes)
 {
     /* 'extra' is just an estimate of the space required. */
-    size_t extra = include_bytes + NXM_TYPICAL_LEN + 256;
+    size_t extra = (pin->public.packet_len
+                    + NXM_TYPICAL_LEN   /* flow_metadata */
+                    + pin->n_stack * 16
+                    + pin->actions_len
+                    + pin->action_set_len
+                    + 256);     /* fudge factor */
     struct ofpbuf *msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN2, version,
                                           htonl(0), extra);
 
-    /* Add packet properties. */
-    ofpprop_put(msg, NXPINT_PACKET, pin->packet, include_bytes);
-    if (include_bytes != pin->packet_len) {
-        ofpprop_put_u32(msg, NXPINT_FULL_LEN, pin->packet_len);
-    }
-    if (buffer_id != UINT32_MAX) {
-        ofpprop_put_u32(msg, NXPINT_BUFFER_ID, buffer_id);
-    }
-
-    /* Add flow properties. */
-    ofpprop_put_u8(msg, NXPINT_TABLE_ID, pin->table_id);
-    if (pin->cookie != OVS_BE64_MAX) {
-        ofpprop_put_be64(msg, NXPINT_COOKIE, pin->cookie);
-    }
-
-    /* Add other properties. */
-    ofpprop_put_u8(msg, NXPINT_REASON,
-                   encode_packet_in_reason(pin->reason, version));
-
-    size_t start = ofpprop_start(msg, NXPINT_METADATA);
-    oxm_put_raw(msg, &pin->flow_metadata, version);
-    ofpprop_end(msg, start);
-
-    if (pin->userdata_len) {
-        ofpprop_put(msg, NXPINT_USERDATA, pin->userdata, pin->userdata_len);
+    ofputil_put_packet_in_private(pin, version, buffer_id, include_bytes, msg);
+    if (pin->public.userdata_len) {
+        ofpprop_put(msg, NXPINT_USERDATA, pin->public.userdata,
+                    pin->public.userdata_len);
     }
 
     ofpmsg_update_length(msg);
@@ -3661,26 +3830,35 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
     return msg;
 }
 
-/* Converts abstract ofputil_packet_in 'pin' into a PACKET_IN message for
- * 'protocol', using the packet-in format specified by 'packet_in_format'.
+/* Converts abstract ofputil_packet_in_private 'pin' into a PACKET_IN message
+ * for 'protocol', using the packet-in format specified by 'packet_in_format'.
  *
  * If 'pkt_buf' is nonnull and 'max_len' allows the packet to be buffered, this
  * function will attempt to obtain a buffer ID from 'pktbuf' and truncate the
  * packet to 'max_len' bytes.  Otherwise, or if 'pktbuf' doesn't have a free
- * buffer, it will send the whole packet without buffering. */
+ * buffer, it will send the whole packet without buffering.
+ *
+ * This function is really meant only for use by ovs-vswitchd.  To any other
+ * code, the "continuation" data, i.e. the data that is in struct
+ * ofputil_packet_in_private but not in struct ofputil_packet_in, is supposed
+ * to be opaque (and it might change from one OVS version to another).  Thus,
+ * if any other code wants to encode a packet-in, it should use a non-"private"
+ * version of this function.  (Such a version doesn't currently exist because
+ * only ovs-vswitchd currently wants to encode packet-ins.  If you need one,
+ * write it...) */
 struct ofpbuf *
-ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
-                         enum ofputil_protocol protocol,
-                         enum nx_packet_in_format packet_in_format,
-                         uint16_t max_len, struct pktbuf *pktbuf)
+ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
+                                 enum ofputil_protocol protocol,
+                                 enum nx_packet_in_format packet_in_format,
+                                 uint16_t max_len, struct pktbuf *pktbuf)
 {
     enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
 
     /* Get buffer ID. */
-    ofp_port_t in_port = pin->flow_metadata.flow.in_port.ofp_port;
+    ofp_port_t in_port = pin->public.flow_metadata.flow.in_port.ofp_port;
     uint32_t buffer_id = (max_len != OFPCML12_NO_BUFFER && pktbuf
-                          ? pktbuf_save(pktbuf, pin->packet,
-                                        pin->packet_len, in_port)
+                          ? pktbuf_save(pktbuf, pin->public.packet,
+                                        pin->public.packet_len, in_port)
                           : UINT32_MAX);
 
     /* Calculate the number of bytes of the packet to include in the
@@ -3690,8 +3868,8 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
      *
      *    - Otherwise, no more than 'max_len' bytes. */
     size_t include_bytes = (buffer_id == UINT32_MAX
-                            ? pin->packet_len
-                            : MIN(max_len, pin->packet_len));
+                            ? pin->public.packet_len
+                            : MIN(max_len, pin->public.packet_len));
 
     struct ofpbuf *msg;
     switch (packet_in_format) {
@@ -3701,18 +3879,18 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         case OFPUTIL_P_OF10_STD_TID:
         case OFPUTIL_P_OF10_NXM:
         case OFPUTIL_P_OF10_NXM_TID:
-            msg = ofputil_encode_ofp10_packet_in(pin, buffer_id);
+            msg = ofputil_encode_ofp10_packet_in(&pin->public, buffer_id);
             break;
 
         case OFPUTIL_P_OF11_STD:
-            msg = ofputil_encode_ofp11_packet_in(pin, buffer_id);
+            msg = ofputil_encode_ofp11_packet_in(&pin->public, buffer_id);
             break;
 
         case OFPUTIL_P_OF12_OXM:
         case OFPUTIL_P_OF13_OXM:
         case OFPUTIL_P_OF14_OXM:
         case OFPUTIL_P_OF15_OXM:
-            msg = ofputil_encode_ofp12_packet_in(pin, version, buffer_id);
+            msg = ofputil_encode_ofp12_packet_in(&pin->public, version, buffer_id);
             break;
 
         default:
@@ -3721,7 +3899,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         break;
 
     case NXPIF_NXT_PACKET_IN:
-        msg = ofputil_encode_nx_packet_in(pin, version, buffer_id);
+        msg = ofputil_encode_nx_packet_in(&pin->public, version, buffer_id);
         break;
 
     case NXPIF_NXT_PACKET_IN2:
@@ -3732,7 +3910,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         OVS_NOT_REACHED();
     }
 
-    ofpbuf_put(msg, pin->packet, include_bytes);
+    ofpbuf_put(msg, pin->public.packet, include_bytes);
     ofpmsg_update_length(msg);
     return msg;
 }
@@ -3786,6 +3964,171 @@ ofputil_packet_in_reason_from_string(const char *s,
         }
     }
     return false;
+}
+
+/* Returns a newly allocated NXT_RESUME message for 'pin', with the given
+ * 'continuation', for 'protocol'.  This message is suitable for resuming the
+ * pipeline traveral of the packet represented by 'pin', if sent to the switch
+ * from which 'pin' was received. */
+struct ofpbuf *
+ofputil_encode_resume(const struct ofputil_packet_in *pin,
+                      const struct ofpbuf *continuation,
+                      enum ofputil_protocol protocol)
+{
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+    size_t extra = pin->packet_len + NXM_TYPICAL_LEN + continuation->size;
+    struct ofpbuf *msg = ofpraw_alloc_xid(OFPRAW_NXT_RESUME, version,
+                                          0, extra);
+    ofputil_put_packet_in(pin, version, UINT32_MAX, pin->packet_len, msg);
+    ofpprop_put_nested(msg, NXPINT_CONTINUATION, continuation);
+    ofpmsg_update_length(msg);
+    return msg;
+}
+
+static enum ofperr
+parse_subvalue_prop(const struct ofpbuf *property, union mf_subvalue *sv)
+{
+    unsigned int len = ofpbuf_msgsize(property);
+    if (len > sizeof *sv) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "NXCPT_STACK property has bad length %u",
+                     len);
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    memset(sv, 0, sizeof *sv);
+    memcpy(&sv->u8[sizeof *sv - len], property->msg, len);
+    return 0;
+}
+
+static enum ofperr
+parse_actions_property(struct ofpbuf *property, enum ofp_version version,
+                       struct ofpbuf *ofpacts)
+{
+    if (!ofpbuf_try_pull(property, ROUND_UP(ofpbuf_headersize(property), 8))) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "actions property has bad length %"PRIu32,
+                     property->size);
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+
+    return ofpacts_pull_openflow_actions(property, property->size,
+                                         version, ofpacts);
+}
+
+/* This is like ofputil_decode_packet_in(), except that it decodes the
+ * continuation data into 'pin'.  The format of this data is supposed to be
+ * opaque to any process other than ovs-vswitchd, so this function should not
+ * be used outside ovs-vswitchd.
+ *
+ * When successful, 'pin' contains some dynamically allocated data.  Call
+ * ofputil_packet_in_private_destroy() to free this data. */
+enum ofperr
+ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
+                                 struct ofputil_packet_in_private *pin,
+                                 size_t *total_len, uint32_t *buffer_id)
+{
+    memset(pin, 0, sizeof *pin);
+
+    struct ofpbuf continuation;
+    enum ofperr error;
+    error = ofputil_decode_packet_in(oh, loose, &pin->public, total_len,
+                                     buffer_id, &continuation);
+    if (error) {
+        return error;
+    }
+
+    struct ofpbuf actions, action_set;
+    ofpbuf_init(&actions, 0);
+    ofpbuf_init(&action_set, 0);
+
+    uint8_t table_id = 0;
+    ovs_be64 cookie = 0;
+
+    size_t allocated_stack = 0;
+
+    while (continuation.size > 0) {
+        struct ofpbuf payload;
+        uint64_t type;
+
+        error = ofpprop_pull(&continuation, &payload, &type);
+        ovs_assert(!error);
+
+        switch (type) {
+        case NXCPT_BRIDGE:
+            error = ofpprop_parse_uuid(&payload, &pin->bridge);
+            break;
+
+        case NXCPT_STACK:
+            if (pin->n_stack >= allocated_stack) {
+                pin->stack = x2nrealloc(pin->stack, &allocated_stack,
+                                           sizeof *pin->stack);
+            }
+            error = parse_subvalue_prop(&payload,
+                                        &pin->stack[pin->n_stack++]);
+            break;
+
+        case NXCPT_MIRRORS:
+            error = ofpprop_parse_u32(&payload, &pin->mirrors);
+            break;
+
+        case NXCPT_CONNTRACKED:
+            pin->conntracked = true;
+            break;
+
+        case NXCPT_TABLE_ID:
+            error = ofpprop_parse_u8(&payload, &table_id);
+            break;
+
+        case NXCPT_COOKIE:
+            error = ofpprop_parse_be64(&payload, &cookie);
+            break;
+
+        case NXCPT_ACTIONS: {
+            struct ofpact_unroll_xlate *unroll
+                = ofpact_put_UNROLL_XLATE(&actions);
+            unroll->rule_table_id = table_id;
+            unroll->rule_cookie = cookie;
+            error = parse_actions_property(&payload, oh->version, &actions);
+            break;
+        }
+
+        case NXCPT_ACTION_SET:
+            error = parse_actions_property(&payload, oh->version, &action_set);
+            break;
+
+        default:
+            error = OFPPROP_UNKNOWN(loose, "continuation", type);
+            break;
+        }
+        if (error) {
+            break;
+        }
+    }
+
+    pin->actions_len = actions.size;
+    pin->actions = ofpbuf_steal_data(&actions);
+    pin->action_set_len = action_set.size;
+    pin->action_set = ofpbuf_steal_data(&action_set);
+
+    if (error) {
+        ofputil_packet_in_private_destroy(pin);
+    }
+
+    return 0;
+}
+
+/* Frees data in 'pin' that is dynamically allocated by
+ * ofputil_decode_packet_in_private().
+ *
+ * 'pin->public' contains some pointer members that
+ * ofputil_decode_packet_in_private() doesn't initialize to newly allocated
+ * data, so this function doesn't free those. */
+void
+ofputil_packet_in_private_destroy(struct ofputil_packet_in_private *pin)
+{
+    if (pin) {
+        free(pin->stack);
+        free(pin->actions);
+        free(pin->action_set);
+    }
 }
 
 /* Converts an OFPT_PACKET_OUT in 'opo' into an abstract ofputil_packet_out in
@@ -9304,6 +9647,7 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_REQUESTFORWARD:
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
+    case OFPTYPE_NXT_RESUME:
         break;
     }
 

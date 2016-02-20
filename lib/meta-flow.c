@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,6 +169,13 @@ mf_subvalue_shift(union mf_subvalue *value, int n)
         }
         *value = tmp;
     }
+}
+
+/* Appends a formatted representation of 'sv' to 's'. */
+void
+mf_subvalue_format(const union mf_subvalue *sv, struct ds *s)
+{
+    ds_put_hex(s, sv, sizeof *sv);
 }
 
 /* Returns true if 'wc' wildcards all the bits in field 'mf', false if 'wc'

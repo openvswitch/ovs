@@ -249,6 +249,13 @@ struct xlate_ctx {
     *       translation isn't needed, and so bonds don't follow the above
     *       process.)
     *
+    *     - "Continuation".  A continuation is a way for an OpenFlow controller
+    *       to interpose on a packet's traversal of the OpenFlow tables.  When
+    *       the translation process encounters a "controller" action with the
+    *       "pause" flag, it freezes translation, serializes the frozen data,
+    *       and sends it to an OpenFlow controller.  The controller then
+    *       examines and possibly modifies the frozen data and eventually sends
+    *       it back to the switch, which thaws it and continues translation.
     *
     * The main problem of freezing translation is preserving state, so that
     * when the translation is thawed later it resumes from where it left off,
@@ -311,6 +318,7 @@ struct xlate_ctx {
     */
     bool freezing;
     struct ofpbuf frozen_actions;
+    const struct ofpact_controller *pause;
 
     /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
      * This is a trigger for recirculation in cases where translating an action
@@ -387,7 +395,7 @@ ctx_cancel_freeze(struct xlate_ctx *ctx)
     }
 }
 
-static void compose_recirculate_action(struct xlate_ctx *ctx);
+static void finish_freezing(struct xlate_ctx *ctx);
 
 /* A controller may use OFPP_NONE as the ingress port to indicate that
  * it did not arrive on a "real" port.  'ofpp_none_bundle' exists for
@@ -3023,7 +3031,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                     xlate_action_set(ctx);
                 }
                 if (ctx->freezing) {
-                    compose_recirculate_action(ctx);
+                    finish_freezing(ctx);
                 }
             } else {
                 /* Forwarding is disabled by STP and RSTP.  Let OFPP_NORMAL and
@@ -3348,9 +3356,9 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
 
     ofpbuf_uninit(&action_list);
 
-    /* Check if need to recirculate. */
+    /* Check if need to freeze. */
     if (ctx->freezing) {
-        compose_recirculate_action(ctx);
+        finish_freezing(ctx);
     }
 
     /* Roll back flow to previous state.
@@ -3634,39 +3642,71 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         .oam = OAM_PACKET_IN,
         .pin = {
             .up = {
-                .packet = dp_packet_steal_data(packet),
-                .packet_len = packet_len,
-                .reason = reason,
-                .table_id = ctx->table_id,
-                .cookie = ctx->rule_cookie,
-                .userdata = (userdata_len
-                             ? xmemdup(userdata, userdata_len)
-                             : NULL),
-                .userdata_len = userdata_len,
+                .public = {
+                    .packet = dp_packet_steal_data(packet),
+                    .packet_len = packet_len,
+                    .reason = reason,
+                    .table_id = ctx->table_id,
+                    .cookie = ctx->rule_cookie,
+                    .userdata = (userdata_len
+                                 ? xmemdup(userdata, userdata_len)
+                                 : NULL),
+                    .userdata_len = userdata_len,
+                }
             },
             .max_len = len,
         },
     };
-    flow_get_metadata(&ctx->xin->flow, &am->pin.up.flow_metadata);
+    flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
 
     ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
     dp_packet_delete(packet);
 }
 
 static void
-compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
+emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
 {
-    struct frozen_metadata md;
-    uint32_t id;
+    struct ofproto_async_msg *am = xmalloc(sizeof *am);
+    *am = (struct ofproto_async_msg) {
+        .controller_id = ctx->pause->controller_id,
+        .oam = OAM_PACKET_IN,
+        .pin = {
+            .up = {
+                .public = {
+                    .userdata = xmemdup(ctx->pause->userdata,
+                                        ctx->pause->userdata_len),
+                    .userdata_len = ctx->pause->userdata_len,
+                    .packet = xmemdup(dp_packet_data(ctx->xin->packet),
+                                      dp_packet_size(ctx->xin->packet)),
+                    .packet_len = dp_packet_size(ctx->xin->packet),
+                },
+                .bridge = *ofproto_dpif_get_uuid(ctx->xbridge->ofproto),
+                .stack = xmemdup(state->stack,
+                                 state->n_stack * sizeof *state->stack),
+                .n_stack = state->n_stack,
+                .mirrors = state->mirrors,
+                .conntracked = state->conntracked,
+                .actions = xmemdup(state->ofpacts, state->ofpacts_len),
+                .actions_len = state->ofpacts_len,
+                .action_set = xmemdup(state->action_set,
+                                      state->action_set_len),
+                .action_set_len = state->action_set_len,
+            },
+            .max_len = UINT16_MAX,
+        },
+    };
+    flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
+    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+}
 
-    frozen_metadata_from_flow(&md, &ctx->xin->flow);
-
+static void
+finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
+{
     ovs_assert(ctx->freezing);
 
     struct frozen_state state = {
         .table_id = table,
         .ofproto_uuid = *ofproto_dpif_get_uuid(ctx->xbridge->ofproto),
-        .metadata = md,
         .stack = ctx->stack.data,
         .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
         .mirrors = ctx->mirrors,
@@ -3676,21 +3716,28 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
         .action_set = ctx->action_set.data,
         .action_set_len = ctx->action_set.size,
     };
+    frozen_metadata_from_flow(&state.metadata, &ctx->xin->flow);
 
-    /* Allocate a unique recirc id for the given metadata state in the
-     * flow.  An existing id, with a new reference to the corresponding
-     * recirculation context, will be returned if possible.
-     * The life-cycle of this recirc id is managed by associating it
-     * with the udpif key ('ukey') created for each new datapath flow. */
-    id = recirc_alloc_id_ctx(&state);
-    if (!id) {
-        XLATE_REPORT_ERROR(ctx, "Failed to allocate recirculation id");
-        ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
-        return;
+    if (ctx->pause) {
+        if (ctx->xin->packet) {
+            emit_continuation(ctx, &state);
+        }
+    } else {
+        /* Allocate a unique recirc id for the given metadata state in the
+         * flow.  An existing id, with a new reference to the corresponding
+         * recirculation context, will be returned if possible.
+         * The life-cycle of this recirc id is managed by associating it
+         * with the udpif key ('ukey') created for each new datapath flow. */
+        uint32_t id = recirc_alloc_id_ctx(&state);
+        if (!id) {
+            XLATE_REPORT_ERROR(ctx, "Failed to allocate recirculation id");
+            ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
+            return;
+        }
+        recirc_refs_add(&ctx->xout->recircs, id);
+
+        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
     }
-    recirc_refs_add(&ctx->xout->recircs, id);
-
-    nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
 
     /* Undo changes done by freezing. */
     ctx_cancel_freeze(ctx);
@@ -3698,10 +3745,10 @@ compose_recirculate_action__(struct xlate_ctx *ctx, uint8_t table)
 
 /* Called only when we're freezing. */
 static void
-compose_recirculate_action(struct xlate_ctx *ctx)
+finish_freezing(struct xlate_ctx *ctx)
 {
     xlate_commit_actions(ctx);
-    compose_recirculate_action__(ctx, 0);
+    finish_freezing__(ctx, 0);
 }
 
 /* Fork the pipeline here. The current packet will continue processing the
@@ -3712,7 +3759,7 @@ static void
 compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
 {
     ctx->freezing = true;
-    compose_recirculate_action__(ctx, table);
+    finish_freezing__(ctx, table);
 }
 
 static void
@@ -4477,11 +4524,18 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_CONTROLLER:
             controller = ofpact_get_CONTROLLER(a);
-            execute_controller_action(ctx, controller->max_len,
-                                      controller->reason,
-                                      controller->controller_id,
-                                      controller->userdata,
-                                      controller->userdata_len);
+            if (controller->pause) {
+                ctx->pause = controller;
+                ctx->xout->slow |= SLOW_CONTROLLER;
+                ctx_trigger_freeze(ctx);
+                a = ofpact_next(a);
+            } else {
+                execute_controller_action(ctx, controller->max_len,
+                                          controller->reason,
+                                          controller->controller_id,
+                                          controller->userdata,
+                                          controller->userdata_len);
+            }
             break;
 
         case OFPACT_ENQUEUE:
@@ -5143,6 +5197,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         .freezing = false,
         .frozen_actions = OFPBUF_STUB_INITIALIZER(frozen_actions_stub),
+        .pause = NULL,
 
         .was_mpls = false,
         .conntracked = false,
@@ -5369,7 +5424,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 xlate_action_set(&ctx);
             }
             if (ctx.freezing) {
-                compose_recirculate_action(&ctx);
+                finish_freezing(&ctx);
             }
         }
 
@@ -5437,6 +5492,67 @@ exit:
         }
     }
     return ctx.error;
+}
+
+enum ofperr
+xlate_resume(struct ofproto_dpif *ofproto,
+             const struct ofputil_packet_in_private *pin,
+             struct ofpbuf *odp_actions,
+             enum slow_path_reason *slow)
+{
+    struct dp_packet packet;
+    dp_packet_use_const(&packet, pin->public.packet,
+                        pin->public.packet_len);
+
+    struct flow flow;
+    flow_extract(&packet, &flow);
+
+    struct xlate_in xin;
+    xlate_in_init(&xin, ofproto, &flow, 0, NULL, ntohs(flow.tcp_flags),
+                  &packet, NULL, odp_actions);
+
+    struct ofpact_note noop;
+    ofpact_init_NOTE(&noop);
+    noop.length = 0;
+
+    bool any_actions = pin->actions_len > 0;
+    struct frozen_state state = {
+        .table_id = 0,     /* Not the table where NXAST_PAUSE was executed. */
+        .ofproto_uuid = pin->bridge,
+        .stack = pin->stack,
+        .n_stack = pin->n_stack,
+        .mirrors = pin->mirrors,
+        .conntracked = pin->conntracked,
+
+        /* When there are no actions, xlate_actions() will search the flow
+         * table.  We don't want it to do that (we want it to resume), so
+         * supply a no-op action if there aren't any.
+         *
+         * (We can't necessarily avoid translating actions entirely if there
+         * aren't any actions, because there might be some finishing-up to do
+         * at the end of the pipeline, and we don't check for those
+         * conditions.) */
+        .ofpacts = any_actions ? pin->actions : &noop.ofpact,
+        .ofpacts_len = any_actions ? pin->actions_len : sizeof noop,
+
+        .action_set = pin->action_set,
+        .action_set_len = pin->action_set_len,
+    };
+    frozen_metadata_from_flow(&state.metadata,
+                              &pin->public.flow_metadata.flow);
+    xin.frozen_state = &state;
+
+    struct xlate_out xout;
+    enum xlate_error error = xlate_actions(&xin, &xout);
+    *slow = xout.slow;
+    xlate_out_uninit(&xout);
+
+    /* xlate_actions() can generate a number of errors, but only
+     * XLATE_BRIDGE_NOT_FOUND really stands out to me as one that we should be
+     * sure to report over OpenFlow.  The others could come up in packet-outs
+     * or regular flow translation and I don't think that it's going to be too
+     * useful to report them to the controller. */
+    return error == XLATE_BRIDGE_NOT_FOUND ? OFPERR_NXR_STALE : 0;
 }
 
 /* Sends 'packet' out 'ofport'.

@@ -1633,9 +1633,13 @@ ofctl_unblock(struct unixctl_conn *conn, int argc OVS_UNUSED,
 /* Prints to stdout all of the messages received on 'vconn'.
  *
  * Iff 'reply_to_echo_requests' is true, sends a reply to any echo request
- * received on 'vconn'. */
+ * received on 'vconn'.
+ *
+ * If 'resume_continuations' is true, sends an NXT_RESUME in reply to any
+ * NXT_PACKET_IN2 that includes a continuation. */
 static void
-monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
+monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
+              bool resume_continuations)
 {
     struct barrier_aux barrier_aux = { vconn, NULL };
     struct unixctl_server *server;
@@ -1662,6 +1666,10 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
                              &blocked);
 
     daemonize_complete();
+
+    enum ofp_version version = vconn_get_version(vconn);
+    enum ofputil_protocol protocol
+        = ofputil_protocol_from_ofp_version(version);
 
     for (;;) {
         struct ofpbuf *b;
@@ -1705,6 +1713,36 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
                     retval = vconn_send_block(vconn, reply);
                     if (retval) {
                         ovs_fatal(retval, "failed to send echo reply");
+                    }
+                }
+                break;
+
+            case OFPTYPE_PACKET_IN:
+                if (resume_continuations) {
+                    struct ofputil_packet_in pin;
+                    struct ofpbuf continuation;
+
+                    error = ofputil_decode_packet_in(b->data, true, &pin,
+                                                     NULL, NULL,
+                                                     &continuation);
+                    if (error) {
+                        fprintf(stderr, "decoding packet-in failed: %s",
+                                ofperr_to_string(error));
+                    } else if (continuation.size) {
+                        struct ofpbuf *reply;
+
+                        reply = ofputil_encode_resume(&pin, &continuation,
+                                                      protocol);
+
+                        fprintf(stderr, "send: ");
+                        ofp_print(stderr, reply->data, reply->size,
+                                  verbosity + 2);
+                        fflush(stderr);
+
+                        retval = vconn_send_block(vconn, reply);
+                        if (retval) {
+                            ovs_fatal(retval, "failed to send NXT_RESUME");
+                        }
                     }
                 }
                 break;
@@ -1758,6 +1796,7 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
     }
 
     open_vconn(ctx->argv[1], &vconn);
+    bool resume_continuations = false;
     for (i = 2; i < ctx->argc; i++) {
         const char *arg = ctx->argv[i];
 
@@ -1784,6 +1823,16 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
             ofputil_append_flow_monitor_request(&fmr, msg);
             dump_transaction(vconn, msg);
             fflush(stdout);
+        } else if (!strcmp(arg, "resume")) {
+            /* This option is intentionally undocumented because it is meant
+             * only for testing. */
+            resume_continuations = true;
+
+            /* Set miss_send_len to ensure that we get packet-ins. */
+            struct ofputil_switch_config config;
+            fetch_switch_config(vconn, &config);
+            config.miss_send_len = UINT16_MAX;
+            set_switch_config(vconn, &config);
         } else {
             ovs_fatal(0, "%s: unsupported \"monitor\" argument", arg);
         }
@@ -1805,7 +1854,7 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
         }
     }
 
-    monitor_vconn(vconn, true);
+    monitor_vconn(vconn, true, resume_continuations);
 }
 
 static void
@@ -1814,7 +1863,7 @@ ofctl_snoop(struct ovs_cmdl_context *ctx)
     struct vconn *vconn;
 
     open_vconn__(ctx->argv[1], SNOOP, &vconn);
-    monitor_vconn(vconn, false);
+    monitor_vconn(vconn, false, false);
 }
 
 static void
@@ -3610,35 +3659,43 @@ ofctl_parse_ofp11_match(struct ovs_cmdl_context *ctx OVS_UNUSED)
     ds_destroy(&in);
 }
 
-/* "parse-pcap PCAP": read packets from PCAP and print their flows. */
+/* "parse-pcap PCAP...": read packets from each PCAP file and print their
+ * flows. */
 static void
 ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
 {
-    FILE *pcap;
-
-    pcap = ovs_pcap_open(ctx->argv[1], "rb");
-    if (!pcap) {
-        ovs_fatal(errno, "%s: open failed", ctx->argv[1]);
-    }
-
-    for (;;) {
-        struct dp_packet *packet;
-        struct flow flow;
-        int error;
-
-        error = ovs_pcap_read(pcap, &packet, NULL);
-        if (error == EOF) {
-            break;
-        } else if (error) {
-            ovs_fatal(error, "%s: read failed", ctx->argv[1]);
+    int error = 0;
+    for (int i = 1; i < ctx->argc; i++) {
+        const char *filename = ctx->argv[i];
+        FILE *pcap = ovs_pcap_open(filename, "rb");
+        if (!pcap) {
+            error = errno;
+            ovs_error(error, "%s: open failed", filename);
+            continue;
         }
 
-        pkt_metadata_init(&packet->md, ODPP_NONE);
-        flow_extract(packet, &flow);
-        flow_print(stdout, &flow);
-        putchar('\n');
-        dp_packet_delete(packet);
+        for (;;) {
+            struct dp_packet *packet;
+            struct flow flow;
+            int retval;
+
+            retval = ovs_pcap_read(pcap, &packet, NULL);
+            if (retval == EOF) {
+                break;
+            } else if (retval) {
+                error = retval;
+                ovs_error(error, "%s: read failed", filename);
+            }
+
+            pkt_metadata_init(&packet->md, ODPP_NONE);
+            flow_extract(packet, &flow);
+            flow_print(stdout, &flow);
+            putchar('\n');
+            dp_packet_delete(packet);
+        }
+        fclose(pcap);
     }
+    exit(error);
 }
 
 /* "check-vlan VLAN_TCI VLAN_TCI_MASK": converts the specified vlan_tci and
@@ -3976,7 +4033,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "parse-instructions", NULL, 1, 1, ofctl_parse_instructions },
     { "parse-ofp10-match", NULL, 0, 0, ofctl_parse_ofp10_match },
     { "parse-ofp11-match", NULL, 0, 0, ofctl_parse_ofp11_match },
-    { "parse-pcap", NULL, 1, 1, ofctl_parse_pcap },
+    { "parse-pcap", NULL, 1, INT_MAX, ofctl_parse_pcap },
     { "check-vlan", NULL, 2, 2, ofctl_check_vlan },
     { "print-error", NULL, 1, 1, ofctl_print_error },
     { "encode-error-reply", NULL, 2, 2, ofctl_encode_error_reply },

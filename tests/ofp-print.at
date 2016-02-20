@@ -3114,6 +3114,18 @@ NXT_FLOW_MOD_TABLE_ID (xid=0x1020304): enable
 ])
 AT_CLEANUP
 
+AT_SETUP([NXT_RESUME])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 0038 01020304 00002320 0000001c \
+0000 0012 ffffffffffff 102030405060 1234 000000000000 \
+0006 000a 00000002 fffd 000000000000
+"], [0], [dnl
+NXT_RESUME (xid=0x1020304): total_len=14 in_port=CONTROLLER (via no_match) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=10:20:30:40:50:60,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x1234
+])
+AT_CLEANUP
+
 AT_SETUP([NXST_FLOW request])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\

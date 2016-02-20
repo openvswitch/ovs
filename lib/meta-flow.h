@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1940,6 +1940,7 @@ bool mf_subvalue_intersect(const union mf_subvalue *a_value,
                            union mf_subvalue *dst_mask);
 int mf_subvalue_width(const union mf_subvalue *);
 void mf_subvalue_shift(union mf_subvalue *, int n);
+void mf_subvalue_format(const union mf_subvalue *, struct ds *);
 
 /* An array of fields with values */
 struct field_array {

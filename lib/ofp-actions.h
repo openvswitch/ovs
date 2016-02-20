@@ -246,6 +246,11 @@ struct ofpact_controller {
     uint16_t controller_id;     /* Controller ID to send packet-in. */
     enum ofp_packet_in_reason reason; /* Reason to put in packet-in. */
 
+    /* If true, this action freezes packet traversal of the OpenFlow tables and
+     * adds a continuation to the packet-in message, that a controller can use
+     * to resume that traversal. */
+    bool pause;
+
     /* Arbitrary data to include in the packet-in message (currently, only in
      * NXT_PACKET_IN2). */
     uint16_t userdata_len;

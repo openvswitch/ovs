@@ -201,6 +201,10 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 
+enum ofperr xlate_resume(struct ofproto_dpif *,
+                         const struct ofputil_packet_in_private *,
+                         struct ofpbuf *odp_actions, enum slow_path_reason *);
+
 int xlate_send_packet(const struct ofport_dpif *, struct dp_packet *);
 
 struct xlate_cache *xlate_cache_new(void);
