@@ -370,6 +370,7 @@ flake8-check: $(FLAKE8_PYFILES)
 		flake8 $^ --ignore=E121,E123,E125,E126,E127,E128,E129,E131,W503,F811,D,H ${FLAKE8_FLAGS}; then \
 		touch $@; else exit 1; fi
 endif
+CLEANFILES += flake8-check
 
 include $(srcdir)/manpages.mk
 $(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.pl
