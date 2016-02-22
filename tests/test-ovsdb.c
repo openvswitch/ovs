@@ -2205,13 +2205,13 @@ print_idl_row_simple2(const struct idltest_simple2 *s, int step)
 }
 
 static void
-dump_simple2(struct ovsdb_idl *idl, const struct idltest_simple2 *myRow, int step)
+dump_simple2(struct ovsdb_idl *idl, int step)
 {
+    const struct idltest_simple2 *myRow;
     IDLTEST_SIMPLE2_FOR_EACH(myRow, idl) {
         print_idl_row_simple2(myRow, step);
     }
 }
-
 
 static void
 do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
@@ -2235,7 +2235,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
 
     /* Display original data in table */
     printf("%03d: Getting records\n", step++);
-    dump_simple2(idl, myRow, step++);
+    dump_simple2(idl, step++);
 
     /* Insert new elements in different map columns */
     myRow = idltest_simple2_first(idl);
@@ -2249,7 +2249,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_txn_destroy(myTxn);
     ovsdb_idl_get_initial_snapshot(idl);
     printf("%03d: After insert element\n", step++);
-    dump_simple2(idl, myRow, step++);
+    dump_simple2(idl, step++);
 
     /* Insert duplicate element */
     myTxn = ovsdb_idl_txn_create(idl);
@@ -2258,7 +2258,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_txn_destroy(myTxn);
     ovsdb_idl_get_initial_snapshot(idl);
     printf("%03d: After insert duplicated element\n", step++);
-    dump_simple2(idl, myRow, step++);
+    dump_simple2(idl, step++);
 
     /* deletes an element of a map column */
     myRow = idltest_simple2_first(idl);
@@ -2270,7 +2270,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_txn_destroy(myTxn);
     ovsdb_idl_get_initial_snapshot(idl);
     printf("%03d: After delete element\n", step++);
-    dump_simple2(idl, myRow, step++);
+    dump_simple2(idl, step++);
 
     /* try to delete a deleted element of a map column */
     myTxn = ovsdb_idl_txn_create(idl);
@@ -2279,7 +2279,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_txn_destroy(myTxn);
     ovsdb_idl_get_initial_snapshot(idl);
     printf("%03d: After trying to delete a deleted element\n", step++);
-    dump_simple2(idl, myRow, step++);
+    dump_simple2(idl, step++);
 
     printf("%03d: End test\n", step);
     return;
