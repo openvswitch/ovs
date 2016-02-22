@@ -551,7 +551,12 @@ for i in 1 2 3; do
         if test $j = 1; then
             ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j" unknown
         else
-            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j"
+            if test $j = 3; then
+                ip_addrs="192.168.0.$i$j fe80::ea2a:eaff:fe28:$i$j/64 192.169.0.$i$j"
+            else
+                ip_addrs="192.168.0.$i$j"
+            fi
+            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j $ip_addrs"
             ovn-nbctl lport-set-port-security lp$i$j f0:00:00:00:00:$i$j
         fi
     done
@@ -719,6 +724,12 @@ for is in 1 2 3; do
                 tip_unknown=`ip_to_hex 11 11 11 11`
                 test_arp $s f000000000$s $sip $tip f000000000$d            #9
                 test_arp $s f000000000$s $sip $tip_unknown                 #10
+
+                if test $jd = 3; then
+                    # lport[123]3 has an additional ip 192.169.0.[123]3.
+                    tip=`ip_to_hex 192 169 0 $id$jd`
+                    test_arp $s f000000000$s $sip $tip f000000000$d        #9
+                fi
             done
         done
 
@@ -742,6 +753,17 @@ for is in 1 2 3; do
         test_packet $s 010000000000 f000000000$s 1236 $bacl3         #8, acl3
     done
 done
+
+# set address for lp13 with invalid characters.
+# lp13 should be configured with only 192.168.0.13.
+ovn-nbctl lport-set-addresses lp13 "f0:00:00:00:00:13 192.168.0.13 invalid 192.169.0.13"
+sip=`ip_to_hex 192 168 0 11`
+tip=`ip_to_hex 192 168 0 13`
+test_arp 11 f00000000011  $sip $tip f00000000013
+
+tip=`ip_to_hex 192 169 0 13`
+#arp request for 192.169.0.13 should be flooded
+test_arp 11 f00000000011  $sip $tip
 
 # Allow some time for packet forwarding.
 # XXX This can be improved.
