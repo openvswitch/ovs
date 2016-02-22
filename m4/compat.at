@@ -12,21 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-m4_ifndef([AT_CHECK_UNQUOTED],
-  [m4_define([AT_CHECK_UNQUOTED],
-  [_AT_CHECK([$1], [$2], AS_ESCAPE(m4_dquote(m4_expand([$3])), [""]),
-    AS_ESCAPE(m4_dquote(m4_expand([$4])),[""]), [$5], [$6])])])
-
-m4_ifndef([AT_SKIP_IF],
-  [m4_define([AT_SKIP_IF],
-    [AT_CHECK([($1) \
-    && exit 77 || exit 0], [0], [ignore], [ignore])])])
-
-m4_ifndef([AT_FAIL_IF],
-  [m4_define([AT_FAIL_IF],
-    [AT_CHECK([($1) \
-    && exit 99 || exit 0], [0], [ignore], [ignore])])])
-
 m4_ifndef([AS_VAR_COPY],
   [m4_define([AS_VAR_COPY],
     [AS_LITERAL_IF([$1[]$2], [$1=$$2], [eval $1=\$$2])])])
