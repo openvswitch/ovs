@@ -1005,11 +1005,24 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
     struct ovsdb_monitor_aux aux;
 
     ovsdb_monitor_init_aux(&aux, m);
+    /* Update ovsdb_monitor's transaction number for
+     * each transaction, before calling ovsdb_monitor_change_cb().  */
+    m->n_transactions++;
     ovsdb_txn_for_each_change(txn, ovsdb_monitor_change_cb, &aux);
 
-    if (aux.efficacy == OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE) {
+    switch(aux.efficacy) {
+    case OVSDB_CHANGES_NO_EFFECT:
+        /* The transaction is ignored by the monitor.
+         * Roll back the 'n_transactions' as if the transaction
+         * has never happened. */
+        m->n_transactions--;
+        break;
+    case OVSDB_CHANGES_REQUIRE_INTERNAL_UPDATE:
+        /* Nothing.  */
+        break;
+    case  OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE:
         ovsdb_monitor_json_cache_flush(m);
-        m->n_transactions++;
+        break;
     }
 
     return NULL;
