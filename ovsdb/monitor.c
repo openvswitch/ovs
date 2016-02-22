@@ -724,40 +724,40 @@ ovsdb_monitor_compose_update(struct ovsdb_monitor *dbmon,
  * going to be used as part of an "update" notification. */
 struct json *
 ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
-                         bool initial, uint64_t *unflushed,
+                         bool initial, uint64_t *unflushed_,
                          enum ovsdb_monitor_version version)
 {
     struct ovsdb_monitor_json_cache_node *cache_node;
     struct shash_node *node;
     struct json *json;
-    uint64_t prev_txn = *unflushed;
-    uint64_t next_txn = dbmon->n_transactions + 1;
+    const uint64_t unflushed = *unflushed_;
+    const uint64_t next_unflushed = dbmon->n_transactions + 1;
 
     /* Return a clone of cached json if one exists. Otherwise,
      * generate a new one and add it to the cache.  */
-    cache_node = ovsdb_monitor_json_cache_search(dbmon, version, prev_txn);
+    cache_node = ovsdb_monitor_json_cache_search(dbmon, version, unflushed);
     if (cache_node) {
         json = cache_node->json ? json_clone(cache_node->json) : NULL;
     } else {
         if (version == OVSDB_MONITOR_V1) {
-            json = ovsdb_monitor_compose_update(dbmon, initial, prev_txn,
+            json = ovsdb_monitor_compose_update(dbmon, initial, unflushed,
                                         ovsdb_monitor_compose_row_update);
         } else {
             ovs_assert(version == OVSDB_MONITOR_V2);
-            json = ovsdb_monitor_compose_update(dbmon, initial, prev_txn,
+            json = ovsdb_monitor_compose_update(dbmon, initial, unflushed,
                                         ovsdb_monitor_compose_row_update2);
         }
-        ovsdb_monitor_json_cache_insert(dbmon, version, prev_txn, json);
+        ovsdb_monitor_json_cache_insert(dbmon, version, unflushed, json);
     }
 
     /* Maintain transaction id of 'changes'. */
     SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
 
-        ovsdb_monitor_table_untrack_changes(mt, prev_txn);
-        ovsdb_monitor_table_track_changes(mt, next_txn);
+        ovsdb_monitor_table_untrack_changes(mt, unflushed);
+        ovsdb_monitor_table_track_changes(mt, next_unflushed);
     }
-    *unflushed = next_txn;
+    *unflushed_ = next_unflushed;
 
     return json;
 }
