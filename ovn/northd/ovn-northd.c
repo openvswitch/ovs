@@ -914,6 +914,112 @@ ovn_lflow_destroy(struct hmap *lflows, struct ovn_lflow *lflow)
     }
 }
 
+struct ipv4_netaddr {
+    ovs_be32 addr;
+    unsigned int plen;
+};
+
+struct ipv6_netaddr {
+    struct in6_addr addr;
+    unsigned int plen;
+};
+
+struct lport_addresses {
+    struct eth_addr ea;
+    size_t n_ipv4_addrs;
+    struct ipv4_netaddr *ipv4_addrs;
+    size_t n_ipv6_addrs;
+    struct ipv6_netaddr *ipv6_addrs;
+};
+
+/*
+ * Extracts the mac, ipv4 and ipv6 addresses from the input param 'address'
+ * which should be of the format 'MAC [IP1 IP2 ..]" where IPn should be
+ * a valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
+ * 'ipv6_addrs' fields of input param 'laddrs'.
+ * The caller has to free the 'ipv4_addrs' and 'ipv6_addrs' fields.
+ * If input param 'store_ipv6' is true only then extracted ipv6 addresses
+ * are stored in 'ipv6_addrs' fields.
+ * Return true if at least 'MAC' is found in 'address', false otherwise.
+ * Eg 1.
+ * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
+ *                 30.0.0.3/23' and 'store_ipv6' = true
+ * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 1.
+ *
+ * Eg. 2
+ * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
+ *                 30.0.0.3/23' and 'store_ipv6' = false
+ * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 0.
+ *
+ * Eg 3. If 'address' = '00:00:00:00:00:01 10.0.0.4 addr 30.0.0.4', then
+ * returns true with laddrs->n_ipv4_addrs = 1 and laddrs->n_ipv6_addrs = 0.
+ */
+static bool
+extract_lport_addresses(char *address, struct lport_addresses *laddrs,
+                        bool store_ipv6)
+{
+    char *buf = address;
+    int buf_index = 0;
+    char *buf_end = buf + strlen(address);
+    if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
+                      ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_INFO_RL(&rl, "invalid syntax '%s' in address. No MAC address"
+                     " found", address);
+        return false;
+    }
+
+    ovs_be32 ip4;
+    struct in6_addr ip6;
+    unsigned int plen;
+    char *error;
+
+    laddrs->n_ipv4_addrs = 0;
+    laddrs->n_ipv6_addrs = 0;
+    laddrs->ipv4_addrs = NULL;
+    laddrs->ipv6_addrs = NULL;
+
+    /* Loop through the buffer and extract the IPv4/IPv6 addresses
+     * and store in the 'laddrs'. Break the loop if invalid data is found.
+     */
+    buf += buf_index;
+    while (buf < buf_end) {
+        buf_index = 0;
+        error = ip_parse_cidr_len(buf, &buf_index, &ip4, &plen);
+        if (!error) {
+            laddrs->n_ipv4_addrs++;
+            laddrs->ipv4_addrs = xrealloc(
+                laddrs->ipv4_addrs,
+                sizeof (struct ipv4_netaddr) * laddrs->n_ipv4_addrs);
+            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].addr = ip4;
+            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].plen = plen;
+            buf += buf_index;
+            continue;
+        }
+        free(error);
+        error = ipv6_parse_cidr_len(buf, &buf_index, &ip6, &plen);
+        if (!error && store_ipv6) {
+            laddrs->n_ipv6_addrs++;
+            laddrs->ipv6_addrs = xrealloc(
+                laddrs->ipv6_addrs,
+                sizeof(struct ipv6_netaddr) * laddrs->n_ipv6_addrs);
+            memcpy(&laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].addr, &ip6,
+                   sizeof(struct in6_addr));
+            laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].plen = plen;
+        }
+
+        if (error) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_INFO_RL(&rl, "invalid syntax '%s' in address", address);
+            free(error);
+            break;
+        }
+        buf += buf_index;
+    }
+
+    return true;
+}
+
 /* Appends port security constraints on L2 address field 'eth_addr_field'
  * (e.g. "eth.src" or "eth.dst") to 'match'.  'port_security', with
  * 'n_port_security' elements, is the collection of port_security constraints
@@ -1194,14 +1300,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         for (size_t i = 0; i < op->nbs->n_addresses; i++) {
-            struct eth_addr ea;
-            ovs_be32 ip;
-
-            if (ovs_scan(op->nbs->addresses[i],
-                         ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
-                         ETH_ADDR_SCAN_ARGS(ea), IP_SCAN_ARGS(&ip))) {
+            struct lport_addresses laddrs;
+            if (!extract_lport_addresses(op->nbs->addresses[i], &laddrs,
+                                         false)) {
+                continue;
+            }
+            for (size_t j = 0; j < laddrs.n_ipv4_addrs; j++) {
                 char *match = xasprintf(
-                    "arp.tpa == "IP_FMT" && arp.op == 1", IP_ARGS(ip));
+                    "arp.tpa == "IP_FMT" && arp.op == 1",
+                    IP_ARGS(laddrs.ipv4_addrs[j].addr));
                 char *actions = xasprintf(
                     "eth.dst = eth.src; "
                     "eth.src = "ETH_ADDR_FMT"; "
@@ -1213,14 +1320,16 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     "outport = inport; "
                     "inport = \"\"; /* Allow sending out inport. */ "
                     "output;",
-                    ETH_ADDR_ARGS(ea),
-                    ETH_ADDR_ARGS(ea),
-                    IP_ARGS(ip));
+                    ETH_ADDR_ARGS(laddrs.ea),
+                    ETH_ADDR_ARGS(laddrs.ea),
+                    IP_ARGS(laddrs.ipv4_addrs[j].addr));
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, 150,
                               match, actions);
                 free(match);
                 free(actions);
             }
+
+            free(laddrs.ipv4_addrs);
         }
     }
 
@@ -1541,12 +1650,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             /* XXX ARP for neighboring router */
         } else if (op->od->n_router_ports) {
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
-                struct eth_addr ea;
-                ovs_be32 ip;
+                struct lport_addresses laddrs;
+                if (!extract_lport_addresses(op->nbs->addresses[i], &laddrs,
+                                             false)) {
+                    continue;
+                }
 
-                if (ovs_scan(op->nbs->addresses[i],
-                             ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
-                             ETH_ADDR_SCAN_ARGS(ea), IP_SCAN_ARGS(&ip))) {
+                for (size_t k = 0; k < laddrs.n_ipv4_addrs; k++) {
+                    ovs_be32 ip = laddrs.ipv4_addrs[k].addr;
                     for (size_t j = 0; j < op->od->n_router_ports; j++) {
                         /* Get the Logical_Router_Port that the Logical_Port is
                          * connected to, as 'peer'. */
@@ -1574,7 +1685,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                                                   "outport = %s; "
                                                   "output;",
                                                   ETH_ADDR_ARGS(peer->mac),
-                                                  ETH_ADDR_ARGS(ea),
+                                                  ETH_ADDR_ARGS(laddrs.ea),
                                                   peer->json_key);
                         ovn_lflow_add(lflows, peer->od,
                                       S_ROUTER_IN_ARP, 200, match, actions);
@@ -1583,6 +1694,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                         break;
                     }
                 }
+
+                free(laddrs.ipv4_addrs);
             }
         }
     }

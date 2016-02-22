@@ -594,6 +594,11 @@ char *ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
     OVS_WARN_UNUSED_RESULT;
 char *ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
     OVS_WARN_UNUSED_RESULT;
+char *ip_parse_masked_len(const char *s, int *n, ovs_be32 *ip, ovs_be32 *mask)
+    OVS_WARN_UNUSED_RESULT;
+char *ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip,
+                        unsigned int *plen)
+    OVS_WARN_UNUSED_RESULT;
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
@@ -1040,6 +1045,11 @@ bool ipv6_parse(const char *s, struct in6_addr *ip);
 char *ipv6_parse_masked(const char *s, struct in6_addr *ipv6,
                         struct in6_addr *mask);
 char *ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
+    OVS_WARN_UNUSED_RESULT;
+char *ipv6_parse_masked_len(const char *s, int *n, struct in6_addr *ipv6,
+                            struct in6_addr *mask);
+char *ipv6_parse_cidr_len(const char *s, int *n, struct in6_addr *ip,
+                          unsigned int *plen)
     OVS_WARN_UNUSED_RESULT;
 
 void *eth_compose(struct dp_packet *, const struct eth_addr eth_dst,
