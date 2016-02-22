@@ -1082,6 +1082,57 @@ against desired actions in a bytewise fashion:
 Please report other discrepancies, if you notice any, so that we can
 fix or document them.
 
+jemalloc as Default Memory Manager for OVSDB-Server
+===================================================
+
+Background
+----------
+
+OVSDB-Server performs a lot of memory-related operations. Many of those are related to
+allocating small pieces of memory. It requests and releases memory continually for creating
+and destroying objects like dynamic strings, json objects, etc.
+
+Tests revealed that by replacing the GLibC memory allocator with the [jemalloc]
+(http://www.canonware.com/jemalloc) memory allocator, OVSDB-Server's performance can be
+significantly improved, and also, in some cases, can reduce the memory usage.
+
+## Performance Improvements
+
+Several tests (insertion, updates, pubsub and transaction size) were run in order to
+compare the GLibC performance and memory usage along both jemalloc and tcmalloc memory
+allocators.
+
+The results showed favorable results for jemalloc library.
+
+- Update 1: Each of 10 parallel workers do 25000 updates over 1000 rows.
+- Update 2: Each of 10 parallel workers do 25000 updates over 200000 rows.
+- Insert: Each of 10 parallel workers insert 25000 rows.
+- Message Queue Simulation: One producer waits for requests (requested by 10 parallel workers).
+  For each request the producer updates 512 rows, composed of one map column with 256 elements.
+- Transaction Size: The program inserts 100, 1000, 10000, 100000 and 500000 rows, alternating
+  between inserting all the rows in the same transaction, or inserting one row per transaction.
+
+| Test     |   GLibC   |  jemalloc  |  tcmalloc  |
+|----------|-----------|------------|------------|
+| Update 1 |   28s     |    24s     |    31s     |
+| Update 2 |   57s     |    38s     |    33s     |
+| Insert   |   38s     |    32s     |    27s     |
+| Queue    |    4s     |     4s     |     4s     |
+| Size     |  129.92s  |   119.87s  |   114.21s  |
+|            Duration (seconds)                  |
+
+
+| Test     |   GLibC   |  jemalloc  |  tcmalloc  |
+|----------|-----------|------------|------------|
+| Update 1 |    7.35   |    18.92   |   171.42   |
+| Update 2 | 1090.7    |    82.88   |   111.08   |
+| Insert   |   66.66   |    57.86   |   127.56   |
+| Queue    | 1094.40   |    28.13   |   270.47   |
+| Size     |  410.17   |   116.50   |   114.21   |
+|        Memory Usage (RSS, megabytes)           |
+
+The results show a consistent better results of jemalloc over GLibC memory allocator.
+TCMalloc was faster in some benchmarks, but uses a lot more of RAM than jemalloc.
 
 Suggestions
 ===========
