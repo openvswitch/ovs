@@ -2,7 +2,7 @@ AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
 AT_TESTED([perl])
 
-m4_include([m4/compat.at])
+m4_include([m4/compat.m4])
 
 dnl Make AT_SETUP automatically run the ovs_init() shell function
 dnl as the first step in every test.
