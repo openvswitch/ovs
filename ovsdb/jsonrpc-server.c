@@ -1297,6 +1297,10 @@ static struct json *
 ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
                                      bool initial)
 {
+    if (!ovsdb_monitor_needs_flush(m->dbmon, m->unflushed)) {
+        return NULL;
+    }
+
     return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed,
                                     m->version);
 }
