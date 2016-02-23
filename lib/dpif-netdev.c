@@ -224,7 +224,9 @@ struct dp_netdev {
     ovsthread_key_t per_pmd_key;
 
     /* Cpu mask for pin of pmd threads. */
+    char *requested_pmd_cmask;
     char *pmd_cmask;
+
     uint64_t last_tnl_conf_seq;
 };
 
@@ -2474,18 +2476,17 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
-/* Returns true if the configuration for rx queues or cpu mask
- * is changed. */
+/* Returns true if the configuration for rx queues is changed. */
 static bool
-pmd_config_changed(const struct dp_netdev *dp, const char *cmask)
+pmd_n_rxq_changed(const struct dp_netdev *dp)
 {
     struct dp_netdev_port *port;
 
     ovs_mutex_lock(&dp->port_mutex);
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        struct netdev *netdev = port->netdev;
-        int requested_n_rxq = netdev_requested_n_rxq(netdev);
-        if (netdev_is_pmd(netdev)
+        int requested_n_rxq = netdev_requested_n_rxq(port->netdev);
+
+        if (netdev_is_pmd(port->netdev)
             && port->latest_requested_n_rxq != requested_n_rxq) {
             ovs_mutex_unlock(&dp->port_mutex);
             return true;
@@ -2493,69 +2494,29 @@ pmd_config_changed(const struct dp_netdev *dp, const char *cmask)
     }
     ovs_mutex_unlock(&dp->port_mutex);
 
-    if (dp->pmd_cmask != NULL && cmask != NULL) {
-        return strcmp(dp->pmd_cmask, cmask);
-    } else {
-        return (dp->pmd_cmask != NULL || cmask != NULL);
-    }
+    return false;
 }
 
-/* Resets pmd threads if the configuration for 'rxq's or cpu mask changes. */
+static bool
+cmask_equals(const char *a, const char *b)
+{
+    if (a && b) {
+        return !strcmp(a, b);
+    }
+
+    return a == NULL && b == NULL;
+}
+
+/* Changes the number or the affinity of pmd threads.  The changes are actually
+ * applied in dpif_netdev_run(). */
 static int
 dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    if (pmd_config_changed(dp, cmask)) {
-        struct dp_netdev_port *port;
-
-        dp_netdev_destroy_all_pmds(dp);
-
-        ovs_mutex_lock(&dp->port_mutex);
-        HMAP_FOR_EACH (port, node, &dp->ports) {
-            struct netdev *netdev = port->netdev;
-            int requested_n_rxq = netdev_requested_n_rxq(netdev);
-            if (netdev_is_pmd(port->netdev)
-                && port->latest_requested_n_rxq != requested_n_rxq) {
-                int i, err;
-
-                /* Closes the existing 'rxq's. */
-                for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
-                    netdev_rxq_close(port->rxq[i]);
-                    port->rxq[i] = NULL;
-                }
-                port->n_rxq = 0;
-
-                /* Sets the new rx queue config.  */
-                err = netdev_set_multiq(port->netdev,
-                                        ovs_numa_get_n_cores() + 1,
-                                        requested_n_rxq);
-                if (err && (err != EOPNOTSUPP)) {
-                    VLOG_ERR("Failed to set dpdk interface %s rx_queue to:"
-                             " %u", netdev_get_name(port->netdev),
-                             requested_n_rxq);
-                    ovs_mutex_unlock(&dp->port_mutex);
-                    return err;
-                }
-                port->latest_requested_n_rxq = requested_n_rxq;
-                /* If the set_multiq() above succeeds, reopens the 'rxq's. */
-                port->n_rxq = netdev_n_rxq(port->netdev);
-                port->rxq = xrealloc(port->rxq, sizeof *port->rxq * port->n_rxq);
-                for (i = 0; i < port->n_rxq; i++) {
-                    netdev_rxq_open(port->netdev, &port->rxq[i], i);
-                }
-            }
-        }
-        /* Reconfigures the cpu mask. */
-        ovs_numa_set_cpu_mask(cmask);
-        free(dp->pmd_cmask);
-        dp->pmd_cmask = cmask ? xstrdup(cmask) : NULL;
-
-        /* Restores the non-pmd. */
-        dp_netdev_set_nonpmd(dp);
-        /* Restores all pmd threads. */
-        dp_netdev_reset_pmd_threads(dp);
-        ovs_mutex_unlock(&dp->port_mutex);
+    if (!cmask_equals(dp->requested_pmd_cmask, cmask)) {
+        free(dp->requested_pmd_cmask);
+        dp->requested_pmd_cmask = cmask ? xstrdup(cmask) : NULL;
     }
 
     return 0;
@@ -2656,6 +2617,59 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
+static void
+reconfigure_pmd_threads(struct dp_netdev *dp)
+    OVS_REQUIRES(dp->port_mutex)
+{
+    struct dp_netdev_port *port;
+
+    dp_netdev_destroy_all_pmds(dp);
+
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        struct netdev *netdev = port->netdev;
+        int requested_n_rxq = netdev_requested_n_rxq(netdev);
+        if (netdev_is_pmd(port->netdev)
+            && port->latest_requested_n_rxq != requested_n_rxq) {
+            int i, err;
+
+            /* Closes the existing 'rxq's. */
+            for (i = 0; i < port->n_rxq; i++) {
+                netdev_rxq_close(port->rxq[i]);
+                port->rxq[i] = NULL;
+            }
+            port->n_rxq = 0;
+
+            /* Sets the new rx queue config. */
+            err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores() + 1,
+                                    requested_n_rxq);
+            if (err && (err != EOPNOTSUPP)) {
+                VLOG_ERR("Failed to set dpdk interface %s rx_queue to: %u",
+                         netdev_get_name(port->netdev),
+                         requested_n_rxq);
+                return;
+            }
+            port->latest_requested_n_rxq = requested_n_rxq;
+            /* If the set_multiq() above succeeds, reopens the 'rxq's. */
+            port->n_rxq = netdev_n_rxq(port->netdev);
+            port->rxq = xrealloc(port->rxq, sizeof *port->rxq * port->n_rxq);
+            for (i = 0; i < port->n_rxq; i++) {
+                netdev_rxq_open(port->netdev, &port->rxq[i], i);
+            }
+        }
+    }
+    /* Reconfigures the cpu mask. */
+    ovs_numa_set_cpu_mask(dp->requested_pmd_cmask);
+    free(dp->pmd_cmask);
+    dp->pmd_cmask = dp->requested_pmd_cmask
+                    ? xstrdup(dp->requested_pmd_cmask)
+                    : NULL;
+
+    /* Restores the non-pmd. */
+    dp_netdev_set_nonpmd(dp);
+    /* Restores all pmd threads. */
+    dp_netdev_reset_pmd_threads(dp);
+}
+
 /* Return true if needs to revalidate datapath flows. */
 static bool
 dpif_netdev_run(struct dpif *dpif)
@@ -2678,8 +2692,14 @@ dpif_netdev_run(struct dpif *dpif)
         }
     }
     ovs_mutex_unlock(&dp->non_pmd_mutex);
-    ovs_mutex_unlock(&dp->port_mutex);
+
     dp_netdev_pmd_unref(non_pmd);
+
+    if (!cmask_equals(dp->pmd_cmask, dp->requested_pmd_cmask)
+        || pmd_n_rxq_changed(dp)) {
+        reconfigure_pmd_threads(dp);
+    }
+    ovs_mutex_unlock(&dp->port_mutex);
 
     tnl_neigh_cache_run();
     tnl_port_map_run();
