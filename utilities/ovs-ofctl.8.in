@@ -1354,7 +1354,7 @@ be set, or \fB\-\fR for a flag that must be unset, without any other
 delimiters between the flags.  Flags not mentioned are wildcarded.  For
 example, \fBtcp,ct_state=+trk\-new\fR matches TCP packets that
 have been run through the connection tracker and do not establish a new
-flow.
+connection.
 .IP
 The following flags describe the state of the tracking:
 .RS
@@ -1670,10 +1670,10 @@ continue processing the current actions list as an untracked packet. An
 additional instance of the packet will be sent to the connection tracker, which
 will be re-injected into the OpenFlow pipeline to resume processing in table
 \fInumber\fR, with the \fBct_state\fR and other ct match fields set. If the
-\fBtable\fR is not specified, then the packet is submitted to the connection
-tracker, but the pipeline does not fork and the ct match fields are not
-populated. It is strongly recommended to specify a table later than the current
-table to prevent loops.
+\fBtable\fR is not specified, then the packet which is submitted to the
+connection tracker is not re-injected into the OpenFlow pipeline. It is
+strongly recommended to specify a table later than the current table to prevent
+loops.
 .IP \fBzone=\fIvalue\fR
 .IQ \fBzone=\fIsrc\fB[\fIstart\fB..\fIend\fB]\fR
 A 16-bit context id that can be used to isolate connections into separate
@@ -1681,14 +1681,15 @@ domains, allowing overlapping network addresses in different zones. If a zone
 is not provided, then the default is to use zone zero. The \fBzone\fR may be
 specified either as an immediate 16-bit \fIvalue\fR, or may be provided from an
 NXM field \fIsrc\fR. The \fIstart\fR and \fIend\fR pair are inclusive, and must
-specify a 16-bit range within the field.
+specify a 16-bit range within the field. This value is copied to the
+\fBct_zone\fR match field for packets which are re-injected into the pipeline
+using the \fBtable\fR option.
 .IP \fBexec\fB(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)\fR
-Perform actions within the context of connection tracking. These actions
-are in the same format as the actions accepted as part of a flow, however
-there are additional restrictions applied. For instance, only actions which
-modify the ct fields are accepted within the \fBexec\fR action. Furthermore,
-some actions may only be performed in this context, for instance modifying the
-ct_mark field:
+Perform actions within the context of connection tracking. This is a restricted
+set of actions which are in the same format as their specifications as part
+of a flow. Only actions which modify the \fBct_mark\fR or \fBct_label\fR
+fields are accepted within the \fBexec\fR action, and these fields may only be
+modified with this option. For example:
 .
 .RS
 .IP \fBset_field:\fIvalue\fR->ct_mark\fR
@@ -1703,7 +1704,7 @@ populate the \fBct_label\fR flow field when the packet is sent to the
 connection tracker with the \fBtable\fR specified.
 .RE
 .IP
-The \fBcommit\fR parameter must be specified to use \fBexec(...)\fR.
+The \fBcommit\fR parameter should be specified to use \fBexec(...)\fR.
 .
 .IP \fBalg=\fIalg\fR
 Specify application layer gateway \fIalg\fR to track specific connection
@@ -1715,6 +1716,10 @@ connection arrives which is related, the \fBct\fR action will set the
 \fBrel\fR flag in the \fBct_state\fR field for packets sent through \fBct\fR.
 .RE
 .
+.IP
+When committing related connections, the \fBct_mark\fR for that connection is
+inherited from the current \fBct_mark\fR stored with the original connection
+(ie, the connection created by \fBct(alg=...)\fR).
 .RE
 .IP
 The \fBct\fR action may be used as a primitive to construct stateful firewalls
@@ -1734,9 +1739,10 @@ send traffic from port 2 to port 1:
 If \fBct\fR is executed on IP (or IPv6) fragments, then the message is
 implicitly reassembled before sending to the connection tracker and
 refragmented upon \fBoutput\fR, to the original maximum received fragment size.
-Reassembly occurs within the context of the \fBzone\fR. Pipeline processing
-for the initial fragments is halted; When the final fragment is received,
-the message is assembled and pipeline processing will continue for that flow.
+Reassembly occurs within the context of the \fBzone\fR, meaning that IP
+fragments in different zones are not assembled together. Pipeline processing
+for the initial fragments is halted; When the final fragment is received, the
+message is assembled and pipeline processing will continue for that flow.
 Because packet ordering is not guaranteed by IP protocols, it is not possible
 to determine which IP fragment will cause message reassembly (and therefore
 continue pipeline processing). As such, it is strongly recommended that
@@ -1744,7 +1750,8 @@ multiple flows should not execute \fBct\fR to reassemble fragments from the
 same IP message.
 .IP
 Currently, connection tracking is only available on Linux kernels with the
-nf_conntrack module loaded.
+nf_conntrack module loaded. The \fBct\fR action was introduced in Open vSwitch
+2.5.
 .
 .IP \fBdec_ttl\fR
 .IQ \fBdec_ttl(\fIid1\fR[\fB,\fIid2\fR]...\fB)\fR
