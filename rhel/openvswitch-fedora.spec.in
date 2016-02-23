@@ -359,6 +359,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/ovn-northd
 %{_bindir}/ovn-sbctl
 %{_datadir}/openvswitch/scripts/ovn-ctl
+%{_datadir}/openvswitch/scripts/ovn-bugtool-nbctl-show
+%{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-lflow-list
+%{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-show
 %{_mandir}/man8/ovs-testcontroller.8*
 %{_mandir}/man5/ovn-nb.5*
 %{_mandir}/man5/ovn-sb.5*
