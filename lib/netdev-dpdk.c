@@ -188,7 +188,7 @@ struct dpdk_ring {
     /* For the client rings */
     struct rte_ring *cring_tx;
     struct rte_ring *cring_rx;
-    int user_port_id; /* User given port no, parsed from port name */
+    unsigned int user_port_id; /* User given port no, parsed from port name */
     int eth_port_id; /* ethernet device port id */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 };
@@ -635,6 +635,8 @@ unlock:
     return err;
 }
 
+/* dev_name must be the prefix followed by a positive decimal number.
+ * (no leading + or - signs are allowed) */
 static int
 dpdk_dev_parse_name(const char dev_name[], const char prefix[],
                     unsigned int *port_no)
@@ -646,8 +648,12 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
     }
 
     cport = dev_name + strlen(prefix);
-    *port_no = strtol(cport, NULL, 0); /* string must be null terminated */
-    return 0;
+
+    if (str_to_uint(cport, 10, port_no)) {
+        return 0;
+    } else {
+        return ENODEV;
+    }
 }
 
 static int
