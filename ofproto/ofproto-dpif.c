@@ -503,6 +503,8 @@ type_run(const char *type)
         return 0;
     }
 
+    /* This must be called before dpif_run() */
+    dpif_poll_threads_set(backer->dpif, pmd_cpu_mask);
 
     if (dpif_run(backer->dpif)) {
         backer->need_revalidate = REV_RECONFIGURE;
@@ -530,8 +532,6 @@ type_run(const char *type)
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
     }
-
-    dpif_poll_threads_set(backer->dpif, pmd_cpu_mask);
 
     if (backer->need_revalidate) {
         struct ofproto_dpif *ofproto;
