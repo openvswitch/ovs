@@ -590,6 +590,22 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
    ```
 
+   If one wishes to use multiple queues for an interface in the guest, the
+   driver in the guest operating system must be configured to do so. It is
+   recommended that the number of queues configured be equal to '$q'.
+
+   For example, this can be done for the Linux kernel virtio-net driver with:
+
+   ```
+   ethtool -L <DEV> combined <$q>
+   ```
+
+   A note on the command above:
+
+   `-L`: Changes the numbers of channels of the specified network device
+
+   `combined`: Changes the number of multi-purpose channels.
+
 DPDK vhost-cuse:
 ----------------
 
