@@ -4193,7 +4193,28 @@
     </group>
 
     <group title="Status">
-      <column name="is_connected">
+      <p>
+        Key-value pair of <ref column="is_connected"/> is always updated.
+        Other key-value pairs in the status columns may be updated depends
+        on the <ref column="target"/> type.
+      </p>
+
+      <p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>punix:</code>), both <ref column="n_connections"/> and
+        <ref column="is_connected"/> may also be updated while the
+        remaining key-value pairs are omitted.
+      </p>
+
+      <p>
+        On the other hand, when <ref column="target"/> specifies an
+        outbound connection, all key-value pairs may be updated, except
+        the above-mentioned two key-value pairs associated with inbound
+        connection targets. They are omitted.
+      </p>
+
+    <column name="is_connected">
         <code>true</code> if currently connected to this manager,
         <code>false</code> otherwise.
       </column>
@@ -4264,18 +4285,11 @@
 
       <column name="status" key="n_connections"
               type='{"type": "integer", "minInteger": 2}'>
-        <p>
-          When <ref column="target"/> specifies a connection method that
-          listens for inbound connections (e.g. <code>ptcp:</code> or
-          <code>pssl:</code>) and more than one connection is actually active,
-          the value is the number of active connections.  Otherwise, this
-          key-value pair is omitted.
-        </p>
-        <p>
-          When multiple connections are active, status columns and key-value
-          pairs (other than this one) report the status of one arbitrarily
-          chosen connection.
-        </p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>pssl:</code>) and more than one connection is actually active,
+        the value is the number of active connections.  Otherwise, this
+        key-value pair is omitted.
       </column>
 
       <column name="status" key="bound_port" type='{"type": "integer"}'>
