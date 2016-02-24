@@ -1,3 +1,7 @@
+v2.5.1 - 26 Feb 2016
+---------------------
+
+
 v2.5.0 - 26 Feb 2016
 ---------------------
    - Dropped support for Python older than version 2.7.  As a consequence,
