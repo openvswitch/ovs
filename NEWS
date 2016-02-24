@@ -71,7 +71,7 @@ v2.5.0 - xx xxx xxxx
    - DPDK:
      * Requires DPDK 2.2
      * Added multiqueue support to vhost-user
-
+     * Note: QEMU 2.5+ required for multiqueue support
 
 v2.4.0 - 20 Aug 2015
 ---------------------
