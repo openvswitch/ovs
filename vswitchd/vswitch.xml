@@ -4281,7 +4281,7 @@
       <column name="status" key="bound_port" type='{"type": "integer"}'>
         When <ref column="target"/> is <code>ptcp:</code> or
         <code>pssl:</code>, this is the TCP port on which the OVSDB server is
-        listening.  (This is is particularly useful when <ref
+        listening.  (This is particularly useful when <ref
         column="target"/> specifies a port of 0, allowing the kernel to
         choose any available port.)
       </column>
