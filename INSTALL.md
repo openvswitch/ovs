@@ -525,7 +525,10 @@ valgrind results are easier to interpret if you put "-q" in
 Sometimes a few tests may fail on some runs but not others.  This is
 usually a bug in the testsuite, not a bug in Open vSwitch itself.  If
 you find that a test fails intermittently, please report it, since the
-developers may not have noticed.
+developers may not have noticed.  You can make the testsuite
+automatically rerun tests that fail, by adding RECHECK=yes to the
+"make" command line, e.g.:
+      `make check TESTSUITEFLAGS=-j8 RECHECK=yes`
 
 OFTest
 ------
