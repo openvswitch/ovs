@@ -34,8 +34,7 @@ override_dh_auto_configure:
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	if $(MAKE) check TESTSUITEFLAGS='$(PARALLEL)' || \
-				$(MAKE) check TESTSUITEFLAGS='--recheck'; then :; \
+	if $(MAKE) check TESTSUITEFLAGS='$(PARALLEL)' RECHECK=yes; then :; \
 	else \
 		cat tests/testsuite.log; \
 		exit 1; \

@@ -29,8 +29,9 @@ In particular:
 
 Testing is also important:
 
-  - A patch that modifies existing code should be tested with
-    `make check` before submission.
+  - A patch that modifies existing code should be tested with `make
+    check` before submission.  Please see INSTALL.md, under
+    "Self-Tests", for more information.
 
   - A patch that adds or deletes files should also be tested with
     `make distcheck` before submission.
