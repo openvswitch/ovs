@@ -35,8 +35,16 @@ openvswitch (2.5.0-1) unstable; urgency=low
      system to support virtual network abstraction.  OVN complements the
      existing capabilities of OVS to add native support for virtual network
      abstractions, such as virtual L2 and L3 overlays and security groups.
+   - RHEL packaging:
+     * DPDK ports may now be created via network scripts (see README.RHEL).
+   - DPDK:
+     * Requires DPDK 2.2
+     * Added multiqueue support to vhost-user
+     * Note: QEMU 2.5+ required for multiqueue support
+   - SELinux:
+     * Introduced SELinux policy package.
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 03 Dec 2015 23:17:44 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 26 Feb 2016 17:23:21 -0700
 
 openvswitch (2.4.0-1) unstable; urgency=low
    [ Open vSwitch team ]
