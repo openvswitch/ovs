@@ -100,6 +100,8 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
+#define OVS_VHOST_MAX_QUEUE_NUM 1024  /* Maximum number of vHost TX queues. */
+
 static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
@@ -173,6 +175,8 @@ struct dpdk_tx_queue {
                                     * from concurrent access.  It is used only
                                     * if the queue is shared among different
                                     * pmd threads (see 'txq_needs_locking'). */
+    int map;                       /* Mapping of configured vhost-user queues
+                                    * to enabled by guest. */
     uint64_t tsc;
     struct rte_mbuf *burst_pkts[MAX_TX_QUEUE_LEN];
 };
@@ -572,6 +576,9 @@ netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
             /* Queues are shared among CPUs. Always flush */
             netdev->tx_q[i].flush_tx = true;
         }
+
+        /* Initialize map for vhost devices. */
+        netdev->tx_q[i].map = -1;
         rte_spinlock_init(&netdev->tx_q[i].tx_lock);
     }
 }
@@ -623,6 +630,8 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
         if (err) {
             goto unlock;
         }
+    } else {
+        netdev_dpdk_alloc_txq(netdev, OVS_VHOST_MAX_QUEUE_NUM);
     }
 
     list_push_back(&dpdk_list, &netdev->list_node);
@@ -907,10 +916,8 @@ netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&netdev->mutex);
 
-    rte_free(netdev->tx_q);
     netdev->up.n_txq = n_txq;
     netdev->up.n_rxq = n_rxq;
-    netdev_dpdk_alloc_txq(netdev, netdev->up.n_txq);
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -1135,17 +1142,16 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     unsigned int total_pkts = cnt;
     uint64_t start = 0;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
+    qid = vhost_dev->tx_q[qid % vhost_dev->real_n_txq].map;
+
+    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid == -1)) {
         rte_spinlock_lock(&vhost_dev->stats_lock);
         vhost_dev->stats.tx_dropped+= cnt;
         rte_spinlock_unlock(&vhost_dev->stats_lock);
         goto out;
     }
 
-    if (vhost_dev->txq_needs_locking) {
-        qid = qid % vhost_dev->real_n_txq;
-        rte_spinlock_lock(&vhost_dev->tx_q[qid].tx_lock);
-    }
+    rte_spinlock_lock(&vhost_dev->tx_q[qid].tx_lock);
 
     do {
         int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
@@ -1183,9 +1189,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         }
     } while (cnt);
 
-    if (vhost_dev->txq_needs_locking) {
-        rte_spinlock_unlock(&vhost_dev->tx_q[qid].tx_lock);
-    }
+    rte_spinlock_unlock(&vhost_dev->tx_q[qid].tx_lock);
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
     netdev_dpdk_vhost_update_tx_counters(&vhost_dev->stats, pkts, total_pkts,
@@ -1845,9 +1849,50 @@ set_irq_status(struct virtio_net *dev)
     }
 }
 
+/*
+ * Fixes mapping for vhost-user tx queues. Must be called after each
+ * enabling/disabling of queues and real_n_txq modifications.
+ */
+static void
+netdev_dpdk_remap_txqs(struct netdev_dpdk *netdev)
+    OVS_REQUIRES(netdev->mutex)
+{
+    int *enabled_queues, n_enabled = 0;
+    int i, k, total_txqs = netdev->real_n_txq;
+
+    enabled_queues = dpdk_rte_mzalloc(total_txqs * sizeof *enabled_queues);
+
+    for (i = 0; i < total_txqs; i++) {
+        /* Enabled queues always mapped to themselves. */
+        if (netdev->tx_q[i].map == i) {
+            enabled_queues[n_enabled++] = i;
+        }
+    }
+
+    if (n_enabled == 0 && total_txqs != 0) {
+        enabled_queues[0] = -1;
+        n_enabled = 1;
+    }
+
+    k = 0;
+    for (i = 0; i < total_txqs; i++) {
+        if (netdev->tx_q[i].map != i) {
+            netdev->tx_q[i].map = enabled_queues[k];
+            k = (k + 1) % n_enabled;
+        }
+    }
+
+    VLOG_DBG("TX queue mapping for %s\n", netdev->vhost_id);
+    for (i = 0; i < total_txqs; i++) {
+        VLOG_DBG("%2d --> %2d", i, netdev->tx_q[i].map);
+    }
+
+    rte_free(enabled_queues);
+}
 
 static int
 netdev_dpdk_vhost_set_queues(struct netdev_dpdk *netdev, struct virtio_net *dev)
+    OVS_REQUIRES(netdev->mutex)
 {
     uint32_t qp_num;
 
@@ -1861,11 +1906,9 @@ netdev_dpdk_vhost_set_queues(struct netdev_dpdk *netdev, struct virtio_net *dev)
 
     netdev->real_n_rxq = qp_num;
     netdev->real_n_txq = qp_num;
-    if (netdev->up.n_txq > netdev->real_n_txq) {
-        netdev->txq_needs_locking = true;
-    } else {
-        netdev->txq_needs_locking = false;
-    }
+    netdev->txq_needs_locking = true;
+
+    netdev_dpdk_remap_txqs(netdev);
 
     return 0;
 }
@@ -1959,6 +2002,47 @@ destroy_device(volatile struct virtio_net *dev)
 
 }
 
+static int
+vring_state_changed(struct virtio_net *dev, uint16_t queue_id, int enable)
+{
+    struct netdev_dpdk *vhost_dev;
+    bool exists = false;
+    int qid = queue_id / VIRTIO_QNUM;
+
+    if (queue_id % VIRTIO_QNUM == VIRTIO_TXQ) {
+        return 0;
+    }
+
+    ovs_mutex_lock(&dpdk_mutex);
+    LIST_FOR_EACH (vhost_dev, list_node, &dpdk_list) {
+        if (strncmp(dev->ifname, vhost_dev->vhost_id, IF_NAME_SZ) == 0) {
+            ovs_mutex_lock(&vhost_dev->mutex);
+            if (enable) {
+                vhost_dev->tx_q[qid].map = qid;
+            } else {
+                vhost_dev->tx_q[qid].map = -1;
+            }
+            netdev_dpdk_remap_txqs(vhost_dev);
+            exists = true;
+            ovs_mutex_unlock(&vhost_dev->mutex);
+            break;
+        }
+    }
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    if (exists) {
+        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s' %"
+                  PRIu64" changed to \'%s\'", queue_id, qid, dev->ifname,
+                  dev->device_fh, (enable == 1) ? "enabled" : "disabled");
+    } else {
+        VLOG_INFO("vHost Device '%s' %"PRIu64" not found", dev->ifname,
+                  dev->device_fh);
+        return -1;
+    }
+
+    return 0;
+}
+
 struct virtio_net *
 netdev_dpdk_get_virtio(const struct netdev_dpdk *dev)
 {
@@ -1973,6 +2057,7 @@ static const struct virtio_net_device_ops virtio_net_device_ops =
 {
     .new_device =  new_device,
     .destroy_device = destroy_device,
+    .vring_state_changed = vring_state_changed
 };
 
 static void *
