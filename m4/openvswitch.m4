@@ -382,9 +382,9 @@ else:
             fi
           done
         done
-        if test $ovs_cv_python != no; then
-          if test -x "$ovs_cv_python" && ! "$ovs_cv_python" -c 'import six' >/dev/null 2>&1; then
-            ovs_cv_python=no
+        if test $ovs_cv_python3 != no; then
+          if test -x "$ovs_cv_python3" && ! "$ovs_cv_python3" -c 'import six' >/dev/null 2>&1; then
+            ovs_cv_python3=no
             AC_MSG_WARN([Missing Python six library.])
           fi
         fi
