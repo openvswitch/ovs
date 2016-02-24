@@ -80,7 +80,8 @@ enum ovsdb_idl_state {
     IDL_S_MONITOR_REQUESTED,
     IDL_S_MONITORING,
     IDL_S_MONITOR2_REQUESTED,
-    IDL_S_MONITORING2
+    IDL_S_MONITORING2,
+    IDL_S_NO_SCHEMA
 };
 
 struct ovsdb_idl {
@@ -417,6 +418,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
 
             case IDL_S_MONITORING:
             case IDL_S_MONITORING2:
+            case IDL_S_NO_SCHEMA:
             default:
                 OVS_NOT_REACHED();
             }
@@ -461,6 +463,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 idl->request_id = NULL;
                 VLOG_ERR("%s: requested schema not found",
                          jsonrpc_session_get_name(idl->session));
+                idl->state = IDL_S_NO_SCHEMA;
         } else if ((msg->type == JSONRPC_ERROR
                     || msg->type == JSONRPC_REPLY)
                    && ovsdb_idl_txn_process_reply(idl, msg)) {
@@ -550,20 +553,34 @@ ovsdb_idl_verify_write_only(struct ovsdb_idl *idl)
     idl->verify_write_only = true;
 }
 
-/* Returns true if 'idl' is currently connected or trying to connect. */
+/* Returns true if 'idl' is currently connected or trying to connect
+ * and a negative response to a schema request has not been received */
 bool
 ovsdb_idl_is_alive(const struct ovsdb_idl *idl)
 {
-    return jsonrpc_session_is_alive(idl->session);
+    return jsonrpc_session_is_alive(idl->session) &&
+           idl->state != IDL_S_NO_SCHEMA;
 }
 
 /* Returns the last error reported on a connection by 'idl'.  The return value
- * is 0 only if no connection made by 'idl' has ever encountered an error.  See
- * jsonrpc_get_status() for return value interpretation. */
+ * is 0 only if no connection made by 'idl' has ever encountered an error and
+ * a negative response to a schema request has never been received. See
+ * jsonrpc_get_status() for jsonrpc_session_get_last_error() return value
+ * interpretation. */
 int
 ovsdb_idl_get_last_error(const struct ovsdb_idl *idl)
 {
-    return jsonrpc_session_get_last_error(idl->session);
+    int err;
+
+    err = jsonrpc_session_get_last_error(idl->session);
+
+    if (err) {
+        return err;
+    } else if (idl->state == IDL_S_NO_SCHEMA) {
+        return ENOENT;
+    } else {
+        return 0;
+    }
 }
 
 static unsigned char *
