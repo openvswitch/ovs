@@ -184,8 +184,7 @@ rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
 
 %check
 %if %{with check}
-    if make check TESTSUITEFLAGS='%{_smp_mflags}' ||
-       make check TESTSUITEFLAGS='--recheck'; then :;
+    if make check TESTSUITEFLAGS='%{_smp_mflags}' RECHECK=yes; then :;
     else
         cat tests/testsuite.log
         exit 1
