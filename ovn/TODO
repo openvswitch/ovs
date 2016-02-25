@@ -159,6 +159,12 @@ think it does everything else.
     (Neutron) where a port will be located, as opposed to the networking
     component discovering it.
 
+** Gratuitous ARP generation
+
+   ovn-controller should generate a GARP when a port is bound to a chassis.
+   This is needed when ports are migrated from one chassis to another, such
+   as live migrating a VM.
+
 * ovsdb-server
 
   ovsdb-server should have adequate features for OVN but it probably
