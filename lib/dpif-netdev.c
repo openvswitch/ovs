@@ -4007,37 +4007,6 @@ exit:
 }
 
 static void
-dpif_dummy_delete_port(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                       const char *argv[], void *aux OVS_UNUSED)
-{
-    struct dp_netdev_port *port;
-    struct dp_netdev *dp;
-
-    ovs_mutex_lock(&dp_netdev_mutex);
-    dp = shash_find_data(&dp_netdevs, argv[1]);
-    if (!dp || !dpif_netdev_class_is_dummy(dp->class)) {
-        ovs_mutex_unlock(&dp_netdev_mutex);
-        unixctl_command_reply_error(conn, "unknown datapath or not a dummy");
-        return;
-    }
-    ovs_refcount_ref(&dp->ref_cnt);
-    ovs_mutex_unlock(&dp_netdev_mutex);
-
-    ovs_mutex_lock(&dp->port_mutex);
-    if (get_port_by_name(dp, argv[2], &port)) {
-        unixctl_command_reply_error(conn, "unknown port");
-    } else if (port->port_no == ODPP_LOCAL) {
-        unixctl_command_reply_error(conn, "can't delete local port");
-    } else {
-        do_del_port(dp, port);
-        unixctl_command_reply(conn, NULL);
-    }
-    ovs_mutex_unlock(&dp->port_mutex);
-
-    dp_netdev_unref(dp);
-}
-
-static void
 dpif_dummy_register__(const char *type)
 {
     struct dpif_class *class;
@@ -4085,8 +4054,6 @@ dpif_dummy_register(enum dummy_level level)
     unixctl_command_register("dpif-dummy/change-port-number",
                              "dp port new-number",
                              3, 3, dpif_dummy_change_port_number, NULL);
-    unixctl_command_register("dpif-dummy/delete-port", "dp port",
-                             2, 2, dpif_dummy_delete_port, NULL);
 }
 
 /* Datapath Classifier. */
