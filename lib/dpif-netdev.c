@@ -1106,27 +1106,28 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     struct netdev *netdev;
     enum netdev_flags flags;
     const char *open_type;
-    int error;
-    int i;
+    int error = 0;
+    int i, n_open_rxqs = 0;
 
     /* Reject devices already in 'dp'. */
     if (!get_port_by_name(dp, devname, &port)) {
-        return EEXIST;
+        error = EEXIST;
+        goto out;
     }
 
     /* Open and validate network device. */
     open_type = dpif_netdev_port_open_type(dp->class, type);
     error = netdev_open(devname, open_type, &netdev);
     if (error) {
-        return error;
+        goto out;
     }
     /* XXX reject non-Ethernet devices */
 
     netdev_get_flags(netdev, &flags);
     if (flags & NETDEV_LOOPBACK) {
         VLOG_ERR("%s: cannot add a loopback device", devname);
-        netdev_close(netdev);
-        return EINVAL;
+        error = EINVAL;
+        goto out_close;
     }
 
     if (netdev_is_pmd(netdev)) {
@@ -1134,7 +1135,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
         if (n_cores == OVS_CORE_UNSPEC) {
             VLOG_ERR("%s, cannot get cpu core info", devname);
-            return ENOENT;
+            error = ENOENT;
+            goto out_close;
         }
         /* There can only be ovs_numa_get_n_cores() pmd threads,
          * so creates a txq for each, and one extra for the non
@@ -1143,7 +1145,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
                                   netdev_requested_n_rxq(netdev));
         if (error && (error != EOPNOTSUPP)) {
             VLOG_ERR("%s, cannot set multiq", devname);
-            return errno;
+            goto out_close;
         }
     }
     port = xzalloc(sizeof *port);
@@ -1152,30 +1154,20 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
     port->type = xstrdup(type);
     port->latest_requested_n_rxq = netdev_requested_n_rxq(netdev);
+
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
         error = netdev_rxq_open(netdev, &port->rxq[i], i);
-        if (error
-            && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
+        if (error) {
             VLOG_ERR("%s: cannot receive packets on this network device (%s)",
                      devname, ovs_strerror(errno));
-            netdev_close(netdev);
-            free(port->type);
-            free(port->rxq);
-            free(port);
-            return error;
+            goto out_rxq_close;
         }
+        n_open_rxqs++;
     }
 
     error = netdev_turn_flags_on(netdev, NETDEV_PROMISC, &sf);
     if (error) {
-        for (i = 0; i < netdev_n_rxq(netdev); i++) {
-            netdev_rxq_close(port->rxq[i]);
-        }
-        netdev_close(netdev);
-        free(port->type);
-        free(port->rxq);
-        free(port);
-        return error;
+        goto out_rxq_close;
     }
     port->sf = sf;
 
@@ -1188,6 +1180,18 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     seq_change(dp->port_seq);
 
     return 0;
+
+out_rxq_close:
+    for (i = 0; i < n_open_rxqs; i++) {
+        netdev_rxq_close(port->rxq[i]);
+    }
+    free(port->type);
+    free(port->rxq);
+    free(port);
+out_close:
+    netdev_close(netdev);
+out:
+    return error;
 }
 
 static int
