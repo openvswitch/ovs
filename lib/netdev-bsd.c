@@ -1536,6 +1536,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_bsd_arp_lookup, /* arp_lookup */          \
                                                      \
     netdev_bsd_update_flags,                         \
+    NULL, /* reconfigure */                          \
                                                      \
     netdev_bsd_rxq_alloc,                            \
     netdev_bsd_rxq_construct,                        \

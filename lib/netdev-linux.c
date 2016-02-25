@@ -2806,6 +2806,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
+    NULL,                       /* reconfigure */               \
                                                                 \
     netdev_linux_rxq_alloc,                                     \
     netdev_linux_rxq_construct,                                 \

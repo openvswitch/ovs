@@ -881,6 +881,7 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                       /* arp_lookup */            \
                                                             \
     netdev_vport_update_flags,                              \
+    NULL,                       /* reconfigure */           \
                                                             \
     NULL,                   /* rx_alloc */                  \
     NULL,                   /* rx_construct */              \
