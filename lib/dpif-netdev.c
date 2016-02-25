@@ -250,6 +250,7 @@ struct dp_netdev_port {
     struct netdev *netdev;
     struct cmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
+    unsigned n_rxq;             /* Number of elements in 'rxq' */
     struct netdev_rxq **rxq;
     struct ovs_refcount ref_cnt;
     char *type;                 /* Port type as requested by user. */
@@ -1151,11 +1152,12 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port = xzalloc(sizeof *port);
     port->port_no = port_no;
     port->netdev = netdev;
-    port->rxq = xmalloc(sizeof *port->rxq * netdev_n_rxq(netdev));
+    port->n_rxq = netdev_n_rxq(netdev);
+    port->rxq = xmalloc(sizeof *port->rxq * port->n_rxq);
     port->type = xstrdup(type);
     port->latest_requested_n_rxq = netdev_requested_n_rxq(netdev);
 
-    for (i = 0; i < netdev_n_rxq(netdev); i++) {
+    for (i = 0; i < port->n_rxq; i++) {
         error = netdev_rxq_open(netdev, &port->rxq[i], i);
         if (error) {
             VLOG_ERR("%s: cannot receive packets on this network device (%s)",
@@ -1288,13 +1290,12 @@ static void
 port_unref(struct dp_netdev_port *port)
 {
     if (port && ovs_refcount_unref_relaxed(&port->ref_cnt) == 1) {
-        int n_rxq = netdev_n_rxq(port->netdev);
         int i;
 
         netdev_close(port->netdev);
         netdev_restore_flags(port->sf);
 
-        for (i = 0; i < n_rxq; i++) {
+        for (i = 0; i < port->n_rxq; i++) {
             netdev_rxq_close(port->rxq[i]);
         }
         free(port->rxq);
@@ -2461,6 +2462,7 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
                     netdev_rxq_close(port->rxq[i]);
                     port->rxq[i] = NULL;
                 }
+                port->n_rxq = 0;
 
                 /* Sets the new rx queue config.  */
                 err = netdev_set_multiq(port->netdev,
@@ -2474,9 +2476,9 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
                 }
                 port->latest_requested_n_rxq = requested_n_rxq;
                 /* If the set_multiq() above succeeds, reopens the 'rxq's. */
-                port->rxq = xrealloc(port->rxq, sizeof *port->rxq
-                                     * netdev_n_rxq(port->netdev));
-                for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                port->n_rxq = netdev_n_rxq(port->netdev);
+                port->rxq = xrealloc(port->rxq, sizeof *port->rxq * port->n_rxq);
+                for (i = 0; i < port->n_rxq; i++) {
                     netdev_rxq_open(port->netdev, &port->rxq[i], i);
                 }
             }
@@ -2604,7 +2606,7 @@ dpif_netdev_run(struct dpif *dpif)
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
-            for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+            for (i = 0; i < port->n_rxq; i++) {
                 dp_netdev_process_rxq_port(non_pmd, port, port->rxq[i]);
             }
         }
@@ -2634,7 +2636,7 @@ dpif_netdev_wait(struct dpif *dpif)
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
-            for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+            for (i = 0; i < port->n_rxq; i++) {
                 netdev_rxq_wait(port->rxq[i]);
             }
         }
@@ -3099,7 +3101,7 @@ dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port)
     /* Cannot create pmd threads for invalid numa node. */
     ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
 
-    for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+    for (i = 0; i < port->n_rxq; i++) {
         pmd = dp_netdev_less_loaded_pmd_on_numa(dp, numa_id);
         if (!pmd) {
             /* There is no pmd threads on this numa node. */
@@ -3167,7 +3169,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         CMAP_FOR_EACH (port, node, &dp->ports) {
             if (netdev_is_pmd(port->netdev)
                 && netdev_get_numa_id(port->netdev) == numa_id) {
-                for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+                for (i = 0; i < port->n_rxq; i++) {
                     /* Make thread-safety analyser happy. */
                     ovs_mutex_lock(&pmds[index]->poll_mutex);
                     dp_netdev_add_rxq_to_pmd(pmds[index], port, port->rxq[i]);
