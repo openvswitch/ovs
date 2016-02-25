@@ -24,7 +24,12 @@ AT_CHECK([tail -1 stdout], [0],
 dnl Test MPLS pop
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=20,tc=0,ttl=64,bos=1)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: pop_mpls(eth_type=0x800),100
+  [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x1)
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(1),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 100
 ])
 
 dnl Setup multiple MPLS tags.
@@ -47,12 +52,7 @@ AT_CHECK([tail -1 stdout], [0],
 dnl Double MPLS pop
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=60,tc=0,ttl=64,bos=0,label=50,tc=0,ttl=64,bos=1)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: pop_mpls(eth_type=0x8847),recirc(0x1)
-])
-
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(1),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=50,tc=0,ttl=64,bos=0)'], [0], [stdout])
-AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x2)
+  [Datapath actions: pop_mpls(eth_type=0x8847),pop_mpls(eth_type=0x800),recirc(0x2)
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(2),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
