@@ -252,7 +252,6 @@ struct dp_netdev_port {
     struct netdev_saved_flags *sf;
     unsigned n_rxq;             /* Number of elements in 'rxq' */
     struct netdev_rxq **rxq;
-    struct ovs_refcount ref_cnt;
     char *type;                 /* Port type as requested by user. */
     int latest_requested_n_rxq; /* Latest requested from netdev number
                                    of rx queues. */
@@ -1173,7 +1172,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     }
     port->sf = sf;
 
-    ovs_refcount_init(&port->ref_cnt);
     cmap_insert(&dp->ports, &port->node, hash_port_no(port_no));
 
     if (netdev_is_pmd(netdev)) {
@@ -1279,29 +1277,22 @@ get_port_by_number(struct dp_netdev *dp,
 }
 
 static void
-port_ref(struct dp_netdev_port *port)
+port_destroy(struct dp_netdev_port *port)
 {
-    if (port) {
-        ovs_refcount_ref(&port->ref_cnt);
+    if (!port) {
+        return;
     }
-}
 
-static void
-port_unref(struct dp_netdev_port *port)
-{
-    if (port && ovs_refcount_unref_relaxed(&port->ref_cnt) == 1) {
-        int i;
+    netdev_close(port->netdev);
+    netdev_restore_flags(port->sf);
 
-        netdev_close(port->netdev);
-        netdev_restore_flags(port->sf);
-
-        for (i = 0; i < port->n_rxq; i++) {
-            netdev_rxq_close(port->rxq[i]);
-        }
-        free(port->rxq);
-        free(port->type);
-        free(port);
+    for (unsigned i = 0; i < port->n_rxq; i++) {
+        netdev_rxq_close(port->rxq[i]);
     }
+
+    free(port->rxq);
+    free(port->type);
+    free(port);
 }
 
 static int
@@ -1380,7 +1371,7 @@ do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
         }
     }
 
-    port_unref(port);
+    port_destroy(port);
 }
 
 static void
@@ -2646,23 +2637,17 @@ dpif_netdev_wait(struct dpif *dpif)
 }
 
 static int
-pmd_load_queues(struct dp_netdev_pmd_thread *pmd,
-                struct rxq_poll **ppoll_list, int poll_cnt)
+pmd_load_queues(struct dp_netdev_pmd_thread *pmd, struct rxq_poll **ppoll_list)
     OVS_REQUIRES(pmd->poll_mutex)
 {
     struct rxq_poll *poll_list = *ppoll_list;
     struct rxq_poll *poll;
     int i;
 
-    for (i = 0; i < poll_cnt; i++) {
-        port_unref(poll_list[i].port);
-    }
-
     poll_list = xrealloc(poll_list, pmd->poll_cnt * sizeof *poll_list);
 
     i = 0;
     LIST_FOR_EACH (poll, node, &pmd->poll_list) {
-        port_ref(poll->port);
         poll_list[i++] = *poll;
     }
 
@@ -2690,7 +2675,7 @@ reload:
     emc_cache_init(&pmd->flow_cache);
 
     ovs_mutex_lock(&pmd->poll_mutex);
-    poll_cnt = pmd_load_queues(pmd, &poll_list, poll_cnt);
+    poll_cnt = pmd_load_queues(pmd, &poll_list);
     ovs_mutex_unlock(&pmd->poll_mutex);
 
     /* List port/core affinity */
@@ -2730,10 +2715,6 @@ reload:
 
     if (!latch_is_set(&pmd->exit_latch)){
         goto reload;
-    }
-
-    for (i = 0; i < poll_cnt; i++) {
-        port_unref(poll_list[i].port);
     }
 
     dp_netdev_pmd_reload_done(pmd);
@@ -3002,7 +2983,6 @@ dp_netdev_pmd_clear_poll_list(struct dp_netdev_pmd_thread *pmd)
 
     ovs_mutex_lock(&pmd->poll_mutex);
     LIST_FOR_EACH_POP (poll, node, &pmd->poll_list) {
-        port_unref(poll->port);
         free(poll);
     }
     pmd->poll_cnt = 0;
@@ -3022,7 +3002,6 @@ dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
     LIST_FOR_EACH_SAFE (poll, next, node, &pmd->poll_list) {
         if (poll->port == port) {
             found = true;
-            port_unref(poll->port);
             ovs_list_remove(&poll->node);
             pmd->poll_cnt--;
             free(poll);
@@ -3078,7 +3057,6 @@ dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
 {
     struct rxq_poll *poll = xmalloc(sizeof *poll);
 
-    port_ref(port);
     poll->port = port;
     poll->rx = rx;
 
