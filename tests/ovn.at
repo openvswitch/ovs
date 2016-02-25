@@ -746,6 +746,11 @@ for i in 1 2 3; do
         echo
     done
 done
+
+# Gracefully terminate daemons
+for daemon in ovn-controller ovn-northd ovsdb-server; do
+    ovs-appctl -t $daemon exit
+done
 AT_CLEANUP
 
 # 2 hypervisors, 4 logical ports per HV
@@ -894,6 +899,10 @@ for i in 1 2; do
     done
 done
 
+# Gracefully terminate daemons
+for daemon in ovn-controller ovn-northd ovsdb-server; do
+    ovs-appctl -t $daemon exit
+done
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
@@ -1049,6 +1058,11 @@ for i in 1 2 3; do
     sort $i.expected > expout
     AT_CHECK([sort $i.packets], [0], [expout])
     echo
+done
+
+# Gracefully terminate daemons
+for daemon in ovs-vtep ovn-controller-vtep ovn-controller ovn-northd ovsdb-server; do
+    ovs-appctl -t $daemon exit
 done
 AT_CLEANUP
 
@@ -1321,5 +1335,10 @@ for i in 1 2 3; do
 	    echo
         done
     done
+done
+
+# Gracefully terminate daemons
+for daemon in ovn-controller ovn-northd ovsdb-server; do
+    ovs-appctl -t $daemon exit
 done
 AT_CLEANUP

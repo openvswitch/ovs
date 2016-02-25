@@ -114,4 +114,6 @@ AT_CHECK([ovn-sbctl \
     -- set Port_Binding baz type='""' options='{}'])
 check_patches
 
+# Gracefully terminate ovn-controller
+ovs-appctl -t ovn-controller exit
 AT_CLEANUP
