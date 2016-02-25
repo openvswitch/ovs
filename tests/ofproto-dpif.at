@@ -6069,7 +6069,7 @@ on_exit 'kill `cat ovs-ofctl.pid`'
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
 dl_src=60:66:66:66:66:00 actions=push_mpls:0x8847,controller
-dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8849,controller
+dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8847,controller
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
@@ -6105,7 +6105,7 @@ on_exit 'kill `cat ovs-ofctl.pid`'
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_DATA([flows.txt], [dnl
 dl_src=60:66:66:66:66:00 actions=push_mpls:0x8847,controller
-dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8849,controller
+dl_src=60:66:66:66:66:01 actions=pop_mpls:0x8847,controller
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
@@ -6396,9 +6396,9 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 sleep 1
-AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, actions: <del>
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions: <del>
+AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout_keep_actions], [0], [dnl
+recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
+recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions:pop_mpls(eth_type=0x800),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
