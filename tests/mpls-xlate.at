@@ -45,7 +45,7 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 
 dnl Double MPLS pop
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=60,tc=0,ttl=64,bos=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=60,tc=0,ttl=64,bos=0,label=50,tc=0,ttl=64,bos=1)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: pop_mpls(eth_type=0x8847),recirc(0x1)
 ])

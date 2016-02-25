@@ -386,13 +386,13 @@ static void
 format_mpls(struct ds *ds, const struct ovs_key_mpls *mpls_key,
             const struct ovs_key_mpls *mpls_mask, int n)
 {
-    if (n == 1) {
-        ovs_be32 key = mpls_key->mpls_lse;
+    for (int i = 0; i < n; i++) {
+        ovs_be32 key = mpls_key[i].mpls_lse;
 
         if (mpls_mask == NULL) {
             format_mpls_lse(ds, key);
         } else {
-            ovs_be32 mask = mpls_mask->mpls_lse;
+            ovs_be32 mask = mpls_mask[i].mpls_lse;
 
             ds_put_format(ds, "label=%"PRIu32"/0x%x,tc=%d/%x,ttl=%d/0x%x,bos=%d/%x",
                           mpls_lse_to_label(key), mpls_lse_to_label(mask),
@@ -400,19 +400,9 @@ format_mpls(struct ds *ds, const struct ovs_key_mpls *mpls_key,
                           mpls_lse_to_ttl(key), mpls_lse_to_ttl(mask),
                           mpls_lse_to_bos(key), mpls_lse_to_bos(mask));
         }
-    } else {
-        int i;
-
-        for (i = 0; i < n; i++) {
-            ds_put_format(ds, "lse%d=%#"PRIx32,
-                          i, ntohl(mpls_key[i].mpls_lse));
-            if (mpls_mask) {
-                ds_put_format(ds, "/%#"PRIx32, ntohl(mpls_mask[i].mpls_lse));
-            }
-            ds_put_char(ds, ',');
-        }
-        ds_chomp(ds, ',');
+        ds_put_char(ds, ',');
     }
+    ds_chomp(ds, ',');
 }
 
 static void
@@ -3935,6 +3925,51 @@ geneve_to_attr(struct ofpbuf *a, const void *data_)
         return s - start;                               \
     }
 
+#define SCAN_BEGIN_ARRAY(NAME, TYPE, CNT)       \
+    SCAN_IF(NAME);                              \
+        TYPE skey[CNT], smask[CNT];             \
+        memset(&skey, 0, sizeof skey);          \
+        memset(&smask, 0, sizeof smask);        \
+        int idx = 0, cnt = CNT;                 \
+        uint64_t fields = 0;                    \
+        do {                                    \
+            int field = 0;                      \
+            len = 0;
+
+/* Scan named ('NAME') entry 'FIELD' as 'TYPE'. */
+#define SCAN_FIELD_ARRAY(NAME, TYPE, FIELD)                             \
+    if (strncmp(s, NAME, strlen(NAME)) == 0) {                          \
+        if (fields & (1UL << field)) {                                  \
+            fields = 0;                                                 \
+            if (++idx == cnt) {                                         \
+                break;                                                  \
+            }                                                           \
+        }                                                               \
+        s += strlen(NAME);                                              \
+        SCAN_TYPE(TYPE, &skey[idx].FIELD, mask ? &smask[idx].FIELD : NULL); \
+        fields |= 1UL << field;                                         \
+        continue;                                                       \
+    }                                                                   \
+    field++;
+
+#define SCAN_PUT_ATTR_ARRAY(BUF, ATTR, DATA, CNT)                    \
+    nl_msg_put_unspec(BUF, ATTR, &(DATA), sizeof (DATA)[0] * (CNT)); \
+
+#define SCAN_PUT_ARRAY(ATTR, CNT)                        \
+    SCAN_PUT_ATTR_ARRAY(key, ATTR, skey, CNT);       \
+    if (mask) {                                      \
+        SCAN_PUT_ATTR_ARRAY(mask, ATTR, smask, CNT); \
+    }
+
+#define SCAN_END_ARRAY(ATTR)             \
+        SCAN_FINISH();                   \
+        if (idx == cnt) {                \
+            return -EINVAL;              \
+        }                                \
+        SCAN_PUT_ARRAY(ATTR, idx + 1);   \
+        return s - start;                \
+    }
+
 #define SCAN_END_SINGLE(ATTR)                           \
         SCAN_FINISH_SINGLE();                           \
         SCAN_PUT(ATTR, NULL);                           \
@@ -4017,12 +4052,12 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
     SCAN_SINGLE("eth_type(", ovs_be16, be16, OVS_KEY_ATTR_ETHERTYPE);
 
-    SCAN_BEGIN("mpls(", struct ovs_key_mpls) {
-        SCAN_FIELD("label=", mpls_label, mpls_lse);
-        SCAN_FIELD("tc=", mpls_tc, mpls_lse);
-        SCAN_FIELD("ttl=", mpls_ttl, mpls_lse);
-        SCAN_FIELD("bos=", mpls_bos, mpls_lse);
-    } SCAN_END(OVS_KEY_ATTR_MPLS);
+    SCAN_BEGIN_ARRAY("mpls(", struct ovs_key_mpls, 3) {
+        SCAN_FIELD_ARRAY("label=", mpls_label, mpls_lse);
+        SCAN_FIELD_ARRAY("tc=", mpls_tc, mpls_lse);
+        SCAN_FIELD_ARRAY("ttl=", mpls_ttl, mpls_lse);
+        SCAN_FIELD_ARRAY("bos=", mpls_bos, mpls_lse);
+    } SCAN_END_ARRAY(OVS_KEY_ATTR_MPLS);
 
     SCAN_BEGIN("ipv4(", struct ovs_key_ipv4) {
         SCAN_FIELD("src=", ipv4, ipv4_src);
