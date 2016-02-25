@@ -243,6 +243,10 @@ int netdev_get_queue_stats(const struct netdev *, unsigned int queue_id,
                            struct netdev_queue_stats *);
 uint64_t netdev_get_change_seq(const struct netdev *);
 
+int netdev_reconfigure(struct netdev *netdev);
+void netdev_wait_reconf_required(struct netdev *netdev);
+bool netdev_is_reconf_required(struct netdev *netdev);
+
 struct netdev_queue_dump {
     struct netdev *netdev;
     int error;

@@ -353,6 +353,9 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->netdev_class = rc->class;
                 netdev->name = xstrdup(name);
                 netdev->change_seq = 1;
+                netdev->reconfigure_seq = seq_create();
+                netdev->last_reconfigure_seq =
+                    seq_read(netdev->reconfigure_seq);
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
                 /* By default enable one tx and rx queue per netdev. */
@@ -500,6 +503,7 @@ netdev_unref(struct netdev *dev)
             shash_delete(&netdev_shash, dev->node);
         }
         free(dev->name);
+        seq_destroy(dev->reconfigure_seq);
         dev->netdev_class->dealloc(dev);
         ovs_mutex_unlock(&netdev_mutex);
 
@@ -1907,3 +1911,38 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
     return 0;
 }
 #endif
+
+void
+netdev_wait_reconf_required(struct netdev *netdev)
+{
+    seq_wait(netdev->reconfigure_seq, netdev->last_reconfigure_seq);
+}
+
+bool
+netdev_is_reconf_required(struct netdev *netdev)
+{
+    return seq_read(netdev->reconfigure_seq) != netdev->last_reconfigure_seq;
+}
+
+/* Give a chance to 'netdev' to reconfigure some of its parameters.
+ *
+ * If a module uses netdev_send() and netdev_rxq_recv(), it must call this
+ * function when netdev_is_reconf_required() returns true.
+ *
+ * Return 0 if successful, otherwise a positive errno value.  If the
+ * reconfiguration fails the netdev will not be able to send or receive
+ * packets.
+ *
+ * When this function is called, no call to netdev_rxq_recv() or netdev_send()
+ * must be issued. */
+int
+netdev_reconfigure(struct netdev *netdev)
+{
+    const struct netdev_class *class = netdev->netdev_class;
+
+    netdev->last_reconfigure_seq = seq_read(netdev->reconfigure_seq);
+
+    return (class->reconfigure
+            ? class->reconfigure(netdev)
+            : EOPNOTSUPP);
+}

@@ -52,6 +52,16 @@ struct netdev {
      * 'netdev''s flags, features, ethernet address, or carrier changes. */
     uint64_t change_seq;
 
+    /* A netdev provider might be unable to change some of the device's
+     * parameter (n_rxq, mtu) when the device is in use.  In this case
+     * the provider can notify the upper layer by calling
+     * netdev_request_reconfigure().  The upper layer will react by stopping
+     * the operations on the device and calling netdev_reconfigure() to allow
+     * the configuration changes.  'last_reconfigure_seq' remembers the value
+     * of 'reconfigure_seq' when the last reconfiguration happened. */
+    struct seq *reconfigure_seq;
+    uint64_t last_reconfigure_seq;
+
     /* The core netdev code initializes these at netdev construction and only
      * provide read-only access to its client.  Netdev implementations may
      * modify them. */
@@ -73,6 +83,12 @@ netdev_change_seq_changed(const struct netdev *netdev_)
     if (!netdev->change_seq) {
         netdev->change_seq++;
     }
+}
+
+static inline void
+netdev_request_reconfigure(struct netdev *netdev)
+{
+    seq_change(netdev->reconfigure_seq);
 }
 
 const char *netdev_get_type(const struct netdev *);
@@ -694,6 +710,15 @@ struct netdev_class {
     int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
 
+    /* If the provider called netdev_request_reconfigure(), the upper layer
+     * will eventually call this.  The provider can update the device
+     * configuration knowing that the upper layer will not call rxq_recv() or
+     * send() until this function returns.
+     *
+     * On error, the configuration is indeterminant and the device cannot be
+     * used to send and receive packets until a successful configuration is
+     * applied. */
+    int (*reconfigure)(struct netdev *netdev);
 /* ## -------------------- ## */
 /* ## netdev_rxq Functions ## */
 /* ## -------------------- ## */
