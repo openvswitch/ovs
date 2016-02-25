@@ -634,7 +634,7 @@ test_arp() {
     hv=`vif_to_hv $inport`
     as $hv ovs-appctl netdev-dummy/receive vif$inport $request
 
-    if test X$reply_ha == X; then
+    if test X$reply_ha = X; then
         # Expect to receive the broadcast ARP on the other logical switch ports
         # if no reply is expected.
         local i j
