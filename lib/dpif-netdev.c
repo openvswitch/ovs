@@ -21,18 +21,19 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "bitmap.h"
 #include "cmap.h"
+#include "coverage.h"
 #include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
@@ -41,8 +42,6 @@
 #include "dynamic-string.h"
 #include "fat-rwlock.h"
 #include "flow.h"
-#include "cmap.h"
-#include "coverage.h"
 #include "hmapx.h"
 #include "latch.h"
 #include "list.h"
@@ -69,6 +68,7 @@
 #include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
+
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev);
