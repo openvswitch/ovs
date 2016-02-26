@@ -34,7 +34,8 @@
             "min": 0
           }
         }
-      }
+      },
+      "isRoot":true
     }, 
     "link2": {
       "columns": {
@@ -104,7 +105,8 @@
             "min": 0
           }
         }
-      }
+      },
+      "isRoot":true
     }
   }
 }
