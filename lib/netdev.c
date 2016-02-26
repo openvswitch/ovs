@@ -111,12 +111,6 @@ netdev_n_rxq(const struct netdev *netdev)
     return netdev->n_rxq;
 }
 
-int
-netdev_requested_n_rxq(const struct netdev *netdev)
-{
-    return netdev->requested_n_rxq;
-}
-
 bool
 netdev_is_pmd(const struct netdev *netdev)
 {
@@ -361,7 +355,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 /* By default enable one tx and rx queue per netdev. */
                 netdev->n_txq = netdev->netdev_class->send ? 1 : 0;
                 netdev->n_rxq = netdev->netdev_class->rxq_alloc ? 1 : 0;
-                netdev->requested_n_rxq = netdev->n_rxq;
 
                 ovs_list_init(&netdev->saved_flags_list);
 
@@ -658,37 +651,30 @@ netdev_rxq_drain(struct netdev_rxq *rx)
             : 0);
 }
 
-/* Configures the number of tx queues and rx queues of 'netdev'.
- * Return 0 if successful, otherwise a positive errno value.
- *
- * 'n_rxq' specifies the maximum number of receive queues to create.
- * The netdev provider might choose to create less (e.g. if the hardware
- * supports only a smaller number).  The caller can check how many have been
- * actually created by calling 'netdev_n_rxq()'
+/* Configures the number of tx queues of 'netdev'. Returns 0 if successful,
+ * otherwise a positive errno value.
  *
  * 'n_txq' specifies the exact number of transmission queues to create.
  * If this function returns successfully, the caller can make 'n_txq'
  * concurrent calls to netdev_send() (each one with a different 'qid' in the
  * range [0..'n_txq'-1]).
  *
- * On error, the tx queue and rx queue configuration is indeterminant.
- * Caller should make decision on whether to restore the previous or
- * the default configuration.  Also, caller must make sure there is no
- * other thread accessing the queues at the same time. */
+ * The change might not effective immediately.  The caller must check if a
+ * reconfiguration is required with netdev_is_reconf_required() and eventually
+ * call netdev_reconfigure() before using the new queues.
+ *
+ * On error, the tx queue configuration is unchanged */
 int
-netdev_set_multiq(struct netdev *netdev, unsigned int n_txq,
-                  unsigned int n_rxq)
+netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
 {
     int error;
 
-    error = (netdev->netdev_class->set_multiq
-             ? netdev->netdev_class->set_multiq(netdev,
-                                                MAX(n_txq, 1),
-                                                MAX(n_rxq, 1))
+    error = (netdev->netdev_class->set_tx_multiq
+             ? netdev->netdev_class->set_tx_multiq(netdev, MAX(n_txq, 1))
              : EOPNOTSUPP);
 
     if (error && error != EOPNOTSUPP) {
-        VLOG_DBG_RL(&rl, "failed to set tx/rx queue for network device %s:"
+        VLOG_DBG_RL(&rl, "failed to set tx queue for network device %s:"
                     "%s", netdev_get_name(netdev), ovs_strerror(error));
     }
 

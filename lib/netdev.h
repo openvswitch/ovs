@@ -109,7 +109,6 @@ bool netdev_is_reserved_name(const char *name);
 
 int netdev_n_txq(const struct netdev *netdev);
 int netdev_n_rxq(const struct netdev *netdev);
-int netdev_requested_n_rxq(const struct netdev *netdev);
 bool netdev_is_pmd(const struct netdev *netdev);
 
 /* Open and close. */
@@ -135,7 +134,7 @@ const char *netdev_get_type_from_name(const char *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
 int netdev_set_mtu(const struct netdev *, int mtu);
 int netdev_get_ifindex(const struct netdev *);
-int netdev_set_multiq(struct netdev *, unsigned int n_txq, unsigned int n_rxq);
+int netdev_set_tx_multiq(struct netdev *, unsigned int n_txq);
 
 /* Packet reception. */
 int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);

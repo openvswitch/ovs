@@ -841,7 +841,7 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     PUSH_HEADER,                                            \
     POP_HEADER,                                             \
     NULL,                       /* get_numa_id */           \
-    NULL,                       /* set_multiq */            \
+    NULL,                       /* set_tx_multiq */         \
                                                             \
     NULL,                       /* send */                  \
     NULL,                       /* send_wait */             \
