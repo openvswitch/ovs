@@ -31,6 +31,16 @@ struct controller_ctx {
     struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
+/* Contains hmap_node whose hash values are the tunnel_key of datapaths
+ * with at least one local port binding. It also stores the port binding of
+ * "localnet" port if such a port exists on the datapath, which indicates
+ * physical network should be used for inter-chassis communication through
+ * the localnet port */
+struct local_datapath {
+    struct hmap_node hmap_node;
+    const struct sbrec_port_binding *localnet_port;
+};
+
 const struct ovsrec_bridge *get_bridge(struct ovsdb_idl *,
                                        const char *br_name);
 

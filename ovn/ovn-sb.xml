@@ -1217,9 +1217,8 @@ tcp.flags = RST;
           <dd>
             A connection to a locally accessible network from each
             <code>ovn-controller</code> instance.  A logical switch can only
-            have a single <code>localnet</code> port attached and at most one
-            regular logical port.  This is used to model direct connectivity to
-            an existing network.
+            have a single <code>localnet</code> port attached.  This is used
+            to model direct connectivity to an existing network.
           </dd>
 
           <dt><code>vtep</code></dt>
