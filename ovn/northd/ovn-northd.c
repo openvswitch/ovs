@@ -963,9 +963,6 @@ extract_lport_addresses(char *address, struct lport_addresses *laddrs,
     char *buf_end = buf + strlen(address);
     if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
                       ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        VLOG_INFO_RL(&rl, "invalid syntax '%s' in address. No MAC address"
-                     " found", address);
         return false;
     }
 
