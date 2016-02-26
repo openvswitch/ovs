@@ -49,20 +49,6 @@ COVERAGE_DEFINE(netlink_sent);
 #define SOL_NETLINK 270
 #endif
 
-#ifdef _WIN32
-static struct ovs_mutex portid_mutex = OVS_MUTEX_INITIALIZER;
-static uint32_t g_last_portid = 0;
-
-/* Port IDs must be unique! */
-static uint32_t
-portid_next(void)
-    OVS_GUARDED_BY(portid_mutex)
-{
-    g_last_portid++;
-    return g_last_portid;
-}
-#endif /* _WIN32 */
-
 /* A single (bad) Netlink message can in theory dump out many, many log
  * messages, so the burst size is set quite high here to avoid missing useful
  * information.  Also, at high logging levels we log *all* Netlink messages. */
@@ -568,7 +554,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         if (!DeviceIoControl(sock->handle, sock->read_ioctl,
                              NULL, 0, tail, sizeof tail, &bytes, NULL)) {
             VLOG_DBG_RL(&rl, "fatal driver failure in transact: %s",
-                ovs_lasterror_to_string());
+                        ovs_lasterror_to_string());
             retval = -1;
             /* XXX: Map to a more appropriate error. */
             errno = EINVAL;
