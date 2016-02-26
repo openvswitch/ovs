@@ -220,6 +220,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/shash.h \
 	lib/simap.c \
 	lib/simap.h \
+	lib/skiplist.c \
+	lib/skiplist.h \
 	lib/smap.c \
 	lib/smap.h \
 	lib/socket-util.c \
