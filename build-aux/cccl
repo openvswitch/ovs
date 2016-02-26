@@ -90,11 +90,11 @@ EOF
         ;;
 
     -O0)
-        clopt="$clopt ${slash}Od ${slash}D_DEBUG"
+        clopt="$clopt ${slash}Od ${slash}D_DEBUG ${slash}MTd"
         ;;
 
     -O2)
-        clopt="$clopt ${slash}O2"
+        clopt="$clopt ${slash}O2 ${slash}MT"
         ;;
 
     -L*)
