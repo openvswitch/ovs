@@ -88,7 +88,8 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC,    0, "ls_in_port_sec")     \
     PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,     1, "ls_in_pre_acl")      \
     PIPELINE_STAGE(SWITCH, IN,  ACL,         2, "ls_in_acl")          \
-    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,     3, "ls_in_l2_lkup")      \
+    PIPELINE_STAGE(SWITCH, IN,  ARP_RSP,     3, "ls_in_arp_rsp")      \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,     4, "ls_in_l2_lkup")      \
                                                                       \
     /* Logical switch egress stages. */                               \
     PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "ls_out_pre_acl")     \
@@ -1280,8 +1281,23 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ds_destroy(&match);
     }
 
-    /* Ingress table 3: Destination lookup, ARP reply for known IPs.
-     * (priority 150). */
+    /* Ingress table 3: ARP responder, skip requests coming from localnet ports.
+     * (priority 100). */
+    HMAP_FOR_EACH (op, key_node, ports) {
+        if (!op->nbs) {
+            continue;
+        }
+
+        if (!strcmp(op->nbs->type, "localnet")) {
+            char *match = xasprintf("inport == %s", op->json_key);
+            ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_RSP, 100,
+                          match, "next;");
+            free(match);
+        }
+    }
+
+    /* Ingress table 3: ARP responder, reply for known IPs.
+     * (priority 50). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
             continue;
@@ -1320,7 +1336,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ETH_ADDR_ARGS(laddrs.ea),
                     ETH_ADDR_ARGS(laddrs.ea),
                     IP_ARGS(laddrs.ipv4_addrs[j].addr));
-                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, 150,
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_RSP, 50,
                               match, actions);
                 free(match);
                 free(actions);
@@ -1330,7 +1346,17 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 3: Destination lookup, broadcast and multicast handling
+    /* Ingress table 3: ARP responder, by default goto next.
+     * (priority 0)*/
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbs) {
+            continue;
+        }
+
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_RSP, 0, "1", "next;");
+    }
+
+    /* Ingress table 4: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
@@ -1350,7 +1376,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
-    /* Ingress table 3: Destination lookup, unicast handling (priority 50), */
+    /* Ingress table 4: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
             continue;
@@ -1387,7 +1413,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 3: Destination lookup for unknown MACs (priority 0). */
+    /* Ingress table 4: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
