@@ -810,6 +810,15 @@
       </p>
 
       <p>
+        A special case is that when a localnet port exists on the datapath,
+        remote port is connected by switching to the localnet port. In this
+        case, instead of adding a flow in table 32 to reach the remote port, a
+        flow is added in table 33 to switch the logical outport to the localnet
+        port, and resubmit to table 33 as if it were unicasted to a logical
+        port on the local hypervisor.
+      </p>
+
+      <p>
         Table 34 matches and drops packets for which the logical input and
         output ports are the same.  It resubmits other packets to table 48.
       </p>

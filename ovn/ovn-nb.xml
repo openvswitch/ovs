@@ -35,6 +35,20 @@
       Each row represents one L2 logical switch.
     </p>
 
+    <p>
+      There are two kinds of logical switches, that is, ones that fully
+      virtualize the network (overlay logical switches) and ones that provide
+      simple connectivity to a physical network (bridged logical switches).
+      They work in the same way when providing connectivity between logical
+      ports on same chasis, but differently when connecting remote logical
+      ports.  Overlay logical switches connect remote logical ports by tunnels,
+      while bridged logical switches provide connectivity to remote ports by
+      bridging the packets to directly connected physical L2 segment with the
+      help of <code>localnet</code> ports.  Each bridged logical switch has
+      one and only one <code>localnet</code> port, which has only one special
+      address <code>unknown</code>.
+    </p>
+
     <column name="name">
       <p>
         A name for the logical switch.  This name has no special meaning or purpose
@@ -116,9 +130,8 @@
           <dd>
             A connection to a locally accessible network from each
             <code>ovn-controller</code> instance.  A logical switch can only
-            have a single <code>localnet</code> port attached and at most one
-            regular logical port.  This is used to model direct connectivity to
-            an existing network.
+            have a single <code>localnet</code> port attached.  This is used
+            to model direct connectivity to an existing network.
           </dd>
 
           <dt><code>vtep</code></dt>
@@ -435,6 +448,13 @@
       <p>
         Note that you can not create an ACL matching on a port with
         type=router.
+      </p>
+
+      <p>
+        Note that when <code>localnet</code> port exists in a lswitch, for
+        <code>to-lport</code> direction, the <code>inport</code> works only if
+        the <code>to-lport</code> is located on the same chassis as the
+        <code>inport</code>.
       </p>
     </column>
 

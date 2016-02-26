@@ -125,14 +125,14 @@ static void
 add_local_datapath(struct hmap *local_datapaths,
         const struct sbrec_port_binding *binding_rec)
 {
-    struct hmap_node *ld;
-    ld = hmap_first_with_hash(local_datapaths,
-                              binding_rec->datapath->tunnel_key);
-    if (!ld) {
-        ld = xmalloc(sizeof *ld);
-        hmap_insert(local_datapaths, ld,
-                    binding_rec->datapath->tunnel_key);
+    if (hmap_first_with_hash(local_datapaths,
+                             binding_rec->datapath->tunnel_key)) {
+        return;
     }
+
+    struct local_datapath *ld = xzalloc(sizeof *ld);
+    hmap_insert(local_datapaths, &ld->hmap_node,
+                binding_rec->datapath->tunnel_key);
 }
 
 static void
