@@ -1239,7 +1239,7 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* push header */
     NULL,                       /* pop header */
     NULL,                       /* get_numa_id */
-    NULL,                       /* set_multiq */
+    NULL,                       /* set_tx_multiq */
 
     netdev_dummy_send,          /* send */
     NULL,                       /* send_wait */

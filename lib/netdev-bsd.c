@@ -1497,7 +1497,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL, /* push header */                          \
     NULL, /* pop header */                           \
     NULL, /* get_numa_id */                          \
-    NULL, /* set_multiq */                           \
+    NULL, /* set_tx_multiq */                        \
                                                      \
     netdev_bsd_send,                                 \
     netdev_bsd_send_wait,                            \

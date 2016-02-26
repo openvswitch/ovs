@@ -67,8 +67,6 @@ struct netdev {
      * modify them. */
     int n_txq;
     int n_rxq;
-    /* Number of rx queues requested by user. */
-    int requested_n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
@@ -300,13 +298,8 @@ struct netdev_class {
      * such info, returns NETDEV_NUMA_UNSPEC. */
     int (*get_numa_id)(const struct netdev *netdev);
 
-    /* Configures the number of tx queues and rx queues of 'netdev'.
-     * Return 0 if successful, otherwise a positive errno value.
-     *
-     * 'n_rxq' specifies the maximum number of receive queues to create.
-     * The netdev provider might choose to create less (e.g. if the hardware
-     * supports only a smaller number).  The actual number of queues created
-     * is stored in the 'netdev->n_rxq' field.
+    /* Configures the number of tx queues of 'netdev'. Returns 0 if successful,
+     * otherwise a positive errno value.
      *
      * 'n_txq' specifies the exact number of transmission queues to create.
      * The caller will call netdev_send() concurrently from 'n_txq' different
@@ -314,12 +307,12 @@ struct netdev_class {
      * making sure that these concurrent calls do not create a race condition
      * by using multiple hw queues or locking.
      *
-     * On error, the tx queue and rx queue configuration is indeterminant.
-     * Caller should make decision on whether to restore the previous or
-     * the default configuration.  Also, caller must make sure there is no
-     * other thread accessing the queues at the same time. */
-    int (*set_multiq)(struct netdev *netdev, unsigned int n_txq,
-                      unsigned int n_rxq);
+     * The caller will call netdev_reconfigure() (if necessary) before using
+     * netdev_send() on any of the newly configured queues, giving the provider
+     * a chance to adjust its settings.
+     *
+     * On error, the tx queue configuration is unchanged. */
+    int (*set_tx_multiq)(struct netdev *netdev, unsigned int n_txq);
 
     /* Sends buffers on 'netdev'.
      * Returns 0 if successful (for every buffer), otherwise a positive errno

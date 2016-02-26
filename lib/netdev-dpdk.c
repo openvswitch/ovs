@@ -373,6 +373,11 @@ struct netdev_dpdk {
     struct qos_conf *qos_conf;
     rte_spinlock_t qos_lock;
 
+    /* The following properties cannot be changed when a device is running,
+     * so we remember the request and update them next time
+     * netdev_dpdk*_reconfigure() is called */
+    int requested_n_txq;
+    int requested_n_rxq;
 };
 
 struct netdev_rxq_dpdk {
@@ -761,7 +766,8 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
 
     netdev->n_txq = NR_QUEUE;
     netdev->n_rxq = NR_QUEUE;
-    netdev->requested_n_rxq = NR_QUEUE;
+    dev->requested_n_rxq = NR_QUEUE;
+    dev->requested_n_txq = NR_QUEUE;
     dev->real_n_txq = NR_QUEUE;
 
     if (type == DPDK_DEV_ETH) {
@@ -955,7 +961,7 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
 
-    smap_add_format(args, "requested_rx_queues", "%d", netdev->requested_n_rxq);
+    smap_add_format(args, "requested_rx_queues", "%d", dev->requested_n_rxq);
     smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
     smap_add_format(args, "requested_tx_queues", "%d", netdev->n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", dev->real_n_txq);
@@ -968,11 +974,14 @@ static int
 netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int new_n_rxq;
 
     ovs_mutex_lock(&dev->mutex);
-    netdev->requested_n_rxq = MAX(smap_get_int(args, "n_rxq",
-                                               netdev->requested_n_rxq), 1);
-    netdev_change_seq_changed(netdev);
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", dev->requested_n_rxq), 1);
+    if (new_n_rxq != dev->requested_n_rxq) {
+        dev->requested_n_rxq = new_n_rxq;
+        netdev_request_reconfigure(netdev);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -986,95 +995,24 @@ netdev_dpdk_get_numa_id(const struct netdev *netdev)
     return dev->socket_id;
 }
 
-/* Sets the number of tx queues and rx queues for the dpdk interface.
- * If the configuration fails, do not try restoring its old configuration
- * and just returns the error. */
+/* Sets the number of tx queues for the dpdk interface. */
 static int
-netdev_dpdk_set_multiq(struct netdev *netdev, unsigned int n_txq,
-                       unsigned int n_rxq)
+netdev_dpdk_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int err = 0;
-    int old_rxq, old_txq;
 
-    if (netdev->n_txq == n_txq && netdev->n_rxq == n_rxq) {
-        return err;
-    }
-
-    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
 
-    rte_eth_dev_stop(dev->port_id);
-
-    old_txq = netdev->n_txq;
-    old_rxq = netdev->n_rxq;
-    netdev->n_txq = n_txq;
-    netdev->n_rxq = n_rxq;
-
-    rte_free(dev->tx_q);
-    err = dpdk_eth_dev_init(dev);
-    netdev_dpdk_alloc_txq(dev, dev->real_n_txq);
-    if (err) {
-        /* If there has been an error, it means that the requested queues
-         * have not been created.  Restore the old numbers. */
-        netdev->n_txq = old_txq;
-        netdev->n_rxq = old_rxq;
+    if (dev->requested_n_txq == n_txq) {
+        goto out;
     }
 
-    dev->txq_needs_locking = dev->real_n_txq != netdev->n_txq;
+    dev->requested_n_txq = n_txq;
+    netdev_request_reconfigure(netdev);
 
+out:
     ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-
-    return err;
-}
-
-static int
-netdev_dpdk_vhost_cuse_set_multiq(struct netdev *netdev, unsigned int n_txq,
-                                  unsigned int n_rxq)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int err = 0;
-
-    if (netdev->n_txq == n_txq && netdev->n_rxq == n_rxq) {
-        return err;
-    }
-
-    ovs_mutex_lock(&dpdk_mutex);
-    ovs_mutex_lock(&dev->mutex);
-
-    netdev->n_txq = n_txq;
-    dev->real_n_txq = 1;
-    netdev->n_rxq = 1;
-    dev->txq_needs_locking = dev->real_n_txq != netdev->n_txq;
-
-    ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-
-    return err;
-}
-
-static int
-netdev_dpdk_vhost_set_multiq(struct netdev *netdev, unsigned int n_txq,
-                             unsigned int n_rxq)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int err = 0;
-
-    if (netdev->n_txq == n_txq && netdev->n_rxq == n_rxq) {
-        return err;
-    }
-
-    ovs_mutex_lock(&dpdk_mutex);
-    ovs_mutex_lock(&dev->mutex);
-
-    netdev->n_txq = n_txq;
-    netdev->n_rxq = n_rxq;
-
-    ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-
-    return err;
+    return 0;
 }
 
 static struct netdev_rxq *
@@ -2713,6 +2651,7 @@ egress_policer_qos_get(const struct netdev *netdev, struct smap *details)
                     1ULL * policer->app_srtcm_params.cir);
     smap_add_format(details, "cbs", "%llu",
                     1ULL * policer->app_srtcm_params.cbs);
+
     return 0;
 }
 
@@ -2782,8 +2721,80 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     egress_policer_run
 };
 
-#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT, MULTIQ, SEND, \
-    GET_CARRIER, GET_STATS, GET_FEATURES, GET_STATUS, RXQ_RECV)          \
+static int
+netdev_dpdk_reconfigure(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int err = 0;
+
+    ovs_mutex_lock(&dpdk_mutex);
+    ovs_mutex_lock(&dev->mutex);
+
+    if (netdev->n_txq == dev->requested_n_txq
+        && netdev->n_rxq == dev->requested_n_rxq) {
+        /* Reconfiguration is unnecessary */
+
+        goto out;
+    }
+
+    rte_eth_dev_stop(dev->port_id);
+
+    netdev->n_txq = dev->requested_n_txq;
+    netdev->n_rxq = dev->requested_n_rxq;
+
+    rte_free(dev->tx_q);
+    err = dpdk_eth_dev_init(dev);
+    netdev_dpdk_alloc_txq(dev, dev->real_n_txq);
+
+    dev->txq_needs_locking = dev->real_n_txq != netdev->n_txq;
+
+out:
+
+    ovs_mutex_unlock(&dev->mutex);
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    return err;
+}
+
+static int
+netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dpdk_mutex);
+    ovs_mutex_lock(&dev->mutex);
+
+    netdev->n_txq = dev->requested_n_txq;
+    netdev->n_rxq = dev->requested_n_rxq;
+
+    ovs_mutex_unlock(&dev->mutex);
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    return 0;
+}
+
+static int
+netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dpdk_mutex);
+    ovs_mutex_lock(&dev->mutex);
+
+    netdev->n_txq = dev->requested_n_txq;
+    dev->real_n_txq = 1;
+    netdev->n_rxq = 1;
+    dev->txq_needs_locking = dev->real_n_txq != netdev->n_txq;
+
+    ovs_mutex_unlock(&dev->mutex);
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    return 0;
+}
+
+#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT, SEND, \
+                          GET_CARRIER, GET_STATS, GET_FEATURES,  \
+                          GET_STATUS, RECONFIGURE, RXQ_RECV)     \
 {                                                             \
     NAME,                                                     \
     true,                       /* is_pmd */                  \
@@ -2802,7 +2813,7 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     NULL,                       /* push header */             \
     NULL,                       /* pop header */              \
     netdev_dpdk_get_numa_id,    /* get_numa_id */             \
-    MULTIQ,                     /* set_multiq */              \
+    netdev_dpdk_set_tx_multiq,                                \
                                                               \
     SEND,                       /* send */                    \
     NULL,                       /* send_wait */               \
@@ -2841,7 +2852,7 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     NULL,                       /* arp_lookup */              \
                                                               \
     netdev_dpdk_update_flags,                                 \
-    NULL,                       /* reconfigure */             \
+    RECONFIGURE,                                              \
                                                               \
     netdev_dpdk_rxq_alloc,                                    \
     netdev_dpdk_rxq_construct,                                \
@@ -3251,12 +3262,12 @@ static const struct netdev_class dpdk_class =
         NULL,
         netdev_dpdk_construct,
         netdev_dpdk_destruct,
-        netdev_dpdk_set_multiq,
         netdev_dpdk_eth_send,
         netdev_dpdk_get_carrier,
         netdev_dpdk_get_stats,
         netdev_dpdk_get_features,
         netdev_dpdk_get_status,
+        netdev_dpdk_reconfigure,
         netdev_dpdk_rxq_recv);
 
 static const struct netdev_class dpdk_ring_class =
@@ -3265,12 +3276,12 @@ static const struct netdev_class dpdk_ring_class =
         NULL,
         netdev_dpdk_ring_construct,
         netdev_dpdk_destruct,
-        netdev_dpdk_set_multiq,
         netdev_dpdk_ring_send,
         netdev_dpdk_get_carrier,
         netdev_dpdk_get_stats,
         netdev_dpdk_get_features,
         netdev_dpdk_get_status,
+        netdev_dpdk_reconfigure,
         netdev_dpdk_rxq_recv);
 
 static const struct netdev_class OVS_UNUSED dpdk_vhost_cuse_class =
@@ -3279,12 +3290,12 @@ static const struct netdev_class OVS_UNUSED dpdk_vhost_cuse_class =
         dpdk_vhost_cuse_class_init,
         netdev_dpdk_vhost_cuse_construct,
         netdev_dpdk_vhost_destruct,
-        netdev_dpdk_vhost_cuse_set_multiq,
         netdev_dpdk_vhost_send,
         netdev_dpdk_vhost_get_carrier,
         netdev_dpdk_vhost_get_stats,
         NULL,
         NULL,
+        netdev_dpdk_vhost_cuse_reconfigure,
         netdev_dpdk_vhost_rxq_recv);
 
 static const struct netdev_class OVS_UNUSED dpdk_vhost_user_class =
@@ -3293,12 +3304,12 @@ static const struct netdev_class OVS_UNUSED dpdk_vhost_user_class =
         dpdk_vhost_user_class_init,
         netdev_dpdk_vhost_user_construct,
         netdev_dpdk_vhost_destruct,
-        netdev_dpdk_vhost_set_multiq,
         netdev_dpdk_vhost_send,
         netdev_dpdk_vhost_get_carrier,
         netdev_dpdk_vhost_get_stats,
         NULL,
         NULL,
+        netdev_dpdk_vhost_user_reconfigure,
         netdev_dpdk_vhost_rxq_recv);
 
 void

@@ -257,8 +257,6 @@ struct dp_netdev_port {
     unsigned n_rxq;             /* Number of elements in 'rxq' */
     struct netdev_rxq **rxq;
     char *type;                 /* Port type as requested by user. */
-    int latest_requested_n_rxq; /* Latest requested from netdev number
-                                   of rx queues. */
 };
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
@@ -1166,20 +1164,26 @@ port_create(const char *devname, const char *open_type, const char *type,
         /* There can only be ovs_numa_get_n_cores() pmd threads,
          * so creates a txq for each, and one extra for the non
          * pmd threads. */
-        error = netdev_set_multiq(netdev, n_cores + 1,
-                                  netdev_requested_n_rxq(netdev));
+        error = netdev_set_tx_multiq(netdev, n_cores + 1);
         if (error && (error != EOPNOTSUPP)) {
             VLOG_ERR("%s, cannot set multiq", devname);
             goto out;
         }
     }
+
+    if (netdev_is_reconf_required(netdev)) {
+        error = netdev_reconfigure(netdev);
+        if (error) {
+            goto out;
+        }
+    }
+
     port = xzalloc(sizeof *port);
     port->port_no = port_no;
     port->netdev = netdev;
     port->n_rxq = netdev_n_rxq(netdev);
     port->rxq = xcalloc(port->n_rxq, sizeof *port->rxq);
     port->type = xstrdup(type);
-    port->latest_requested_n_rxq = netdev_requested_n_rxq(netdev);
 
     for (i = 0; i < port->n_rxq; i++) {
         error = netdev_rxq_open(netdev, &port->rxq[i], i);
@@ -2476,27 +2480,6 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
-/* Returns true if the configuration for rx queues is changed. */
-static bool
-pmd_n_rxq_changed(const struct dp_netdev *dp)
-{
-    struct dp_netdev_port *port;
-
-    ovs_mutex_lock(&dp->port_mutex);
-    HMAP_FOR_EACH (port, node, &dp->ports) {
-        int requested_n_rxq = netdev_requested_n_rxq(port->netdev);
-
-        if (netdev_is_pmd(port->netdev)
-            && port->latest_requested_n_rxq != requested_n_rxq) {
-            ovs_mutex_unlock(&dp->port_mutex);
-            return true;
-        }
-    }
-    ovs_mutex_unlock(&dp->port_mutex);
-
-    return false;
-}
-
 static bool
 cmask_equals(const char *a, const char *b)
 {
@@ -2621,11 +2604,9 @@ static int
 port_reconfigure(struct dp_netdev_port *port)
 {
     struct netdev *netdev = port->netdev;
-    int requested_n_rxq = netdev_requested_n_rxq(netdev);
     int i, err;
 
-    if (!netdev_is_pmd(port->netdev)
-        || port->latest_requested_n_rxq != requested_n_rxq) {
+    if (!netdev_is_reconf_required(netdev)) {
         return 0;
     }
 
@@ -2636,15 +2617,14 @@ port_reconfigure(struct dp_netdev_port *port)
     }
     port->n_rxq = 0;
 
-    /* Sets the new rx queue config. */
-    err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores() + 1,
-                            requested_n_rxq);
+    /* Allows 'netdev' to apply the pending configuration changes. */
+    err = netdev_reconfigure(netdev);
     if (err && (err != EOPNOTSUPP)) {
-        VLOG_ERR("Failed to set dpdk interface %s rx_queue to: %u",
-                 netdev_get_name(port->netdev), requested_n_rxq);
+        VLOG_ERR("Failed to set interface %s new configuration",
+                 netdev_get_name(netdev));
         return err;
     }
-    /* If the set_multiq() above succeeds, reopens the 'rxq's. */
+    /* If the netdev_reconfigure() above succeeds, reopens the 'rxq's. */
     port->rxq = xrealloc(port->rxq, sizeof *port->rxq * netdev_n_rxq(netdev));
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
         err = netdev_rxq_open(netdev, &port->rxq[i], i);
@@ -2688,6 +2668,22 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     dp_netdev_reset_pmd_threads(dp);
 }
 
+/* Returns true if one of the netdevs in 'dp' requires a reconfiguration */
+static bool
+ports_require_restart(const struct dp_netdev *dp)
+    OVS_REQUIRES(dp->port_mutex)
+{
+    struct dp_netdev_port *port;
+
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        if (netdev_is_reconf_required(port->netdev)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* Return true if needs to revalidate datapath flows. */
 static bool
 dpif_netdev_run(struct dpif *dpif)
@@ -2714,7 +2710,7 @@ dpif_netdev_run(struct dpif *dpif)
     dp_netdev_pmd_unref(non_pmd);
 
     if (!cmask_equals(dp->pmd_cmask, dp->requested_pmd_cmask)
-        || pmd_n_rxq_changed(dp)) {
+        || ports_require_restart(dp)) {
         reconfigure_pmd_threads(dp);
     }
     ovs_mutex_unlock(&dp->port_mutex);
@@ -2739,6 +2735,7 @@ dpif_netdev_wait(struct dpif *dpif)
     ovs_mutex_lock(&dp_netdev_mutex);
     ovs_mutex_lock(&dp->port_mutex);
     HMAP_FOR_EACH (port, node, &dp->ports) {
+        netdev_wait_reconf_required(port->netdev);
         if (!netdev_is_pmd(port->netdev)) {
             int i;
 
