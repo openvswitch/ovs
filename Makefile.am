@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2015 Nicira, Inc.
+# Copyright (C) 2007-2016 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -361,8 +361,8 @@ CLEAN_LOCAL += ovsext_clean
 ovsext_clean: datapath-windows/ovsext.sln
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
 	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
-.PHONY: ovsext_make
 endif
+.PHONY: ovsext_make
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
