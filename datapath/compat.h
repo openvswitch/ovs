@@ -35,7 +35,6 @@
 #define GROUP_ID(grp)	0
 #endif
 
-#ifdef OVS_FRAGMENT_BACKPORT
 #ifdef HAVE_NF_IPV6_OPS_FRAGMENT
 static inline int __init ip6_output_init(void) { return 0; }
 static inline void ip6_output_exit(void) { }
@@ -74,9 +73,5 @@ static inline void compat_exit(void)
 	nf_ct_frag6_cleanup();
 	rpl_ipfrag_fini();
 }
-#else
-static inline int __init compat_init(void) { return 0; }
-static inline void compat_exit(void) { }
-#endif
 
 #endif /* compat.h */

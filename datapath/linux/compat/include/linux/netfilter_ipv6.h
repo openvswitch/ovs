@@ -18,7 +18,6 @@ struct ovs_nf_ipv6_ops {
 };
 #define nf_ipv6_ops ovs_nf_ipv6_ops
 
-#if defined(OVS_FRAGMENT_BACKPORT)
 static struct ovs_nf_ipv6_ops ovs_ipv6_ops = {
 	.fragment = ip6_fragment,
 };
@@ -27,12 +26,6 @@ static inline struct ovs_nf_ipv6_ops *ovs_nf_get_ipv6_ops(void)
 {
 	return &ovs_ipv6_ops;
 }
-#else /* !OVS_FRAGMENT_BACKPORT */
-static inline const struct ovs_nf_ipv6_ops *ovs_nf_get_ipv6_ops(void)
-{
-	return NULL;
-}
-#endif
 #define nf_get_ipv6_ops ovs_nf_get_ipv6_ops
 
 #endif /* HAVE_NF_IPV6_OPS_FRAGMENT */
