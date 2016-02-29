@@ -699,6 +699,7 @@
         <li><code>icmp4.type</code> <code>icmp4.code</code></li>
         <li><code>icmp6.type</code> <code>icmp6.code</code></li>
         <li><code>nd.target</code> <code>nd.sll</code> <code>nd.tll</code></li>
+        <li><code>ct_mark</code> <code>ct_label</code></li>
         <li>
           <p>
             <code>ct_state</code>, which has the following Boolean subfields:

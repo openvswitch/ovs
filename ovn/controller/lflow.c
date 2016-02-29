@@ -60,6 +60,8 @@ symtab_init(void)
 #undef MFF_LOG_REG
 
     /* Connection tracking state. */
+    expr_symtab_add_field(&symtab, "ct_mark", MFF_CT_MARK, NULL, false);
+    expr_symtab_add_field(&symtab, "ct_label", MFF_CT_LABEL, NULL, false);
     expr_symtab_add_field(&symtab, "ct_state", MFF_CT_STATE, NULL, false);
     char ct_state_str[16];
     snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_TRACKED_BIT);
