@@ -39,18 +39,6 @@
 #include <net/xfrm.h>
 
 #include "gso.h"
-#include "vlan.h"
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37) && \
-	!defined(HAVE_VLAN_BUG_WORKAROUND)
-#include <linux/module.h>
-
-static int vlan_tso __read_mostly;
-module_param(vlan_tso, int, 0644);
-MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
-#else
-#define vlan_tso true
-#endif
 
 #ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
 static bool dev_supports_vlan_tx(struct net_device *dev)
@@ -106,15 +94,11 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 		features = netif_skb_features(skb);
 
 		if (vlan) {
-			if (!vlan_tso)
-				features &= ~(NETIF_F_TSO | NETIF_F_TSO6 |
-					      NETIF_F_UFO | NETIF_F_FSO);
-
 			skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
 							skb_vlan_tag_get(skb));
 			if (unlikely(!skb))
 				return err;
-			vlan_set_tci(skb, 0);
+			skb->vlan_tci = 0;
 		}
 
 		/* As of v3.11 the kernel provides an mpls_features field in

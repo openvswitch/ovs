@@ -44,7 +44,6 @@
 #include <net/ipv6.h>
 #include <net/ndisc.h>
 
-#include "vlan.h"
 #include "flow_netlink.h"
 
 #define TBL_MIN_BUCKETS		1024
@@ -166,13 +165,6 @@ static void rcu_free_flow_callback(struct rcu_head *rcu)
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
 
 	flow_free(flow);
-}
-
-static void rcu_free_sw_flow_mask_cb(struct rcu_head *rcu)
-{
-	struct sw_flow_mask *mask = container_of(rcu, struct sw_flow_mask, rcu);
-
-	kfree(mask);
 }
 
 void ovs_flow_free(struct sw_flow *flow, bool deferred)
@@ -774,7 +766,7 @@ static void tbl_mask_array_delete_mask(struct mask_array *ma,
 		if (mask == ovsl_dereference(ma->masks[i])) {
 			RCU_INIT_POINTER(ma->masks[i], NULL);
 			ma->count--;
-			call_rcu(&mask->rcu, rcu_free_sw_flow_mask_cb);
+			kfree_rcu(mask, rcu);
 			return;
 		}
 	}

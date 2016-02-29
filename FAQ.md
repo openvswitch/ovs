@@ -27,7 +27,7 @@ A: Open vSwitch is a production quality open source software switch
 ### Q: What virtualization platforms can use Open vSwitch?
 
 A: Open vSwitch can currently run on any Linux-based virtualization
-   platform (kernel 2.6.32 and newer), including: KVM, VirtualBox, Xen,
+   platform (kernel 3.10 and newer), including: KVM, VirtualBox, Xen,
    Xen Cloud Platform, XenServer. As of Linux 3.3 it is part of the
    mainline kernel.  The bulk of the code is written in platform-
    independent C and is easily ported to other environments.  We welcome
@@ -157,6 +157,7 @@ A: The following table lists the Linux kernel versions against which the
 |    2.3.x     | 2.6.32 to 3.14
 |    2.4.x     | 2.6.32 to 4.0
 |    2.5.x     | 2.6.32 to 4.3
+|    2.6.x     | 3.10 to 4.3
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.

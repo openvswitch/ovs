@@ -37,6 +37,8 @@ Post-v2.5.0
        for 2.7+.
    - SELinux:
      * Introduced SELinux policy package.
+   - Datapath Linux kernel compatibility.
+     * Dropped support for kernel older than 3.10.
 
 v2.5.0 - xx xxx xxxx
 ---------------------

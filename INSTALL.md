@@ -63,23 +63,13 @@ install the following:
   - A supported Linux kernel version.  Please refer to [README.md] for a
     list of supported versions.
 
-    The Open vSwitch datapath requires bridging support
-    (CONFIG_BRIDGE) to be built as a kernel module.  (This is common
-    in kernels provided by Linux distributions.)  The bridge module
-    must not be loaded or in use.  If the bridge module is running
-    (check with "lsmod | grep bridge"), you must remove it ("rmmod
-    bridge") before starting the datapath.
-
     For optional support of ingress policing, you must enable kernel
     configuration options NET_CLS_BASIC, NET_SCH_INGRESS, and
     NET_ACT_POLICE, either built-in or as modules.  (NET_CLS_POLICE is
     obsolete and not needed.)
 
-    To use GRE tunneling on Linux 2.6.37 or newer, kernel support
-    for GRE demultiplexing (CONFIG_NET_IPGRE_DEMUX) must be compiled
-    in or available as a module.  Also, on kernels before 3.11, the
-    ip_gre module, for GRE tunnels over IP (NET_IPGRE), must not be
-    loaded or compiled in.
+    On kernels before 3.11, the ip_gre module, for GRE tunnels over IP
+    (NET_IPGRE), must not be loaded or compiled in.
 
     To configure HTB or HFSC quality of service with Open vSwitch,
     you must enable the respective configuration options.
@@ -301,23 +291,6 @@ Building the Sources
    If the `modprobe` operation fails, look at the last few kernel log
    messages (e.g. with `dmesg | tail`):
 
-      - The message "openvswitch: exports duplicate symbol
-        br_should_route_hook (owned by bridge)" means that the bridge
-        module is loaded.  Run `/sbin/rmmod bridge` to remove it.
-
-        If `/sbin/rmmod bridge` fails with "ERROR: Module bridge does
-        not exist in /proc/modules", then the bridge is compiled into
-        the kernel, rather than as a module.  Open vSwitch does not
-        support this configuration (see "Build Requirements", above).
-
-      - The message "openvswitch: exports duplicate symbol
-        dp_ioctl_hook (owned by ofdatapath)" means that the ofdatapath
-        module from the OpenFlow reference implementation is loaded.
-        Run `/sbin/rmmod ofdatapath` to remove it.  (You might have to
-        delete any existing datapaths beforehand, using the "dpctl"
-        program included with the OpenFlow reference implementation.
-        "ovs-dpctl" will not work.)
-
       - Otherwise, the most likely problem is that Open vSwitch was
         built for a kernel different from the one into which you are
         trying to load it.  Run `modinfo` on openvswitch.ko and on
@@ -334,18 +307,6 @@ Building the Sources
       - If you decide to report a bug or ask a question related to
         module loading, please include the output from the `dmesg` and
         `modinfo` commands mentioned above.
-
-There is an optional module parameter to openvswitch.ko called
-vlan_tso that enables TCP segmentation offload over VLANs on NICs
-that support it. Many drivers do not expose support for TSO on VLANs
-in a way that Open vSwitch can use but there is no way to detect
-whether this is the case. If you know that your particular driver can
-handle it (for example by testing sending large TCP packets over VLANs)
-then passing in a value of 1 may improve performance. Modules built for
-Linux kernels 2.6.37 and later, as well as specially patched versions
-of earlier kernels, do not need this and do not have this parameter. If
-you do not understand what this means or do not know if your driver
-will work, do not set this.
 
 6. Initialize the configuration database using ovsdb-tool, e.g.:
 

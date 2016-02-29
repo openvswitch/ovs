@@ -16,6 +16,7 @@
 #include <linux/etherdevice.h>
 #include <linux/hash.h>
 #include <linux/if_link.h>
+#include <linux/if_vlan.h>
 
 #include <net/dst_metadata.h>
 #include <net/net_namespace.h>
@@ -125,9 +126,7 @@ static void geneve_rx(struct geneve_sock *gs, struct sk_buff *skb)
 	struct genevehdr *gnvh = geneve_hdr(skb);
 	struct metadata_dst *tun_dst;
 	struct geneve_dev *geneve = NULL;
-#ifdef HAVE_DEV_TSTATS
 	struct pcpu_sw_netstats *stats;
-#endif
 	struct iphdr *iph;
 	u8 *vni;
 	__be32 addr;
@@ -200,13 +199,11 @@ static void geneve_rx(struct geneve_sock *gs, struct sk_buff *skb)
 		}
 	}
 
-#ifdef HAVE_DEV_TSTATS
 	stats = this_cpu_ptr((struct pcpu_sw_netstats __percpu *)geneve->dev->tstats);
 	u64_stats_update_begin(&stats->syncp);
 	stats->rx_packets++;
 	stats->rx_bytes += skb->len;
 	u64_stats_update_end(&stats->syncp);
-#endif
 	netdev_port_receive(skb, &tun_dst->u.tun_info);
 	return;
 drop:
@@ -214,7 +211,6 @@ drop:
 	kfree_skb(skb);
 }
 
-#ifdef HAVE_DEV_TSTATS
 /* Setup stats when device is created */
 static int geneve_init(struct net_device *dev)
 {
@@ -229,7 +225,6 @@ static void geneve_uninit(struct net_device *dev)
 {
 	free_percpu(dev->tstats);
 }
-#endif
 
 /* Callback from net/ipv4/udp.c to receive packets */
 static int geneve_udp_encap_recv(struct sock *sk, struct sk_buff *skb)
@@ -495,7 +490,7 @@ static struct geneve_sock *geneve_find_sock(struct geneve_net *gn,
 	struct geneve_sock *gs;
 
 	list_for_each_entry(gs, &gn->sock_list, list) {
-		if (inet_sport(gs->sock->sk) == dst_port &&
+		if (inet_sk(gs->sock->sk)->inet_sport == dst_port &&
 		    inet_sk(gs->sock->sk)->sk.sk_family == AF_INET) {
 			return gs;
 		}
@@ -549,7 +544,7 @@ static int geneve_build_skb(struct rtable *rt, struct sk_buff *skb,
 	int min_headroom;
 	int err;
 
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
 			+ GENEVE_BASE_HLEN + opt_len + sizeof(struct iphdr)
 			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
 	err = skb_cow_head(skb, min_headroom);
@@ -623,7 +618,7 @@ static struct rtable *geneve_get_rt(struct sk_buff *skb,
 		dev->stats.tx_carrier_errors++;
 		return rt;
 	}
-	if (rt_dst(rt).dev == dev) { /* is this necessary? */
+	if (rt->dst.dev == dev) { /* is this necessary? */
 		netdev_dbg(dev, "circular route to %pI4\n", &fl4->daddr);
 		dev->stats.collisions++;
 		ip_rt_put(rt);
@@ -712,7 +707,7 @@ netdev_tx_t rpl_geneve_xmit(struct sk_buff *skb)
 		ttl = geneve->ttl;
 		if (!ttl && IN_MULTICAST(ntohl(fl4.daddr)))
 			ttl = 1;
-		ttl = ttl ? : ip4_dst_hoplimit(&rt_dst(rt));
+		ttl = ttl ? : ip4_dst_hoplimit(&rt->dst);
 		df = 0;
 	}
 	err = udp_tunnel_xmit_skb(rt, gs->sock->sk, skb, fl4.saddr, fl4.daddr,
@@ -771,11 +766,9 @@ static int geneve_change_mtu(struct net_device *dev, int new_mtu)
 }
 
 static const struct net_device_ops geneve_netdev_ops = {
-#ifdef HAVE_DEV_TSTATS
 	.ndo_init		= geneve_init,
 	.ndo_uninit		= geneve_uninit,
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
-#endif
 	.ndo_open		= geneve_open,
 	.ndo_stop		= geneve_stop,
 	.ndo_start_xmit		= geneve_dev_xmit,
@@ -1118,7 +1111,6 @@ static struct pernet_operations geneve_net_ops = {
 	.size = sizeof(struct geneve_net),
 };
 
-DEFINE_COMPAT_PNET_REG_FUNC(device)
 int rpl_geneve_init_module(void)
 {
 	int rc;
