@@ -4052,7 +4052,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
     SCAN_SINGLE("eth_type(", ovs_be16, be16, OVS_KEY_ATTR_ETHERTYPE);
 
-    SCAN_BEGIN_ARRAY("mpls(", struct ovs_key_mpls, 3) {
+    SCAN_BEGIN_ARRAY("mpls(", struct ovs_key_mpls, FLOW_MAX_MPLS_LABELS) {
         SCAN_FIELD_ARRAY("label=", mpls_label, mpls_lse);
         SCAN_FIELD_ARRAY("tc=", mpls_tc, mpls_lse);
         SCAN_FIELD_ARRAY("ttl=", mpls_ttl, mpls_lse);
