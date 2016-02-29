@@ -39,7 +39,7 @@ enum OVS_PACKED_ENUM ofpbuf_source {
  * 'header' and 'msg' conventions:
  *
  * OpenFlow messages: 'header' points to the start of the OpenFlow
- *    header, while 'msg' is the OpenFlow msg bofy.
+ *    header, while 'msg' is the OpenFlow msg body.
  *    When parsing, the 'data' will move past these, as data is being
  *    pulled from the OpenFlow message.
  *
