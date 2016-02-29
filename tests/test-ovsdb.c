@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +196,11 @@ usage(void)
            "    [\"advance\", NUMBER] advances NUMBER milliseconds in\n"
            "    simulated time, for causing triggers to time out.\n"
            "  idl SERVER [TRANSACTION...]\n"
+           "    connect to SERVER and dump the contents of the database\n"
+           "    as seen initially by the IDL implementation and after\n"
+           "    executing each TRANSACTION.  (Each TRANSACTION must modify\n"
+           "    the database or this command will hang.)\n"
+           "  idl-fetch SERVER [TRANSACTION...]\n"
            "    connect to SERVER and dump the contents of the database\n"
            "    as seen initially by the IDL implementation and after\n"
            "    executing each TRANSACTION.  (Each TRANSACTION must modify\n"
@@ -2179,6 +2185,240 @@ do_idl(struct ovs_cmdl_context *ctx)
     printf("%03d: done\n", step);
 }
 
+static void
+do_fetch_column_row(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int step = 0;
+    int error;
+    const struct idltest_simple *s;
+
+    idltest_init();
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    if (ctx->argc > 2) {
+        struct stream *stream;
+
+        error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                                  DSCP_DEFAULT), &stream);
+        if (error) {
+            ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+        }
+        rpc = jsonrpc_open(stream);
+    } else {
+        rpc = NULL;
+    }
+
+    ovsdb_idl_add_table(idl, &idltest_table_simple);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_b);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ba);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_i);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_ia);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_r);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ra);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_sa);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_u);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_s);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_ua);
+
+    ovsdb_idl_get_initial_snapshot(idl);
+    ovsdb_idl_run(idl);
+
+    /* Wait for update. */
+    for (;;) {
+        ovsdb_idl_run(idl);
+        if (ovsdb_idl_get_seqno(idl) != seqno) {
+            break;
+        }
+        jsonrpc_run(rpc);
+
+        ovsdb_idl_wait(idl);
+        jsonrpc_wait(rpc);
+        poll_block();
+    }
+
+    /* Print initial simple data without fetching column. */
+    printf("%03d: Initial. On-demand columns: [s ia ua]\n", step);
+    s = idltest_simple_first(idl);
+    IDLTEST_SIMPLE_FOR_EACH(s, idl) {
+        print_idl_row_simple(s, step++);
+    }
+
+    /* get ondemand column of second row */
+    printf("%03d: After changes with fetch for ua column in only one row\n",
+            step);
+    s = idltest_simple_first(idl);
+    idltest_simple_fetch_ua(idl, s);
+    do {
+        ovsdb_idl_run(idl);
+    } while (idltest_simple_is_row_fetch_pending(s));
+    IDLTEST_SIMPLE_FOR_EACH(s, idl) {
+        print_idl_row_simple(s, step++);
+    }
+
+    ovsdb_idl_destroy(idl);
+}
+
+static void
+do_fetch_column(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int step = 0;
+    int error;
+    const struct idltest_simple *s;
+
+    idltest_init();
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    if (ctx->argc > 2) {
+        struct stream *stream;
+
+        error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                                  DSCP_DEFAULT), &stream);
+        if (error) {
+            ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+        }
+        rpc = jsonrpc_open(stream);
+    } else {
+        rpc = NULL;
+    }
+
+    ovsdb_idl_add_table(idl, &idltest_table_simple);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_b);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ba);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_i);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_ia);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_r);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ra);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_sa);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_u);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_s);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_ua);
+
+    ovsdb_idl_get_initial_snapshot(idl);
+    ovsdb_idl_run(idl);
+
+    /* Wait for update. */
+    for (;;) {
+        ovsdb_idl_run(idl);
+        if (ovsdb_idl_get_seqno(idl) != seqno) {
+            break;
+        }
+        jsonrpc_run(rpc);
+
+        ovsdb_idl_wait(idl);
+        jsonrpc_wait(rpc);
+        poll_block();
+    }
+
+    /* Print initial simple data without fetching column. */
+    printf("%03d: Initial. On-demand columns: [s ia ua]\n", step);
+    s = idltest_simple_first(idl);
+    IDLTEST_SIMPLE_FOR_EACH(s, idl) {
+        print_idl_row_simple(s, step++);
+    }
+
+    /* Print simple data after fetching s column */
+    printf("%03d: After fetch for entire s column\n", step);
+    s = idltest_simple_first(idl);
+    idltest_simple_fetch_col_s(idl);
+    do {
+        ovsdb_idl_run(idl);
+    } while (idltest_simple_is_s_fetch_pending(idl));
+    IDLTEST_SIMPLE_FOR_EACH(s, idl) {
+        print_idl_row_simple(s, step++);
+    }
+
+    ovsdb_idl_destroy(idl);
+}
+
+static void
+do_fetch_table(struct ovs_cmdl_context *ctx)
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    int step = 0;
+    int error;
+    const struct idltest_simple *s;
+
+    idltest_init();
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
+    if (ctx->argc > 2) {
+        struct stream *stream;
+
+        error = stream_open_block(jsonrpc_stream_open(ctx->argv[1], &stream,
+                                  DSCP_DEFAULT), &stream);
+        if (error) {
+            ovs_fatal(error, "failed to connect to \"%s\"", ctx->argv[1]);
+        }
+        rpc = jsonrpc_open(stream);
+    } else {
+        rpc = NULL;
+    }
+
+    ovsdb_idl_add_table(idl, &idltest_table_simple);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_b);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ba);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_i);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_ia);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_r);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_ra);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_sa);
+    ovsdb_idl_add_column(idl, &idltest_simple_col_u);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_s);
+    ovsdb_idl_add_on_demand_column(idl, &idltest_table_simple,
+                                   &idltest_simple_col_ua);
+
+    ovsdb_idl_get_initial_snapshot(idl);
+    ovsdb_idl_run(idl);
+
+    /* Wait for update. */
+    for (;;) {
+        ovsdb_idl_run(idl);
+        if (ovsdb_idl_get_seqno(idl) != seqno) {
+            break;
+        }
+        jsonrpc_run(rpc);
+
+        ovsdb_idl_wait(idl);
+        jsonrpc_wait(rpc);
+        poll_block();
+    }
+
+    /* Print initial simple data without fetching column. */
+    printf("%03d: Initial. On-demand columns: [s ia ua]\n", step);
+    s = idltest_simple_first(idl);
+    IDLTEST_SIMPLE_FOR_EACH(s, idl) {
+        print_idl_row_simple(s, step++);
+    }
+
+    /* fetch complete table */
+    printf("%03d: After complete table fetch\n", step);
+    idltest_simple_fetch_table(idl);
+    do {
+        ovsdb_idl_run(idl);
+    } while (idltest_simple_is_table_fetch_pending(idl));
+    IDLTEST_SIMPLE_FOR_EACH(s, idl) {
+        print_idl_row_simple(s, step++);
+    }
+
+    ovsdb_idl_destroy(idl);
+}
+
 static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io },
     { "default-atoms", NULL, 0, 0, do_default_atoms },
@@ -2207,6 +2447,9 @@ static struct ovs_cmdl_command all_commands[] = {
     { "execute", NULL, 2, INT_MAX, do_execute },
     { "trigger", NULL, 2, INT_MAX, do_trigger },
     { "idl", NULL, 1, INT_MAX, do_idl },
+    { "idl-fetch-column-row", NULL, 1, INT_MAX, do_fetch_column_row },
+    { "idl-fetch-column", NULL, 1, INT_MAX, do_fetch_column },
+    { "idl-fetch-table", NULL, 1, INT_MAX, do_fetch_table },
     { "help", NULL, 0, INT_MAX, do_help },
     { NULL, NULL, 0, 0, NULL },
 };
