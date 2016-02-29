@@ -13,7 +13,7 @@
 
 #include <linux/version.h>
 
-#if !defined(HAVE_CORRECT_MRU_HANDLING) && defined(OVS_FRAGMENT_BACKPORT)
+#ifndef HAVE_CORRECT_MRU_HANDLING
 
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -557,4 +557,4 @@ void inet_frag_maybe_warn_overflow(struct inet_frag_queue *q,
 		net_dbg_ratelimited("%s%s", prefix, msg);
 }
 
-#endif /* !HAVE_CORRECT_MRU_HANDLING && OVS_FRAGMENT_BACKPORT */
+#endif /* !HAVE_CORRECT_MRU_HANDLING */

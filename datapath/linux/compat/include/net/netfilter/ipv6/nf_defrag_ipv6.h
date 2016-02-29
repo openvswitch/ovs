@@ -13,22 +13,11 @@
  */
 #if defined(HAVE_NF_CT_FRAG6_CONSUME_ORIG) || \
     defined(HAVE_NF_CT_FRAG6_OUTPUT)
-#if defined(OVS_FRAGMENT_BACKPORT)
 #define OVS_NF_DEFRAG6_BACKPORT 1
 struct sk_buff *rpl_nf_ct_frag6_gather(struct sk_buff *skb, u32 user);
 int __init rpl_nf_ct_frag6_init(void);
 void rpl_nf_ct_frag6_cleanup(void);
 void rpl_nf_ct_frag6_consume_orig(struct sk_buff *skb);
-#else /* !OVS_FRAGMENT_BACKPORT */
-static inline struct sk_buff *rpl_nf_ct_frag6_gather(struct sk_buff *skb,
-						     u32 user)
-{
-	return skb;
-}
-static inline int __init rpl_nf_ct_frag6_init(void) { return 0; }
-static inline void rpl_nf_ct_frag6_cleanup(void) { }
-static inline void rpl_nf_ct_frag6_consume_orig(struct sk_buff *skb) { }
-#endif /* OVS_FRAGMENT_BACKPORT */
 #define nf_ct_frag6_gather rpl_nf_ct_frag6_gather
 #else /* HAVE_NF_CT_FRAG6_CONSUME_ORIG */
 static inline int __init rpl_nf_ct_frag6_init(void) { return 0; }
