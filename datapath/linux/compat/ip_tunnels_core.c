@@ -19,6 +19,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/if_vlan.h>
 #include <linux/in.h>
 #include <linux/in_route.h>
 #include <linux/inetdevice.h>
@@ -48,7 +49,7 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	skb_scrub_packet(skb, xnet);
 
 	skb_clear_hash(skb);
-	skb_dst_set(skb, &rt_dst(rt));
+	skb_dst_set(skb, &rt->dst);
 
 #if 0
 	/* Do not clear ovs_skb_cb.  It will be done in gso code. */
@@ -71,7 +72,7 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	iph->ttl	=	ttl;
 
 #ifdef HAVE_IP_SELECT_IDENT_USING_DST_ENTRY
-	__ip_select_ident(iph, &rt_dst(rt), (skb_shinfo(skb)->gso_segs ?: 1) - 1);
+	__ip_select_ident(iph, &rt->dst, (skb_shinfo(skb)->gso_segs ?: 1) - 1);
 #elif defined(HAVE_IP_SELECT_IDENT_USING_NET)
 	__ip_select_ident(dev_net(rt->dst.dev), iph,
 			  skb_shinfo(skb)->gso_segs ?: 1);
@@ -167,7 +168,7 @@ int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_prot
 	secpath_reset(skb);
 	skb_clear_hash(skb);
 	skb_dst_drop(skb);
-	vlan_set_tci(skb, 0);
+	skb->vlan_tci = 0;
 	skb_set_queue_mapping(skb, 0);
 	skb->pkt_type = PACKET_HOST;
 	return 0;
@@ -181,7 +182,7 @@ bool ovs_skb_is_encapsulated(struct sk_buff *skb)
 	/* checking for inner protocol should be sufficient on newer kernel, but
 	 * old kernel just set encapsulation bit.
 	 */
-	return ovs_skb_get_inner_protocol(skb) || skb_encapsulation(skb);
+	return ovs_skb_get_inner_protocol(skb) || skb->encapsulation;
 }
 EXPORT_SYMBOL_GPL(ovs_skb_is_encapsulated);
 

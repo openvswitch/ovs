@@ -27,7 +27,6 @@
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
-#include <net/route.h>
 
 #include "datapath.h"
 
@@ -81,7 +80,7 @@ struct vport_portids {
 
 /**
  * struct vport - one port within a datapath
- * @rcu: RCU callback head for deferred destruction.
+ * @dev: Pointer to net_device.
  * @dp: Datapath to which this port belongs.
  * @upcall_portids: RCU protected 'struct vport_portids'.
  * @port_no: Index into @dp's @ports array.
@@ -89,6 +88,7 @@ struct vport_portids {
  * @dp_hash_node: Element in @datapath->ports hash table in datapath.c.
  * @ops: Class structure.
  * @detach_list: list used for detaching vport in net-exit call.
+ * @rcu: RCU callback head for deferred destruction.
  */
 struct vport {
 	struct net_device *dev;
@@ -153,9 +153,9 @@ struct vport_ops {
 	int (*set_options)(struct vport *, struct nlattr *);
 	int (*get_options)(const struct vport *, struct sk_buff *);
 
+	netdev_tx_t (*send)(struct sk_buff *skb);
 	int (*get_egress_tun_info)(struct vport *, struct sk_buff *,
 				   struct dp_upcall_info *upcall);
-	netdev_tx_t (*send)(struct sk_buff *skb);
 
 	struct module *owner;
 	struct list_head list;
@@ -214,31 +214,12 @@ static inline const char *ovs_vport_name(struct vport *vport)
 
 int __ovs_vport_ops_register(struct vport_ops *ops);
 #define ovs_vport_ops_register(ops)		\
-({						\
-	(ops)->owner = THIS_MODULE;		\
-	__ovs_vport_ops_register(ops);		\
-})
+	({					\
+		(ops)->owner = THIS_MODULE;	\
+		__ovs_vport_ops_register(ops);	\
+	})
 
 void ovs_vport_ops_unregister(struct vport_ops *ops);
-
-static inline struct rtable *ovs_tunnel_route_lookup(struct net *net,
-						     const struct ip_tunnel_key *key,
-						     u32 mark,
-						     struct flowi4 *fl,
-						     u8 protocol)
-{
-	struct rtable *rt;
-
-	memset(fl, 0, sizeof(*fl));
-	fl->daddr = key->u.ipv4.dst;
-	fl->saddr = key->u.ipv4.src;
-	fl->flowi4_tos = RT_TOS(key->tos);
-	fl->flowi4_mark = mark;
-	fl->flowi4_proto = protocol;
-
-	rt = ip_route_output_key(net, fl);
-	return rt;
-}
-
 void ovs_vport_send(struct vport *vport, struct sk_buff *skb);
+
 #endif /* vport.h */

@@ -139,14 +139,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
        else
           AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.3.x is not supported (please refer to the FAQ for advice)])
        fi
-    elif test "$version" = 3; then
+    elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
     else
-       if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 2.6.32 or later is required])
-       else
-         : # Linux 2.6.x
-       fi
+       AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 3.10 or later is required])
     fi
     if (test ! -e "$KBUILD"/include/linux/version.h && \
         test ! -e "$KBUILD"/include/generated/uapi/linux/version.h)|| \
@@ -307,7 +303,7 @@ AC_DEFUN([OVS_DEFINE], [
 
 dnl OVS_CHECK_LINUX_COMPAT
 dnl
-dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
+dnl Runs various Autoconf checks on the Linux kernel source in
 dnl the directory in $KBUILD.
 AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   rm -f datapath/linux/kcompat.h.new
@@ -381,11 +377,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_get_iflink])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_rx_handler_register])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_extended])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [rx_handler_func_t.*pskb],
-                  [OVS_DEFINE([HAVE_RX_HANDLER_PSKB])])
+  dnl Ubuntu kernel 3.13 has defined this struct but not used for netdev->tstats.
+  dnl So check type of tstats.
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats.*tstats],
+                  [OVS_DEFINE([HAVE_PCPU_SW_NETSTATS])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netif_needs_gso.*net_device],
                   [OVS_DEFINE([HAVE_NETIF_NEEDS_GSO_NETDEV])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [udp_offload])
@@ -530,8 +525,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/u64_stats_sync.h], [u64_stats_fetch_begin_irq])
 
-  OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
-                  [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [struct vxlan_metadata],
                   [OVS_DEFINE([HAVE_VXLAN_METADATA])])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [VXLAN_HF_RCO])

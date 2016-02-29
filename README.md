@@ -36,10 +36,7 @@ vSwitch supports the following features:
 * Transactional configuration database with C and Python bindings
 * High-performance forwarding using a Linux kernel module
 
-The included Linux kernel module supports Linux 2.6.32 and up, with
-testing focused on 2.6.32 with Centos and Xen patches.  Open vSwitch
-also has special support for Citrix XenServer and Red Hat Enterprise
-Linux hosts.
+The included Linux kernel module supports Linux 3.10 and up.
 
 Open vSwitch can also operate, at a cost in performance, entirely in
 userspace, without assistance from a kernel module.  This userspace

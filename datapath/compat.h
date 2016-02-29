@@ -27,31 +27,12 @@
 #include <net/xfrm.h>
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 
+/* Even though vanilla 3.10 kernel has grp->id, RHEL 7 kernel is missing
+ * this field. */
 #ifdef HAVE_GENL_MULTICAST_GROUP_WITH_ID
 #define GROUP_ID(grp)	((grp)->id)
 #else
 #define GROUP_ID(grp)	0
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-#define rt_dst(rt) (rt->dst)
-#else
-#define rt_dst(rt) (rt->u.dst)
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
-#define inet_sport(sk)	(inet_sk(sk)->sport)
-#else
-#define inet_sport(sk)	(inet_sk(sk)->inet_sport)
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
-static inline bool skb_encapsulation(struct sk_buff *skb)
-{
-	return skb->encapsulation;
-}
-#else
-#define skb_encapsulation(skb) false
 #endif
 
 #ifdef OVS_FRAGMENT_BACKPORT

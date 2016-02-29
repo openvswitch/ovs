@@ -17,6 +17,7 @@
 
 #include <linux/version.h>
 
+#include <linux/etherdevice.h>
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/net.h>
@@ -310,7 +311,7 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 		goto error;
 	}
 
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
 		+ sizeof(struct iphdr) + LISP_HLEN;
 
 	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
@@ -327,7 +328,7 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	/* Reset l2 headers. */
 	skb_pull(skb, network_offset);
 	skb_reset_mac_header(skb);
-	vlan_set_tci(skb, 0);
+	skb->vlan_tci = 0;
 
 	skb = udp_tunnel_handle_offloads(skb, false, 0, false);
 	if (IS_ERR(skb)) {
@@ -362,7 +363,6 @@ error:
 }
 EXPORT_SYMBOL(rpl_lisp_xmit);
 
-#ifdef HAVE_DEV_TSTATS
 /* Setup stats when device is created */
 static int lisp_init(struct net_device *dev)
 {
@@ -377,7 +377,6 @@ static void lisp_uninit(struct net_device *dev)
 {
 	free_percpu(dev->tstats);
 }
-#endif
 
 static struct socket *create_sock(struct net *net, bool ipv6,
 				       __be16 port)
@@ -458,11 +457,9 @@ static int lisp_change_mtu(struct net_device *dev, int new_mtu)
 }
 
 static const struct net_device_ops lisp_netdev_ops = {
-#ifdef HAVE_DEV_TSTATS
 	.ndo_init               = lisp_init,
 	.ndo_uninit             = lisp_uninit,
 	.ndo_get_stats64        = ip_tunnel_get_stats64,
-#endif
 	.ndo_open               = lisp_open,
 	.ndo_stop               = lisp_stop,
 	.ndo_start_xmit         = lisp_dev_xmit,
@@ -697,7 +694,6 @@ static struct pernet_operations lisp_net_ops = {
 	.size = sizeof(struct lisp_net),
 };
 
-DEFINE_COMPAT_PNET_REG_FUNC(device)
 int rpl_lisp_init_module(void)
 {
 	int rc;
