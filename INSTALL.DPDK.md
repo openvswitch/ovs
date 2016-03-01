@@ -36,11 +36,11 @@ on Debian/Ubuntu)
      Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
-     `make install T=x86_64-native-linuxapp-gcc`
+     `make install T=x86_64-native-linuxapp-gcc DESTDIR=install`
 
      To include IVSHMEM (shared memory):
 
-     `make install T=x86_64-ivshmem-linuxapp-gcc`
+     `make install T=x86_64-ivshmem-linuxapp-gcc DESTDIR=install`
 
      For further details refer to http://dpdk.org/
 
