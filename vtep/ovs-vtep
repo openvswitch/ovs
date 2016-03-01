@@ -531,8 +531,8 @@ def del_binding(binding, ls):
                   % (ps_name, port_no, vlan_))
         ovs_ofctl("del-flows %s in_port=%s" % (ps_name, patch_no))
     else:
-        ovs_ofctl("del-flows %s in_port=%s" % (ps_name, port_no))
-        ovs_ofctl("del-flows %s in_port=%s" % (ps_name, patch_no))
+        ovs_ofctl("--strict del-flows %s in_port=%s" % (ps_name, port_no))
+        ovs_ofctl("--strict del-flows %s in_port=%s" % (ps_name, patch_no))
 
     ls.del_lbinding(lbinding)
 
