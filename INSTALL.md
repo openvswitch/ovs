@@ -482,6 +482,12 @@ The results of a testing run are reported in tests/testsuite.log.
 Please report test failures as bugs and include the testsuite.log in
 your report.
 
+If the build was configured with "--enable-coverage" and the "lcov"
+utility is installed, you can run the testsuite and generate a code
+coverage report by using "make check-lcov". All of the options for
+TESTSUITEFLAGS are available, so you can e.g.:
+      `make check-lcov TESTSUITEFLAGS=-j8 -k ovn`
+
 If you have "valgrind" installed, then you can also run the testsuite
 under valgrind by using "make check-valgrind" in place of "make
 check".  All the same options are available via TESTSUITEFLAGS.  When
