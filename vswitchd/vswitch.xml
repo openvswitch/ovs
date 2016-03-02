@@ -3310,6 +3310,21 @@
           for information on how this classifier works.
         </dd>
       </dl>
+      <dl>
+        <dt><code>egress-policer</code></dt>
+        <dd>
+          An egress policer algorithm. This implementation uses the DPDK
+          rte_meter library. The rte_meter library provides an implementation
+          which allows the metering and policing of traffic. The implementation
+          in OVS essentially creates a single token bucket used to police
+          traffic. It should be noted that when the rte_meter is configured as
+          part of QoS there will be a performance overhead as the rte_meter
+          itself will consume CPU cycles in order to police traffic. These CPU
+          cycles ordinarily are used for packet proccessing. As such the drop
+          in performance will be noticed in terms of overall aggregate traffic
+          throughput.
+        </dd>
+      </dl>
     </column>
 
     <column name="queues">
@@ -3343,6 +3358,38 @@
         specified, for physical interfaces, the default is the link rate.  For
         other interfaces or if the link rate cannot be determined, the default
         is currently 100 Mbps.
+      </column>
+    </group>
+
+    <group title="Configuration for egress-policer QoS">
+      <p>
+        <ref table="QoS"/> <ref table="QoS" column="type"/>
+        <code>egress-policer</code> provides egress policing for userspace
+        port types with DPDK.
+
+        It has the following key-value pairs defined.
+      </p>
+
+      <column name="other_config" key="cir" type='{"type": "integer"}'>
+        The Committed Information Rate (CIR) is measured in bytes of IP
+        packets per second, i.e. it includes the IP header, but not link
+        specific (e.g. Ethernet) headers. This represents the bytes per second
+        rate at which the token bucket will be updated. The cir value is
+        calculated by (pps x packet data size).  For example assuming a user
+        wishes to limit a stream consisting of 64 byte packets to 1 million
+        packets per second the CIR would be set to to to 46000000. This value
+        can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
+        rate for the number of packets per second and 46 represents the size
+        of the packet data for a 64 byte ip packet.
+      </column>
+      <column name="other_config" key="cbs" type='{"type": "integer"}'>
+        The Committed Burst Size (CBS) is measured in bytes and represents a
+        token bucket. At a minimum this value should be be set to the expected
+        largest size packet in the traffic stream. In practice larger values
+        may be used to increase the size of the token bucket. If a packet can
+        be transmitted then the cbs will be decremented by the number of
+        bytes/tokens of the packet. If there are not enough tokens in the cbs
+        bucket the packet will be dropped.
       </column>
     </group>
 
