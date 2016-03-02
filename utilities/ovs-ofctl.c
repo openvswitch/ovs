@@ -75,6 +75,9 @@ VLOG_DEFINE_THIS_MODULE(ofctl);
  */
 static bool bundle = false;
 
+/* --color: Use color markers. */
+static bool enable_color;
+
 /* --strict: Use strict matching for flow mod commands?  Additionally governs
  * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
  */
@@ -170,6 +173,7 @@ parse_options(int argc, char *argv[])
         OPT_RSORT,
         OPT_UNIXCTL,
         OPT_BUNDLE,
+        OPT_COLOR,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -188,6 +192,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
         {"bundle", no_argument, NULL, OPT_BUNDLE},
+        {"color", optional_argument, NULL, OPT_COLOR},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -288,6 +293,30 @@ parse_options(int argc, char *argv[])
         case OPT_UNIXCTL:
             unixctl_path = optarg;
             break;
+
+        case OPT_COLOR:
+            if (optarg) {
+                if (!strcasecmp(optarg, "always")
+                    || !strcasecmp(optarg, "yes")
+                    || !strcasecmp(optarg, "force")) {
+                    enable_color = true;
+                } else if (!strcasecmp(optarg, "never")
+                           || !strcasecmp(optarg, "no")
+                           || !strcasecmp(optarg, "none")) {
+                    enable_color = false;
+                } else if (!strcasecmp(optarg, "auto")
+                           || !strcasecmp(optarg, "tty")
+                           || !strcasecmp(optarg, "if-tty")) {
+                    /* Determine whether we need colors, i.e. whether standard
+                     * output is a tty. */
+                    enable_color = is_stdout_a_tty();
+                } else {
+                    ovs_fatal(0, "incorrect value `%s' for --color", optarg);
+                }
+            } else {
+                enable_color = is_stdout_a_tty();
+            }
+        break;
 
         DAEMON_OPTION_HANDLERS
         OFP_VERSION_OPTION_HANDLERS
@@ -417,6 +446,7 @@ usage(void)
            "  --sort[=field]              sort in ascending order\n"
            "  --rsort[=field]             sort in descending order\n"
            "  --unixctl=SOCKET            set control socket name\n"
+           "  --color[=always|never|auto] control use of color in output\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);

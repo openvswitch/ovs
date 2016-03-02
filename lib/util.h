@@ -613,6 +613,8 @@ ovs_be128_is_zero(const ovs_be128 *val)
 
 void xsleep(unsigned int seconds);
 
+bool is_stdout_a_tty(void);
+
 #ifdef _WIN32
 
 char *ovs_format_message(int error);
