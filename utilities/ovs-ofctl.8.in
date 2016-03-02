@@ -2968,6 +2968,7 @@ These options currently affect only \fBdump\-flows\fR output.
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
+.so lib/colors.man
 .so lib/common.man
 .
 .SH "RUNTIME MANAGEMENT COMMANDS"

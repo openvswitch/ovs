@@ -431,6 +431,7 @@ EXTRA_DIST += \
 	lib/db-ctl-base.xml
 
 MAN_FRAGMENTS += \
+	lib/colors.man \
 	lib/common.man \
 	lib/common-syn.man \
 	lib/coverage-unixctl.man \
