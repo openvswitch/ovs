@@ -87,13 +87,11 @@ m4_define([OVN_CONTROLLER_VTEP_STOP],
    # database will fail with 'Broken pipe' error.
    AT_CHECK([check_logs "$1
 /Broken pipe/d"])
-   AT_CHECK([ovs-appctl -t ovs-vtep exit])
-   AT_CHECK([ovs-appctl -t ovn-northd exit])
-   AT_CHECK([ovs-appctl -t ovn-controller-vtep exit])
-   # makes sure ovn-controller-vtep exits.
-   OVS_WAIT_UNTIL([test ! -f ovn-controller-vtep.pid])
-   AT_CHECK([ovs-appctl -t ovsdb-server exit])
-   AT_CHECK([ovs-appctl -t ovs-vswitchd exit])])
+   OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+   OVS_APP_EXIT_AND_WAIT([ovn-northd])
+   OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+   OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+   OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])])
 
 # Adds logical port for a vtep gateway chassis in ovn-nb database.
 #

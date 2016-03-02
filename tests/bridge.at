@@ -35,4 +35,6 @@ dummy@ovs-dummy: hit:0 missed:0
 		br0 65534/100: (dummy)
 		p1 1/1: (dummy)
 ])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP

@@ -1048,4 +1048,6 @@ AT_CHECK([ovs-vsctl set int p1 type=gre options:remote_ip=127.0.0.1])
 AT_CHECK([ovs-vsctl del-port p1])
 AT_CHECK([ovs-vsctl add-port br0 p1 -- set int p1 type=dummy])
 
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP

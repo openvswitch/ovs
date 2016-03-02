@@ -800,9 +800,26 @@ for i in 1 2 3; do
 done
 
 # Gracefully terminate daemons
-for daemon in ovn-controller ovn-northd ovsdb-server; do
-    ovs-appctl -t $daemon exit
+for sim in hv1 hv2 hv3; do
+    as $sim
+    OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 done
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CLEANUP
 
 # 2 hypervisors, 4 logical ports per HV
@@ -952,9 +969,25 @@ for i in 1 2; do
 done
 
 # Gracefully terminate daemons
-for daemon in ovn-controller ovn-northd ovsdb-server; do
-    ovs-appctl -t $daemon exit
+for sim in hv1 hv2; do
+    as $sim
+    OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 done
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
@@ -1113,8 +1146,30 @@ for i in 1 2 3; do
 done
 
 # Gracefully terminate daemons
-for daemon in ovs-vtep ovn-controller-vtep ovn-controller ovn-northd ovsdb-server; do
-    ovs-appctl -t $daemon exit
+as vtep
+OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+
+as hv2
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+for sim in hv1 hv2 hv3 vtep main; do
+    as $sim
+    for daemon in ovs-vswitchd ovsdb-server; do
+        OVS_APP_EXIT_AND_WAIT([$daemon])
+    done
 done
 AT_CLEANUP
 
@@ -1857,7 +1912,24 @@ for i in 1 2 3; do
 done
 
 # Gracefully terminate daemons
-for daemon in ovn-controller ovn-northd ovsdb-server; do
-    ovs-appctl -t $daemon exit
+for sim in hv1 hv2 hv3; do
+    as $sim
+    OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 done
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CLEANUP
