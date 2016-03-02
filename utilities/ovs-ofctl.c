@@ -33,6 +33,7 @@
 #include "classifier.h"
 #include "command-line.h"
 #include "daemon.h"
+#include "colors.h"
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
@@ -363,6 +364,8 @@ parse_options(int argc, char *argv[])
     allowed_protocols &= version_protocols;
     mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                   allowed_protocols));
+
+    colors_init(enable_color);
 }
 
 static void
