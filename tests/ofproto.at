@@ -16,7 +16,7 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/send 0205000801234567
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//
 /ECHO/d' monitor.log], [0], [dnl
@@ -2621,7 +2621,7 @@ ovs-appctl -t ovs-ofctl ofctl/send 010400180000000300002320000000140000000000000
 ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000001
 check_async 7 OFPR_ACTION OFPPR_ADD
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -2724,7 +2724,7 @@ ovs-appctl -t ovs-ofctl ofctl/send 030400180000000300002320000000140000000000000
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
 check_async 7 OFPR_ACTION OFPPR_ADD
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -2833,7 +2833,7 @@ ovs-appctl -t ovs-ofctl ofctl/send 040400180000000300002320000000140000000000000
 ovs-appctl -t ovs-ofctl ofctl/send 041800180000000400000002000000000000000000000002
 check_async 6 OFPR_ACTION OFPPR_ADD
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3033,7 +3033,7 @@ ovs-appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000
 ovs-appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
 check_async 6 OFPR_ACTION OFPPR_ADD OFPPR_MODIFY OFPRR_DELETE
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3106,7 +3106,7 @@ check_async 2 OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE
 
 # Set-async has changed in OF 1.4 and is not yet implemented.
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3351,7 +3351,7 @@ AT_CHECK([ovs-ofctl packet-out br0 controller controller,1 '00010203040500102030
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 ovs-ofctl dump-ports br0
 
@@ -3386,7 +3386,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 packet-out br0 4294967293 controller '00010203
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
@@ -3419,7 +3419,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 packet-out br0 4294967293 controller '00010203
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.1): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
@@ -3448,7 +3448,7 @@ AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_M
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 NXT_PACKET_IN2: total_len=14 pkt_mark=0xaa,metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=14 (unbuffered)
@@ -3477,7 +3477,7 @@ AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_M
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 NXT_PACKET_IN: total_len=14 pkt_mark=0xaa,metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=14 (unbuffered)
@@ -3505,7 +3505,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 packet-out br0 none 'set_field:0xfafafafa5a5a5
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=14 metadata=0xfafafafa5a5a5a5a,in_port=ANY (via action) data_len=14 (unbuffered)
@@ -3533,7 +3533,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 none 'set_field:0xfafafafa5a5a5
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.3): total_len=14 metadata=0x6b,in_port=ANY (via action) data_len=14 (unbuffered)
@@ -3560,7 +3560,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 packet-out br0 none 'set_field:127.0.0.1->tun_
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=14 tun_id=0x1020304,tun_src=127.0.0.1,tun_dst=192.168.0.1,in_port=ANY (via action) data_len=14 (unbuffered)
@@ -3726,7 +3726,7 @@ NXST_FLOW_MONITOR reply (xid=0x0):
 OFPT_BARRIER_REPLY:
 ])
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3767,7 +3767,7 @@ NXST_FLOW_MONITOR reply (xid=0x0):
 OFPT_BARRIER_REPLY:
 ])
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3819,7 +3819,7 @@ NXST_FLOW_MONITOR reply (xid=0x0):
 OFPT_BARRIER_REPLY:
 ])
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -3880,7 +3880,7 @@ ovs-appctl -t ovs-ofctl ofctl/unblock
 #    https://www.mail-archive.com/dev@openvswitch.org/msg27675.html
 OVS_WAIT_UNTIL([grep NXT_FLOW_MONITOR_RESUMED monitor.log])
 
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 # Check that the flow monitor reported the same number of flows
 # added and deleted, but fewer than we actually added and deleted.
@@ -4036,7 +4036,7 @@ AT_CAPTURE_FILE([monitor.log])
 # Send an OpenFlow14 message (05), OFPT_BUNDLE_CONTROL (21), length (10), xid (0a)
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4062,7 +4062,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4091,7 +4091,7 @@ AT_CAPTURE_FILE([monitor.log])
 
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4120,7 +4120,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4157,7 +4157,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 02 00 01"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4187,7 +4187,7 @@ AT_CAPTURE_FILE([monitor.log])
 # Open, Close, Close
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 04 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4214,7 +4214,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 00 00
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 04 00 01"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4244,7 +4244,7 @@ AT_CAPTURE_FILE([monitor.log])
 # Open, Close, Close
 ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 0a 00 00 00 01 00 06 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4518,7 +4518,7 @@ AT_CAPTURE_FILE([monitor.log])
 # message type (0000), and flags (0002)
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4547,7 +4547,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4576,7 +4576,7 @@ AT_CAPTURE_FILE([monitor.log])
 
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4605,7 +4605,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4642,7 +4642,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 01"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4672,7 +4672,7 @@ AT_CAPTURE_FILE([monitor.log])
 # Commit
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 04 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4699,7 +4699,7 @@ ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 04 00 01"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4729,7 +4729,7 @@ AT_CAPTURE_FILE([monitor.log])
 # Discard
 ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 06 00 02"
 ovs-appctl -t ovs-ofctl ofctl/barrier
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
 send: ONFT_BUNDLE_CONTROL (OF1.3):

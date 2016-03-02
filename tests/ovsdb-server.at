@@ -1,9 +1,7 @@
 AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 
 m4_define([OVSDB_SERVER_SHUTDOWN], 
-  [cp pid savepid
-   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl -e exit], [0], [ignore], [ignore])
-   OVS_WAIT_WHILE([kill -0 `cat savepid`], [kill `cat savepid`])])
+  [OVS_APP_EXIT_AND_WAIT(["`pwd`"/unixctl])])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -244,6 +242,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [constraints
 ])
 AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ignore])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db with --monitor])
@@ -275,6 +274,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [constraints
 ordinals
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
@@ -304,6 +304,7 @@ OVS_WAIT_UNTIL(
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [ordinals
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([--remote=db: implementation])
@@ -367,6 +368,7 @@ AT_CHECK(
   [[[{"rows":[{"managers":"punix:socket1"}]},{"rows":[{"is_connected":false,"target":"punix:socket2"}]}]
 ]], 
   [ignore])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote and remove-remote])
@@ -419,6 +421,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-remote punix:socket2])
 OVS_WAIT_UNTIL([test ! -e socket2])
 AT_CHECK([test ! -e socket1])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote with --monitor])
@@ -448,6 +451,7 @@ OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 OVS_WAIT_UNTIL([test -S socket1])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-remote and remove-remote with --monitor])
@@ -481,6 +485,7 @@ OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 AT_CHECK([test ! -e socket1])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([SSL db: implementation])
@@ -748,8 +753,7 @@ done
 AT_CHECK([ovs-appctl -t ovsdb-client ovsdb-client/unblock])
 OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client.out])
 OVS_WAIT_UNTIL([grep "\"xyzzy$counter\"" ovsdb-client-nonblock.out])
-AT_CHECK([ovs-appctl -t ovsdb-client exit])
-OVS_WAIT_WHILE([test -e ovsdb-client.pid])
+OVS_APP_EXIT_AND_WAIT([ovsdb-client])
 AT_CHECK([kill `cat nonblock.pid`])
 
 # Count the number of updates in the ovsdb-client output, by counting
@@ -767,6 +771,7 @@ AT_CHECK([test $logged_updates -lt $logged_nonblock_updates])
 AT_CHECK_UNQUOTED([ovs-vsctl get open_vswitch . system_version], [0],
   ["xyzzy$counter"
 ])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL IPv4 sockets)])

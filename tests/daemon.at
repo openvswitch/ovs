@@ -83,7 +83,7 @@ if test "$IS_WIN32" = "yes"; then
   # When a 'kill pid' is done on windows (through 'taskkill //F'),
   # pidfiles are not deleted (because it is force kill), so use
   # 'ovs-appctl exit' instead
-  ovs-appctl -t `pwd`/unixctl exit
+  OVS_APP_EXIT_AND_WAIT([`pwd`/unixctl])
 else
   kill `cat pid`
 fi
