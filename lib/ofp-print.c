@@ -28,6 +28,7 @@
 
 #include "bundle.h"
 #include "byte-order.h"
+#include "colors.h"
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
@@ -1580,30 +1581,39 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
 void
 ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
 {
-    ds_put_format(string, " cookie=0x%"PRIx64", duration=",
-                  ntohll(fs->cookie));
+    ds_put_format(string, " %scookie=%s0x%"PRIx64", %sduration=%s",
+                  colors.param, colors.end, ntohll(fs->cookie),
+                  colors.param, colors.end);
 
     ofp_print_duration(string, fs->duration_sec, fs->duration_nsec);
-    ds_put_format(string, ", table=%"PRIu8", ", fs->table_id);
-    ds_put_format(string, "n_packets=%"PRIu64", ", fs->packet_count);
-    ds_put_format(string, "n_bytes=%"PRIu64", ", fs->byte_count);
+    ds_put_format(string, ", %stable=%s%"PRIu8", ",
+                  colors.special, colors.end, fs->table_id);
+    ds_put_format(string, "%sn_packets=%s%"PRIu64", ",
+                  colors.param, colors.end, fs->packet_count);
+    ds_put_format(string, "%sn_bytes=%s%"PRIu64", ",
+                  colors.param, colors.end, fs->byte_count);
     if (fs->idle_timeout != OFP_FLOW_PERMANENT) {
-        ds_put_format(string, "idle_timeout=%"PRIu16", ", fs->idle_timeout);
+        ds_put_format(string, "%sidle_timeout=%s%"PRIu16", ",
+                      colors.param, colors.end, fs->idle_timeout);
     }
     if (fs->hard_timeout != OFP_FLOW_PERMANENT) {
-        ds_put_format(string, "hard_timeout=%"PRIu16", ", fs->hard_timeout);
+        ds_put_format(string, "%shard_timeout=%s%"PRIu16", ",
+                      colors.param, colors.end, fs->hard_timeout);
     }
     if (fs->flags) {
         ofp_print_flow_flags(string, fs->flags);
     }
     if (fs->importance != 0) {
-        ds_put_format(string, "importance=%"PRIu16", ", fs->importance);
+        ds_put_format(string, "%simportance=%s%"PRIu16", ",
+                      colors.param, colors.end, fs->importance);
     }
     if (fs->idle_age >= 0) {
-        ds_put_format(string, "idle_age=%d, ", fs->idle_age);
+        ds_put_format(string, "%sidle_age=%s%d, ",
+                      colors.param, colors.end, fs->idle_age);
     }
     if (fs->hard_age >= 0 && fs->hard_age != fs->duration_sec) {
-        ds_put_format(string, "hard_age=%d, ", fs->hard_age);
+        ds_put_format(string, "%shard_age=%s%d, ",
+                      colors.param, colors.end, fs->hard_age);
     }
 
     match_format(&fs->match, string, fs->priority);
@@ -1611,7 +1621,7 @@ ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
         ds_put_char(string, ' ');
     }
 
-    ds_put_cstr(string, "actions=");
+    ds_put_format(string, "%sactions=%s", colors.actions, colors.end);
     ofpacts_format(fs->ofpacts, fs->ofpacts_len, string);
 }
 
