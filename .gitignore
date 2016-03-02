@@ -71,3 +71,4 @@ OvsDpInterface.h
 testsuite.tmp.orig
 /rpm/
 /openvswitch-*.tar.gz
+/tests/lcov/
