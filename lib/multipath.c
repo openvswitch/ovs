@@ -21,6 +21,7 @@
 #include <inttypes.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include "colors.h"
 #include "dynamic-string.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
@@ -246,9 +247,9 @@ multipath_format(const struct ofpact_multipath *mp, struct ds *s)
         algorithm = "<unknown>";
     }
 
-    ds_put_format(s, "multipath(%s,%"PRIu16",%s,%d,%"PRIu16",",
-                  fields, mp->basis, algorithm, mp->max_link + 1,
-                  mp->arg);
+    ds_put_format(s, "%smultipath(%s%s,%"PRIu16",%s,%d,%"PRIu16",",
+                  colors.paren, colors.end, fields, mp->basis, algorithm,
+                  mp->max_link + 1, mp->arg);
     mf_format_subfield(&mp->dst, s);
-    ds_put_char(s, ')');
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }

@@ -21,6 +21,7 @@
 #include <netinet/icmp6.h>
 
 #include "classifier.h"
+#include "colors.h"
 #include "dynamic-string.h"
 #include "hmap.h"
 #include "meta-flow.h"
@@ -1595,9 +1596,9 @@ nxm_parse_reg_move(struct ofpact_reg_move *move, const char *s)
 void
 nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
 {
-    ds_put_format(s, "move:");
+    ds_put_format(s, "%smove:%s", colors.special, colors.end);
     mf_format_subfield(&move->src, s);
-    ds_put_cstr(s, "->");
+    ds_put_format(s, "%s->%s", colors.special, colors.end);
     mf_format_subfield(&move->dst, s);
 }
 
@@ -1685,14 +1686,14 @@ nxm_parse_stack_action(struct ofpact_stack *stack_action, const char *s)
 void
 nxm_format_stack_push(const struct ofpact_stack *push, struct ds *s)
 {
-    ds_put_cstr(s, "push:");
+    ds_put_format(s, "%spush:%s", colors.param, colors.end);
     mf_format_subfield(&push->subfield, s);
 }
 
 void
 nxm_format_stack_pop(const struct ofpact_stack *pop, struct ds *s)
 {
-    ds_put_cstr(s, "pop:");
+    ds_put_format(s, "%spop:%s", colors.param, colors.end);
     mf_format_subfield(&pop->subfield, s);
 }
 
