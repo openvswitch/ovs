@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,28 @@
 
 #include <stdint.h>
 #include "compiler.h"
+#include "util.h"
 
 struct expr;
 struct lexer;
 struct ofpbuf;
 struct shash;
 struct simap;
+
+enum action_opcode {
+    /* "arp { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_ARP,
+};
+
+/* Header. */
+struct action_header {
+    ovs_be32 opcode;            /* One of ACTION_OPCODE_* */
+    uint8_t pad[4];
+};
+BUILD_ASSERT_DECL(sizeof(struct action_header) == 8);
 
 struct action_params {
     /* A table of "struct expr_symbol"s to support (as one would provide to

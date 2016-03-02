@@ -908,14 +908,6 @@
           Commit the flow to the connection tracking entry associated
           with it by a previous call to <code>ct_next</code>.
         </dd>
-      </dl>
-
-      <p>
-        The following actions will likely be useful later, but they have not
-        been thought out carefully.
-      </p>
-
-      <dl>
 
         <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
@@ -943,9 +935,22 @@
             <li><code>arp.tpa</code> copied from <code>ip4.dst</code></li>
           </ul>
 
+          <p>
+            The ARP packet has the same VLAN header, if any, as the IP packet
+            it replaces.
+          </p>
+
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 
+      </dl>
+
+      <p>
+        The following actions will likely be useful later, but they have not
+        been thought out carefully.
+      </p>
+
+      <dl>
         <dt><code>icmp4 { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
           <p>

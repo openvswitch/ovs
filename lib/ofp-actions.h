@@ -254,20 +254,22 @@ struct ofpact_output {
  *
  * Used for NXAST_CONTROLLER. */
 struct ofpact_controller {
-    struct ofpact ofpact;
-    uint16_t max_len;           /* Maximum length to send to controller. */
-    uint16_t controller_id;     /* Controller ID to send packet-in. */
-    enum ofp_packet_in_reason reason; /* Reason to put in packet-in. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t max_len;   /* Max length to send to controller. */
+        uint16_t controller_id; /* Controller ID to send packet-in. */
+        enum ofp_packet_in_reason reason; /* Reason to put in packet-in. */
 
-    /* If true, this action freezes packet traversal of the OpenFlow tables and
-     * adds a continuation to the packet-in message, that a controller can use
-     * to resume that traversal. */
-    bool pause;
+        /* If true, this action freezes packet traversal of the OpenFlow
+         * tables and adds a continuation to the packet-in message, that
+         * a controller can use to resume that traversal. */
+        bool pause;
 
-    /* Arbitrary data to include in the packet-in message (currently, only in
-     * NXT_PACKET_IN2). */
-    uint16_t userdata_len;
-    uint8_t userdata[];
+        /* Arbitrary data to include in the packet-in message (currently,
+         * only in NXT_PACKET_IN2). */
+        uint16_t userdata_len;
+    );
+    uint8_t userdata[0];
 };
 
 /* OFPACT_ENQUEUE.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,6 +184,62 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
 }
 
 static void
+parse_arp_action(struct action_context *ctx)
+{
+    if (!lexer_match(ctx->lexer, LEX_T_LCURLY)) {
+        action_syntax_error(ctx, "expecting `{'");
+        return;
+    }
+
+    struct ofpbuf *outer_ofpacts = ctx->ofpacts;
+    uint64_t inner_ofpacts_stub[1024 / 8];
+    struct ofpbuf inner_ofpacts = OFPBUF_STUB_INITIALIZER(inner_ofpacts_stub);
+    ctx->ofpacts = &inner_ofpacts;
+
+    /* Save prerequisites.  (XXX What is the right treatment for prereqs?) */
+    struct expr *outer_prereqs = ctx->prereqs;
+    ctx->prereqs = NULL;
+
+    /* Parse inner actions. */
+    while (!lexer_match(ctx->lexer, LEX_T_RCURLY)) {
+        if (!parse_action(ctx)) {
+            break;
+        }
+    }
+
+    ctx->ofpacts = outer_ofpacts;
+
+    /* Add a "controller" action with the actions nested inside "arp {...}",
+     * converted to OpenFlow, as its userdata.  ovn-controller will convert the
+     * packet to an ARP and then send the packet and actions back to the switch
+     * inside an OFPT_PACKET_OUT message. */
+    size_t oc_offset = ctx->ofpacts->size;
+    ofpact_put_CONTROLLER(ctx->ofpacts);
+
+    struct action_header ah = { .opcode = htonl(ACTION_OPCODE_ARP) };
+    ofpbuf_put(ctx->ofpacts, &ah, sizeof ah);
+
+    ofpacts_put_openflow_actions(inner_ofpacts.data, inner_ofpacts.size,
+                                 ctx->ofpacts, OFP13_VERSION);
+
+    struct ofpact_controller *oc = ofpbuf_at_assert(ctx->ofpacts, oc_offset,
+                                                    sizeof *oc);
+    ctx->ofpacts->header = oc;
+    oc->max_len = UINT16_MAX;
+    oc->reason = OFPR_ACTION;
+    oc->userdata_len = ctx->ofpacts->size - (oc_offset + sizeof *oc);
+    ofpact_finish(ctx->ofpacts, &oc->ofpact);
+
+    /* Restore prerequisites. */
+    expr_destroy(ctx->prereqs);
+    ctx->prereqs = outer_prereqs;
+    add_prerequisite(ctx, "ip4");
+
+    /* Free memory. */
+    ofpbuf_uninit(&inner_ofpacts);
+}
+
+static void
 emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
@@ -239,6 +295,8 @@ parse_action(struct action_context *ctx)
         emit_ct(ctx, true, false);
     } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
         emit_ct(ctx, false, true);
+    } else if (lexer_match_id(ctx->lexer, "arp")) {
+        parse_arp_action(ctx);
     } else {
         action_syntax_error(ctx, "expecting action");
     }
