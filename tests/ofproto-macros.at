@@ -104,7 +104,7 @@ sim_add () {
 # "as $1 COMMAND..." sets those variables in a subshell and invokes COMMAND
 # there.
 as() {
-    if test "X$1" != X; then
+    if test "X$2" != X; then
         (ovs_setenv $1; shift; $@)
     else
         ovs_setenv $1
