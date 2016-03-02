@@ -111,7 +111,7 @@
 
     <h2>Logical Switch Datapaths</h2>
 
-    <h3>Ingress Table 0: Admission Control and Ingress Port Security</h3>
+    <h3>Ingress Table 0: Admission Control and Ingress Port Security - L2</h3>
 
     <p>
       Ingress table 0 contains these logical flows:
@@ -139,17 +139,101 @@
       be dropped.
     </p>
 
-    <h3>Ingress Table 1: <code>from-lport</code> Pre-ACLs</h3>
+    <h3>Ingress Table 1: Ingress Port Security - IP</h3>
 
     <p>
-      Ingress table 1 prepares flows for possible stateful ACL processing
-      in table 2.  It contains a priority-0 flow that simply moves
-      traffic to table 2.  If stateful ACLs are used in the logical
-      datapath, a priority-100 flow is added that sends IP packets to
-      the connection tracker before advancing to table 2.
+      Ingress table 1 contains these logical flows:
     </p>
 
-    <h3>Ingress table 2: <code>from-lport</code> ACLs</h3>
+    <ul>
+      <li>
+        <p>
+          For each element in the port security set having one or more IPv4 or
+          IPv6 addresses (or both),
+        </p>
+
+        <ul>
+          <li>
+            Priority 90 flow to allow IPv4 traffic if it has IPv4 addresses
+            which match the <code>inport</code>, valid <code>eth.src</code>
+            and valid <code>ip4.src</code> address(es).
+          </li>
+
+          <li>
+            Priority 90 flow to allow IPv6 traffic if it has IPv6 addresses
+            which match the <code>inport</code>, valid <code>eth.src</code> and
+            valid <code>ip6.src</code> address(es).
+          </li>
+
+          <li>
+            Priority 80 flow to drop IP (both IPv4 and IPv6) traffic which
+            match the <code>inport</code> and valid <code>eth.src</code>.
+          </li>
+        </ul>
+      </li>
+
+      <li>
+        One priority-0 fallback flow that matches all packets and advances to
+        table 2.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 2: Ingress Port Security - Neighbor discovery</h3>
+
+    <p>
+      Ingress table 2 contains these logical flows:
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          For each element in the port security set,
+        </p>
+
+        <ul>
+          <li>
+            Priority 90 flow to allow ARP traffic which match the
+            <code>inport</code> and valid <code>eth.src</code> and
+            <code>arp.sha</code>. If the element has one or more
+            IPv4 addresses, then it also matches the valid
+            <code>arp.spa</code>.
+          </li>
+
+          <li>
+            Priority 90 flow to allow IPv6 Neighbor Solicitation and
+            Advertisement traffic which match the <code>inport</code>,
+            valid <code>eth.src</code> and
+            <code>nd.sll</code>/<code>nd.tll</code>.
+            If the element has one or more IPv6 addresses, then it also
+            matches the valid <code>nd.target</code> address(es) for Neighbor
+            Advertisement traffic.
+          </li>
+
+          <li>
+            Priority 80 flow to drop ARP and IPv6 Neighbor Solicitation and
+            Advertisement traffic which match the <code>inport</code> and
+            valid <code>eth.src</code>.
+          </li>
+        </ul>
+      </li>
+
+      <li>
+        One priority-0 fallback flow that matches all packets and advances to
+        table 3.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 3: <code>from-lport</code> Pre-ACLs</h3>
+
+    <p>
+      Ingress table 3 prepares flows for possible stateful ACL processing
+      in table 4.  It contains a priority-0 flow that simply moves
+      traffic to table 4.  If stateful ACLs are used in the logical
+      datapath, a priority-100 flow is added that sends IP packets to
+      the connection tracker before advancing to table 4.
+    </p>
+
+    <h3>Ingress table 4: <code>from-lport</code> ACLs</h3>
 
     <p>
       Logical flows in this table closely reproduce those in the
@@ -163,7 +247,7 @@
     </p>
 
     <p>
-      Ingress table 2 also contains a priority 0 flow with action
+      Ingress table 4 also contains a priority 0 flow with action
       <code>next;</code>, so that ACLs allow packets by default.  If the
       logical datapath has a statetful ACL, the following flows will
       also be added:
@@ -195,7 +279,7 @@
       </li>
     </ul>
 
-    <h3>Ingress Table 3: ARP responder</h3>
+    <h3>Ingress Table 5: ARP responder</h3>
 
     <p>
       This table implements ARP responder for known IPs.  It contains these
@@ -205,7 +289,7 @@
     <ul>
       <li>
         Priority-100 flows to skip ARP responder if inport is of type
-        <code>localnet</code>, and advances directly to table 3.
+        <code>localnet</code>, and advances directly to table 6.
       </li>
 
       <li>
@@ -236,11 +320,11 @@ output;
 
       <li>
         One priority-0 fallback flow that matches all packets and advances to
-        table 4.
+        table 6.
       </li>
     </ul>
 
-    <h3>Ingress Table 4: Destination Lookup</h3>
+    <h3>Ingress Table 6: Destination Lookup</h3>
 
     <p>
       This table implements switching behavior.  It contains these logical
@@ -274,17 +358,26 @@ output;
     <h3>Egress Table 0: <code>to-lport</code> Pre-ACLs</h3>
 
     <p>
-      This is similar to ingress table 1 except for <code>to-lport</code>
+      This is similar to ingress table 3 except for <code>to-lport</code>
       traffic.
     </p>
 
     <h3>Egress Table 1: <code>to-lport</code> ACLs</h3>
 
     <p>
-      This is similar to ingress table 2 except for <code>to-lport</code> ACLs.
+      This is similar to ingress table 4 except for <code>to-lport</code> ACLs.
     </p>
 
-    <h3>Egress Table 2: Egress Port Security</h3>
+    <h3>Egress Table 2: Egress Port Security - IP</h3>
+
+    <p>
+      This is similar to the ingress port security logic in table 1 except
+      that <code>outport</code>, <code>eth.dst</code>, <code>ip4.dst</code>
+      and <code>ip6.dst</code> are checked instead of <code>inport</code>,
+      <code>eth.src</code>, <code>ip4.src</code> and <code>ip6.src</code>
+    </p>
+
+    <h3>Egress Table 3: Egress Port Security - L2</h3>
 
     <p>
       This is similar to the ingress port security logic in ingress table 0,

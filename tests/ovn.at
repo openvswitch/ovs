@@ -1543,3 +1543,321 @@ for daemon in ovn-controller ovn-northd ovsdb-server; do
     ovs-appctl -t $daemon exit
 done
 AT_CLEANUP
+
+# 3 hypervisors, one logical switch, 3 logical ports per hypervisor
+AT_SETUP([ovn -- portsecurity : 3 HVs, 1 LS, 3 lports/HV])
+AT_KEYWORDS([portsecurity])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Create hypervisors hv[123].
+# Add vif1[123] to hv1, vif2[123] to hv2, vif3[123] to hv3.
+# Add all of the vifs to a single logical switch lsw0.
+# Turn off port security on vifs vif[123]1
+# Turn on l2 port security on vifs vif[123]2
+# Turn of l2 and l3 port security on vifs vif[123]3
+# Make vif13, vif2[23], vif3[123] destinations for unknown MACs.
+ovn-nbctl lswitch-add lsw0
+net_add n1
+for i in 1 2 3; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+
+    for j in 1 2 3; do
+        ovs-vsctl add-port br-int vif$i$j -- set Interface vif$i$j external-ids:iface-id=lp$i$j options:tx_pcap=hv$i/vif$i$j-tx.pcap options:rxq_pcap=hv$i/vif$i$j-rx.pcap ofport-request=$i$j
+        ovn-nbctl lport-add lsw0 lp$i$j
+        if test $j = 1; then
+            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j" unknown
+        elif test $j = 2; then
+            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j"
+            ovn-nbctl lport-set-port-security lp$i$j f0:00:00:00:00:$i$j
+        else
+            extra_addr="f0:00:00:00:0$i:$i$j fe80::ea2a:eaff:fe28:$i$j"
+            ovn-nbctl lport-set-addresses lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j" "$extra_addr"
+            ovn-nbctl lport-set-port-security lp$i$j "f0:00:00:00:00:$i$j 192.168.0.$i$j" "$extra_addr"
+        fi
+    done
+done
+
+ovn-nbctl show
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+ovn-sbctl dump-flows -- list multicast_group
+
+echo "------ hv1 dump ------"
+as hv1 ovs-vsctl show
+as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+echo "------ hv2 dump ------"
+as hv2 ovs-vsctl show
+as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+echo "------ hv3 dump ------"
+as hv3 ovs-vsctl show
+as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv${1%?}
+}
+
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        : > $i$j.expected
+    done
+done
+
+# test_ip INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+#
+# This shell function causes an ip packet to be received on INPORT.
+# The packet's content has Ethernet destination DST and source SRC
+# (each exactly 12 hex digits) and Ethernet type ETHTYPE (4 hex digits).
+# The OUTPORTs (zero or more) list the VIFs on which the packet should
+# be received.  INPORT and the OUTPORTs are specified as lport numbers,
+# e.g. 11 for vif11.
+test_ip() {
+    # This packet has bad checksums but logical L3 routing doesn't check.
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}003511110008
+    shift; shift; shift; shift; shift
+    hv=`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
+    for outport; do
+        echo $packet | trim_zeros >> $outport.expected
+    done
+}
+
+# test_arp INPORT SHA SPA TPA DROP [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an lport number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 smac=$2 sha=$3 spa=$4 tpa=$5 drop=$6 reply_ha=$7
+    local request=ffffffffffff${smac}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+    hv=`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $request
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
+    if test $drop != 1; then
+        if test X$reply_ha == X; then
+            # Expect to receive the broadcast ARP on the other logical switch ports
+            # if no reply is expected.
+            local i j
+            for i in 1 2 3; do
+                for j in 1 2 3; do
+                    if test $i$j != $inport; then
+                        echo $request >> $i$j.expected
+                    fi
+                done
+            done
+        else
+            # Expect to receive the reply, if any.
+            local reply=${smac}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+            echo $reply >> $inport.expected
+        fi
+    fi
+}
+
+# test_ipv6 INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+# This function is similar to test_ip() except that it sends
+# ipv6 packet
+test_ipv6() {
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local packet=${dst_mac}${src_mac}86dd6000000000083aff${src_ip}${dst_ip}0000000000000000
+    shift; shift; shift; shift; shift
+    hv=`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
+    for outport; do
+        echo $packet | trim_zeros >> $outport.expected
+    done
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+# no port security
+sip=`ip_to_hex 192 168 0 12`
+tip=`ip_to_hex 192 168 0 13`
+# the arp packet should be allowed even if lp[123]1 is
+# not configured with mac f00000000023 and ip 192.168.0.12
+for i in 1 2 3; do
+    test_arp ${i}1 f00000000023 f00000000023 $sip $tip 0 f00000000013
+    for j in 1 2 3; do
+        if test $i != $j; then
+            test_ip ${i}1 f000000000${i}1 f000000000${j}1 $sip $tip ${j}1
+        fi
+    done
+done
+
+# l2 port security
+sip=`ip_to_hex 192 168 0 12`
+tip=`ip_to_hex 192 168 0 13`
+
+# arp packet should be allowed since lp22 is configured with
+# mac f00000000022
+test_arp 22 f00000000022 f00000000022 $sip $tip 0 f00000000013
+
+# arp packet should not be allowed since lp32 is not configured with
+# mac f00000000021
+test_arp 32 f00000000021 f00000000021 $sip $tip 1
+
+# arp packet with sha set to f00000000021 should not be allowed
+# for lp12
+test_arp 12 f00000000012 f00000000021 $sip $tip 1
+
+# ip packets should be allowed and received since lp[123]2 do not
+# have l3 port security
+sip=`ip_to_hex 192 168 0 55`
+tip=`ip_to_hex 192 168 0 66`
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        if test $i != $j; then
+            test_ip ${i}2 f000000000${i}2 f000000000${j}2 $sip $tip ${j}2
+        fi
+    done
+done
+
+# ipv6 packets should be received by lp[123]2
+# lp[123]1 can send ipv6 traffic as there is no port security
+sip=fe800000000000000000000000000000
+tip=ff020000000000000000000000000000
+
+for i in 1 2 3; do
+    test_ipv6 ${i}1 f000000000${i}1 f000000000${i}2 $sip $tip ${i}2
+done
+
+
+# l2 and l3 port security
+sip=`ip_to_hex 192 168 0 13`
+tip=`ip_to_hex 192 168 0 22`
+# arp packet should be allowed since lp13 is configured with
+# f00000000013 and 192.168.0.13
+test_arp 13 f00000000013 f00000000013 $sip $tip 0 f00000000022
+
+# the arp packet should be dropped because lp23 is not configured
+# with mac f00000000022
+sip=`ip_to_hex 192 168 0 13`
+tip=`ip_to_hex 192 168 0 22`
+test_arp 23 f00000000022 f00000000022 $sip $tip 1
+
+# the arp packet should be dropped because lp33 is not configured
+# with ip 192.168.0.55
+spa=`ip_to_hex 192 168 0 55`
+tpa=`ip_to_hex 192 168 0 22`
+test_arp 33 f00000000031 f00000000031 $spa $tpa 1
+
+# ip packets should not be received by lp[123]3 since
+# l3 port security is enabled
+sip=`ip_to_hex 192 168 0 55`
+tip=`ip_to_hex 192 168 0 66`
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        test_ip ${i}2 f000000000${i}2 f000000000${j}3 $sip $tip
+    done
+done
+
+# ipv6 packets should be dropped for lp[123]3 since
+# it is configured with only ipv4 address
+sip=fe800000000000000000000000000000
+tip=ff020000000000000000000000000000
+
+for i in 1 2 3; do
+    test_ipv6 ${i}3 f000000000${i}3 f00000000022 $sip $tip
+done
+
+# ipv6 packets should not be received by lp[123]3 with mac f000000000$[123]3
+# lp[123]1 can send ipv6 traffic as there is no port security
+for i in 1 2 3; do
+    test_ipv6 ${i}1 f000000000${i}1 f000000000${i}3 $sip $tip
+done
+
+# lp13 has extra port security with mac f0000000113 and ipv6 addr
+# fe80::ea2a:eaff:fe28:0012
+
+# ipv4 packet should be dropped for lp13 with mac f0000000113
+sip=`ip_to_hex 192 168 0 13`
+tip=`ip_to_hex 192 168 0 23`
+test_ip 13 f00000000113 f00000000023 $sip $tip
+
+# ipv6 packet should be received by lp[123]3 with mac f0000000{i}{i}3
+# and ip6.dst as fe80::ea2a:eaff:fe28:0{i}{i}3.
+# lp11 can send ipv6 traffic as there is no port security
+sip=ee800000000000000000000000000000
+for i in 1 2 3; do
+    tip=fe80000000000000ea2aeafffe2800{i}3
+    test_ipv6 11 f00000000011 f000000000{i}${i}3 $sip $tip {i}3
+done
+
+
+# ipv6 packet should not be received by lp33 with mac f0000000333
+# and ip6.dst as fe80::ea2a:eaff:fe28:0023 as it is
+# configured with fe80::ea2a:eaff:fe28:0033
+# lp11 can send ipv6 traffic as there is no port security
+
+sip=ee800000000000000000000000000000
+tip=fe80000000000000ea2aeafffe280023
+test_ipv6 11 f00000000011 f00000000333 $sip $tip
+
+# ipv6 packet should be allowed for lp[123]3 with mac f0000000{i}{i}3
+# and ip6.src fe80::ea2a:eaff:fe28:0{i}{i}3 and ip6.src ::.
+# and should be dropped for any other ip6.src
+# lp21 can receive ipv6 traffic as there is no port security
+
+tip=ee800000000000000000000000000000
+for i in 1 2 3; do
+    sip=fe80000000000000ea2aeafffe2800${i}3
+    test_ipv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip 21
+
+    sip=00000000000000000000000000000000
+    test_ipv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip 21
+
+    # should be dropped
+    sip=ae80000000000000ea2aeafffe2800aa
+    test_ipv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip
+done
+
+
+# Allow some time for packet forwarding.
+
+# XXX This can be improved.
+sleep 1
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        file=hv$i/vif$i$j-tx.pcap
+        echo $file
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
+        sort $i$j.expected > expout
+        AT_CHECK([sort $i$j.packets], [0], [expout])
+        echo
+    done
+done
+
+# Gracefully terminate daemons
+for daemon in ovn-controller ovn-northd ovsdb-server; do
+    ovs-appctl -t $daemon exit
+done
+AT_CLEANUP
