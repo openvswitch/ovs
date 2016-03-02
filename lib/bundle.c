@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <inttypes.h>
 
+#include "colors.h"
 #include "dynamic-string.h"
 #include "multipath.h"
 #include "meta-flow.h"
@@ -300,22 +301,22 @@ bundle_format(const struct ofpact_bundle *bundle, struct ds *s)
 
     action = bundle->dst.field ? "bundle_load" : "bundle";
 
-    ds_put_format(s, "%s(%s,%"PRIu16",%s,%s,", action, fields,
-                  bundle->basis, algorithm, "ofport");
+    ds_put_format(s, "%s%s(%s%s,%"PRIu16",%s,%s,", colors.paren, action,
+                  colors.end, fields, bundle->basis, algorithm, "ofport");
 
     if (bundle->dst.field) {
         mf_format_subfield(&bundle->dst, s);
-        ds_put_cstr(s, ",");
+        ds_put_char(s, ',');
     }
 
-    ds_put_cstr(s, "slaves:");
+    ds_put_format(s, "%sslaves:%s", colors.param, colors.end);
     for (i = 0; i < bundle->n_slaves; i++) {
         if (i) {
-            ds_put_cstr(s, ",");
+            ds_put_char(s, ',');
         }
 
         ofputil_format_port(bundle->slaves[i], s);
     }
 
-    ds_put_cstr(s, ")");
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
