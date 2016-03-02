@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1254,35 +1254,45 @@ packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
  * 'arp_op', 'arp_sha', 'arp_tha', 'arp_spa', and 'arp_tpa'.  The outer
  * Ethernet frame is initialized with Ethernet source 'arp_sha' and destination
  * 'arp_tha', except that destination ff:ff:ff:ff:ff:ff is used instead if
- * 'broadcast' is true. */
+ * 'broadcast' is true.  Points the L3 header to the ARP header. */
 void
 compose_arp(struct dp_packet *b, uint16_t arp_op,
             const struct eth_addr arp_sha, const struct eth_addr arp_tha,
             bool broadcast, ovs_be32 arp_spa, ovs_be32 arp_tpa)
 {
-    struct eth_header *eth;
-    struct arp_eth_header *arp;
+    compose_arp__(b);
 
+    struct eth_header *eth = dp_packet_l2(b);
+    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
+    eth->eth_src = arp_sha;
+
+    struct arp_eth_header *arp = dp_packet_l3(b);
+    arp->ar_op = htons(arp_op);
+    arp->ar_sha = arp_sha;
+    arp->ar_tha = arp_tha;
+    put_16aligned_be32(&arp->ar_spa, arp_spa);
+    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
+}
+
+/* Clears 'b' and replaces its contents by an ARP frame.  Sets the fields in
+ * the Ethernet and ARP headers that are fixed for ARP frames to those fixed
+ * values, and zeroes the other fields.  Points the L3 header to the ARP
+ * header. */
+void
+compose_arp__(struct dp_packet *b)
+{
     dp_packet_clear(b);
     dp_packet_prealloc_tailroom(b, ARP_PACKET_SIZE);
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
 
-    eth = dp_packet_put_uninit(b, sizeof *eth);
-    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
-    eth->eth_src = arp_sha;
+    struct eth_header *eth = dp_packet_put_zeros(b, sizeof *eth);
     eth->eth_type = htons(ETH_TYPE_ARP);
 
-    arp = dp_packet_put_uninit(b, sizeof *arp);
+    struct arp_eth_header *arp = dp_packet_put_zeros(b, sizeof *arp);
     arp->ar_hrd = htons(ARP_HRD_ETHERNET);
     arp->ar_pro = htons(ARP_PRO_IP);
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
-    arp->ar_op = htons(arp_op);
-    arp->ar_sha = arp_sha;
-    arp->ar_tha = arp_tha;
-
-    put_16aligned_be32(&arp->ar_spa, arp_spa);
-    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
 
     dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);

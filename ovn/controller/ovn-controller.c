@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,7 +297,7 @@ main(int argc, char *argv[])
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
-            pinctrl_run(&ctx, br_int);
+            pinctrl_run(br_int);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &flow_table, &ct_zones, &local_datapaths);
