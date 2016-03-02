@@ -2041,6 +2041,17 @@ xsleep(unsigned int seconds)
     ovsrcu_quiesce_end();
 }
 
+/* Determine whether standard output is a tty or not. This is useful to decide
+ * whether to use color output or not when --color option for utilities is set
+ * to `auto`.
+ */
+bool
+is_stdout_a_tty(void)
+{
+    char const *t = getenv("TERM");
+    return (isatty(STDOUT_FILENO) && t && strcmp(t, "dumb") != 0);
+}
+
 #ifdef _WIN32
 
 char *
