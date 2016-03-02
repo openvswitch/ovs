@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "byte-order.h"
+#include "colors.h"
 #include "coverage.h"
 #include "csum.h"
 #include "dynamic-string.h"
@@ -984,7 +985,7 @@ format_flags_masked(struct ds *ds, const char *name,
                     uint32_t mask, uint32_t max_mask)
 {
     if (name) {
-        ds_put_format(ds, "%s=", name);
+        ds_put_format(ds, "%s%s=%s", colors.param, name, colors.end);
     }
 
     if (mask == max_mask) {
