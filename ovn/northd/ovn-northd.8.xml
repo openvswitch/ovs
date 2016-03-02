@@ -241,9 +241,11 @@
       for the <code>from-lport</code> direction.  <code>allow</code>
       ACLs translate into logical flows with the <code>next;</code>
       action, <code>allow-related</code> ACLs translate into logical
-      flows with the <code>ct_next;</code> action, other ACLs translate
-      to <code>drop;</code>.  The <code>priority</code> values from the
-      <code>ACL</code> table are used directly.
+      flows with the <code>ct_commit; next;</code> actions, other ACLs
+      translate to <code>drop;</code>.  The <code>priority</code> values
+      from the <code>ACL</code> table have a limited range and have 1000
+      added to them to leave room for OVN default flows at both higher
+      and lower priorities.
     </p>
 
     <p>
