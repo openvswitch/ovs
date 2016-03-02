@@ -940,8 +940,15 @@
 
         <dt><code>ct_commit;</code></dt>
         <dd>
-          Commit the flow to the connection tracking entry associated
-          with it by a previous call to <code>ct_next</code>.
+          <p>
+            Commit the flow to the connection tracking entry associated
+            with it by a previous call to <code>ct_next</code>.
+          </p>
+          <p>
+            Note that if you want processing to continue in the next table,
+            you must execute the <code>next</code> action after
+            <code>ct_commit</code>.
+          </p>
         </dd>
 
         <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>
