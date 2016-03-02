@@ -939,15 +939,31 @@
         </dd>
 
         <dt><code>ct_commit;</code></dt>
+        <dt><code>ct_commit(ct_mark=<var>value[/mask]</var>);</code></dt>
+        <dt><code>ct_commit(ct_label=<var>value[/mask]</var>);</code></dt>
+        <dt><code>ct_commit(ct_mark=<var>value[/mask]</var>, ct_label=<var>value[/mask]</var>);</code></dt>
         <dd>
           <p>
-            Commit the flow to the connection tracking entry associated
-            with it by a previous call to <code>ct_next</code>.
+            Commit the flow to the connection tracking entry associated with it
+            by a previous call to <code>ct_next</code>.  When
+            <code>ct_mark=<var>value[/mask]</var></code> and/or
+            <code>ct_label=<var>value[/mask]</var></code> are supplied,
+            <code>ct_mark</code> and/or <code>ct_label</code> will be set to the
+            values indicated by <var>value[/mask]</var> on the connection
+            tracking entry. <code>ct_mark</code> is a 32-bit field.
+            <code>ct_label</code> is technically a 128-bit field, though OVN
+            currently only supports 64-bits and will later be extended to
+            support the full 128-bits.
           </p>
+
           <p>
             Note that if you want processing to continue in the next table,
             you must execute the <code>next</code> action after
-            <code>ct_commit</code>.
+            <code>ct_commit</code>.  You may also leave out <code>next</code>
+            which will commit connection tracking state, and then drop the
+            packet.  This could be useful for setting <code>ct_mark</code>
+            on a connection tracking entry before dropping a packet,
+            for example.
           </p>
         </dd>
 

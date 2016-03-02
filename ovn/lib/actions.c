@@ -624,7 +624,9 @@ parse_put_dhcp_opts_action(struct action_context *ctx,
 }
 
 static void
-emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
+emit_ct(struct action_context *ctx, bool recirc_next, bool commit,
+        int *ct_mark, int *ct_mark_mask,
+        ovs_be128 *ct_label, ovs_be128 *ct_label_mask)
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
     ct->flags |= commit ? NX_CT_F_COMMIT : 0;
@@ -650,6 +652,149 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 
     /* CT only works with IP, so set up a prerequisite. */
     add_prerequisite(ctx, "ip");
+
+    size_t set_field_offset = ctx->ofpacts->size;
+    ofpbuf_pull(ctx->ofpacts, set_field_offset);
+
+    if (ct_mark) {
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ctx->ofpacts);
+        sf->field = mf_from_id(MFF_CT_MARK);
+        sf->value.be32 = htonl(*ct_mark);
+        sf->mask.be32 = ct_mark_mask ? htonl(*ct_mark_mask) : OVS_BE32_MAX;
+    }
+
+    if (ct_label) {
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ctx->ofpacts);
+        sf->field = mf_from_id(MFF_CT_LABEL);
+        sf->value.be128 = *ct_label;
+        sf->mask.be128 = ct_label_mask ? *ct_label_mask : OVS_BE128_MAX;
+    }
+
+    ctx->ofpacts->header = ofpbuf_push_uninit(ctx->ofpacts, set_field_offset);
+    ct = ctx->ofpacts->header;
+    ofpact_finish(ctx->ofpacts, &ct->ofpact);
+}
+
+/* Parse an argument to the ct_commit(); action.  Supported arguments include:
+ *
+ *      ct_mark=<value>[/<mask>]
+ *      ct_label=<value>[/<mask>]
+ *
+ * If a comma separates the current argument from the next argument, this
+ * function will consume it.
+ *
+ * set_mark - This will be set to true if a value for ct_mark was successfully
+ *            parsed. Otherwise, it will be unchanged.
+ * mark_value - If set_mark was set to true, this will contain the value
+ *              parsed for ct_mark.
+ * mark_mask - If set_mark was set to true, this will contain the mask
+ *             for ct_mark if one was found.  Otherwise, it will be
+ *             unchanged, so the caller should initialize this to an
+ *             appropriate value.
+ * set_label - This will be set to true if a value for ct_label was successfully
+ *             parsed. Otherwise, it will be unchanged.
+ * label_value - If set_label was set to true, this will contain the value
+ *               parsed for ct_label.
+ * label_mask - If set_label was set to true, this will contain the mask
+ *              for ct_label if one was found.  Otherwise, it will be
+ *              unchanged, so the caller should initialize this to an
+ *              appropriate value.
+ *
+ * Return true after successfully parsing an argument.  false on failure. */
+static bool
+parse_ct_commit_arg(struct action_context *ctx,
+                    bool *set_mark, int *mark_value, int *mark_mask,
+                    bool *set_label, ovs_be128 *label_value,
+                    ovs_be128 *label_mask)
+{
+    if (lexer_match_id(ctx->lexer, "ct_mark")) {
+        if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+            action_error(ctx, "Expected '=' after argument to ct_commit");
+            return false;
+        }
+        if (ctx->lexer->token.type == LEX_T_INTEGER) {
+            *mark_value = ntohll(ctx->lexer->token.value.integer);
+        } else if (ctx->lexer->token.type == LEX_T_MASKED_INTEGER) {
+            *mark_value = ntohll(ctx->lexer->token.value.integer);
+            *mark_mask = ntohll(ctx->lexer->token.mask.integer);
+        } else {
+            action_error(ctx, "Expected integer after 'ct_mark='");
+            return false;
+        }
+        lexer_get(ctx->lexer);
+        *set_mark = true;
+    } else if (lexer_match_id(ctx->lexer, "ct_label")) {
+        if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+            action_error(ctx, "Expected '=' after argument to ct_commit");
+            return false;
+        }
+        if (ctx->lexer->token.type == LEX_T_INTEGER) {
+            label_value->be64.lo = ctx->lexer->token.value.integer;
+        } else if (ctx->lexer->token.type == LEX_T_MASKED_INTEGER) {
+            /* XXX Technically, ct_label is a 128-bit field.  The lexer
+             * only supports 64-bit integers, so that's all we support
+             * here.  More work is needed to use parse_int_string()
+             * to support the full 128-bits. */
+            label_value->be64.lo = ctx->lexer->token.value.integer;
+            label_mask->be64.hi = 0;
+            label_mask->be64.lo = ctx->lexer->token.mask.integer;
+        } else {
+            action_error(ctx, "Expected integer after 'ct_label='");
+            return false;
+        }
+        lexer_get(ctx->lexer);
+        *set_label = true;
+    } else {
+        action_error(ctx, "Expected argument to ct_commit()");
+        return false;
+    }
+
+    if (lexer_match(ctx->lexer, LEX_T_COMMA)) {
+        /* A comma is valid after an argument, but only if another
+         * argument is present (not a closing paren) */
+        if (lexer_lookahead(ctx->lexer) == LEX_T_RPAREN) {
+            action_error(ctx, "Another argument to ct_commit() expected "
+                              "after comma.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void
+parse_ct_commit_action(struct action_context *ctx)
+{
+    if (!lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        /* ct_commit; */
+        emit_ct(ctx, false, true, NULL, NULL, NULL, NULL);
+        return;
+    }
+
+    /* ct_commit();
+     * ct_commit(ct_mark=0);
+     * ct_commit(ct_label=0);
+     * ct_commit(ct_mark=0, ct_label=0); */
+
+    bool set_mark = false;
+    bool set_label = false;
+    int mark_value = 0;
+    int mark_mask = ~0;
+    ovs_be128 label_value = { .be32 = { 0, }, };
+    ovs_be128 label_mask = OVS_BE128_MAX;
+
+    while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+        if (!parse_ct_commit_arg(ctx, &set_mark, &mark_value, &mark_mask,
+                                 &set_label, &label_value, &label_mask)) {
+            return;
+        }
+    }
+
+    emit_ct(ctx, false, true,
+            set_mark ? &mark_value : NULL,
+            set_mark ? &mark_mask : NULL,
+            set_label ? &label_value : NULL,
+            set_label ? &label_mask : NULL);
 }
 
 static void
@@ -755,9 +900,9 @@ parse_action(struct action_context *ctx)
             action_syntax_error(ctx, "expecting `--'");
         }
     } else if (lexer_match_id(ctx->lexer, "ct_next")) {
-        emit_ct(ctx, true, false);
+        emit_ct(ctx, true, false, NULL, NULL, NULL, NULL);
     } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
-        emit_ct(ctx, false, true);
+        parse_ct_commit_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "ct_dnat")) {
         parse_ct_nat(ctx, false);
     } else if (lexer_match_id(ctx->lexer, "ct_snat")) {

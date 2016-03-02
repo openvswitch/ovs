@@ -38,6 +38,12 @@ ovn-sb.xml includes a tentative specification for this action.
 IPv6 will probably need an action or actions for ND that is similar to
 the "arp" action, and an action for generating
 
+*** ct_label 128-bit support.
+
+We only support 64-bits for the ct_label argument to ct_commit(), but ct_label
+is a 128-bit field.  The OVN lexer only supports parsing 64-bit integers, but
+we can use parse_int_string() to support larger integers.
+
 ** IPv6
 
 *** ND versus ARP

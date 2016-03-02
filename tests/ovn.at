@@ -506,6 +506,12 @@ ip.ttl => Syntax error at end of input expecting `--'.
 # conntrack
 ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
 ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
+ct_commit(); => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
+ct_commit(ct_mark=1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1->ct_mark)), prereqs=ip
+ct_commit(ct_mark=1/1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1/0x1->ct_mark)), prereqs=ip
+ct_commit(ct_label=1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1->ct_label)), prereqs=ip
+ct_commit(ct_label=1/1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1/0x1->ct_label)), prereqs=ip
+ct_commit(ct_mark=1, ct_label=2); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1->ct_mark,set_field:0x2->ct_label)), prereqs=ip
 
 # dnat
 ct_dnat; => actions=ct(table=27,zone=NXM_NX_REG3[0..15],nat), prereqs=ip
