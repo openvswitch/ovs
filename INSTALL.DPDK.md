@@ -207,6 +207,26 @@ Using the DPDK with ovs-vswitchd:
    ./ovs-ofctl add-flow br0 in_port=2,action=output:1
    ```
 
+8. QoS usage example
+
+   Assuming you have a vhost-user port transmitting traffic consisting of
+   packets of size 64 bytes, the following command would limit the egress
+   transmission rate of the port to ~1,000,000 packets per second:
+
+   `ovs-vsctl set port vhost-user0 qos=@newqos -- --id=@newqos create qos
+   type=egress-policer other-config:cir=46000000 other-config:cbs=2048`
+
+   To examine the QoS configuration of the port:
+
+   `ovs-appctl -t ovs-vswitchd qos/show vhost-user0`
+
+   To clear the QoS configuration from the port and ovsdb use the following:
+
+   `ovs-vsctl destroy QoS vhost-user0 -- clear Port vhost-user0 qos`
+
+   For more details regarding egress-policer parameters please refer to the
+   vswitch.xml.
+
 Performance Tuning:
 -------------------
 
