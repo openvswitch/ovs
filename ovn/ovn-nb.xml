@@ -54,7 +54,15 @@
         logical port.
       </p>
     </column>
+    <column name="services">
+      <p>
+        The logical service connected to the logical switch.
+      </p>
 
+      <p>
+        A logical service should not cross logical switch boundaries.
+      </p>
+    </column>
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
@@ -66,6 +74,36 @@
     </group>
   </table>
 
+ <table name="Logical_Service" title="Logical service">
+    <p>
+      Each row represents one logical service.
+    </p>
+
+    <column name="name">
+      <p>
+        A name for the logical serivce.  This name has no special meaning or purpose
+        other than to provide convenience for human interaction with the ovn-nb
+        database.  There is no requirement for the name to be unique.  The
+        logical service's UUID should be used as the unique identifier.
+      </p>
+    </column>
+
+    <column name="ports">
+      <p>
+        The logical ports connected to the logical service.
+      </p>
+
+      <p>
+        It is an error for multiple logical switches to include the same
+        logical port.
+      </p>
+    </column>
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
   <table name="Logical_Port" title="L2 logical switch port">
     <p>
       A port within an L2 logical switch.

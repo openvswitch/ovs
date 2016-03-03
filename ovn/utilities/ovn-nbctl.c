@@ -296,6 +296,12 @@ Logical switch commands:\n\
   lswitch-del LSWITCH       delete LSWITCH and all its ports\n\
   lswitch-list              print the names of all logical switches\n\
 \n\
+Logical service commands:\n\
+  lservice-add LSERVICE LPORT-APP LPORT-TRUST LPORT-UNTRUST\n\
+                           create a logical service before an application\n\
+  lservice-del LSERVICE    delete a service, does not delete attached ports\n\
+  lservice-list            print the names of all logical services and attached ports\n\
+\n\
 ACL commands:\n\
   acl-add LSWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
                             add an ACL to LSWITCH\n\
@@ -348,7 +354,7 @@ Other options:\n\
   -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
 }
-
+
 static const struct nbrec_logical_switch *
 lswitch_by_name_or_uuid(struct ctl_context *ctx, const char *id)
 {
@@ -388,7 +394,45 @@ lswitch_by_name_or_uuid(struct ctl_context *ctx, const char *id)
 
     return lswitch;
 }
+static const struct nbrec_logical_service *
+lservice_by_name_or_uuid(struct ctl_context *ctx, const char *id)
+{
+    const struct nbrec_logical_service *lservice = NULL;
+    bool is_uuid = false;
+    bool duplicate = false;
+    struct uuid lservice_uuid;
 
+    if (uuid_from_string(&lservice_uuid, id)) {
+        is_uuid = true;
+        lservice = nbrec_logical_service_get_for_uuid(ctx->idl,
+                                                    &lservice_uuid);
+    }
+
+    if (!lservice) {
+        const struct nbrec_logical_service *iter;
+
+        NBREC_LOGICAL_SERVICE_FOR_EACH(iter, ctx->idl) {
+            if (strcmp(iter->name, id)) {
+                continue;
+            }
+            if (lservice) {
+                VLOG_WARN("There is more than one logical service named '%s'. "
+                        "Use a UUID.", id);
+                lservice = NULL;
+                duplicate = true;
+                break;
+            }
+            lservice = iter;
+        }
+    }
+
+    if (!lservice && !duplicate) {
+        VLOG_WARN("lservice not found for %s: '%s'",
+                is_uuid ? "UUID" : "name", id);
+    }
+
+    return lservice;
+}
 static void
 print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
 {
@@ -478,7 +522,52 @@ nbctl_lswitch_list(struct ctl_context *ctx)
     smap_destroy(&lswitches);
     free(nodes);
 }
-
+
+static void
+nbctl_lservice_add(struct ctl_context *ctx)
+{
+    struct nbrec_logical_service *lservice;
+
+    lservice = nbrec_logical_service_insert(ctx->txn);
+    if (ctx->argc == 2) {
+        nbrec_logical_service_set_name(lservice, ctx->argv[1]);
+    }
+}
+
+static void
+nbctl_lservice_del(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_service *lservice;
+
+    lservice = lservice_by_name_or_uuid(ctx, id);
+    if (!lservice) {
+        return;
+    }
+
+    nbrec_logical_service_delete(lservice);
+}
+
+static void
+nbctl_lservice_list(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_service *lservice;
+    struct smap lservices;
+
+    smap_init(&lservices);
+    NBREC_LOGICAL_SERVICE_FOR_EACH(lservice, ctx->idl) {
+        smap_add_format(&lservices, lservice->name, UUID_FMT " (%s)",
+                        UUID_ARGS(&lservice->header_.uuid), lservice->name);
+    }
+    const struct smap_node **nodes = smap_sort(&lservices);
+    for (size_t i = 0; i < smap_count(&lservices); i++) {
+        const struct smap_node *node = nodes[i];
+        ds_put_format(&ctx->output, "%s\n", node->value);
+    }
+    smap_destroy(&lservices);
+    free(nodes);
+}
+
 static const struct nbrec_logical_port *
 lport_by_name_or_uuid(struct ctl_context *ctx, const char *id)
 {
@@ -1311,6 +1400,13 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "lswitch-del", 1, 1, "LSWITCH", NULL, nbctl_lswitch_del,
       NULL, "", RW },
     { "lswitch-list", 0, 0, "", NULL, nbctl_lswitch_list, NULL, "", RO },
+
+    /* lservice commands. */
+    { "lservice-add", 4, 4, "LSERVICE LPORT LPORT LPORT", NULL, nbctl_lservice_add,
+      NULL, "", RW },
+    { "lservice-del", 1, 1, "LSWITCH", NULL, nbctl_lservice_del,
+      NULL, "", RW },
+    { "lservice-list", 0, 0, "", NULL, nbctl_lservice_list, NULL, "", RO },
 
     /* acl commands. */
     { "acl-add", 5, 5, "LSWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
