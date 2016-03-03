@@ -1732,7 +1732,7 @@ populate the \fBct_label\fR flow field when the packet is sent to the
 connection tracker with the \fBtable\fR specified.
 .RE
 .IP
-The \fBcommit\fR parameter should be specified to use \fBexec(...)\fR.
+The \fBcommit\fR parameter must be specified to use \fBexec(...)\fR.
 .
 .IP \fBalg=\fIalg\fR
 Specify application layer gateway \fIalg\fR to track specific connection
@@ -1743,6 +1743,9 @@ Look for negotiation of FTP data connections. If a subsequent FTP data
 connection arrives which is related, the \fBct\fR action will set the
 \fBrel\fR flag in the \fBct_state\fR field for packets sent through \fBct\fR.
 .RE
+.
+.IP
+The \fBcommit\fR parameter must be specified to use \fBalg=\fIalg\fR.
 .
 .IP
 When committing related connections, the \fBct_mark\fR for that connection is
