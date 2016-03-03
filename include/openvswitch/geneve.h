@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef GENEVE_H
-#define GENEVE_H 1
+#ifndef OPENVSWITCH_GENEVE_H
+#define OPENVSWITCH_GENEVE_H 1
 
 #include "openvswitch/types.h"
 

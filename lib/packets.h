@@ -23,7 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
-#include "geneve.h"
+#include "openvswitch/geneve.h"
 #include "openvswitch/types.h"
 #include "odp-netlink.h"
 #include "random.h"

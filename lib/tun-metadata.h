@@ -20,10 +20,10 @@
 #include <stdint.h>
 
 #include "dynamic-string.h"
-#include "geneve.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/geneve.h"
 
 struct flow_tnl;
 struct match;
