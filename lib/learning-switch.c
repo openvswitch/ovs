@@ -31,7 +31,6 @@
 #include "mac-learning.h"
 #include "ofpbuf.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
@@ -42,6 +41,7 @@
 #include "shash.h"
 #include "simap.h"
 #include "timeval.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 

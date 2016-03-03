@@ -27,9 +27,9 @@
 #include "nx-match.h"
 #include "ofpbuf.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(bundle);

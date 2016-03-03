@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "ofp-errors.h"
 #include <errno.h>
 #include "byte-order.h"
 #include "dynamic-string.h"
@@ -23,6 +22,7 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_errors);

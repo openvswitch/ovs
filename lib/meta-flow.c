@@ -26,7 +26,6 @@
 #include "classifier.h"
 #include "dynamic-string.h"
 #include "nx-match.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ovs-thread.h"
 #include "packets.h"
@@ -36,6 +35,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);

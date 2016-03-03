@@ -25,10 +25,10 @@
 #include "meta-flow.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-errors.h"
 #include "unaligned.h"
 
 

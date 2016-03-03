@@ -35,7 +35,6 @@
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -59,6 +58,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "unixctl.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "bundles.h"
 

@@ -25,8 +25,8 @@
 #include "dynamic-string.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
+#include "openvswitch/ofp-errors.h"
 #include "openflow/nicira-ext.h"
 #include "packets.h"
 

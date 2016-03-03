@@ -20,7 +20,7 @@
 
 #include "byte-order.h"
 #include "ofpbuf.h"
-#include "ofp-errors.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
 #include "uuid.h"
