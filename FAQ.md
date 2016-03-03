@@ -1596,7 +1596,7 @@ A: This is a Open vSwitch extension to OpenFlow error codes.  Open
    If you want to dissect the extended error message yourself, the
    format is documented in include/openflow/nicira-ext.h in the Open
    vSwitch source distribution.  The extended error codes are
-   documented in lib/ofp-errors.h.
+   documented in include/openvswitch/ofp-errors.h.
 
 Q1: Some of the traffic that I'd expect my OpenFlow controller to see
     doesn't actually appear through the OpenFlow connection, even

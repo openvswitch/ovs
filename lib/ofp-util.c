@@ -34,7 +34,6 @@
 #include "nx-match.h"
 #include "id-pool.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-prop.h"
 #include "ofp-util.h"
@@ -46,6 +45,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "type-props.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "bitmap.h"
 

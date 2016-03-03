@@ -49,7 +49,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "ofp-errors.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 struct ofpbuf;

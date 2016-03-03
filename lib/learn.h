@@ -18,7 +18,7 @@
 #define LEARN_H 1
 
 #include "compiler.h"
-#include "ofp-errors.h"
+#include "openvswitch/ofp-errors.h"
 
 struct ds;
 struct flow;

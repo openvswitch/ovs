@@ -21,11 +21,11 @@
 #include "hmap.h"
 #include "list.h"
 #include "match.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofproto.h"
 #include "ofproto-provider.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 struct nlattr;

@@ -33,7 +33,6 @@
 #include "netlink.h"
 #include "odp-execute.h"
 #include "odp-util.h"
-#include "ofp-errors.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -49,6 +48,7 @@
 #include "util.h"
 #include "uuid.h"
 #include "valgrind.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif);

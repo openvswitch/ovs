@@ -26,7 +26,6 @@
 #include "hmap.h"
 #include "meta-flow.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
@@ -35,6 +34,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(nx_match);

@@ -144,7 +144,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-actions.c \
 	lib/ofp-actions.h \
 	lib/ofp-errors.c \
-	lib/ofp-errors.h \
 	lib/ofp-msgs.c \
 	lib/ofp-msgs.h \
 	lib/ofp-parse.c \
@@ -494,10 +493,10 @@ lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
 EXTRA_DIST += build-aux/extract-ofp-actions
 
-lib/ofp-errors.inc: lib/ofp-errors.h include/openflow/openflow-common.h \
+lib/ofp-errors.inc: include/openvswitch/ofp-errors.h include/openflow/openflow-common.h \
 	$(srcdir)/build-aux/extract-ofp-errors
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-errors \
-		$(srcdir)/lib/ofp-errors.h \
+		$(srcdir)/include/openvswitch/ofp-errors.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
 lib/ofp-errors.lo: lib/ofp-errors.inc

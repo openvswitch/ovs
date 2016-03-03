@@ -20,10 +20,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "meta-flow.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 /* List of OVS abstracted actions.
