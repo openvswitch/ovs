@@ -967,9 +967,9 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     for (i = 0; i < bundle->n_slaves; i++) {
         uint16_t ofp_port = ntohs(((ovs_be16 *)(nab + 1))[i]);
         ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
+        bundle = ofpacts->header;
     }
 
-    bundle = ofpacts->header;
     ofpact_update_len(ofpacts, &bundle->ofpact);
 
     if (!error) {
