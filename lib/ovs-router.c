@@ -33,7 +33,7 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "netdev.h"
 #include "packets.h"
 #include "seq.h"

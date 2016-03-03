@@ -36,7 +36,7 @@
 #include "colors.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "nx-match.h"
 #include "odp-util.h"

@@ -19,7 +19,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "expr.h"
 #include "lex.h"
 #include "logical-fields.h"

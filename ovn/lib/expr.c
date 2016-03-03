@@ -16,7 +16,7 @@
 
 #include <config.h>
 #include "expr.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "lex.h"
 #include "logical-fields.h"

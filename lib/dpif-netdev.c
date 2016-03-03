@@ -39,7 +39,7 @@
 #include "dpif.h"
 #include "dpif-provider.h"
 #include "dummy.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fat-rwlock.h"
 #include "flow.h"
 #include "hmapx.h"

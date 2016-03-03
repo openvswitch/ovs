@@ -19,7 +19,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "packets.h"
 #include "util.h"

@@ -34,7 +34,7 @@
 
 #include "bitmap.h"
 #include "dpif-provider.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "fat-rwlock.h"
 #include "netdev.h"

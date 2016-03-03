@@ -18,7 +18,7 @@
 #undef NDEBUG
 #include "odp-util.h"
 #include <stdio.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "match.h"
 #include "ofp-parse.h"

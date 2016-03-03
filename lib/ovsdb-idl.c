@@ -24,7 +24,7 @@
 
 #include "bitmap.h"
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
 #include "jsonrpc.h"

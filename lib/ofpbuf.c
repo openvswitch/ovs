@@ -18,7 +18,7 @@
 #include "ofpbuf.h"
 #include <stdlib.h>
 #include <string.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "netdev-dpdk.h"
 #include "util.h"
 

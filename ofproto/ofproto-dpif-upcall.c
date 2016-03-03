@@ -23,7 +23,7 @@
 #include "coverage.h"
 #include "cmap.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "latch.h"

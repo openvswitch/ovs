@@ -20,7 +20,7 @@
 #include "byte-order.h"
 #include "compiler.h"
 #include "ct-dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "ofpbuf.h"
 #include "timeval.h"

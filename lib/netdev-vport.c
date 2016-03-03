@@ -32,7 +32,7 @@
 #include "dirs.h"
 #include "dpif.h"
 #include "dp-packet.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"

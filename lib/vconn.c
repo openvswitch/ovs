@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-msgs.h"

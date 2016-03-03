@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include "byte-order.h"
 #include "colors.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ofp-util.h"
 #include "packets.h"
 #include "tun-metadata.h"

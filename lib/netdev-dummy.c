@@ -22,7 +22,7 @@
 
 #include "dp-packet.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "list.h"
 #include "netdev-provider.h"

@@ -24,7 +24,7 @@
 #include <netinet/in.h>
 
 #include "byte-order.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "learn.h"
 #include "meta-flow.h"
 #include "multipath.h"

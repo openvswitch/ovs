@@ -23,7 +23,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netlink.h"

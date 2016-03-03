@@ -21,7 +21,7 @@
 
 #include "bitmap.h"
 #include "column.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "monitor.h"
 #include "json.h"
 #include "jsonrpc.h"

@@ -30,7 +30,7 @@
 #include "byte-order.h"
 #include "colors.h"
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "learn.h"
 #include "multipath.h"

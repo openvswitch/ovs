@@ -20,7 +20,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include "byte-order.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "odp-util.h"
 #include "ofp-util.h"
 #include "packets.h"

@@ -19,7 +19,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 

@@ -24,7 +24,7 @@
 #include <netinet/ip6.h>
 
 #include "classifier.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
 #include "ofp-util.h"
 #include "ovs-thread.h"

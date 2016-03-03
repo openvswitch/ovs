@@ -24,7 +24,7 @@
 #include <limits.h>
 #include <string.h>
 
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "shash.h"
 #include "unicode.h"

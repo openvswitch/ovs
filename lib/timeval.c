@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dummy.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"

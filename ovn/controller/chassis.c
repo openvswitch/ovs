@@ -16,8 +16,8 @@
 #include <config.h>
 #include "chassis.h"
 
-#include "lib/dynamic-string.h"
 #include "lib/vswitch-idl.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
