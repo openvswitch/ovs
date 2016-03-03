@@ -776,6 +776,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
     }
 
     ovs_mutex_lock(&dpdk_mutex);
+    rte_free(dev->tx_q);
     list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
     ovs_mutex_unlock(&dpdk_mutex);
