@@ -19,7 +19,7 @@
 #include <stdlib.h>
 
 #include "connectivity.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "dp-packet.h"

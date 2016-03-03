@@ -29,7 +29,7 @@
 #include "colors.h"
 #include "coverage.h"
 #include "csum.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "jhash.h"
 #include "match.h"

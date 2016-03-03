@@ -33,7 +33,7 @@
 #include "coverage.h"
 #include "dp-packet.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "in-band.h"
 #include "lacp.h"
 #include "learn.h"

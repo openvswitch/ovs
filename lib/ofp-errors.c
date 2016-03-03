@@ -17,7 +17,7 @@
 #include <config.h>
 #include <errno.h>
 #include "byte-order.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"

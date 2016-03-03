@@ -22,7 +22,7 @@
 
 #include "classifier.h"
 #include "colors.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "meta-flow.h"
 #include "ofp-actions.h"

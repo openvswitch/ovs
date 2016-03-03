@@ -19,7 +19,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <stdlib.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "util.h"
 #include "openvswitch/vlog.h"

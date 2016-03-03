@@ -31,7 +31,7 @@
 #include "cfm.h"
 #include "ovs-lldp.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "hmapx.h"

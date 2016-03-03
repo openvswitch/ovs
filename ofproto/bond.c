@@ -31,7 +31,7 @@
 #include "ofproto/ofproto-dpif-rid.h"
 #include "connectivity.h"
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hmap.h"
 #include "lacp.h"

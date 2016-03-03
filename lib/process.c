@@ -26,7 +26,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "list.h"
 #include "ovs-thread.h"

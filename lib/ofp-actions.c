@@ -23,7 +23,7 @@
 #include "colors.h"
 #include "compiler.h"
 #include "dummy.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "learn.h"
 #include "meta-flow.h"

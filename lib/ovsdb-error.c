@@ -20,7 +20,7 @@
 #include <inttypes.h>
 
 #include "backtrace.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "util.h"
 #include "openvswitch/vlog.h"

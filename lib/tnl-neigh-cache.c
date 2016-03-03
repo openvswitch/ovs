@@ -28,7 +28,7 @@
 #include "cmap.h"
 #include "coverage.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "errno.h"
 #include "flow.h"
 #include "netdev.h"

@@ -31,7 +31,7 @@
 
 #include "command-line.h"
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
 #include "ovsdb-data.h"

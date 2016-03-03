@@ -24,7 +24,7 @@
 #include <stdlib.h>
 
 #include "command-line.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"

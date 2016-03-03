@@ -31,7 +31,7 @@
 #include "async-append.h"
 #include "coverage.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"
 #include "sat-math.h"

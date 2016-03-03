@@ -34,7 +34,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "list.h"
 #include "lldp/lldpd.h"

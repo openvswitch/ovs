@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"

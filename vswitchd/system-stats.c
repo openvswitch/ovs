@@ -33,7 +33,7 @@
 
 #include "daemon.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "latch.h"
 #include "ofpbuf.h"

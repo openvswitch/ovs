@@ -27,7 +27,7 @@
 #include "coverage.h"
 #include "dpif.h"
 #include "dp-packet.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
 #include "list.h"

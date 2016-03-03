@@ -29,7 +29,7 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "encaps.h"
 #include "fatal-signal.h"
 #include "hmap.h"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "colors.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"

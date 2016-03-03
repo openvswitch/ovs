@@ -77,7 +77,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/heap.c \
 	lib/heap.h \
 	lib/dynamic-string.c \
-	lib/dynamic-string.h \
 	lib/entropy.c \
 	lib/entropy.h \
 	lib/fat-rwlock.c \

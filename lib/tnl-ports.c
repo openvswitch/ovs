@@ -23,7 +23,7 @@
 #include <string.h>
 
 #include "classifier.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "list.h"
 #include "netdev.h"

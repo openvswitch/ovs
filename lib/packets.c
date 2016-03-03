@@ -27,7 +27,7 @@
 #include "crc32c.h"
 #include "flow.h"
 #include "hmap.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
 #include "dp-packet.h"

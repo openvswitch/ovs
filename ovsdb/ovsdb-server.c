@@ -26,7 +26,7 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "file.h"
 #include "hash.h"

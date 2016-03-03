@@ -16,7 +16,7 @@
 #include <config.h>
 #include "ofctrl.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "match.h"
 #include "ofp-actions.h"

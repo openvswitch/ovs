@@ -16,7 +16,7 @@
 #include <config.h>
 #include "lflow.h"
 #include "lport.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ofctrl.h"
 #include "ofp-actions.h"
 #include "ofpbuf.h"

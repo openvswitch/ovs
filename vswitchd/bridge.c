@@ -28,7 +28,7 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "hmapx.h"

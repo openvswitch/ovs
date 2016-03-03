@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "process.h"
 #include "util.h"
 #include "openvswitch/vlog.h"

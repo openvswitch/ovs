@@ -20,7 +20,7 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "list.h"

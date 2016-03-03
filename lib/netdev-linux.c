@@ -52,7 +52,7 @@
 #include "dp-packet.h"
 #include "dpif-netlink.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"

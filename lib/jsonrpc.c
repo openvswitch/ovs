@@ -21,7 +21,7 @@
 #include <errno.h>
 
 #include "byteq.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
 #include "list.h"

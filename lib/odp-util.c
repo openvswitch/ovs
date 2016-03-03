@@ -29,7 +29,7 @@
 #include "byte-order.h"
 #include "coverage.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "netlink.h"
 #include "ofpbuf.h"

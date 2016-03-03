@@ -19,7 +19,7 @@
 
 #include <stddef.h>
 
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "shash.h"

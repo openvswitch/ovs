@@ -27,7 +27,7 @@
 
 #include "byte-order.h"
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "netlink.h"
 #include "netlink-socket.h"
 #include "ofpbuf.h"

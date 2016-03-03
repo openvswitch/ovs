@@ -22,7 +22,7 @@
 #include <stdlib.h>
 
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "odp-util.h"

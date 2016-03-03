@@ -17,7 +17,7 @@
 #include <config.h>
 #include "ofp-msgs.h"
 #include "byte-order.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "ofpbuf.h"

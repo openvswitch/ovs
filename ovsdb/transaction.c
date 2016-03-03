@@ -18,7 +18,7 @@
 #include "transaction.h"
 
 #include "bitmap.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "json.h"

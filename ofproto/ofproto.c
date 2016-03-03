@@ -28,7 +28,7 @@
 #include "connectivity.h"
 #include "connmgr.h"
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "meta-flow.h"

@@ -21,7 +21,7 @@
 #include "connectivity.h"
 #include "csum.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fat-rwlock.h"
 #include "hash.h"
 #include "hmap.h"
