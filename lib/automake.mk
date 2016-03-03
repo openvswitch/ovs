@@ -86,7 +86,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/fatal-signal.h \
 	lib/flow.c \
 	lib/flow.h \
-	lib/geneve.h \
 	lib/guarded-list.c \
 	lib/guarded-list.h \
 	lib/hash.c \
