@@ -175,9 +175,9 @@ bundle_from_openflow(const struct nx_action_bundle *nab,
     for (i = 0; i < bundle->n_slaves; i++) {
         uint16_t ofp_port = ntohs(((ovs_be16 *)(nab + 1))[i]);
         ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
+        bundle = ofpacts->l2;
     }
 
-    bundle = ofpacts->l2;
     ofpact_update_len(ofpacts, &bundle->ofpact);
 
     if (!error) {
