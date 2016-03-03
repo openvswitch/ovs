@@ -183,8 +183,7 @@ ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
                                                  buffer->size,
                                                  headroom);
     if (buffer->header) {
-        uintptr_t data_delta
-            = (char *)new_buffer->data - (char *)buffer->data;
+        ptrdiff_t data_delta = (char *)new_buffer->data - (char *)buffer->data;
 
         new_buffer->header = (char *) buffer->header + data_delta;
     }
@@ -267,12 +266,12 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
     new_data = (char *) new_base + new_headroom;
     if (b->data != new_data) {
         if (b->header) {
-            uintptr_t data_delta = (char *) b->header - (char *) b->data;
+            ptrdiff_t data_delta = (char *) b->header - (char *) b->data;
 
             b->header = (char *) new_data + data_delta;
         }
         if (b->msg) {
-            uintptr_t data_delta = (char *) b->msg - (char *) b->data;
+            ptrdiff_t data_delta = (char *) b->msg - (char *) b->data;
 
             b->msg = (char *) new_data + data_delta;
         }
