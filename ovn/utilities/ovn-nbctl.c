@@ -1173,6 +1173,10 @@ static const struct ctl_table_class tables[] = {
      {{&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
       {NULL, NULL, NULL}}},
 
+    {&nbrec_table_logical_service,
+     {{&nbrec_table_logical_service, &nbrec_logical_service_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
     {&nbrec_table_logical_port,
      {{&nbrec_table_logical_port, &nbrec_logical_port_col_name, NULL},
       {NULL, NULL, NULL}}},

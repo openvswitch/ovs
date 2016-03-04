@@ -88,9 +88,29 @@
       </p>
     </column>
 
-    <column name="ports">
+    <column name="app_port">
       <p>
-        The logical ports connected to the logical service.
+        The logical application port connected to the logical service.
+      </p>
+
+      <p>
+        It is an error for multiple logical switches to include the same
+        logical port.
+      </p>
+    </column>
+    <column name="in_port">
+      <p>
+        The logical service port connected to the logical application.
+      </p>
+
+      <p>
+        It is an error for multiple logical switches to include the same
+        logical port.
+      </p>
+    </column>
+    <column name="out_port">
+      <p>
+        The logical service port connected to the logical network.
       </p>
 
       <p>

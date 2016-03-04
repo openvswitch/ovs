@@ -453,7 +453,7 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
         ovn_datapath_destroy(datapaths, od);
     }
 }
-
+
 struct ovn_port {
     struct hmap_node key_node;  /* Index on 'key'. */
     char *key;                  /* nbs->name, nbr->name, sb->logical_port. */
@@ -726,7 +726,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         ovn_port_destroy(ports, op);
     }
 }
-
+
 #define OVN_MIN_MULTICAST 32768
 #define OVN_MAX_MULTICAST 65535
 
@@ -1118,7 +1118,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 }
 
 static void
-build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
+build_lswitch_flows(struct hmap *datapaths, struct hmap *services, struct hmap *ports,
                     struct hmap *lflows, struct hmap *mcgroups)
 {
     /* This flow table structure is documented in ovn-northd(8), so please
@@ -1176,7 +1176,104 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       ds_cstr(&match), "next;");
         ds_destroy(&match);
     }
+    /* Ingress table 3: Add override rules for service insertion
+     *  If a service is defined send traffic destined for an application
+     *  to the service first (both for ingress and egress)
+     */
+    HMAP_FOR_EACH(od, key_node, datapaths) {
+      if (!od->nbs) {
+	continue;
+      }
+      /* For each service add ingress and egress flow rules. These rules are given
+       *  a higher priority than the base rules. If the service exists then it will
+       *  be inserted into the flow, if not then the behavior is the default.
+       * 
+       * The first rule for both ingress and egress has higher priority than the second
+       *   to ensure that the service is always inserted first.
+       *
+       * The ingress rules are as follows:
+       *     If the src mac is not the in_port then send to out_port to be processed
+       *     If the src mac is the in_port then deliver to the app_port
+       *
+       * The egress rules are as follows:
+       *     If the src mac is the app_port then send to the in_port to be processed
+       *     If the src mac is the out_port then deliver as normal to dst_ip port
+       *
+       */
+      uint16_t to_service_priority = 250;
+      uint16_t from_service_priority = 200;
+      char *service_match = NULL;
+      char *service_actions = NULL;
+     
+      struct ovn_port *app_port;
+      struct ovn_port *in_port;
+      struct ovn_port *out_port;
+      /*
+       * Iterate through all the services defined for this datapath.
+       */
+      for (size_t i = 0; i < od->nbs->n_services; i++){
+	/*
+	 * Map database entries for ports to port data structures
+	 *
+	 * app_port: Port of server that is having service inserted
+	 * in_port: Port of service connected to application/server
+	 * out_port: Port of service connected to logical network
+	 */
+	app_port = ovn_port_find(ports, od->nbs->services->app_port->name);
+	in_port = ovn_port_find(ports, od->nbs->services->in_port->name);
+	out_port = ovn_port_find(ports, od->nbs->services->port_out->name);
+      /*
+       * Add ingress flow rules
+       */
 
+      /*
+       * Match app_port mac and in_port mac
+       * Action output to app_port
+       */
+      service_match = xasprintf(
+			       "ip.dst == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(in_port->mac));
+      service_actions = xasprintf("outport= %s;""output;",app_port->json_key);
+      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, to_service_priority,
+	       service_match, service_actions);
+      free(service_match);
+      free(service_actions);
+      /*
+       * Match app_port, if previous rule did not apply
+       * Action output to out_port
+       */
+      service_match = xasprintf( "ip.dst == "IP_FMT, IP_ARGS(app_port->ip));
+      service_actions = xasprintf("outport= %s;""output;",out_port->json_key);
+      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, from_service_priority,
+	       service_match, service_actions);
+      free(service_match);
+      free(service_actions);
+      /*
+       * Add egress flow rules
+       */
+ 
+      /*
+       * Match src_mac as app
+       * Action send to in_port
+       */
+      service_match = xasprintf( "ip.src == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(app_port->mac));
+      service_actions = xasprintf("outport= %s;""output;",in_port->json_key);
+      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, to_service_priority,
+	       service_match, service_actions);
+      free(service_match);
+      free(service_actions);
+      /* 
+       * Match src_ip as app_port and src_mac as out_port
+       * Action output to dst_port
+       */
+      service_match = xasprintf("ip.src == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(in_port->mac));
+      /* TODO Need to find dst_port if not in this network then send out route port */
+      service_actions = xasprintf("outport= %s;""output;",dst_port->json_key);
+      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, from_service_priority,
+	       service_match, service_actions);
+      free(service_match);
+      free(service_actions);
+      }
+    }
     /* Ingress table 3: Destination lookup, ARP reply for known IPs.
      * (priority 150). */
     HMAP_FOR_EACH (op, key_node, ports) {
@@ -1612,12 +1709,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
  * constructing their contents based on the OVN_NB database. */
 static void
 build_lflows(struct northd_context *ctx, struct hmap *datapaths,
-             struct hmap *ports)
+             struct hmap *services, struct hmap *ports)
 {
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
     struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
 
-    build_lswitch_flows(datapaths, ports, &lflows, &mcgroups);
+    build_lswitch_flows(datapaths, services, ports, &lflows, &mcgroups);
     build_lrouter_flows(datapaths, ports, &lflows);
 
     /* Push changes to the Logical_Flow table to database. */
@@ -1703,10 +1800,10 @@ ovnnb_db_run(struct northd_context *ctx)
         return;
     }
     VLOG_DBG("ovn-nb db contents may have changed.");
-    struct hmap datapaths, ports;
+    struct hmap datapaths, services, ports;
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, &ports);
-    build_lflows(ctx, &datapaths, &ports);
+    build_lflows(ctx, &datapaths, &services, &ports);
 
     struct ovn_datapath *dp, *next_dp;
     HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, &datapaths) {
