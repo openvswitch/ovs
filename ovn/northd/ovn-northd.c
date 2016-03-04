@@ -1118,7 +1118,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 }
 
 static void
-build_lswitch_flows(struct hmap *datapaths, struct hmap *services, struct hmap *ports,
+build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     struct hmap *lflows, struct hmap *mcgroups)
 {
     /* This flow table structure is documented in ovn-northd(8), so please
@@ -1219,9 +1219,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *services, struct hmap *
 	 * in_port: Port of service connected to application/server
 	 * out_port: Port of service connected to logical network
 	 */
-	app_port = ovn_port_find(ports, od->nbs->services->app_port->name);
-	in_port = ovn_port_find(ports, od->nbs->services->in_port->name);
-	out_port = ovn_port_find(ports, od->nbs->services->port_out->name);
+	app_port = ovn_port_find(ports, od->nbs->services[i]->app_port->name);
+	in_port = ovn_port_find(ports, od->nbs->services[i]->in_port->name);
+	out_port = ovn_port_find(ports, od->nbs->services[i]->out_port->name);
       /*
        * Add ingress flow rules
        */
@@ -1267,7 +1267,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *services, struct hmap *
        */
       service_match = xasprintf("ip.src == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(in_port->mac));
       /* TODO Need to find dst_port if not in this network then send out route port */
-      service_actions = xasprintf("outport= %s;""output;",dst_port->json_key);
+      service_actions = xasprintf("output;");
       ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, from_service_priority,
 	       service_match, service_actions);
       free(service_match);
@@ -1709,12 +1709,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
  * constructing their contents based on the OVN_NB database. */
 static void
 build_lflows(struct northd_context *ctx, struct hmap *datapaths,
-             struct hmap *services, struct hmap *ports)
+              struct hmap *ports)
 {
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
     struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
 
-    build_lswitch_flows(datapaths, services, ports, &lflows, &mcgroups);
+    build_lswitch_flows(datapaths, ports, &lflows, &mcgroups);
     build_lrouter_flows(datapaths, ports, &lflows);
 
     /* Push changes to the Logical_Flow table to database. */
@@ -1800,10 +1800,10 @@ ovnnb_db_run(struct northd_context *ctx)
         return;
     }
     VLOG_DBG("ovn-nb db contents may have changed.");
-    struct hmap datapaths, services, ports;
+    struct hmap datapaths,ports;
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, &ports);
-    build_lflows(ctx, &datapaths, &services, &ports);
+    build_lflows(ctx, &datapaths, &ports);
 
     struct ovn_datapath *dp, *next_dp;
     HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, &datapaths) {
