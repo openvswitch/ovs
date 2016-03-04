@@ -1347,6 +1347,7 @@ static void stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 	if (unlikely(!validate_checksum(skb)))
 		goto drop;
 
+	__skb_pull(skb, sizeof(struct tcphdr));
 	skb = reassemble(skb);
 	if (!skb)
 		return;
@@ -1490,7 +1491,7 @@ static unsigned int nf_ip_hook(FIRST_PARAM, struct sk_buff *skb, LAST_PARAM)
 	if (!stt_dev)
 		return NF_ACCEPT;
 
-	__skb_pull(skb, ip_hdr_len + sizeof(struct tcphdr));
+	__skb_pull(skb, ip_hdr_len);
 	stt_rcv(stt_dev, skb);
 	return NF_STOLEN;
 }
