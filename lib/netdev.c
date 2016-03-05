@@ -639,28 +639,28 @@ netdev_rxq_close(struct netdev_rxq *rx)
     }
 }
 
-/* Attempts to receive batch of packets from 'rx'.
+/* Attempts to receive a batch of packets from 'rx'.  'pkts' should point to
+ * the beginning of an array of MAX_RX_BATCH pointers to dp_packet.  If
+ * successful, this function stores pointers to up to MAX_RX_BATCH dp_packets
+ * into the array, transferring ownership of the packets to the caller, stores
+ * the number of received packets into '*cnt', and returns 0.
  *
- * Returns EAGAIN immediately if no packet is ready to be received.
+ * The implementation does not necessarily initialize any non-data members of
+ * 'pkts'.  That is, the caller must initialize layer pointers and metadata
+ * itself, if desired, e.g. with pkt_metadata_init() and miniflow_extract().
  *
- * Returns EMSGSIZE, and discards the packet, if the received packet is longer
- * than 'dp_packet_tailroom(buffer)'.
- *
- * It is advised that the tailroom of 'buffer' should be
- * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
- * out-of-band VLAN header to be added to the packet.  At the very least,
- * 'buffer' must have at least ETH_TOTAL_MIN bytes of tailroom.
- *
- * This function may be set to null if it would always return EOPNOTSUPP
- * anyhow. */
+ * Returns EAGAIN immediately if no packet is ready to be received or another
+ * positive errno value if an error was encountered. */
 int
-netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **buffers, int *cnt)
+netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **pkts, int *cnt)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx, buffers, cnt);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, pkts, cnt);
     if (!retval) {
         COVERAGE_INC(netdev_received);
+    } else {
+        *cnt = 0;
     }
     return retval;
 }
