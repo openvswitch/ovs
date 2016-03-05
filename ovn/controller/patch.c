@@ -280,7 +280,7 @@ void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
           struct hmap *local_datapaths)
 {
-    if (!ctx->ovs_idl_txn) {
+    if (!ctx->ovs_idl_txn || !ctx->ovnsb_idl_txn) {
         return;
     }
 
