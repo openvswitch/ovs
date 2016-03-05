@@ -1123,7 +1123,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 {
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
-
+  VLOG_INFO("build_lswitch_flows\n");
     /* Build pre-ACL and ACL tables for both ingress and egress.
      * Ingress tables 1 and 2.  Egress tables 0 and 1. */
     struct ovn_datapath *od;
@@ -1180,10 +1180,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
      *  If a service is defined send traffic destined for an application
      *  to the service first (both for ingress and egress)
      */
+    VLOG_INFO("just before service insertion\n");
     HMAP_FOR_EACH(od, key_node, datapaths) {
       if (!od->nbs) {
 	continue;
       }
+      VLOG_INFO("entered service insertion\n");
       /* For each service add ingress and egress flow rules. These rules are given
        *  a higher priority than the base rules. If the service exists then it will
        *  be inserted into the flow, if not then the behavior is the default.
@@ -1211,6 +1213,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
       /*
        * Iterate through all the services defined for this datapath.
        */
+      VLOG_INFO("Iterating through %d services \n", (int)od->nbs->n_services);
       for (size_t i = 0; i < od->nbs->n_services; i++){
 	/*
 	 * Map database entries for ports to port data structures
@@ -1219,9 +1222,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 	 * in_port: Port of service connected to application/server
 	 * out_port: Port of service connected to logical network
 	 */
-	app_port = ovn_port_find(ports, od->nbs->services[i]->app_port->name);
-	in_port = ovn_port_find(ports, od->nbs->services[i]->in_port->name);
-	out_port = ovn_port_find(ports, od->nbs->services[i]->out_port->name);
+	app_port = ovn_port_find(ports, od->nbs->services[i]->app_port);
+	VLOG_INFO("App port: %s\n", app_port->key);
+	in_port = ovn_port_find(ports, od->nbs->services[i]->in_port);
+	VLOG_INFO("In port: %s\n", in_port->key);
+	out_port = ovn_port_find(ports, od->nbs->services[i]->out_port);
+	VLOG_INFO("Out port: %s\n", out_port->key);
       /*
        * Add ingress flow rules
        */
@@ -1230,10 +1236,23 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
        * Match app_port mac and in_port mac
        * Action output to app_port
        */
+	struct eth_addr app_ea,in_ea,out_ea;
+	ovs_be32 app_ip,in_ip,out_ip;
+	
+	ovs_scan(app_port->nbs->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+		 ETH_ADDR_SCAN_ARGS(app_ea), IP_SCAN_ARGS(&app_ip));
+	ovs_scan(in_port->nbs->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+		 ETH_ADDR_SCAN_ARGS(in_ea), IP_SCAN_ARGS(&in_ip));
+	ovs_scan(out_port->nbs->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+		 ETH_ADDR_SCAN_ARGS(out_ea), IP_SCAN_ARGS(&out_ip));
+	VLOG_INFO("Ingress rule 1\n");
+	
       service_match = xasprintf(
-			       "ip.dst == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(in_port->mac));
+			       "ip.dst == "IP_FMT" && eth.src =="ETH_ADDR_FMT, IP_ARGS(app_ip),ETH_ADDR_ARGS(in_ea));
+      VLOG_INFO("service match %s\n",service_match);
       service_actions = xasprintf("outport= %s;""output;",app_port->json_key);
-      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, to_service_priority,
+        VLOG_INFO("service action %s\n",service_actions);
+      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, to_service_priority,
 	       service_match, service_actions);
       free(service_match);
       free(service_actions);
@@ -1241,9 +1260,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
        * Match app_port, if previous rule did not apply
        * Action output to out_port
        */
-      service_match = xasprintf( "ip.dst == "IP_FMT, IP_ARGS(app_port->ip));
+	VLOG_INFO("Ingress rule 2\n");
+      service_match = xasprintf( "ip.dst == "IP_FMT, IP_ARGS(app_ip));
       service_actions = xasprintf("outport= %s;""output;",out_port->json_key);
-      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, from_service_priority,
+      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, from_service_priority,
 	       service_match, service_actions);
       free(service_match);
       free(service_actions);
@@ -1255,9 +1275,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
        * Match src_mac as app
        * Action send to in_port
        */
-      service_match = xasprintf( "ip.src == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(app_port->mac));
+	VLOG_INFO("Egress rule 1\n");
+      service_match = xasprintf( "ip.src == "IP_FMT" && eth.src =="ETH_ADDR_FMT, IP_ARGS(app_ip),ETH_ADDR_ARGS(app_ea));
+      VLOG_INFO("service match %s\n",service_match);
       service_actions = xasprintf("outport= %s;""output;",in_port->json_key);
-      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, to_service_priority,
+       VLOG_INFO("service actions %s\n",service_actions);
+      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, to_service_priority,
 	       service_match, service_actions);
       free(service_match);
       free(service_actions);
@@ -1265,10 +1288,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
        * Match src_ip as app_port and src_mac as out_port
        * Action output to dst_port
        */
-      service_match = xasprintf("ip.src == "IP_FMT"&& eth.src =="ETH_ADDR_FMT, IP_ARGS(app_port->ip),ETH_ADDR_ARGS(in_port->mac));
+	VLOG_INFO("Egress rule 2\n");
+      service_match = xasprintf("ip.src == "IP_FMT" && eth.src =="ETH_ADDR_FMT, IP_ARGS(app_ip),ETH_ADDR_ARGS(in_ea));
       /* TODO Need to find dst_port if not in this network then send out route port */
       service_actions = xasprintf("output;");
-      ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, from_service_priority,
+      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, from_service_priority,
 	       service_match, service_actions);
       free(service_match);
       free(service_actions);
