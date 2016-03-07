@@ -1238,7 +1238,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     dbmon = ovsdb_monitor_add(m->dbmon);
     if (dbmon != m->dbmon) {
         /* Found an exisiting dbmon, reuse the current one. */
-        ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m);
+        ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
         ovsdb_monitor_add_jsonrpc_monitor(dbmon, m);
         m->dbmon = dbmon;
     }
@@ -1320,7 +1320,7 @@ ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m)
 {
     json_destroy(m->monitor_id);
     hmap_remove(&m->session->monitors, &m->node);
-    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m);
+    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
     free(m);
 }
 
