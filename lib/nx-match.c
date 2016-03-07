@@ -1468,7 +1468,6 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
         const char *name;
         uint64_t header;
         ovs_be64 nw_header;
-        ovs_be64 *header_ptr;
         int name_len;
         size_t n;
 
@@ -1485,7 +1484,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 
         s += name_len + 1;
 
-        header_ptr = ofpbuf_put_uninit(b, nxm_header_len(header));
+        b->header = ofpbuf_put_uninit(b, nxm_header_len(header));
         s = ofpbuf_put_hex(b, s, &n);
         if (n != nxm_field_bytes(header)) {
             const struct mf_field *field = mf_from_oxm_header(header);
@@ -1508,7 +1507,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
             }
         }
         nw_header = htonll(header);
-        memcpy(header_ptr, &nw_header, nxm_header_len(header));
+        memcpy(b->header, &nw_header, nxm_header_len(header));
 
         if (nxm_hasmask(header)) {
             s += strspn(s, " ");
