@@ -96,7 +96,7 @@ sim_add () {
    as $1 ovs-vsctl --no-wait -- init || return 1
 
    # Start ovs-vswitchd
-   as $1 start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif
+   as $1 start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif -vunixctl
 }
 
 # "as $1" sets the OVS_*DIR environment variables to point to $ovs_base/$1.
@@ -272,7 +272,7 @@ m4_define([_OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '
