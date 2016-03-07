@@ -970,7 +970,7 @@ OFPACTS
 #undef OFPACT
 
 /* Call after adding the variable-length part to a variable-length action. */
-void ofpact_finish(struct ofpbuf *, struct ofpact *);
+void *ofpact_finish(struct ofpbuf *, struct ofpact *);
 
 /* Additional functions for composing ofpacts. */
 struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);

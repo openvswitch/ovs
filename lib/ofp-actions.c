@@ -1262,8 +1262,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
         bundle = ofpacts->header;
     }
 
-    ofpact_finish(ofpacts, &bundle->ofpact);
-
+    bundle = ofpact_finish(ofpacts, &bundle->ofpact);
     if (!error) {
         error = bundle_check(bundle, OFPP_MAX, NULL);
     }
@@ -4995,7 +4994,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
     out->header = &conntrack->ofpact;
-    ofpact_finish(out, &conntrack->ofpact);
+    conntrack = ofpact_finish(out, &conntrack->ofpact);
 
     if (conntrack->ofpact.len > sizeof(*conntrack)
         && !(conntrack->flags & NX_CT_F_COMMIT)) {
@@ -7443,8 +7442,11 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
 /* Finishes composing a variable-length action (begun using
  * ofpact_put_<NAME>()), by padding the action to a multiple of OFPACT_ALIGNTO
  * bytes and updating its embedded length field.  See the large comment near
- * the end of ofp-actions.h for more information. */
-void
+ * the end of ofp-actions.h for more information.
+ *
+ * May reallocate 'ofpacts'. Callers should consider updating their 'ofpact'
+ * pointer to the return value of this function. */
+void *
 ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
     ptrdiff_t len;
@@ -7454,6 +7456,8 @@ ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
     ovs_assert(len > 0 && len <= UINT16_MAX);
     ofpact->len = len;
     ofpbuf_padto(ofpacts, OFPACT_ALIGN(ofpacts->size));
+
+    return ofpacts->header;
 }
 
 static char * OVS_WARN_UNUSED_RESULT
