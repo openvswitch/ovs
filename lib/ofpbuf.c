@@ -175,19 +175,17 @@ ofpbuf_clone(const struct ofpbuf *buffer)
 /* Creates and returns a new ofpbuf whose data are copied from 'buffer'.   The
  * returned ofpbuf will additionally have 'headroom' bytes of headroom. */
 struct ofpbuf *
-ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
+ofpbuf_clone_with_headroom(const struct ofpbuf *b, size_t headroom)
 {
     struct ofpbuf *new_buffer;
 
-    new_buffer = ofpbuf_clone_data_with_headroom(buffer->data,
-                                                 buffer->size,
-                                                 headroom);
-    if (buffer->header) {
-        ptrdiff_t data_delta = (char *) buffer->header - (char *) buffer->data;
+    new_buffer = ofpbuf_clone_data_with_headroom(b->data, b->size, headroom);
+    if (b->header) {
+        ptrdiff_t header_offset = (char *) b->header - (char *) b->data;
 
-        new_buffer->header = (char *) new_buffer->data + data_delta;
+        new_buffer->header = (char *) new_buffer->data + header_offset;
     }
-    new_buffer->msg = buffer->msg;
+    new_buffer->msg = b->msg;
 
     return new_buffer;
 }
@@ -266,14 +264,14 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
     new_data = (char *) new_base + new_headroom;
     if (b->data != new_data) {
         if (b->header) {
-            ptrdiff_t data_delta = (char *) b->header - (char *) b->data;
+            ptrdiff_t header_offset = (char *) b->header - (char *) b->data;
 
-            b->header = (char *) new_data + data_delta;
+            b->header = (char *) new_data + header_offset;
         }
         if (b->msg) {
-            ptrdiff_t data_delta = (char *) b->msg - (char *) b->data;
+            ptrdiff_t msg_offset = (char *) b->msg - (char *) b->data;
 
-            b->msg = (char *) new_data + data_delta;
+            b->msg = (char *) new_data + msg_offset;
         }
         b->data = new_data;
     }
