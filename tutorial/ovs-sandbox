@@ -360,8 +360,16 @@ cat <<EOF
 ----------------------------------------------------------------------
 You are running in a dummy Open vSwitch environment.  You can use
 ovs-vsctl, ovs-ofctl, ovs-appctl, and other tools to work with the
-dummy switch.  
+dummy switch.
 
+EOF
+if $ovn; then cat << EOF
+This environment also has the OVN daemons and databases enabled.
+You can use ovn-nbctl and ovn-sbctl to interact with the OVN databases.
+
+EOF
+fi
+cat <<EOF
 Log files, pidfiles, and the configuration database are in the
 "sandbox" subdirectory.
 
