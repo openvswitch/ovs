@@ -455,16 +455,16 @@ be lifted in the future to allow for easier management.
 These commands are Nicira extensions to OpenFlow and require Open vSwitch
 2.5 or later.
 
-.IP "\fBadd\-TLV\-map \fIswitch option\fR[\fB,\fIoption\fR]..."
+.IP "\fBadd\-tlv\-map \fIswitch option\fR[\fB,\fIoption\fR]..."
 Add each \fIoption\fR to \fIswitch\fR's tables. Duplicate fields are
 rejected.
 .
-.IP "\fBdel\-TLV\-map \fIswitch \fR[\fIoption\fR[\fB,\fIoption\fR]]..."
+.IP "\fBdel\-tlv\-map \fIswitch \fR[\fIoption\fR[\fB,\fIoption\fR]]..."
 Delete each \fIoption\fR from \fIswitch\fR's table, or all option TLV
 mapping if no \fIoption\fR is specified.
 Fields that aren't mapped are ignored.
 .
-.IP "\fBdump\-TLV\-map \fIswitch\fR"
+.IP "\fBdump\-tlv\-map \fIswitch\fR"
 Show the currently mapped fields in the switch's option table as well
 as switch capabilities.
 .
