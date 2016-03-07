@@ -959,7 +959,8 @@ ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon)
 
 void
 ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
-                   struct ovsdb_jsonrpc_monitor *jsonrpc_monitor)
+                   struct ovsdb_jsonrpc_monitor *jsonrpc_monitor,
+                   uint64_t unflushed)
 {
     struct jsonrpc_monitor_node *jm;
 
@@ -971,6 +972,12 @@ ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
     /* Find and remove the jsonrpc monitor from the list.  */
     LIST_FOR_EACH(jm, node, &dbmon->jsonrpc_monitors) {
         if (jm->jsonrpc_monitor == jsonrpc_monitor) {
+            /* Release the tracked changes. */
+            struct shash_node *node;
+            SHASH_FOR_EACH (node, &dbmon->tables) {
+                struct ovsdb_monitor_table *mt = node->data;
+                ovsdb_monitor_table_untrack_changes(mt, unflushed);
+            }
             list_remove(&jm->node);
             free(jm);
 
