@@ -179,9 +179,7 @@ bundle_parse__(const char *s, char **save_ptr,
         bundle = ofpacts->header;
         bundle->n_slaves++;
     }
-    ofpact_finish(ofpacts, &bundle->ofpact);
-
-    bundle = ofpacts->header;
+    bundle = ofpact_finish(ofpacts, &bundle->ofpact);
     bundle->basis = atoi(basis);
 
     if (!strcasecmp(fields, "eth_src")) {
