@@ -36,10 +36,8 @@ void ovsdb_monitor_add_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
                        struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
 
 void ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
-                       struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
-
-void ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
-                               struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
+                               struct ovsdb_jsonrpc_monitor *jsonrpc_monitor,
+                               uint64_t unflushed);
 
 void ovsdb_monitor_add_table(struct ovsdb_monitor *m,
                              const struct ovsdb_table *table);
