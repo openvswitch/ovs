@@ -185,7 +185,11 @@ ofpbuf_clone_with_headroom(const struct ofpbuf *b, size_t headroom)
 
         new_buffer->header = (char *) new_buffer->data + header_offset;
     }
-    new_buffer->msg = b->msg;
+    if (b->msg) {
+        ptrdiff_t msg_offset = (char *) b->msg - (char *) b->data;
+
+        new_buffer->msg = (char *) new_buffer->data + msg_offset;
+    }
 
     return new_buffer;
 }
