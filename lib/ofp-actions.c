@@ -7405,7 +7405,7 @@ ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 
     ovs_assert(ofpact == ofpacts->header);
     len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;
-    ovs_assert(len <= UINT16_MAX);
+    ovs_assert(len > 0 && len <= UINT16_MAX);
     ofpact->len = len;
     ofpbuf_padto(ofpacts, OFPACT_ALIGN(ofpacts->size));
 }
