@@ -3100,6 +3100,7 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct iface *iface;
     const char *type;
     struct smap_node *node;
+    int error;
 
     iface = iface_find(argv[1]);
     if (!iface) {
@@ -3107,28 +3108,33 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    netdev_get_qos(iface->netdev, &type, &smap);
+    error = netdev_get_qos(iface->netdev, &type, &smap);
+    if (!error) {
+        if (*type != '\0') {
+            struct netdev_queue_dump dump;
+            struct smap details;
+            unsigned int queue_id;
 
-    if (*type != '\0') {
-        struct netdev_queue_dump dump;
-        struct smap details;
-        unsigned int queue_id;
+            ds_put_format(&ds, "QoS: %s %s\n", iface->name, type);
 
-        ds_put_format(&ds, "QoS: %s %s\n", iface->name, type);
+            SMAP_FOR_EACH (node, &smap) {
+                ds_put_format(&ds, "%s: %s\n", node->key, node->value);
+            }
 
-        SMAP_FOR_EACH (node, &smap) {
-            ds_put_format(&ds, "%s: %s\n", node->key, node->value);
+            smap_init(&details);
+            NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &dump, iface->netdev) {
+                qos_unixctl_show_queue(queue_id, &details, iface, &ds);
+            }
+            smap_destroy(&details);
+
+            unixctl_command_reply(conn, ds_cstr(&ds));
+        } else {
+            ds_put_format(&ds, "QoS not configured on %s\n", iface->name);
+            unixctl_command_reply_error(conn, ds_cstr(&ds));
         }
-
-        smap_init(&details);
-        NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &dump, iface->netdev) {
-            qos_unixctl_show_queue(queue_id, &details, iface, &ds);
-        }
-        smap_destroy(&details);
-
-        unixctl_command_reply(conn, ds_cstr(&ds));
     } else {
-        ds_put_format(&ds, "QoS not configured on %s\n", iface->name);
+        ds_put_format(&ds, "%s: failed to retrieve QOS configuration (%s)\n",
+                      iface->name, ovs_strerror(error));
         unixctl_command_reply_error(conn, ds_cstr(&ds));
     }
 
