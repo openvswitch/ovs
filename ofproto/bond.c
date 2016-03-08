@@ -237,8 +237,6 @@ bond_create(const struct bond_settings *s, struct ofproto_dpif *ofproto)
     list_init(&bond->enabled_slaves);
     ovs_mutex_init(&bond->mutex);
     ovs_refcount_init(&bond->ref_cnt);
-
-    bond->recirc_id = 0;
     hmap_init(&bond->pr_rule_ops);
 
     bond_reconfigure(bond, s);
