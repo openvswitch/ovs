@@ -28,7 +28,6 @@ EXTRA_DIST += \
 	rhel/usr_lib_systemd_system_openvswitch.service \
 	rhel/usr_lib_systemd_system_openvswitch-nonetwork.service \
 	rhel/usr_lib_systemd_system_ovn-controller.service \
-	rhel/usr_lib_systemd_system_ovn-controller.service.in \
 	rhel/usr_lib_systemd_system_ovn-controller-vtep.service \
 	rhel/usr_lib_systemd_system_ovn-northd.service
 
@@ -51,8 +50,6 @@ $(srcdir)/rhel/openvswitch.spec: rhel/openvswitch.spec.in $(top_builddir)/config
 
 $(srcdir)/rhel/openvswitch-fedora.spec: rhel/openvswitch-fedora.spec.in $(top_builddir)/config.status
 	$(update_rhel_spec)
-
-$(srcdir)/rhel/usr_lib_systemd_system_ovn-controller.service: rhel/usr_lib_systemd_system_ovn-controller.service.in $(top_builddir)/config.status
 
 RPMBUILD_TOP := $(abs_top_builddir)/rpm/rpmbuild
 
