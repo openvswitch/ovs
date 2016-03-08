@@ -1170,7 +1170,12 @@ ovsdb_monitor_destroy_callback(struct ovsdb_replica *replica)
 void
 ovsdb_monitor_get_memory_usage(struct simap *usage)
 {
+    struct ovsdb_monitor *dbmon;
     simap_put(usage, "monitors", hmap_count(&ovsdb_monitors));
+
+    HMAP_FOR_EACH(dbmon, hmap_node,  &ovsdb_monitors) {
+        simap_increase(usage, "json-caches", hmap_count(&dbmon->json_cache));
+    }
 }
 
 static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class = {
