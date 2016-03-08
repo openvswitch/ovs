@@ -271,6 +271,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !(wc->masks.mpls_lse[0] & htonl(MPLS_TC_MASK));
     case MFF_MPLS_BOS:
         return !(wc->masks.mpls_lse[0] & htonl(MPLS_BOS_MASK));
+    case MFF_MPLS_TTL:
+        return !(wc->masks.mpls_lse[0] & htonl(MPLS_TTL_MASK));
 
     case MFF_IPV4_SRC:
         return !wc->masks.nw_src;
@@ -527,6 +529,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_ETH_DST:
     case MFF_ETH_TYPE:
     case MFF_VLAN_TCI:
+    case MFF_MPLS_TTL:
     case MFF_IPV4_SRC:
     case MFF_IPV4_DST:
     case MFF_IPV6_SRC:
@@ -739,6 +742,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_MPLS_BOS:
         value->u8 = mpls_lse_to_bos(flow->mpls_lse[0]);
+        break;
+
+    case MFF_MPLS_TTL:
+        value->u8 = mpls_lse_to_ttl(flow->mpls_lse[0]);
         break;
 
     case MFF_IPV4_SRC:
@@ -993,6 +1000,10 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_MPLS_BOS:
         match_set_mpls_bos(match, 0, value->u8);
+        break;
+
+    case MFF_MPLS_TTL:
+        match_set_mpls_ttl(match, 0, value->u8);
         break;
 
     case MFF_IPV4_SRC:
@@ -1299,6 +1310,10 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_MPLS_BOS:
         flow_set_mpls_bos(flow, 0, value->u8);
+        break;
+
+    case MFF_MPLS_TTL:
+        flow_set_mpls_ttl(flow, 0, value->u8);
         break;
 
     case MFF_IPV4_SRC:
@@ -1623,6 +1638,10 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         match_set_any_mpls_bos(match, 0);
         break;
 
+    case MFF_MPLS_TTL:
+        match_set_any_mpls_ttl(match, 0);
+        break;
+
     case MFF_IPV4_SRC:
     case MFF_ARP_SPA:
         match_set_nw_src_masked(match, htonl(0), htonl(0));
@@ -1779,6 +1798,7 @@ mf_set(const struct mf_field *mf,
     case MFF_MPLS_LABEL:
     case MFF_MPLS_TC:
     case MFF_MPLS_BOS:
+    case MFF_MPLS_TTL:
     case MFF_IP_PROTO:
     case MFF_IP_TTL:
     case MFF_IP_DSCP:
