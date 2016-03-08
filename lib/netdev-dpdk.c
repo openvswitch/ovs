@@ -270,7 +270,7 @@ free_dpdk_buf(struct dp_packet *p)
 {
     struct rte_mbuf *pkt = (struct rte_mbuf *) p;
 
-    rte_pktmbuf_free_seg(pkt);
+    rte_pktmbuf_free(pkt);
 }
 
 static void
@@ -902,7 +902,7 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
         int i;
 
         for (i = nb_tx; i < txq->count; i++) {
-            rte_pktmbuf_free_seg(txq->burst_pkts[i]);
+            rte_pktmbuf_free(txq->burst_pkts[i]);
         }
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped += txq->count-nb_tx;
