@@ -1144,6 +1144,21 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_MPLS_BOS,
 
+    /* "mpls_ttl".
+     *
+     * The outermost MPLS label's time-to-live (TTL) field, or 0 if no MPLS
+     * labels are present.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: MPLS.
+     * Access: read/write.
+     * NXM: NXM_NX_MPLS_TTL(30) since v2.6.
+     * OXM: none.
+     */
+    MFF_MPLS_TTL,
+
 /* ## ---- ## */
 /* ## IPv4 ## */
 /* ## ---- ## */

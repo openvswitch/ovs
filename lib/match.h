@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,8 @@ void match_set_any_mpls_tc(struct match *, int idx);
 void match_set_mpls_tc(struct match *, int idx, uint8_t);
 void match_set_any_mpls_bos(struct match *, int idx);
 void match_set_mpls_bos(struct match *, int idx, uint8_t);
+void match_set_any_mpls_ttl(struct match *, int idx);
+void match_set_mpls_ttl(struct match *, int idx, uint8_t);
 void match_set_tp_src(struct match *, ovs_be16);
 void match_set_mpls_lse(struct match *, int idx, ovs_be32 lse);
 void match_set_tp_src_masked(struct match *, ovs_be16 port, ovs_be16 mask);
