@@ -257,6 +257,10 @@ Here is an example:
       `% mkdir _gcc && (cd _gcc && ../configure CC=gcc)`
       `% mkdir _clang && (cd _clang && ../configure CC=clang)`
 
+To use jemalloc as the memory allocator for OVSDB Server, add
+--enable-jemalloc, which links OVSDB Server with jemalloc (the library
+must be installed on the system). For the rationale about this flag
+refer to DESIGN.md.
 
 Building the Sources
 --------------------
