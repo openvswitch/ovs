@@ -3658,6 +3658,7 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
                     .packet = xmemdup(dp_packet_data(ctx->xin->packet),
                                       dp_packet_size(ctx->xin->packet)),
                     .packet_len = dp_packet_size(ctx->xin->packet),
+                    .reason = ctx->pause->reason,
                 },
                 .bridge = *ofproto_dpif_get_uuid(ctx->xbridge->ofproto),
                 .stack = xmemdup(state->stack,
