@@ -595,8 +595,8 @@ netdev_linux_notify_sock(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static struct nl_sock *sock;
-    unsigned int mcgroups[3] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
-                                RTNLGRP_IPV6_IFADDR};
+    unsigned int mcgroups[] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
+                                RTNLGRP_IPV6_IFADDR, RTNLGRP_IPV6_IFINFO};
 
     if (ovsthread_once_start(&once)) {
         int error;
@@ -652,7 +652,16 @@ netdev_linux_run(void)
             struct rtnetlink_change change;
 
             if (rtnetlink_parse(&buf, &change)) {
-                struct netdev *netdev_ = netdev_from_name(change.ifname);
+                struct netdev *netdev_ = NULL;
+                char dev_name[IFNAMSIZ];
+
+                if (!change.ifname) {
+                     change.ifname = if_indextoname(change.if_index, dev_name);
+                }
+
+                if (change.ifname) {
+                    netdev_ = netdev_from_name(change.ifname);
+                }
                 if (netdev_ && is_netdev_linux_class(netdev_->netdev_class)) {
                     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
