@@ -15,6 +15,7 @@
 #ifndef SMAP_H
 #define SMAP_H 1
 
+#include <netinet/in.h>
 #include "hmap.h"
 
 struct json;
