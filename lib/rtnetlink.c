@@ -100,7 +100,7 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
          * There are *many* more fields in these messages, but currently we
          * only care about these fields. */
         static const struct nl_policy policy[] = {
-            [IFA_LABEL] = { .type = NL_A_STRING, .optional = false },
+            [IFA_LABEL] = { .type = NL_A_STRING, .optional = true },
         };
 
         struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -115,7 +115,9 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
 
             change->nlmsg_type     = nlmsg->nlmsg_type;
             change->if_index       = ifaddr->ifa_index;
-            change->ifname         = nl_attr_get_string(attrs[IFA_LABEL]);
+            change->ifname         = (attrs[IFA_LABEL]
+                                      ? nl_attr_get_string(attrs[IFA_LABEL])
+                                      : NULL);
         }
     }
 
