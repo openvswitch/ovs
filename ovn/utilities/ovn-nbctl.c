@@ -297,7 +297,7 @@ Logical switch commands:\n\
   lswitch-list              print the names of all logical switches\n\
 \n\
 Logical service commands:\n\
-  lservice-add LSERVICE LPORT-APP LPORT-TRUST LPORT-UNTRUST\n\
+  lservice-add LSWITCH LPORT-APP LPORT-TRUST LPORT-UNTRUST [LSERVICE]\n\
                            create a logical service before an application\n\
   lservice-del LSERVICE    delete a service, does not delete attached ports\n\
   lservice-list            print the names of all logical services and attached ports\n\
@@ -524,7 +524,7 @@ nbctl_lservice_add(struct ctl_context *ctx)
         return;
     }
 
-    if (ctx->argc != 6) {
+    if (ctx->argc < 5) {
       /* Ensure all arguments are present */
       VLOG_WARN("Invalid number of arguments to lservice-add.");
         return;
@@ -535,10 +535,12 @@ nbctl_lservice_add(struct ctl_context *ctx)
 
     /* Create the logical port. */
     lservice = nbrec_logical_service_insert(ctx->txn);
-    nbrec_logical_service_set_name(lservice, ctx->argv[2]);
-    nbrec_logical_service_set_app_port(lservice, ctx->argv[3]);
-    nbrec_logical_service_set_in_port(lservice, ctx->argv[4]);
-    nbrec_logical_service_set_out_port(lservice, ctx->argv[5]);
+    nbrec_logical_service_set_app_port(lservice, ctx->argv[2]);
+    nbrec_logical_service_set_in_port(lservice, ctx->argv[3]);
+    nbrec_logical_service_set_out_port(lservice, ctx->argv[4]);
+    if (ctx->argc == 6){
+       nbrec_logical_service_set_name(lservice, ctx->argv[5]);
+    }
 
 
     /* Insert the logical port into the logical switch. */
@@ -1464,7 +1466,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "lswitch-list", 0, 0, "", NULL, nbctl_lswitch_list, NULL, "", RO },
 
     /* lservice commands. */
-    { "lservice-add", 5, 5, "LSERVICE LPORT LPORT LPORT", NULL, nbctl_lservice_add,
+    { "lservice-add", 5, 6, "LSERVICE LPORT LPORT LPORT [NAME]", NULL, nbctl_lservice_add,
       NULL, "", RW },
     { "lservice-del", 1, 1, "LSWITCH", NULL, nbctl_lservice_del,
       NULL, "", RW },
