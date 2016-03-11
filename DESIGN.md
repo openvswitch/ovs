@@ -426,6 +426,7 @@ version works.
          [8]  0000/efff    <none>       <none>        <none>
          [9]  1001/1001    <none>       <none>     1001/1001,--
         [10]  3000/3000    <none>       <none>        <none>
+        [11]  1000/1000    <none>     fffe/0,??/1  1000/1000,--
 
 Each column is interpreted as follows.
 
@@ -511,6 +512,9 @@ The matches are:
      odd-numbered PCP (and any VID).  Only possible with NXM.  (This
      is just an example; one can match on any desired VID bit
      pattern.)
+
+[11] Matches any packet with an 802.1Q header, regardless of VID or
+     PCP.
 
 Additional notes:
 

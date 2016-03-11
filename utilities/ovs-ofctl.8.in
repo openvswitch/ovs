@@ -1051,7 +1051,10 @@ header with the CFI bit (with value \fB0x1000\fR) forced to 1.
 Examples:
 .RS
 .IP \fBvlan_tci=0\fR
-Match only packets without an 802.1Q header.
+Match packets without an 802.1Q header.
+.IP \fBvlan_tci=0x1000/0x1000\fR
+Match packets with an 802.1Q header, regardless of VLAN and priority
+values.
 .IP \fBvlan_tci=0xf123\fR
 Match packets tagged with priority 7 in VLAN 0x123.
 .IP \fBvlan_tci=0x1123/0x1fff\fR
