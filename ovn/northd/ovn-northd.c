@@ -1303,15 +1303,24 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 		    service_match, service_actions);
       free(service_match);
       free(service_actions);
+#ifdef JUNK
       /* 
        * Match src_ip as app_port and src_mac as out_port
        * Action output to dst_port
        */
       VLOG_INFO("Egress rule 2\n");
-      /* Matching on IP 
-	 service_match = xasprintf("ip.src == "IP_FMT" && eth.src =="ETH_ADDR_FMT, \
-	 IP_ARGS(app_ip),ETH_ADDR_ARGS(in_ea));
-      */
+      /* Matching on IP */
+      service_match = xasprintf("ip4.src == "IP_FMT" && eth.src =="ETH_ADDR_FMT, \
+      IP_ARGS(app_ip),ETH_ADDR_ARGS(in_ea));
+      VLOG_INFO("service match egress 2 %s\n",service_match);
+      service_actions = xasprintf("eth.src = "ETH_ADDR_FMT"; "
+				   " next ;",ETH_ADDR_ARGS(app_ea));
+      VLOG_INFO("service actions egress 2 %s\n",service_actions);
+      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 225,
+		    service_match, service_actions);
+      free(service_match);
+      free(service_actions);
+
       /*
        * Ugly hack to add dest port to all rules - need to fix
        */
@@ -1335,16 +1344,14 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 	  ds_put_format(&service_actions, "outport = %s; output;", op->json_key);
 	  VLOG_INFO("Match String: %s\n",ds_cstr(&service_match));
 	  VLOG_INFO("Action String: %s\n",ds_cstr(&service_actions));
-	  ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, to_service_priority, \
+	  ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, to_service_priority, \
 			ds_cstr(&service_match), ds_cstr(&service_actions));
 	  ds_destroy(&service_actions);
 	  ds_destroy(&service_match);
 	  VLOG_INFO("Completed output match");   
 	}
-	
-	  
-
       }
+#endif
     }
   }
   VLOG_INFO("Service Insertion complete\n");
