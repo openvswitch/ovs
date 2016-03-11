@@ -1367,10 +1367,11 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                         = row->table->change_seqno[change]
                         = row->table->idl->change_seqno + 1;
                     if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
-                        if (list_is_empty(&row->track_node)) {
-                            list_push_front(&row->table->track_list,
-                                            &row->track_node);
+                        if (!list_is_empty(&row->track_node)) {
+                            list_remove(&row->track_node);
                         }
+                        list_push_back(&row->table->track_list,
+                                       &row->track_node);
                         if (!row->updated) {
                             row->updated = bitmap_allocate(class->n_columns);
                         }
@@ -1589,7 +1590,7 @@ ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
                 = row->table->idl->change_seqno + 1;
         }
         if (list_is_empty(&row->track_node)) {
-            list_push_front(&row->table->track_list, &row->track_node);
+            list_push_back(&row->table->track_list, &row->track_node);
         }
     }
 }
