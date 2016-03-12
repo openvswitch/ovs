@@ -1299,10 +1299,13 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 				  ETH_ADDR_ARGS(in_ea),
 				  in_port->json_key);
       VLOG_INFO("service actions %s\n",service_actions);
+
       ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 225,
 		    service_match, service_actions);
+      
       free(service_match);
       free(service_actions);
+      
 #ifdef JUNK
       /* 
        * Match src_ip as app_port and src_mac as out_port
@@ -1320,7 +1323,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 		    service_match, service_actions);
       free(service_match);
       free(service_actions);
-
+#endif
       /*
        * Ugly hack to add dest port to all rules - need to fix
        */
@@ -1328,12 +1331,13 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 	if (!op->nbs) {
 	  continue;
 	}
-
+      /* Only add ports that are have services attached */
+      if (od == op->od){
 	/* TODO Fixing cases when multiple addresses */
 	struct eth_addr def_ea;
 	ovs_be32 def_ip;            
 	struct ds service_match, service_actions;
-	
+	/* Only add ports that have IP addresses */
 	if (ovs_scan(op->nbs->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
 		     ETH_ADDR_SCAN_ARGS(def_ea), IP_SCAN_ARGS(&def_ip))) {
 	  VLOG_INFO("Addresses for port: %s\n",op->nbs->addresses[0]);
@@ -1351,7 +1355,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 	  VLOG_INFO("Completed output match");   
 	}
       }
-#endif
+      }
     }
   }
   VLOG_INFO("Service Insertion complete\n");
