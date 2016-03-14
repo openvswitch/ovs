@@ -1195,6 +1195,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 static const struct netdev_class dummy_class = {
     "dummy",
+    false,                      /* is_pmd */
     NULL,                       /* init */
     netdev_dummy_run,
     netdev_dummy_wait,

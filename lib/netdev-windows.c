@@ -490,6 +490,7 @@ netdev_windows_internal_construct(struct netdev *netdev_)
 #define NETDEV_WINDOWS_CLASS(NAME, CONSTRUCT)                           \
 {                                                                       \
     .type               = NAME,                                         \
+    .is_pmd             = false,                                        \
     .alloc              = netdev_windows_alloc,                         \
     .construct          = CONSTRUCT,                                    \
     .destruct           = netdev_windows_destruct,                      \

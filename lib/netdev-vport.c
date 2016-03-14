@@ -1549,11 +1549,12 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
 
 #define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
     { DPIF_PORT,                                                               \
-        { NAME, VPORT_FUNCTIONS(get_tunnel_config,                             \
-                                set_tunnel_config,                             \
-                                get_netdev_tunnel_config,                      \
-                                tunnel_get_status,                             \
-                                BUILD_HEADER, PUSH_HEADER, POP_HEADER) }}
+        { NAME, false,                                                         \
+          VPORT_FUNCTIONS(get_tunnel_config,                                   \
+                          set_tunnel_config,                                   \
+                          get_netdev_tunnel_config,                            \
+                          tunnel_get_status,                                   \
+                          BUILD_HEADER, PUSH_HEADER, POP_HEADER) }}
 
 void
 netdev_vport_tunnel_register(void)
@@ -1595,9 +1596,10 @@ netdev_vport_patch_register(void)
 {
     static const struct vport_class patch_class =
         { NULL,
-            { "patch", VPORT_FUNCTIONS(get_patch_config,
-                                       set_patch_config,
-                                       NULL,
-                                       NULL, NULL, NULL, NULL) }};
+            { "patch", false,
+              VPORT_FUNCTIONS(get_patch_config,
+                              set_patch_config,
+                              NULL,
+                              NULL, NULL, NULL, NULL) }};
     netdev_register_provider(&patch_class.netdev_class);
 }

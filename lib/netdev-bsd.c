@@ -1547,6 +1547,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                          GET_FEATURES)               \
 {                                                    \
     NAME,                                            \
+    false, /* is_pmd */                              \
                                                      \
     NULL, /* init */                                 \
     netdev_bsd_run,                                  \

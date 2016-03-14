@@ -2641,6 +2641,7 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     GET_CARRIER, GET_STATS, GET_FEATURES, GET_STATUS, RXQ_RECV)          \
 {                                                             \
     NAME,                                                     \
+    true,                       /* is_pmd */                  \
     INIT,                       /* init */                    \
     NULL,                       /* netdev_dpdk_run */         \
     NULL,                       /* netdev_dpdk_wait */        \
