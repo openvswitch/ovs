@@ -205,6 +205,9 @@ struct netdev_class {
      * the system. */
     const char *type;
 
+    /* If 'true' then this netdev should be polled by PMD threads. */
+    bool is_pmd;
+
 /* ## ------------------- ## */
 /* ## Top-Level Functions ## */
 /* ## ------------------- ## */
