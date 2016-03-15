@@ -1610,7 +1610,7 @@ run(struct ofproto *ofproto_)
 }
 
 static void
-wait(struct ofproto *ofproto_)
+ofproto_dpif_wait(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
@@ -5771,7 +5771,7 @@ const struct ofproto_class ofproto_dpif_class = {
     destruct,
     dealloc,
     run,
-    wait,
+    ofproto_dpif_wait,
     NULL,                       /* get_memory_usage. */
     type_get_memory_usage,
     flush,
