@@ -41,8 +41,9 @@
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__MACH__)
 typedef unsigned int clockid_t;
+static int clock_gettime(clock_t id, struct timespec *ts);
 
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC 1
@@ -51,7 +52,9 @@ typedef unsigned int clockid_t;
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 2
 #endif
+#endif /* defined(_WIN32) || defined(__MACH__) */
 
+#ifdef _WIN32
 /* Number of 100 ns intervals from January 1, 1601 till January 1, 1970. */
 const static unsigned long long unix_epoch = 116444736000000000;
 #endif /* _WIN32 */
@@ -416,6 +419,34 @@ clock_gettime(clock_t id, struct timespec *ts)
     return 0;
 }
 #endif /* _WIN32 */
+
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+static int
+clock_gettime(clock_t id, struct timespec *ts)
+{
+    mach_timespec_t mts;
+    clock_serv_t clk;
+    clock_id_t cid;
+
+    if (id == CLOCK_MONOTONIC) {
+        cid = SYSTEM_CLOCK;
+    } else if (id == CLOCK_REALTIME) {
+        cid = CALENDAR_CLOCK;
+    } else {
+        return -1;
+    }
+
+    host_get_clock_service(mach_host_self(), cid, &clk);
+    clock_get_time(clk, &mts);
+    mach_port_deallocate(mach_task_self(), clk);
+    ts->tv_sec = mts.tv_sec;
+    ts->tv_nsec = mts.tv_nsec;
+
+    return 0;
+}
+#endif
 
 void
 xgettimeofday(struct timeval *tv)
