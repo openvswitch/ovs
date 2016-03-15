@@ -38,6 +38,11 @@
 
 VLOG_DEFINE_THIS_MODULE(route_table_bsd);
 
+/* OS X does not define RT_ROUNDUP() or equivalent macro. */
+#if defined(__MACH__)
+#define RT_ROUNDUP(l) ((l) > 0 ? ROUND_UP((l), sizeof(long)) : sizeof(long))
+#endif
+
 bool
 route_table_fallback_lookup(ovs_be32 ip, char name[], ovs_be32 *gw)
 {
@@ -161,6 +166,8 @@ retry:
 #if defined(__FreeBSD__)
             sa = (struct sockaddr *)((char *)sa + SA_SIZE(sa));
 #elif defined(__NetBSD__)
+            sa = (struct sockaddr *)((char *)sa + RT_ROUNDUP(sa->sa_len));
+#elif defined(__MACH__)
             sa = (struct sockaddr *)((char *)sa + RT_ROUNDUP(sa->sa_len));
 #else
 #error unimplemented
