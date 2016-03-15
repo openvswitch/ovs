@@ -179,7 +179,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
 typedef struct OvsFlowStats {
     Ovs64AlignedU64 packetCount;
     Ovs64AlignedU64 byteCount;
-    uint32_t used;
+    uint64_t used;
     uint8_t tcpFlags;
 } OvsFlowStats;
 

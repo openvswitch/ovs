@@ -340,6 +340,9 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
          * created or deleted
          */
         nlError = NL_ERROR_NOENT;
+        if (rc == STATUS_DUPLICATE_NAME) {
+            nlError = NL_ERROR_EXIST;
+        }
         goto done;
     }
 
@@ -734,6 +737,20 @@ done:
     return rc;
 }
 
+UINT64
+OvsFlowUsedTime(UINT64 flowUsed)
+{
+    UINT64 currentMs, iddleMs;
+    LARGE_INTEGER tickCount;
+
+    KeQueryTickCount(&tickCount);
+    iddleMs =  tickCount.QuadPart - flowUsed;
+    iddleMs *= ovsTimeIncrementPerTick;
+    currentMs = KeQueryPerformanceCounter(&tickCount).QuadPart * 1000 /
+                tickCount.QuadPart;
+    return  currentMs - iddleMs;
+}
+
 /*
  *----------------------------------------------------------------------------
  *  _MapFlowStatsToNlStats --
@@ -749,7 +766,10 @@ _MapFlowStatsToNlStats(PNL_BUFFER nlBuf, OvsFlowStats *flowStats)
     replyStats.n_packets = flowStats->packetCount;
     replyStats.n_bytes = flowStats->byteCount;
 
-    if (!NlMsgPutTailU64(nlBuf, OVS_FLOW_ATTR_USED, flowStats->used)) {
+    if (flowStats->used &&
+        !NlMsgPutTailU64(nlBuf, OVS_FLOW_ATTR_USED,
+                         OvsFlowUsedTime(flowStats->used))
+       ) {
         rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
@@ -1039,8 +1059,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             icmpKey.icmp_code = (__u8)(ipv4FlowPutKey->l4.tpDst);
 
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMP,
-                                   (PCHAR)(&icmpKey),
-                                   sizeof(icmpKey))) {
+                                    (PCHAR)(&icmpKey),
+                                    sizeof(icmpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1690,7 +1710,7 @@ OvsFlowUsed(OvsFlow *flow,
     LARGE_INTEGER tickCount;
 
     KeQueryTickCount(&tickCount);
-    flow->used = tickCount.QuadPart * ovsTimeIncrementPerTick;
+    flow->used = tickCount.QuadPart;
     flow->packetCount++;
     flow->byteCount += OvsPacketLenNBL(packet);
     flow->tcpFlags |= OvsGetTcpFlags(packet, &flow->key, layers);
@@ -2219,14 +2239,14 @@ ReportFlowInfo(OvsFlow *flow,
     if (getFlags & FLOW_GET_KEY) {
         // always copy the tunnel key part
         RtlCopyMemory(&info->key, &flow->key,
-                            flow->key.l2.keyLen + flow->key.l2.offset);
+                      flow->key.l2.keyLen + flow->key.l2.offset);
     }
 
     if (getFlags & FLOW_GET_STATS) {
         OvsFlowStats *stats = &info->stats;
         stats->packetCount = flow->packetCount;
         stats->byteCount = flow->byteCount;
-        stats->used = (UINT32)flow->used;
+        stats->used = flow->used;
         stats->tcpFlags = flow->tcpFlags;
     }
 
@@ -2318,22 +2338,24 @@ HandleFlowPut(OvsFlowPut *put,
             return STATUS_UNSUCCESSFUL;
         }
 
+#if DBG
         /* Validate the flow addition */
         {
             UINT64 newHash;
             OvsFlow *flow = OvsLookupFlow(datapath, &put->key, &newHash,
-                                                                    FALSE);
+                                          FALSE);
             ASSERT(flow);
             ASSERT(newHash == hash);
             if (!flow || newHash != hash) {
                 return STATUS_UNSUCCESSFUL;
             }
         }
+#endif
     } else {
         stats->packetCount = KernelFlow->packetCount;
         stats->byteCount = KernelFlow->byteCount;
         stats->tcpFlags = KernelFlow->tcpFlags;
-        stats->used = (UINT32)KernelFlow->used;
+        stats->used = KernelFlow->used;
 
         if (mayModify) {
             OvsFlow *newFlow;
@@ -2342,29 +2364,22 @@ HandleFlowPut(OvsFlowPut *put,
                 return STATUS_UNSUCCESSFUL;
             }
 
-            KernelFlow = OvsLookupFlow(datapath, &put->key, &hash, TRUE);
-            if (KernelFlow)  {
-                if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0) {
+            if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0) {
                     newFlow->packetCount = KernelFlow->packetCount;
                     newFlow->byteCount = KernelFlow->byteCount;
                     newFlow->tcpFlags = KernelFlow->tcpFlags;
+                    newFlow->used = KernelFlow->used;
                 }
-                RemoveFlow(datapath, &KernelFlow);
-            }  else  {
-                if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0)  {
-                    newFlow->packetCount = stats->packetCount;
-                    newFlow->byteCount = stats->byteCount;
-                    newFlow->tcpFlags = stats->tcpFlags;
-                }
-            }
+            RemoveFlow(datapath, &KernelFlow);
             status = AddFlow(datapath, newFlow);
             ASSERT(status == STATUS_SUCCESS);
 
+#if DBG
             /* Validate the flow addition */
             {
                 UINT64 newHash;
                 OvsFlow *testflow = OvsLookupFlow(datapath, &put->key,
-                                                            &newHash, FALSE);
+                                                  &newHash, FALSE);
                 ASSERT(testflow);
                 ASSERT(newHash == hash);
                 if (!testflow || newHash != hash) {
@@ -2372,15 +2387,15 @@ HandleFlowPut(OvsFlowPut *put,
                     return STATUS_UNSUCCESSFUL;
                 }
             }
+#endif
         } else {
             if (mayDelete) {
                 if (KernelFlow) {
                     RemoveFlow(datapath, &KernelFlow);
                 }
             } else {
-                /* Return success if an identical flow already exists. */
-                /* XXX: should we return EEXIST in a netlink error? */
-                return STATUS_SUCCESS;
+                /* Return duplicate if an identical flow already exists. */
+                return STATUS_DUPLICATE_NAME;
             }
         }
     }
