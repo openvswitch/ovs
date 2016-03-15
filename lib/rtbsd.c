@@ -128,7 +128,9 @@ rtbsd_notifier_run(void)
             case RTM_IFINFO:
             /* Since RTM_IFANNOUNCE messages are smaller than RTM_IFINFO
              * messages, the same buffer may be used. */
+#ifndef __MACH__ /* OS X does not implement RTM_IFANNOUNCE */
             case RTM_IFANNOUNCE:
+#endif
                 rtbsd_report_change(&msg);
                 break;
             default:
@@ -180,11 +182,13 @@ rtbsd_report_change(const struct if_msghdr *msg)
         change.if_index = msg->ifm_index;
         if_indextoname(msg->ifm_index, change.if_name);
         break;
+#ifndef __MACH__ /* OS X does not implement RTM_IFANNOUNCE */
     case RTM_IFANNOUNCE:
         ahdr = (const struct if_announcemsghdr *) msg;
         change.if_index = ahdr->ifan_index;
         strncpy(change.if_name, ahdr->ifan_name, IF_NAMESIZE);
         break;
+#endif
     }
 
     LIST_FOR_EACH (notifier, node, &all_notifiers) {

@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#if !defined(__MACH__)
 #include <config.h>
 
 #include "netdev-provider.h"
@@ -1826,3 +1827,4 @@ af_link_ioctl(unsigned long command, const void *arg)
             : 0);
 }
 #endif
+#endif /* !defined(__MACH__) */
