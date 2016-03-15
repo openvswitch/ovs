@@ -247,6 +247,13 @@ Here is an example:
       `% mkdir _gcc && (cd _gcc && ../configure CC=gcc)`
       `% mkdir _clang && (cd _clang && ../configure CC=clang)`
 
+Under certains loads the ovsdb-server and other components perform
+better when using the jemalloc memory allocator, instead of the glibc
+memory allocator.
+
+If you wish to link with jemalloc add it to LIBS:
+
+      `% ./configure LIBS=-ljemalloc`
 
 Building the Sources
 --------------------

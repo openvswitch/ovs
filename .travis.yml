@@ -10,6 +10,8 @@ addons:
       - gcc-multilib
       - libssl-dev
       - llvm-dev
+      - libjemalloc1
+      - libjemalloc-dev
 
 before_install: ./.travis/prepare.sh
 
@@ -30,6 +32,7 @@ env:
   - KERNEL=3.14.60
   - KERNEL=3.12.53
   - KERNEL=3.10.96
+  - TESTSUITE=1 LIBS=-ljemalloc
 
 script: ./.travis/build.sh $OPTS
 
