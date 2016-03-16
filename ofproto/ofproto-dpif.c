@@ -4887,6 +4887,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     xlate_actions(&trace.xin, &trace.xout);
 
     ds_put_char(ds, '\n');
+    trace.xin.flow.actset_output = 0;
     trace_format_flow(ds, 0, "Final flow", &trace);
     trace_format_megaflow(ds, 0, "Megaflow", &trace);
 
