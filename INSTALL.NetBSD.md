@@ -8,6 +8,7 @@ In that case, you need at least the following packages.
   * libtool-base
   * gmake
   * python27
+  * py27-six
   * py27-xml
   * pkg_alternatives
 
@@ -20,7 +21,7 @@ install pre-built binary packages as the following.
     ```
     # PKG_PATH=http://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/6.1.2/All/
     # export PKG_PATH
-    # pkg_add automake libtool-base gmake python27 py27-xml pkg_alternatives
+    # pkg_add automake libtool-base gmake python27 py27-six py27-xml pkg_alternatives
     ```
 
 NetBSD's `/usr/bin/make` is not GNU make.  GNU make is installed as
