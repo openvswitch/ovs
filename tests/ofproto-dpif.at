@@ -7404,3 +7404,14 @@ dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0xf063/0x1000,dl_type=0
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - trace (unchanged)])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1'], [0], [stdout])
+AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: unchanged
+])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100)'], [0], [stdout])
+AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: unchanged
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
