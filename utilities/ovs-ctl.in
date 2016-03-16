@@ -52,8 +52,7 @@ insert_mod_if_required () {
     fi
 
     # If openvswitch is already loaded then we're done.
-    test -e /sys/module/openvswitch -o -e /sys/module/openvswitch_mod && \
-     return 0
+    test -e /sys/module/openvswitch && return 0
 
     # Load openvswitch.  If that's successful then we're done.
     insert_mods && return 0
@@ -351,10 +350,7 @@ force_reload_kmod () {
         fi
     done
 
-    # try both old and new names in case this is post upgrade
-    if test -e /sys/module/openvswitch_mod; then
-        action "Removing openvswitch module" rmmod openvswitch_mod
-    elif test -e /sys/module/openvswitch; then
+    if test -e /sys/module/openvswitch; then
         action "Removing openvswitch module" rmmod openvswitch
     fi
 
