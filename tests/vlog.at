@@ -360,7 +360,7 @@ AT_CHECK([vlog_filt stderr], [0], [opened log file
 ])
 
 AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p
-/\(test_unixctl\|daemon\) /p'], [0], [dnl
+/test_unixctl /p; /daemon /p'], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon             OFF       INFO       INFO
@@ -374,7 +374,7 @@ AT_CHECK([APPCTL -t test-unixctl vlog/set nonexistent], [2], [],
 ovs-appctl: test-unixctl: server returned an error
 ])
 AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p
-/\(test_unixctl\|daemon\) /p'], [0], [dnl
+/test_unixctl /p; /daemon /p'], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon             OFF        ERR        DBG
