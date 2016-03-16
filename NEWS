@@ -40,7 +40,7 @@ Post-v2.5.0
    - Datapath Linux kernel compatibility.
      * Dropped support for kernel older than 3.10.
 
-v2.5.0 - xx xxx xxxx
+v2.5.0 - 26 Feb 2016
 ---------------------
    - Dropped support for Python older than version 2.7.  As a consequence,
      using Open vSwitch 2.5 or later on XenServer 6.5 or earlier (which
