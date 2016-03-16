@@ -413,6 +413,21 @@ ovs_strerror(int error)
     char *buffer;
     char *s;
 
+    if (error == 0) {
+        /*
+         * strerror(0) varies among platforms:
+         *
+         *   Success
+         *   No error
+         *   Undefined error: 0
+         *
+         * We want to provide a consistent result here because
+         * our testsuite has test cases which strictly matches
+         * log messages containing this string.
+         */
+        return "Success";
+    }
+
     save_errno = errno;
     buffer = strerror_buffer_get()->s;
 
@@ -2059,6 +2074,11 @@ ovs_format_message(int error)
 {
     enum { BUFSIZE = sizeof strerror_buffer_get()->s };
     char *buffer = strerror_buffer_get()->s;
+
+    if (error == 0) {
+        /* See ovs_strerror */
+        return "Success";
+    }
 
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                   NULL, error, 0, buffer, BUFSIZE, NULL);

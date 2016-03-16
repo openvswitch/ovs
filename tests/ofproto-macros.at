@@ -30,7 +30,6 @@ prt==1 { sub(/[ \t]*$/, ""); print $0 }
 vconn_sub() {
     sed '
 s/tcp:127.0.0.1:[0-9][0-9]*:/unix:/
-s/No error/Success/
 '
 }
 ]
