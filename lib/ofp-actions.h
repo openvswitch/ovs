@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@
     /* Output. */                                                       \
     OFPACT(OUTPUT,          ofpact_output,      ofpact, "output")       \
     OFPACT(GROUP,           ofpact_group,       ofpact, "group")        \
-    OFPACT(CONTROLLER,      ofpact_controller,  ofpact, "controller")   \
+    OFPACT(CONTROLLER,      ofpact_controller,  userdata, "controller") \
     OFPACT(ENQUEUE,         ofpact_enqueue,     ofpact, "enqueue")      \
     OFPACT(OUTPUT_REG,      ofpact_output_reg,  ofpact, "output_reg")   \
     OFPACT(BUNDLE,          ofpact_bundle,      slaves, "bundle")       \
@@ -185,6 +185,19 @@ BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
 #define OFPACT_ALIGNTO 8
 #define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
 
+/* Expands to an anonymous union that contains:
+ *
+ *    - MEMBERS in a nested anonymous struct.
+ *
+ *    - An array as large as MEMBERS plus padding to a multiple of 8 bytes.
+ *
+ * The effect is to pad MEMBERS to a multiple of 8 bytes. */
+#define OFPACT_PADDED_MEMBERS(MEMBERS)                          \
+    union {                                                     \
+        struct { MEMBERS };                                     \
+        uint8_t pad[OFPACT_ALIGN(sizeof(struct { MEMBERS }))];  \
+    }
+
 /* Returns the ofpact following 'ofpact'. */
 static inline struct ofpact *
 ofpact_next(const struct ofpact *ofpact)
@@ -241,10 +254,22 @@ struct ofpact_output {
  *
  * Used for NXAST_CONTROLLER. */
 struct ofpact_controller {
-    struct ofpact ofpact;
-    uint16_t max_len;           /* Maximum length to send to controller. */
-    uint16_t controller_id;     /* Controller ID to send packet-in. */
-    enum ofp_packet_in_reason reason; /* Reason to put in packet-in. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t max_len;   /* Max length to send to controller. */
+        uint16_t controller_id; /* Controller ID to send packet-in. */
+        enum ofp_packet_in_reason reason; /* Reason to put in packet-in. */
+
+        /* If true, this action freezes packet traversal of the OpenFlow
+         * tables and adds a continuation to the packet-in message, that
+         * a controller can use to resume that traversal. */
+        bool pause;
+
+        /* Arbitrary data to include in the packet-in message (currently,
+         * only in NXT_PACKET_IN2). */
+        uint16_t userdata_len;
+    );
+    uint8_t userdata[0];
 };
 
 /* OFPACT_ENQUEUE.
@@ -477,8 +502,7 @@ struct ofpact_meter {
  *
  * Used for OFPIT11_WRITE_ACTIONS. */
 struct ofpact_nest {
-    struct ofpact ofpact;
-    uint8_t pad[PAD_SIZE(sizeof(struct ofpact), OFPACT_ALIGNTO)];
+    OFPACT_PADDED_MEMBERS(struct ofpact ofpact;);
     struct ofpact actions[];
 };
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
@@ -497,21 +521,6 @@ enum nx_conntrack_flags {
  * that the packet should not be recirculated. */
 #define NX_CT_RECIRC_NONE OFPTT_ALL
 
-/* We want to determine the size of these elements at compile time to ensure
- * actions alignment, but we also want to allow ofpact_conntrack to have
- * basic _put(), _get(), etc accessors defined below which access these
- * members directly from ofpact_conntrack. An anonymous struct will serve
- * both of these purposes. */
-#define CT_MEMBERS                      \
-struct {                                \
-    struct ofpact ofpact;               \
-    uint16_t flags;                     \
-    uint16_t zone_imm;                  \
-    struct mf_subfield zone_src;        \
-    uint16_t alg;                       \
-    uint8_t recirc_table;               \
-}
-
 #if !defined(IPPORT_FTP)
 #define	IPPORT_FTP  21
 #endif
@@ -520,10 +529,14 @@ struct {                                \
  *
  * Used for NXAST_CT. */
 struct ofpact_conntrack {
-    union {
-        CT_MEMBERS;
-        uint8_t pad[OFPACT_ALIGN(sizeof(CT_MEMBERS))];
-    };
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t flags;
+        uint16_t zone_imm;
+        struct mf_subfield zone_src;
+        uint16_t alg;
+        uint8_t recirc_table;
+    );
     struct ofpact actions[0];
 };
 BUILD_ASSERT_DECL(offsetof(struct ofpact_conntrack, actions)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -589,6 +589,23 @@ match_set_mpls_bos(struct match *match, int idx, uint8_t mpls_bos)
 {
     match->wc.masks.mpls_lse[idx] |= htonl(MPLS_BOS_MASK);
     flow_set_mpls_bos(&match->flow, idx, mpls_bos);
+}
+
+/* Modifies 'match' so that the TTL of MPLS label 'idx' is wildcarded. */
+void
+match_set_any_mpls_ttl(struct match *match, int idx)
+{
+    match->wc.masks.mpls_lse[idx] &= ~htonl(MPLS_TTL_MASK);
+    flow_set_mpls_ttl(&match->flow, idx, 0);
+}
+
+/* Modifies 'match' so that it matches only packets in which the TTL of MPLS
+ * label 'idx' equals 'mpls_ttl'. */
+void
+match_set_mpls_ttl(struct match *match, int idx, uint8_t mpls_ttl)
+{
+    match->wc.masks.mpls_lse[idx] |= htonl(MPLS_TTL_MASK);
+    flow_set_mpls_ttl(&match->flow, idx, mpls_ttl);
 }
 
 /* Modifies 'match' so that the MPLS LSE is wildcarded. */

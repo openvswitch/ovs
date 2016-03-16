@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1404,6 +1404,7 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_ROLE_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_REQUESTFORWARD:
+    case OFPTYPE_TABLE_STATUS:
     case OFPTYPE_SET_FLOW_FORMAT:
     case OFPTYPE_FLOW_MOD_TABLE_ID:
     case OFPTYPE_SET_PACKET_IN_FORMAT:
@@ -1420,6 +1421,7 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_NXT_TLV_TABLE_MOD:
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
+    case OFPTYPE_NXT_RESUME:
     default:
         return true;
     }

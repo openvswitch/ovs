@@ -113,7 +113,7 @@ static int ip_tunnel_bind_dev(struct net_device *dev)
 		rt = ip_route_output_key(tunnel->net, &fl4);
 
 		if (!IS_ERR(rt)) {
-			tdev = rt_dst(rt).dev;
+			tdev = rt->dst.dev;
 			ip_rt_put(rt);
 		}
 		if (dev->type != ARPHRD_ETHER)
@@ -137,23 +137,34 @@ static int ip_tunnel_bind_dev(struct net_device *dev)
 	return mtu;
 }
 
-int rpl_ip_tunnel_change_mtu(struct net_device *dev, int new_mtu)
+int rpl___ip_tunnel_change_mtu(struct net_device *dev, int new_mtu, bool strict)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	int t_hlen = tunnel->hlen + sizeof(struct iphdr);
+	int max_mtu = 0xFFF8 - dev->hard_header_len - t_hlen;
 
-	if (new_mtu < 68 ||
-	    new_mtu > 0xFFF8 - dev->hard_header_len - t_hlen)
+	if (new_mtu < 68)
 		return -EINVAL;
+
+	if (new_mtu > max_mtu) {
+		if (strict)
+			return -EINVAL;
+
+		new_mtu = max_mtu;
+	}
+
 	dev->mtu = new_mtu;
 	return 0;
 }
 
+int rpl_ip_tunnel_change_mtu(struct net_device *dev, int new_mtu)
+{
+	return rpl___ip_tunnel_change_mtu(dev, new_mtu, true);
+}
+
 static void ip_tunnel_dev_free(struct net_device *dev)
 {
-#ifdef HAVE_DEV_TSTATS
 	free_percpu(dev->tstats);
-#endif
 	free_netdev(dev);
 }
 
@@ -248,11 +259,9 @@ int rpl_ip_tunnel_init(struct net_device *dev)
 	struct iphdr *iph = &tunnel->parms.iph;
 
 	dev->destructor	= ip_tunnel_dev_free;
-#ifdef HAVE_DEV_TSTATS
 	dev->tstats = (typeof(dev->tstats)) netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
 	if (!dev->tstats)
 		return -ENOMEM;
-#endif
 	tunnel->dev = dev;
 	tunnel->net = dev_net(dev);
 	strcpy(tunnel->parms.name, dev->name);

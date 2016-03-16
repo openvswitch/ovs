@@ -157,6 +157,14 @@ struct ofp14_table_desc {
 };
 OFP_ASSERT(sizeof(struct ofp14_table_desc) == 8);
 
+/* A table config has changed in the datapath */
+struct ofp14_table_status {
+    uint8_t reason;    /* One of OFPTR_*. */
+    uint8_t pad[7];    /* Pad to 64 bits */
+    /* Followed by struct ofp14_table_desc */
+};
+OFP_ASSERT(sizeof(struct ofp14_table_status) == 8);
+
 /* ## ---------------- ## */
 /* ## ofp14_port_stats ## */
 /* ## ---------------- ## */

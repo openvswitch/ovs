@@ -1122,11 +1122,10 @@ static NDIS_STATUS
 FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
                  BOOLEAN lastPacket, UINT16 packetCounter)
 {
-    EthHdr *dstEth;
-    IPHdr *dstIP;
-    TCPHdr *dstTCP;
-    PMDL mdl;
-    PUINT8 bufferStart;
+    EthHdr *dstEth = NULL;
+    TCPHdr *dstTCP = NULL;
+    PMDL mdl = NULL;
+    PUINT8 bufferStart = NULL;
 
     mdl = NET_BUFFER_FIRST_MDL(nb);
 
@@ -1135,43 +1134,85 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
         return NDIS_STATUS_RESOURCES;
     }
     dstEth = (EthHdr *)(bufferStart + NET_BUFFER_CURRENT_MDL_OFFSET(nb));
-    ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
-            >= sizeof(EthHdr) + sizeof(IPHdr) + sizeof(TCPHdr));
-    dstIP = (IPHdr *)((PCHAR)dstEth + sizeof *dstEth);
-    dstTCP = (TCPHdr *)((PCHAR)dstIP + dstIP->ihl * 4);
-    ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
-            >= sizeof(EthHdr) + dstIP->ihl * 4 + TCP_HDR_LEN(dstTCP));
 
-    /* Fix IP length and checksum */
-    ASSERT(dstIP->protocol == IPPROTO_TCP);
-    dstIP->tot_len = htons(segmentSize + dstIP->ihl * 4 + TCP_HDR_LEN(dstTCP));
-    dstIP->id += packetCounter;
-    dstIP->check = 0;
-    dstIP->check = IPChecksum((UINT8 *)dstIP, dstIP->ihl * 4, 0);
+    switch (dstEth->Type) {
+    case ETH_TYPE_IPV4_NBO:
+    {
+        IPHdr *dstIP = NULL;
 
-    /* Fix TCP checksum */
-    dstTCP->seq = htonl(seqNumber);
+        ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
+                >= sizeof(EthHdr) + sizeof(IPHdr) + sizeof(TCPHdr));
+        dstIP = (IPHdr *)((PCHAR)dstEth + sizeof(*dstEth));
+        dstTCP = (TCPHdr *)((PCHAR)dstIP + dstIP->ihl * 4);
+        ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
+                >= sizeof(EthHdr) + dstIP->ihl * 4 + TCP_HDR_LEN(dstTCP));
 
-    /*
-     * Set the TCP FIN and PSH bit only for the last packet
-     * More information can be found under:
-     * https://msdn.microsoft.com/en-us/library/windows/hardware/ff568840%28v=vs.85%29.aspx
-     */
-    if (dstTCP->fin) {
-        dstTCP->fin = lastPacket;
+        /* Fix IP length and checksum */
+        ASSERT(dstIP->protocol == IPPROTO_TCP);
+        dstIP->tot_len = htons(segmentSize + dstIP->ihl * 4 + TCP_HDR_LEN(dstTCP));
+        dstIP->id += packetCounter;
+        dstIP->check = 0;
+        dstIP->check = IPChecksum((UINT8 *)dstIP, dstIP->ihl * 4, 0);
+        dstTCP->seq = htonl(seqNumber);
+
+        /*
+         * Set the TCP FIN and PSH bit only for the last packet
+         * More information can be found under:
+         * https://msdn.microsoft.com/en-us/library/windows/hardware/ff568840%28v=vs.85%29.aspx
+         */
+        if (dstTCP->fin) {
+            dstTCP->fin = lastPacket;
+        }
+        if (dstTCP->psh) {
+            dstTCP->psh = lastPacket;
+        }
+        UINT16 csumLength = segmentSize + TCP_HDR_LEN(dstTCP);
+        dstTCP->check = IPPseudoChecksum(&dstIP->saddr,
+                                         &dstIP->daddr,
+                                         IPPROTO_TCP,
+                                         csumLength);
+        dstTCP->check = CalculateChecksumNB(nb,
+                                            csumLength,
+                                            sizeof(*dstEth) + dstIP->ihl * 4);
+        break;
     }
-    if (dstTCP->psh) {
-        dstTCP->psh = lastPacket;
-    }
+    case ETH_TYPE_IPV6_NBO:
+    {
+        IPv6Hdr *dstIP = NULL;
 
-    UINT16 csumLength = segmentSize + TCP_HDR_LEN(dstTCP);
-    dstTCP->check = IPPseudoChecksum(&dstIP->saddr,
-                                     &dstIP->daddr,
-                                     IPPROTO_TCP,
-                                     csumLength);
-    dstTCP->check = CalculateChecksumNB(nb,
-                                        csumLength,
-                                        sizeof *dstEth + dstIP->ihl * 4);
+        ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
+            >= sizeof(EthHdr) + sizeof(IPv6Hdr) + sizeof(TCPHdr));
+        dstIP = (IPv6Hdr *)((PCHAR)dstEth + sizeof(*dstEth));
+        dstTCP = (TCPHdr *)((PCHAR)dstIP + sizeof(IPv6Hdr));
+        ASSERT((INT)MmGetMdlByteCount(mdl) - NET_BUFFER_CURRENT_MDL_OFFSET(nb)
+            >= sizeof(EthHdr) + sizeof(IPv6Hdr) + TCP_HDR_LEN(dstTCP));
+
+        /* Fix IP length */
+        ASSERT(dstIP->nexthdr == IPPROTO_TCP);
+        dstIP->payload_len = htons(segmentSize + sizeof(IPv6Hdr) + TCP_HDR_LEN(dstTCP));
+
+        dstTCP->seq = htonl(seqNumber);
+        if (dstTCP->fin) {
+            dstTCP->fin = lastPacket;
+        }
+        if (dstTCP->psh) {
+            dstTCP->psh = lastPacket;
+        }
+
+        UINT16 csumLength = segmentSize + TCP_HDR_LEN(dstTCP);
+        dstTCP->check = IPv6PseudoChecksum((UINT32*)&dstIP->saddr,
+                                           (UINT32*)&dstIP->daddr,
+                                           IPPROTO_TCP,
+                                           csumLength);
+        dstTCP->check = CalculateChecksumNB(nb,
+                                            csumLength,
+                                            sizeof(*dstEth) + sizeof(IPv6Hdr));
+        break;
+    }
+    default:
+        OVS_LOG_ERROR("Invalid eth type: %d\n", dstEth->Type);
+        ASSERT(! "Invalid eth type");
+    }
 
     return STATUS_SUCCESS;
 }

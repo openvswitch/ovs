@@ -14,9 +14,7 @@ Requires=openvswitch.service
 After=openvswitch.service
 
 [Service]
-Type=simple
-Environment=OVS_RUNDIR=%t/openvswitch
-Environment=OVS_DB=unix:%t/openvswitch/db.sock
-ExecStart=/usr/bin/ovn-controller -vconsole:emer -vsyslog:err -vfile:info \
-          --log-file=/var/log/openvswitch/ovn-controller.log \
-          --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller.pid ${OVS_DB}
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_controller
+ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_controller

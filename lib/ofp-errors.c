@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -284,17 +284,15 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
     const struct ofp_error_msg *oem;
     enum ofpraw raw;
     uint16_t type, code;
-    enum ofperr error;
     uint32_t vendor;
-    struct ofpbuf b;
 
     if (payload) {
         memset(payload, 0, sizeof *payload);
     }
 
     /* Pull off the error message. */
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofpraw_pull(&raw, &b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofperr error = ofpraw_pull(&raw, &b);
     if (error) {
         return 0;
     }

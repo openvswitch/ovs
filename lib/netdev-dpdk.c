@@ -45,6 +45,7 @@
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "shash.h"
+#include "smap.h"
 #include "sset.h"
 #include "unaligned.h"
 #include "timeval.h"
@@ -53,6 +54,7 @@
 
 #include "rte_config.h"
 #include "rte_mbuf.h"
+#include "rte_meter.h"
 #include "rte_virtio_net.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
@@ -69,14 +71,14 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * The minimum mbuf size is limited to avoid scatter behaviour and drop in
  * performance for standard Ethernet MTU.
  */
-#define MTU_TO_MAX_LEN(mtu)  ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
-#define MBUF_SIZE_MTU(mtu)   (MTU_TO_MAX_LEN(mtu)        \
-                              + sizeof(struct dp_packet) \
-                              + RTE_PKTMBUF_HEADROOM)
-#define MBUF_SIZE_DRIVER     (2048                       \
-                              + sizeof (struct rte_mbuf) \
-                              + RTE_PKTMBUF_HEADROOM)
-#define MBUF_SIZE(mtu)       MAX(MBUF_SIZE_MTU(mtu), MBUF_SIZE_DRIVER)
+#define ETHER_HDR_MAX_LEN           (ETHER_HDR_LEN + ETHER_CRC_LEN + (2 * VLAN_HEADER_LEN))
+#define MTU_TO_FRAME_LEN(mtu)       ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
+#define MTU_TO_MAX_FRAME_LEN(mtu)   ((mtu) + ETHER_HDR_MAX_LEN)
+#define FRAME_LEN_TO_MTU(frame_len) ((frame_len)- ETHER_HDR_LEN - ETHER_CRC_LEN)
+#define MBUF_SIZE(mtu)              ( MTU_TO_MAX_FRAME_LEN(mtu)   \
+                                    + sizeof(struct dp_packet)    \
+                                    + RTE_PKTMBUF_HEADROOM)
+#define NETDEV_DPDK_MBUF_ALIGN      1024
 
 /* Max and min number of packets in the mempool.  OVS tries to allocate a
  * mempool with MAX_NB_MBUF: if this fails (because the system doesn't have
@@ -99,6 +101,8 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
+
+#define OVS_VHOST_MAX_QUEUE_NUM 1024  /* Maximum number of vHost TX queues. */
 
 static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
@@ -143,6 +147,101 @@ static int rte_eal_init_ret = ENODEV;
 
 static struct ovs_mutex dpdk_mutex = OVS_MUTEX_INITIALIZER;
 
+/* Quality of Service */
+
+/* An instance of a QoS configuration.  Always associated with a particular
+ * network device.
+ *
+ * Each QoS implementation subclasses this with whatever additional data it
+ * needs.
+ */
+struct qos_conf {
+    const struct dpdk_qos_ops *ops;
+};
+
+/* A particular implementation of dpdk QoS operations.
+ *
+ * The functions below return 0 if successful or a positive errno value on
+ * failure, except where otherwise noted. All of them must be provided, except
+ * where otherwise noted.
+ */
+struct dpdk_qos_ops {
+
+    /* Name of the QoS type */
+    const char *qos_name;
+
+    /* Called to construct the QoS implementation on 'netdev'. The
+     * implementation should make the appropriate calls to configure QoS
+     * according to 'details'. The implementation may assume that any current
+     * QoS configuration already installed should be destroyed before
+     * constructing the new configuration.
+     *
+     * The contents of 'details' should be documented as valid for 'ovs_name'
+     * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
+     * (which is built as ovs-vswitchd.conf.db(8)).
+     *
+     * This function must return 0 if and only if it sets 'netdev->qos_conf'
+     * to an initialized 'struct qos_conf'.
+     *
+     * For all QoS implementations it should always be non-null.
+     */
+    int (*qos_construct)(struct netdev *netdev, const struct smap *details);
+
+    /* Destroys the data structures allocated by the implementation as part of
+     * 'qos_conf.
+     *
+     * For all QoS implementations it should always be non-null.
+     */
+    void (*qos_destruct)(struct netdev *netdev, struct qos_conf *conf);
+
+    /* Retrieves details of 'netdev->qos_conf' configuration into 'details'.
+     *
+     * The contents of 'details' should be documented as valid for 'ovs_name'
+     * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
+     * (which is built as ovs-vswitchd.conf.db(8)).
+     */
+    int (*qos_get)(const struct netdev *netdev, struct smap *details);
+
+    /* Reconfigures 'netdev->qos_conf' according to 'details', performing any
+     * required calls to complete the reconfiguration.
+     *
+     * The contents of 'details' should be documented as valid for 'ovs_name'
+     * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
+     * (which is built as ovs-vswitchd.conf.db(8)).
+     *
+     * This function may be null if 'qos_conf' is not configurable.
+     */
+    int (*qos_set)(struct netdev *netdev, const struct smap *details);
+
+    /* Modify an array of rte_mbufs. The modification is specific to
+     * each qos implementation.
+     *
+     * The function should take and array of mbufs and an int representing
+     * the current number of mbufs present in the array.
+     *
+     * After the function has performed a qos modification to the array of
+     * mbufs it returns an int representing the number of mbufs now present in
+     * the array. This value is can then be passed to the port send function
+     * along with the modified array for transmission.
+     *
+     * For all QoS implementations it should always be non-null.
+     */
+    int (*qos_run)(struct netdev *netdev, struct rte_mbuf **pkts,
+                           int pkt_cnt);
+};
+
+/* dpdk_qos_ops for each type of user space QoS implementation */
+static const struct dpdk_qos_ops egress_policer_ops;
+
+/*
+ * Array of dpdk_qos_ops, contains pointer to all supported QoS
+ * operations.
+ */
+static const struct dpdk_qos_ops *const qos_confs[] = {
+    &egress_policer_ops,
+    NULL
+};
+
 /* Contains all 'struct dpdk_dev's. */
 static struct ovs_list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
     = OVS_LIST_INITIALIZER(&dpdk_list);
@@ -173,6 +272,8 @@ struct dpdk_tx_queue {
                                     * from concurrent access.  It is used only
                                     * if the queue is shared among different
                                     * pmd threads (see 'txq_needs_locking'). */
+    int map;                       /* Mapping of configured vhost-user queues
+                                    * to enabled by guest. */
     uint64_t tsc;
     struct rte_mbuf *burst_pkts[MAX_TX_QUEUE_LEN];
 };
@@ -188,7 +289,7 @@ struct dpdk_ring {
     /* For the client rings */
     struct rte_ring *cring_tx;
     struct rte_ring *cring_rx;
-    int user_port_id; /* User given port no, parsed from port name */
+    unsigned int user_port_id; /* User given port no, parsed from port name */
     int eth_port_id; /* ethernet device port id */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 };
@@ -233,6 +334,11 @@ struct netdev_dpdk {
 
     /* In dpdk_list. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
+
+    /* QoS configuration and lock for the device */
+    struct qos_conf *qos_conf;
+    rte_spinlock_t qos_lock;
+
 };
 
 struct netdev_rxq_dpdk {
@@ -250,6 +356,22 @@ static bool
 is_dpdk_class(const struct netdev_class *class)
 {
     return class->construct == netdev_dpdk_construct;
+}
+
+/* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
+ * aligned at 1k or less. If a declared mbuf size is not a multiple of this
+ * value, insufficient buffers are allocated to accomodate the packet in its
+ * entirety. Furthermore, certain drivers need to ensure that there is also
+ * sufficient space in the Rx buffer to accommodate two VLAN tags (for QinQ
+ * frames). If the RX buffer is too small, then the driver enables scatter RX
+ * behaviour, which reduces performance. To prevent this, use a buffer size that
+ * is closest to 'mtu', but which satisfies the aforementioned criteria.
+ */
+static uint32_t
+dpdk_buf_size(int mtu)
+{
+    return ROUND_UP((MTU_TO_MAX_FRAME_LEN(mtu) + RTE_PKTMBUF_HEADROOM),
+                     NETDEV_DPDK_MBUF_ALIGN);
 }
 
 /* XXX: use dpdk malloc for entire OVS. in fact huge page should be used
@@ -274,35 +396,7 @@ free_dpdk_buf(struct dp_packet *p)
 {
     struct rte_mbuf *pkt = (struct rte_mbuf *) p;
 
-    rte_pktmbuf_free_seg(pkt);
-}
-
-static void
-__rte_pktmbuf_init(struct rte_mempool *mp,
-                   void *opaque_arg OVS_UNUSED,
-                   void *_m,
-                   unsigned i OVS_UNUSED)
-{
-    struct rte_mbuf *m = _m;
-    uint32_t buf_len = mp->elt_size - sizeof(struct dp_packet);
-
-    RTE_MBUF_ASSERT(mp->elt_size >= sizeof(struct dp_packet));
-
-    memset(m, 0, mp->elt_size);
-
-    /* start of buffer is just after mbuf structure */
-    m->buf_addr = (char *)m + sizeof(struct dp_packet);
-    m->buf_physaddr = rte_mempool_virt2phy(mp, m) +
-                    sizeof(struct dp_packet);
-    m->buf_len = (uint16_t)buf_len;
-
-    /* keep some headroom between start of buffer and data */
-    m->data_off = RTE_MIN(RTE_PKTMBUF_HEADROOM, m->buf_len);
-
-    /* init some constant fields */
-    m->pool = mp;
-    m->nb_segs = 1;
-    m->port = 0xff;
+    rte_pktmbuf_free(pkt);
 }
 
 static void
@@ -313,7 +407,7 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 {
     struct rte_mbuf *m = _m;
 
-    __rte_pktmbuf_init(mp, opaque_arg, _m, i);
+    rte_pktmbuf_init(mp, opaque_arg, _m, i);
 
     dp_packet_init_dpdk((struct dp_packet *) m, m->buf_len);
 }
@@ -324,6 +418,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     struct dpdk_mp *dmp = NULL;
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     unsigned mp_size;
+    struct rte_pktmbuf_pool_private mbp_priv;
 
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
@@ -336,6 +431,8 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     dmp->socket_id = socket_id;
     dmp->mtu = mtu;
     dmp->refcount = 1;
+    mbp_priv.mbuf_data_room_size = MBUF_SIZE(mtu) - sizeof(struct dp_packet);
+    mbp_priv.mbuf_priv_size = sizeof (struct dp_packet) - sizeof (struct rte_mbuf);
 
     mp_size = MAX_NB_MBUF;
     do {
@@ -347,7 +444,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
         dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
                                      MP_CACHE_SZ,
                                      sizeof(struct rte_pktmbuf_pool_private),
-                                     rte_pktmbuf_pool_init, NULL,
+                                     rte_pktmbuf_pool_init, &mbp_priv,
                                      ovs_rte_pktmbuf_init, NULL,
                                      socket_id, 0);
     } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
@@ -572,6 +669,9 @@ netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
             /* Queues are shared among CPUs. Always flush */
             netdev->tx_q[i].flush_tx = true;
         }
+
+        /* Initialize map for vhost devices. */
+        netdev->tx_q[i].map = -1;
         rte_spinlock_init(&netdev->tx_q[i].tx_lock);
     }
 }
@@ -584,6 +684,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
     int sid;
     int err = 0;
+    uint32_t buf_size;
 
     ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
@@ -604,13 +705,18 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
     netdev->type = type;
     netdev->flags = 0;
     netdev->mtu = ETHER_MTU;
-    netdev->max_packet_len = MTU_TO_MAX_LEN(netdev->mtu);
+    netdev->max_packet_len = MTU_TO_FRAME_LEN(netdev->mtu);
 
-    netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, netdev->mtu);
+    buf_size = dpdk_buf_size(netdev->mtu);
+    netdev->dpdk_mp = dpdk_mp_get(netdev->socket_id, FRAME_LEN_TO_MTU(buf_size));
     if (!netdev->dpdk_mp) {
         err = ENOMEM;
         goto unlock;
     }
+
+    /* Initialise QoS configuration to NULL and qos lock to unlocked */
+    netdev->qos_conf = NULL;
+    rte_spinlock_init(&netdev->qos_lock);
 
     netdev_->n_txq = NR_QUEUE;
     netdev_->n_rxq = NR_QUEUE;
@@ -623,6 +729,8 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
         if (err) {
             goto unlock;
         }
+    } else {
+        netdev_dpdk_alloc_txq(netdev, OVS_VHOST_MAX_QUEUE_NUM);
     }
 
     list_push_back(&dpdk_list, &netdev->list_node);
@@ -635,6 +743,8 @@ unlock:
     return err;
 }
 
+/* dev_name must be the prefix followed by a positive decimal number.
+ * (no leading + or - signs are allowed) */
 static int
 dpdk_dev_parse_name(const char dev_name[], const char prefix[],
                     unsigned int *port_no)
@@ -646,8 +756,12 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
     }
 
     cport = dev_name + strlen(prefix);
-    *port_no = strtol(cport, NULL, 0); /* string must be null terminated */
-    return 0;
+
+    if (str_to_uint(cport, 10, port_no)) {
+        return 0;
+    } else {
+        return ENODEV;
+    }
 }
 
 static int
@@ -677,14 +791,26 @@ static int
 netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
 {
     struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    const char *name = netdev_->name;
     int err;
+
+    /* 'name' is appended to 'vhost_sock_dir' and used to create a socket in
+     * the file system. '/' or '\' would traverse directories, so they're not
+     * acceptable in 'name'. */
+    if (strchr(name, '/') || strchr(name, '\\')) {
+        VLOG_ERR("\"%s\" is not a valid name for a vhost-user port. "
+                 "A valid name must not include '/' or '\\'",
+                 name);
+        return EINVAL;
+    }
 
     ovs_mutex_lock(&dpdk_mutex);
     /* Take the name of the vhost-user port and append it to the location where
      * the socket is to be created, then register the socket.
      */
     snprintf(netdev->vhost_id, sizeof(netdev->vhost_id), "%s/%s",
-            vhost_sock_dir, netdev_->name);
+             vhost_sock_dir, name);
+
     err = rte_vhost_driver_register(netdev->vhost_id);
     if (err) {
         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
@@ -692,7 +818,7 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev_)
     } else {
         fatal_signal_add_file_to_unlink(netdev->vhost_id);
         VLOG_INFO("Socket %s created for vhost-user port %s\n",
-                  netdev->vhost_id, netdev_->name);
+                  netdev->vhost_id, name);
         err = vhost_construct_helper(netdev_);
     }
 
@@ -756,6 +882,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
     }
 
     ovs_mutex_lock(&dpdk_mutex);
+    rte_free(dev->tx_q);
     list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -889,10 +1016,8 @@ netdev_dpdk_vhost_set_multiq(struct netdev *netdev_, unsigned int n_txq,
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&netdev->mutex);
 
-    rte_free(netdev->tx_q);
     netdev->up.n_txq = n_txq;
     netdev->up.n_rxq = n_rxq;
-    netdev_dpdk_alloc_txq(netdev, netdev->up.n_txq);
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -964,7 +1089,7 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
         int i;
 
         for (i = nb_tx; i < txq->count; i++) {
-            rte_pktmbuf_free_seg(txq->burst_pkts[i]);
+            rte_pktmbuf_free(txq->burst_pkts[i]);
         }
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped += txq->count-nb_tx;
@@ -1089,6 +1214,23 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
     return 0;
 }
 
+static inline int
+netdev_dpdk_qos_run__(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
+                        int cnt)
+{
+    struct netdev *netdev = &dev->up;
+
+    if (dev->qos_conf != NULL) {
+        rte_spinlock_lock(&dev->qos_lock);
+        if (dev->qos_conf != NULL) {
+            cnt = dev->qos_conf->ops->qos_run(netdev, pkts, cnt);
+        }
+        rte_spinlock_unlock(&dev->qos_lock);
+    }
+
+    return cnt;
+}
+
 static inline void
 netdev_dpdk_vhost_update_tx_counters(struct netdev_stats *stats,
                                      struct dp_packet **packets,
@@ -1115,19 +1257,23 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(vhost_dev);
     struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
     unsigned int total_pkts = cnt;
+    unsigned int qos_pkts = cnt;
     uint64_t start = 0;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
+    qid = vhost_dev->tx_q[qid % vhost_dev->real_n_txq].map;
+
+    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid == -1)) {
         rte_spinlock_lock(&vhost_dev->stats_lock);
         vhost_dev->stats.tx_dropped+= cnt;
         rte_spinlock_unlock(&vhost_dev->stats_lock);
         goto out;
     }
 
-    if (vhost_dev->txq_needs_locking) {
-        qid = qid % vhost_dev->real_n_txq;
-        rte_spinlock_lock(&vhost_dev->tx_q[qid].tx_lock);
-    }
+    rte_spinlock_lock(&vhost_dev->tx_q[qid].tx_lock);
+
+    /* Check has QoS has been configured for the netdev */
+    cnt = netdev_dpdk_qos_run__(vhost_dev, cur_pkts, cnt);
+    qos_pkts -= cnt;
 
     do {
         int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
@@ -1165,11 +1311,10 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         }
     } while (cnt);
 
-    if (vhost_dev->txq_needs_locking) {
-        rte_spinlock_unlock(&vhost_dev->tx_q[qid].tx_lock);
-    }
+    rte_spinlock_unlock(&vhost_dev->tx_q[qid].tx_lock);
 
     rte_spinlock_lock(&vhost_dev->stats_lock);
+    cnt += qos_pkts;
     netdev_dpdk_vhost_update_tx_counters(&vhost_dev->stats, pkts, total_pkts,
                                          cnt);
     rte_spinlock_unlock(&vhost_dev->stats_lock);
@@ -1265,17 +1410,23 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
         newcnt++;
     }
 
+    if (dev->type == DPDK_DEV_VHOST) {
+        __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) mbufs, newcnt, true);
+    } else {
+        unsigned int qos_pkts = newcnt;
+
+        /* Check if QoS has been configured for this netdev. */
+        newcnt = netdev_dpdk_qos_run__(dev, mbufs, newcnt);
+
+        dropped += qos_pkts - newcnt;
+        dpdk_queue_pkts(dev, qid, mbufs, newcnt);
+        dpdk_queue_flush(dev, qid);
+    }
+
     if (OVS_UNLIKELY(dropped)) {
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped += dropped;
         rte_spinlock_unlock(&dev->stats_lock);
-    }
-
-    if (dev->type == DPDK_DEV_VHOST) {
-        __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) mbufs, newcnt, true);
-    } else {
-        dpdk_queue_pkts(dev, qid, mbufs, newcnt);
-        dpdk_queue_flush(dev, qid);
     }
 
     if (!dpdk_thread_is_pmd()) {
@@ -1327,15 +1478,24 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
     } else {
         int next_tx_idx = 0;
         int dropped = 0;
+        unsigned int qos_pkts = 0;
+        unsigned int temp_cnt = 0;
 
         for (i = 0; i < cnt; i++) {
             int size = dp_packet_size(pkts[i]);
 
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
+                    temp_cnt = i - next_tx_idx;
+                    qos_pkts = temp_cnt;
+
+                    temp_cnt = netdev_dpdk_qos_run__(dev, (struct rte_mbuf**)pkts,
+                                                temp_cnt);
+                    dropped += qos_pkts - temp_cnt;
                     dpdk_queue_pkts(dev, qid,
                                     (struct rte_mbuf **)&pkts[next_tx_idx],
-                                    i-next_tx_idx);
+                                    temp_cnt);
+
                 }
 
                 VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
@@ -1347,9 +1507,13 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
             }
         }
         if (next_tx_idx != cnt) {
-           dpdk_queue_pkts(dev, qid,
-                            (struct rte_mbuf **)&pkts[next_tx_idx],
-                            cnt-next_tx_idx);
+            cnt -= next_tx_idx;
+            qos_pkts = cnt;
+
+            cnt = netdev_dpdk_qos_run__(dev, (struct rte_mbuf**)pkts, cnt);
+            dropped += qos_pkts - cnt;
+            dpdk_queue_pkts(dev, qid, (struct rte_mbuf **)&pkts[next_tx_idx],
+                            cnt);
         }
 
         if (OVS_UNLIKELY(dropped)) {
@@ -1417,9 +1581,10 @@ static int
 netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int old_mtu, err;
+    int old_mtu, err, dpdk_mtu;
     struct dpdk_mp *old_mp;
     struct dpdk_mp *mp;
+    uint32_t buf_size;
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
@@ -1428,7 +1593,10 @@ netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
         goto out;
     }
 
-    mp = dpdk_mp_get(dev->socket_id, dev->mtu);
+    buf_size = dpdk_buf_size(mtu);
+    dpdk_mtu = FRAME_LEN_TO_MTU(buf_size);
+
+    mp = dpdk_mp_get(dev->socket_id, dpdk_mtu);
     if (!mp) {
         err = ENOMEM;
         goto out;
@@ -1440,14 +1608,14 @@ netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
     old_mp = dev->dpdk_mp;
     dev->dpdk_mp = mp;
     dev->mtu = mtu;
-    dev->max_packet_len = MTU_TO_MAX_LEN(dev->mtu);
+    dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
 
     err = dpdk_eth_dev_init(dev);
     if (err) {
         dpdk_mp_put(mp);
         dev->mtu = old_mtu;
         dev->dpdk_mp = old_mp;
-        dev->max_packet_len = MTU_TO_MAX_LEN(dev->mtu);
+        dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
         dpdk_eth_dev_init(dev);
         goto out;
     }
@@ -1736,7 +1904,7 @@ netdev_dpdk_get_status(const struct netdev *netdev_, struct smap *args)
     smap_add_format(args, "numa_id", "%d", rte_eth_dev_socket_id(dev->port_id));
     smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
     smap_add_format(args, "min_rx_bufsize", "%u", dev_info.min_rx_bufsize);
-    smap_add_format(args, "max_rx_pktlen", "%u", dev_info.max_rx_pktlen);
+    smap_add_format(args, "max_rx_pktlen", "%u", dev->max_packet_len);
     smap_add_format(args, "max_rx_queues", "%u", dev_info.max_rx_queues);
     smap_add_format(args, "max_tx_queues", "%u", dev_info.max_tx_queues);
     smap_add_format(args, "max_mac_addrs", "%u", dev_info.max_mac_addrs);
@@ -1827,9 +1995,50 @@ set_irq_status(struct virtio_net *dev)
     }
 }
 
+/*
+ * Fixes mapping for vhost-user tx queues. Must be called after each
+ * enabling/disabling of queues and real_n_txq modifications.
+ */
+static void
+netdev_dpdk_remap_txqs(struct netdev_dpdk *netdev)
+    OVS_REQUIRES(netdev->mutex)
+{
+    int *enabled_queues, n_enabled = 0;
+    int i, k, total_txqs = netdev->real_n_txq;
+
+    enabled_queues = dpdk_rte_mzalloc(total_txqs * sizeof *enabled_queues);
+
+    for (i = 0; i < total_txqs; i++) {
+        /* Enabled queues always mapped to themselves. */
+        if (netdev->tx_q[i].map == i) {
+            enabled_queues[n_enabled++] = i;
+        }
+    }
+
+    if (n_enabled == 0 && total_txqs != 0) {
+        enabled_queues[0] = -1;
+        n_enabled = 1;
+    }
+
+    k = 0;
+    for (i = 0; i < total_txqs; i++) {
+        if (netdev->tx_q[i].map != i) {
+            netdev->tx_q[i].map = enabled_queues[k];
+            k = (k + 1) % n_enabled;
+        }
+    }
+
+    VLOG_DBG("TX queue mapping for %s\n", netdev->vhost_id);
+    for (i = 0; i < total_txqs; i++) {
+        VLOG_DBG("%2d --> %2d", i, netdev->tx_q[i].map);
+    }
+
+    rte_free(enabled_queues);
+}
 
 static int
 netdev_dpdk_vhost_set_queues(struct netdev_dpdk *netdev, struct virtio_net *dev)
+    OVS_REQUIRES(netdev->mutex)
 {
     uint32_t qp_num;
 
@@ -1843,11 +2052,9 @@ netdev_dpdk_vhost_set_queues(struct netdev_dpdk *netdev, struct virtio_net *dev)
 
     netdev->real_n_rxq = qp_num;
     netdev->real_n_txq = qp_num;
-    if (netdev->up.n_txq > netdev->real_n_txq) {
-        netdev->txq_needs_locking = true;
-    } else {
-        netdev->txq_needs_locking = false;
-    }
+    netdev->txq_needs_locking = true;
+
+    netdev_dpdk_remap_txqs(netdev);
 
     return 0;
 }
@@ -1941,6 +2148,47 @@ destroy_device(volatile struct virtio_net *dev)
 
 }
 
+static int
+vring_state_changed(struct virtio_net *dev, uint16_t queue_id, int enable)
+{
+    struct netdev_dpdk *vhost_dev;
+    bool exists = false;
+    int qid = queue_id / VIRTIO_QNUM;
+
+    if (queue_id % VIRTIO_QNUM == VIRTIO_TXQ) {
+        return 0;
+    }
+
+    ovs_mutex_lock(&dpdk_mutex);
+    LIST_FOR_EACH (vhost_dev, list_node, &dpdk_list) {
+        if (strncmp(dev->ifname, vhost_dev->vhost_id, IF_NAME_SZ) == 0) {
+            ovs_mutex_lock(&vhost_dev->mutex);
+            if (enable) {
+                vhost_dev->tx_q[qid].map = qid;
+            } else {
+                vhost_dev->tx_q[qid].map = -1;
+            }
+            netdev_dpdk_remap_txqs(vhost_dev);
+            exists = true;
+            ovs_mutex_unlock(&vhost_dev->mutex);
+            break;
+        }
+    }
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    if (exists) {
+        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s' %"
+                  PRIu64" changed to \'%s\'", queue_id, qid, dev->ifname,
+                  dev->device_fh, (enable == 1) ? "enabled" : "disabled");
+    } else {
+        VLOG_INFO("vHost Device '%s' %"PRIu64" not found", dev->ifname,
+                  dev->device_fh);
+        return -1;
+    }
+
+    return 0;
+}
+
 struct virtio_net *
 netdev_dpdk_get_virtio(const struct netdev_dpdk *dev)
 {
@@ -1955,6 +2203,7 @@ static const struct virtio_net_device_ops virtio_net_device_ops =
 {
     .new_device =  new_device,
     .destroy_device = destroy_device,
+    .vring_state_changed = vring_state_changed
 };
 
 static void *
@@ -2020,7 +2269,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
                  unsigned int *eth_port_id)
 {
     struct dpdk_ring *ivshmem;
-    char ring_name[10];
+    char ring_name[RTE_RING_NAMESIZE];
     int err;
 
     ivshmem = dpdk_rte_mzalloc(sizeof *ivshmem);
@@ -2029,7 +2278,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
     }
 
     /* XXX: Add support for multiquque ring. */
-    err = snprintf(ring_name, 10, "%s_tx", dev_name);
+    err = snprintf(ring_name, sizeof(ring_name), "%s_tx", dev_name);
     if (err < 0) {
         return -err;
     }
@@ -2042,7 +2291,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return ENOMEM;
     }
 
-    err = snprintf(ring_name, 10, "%s_rx", dev_name);
+    err = snprintf(ring_name, sizeof(ring_name), "%s_rx", dev_name);
     if (err < 0) {
         return -err;
     }
@@ -2139,6 +2388,255 @@ unlock_dpdk:
     return err;
 }
 
+/* QoS Functions */
+
+/*
+ * Initialize QoS configuration operations.
+ */
+static void
+qos_conf_init(struct qos_conf *conf, const struct dpdk_qos_ops *ops)
+{
+    conf->ops = ops;
+}
+
+/*
+ * Search existing QoS operations in qos_ops and compare each set of
+ * operations qos_name to name. Return a dpdk_qos_ops pointer to a match,
+ * else return NULL
+ */
+static const struct dpdk_qos_ops *
+qos_lookup_name(const char *name)
+{
+    const struct dpdk_qos_ops *const *opsp;
+
+    for (opsp = qos_confs; *opsp != NULL; opsp++) {
+        const struct dpdk_qos_ops *ops = *opsp;
+        if (!strcmp(name, ops->qos_name)) {
+            return ops;
+        }
+    }
+    return NULL;
+}
+
+/*
+ * Call qos_destruct to clean up items associated with the netdevs
+ * qos_conf. Set netdevs qos_conf to NULL.
+ */
+static void
+qos_delete_conf(struct netdev *netdev_)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+
+    rte_spinlock_lock(&netdev->qos_lock);
+    if (netdev->qos_conf) {
+        if (netdev->qos_conf->ops->qos_destruct) {
+            netdev->qos_conf->ops->qos_destruct(netdev_, netdev->qos_conf);
+        }
+        netdev->qos_conf = NULL;
+    }
+    rte_spinlock_unlock(&netdev->qos_lock);
+}
+
+static int
+netdev_dpdk_get_qos_types(const struct netdev *netdev OVS_UNUSED,
+                           struct sset *types)
+{
+    const struct dpdk_qos_ops *const *opsp;
+
+    for (opsp = qos_confs; *opsp != NULL; opsp++) {
+        const struct dpdk_qos_ops *ops = *opsp;
+        if (ops->qos_construct && ops->qos_name[0] != '\0') {
+            sset_add(types, ops->qos_name);
+        }
+    }
+    return 0;
+}
+
+static int
+netdev_dpdk_get_qos(const struct netdev *netdev_,
+                    const char **typep, struct smap *details)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    int error = 0;
+
+    ovs_mutex_lock(&netdev->mutex);
+    if(netdev->qos_conf) {
+        *typep = netdev->qos_conf->ops->qos_name;
+        error = (netdev->qos_conf->ops->qos_get
+                 ? netdev->qos_conf->ops->qos_get(netdev_, details): 0);
+    }
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_set_qos(struct netdev *netdev_,
+                    const char *type, const struct smap *details)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    const struct dpdk_qos_ops *new_ops = NULL;
+    int error = 0;
+
+    /* If type is empty or unsupported then the current QoS configuration
+     * for the dpdk-netdev can be destroyed */
+    new_ops = qos_lookup_name(type);
+
+    if (type[0] == '\0' || !new_ops || !new_ops->qos_construct) {
+        qos_delete_conf(netdev_);
+        return EOPNOTSUPP;
+    }
+
+    ovs_mutex_lock(&netdev->mutex);
+
+    if (netdev->qos_conf) {
+        if (new_ops == netdev->qos_conf->ops) {
+            error = new_ops->qos_set ? new_ops->qos_set(netdev_, details) : 0;
+        } else {
+            /* Delete existing QoS configuration. */
+            qos_delete_conf(netdev_);
+            ovs_assert(netdev->qos_conf == NULL);
+
+            /* Install new QoS configuration. */
+            error = new_ops->qos_construct(netdev_, details);
+            ovs_assert((error == 0) == (netdev->qos_conf != NULL));
+        }
+    } else {
+        error = new_ops->qos_construct(netdev_, details);
+        ovs_assert((error == 0) == (netdev->qos_conf != NULL));
+    }
+
+    ovs_mutex_unlock(&netdev->mutex);
+    return error;
+}
+
+/* egress-policer details */
+
+struct egress_policer {
+    struct qos_conf qos_conf;
+    struct rte_meter_srtcm_params app_srtcm_params;
+    struct rte_meter_srtcm egress_meter;
+};
+
+static struct egress_policer *
+egress_policer_get__(const struct netdev *netdev_)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    return CONTAINER_OF(netdev->qos_conf, struct egress_policer, qos_conf);
+}
+
+static int
+egress_policer_qos_construct(struct netdev *netdev_,
+                            const struct smap *details)
+{
+    struct netdev_dpdk *netdev = netdev_dpdk_cast(netdev_);
+    struct egress_policer *policer;
+    const char *cir_s;
+    const char *cbs_s;
+    int err = 0;
+
+    rte_spinlock_lock(&netdev->qos_lock);
+    policer = xmalloc(sizeof *policer);
+    qos_conf_init(&policer->qos_conf, &egress_policer_ops);
+    netdev->qos_conf = &policer->qos_conf;
+    cir_s = smap_get(details, "cir");
+    cbs_s = smap_get(details, "cbs");
+    policer->app_srtcm_params.cir = cir_s ? strtoull(cir_s, NULL, 10) : 0;
+    policer->app_srtcm_params.cbs = cbs_s ? strtoull(cbs_s, NULL, 10) : 0;
+    policer->app_srtcm_params.ebs = 0;
+    err = rte_meter_srtcm_config(&policer->egress_meter,
+                                    &policer->app_srtcm_params);
+    rte_spinlock_unlock(&netdev->qos_lock);
+
+    return err;
+}
+
+static void
+egress_policer_qos_destruct(struct netdev *netdev_ OVS_UNUSED,
+                        struct qos_conf *conf)
+{
+    struct egress_policer *policer = CONTAINER_OF(conf, struct egress_policer,
+                                                qos_conf);
+    free(policer);
+}
+
+static int
+egress_policer_qos_get(const struct netdev *netdev, struct smap *details)
+{
+    struct egress_policer *policer = egress_policer_get__(netdev);
+    smap_add_format(details, "cir", "%llu",
+                    1ULL * policer->app_srtcm_params.cir);
+    smap_add_format(details, "cbs", "%llu",
+                    1ULL * policer->app_srtcm_params.cbs);
+    return 0;
+}
+
+static int
+egress_policer_qos_set(struct netdev *netdev_, const struct smap *details)
+{
+    struct egress_policer *policer;
+    const char *cir_s;
+    const char *cbs_s;
+    int err = 0;
+
+    policer = egress_policer_get__(netdev_);
+    cir_s = smap_get(details, "cir");
+    cbs_s = smap_get(details, "cbs");
+    policer->app_srtcm_params.cir = cir_s ? strtoull(cir_s, NULL, 10) : 0;
+    policer->app_srtcm_params.cbs = cbs_s ? strtoull(cbs_s, NULL, 10) : 0;
+    policer->app_srtcm_params.ebs = 0;
+    err = rte_meter_srtcm_config(&policer->egress_meter,
+                                    &policer->app_srtcm_params);
+
+    return err;
+}
+
+static inline bool
+egress_policer_pkt_handle__(struct rte_meter_srtcm *meter,
+                            struct rte_mbuf *pkt, uint64_t time)
+{
+    uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct ether_hdr);
+
+    return rte_meter_srtcm_color_blind_check(meter, time, pkt_len) ==
+                                                e_RTE_METER_GREEN;
+}
+
+static int
+egress_policer_run(struct netdev *netdev_, struct rte_mbuf **pkts,
+                        int pkt_cnt)
+{
+    int i = 0;
+    int cnt = 0;
+    struct egress_policer *policer = egress_policer_get__(netdev_);
+    struct rte_mbuf *pkt = NULL;
+    uint64_t current_time = rte_rdtsc();
+
+    for(i = 0; i < pkt_cnt; i++) {
+        pkt = pkts[i];
+        /* Handle current packet */
+        if (egress_policer_pkt_handle__(&policer->egress_meter, pkt,
+                                        current_time)) {
+            if (cnt != i) {
+                pkts[cnt] = pkt;
+            }
+            cnt++;
+        } else {
+            rte_pktmbuf_free(pkt);
+        }
+    }
+
+    return cnt;
+}
+
+static const struct dpdk_qos_ops egress_policer_ops = {
+    "egress-policer",    /* qos_name */
+    egress_policer_qos_construct,
+    egress_policer_qos_destruct,
+    egress_policer_qos_get,
+    egress_policer_qos_set,
+    egress_policer_run
+};
+
 #define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT, MULTIQ, SEND, \
     GET_CARRIER, GET_STATS, GET_FEATURES, GET_STATUS, RXQ_RECV)          \
 {                                                             \
@@ -2176,10 +2674,10 @@ unlock_dpdk:
     NULL,                       /* set_advertisements */      \
                                                               \
     NULL,                       /* set_policing */            \
-    NULL,                       /* get_qos_types */           \
+    netdev_dpdk_get_qos_types,                                \
     NULL,                       /* get_qos_capabilities */    \
-    NULL,                       /* get_qos */                 \
-    NULL,                       /* set_qos */                 \
+    netdev_dpdk_get_qos,                                      \
+    netdev_dpdk_set_qos,                                      \
     NULL,                       /* get_queue */               \
     NULL,                       /* set_queue */               \
     NULL,                       /* delete_queue */            \

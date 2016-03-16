@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-m4_include([m4/compat.at])
+m4_include([m4/compat.m4])
 
 dnl Checks for --enable-coverage and updates CFLAGS and LDFLAGS appropriately.
 AC_DEFUN([OVS_CHECK_COVERAGE],
@@ -357,6 +357,48 @@ else:
      HAVE_PYTHON=no
    fi
    AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])
+
+dnl Checks for Python 3.x, x >= 4.
+AC_DEFUN([OVS_CHECK_PYTHON3],
+  [AC_CACHE_CHECK(
+     [for Python 3.x for x >= 4],
+     [ovs_cv_python3],
+     [if test -n "$PYTHON3"; then
+        ovs_cv_python3=$PYTHON3
+      else
+        ovs_cv_python3=no
+        for binary in python3 python3.4; do
+          ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+          for dir in $PATH; do
+            IFS=$ovs_save_IFS
+            test -z "$dir" && dir=.
+            if test -x "$dir"/"$binary" && "$dir"/"$binary" -c 'import sys
+if sys.hexversion >= 0x03040000 and sys.hexversion < 0x04000000:
+    sys.exit(0)
+else:
+    sys.exit(1)'; then
+              ovs_cv_python3=$dir/$binary
+              break 2
+            fi
+          done
+        done
+        if test $ovs_cv_python3 != no; then
+          if test -x "$ovs_cv_python3" && ! "$ovs_cv_python3" -c 'import six' >/dev/null 2>&1; then
+            ovs_cv_python3=no
+            AC_MSG_WARN([Missing Python six library.])
+          fi
+        fi
+      fi])
+   AC_SUBST([HAVE_PYTHON3])
+   AM_MISSING_PROG([PYTHON3], [python3])
+   if test $ovs_cv_python3 != no; then
+     PYTHON3=$ovs_cv_python3
+     HAVE_PYTHON3=yes
+   else
+     HAVE_PYTHON3=no
+   fi
+   AM_CONDITIONAL([HAVE_PYTHON3], [test "$HAVE_PYTHON3" = yes])])
+
 
 dnl Checks for dot.
 AC_DEFUN([OVS_CHECK_FLAKE8],

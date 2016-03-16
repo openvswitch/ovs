@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -425,29 +425,29 @@ ip_parse(const char *s, ovs_be32 *ip)
 }
 
 /* Parses string 's', which must be an IP address with an optional netmask or
- * CIDR prefix length.  Stores the IP address into '*ip' and the netmask into
- * '*mask'.  (If 's' does not contain a netmask, 255.255.255.255 is
- * assumed.)
+ * CIDR prefix length.  Stores the IP address into '*ip', netmask into '*mask',
+ * (255.255.255.255, if 's' lacks a netmask), and number of scanned characters
+ * into '*n'.
  *
  * Returns NULL if successful, otherwise an error message that the caller must
  * free(). */
 char * OVS_WARN_UNUSED_RESULT
-ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
+ip_parse_masked_len(const char *s, int *n, ovs_be32 *ip,
+                    ovs_be32 *mask)
 {
     int prefix;
-    int n;
 
-    if (ovs_scan(s, IP_SCAN_FMT"/"IP_SCAN_FMT"%n",
-                 IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask), &n) && !s[n]) {
+    if (ovs_scan_len(s, n, IP_SCAN_FMT"/"IP_SCAN_FMT,
+                 IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask))) {
         /* OK. */
-    } else if (ovs_scan(s, IP_SCAN_FMT"/%d%n", IP_SCAN_ARGS(ip), &prefix, &n)
-               && !s[n]) {
+    } else if (ovs_scan_len(s, n, IP_SCAN_FMT"/%d",
+                            IP_SCAN_ARGS(ip), &prefix)) {
         if (prefix <= 0 || prefix > 32) {
             return xasprintf("%s: network prefix bits not between 0 and "
                              "32", s);
         }
         *mask = be32_prefix_mask(prefix);
-    } else if (ip_parse(s, ip)) {
+    } else if (ovs_scan_len(s, n, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
         *mask = OVS_BE32_MAX;
     } else {
         return xasprintf("%s: invalid IP address", s);
@@ -455,15 +455,33 @@ ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
     return NULL;
 }
 
-/* Similar to ip_parse_masked(), but the mask, if present, must be a CIDR mask
- * and is returned as a prefix length in '*plen'. */
+/* This function is similar to ip_parse_masked_len(), but doesn't return the
+ * number of scanned characters and expects 's' to end after the ip/(optional)
+ * mask.
+ *
+ * Returns NULL if successful, otherwise an error message that the caller must
+ * free(). */
 char * OVS_WARN_UNUSED_RESULT
-ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
+ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
+{
+    int n = 0;
+
+    char *error = ip_parse_masked_len(s, &n, ip, mask);
+    if (!error && s[n]) {
+        return xasprintf("%s: invalid IP address", s);
+    }
+    return error;
+}
+
+/* Similar to ip_parse_masked_len(), but the mask, if present, must be a CIDR
+ * mask and is returned as a prefix len in '*plen'. */
+char * OVS_WARN_UNUSED_RESULT
+ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip, unsigned int *plen)
 {
     ovs_be32 mask;
     char *error;
 
-    error = ip_parse_masked(s, ip, &mask);
+    error = ip_parse_masked_len(s, n, ip, &mask);
     if (error) {
         return error;
     }
@@ -473,6 +491,21 @@ ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
     }
     *plen = ip_count_cidr_bits(mask);
     return NULL;
+}
+
+/* Similar to ip_parse_cidr_len(), but doesn't return the number of scanned
+ * characters and expects 's' to be NULL terminated at the end of the
+ * ip/(optional) cidr. */
+char * OVS_WARN_UNUSED_RESULT
+ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
+{
+    int n = 0;
+
+    char *error = ip_parse_cidr_len(s, &n, ip, plen);
+    if (!error && s[n]) {
+        return xasprintf("%s: invalid IP address", s);
+    }
+    return error;
 }
 
 /* Parses string 's', which must be an IPv6 address.  Stores the IPv6 address
@@ -485,49 +518,65 @@ ipv6_parse(const char *s, struct in6_addr *ip)
 
 /* Parses string 's', which must be an IPv6 address with an optional netmask or
  * CIDR prefix length.  Stores the IPv6 address into '*ip' and the netmask into
- * '*mask'.  (If 's' does not contain a netmask, all-one-bits is assumed.)
+ * '*mask' (if 's' does not contain a netmask, all-one-bits is assumed), and
+ * number of scanned characters into '*n'.
  *
  * Returns NULL if successful, otherwise an error message that the caller must
  * free(). */
 char * OVS_WARN_UNUSED_RESULT
-ipv6_parse_masked(const char *s, struct in6_addr *ip, struct in6_addr *mask)
+ipv6_parse_masked_len(const char *s, int *n, struct in6_addr *ip,
+                      struct in6_addr *mask)
 {
     char ipv6_s[IPV6_SCAN_LEN + 1];
     int prefix;
-    int n;
 
-    if (ovs_scan(s, IPV6_SCAN_FMT"%n", ipv6_s, &n) && ipv6_parse(ipv6_s, ip)) {
-        s += n;
-        if (!*s) {
-            *mask = in6addr_exact;
-        } else if (ovs_scan(s, "/%d%n", &prefix, &n) && !s[n]) {
+    if (ovs_scan_len(s, n, " "IPV6_SCAN_FMT, ipv6_s)
+        && ipv6_parse(ipv6_s, ip)) {
+        if (ovs_scan_len(s, n, "/%d", &prefix)) {
             if (prefix <= 0 || prefix > 128) {
                 return xasprintf("%s: IPv6 network prefix bits not between 0 "
                                  "and 128", s);
             }
             *mask = ipv6_create_mask(prefix);
-        } else if (ovs_scan(s, "/"IPV6_SCAN_FMT"%n", ipv6_s, &n)
-                   && !s[n]
-                   && ipv6_parse(ipv6_s, mask)) {
+        } else if (ovs_scan_len(s, n, "/"IPV6_SCAN_FMT, ipv6_s)) {
+             if (!ipv6_parse(ipv6_s, mask)) {
+                 return xasprintf("%s: Invalid IPv6 mask", s);
+             }
             /* OK. */
         } else {
-            return xasprintf("%s: syntax error expecting IPv6 prefix length "
-                             "or mask", s);
+            /* OK. No mask. */
+            *mask = in6addr_exact;
         }
         return NULL;
     }
     return xasprintf("%s: invalid IPv6 address", s);
 }
 
-/* Similar to ipv6_parse_masked(), but the mask, if present, must be a CIDR
+/* This function is similar to ipv6_parse_masked_len(), but doesn't return the
+ * number of scanned characters and expects 's' to end following the
+ * ipv6/(optional) mask. */
+char * OVS_WARN_UNUSED_RESULT
+ipv6_parse_masked(const char *s, struct in6_addr *ip, struct in6_addr *mask)
+{
+    int n = 0;
+
+    char *error = ipv6_parse_masked_len(s, &n, ip, mask);
+    if (!error && s[n]) {
+        return xasprintf("%s: invalid IPv6 address", s);
+    }
+    return error;
+}
+
+/* Similar to ipv6_parse_masked_len(), but the mask, if present, must be a CIDR
  * mask and is returned as a prefix length in '*plen'. */
 char * OVS_WARN_UNUSED_RESULT
-ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
+ipv6_parse_cidr_len(const char *s, int *n, struct in6_addr *ip,
+                    unsigned int *plen)
 {
     struct in6_addr mask;
     char *error;
 
-    error = ipv6_parse_masked(s, ip, &mask);
+    error = ipv6_parse_masked_len(s, n, ip, &mask);
     if (error) {
         return error;
     }
@@ -537,6 +586,20 @@ ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
     }
     *plen = ipv6_count_cidr_bits(&mask);
     return NULL;
+}
+
+/* Similar to ipv6_parse_cidr_len(), but doesn't return the number of scanned
+ * characters and expects 's' to end after the ipv6/(optional) cidr. */
+char * OVS_WARN_UNUSED_RESULT
+ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
+{
+    int n = 0;
+
+    char *error = ipv6_parse_cidr_len(s, &n, ip, plen);
+    if (!error && s[n]) {
+        return xasprintf("%s: invalid IPv6 address", s);
+    }
+    return error;
 }
 
 /* Stores the string representation of the IPv6 address 'addr' into the
@@ -1191,35 +1254,45 @@ packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
  * 'arp_op', 'arp_sha', 'arp_tha', 'arp_spa', and 'arp_tpa'.  The outer
  * Ethernet frame is initialized with Ethernet source 'arp_sha' and destination
  * 'arp_tha', except that destination ff:ff:ff:ff:ff:ff is used instead if
- * 'broadcast' is true. */
+ * 'broadcast' is true.  Points the L3 header to the ARP header. */
 void
 compose_arp(struct dp_packet *b, uint16_t arp_op,
             const struct eth_addr arp_sha, const struct eth_addr arp_tha,
             bool broadcast, ovs_be32 arp_spa, ovs_be32 arp_tpa)
 {
-    struct eth_header *eth;
-    struct arp_eth_header *arp;
+    compose_arp__(b);
 
+    struct eth_header *eth = dp_packet_l2(b);
+    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
+    eth->eth_src = arp_sha;
+
+    struct arp_eth_header *arp = dp_packet_l3(b);
+    arp->ar_op = htons(arp_op);
+    arp->ar_sha = arp_sha;
+    arp->ar_tha = arp_tha;
+    put_16aligned_be32(&arp->ar_spa, arp_spa);
+    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
+}
+
+/* Clears 'b' and replaces its contents by an ARP frame.  Sets the fields in
+ * the Ethernet and ARP headers that are fixed for ARP frames to those fixed
+ * values, and zeroes the other fields.  Points the L3 header to the ARP
+ * header. */
+void
+compose_arp__(struct dp_packet *b)
+{
     dp_packet_clear(b);
     dp_packet_prealloc_tailroom(b, ARP_PACKET_SIZE);
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
 
-    eth = dp_packet_put_uninit(b, sizeof *eth);
-    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
-    eth->eth_src = arp_sha;
+    struct eth_header *eth = dp_packet_put_zeros(b, sizeof *eth);
     eth->eth_type = htons(ETH_TYPE_ARP);
 
-    arp = dp_packet_put_uninit(b, sizeof *arp);
+    struct arp_eth_header *arp = dp_packet_put_zeros(b, sizeof *arp);
     arp->ar_hrd = htons(ARP_HRD_ETHERNET);
     arp->ar_pro = htons(ARP_PRO_IP);
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
-    arp->ar_op = htons(arp_op);
-    arp->ar_sha = arp_sha;
-    arp->ar_tha = arp_tha;
-
-    put_16aligned_be32(&arp->ar_spa, arp_spa);
-    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
 
     dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);

@@ -135,10 +135,20 @@ put_stack(enum mf_field_id field, struct ofpact_stack *stack)
     stack->subfield.n_bits = stack->subfield.field->n_bits;
 }
 
+static const struct sbrec_port_binding*
+get_localnet_port(struct hmap *local_datapaths, int64_t tunnel_key)
+{
+    struct local_datapath *ld;
+    ld = CONTAINER_OF(hmap_first_with_hash(local_datapaths, tunnel_key),
+                      struct local_datapath, hmap_node);
+    return ld ? ld->localnet_port : NULL;
+}
+
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
-             const struct simap *ct_zones, struct hmap *flow_table)
+             const struct simap *ct_zones, struct hmap *flow_table,
+             struct hmap *local_datapaths)
 {
     struct simap localvif_to_ofport = SIMAP_INITIALIZER(&localvif_to_ofport);
     struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
@@ -244,6 +254,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         int tag = 0;
         ofp_port_t ofport;
+        bool is_remote = false;
         if (binding->parent_port && *binding->parent_port) {
             if (!binding->tag) {
                 continue;
@@ -262,19 +273,32 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         }
 
         const struct chassis_tunnel *tun = NULL;
+        const struct sbrec_port_binding *localnet_port =
+            get_localnet_port(local_datapaths,
+                              binding->datapath->tunnel_key);
         if (!ofport) {
+            /* It is remote port, may be reached by tunnel or localnet port */
+            is_remote = true;
             if (!binding->chassis) {
                 continue;
             }
-            tun = chassis_tunnel_find(&tunnels, binding->chassis->name);
-            if (!tun) {
-                continue;
+            if (localnet_port) {
+                ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
+                                              localnet_port->logical_port));
+                if (!ofport) {
+                    continue;
+                }
+            } else {
+                tun = chassis_tunnel_find(&tunnels, binding->chassis->name);
+                if (!tun) {
+                    continue;
+                }
+                ofport = tun->ofport;
             }
-            ofport = tun->ofport;
         }
 
         struct match match;
-        if (!tun) {
+        if (!is_remote) {
             int zone_id = simap_get(ct_zones, binding->logical_port);
             /* Packets that arrive from a vif can belong to a VM or
              * to a container located inside that VM. Packets that
@@ -395,7 +419,32 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             }
             ofctrl_add_flow(flow_table, OFTABLE_LOG_TO_PHY, 100,
                             &match, &ofpacts);
+        } else if (!tun) {
+            /* Remote port connected by localnet port */
+            /* Table 33, priority 100.
+             * =======================
+             *
+             * Implements switching to localnet port. Each flow matches a
+             * logical output port on remote hypervisor, switch the output port
+             * to connected localnet port and resubmits to same table.
+             */
+
+            match_init_catchall(&match);
+            ofpbuf_clear(&ofpacts);
+
+            /* Match MFF_LOG_DATAPATH, MFF_LOG_OUTPORT. */
+            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
+                          binding->tunnel_key);
+
+            put_load(localnet_port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
+
+            /* Resubmit to table 33. */
+            put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
+            ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100, &match,
+                            &ofpacts);
         } else {
+            /* Remote port connected by tunnel */
             /* Table 32, priority 100.
              * =======================
              *
@@ -485,7 +534,11 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                                ? port->parent_port : port->logical_port)) {
                 put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
                 put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
-            } else if (port->chassis) {
+            } else if (port->chassis && !get_localnet_port(local_datapaths,
+                                             mc->datapath->tunnel_key)) {
+                /* Add remote chassis only when localnet port not exist,
+                 * otherwise multicast will reach remote ports through localnet
+                 * port. */
                 sset_add(&remote_chassis, port->chassis->name);
             }
         }

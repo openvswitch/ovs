@@ -3411,6 +3411,27 @@ exit:
     return error;
 }
 
+static enum ofperr
+handle_nxt_resume(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ofputil_packet_in_private pin;
+    enum ofperr error;
+
+    error = ofputil_decode_packet_in_private(oh, false, &pin, NULL, NULL);
+    if (error) {
+        return error;
+    }
+
+    error = (ofproto->ofproto_class->nxt_resume
+             ? ofproto->ofproto_class->nxt_resume(ofproto, &pin)
+             : OFPERR_NXR_NOT_SUPPORTED);
+
+    ofputil_packet_in_private_destroy(&pin);
+
+    return error;
+}
+
 static void
 update_port_config(struct ofconn *ofconn, struct ofport *port,
                    enum ofputil_port_config config,
@@ -3549,21 +3570,19 @@ handle_table_features_request(struct ofconn *ofconn,
                               const struct ofp_header *request)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofputil_table_features *features;
-    struct ovs_list replies;
-    struct ofpbuf msg;
-    size_t i;
-
-    ofpbuf_use_const(&msg, request, ntohs(request->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(request,
+                                                 ntohs(request->length));
     ofpraw_pull_assert(&msg);
     if (msg.size || ofpmp_more(request)) {
         return OFPERR_OFPTFFC_EPERM;
     }
 
+    struct ofputil_table_features *features;
     query_tables(ofproto, &features, NULL);
 
+    struct ovs_list replies;
     ofpmp_init(&replies, request);
-    for (i = 0; i < ofproto->n_tables; i++) {
+    for (size_t i = 0; i < ofproto->n_tables; i++) {
         if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
             ofputil_append_table_features_reply(&features[i], &replies);
         }
@@ -3575,24 +3594,35 @@ handle_table_features_request(struct ofconn *ofconn,
     return 0;
 }
 
+/* Returns the vacancy of 'oftable', a number that ranges from 0 (if the table
+ * is full) to 100 (if the table is empty).
+ *
+ * A table without a limit on flows is considered to be empty. */
+static uint8_t
+oftable_vacancy(const struct oftable *t)
+{
+    return (!t->max_flows ? 100
+            : t->n_flows >= t->max_flows ? 0
+            : (t->max_flows - t->n_flows) * 100.0 / t->max_flows);
+}
+
 static void
 query_table_desc__(struct ofputil_table_desc *td,
                    struct ofproto *ofproto, uint8_t table_id)
 {
-    unsigned int count = ofproto->tables[table_id].n_flows;
-    unsigned int max_flows = ofproto->tables[table_id].max_flows;
+    const struct oftable *t = &ofproto->tables[table_id];
 
     td->table_id = table_id;
-    td->eviction = (ofproto->tables[table_id].eviction & EVICTION_OPENFLOW
+    td->eviction = (t->eviction & EVICTION_OPENFLOW
                     ? OFPUTIL_TABLE_EVICTION_ON
                     : OFPUTIL_TABLE_EVICTION_OFF);
     td->eviction_flags = OFPROTO_EVICTION_FLAGS;
-    td->vacancy = (ofproto->tables[table_id].vacancy_enabled
+    td->vacancy = (t->vacancy_event
                    ? OFPUTIL_TABLE_VACANCY_ON
                    : OFPUTIL_TABLE_VACANCY_OFF);
-    td->table_vacancy.vacancy_down = ofproto->tables[table_id].vacancy_down;
-    td->table_vacancy.vacancy_up = ofproto->tables[table_id].vacancy_up;
-    td->table_vacancy.vacancy = max_flows ? (count * 100) / max_flows : 0;
+    td->table_vacancy.vacancy_down = t->vacancy_down;
+    td->table_vacancy.vacancy_up = t->vacancy_up;
+    td->table_vacancy.vacancy = oftable_vacancy(t);
 }
 
 /* This function queries the database for dumping table-desc. */
@@ -3630,6 +3660,40 @@ handle_table_desc_request(struct ofconn *ofconn,
     ofconn_send_replies(ofconn, &replies);
     free(table_desc);
     return 0;
+}
+
+/* This function determines and sends the vacancy event, based on the value
+ * of current vacancy and threshold vacancy. If the current vacancy is less
+ * than or equal to vacancy_down, vacancy up events must be enabled, and when
+ * the current vacancy is greater or equal to vacancy_up, vacancy down events
+ * must be enabled. */
+static void
+send_table_status(struct ofproto *ofproto, uint8_t table_id)
+{
+    struct oftable *t = &ofproto->tables[table_id];
+    if (!t->vacancy_event) {
+        return;
+    }
+
+    uint8_t vacancy = oftable_vacancy(t);
+    enum ofp14_table_reason event;
+    if (vacancy < t->vacancy_down) {
+        event = OFPTR_VACANCY_DOWN;
+    } else if (vacancy > t->vacancy_up) {
+        event = OFPTR_VACANCY_UP;
+    } else {
+        return;
+    }
+
+    if (event == t->vacancy_event) {
+        struct ofputil_table_desc td;
+        query_table_desc__(&td, ofproto, table_id);
+        connmgr_send_table_status(ofproto->connmgr, &td, event);
+
+        t->vacancy_event = (event == OFPTR_VACANCY_DOWN
+                            ? OFPTR_VACANCY_UP
+                            : OFPTR_VACANCY_DOWN);
+    }
 }
 
 static void
@@ -4667,6 +4731,9 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
         ofmonitor_report(ofproto->connmgr, new_rule, NXFME_ADDED, 0,
                          req ? req->ofconn : NULL,
                          req ? req->request->xid : 0, NULL);
+
+        /* Send Vacancy Events for OF1.4+. */
+        send_table_status(ofproto, new_rule->table_id);
     }
 
     send_buffered_packet(req, fm->buffer_id, new_rule);
@@ -5062,6 +5129,10 @@ delete_flows_finish__(struct ofproto *ofproto,
             ofmonitor_report(ofproto->connmgr, rule, NXFME_DELETED, reason,
                              req ? req->ofconn : NULL,
                              req ? req->request->xid : 0, NULL);
+
+            /* Send Vacancy Event for OF1.4+. */
+            send_table_status(ofproto, rule->table_id);
+
             ofproto_rule_remove__(ofproto, rule);
             learned_cookies_dec(ofproto, rule_get_actions(rule),
                                 &dead_cookies);
@@ -5389,7 +5460,7 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
     uint32_t format;
 
     format = ntohl(msg->format);
-    if (format != NXPIF_OPENFLOW10 && format != NXPIF_NXM) {
+    if (!ofputil_packet_in_format_is_valid(format)) {
         return OFPERR_OFPBRC_EPERM;
     }
 
@@ -5602,17 +5673,14 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofmonitor **monitors;
-    size_t n_monitors, allocated_monitors;
-    struct rule_collection rules;
-    struct ovs_list replies;
-    enum ofperr error;
-    struct ofpbuf b;
-    size_t i;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    monitors = NULL;
-    n_monitors = allocated_monitors = 0;
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+
+    struct ofmonitor **monitors = NULL;
+    size_t allocated_monitors = 0;
+    size_t n_monitors = 0;
+
+    enum ofperr error;
 
     ovs_mutex_lock(&ofproto_mutex);
     for (;;) {
@@ -5646,11 +5714,13 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
         monitors[n_monitors++] = m;
     }
 
+    struct rule_collection rules;
     rule_collection_init(&rules);
-    for (i = 0; i < n_monitors; i++) {
+    for (size_t i = 0; i < n_monitors; i++) {
         ofproto_collect_ofmonitor_initial_rules(monitors[i], &rules);
     }
 
+    struct ovs_list replies;
     ofpmp_init(&replies, oh);
     ofmonitor_compose_refresh_updates(&rules, &replies);
     ovs_mutex_unlock(&ofproto_mutex);
@@ -5663,7 +5733,7 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 
 error:
-    for (i = 0; i < n_monitors; i++) {
+    for (size_t i = 0; i < n_monitors; i++) {
         ofmonitor_destroy(monitors[i]);
     }
     free(monitors);
@@ -6722,11 +6792,16 @@ table_mod__(struct oftable *oftable,
 
     if (tm->vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
         ovs_mutex_lock(&ofproto_mutex);
-        oftable->vacancy_enabled = (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON
-                                    ? OFPTC14_VACANCY_EVENTS
-                                    : 0);
         oftable->vacancy_down = tm->table_vacancy.vacancy_down;
         oftable->vacancy_up = tm->table_vacancy.vacancy_up;
+        if (tm->vacancy == OFPUTIL_TABLE_VACANCY_OFF) {
+            oftable->vacancy_event = 0;
+        } else if (!oftable->vacancy_event) {
+            uint8_t vacancy = oftable_vacancy(oftable);
+            oftable->vacancy_event = (vacancy < oftable->vacancy_up
+                                      ? OFPTR_VACANCY_UP
+                                      : OFPTR_VACANCY_DOWN);
+        }
         ovs_mutex_unlock(&ofproto_mutex);
     }
 }
@@ -7214,6 +7289,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_GET_ASYNC_REQUEST:
         return handle_nxt_get_async_request(ofconn, oh);
 
+    case OFPTYPE_NXT_RESUME:
+        return handle_nxt_resume(ofconn, oh);
+
         /* Statistics requests. */
     case OFPTYPE_DESC_STATS_REQUEST:
         return handle_desc_stats_request(ofconn, oh);
@@ -7307,6 +7385,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_TABLE_DESC_REPLY:
     case OFPTYPE_ROLE_STATUS:
     case OFPTYPE_REQUESTFORWARD:
+    case OFPTYPE_TABLE_STATUS:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {

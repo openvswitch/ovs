@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -386,7 +386,7 @@ ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
     pthread_attr_init(&attr);
     set_min_stack_size(&attr, 512 * 1024);
 
-    error = pthread_create(&thread, NULL, ovsthread_wrapper, aux);
+    error = pthread_create(&thread, &attr, ovsthread_wrapper, aux);
     if (error) {
         ovs_abort(error, "pthread_create failed");
     }

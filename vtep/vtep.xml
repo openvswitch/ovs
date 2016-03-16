@@ -310,6 +310,28 @@
         requested by the NVC due to lack of resources.
       </column>
 
+      <column name="switch_fault_status" key="lr_switch_bindings_fault">
+        Indicates that the switch has been unable to create the logical router
+        interfaces requested by the NVC due to conflicting configurations or a
+        lack of hardware resources.
+      </column>
+
+      <column name="switch_fault_status" key="lr_static_routes_fault">
+        Indicates that the switch has been unable to create the static routes
+        requested by the NVC due to conflicting configurations or a lack of
+        hardware resources.
+      </column>
+
+      <column name="switch_fault_status" key="lr_creation_fault">
+        Indicates that the switch has been unable to create the logical router
+        requested by the NVC due to conflicting configurations or a lack of
+        hardware resources.
+      </column>
+
+      <column name="switch_fault_status" key="lr_support_fault">
+        Indicates that the switch does not support logical routing.
+      </column>
+
       <column name="switch_fault_status" key="unspecified_fault">
         Indicates that an error has occurred in the switch but that no
         more specific information is available.

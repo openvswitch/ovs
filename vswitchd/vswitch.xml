@@ -3310,6 +3310,21 @@
           for information on how this classifier works.
         </dd>
       </dl>
+      <dl>
+        <dt><code>egress-policer</code></dt>
+        <dd>
+          An egress policer algorithm. This implementation uses the DPDK
+          rte_meter library. The rte_meter library provides an implementation
+          which allows the metering and policing of traffic. The implementation
+          in OVS essentially creates a single token bucket used to police
+          traffic. It should be noted that when the rte_meter is configured as
+          part of QoS there will be a performance overhead as the rte_meter
+          itself will consume CPU cycles in order to police traffic. These CPU
+          cycles ordinarily are used for packet proccessing. As such the drop
+          in performance will be noticed in terms of overall aggregate traffic
+          throughput.
+        </dd>
+      </dl>
     </column>
 
     <column name="queues">
@@ -3343,6 +3358,38 @@
         specified, for physical interfaces, the default is the link rate.  For
         other interfaces or if the link rate cannot be determined, the default
         is currently 100 Mbps.
+      </column>
+    </group>
+
+    <group title="Configuration for egress-policer QoS">
+      <p>
+        <ref table="QoS"/> <ref table="QoS" column="type"/>
+        <code>egress-policer</code> provides egress policing for userspace
+        port types with DPDK.
+
+        It has the following key-value pairs defined.
+      </p>
+
+      <column name="other_config" key="cir" type='{"type": "integer"}'>
+        The Committed Information Rate (CIR) is measured in bytes of IP
+        packets per second, i.e. it includes the IP header, but not link
+        specific (e.g. Ethernet) headers. This represents the bytes per second
+        rate at which the token bucket will be updated. The cir value is
+        calculated by (pps x packet data size).  For example assuming a user
+        wishes to limit a stream consisting of 64 byte packets to 1 million
+        packets per second the CIR would be set to to to 46000000. This value
+        can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
+        rate for the number of packets per second and 46 represents the size
+        of the packet data for a 64 byte ip packet.
+      </column>
+      <column name="other_config" key="cbs" type='{"type": "integer"}'>
+        The Committed Burst Size (CBS) is measured in bytes and represents a
+        token bucket. At a minimum this value should be be set to the expected
+        largest size packet in the traffic stream. In practice larger values
+        may be used to increase the size of the token bucket. If a packet can
+        be transmitted then the cbs will be decremented by the number of
+        bytes/tokens of the packet. If there are not enough tokens in the cbs
+        bucket the packet will be dropped.
       </column>
     </group>
 
@@ -4193,7 +4240,28 @@
     </group>
 
     <group title="Status">
-      <column name="is_connected">
+      <p>
+        Key-value pair of <ref column="is_connected"/> is always updated.
+        Other key-value pairs in the status columns may be updated depends
+        on the <ref column="target"/> type.
+      </p>
+
+      <p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>punix:</code>), both <ref column="n_connections"/> and
+        <ref column="is_connected"/> may also be updated while the
+        remaining key-value pairs are omitted.
+      </p>
+
+      <p>
+        On the other hand, when <ref column="target"/> specifies an
+        outbound connection, all key-value pairs may be updated, except
+        the above-mentioned two key-value pairs associated with inbound
+        connection targets. They are omitted.
+      </p>
+
+    <column name="is_connected">
         <code>true</code> if currently connected to this manager,
         <code>false</code> otherwise.
       </column>
@@ -4264,24 +4332,17 @@
 
       <column name="status" key="n_connections"
               type='{"type": "integer", "minInteger": 2}'>
-        <p>
-          When <ref column="target"/> specifies a connection method that
-          listens for inbound connections (e.g. <code>ptcp:</code> or
-          <code>pssl:</code>) and more than one connection is actually active,
-          the value is the number of active connections.  Otherwise, this
-          key-value pair is omitted.
-        </p>
-        <p>
-          When multiple connections are active, status columns and key-value
-          pairs (other than this one) report the status of one arbitrarily
-          chosen connection.
-        </p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>pssl:</code>) and more than one connection is actually active,
+        the value is the number of active connections.  Otherwise, this
+        key-value pair is omitted.
       </column>
 
       <column name="status" key="bound_port" type='{"type": "integer"}'>
         When <ref column="target"/> is <code>ptcp:</code> or
         <code>pssl:</code>, this is the TCP port on which the OVSDB server is
-        listening.  (This is is particularly useful when <ref
+        listening.  (This is particularly useful when <ref
         column="target"/> specifies a port of 0, allowing the kernel to
         choose any available port.)
       </column>

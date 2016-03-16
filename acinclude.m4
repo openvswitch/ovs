@@ -139,14 +139,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
        else
           AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.3.x is not supported (please refer to the FAQ for advice)])
        fi
-    elif test "$version" = 3; then
+    elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
     else
-       if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 2.6.32 or later is required])
-       else
-         : # Linux 2.6.x
-       fi
+       AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 3.10 or later is required])
     fi
     if (test ! -e "$KBUILD"/include/linux/version.h && \
         test ! -e "$KBUILD"/include/generated/uapi/linux/version.h)|| \
@@ -307,7 +303,7 @@ AC_DEFUN([OVS_DEFINE], [
 
 dnl OVS_CHECK_LINUX_COMPAT
 dnl
-dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
+dnl Runs various Autoconf checks on the Linux kernel source in
 dnl the directory in $KBUILD.
 AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   rm -f datapath/linux/kcompat.h.new
@@ -354,6 +350,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [IPSKB_FRAG_PMTU],
                   [OVS_DEFINE([HAVE_CORRECT_MRU_HANDLING])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h], [__ip_tunnel_change_mtu])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [hashfn.*const],
                   [OVS_DEFINE([HAVE_INET_FRAGS_CONST])])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [last_in],
@@ -380,11 +377,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_get_iflink])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_rx_handler_register])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_extended])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [rx_handler_func_t.*pskb],
-                  [OVS_DEFINE([HAVE_RX_HANDLER_PSKB])])
+  dnl Ubuntu kernel 3.13 has defined this struct but not used for netdev->tstats.
+  dnl So check type of tstats.
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats.*tstats],
+                  [OVS_DEFINE([HAVE_PCPU_SW_NETSTATS])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netif_needs_gso.*net_device],
                   [OVS_DEFINE([HAVE_NETIF_NEEDS_GSO_NETDEV])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [udp_offload])
@@ -529,8 +525,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/u64_stats_sync.h], [u64_stats_fetch_begin_irq])
 
-  OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
-                  [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [struct vxlan_metadata],
                   [OVS_DEFINE([HAVE_VXLAN_METADATA])])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [VXLAN_HF_RCO])
@@ -550,15 +544,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
                   [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
-
-  dnl Conntrack support, and therefore, IP fragment handling backport, should
-  dnl only be enabled on kernels 3.10+. In future when OVS drops support for
-  dnl kernels older than 3.10, this macro could be removed from the codebase.
-  if test "$version" = 4; then
-        OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
-  elif test "$version" = 3 && test "$patchlevel" -ge 10; then
-        OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
-  fi
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

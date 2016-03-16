@@ -41,7 +41,6 @@ openvswitch_headers = \
 	flow.h \
 	flow_netlink.h \
 	flow_table.h \
-	vlan.h \
 	vport.h \
 	vport-internal_dev.h \
 	vport-netdev.h

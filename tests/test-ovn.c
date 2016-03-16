@@ -238,6 +238,18 @@ create_symtab(struct shash *symtab)
     expr_symtab_add_string(symtab, "big_string", MFF_XREG0, NULL);
 }
 
+static bool
+lookup_port_cb(const void *ports_, const char *port_name, unsigned int *portp)
+{
+    const struct simap *ports = ports_;
+    const struct simap_node *node = simap_find(ports, port_name);
+    if (!node) {
+        return false;
+    }
+    *portp = node->data;
+    return true;
+}
+
 static void
 test_parse_expr__(int steps)
 {
@@ -274,7 +286,7 @@ test_parse_expr__(int steps)
             if (steps > 3) {
                 struct hmap matches;
 
-                expr_to_matches(expr, &ports, &matches);
+                expr_to_matches(expr, lookup_port_cb, &ports, &matches);
                 expr_matches_print(&matches, stdout);
                 expr_matches_destroy(&matches);
             } else {
@@ -934,7 +946,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             struct expr_match *m;
             struct test_rule *test_rule;
 
-            expr_to_matches(modified, &string_map, &matches);
+            expr_to_matches(modified, lookup_port_cb, &string_map, &matches);
 
             classifier_init(&cls, NULL);
             HMAP_FOR_EACH (m, hmap_node, &matches) {
@@ -1229,13 +1241,15 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
         struct action_params ap = {
             .symtab = &symtab,
-            .ports = &ports,
+            .lookup_port = lookup_port_cb,
+            .aux = &ports,
             .ct_zones = &ct_zones,
 
             .n_tables = 16,
             .first_ptable = 16,
             .cur_ltable = 10,
             .output_ptable = 64,
+            .arp_ptable = 65,
         };
         error = actions_parse_string(ds_cstr(&input), &ap, &ofpacts, &prereqs);
         if (!error) {

@@ -36,11 +36,11 @@ on Debian/Ubuntu)
      Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
-     `make install T=x86_64-native-linuxapp-gcc`
+     `make install T=x86_64-native-linuxapp-gcc DESTDIR=install`
 
      To include IVSHMEM (shared memory):
 
-     `make install T=x86_64-ivshmem-linuxapp-gcc`
+     `make install T=x86_64-ivshmem-linuxapp-gcc DESTDIR=install`
 
      For further details refer to http://dpdk.org/
 
@@ -207,6 +207,26 @@ Using the DPDK with ovs-vswitchd:
    ./ovs-ofctl add-flow br0 in_port=2,action=output:1
    ```
 
+8. QoS usage example
+
+   Assuming you have a vhost-user port transmitting traffic consisting of
+   packets of size 64 bytes, the following command would limit the egress
+   transmission rate of the port to ~1,000,000 packets per second:
+
+   `ovs-vsctl set port vhost-user0 qos=@newqos -- --id=@newqos create qos
+   type=egress-policer other-config:cir=46000000 other-config:cbs=2048`
+
+   To examine the QoS configuration of the port:
+
+   `ovs-appctl -t ovs-vswitchd qos/show vhost-user0`
+
+   To clear the QoS configuration from the port and ovsdb use the following:
+
+   `ovs-vsctl destroy QoS vhost-user0 -- clear Port vhost-user0 qos`
+
+   For more details regarding egress-policer parameters please refer to the
+   vswitch.xml.
+
 Performance Tuning:
 -------------------
 
@@ -272,9 +292,12 @@ Performance Tuning:
 
 	NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
 
-	The OVS log can be checked to confirm that the port/rxq assignment to
-	pmd threads is as required. This can also be checked with the following
-	commands:
+	The following command can be used to confirm that the port/rxq assignment
+	to pmd threads is as required:
+
+	`ovs-appctl dpif-netdev/pmd-rxq-show`
+
+	This can also be checked with:
 
 	```
 	top -H
@@ -392,7 +415,7 @@ Performance Tuning:
 	This behavior is typically supported and enabled by default, however
 	in the case where the user knows that rx mergeable buffers are not needed
 	i.e. jumbo frames are not needed, it can be forced off by adding
-	rx_mrgbuf=off to the QEMU command line options. By not reserving multiple
+	mrg_rxbuf=off to the QEMU command line options. By not reserving multiple
 	chains of descriptors it will make more individual virtio descriptors
 	available for rx to the guest using dpdkvhost ports and this can improve
 	performance.
@@ -508,7 +531,8 @@ Adding DPDK vhost-user ports to the Switch:
 
 Following the steps above to create a bridge, you can now add DPDK vhost-user
 as a port to the vswitch. Unlike DPDK ring ports, DPDK vhost-user ports can
-have arbitrary names.
+have arbitrary names, except that forward and backward slashes are prohibited
+in the names.
 
   -  For vhost-user, the name of the port type is `dpdkvhostuser`
 
@@ -585,6 +609,22 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce,queues=$q
    -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
    ```
+
+   If one wishes to use multiple queues for an interface in the guest, the
+   driver in the guest operating system must be configured to do so. It is
+   recommended that the number of queues configured be equal to '$q'.
+
+   For example, this can be done for the Linux kernel virtio-net driver with:
+
+   ```
+   ethtool -L <DEV> combined <$q>
+   ```
+
+   A note on the command above:
+
+   `-L`: Changes the numbers of channels of the specified network device
+
+   `combined`: Changes the number of multi-purpose channels.
 
 DPDK vhost-cuse:
 ----------------
@@ -898,29 +938,17 @@ Restrictions:
     this with smaller page sizes.
 
   Platform and Network Interface:
-  - Currently it is not possible to use an Intel XL710 Network Interface as a
-    DPDK port type on a platform with more than 64 logical cores. This is
-    related to how DPDK reports the number of TX queues that may be used by
-    a DPDK application with an XL710. The maximum number of TX queues supported
-    by a DPDK application for an XL710 is 64. If a user attempts to add an
-    XL710 interface as a DPDK port type to a system as described above the
-    port addition will fail as OVS will attempt to initialize a TX queue greater
-    than 64. This issue is expected to be resolved in a future DPDK release.
-    As a workaround a user can disable hyper-threading to reduce the overall
-    core count of the system to be less than or equal to 64 when using an XL710
-    interface with DPDK.
-
-  vHost and QEMU v2.4.0+:
-  - For versions of QEMU v2.4.0 and later, it is currently not possible to
-    unbind more than one dpdkvhostuser port from the guest kernel driver
-    without causing the ovs-vswitchd process to crash. If this is a requirement
-    for your use case, it is recommended either to use a version of QEMU
-    between v2.2.0 and v2.3.1 (inclusive), or alternatively, to apply the
-    following patch to DPDK and rebuild:
-    http://dpdk.org/dev/patchwork/patch/7736/
-    This problem will likely be resolved in Open vSwitch at a later date, when
-    the next release of DPDK (which includes the above patch) is available and
-    integrated into OVS.
+  - By default with DPDK 2.2, a maximum of 64 TX queues can be used with an
+    Intel XL710 Network Interface on a platform with more than 64 logical
+    cores. If a user attempts to add an XL710 interface as a DPDK port type to
+    a system as described above, an error will be reported that initialization
+    failed for the 65th queue. OVS will then roll back to the previous
+    successful queue initialization and use that value as the total number of
+    TX queues available with queue locking. If a user wishes to use more than
+    64 queues and avoid locking, then the
+    `CONFIG_RTE_LIBRTE_I40E_QUEUE_NUM_PER_PF` config parameter in DPDK must be
+    increased to the desired number of queues. Both DPDK and OVS must be
+    recompiled for this change to take effect.
 
 Bug Reporting:
 --------------

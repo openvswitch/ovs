@@ -1,13 +1,14 @@
 AT_BANNER([vlog])
 
-AT_SETUP([vlog - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_CAPTURE_FILE([log_file])
-AT_CAPTURE_FILE([stderr_log])
-AT_CHECK([$PYTHON $srcdir/test-vlog.py --log-file log_file \
+m4_define([VLOG_PYN],
+  [AT_SETUP([vlog - $1])
+   AT_SKIP_IF([test $2 = no])
+   AT_CAPTURE_FILE([log_file])
+   AT_CAPTURE_FILE([stderr_log])
+   AT_CHECK([$3 $srcdir/test-vlog.py --log-file log_file \
 -v dbg module_1:info module_2:warn syslog:off 2>stderr_log])
 
-AT_CHECK([sed -e 's/.*-.*-.*T..:..:..Z |//' \
+   AT_CHECK([sed -e 's/.*-.*-.*T..:..:..Z |//' \
 -e 's/File ".*", line [[0-9]][[0-9]]*,/File <name>, line <number>,/' \
 stderr_log], [0], [dnl
   0  | module_0 | EMER | emergency
@@ -99,7 +100,10 @@ Traceback (most recent call last):
 AssertionError
 ])
 
-AT_CLEANUP
+   AT_CLEANUP])
+
+VLOG_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_divert_push([PREPARE_TESTS])
 vlog_filt () {
@@ -142,30 +146,34 @@ message3
 ])
 AT_CLEANUP
 
-AT_SETUP([vlog - vlog/reopen - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
-on_exit 'kill `cat test-unixctl.py.pid`'
+m4_define([VLOG_REOPEN_PYN],
+  [AT_SETUP([vlog - vlog/reopen - $1])
+   AT_SKIP_IF([test $2 = no])
+   on_exit 'kill `cat test-unixctl.py.pid`'
 
-AT_CAPTURE_FILE([log])
-AT_CAPTURE_FILE([log.old])
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CAPTURE_FILE([log])
+   AT_CAPTURE_FILE([log.old])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
 
-AT_CHECK([APPCTL -t test-unixctl.py log message])
-mv log log.old
-AT_CHECK([APPCTL -t test-unixctl.py log message2])
-AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
-AT_CHECK([APPCTL -t test-unixctl.py log message3])
-AT_CHECK([APPCTL -t test-unixctl.py exit])
+   AT_CHECK([APPCTL -t test-unixctl.py log message])
+   mv log log.old
+   AT_CHECK([APPCTL -t test-unixctl.py log message2])
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+   AT_CHECK([APPCTL -t test-unixctl.py log message3])
+   AT_CHECK([APPCTL -t test-unixctl.py exit])
 
-AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
+   AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
  Entering run loop.
  message
  message2
 ])
-AT_CHECK([sed 's/.*|//' log], [0], [dnl
+   AT_CHECK([sed 's/.*|//' log], [0], [dnl
  message3
 ])
-AT_CLEANUP
+   AT_CLEANUP])
+
+VLOG_REOPEN_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_REOPEN_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - vlog/reopen without log file - C])
 on_exit 'kill `cat test-unixctl.pid`'
@@ -178,16 +186,20 @@ ovs-appctl: test-unixctl: server returned an error
 ])
 AT_CLEANUP
 
-AT_SETUP([vlog - vlog/reopen without log file - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
-on_exit 'kill `cat test-unixctl.py.pid`'
+m4_define([VLOG_REOPEN_WITHOUT_FILE_PYN],
+  [AT_SETUP([vlog - vlog/reopen without log file - $1])
+   AT_SKIP_IF([test $2 = no])
+   on_exit 'kill `cat test-unixctl.py.pid`'
 
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach])
 
-AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
-  [Logging to file not configured
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
+     [Logging to file not configured
 ])
-AT_CLEANUP
+   AT_CLEANUP])
+
+VLOG_REOPEN_WITHOUT_FILE_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_REOPEN_WITHOUT_FILE_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 dnl This checks that if vlog/reopen can't reopen the log file,
 dnl nothing particularly bad (e.g. a crash) happens.
@@ -227,33 +239,37 @@ AT_CLEANUP
 dnl This checks that if vlog/reopen can't reopen the log file,
 dnl nothing particularly bad (e.g. Python throws an exception and
 dnl aborts the program) happens.
-AT_SETUP([vlog - vlog/reopen can't reopen log file - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+m4_define([VLOG_CANT_REOPEN_PYN],
+  [AT_SETUP([vlog - vlog/reopen can't reopen log file - $1])
+   AT_SKIP_IF([test $2 = no])
 
-# Verify that /dev/full is a character device that fails writes.
-AT_SKIP_IF([test ! -c /dev/full])
-AT_SKIP_IF([echo > /dev/full])
+   # Verify that /dev/full is a character device that fails writes.
+   AT_SKIP_IF([test ! -c /dev/full])
+   AT_SKIP_IF([echo > /dev/full])
 
-on_exit 'kill `cat test-unixctl.py.pid`'
+   on_exit 'kill `cat test-unixctl.py.pid`'
 
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
-AT_CHECK([APPCTL -t test-unixctl.py log message])
-mv log log.old
-ln -s /dev/full log
-AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
-AT_CHECK([APPCTL -t test-unixctl.py log message2])
-rm log
-AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
-AT_CHECK([APPCTL -t test-unixctl.py log message3])
-AT_CHECK([APPCTL -t test-unixctl.py exit])
-AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([APPCTL -t test-unixctl.py log message])
+   mv log log.old
+   ln -s /dev/full log
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+   AT_CHECK([APPCTL -t test-unixctl.py log message2])
+   rm log
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+   AT_CHECK([APPCTL -t test-unixctl.py log message3])
+   AT_CHECK([APPCTL -t test-unixctl.py exit])
+   AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
  Entering run loop.
  message
 ])
-AT_CHECK([sed 's/.*|//' log], [0], [dnl
+   AT_CHECK([sed 's/.*|//' log], [0], [dnl
  message3
 ])
-AT_CLEANUP
+   AT_CLEANUP])
+
+VLOG_CANT_REOPEN_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_CANT_REOPEN_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - vlog/close - C])
 on_exit 'kill `cat test-unixctl.pid`'
@@ -294,40 +310,44 @@ message5
 ])
 AT_CLEANUP
 
-AT_SETUP([vlog - vlog/close - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
-on_exit 'kill `cat test-unixctl.py.pid`'
+m4_define([VLOG_CLOSE_PYN],
+  [AT_SETUP([vlog - vlog/close - $1])
+   AT_SKIP_IF([test $2 = no])
+   on_exit 'kill `cat test-unixctl.py.pid`'
 
-AT_CAPTURE_FILE([log])
-AT_CAPTURE_FILE([log.old])
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CAPTURE_FILE([log])
+   AT_CAPTURE_FILE([log.old])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
 
-AT_CHECK([APPCTL -t test-unixctl.py log message])
-AT_CHECK([APPCTL -t test-unixctl.py log message2])
+   AT_CHECK([APPCTL -t test-unixctl.py log message])
+   AT_CHECK([APPCTL -t test-unixctl.py log message2])
 
-# After closing the log file, message3 won't appear anywhere.
-AT_CHECK([APPCTL -t test-unixctl.py vlog/close])
-mv log log.old
-AT_CHECK([APPCTL -t test-unixctl.py log message3])
+   # After closing the log file, message3 won't appear anywhere.
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/close])
+   mv log log.old
+   AT_CHECK([APPCTL -t test-unixctl.py log message3])
 
-# Closing the log file again is harmless.
-AT_CHECK([APPCTL -t test-unixctl.py vlog/close])
-AT_CHECK([APPCTL -t test-unixctl.py log message4])
+   # Closing the log file again is harmless.
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/close])
+   AT_CHECK([APPCTL -t test-unixctl.py log message4])
 
-# After reopening the log file, further messages start appearing again.
-AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
-AT_CHECK([APPCTL -t test-unixctl.py log message5])
-AT_CHECK([APPCTL -t test-unixctl.py exit])
+   # After reopening the log file, further messages start appearing again.
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+   AT_CHECK([APPCTL -t test-unixctl.py log message5])
+   AT_CHECK([APPCTL -t test-unixctl.py exit])
 
-AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
+   AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
  Entering run loop.
  message
  message2
 ])
-AT_CHECK([sed 's/.*|//' log], [0], [dnl
+   AT_CHECK([sed 's/.*|//' log], [0], [dnl
  message5
 ])
-AT_CLEANUP
+   AT_CLEANUP])
+
+VLOG_CLOSE_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_CLOSE_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - vlog/set and vlog/list - C])
 on_exit 'kill `cat test-unixctl.pid`'
@@ -373,14 +393,15 @@ AT_CHECK([APPCTL -t test-unixctl log patterntest])
 AT_CHECK([grep -q 'I<3OVS' log])
 AT_CLEANUP
 
-AT_SETUP([vlog - vlog/set and vlog/list - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
-on_exit 'kill `cat test-unixctl.py.pid`'
+m4_define([VLOG_SET_AND_LIST_PYN],
+  [AT_SETUP([vlog - vlog/set and vlog/list - $1])
+   AT_SKIP_IF([test $2 = no])
+   on_exit 'kill `cat test-unixctl.py.pid`'
 
-AT_CAPTURE_FILE([log])
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CAPTURE_FILE([log])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
 
-AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon            info       info       info
@@ -394,12 +415,12 @@ test-unixctl      info       info       info
 unixctl_server    info       info       info
 ])
 
-AT_CHECK([APPCTL -t test-unixctl.py vlog/set daemon:syslog:err])
-AT_CHECK([APPCTL -t test-unixctl.py vlog/set file:dbg])
-AT_CHECK([APPCTL -t test-unixctl.py vlog/set nonexistent], [0],
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set daemon:syslog:err])
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set file:dbg])
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set nonexistent], [0],
   [no destination, level, or module "nonexistent"
 ])
-AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon            info        err        dbg
@@ -413,16 +434,19 @@ test-unixctl      info       info        dbg
 unixctl_server    info       info        dbg
 ])
 
-AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern], [0],
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern], [0],
   [Please supply a valid pattern and destination
 ])
-AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:nonexistent], [0],
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:nonexistent], [0],
   [Destination nonexistent does not exist
 ])
-AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:file:'I<3OVS|%m'])
-AT_CHECK([APPCTL -t test-unixctl.py log patterntest])
-AT_CHECK([grep -q 'I<3OVS' log])
-AT_CLEANUP
+   AT_CHECK([APPCTL -t test-unixctl.py vlog/set pattern:file:'I<3OVS|%m'])
+   AT_CHECK([APPCTL -t test-unixctl.py log patterntest])
+   AT_CHECK([grep -q 'I<3OVS' log])
+   AT_CLEANUP])
+
+VLOG_SET_AND_LIST_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_SET_AND_LIST_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - RFC5424 facility])
 on_exit 'kill `cat ovsdb-server.pid`'
@@ -461,20 +485,24 @@ AT_CHECK([tail -1 ovsdb-server.log | awk '{print $1}'], [0], [<191>1
 ])
 AT_CLEANUP
 
-AT_SETUP([vlog - RFC5424 facility - Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
-on_exit 'kill `cat test-unixctl.py.pid`'
+m4_define([VLOG_RFC5424_PYN],
+  [AT_SETUP([vlog - RFC5424 facility - $1])
+   AT_SKIP_IF([test $2 = no])
+   on_exit 'kill `cat test-unixctl.py.pid`'
 
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
 -vFACILITY:invalid --detach], [1], [], [test-unixctl.py: processing "FACILITY:invalid": Facility invalid is invalid
 ])
 
-AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
 -vFACILITY:daemon --detach])
 
-AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:invalid], [0],
+   AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:invalid], [0],
 [Facility invalid is invalid
 ])
 
-AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:local0])
-AT_CLEANUP
+   AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:local0])
+   AT_CLEANUP])
+
+VLOG_RFC5424_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_RFC5424_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])

@@ -14,8 +14,7 @@
 #include <linux/kconfig.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0) && \
-    IS_ENABLED(CONFIG_NF_CONNTRACK)
+#if IS_ENABLED(CONFIG_NF_CONNTRACK)
 
 #include <linux/module.h>
 #include <linux/openvswitch.h>
@@ -799,4 +798,4 @@ void ovs_ct_exit(struct net *net)
 		nf_connlabels_put(net);
 }
 
-#endif /* CONFIG_NF_CONNTRACK && LINUX > 3.10 */
+#endif /* CONFIG_NF_CONNTRACK */

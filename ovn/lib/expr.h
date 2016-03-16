@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -370,7 +370,11 @@ struct expr_match {
     size_t n, allocated;
 };
 
-uint32_t expr_to_matches(const struct expr *, const struct simap *ports,
+uint32_t expr_to_matches(const struct expr *,
+                         bool (*lookup_port)(const void *aux,
+                                             const char *port_name,
+                                             unsigned int *portp),
+                         const void *aux,
                          struct hmap *matches);
 void expr_matches_destroy(struct hmap *matches);
 void expr_matches_print(const struct hmap *matches, FILE *);
@@ -378,7 +382,13 @@ void expr_matches_print(const struct hmap *matches, FILE *);
 /* Action parsing helper. */
 
 char *expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
-                            const struct simap *ports, struct ofpbuf *ofpacts,
+                            bool (*lookup_port)(const void *aux,
+                                                const char *port_name,
+                                                unsigned int *portp),
+                            const void *aux, struct ofpbuf *ofpacts,
                             struct expr **prereqsp);
+char *expr_parse_field(struct lexer *, int n_bits, bool rw,
+                       const struct shash *symtab, struct mf_subfield *,
+                       struct expr **prereqsp);
 
 #endif /* ovn/expr.h */

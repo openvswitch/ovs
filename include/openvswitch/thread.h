@@ -21,7 +21,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <sys/types.h>
-#include "util.h"
+#include "openvswitch/compiler.h"
 
 /* Mutex. */
 struct OVS_LOCKABLE ovs_mutex {

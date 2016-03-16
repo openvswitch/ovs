@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include "nx-match.h"
 #include "odp-netlink.h"
 #include "ofp-parse.h"
+#include "ofp-prop.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "unaligned.h"
@@ -273,6 +274,8 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(20): struct nx_action_controller. */
     NXAST_RAW_CONTROLLER,
+    /* NX1.0+(37): struct nx_action_controller2, ... */
+    NXAST_RAW_CONTROLLER2,
 
     /* NX1.0+(22): struct nx_action_write_metadata. */
     NXAST_RAW_WRITE_METADATA,
@@ -625,6 +628,31 @@ struct nx_action_controller {
 };
 OFP_ASSERT(sizeof(struct nx_action_controller) == 16);
 
+/* Properties for NXAST_CONTROLLER2.
+ *
+ * For more information on the effect of NXAC2PT_PAUSE, see the large comment
+ * on NXT_PACKET_IN2 in nicira-ext.h */
+enum nx_action_controller2_prop_type {
+    NXAC2PT_MAX_LEN,            /* ovs_be16 max bytes to send (default all). */
+    NXAC2PT_CONTROLLER_ID,      /* ovs_be16 dest controller ID (default 0). */
+    NXAC2PT_REASON,             /* uint8_t reason (OFPR_*), default 0. */
+    NXAC2PT_USERDATA,           /* Data to copy into NXPINT_USERDATA. */
+    NXAC2PT_PAUSE,              /* Flag to pause pipeline to resume later. */
+};
+
+/* Action structure for NXAST_CONTROLLER2.
+ *
+ * This replacement for NXAST_CONTROLLER makes it extensible via properties. */
+struct nx_action_controller2 {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16 or more. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_CONTROLLER2. */
+    uint8_t zeros[6];               /* Must be zero. */
+    /* Followed by NXAC2PT_* properties. */
+};
+OFP_ASSERT(sizeof(struct nx_action_controller2) == 16);
+
 static enum ofperr
 decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
                             enum ofp_version ofp_version OVS_UNUSED,
@@ -633,9 +661,81 @@ decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
     struct ofpact_controller *oc;
 
     oc = ofpact_put_CONTROLLER(out);
+    oc->ofpact.raw = NXAST_RAW_CONTROLLER;
     oc->max_len = ntohs(nac->max_len);
     oc->controller_id = ntohs(nac->controller_id);
     oc->reason = nac->reason;
+    ofpact_finish(out, &oc->ofpact);
+
+    return 0;
+}
+
+static enum ofperr
+decode_NXAST_RAW_CONTROLLER2(const struct nx_action_controller2 *nac2,
+                             enum ofp_version ofp_version OVS_UNUSED,
+                             struct ofpbuf *out)
+{
+    if (!is_all_zeros(nac2->zeros, sizeof nac2->zeros)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    size_t start_ofs = out->size;
+    struct ofpact_controller *oc = ofpact_put_CONTROLLER(out);
+    oc->ofpact.raw = NXAST_RAW_CONTROLLER2;
+    oc->max_len = UINT16_MAX;
+    oc->reason = OFPR_ACTION;
+
+    struct ofpbuf properties;
+    ofpbuf_use_const(&properties, nac2, ntohs(nac2->len));
+    ofpbuf_pull(&properties, sizeof *nac2);
+
+    while (properties.size > 0) {
+        struct ofpbuf payload;
+        uint64_t type;
+
+        enum ofperr error = ofpprop_pull(&properties, &payload, &type);
+        if (error) {
+            return error;
+        }
+
+        switch (type) {
+        case NXAC2PT_MAX_LEN:
+            error = ofpprop_parse_u16(&payload, &oc->max_len);
+            break;
+
+        case NXAC2PT_CONTROLLER_ID:
+            error = ofpprop_parse_u16(&payload, &oc->controller_id);
+            break;
+
+        case NXAC2PT_REASON: {
+            uint8_t u8;
+            error = ofpprop_parse_u8(&payload, &u8);
+            oc->reason = u8;
+            break;
+        }
+
+        case NXAC2PT_USERDATA:
+            out->size = start_ofs + OFPACT_CONTROLLER_SIZE;
+            ofpbuf_put(out, payload.msg, ofpbuf_msgsize(&payload));
+            oc = ofpbuf_at_assert(out, start_ofs, sizeof *oc);
+            oc->userdata_len = ofpbuf_msgsize(&payload);
+            break;
+
+        case NXAC2PT_PAUSE:
+            oc->pause = true;
+            break;
+
+        default:
+            error = OFPPROP_UNKNOWN(false, "NXAST_RAW_CONTROLLER2", type);
+            break;
+        }
+        if (error) {
+            return error;
+        }
+    }
+
+    ofpact_finish(out, &oc->ofpact);
+
     return 0;
 }
 
@@ -644,12 +744,37 @@ encode_CONTROLLER(const struct ofpact_controller *controller,
                   enum ofp_version ofp_version OVS_UNUSED,
                   struct ofpbuf *out)
 {
-    struct nx_action_controller *nac;
+    if (controller->userdata_len
+        || controller->pause
+        || controller->ofpact.raw == NXAST_RAW_CONTROLLER2) {
+        size_t start_ofs = out->size;
+        put_NXAST_CONTROLLER2(out);
+        if (controller->max_len != UINT16_MAX) {
+            ofpprop_put_u16(out, NXAC2PT_MAX_LEN, controller->max_len);
+        }
+        if (controller->controller_id != 0) {
+            ofpprop_put_u16(out, NXAC2PT_CONTROLLER_ID,
+                            controller->controller_id);
+        }
+        if (controller->reason != OFPR_ACTION) {
+            ofpprop_put_u8(out, NXAC2PT_REASON, controller->reason);
+        }
+        if (controller->userdata_len != 0) {
+            ofpprop_put(out, NXAC2PT_USERDATA, controller->userdata,
+                        controller->userdata_len);
+        }
+        if (controller->pause) {
+            ofpprop_put_flag(out, NXAC2PT_PAUSE);
+        }
+        pad_ofpat(out, start_ofs);
+    } else {
+        struct nx_action_controller *nac;
 
-    nac = put_NXAST_CONTROLLER(out);
-    nac->max_len = htons(controller->max_len);
-    nac->controller_id = htons(controller->controller_id);
-    nac->reason = controller->reason;
+        nac = put_NXAST_CONTROLLER(out);
+        nac->max_len = htons(controller->max_len);
+        nac->controller_id = htons(controller->controller_id);
+        nac->reason = controller->reason;
+    }
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -659,6 +784,8 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
     enum ofp_packet_in_reason reason = OFPR_ACTION;
     uint16_t controller_id = 0;
     uint16_t max_len = UINT16_MAX;
+    const char *userdata = NULL;
+    bool pause = false;
 
     if (!arg[0]) {
         /* Use defaults. */
@@ -685,6 +812,10 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
                 if (error) {
                     return error;
                 }
+            } else if (!strcmp(name, "userdata")) {
+                userdata = value;
+            } else if (!strcmp(name, "pause")) {
+                pause = true;
             } else {
                 return xasprintf("unknown key \"%s\" parsing controller "
                                  "action", name);
@@ -692,7 +823,7 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
         }
     }
 
-    if (reason == OFPR_ACTION && controller_id == 0) {
+    if (reason == OFPR_ACTION && controller_id == 0 && !userdata && !pause) {
         struct ofpact_output *output;
 
         output = ofpact_put_OUTPUT(ofpacts);
@@ -705,15 +836,41 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
         controller->max_len = max_len;
         controller->reason = reason;
         controller->controller_id = controller_id;
+        controller->pause = pause;
+
+        if (userdata) {
+            size_t start_ofs = ofpacts->size;
+            const char *end = ofpbuf_put_hex(ofpacts, userdata, NULL);
+            if (*end) {
+                return xstrdup("bad hex digit in `controller' "
+                               "action `userdata'");
+            }
+            size_t userdata_len = ofpacts->size - start_ofs;
+            controller = ofpacts->header;
+            controller->userdata_len = userdata_len;
+        }
+        ofpact_finish(ofpacts, &controller->ofpact);
     }
 
     return NULL;
 }
 
 static void
+format_hex_arg(struct ds *s, const uint8_t *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (i) {
+            ds_put_char(s, '.');
+        }
+        ds_put_format(s, "%02"PRIx8, data[i]);
+    }
+}
+
+static void
 format_CONTROLLER(const struct ofpact_controller *a, struct ds *s)
 {
-    if (a->reason == OFPR_ACTION && a->controller_id == 0) {
+    if (a->reason == OFPR_ACTION && !a->controller_id && !a->userdata_len
+        && !a->pause) {
         ds_put_format(s, "CONTROLLER:%"PRIu16, a->max_len);
     } else {
         enum ofp_packet_in_reason reason = a->reason;
@@ -731,6 +888,14 @@ format_CONTROLLER(const struct ofpact_controller *a, struct ds *s)
         }
         if (a->controller_id != 0) {
             ds_put_format(s, "id=%"PRIu16",", a->controller_id);
+        }
+        if (a->userdata_len) {
+            ds_put_cstr(s, "userdata=");
+            format_hex_arg(s, a->userdata, a->userdata_len);
+            ds_put_char(s, ',');
+        }
+        if (a->pause) {
+            ds_put_cstr(s, "pause,");
         }
         ds_chomp(s, ',');
         ds_put_char(s, ')');
@@ -889,18 +1054,16 @@ decode_NXAST_RAW_OUTPUT_REG2(const struct nx_action_output_reg2 *naor,
                              struct ofpbuf *out)
 {
     struct ofpact_output_reg *output_reg;
-    enum ofperr error;
-    struct ofpbuf b;
-
     output_reg = ofpact_put_OUTPUT_REG(out);
     output_reg->ofpact.raw = NXAST_RAW_OUTPUT_REG2;
     output_reg->src.ofs = nxm_decode_ofs(naor->ofs_nbits);
     output_reg->src.n_bits = nxm_decode_n_bits(naor->ofs_nbits);
     output_reg->max_len = ntohs(naor->max_len);
 
-    ofpbuf_use_const(&b, naor, ntohs(naor->len));
+    struct ofpbuf b = ofpbuf_const_initializer(naor, ntohs(naor->len));
     ofpbuf_pull(&b, OBJECT_OFFSETOF(naor, pad));
-    error = nx_pull_header(&b, &output_reg->src.field, NULL);
+
+    enum ofperr error = nx_pull_header(&b, &output_reg->src.field, NULL);
     if (error) {
         return error;
     }
@@ -1090,9 +1253,9 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     for (i = 0; i < bundle->n_slaves; i++) {
         uint16_t ofp_port = ntohs(((ovs_be16 *)(nab + 1))[i]);
         ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
+        bundle = ofpacts->header;
     }
 
-    bundle = ofpacts->header;
     ofpact_finish(ofpacts, &bundle->ofpact);
 
     if (!error) {
@@ -2011,20 +2174,17 @@ decode_copy_field__(ovs_be16 src_offset, ovs_be16 dst_offset, ovs_be16 n_bits,
                     const void *action, ovs_be16 action_len, size_t oxm_offset,
                     struct ofpbuf *ofpacts)
 {
-    struct ofpact_reg_move *move;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    move = ofpact_put_REG_MOVE(ofpacts);
+    struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
     move->ofpact.raw = ONFACT_RAW13_COPY_FIELD;
     move->src.ofs = ntohs(src_offset);
     move->src.n_bits = ntohs(n_bits);
     move->dst.ofs = ntohs(dst_offset);
     move->dst.n_bits = ntohs(n_bits);
 
-    ofpbuf_use_const(&b, action, ntohs(action_len));
+    struct ofpbuf b = ofpbuf_const_initializer(action, ntohs(action_len));
     ofpbuf_pull(&b, oxm_offset);
-    error = nx_pull_header(&b, &move->src.field, NULL);
+
+    enum ofperr error = nx_pull_header(&b, &move->src.field, NULL);
     if (error) {
         return error;
     }
@@ -2065,20 +2225,17 @@ decode_NXAST_RAW_REG_MOVE(const struct nx_action_reg_move *narm,
                           enum ofp_version ofp_version OVS_UNUSED,
                           struct ofpbuf *ofpacts)
 {
-    struct ofpact_reg_move *move;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    move = ofpact_put_REG_MOVE(ofpacts);
+    struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
     move->ofpact.raw = NXAST_RAW_REG_MOVE;
     move->src.ofs = ntohs(narm->src_ofs);
     move->src.n_bits = ntohs(narm->n_bits);
     move->dst.ofs = ntohs(narm->dst_ofs);
     move->dst.n_bits = ntohs(narm->n_bits);
 
-    ofpbuf_use_const(&b, narm, ntohs(narm->len));
+    struct ofpbuf b = ofpbuf_const_initializer(narm, ntohs(narm->len));
     ofpbuf_pull(&b, sizeof *narm);
-    error = nx_pull_header(&b, &move->src.field, NULL);
+
+    enum ofperr error = nx_pull_header(&b, &move->src.field, NULL);
     if (error) {
         return error;
     }
@@ -2242,16 +2399,12 @@ static enum ofperr
 decode_ofpat_set_field(const struct ofp12_action_set_field *oasf,
                        bool may_mask, struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    sf = ofpact_put_SET_FIELD(ofpacts);
-
-    ofpbuf_use_const(&b, oasf, ntohs(oasf->len));
+    struct ofpbuf b = ofpbuf_const_initializer(oasf, ntohs(oasf->len));
     ofpbuf_pull(&b, OBJECT_OFFSETOF(oasf, pad));
-    error = nx_pull_entry(&b, &sf->field, &sf->value,
-                          may_mask ? &sf->mask : NULL);
+
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+    enum ofperr error = nx_pull_entry(&b, &sf->field, &sf->value,
+                                      may_mask ? &sf->mask : NULL);
     if (error) {
         return (error == OFPERR_OFPBMC_BAD_MASK
                 ? OFPERR_OFPBAC_BAD_SET_MASK
@@ -2353,16 +2506,13 @@ decode_NXAST_RAW_REG_LOAD2(const struct nx_action_reg_load2 *narl,
                            enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *out)
 {
-    struct ofpact_set_field *sf;
-    enum ofperr error;
-    struct ofpbuf b;
-
-    sf = ofpact_put_SET_FIELD(out);
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(out);
     sf->ofpact.raw = NXAST_RAW_REG_LOAD2;
 
-    ofpbuf_use_const(&b, narl, ntohs(narl->len));
+    struct ofpbuf b = ofpbuf_const_initializer(narl, ntohs(narl->len));
     ofpbuf_pull(&b, OBJECT_OFFSETOF(narl, pad));
-    error = nx_pull_entry(&b, &sf->field, &sf->value, &sf->mask);
+
+    enum ofperr error = nx_pull_entry(&b, &sf->field, &sf->value, &sf->mask);
     if (error) {
         return error;
     }
@@ -2799,14 +2949,12 @@ static enum ofperr
 decode_stack_action(const struct nx_action_stack *nasp,
                     struct ofpact_stack *stack_action)
 {
-    enum ofperr error;
-    struct ofpbuf b;
-
     stack_action->subfield.ofs = ntohs(nasp->offset);
 
-    ofpbuf_use_const(&b, nasp, sizeof *nasp);
+    struct ofpbuf b = ofpbuf_const_initializer(nasp, sizeof *nasp);
     ofpbuf_pull(&b, OBJECT_OFFSETOF(nasp, pad));
-    error = nx_pull_header(&b, &stack_action->subfield.field, NULL);
+    enum ofperr error = nx_pull_header(&b, &stack_action->subfield.field,
+                                       NULL);
     if (error) {
         return error;
     }
@@ -4401,31 +4549,15 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
            enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
-    struct ofpact_note *note;
-
-    note = ofpact_put_NOTE(ofpacts);
-    while (*arg != '\0') {
-        uint8_t byte;
-        bool ok;
-
-        if (*arg == '.') {
-            arg++;
-        }
-        if (*arg == '\0') {
-            break;
-        }
-
-        byte = hexits_value(arg, 2, &ok);
-        if (!ok) {
-            return xstrdup("bad hex digit in `note' argument");
-        }
-        ofpbuf_put(ofpacts, &byte, 1);
-
-        note = ofpacts->header;
-        note->length++;
-
-        arg += 2;
+    size_t start_ofs = ofpacts->size;
+    ofpact_put_NOTE(ofpacts);
+    arg = ofpbuf_put_hex(ofpacts, arg, NULL);
+    if (arg[0]) {
+        return xstrdup("bad hex digit in `note' argument");
     }
+    struct ofpact_note *note = ofpbuf_at_assert(ofpacts, start_ofs,
+                                                sizeof *note);
+    note->length = ofpacts->size - (start_ofs + sizeof *note);
     ofpact_finish(ofpacts, &note->ofpact);
     return NULL;
 }
@@ -4433,15 +4565,8 @@ parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
 static void
 format_NOTE(const struct ofpact_note *a, struct ds *s)
 {
-    size_t i;
-
     ds_put_cstr(s, "note:");
-    for (i = 0; i < a->length; i++) {
-        if (i) {
-            ds_put_char(s, '.');
-        }
-        ds_put_format(s, "%02"PRIx8, a->data[i]);
-    }
+    format_hex_arg(s, a->data, a->length);
 }
 
 /* Exit action. */
@@ -4807,13 +4932,10 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
                     enum ofp_version ofp_version, struct ofpbuf *out)
 {
     const size_t ct_offset = ofpacts_pull(out);
-    struct ofpact_conntrack *conntrack;
-    struct ofpbuf openflow;
-    int error = 0;
-
-    conntrack = ofpact_put_CT(out);
+    struct ofpact_conntrack *conntrack = ofpact_put_CT(out);
     conntrack->flags = ntohs(nac->flags);
-    error = decode_ct_zone(nac, conntrack);
+
+    int error = decode_ct_zone(nac, conntrack);
     if (error) {
         goto out;
     }
@@ -4822,7 +4944,8 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     ofpbuf_pull(out, sizeof(*conntrack));
 
-    ofpbuf_use_const(&openflow, nac + 1, ntohs(nac->len) - sizeof(*nac));
+    struct ofpbuf openflow = ofpbuf_const_initializer(
+        nac + 1, ntohs(nac->len) - sizeof(*nac));
     error = ofpacts_pull_openflow_actions__(&openflow, openflow.size,
                                             ofp_version,
                                             1u << OVSINST_OFPIT11_APPLY_ACTIONS,
@@ -5600,9 +5723,7 @@ static enum ofperr
 ofpacts_decode(const void *actions, size_t actions_len,
                enum ofp_version ofp_version, struct ofpbuf *ofpacts)
 {
-    struct ofpbuf openflow;
-
-    ofpbuf_use_const(&openflow, actions, actions_len);
+    struct ofpbuf openflow = ofpbuf_const_initializer(actions, actions_len);
     while (openflow.size) {
         const struct ofp_action_header *action = openflow.data;
         enum ofp_raw_action_type raw;
@@ -7280,8 +7401,12 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
 void
 ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
+    ptrdiff_t len;
+
     ovs_assert(ofpact == ofpacts->header);
-    ofpact->len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;
+    len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;
+    ovs_assert(len > 0 && len <= UINT16_MAX);
+    ofpact->len = len;
     ofpbuf_padto(ofpacts, OFPACT_ALIGN(ofpacts->size));
 }
 

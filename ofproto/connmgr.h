@@ -60,13 +60,11 @@ struct ofproto_async_msg {
     uint16_t controller_id;     /* Controller ID to send to. */
 
     enum ofputil_async_msg_type oam;
-    union {
-        /* OAM_PACKET_IN. */
-        struct {
-            struct ofputil_packet_in up;
-            int max_len;                /* From action, or -1 if none. */
-        } pin;
-    };
+    /* OAM_PACKET_IN. */
+    struct {
+        struct ofputil_packet_in_private up;
+        int max_len;            /* From action, or -1 if none. */
+    } pin;
 };
 void ofproto_async_msg_free(struct ofproto_async_msg *);
 
@@ -219,4 +217,7 @@ void ofmonitor_compose_refresh_updates(struct rule_collection *rules,
                                        struct ovs_list *msgs)
     OVS_REQUIRES(ofproto_mutex);
 
+void connmgr_send_table_status(struct connmgr *,
+                               const struct ofputil_table_desc *td,
+                               uint8_t reason);
 #endif /* connmgr.h */

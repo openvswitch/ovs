@@ -709,6 +709,78 @@ though.
 perspective and also provides an example of what the resulting OpenFlow flows
 look like.
 
+7) Container Ports
+------------------
+
+OVN supports containers running directly on the hypervisors and running
+containers inside VMs. This example shows how OVN supports network
+virtualization to containers when run inside VMs. Details about how to use
+docker containers in OVS can be found [here][openvswitch-docker].
+
+To support container traffic created inside a VM and to distinguish network
+traffic coming from different container vifs, for each container a logical
+port needs to be created with parent name set to the VM's logical port and
+the tag set to the vlan tag of the container vif.
+
+Start with a simple logical switch with 3 logical ports.
+
+[View ovn/env7/setup.sh][env7setup].
+
+    $ ovn/env7/setup.sh
+
+Lets create a container vif attached to the logical port 'sw0-port1' and
+another container vif attached to the logical port 'sw0-port2'.
+
+[View ovn/env7/add-container-ports.sh][env7contports]
+
+    $ ovn/env7/add-container-ports.sh
+
+Run the `ovn-nbctl` command to see the logical ports
+
+    $ovn-nbctl show
+
+
+As you can see a logical port 'csw0-cport1' is created on a logical
+switch 'csw0' whose parent is 'sw0-port1' and it has tag set to 42.
+And a logical port 'csw0-cport2' is created on the logical switch 'csw0'
+whose parent is 'sw0-port2' and it has tag set to 43.
+
+Bridge 'br-vmport1' represents the ovs bridge running inside the VM
+connected to the logical port 'sw0-port1'. In this tutorial the ovs port
+to 'sw0-port1' is created as a patch port with its peer connected to the
+ovs bridge 'br-vmport1'. An ovs port 'cport1' is added to 'br-vmport1'
+which represents the container interface connected to the ovs bridge
+and vlan tag set to 42. Similarly 'br-vmport2' represents the ovs bridge
+for the logical port 'sw0-port2' and 'cport2' connected to 'br-vmport2'
+with vlan tag set to 43.
+
+This first trace shows a packet from 'csw0-port1' with a destination mac
+address of 'csw0-port2'. You can see ovs bridge of the vm 'br-vmport1' tags
+the traffic with vlan id 42 and the traffic reaches to the br-int because
+of the patch port. As you can see below `ovn-controller` has added a flow
+to strip the vlan tag and set the reg6 and metadata appropriately.
+
+    $ ovs-ofctl -O OpenFlow13 dump-flows br-int
+    OFPST_FLOW reply (OF1.3) (xid=0x2):
+    cookie=0x0, duration=2767.032s, table=0, n_packets=0, n_bytes=0, priority=150,in_port=3,dl_vlan=42 actions=pop_vlan,set_field:0x3->reg5,set_field:0x2->metadata,set_field:0x1->reg6,resubmit(,16)
+    cookie=0x0, duration=2767.002s, table=0, n_packets=0, n_bytes=0, priority=150,in_port=4,dl_vlan=43 actions=pop_vlan,set_field:0x4->reg5,set_field:0x2->metadata,set_field:0x2->reg6,resubmit(,16)
+    cookie=0x0, duration=2767.032s, table=0, n_packets=0, n_bytes=0, priority=100,in_port=3 actions=set_field:0x1->reg5,set_field:0x1->metadata,set_field:0x1->reg6,resubmit(,16)
+    cookie=0x0, duration=2767.001s, table=0, n_packets=0, n_bytes=0, priority=100,in_port=4 actions=set_field:0x2->reg5,set_field:0x1->metadata,set_field:0x2->reg6,resubmit(,16)
+
+[View ovn/env7/packet1.sh][env7packet1].
+
+    $ ovn/env5/packet1.sh
+
+
+The second trace shows a packet from 'csw0-port2' to 'csw0-port1'.
+
+[View ovn/env7/packet2.sh][env7packet2].
+
+    $ ovn/env5/packet1.sh
+
+You can extend this setup by adding additional container ports with two
+hypervisors. Please see the tutorial 3 above.
+
 [ovn-architecture(7)]:http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
 [Tutorial.md]:https://github.com/openvswitch/ovs/blob/master/tutorial/Tutorial.md
 [ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
@@ -742,4 +814,9 @@ look like.
 [env5packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env5/packet2.sh
 [env6setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env6/setup.sh
 [env6acls]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env6/add-acls.sh
+[env7setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/setup.sh
+[env7contports]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/add-container-ports.sh
+[env7packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/packet1.sh
+[env7packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/packet2.sh
 [openstack-ovn-acl-blog]:http://blog.russellbryant.net/2015/10/22/openstack-security-groups-using-ovn-acls/
+[openvswitch-docker]:http://openvswitch.org/support/dist-docs/INSTALL.Docker.md.txt

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 VMware, Inc.
+ * Copyright (c) 2014, 2016 VMware, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -224,18 +224,14 @@ netdev_windows_netdev_from_ofpbuf(struct netdev_windows_netdev_info *info,
         [OVS_WIN_NETDEV_ATTR_IF_FLAGS] = { .type = NL_A_U32 },
     };
 
-    struct nlattr *a[ARRAY_SIZE(ovs_netdev_policy)];
-    struct ovs_header *ovs_header;
-    struct nlmsghdr *nlmsg;
-    struct genlmsghdr *genl;
-    struct ofpbuf b;
-
     netdev_windows_info_init(info);
 
-    ofpbuf_use_const(&b, buf->data, buf->size);
-    nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
-    genl = ofpbuf_try_pull(&b, sizeof *genl);
-    ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+    struct ofpbuf b = ofpbuf_const_initializer(&b, buf->data, buf->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct genlmsghdr *genl = ofpbuf_try_pull(&b, sizeof *genl);
+    struct ovs_header *ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+
+    struct nlattr *a[ARRAY_SIZE(ovs_netdev_policy)];
     if (!nlmsg || !genl || !ovs_header
         || nlmsg->nlmsg_type != ovs_win_netdev_family
         || !nl_policy_parse(&b, 0, ovs_netdev_policy, a,

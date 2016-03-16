@@ -60,9 +60,14 @@ struct ovs_list;
  *
  * where the syntax of each part is:
  *
- *    - type: One of OFPT (standard OpenFlow message), OFPST (standard OpenFlow
- *      statistics message), NXT (Nicira extension message), or NXST (Nicira
- *      extension statistics message).
+ *    - type: One of the following:
+ *
+ *          * OFPT: standard OpenFlow message.
+ *          * OFPST: standard OpenFlow statistics or multipart message.
+ *          * NXT: Nicira extension message.
+ *          * NXST: Nicira extension statistics or multipart message.
+ *          * ONFT: Open Networking Foundation extension message.
+ *          * ONFST: Open Networking Foundation multipart message.
  *
  *      As new vendors implement extensions it will make sense to expand the
  *      dictionary of possible types.
@@ -73,9 +78,9 @@ struct ovs_list;
  *    - number:
  *         For OFPT, the 'type' in struct ofp_header.
  *         For OFPST, the 'type' in struct ofp_stats_msg or ofp11_stats_msg.
- *         For NXT, the 'subtype' in struct nicira_header.
- *         For NXST, the 'subtype' in struct nicira10_stats_msg or
- *           nicira11_stats_msg.
+ *         For NXT or ONFT, the 'subtype' in struct ofp_vendor_header.
+ *         For NXST or ONFST, the 'subtype' in an appropriate vendor stats
+ *         struct.
  *
  *    - arguments: The types of data that follow the OpenFlow headers (the
  *      message "body").  This can be "void" if the message has no body.
@@ -152,6 +157,8 @@ enum ofpraw {
     OFPRAW_OFPT13_PACKET_IN,
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,
+    /* NXT 1.0+ (30): uint8_t[8][]. */
+    OFPRAW_NXT_PACKET_IN2,
 
     /* OFPT 1.0 (11): struct ofp10_flow_removed. */
     OFPRAW_OFPT10_FLOW_REMOVED,
@@ -249,14 +256,21 @@ enum ofpraw {
     /* OFPT 1.4+ (30): struct ofp14_role_status, uint8_t[8][]. */
     OFPRAW_OFPT14_ROLE_STATUS,
 
+    /* OFPT 1.4+ (31): struct ofp14_table_status, uint8_t[8][]. */
+    OFPRAW_OFPT14_TABLE_STATUS,
+
     /* OFPT 1.4+ (32): struct ofp14_requestforward, uint8_t[8][]. */
     OFPRAW_OFPT14_REQUESTFORWARD,
 
     /* OFPT 1.4+ (33): struct ofp14_bundle_ctrl_msg, uint8_t[8][]. */
     OFPRAW_OFPT14_BUNDLE_CONTROL,
+    /* ONFT 1.3 (2300): struct ofp14_bundle_ctrl_msg, uint8_t[8][]. */
+    OFPRAW_ONFT13_BUNDLE_CONTROL,
 
     /* OFPT 1.4+ (34): struct ofp14_bundle_ctrl_msg, uint8_t[]. */
     OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE,
+    /* ONFT 1.3 (2301): struct ofp14_bundle_ctrl_msg, uint8_t[]. */
+    OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE,
 
 /* Standard statistics. */
 
@@ -450,6 +464,9 @@ enum ofpraw {
 
     /* NXT 1.0+ (26): struct nx_tlv_table_reply, struct nx_tlv_map[]. */
     OFPRAW_NXT_TLV_TABLE_REPLY,
+
+    /* NXT 1.0+ (28): uint8_t[8][]. */
+    OFPRAW_NXT_RESUME,
 };
 
 /* Decoding messages into OFPRAW_* values. */
@@ -514,6 +531,7 @@ enum ofptype {
                                   * OFPRAW_OFPT11_PACKET_IN.
                                   * OFPRAW_OFPT12_PACKET_IN.
                                   * OFPRAW_OFPT13_PACKET_IN.
+                                  * OFPRAW_NXT_PACKET_IN2.
                                   * OFPRAW_NXT_PACKET_IN. */
     OFPTYPE_FLOW_REMOVED,        /* OFPRAW_OFPT10_FLOW_REMOVED.
                                   * OFPRAW_OFPT11_FLOW_REMOVED.
@@ -575,9 +593,14 @@ enum ofptype {
     /* Request forwarding by the switch. */
     OFPTYPE_REQUESTFORWARD,       /* OFPRAW_OFPT14_REQUESTFORWARD. */
 
-    OFPTYPE_BUNDLE_CONTROL,       /* OFPRAW_OFPT14_BUNDLE_CONTROL. */
+    /* Asynchronous messages. */
+    OFPTYPE_TABLE_STATUS,          /* OFPRAW_OFPT14_TABLE_STATUS. */
 
-    OFPTYPE_BUNDLE_ADD_MESSAGE,   /* OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE. */
+    OFPTYPE_BUNDLE_CONTROL,       /* OFPRAW_OFPT14_BUNDLE_CONTROL.
+                                   * OFPRAW_ONFT13_BUNDLE_CONTROL. */
+
+    OFPTYPE_BUNDLE_ADD_MESSAGE,   /* OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE.
+                                   * OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE. */
 
     /* Statistics. */
     OFPTYPE_DESC_STATS_REQUEST,      /* OFPRAW_OFPST_DESC_REQUEST. */
@@ -667,6 +690,7 @@ enum ofptype {
     OFPTYPE_NXT_TLV_TABLE_MOD, /* OFPRAW_NXT_TLV_TABLE_MOD. */
     OFPTYPE_NXT_TLV_TABLE_REQUEST, /* OFPRAW_NXT_TLV_TABLE_REQUEST. */
     OFPTYPE_NXT_TLV_TABLE_REPLY, /* OFPRAW_NXT_TLV_TABLE_REPLY. */
+    OFPTYPE_NXT_RESUME,          /* OFPRAW_NXT_RESUME. */
 
     /* Flow monitor extension. */
     OFPTYPE_FLOW_MONITOR_CANCEL,        /* OFPRAW_NXT_FLOW_MONITOR_CANCEL. */

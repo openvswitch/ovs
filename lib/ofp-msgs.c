@@ -35,6 +35,78 @@ VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 #define OFPT11_STATS_REPLY 19
 #define OFPST_VENDOR 0xffff
 
+/* Vendor extension message. */
+struct ofp_vendor_header {
+    struct ofp_header header;   /* OFPT_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+
+    /* In theory everything after 'vendor' is vendor specific.  In practice,
+     * the vendors we support put a 32-bit subtype here.  We'll change this
+     * structure if we start adding support for other vendor formats. */
+    ovs_be32 subtype;           /* Vendor-specific subtype. */
+
+    /* Followed by vendor-defined additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp_vendor_header) == 16);
+
+/* Statistics request or reply message. */
+struct ofp10_stats_msg {
+    struct ofp_header header;
+    ovs_be16 type;              /* One of the OFPST_* constants. */
+    ovs_be16 flags;             /* Requests: always 0.
+                                 * Replies: 0 or OFPSF_REPLY_MORE. */
+};
+OFP_ASSERT(sizeof(struct ofp10_stats_msg) == 12);
+
+/* Vendor extension stats message. */
+struct ofp10_vendor_stats_msg {
+    struct ofp10_stats_msg osm; /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+    /* Followed by vendor-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp10_vendor_stats_msg) == 16);
+
+struct ofp11_stats_msg {
+    struct ofp_header header;
+    ovs_be16 type;              /* One of the OFPST_* constants. */
+    ovs_be16 flags;             /* OFPSF_REQ_* flags (none yet defined). */
+    uint8_t pad[4];
+    /* Followed by the body of the request. */
+};
+OFP_ASSERT(sizeof(struct ofp11_stats_msg) == 16);
+
+/* Vendor extension stats message. */
+struct ofp11_vendor_stats_msg {
+    struct ofp11_stats_msg osm; /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+
+    /* In theory everything after 'vendor' is vendor specific.  In practice,
+     * the vendors we support put a 32-bit subtype here.  We'll change this
+     * structure if we start adding support for other vendor formats. */
+    ovs_be32 subtype;           /* Vendor-specific subtype. */
+
+    /* Followed by vendor-defined additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp11_vendor_stats_msg) == 24);
+
+/* Header for Nicira vendor stats request and reply messages in OpenFlow
+ * 1.0. */
+struct nicira10_stats_msg {
+    struct ofp10_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* One of NXST_* below. */
+    uint8_t pad[4];             /* Align to 64-bits. */
+};
+OFP_ASSERT(sizeof(struct nicira10_stats_msg) == 24);
+
 /* A thin abstraction of OpenFlow headers:
  *
  *   - 'version' and 'type' come straight from struct ofp_header, so these are
@@ -159,15 +231,8 @@ ofphdrs_decode(struct ofphdrs *hdrs,
 
         ovh = (const struct ofp_vendor_header *) oh;
         hdrs->vendor = ntohl(ovh->vendor);
-        if (hdrs->vendor == NX_VENDOR_ID) {
-            /* Get Nicira message subtype (NXT_*). */
-            const struct nicira_header *nh;
-
-            if (length < sizeof *nh) {
-                return OFPERR_OFPBRC_BAD_LEN;
-            }
-            nh = (const struct nicira_header *) oh;
-            hdrs->subtype = ntohl(nh->subtype);
+        if (hdrs->vendor == NX_VENDOR_ID || hdrs->vendor == ONF_VENDOR_ID) {
+            hdrs->subtype = ntohl(ovh->subtype);
         } else {
             log_bad_vendor(hdrs->vendor);
             return OFPERR_OFPBRC_BAD_VENDOR;
@@ -230,15 +295,9 @@ ofphdrs_decode(struct ofphdrs *hdrs,
 
             ovsm = (const struct ofp11_vendor_stats_msg *) oh;
             hdrs->vendor = ntohl(ovsm->vendor);
-            if (hdrs->vendor == NX_VENDOR_ID) {
-                /* Get Nicira statistic type (NXST_*). */
-                const struct nicira11_stats_msg *nsm;
-
-                if (length < sizeof *nsm) {
-                    return OFPERR_OFPBRC_BAD_LEN;
-                }
-                nsm = (const struct nicira11_stats_msg *) oh;
-                hdrs->subtype = ntohl(nsm->subtype);
+            if (hdrs->vendor == NX_VENDOR_ID ||
+                hdrs->vendor == ONF_VENDOR_ID) {
+                hdrs->subtype = ntohl(ovsm->subtype);
             } else {
                 log_bad_vendor(hdrs->vendor);
                 return OFPERR_OFPBRC_BAD_VENDOR;
@@ -308,7 +367,7 @@ size_t
 ofphdrs_len(const struct ofphdrs *hdrs)
 {
     if (hdrs->type == OFPT_VENDOR) {
-        return sizeof(struct nicira_header);
+        return sizeof(struct ofp_vendor_header);
     }
 
     switch ((enum ofp_version) hdrs->version) {
@@ -329,7 +388,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
         if (hdrs->type == OFPT11_STATS_REQUEST ||
             hdrs->type == OFPT11_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
-                    ? sizeof(struct nicira11_stats_msg)
+                    ? sizeof(struct ofp11_vendor_stats_msg)
                     : sizeof(struct ofp11_stats_msg));
         }
         break;
@@ -348,9 +407,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
 enum ofperr
 ofpraw_decode(enum ofpraw *raw, const struct ofp_header *oh)
 {
-    struct ofpbuf msg;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     return ofpraw_pull(raw, &msg);
 }
 
@@ -675,11 +732,10 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
     oh->xid = xid;
 
     if (hdrs->type == OFPT_VENDOR) {
-        struct nicira_header *nh = buf->header;
+        struct ofp_vendor_header *ovh = buf->header;
 
-        ovs_assert(hdrs->vendor == NX_VENDOR_ID);
-        nh->vendor = htonl(hdrs->vendor);
-        nh->subtype = htonl(hdrs->subtype);
+        ovh->vendor = htonl(hdrs->vendor);
+        ovh->subtype = htonl(hdrs->subtype);
     } else if (version == OFP10_VERSION
                && (hdrs->type == OFPT10_STATS_REQUEST ||
                    hdrs->type == OFPT10_STATS_REPLY)) {
@@ -714,13 +770,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
             struct ofp11_vendor_stats_msg *ovsm = buf->header;
 
             ovsm->vendor = htonl(hdrs->vendor);
-            if (hdrs->vendor == NX_VENDOR_ID) {
-                struct nicira11_stats_msg *nsm = buf->header;
-
-                nsm->subtype = htonl(hdrs->subtype);
-            } else {
-                OVS_NOT_REACHED();
-            }
+            ovsm->subtype = htonl(hdrs->subtype);
         }
     }
 }

@@ -327,4 +327,10 @@ int rpl_ip_tunnel_get_iflink(const struct net_device *dev);
 #define ip_tunnel_get_link_net rpl_ip_tunnel_get_link_net
 struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev);
 #endif /* HAVE_METADATA_DST */
+
+#ifndef HAVE___IP_TUNNEL_CHANGE_MTU
+#define __ip_tunnel_change_mtu rpl___ip_tunnel_change_mtu
+int rpl___ip_tunnel_change_mtu(struct net_device *dev, int new_mtu, bool strict);
+#endif
+
 #endif /* __NET_IP_TUNNELS_H */

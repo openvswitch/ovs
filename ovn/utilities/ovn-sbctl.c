@@ -771,6 +771,10 @@ static const struct ctl_table_class tables[] = {
      {{&sbrec_table_port_binding, &sbrec_port_binding_col_logical_port, NULL},
       {NULL, NULL, NULL}}},
 
+    {&sbrec_table_mac_binding,
+     {{&sbrec_table_mac_binding, &sbrec_mac_binding_col_logical_port, NULL},
+      {NULL, NULL, NULL}}},
+
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
 

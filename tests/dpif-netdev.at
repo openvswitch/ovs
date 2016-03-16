@@ -14,6 +14,15 @@ strip_xout () {
 ' | sort
 }
 
+strip_xout_keep_actions () {
+    sed '
+    s/ufid:[-0-9a-f]* //
+    s/used:[0-9]*\.[0-9]*/used:0.0/
+    s/packets:[0-9]*/packets:0/
+    s/bytes:[0-9]*/bytes:0/
+' | sort
+}
+
 filter_flow_install () {
     grep 'flow_add' | sed 's/.*flow_add: //' | sort | uniq
 }

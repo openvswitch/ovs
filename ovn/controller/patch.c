@@ -180,15 +180,26 @@ add_bridge_mappings(struct controller_ctx *ctx,
             continue;
         }
 
-        struct hmap_node *ld;
-        ld = hmap_first_with_hash(local_datapaths,
-                                  binding->datapath->tunnel_key);
+        struct local_datapath *ld;
+        ld = CONTAINER_OF(hmap_first_with_hash(local_datapaths,
+                          binding->datapath->tunnel_key),
+                          struct local_datapath, hmap_node);
         if (!ld) {
             /* This localnet port is on a datapath with no
              * logical ports bound to this chassis, so there's no need
              * to create patch ports for it. */
             continue;
         }
+        if (ld->localnet_port) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "localnet port '%s' already set for datapath "
+                         "'%"PRId64"', skipping the new port '%s'.",
+                         ld->localnet_port->logical_port,
+                         binding->datapath->tunnel_key,
+                         binding->logical_port);
+            continue;
+        }
+        ld->localnet_port = binding;
 
         const char *network = smap_get(&binding->options, "network_name");
         if (!network) {

@@ -85,6 +85,7 @@ enum ofperr ofpprop_parse_u16(const struct ofpbuf *, uint16_t *value);
 enum ofperr ofpprop_parse_u32(const struct ofpbuf *, uint32_t *value);
 enum ofperr ofpprop_parse_u64(const struct ofpbuf *, uint64_t *value);
 enum ofperr ofpprop_parse_uuid(const struct ofpbuf *, struct uuid *);
+enum ofperr ofpprop_parse_nested(const struct ofpbuf *, struct ofpbuf *);
 
 /* Serializing properties. */
 void ofpprop_put(struct ofpbuf *, uint64_t type,
@@ -100,9 +101,12 @@ void ofpprop_put_u64(struct ofpbuf *, uint64_t type, uint64_t value);
 void ofpprop_put_bitmap(struct ofpbuf *, uint64_t type, uint64_t bitmap);
 void ofpprop_put_flag(struct ofpbuf *, uint64_t type);
 void ofpprop_put_uuid(struct ofpbuf *, uint64_t type, const struct uuid *);
+void ofpprop_put_nested(struct ofpbuf *, uint64_t type, const struct ofpbuf *);
 
 size_t ofpprop_start(struct ofpbuf *, uint64_t type);
 void ofpprop_end(struct ofpbuf *, size_t start_ofs);
+
+size_t ofpprop_start_nested(struct ofpbuf *, uint64_t type);
 
 /* Logging errors while deserializing properties.
  *

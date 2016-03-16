@@ -21,18 +21,19 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "bitmap.h"
 #include "cmap.h"
+#include "coverage.h"
 #include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
@@ -41,8 +42,7 @@
 #include "dynamic-string.h"
 #include "fat-rwlock.h"
 #include "flow.h"
-#include "cmap.h"
-#include "coverage.h"
+#include "hmapx.h"
 #include "latch.h"
 #include "list.h"
 #include "match.h"
@@ -68,6 +68,7 @@
 #include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
+
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev);
@@ -496,6 +497,13 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos);
 static void dp_netdev_destroy_all_pmds(struct dp_netdev *dp);
 static void dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id);
+static void dp_netdev_pmd_clear_poll_list(struct dp_netdev_pmd_thread *pmd);
+static void dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
+                                        struct dp_netdev_pmd_thread *pmd);
+static void dp_netdev_del_port_from_all_pmds(struct dp_netdev *dp,
+                                             struct dp_netdev_port *port);
+static void
+dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port);
 static void
 dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
                          struct dp_netdev_port *port, struct netdev_rxq *rx);
@@ -567,8 +575,9 @@ get_dp_netdev(const struct dpif *dpif)
 }
 
 enum pmd_info_type {
-    PMD_INFO_SHOW_STATS,  /* show how cpu cycles are spent */
-    PMD_INFO_CLEAR_STATS  /* set the cycles count to 0 */
+    PMD_INFO_SHOW_STATS,  /* Show how cpu cycles are spent. */
+    PMD_INFO_CLEAR_STATS, /* Set the cycles count to 0. */
+    PMD_INFO_SHOW_RXQ     /* Show poll-lists of pmd threads. */
 };
 
 static void
@@ -677,6 +686,35 @@ pmd_info_clear_stats(struct ds *reply OVS_UNUSED,
 }
 
 static void
+pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
+{
+    if (pmd->core_id != NON_PMD_CORE_ID) {
+        struct rxq_poll *poll;
+        const char *prev_name = NULL;
+
+        ds_put_format(reply, "pmd thread numa_id %d core_id %u:\n",
+                      pmd->numa_id, pmd->core_id);
+
+        ovs_mutex_lock(&pmd->poll_mutex);
+        LIST_FOR_EACH (poll, node, &pmd->poll_list) {
+            const char *name = netdev_get_name(poll->port->netdev);
+
+            if (!prev_name || strcmp(name, prev_name)) {
+                if (prev_name) {
+                    ds_put_cstr(reply, "\n");
+                }
+                ds_put_format(reply, "\tport: %s\tqueue-id:",
+                              netdev_get_name(poll->port->netdev));
+            }
+            ds_put_format(reply, " %d", netdev_rxq_get_queue_id(poll->rx));
+            prev_name = name;
+        }
+        ovs_mutex_unlock(&pmd->poll_mutex);
+        ds_put_cstr(reply, "\n");
+    }
+}
+
+static void
 dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
                      void *aux)
 {
@@ -702,22 +740,26 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     }
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        unsigned long long stats[DP_N_STATS];
-        uint64_t cycles[PMD_N_CYCLES];
-        int i;
+        if (type == PMD_INFO_SHOW_RXQ) {
+            pmd_info_show_rxq(&reply, pmd);
+        } else {
+            unsigned long long stats[DP_N_STATS];
+            uint64_t cycles[PMD_N_CYCLES];
+            int i;
 
-        /* Read current stats and cycle counters */
-        for (i = 0; i < ARRAY_SIZE(stats); i++) {
-            atomic_read_relaxed(&pmd->stats.n[i], &stats[i]);
-        }
-        for (i = 0; i < ARRAY_SIZE(cycles); i++) {
-            atomic_read_relaxed(&pmd->cycles.n[i], &cycles[i]);
-        }
+            /* Read current stats and cycle counters */
+            for (i = 0; i < ARRAY_SIZE(stats); i++) {
+                atomic_read_relaxed(&pmd->stats.n[i], &stats[i]);
+            }
+            for (i = 0; i < ARRAY_SIZE(cycles); i++) {
+                atomic_read_relaxed(&pmd->cycles.n[i], &cycles[i]);
+            }
 
-        if (type == PMD_INFO_CLEAR_STATS) {
-            pmd_info_clear_stats(&reply, pmd, stats, cycles);
-        } else if (type == PMD_INFO_SHOW_STATS) {
-            pmd_info_show_stats(&reply, pmd, stats, cycles);
+            if (type == PMD_INFO_CLEAR_STATS) {
+                pmd_info_clear_stats(&reply, pmd, stats, cycles);
+            } else if (type == PMD_INFO_SHOW_STATS) {
+                pmd_info_show_stats(&reply, pmd, stats, cycles);
+            }
         }
     }
 
@@ -731,7 +773,8 @@ static int
 dpif_netdev_init(void)
 {
     static enum pmd_info_type show_aux = PMD_INFO_SHOW_STATS,
-                              clear_aux = PMD_INFO_CLEAR_STATS;
+                              clear_aux = PMD_INFO_CLEAR_STATS,
+                              poll_aux = PMD_INFO_SHOW_RXQ;
 
     unixctl_command_register("dpif-netdev/pmd-stats-show", "[dp]",
                              0, 1, dpif_netdev_pmd_info,
@@ -739,6 +782,9 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/pmd-stats-clear", "[dp]",
                              0, 1, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
+    unixctl_command_register("dpif-netdev/pmd-rxq-show", "[dp]",
+                             0, 1, dpif_netdev_pmd_info,
+                             (void *)&poll_aux);
     return 0;
 }
 
@@ -1137,26 +1183,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     cmap_insert(&dp->ports, &port->node, hash_port_no(port_no));
 
     if (netdev_is_pmd(netdev)) {
-        int numa_id = netdev_get_numa_id(netdev);
-        struct dp_netdev_pmd_thread *pmd;
-
-        /* Cannot create pmd threads for invalid numa node. */
-        ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
-
-        for (i = 0; i < netdev_n_rxq(netdev); i++) {
-            pmd = dp_netdev_less_loaded_pmd_on_numa(dp, numa_id);
-            if (!pmd) {
-                /* There is no pmd threads on this numa node. */
-                dp_netdev_set_pmds_on_numa(dp, numa_id);
-                /* Assigning of rx queues done. */
-                break;
-            }
-
-            ovs_mutex_lock(&pmd->poll_mutex);
-            dp_netdev_add_rxq_to_pmd(pmd, port, port->rxq[i]);
-            ovs_mutex_unlock(&pmd->poll_mutex);
-            dp_netdev_reload_pmd__(pmd);
-        }
+        dp_netdev_add_port_to_pmds(dp, port);
     }
     seq_change(dp->port_seq);
 
@@ -1344,29 +1371,7 @@ do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
         if (!has_pmd_port_for_numa(dp, numa_id)) {
             dp_netdev_del_pmds_on_numa(dp, numa_id);
         } else {
-            struct dp_netdev_pmd_thread *pmd;
-            struct rxq_poll *poll, *next;
-
-            CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-                if (pmd->numa_id == numa_id) {
-                    bool found = false;
-
-                    ovs_mutex_lock(&pmd->poll_mutex);
-                    LIST_FOR_EACH_SAFE (poll, next, node, &pmd->poll_list) {
-                        if (poll->port == port) {
-                            found = true;
-                            port_unref(poll->port);
-                            list_remove(&poll->node);
-                            pmd->poll_cnt--;
-                            free(poll);
-                        }
-                    }
-                    ovs_mutex_unlock(&pmd->poll_mutex);
-                    if (found) {
-                        dp_netdev_reload_pmd__(pmd);
-                    }
-                }
-            }
+            dp_netdev_del_port_from_all_pmds(dp, port);
         }
     }
 
@@ -1593,7 +1598,7 @@ netdev_flow_key_equal(const struct netdev_flow_key *a,
 }
 
 /* Used to compare 'netdev_flow_key' in the exact match cache to a miniflow.
- * The maps are compared bitwise, so both 'key->mf' 'mf' must have been
+ * The maps are compared bitwise, so both 'key->mf' and 'mf' must have been
  * generated by miniflow_extract. */
 static inline bool
 netdev_flow_key_equal_mf(const struct netdev_flow_key *key,
@@ -2684,8 +2689,9 @@ reload:
 
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
-       VLOG_INFO("Core %d processing port \'%s\'\n", pmd->core_id,
-                 netdev_get_name(poll_list[i].port->netdev));
+       VLOG_DBG("Core %d processing port \'%s\' with queue-id %d\n",
+                pmd->core_id, netdev_get_name(poll_list[i].port->netdev),
+                netdev_rxq_get_queue_id(poll_list[i].rx));
     }
 
     /* Signal here to make sure the pmd finishes
@@ -2887,8 +2893,6 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
 static void
 dp_netdev_del_pmd(struct dp_netdev *dp, struct dp_netdev_pmd_thread *pmd)
 {
-    struct rxq_poll *poll;
-
     /* Uninit the 'flow_cache' since there is
      * no actual thread uninit it for NON_PMD_CORE_ID. */
     if (pmd->core_id == NON_PMD_CORE_ID) {
@@ -2901,10 +2905,7 @@ dp_netdev_del_pmd(struct dp_netdev *dp, struct dp_netdev_pmd_thread *pmd)
     }
 
     /* Unref all ports and free poll_list. */
-    LIST_FOR_EACH_POP (poll, node, &pmd->poll_list) {
-        port_unref(poll->port);
-        free(poll);
-    }
+    dp_netdev_pmd_clear_poll_list(pmd);
 
     /* Purges the 'pmd''s flows after stopping the thread, but before
      * destroying the flows, so that the flow stats can be collected. */
@@ -2987,6 +2988,62 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
     free(free_idx);
 }
 
+/* Deletes all rx queues from pmd->poll_list. */
+static void
+dp_netdev_pmd_clear_poll_list(struct dp_netdev_pmd_thread *pmd)
+{
+    struct rxq_poll *poll;
+
+    ovs_mutex_lock(&pmd->poll_mutex);
+    LIST_FOR_EACH_POP (poll, node, &pmd->poll_list) {
+        port_unref(poll->port);
+        free(poll);
+    }
+    pmd->poll_cnt = 0;
+    ovs_mutex_unlock(&pmd->poll_mutex);
+}
+
+/* Deletes all rx queues of 'port' from poll_list of pmd thread and
+ * reloads it if poll_list was changed. */
+static void
+dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
+                            struct dp_netdev_pmd_thread *pmd)
+{
+    struct rxq_poll *poll, *next;
+    bool found = false;
+
+    ovs_mutex_lock(&pmd->poll_mutex);
+    LIST_FOR_EACH_SAFE (poll, next, node, &pmd->poll_list) {
+        if (poll->port == port) {
+            found = true;
+            port_unref(poll->port);
+            list_remove(&poll->node);
+            pmd->poll_cnt--;
+            free(poll);
+        }
+    }
+    ovs_mutex_unlock(&pmd->poll_mutex);
+    if (found) {
+        dp_netdev_reload_pmd__(pmd);
+    }
+}
+
+/* Deletes all rx queues of 'port' from all pmd threads of dp and
+ * reloads them if needed. */
+static void
+dp_netdev_del_port_from_all_pmds(struct dp_netdev *dp,
+                                 struct dp_netdev_port *port)
+{
+    int numa_id = netdev_get_numa_id(port->netdev);
+    struct dp_netdev_pmd_thread *pmd;
+
+    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        if (pmd->numa_id == numa_id) {
+            dp_netdev_del_port_from_pmd(port, pmd);
+       }
+    }
+}
+
 /* Returns PMD thread from this numa node with fewer rx queues to poll.
  * Returns NULL if there is no PMD threads on this numa node.
  * Can be called safely only by main thread. */
@@ -3021,6 +3078,45 @@ dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
 
     list_push_back(&pmd->poll_list, &poll->node);
     pmd->poll_cnt++;
+}
+
+/* Distributes all rx queues of 'port' between all PMD threads and reloads
+ * them if needed. */
+static void
+dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port)
+{
+    int numa_id = netdev_get_numa_id(port->netdev);
+    struct dp_netdev_pmd_thread *pmd;
+    struct hmapx to_reload;
+    struct hmapx_node *node;
+    int i;
+
+    hmapx_init(&to_reload);
+    /* Cannot create pmd threads for invalid numa node. */
+    ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
+
+    for (i = 0; i < netdev_n_rxq(port->netdev); i++) {
+        pmd = dp_netdev_less_loaded_pmd_on_numa(dp, numa_id);
+        if (!pmd) {
+            /* There is no pmd threads on this numa node. */
+            dp_netdev_set_pmds_on_numa(dp, numa_id);
+            /* Assigning of rx queues done. */
+            break;
+        }
+
+        ovs_mutex_lock(&pmd->poll_mutex);
+        dp_netdev_add_rxq_to_pmd(pmd, port, port->rxq[i]);
+        ovs_mutex_unlock(&pmd->poll_mutex);
+
+        hmapx_add(&to_reload, pmd);
+    }
+
+    HMAPX_FOR_EACH (node, &to_reload) {
+        pmd = (struct dp_netdev_pmd_thread *) node->data;
+        dp_netdev_reload_pmd__(pmd);
+    }
+
+    hmapx_destroy(&to_reload);
 }
 
 /* Checks the numa node id of 'netdev' and starts pmd threads for

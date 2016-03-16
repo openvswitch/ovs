@@ -35,6 +35,20 @@
       Each row represents one L2 logical switch.
     </p>
 
+    <p>
+      There are two kinds of logical switches, that is, ones that fully
+      virtualize the network (overlay logical switches) and ones that provide
+      simple connectivity to a physical network (bridged logical switches).
+      They work in the same way when providing connectivity between logical
+      ports on same chasis, but differently when connecting remote logical
+      ports.  Overlay logical switches connect remote logical ports by tunnels,
+      while bridged logical switches provide connectivity to remote ports by
+      bridging the packets to directly connected physical L2 segment with the
+      help of <code>localnet</code> ports.  Each bridged logical switch has
+      one and only one <code>localnet</code> port, which has only one special
+      address <code>unknown</code>.
+    </p>
+
     <column name="name">
       <p>
         A name for the logical switch.  This name has no special meaning or purpose
@@ -116,9 +130,8 @@
           <dd>
             A connection to a locally accessible network from each
             <code>ovn-controller</code> instance.  A logical switch can only
-            have a single <code>localnet</code> port attached and at most one
-            regular logical port.  This is used to model direct connectivity to
-            an existing network.
+            have a single <code>localnet</code> port attached.  This is used
+            to model direct connectivity to an existing network.
           </dd>
 
           <dt><code>vtep</code></dt>
@@ -271,12 +284,12 @@
         </p>
 
         <dl>
-          <dt><code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code></dt>
+          <dt><code>Ethernet address followed by zero or more IPv4 or IPv6 addresses (or both)</code></dt>
           <dd>
             <p>
-              An Ethernet address owned by the logical port.  Like a physical
-              Ethernet NIC, a logical port ordinarily has a single fixed
-              Ethernet address.
+              An Ethernet address defined is owned by the logical port.
+              Like a physical Ethernet NIC, a logical port ordinarily has
+              a single fixed Ethernet address.
             </p>
 
             <p>
@@ -286,27 +299,53 @@
               if a MAC learning process had learned that MAC address on the
               port.
             </p>
-          </dd>
 
-          <dt><code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var> <var>a</var>.<var>b</var>.<var>c</var>.<var>d</var></code></dt>
-          <dd>
             <p>
-              This form has all the effects of the previous form.  It also
-              indicates that the logical port owns the given IPv4 address.
+              If IPv4 or IPv6 address(es) (or both) are defined, it indicates
+              that the logical port owns the given IP addresses.
             </p>
 
             <p>
-              The OVN logical switch uses this information to synthesize
-              responses to ARP requests without traversing the physical
-              network.  The OVN logical router connected to the logical switch,
-              if any, uses this information to avoid issuing ARP requests for
-              logical switch ports.
+              If IPv4 address(es) are defined, the OVN logical switch uses this
+              information to synthesize responses to ARP requests without
+              traversing the physical network. The OVN logical router connected
+              to the logical switch, if any, uses this information to avoid
+              issuing ARP requests for logical switch ports.
             </p>
 
             <p>
               Note that the order here is important. The Ethernet address must
-              be listed before the IP address.
+              be listed before the IP address(es) if defined.
             </p>
+
+            <p>
+              Examples:
+            </p>
+
+            <dl>
+              <dt><code>80:fa:5b:06:72:b7</code></dt>
+              <dd>
+                This indicates that the logical port owns the above mac address.
+              </dd>
+
+              <dt><code>80:fa:5b:06:72:b7 10.0.0.4 20.0.0.4</code></dt>
+              <dd>
+                This indicates that the logical port owns the mac address and two
+                IPv4 addresses.
+              </dd>
+
+              <dt><code>80:fa:5b:06:72:b7 fdaa:15f2:72cf:0:f816:3eff:fe20:3f41</code></dt>
+              <dd>
+                This indicates that the logical port owns the mac address and
+                1 IPv6 address.
+              </dd>
+
+              <dt><code>80:fa:5b:06:72:b7 10.0.0.4 fdaa:15f2:72cf:0:f816:3eff:fe20:3f41</code></dt>
+              <dd>
+                This indicates that the logical port owns the mac address and
+                1 IPv4 address and 1 IPv6 address.
+              </dd>
+            </dl>
           </dd>
 
           <dt><code>unknown</code></dt>
@@ -409,6 +448,13 @@
       <p>
         Note that you can not create an ACL matching on a port with
         type=router.
+      </p>
+
+      <p>
+        Note that when <code>localnet</code> port exists in a lswitch, for
+        <code>to-lport</code> direction, the <code>inport</code> works only if
+        the <code>to-lport</code> is located on the same chassis as the
+        <code>inport</code>.
       </p>
     </column>
 

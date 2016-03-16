@@ -79,6 +79,7 @@ docs = \
 	INSTALL.Libvirt.md \
 	INSTALL.NetBSD.md \
 	INSTALL.RHEL.md \
+	INSTALL.SELinux.md \
 	INSTALL.SSL.md \
 	INSTALL.XenServer.md \
 	INSTALL.userspace.md \
@@ -370,6 +371,7 @@ flake8-check: $(FLAKE8_PYFILES)
 		flake8 $^ --ignore=E121,E123,E125,E126,E127,E128,E129,E131,W503,F811,D,H ${FLAKE8_FLAGS}; then \
 		touch $@; else exit 1; fi
 endif
+CLEANFILES += flake8-check
 
 include $(srcdir)/manpages.mk
 $(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.pl
@@ -383,17 +385,17 @@ $(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.pl
 CLEANFILES += manpage-dep-check
 
 if VSTUDIO_DDK
-ALL_LOCAL += ovsext_make
-ovsext_make: datapath-windows/ovsext.sln
-	MSBuild.exe datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8$(VSTUDIO_CONFIG)"
-	MSBuild.exe datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
+ALL_LOCAL += ovsext
+ovsext: datapath-windows/ovsext.sln $(srcdir)/datapath-windows/include/OvsDpInterface.h
+	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8$(VSTUDIO_CONFIG)"
+	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 
 CLEAN_LOCAL += ovsext_clean
 ovsext_clean: datapath-windows/ovsext.sln
-	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
-	MSBuild.exe datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
+	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8$(VSTUDIO_CONFIG)"
+	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 endif
-.PHONY: ovsext_make
+.PHONY: ovsext
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
@@ -431,3 +433,4 @@ include datapath-windows/automake.mk
 include datapath-windows/include/automake.mk
 include windows/automake.mk
 include ovn/automake.mk
+include selinux/automake.mk

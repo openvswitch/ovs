@@ -11,7 +11,7 @@ OVS_VSWITCHD_START
 
 # Start a monitor running OpenFlow 1.0, then send the switch an OF1.1 features
 # request
-AT_CHECK([ovs-ofctl -P openflow10 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/send 0205000801234567
@@ -1777,7 +1777,7 @@ head_table () {
         actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
         supported on Set-Field: tun_id tun_src tun_dst tun_ipv6_src tun_ipv6_dst tun_flags tun_gbp_id tun_gbp_flags tun_metadata0 dnl
 tun_metadata1 tun_metadata2 tun_metadata3 tun_metadata4 tun_metadata5 tun_metadata6 tun_metadata7 tun_metadata8 tun_metadata9 tun_metadata10 tun_metadata11 tun_metadata12 tun_metadata13 tun_metadata14 tun_metadata15 tun_metadata16 tun_metadata17 tun_metadata18 tun_metadata19 tun_metadata20 tun_metadata21 tun_metadata22 tun_metadata23 tun_metadata24 tun_metadata25 tun_metadata26 tun_metadata27 tun_metadata28 tun_metadata29 tun_metadata30 tun_metadata31 tun_metadata32 tun_metadata33 tun_metadata34 tun_metadata35 tun_metadata36 tun_metadata37 tun_metadata38 tun_metadata39 tun_metadata40 tun_metadata41 tun_metadata42 tun_metadata43 tun_metadata44 tun_metadata45 tun_metadata46 tun_metadata47 tun_metadata48 tun_metadata49 tun_metadata50 tun_metadata51 tun_metadata52 tun_metadata53 tun_metadata54 tun_metadata55 tun_metadata56 tun_metadata57 tun_metadata58 tun_metadata59 tun_metadata60 tun_metadata61 tun_metadata62 tun_metadata63 dnl
-metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
+metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 reg5 reg6 reg7 xreg0 xreg1 xreg2 xreg3 eth_src eth_dst vlan_tci vlan_vid vlan_pcp mpls_label mpls_tc mpls_ttl ip_src ip_dst ipv6_src ipv6_dst ipv6_label nw_tos ip_dscp nw_ecn nw_ttl arp_op arp_spa arp_tpa arp_sha arp_tha tcp_src tcp_dst udp_src udp_dst sctp_src sctp_dst icmp_type icmp_code icmpv6_type icmpv6_code nd_target nd_sll nd_tll
     matching:
       dp_hash: arbitrary mask
       recirc_id: exact match or wildcard
@@ -1884,6 +1884,7 @@ metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 
       mpls_label: exact match or wildcard
       mpls_tc: exact match or wildcard
       mpls_bos: exact match or wildcard
+      mpls_ttl: exact match or wildcard
       ip_src: arbitrary mask
       ip_dst: arbitrary mask
       ipv6_src: arbitrary mask
@@ -1999,7 +2000,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
 AT_CHECK([ovs-ofctl -O Openflow14 mod-table br0 0 vacancy:20,80])
 # Check that the configuration was updated.
 mv expout orig-expout
-sed -e '3s/vacancy=off/vacancy=on vacancy_down=20% vacancy_up=80% vacancy=0%/' <orig-expout > expout
+sed -e '3s/vacancy=off/vacancy=on vacancy_down=20% vacancy_up=80% vacancy=100%/' <orig-expout > expout
 AT_CHECK([ovs-ofctl -O OpenFlow14 dump-table-desc br0 | sed '/^$/d
 /^OFPST_TABLE_DESC/d'], [0], [expout])
 OVS_VSWITCHD_STOP
@@ -2523,7 +2524,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - asynchronous message control (OpenFlow 1.0)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -P openflow10 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -P standard monitor br0 --detach --no-chdir --pidfile])
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     shift
@@ -2626,7 +2627,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - asynchronous message control (OpenFlow 1.2)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow12 -P standard monitor br0 --detach --no-chdir --pidfile])
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     INDEX=$1
@@ -2729,7 +2730,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - asynchronous message control (OpenFlow 1.3)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -P standard monitor br0 --detach --no-chdir --pidfile])
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     INDEX=$1
@@ -2838,7 +2839,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - asynchronous message control (OpenFlow 1.4)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -P standard monitor br0 --detach --no-chdir --pidfile])
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     INDEX=$1
@@ -2907,12 +2908,90 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
         echo >>expout "OFPT_FLOW_REMOVED (OF1.4):  reason=delete table_id=0"
     fi
 
-        # OFPT_FLOW_REMOVED, OFPRR_GROUP_DELETE
+    # OFPT_FLOW_REMOVED, OFPRR_GROUP_DELETE
     ovs-ofctl -O OpenFlow14 add-group br0 group_id=1234,type=all,bucket=output:10
     ovs-ofctl -O OpenFlow14 add-flow br0 send_flow_rem,actions=group:1234
     ovs-ofctl -O OpenFlow14 --strict del-groups br0 group_id=1234
     if test X"$1" = X"OFPRR_GROUP_DELETE"; then shift;
         echo >>expout "OFPT_FLOW_REMOVED (OF1.4):  reason=group_delete table_id=0"
+    fi
+
+    # OFPT_TABLE_STATUS, OFPTR_VACANCY_UP
+    if test X"$1" = X"OFPTR_VACANCY_UP"; then shift;
+        ovs-vsctl -- --id=@t1 create Flow_Table flow-limit=10 -- set bridge br0 flow_tables:1=@t1
+
+	# Turn on vacancy events, then add flows until we're full.
+	# With initial vacancy of 100% and vacancy_up of 80%, so that
+	# vacancy >= vacancy_up, this enables VACANY_DOWN events, so
+	# we get a single such message when vacancy dips below 20%.
+        ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
+        echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_DOWN
+table_desc:-
+  table 1:
+   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME
+   vacancy=on vacancy_down=20% vacancy_up=80% vacancy=10%"
+        # Then delete flows until we're empty.  Sending the
+	# VACANCY_DOWN message enabled VACANCY_UP events, so we get a
+	# single such message when vacancy rises above 80%.
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
+        echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_UP
+table_desc:-
+  table 1:
+   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME
+   vacancy=on vacancy_down=20% vacancy_up=80% vacancy=90%"
+
+        # Now approach vacancy from the other direction.  First
+	# disable vacancy events.  With initial vacancy of 70%, so
+	# that vacancy < vacancy_up, this enables VACANCY_UP events.
+	# That means that filling up the table generates no message,
+	# but deleting all the flows generates VACANCY_UP at the point
+	# vacancy rises above 80%.
+        ovs-ofctl -O OpenFlow14 mod-table br0 1 novacancy
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=3,actions=2
+        ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=4,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=5,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=6,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=7,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=8,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=9,actions=2
+        ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=10,actions=2
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=4
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=5
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=6
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=7
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=8
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=9
+        ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=10
+        echo >>expout "OFPT_TABLE_STATUS (OF1.4): reason=VACANCY_UP
+table_desc:-
+  table 1:
+   eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME
+   vacancy=on vacancy_down=20% vacancy_up=80% vacancy=90%"
     fi
 
     AT_FAIL_IF([test X"$1" != X])
@@ -2940,8 +3019,8 @@ ovs-appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000
 check_async 3 OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE
 
 # Use OF 1.4 OFPT_SET_ASYNC to enable a patchwork of asynchronous messages.
-ovs-appctl -t ovs-ofctl ofctl/send 051c0038000000020000000800000005000100080000000200020008000000020003000800000005000400080000001c0005000800000005
-check_async 4 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
+ovs-appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000000200020008000000020003000800000005000400080000001c00050008000000050008000800000018
+check_async 4 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE OFPTR_VACANCY_UP
 
 # Set controller ID 123.
 ovs-appctl -t ovs-ofctl ofctl/send 05040018000000030000232000000014000000000000007b
@@ -2960,7 +3039,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto - asynchronous message control (OpenFlow 1.5)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow15 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -P standard monitor br0 --detach --no-chdir --pidfile])
 check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     INDEX=$1
@@ -3260,7 +3339,7 @@ OVS_VSWITCHD_START
 add_of_ports br0 1
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -P openflow10 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3295,7 +3374,7 @@ AT_SETUP([ofproto - packet-out from controller (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow12 -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3328,7 +3407,7 @@ AT_SETUP([ofproto - packet-out from controller (OpenFlow 1.1)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -O OpenFlow11 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow11 -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0209000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3353,13 +3432,41 @@ OFPT_BARRIER_REPLY (OF1.1):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This test checks that metadata and userdata are encoded in NXT_PACKET_IN2.
+AT_SETUP([ofproto - packet-out with metadata and userdata (NXT_PACKET_IN2)])
+OVS_VSWITCHD_START
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P nxt_packet_in2 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# Send a packet-out with a load action to set some metadata, and forward to controller
+AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), load(0xaa->NXM_NX_PKT_MARK[[]]), controller(userdata=01.02.03.04.05)' '0001020304050010203040501234'])
+
+# Stop the monitor and check its output.
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+NXT_PACKET_IN2: total_len=14 pkt_mark=0xaa,metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=14 (unbuffered)
+ userdata=01.02.03.04.05
+vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+OFPT_BARRIER_REPLY:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This test checks that metadata is encoded in packet_in structures,
 dnl supported by NXAST.
 AT_SETUP([ofproto - packet-out with metadata (NXM)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -P nxm monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -P nxt_packet_in monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3387,7 +3494,7 @@ AT_SETUP([ofproto - packet-out with metadata (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow12 -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3415,7 +3522,7 @@ AT_SETUP([ofproto - packet-out with metadata and dual set_field (OpenFlow 1.3)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3442,7 +3549,7 @@ AT_SETUP([ofproto - packet-out with tunnel metadata (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 
 # Start a monitor listening for packet-ins.
-AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
+AT_CHECK([ovs-ofctl -O OpenFlow12 -P standard monitor br0 --detach --no-chdir --pidfile])
 ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700000080
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
@@ -3918,7 +4025,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([ofproto - bundles, open (OpenFlow 1.4)])
+AT_SETUP([ofproto - bundle open (OpenFlow 1.4)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
 
@@ -3942,7 +4049,7 @@ OFPT_BARRIER_REPLY (OF1.4):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - bundles, double open (OpenFlow 1.4)])
+AT_SETUP([ofproto - bundle double open (OpenFlow 1.4)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
 
@@ -4382,6 +4489,491 @@ OFPT_ERROR (OF1.4) (xid=0xb): OFPBRC_EPERM
 OFPT_FLOW_MOD (OF1.4) (xid=0xb): ADD table:254 actions=drop
 OFPT_ERROR (OF1.4) (xid=0xd): OFPBFC_MSG_FAILED
 OFPT_BUNDLE_CONTROL (OF1.4) (xid=0xd):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+ovs-ofctl: talking to unix:br0.mgmt (error)
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:11
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:22
+ idle_timeout=70, in_port=2,dl_src=00:88:99:aa:bb:cc actions=output:33
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto - bundle open (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Send an OpenFlow13 message (04), OFPT_EXPERIMENTER (04), length (0018),
+# xid (0000000a), ONF_EXPERIMENTER_ID (4F4E4600),
+# ONFT_BUNDLE_CONTROL (2300 = 0x08FC), bundle id (00000001),
+# message type (0000), and flags (0002)
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle double open (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Send twice an OpenFlow13 message (04), OFPT_EXPERIMENTER (04), length (0018),
+# xid (0000000a), ONF_EXPERIMENTER_ID (4F4E4600),
+# ONFT_BUNDLE_CONTROL (2300 = 0x08FC), bundle id (00000001),
+# message type (0000), and flags (0002)
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.3):
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+OFPT_ERROR (OF1.3): OFPBFC_BAD_ID
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle close without open (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+OFPT_ERROR (OF1.3): OFPBFC_BAD_ID
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle double close (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close, Close
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.3):
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.3):
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+OFPT_ERROR (OF1.3): OFPBFC_BUNDLE_CLOSED
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle close, different flags (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Close
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 02 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.3):
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_ERROR (OF1.3): OFPBFC_BAD_FLAGS
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle commit without open (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Commit
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 04 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=ordered
+OFPT_ERROR (OF1.3): OFPBFC_BAD_ID
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle commit, different flags (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Open, Commit
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 00 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 04 00 01"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REQUEST flags=ordered
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+OFPT_BARRIER_REPLY (OF1.3):
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic
+OFPT_ERROR (OF1.3): OFPBFC_BAD_FLAGS
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle discard without open (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+# Discard
+ovs-appctl -t ovs-ofctl ofctl/send "04 04 00 18 00 00 00 0a 4F 4E 46 00 00 00 08 FC 00 00 00 01 00 06 00 02"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([ofctl_strip < monitor.log], [0], [dnl
+send: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=DISCARD_REQUEST flags=ordered
+OFPT_ERROR (OF1.3): OFPBFC_BAD_ID
+ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0x1 type=DISCARD_REQUEST flags=ordered
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto - bundle with multiple flow mods (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-appctl vlog/set vconn:dbg])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+
+AT_DATA([flows.txt], [dnl
+add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=1
+add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=2
+add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=3
+add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=4
+delete
+add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=5
+add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=6
+add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=7
+delete in_port=2 dl_src=00:88:99:aa:bb:cc
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:5
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:6
+NXST_FLOW reply:
+])
+
+AT_DATA([flows.txt], [dnl
+modify actions=drop
+modify_strict in_port=2 dl_src=00:77:88:99:aa:bb actions=7
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
+NXST_FLOW reply:
+])
+
+# Adding an existing flow acts as a modify, and delete_strict also works.
+AT_DATA([flows.txt], [dnl
+add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=8
+delete_strict in_port=2 dl_src=00:66:77:88:99:aa
+add in_port=2 dl_src=00:66:77:88:99:aa actions=drop
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:8
+ in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+NXST_FLOW reply:
+])
+
+dnl Check logs for OpenFlow trace
+# Prevent race.
+OVS_WAIT_UNTIL([vconn_sub < ovs-vswitchd.log | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
+AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO:
+ version bitmap: 0x01
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
+vconn|DBG|unix: received: OFPT_FLOW_MOD: DEL actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.3):
+ version bitmap: 0x04
+vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x06 and earlier, peer supports version 0x04)
+vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=OPEN_REPLY flags=0
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:66:77:88:99:aa idle:50 actions=output:1
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:77:88:99:aa:bb idle:60 actions=output:2
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:88:99:aa:bb:cc idle:70 actions=output:3
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:66:77:88:99:aa idle:50 actions=output:4
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): DEL table:255 actions=drop
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:66:77:88:99:aa idle:50 actions=output:5
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:77:88:99:aa:bb idle:60 actions=output:6
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:88:99:aa:bb:cc idle:70 actions=output:7
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): DEL table:255 in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
+vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=COMMIT_REPLY flags=0
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO:
+ version bitmap: 0x01
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
+vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
+vconn|DBG|unix: received: NXST_FLOW request:
+vconn|DBG|unix: sent (Success): NXST_FLOW reply:
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:5
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:6
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.3):
+ version bitmap: 0x04
+vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x06 and earlier, peer supports version 0x04)
+vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=OPEN_REPLY flags=0
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): MOD actions=drop
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): MOD_STRICT in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
+vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=COMMIT_REPLY flags=0
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO:
+ version bitmap: 0x01
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
+vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
+vconn|DBG|unix: received: NXST_FLOW request:
+vconn|DBG|unix: sent (Success): NXST_FLOW reply:
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO (OF1.3):
+ version bitmap: 0x04
+vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x06 and earlier, peer supports version 0x04)
+vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=OPEN_REPLY flags=0
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:77:88:99:aa:bb idle:60 actions=output:8
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): DEL_STRICT table:255 in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
+ bundle_id=0 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
+ bundle_id=0 type=COMMIT_REPLY flags=0
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: received: OFPT_HELLO:
+ version bitmap: 0x01
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
+vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
+vconn|DBG|unix: received: NXST_FLOW request: 
+vconn|DBG|unix: sent (Success): NXST_FLOW reply:
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:8
+ in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto - failing bundle commit (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-ofctl del-flows br0])
+
+ovs-ofctl add-flows br0 - <<EOF
+idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=11
+idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=22
+idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=33
+EOF
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:11
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:22
+ idle_timeout=70, in_port=2,dl_src=00:88:99:aa:bb:cc actions=output:33
+NXST_FLOW reply:
+])
+
+# last line uses illegal table number (OVS internal table)
+AT_DATA([flows.txt], [dnl
+add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=1
+add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=2
+add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=3
+modify idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=4
+delete
+add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=5
+add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=6
+add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=7
+delete in_port=2 dl_src=00:88:99:aa:bb:cc
+add table=254 actions=drop
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/|WARN|/d
+s/unix:.*br0\.mgmt/unix:br0.mgmt/' | sed 's/(.* error)/(error)/'],
+[0], [dnl
+OFPT_ERROR (OF1.3) (xid=0xb): OFPBRC_EPERM
+OFPT_FLOW_MOD (OF1.3) (xid=0xb): ADD table:254 actions=drop
+OFPT_ERROR (OF1.3) (xid=0xd): OFPBFC_MSG_FAILED
+ONFT_BUNDLE_CONTROL (OF1.3) (xid=0xd):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ovs-ofctl: talking to unix:br0.mgmt (error)
 ])

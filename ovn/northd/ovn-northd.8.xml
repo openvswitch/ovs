@@ -195,17 +195,22 @@
       </li>
     </ul>
 
-    <h3>Ingress Table 3: Destination Lookup</h3>
+    <h3>Ingress Table 3: ARP responder</h3>
 
     <p>
-      This table implements switching behavior.  It contains these logical
-      flows:
+      This table implements ARP responder for known IPs.  It contains these
+      logical flows:
     </p>
 
     <ul>
       <li>
+        Priority-100 flows to skip ARP responder if inport is of type
+        <code>localnet</code>, and advances directly to table 3.
+      </li>
+
+      <li>
         <p>
-          Priority-150 flows that matches ARP requests to each known IP address
+          Priority-50 flows that matches ARP requests to each known IP address
           <var>A</var> of logical port <var>P</var>, and respond with ARP
           replies directly with corresponding Ethernet address <var>E</var>:
         </p>
@@ -229,6 +234,20 @@ output;
         </p>
       </li>
 
+      <li>
+        One priority-0 fallback flow that matches all packets and advances to
+        table 4.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 4: Destination Lookup</h3>
+
+    <p>
+      This table implements switching behavior.  It contains these logical
+      flows:
+    </p>
+
+    <ul>
       <li>
         A priority-100 flow that outputs all packets with an Ethernet broadcast
         or multicast <code>eth.dst</code> to the <code>MC_FLOOD</code>
@@ -379,12 +398,12 @@ next;
 
       <li>
         <p>
-          ARP reply.  These flows reply to ARP requests for the router's own IP
-          address.  For each router port <var>P</var> that owns IP address
-          <var>A</var> and Ethernet address <var>E</var>, a priority-90 flow
-          matches <code>inport == <var>P</var> &amp;&amp; arp.tpa ==
-          <var>A</var> &amp;&amp; arp.op == 1</code> (ARP request) with the
-          following actions:
+          Reply to ARP requests.  These flows reply to ARP requests for the
+          router's own IP address.  For each router port <var>P</var> that owns
+          IP address <var>A</var> and Ethernet address <var>E</var>, a
+          priority-90 flow matches <code>inport == <var>P</var> &amp;&amp;
+          arp.op == 1 &amp;&amp; arp.tpa == <var>A</var></code> (ARP request)
+          with the following actions:
         </p>
 
         <pre>
@@ -399,6 +418,13 @@ outport = <var>P</var>;
 inport = ""; /* Allow sending out inport. */
 output;
         </pre>
+      </li>
+
+      <li>
+        ARP reply handling.  These flows use ARP replies to populate the
+        logical router's ARP table.  A priority-90 flow with match <code>arp.op
+        == 2</code> has actions <code>put_arp(inport, arp.spa,
+        arp.sha);</code>.
       </li>
 
       <li>
@@ -525,7 +551,10 @@ icmp4 {
       to the address in <code>ip4.dst</code>.  This table implements IP
       routing, setting <code>reg0</code> to the next-hop IP address (leaving
       <code>ip4.dst</code>, the packet's final destination, unchanged) and
-      advances to the next table for ARP resolution.
+      advances to the next table for ARP resolution.  It also sets
+      <code>reg1</code> to the IP address owned by the selected router port
+      (which is used later in table 4 as the IP source address for an ARP
+      request, if needed).
     </p>
 
     <p>
@@ -536,7 +565,9 @@ icmp4 {
       <li>
         <p>
           Routing table.  For each route to IPv4 network <var>N</var> with
-          netmask <var>M</var>, a logical flow with match <code>ip4.dst ==
+          netmask <var>M</var>, on router port <var>P</var> with IP address
+          <var>A</var> and Ethernet
+          address <var>E</var>, a logical flow with match <code>ip4.dst ==
           <var>N</var>/<var>M</var></code>, whose priority is the number of
           1-bits in <var>M</var>, has the following actions:
         </p>
@@ -544,6 +575,9 @@ icmp4 {
         <pre>
 ip.ttl--;
 reg0 = <var>G</var>;
+reg1 = <var>A</var>;
+eth.src = <var>E</var>;
+outport = <var>P</var>;
 next;
         </pre>
 
@@ -602,64 +636,76 @@ icmp4 {
     <ul>
       <li>
         <p>
-          Known MAC bindings.  For each IP address <var>A</var> whose host is
-          known to have Ethernet address <var>HE</var> and reside on router
-          port <var>P</var> with Ethernet address <var>PE</var>, a priority-200
-          flow with match <code>reg0 == <var>A</var></code> has the following
-          actions:
+          Static MAC bindings.  MAC bindings can be known statically based on
+          data in the <code>OVN_Northbound</code> database.  For router ports
+          connected to logical switches, MAC bindings can be known statically
+          from the <code>addresses</code> column in the
+          <code>Logical_Port</code> table.  For router ports connected to other
+          logical routers, MAC bindings can be known statically from the
+          <code>mac</code> and <code>network</code> column in the
+          <code>Logical_Router_Port</code> table.
         </p>
 
-        <pre>
-eth.src = <var>PE</var>;
-eth.dst = <var>HE</var>;
-outport = <var>P</var>;
-output;
-        </pre>
-
         <p>
-          MAC bindings can be known statically based on data in the
-          <code>OVN_Northbound</code> database.  For router ports connected to
-          logical switches, MAC bindings can be known statically from the
-          <code>addresses</code> column in the <code>Logical_Port</code> table.
-          For router ports connected to other logical routers, MAC bindings can
-          be known statically from the <code>mac</code> and
-          <code>network</code> column in the <code>Logical_Router_Port</code>
-          table.
+          For each IP address <var>A</var> whose host is known to have Ethernet
+          address <var>E</var> on router port <var>P</var>, a priority-100 flow
+          with match <code>outport === <var>P</var> &amp;&amp; reg0 ==
+          <var>A</var></code> has actions <code>eth.dst = <var>E</var>;
+          next;</code>.
         </p>
       </li>
 
       <li>
         <p>
-          Unknown MAC bindings.  For each non-gateway route to IPv4 network
-          <var>N</var> with netmask <var>M</var> on router port <var>P</var>
-          that owns IP address <var>A</var> and Ethernet address <var>E</var>,
-          a logical flow with match <code>ip4.dst ==
-          <var>N</var>/<var>M</var></code>, whose priority is the number of
-          1-bits in <var>M</var>, has the following actions:
+          Dynamic MAC bindings.  This flows resolves MAC-to-IP bindings that
+          have become known dynamically through ARP.  (The next table will
+          issue an ARP request for cases where the binding is not yet known.)
+        </p>
+
+        <p>
+          A priority-0 logical flow with match <code>1</code> has actions
+          <code>get_arp(outport, reg0); next;</code>.
+        </p>
+      </li>
+    </ul>
+
+    <h3>Ingress Table 4: ARP Request</h3>
+
+    <p>
+      In the common case where the Ethernet destination has been resolved, this
+      table outputs the packet.  Otherwise, it composes and sends an ARP
+      request.  It holds the following flows:
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          Unknown MAC address.  A priority-100 flow with match <code>eth.dst ==
+          00:00:00:00:00:00</code> has the following actions:
         </p>
 
         <pre>
 arp {
     eth.dst = ff:ff:ff:ff:ff:ff;
-    eth.src = <var>E</var>;
-    arp.sha = <var>E</var>;
-    arp.tha = 00:00:00:00:00:00;
-    arp.spa = <var>A</var>;
-    arp.tpa = ip4.dst;
+    arp.spa = reg1;
     arp.op = 1;  /* ARP request. */
-    outport = <var>P</var>;
     output;
 };
         </pre>
 
         <p>
-          TBD: How to install MAC bindings when an ARP response comes back.
-          (Implement a "learn" action?)
+          (Ingress table 2 initialized <code>reg1</code> with the IP address
+          owned by <code>outport</code>.)
         </p>
 
         <p>
-          Not yet implemented.
+          The IP packet that triggers the ARP request is dropped.
         </p>
+      </li>
+
+      <li>
+        Known MAC address.  A priority-0 flow with match <code>1</code> has
+        actions <code>output;</code>.
       </li>
     </ul>
 

@@ -466,16 +466,16 @@ be lifted in the future to allow for easier management.
 These commands are Nicira extensions to OpenFlow and require Open vSwitch
 2.5 or later.
 
-.IP "\fBadd\-TLV\-map \fIswitch option\fR[\fB,\fIoption\fR]..."
+.IP "\fBadd\-tlv\-map \fIswitch option\fR[\fB,\fIoption\fR]..."
 Add each \fIoption\fR to \fIswitch\fR's tables. Duplicate fields are
 rejected.
 .
-.IP "\fBdel\-TLV\-map \fIswitch \fR[\fIoption\fR[\fB,\fIoption\fR]]..."
+.IP "\fBdel\-tlv\-map \fIswitch \fR[\fIoption\fR[\fB,\fIoption\fR]]..."
 Delete each \fIoption\fR from \fIswitch\fR's table, or all option TLV
 mapping if no \fIoption\fR is specified.
 Fields that aren't mapped are ignored.
 .
-.IP "\fBdump\-TLV\-map \fIswitch\fR"
+.IP "\fBdump\-tlv\-map \fIswitch\fR"
 Show the currently mapped fields in the switch's option table as well
 as switch capabilities.
 .
@@ -1051,7 +1051,10 @@ header with the CFI bit (with value \fB0x1000\fR) forced to 1.
 Examples:
 .RS
 .IP \fBvlan_tci=0\fR
-Match only packets without an 802.1Q header.
+Match packets without an 802.1Q header.
+.IP \fBvlan_tci=0x1000/0x1000\fR
+Match packets with an 802.1Q header, regardless of VLAN and priority
+values.
 .IP \fBvlan_tci=0xf123\fR
 Match packets tagged with priority 7 in VLAN 0x123.
 .IP \fBvlan_tci=0x1123/0x1fff\fR
@@ -1367,7 +1370,7 @@ be set, or \fB\-\fR for a flag that must be unset, without any other
 delimiters between the flags.  Flags not mentioned are wildcarded.  For
 example, \fBtcp,ct_state=+trk\-new\fR matches TCP packets that
 have been run through the connection tracker and do not establish a new
-flow.
+connection.
 .IP
 The following flags describe the state of the tracking:
 .RS
@@ -1505,7 +1508,7 @@ network device that has the same name as the bridge.
 Outputs the packet on the port from which it was received.
 .
 .IP \fBcontroller(\fIkey\fB=\fIvalue\fR...\fB)
-Sends the packet to the OpenFlow controller as a ``packet in''
+Sends the packet and its metadata to the OpenFlow controller as a ``packet in''
 message.  The supported key-value pairs are:
 .RS
 .IP "\fBmax_len=\fInbytes\fR"
@@ -1523,12 +1526,27 @@ default connection ID for each controller connection, and a given
 controller connection will only have a nonzero connection ID if its
 controller uses the \fBNXT_SET_CONTROLLER_ID\fR Nicira extension to
 OpenFlow.
+.IP "\fBuserdata=\fIhh\fR...\fR"
+Supplies the bytes represented as hex digits \fIhh\fR as additional
+data to the controller in the packet-in message.  Pairs of hex digits
+may be separated by periods for readability.
+.IP "\fBpause\fR"
+Causes the switch to freeze the packet's trip through Open vSwitch
+flow tables and serializes that state into the packet-in message as a
+``continuation,'' an additional property in the \fBNXT_PACKET_IN2\fR
+message.  The controller can later send the continuation back to the
+switch in an \fBNXT_RESUME\fR message, which will restart the packet's
+traversal from the point where it was interrupted.  This permits an
+OpenFlow controller to interpose on a packet midway through processing
+in Open vSwitch.
+.
 .RE
 .IP
-Any \fIreason\fR other than \fBaction\fR and any nonzero
-\fIcontroller-id\fR uses a Nicira vendor extension that, as of this
-writing, is only known to be implemented by Open vSwitch (version 1.6
-or later).
+If any \fIreason\fR other than \fBaction\fR or any nonzero
+\fIcontroller-id\fR is supplied, Open vSwitch extension
+\fBNXAST_CONTROLLER\fR, supported by Open vSwitch 1.6 and later, is
+used.  If \fBuserdata\fR is supplied, then \fBNXAST_CONTROLLER2\fR,
+supported by Open vSwitch 2.6 and later, is used.
 .
 .IP \fBcontroller\fR
 .IQ \fBcontroller\fR[\fB:\fInbytes\fR]
@@ -1683,10 +1701,10 @@ continue processing the current actions list as an untracked packet. An
 additional instance of the packet will be sent to the connection tracker, which
 will be re-injected into the OpenFlow pipeline to resume processing in table
 \fInumber\fR, with the \fBct_state\fR and other ct match fields set. If the
-\fBtable\fR is not specified, then the packet is submitted to the connection
-tracker, but the pipeline does not fork and the ct match fields are not
-populated. It is strongly recommended to specify a table later than the current
-table to prevent loops.
+\fBtable\fR is not specified, then the packet which is submitted to the
+connection tracker is not re-injected into the OpenFlow pipeline. It is
+strongly recommended to specify a table later than the current table to prevent
+loops.
 .IP \fBzone=\fIvalue\fR
 .IQ \fBzone=\fIsrc\fB[\fIstart\fB..\fIend\fB]\fR
 A 16-bit context id that can be used to isolate connections into separate
@@ -1694,14 +1712,15 @@ domains, allowing overlapping network addresses in different zones. If a zone
 is not provided, then the default is to use zone zero. The \fBzone\fR may be
 specified either as an immediate 16-bit \fIvalue\fR, or may be provided from an
 NXM field \fIsrc\fR. The \fIstart\fR and \fIend\fR pair are inclusive, and must
-specify a 16-bit range within the field.
+specify a 16-bit range within the field. This value is copied to the
+\fBct_zone\fR match field for packets which are re-injected into the pipeline
+using the \fBtable\fR option.
 .IP \fBexec\fB(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)\fR
-Perform actions within the context of connection tracking. These actions
-are in the same format as the actions accepted as part of a flow, however
-there are additional restrictions applied. For instance, only actions which
-modify the ct fields are accepted within the \fBexec\fR action. Furthermore,
-some actions may only be performed in this context, for instance modifying the
-ct_mark field:
+Perform actions within the context of connection tracking. This is a restricted
+set of actions which are in the same format as their specifications as part
+of a flow. Only actions which modify the \fBct_mark\fR or \fBct_label\fR
+fields are accepted within the \fBexec\fR action, and these fields may only be
+modified with this option. For example:
 .
 .RS
 .IP \fBset_field:\fIvalue\fR->ct_mark\fR
@@ -1728,6 +1747,13 @@ connection arrives which is related, the \fBct\fR action will set the
 \fBrel\fR flag in the \fBct_state\fR field for packets sent through \fBct\fR.
 .RE
 .
+.IP
+The \fBcommit\fR parameter must be specified to use \fBalg=\fIalg\fR.
+.
+.IP
+When committing related connections, the \fBct_mark\fR for that connection is
+inherited from the current \fBct_mark\fR stored with the original connection
+(ie, the connection created by \fBct(alg=...)\fR).
 .RE
 .IP
 The \fBct\fR action may be used as a primitive to construct stateful firewalls
@@ -1747,9 +1773,10 @@ send traffic from port 2 to port 1:
 If \fBct\fR is executed on IP (or IPv6) fragments, then the message is
 implicitly reassembled before sending to the connection tracker and
 refragmented upon \fBoutput\fR, to the original maximum received fragment size.
-Reassembly occurs within the context of the \fBzone\fR. Pipeline processing
-for the initial fragments is halted; When the final fragment is received,
-the message is assembled and pipeline processing will continue for that flow.
+Reassembly occurs within the context of the \fBzone\fR, meaning that IP
+fragments in different zones are not assembled together. Pipeline processing
+for the initial fragments is halted; When the final fragment is received, the
+message is assembled and pipeline processing will continue for that flow.
 Because packet ordering is not guaranteed by IP protocols, it is not possible
 to determine which IP fragment will cause message reassembly (and therefore
 continue pipeline processing). As such, it is strongly recommended that
@@ -1757,7 +1784,8 @@ multiple flows should not execute \fBct\fR to reassemble fragments from the
 same IP message.
 .IP
 Currently, connection tracking is only available on Linux kernels with the
-nf_conntrack module loaded.
+nf_conntrack module loaded. The \fBct\fR action was introduced in Open vSwitch
+2.5.
 .
 .IP \fBdec_ttl\fR
 .IQ \fBdec_ttl(\fIid1\fR[\fB,\fIid2\fR]...\fB)\fR
@@ -2850,24 +2878,49 @@ specified flow formats, \fBovs\-ofctl\fR will report a fatal error.
 .
 .IP "\fB\-P \fIformat\fR"
 .IQ "\fB\-\-packet\-in\-format=\fIformat\fR"
-\fBovs\-ofctl\fR supports the following packet_in formats, in order of
+\fBovs\-ofctl\fR supports the following ``packet-in'' formats, in order of
 increasing capability:
 .RS
-.IP "\fBopenflow10\fR"
-This is the standard OpenFlow 1.0 packet in format. It should be supported by
-all OpenFlow switches.
+.IP "\fBstandard\fR"
+This uses the \fBOFPT_PACKET_IN\fR message, the standard ``packet-in''
+message for any given OpenFlow version.  Every OpenFlow switch that
+supports a given OpenFlow version supports this format.
 .
-.IP "\fBnxm\fR (Nicira Extended Match)"
-This packet_in format includes flow metadata encoded using the NXM format.
+.IP "\fBnxt_packet_in\fR"
+This uses the \fBNXT_PACKET_IN\fR message, which adds many of the
+capabilities of the OpenFlow 1.1 and later ``packet-in'' messages
+before those OpenFlow versions were available in Open vSwitch.  Open
+vSwitch 1.1 and later support this format.  Only Open vSwitch 2.6 and
+later, however, support it for OpenFlow 1.1 and later (but there is
+little reason to use it with those versions of OpenFlow).
+.
+.IP "\fBnxt_packet_in2\fR"
+This uses the \fBNXT_PACKET_IN2\fR message, which is extensible and
+should avoid the need to define new formats later.  In particular,
+this format supports passing arbitrary user-provided data to a
+controller using the \fBuserdata\fB option on the \fBcontroller\fR
+action.  Open vSwitch 2.6 and later support this format.
 .
 .RE
 .IP
-Usually, \fBovs\-ofctl\fR prefers the \fBnxm\fR packet_in format, but will
-allow the switch to choose its default if \fBnxm\fR is unsupported.  When
-\fIformat\fR is one of the formats listed in the above table, \fBovs\-ofctl\fR
-will insist on the selected format.  If the switch does not support the
-requested format, \fBovs\-ofctl\fR will report a fatal error.  This option only
-affects the \fBmonitor\fR command.
+Without this option, \fBovs\-ofctl\fR prefers \fBnxt_packet_in2\fR if
+the switch supports it.  Otherwise, if OpenFlow 1.0 is in use,
+\fBovs\-ofctl\fR prefers \fBnxt_packet_in\fR if the switch supports
+it.  Otherwise, \fBovs\-ofctl\fR falls back to the \fBstandard\fR
+packet-in format.  When this option is specified, \fBovs\-ofctl\fR
+insists on the selected format.  If the switch does not support the
+requested format, \fBovs\-ofctl\fR will report a fatal error.
+.IP
+Before version 2.6, Open vSwitch called \fBstandard\fR format
+\fBopenflow10\fR and \fBnxt_packet_in\fR format \fBnxm\fR, and
+\fBovs\-ofctl\fR still accepts these names as synonyms.  (The name
+\fBopenflow10\fR was a misnomer because this format actually varies
+from one OpenFlow version to another; it is not consistently OpenFlow
+1.0 format.  Similarly, when \fBnxt_packet_in2\fR was introduced, the
+name \fBnxm\fR became confusing because it also uses OXM/NXM.)
+.
+.IP
+This option affects only the \fBmonitor\fR command.
 .
 .IP "\fB\-\-timestamp\fR"
 Print a timestamp before each received packet.  This option only

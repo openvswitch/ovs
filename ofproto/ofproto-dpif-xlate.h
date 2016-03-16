@@ -140,9 +140,8 @@ struct xlate_in {
      * set. */
     struct flow_wildcards *wc;
 
-    /* The recirculation context related to this translation, as returned by
-     * xlate_lookup. */
-    const struct recirc_state *recirc;
+    /* The frozen state to be resumed, as returned by xlate_lookup(). */
+    const struct frozen_state *frozen_state;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,
@@ -201,6 +200,10 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    struct flow_wildcards *, struct ofpbuf *odp_actions);
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
+
+enum ofperr xlate_resume(struct ofproto_dpif *,
+                         const struct ofputil_packet_in_private *,
+                         struct ofpbuf *odp_actions, enum slow_path_reason *);
 
 int xlate_send_packet(const struct ofport_dpif *, struct dp_packet *);
 

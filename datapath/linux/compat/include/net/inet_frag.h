@@ -13,7 +13,6 @@
 	} while (0)
 #endif
 
-#ifdef OVS_FRAGMENT_BACKPORT
 #ifdef HAVE_INET_FRAGS_LAST_IN
 #define q_flags(q) (q->last_in)
 #define qp_flags(qp) (qp->q.last_in)
@@ -80,6 +79,5 @@ void rpl_inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f);
 void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f);
 #define inet_frag_destroy(q, f, work) rpl_inet_frag_destroy(q, f)
 #endif /* !HAVE_CORRECT_MRU_HANDLING */
-#endif /* OVS_FRAGMENT_BACKPORT */
 
 #endif /* inet_frag.h */

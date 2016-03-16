@@ -199,7 +199,7 @@ static struct vxlan_sock *vxlan_find_sock(struct net *net, sa_family_t family,
 	flags &= VXLAN_F_RCV_FLAGS;
 
 	hlist_for_each_entry_rcu(vs, vs_head(net, port), hlist) {
-		if (inet_sport(vs->sock->sk) == port &&
+		if (inet_sk(vs->sock->sk)->inet_sport == port &&
 		    vxlan_get_sk_family(vs) == family &&
 		    vs->flags == flags)
 			return vs;
@@ -819,9 +819,7 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 	struct iphdr *oip = NULL;
 	struct ipv6hdr *oip6 = NULL;
 	struct vxlan_dev *vxlan;
-#ifdef HAVE_DEV_TSTATS
 	struct pcpu_sw_netstats *stats;
-#endif
 	union vxlan_addr saddr;
 	int err = 0;
 
@@ -885,13 +883,11 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 		}
 	}
 
-#ifdef HAVE_DEV_TSTATS
 	stats = this_cpu_ptr((struct pcpu_sw_netstats __percpu *)vxlan->dev->tstats);
 	u64_stats_update_begin(&stats->syncp);
 	stats->rx_packets++;
 	stats->rx_bytes += skb->len;
 	u64_stats_update_end(&stats->syncp);
-#endif
 	netdev_port_receive(skb, skb_tunnel_info(skb));
 	return;
 drop:
@@ -1152,7 +1148,7 @@ static int vxlan_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *sk
 		}
 	}
 
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
 			+ VXLAN_HLEN + sizeof(struct iphdr)
 			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
 
@@ -1306,7 +1302,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 			goto tx_error;
 		}
 
-		if (rt_dst(rt).dev == dev) {
+		if (rt->dst.dev == dev) {
 			netdev_dbg(dev, "circular route to %pI4\n",
 				   &dst->sin.sin_addr.s_addr);
 			dev->stats.collisions++;
@@ -1330,7 +1326,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		}
 
 		tos = ip_tunnel_ecn_encap(tos, old_iph, skb);
-		ttl = ttl ? : ip4_dst_hoplimit(&rt_dst(rt));
+		ttl = ttl ? : ip4_dst_hoplimit(&rt->dst);
 		err = vxlan_xmit_skb(rt, sk, skb, fl4.saddr,
 				     dst->sin.sin_addr.s_addr, tos, ttl, df,
 				     src_port, dst_port, htonl(vni << 8), md,
@@ -1500,7 +1496,6 @@ static void vxlan_vs_add_dev(struct vxlan_sock *vs, struct vxlan_dev *vxlan)
 }
 
 /* Setup stats when device is created */
-#ifdef HAVE_DEV_TSTATS
 static int vxlan_init(struct net_device *dev)
 {
 	dev->tstats = (typeof(dev->tstats)) netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
@@ -1509,7 +1504,6 @@ static int vxlan_init(struct net_device *dev)
 
 	return 0;
 }
-#endif
 
 static void vxlan_fdb_delete_default(struct vxlan_dev *vxlan)
 {
@@ -1522,7 +1516,6 @@ static void vxlan_fdb_delete_default(struct vxlan_dev *vxlan)
 	spin_unlock_bh(&vxlan->hash_lock);
 }
 
-#ifdef HAVE_DEV_TSTATS
 static void vxlan_uninit(struct net_device *dev)
 {
 	struct vxlan_dev *vxlan = netdev_priv(dev);
@@ -1531,7 +1524,6 @@ static void vxlan_uninit(struct net_device *dev)
 
 	free_percpu(dev->tstats);
 }
-#endif
 
 /* Start ageing timer and join group when device is brought up */
 static int vxlan_open(struct net_device *dev)
@@ -1608,27 +1600,41 @@ static void vxlan_set_multicast_list(struct net_device *dev)
 {
 }
 
+static int __vxlan_change_mtu(struct net_device *dev,
+			      struct net_device *lowerdev,
+			      struct vxlan_rdst *dst, int new_mtu, bool strict)
+{
+	int max_mtu = IP_MAX_MTU;
+
+	if (lowerdev)
+		max_mtu = lowerdev->mtu;
+
+	if (dst->remote_ip.sa.sa_family == AF_INET6)
+		max_mtu -= VXLAN6_HEADROOM;
+	else
+		max_mtu -= VXLAN_HEADROOM;
+
+	if (new_mtu < 68)
+		return -EINVAL;
+
+	if (new_mtu > max_mtu) {
+		if (strict)
+			return -EINVAL;
+
+		new_mtu = max_mtu;
+	}
+
+	dev->mtu = new_mtu;
+	return 0;
+}
+
 static int vxlan_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct vxlan_dev *vxlan = netdev_priv(dev);
 	struct vxlan_rdst *dst = &vxlan->default_dst;
-	struct net_device *lowerdev;
-	int max_mtu;
-
-	lowerdev = __dev_get_by_index(vxlan->net, dst->remote_ifindex);
-	if (lowerdev == NULL)
-		return eth_change_mtu(dev, new_mtu);
-
-	if (dst->remote_ip.sa.sa_family == AF_INET6)
-		max_mtu = lowerdev->mtu - VXLAN6_HEADROOM;
-	else
-		max_mtu = lowerdev->mtu - VXLAN_HEADROOM;
-
-	if (new_mtu < 68 || new_mtu > max_mtu)
-		return -EINVAL;
-
-	dev->mtu = new_mtu;
-	return 0;
+	struct net_device *lowerdev = __dev_get_by_index(vxlan->net,
+							 dst->remote_ifindex);
+	return __vxlan_change_mtu(dev, lowerdev, dst, new_mtu, true);
 }
 
 static netdev_tx_t vxlan_dev_xmit(struct sk_buff *skb, struct net_device *dev)
@@ -1643,11 +1649,9 @@ static netdev_tx_t vxlan_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 }
 
 static const struct net_device_ops vxlan_netdev_ops = {
-#ifdef HAVE_DEV_TSTATS
 	.ndo_init		= vxlan_init,
 	.ndo_uninit		= vxlan_uninit,
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
-#endif
 	.ndo_open		= vxlan_open,
 	.ndo_stop		= vxlan_stop,
 	.ndo_start_xmit		= vxlan_dev_xmit,
@@ -1891,6 +1895,7 @@ static int vxlan_dev_configure(struct net *src_net, struct net_device *dev,
 	int err;
 	bool use_ipv6 = false;
 	__be16 default_port = vxlan->cfg.dst_port;
+	struct net_device *lowerdev = NULL;
 
 	vxlan->net = src_net;
 
@@ -1910,9 +1915,7 @@ static int vxlan_dev_configure(struct net *src_net, struct net_device *dev,
 	}
 
 	if (conf->remote_ifindex) {
-		struct net_device *lowerdev
-			 = __dev_get_by_index(src_net, conf->remote_ifindex);
-
+		lowerdev = __dev_get_by_index(src_net, conf->remote_ifindex);
 		dst->remote_ifindex = conf->remote_ifindex;
 
 		if (!lowerdev) {
@@ -1941,6 +1944,12 @@ static int vxlan_dev_configure(struct net *src_net, struct net_device *dev,
 		dev->needed_headroom = ETH_HLEN + VXLAN6_HEADROOM;
 	} else {
 		dev->needed_headroom = ETH_HLEN + VXLAN_HEADROOM;
+	}
+
+	if (conf->mtu) {
+		err = __vxlan_change_mtu(dev, lowerdev, dst, conf->mtu, false);
+		if (err)
+			return err;
 	}
 
 	memcpy(&vxlan->cfg, conf, sizeof(*conf));
@@ -2187,7 +2196,6 @@ static struct pernet_operations vxlan_net_ops = {
 	.size = sizeof(struct vxlan_net),
 };
 
-DEFINE_COMPAT_PNET_REG_FUNC(device)
 int rpl_vxlan_init_module(void)
 {
 	int rc;
