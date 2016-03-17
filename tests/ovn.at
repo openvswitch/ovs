@@ -830,9 +830,40 @@ AT_KEYWORDS([ovn-localnet])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
-# We model each logical port connectivity to a locally attached
-# physical network with its own logical switch.  One port is
-# for the VIF, and the other port is a special 'localnet' port.
+# In this test cases we create 3 lswitches, all connected to same
+# physical network (through br-phys on each HV). Each lswitch has
+# VIF ports across 2 HVs. Each HV has 5 VIF ports. The first digit
+# of VIF port name indicates the hypervisor it is bound to, e.g.
+# lp23 means VIF 3 on hv2.
+#
+# lswitch's VLAN tag and their lports are:
+#   - ls1:
+#       - untagged
+#       - lports: lp11, lp12, lp21, lp22
+#
+#   - ls2:
+#       - tagged with VLAN 101
+#       - lports: lp13, lp14, lp23, lp24
+#   - ls3:
+#       - untagged
+#       - lports: lp15, lp25
+#
+# Note: a localnet port is created for each lswitch to connect to
+# physical network.
+
+for i in 1 2 3; do
+    lswitch_name=ls$i
+    ovn-nbctl lswitch-add $lswitch_name
+    ln_port_name=ln$i
+    if test $i -eq 2; then
+        ovn-nbctl lport-add $lswitch_name $ln_port_name "" 101
+    else
+        ovn-nbctl lport-add $lswitch_name $ln_port_name
+    fi
+    ovn-nbctl lport-set-addresses $ln_port_name unknown
+    ovn-nbctl lport-set-type $ln_port_name localnet
+    ovn-nbctl lport-set-options $ln_port_name network_name=phys
+done
 
 net_add n1
 for i in 1 2; do
@@ -842,27 +873,21 @@ for i in 1 2; do
     ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
     ovn_attach n1 br-phys 192.168.0.$i
 
-    for j in 1 2 3 4; do
+    for j in 1 2 3 4 5; do
         ovs-vsctl add-port br-int vif$i$j -- \
             set Interface vif$i$j external-ids:iface-id=lp$i$j \
                                   options:tx_pcap=hv$i/vif$i$j-tx.pcap \
                                   options:rxq_pcap=hv$i/vif$i$j-rx.pcap \
                                   ofport-request=$i$j
 
-        lswitch_name=phys-lp$i$j
         lport_name=lp$i$j
-        ln_port_name=phys-ln-$i$j
-
-        ovn-nbctl lswitch-add $lswitch_name
-
         if test $j -le 2; then
-            ovn-nbctl lport-add $lswitch_name $ln_port_name
+            lswitch_name=ls1
+        elif test $j -le 4; then
+            lswitch_name=ls2
         else
-            ovn-nbctl lport-add $lswitch_name $ln_port_name "" 101
+            lswitch_name=ls3
         fi
-        ovn-nbctl lport-set-addresses $ln_port_name unknown
-        ovn-nbctl lport-set-type $ln_port_name localnet
-        ovn-nbctl lport-set-options $ln_port_name network_name=phys
 
         ovn-nbctl lport-add $lswitch_name $lport_name
         ovn-nbctl lport-set-addresses $lport_name f0:00:00:00:00:$i$j
@@ -893,7 +918,7 @@ trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
 }
 for i in 1 2; do
-    for j in 1 2 3 4; do
+    for j in 1 2 3 4 5; do
         : > $i$j.expected
     done
 done
@@ -928,6 +953,16 @@ test_packet 23 f00000000013 f00000000023 2313 13
 test_packet 13 f00000000014 f00000000013 1314 14
 test_packet 14 f00000000013 f00000000014 1413 13
 
+# lp11 and lp15 are on the same network (phys, untagged),
+# same hypervisor, and on different lswitches
+test_packet 11 f00000000015 f00000000011 1115 15
+test_packet 15 f00000000011 f00000000015 1511 11
+
+# lp11 and lp25 are on the same network (phys, untagged),
+# different hypervisors, and on different lswitches
+test_packet 11 f00000000025 f00000000011 1125 25
+test_packet 25 f00000000011 f00000000025 2511 11
+
 # Ports that should not be able to communicate
 test_packet 11 f00000000013 f00000000011 1113
 test_packet 11 f00000000023 f00000000011 1123
@@ -958,7 +993,7 @@ as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2; do
-    for j in 1 2 3 4; do
+    for j in 1 2 3 4 5; do
         file=hv$i/vif$i$j-tx.pcap
         echo $file
         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
