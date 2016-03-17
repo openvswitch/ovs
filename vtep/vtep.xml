@@ -31,6 +31,27 @@
     </dd>
   </dl>
 
+  <h2>Common Column</h2>
+
+  <p>
+    Some tables contain a column, named <code>other_config</code>.
+    This column has the same form and purpose each place that it appears,
+    so we describe it here to save space later.
+  </p>
+
+  <dl>
+    <dt><code>other_config</code>: map of string-string pairs</dt>
+    <dd>
+      <p>
+        Key-value pairs for configuring rarely used or proprietary features.
+      </p>
+      <p>
+        Some tables do not have <code>other_config</code> column because no
+        key-value pairs have yet been defined for them.
+      </p>
+    </dd>
+  </dl>
+
   <table name="Global" title="Top-level configuration.">
     Top-level configuration for a hardware VTEP.  There must be
     exactly one record in the <ref table="Global"/> table.
@@ -336,8 +357,15 @@
         Indicates that an error has occurred in the switch but that no
         more specific information is available.
       </column>
-
     </group>
+
+    <group title="Common Column">
+      The overall purpose of this column is described under <code>Common
+      Column</code> at the beginning of this document.
+
+      <column name="other_config"/>
+    </group>
+
   </table>
 
   <table name="Tunnel" title="A tunnel created by a physical switch.">
@@ -625,6 +653,13 @@
       </column>
     </group>
 
+    <group title="Common Column">
+      The overall purpose of this column is described under <code>Common
+      Column</code> at the beginning of this document.
+
+      <column name="other_config"/>
+    </group>
+
   </table>
 
   <table name="Logical_Binding_Stats" title="Statistics for a VLAN on a physical port bound to a logical network.">
@@ -729,6 +764,14 @@
         login banner.
       </column>
     </group>
+
+    <group title="Common Column">
+      The overall purpose of this column is described under <code>Common
+      Column</code> at the beginning of this document.
+
+      <column name="other_config"/>
+    </group>
+
   </table>
 
   <table name="Ucast_Macs_Local" title="Unicast MACs (local)">
@@ -939,6 +982,13 @@
           more specific information is available.
         </p>
       </column>
+    </group>
+
+    <group title="Common Column">
+      The overall purpose of this column is described under <code>Common
+      Column</code> at the beginning of this document.
+
+      <column name="other_config"/>
     </group>
 
   </table>
