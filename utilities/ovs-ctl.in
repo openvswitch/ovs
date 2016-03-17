@@ -1,5 +1,5 @@
 #! /bin/sh
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -271,19 +271,6 @@ ovs_save () {
     [ -z "${bridges}" ] && return 0
 }
 
-save_ofports_if_required () {
-    # Save OpenFlow port numbers if we are upgrading from a pre-1.10 branch.
-    #
-    # (Versions 1.10 and later save OpenFlow port numbers without assistance,
-    # so we don't have to do anything for them.
-    case `ovs-appctl version | sed 1q` in
-        "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
-            action "Saving ofport values" ovs_save save-ofports \
-                "${script_ofports}"
-            ;;
-    esac
-}
-
 save_flows_if_required () {
     if test X"$DELETE_BRIDGES" != Xyes; then
         action "Saving flows" ovs_save save-flows "${script_flows}"
@@ -293,11 +280,6 @@ save_flows_if_required () {
 save_interfaces () {
     "$datadir/scripts/ovs-save" save-interfaces ${ifaces} \
         > "${script_interfaces}"
-}
-
-restore_ofports () {
-    [ -x "${script_ofports}" ] && \
-        action "Restoring ofport values" "${script_ofports}"
 }
 
 flow_restore_wait () {
@@ -331,8 +313,7 @@ restore_interfaces () {
 init_restore_scripts () {
     script_interfaces=`mktemp`
     script_flows=`mktemp`
-    script_ofports=`mktemp`
-    trap 'rm -f "${script_interfaces}" "${script_flows}" "${script_ofports}"' 0
+    trap 'rm -f "${script_interfaces}" "${script_flows}"' 0
 }
 
 force_reload_kmod () {
@@ -341,15 +322,11 @@ force_reload_kmod () {
 
     init_restore_scripts
     save_flows_if_required
-    save_ofports_if_required
 
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
     stop_ovsdb
     start_ovsdb
-
-    # Restore of ofports should happen before vswitchd is restarted.
-    restore_ofports
 
     stop_forwarding
 
@@ -399,35 +376,16 @@ force_reload_kmod () {
 ## restart ##
 ## ------- ##
 
-save_interfaces_if_required () {
-    # Save interfaces if we are upgrading from a pre-1.10 branch.
-    case `ovs-appctl version | sed 1q` in
-        "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
-            ifaces=`internal_interfaces`
-            action "Detected internal interfaces: $ifaces" true
-            if action "Saving interface configuration" save_interfaces; then
-                chmod +x "$script_interfaces"
-            fi
-            ;;
-    esac
-}
-
 restart () {
     if daemon_is_running ovsdb-server && daemon_is_running ovs-vswitchd; then
         init_restore_scripts
-        save_interfaces_if_required
         save_flows_if_required
-        save_ofports_if_required
     fi
 
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
     stop_ovsdb
     start_ovsdb
-
-    # Restore of ofports, if required, should happen before vswitchd is
-    # restarted.
-    restore_ofports
 
     stop_forwarding
 
