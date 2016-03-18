@@ -269,6 +269,7 @@ static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
 static bool port_is_bond_fake_iface(const struct port *);
 
+static unixctl_cb_func qos_unixctl_show_types;
 static unixctl_cb_func qos_unixctl_show;
 
 static struct port *port_create(struct bridge *, const struct ovsrec_port *);
@@ -476,6 +477,8 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_ssl_col_external_ids);
 
     /* Register unixctl commands. */
+    unixctl_command_register("qos/show-types", "interface", 1, 1,
+                             qos_unixctl_show_types, NULL);
     unixctl_command_register("qos/show", "interface", 1, 1,
                              qos_unixctl_show, NULL);
     unixctl_command_register("bridge/dump-flows", "bridge", 1, 1,
@@ -3119,6 +3122,44 @@ qos_unixctl_show_queue(unsigned int queue_id,
         ds_put_format(ds, "\tFailed to get statistics for queue %u: %s",
                       queue_id, ovs_strerror(error));
     }
+}
+
+static void
+qos_unixctl_show_types(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                       const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct sset types = SSET_INITIALIZER(&types);
+    struct iface *iface;
+    const char * types_name;
+    int error;
+
+    iface = iface_find(argv[1]);
+    if (!iface) {
+        unixctl_command_reply_error(conn, "no such interface");
+        return;
+    }
+
+    error = netdev_get_qos_types(iface->netdev, &types);
+    if (!error) {
+        if (!sset_is_empty(&types)) {
+            SSET_FOR_EACH (types_name, &types) {
+                ds_put_format(&ds, "QoS type: %s\n", types_name);
+            }
+            unixctl_command_reply(conn, ds_cstr(&ds));
+        } else {
+            ds_put_format(&ds, "No QoS types supported for interface: %s\n",
+                          iface->name);
+            unixctl_command_reply(conn, ds_cstr(&ds));
+        }
+    } else {
+        ds_put_format(&ds, "%s: failed to retrieve supported QoS types (%s)",
+                      iface->name, ovs_strerror(error));
+        unixctl_command_reply_error(conn, ds_cstr(&ds));
+    }
+
+    sset_destroy(&types);
+    ds_destroy(&ds);
 }
 
 static void
