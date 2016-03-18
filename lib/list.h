@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,14 @@
 #include "openvswitch/list.h"
 
 /* "struct ovs_list" with pointers that will (probably) cause segfaults if
- * dereferenced and, better yet, show up clearly in a debugger. */
-#define OVS_LIST_POISON \
-(struct ovs_list) { (struct ovs_list *) (uintptr_t) 0xccccccccccccccccULL, \
-                    (struct ovs_list *) (uintptr_t) 0xccccccccccccccccULL }
+ * dereferenced and, better yet, show up clearly in a debugger.
+
+ * MSVC2015 doesn't support designated initializers when compiling C++,
+ * and doesn't support ternary operators with non-designated initializers.
+ * So we use these static definitions rather than using initializer macros. */
+static const struct ovs_list OVS_LIST_POISON =
+    { (struct ovs_list *) (UINTPTR_MAX / 0xf * 0xc),
+      (struct ovs_list *) (UINTPTR_MAX / 0xf * 0xc) };
 
 static inline void list_init(struct ovs_list *);
 static inline void list_poison(struct ovs_list *);
