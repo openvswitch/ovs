@@ -1415,14 +1415,45 @@ bitwise_scan(const void *p, unsigned int len, bool target, unsigned int start,
 int
 bitwise_rscan(const void *p, unsigned int len, bool target, int start, int end)
 {
+    const uint8_t *s = p;
+    int start_byte = len - (start / 8 + 1);
+    int end_byte = len - (end / 8 + 1);
+    int ofs_byte;
     int ofs;
+    uint8_t the_byte;
 
-    for (ofs = start; ofs > end; ofs--) {
-        if (bitwise_get_bit(p, len, ofs) == target) {
+    /* Find the target in the start_byte from starting offset */
+    ofs_byte = start_byte;
+    the_byte = s[ofs_byte];
+    for (ofs = start % 8; ofs >= 0; ofs--) {
+        if (((the_byte & (1u << ofs)) != 0) == target) {
             break;
         }
     }
-    return ofs;
+    if (ofs < 0) {
+        /* Target not found in start byte, continue searching byte by byte */
+        for (ofs_byte = start_byte + 1; ofs_byte <= end_byte; ofs_byte++) {
+            if ((target && s[ofs_byte])
+                    || (!target && (s[ofs_byte] != 0xff))) {
+               break;
+            }
+        }
+        if (ofs_byte > end_byte) {
+            return end;
+        }
+        the_byte = s[ofs_byte];
+        /* Target is in the_byte, find it bit by bit */
+        for (ofs = 7; ofs >= 0; ofs--) {
+            if (((the_byte & (1u << ofs)) != 0) == target) {
+                break;
+            }
+        }
+    }
+    int ret = (len - ofs_byte) * 8 - (8 - ofs);
+    if (ret < end) {
+        return end;
+    }
+    return ret;
 }
 
 /* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
