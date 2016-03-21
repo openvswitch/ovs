@@ -62,7 +62,7 @@ static void (*ctl_exit_func)(int status) = NULL;
 OVS_NO_RETURN static void ctl_exit(int status);
 
 /* Represents all tables in the schema.  User must define 'tables'
- * in implementation and supply via clt_init().  The definition must end
+ * in implementation and supply via ctl_init().  The definition must end
  * with an all-NULL entry. */
 static const struct ctl_table_class *tables;
 
