@@ -28,6 +28,7 @@
 #include <unistd.h>
 
 #include "db-ctl-base.h"
+#include "dirs.h"
 
 #include "command-line.h"
 #include "compiler.h"
@@ -154,7 +155,7 @@ sbctl_default_db(void)
     if (!def) {
         def = getenv("OVN_SB_DB");
         if (!def) {
-            def = ctl_default_db();
+            def = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
         }
     }
     return def;

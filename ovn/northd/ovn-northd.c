@@ -52,7 +52,8 @@ struct northd_context {
 static const char *ovnnb_db;
 static const char *ovnsb_db;
 
-static const char *default_db(void);
+static const char *default_nb_db(void);
+static const char *default_sb_db(void);
 
 /* Pipeline stages. */
 
@@ -172,7 +173,7 @@ Options:\n\
   -h, --help                display this help message\n\
   -o, --options             list available options\n\
   -V, --version             display version information\n\
-", program_name, program_name, default_db(), default_db());
+", program_name, program_name, default_nb_db(), default_sb_db());
     daemon_usage();
     vlog_usage();
     stream_usage("database", true, true, false);
@@ -2238,15 +2239,26 @@ ovnsb_db_run(struct northd_context *ctx)
 }
 
 
-static char *default_db_;
+static char *default_nb_db_;
 
 static const char *
-default_db(void)
+default_nb_db(void)
 {
-    if (!default_db_) {
-        default_db_ = xasprintf("unix:%s/db.sock", ovs_rundir());
+    if (!default_nb_db_) {
+        default_nb_db_ = xasprintf("unix:%s/ovnnb_db.sock", ovs_rundir());
     }
-    return default_db_;
+    return default_nb_db_;
+}
+
+static char *default_sb_db_;
+
+static const char *
+default_sb_db(void)
+{
+    if (!default_sb_db_) {
+        default_sb_db_ = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
+    }
+    return default_sb_db_;
 }
 
 static void
@@ -2308,11 +2320,11 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     }
 
     if (!ovnsb_db) {
-        ovnsb_db = default_db();
+        ovnsb_db = default_sb_db();
     }
 
     if (!ovnnb_db) {
-        ovnnb_db = default_db();
+        ovnnb_db = default_nb_db();
     }
 
     free(short_options);
@@ -2428,7 +2440,8 @@ main(int argc, char *argv[])
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
     service_stop();
 
-    free(default_db_);
+    free(default_nb_db_);
+    free(default_sb_db_);
     exit(res);
 }
 
