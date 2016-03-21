@@ -2157,7 +2157,6 @@ ovnnb_db_run(struct northd_context *ctx)
     if (!ctx->ovnsb_txn) {
         return;
     }
-    VLOG_DBG("ovn-nb db contents may have changed.");
     struct hmap datapaths, ports;
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, &ports);
@@ -2195,8 +2194,6 @@ ovnsb_db_run(struct northd_context *ctx)
         struct hmap_node node;
         const struct nbrec_logical_port *nb;
     } *hash_node, *hash_node_next;
-
-    VLOG_DBG("Recalculating port up states for ovn-nb db.");
 
     hmap_init(&lports_hmap);
 
