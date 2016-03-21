@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "netlink.h"
 #include "netlink-notifier.h"
 #include "ofpbuf.h"
+#include "packets.h"
 
 static struct nln *nln = NULL;
 static struct rtnetlink_change rtn_change;

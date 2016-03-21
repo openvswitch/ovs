@@ -20,8 +20,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "list.h"
-#include "packets.h"
 #include "util.h"
+
+struct ds;
 
 #ifdef  __cplusplus
 extern "C" {
