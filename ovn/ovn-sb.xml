@@ -162,6 +162,12 @@
       not prescribe a particular format for chassis names.
     </column>
 
+    <column name="hostname">
+      The hostname of the chassis, if applicable.  ovn-controller will populate
+      this column with the hostname of the host it is running on.
+      ovn-controller-vtep will leave this column empty.
+    </column>
+
     <group title="Encapsulation Configuration">
       <p>
         OVN uses encapsulation to transmit logical dataplane packets

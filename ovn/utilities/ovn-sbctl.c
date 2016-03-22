@@ -504,8 +504,8 @@ pre_get_info(struct ctl_context *ctx)
 static struct cmd_show_table cmd_show_tables[] = {
     {&sbrec_table_chassis,
      &sbrec_chassis_col_name,
-     {&sbrec_chassis_col_encaps,
-      NULL,
+     {&sbrec_chassis_col_hostname,
+      &sbrec_chassis_col_encaps,
       NULL},
      {&sbrec_table_port_binding,
       &sbrec_port_binding_col_logical_port,

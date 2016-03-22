@@ -14,6 +14,8 @@
  */
 
 #include <config.h>
+#include <unistd.h>
+
 #include "chassis.h"
 
 #include "lib/vswitch-idl.h"
@@ -89,7 +91,16 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     }
     free(tokstr);
 
+    char hostname[HOST_NAME_MAX + 1];
+    if (gethostname(hostname, sizeof hostname)) {
+        hostname[0] = '\0';
+    }
+
     if (chassis_rec) {
+        if (strcmp(hostname, chassis_rec->hostname)) {
+            sbrec_chassis_set_hostname(chassis_rec, hostname);
+        }
+
         /* Compare desired tunnels against those currently in the database. */
         uint32_t cur_tunnels = 0;
         bool same = true;
@@ -127,6 +138,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     if (!chassis_rec) {
         chassis_rec = sbrec_chassis_insert(ctx->ovnsb_idl_txn);
         sbrec_chassis_set_name(chassis_rec, chassis_id);
+        sbrec_chassis_set_hostname(chassis_rec, hostname);
     }
 
     int n_encaps = count_1bits(req_tunnels);
