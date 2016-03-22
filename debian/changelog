@@ -1,9 +1,10 @@
 openvswitch (2.4.1-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - Fixes buffer overflow for crafted MPLS packets (CVE-2016-2074).
+   - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 20 Aug 2015 17:23:43 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 28 Mar 2016 17:13:32 -0700
 
 openvswitch (2.4.0-1) unstable; urgency=low
    [ Open vSwitch team ]
