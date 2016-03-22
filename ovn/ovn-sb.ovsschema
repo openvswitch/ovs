@@ -1,11 +1,12 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.1.0",
-    "cksum": "1223981720 5320",
+    "version": "1.2.0",
+    "cksum": "1259182303 5368",
     "tables": {
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
+                "hostname": {"type": "string"},
                 "encaps": {"type": {"key": {"type": "uuid",
                                             "refTable": "Encap"},
                                     "min": 1, "max": "unlimited"}},
