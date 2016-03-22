@@ -2021,11 +2021,12 @@ A: Add new members for your field to "struct flow" in lib/flow.h, and
    add new enumerations for your new field to "enum mf_field_id" in
    lib/meta-flow.h, following the existing pattern.  Also, add support
    to miniflow_extract() in lib/flow.c for extracting your new field
-   from a packet into struct miniflow.  Then recompile and fix all of
-   the new warnings, implementing new functionality for the new field
-   or header as needed.  (If you configure with --enable-Werror, as
-   described in [INSTALL.md], then it is impossible to miss any
-   warnings.)
+   from a packet into struct miniflow, and to nx_put_raw() in
+   lib/nx-match.c to output your new field in OXM matches.  Then
+   recompile and fix all of the new warnings, implementing new
+   functionality for the new field or header as needed.  (If you
+   configure with --enable-Werror, as described in [INSTALL.md], then
+   it is impossible to miss any warnings.)
 
    If you want kernel datapath support for your new field, you also
    need to modify the kernel module for the operating systems you are
