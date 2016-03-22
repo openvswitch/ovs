@@ -763,10 +763,13 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev_);
 
-    /* Can't remove a port while a guest is attached to it. */
+    /* Guest becomes an orphan if still attached. */
     if (netdev_dpdk_get_virtio(dev) != NULL) {
-        VLOG_ERR("Can not remove port, vhost device still attached");
-                return;
+        VLOG_ERR("Removing port '%s' while vhost device still attached.",
+                 netdev_->name);
+        VLOG_ERR("To restore connectivity after re-adding of port, VM on socket"
+                 " '%s' must be restarted.",
+                 dev->vhost_id);
     }
 
     if (rte_vhost_driver_unregister(dev->vhost_id)) {
