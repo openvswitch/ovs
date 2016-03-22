@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2016 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +72,9 @@ void *shash_find_and_delete(struct shash *, const char *);
 void *shash_find_and_delete_assert(struct shash *, const char *);
 struct shash_node *shash_first(const struct shash *);
 const struct shash_node **shash_sort(const struct shash *);
+const struct shash_node **shash_sort_numeric(const struct shash *);
+const struct shash_node **shash_sort_with_compar(const struct shash *,
+                                        int (*)(const void *, const void *));
 bool shash_equal_keys(const struct shash *, const struct shash *);
 struct shash_node *shash_random_node(struct shash *);
 

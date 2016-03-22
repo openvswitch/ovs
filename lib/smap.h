@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +94,9 @@ size_t smap_count(const struct smap *);
 
 void smap_clone(struct smap *dst, const struct smap *src);
 const struct smap_node **smap_sort(const struct smap *);
+const struct smap_node **smap_sort_numeric(const struct smap *);
+const struct smap_node **smap_sort_with_compar(const struct smap *,
+                                        int (*)(const void *, const void *));
 
 void smap_from_json(struct smap *, const struct json *);
 struct json *smap_to_json(const struct smap *);
