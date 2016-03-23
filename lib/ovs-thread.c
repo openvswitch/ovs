@@ -364,13 +364,28 @@ set_min_stack_size(pthread_attr_t *attr, size_t min_stacksize)
 pthread_t
 ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct ovsthread_aux *aux;
     pthread_t thread;
     int error;
 
     forbid_forking("multiple threads exist");
     multithreaded = true;
-    ovsrcu_quiesce_end();
+
+    if (ovsthread_once_start(&once)) {
+        /* The first call to this function has to happen in the main thread.
+         * Before the process becomes multithreaded we make sure that the
+         * main thread is considered non quiescent.
+         *
+         * For other threads this is done in ovs_thread_wrapper(), but the
+         * main thread has no such wrapper.
+         *
+         * There's no reason to call ovsrcu_quiesce_end() in subsequent
+         * invocations of this function and it might introduce problems
+         * for other threads. */
+        ovsrcu_quiesce_end();
+        ovsthread_once_done(&once);
+    }
 
     aux = xmalloc(sizeof *aux);
     aux->start = start;
