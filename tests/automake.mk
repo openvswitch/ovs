@@ -229,6 +229,7 @@ tests_ovstest_SOURCES = \
 	tests/test-odp.c \
 	tests/test-packets.c \
 	tests/test-random.c \
+	tests/test-rcu.c \
 	tests/test-reconnect.c \
 	tests/test-sflow.c \
 	tests/test-sha1.c \

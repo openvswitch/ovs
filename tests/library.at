@@ -187,3 +187,7 @@ AT_CLEANUP
 AT_SETUP([snprintf])
 AT_CHECK([ovstest test-util snprintf])
 AT_CLEANUP
+
+AT_SETUP([test rcu])
+AT_CHECK([ovstest test-rcu-quiesce], [0], [])
+AT_CLEANUP
