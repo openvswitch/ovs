@@ -284,6 +284,7 @@ tests_ovstest_SOURCES = \
 	tests/test-ofpbuf.c \
 	tests/test-packets.c \
 	tests/test-random.c \
+	tests/test-rcu.c \
 	tests/test-reconnect.c \
 	tests/test-rstp.c \
 	tests/test-sflow.c \
