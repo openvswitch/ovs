@@ -99,8 +99,10 @@ EXTRA_DIST = \
 	$(docs) \
 	NOTICE \
 	.travis.yml \
-	.travis/build.sh \
-	.travis/prepare.sh \
+	.travis/linux-build.sh \
+	.travis/linux-prepare.sh \
+	.travis/osx-build.sh \
+	.travis/osx-prepare.sh \
 	appveyor.yml \
 	boot.sh \
 	build-aux/cccl \
