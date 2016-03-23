@@ -22,7 +22,7 @@
 #include "openvswitch/types.h"
 
 #ifndef __CHECKER__
-#if !(defined(_WIN32) || defined(__MACH__))
+#if !(defined(_WIN32) || defined(htonll))
 static inline ovs_be64
 htonll(uint64_t n)
 {
@@ -34,7 +34,7 @@ ntohll(ovs_be64 n)
 {
     return htonl(1) == 1 ? n : ((uint64_t) ntohl(n) << 32) | ntohl(n >> 32);
 }
-#endif /* !(defined(_WIN32) || defined(__MACH__)) */
+#endif /* !(defined(_WIN32) || defined(htonll)) */
 #else
 /* Making sparse happy with these functions also makes them unreadable, so
  * don't bother to show it their implementations. */
