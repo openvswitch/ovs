@@ -170,7 +170,9 @@ rtbsd_report_change(const struct if_msghdr *msg)
 {
     struct rtbsd_notifier *notifier;
     struct rtbsd_change change;
+#ifndef __MACH__
     const struct if_announcemsghdr *ahdr;
+#endif
 
     COVERAGE_INC(rtbsd_changed);
 
