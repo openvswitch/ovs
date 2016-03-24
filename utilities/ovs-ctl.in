@@ -137,7 +137,7 @@ del_transient_ports () {
     done
 }
 
-start_ovsdb () {
+do_start_ovsdb () {
     check_force_cores
 
     if daemon_is_running ovsdb-server; then
@@ -185,6 +185,12 @@ start_ovsdb () {
     fi
 }
 
+start_ovsdb() {
+    if test X"$OVSDB_SERVER" = Xyes; then
+        do_start_ovsdb
+    fi
+}
+
 add_managers () {
     # Now that ovs-vswitchd has started and completed its initial
     # configuration, tell ovsdb-server to conenct to the remote managers.  We
@@ -198,7 +204,7 @@ add_managers () {
 	    db:Open_vSwitch,Open_vSwitch,manager_options
 }
 
-start_forwarding () {
+do_start_forwarding () {
     check_force_cores
 
     insert_mod_if_required || return 1
@@ -225,16 +231,26 @@ start_forwarding () {
     fi
 }
 
+start_forwarding () {
+    if test X"$OVS_VSWITCHD" = Xyes; then
+        do_start_forwarding
+    fi
+}
+
 ## ---- ##
 ## stop ##
 ## ---- ##
 
 stop_ovsdb () {
-    stop_daemon ovsdb-server
+    if test X"$OVSDB_SERVER" = Xyes; then
+        stop_daemon ovsdb-server
+    fi
 }
 
 stop_forwarding () {
-    stop_daemon ovs-vswitchd
+    if test X"$OVS_VSWITCHD" = Xyes; then
+        stop_daemon ovs-vswitchd
+    fi
 }
 
 ## ----------------- ##
@@ -284,12 +300,16 @@ save_interfaces () {
 }
 
 flow_restore_wait () {
-    ovs_vsctl set open_vswitch . other_config:flow-restore-wait="true"
+    if test X"$OVS_VSWITCHD" = Xyes; then
+        ovs_vsctl set open_vswitch . other_config:flow-restore-wait="true"
+    fi
 }
 
 flow_restore_complete () {
-    ovs_vsctl --if-exists remove open_vswitch . other_config \
-        flow-restore-wait="true"
+    if test X"$OVS_VSWITCHD" = Xyes; then
+        ovs_vsctl --if-exists remove open_vswitch . other_config \
+                  flow-restore-wait="true"
+    fi
 }
 
 restore_flows () {
@@ -318,6 +338,12 @@ init_restore_scripts () {
 }
 
 force_reload_kmod () {
+
+    if test X"$OVS_VSWITCHD" != Xyes; then
+        log_failure_msg "Reloading of kmod without ovs-vswitchd is an error"
+        exit 1
+    fi
+
     ifaces=`internal_interfaces`
     action "Detected internal interfaces: $ifaces" true
 
@@ -377,7 +403,9 @@ force_reload_kmod () {
 restart () {
     if daemon_is_running ovsdb-server && daemon_is_running ovs-vswitchd; then
         init_restore_scripts
-        save_flows_if_required
+        if test X"$OVS_VSWITCHD" = Xyes; then
+            save_flows_if_required
+        fi
     fi
 
     # Restart the database first, since a large database may take a
@@ -459,6 +487,8 @@ set_defaults () {
     DAEMON_CWD=/
     FORCE_COREFILES=yes
     MLOCKALL=yes
+    OVSDB_SERVER=yes
+    OVS_VSWITCHD=yes
     OVSDB_SERVER_PRIORITY=-10
     OVS_VSWITCHD_PRIORITY=-10
     OVSDB_SERVER_WRAPPER=
