@@ -582,6 +582,15 @@ ovsdb_idl_get_last_error(const struct ovsdb_idl *idl)
         return 0;
     }
 }
+
+/* Sets the "probe interval" for 'idl->session' to 'probe_interval', in
+ * milliseconds.
+ */
+void
+ovsdb_idl_set_probe_interval(const struct ovsdb_idl *idl, int probe_interval)
+{
+    jsonrpc_session_set_probe_interval(idl->session, probe_interval);
+}
 
 static unsigned char *
 ovsdb_idl_get_mode(struct ovsdb_idl *idl,
