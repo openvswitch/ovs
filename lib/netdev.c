@@ -1022,39 +1022,6 @@ netdev_set_advertisements(struct netdev *netdev,
             : EOPNOTSUPP);
 }
 
-/* If 'netdev' has an assigned IPv4 address, sets '*address' to that address
- * and '*netmask' to its netmask and returns 0.  Otherwise, returns a positive
- * errno value and sets '*address' to 0 (INADDR_ANY).
- *
- * The following error values have well-defined meanings:
- *
- *   - EADDRNOTAVAIL: 'netdev' has no assigned IPv4 address.
- *
- *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
- *
- * 'address' or 'netmask' or both may be null, in which case the address or
- * netmask is not reported. */
-int
-netdev_get_in4(const struct netdev *netdev,
-               struct in_addr *address_, struct in_addr *netmask_)
-{
-    struct in_addr address;
-    struct in_addr netmask;
-    int error;
-
-    error = (netdev->netdev_class->get_in4
-             ? netdev->netdev_class->get_in4(netdev,
-                    &address, &netmask)
-             : EOPNOTSUPP);
-    if (address_) {
-        address_->s_addr = error ? 0 : address.s_addr;
-    }
-    if (netmask_) {
-        netmask_->s_addr = error ? 0 : netmask.s_addr;
-    }
-    return error;
-}
-
 /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
  * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
  * positive errno value. */
@@ -1072,18 +1039,33 @@ netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
 int
 netdev_get_in4_by_name(const char *device_name, struct in_addr *in4)
 {
-    struct netdev *netdev;
-    int error;
+    struct in6_addr *mask, *addr6;
+    int err, n_in6, i;
+    struct netdev *dev;
 
-    error = netdev_open(device_name, "system", &netdev);
-    if (error) {
-        in4->s_addr = htonl(0);
-        return error;
+    err = netdev_open(device_name, NULL, &dev);
+    if (err) {
+        return err;
     }
 
-    error = netdev_get_in4(netdev, in4, NULL);
-    netdev_close(netdev);
-    return error;
+    err = netdev_get_addr_list(dev, &addr6, &mask, &n_in6);
+    if (err) {
+        goto out;
+    }
+
+    for (i = 0; i < n_in6; i++) {
+        if (IN6_IS_ADDR_V4MAPPED(&addr6[i])) {
+            in4->s_addr = in6_addr_get_mapped_ipv4(&addr6[i]);
+            goto out;
+        }
+    }
+    err = -ENOENT;
+out:
+    free(addr6);
+    free(mask);
+    netdev_close(dev);
+    return err;
+
 }
 
 /* Adds 'router' as a default IP gateway for the TCP/IP stack that corresponds

@@ -220,13 +220,12 @@ struct rtnl_link_stats64 {
 enum {
     VALID_IFINDEX           = 1 << 0,
     VALID_ETHERADDR         = 1 << 1,
-    VALID_IN4               = 1 << 2,
-    VALID_IN6               = 1 << 3,
-    VALID_MTU               = 1 << 4,
-    VALID_POLICING          = 1 << 5,
-    VALID_VPORT_STAT_ERROR  = 1 << 6,
-    VALID_DRVINFO           = 1 << 7,
-    VALID_FEATURES          = 1 << 8,
+    VALID_IN                = 1 << 2,
+    VALID_MTU               = 1 << 3,
+    VALID_POLICING          = 1 << 4,
+    VALID_VPORT_STAT_ERROR  = 1 << 5,
+    VALID_DRVINFO           = 1 << 6,
+    VALID_FEATURES          = 1 << 7,
 };
 
 /* Traffic control. */
@@ -482,7 +481,6 @@ struct netdev_linux {
      * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
     struct eth_addr etheraddr;
-    struct in_addr address, netmask;
     int mtu;
     unsigned int ifi_flags;
     long long int carrier_resets;
@@ -495,8 +493,6 @@ struct netdev_linux {
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
-    int in4_error;              /* Cached error code from reading in4 addr. */
-    int in6_error;              /* Cached error code from reading in6 addr. */
 
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
@@ -531,8 +527,6 @@ static void netdev_linux_run(void);
 
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
-static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
-                                 int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, unsigned int *flags);
 static int set_flags(const char *, unsigned int flags);
 static int update_flags(struct netdev_linux *netdev, enum netdev_flags off,
@@ -726,7 +720,7 @@ netdev_linux_changed(struct netdev_linux *dev,
     dev->ifi_flags = ifi_flags;
 
     dev->cache_valid &= mask;
-    if (!(mask & (VALID_IN4 | VALID_IN6))) {
+    if (!(mask & VALID_IN)) {
         netdev_get_addrs_list_flush();
     }
 }
@@ -738,9 +732,9 @@ netdev_linux_update(struct netdev_linux *dev,
 {
     if (rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)){
         if (change->nlmsg_type == RTM_NEWLINK) {
-            /* Keep drv-info, in4, in6. */
+            /* Keep drv-info, and ip addresses. */
             netdev_linux_changed(dev, change->ifi_flags,
-                                 VALID_DRVINFO | VALID_IN4 | VALID_IN6);
+                                 VALID_DRVINFO | VALID_IN);
 
             /* Update netdev from rtnl-change msg. */
             if (change->mtu) {
@@ -763,8 +757,7 @@ netdev_linux_update(struct netdev_linux *dev,
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(change->nlmsg_type)) {
         /* Invalidates in4, in6. */
-        netdev_linux_changed(dev, dev->ifi_flags,
-                             ~(VALID_IN4 | VALID_IN6));
+        netdev_linux_changed(dev, dev->ifi_flags, ~VALID_IN);
     } else {
         OVS_NOT_REACHED();
     }
@@ -2475,40 +2468,6 @@ netdev_linux_dump_queue_stats(const struct netdev *netdev_,
 }
 
 static int
-netdev_linux_get_in4(const struct netdev *netdev_,
-                     struct in_addr *address, struct in_addr *netmask)
-{
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error;
-
-    ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN4)) {
-        error = netdev_linux_get_ipv4(netdev_, &netdev->address,
-                                      SIOCGIFADDR, "SIOCGIFADDR");
-        if (!error) {
-            error = netdev_linux_get_ipv4(netdev_, &netdev->netmask,
-                                          SIOCGIFNETMASK, "SIOCGIFNETMASK");
-        }
-        netdev->in4_error = error;
-        netdev->cache_valid |= VALID_IN4;
-    } else {
-        error = netdev->in4_error;
-    }
-
-    if (!error) {
-        if (netdev->address.s_addr != INADDR_ANY) {
-            *address = netdev->address;
-            *netmask = netdev->netmask;
-        } else {
-            error = EADDRNOTAVAIL;
-        }
-    }
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return error;
-}
-
-static int
 netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
@@ -2518,20 +2477,12 @@ netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev->address = address;
-        netdev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
         }
     }
 
-    if (!error) {
-        netdev->cache_valid |= VALID_IN4;
-        netdev->in4_error = 0;
-    } else {
-        netdev->cache_valid &= ~VALID_IN4;
-    }
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
@@ -2848,7 +2799,6 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_queue_dump_done,                               \
     netdev_linux_dump_queue_stats,                              \
                                                                 \
-    netdev_linux_get_in4,                                       \
     netdev_linux_set_in4,                                       \
     netdev_linux_get_addr_list,                                 \
     netdev_linux_add_router,                                    \
@@ -5589,23 +5539,6 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
             /* The device doesn't support this operation.  That's pretty
              * common, so there's no point in logging anything. */
         }
-    }
-    return error;
-}
-
-static int
-netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
-                      int cmd, const char *cmd_name)
-{
-    struct ifreq ifr;
-    int error;
-
-    ifr.ifr_addr.sa_family = AF_INET;
-    error = af_inet_ifreq_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
-    if (!error) {
-        const struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
-                                                     &ifr.ifr_addr);
-        *ip = sin->sin_addr;
     }
     return error;
 }

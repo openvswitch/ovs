@@ -717,20 +717,6 @@ netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
 }
 
 static int
-netdev_dummy_get_in4(const struct netdev *netdev_,
-                     struct in_addr *address, struct in_addr *netmask)
-{
-    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-
-    ovs_mutex_lock(&netdev->mutex);
-    *address = netdev->address;
-    *netmask = netdev->netmask;
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return address->s_addr ? 0 : EADDRNOTAVAIL;
-}
-
-static int
 netdev_dummy_get_addr_list(const struct netdev *netdev_, struct in6_addr **paddr,
                            struct in6_addr **pmask, int *n_addr)
 {
@@ -1282,7 +1268,6 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_queue_dump_done,
     netdev_dummy_dump_queue_stats,
 
-    netdev_dummy_get_in4,       /* get_in4 */
     NULL,                       /* set_in4 */
     netdev_dummy_get_addr_list,
     NULL,                       /* add_router */
