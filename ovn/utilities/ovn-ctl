@@ -37,11 +37,11 @@ pidfile_is_running () {
 
 stop_ovsdb () {
     if pidfile_is_running $DB_NB_PID; then
-        ovs-appctl -t ovnnb_db exit
+        ovs-appctl -t $rundir/ovnnb_db.ctl exit
     fi
 
     if pidfile_is_running $DB_SB_PID; then
-        ovs-appctl -t ovnsb_db exit
+        ovs-appctl -t $rundir/ovnsb_db.ctl exit
     fi
 }
 
@@ -52,7 +52,7 @@ start_ovsdb () {
 
         set ovsdb-server
 
-        set "$@" --detach $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE --remote=punix:$DB_NB_SOCK --remote=ptcp:$DB_NB_PORT --pidfile=$DB_NB_PID --unixctl=ovnnb_db
+        set "$@" --detach $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE --remote=punix:$DB_NB_SOCK --remote=ptcp:$DB_NB_PORT --pidfile=$DB_NB_PID --unixctl=ovnnb_db.ctl
 
         $@ $DB_NB_FILE
     fi
@@ -63,7 +63,7 @@ start_ovsdb () {
 
         set ovsdb-server
 
-        set "$@" --detach $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE --remote=punix:$DB_SB_SOCK --remote=ptcp:$DB_SB_PORT --pidfile=$DB_SB_PID --unixctl=ovnsb_db
+        set "$@" --detach $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE --remote=punix:$DB_SB_SOCK --remote=ptcp:$DB_SB_PORT --pidfile=$DB_SB_PID --unixctl=ovnsb_db.ctl
         $@ $DB_SB_FILE
     fi
 }
@@ -151,17 +151,16 @@ restart_ovsdb () {
 ## ---- ##
 
 set_defaults () {
-    OVN_DIR=$rundir
     OVN_MANAGE_OVSDB=yes
 
-    DB_NB_SOCK=$OVN_DIR/ovnnb_db.sock
-    DB_NB_PID=$OVN_DIR/ovnnb_db.pid
-    DB_NB_FILE=$OVN_DIR/ovnnb_db.db
+    DB_NB_SOCK=$rundir/ovnnb_db.sock
+    DB_NB_PID=$rundir/ovnnb_db.pid
+    DB_NB_FILE=$dbdir/ovnnb_db.db
     DB_NB_PORT=6641
 
-    DB_SB_SOCK=$OVN_DIR/ovnsb_db.sock
-    DB_SB_PID=$OVN_DIR/ovnsb_db.pid
-    DB_SB_FILE=$OVN_DIR/ovnsb_db.db
+    DB_SB_SOCK=$rundir/ovnsb_db.sock
+    DB_SB_PID=$rundir/ovnsb_db.pid
+    DB_SB_FILE=$dbdir/ovnsb_db.db
     DB_SB_PORT=6642
 
     DB_NB_SCHEMA=$datadir/ovn-nb.ovsschema
@@ -182,8 +181,8 @@ set_defaults () {
     OVN_NORTHD_LOG="-vconsole:emer -vsyslog:err -vfile:info"
     OVN_NB_LOG="-vconsole:off"
     OVN_SB_LOG="-vconsole:off"
-    OVN_NB_LOGFILE="$OVS_LOGDIR/ovsdb-server-nb.log"
-    OVN_SB_LOGFILE="$OVS_LOGDIR/ovsdb-server-sb.log"
+    OVN_NB_LOGFILE="$logdir/ovsdb-server-nb.log"
+    OVN_SB_LOGFILE="$logdir/ovsdb-server-sb.log"
 }
 
 set_option () {
@@ -244,9 +243,8 @@ File location options:
   --db-sb-schema=FILE  OVN_Southbound db file (default: $DB_SB_SCHEMA)
   --db-nb-port=PORT    OVN Northbound db ptcp port (default: $DB_NB_PORT)
   --db-sb-port=PORT    OVN Southbound db ptcp port (default: $DB_SB_PORT)
-  --ovn-dir=FILE       OVN Databases directory (default: $OVN_DIR)
-  --ovn-nb-logfile=FILE OVN Northbound log file (default: $OVS_LOGDIR/ovsdb-server-nb.log)
-  --ovn-sb-logfile=FILE OVN Southbound log file (default: $OVS_LOGDIR/ovsdb-server-sb.log)
+  --ovn-nb-logfile=FILE OVN Northbound log file (default: $OVN_NB_LOGFILE)
+  --ovn-sb-logfile=FILE OVN Southbound log file (default: $OVN_SB_LOGFILE)
 
 Default directories with "configure" option and environment variable override:
   logs: /usr/local/var/log/openvswitch (--with-logdir, OVS_LOGDIR)
