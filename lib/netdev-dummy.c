@@ -786,6 +786,7 @@ netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     netdev->address = address;
     netdev->netmask = netmask;
+    netdev_change_seq_changed(netdev_);
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -800,6 +801,7 @@ netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6,
     ovs_mutex_lock(&netdev->mutex);
     netdev->ipv6 = *in6;
     netdev->ipv6_mask = *mask;
+    netdev_change_seq_changed(netdev_);
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
