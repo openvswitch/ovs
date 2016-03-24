@@ -56,7 +56,7 @@ m4_define([OVSDB_CHECK_POSITIVE_PY3],
 m4_define([OVSDB_CHECK_POSITIVE_CPY],
   [OVSDB_CHECK_POSITIVE([$1 - C], [$2], [$3], [$4], [$5])
    OVSDB_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4], [$5], [$6])
-   OVSDB_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4], [$5], [$7])])
+   OVSDB_CHECK_POSITIVE_PY3([$1 - Python3], [$2], [$3], [$4], [$5], [$7])])
 
 # OVSDB_CHECK_NEGATIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
 #
