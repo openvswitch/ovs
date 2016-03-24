@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -29,6 +30,7 @@ uint64_t route_table_get_change_seq(void);
 void route_table_init(void);
 void route_table_run(void);
 void route_table_wait(void);
-bool route_table_fallback_lookup(ovs_be32, char [], ovs_be32 *);
-
+bool route_table_fallback_lookup(const struct in6_addr *ip6_dst,
+                                 char name[],
+                                 struct in6_addr *gw6);
 #endif /* route-table.h */
