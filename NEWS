@@ -30,6 +30,9 @@ Post-v2.5.0
      bitrot.
    - ovs-appctl:
      * New "vlog/close" command.
+   - ovs-ctl:
+     * Added the ability to selectively start the forwarding and database
+       functions (ovs-vswitchd and ovsdb-server, respectively).
    - ovsdb-server:
      * Remove max number of sessions limit, to enable connection scaling
        testing.
