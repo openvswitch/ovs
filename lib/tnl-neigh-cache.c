@@ -147,7 +147,9 @@ static int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
-    if (flow->dl_type != htons(ETH_TYPE_ARP)) {
+    if (flow->dl_type != htons(ETH_TYPE_ARP) ||
+        flow->nw_proto != ARP_OP_REPLY ||
+        eth_addr_is_zero(flow->arp_sha)) {
         return EINVAL;
     }
 
@@ -168,6 +170,15 @@ tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
         flow->nw_proto != IPPROTO_ICMPV6 ||
         flow->tp_dst != htons(0) ||
         flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+        return EINVAL;
+    }
+    /* - RFC4861 says Neighbor Advertisements sent in response to unicast Neighbor
+     *   Solicitations SHOULD include the Target link-layer address. However, Linux
+     *   doesn't. So, the response to Solicitations sent by OVS will include the
+     *   TLL address and other Advertisements not including it can be ignored.
+     * - OVS flow extract can set this field to zero in case of packet parsing errors.
+     *   For details refer miniflow_extract()*/
+    if (eth_addr_is_zero(flow->arp_tha)) {
         return EINVAL;
     }
 
