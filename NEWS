@@ -1,6 +1,8 @@
 v2.5.2 - xx xxx xxxx
 ---------------------
-
+   - ovs-ctl:
+     * Added the ability to selectively start the forwarding and database
+       functions (ovs-vswitchd and ovsdb-server, respectively).
 
 v2.5.1 - 27 Sep 2016
 ---------------------
