@@ -617,20 +617,6 @@ struct netdev_class {
                                        void *aux),
                             void *aux);
 
-    /* If 'netdev' has an assigned IPv4 address, sets '*address' to that
-     * address and '*netmask' to the associated netmask.
-     *
-     * The following error values have well-defined meanings:
-     *
-     *   - EADDRNOTAVAIL: 'netdev' has no assigned IPv4 address.
-     *
-     *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
-     *
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*get_in4)(const struct netdev *netdev, struct in_addr *address,
-                   struct in_addr *netmask);
-
     /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
      * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.
      *

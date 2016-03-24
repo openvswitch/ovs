@@ -91,8 +91,6 @@ struct netdev_bsd {
 
     int ifindex;
     struct eth_addr etheraddr;
-    struct in_addr in4;
-    struct in_addr netmask;
     int mtu;
     int carrier;
 
@@ -105,12 +103,11 @@ struct netdev_bsd {
 
 
 enum {
-    VALID_IFINDEX = 1 << 0,
+    VALID_IFINDEX   = 1 << 0,
     VALID_ETHERADDR = 1 << 1,
-    VALID_IN4 = 1 << 2,
-    VALID_IN6 = 1 << 3,
-    VALID_MTU = 1 << 4,
-    VALID_CARRIER = 1 << 5
+    VALID_IN        = 1 << 2,
+    VALID_MTU       = 1 << 3,
+    VALID_CARRIER   = 1 << 4
 };
 
 #define PCAP_SNAPLEN 2048
@@ -1173,46 +1170,6 @@ cleanup:
 }
 
 /*
- * If 'netdev' has an assigned IPv4 address, sets '*in4' to that address and
- * '*netmask' to its netmask and returns true.  Otherwise, returns false.
- */
-static int
-netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
-                   struct in_addr *netmask)
-{
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    int error = 0;
-
-    ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN4)) {
-        struct ifreq ifr;
-
-        ifr.ifr_addr.sa_family = AF_INET;
-        error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
-                                    SIOCGIFADDR, "SIOCGIFADDR");
-        if (!error) {
-            const struct sockaddr_in *sin;
-
-            sin = ALIGNED_CAST(struct sockaddr_in *, &ifr.ifr_addr);
-            netdev->in4 = sin->sin_addr;
-            netdev->cache_valid |= VALID_IN4;
-            error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
-                                        SIOCGIFNETMASK, "SIOCGIFNETMASK");
-            if (!error) {
-                *netmask = sin->sin_addr;
-            }
-        }
-    }
-    if (!error) {
-        *in4 = netdev->in4;
-        *netmask = netdev->netmask;
-    }
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return error ? error : in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
-}
-
-/*
  * Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
  * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
  * positive errno value.
@@ -1230,11 +1187,6 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
         if (addr.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", mask);
-            if (!error) {
-                netdev->cache_valid |= VALID_IN4;
-                netdev->in4 = addr;
-                netdev->netmask = mask;
-            }
         }
         netdev_change_seq_changed(netdev_);
     }
@@ -1250,12 +1202,12 @@ netdev_bsd_get_addr_list(const struct netdev *netdev_,
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int error;
 
-    if (!(netdev->cache_valid & VALID_IN6)) {
+    if (!(netdev->cache_valid & VALID_IN)) {
         netdev_get_addrs_list_flush();
     }
     error = netdev_get_addrs(netdev_get_name(netdev_), addr, mask, n_cnt);
     if (!error) {
-        netdev->cache_valid |= VALID_IN6;
+        netdev->cache_valid |= VALID_IN;
     }
     return error;
 }
@@ -1577,7 +1529,6 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL, /* queue_dump_done */                      \
     NULL, /* dump_queue_stats */                     \
                                                      \
-    netdev_bsd_get_in4,                              \
     netdev_bsd_set_in4,                              \
     netdev_bsd_get_addr_list,                        \
     NULL, /* add_router */                           \
