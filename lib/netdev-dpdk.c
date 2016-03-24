@@ -2693,7 +2693,7 @@ static const struct dpdk_qos_ops egress_policer_ops = {
                                                               \
     NULL,                       /* get_in4 */                 \
     NULL,                       /* set_in4 */                 \
-    NULL,                       /* get_in6 */                 \
+    NULL,                       /* get_addr_list */           \
     NULL,                       /* add_router */              \
     NULL,                       /* get_next_hop */            \
     GET_STATUS,                                               \

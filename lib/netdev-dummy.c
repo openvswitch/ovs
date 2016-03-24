@@ -116,7 +116,7 @@ struct netdev_dummy {
     FILE *tx_pcap, *rxq_pcap OVS_GUARDED;
 
     struct in_addr address, netmask;
-    struct in6_addr ipv6;
+    struct in6_addr ipv6, ipv6_mask;
     struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
 };
 
@@ -731,15 +731,50 @@ netdev_dummy_get_in4(const struct netdev *netdev_,
 }
 
 static int
-netdev_dummy_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+netdev_dummy_get_addr_list(const struct netdev *netdev_, struct in6_addr **paddr,
+                           struct in6_addr **pmask, int *n_addr)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    int cnt = 0, i = 0, err = 0;
+    struct in6_addr *addr, *mask;
 
     ovs_mutex_lock(&netdev->mutex);
-    *in6 = netdev->ipv6;
+    if (netdev->address.s_addr != INADDR_ANY) {
+        cnt++;
+    }
+
+    if (ipv6_addr_is_set(&netdev->ipv6)) {
+        cnt++;
+    }
+    if (!cnt) {
+        err = EADDRNOTAVAIL;
+        goto out;
+    }
+    addr = xmalloc(sizeof *addr * cnt);
+    mask = xmalloc(sizeof *mask * cnt);
+    if (netdev->address.s_addr != INADDR_ANY) {
+        in6_addr_set_mapped_ipv4(&addr[i], netdev->address.s_addr);
+        in6_addr_set_mapped_ipv4(&mask[i], netdev->netmask.s_addr);
+        i++;
+    }
+
+    if (ipv6_addr_is_set(&netdev->ipv6)) {
+        memcpy(&addr[i], &netdev->ipv6, sizeof *addr);
+        memcpy(&mask[i], &netdev->ipv6_mask, sizeof *mask);
+        i++;
+    }
+    if (paddr) {
+        *paddr = addr;
+        *pmask = mask;
+        *n_addr = cnt;
+    } else {
+        free(addr);
+        free(mask);
+    }
+out:
     ovs_mutex_unlock(&netdev->mutex);
 
-    return ipv6_addr_is_set(in6) ? 0 : EADDRNOTAVAIL;
+    return err;
 }
 
 static int
@@ -757,12 +792,14 @@ netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
 }
 
 static int
-netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6)
+netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6,
+                     struct in6_addr *mask)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ipv6 = *in6;
+    netdev->ipv6_mask = *mask;
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -1245,7 +1282,7 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_get_in4,       /* get_in4 */
     NULL,                       /* set_in4 */
-    netdev_dummy_get_in6,       /* get_in6 */
+    netdev_dummy_get_addr_list,
     NULL,                       /* add_router */
     NULL,                       /* get_next_hop */
     NULL,                       /* get_status */
@@ -1538,15 +1575,20 @@ netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct netdev *netdev = netdev_from_name(argv[1]);
 
     if (netdev && is_dummy_class(netdev->netdev_class)) {
-        char ip6_s[IPV6_SCAN_LEN + 1];
         struct in6_addr ip6;
+        char *error;
+        uint32_t plen;
 
-        if (ovs_scan(argv[2], IPV6_SCAN_FMT, ip6_s) &&
-            inet_pton(AF_INET6, ip6_s, &ip6) == 1) {
-            netdev_dummy_set_in6(netdev, &ip6);
+        error = ipv6_parse_cidr(argv[2], &ip6, &plen);
+        if (!error) {
+            struct in6_addr mask;
+
+            mask = ipv6_create_mask(plen);
+            netdev_dummy_set_in6(netdev, &ip6, &mask);
             unixctl_command_reply(conn, "OK");
         } else {
-            unixctl_command_reply_error(conn, "Invalid parameters");
+            unixctl_command_reply_error(conn, error);
+            free(error);
         }
         netdev_close(netdev);
     } else {

@@ -639,7 +639,11 @@ struct netdev_class {
     int (*set_in4)(struct netdev *netdev, struct in_addr addr,
                    struct in_addr mask);
 
-    /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
+    /* Returns all assigned IP address to  'netdev' and returns 0.
+     * API allocates array of address and masks and set it to
+     * '*addr' and '*mask'.
+     * Otherwise, returns a positive errno value and sets '*addr', '*mask
+     * and '*n_addr' to NULL.
      *
      * The following error values have well-defined meanings:
      *
@@ -647,9 +651,9 @@ struct netdev_class {
      *
      *   - EOPNOTSUPP: No IPv6 network stack attached to 'netdev'.
      *
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*get_in6)(const struct netdev *netdev, struct in6_addr *in6);
+     * 'addr' may be null, in which case the address itself is not reported. */
+    int (*get_addr_list)(const struct netdev *netdev, struct in6_addr **in,
+                         struct in6_addr **mask, int *n_in6);
 
     /* Adds 'router' as a default IP gateway for the TCP/IP stack that
      * corresponds to 'netdev'.

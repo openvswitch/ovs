@@ -319,7 +319,7 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
 
     iface[0] = '\0';
     route = &netdev->tnl_cfg.ipv6_dst;
-    if (ovs_router_lookup(route, iface, &gw)) {
+    if (ovs_router_lookup(route, iface, NULL, &gw)) {
         struct netdev *egress_netdev;
 
         if (!netdev_open(iface, "system", &egress_netdev)) {
@@ -1530,7 +1530,7 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
                                                             \
     NULL,                       /* get_in4 */               \
     NULL,                       /* set_in4 */               \
-    NULL,                       /* get_in6 */               \
+    NULL,                       /* get_addr_list */         \
     NULL,                       /* add_router */            \
     NULL,                       /* get_next_hop */          \
     GET_STATUS,                                             \

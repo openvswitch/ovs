@@ -483,7 +483,6 @@ struct netdev_linux {
     int ifindex;
     struct eth_addr etheraddr;
     struct in_addr address, netmask;
-    struct in6_addr in6;
     int mtu;
     unsigned int ifi_flags;
     long long int carrier_resets;
@@ -727,6 +726,9 @@ netdev_linux_changed(struct netdev_linux *dev,
     dev->ifi_flags = ifi_flags;
 
     dev->cache_valid &= mask;
+    if (!(mask & (VALID_IN4 | VALID_IN6))) {
+        netdev_get_addrs_list_flush();
+    }
 }
 
 static void
@@ -2535,61 +2537,18 @@ netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
     return error;
 }
 
-static bool
-parse_if_inet6_line(const char *line,
-                    struct in6_addr *in6, char ifname[16 + 1])
-{
-    uint8_t *s6 = in6->s6_addr;
-#define X8 "%2"SCNx8
-    return ovs_scan(line,
-                    " "X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8
-                    "%*x %*x %*x %*x %16s\n",
-                    &s6[0], &s6[1], &s6[2], &s6[3],
-                    &s6[4], &s6[5], &s6[6], &s6[7],
-                    &s6[8], &s6[9], &s6[10], &s6[11],
-                    &s6[12], &s6[13], &s6[14], &s6[15],
-                    ifname);
-}
-
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
  * Otherwise, sets '*in6' to 'in6addr_any' and returns the corresponding
  * error. */
 static int
-netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+netdev_linux_get_addr_list(const struct netdev *netdev_,
+                          struct in6_addr **addr, struct in6_addr **mask, int *n_cnt)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN6)) {
-        FILE *file;
-        char line[128];
-
-        netdev->in6 = in6addr_any;
-        netdev->in6_error = EADDRNOTAVAIL;
-
-        file = fopen("/proc/net/if_inet6", "r");
-        if (file != NULL) {
-            const char *name = netdev_get_name(netdev_);
-            while (fgets(line, sizeof line, file)) {
-                struct in6_addr in6_tmp;
-                char ifname[16 + 1];
-                if (parse_if_inet6_line(line, &in6_tmp, ifname)
-                    && !strcmp(name, ifname))
-                {
-                    netdev->in6 = in6_tmp;
-                    netdev->in6_error = 0;
-                    break;
-                }
-            }
-            fclose(file);
-        } else {
-            netdev->in6_error = EOPNOTSUPP;
-        }
-        netdev->cache_valid |= VALID_IN6;
-    }
-    *in6 = netdev->in6;
-    error = netdev->in6_error;
+    error = netdev_get_addrs(netdev_get_name(netdev_), addr, mask, n_cnt);
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
@@ -2891,7 +2850,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                                 \
     netdev_linux_get_in4,                                       \
     netdev_linux_set_in4,                                       \
-    netdev_linux_get_in6,                                       \
+    netdev_linux_get_addr_list,                                 \
     netdev_linux_add_router,                                    \
     netdev_linux_get_next_hop,                                  \
     GET_STATUS,                                                 \
