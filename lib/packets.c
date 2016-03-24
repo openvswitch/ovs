@@ -794,7 +794,7 @@ eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
     dp_packet_prealloc_tailroom(b, 2 + ETH_HEADER_LEN + VLAN_HEADER_LEN + size);
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
     eth = dp_packet_put_uninit(b, ETH_HEADER_LEN);
-    data = dp_packet_put_uninit(b, size);
+    data = dp_packet_put_zeros(b, size);
 
     eth->eth_dst = eth_dst;
     eth->eth_src = eth_src;
@@ -846,7 +846,6 @@ packet_rh_present(struct dp_packet *packet)
     uint8_t *data = dp_packet_l3(packet);
 
     remaining = packet->l4_ofs - packet->l3_ofs;
-
     if (remaining < sizeof *nh) {
         return false;
     }
@@ -1027,9 +1026,7 @@ packet_set_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
     }
 
     packet_set_ipv6_tc(&nh->ip6_flow, key_tc);
-
     packet_set_ipv6_flow_label(&nh->ip6_flow, key_fl);
-
     nh->ip6_hlim = key_hl;
 }
 
@@ -1116,7 +1113,8 @@ packet_set_icmp(struct dp_packet *packet, uint8_t type, uint8_t code)
 
 void
 packet_set_nd(struct dp_packet *packet, const ovs_be32 target[4],
-              const struct eth_addr sll, const struct eth_addr tll) {
+              const struct eth_addr sll, const struct eth_addr tll)
+{
     struct ovs_nd_msg *ns;
     struct ovs_nd_opt *nd_opt;
     int bytes_remain = dp_packet_l4_size(packet);
@@ -1298,34 +1296,60 @@ compose_arp__(struct dp_packet *b)
     dp_packet_set_l3(b, arp);
 }
 
+/* This function expect packet with ethernet header with correct
+ * l3 pointer set. */
+static void *
+compose_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
+             const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
+             uint8_t key_hl, int size)
+{
+    struct ip6_hdr *nh;
+    void *data;
+
+    nh = dp_packet_l3(packet);
+    nh->ip6_vfc = 0x60;
+    nh->ip6_nxt = proto;
+    nh->ip6_plen = htons(size);
+    data = dp_packet_put_zeros(packet, size);
+    dp_packet_set_l4(packet, data);
+    packet_set_ipv6(packet, proto, src, dst, key_tc, key_fl, key_hl);
+    return data;
+}
+
 void
 compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
-           struct in6_addr * ipv6_src, struct in6_addr * ipv6_dst)
+           struct in6_addr *ipv6_src, struct in6_addr *ipv6_dst)
 {
     struct in6_addr sn_addr;
     struct eth_addr eth_dst;
     struct ovs_nd_msg *ns;
     struct ovs_nd_opt *nd_opt;
+    uint32_t icmp_csum;
 
     in6_addr_solicited_node(&sn_addr, ipv6_dst);
     ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
 
-    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6,
-                IPV6_HEADER_LEN + ICMP6_HEADER_LEN + ND_OPT_LEN);
-    packet_set_ipv6(b, IPPROTO_ICMPV6,
-                    ALIGNED_CAST(ovs_be32 *, ipv6_src->s6_addr),
-                    ALIGNED_CAST(ovs_be32 *, sn_addr.s6_addr),
-                    0, 0, 255);
-
-    ns = dp_packet_l4(b);
-    nd_opt = &ns->options[0];
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
+    ns = compose_ipv6(b, IPPROTO_ICMPV6,
+                      ALIGNED_CAST(ovs_be32 *, ipv6_src->s6_addr),
+                      ALIGNED_CAST(ovs_be32 *, sn_addr.s6_addr),
+                      0, 0, 255,
+                      ND_MSG_LEN + ND_OPT_LEN);
 
     ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
     ns->icmph.icmp6_code = 0;
+    put_16aligned_be32(&ns->rco_flags, htonl(0));
 
+    nd_opt = &ns->options[0];
     nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
+    nd_opt->nd_opt_len = 1;
+
     packet_set_nd(b, ALIGNED_CAST(ovs_be32 *, ipv6_dst->s6_addr),
                   eth_src, eth_addr_zero);
+    ns->icmph.icmp6_cksum = 0;
+    icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    ns->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, ns,
+                                                      ND_MSG_LEN + ND_OPT_LEN));
 }
 
 uint32_t
@@ -1352,15 +1376,14 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[1])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[2])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[3])));
+
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[0])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[1])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[2])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[3])));
 
-    partial = csum_add16(partial, 0);
+    partial = csum_add16(partial, htons(ip6->ip6_nxt));
     partial = csum_add16(partial, ip6->ip6_plen);
-    partial = csum_add16(partial, 0);
-    partial = csum_add16(partial, ip6->ip6_nxt);
 
     return partial;
 }
