@@ -40,8 +40,8 @@ static struct classifier cls;   /* Tunnel ports. */
 struct ip_device {
     struct netdev *dev;
     struct eth_addr mac;
-    ovs_be32 addr4;
-    struct in6_addr addr6;
+    struct in6_addr *addr;
+    int n_addr;
     uint64_t change_seq;
     struct ovs_list node;
     char dev_name[IFNAMSIZ];
@@ -150,6 +150,20 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
     }
 }
 
+static void
+map_insert_ipdev__(struct ip_device *ip_dev, char dev_name[],
+                   odp_port_t port, ovs_be16 udp_port)
+{
+    if (ip_dev->n_addr) {
+        int i;
+
+        for (i = 0; i < ip_dev->n_addr; i++) {
+            map_insert(port, ip_dev->mac, &ip_dev->addr[i],
+                       udp_port, dev_name);
+        }
+    }
+}
+
 void
 tnl_port_map_insert(odp_port_t port,
                     ovs_be16 udp_port, const char dev_name[])
@@ -171,15 +185,7 @@ tnl_port_map_insert(odp_port_t port,
     list_insert(&port_list, &p->node);
 
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_insert(p->port, ip_dev->mac, &addr4,
-                       p->udp_port, p->dev_name);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_insert(p->port, ip_dev->mac, &ip_dev->addr6,
-                       p->udp_port, p->dev_name);
-        }
+        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->udp_port);
     }
 
 out:
@@ -210,6 +216,18 @@ map_delete(struct eth_addr mac, struct in6_addr *addr, ovs_be16 udp_port)
     tnl_port_unref(cr);
 }
 
+static void
+ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 udp_port)
+{
+    if (ip_dev->n_addr) {
+        int i;
+
+        for (i = 0; i < ip_dev->n_addr; i++) {
+            map_delete(ip_dev->mac, &ip_dev->addr[i], udp_port);
+        }
+    }
+}
+
 void
 tnl_port_map_delete(ovs_be16 udp_port)
 {
@@ -230,13 +248,7 @@ tnl_port_map_delete(ovs_be16 udp_port)
         goto out;
     }
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_delete(ip_dev->mac, &addr4, udp_port);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_delete(ip_dev->mac, &ip_dev->addr6, udp_port);
-        }
+        ipdev_map_delete(ip_dev, p->udp_port);
     }
 
     free(p);
@@ -331,56 +343,64 @@ map_insert_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_insert(p->port, ip_dev->mac, &addr4,
-                       p->udp_port, p->dev_name);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_insert(p->port, ip_dev->mac, &ip_dev->addr6,
-                       p->udp_port, p->dev_name);
-        }
+        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->udp_port);
     }
+}
+
+static void
+insert_ipdev__(struct netdev *dev,
+               struct in6_addr *addr, int n_addr)
+{
+    struct ip_device *ip_dev;
+    enum netdev_flags flags;
+    int error;
+
+    error = netdev_get_flags(dev, &flags);
+    if (error || (flags & NETDEV_LOOPBACK)) {
+        goto err;
+    }
+
+    ip_dev = xzalloc(sizeof *ip_dev);
+    ip_dev->dev = netdev_ref(dev);
+    ip_dev->change_seq = netdev_get_change_seq(dev);
+    error = netdev_get_etheraddr(ip_dev->dev, &ip_dev->mac);
+    if (error) {
+        goto err_free_ipdev;
+    }
+    ip_dev->addr = addr;
+    ip_dev->n_addr = n_addr;
+    ovs_strlcpy(ip_dev->dev_name, netdev_get_name(dev), sizeof ip_dev->dev_name);
+    list_insert(&addr_list, &ip_dev->node);
+    map_insert_ipdev(ip_dev);
+    return;
+
+err_free_ipdev:
+    netdev_close(ip_dev->dev);
+    free(ip_dev);
+err:
+    free(addr);
 }
 
 static void
 insert_ipdev(const char dev_name[])
 {
-    struct ip_device *ip_dev;
-    enum netdev_flags flags;
+    struct in6_addr *addr, *mask;
     struct netdev *dev;
-    int error;
-    int error4, error6;
+    int error, n_in6;
 
     error = netdev_open(dev_name, NULL, &dev);
     if (error) {
         return;
     }
 
-    error = netdev_get_flags(dev, &flags);
-    if (error || (flags & NETDEV_LOOPBACK)) {
+    error = netdev_get_addr_list(dev, &addr, &mask, &n_in6);
+    if (error) {
         netdev_close(dev);
         return;
     }
-
-    ip_dev = xzalloc(sizeof *ip_dev);
-    ip_dev->dev = dev;
-    ip_dev->change_seq = netdev_get_change_seq(dev);
-    error = netdev_get_etheraddr(ip_dev->dev, &ip_dev->mac);
-    if (error) {
-        free(ip_dev);
-        return;
-    }
-    error4 = netdev_get_in4(ip_dev->dev, (struct in_addr *)&ip_dev->addr4, NULL);
-    error6 = netdev_get_in6(ip_dev->dev, &ip_dev->addr6);
-    if (error4 && error6) {
-        free(ip_dev);
-        return;
-    }
-    ovs_strlcpy(ip_dev->dev_name, netdev_get_name(dev), sizeof ip_dev->dev_name);
-
-    list_insert(&addr_list, &ip_dev->node);
-    map_insert_ipdev(ip_dev);
+    free(mask);
+    insert_ipdev__(dev, addr, n_in6);
+    netdev_close(dev);
 }
 
 static void
@@ -389,17 +409,12 @@ delete_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_delete(ip_dev->mac, &addr4, p->udp_port);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_delete(ip_dev->mac, &ip_dev->addr6, p->udp_port);
-        }
+        ipdev_map_delete(ip_dev, p->udp_port);
     }
 
     list_remove(&ip_dev->node);
     netdev_close(ip_dev->dev);
+    free(ip_dev->addr);
     free(ip_dev);
 }
 
@@ -417,7 +432,6 @@ tnl_port_map_insert_ipdev(const char dev_name[])
             }
             /* Address changed. */
             delete_ipdev(ip_dev);
-            break;
         }
     }
     insert_ipdev(dev_name);

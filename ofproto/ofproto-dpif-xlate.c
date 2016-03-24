@@ -2750,7 +2750,8 @@ process_special(struct xlate_ctx *ctx, const struct xport *xport)
 
 static int
 tnl_route_lookup_flow(const struct flow *oflow,
-                      struct in6_addr *ip, struct xport **out_port)
+                      struct in6_addr *ip, struct in6_addr *src,
+                      struct xport **out_port)
 {
     char out_dev[IFNAMSIZ];
     struct xbridge *xbridge;
@@ -2759,7 +2760,7 @@ tnl_route_lookup_flow(const struct flow *oflow,
     struct in6_addr dst;
 
     dst = flow_tnl_dst(&oflow->tunnel);
-    if (!ovs_router_lookup(&dst, out_dev, &gw)) {
+    if (!ovs_router_lookup(&dst, out_dev, src, &gw)) {
         return -ENOENT;
     }
 
@@ -2850,7 +2851,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     char buf_sip6[INET6_ADDRSTRLEN];
     char buf_dip6[INET6_ADDRSTRLEN];
 
-    err = tnl_route_lookup_flow(flow, &d_ip6, &out_dev);
+    err = tnl_route_lookup_flow(flow, &d_ip6, &s_ip6, &out_dev);
     if (err) {
         xlate_report(ctx, "native tunnel routing failed");
         return err;
@@ -2869,18 +2870,7 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
 
     d_ip = in6_addr_get_mapped_ipv4(&d_ip6);
     if (d_ip) {
-        err = netdev_get_in4(out_dev->netdev, (struct in_addr *) &s_ip, NULL);
-        if (err) {
-            xlate_report(ctx, "tunnel output device lacks IPv4 address");
-            return err;
-        }
-        in6_addr_set_mapped_ipv4(&s_ip6, s_ip);
-    } else {
-        err = netdev_get_in6(out_dev->netdev, &s_ip6);
-        if (err) {
-            xlate_report(ctx, "tunnel output device lacks IPv6 address");
-            return err;
-        }
+        s_ip = in6_addr_get_mapped_ipv4(&s_ip6);
     }
 
     err = tnl_neigh_lookup(out_dev->xbridge->name, &d_ip6, &dmac);

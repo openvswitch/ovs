@@ -4963,8 +4963,7 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
                 struct netdev *netdev;
 
                 if (!netdev_open(vlan_dev->name, "system", &netdev)) {
-                    if (!netdev_get_in4(netdev, NULL, NULL) ||
-                        !netdev_get_in6(netdev, NULL)) {
+                    if (!netdev_get_addr_list(netdev, NULL, NULL, NULL)) {
                         /* It has an IP address configured, so we don't own
                          * it.  Don't delete it. */
                     } else {

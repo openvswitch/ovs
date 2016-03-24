@@ -24,6 +24,13 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef _WIN32
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#endif
+
 #include "coverage.h"
 #include "dpif.h"
 #include "dp-packet.h"
@@ -45,6 +52,7 @@
 #include "svec.h"
 #include "openvswitch/vlog.h"
 #include "flow.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev);
 
@@ -1125,9 +1133,11 @@ netdev_get_status(const struct netdev *netdev, struct smap *smap)
             : EOPNOTSUPP);
 }
 
-/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
- * returns 0.  Otherwise, returns a positive errno value and sets '*in6' to
- * all-zero-bits (in6addr_any).
+/* Returns all assigned IP address to  'netdev' and returns 0.
+ * API allocates array of address and masks and set it to
+ * '*addr' and '*mask'.
+ * Otherwise, returns a positive errno value and sets '*addr', '*mask
+ * and '*n_addr' to NULL.
  *
  * The following error values have well-defined meanings:
  *
@@ -1135,20 +1145,21 @@ netdev_get_status(const struct netdev *netdev, struct smap *smap)
  *
  *   - EOPNOTSUPP: No IPv6 network stack attached to 'netdev'.
  *
- * 'in6' may be null, in which case the address itself is not reported. */
+ * 'addr' may be null, in which case the address itself is not reported. */
 int
-netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
+netdev_get_addr_list(const struct netdev *netdev, struct in6_addr **addr,
+                     struct in6_addr **mask, int *n_addr)
 {
-    struct in6_addr dummy;
     int error;
 
-    error = (netdev->netdev_class->get_in6
-             ? netdev->netdev_class->get_in6(netdev,
-                    in6 ? in6 : &dummy)
-             : EOPNOTSUPP);
-    if (error && in6) {
-        memset(in6, 0, sizeof *in6);
+    error = (netdev->netdev_class->get_addr_list
+             ? netdev->netdev_class->get_addr_list(netdev, addr, mask, n_addr): EOPNOTSUPP);
+    if (error && addr) {
+        *addr = NULL;
+        *mask = NULL;
+        *n_addr = 0;
     }
+
     return error;
 }
 
@@ -1851,3 +1862,95 @@ netdev_get_change_seq(const struct netdev *netdev)
 {
     return netdev->change_seq;
 }
+
+#ifndef _WIN32
+/* This implementation is shared by Linux and BSD. */
+
+static struct ifaddrs *if_addr_list;
+static struct ovs_mutex if_addr_list_lock = OVS_MUTEX_INITIALIZER;
+
+void
+netdev_get_addrs_list_flush(void)
+{
+    ovs_mutex_lock(&if_addr_list_lock);
+    if (if_addr_list) {
+        freeifaddrs(if_addr_list);
+        if_addr_list = NULL;
+    }
+    ovs_mutex_unlock(&if_addr_list_lock);
+}
+
+int
+netdev_get_addrs(const char dev[], struct in6_addr **paddr,
+                 struct in6_addr **pmask, int *n_in)
+{
+    struct in6_addr *addr_array, *mask_array;
+    const struct ifaddrs *ifa;
+    int cnt = 0, i = 0;
+
+    ovs_mutex_lock(&if_addr_list_lock);
+    if (!if_addr_list) {
+        int err;
+
+        err = getifaddrs(&if_addr_list);
+        if (err) {
+            ovs_mutex_unlock(&if_addr_list_lock);
+            return -err;
+        }
+    }
+
+    for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
+        int family;
+
+        family = ifa->ifa_addr->sa_family;
+        if (family == AF_INET || family == AF_INET6) {
+            if (!strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
+                cnt++;
+            }
+        }
+    }
+
+    if (!cnt) {
+        ovs_mutex_unlock(&if_addr_list_lock);
+        return EADDRNOTAVAIL;
+    }
+    addr_array = xzalloc(sizeof *addr_array * cnt);
+    mask_array = xzalloc(sizeof *mask_array * cnt);
+    for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
+        int family;
+
+        if (strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
+            continue;
+        }
+
+        family = ifa->ifa_addr->sa_family;
+        if (family == AF_INET) {
+            const struct sockaddr_in *sin;
+
+            sin = ALIGNED_CAST(const struct sockaddr_in *, ifa->ifa_addr);
+            in6_addr_set_mapped_ipv4(&addr_array[i], sin->sin_addr.s_addr);
+            sin = (struct sockaddr_in *) &ifa->ifa_netmask;
+            in6_addr_set_mapped_ipv4(&mask_array[i], sin->sin_addr.s_addr);
+            i++;
+        } else if (family == AF_INET6) {
+            const struct sockaddr_in6 *sin6;
+
+            sin6 = ALIGNED_CAST(const struct sockaddr_in6 *, ifa->ifa_addr);
+            memcpy(&addr_array[i], &sin6->sin6_addr, sizeof *addr_array);
+            sin6 = (struct sockaddr_in6 *) &ifa->ifa_netmask;
+            memcpy(&mask_array[i], &sin6->sin6_addr, sizeof *mask_array);
+            i++;
+        }
+    }
+    ovs_mutex_unlock(&if_addr_list_lock);
+    if (paddr) {
+        *n_in = cnt;
+        *paddr = addr_array;
+        *pmask = mask_array;
+    } else {
+        free(addr_array);
+        free(mask_array);
+    }
+    return 0;
+}
+#endif

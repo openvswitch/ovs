@@ -93,7 +93,6 @@ struct netdev_bsd {
     struct eth_addr etheraddr;
     struct in_addr in4;
     struct in_addr netmask;
-    struct in6_addr in6;
     int mtu;
     int carrier;
 
@@ -1245,37 +1244,20 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
 }
 
 static int
-netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+netdev_bsd_get_addr_list(const struct netdev *netdev_,
+                         struct in6_addr **addr, struct in6_addr **mask, int *n_cnt)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error;
+
     if (!(netdev->cache_valid & VALID_IN6)) {
-        struct ifaddrs *ifa, *head;
-        struct sockaddr_in6 *sin6;
-        const char *netdev_name = netdev_get_name(netdev_);
-
-        if (getifaddrs(&head) != 0) {
-            VLOG_ERR("getifaddrs on %s device failed: %s", netdev_name,
-                    ovs_strerror(errno));
-            return errno;
-        }
-
-        for (ifa = head; ifa; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr->sa_family == AF_INET6 &&
-                    !strcmp(ifa->ifa_name, netdev_name)) {
-                sin6 = ALIGNED_CAST(struct sockaddr_in6 *, ifa->ifa_addr);
-                if (sin6) {
-                    memcpy(&netdev->in6, &sin6->sin6_addr, sin6->sin6_len);
-                    netdev->cache_valid |= VALID_IN6;
-                    *in6 = netdev->in6;
-                    freeifaddrs(head);
-                    return 0;
-                }
-            }
-        }
-        return EADDRNOTAVAIL;
+        netdev_get_addrs_list_flush();
     }
-    *in6 = netdev->in6;
-    return 0;
+    error = netdev_get_addrs(netdev_get_name(netdev_), addr, mask, n_cnt);
+    if (!error) {
+        netdev->cache_valid |= VALID_IN6;
+    }
+    return error;
 }
 
 #if defined(__NetBSD__)
@@ -1597,7 +1579,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                      \
     netdev_bsd_get_in4,                              \
     netdev_bsd_set_in4,                              \
-    netdev_bsd_get_in6,                              \
+    netdev_bsd_get_addr_list,                        \
     NULL, /* add_router */                           \
     netdev_bsd_get_next_hop,                         \
     NULL, /* get_status */                           \

@@ -276,8 +276,6 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
                 change->rd.rta_gw = nl_attr_get_in6_addr(attrs[RTA_GATEWAY]);
             }
         }
-
-
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
     }
