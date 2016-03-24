@@ -69,6 +69,24 @@ ovs_router_entry_cast(const struct cls_rule *cr)
     }
 }
 
+static bool
+ovs_router_lookup_fallback(const struct in6_addr *ip6_dst, char output_bridge[],
+                           struct in6_addr *src6, struct in6_addr *gw6)
+{
+    ovs_be32 src;
+
+    if (!route_table_fallback_lookup(ip6_dst, output_bridge, gw6)) {
+        return false;
+    }
+    if (netdev_get_in4_by_name(output_bridge, (struct in_addr *)&src)) {
+        return false;
+    }
+    if (src6) {
+        in6_addr_set_mapped_ipv4(src6, src);
+    }
+    return true;
+}
+
 bool
 ovs_router_lookup(const struct in6_addr *ip6_dst, char output_bridge[],
                   struct in6_addr *src, struct in6_addr *gw)
@@ -87,20 +105,7 @@ ovs_router_lookup(const struct in6_addr *ip6_dst, char output_bridge[],
         }
         return true;
     }
-    return false;
-}
-
-bool
-ovs_router_lookup4(ovs_be32 ip_dst, char output_bridge[], ovs_be32 *gw)
-{
-    struct in6_addr ip6_dst = in6_addr_mapped_ipv4(ip_dst);
-    struct in6_addr gw6;
-
-    if (ovs_router_lookup(&ip6_dst, output_bridge, NULL, &gw6)) {
-        *gw = in6_addr_get_mapped_ipv4(&gw6);
-        return true;
-    }
-    return route_table_fallback_lookup(ip_dst, output_bridge, gw);
+    return ovs_router_lookup_fallback(ip6_dst, output_bridge, src, gw);
 }
 
 static void

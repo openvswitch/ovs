@@ -27,7 +27,6 @@ extern "C" {
 
 bool ovs_router_lookup(const struct in6_addr *ip_dst, char out_dev[],
                        struct in6_addr *src, struct in6_addr *gw);
-bool ovs_router_lookup4(ovs_be32 ip_dst, char out_dev[], ovs_be32 *gw);
 void ovs_router_init(void);
 void ovs_router_insert(const struct in6_addr *ip_dst, uint8_t plen,
                        const char output_bridge[], const struct in6_addr *gw);
