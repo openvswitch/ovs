@@ -504,10 +504,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
                           name, node->value);
                 return EINVAL;
             }
-            if (dst_proto == ETH_TYPE_IPV6) {
-                VLOG_WARN("%s: IPv6 'remote_ip' is not supported", name);
-                return EOPNOTSUPP;
-            }
         } else if (!strcmp(node->key, "local_ip")) {
             int err;
             err = parse_tunnel_ip(node->value, true, &tnl_cfg.ip_src_flow,
@@ -516,10 +512,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
             case ENOENT:
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
                 break;
-            }
-            if (src_proto == ETH_TYPE_IPV6) {
-                VLOG_WARN("%s: IPv6 'local_ip' is not supported", name);
-                return EOPNOTSUPP;
             }
         } else if (!strcmp(node->key, "tos")) {
             if (!strcmp(node->value, "inherit")) {
