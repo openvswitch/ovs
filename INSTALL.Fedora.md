@@ -64,8 +64,9 @@ make rpm-fedora
 ```
 
 This will create the RPMs `openvswitch`, `python-openvswitch`,
-`openvswitch-test`, `openvswitch-devel`, `openvswitch-ovn`,
-and `openvswitch-debuginfo`.
+`openvswitch-test`, `openvswitch-devel`, `openvswitch-ovn-common`,
+`openvswitch-ovn-central`, `openvswitch-ovn-host`, `openvswitch-ovn-vtep`,
+`openvswitch-ovn-docker`, and `openvswitch-debuginfo`.
 
 To enable DPDK support in the openvswitch package,
 the `--with dpdk` option can be added:
@@ -110,9 +111,12 @@ module is to be used. The openvswitch-kmod RPM should not be installed if
 only the in-tree Linux datapath or user-space datapath is needed. See [FAQ.md]
 for more information about the various Open vSwitch datapath options.
 
-In most cases only the `openvswitch` and (when using OVN) `openvswitch-ovn` RPMs
-will need to be installed. The `python-openvswitch`, `openvswitch-test`, `openvswitch-devel`,
-and `openvswitch-debuginfo` RPMs are optional unless required for a specific purpose.
+In most cases only the `openvswitch` RPM will need to be installed. The
+`python-openvswitch`, `openvswitch-test`, `openvswitch-devel`, and
+`openvswitch-debuginfo` RPMs are optional unless required for a specific
+purpose.
+
+The `openvswitch-ovn-*` packages are only needed when using OVN.
 
 See [rhel/README.RHEL] for additional usage and configuration information.
 
