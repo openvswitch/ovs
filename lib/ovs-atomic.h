@@ -333,7 +333,7 @@
         #include "ovs-atomic-i586.h"
     #elif HAVE_GCC4_ATOMICS
         #include "ovs-atomic-gcc4+.h"
-    #elif _MSC_VER && _M_IX86 >= 500
+    #elif _MSC_VER && _WIN32
         #include "ovs-atomic-msvc.h"
     #else
         /* ovs-atomic-pthreads implementation is provided for portability.

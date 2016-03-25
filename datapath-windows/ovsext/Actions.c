@@ -16,6 +16,7 @@
 
 #include "precomp.h"
 
+#include "Actions.h"
 #include "Debug.h"
 #include "Event.h"
 #include "Flow.h"
@@ -24,6 +25,7 @@
 #include "NetProto.h"
 #include "Offload.h"
 #include "PacketIO.h"
+#include "Recirc.h"
 #include "Stt.h"
 #include "Switch.h"
 #include "User.h"
@@ -34,6 +36,8 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_ACTION
+
+#define OVS_DEST_PORTS_ARRAY_MIN_SIZE 2
 
 typedef struct _OVS_ACTION_STATS {
     UINT64 rxGre;
@@ -55,6 +59,8 @@ typedef struct _OVS_ACTION_STATS {
     UINT32 cannotGrowDest;
     UINT32 zeroActionLen;
     UINT32 failedChecksum;
+    UINT32 deferredActionsQueueFull;
+    UINT32 deferredActionsExecLimit;
 } OVS_ACTION_STATS, *POVS_ACTION_STATS;
 
 OVS_ACTION_STATS ovsActionStats;
@@ -66,7 +72,6 @@ OVS_ACTION_STATS ovsActionStats;
  * exercised while adding new members to the structure - only add ones that get
  * used across multiple stages in the pipeline/get used in multiple functions.
  */
-#define OVS_DEST_PORTS_ARRAY_MIN_SIZE 2
 typedef struct OvsForwardingContext {
     POVS_SWITCH_CONTEXT switchContext;
     /* The NBL currently used in the pipeline. */
@@ -99,7 +104,7 @@ typedef struct OvsForwardingContext {
      */
     OvsIPv4TunnelKey tunKey;
 
-     /*
+    /*
      * Tunneling - Tx:
      * To store the output port, when it is a tunneled port. We don't foresee
      * multiple tunneled ports as outport for any given NBL.
@@ -116,7 +121,6 @@ typedef struct OvsForwardingContext {
     /* header information */
     OVS_PACKET_HDR_INFO layers;
 } OvsForwardingContext;
-
 
 /*
  * --------------------------------------------------------------------------
@@ -564,10 +568,10 @@ OvsCompleteNBLForwardingCtx(OvsForwardingContext *ovsFwdCtx,
 static __inline NDIS_STATUS
 OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
 {
-    OvsFlowKey key;
-    OvsFlow *flow;
-    UINT64 hash;
-    NDIS_STATUS status;
+    OvsFlowKey key = { 0 };
+    OvsFlow *flow = NULL;
+    UINT64 hash = 0;
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_VPORT_ENTRY vport =
         OvsFindVportByPortNo(ovsFwdCtx->switchContext, ovsFwdCtx->srcVportNo);
     if (vport == NULL || vport->ovsState != OVS_STATE_CONNECTED) {
@@ -595,11 +599,13 @@ OvsDoFlowLookupOutput(OvsForwardingContext *ovsFwdCtx)
     if (flow) {
         OvsFlowUsed(flow, ovsFwdCtx->curNbl, &ovsFwdCtx->layers);
         ovsFwdCtx->switchContext->datapath.hits++;
-        status = OvsActionsExecute(ovsFwdCtx->switchContext,
-                                   ovsFwdCtx->completionList, ovsFwdCtx->curNbl,
-                                   ovsFwdCtx->srcVportNo, ovsFwdCtx->sendFlags,
-                                   &key, &hash, &ovsFwdCtx->layers,
-                                   flow->actions, flow->actionsLen);
+        status = OvsDoExecuteActions(ovsFwdCtx->switchContext,
+                                     ovsFwdCtx->completionList,
+                                     ovsFwdCtx->curNbl,
+                                     ovsFwdCtx->srcVportNo,
+                                     ovsFwdCtx->sendFlags,
+                                     &key, &hash, &ovsFwdCtx->layers,
+                                     flow->actions, flow->actionsLen);
         ovsFwdCtx->curNbl = NULL;
     } else {
         LIST_ENTRY missedPackets;
@@ -1520,8 +1526,55 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
 
 /*
  * --------------------------------------------------------------------------
- * OvsActionsExecute --
- *     Interpret and execute the specified 'actions' on the specifed packet
+ * OvsExecuteRecirc --
+ *     The function adds a deferred action to allow the current packet, nbl,
+ *     to re-enter datapath packet processing.
+ * --------------------------------------------------------------------------
+ */
+NDIS_STATUS
+OvsExecuteRecirc(OvsForwardingContext *ovsFwdCtx,
+                 OvsFlowKey *key,
+                 const PNL_ATTR actions,
+                 int rem)
+{
+    POVS_DEFERRED_ACTION deferredAction = NULL;
+    PNET_BUFFER_LIST newNbl = NULL;
+
+    if (!NlAttrIsLast(actions, rem)) {
+        /*
+         * Recirc action is the not the last action of the action list, so we
+         * need to clone the packet.
+         */
+        newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                                   0, 0, TRUE /*copy NBL info*/);
+        /*
+         * Skip the recirc action when out of memory, but continue on with the
+         * rest of the action list.
+         */
+        if (newNbl == NULL) {
+            ovsActionStats.noCopiedNbl++;
+            return NDIS_STATUS_SUCCESS;
+        }
+        ovsFwdCtx->curNbl = newNbl;
+    }
+
+    deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key, NULL);
+    if (deferredAction) {
+        deferredAction->key.recircId = NlAttrGetU32(actions);
+    } else {
+        if (newNbl) {
+            ovsActionStats.deferredActionsQueueFull++;
+            OvsCompleteNBL(ovsFwdCtx->switchContext, newNbl, TRUE);
+        }
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsDoExecuteActions --
+ *     Interpret and execute the specified 'actions' on the specified packet
  *     'curNbl'. The expectation is that if the packet needs to be dropped
  *     (completed) for some reason, it is added to 'completionList' so that the
  *     caller can complete the packet. If 'completionList' is NULL, the NBL is
@@ -1537,16 +1590,16 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
  * --------------------------------------------------------------------------
  */
 NDIS_STATUS
-OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
-                  OvsCompletionList *completionList,
-                  PNET_BUFFER_LIST curNbl,
-                  UINT32 portNo,
-                  ULONG sendFlags,
-                  OvsFlowKey *key,
-                  UINT64 *hash,
-                  OVS_PACKET_HDR_INFO *layers,
-                  const PNL_ATTR actions,
-                  INT actionsLen)
+OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
+                    OvsCompletionList *completionList,
+                    PNET_BUFFER_LIST curNbl,
+                    UINT32 portNo,
+                    ULONG sendFlags,
+                    OvsFlowKey *key,
+                    UINT64 *hash,
+                    OVS_PACKET_HDR_INFO *layers,
+                    const PNL_ATTR actions,
+                    INT actionsLen)
 {
     PNL_ATTR a;
     INT rem;
@@ -1695,6 +1748,29 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
             break;
         }
 
+        case OVS_ACTION_ATTR_RECIRC:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            status = OvsExecuteRecirc(&ovsFwdCtx, key, (const PNL_ATTR)a, rem);
+            if (status != NDIS_STATUS_SUCCESS) {
+                dropReason = L"OVS-recirculation action failed";
+                goto dropit;
+            }
+
+            if (NlAttrIsLast(a, rem)) {
+                goto exit;
+            }
+            break;
+        }
+
         case OVS_ACTION_ATTR_USERSPACE:
         {
             PNL_ATTR userdataAttr;
@@ -1779,6 +1855,147 @@ dropit:
      */
     if (ovsFwdCtx.curNbl) {
         OvsCompleteNBLForwardingCtx(&ovsFwdCtx, dropReason);
+    }
+
+exit:
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsActionsExecute --
+ *     The function interprets and executes the specified 'actions' on the
+ *     specified packet 'curNbl'. See 'OvsDoExecuteActions' description for
+ *     more details.
+ *
+ *     Also executes deferred actions added by recirculation or sample
+ *     actions.
+ * --------------------------------------------------------------------------
+ */
+NDIS_STATUS
+OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
+                  OvsCompletionList *completionList,
+                  PNET_BUFFER_LIST curNbl,
+                  UINT32 portNo,
+                  ULONG sendFlags,
+                  OvsFlowKey *key,
+                  UINT64 *hash,
+                  OVS_PACKET_HDR_INFO *layers,
+                  const PNL_ATTR actions,
+                  INT actionsLen)
+{
+    NDIS_STATUS status = STATUS_SUCCESS;
+
+    status = OvsDoExecuteActions(switchContext, completionList, curNbl,
+                                 portNo, sendFlags, key, hash, layers,
+                                 actions, actionsLen);
+
+    if (status == STATUS_SUCCESS) {
+        status = OvsProcessDeferredActions(switchContext, completionList,
+                                           portNo, sendFlags, layers);
+    }
+
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsDoRecirc --
+ *     The function processes the packet 'curNbl' that re-entered datapath
+ *     packet processing after a recirculation action.
+ * --------------------------------------------------------------------------
+ */
+NDIS_STATUS
+OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
+            OvsCompletionList *completionList,
+            PNET_BUFFER_LIST curNbl,
+            OvsFlowKey *key,
+            UINT32 srcPortNo,
+            OVS_PACKET_HDR_INFO *layers)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    OvsFlow *flow = NULL;
+    OvsForwardingContext ovsFwdCtx = { 0 };
+    UINT64 hash = 0;
+    ASSERT(layers);
+
+    OvsInitForwardingCtx(&ovsFwdCtx, switchContext, curNbl,
+                         srcPortNo, 0,
+                         NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl),
+                         completionList, layers, TRUE);
+
+    status = OvsExtractFlow(ovsFwdCtx.curNbl, ovsFwdCtx.srcVportNo, key,
+                            &ovsFwdCtx.layers, NULL);
+    if (status != NDIS_STATUS_SUCCESS) {
+        OvsCompleteNBLForwardingCtx(&ovsFwdCtx,
+            L"OVS-Dropped due to extract flow failure");
+        ovsActionStats.failedFlowMiss++;
+        return NDIS_STATUS_FAILURE;
+    }
+
+    flow = OvsLookupFlow(&ovsFwdCtx.switchContext->datapath, key, &hash, FALSE);
+    if (flow) {
+        UINT32 level = OvsDeferredActionsLevelGet();
+
+        if (level > DEFERRED_ACTION_EXEC_LEVEL) {
+            OvsCompleteNBLForwardingCtx(&ovsFwdCtx,
+                L"OVS-Dropped due to deferred actions execution level limit \
+                  reached");
+            ovsActionStats.deferredActionsExecLimit++;
+            ovsFwdCtx.curNbl = NULL;
+            return NDIS_STATUS_FAILURE;
+        }
+
+        OvsFlowUsed(flow, ovsFwdCtx.curNbl, &ovsFwdCtx.layers);
+        ovsFwdCtx.switchContext->datapath.hits++;
+
+        OvsDeferredActionsLevelInc();
+
+        status = OvsDoExecuteActions(ovsFwdCtx.switchContext,
+                                     ovsFwdCtx.completionList,
+                                     ovsFwdCtx.curNbl,
+                                     ovsFwdCtx.srcVportNo,
+                                     ovsFwdCtx.sendFlags,
+                                     key, &hash, &ovsFwdCtx.layers,
+                                     flow->actions, flow->actionsLen);
+        ovsFwdCtx.curNbl = NULL;
+
+        OvsDeferredActionsLevelDec();
+    } else {
+        POVS_VPORT_ENTRY vport = NULL;
+        LIST_ENTRY missedPackets;
+        UINT32 num = 0;
+
+        ovsFwdCtx.switchContext->datapath.misses++;
+        InitializeListHead(&missedPackets);
+        vport = OvsFindVportByPortNo(switchContext, srcPortNo);
+        if (vport == NULL || vport->ovsState != OVS_STATE_CONNECTED) {
+            OvsCompleteNBLForwardingCtx(&ovsFwdCtx,
+                L"OVS-Dropped due to port removal");
+            ovsActionStats.noVport++;
+            return NDIS_STATUS_SUCCESS;
+        }
+        status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
+                                        vport, key, ovsFwdCtx.curNbl,
+                                        srcPortNo ==
+                                        switchContext->virtualExternalPortId,
+                                        &ovsFwdCtx.layers,
+                                        ovsFwdCtx.switchContext,
+                                        &missedPackets, &num);
+        if (num) {
+            OvsQueuePackets(&missedPackets, num);
+        }
+        if (status == NDIS_STATUS_SUCCESS) {
+            /* Complete the packet since it was copied to user buffer. */
+            OvsCompleteNBLForwardingCtx(&ovsFwdCtx,
+                L"OVS-Dropped since packet was copied to userspace");
+            ovsActionStats.flowMiss++;
+        } else {
+            OvsCompleteNBLForwardingCtx(&ovsFwdCtx,
+                L"OVS-Dropped due to failure to queue to userspace");
+            ovsActionStats.failedFlowMiss++;
+            status = NDIS_STATUS_FAILURE;
+        }
     }
 
     return status;

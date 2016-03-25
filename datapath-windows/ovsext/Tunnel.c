@@ -39,6 +39,7 @@
 #include "PacketIO.h"
 #include "NetProto.h"
 #include "Flow.h"
+#include "Actions.h"
 
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 
@@ -258,13 +259,13 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
                           sendCompleteFlags);
 
     {
-        POVS_VPORT_ENTRY vport;
-        UINT32 portNo;
-        OVS_PACKET_HDR_INFO layers;
-        OvsFlowKey key;
-        UINT64 hash;
-        PNET_BUFFER curNb;
-        OvsFlow *flow;
+        POVS_VPORT_ENTRY vport = NULL;
+        UINT32 portNo = 0;
+        OVS_PACKET_HDR_INFO layers = { 0 };
+        OvsFlowKey key = { 0 };
+        UINT64 hash = 0;
+        PNET_BUFFER curNb = NULL;
+        OvsFlow *flow = NULL;
 
         fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(pNbl);
 

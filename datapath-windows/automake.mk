@@ -9,6 +9,7 @@ EXTRA_DIST += \
 	datapath-windows/misc/uninstall.cmd \
 	datapath-windows/ovsext.sln \
 	datapath-windows/ovsext/Actions.c \
+	datapath-windows/ovsext/Actions.h \
 	datapath-windows/ovsext/Atomic.h \
 	datapath-windows/ovsext/BufferMgmt.c \
 	datapath-windows/ovsext/BufferMgmt.h \
@@ -45,6 +46,8 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/PacketIO.h \
 	datapath-windows/ovsext/PacketParser.c \
 	datapath-windows/ovsext/PacketParser.h \
+	datapath-windows/ovsext/Recirc.c \
+	datapath-windows/ovsext/Recirc.h \
 	datapath-windows/ovsext/Stt.c \
 	datapath-windows/ovsext/Stt.h \
 	datapath-windows/ovsext/Switch.c \
