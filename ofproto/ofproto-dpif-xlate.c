@@ -37,7 +37,7 @@
 #include "in-band.h"
 #include "lacp.h"
 #include "learn.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-lldp.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"

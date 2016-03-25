@@ -21,7 +21,7 @@
 #include <errno.h>
 
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "random.h"
 

@@ -36,7 +36,7 @@
 #include <sys/types.h>
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "lldp/lldpd.h"
 #include "lldp/lldpd-structs.h"
 #include "netdev.h"

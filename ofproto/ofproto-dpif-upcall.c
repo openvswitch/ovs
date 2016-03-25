@@ -27,7 +27,7 @@
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "ofproto-dpif-ipfix.h"

@@ -34,7 +34,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 

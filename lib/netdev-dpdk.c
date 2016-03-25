@@ -34,7 +34,7 @@
 #include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "fatal-signal.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"

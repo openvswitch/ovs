@@ -18,7 +18,7 @@
 #include "ovs-rcu.h"
 #include "fatal-signal.h"
 #include "guarded-list.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "seq.h"

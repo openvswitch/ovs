@@ -24,7 +24,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 

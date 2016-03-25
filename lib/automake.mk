@@ -110,7 +110,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/learn.h \
 	lib/learning-switch.c \
 	lib/learning-switch.h \
-	lib/list.h \
 	lib/lockfile.c \
 	lib/lockfile.h \
 	lib/mac-learning.c \

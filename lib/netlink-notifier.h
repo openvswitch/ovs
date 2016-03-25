@@ -20,7 +20,7 @@
 /* These functions are Linux specific, so they should be used directly only by
  * Linux-specific code. */
 
-#include "list.h"
+#include "openvswitch/list.h"
 
 struct nln;
 struct nln_notifier;

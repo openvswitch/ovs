@@ -27,7 +27,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include "dp-packet.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "lldpd-structs.h"
 #include "lldp-tlv.h"
 #include "packets.h"

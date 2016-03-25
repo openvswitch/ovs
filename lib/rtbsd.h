@@ -18,7 +18,7 @@
 #define RTBSD_H 1
 
 #include <net/if.h>
-#include "list.h"
+#include "openvswitch/list.h"
 
 /*
  * A digested version of a message received from a PF_ROUTE socket which

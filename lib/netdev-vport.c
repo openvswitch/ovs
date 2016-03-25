@@ -36,7 +36,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-provider.h"
 #include "odp-netlink.h"
 #include "dp-packet.h"

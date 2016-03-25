@@ -22,7 +22,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "ofproto-dpif.h"
