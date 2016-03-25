@@ -36,10 +36,10 @@
 #include "dpctl.h"
 #include "fatal-signal.h"
 #include "odp-util.h"
-#include "ofp-parse.h"
 #include "packets.h"
 #include "timeval.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 static struct dpctl_params dpctl_p;

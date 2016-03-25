@@ -16,8 +16,6 @@
 
 #include <config.h>
 
-#include "ofp-parse.h"
-
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -38,6 +36,7 @@
 #include "packets.h"
 #include "simap.h"
 #include "socket-util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vconn.h"
 
 /* Parses 'str' as an 8-bit unsigned integer into '*valuep'.

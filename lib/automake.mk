@@ -145,7 +145,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-msgs.c \
 	lib/ofp-msgs.h \
 	lib/ofp-parse.c \
-	lib/ofp-parse.h \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
 	lib/ofp-prop.c \

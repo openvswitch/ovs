@@ -21,10 +21,10 @@
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "match.h"
-#include "ofp-parse.h"
 #include "ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 static int
