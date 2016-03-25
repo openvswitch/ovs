@@ -29,7 +29,7 @@ ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
     b->source = source;
     b->header = NULL;
     b->msg = NULL;
-    list_poison(&b->list_node);
+    ovs_list_poison(&b->list_node);
 }
 
 static void

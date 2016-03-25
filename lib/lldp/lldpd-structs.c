@@ -37,7 +37,7 @@ lldpd_chassis_mgmt_cleanup(struct lldpd_chassis *chassis)
        free(mgmt);
     }
 
-    list_init(&chassis->c_mgmt);
+    ovs_list_init(&chassis->c_mgmt);
 }
 
 void
@@ -82,14 +82,14 @@ lldpd_remote_cleanup(struct lldpd_hardware *hw,
             }
 
             if (!all) {
-                list_remove(&port->p_entries);
+                ovs_list_remove(&port->p_entries);
             }
             lldpd_port_cleanup(port, true);
             free(port);
         }
     }
     if (all) {
-        list_init(&hw->h_rports);
+        ovs_list_init(&hw->h_rports);
     }
 }
 
@@ -101,16 +101,16 @@ lldpd_aa_maps_cleanup(struct lldpd_port *port)
     struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map = NULL;
     struct lldpd_aa_isid_vlan_maps_tlv *isid_vlan_map_next = NULL;
 
-    if (!list_is_empty(&port->p_isid_vlan_maps)) {
+    if (!ovs_list_is_empty(&port->p_isid_vlan_maps)) {
 
         LIST_FOR_EACH_SAFE (isid_vlan_map, isid_vlan_map_next, m_entries,
                             &port->p_isid_vlan_maps) {
 
-            list_remove(&isid_vlan_map->m_entries);
+            ovs_list_remove(&isid_vlan_map->m_entries);
             free(isid_vlan_map);
         }
 
-        list_init(&port->p_isid_vlan_maps);
+        ovs_list_init(&port->p_isid_vlan_maps);
     }
 }
 

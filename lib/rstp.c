@@ -184,7 +184,7 @@ rstp_unref(struct rstp *rstp)
          * means that there should be not ports at this time. */
         ovs_assert(hmap_is_empty(&rstp->ports));
 
-        list_remove(&rstp->node);
+        ovs_list_remove(&rstp->node);
         ovs_mutex_unlock(&rstp_mutex);
         hmap_destroy(&rstp->ports);
         free(rstp->name);
@@ -287,7 +287,7 @@ rstp_create(const char *name, rstp_identifier bridge_address,
 
     ovs_refcount_init(&rstp->ref_cnt);
 
-    list_push_back(all_rstps, &rstp->node);
+    ovs_list_push_back(all_rstps, &rstp->node);
     ovs_mutex_unlock(&rstp_mutex);
 
     VLOG_DBG("RSTP instance creation done");

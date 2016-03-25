@@ -328,8 +328,8 @@ ovsdb_create(struct ovsdb_schema *schema)
 
     db = xmalloc(sizeof *db);
     db->schema = schema;
-    list_init(&db->replicas);
-    list_init(&db->triggers);
+    ovs_list_init(&db->replicas);
+    ovs_list_init(&db->triggers);
     db->run_triggers = false;
 
     shash_init(&db->tables);
@@ -361,9 +361,9 @@ ovsdb_destroy(struct ovsdb *db)
         struct shash_node *node;
 
         /* Remove all the replicas. */
-        while (!list_is_empty(&db->replicas)) {
+        while (!ovs_list_is_empty(&db->replicas)) {
             struct ovsdb_replica *r
-                = CONTAINER_OF(list_pop_back(&db->replicas),
+                = CONTAINER_OF(ovs_list_pop_back(&db->replicas),
                                struct ovsdb_replica, node);
             ovsdb_remove_replica(db, r);
         }
@@ -420,12 +420,12 @@ ovsdb_replica_init(struct ovsdb_replica *r,
 void
 ovsdb_add_replica(struct ovsdb *db, struct ovsdb_replica *r)
 {
-    list_push_back(&db->replicas, &r->node);
+    ovs_list_push_back(&db->replicas, &r->node);
 }
 
 void
 ovsdb_remove_replica(struct ovsdb *db OVS_UNUSED, struct ovsdb_replica *r)
 {
-    list_remove(&r->node);
+    ovs_list_remove(&r->node);
     (r->class->destroy)(r);
 }

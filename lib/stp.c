@@ -313,7 +313,7 @@ stp_create(const char *name, stp_identifier bridge_id,
     }
     ovs_refcount_init(&stp->ref_cnt);
 
-    list_push_back(all_stps, &stp->node);
+    ovs_list_push_back(all_stps, &stp->node);
     ovs_mutex_unlock(&mutex);
     return stp;
 }
@@ -336,7 +336,7 @@ stp_unref(struct stp *stp)
         size_t i;
 
         ovs_mutex_lock(&mutex);
-        list_remove(&stp->node);
+        ovs_list_remove(&stp->node);
         ovs_mutex_unlock(&mutex);
         free(stp->name);
 

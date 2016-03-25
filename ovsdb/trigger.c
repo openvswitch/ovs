@@ -35,7 +35,7 @@ ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
 {
     trigger->session = session;
     trigger->db = db;
-    list_push_back(&trigger->db->triggers, &trigger->node);
+    ovs_list_push_back(&trigger->db->triggers, &trigger->node);
     trigger->request = request;
     trigger->result = NULL;
     trigger->created = now;
@@ -46,7 +46,7 @@ ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
 void
 ovsdb_trigger_destroy(struct ovsdb_trigger *trigger)
 {
-    list_remove(&trigger->node);
+    ovs_list_remove(&trigger->node);
     json_destroy(trigger->request);
     json_destroy(trigger->result);
 }
@@ -124,6 +124,6 @@ static void
 ovsdb_trigger_complete(struct ovsdb_trigger *t)
 {
     ovs_assert(t->result != NULL);
-    list_remove(&t->node);
-    list_push_back(&t->session->completions, &t->node);
+    ovs_list_remove(&t->node);
+    ovs_list_push_back(&t->session->completions, &t->node);
 }

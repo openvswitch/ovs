@@ -69,7 +69,7 @@ advance_txq(struct pinsched *ps)
 static struct ofpbuf *
 dequeue_packet(struct pinsched *ps, struct pinqueue *q)
 {
-    struct ofpbuf *packet = ofpbuf_from_list(list_pop_front(&q->packets));
+    struct ofpbuf *packet = ofpbuf_from_list(ovs_list_pop_front(&q->packets));
     q->n--;
     ps->n_queued--;
     return packet;
@@ -113,7 +113,7 @@ pinqueue_get(struct pinsched *ps, ofp_port_t port_no)
     q = xmalloc(sizeof *q);
     hmap_insert(&ps->queues, &q->node, hash);
     q->port_no = port_no;
-    list_init(&q->packets);
+    ovs_list_init(&q->packets);
     q->n = 0;
     return q;
 }
@@ -185,14 +185,14 @@ void
 pinsched_send(struct pinsched *ps, ofp_port_t port_no,
               struct ofpbuf *packet, struct ovs_list *txq)
 {
-    list_init(txq);
+    ovs_list_init(txq);
     if (!ps) {
-        list_push_back(txq, &packet->list_node);
+        ovs_list_push_back(txq, &packet->list_node);
     } else if (!ps->n_queued && get_token(ps)) {
         /* In the common case where we are not constrained by the rate limit,
          * let the packet take the normal path. */
         ps->n_normal++;
-        list_push_back(txq, &packet->list_node);
+        ovs_list_push_back(txq, &packet->list_node);
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
         if (ps->n_queued * 1000 >= ps->token_bucket.burst) {
@@ -200,7 +200,7 @@ pinsched_send(struct pinsched *ps, ofp_port_t port_no,
         }
 
         struct pinqueue *q = pinqueue_get(ps, port_no);
-        list_push_back(&q->packets, &packet->list_node);
+        ovs_list_push_back(&q->packets, &packet->list_node);
         q->n++;
         ps->n_queued++;
         ps->n_limited++;
@@ -210,7 +210,7 @@ pinsched_send(struct pinsched *ps, ofp_port_t port_no,
 void
 pinsched_run(struct pinsched *ps, struct ovs_list *txq)
 {
-    list_init(txq);
+    ovs_list_init(txq);
     if (ps) {
         int i;
 
@@ -218,7 +218,7 @@ pinsched_run(struct pinsched *ps, struct ovs_list *txq)
          * number of iterations to allow other code to get work done too. */
         for (i = 0; ps->n_queued && get_token(ps) && i < 50; i++) {
             struct ofpbuf *packet = get_tx_packet(ps);
-            list_push_back(txq, &packet->list_node);
+            ovs_list_push_back(txq, &packet->list_node);
         }
     }
 }

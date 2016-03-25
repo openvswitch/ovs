@@ -521,7 +521,7 @@ add_port_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     struct vtep_ctl_port *port;
 
     port = xmalloc(sizeof *port);
-    list_push_back(&ps->ports, &port->ports_node);
+    ovs_list_push_back(&ps->ports, &port->ports_node);
     port->port_cfg = port_cfg;
     port->ps = ps;
     shash_add(&vtepctl_ctx->ports, cache_name, port);
@@ -537,7 +537,7 @@ del_cached_port(struct vtep_ctl_context *vtepctl_ctx,
 {
     char *cache_name = xasprintf("%s+%s", port->ps->name, port->port_cfg->name);
 
-    list_remove(&port->ports_node);
+    ovs_list_remove(&port->ports_node);
     shash_find_and_delete(&vtepctl_ctx->ports, cache_name);
     vteprec_physical_port_delete(port->port_cfg);
     free(cache_name);
@@ -551,7 +551,7 @@ add_pswitch_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     struct vtep_ctl_pswitch *ps = xmalloc(sizeof *ps);
     ps->ps_cfg = ps_cfg;
     ps->name = xstrdup(ps_cfg->name);
-    list_init(&ps->ports);
+    ovs_list_init(&ps->ports);
     shash_add(&vtepctl_ctx->pswitches, ps->name, ps);
 }
 
@@ -576,7 +576,7 @@ vtep_delete_pswitch(const struct vteprec_global *vtep_global,
 static void
 del_cached_pswitch(struct vtep_ctl_context *ctx, struct vtep_ctl_pswitch *ps)
 {
-    ovs_assert(list_is_empty(&ps->ports));
+    ovs_assert(ovs_list_is_empty(&ps->ports));
     if (ps->ps_cfg) {
         vteprec_physical_switch_delete(ps->ps_cfg);
         vtep_delete_pswitch(ctx->vtep_global, ps->ps_cfg);
@@ -723,7 +723,7 @@ add_ploc_to_mcast_mac(struct vtep_ctl_mcast_mac *mcast_mac,
 
     ploc = xmalloc(sizeof *ploc);
     ploc->ploc_cfg = ploc_cfg;
-    list_push_back(&mcast_mac->locators, &ploc->locators_node);
+    ovs_list_push_back(&mcast_mac->locators, &ploc->locators_node);
 }
 
 static void
@@ -734,7 +734,7 @@ del_ploc_from_mcast_mac(struct vtep_ctl_mcast_mac *mcast_mac,
 
     LIST_FOR_EACH (ploc, locators_node, &mcast_mac->locators) {
         if (ploc->ploc_cfg == ploc_cfg) {
-            list_remove(&ploc->locators_node);
+            ovs_list_remove(&ploc->locators_node);
             free(ploc);
             return;
         }
@@ -755,7 +755,7 @@ add_mcast_mac_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     mcast_shash = local ? &ls->mcast_local : &ls->mcast_remote;
 
     mcast_mac->ploc_set_cfg = ploc_set_cfg;
-    list_init(&mcast_mac->locators);
+    ovs_list_init(&mcast_mac->locators);
     shash_add(mcast_shash, mac, mcast_mac);
 
     for (i = 0; i < ploc_set_cfg->n_locators; i++) {
@@ -1732,7 +1732,7 @@ commit_mcast_entries(struct vtep_ctl_mcast_mac *mcast_mac)
     size_t n_locators;
     int i;
 
-    n_locators = list_size(&mcast_mac->locators);
+    n_locators = ovs_list_size(&mcast_mac->locators);
     ovs_assert(n_locators);
 
     locators = xmalloc(n_locators * sizeof *locators);
@@ -1841,7 +1841,7 @@ del_mcast_entry(struct ctl_context *ctx,
     mcast_mac->ploc_set_cfg = ploc_set_cfg;
 
     del_ploc_from_mcast_mac(mcast_mac, ploc_cfg);
-    if (list_is_empty(&mcast_mac->locators)) {
+    if (ovs_list_is_empty(&mcast_mac->locators)) {
         struct shash_node *node = shash_find(mcast_shash, mac);
 
         vteprec_physical_locator_set_delete(ploc_set_cfg);

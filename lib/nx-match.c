@@ -2009,7 +2009,7 @@ nxm_init(void)
         hmap_init(&nxm_header_map);
         hmap_init(&nxm_name_map);
         for (int i = 0; i < MFF_N_IDS; i++) {
-            list_init(&nxm_mf_map[i]);
+            ovs_list_init(&nxm_mf_map[i]);
         }
         for (struct nxm_field_index *nfi = all_nxm_fields;
              nfi < &all_nxm_fields[ARRAY_SIZE(all_nxm_fields)]; nfi++) {
@@ -2017,7 +2017,7 @@ nxm_init(void)
                         hash_uint64(nxm_no_len(nfi->nf.header)));
             hmap_insert(&nxm_name_map, &nfi->name_node,
                         hash_string(nfi->nf.name, 0));
-            list_push_back(&nxm_mf_map[nfi->nf.id], &nfi->mf_node);
+            ovs_list_push_back(&nxm_mf_map[nfi->nf.id], &nfi->mf_node);
         }
         ovsthread_once_done(&once);
     }

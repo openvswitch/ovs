@@ -73,7 +73,7 @@ nln_create(int protocol, int multicast_group, nln_parse_func *parse,
     nln->change = change;
     nln->has_run = false;
 
-    list_init(&nln->all_notifiers);
+    ovs_list_init(&nln->all_notifiers);
     return nln;
 }
 
@@ -86,7 +86,7 @@ void
 nln_destroy(struct nln *nln)
 {
     if (nln) {
-        ovs_assert(list_is_empty(&nln->all_notifiers));
+        ovs_assert(ovs_list_is_empty(&nln->all_notifiers));
         nl_sock_destroy(nln->notify_sock);
         free(nln);
     }
@@ -127,7 +127,7 @@ nln_notifier_create(struct nln *nln, nln_notify_func *cb, void *aux)
     }
 
     notifier = xmalloc(sizeof *notifier);
-    list_push_back(&nln->all_notifiers, &notifier->node);
+    ovs_list_push_back(&nln->all_notifiers, &notifier->node);
     notifier->cb = cb;
     notifier->aux = aux;
     notifier->nln = nln;
@@ -142,8 +142,8 @@ nln_notifier_destroy(struct nln_notifier *notifier)
     if (notifier) {
         struct nln *nln = notifier->nln;
 
-        list_remove(&notifier->node);
-        if (list_is_empty(&nln->all_notifiers)) {
+        ovs_list_remove(&notifier->node);
+        if (ovs_list_is_empty(&nln->all_notifiers)) {
             nl_sock_destroy(nln->notify_sock);
             nln->notify_sock = NULL;
         }

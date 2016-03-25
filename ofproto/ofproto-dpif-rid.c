@@ -49,8 +49,8 @@ recirc_init(void)
         next_id = 1; /* 0 is not a valid ID. */
         cmap_init(&id_map);
         cmap_init(&metadata_map);
-        list_init(&expiring);
-        list_init(&expired);
+        ovs_list_init(&expiring);
+        ovs_list_init(&expired);
         ovs_mutex_unlock(&mutex);
 
         ovsthread_once_done(&once);
@@ -93,9 +93,9 @@ recirc_run(void)
             ovsrcu_postpone(recirc_id_node_free, node);
         }
 
-        if (!list_is_empty(&expiring)) {
+        if (!ovs_list_is_empty(&expiring)) {
             /* 'expired' is now empty, move nodes in 'expiring' to it. */
-            list_splice(&expired, list_front(&expiring), &expiring);
+            ovs_list_splice(&expired, ovs_list_front(&expiring), &expiring);
         }
     }
     ovs_mutex_unlock(&mutex);
@@ -329,7 +329,7 @@ recirc_id_node_unref(const struct recirc_id_node *node_)
         cmap_remove(&metadata_map, &node->metadata_node, node->hash);
         /* We keep the node in the 'id_map' so that it can be found as long
          * as it lingers, and add it to the 'expiring' list. */
-        list_insert(&expiring, &node->exp_node);
+        ovs_list_insert(&expiring, &node->exp_node);
         ovs_mutex_unlock(&mutex);
     }
 }

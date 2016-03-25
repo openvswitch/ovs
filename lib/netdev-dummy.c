@@ -127,7 +127,7 @@ struct netdev_rxq_dummy {
     struct netdev_rxq up;
     struct ovs_list node;       /* In netdev_dummy's "rxes" list. */
     struct ovs_list recv_queue;
-    int recv_queue_len;         /* list_size(&recv_queue). */
+    int recv_queue_len;         /* ovs_list_size(&recv_queue). */
     struct seq *seq;            /* Reports newly queued packets. */
 };
 
@@ -165,7 +165,7 @@ dummy_packet_stream_init(struct dummy_packet_stream *s, struct stream *stream)
     int rxbuf_size = stream ? 2048 : 0;
     s->stream = stream;
     dp_packet_init(&s->rxbuf, rxbuf_size);
-    list_init(&s->txq);
+    ovs_list_init(&s->txq);
 }
 
 static struct dummy_packet_stream *
@@ -183,7 +183,7 @@ static void
 dummy_packet_stream_wait(struct dummy_packet_stream *s)
 {
     stream_run_wait(s->stream);
-    if (!list_is_empty(&s->txq)) {
+    if (!ovs_list_is_empty(&s->txq)) {
         stream_send_wait(s->stream);
     }
     stream_recv_wait(s->stream);
@@ -192,7 +192,7 @@ dummy_packet_stream_wait(struct dummy_packet_stream *s)
 static void
 dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size_t size)
 {
-    if (list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
+    if (ovs_list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
         struct dp_packet *b;
         struct pkt_list_node *node;
 
@@ -201,7 +201,7 @@ dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size
 
         node = xmalloc(sizeof *node);
         node->pkt = b;
-        list_push_back(&s->txq, &node->list_node);
+        ovs_list_push_back(&s->txq, &node->list_node);
     }
 }
 
@@ -213,19 +213,19 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
 
     stream_run(s->stream);
 
-    if (!list_is_empty(&s->txq)) {
+    if (!ovs_list_is_empty(&s->txq)) {
         struct pkt_list_node *txbuf_node;
         struct dp_packet *txbuf;
         int retval;
 
-        ASSIGN_CONTAINER(txbuf_node, list_front(&s->txq), list_node);
+        ASSIGN_CONTAINER(txbuf_node, ovs_list_front(&s->txq), list_node);
         txbuf = txbuf_node->pkt;
         retval = stream_send(s->stream, dp_packet_data(txbuf), dp_packet_size(txbuf));
 
         if (retval > 0) {
             dp_packet_pull(txbuf, retval);
             if (!dp_packet_size(txbuf)) {
-                list_remove(&txbuf_node->list_node);
+                ovs_list_remove(&txbuf_node->list_node);
                 free(txbuf_node);
                 dp_packet_delete(txbuf);
             }
@@ -664,11 +664,11 @@ netdev_dummy_construct(struct netdev *netdev_)
 
     dummy_packet_conn_init(&netdev->conn);
 
-    list_init(&netdev->rxes);
+    ovs_list_init(&netdev->rxes);
     ovs_mutex_unlock(&netdev->mutex);
 
     ovs_mutex_lock(&dummy_list_mutex);
-    list_push_back(&dummy_list, &netdev->list_node);
+    ovs_list_push_back(&dummy_list, &netdev->list_node);
     ovs_mutex_unlock(&dummy_list_mutex);
 
     return 0;
@@ -680,7 +680,7 @@ netdev_dummy_destruct(struct netdev *netdev_)
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
     ovs_mutex_lock(&dummy_list_mutex);
-    list_remove(&netdev->list_node);
+    ovs_list_remove(&netdev->list_node);
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
@@ -845,8 +845,8 @@ netdev_dummy_rxq_construct(struct netdev_rxq *rxq_)
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
 
     ovs_mutex_lock(&netdev->mutex);
-    list_push_back(&netdev->rxes, &rx->node);
-    list_init(&rx->recv_queue);
+    ovs_list_push_back(&netdev->rxes, &rx->node);
+    ovs_list_init(&rx->recv_queue);
     rx->recv_queue_len = 0;
     rx->seq = seq_create();
     ovs_mutex_unlock(&netdev->mutex);
@@ -861,7 +861,7 @@ netdev_dummy_rxq_destruct(struct netdev_rxq *rxq_)
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
 
     ovs_mutex_lock(&netdev->mutex);
-    list_remove(&rx->node);
+    ovs_list_remove(&rx->node);
     pkt_list_delete(&rx->recv_queue);
     ovs_mutex_unlock(&netdev->mutex);
     seq_destroy(rx->seq);
@@ -884,10 +884,10 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     struct dp_packet *packet;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!list_is_empty(&rx->recv_queue)) {
+    if (!ovs_list_is_empty(&rx->recv_queue)) {
         struct pkt_list_node *pkt_node;
 
-        ASSIGN_CONTAINER(pkt_node, list_pop_front(&rx->recv_queue), list_node);
+        ASSIGN_CONTAINER(pkt_node, ovs_list_pop_front(&rx->recv_queue), list_node);
         packet = pkt_node->pkt;
         free(pkt_node);
         rx->recv_queue_len--;
@@ -920,7 +920,7 @@ netdev_dummy_rxq_wait(struct netdev_rxq *rxq_)
     uint64_t seq = seq_read(rx->seq);
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!list_is_empty(&rx->recv_queue)) {
+    if (!ovs_list_is_empty(&rx->recv_queue)) {
         poll_immediate_wake();
     } else {
         seq_wait(rx->seq, seq);
@@ -1343,7 +1343,7 @@ netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packe
     struct pkt_list_node *pkt_node = xmalloc(sizeof *pkt_node);
 
     pkt_node->pkt = packet;
-    list_push_back(&rx->recv_queue, &pkt_node->list_node);
+    ovs_list_push_back(&rx->recv_queue, &pkt_node->list_node);
     rx->recv_queue_len++;
     seq_change(rx->seq);
 }

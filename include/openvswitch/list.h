@@ -43,33 +43,33 @@ static const struct ovs_list OVS_LIST_POISON =
 (struct ovs_list) { (struct ovs_list *) (uintptr_t) 0xccccccccccccccccULL, \
                     (struct ovs_list *) (uintptr_t) 0xccccccccccccccccULL }
 
-static inline void list_init(struct ovs_list *);
-static inline void list_poison(struct ovs_list *);
+static inline void ovs_list_init(struct ovs_list *);
+static inline void ovs_list_poison(struct ovs_list *);
 
 /* List insertion. */
-static inline void list_insert(struct ovs_list *, struct ovs_list *);
-static inline void list_splice(struct ovs_list *before, struct ovs_list *first,
+static inline void ovs_list_insert(struct ovs_list *, struct ovs_list *);
+static inline void ovs_list_splice(struct ovs_list *before, struct ovs_list *first,
                                struct ovs_list *last);
-static inline void list_push_front(struct ovs_list *, struct ovs_list *);
-static inline void list_push_back(struct ovs_list *, struct ovs_list *);
-static inline void list_replace(struct ovs_list *, const struct ovs_list *);
-static inline void list_moved(struct ovs_list *, const struct ovs_list *orig);
-static inline void list_move(struct ovs_list *dst, struct ovs_list *src);
+static inline void ovs_list_push_front(struct ovs_list *, struct ovs_list *);
+static inline void ovs_list_push_back(struct ovs_list *, struct ovs_list *);
+static inline void ovs_list_replace(struct ovs_list *, const struct ovs_list *);
+static inline void ovs_list_moved(struct ovs_list *, const struct ovs_list *orig);
+static inline void ovs_list_move(struct ovs_list *dst, struct ovs_list *src);
 
 /* List removal. */
-static inline struct ovs_list *list_remove(struct ovs_list *);
-static inline struct ovs_list *list_pop_front(struct ovs_list *);
-static inline struct ovs_list *list_pop_back(struct ovs_list *);
+static inline struct ovs_list *ovs_list_remove(struct ovs_list *);
+static inline struct ovs_list *ovs_list_pop_front(struct ovs_list *);
+static inline struct ovs_list *ovs_list_pop_back(struct ovs_list *);
 
 /* List elements. */
-static inline struct ovs_list *list_front(const struct ovs_list *);
-static inline struct ovs_list *list_back(const struct ovs_list *);
+static inline struct ovs_list *ovs_list_front(const struct ovs_list *);
+static inline struct ovs_list *ovs_list_back(const struct ovs_list *);
 
 /* List properties. */
-static inline size_t list_size(const struct ovs_list *);
-static inline bool list_is_empty(const struct ovs_list *);
-static inline bool list_is_singleton(const struct ovs_list *);
-static inline bool list_is_short(const struct ovs_list *);
+static inline size_t ovs_list_size(const struct ovs_list *);
+static inline bool ovs_list_is_empty(const struct ovs_list *);
+static inline bool ovs_list_is_singleton(const struct ovs_list *);
+static inline bool ovs_list_is_short(const struct ovs_list *);
 
 #define LIST_FOR_EACH(ITER, MEMBER, LIST)                               \
     for (INIT_CONTAINER(ITER, (LIST)->next, MEMBER);                    \
@@ -94,14 +94,14 @@ static inline bool list_is_short(const struct ovs_list *);
           : 0);                                                    \
          (ITER) = (NEXT))
 #define LIST_FOR_EACH_POP(ITER, MEMBER, LIST)                      \
-    while (!list_is_empty(LIST)                                    \
-           && (INIT_CONTAINER(ITER, list_pop_front(LIST), MEMBER), 1))
+    while (!ovs_list_is_empty(LIST)                                    \
+           && (INIT_CONTAINER(ITER, ovs_list_pop_front(LIST), MEMBER), 1))
 
 /* Inline implementations. */
 
 /* Initializes 'list' as an empty list. */
 static inline void
-list_init(struct ovs_list *list)
+ovs_list_init(struct ovs_list *list)
 {
     list->next = list->prev = list;
 }
@@ -109,14 +109,14 @@ list_init(struct ovs_list *list)
 /* Initializes 'list' with pointers that will (probably) cause segfaults if
  * dereferenced and, better yet, show up clearly in a debugger. */
 static inline void
-list_poison(struct ovs_list *list)
+ovs_list_poison(struct ovs_list *list)
 {
     *list = OVS_LIST_POISON;
 }
 
 /* Inserts 'elem' just before 'before'. */
 static inline void
-list_insert(struct ovs_list *before, struct ovs_list *elem)
+ovs_list_insert(struct ovs_list *before, struct ovs_list *elem)
 {
     elem->prev = before->prev;
     elem->next = before;
@@ -127,7 +127,7 @@ list_insert(struct ovs_list *before, struct ovs_list *elem)
 /* Removes elements 'first' though 'last' (exclusive) from their current list,
    then inserts them just before 'before'. */
 static inline void
-list_splice(struct ovs_list *before, struct ovs_list *first, struct ovs_list *last)
+ovs_list_splice(struct ovs_list *before, struct ovs_list *first, struct ovs_list *last)
 {
     if (first == last) {
         return;
@@ -148,23 +148,23 @@ list_splice(struct ovs_list *before, struct ovs_list *first, struct ovs_list *la
 /* Inserts 'elem' at the beginning of 'list', so that it becomes the front in
    'list'. */
 static inline void
-list_push_front(struct ovs_list *list, struct ovs_list *elem)
+ovs_list_push_front(struct ovs_list *list, struct ovs_list *elem)
 {
-    list_insert(list->next, elem);
+    ovs_list_insert(list->next, elem);
 }
 
 /* Inserts 'elem' at the end of 'list', so that it becomes the back in
  * 'list'. */
 static inline void
-list_push_back(struct ovs_list *list, struct ovs_list *elem)
+ovs_list_push_back(struct ovs_list *list, struct ovs_list *elem)
 {
-    list_insert(list, elem);
+    ovs_list_insert(list, elem);
 }
 
 /* Puts 'elem' in the position currently occupied by 'position'.
  * Afterward, 'position' is not part of a list. */
 static inline void
-list_replace(struct ovs_list *element, const struct ovs_list *position)
+ovs_list_replace(struct ovs_list *element, const struct ovs_list *position)
 {
     element->next = position->next;
     element->next->prev = element;
@@ -181,10 +181,10 @@ list_replace(struct ovs_list *element, const struct ovs_list *position)
  * language lawyer sense, this still yields undefined behavior, but it works
  * with actual compilers.) */
 static inline void
-list_moved(struct ovs_list *list, const struct ovs_list *orig)
+ovs_list_moved(struct ovs_list *list, const struct ovs_list *orig)
 {
     if (list->next == orig) {
-        list_init(list);
+        ovs_list_init(list);
     } else {
         list->prev->next = list->next->prev = list;
     }
@@ -194,16 +194,16 @@ list_moved(struct ovs_list *list, const struct ovs_list *orig)
  * around in memory.  The effect is that, if 'src' was the head of a list, now
  * 'dst' is the head of a list containing the same elements. */
 static inline void
-list_move(struct ovs_list *dst, struct ovs_list *src)
+ovs_list_move(struct ovs_list *dst, struct ovs_list *src)
 {
     *dst = *src;
-    list_moved(dst, src);
+    ovs_list_moved(dst, src);
 }
 
 /* Removes 'elem' from its list and returns the element that followed it.
    Undefined behavior if 'elem' is not in a list. */
 static inline struct ovs_list *
-list_remove(struct ovs_list *elem)
+ovs_list_remove(struct ovs_list *elem)
 {
     elem->prev->next = elem->next;
     elem->next->prev = elem->prev;
@@ -213,33 +213,33 @@ list_remove(struct ovs_list *elem)
 /* Removes the front element from 'list' and returns it.  Undefined behavior if
    'list' is empty before removal. */
 static inline struct ovs_list *
-list_pop_front(struct ovs_list *list)
+ovs_list_pop_front(struct ovs_list *list)
 {
     struct ovs_list *front = list->next;
 
-    list_remove(front);
+    ovs_list_remove(front);
     return front;
 }
 
 /* Removes the back element from 'list' and returns it.
    Undefined behavior if 'list' is empty before removal. */
 static inline struct ovs_list *
-list_pop_back(struct ovs_list *list)
+ovs_list_pop_back(struct ovs_list *list)
 {
     struct ovs_list *back = list->prev;
 
-    list_remove(back);
+    ovs_list_remove(back);
     return back;
 }
 
 /* Returns the front element in 'list_'.
    Undefined behavior if 'list_' is empty. */
 static inline struct ovs_list *
-list_front(const struct ovs_list *list_)
+ovs_list_front(const struct ovs_list *list_)
 {
     struct ovs_list *list = CONST_CAST(struct ovs_list *, list_);
 
-    ovs_assert(!list_is_empty(list));
+    ovs_assert(!ovs_list_is_empty(list));
 
     return list->next;
 }
@@ -247,11 +247,11 @@ list_front(const struct ovs_list *list_)
 /* Returns the back element in 'list_'.
    Undefined behavior if 'list_' is empty. */
 static inline struct ovs_list *
-list_back(const struct ovs_list *list_)
+ovs_list_back(const struct ovs_list *list_)
 {
     struct ovs_list *list = CONST_CAST(struct ovs_list *, list_);
 
-    ovs_assert(!list_is_empty(list));
+    ovs_assert(!ovs_list_is_empty(list));
 
     return list->prev;
 }
@@ -259,7 +259,7 @@ list_back(const struct ovs_list *list_)
 /* Returns the number of elements in 'list'.
    Runs in O(n) in the number of elements. */
 static inline size_t
-list_size(const struct ovs_list *list)
+ovs_list_size(const struct ovs_list *list)
 {
     const struct ovs_list *e;
     size_t cnt = 0;
@@ -272,21 +272,21 @@ list_size(const struct ovs_list *list)
 
 /* Returns true if 'list' is empty, false otherwise. */
 static inline bool
-list_is_empty(const struct ovs_list *list)
+ovs_list_is_empty(const struct ovs_list *list)
 {
     return list->next == list;
 }
 
 /* Returns true if 'list' has exactly 1 element, false otherwise. */
 static inline bool
-list_is_singleton(const struct ovs_list *list)
+ovs_list_is_singleton(const struct ovs_list *list)
 {
-    return list_is_short(list) && !list_is_empty(list);
+    return ovs_list_is_short(list) && !ovs_list_is_empty(list);
 }
 
 /* Returns true if 'list' has 0 or 1 elements, false otherwise. */
 static inline bool
-list_is_short(const struct ovs_list *list)
+ovs_list_is_short(const struct ovs_list *list)
 {
     return list->next == list->prev;
 }

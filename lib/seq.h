@@ -82,8 +82,8 @@
  * To add an element to the queue:
  *
  *    ovs_mutex_lock(&mutex);
- *    list_push_back(&queue, ...element...);
- *    if (list_is_singleton(&queue)) {   // The 'if' test here is optional.
+ *    ovs_list_push_back(&queue, ...element...);
+ *    if (ovs_list_is_singleton(&queue)) {   // The 'if' test here is optional.
  *        seq_change(&nonempty_seq);
  *    }
  *    ovs_mutex_unlock(&mutex);
@@ -91,7 +91,7 @@
  * To wait for the queue to become nonempty:
  *
  *    ovs_mutex_lock(&mutex);
- *    if (list_is_empty(&queue)) {
+ *    if (ovs_list_is_empty(&queue)) {
  *        seq_wait(&nonempty_seq, seq_read(&nonempty_seq));
  *    } else {
  *        poll_immediate_wake();

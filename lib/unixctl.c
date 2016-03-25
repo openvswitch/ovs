@@ -256,7 +256,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
 
     server = xmalloc(sizeof *server);
     server->listener = listener;
-    list_init(&server->conns);
+    ovs_list_init(&server->conns);
     *serverp = server;
 
 exit:
@@ -362,7 +362,7 @@ run_connection(struct unixctl_conn *conn)
 static void
 kill_connection(struct unixctl_conn *conn)
 {
-    list_remove(&conn->node);
+    ovs_list_remove(&conn->node);
     jsonrpc_close(conn->rpc);
     json_destroy(conn->request_id);
     free(conn);
@@ -385,7 +385,7 @@ unixctl_server_run(struct unixctl_server *server)
         error = pstream_accept(server->listener, &stream);
         if (!error) {
             struct unixctl_conn *conn = xzalloc(sizeof *conn);
-            list_push_back(&server->conns, &conn->node);
+            ovs_list_push_back(&server->conns, &conn->node);
             conn->rpc = jsonrpc_open(stream);
         } else if (error == EAGAIN) {
             break;

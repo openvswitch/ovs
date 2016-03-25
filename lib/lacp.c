@@ -236,7 +236,7 @@ lacp_create(void) OVS_EXCLUDED(mutex)
     ovs_refcount_init(&lacp->ref_cnt);
 
     lacp_lock();
-    list_push_back(all_lacps, &lacp->node);
+    ovs_list_push_back(all_lacps, &lacp->node);
     lacp_unlock();
     return lacp;
 }
@@ -264,7 +264,7 @@ lacp_unref(struct lacp *lacp) OVS_EXCLUDED(mutex)
         }
 
         hmap_destroy(&lacp->slaves);
-        list_remove(&lacp->node);
+        ovs_list_remove(&lacp->node);
         free(lacp->name);
         free(lacp);
         lacp_unlock();

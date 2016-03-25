@@ -543,7 +543,7 @@ add_bridge_to_cache(struct vsctl_context *vsctl_ctx,
     struct vsctl_bridge *br = xmalloc(sizeof *br);
     br->br_cfg = br_cfg;
     br->name = xstrdup(name);
-    list_init(&br->ports);
+    ovs_list_init(&br->ports);
     br->parent = parent;
     br->vlan = vlan;
     hmap_init(&br->children);
@@ -582,7 +582,7 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
 static void
 del_cached_bridge(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *br)
 {
-    ovs_assert(list_is_empty(&br->ports));
+    ovs_assert(ovs_list_is_empty(&br->ports));
     ovs_assert(hmap_is_empty(&br->children));
     if (br->parent) {
         hmap_remove(&br->parent->children, &br->children_node);
@@ -637,8 +637,8 @@ add_port_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *parent,
     }
 
     port = xmalloc(sizeof *port);
-    list_push_back(&parent->ports, &port->ports_node);
-    list_init(&port->ifaces);
+    ovs_list_push_back(&parent->ports, &port->ports_node);
+    ovs_list_init(&port->ifaces);
     port->port_cfg = port_cfg;
     port->bridge = parent;
     shash_add(&vsctl_ctx->ports, port_cfg->name, port);
@@ -649,8 +649,8 @@ add_port_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_bridge *parent,
 static void
 del_cached_port(struct vsctl_context *vsctl_ctx, struct vsctl_port *port)
 {
-    ovs_assert(list_is_empty(&port->ifaces));
-    list_remove(&port->ports_node);
+    ovs_assert(ovs_list_is_empty(&port->ifaces));
+    ovs_list_remove(&port->ports_node);
     shash_find_and_delete(&vsctl_ctx->ports, port->port_cfg->name);
     ovsrec_port_delete(port->port_cfg);
     free(port);
@@ -663,7 +663,7 @@ add_iface_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_port *parent,
     struct vsctl_iface *iface;
 
     iface = xmalloc(sizeof *iface);
-    list_push_back(&parent->ifaces, &iface->ifaces_node);
+    ovs_list_push_back(&parent->ifaces, &iface->ifaces_node);
     iface->iface_cfg = iface_cfg;
     iface->port = parent;
     shash_add(&vsctl_ctx->ifaces, iface_cfg->name, iface);
@@ -674,7 +674,7 @@ add_iface_to_cache(struct vsctl_context *vsctl_ctx, struct vsctl_port *parent,
 static void
 del_cached_iface(struct vsctl_context *vsctl_ctx, struct vsctl_iface *iface)
 {
-    list_remove(&iface->ifaces_node);
+    ovs_list_remove(&iface->ifaces_node);
     shash_find_and_delete(&vsctl_ctx->ifaces, iface->iface_cfg->name);
     ovsrec_interface_delete(iface->iface_cfg);
     free(iface);

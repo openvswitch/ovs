@@ -161,7 +161,7 @@ process_register(const char *name, pid_t pid)
     p->name = xstrdup(slash ? slash + 1 : name);
     p->exited = false;
 
-    list_push_back(&all_processes, &p->node);
+    ovs_list_push_back(&all_processes, &p->node);
 
     return p;
 }
@@ -275,7 +275,7 @@ void
 process_destroy(struct process *p)
 {
     if (p) {
-        list_remove(&p->node);
+        ovs_list_remove(&p->node);
         free(p->name);
         free(p);
     }
@@ -367,7 +367,7 @@ process_run(void)
 #ifndef _WIN32
     char buf[_POSIX_PIPE_BUF];
 
-    if (!list_is_empty(&all_processes) && read(fds[0], buf, sizeof buf) > 0) {
+    if (!ovs_list_is_empty(&all_processes) && read(fds[0], buf, sizeof buf) > 0) {
         struct process *p;
 
         LIST_FOR_EACH (p, node, &all_processes) {
