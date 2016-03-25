@@ -50,7 +50,6 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofp-actions.h"
-#include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-mirror.h"
@@ -70,6 +69,7 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "vlan-bitmap.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);

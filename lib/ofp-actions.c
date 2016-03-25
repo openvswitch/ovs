@@ -30,12 +30,12 @@
 #include "multipath.h"
 #include "nx-match.h"
 #include "odp-netlink.h"
-#include "ofp-parse.h"
 #include "ofp-prop.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "unaligned.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_actions);

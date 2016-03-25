@@ -32,7 +32,6 @@
 #include "ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
-#include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "openflow/openflow.h"
@@ -42,6 +41,7 @@
 #include "simap.h"
 #include "timeval.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 

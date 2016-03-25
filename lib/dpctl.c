@@ -39,7 +39,6 @@
 #include "netdev-dpdk.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofp-parse.h"
 #include "ofpbuf.h"
 #include "ovs-numa.h"
 #include "packets.h"
@@ -50,6 +49,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 
 typedef int dpctl_command_handler(int argc, const char *argv[],
                                   struct dpctl_params *);
