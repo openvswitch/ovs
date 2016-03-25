@@ -21,7 +21,7 @@
 #include <stdbool.h>
 
 #include "compiler.h"
-#include "list.h"
+#include "openvswitch/list.h"
 
 #define OVS_CORE_UNSPEC INT_MAX
 #define OVS_NUMA_UNSPEC INT_MAX

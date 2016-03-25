@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #include "cmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ofp-actions.h"
 #include "ofproto-dpif-mirror.h"
 #include "ovs-thread.h"

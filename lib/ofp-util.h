@@ -23,7 +23,7 @@
 #include "bitmap.h"
 #include "compiler.h"
 #include "flow.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "match.h"
 #include "meta-flow.h"
 #include "netdev.h"

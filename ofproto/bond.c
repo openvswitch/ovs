@@ -35,7 +35,7 @@
 #include "flow.h"
 #include "hmap.h"
 #include "lacp.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev.h"
 #include "odp-util.h"
 #include "ofpbuf.h"

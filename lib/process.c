@@ -28,7 +28,7 @@
 #include "coverage.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "signals.h"

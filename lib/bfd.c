@@ -30,7 +30,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev.h"
 #include "odp-util.h"
 #include "ofpbuf.h"

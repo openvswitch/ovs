@@ -30,7 +30,7 @@
 
 #include "hash.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "openvswitch/vlog.h"
 

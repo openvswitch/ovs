@@ -22,7 +22,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "json.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovsdb-error.h"
 #include "ovsdb.h"
 #include "row.h"

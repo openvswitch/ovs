@@ -21,7 +21,7 @@
 #define AA_STRUCTS_H
 
 #include <stdint.h>
-#include "list.h"
+#include "openvswitch/list.h"
 
 struct lldp_aa_element_system_id {
     struct eth_addr system_mac;

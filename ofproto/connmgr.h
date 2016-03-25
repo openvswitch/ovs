@@ -19,7 +19,7 @@
 
 #include "classifier.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "match.h"
 #include "ofp-util.h"
 #include "ofproto.h"

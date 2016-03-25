@@ -39,7 +39,7 @@
 #include <sys/utsname.h>
 #endif
 #include "compiler.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "packets.h"
 #include "timeval.h"
 

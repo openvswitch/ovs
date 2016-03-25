@@ -16,7 +16,7 @@
 #ifndef OVSDB_TRIGGER_H
 #define OVSDB_TRIGGER_H 1
 
-#include "list.h"
+#include "openvswitch/list.h"
 
 struct ovsdb;
 

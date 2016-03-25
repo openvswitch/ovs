@@ -24,7 +24,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"

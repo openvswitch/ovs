@@ -24,7 +24,7 @@
 #include "dpif-netdev.h"
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"

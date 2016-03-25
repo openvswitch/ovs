@@ -26,7 +26,7 @@
 #include "compiler.h"
 #include "fatal-signal.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-dpdk.h"
 #include "ovs-rcu.h"
 #include "poll-loop.h"

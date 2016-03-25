@@ -18,7 +18,7 @@
 #define FAT_RWLOCK_H 1
 
 #include "compiler.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 
 /* "Fat rwlock".

@@ -23,7 +23,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "poll-loop.h"
 #include "shash.h"
 #include "stream.h"

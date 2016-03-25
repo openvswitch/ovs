@@ -55,7 +55,7 @@
 #include "classifier.h"
 #include "lex.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "match.h"
 #include "meta-flow.h"
 

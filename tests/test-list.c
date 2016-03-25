@@ -15,11 +15,11 @@
  */
 
 /* A non-exhaustive test for some of the functions and macros declared in
- * list.h. */
+ * openvswitch/list.h. */
 
 #include <config.h>
 #undef NDEBUG
-#include "list.h"
+#include "openvswitch/list.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

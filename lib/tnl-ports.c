@@ -25,7 +25,7 @@
 #include "classifier.h"
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"

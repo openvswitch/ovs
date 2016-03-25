@@ -38,7 +38,7 @@
 #include "guarded-list.h"
 #include "heap.h"
 #include "hindex.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
 #include "ofproto/ofproto.h"

@@ -19,7 +19,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "list.h"
+#include "openvswitch/list.h"
 #include "util.h"
 
 struct ds;

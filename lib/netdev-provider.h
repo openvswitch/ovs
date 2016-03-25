@@ -21,7 +21,7 @@
 
 #include "connectivity.h"
 #include "netdev.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "seq.h"

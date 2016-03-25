@@ -18,7 +18,7 @@
 
 #include "compiler.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "shash.h"
 
 struct json;

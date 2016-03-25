@@ -26,7 +26,7 @@
 #include "byte-order.h"
 #include "coverage.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "poll-loop.h"
 #include "timeval.h"
 #include "entropy.h"
