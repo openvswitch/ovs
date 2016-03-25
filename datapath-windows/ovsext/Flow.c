@@ -1757,6 +1757,25 @@ DeleteAllFlows(OVS_DATAPATH *datapath)
     }
 }
 
+NDIS_STATUS
+OvsGetFlowMetadata(OvsFlowKey *key,
+                   PNL_ATTR *keyAttrs)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+
+    if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
+        key->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
+        key->l2.keyLen += sizeof(key->recircId);
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_DP_HASH]) {
+        key->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
+        key->l2.keyLen += sizeof(key->dpHash);
+    }
+
+    return status;
+}
+
 /*
  *----------------------------------------------------------------------------
  * Initializes 'flow' members from 'packet', 'skb_priority', 'tun_id', and
