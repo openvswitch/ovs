@@ -25,7 +25,7 @@
 #include "coverage.h"
 #include "netlink.h"
 #include "netlink-socket.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netlink_notifier);

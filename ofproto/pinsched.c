@@ -24,7 +24,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "random.h"

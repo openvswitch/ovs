@@ -27,7 +27,7 @@
 #include "meta-flow.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "shash.h"

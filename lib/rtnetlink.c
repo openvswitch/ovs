@@ -24,7 +24,7 @@
 
 #include "netlink.h"
 #include "netlink-notifier.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 
 static struct nln *nln = NULL;

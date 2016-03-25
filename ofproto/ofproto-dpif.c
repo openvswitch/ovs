@@ -48,7 +48,7 @@
 #include "odp-util.h"
 #include "odp-execute.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-print.h"
 #include "ofproto-dpif-ipfix.h"

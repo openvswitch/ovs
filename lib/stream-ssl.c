@@ -35,7 +35,7 @@
 #include "coverage.h"
 #include "openvswitch/dynamic-string.h"
 #include "entropy.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"

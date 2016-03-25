@@ -25,7 +25,7 @@
 #include "multipath.h"
 #include "meta-flow.h"
 #include "nx-match.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"

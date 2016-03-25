@@ -7,7 +7,7 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "dp-packet.h"
 #include "packets.h"

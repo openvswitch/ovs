@@ -45,7 +45,7 @@
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofp-version-opt.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"

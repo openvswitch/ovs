@@ -23,7 +23,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "openvswitch/list.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "ofproto-dpif.h"
 #include "dp-packet.h"

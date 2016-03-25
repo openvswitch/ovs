@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif.h"
 #include "ofproto-dpif-rid.h"
 #include "ofproto-provider.h"

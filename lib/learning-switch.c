@@ -29,7 +29,7 @@
 #include "flow.h"
 #include "hmap.h"
 #include "mac-learning.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"

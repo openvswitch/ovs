@@ -32,7 +32,7 @@
 #include "odp-netlink.h"
 #include "ofp-prop.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/ofp-parse.h"

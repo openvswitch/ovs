@@ -27,7 +27,7 @@
 #include "hash.h"
 #include "openvswitch/list.h"
 #include "netdev.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
 #include "ovs-thread.h"

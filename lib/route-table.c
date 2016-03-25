@@ -28,7 +28,7 @@
 #include "netlink.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-router.h"
 #include "packets.h"
 #include "rtnetlink.h"

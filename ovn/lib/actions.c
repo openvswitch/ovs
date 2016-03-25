@@ -24,7 +24,7 @@
 #include "lex.h"
 #include "logical-fields.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "simap.h"
 
 /* Context maintained during actions_parse(). */

@@ -61,7 +61,7 @@
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-atomic.h"
 #include "packets.h"

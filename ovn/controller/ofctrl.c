@@ -23,7 +23,7 @@
 #include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"

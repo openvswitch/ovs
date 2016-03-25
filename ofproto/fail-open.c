@@ -23,7 +23,7 @@
 #include "flow.h"
 #include "mac-learning.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
 #include "ofproto.h"

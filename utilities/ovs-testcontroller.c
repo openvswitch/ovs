@@ -30,7 +30,7 @@
 #include "fatal-signal.h"
 #include "learning-switch.h"
 #include "ofp-version-opt.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"

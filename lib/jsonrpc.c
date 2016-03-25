@@ -25,7 +25,7 @@
 #include "fatal-signal.h"
 #include "json.h"
 #include "openvswitch/list.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "reconnect.h"

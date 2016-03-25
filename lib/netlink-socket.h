@@ -193,7 +193,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-atomic.h"
 #include "ovs-thread.h"
 

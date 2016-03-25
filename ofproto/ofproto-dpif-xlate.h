@@ -19,7 +19,7 @@
 #include "flow.h"
 #include "meta-flow.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif-rid.h"
 #include "ofproto-dpif.h"

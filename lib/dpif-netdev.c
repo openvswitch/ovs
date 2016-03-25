@@ -53,7 +53,7 @@
 #include "odp-execute.h"
 #include "odp-util.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-numa.h"
 #include "ovs-rcu.h"
 #include "packets.h"

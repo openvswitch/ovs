@@ -21,7 +21,7 @@
 
 #include "openvswitch/dynamic-string.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/geneve.h"
 
