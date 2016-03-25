@@ -2597,8 +2597,15 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
             OVS_LOG_ERROR("Wrong ethertype for MPLS attribute.");
             status = STATUS_INVALID_PARAMETER;
         }
+    } else if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
+        UINT32 recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
+
+        if (!recircId) {
+            OVS_LOG_ERROR("Invalid recirculation ID.");
+            status = STATUS_INVALID_PARAMETER;
+        }
     } else {
-        OVS_LOG_ERROR("Probed feature not supported.");
+        OVS_LOG_ERROR("Feature not supported.");
         status = STATUS_INVALID_PARAMETER;
     }
 
