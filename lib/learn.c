@@ -26,7 +26,7 @@
 #include "nx-match.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/ofp-errors.h"
 #include "unaligned.h"

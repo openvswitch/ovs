@@ -19,7 +19,7 @@
 #include "ofp-prop.h"
 
 #include "byte-order.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "util.h"

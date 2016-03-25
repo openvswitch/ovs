@@ -4,6 +4,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/dynamic-string.h \
 	include/openvswitch/geneve.h \
 	include/openvswitch/list.h \
+	include/openvswitch/ofpbuf.h \
 	include/openvswitch/ofp-errors.h \
 	include/openvswitch/ofp-parse.h \
 	include/openvswitch/thread.h \

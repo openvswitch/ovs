@@ -32,7 +32,7 @@
 #include "coverage.h"
 #include "dirs.h"
 #include "openvswitch/dynamic-string.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "sat-math.h"
 #include "socket-util.h"

@@ -25,7 +25,7 @@
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-provider.h"
 #include "pinsched.h"
 #include "poll-loop.h"

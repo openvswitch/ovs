@@ -23,7 +23,7 @@
 #include "fatal-signal.h"
 #include "match.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
 #include "ovn/lib/lex.h"

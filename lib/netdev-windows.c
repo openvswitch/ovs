@@ -24,7 +24,7 @@
 #include "coverage.h"
 #include "fatal-signal.h"
 #include "netdev-provider.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"

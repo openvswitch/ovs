@@ -29,7 +29,7 @@
 #include "hmap.h"
 #include "netdev.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "packets.h"
 #include "poll-loop.h"

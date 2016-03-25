@@ -25,7 +25,7 @@
 #include <linux/rtnetlink.h>
 #include "netlink.h"
 #include "netlink-socket.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "poll-loop.h"
 #include "timeval.h"
 #include "util.h"

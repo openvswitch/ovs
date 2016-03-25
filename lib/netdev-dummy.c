@@ -29,7 +29,7 @@
 #include "netdev-vport.h"
 #include "odp-util.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "pcap-file.h"

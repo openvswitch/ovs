@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include "byte-order.h"
 #include "connectivity.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-atomic.h"
 #include "dp-packet.h"
 #include "packets.h"

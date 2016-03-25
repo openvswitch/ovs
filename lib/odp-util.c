@@ -32,7 +32,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "simap.h"
 #include "timeval.h"

@@ -43,7 +43,7 @@
 #include "nx-match.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto/bond.h"
 #include "ofproto/ofproto.h"
 #include "ovs-numa.h"

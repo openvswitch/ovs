@@ -39,7 +39,7 @@
 #include "netdev-dpdk.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "shash.h"

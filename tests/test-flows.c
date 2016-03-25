@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "classifier.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "openflow/openflow.h"

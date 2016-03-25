@@ -19,7 +19,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "ofctrl.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 #include "ovn/lib/actions.h"

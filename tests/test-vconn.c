@@ -27,7 +27,7 @@
 #include "fatal-signal.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovstest.h"
 #include "poll-loop.h"

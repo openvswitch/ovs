@@ -38,7 +38,7 @@
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "openflow/openflow.h"

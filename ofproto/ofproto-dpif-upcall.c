@@ -29,7 +29,7 @@
 #include "latch.h"
 #include "openvswitch/list.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"

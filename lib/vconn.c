@@ -29,7 +29,7 @@
 #include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "packets.h"

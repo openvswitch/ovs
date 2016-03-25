@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include <stdlib.h>
 #include <string.h>
 #include "openvswitch/dynamic-string.h"

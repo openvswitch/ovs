@@ -28,7 +28,7 @@
 #include "flow.h"
 #include "jsonrpc.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"

@@ -25,7 +25,7 @@
 
 #include "ofp-util.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto/ofproto-provider.h"
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-dpif-rid.h"
@@ -38,7 +38,7 @@
 #include "openvswitch/list.h"
 #include "netdev.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "dp-packet.h"
 #include "poll-loop.h"

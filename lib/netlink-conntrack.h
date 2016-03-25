@@ -22,7 +22,7 @@
 #include "ct-dpif.h"
 #include "openvswitch/dynamic-string.h"
 #include "hmap.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"

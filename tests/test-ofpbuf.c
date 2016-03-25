@@ -17,7 +17,7 @@
 #include <config.h>
 #undef NDEBUG
 #include <stdio.h>
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
 

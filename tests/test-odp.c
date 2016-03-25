@@ -21,7 +21,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "match.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
 #include "openvswitch/ofp-parse.h"
