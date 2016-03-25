@@ -356,6 +356,7 @@ rungdb $gdb_vswitchd $gdb_vswitchd_ex ovs-vswitchd --detach --no-chdir --pidfile
 
 if $ovn; then
     ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
+    ovs-vsctl set open . external-ids:hostname=sandbox
     ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1

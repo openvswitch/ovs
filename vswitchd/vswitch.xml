@@ -72,6 +72,10 @@
         host as displayed by <code>xe host-list</code>.
       </column>
 
+      <column name="external_ids" key="hostname">
+        The hostname for the host running Open vSwitch.
+      </column>
+
       <column name="other_config" key="stats-update-interval"
               type='{"type": "integer", "minInteger": 5000}'>
         <p>
