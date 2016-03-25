@@ -62,12 +62,9 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
         return;
     }
 
-    const struct sbrec_chassis *chassis_rec;
     const struct ovsrec_open_vswitch *cfg;
     const char *encap_type, *encap_ip;
     static bool inited = false;
-
-    chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
 
     cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (!cfg) {
@@ -96,10 +93,17 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     }
     free(tokstr);
 
-    char hostname[HOST_NAME_MAX + 1];
-    if (gethostname(hostname, sizeof hostname)) {
-        hostname[0] = '\0';
+    const char *hostname = smap_get(&cfg->external_ids, "hostname");
+    char hostname_[HOST_NAME_MAX + 1];
+    if (!hostname || !hostname[0]) {
+        if (gethostname(hostname_, sizeof hostname_)) {
+            hostname_[0] = '\0';
+        }
+        hostname = hostname_;
     }
+
+    const struct sbrec_chassis *chassis_rec
+        = get_chassis(ctx->ovnsb_idl, chassis_id);
 
     if (chassis_rec) {
         if (strcmp(hostname, chassis_rec->hostname)) {
