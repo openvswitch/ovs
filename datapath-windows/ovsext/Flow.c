@@ -1018,8 +1018,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
     ipv4Key.ipv4_frag = ipv4FlowPutKey->nwFrag;
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_IPV4,
-                           (PCHAR)(&ipv4Key),
-                           sizeof(struct ovs_key_ipv4))) {
+                            (PCHAR)(&ipv4Key),
+                            sizeof(struct ovs_key_ipv4))) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -1030,8 +1030,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             tcpKey.tcp_src = ipv4FlowPutKey->l4.tpSrc;
             tcpKey.tcp_dst = ipv4FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_TCP,
-                                   (PCHAR)(&tcpKey),
-                                   sizeof(tcpKey))) {
+                                    (PCHAR)(&tcpKey),
+                                    sizeof(tcpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1043,8 +1043,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             udpKey.udp_src = ipv4FlowPutKey->l4.tpSrc;
             udpKey.udp_dst = ipv4FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_UDP,
-                                   (PCHAR)(&udpKey),
-                                   sizeof(udpKey))) {
+                                    (PCHAR)(&udpKey),
+                                    sizeof(udpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1056,8 +1056,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             sctpKey.sctp_src = ipv4FlowPutKey->l4.tpSrc;
             sctpKey.sctp_dst = ipv4FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_SCTP,
-                                   (PCHAR)(&sctpKey),
-                                   sizeof(sctpKey))) {
+                                    (PCHAR)(&sctpKey),
+                                    sizeof(sctpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1112,8 +1112,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
     ipv6Key.ipv6_frag = ipv6FlowPutKey->nwFrag;
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_IPV6,
-                           (PCHAR)(&ipv6Key),
-                           sizeof(ipv6Key))) {
+                            (PCHAR)(&ipv6Key),
+                            sizeof(ipv6Key))) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -1124,8 +1124,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             tcpKey.tcp_src = ipv6FlowPutKey->l4.tpSrc;
             tcpKey.tcp_dst = ipv6FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_TCP,
-                                   (PCHAR)(&tcpKey),
-                                   sizeof(tcpKey))) {
+                                    (PCHAR)(&tcpKey),
+                                    sizeof(tcpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1137,8 +1137,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             udpKey.udp_src = ipv6FlowPutKey->l4.tpSrc;
             udpKey.udp_dst = ipv6FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_UDP,
-                                   (PCHAR)(&udpKey),
-                                   sizeof(udpKey))) {
+                                    (PCHAR)(&udpKey),
+                                    sizeof(udpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1150,8 +1150,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             sctpKey.sctp_src = ipv6FlowPutKey->l4.tpSrc;
             sctpKey.sctp_dst = ipv6FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_SCTP,
-                                   (PCHAR)(&sctpKey),
-                                   sizeof(sctpKey))) {
+                                    (PCHAR)(&sctpKey),
+                                    sizeof(sctpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1167,8 +1167,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             icmpV6Key.icmpv6_code = (__u8)(icmpv6FlowPutKey->l4.tpDst);
 
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMPV6,
-                                   (PCHAR)(&icmpV6Key),
-                                   sizeof(icmpV6Key))) {
+                                    (PCHAR)(&icmpV6Key),
+                                    sizeof(icmpV6Key))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1180,8 +1180,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             RtlCopyMemory(&(ndKey.nd_tll), &icmpv6FlowPutKey->arpTha,
                           ETH_ADDR_LEN);
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ND,
-                                   (PCHAR)(&ndKey),
-                                   sizeof(ndKey))) {
+                                    (PCHAR)(&ndKey),
+                                    sizeof(ndKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1229,8 +1229,8 @@ _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf, ArpKey *arpFlowPutKey)
     arpKey.arp_op = htons(arpFlowPutKey->nwProto);
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ARP,
-                           (PCHAR)(&arpKey),
-                           sizeof(arpKey))) {
+                            (PCHAR)(&arpKey),
+                            sizeof(arpKey))) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -2409,11 +2409,11 @@ HandleFlowPut(OvsFlowPut *put,
             }
 
             if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0) {
-                    newFlow->packetCount = KernelFlow->packetCount;
-                    newFlow->byteCount = KernelFlow->byteCount;
-                    newFlow->tcpFlags = KernelFlow->tcpFlags;
-                    newFlow->used = KernelFlow->used;
-                }
+                newFlow->packetCount = KernelFlow->packetCount;
+                newFlow->byteCount = KernelFlow->byteCount;
+                newFlow->tcpFlags = KernelFlow->tcpFlags;
+                newFlow->used = KernelFlow->used;
+            }
             RemoveFlow(datapath, &KernelFlow);
             status = AddFlow(datapath, newFlow);
             ASSERT(status == STATUS_SUCCESS);
@@ -2467,7 +2467,7 @@ OvsPrepareFlow(OvsFlow **flow,
         localFlow->actionsLen = put->actionsLen;
         if (put->actionsLen) {
             NdisMoveMemory((PUCHAR)localFlow->actions, put->actions,
-                                       put->actionsLen);
+                           put->actionsLen);
         }
         localFlow->userActionsLen = 0;  // 0 indicate no conversion is made
         localFlow->used = 0;
