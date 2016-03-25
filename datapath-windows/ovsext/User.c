@@ -22,6 +22,7 @@
 
 #include "precomp.h"
 
+#include "Actions.h"
 #include "Datapath.h"
 #include "Debug.h"
 #include "Event.h"
@@ -388,14 +389,14 @@ NTSTATUS
 OvsExecuteDpIoctl(OvsPacketExecute *execute)
 {
     NTSTATUS                    status = STATUS_SUCCESS;
-    NTSTATUS                    ndisStatus;
+    NTSTATUS                    ndisStatus = STATUS_SUCCESS;
     LOCK_STATE_EX               lockState;
-    PNET_BUFFER_LIST pNbl;
-    PNL_ATTR actions;
+    PNET_BUFFER_LIST            pNbl = NULL;
+    PNL_ATTR                    actions = NULL;
     PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO fwdDetail;
-    OvsFlowKey key;
-    OVS_PACKET_HDR_INFO layers;
-    POVS_VPORT_ENTRY vport;
+    OvsFlowKey                  key = { 0 };
+    OVS_PACKET_HDR_INFO         layers = { 0 };
+    POVS_VPORT_ENTRY            vport = NULL;
 
     if (execute->packetLen == 0) {
         status = STATUS_INVALID_PARAMETER;

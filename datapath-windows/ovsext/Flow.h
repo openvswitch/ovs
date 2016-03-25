@@ -54,8 +54,11 @@ NDIS_STATUS OvsAllocateFlowTable(OVS_DATAPATH *datapath,
 NDIS_STATUS OvsExtractFlow(const NET_BUFFER_LIST *pkt, UINT32 inPort,
                            OvsFlowKey *flow, POVS_PACKET_HDR_INFO layers,
                            OvsIPv4TunnelKey *tunKey);
-OvsFlow *OvsLookupFlow(OVS_DATAPATH *datapath, const OvsFlowKey *key,
+OvsFlow* OvsLookupFlow(OVS_DATAPATH *datapath, const OvsFlowKey *key,
                        UINT64 *hash, BOOLEAN hashValid);
+OvsFlow* OvsLookupFlowRecirc(OVS_DATAPATH *datapath,
+                             const OvsFlowKey *key,
+                             UINT64 *hash);
 UINT64 OvsHashFlow(const OvsFlowKey *key);
 VOID OvsFlowUsed(OvsFlow *flow, const NET_BUFFER_LIST *pkt,
                  const POVS_PACKET_HDR_INFO layers);

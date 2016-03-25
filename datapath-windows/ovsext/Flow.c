@@ -110,9 +110,7 @@ const NL_POLICY nlFlowPolicy[] = {
     [OVS_FLOW_ATTR_PROBE] = {.type = NL_A_FLAG, .optional = TRUE}
 };
 
-/* For Parsing nested OVS_FLOW_ATTR_KEY attributes.
- * Some of the attributes like OVS_KEY_ATTR_RECIRC_ID
- * are not supported yet. */
+/* For Parsing nested OVS_FLOW_ATTR_KEY attributes. */
 
 const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_ENCAP] = {.type = NL_A_VAR_LEN, .optional = TRUE},
@@ -252,7 +250,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                     UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
-    BOOLEAN ok;
+    BOOLEAN ok = FALSE;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
@@ -496,7 +494,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         /* Get tunnel keys attributes */
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
                                NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
-                               nlFlowTunnelKeyPolicy, 
+                               nlFlowTunnelKeyPolicy,
                                ARRAY_SIZE(nlFlowTunnelKeyPolicy),
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
@@ -844,6 +842,12 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
         /* Starting the nested attribute failed. */
         rc = STATUS_UNSUCCESSFUL;
         goto error_nested_start;
+    }
+
+    if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_RECIRC_ID,
+                         flowKey->recircId)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
     }
 
     /* Ethernet header */
@@ -1368,6 +1372,11 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 {
     _MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
 
+    if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
+        destKey->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
+        destKey->l2.keyLen += sizeof(destKey->recircId);
+    }
+
     /* ===== L2 headers ===== */
     destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
 
@@ -1546,7 +1555,7 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
             mplsFlowPutKey->pad[1] = 0;
             mplsFlowPutKey->pad[2] = 0;
             mplsFlowPutKey->pad[3] = 0;
-            destKey->l2.keyLen += sizeof(MplsKey);
+            destKey->l2.keyLen += OVS_MPLS_KEY_SIZE;
         }
         break;
     }
@@ -2259,6 +2268,8 @@ ReportFlowInfo(OvsFlow *flow,
         }
     }
 
+    info->key.recircId = flow->key.recircId;
+
     return status;
 }
 
@@ -2547,7 +2558,7 @@ OvsTunKeyAttrSize(void)
  *----------------------------------------------------------------------------
  *  OvsProbeSupportedFeature --
  *    Verifies if the probed feature is supported.
- * 
+ *
  * Results:
  *   STATUS_SUCCESS if the probed feature is supported.
  *----------------------------------------------------------------------------
