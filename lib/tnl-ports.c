@@ -182,7 +182,7 @@ tnl_port_map_insert(odp_port_t port,
     p->port = port;
     p->udp_port = udp_port;
     ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
-    list_insert(&port_list, &p->node);
+    ovs_list_insert(&port_list, &p->node);
 
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
         map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->udp_port);
@@ -238,7 +238,7 @@ tnl_port_map_delete(ovs_be16 udp_port)
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH_SAFE(p, next, node, &port_list) {
         if (p->udp_port == udp_port) {
-            list_remove(&p->node);
+            ovs_list_remove(&p->node);
             found = true;
             break;
         }
@@ -370,7 +370,7 @@ insert_ipdev__(struct netdev *dev,
     ip_dev->addr = addr;
     ip_dev->n_addr = n_addr;
     ovs_strlcpy(ip_dev->dev_name, netdev_get_name(dev), sizeof ip_dev->dev_name);
-    list_insert(&addr_list, &ip_dev->node);
+    ovs_list_insert(&addr_list, &ip_dev->node);
     map_insert_ipdev(ip_dev);
     return;
 
@@ -412,7 +412,7 @@ delete_ipdev(struct ip_device *ip_dev)
         ipdev_map_delete(ip_dev, p->udp_port);
     }
 
-    list_remove(&ip_dev->node);
+    ovs_list_remove(&ip_dev->node);
     netdev_close(ip_dev->dev);
     free(ip_dev->addr);
     free(ip_dev);
@@ -479,7 +479,7 @@ void
 tnl_port_map_init(void)
 {
     classifier_init(&cls, flow_segment_u64s);
-    list_init(&addr_list);
-    list_init(&port_list);
+    ovs_list_init(&addr_list);
+    ovs_list_init(&port_list);
     unixctl_command_register("tnl/ports/show", "-v", 0, 1, tnl_port_show, NULL);
 }

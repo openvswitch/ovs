@@ -953,14 +953,14 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     /* Loop through the ports already on the datapath and remove any
      * that we don't need anymore. */
-    list_init(&garbage_list);
+    ovs_list_init(&garbage_list);
     dpif_port_dump_start(&port_dump, backer->dpif);
     while (dpif_port_dump_next(&port_dump, &port)) {
         node = shash_find(&init_ofp_ports, port.name);
         if (!node && strcmp(port.name, dpif_base_name(backer->dpif))) {
             garbage = xmalloc(sizeof *garbage);
             garbage->odp_port = port.port_no;
-            list_push_front(&garbage_list, &garbage->list_node);
+            ovs_list_push_front(&garbage_list, &garbage->list_node);
         }
     }
     dpif_port_dump_done(&port_dump);
@@ -2762,7 +2762,7 @@ bundle_del_port(struct ofport_dpif *port)
 
     bundle->ofproto->backer->need_revalidate = REV_RECONFIGURE;
 
-    list_remove(&port->bundle_node);
+    ovs_list_remove(&port->bundle_node);
     port->bundle = NULL;
 
     if (bundle->lacp) {
@@ -2793,7 +2793,7 @@ bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
         }
 
         port->bundle = bundle;
-        list_push_back(&bundle->ports, &port->bundle_node);
+        ovs_list_push_back(&bundle->ports, &port->bundle_node);
         if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
             || port->is_layer3
             || (bundle->ofproto->stp && !stp_forward_in_state(port->stp_state))
@@ -2870,7 +2870,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->aux = aux;
         bundle->name = NULL;
 
-        list_init(&bundle->ports);
+        ovs_list_init(&bundle->ports);
         bundle->vlan_mode = PORT_VLAN_TRUNK;
         bundle->vlan = -1;
         bundle->trunks = NULL;
@@ -2908,7 +2908,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
             ok = false;
         }
     }
-    if (!ok || list_size(&bundle->ports) != s->n_slaves) {
+    if (!ok || ovs_list_size(&bundle->ports) != s->n_slaves) {
         struct ofport_dpif *next_port;
 
         LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
@@ -2922,9 +2922,9 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         found: ;
         }
     }
-    ovs_assert(list_size(&bundle->ports) <= s->n_slaves);
+    ovs_assert(ovs_list_size(&bundle->ports) <= s->n_slaves);
 
-    if (list_is_empty(&bundle->ports)) {
+    if (ovs_list_is_empty(&bundle->ports)) {
         bundle_destroy(bundle);
         return EINVAL;
     }
@@ -2992,7 +2992,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     }
 
     /* Bonding. */
-    if (!list_is_short(&bundle->ports)) {
+    if (!ovs_list_is_short(&bundle->ports)) {
         bundle->ofproto->has_bonded_bundles = true;
         if (bundle->bond) {
             if (bond_reconfigure(bundle->bond, s->bond)) {
@@ -3029,9 +3029,9 @@ bundle_remove(struct ofport *port_)
 
     if (bundle) {
         bundle_del_port(port);
-        if (list_is_empty(&bundle->ports)) {
+        if (ovs_list_is_empty(&bundle->ports)) {
             bundle_destroy(bundle);
-        } else if (list_is_short(&bundle->ports)) {
+        } else if (ovs_list_is_short(&bundle->ports)) {
             bond_unref(bundle->bond);
             bundle->bond = NULL;
         }
@@ -3078,7 +3078,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     } *pkt_node;
     struct ovs_list packets;
 
-    list_init(&packets);
+    ovs_list_init(&packets);
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         if (mac_entry_get_port(ofproto->ml, e) != bundle) {
@@ -3086,7 +3086,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
             pkt_node->pkt = bond_compose_learning_packet(bundle->bond,
                                                          e->mac, e->vlan,
                                                          (void **)&pkt_node->port);
-            list_push_back(&packets, &pkt_node->list_node);
+            ovs_list_push_back(&packets, &pkt_node->list_node);
         }
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
@@ -4564,7 +4564,7 @@ ofproto_unixctl_mcast_snooping_flush(struct unixctl_conn *conn, int argc,
 static struct ofport_dpif *
 ofbundle_get_a_port(const struct ofbundle *bundle)
 {
-    return CONTAINER_OF(list_front(&bundle->ports), struct ofport_dpif,
+    return CONTAINER_OF(ovs_list_front(&bundle->ports), struct ofport_dpif,
                         bundle_node);
 }
 

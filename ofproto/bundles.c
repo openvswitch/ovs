@@ -53,7 +53,7 @@ ofp_bundle_create(uint32_t id, uint16_t flags)
     bundle->flags = flags;
     bundle->state = BS_OPEN;
 
-    list_init(&bundle->msg_list);
+    ovs_list_init(&bundle->msg_list);
 
     return bundle;
 }
@@ -166,6 +166,6 @@ ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
-    list_push_back(&bundle->msg_list, &bmsg->node);
+    ovs_list_push_back(&bundle->msg_list, &bmsg->node);
     return 0;
 }

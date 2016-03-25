@@ -389,7 +389,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->n_rxq = netdev->netdev_class->rxq_alloc ? 1 : 0;
                 netdev->requested_n_rxq = netdev->n_rxq;
 
-                list_init(&netdev->saved_flags_list);
+                ovs_list_init(&netdev->saved_flags_list);
 
                 error = rc->class->construct(netdev);
                 if (!error) {
@@ -397,7 +397,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     netdev_change_seq_changed(netdev);
                 } else {
                     free(netdev->name);
-                    ovs_assert(list_is_empty(&netdev->saved_flags_list));
+                    ovs_assert(ovs_list_is_empty(&netdev->saved_flags_list));
                     shash_delete(&netdev_shash, netdev->node);
                     rc->class->dealloc(netdev);
                 }
@@ -1171,7 +1171,7 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
             ovs_mutex_lock(&netdev_mutex);
             *sfp = sf = xmalloc(sizeof *sf);
             sf->netdev = netdev;
-            list_push_front(&netdev->saved_flags_list, &sf->node);
+            ovs_list_push_front(&netdev->saved_flags_list, &sf->node);
             sf->saved_flags = changed_flags;
             sf->saved_values = changed_flags & new_flags;
 
@@ -1252,7 +1252,7 @@ netdev_restore_flags(struct netdev_saved_flags *sf)
                                            &old_flags);
 
         ovs_mutex_lock(&netdev_mutex);
-        list_remove(&sf->node);
+        ovs_list_remove(&sf->node);
         free(sf);
         netdev_unref(netdev);
     }

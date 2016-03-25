@@ -458,7 +458,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
         VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size );
     }
 
-    list_push_back(&dpdk_mp_list, &dmp->list_node);
+    ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
     return dmp;
 }
 
@@ -736,7 +736,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
         netdev_dpdk_alloc_txq(netdev, OVS_VHOST_MAX_QUEUE_NUM);
     }
 
-    list_push_back(&dpdk_list, &netdev->list_node);
+    ovs_list_push_back(&dpdk_list, &netdev->list_node);
 
 unlock:
     if (err) {
@@ -862,7 +862,7 @@ netdev_dpdk_destruct(struct netdev *netdev_)
 
     ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
-    list_remove(&dev->list_node);
+    ovs_list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
     ovs_mutex_unlock(&dpdk_mutex);
 }
@@ -889,7 +889,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
 
     ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
-    list_remove(&dev->list_node);
+    ovs_list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
     ovs_mutex_unlock(&dpdk_mutex);
 }
@@ -2337,7 +2337,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
 
     ivshmem->user_port_id = port_no;
     ivshmem->eth_port_id = rte_eth_dev_count() - 1;
-    list_push_back(&dpdk_ring_list, &ivshmem->list_node);
+    ovs_list_push_back(&dpdk_ring_list, &ivshmem->list_node);
 
     *eth_port_id = ivshmem->eth_port_id;
     return 0;

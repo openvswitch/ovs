@@ -841,7 +841,7 @@ build_simple_tree(enum expr_type type, int n, struct expr ***terminalp)
         struct expr *e = expr_create_andor(type);
         for (int i = 0; i < 2; i++) {
             struct expr *sub = make_terminal(terminalp);
-            list_push_back(&e->andor, &sub->node);
+            ovs_list_push_back(&e->andor, &sub->node);
         }
         return e;
     } else if (n == 1) {
@@ -864,7 +864,7 @@ build_tree_shape(enum expr_type type, const struct tree_shape **tsp,
         struct expr *sub = (ts->s[i] > 2
                             ? build_tree_shape(t, tsp, terminalp)
                             : build_simple_tree(t, ts->s[i], terminalp));
-        list_push_back(&e->andor, &sub->node);
+        ovs_list_push_back(&e->andor, &sub->node);
     }
     return e;
 }

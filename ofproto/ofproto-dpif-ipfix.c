@@ -496,7 +496,7 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
     exporter->seq_number = 1;
     exporter->last_template_set_time = TIME_MIN;
     hmap_init(&exporter->cache_flow_key_map);
-    list_init(&exporter->cache_flow_start_timestamp_list);
+    ovs_list_init(&exporter->cache_flow_start_timestamp_list);
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
 }
@@ -1344,7 +1344,7 @@ ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
         /* As the latest entry added into the cache, it should
          * logically have the highest flow_start_timestamp_usec, so
          * append it at the tail. */
-        list_push_back(&exporter->cache_flow_start_timestamp_list,
+        ovs_list_push_back(&exporter->cache_flow_start_timestamp_list,
                        &entry->cache_flow_start_timestamp_list_node);
 
         /* Enforce exporter->cache_max_flows limit. */
@@ -1772,7 +1772,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
     bool template_msg_sent = false;
     enum ipfix_flow_end_reason flow_end_reason;
 
-    if (list_is_empty(&exporter->cache_flow_start_timestamp_list)) {
+    if (ovs_list_is_empty(&exporter->cache_flow_start_timestamp_list)) {
         return;
     }
 
@@ -1795,7 +1795,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
             break;
         }
 
-        list_remove(&entry->cache_flow_start_timestamp_list_node);
+        ovs_list_remove(&entry->cache_flow_start_timestamp_list_node);
         hmap_remove(&exporter->cache_flow_key_map,
                     &entry->flow_key_map_node);
 

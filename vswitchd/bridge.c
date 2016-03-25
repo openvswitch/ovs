@@ -864,7 +864,7 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
             }
         }
 
-        if (list_is_empty(&port->ifaces)) {
+        if (ovs_list_is_empty(&port->ifaces)) {
             port_destroy(port);
         }
     }
@@ -928,7 +928,7 @@ port_configure(struct port *port)
 
     /* Get slaves. */
     s.n_slaves = 0;
-    s.slaves = xmalloc(list_size(&port->ifaces) * sizeof *s.slaves);
+    s.slaves = xmalloc(ovs_list_size(&port->ifaces) * sizeof *s.slaves);
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         s.slaves[s.n_slaves++] = iface->ofp_port;
     }
@@ -1291,14 +1291,14 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     }
 
     /* STP over bonds is not supported. */
-    if (!list_is_singleton(&port->ifaces)) {
+    if (!ovs_list_is_singleton(&port->ifaces)) {
         VLOG_ERR("port %s: cannot enable STP on bonds, disabling",
                  port->name);
         port_s->enable = false;
         return;
     }
 
-    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
 
     /* Internal ports shouldn't participate in spanning tree, so
      * skip them. */
@@ -1379,14 +1379,14 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
     }
 
     /* RSTP over bonds is not supported. */
-    if (!list_is_singleton(&port->ifaces)) {
+    if (!ovs_list_is_singleton(&port->ifaces)) {
         VLOG_ERR("port %s: cannot enable RSTP on bonds, disabling",
                 port->name);
         port_s->enable = false;
         return;
     }
 
-    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
 
     /* Internal ports shouldn't participate in spanning tree, so
      * skip them. */
@@ -1680,7 +1680,7 @@ bridge_has_bond_fake_iface(const struct bridge *br, const char *name)
 static bool
 port_is_bond_fake_iface(const struct port *port)
 {
-    return port->cfg->bond_fake_iface && !list_is_short(&port->ifaces);
+    return port->cfg->bond_fake_iface && !ovs_list_is_short(&port->ifaces);
 }
 
 static void
@@ -1832,7 +1832,7 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
 
     /* Create the iface structure. */
     iface = xzalloc(sizeof *iface);
-    list_push_back(&port->ifaces, &iface->port_elem);
+    ovs_list_push_back(&port->ifaces, &iface->port_elem);
     hmap_insert(&br->iface_by_name, &iface->name_node,
                 hash_string(iface_cfg->name, 0));
     iface->port = port;
@@ -2440,12 +2440,12 @@ port_refresh_stp_status(struct port *port)
     }
 
     /* STP doesn't currently support bonds. */
-    if (!list_is_singleton(&port->ifaces)) {
+    if (!ovs_list_is_singleton(&port->ifaces)) {
         ovsrec_port_set_status(port->cfg, NULL);
         return;
     }
 
-    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
     if (ofproto_port_get_stp_status(ofproto, iface->ofp_port, &status)) {
         return;
     }
@@ -2479,11 +2479,11 @@ port_refresh_stp_stats(struct port *port)
     }
 
     /* STP doesn't currently support bonds. */
-    if (!list_is_singleton(&port->ifaces)) {
+    if (!ovs_list_is_singleton(&port->ifaces)) {
         return;
     }
 
-    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
     if (ofproto_port_get_stp_stats(ofproto, iface->ofp_port, &stats)) {
         return;
     }
@@ -2550,12 +2550,12 @@ port_refresh_rstp_status(struct port *port)
     }
 
     /* RSTP doesn't currently support bonds. */
-    if (!list_is_singleton(&port->ifaces)) {
+    if (!ovs_list_is_singleton(&port->ifaces)) {
         ovsrec_port_set_rstp_status(port->cfg, NULL);
         return;
     }
 
-    iface = CONTAINER_OF(list_front(&port->ifaces), struct iface, port_elem);
+    iface = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface, port_elem);
     if (ofproto_port_get_rstp_status(ofproto, iface->ofp_port, &status)) {
         return;
     }
@@ -2603,7 +2603,7 @@ port_refresh_bond_status(struct port *port, bool force_update)
     struct eth_addr mac;
 
     /* Return if port is not a bond */
-    if (list_is_singleton(&port->ifaces)) {
+    if (ovs_list_is_singleton(&port->ifaces)) {
         return;
     }
 
@@ -3994,7 +3994,7 @@ bridge_aa_refresh_queued(struct bridge *br)
     struct ovs_list *list = xmalloc(sizeof *list);
     struct bridge_aa_vlan *node, *next;
 
-    list_init(list);
+    ovs_list_init(list);
     ofproto_aa_vlan_get_queued(br->ofproto, list);
 
     LIST_FOR_EACH_SAFE (node, next, list_node, list) {
@@ -4008,7 +4008,7 @@ bridge_aa_refresh_queued(struct bridge *br)
             bridge_aa_update_trunks(port, node);
         }
 
-        list_remove(&node->list_node);
+        ovs_list_remove(&node->list_node);
         free(node->port_name);
         free(node);
     }
@@ -4028,7 +4028,7 @@ port_create(struct bridge *br, const struct ovsrec_port *cfg)
     port->bridge = br;
     port->name = xstrdup(cfg->name);
     port->cfg = cfg;
-    list_init(&port->ifaces);
+    ovs_list_init(&port->ifaces);
 
     hmap_insert(&br->ports, &port->hmap_node, hash_string(port->name, 0));
     return port;
@@ -4153,7 +4153,7 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
                             0);
     s->priority = (priority > 0 && priority <= UINT16_MAX
                    ? priority
-                   : UINT16_MAX - !list_is_short(&port->ifaces));
+                   : UINT16_MAX - !ovs_list_is_short(&port->ifaces));
 
     lacp_time = smap_get(&port->cfg->other_config, "lacp-time");
     s->fast = lacp_time && !strcasecmp(lacp_time, "fast");
@@ -4316,7 +4316,7 @@ iface_destroy__(struct iface *iface)
             hmap_remove(&br->ifaces, &iface->ofp_port_node);
         }
 
-        list_remove(&iface->port_elem);
+        ovs_list_remove(&iface->port_elem);
         hmap_remove(&br->iface_by_name, &iface->name_node);
 
         /* The user is changing configuration here, so netdev_remove needs to be
@@ -4335,7 +4335,7 @@ iface_destroy(struct iface *iface)
         struct port *port = iface->port;
 
         iface_destroy__(iface);
-        if (list_is_empty(&port->ifaces)) {
+        if (ovs_list_is_empty(&port->ifaces)) {
             port_destroy(port);
         }
     }
@@ -5010,7 +5010,7 @@ configure_splinter_port(struct port *port)
 
     ofproto_bundle_unregister(port->bridge->ofproto, port);
 
-    vlandev = CONTAINER_OF(list_front(&port->ifaces), struct iface,
+    vlandev = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface,
                            port_elem);
 
     realdev_name = smap_get(&port->cfg->other_config, "realdev");

@@ -208,7 +208,7 @@ tun_metadata_table_request(struct ofputil_tlv_table_reply *ttr)
 
     ttr->max_option_space = TUN_METADATA_TOT_OPT_SIZE;
     ttr->max_fields = TUN_METADATA_NUM_OPTS;
-    list_init(&ttr->mappings);
+    ovs_list_init(&ttr->mappings);
 
     for (i = 0; i < TUN_METADATA_NUM_OPTS; i++) {
         struct tun_meta_entry *entry = &map->entries[i];
@@ -224,7 +224,7 @@ tun_metadata_table_request(struct ofputil_tlv_table_reply *ttr)
         map->option_len = entry->loc.len;
         map->index = i;
 
-        list_push_back(&ttr->mappings, &map->list_node);
+        ovs_list_push_back(&ttr->mappings, &map->list_node);
     }
 }
 

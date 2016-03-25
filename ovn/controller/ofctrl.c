@@ -212,8 +212,8 @@ recv_S_TLV_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type)
 
         struct ofputil_tlv_table_mod ttm;
         ttm.command = NXTTMC_ADD;
-        list_init(&ttm.mappings);
-        list_push_back(&ttm.mappings, &tm.list_node);
+        ovs_list_init(&ttm.mappings);
+        ovs_list_push_back(&ttm.mappings, &tm.list_node);
 
         xid = queue_msg(ofputil_encode_tlv_table_mod(OFP13_VERSION, &ttm));
         xid2 = queue_msg(ofputil_encode_barrier_request(OFP13_VERSION));

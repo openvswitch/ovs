@@ -74,7 +74,7 @@ rtbsd_notifier_register(struct rtbsd_notifier *notifier,
         }
     }
 
-    list_push_back(&all_notifiers, &notifier->node);
+    ovs_list_push_back(&all_notifiers, &notifier->node);
     notifier->cb = cb;
     notifier->aux = aux;
 
@@ -90,8 +90,8 @@ rtbsd_notifier_unregister(struct rtbsd_notifier *notifier)
     OVS_EXCLUDED(rtbsd_mutex)
 {
     ovs_mutex_lock(&rtbsd_mutex);
-    list_remove(&notifier->node);
-    if (list_is_empty(&all_notifiers)) {
+    ovs_list_remove(&notifier->node);
+    if (ovs_list_is_empty(&all_notifiers)) {
         close(notify_sock);
         notify_sock = -1;
     }

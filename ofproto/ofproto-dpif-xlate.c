@@ -614,7 +614,7 @@ xlate_report_actions(struct xlate_ctx *ctx, const char *title,
 static void
 xlate_xbridge_init(struct xlate_cfg *xcfg, struct xbridge *xbridge)
 {
-    list_init(&xbridge->xbundles);
+    ovs_list_init(&xbridge->xbundles);
     hmap_init(&xbridge->xports);
     hmap_insert(&xcfg->xbridges, &xbridge->hmap_node,
                 hash_pointer(xbridge->ofproto, 0));
@@ -623,8 +623,8 @@ xlate_xbridge_init(struct xlate_cfg *xcfg, struct xbridge *xbridge)
 static void
 xlate_xbundle_init(struct xlate_cfg *xcfg, struct xbundle *xbundle)
 {
-    list_init(&xbundle->xports);
-    list_insert(&xbundle->xbridge->xbundles, &xbundle->list_node);
+    ovs_list_init(&xbundle->xports);
+    ovs_list_insert(&xbundle->xbridge->xbundles, &xbundle->list_node);
     hmap_insert(&xcfg->xbundles, &xbundle->hmap_node,
                 hash_pointer(xbundle->ofbundle, 0));
 }
@@ -837,7 +837,7 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
 
     if (xbundle) {
         new_xport->xbundle = xbundle;
-        list_insert(&new_xport->xbundle->xports, &new_xport->bundle_node);
+        ovs_list_insert(&new_xport->xbundle->xports, &new_xport->bundle_node);
     }
 
     HMAP_FOR_EACH (pdscp, hmap_node, &xport->skb_priorities) {
@@ -1035,7 +1035,7 @@ xlate_xbundle_remove(struct xlate_cfg *xcfg, struct xbundle *xbundle)
     }
 
     hmap_remove(&xcfg->xbundles, &xbundle->hmap_node);
-    list_remove(&xbundle->list_node);
+    ovs_list_remove(&xbundle->list_node);
     bond_unref(xbundle->bond);
     lacp_unref(xbundle->lacp);
     free(xbundle->name);
@@ -1095,11 +1095,11 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     }
 
     if (xport->xbundle) {
-        list_remove(&xport->bundle_node);
+        ovs_list_remove(&xport->bundle_node);
     }
     xport->xbundle = xbundle_lookup(new_xcfg, ofbundle);
     if (xport->xbundle) {
-        list_insert(&xport->xbundle->xports, &xport->bundle_node);
+        ovs_list_insert(&xport->xbundle->xports, &xport->bundle_node);
     }
 
     clear_skb_priorities(xport);
@@ -1133,7 +1133,7 @@ xlate_xport_remove(struct xlate_cfg *xcfg, struct xport *xport)
     }
 
     if (xport->xbundle) {
-        list_remove(&xport->bundle_node);
+        ovs_list_remove(&xport->bundle_node);
     }
 
     clear_skb_priorities(xport);
@@ -1846,11 +1846,11 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     bool use_recirc = false;
 
     vid = output_vlan_to_vid(out_xbundle, vlan);
-    if (list_is_empty(&out_xbundle->xports)) {
+    if (ovs_list_is_empty(&out_xbundle->xports)) {
         /* Partially configured bundle with no slaves.  Drop the packet. */
         return;
     } else if (!out_xbundle->bond) {
-        xport = CONTAINER_OF(list_front(&out_xbundle->xports), struct xport,
+        xport = CONTAINER_OF(ovs_list_front(&out_xbundle->xports), struct xport,
                              bundle_node);
     } else {
         struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);

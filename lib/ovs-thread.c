@@ -708,7 +708,7 @@ ovsthread_key_destruct__(void *slots_)
     int i;
 
     ovs_mutex_lock(&key_mutex);
-    list_remove(&slots->list_node);
+    ovs_list_remove(&slots->list_node);
     LIST_FOR_EACH (key, list_node, &inuse_keys) {
         void *value = clear_slot(slots, key->index);
         if (value && key->destructor) {
@@ -758,17 +758,17 @@ ovsthread_key_create(ovsthread_key_t *keyp, void (*destructor)(void *))
     }
 
     ovs_mutex_lock(&key_mutex);
-    if (list_is_empty(&free_keys)) {
+    if (ovs_list_is_empty(&free_keys)) {
         key = xmalloc(sizeof *key);
         key->index = n_keys++;
         if (key->index >= MAX_KEYS) {
             abort();
         }
     } else {
-        key = CONTAINER_OF(list_pop_back(&free_keys),
+        key = CONTAINER_OF(ovs_list_pop_back(&free_keys),
                             struct ovsthread_key, list_node);
     }
-    list_push_back(&inuse_keys, &key->list_node);
+    ovs_list_push_back(&inuse_keys, &key->list_node);
     key->destructor = destructor;
     ovs_mutex_unlock(&key_mutex);
 
@@ -787,8 +787,8 @@ ovsthread_key_delete(ovsthread_key_t key)
     ovs_mutex_lock(&key_mutex);
 
     /* Move 'key' from 'inuse_keys' to 'free_keys'. */
-    list_remove(&key->list_node);
-    list_push_back(&free_keys, &key->list_node);
+    ovs_list_remove(&key->list_node);
+    ovs_list_push_back(&free_keys, &key->list_node);
 
     /* Clear this slot in all threads. */
     LIST_FOR_EACH (slots, list_node, &slots_list) {
@@ -810,7 +810,7 @@ ovsthread_key_lookup__(const struct ovsthread_key *key)
 
         ovs_mutex_lock(&key_mutex);
         pthread_setspecific(tsd_key, slots);
-        list_push_back(&slots_list, &slots->list_node);
+        ovs_list_push_back(&slots_list, &slots->list_node);
         ovs_mutex_unlock(&key_mutex);
     }
 

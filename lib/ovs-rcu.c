@@ -81,7 +81,7 @@ ovsrcu_perthread_get(void)
                     sizeof perthread->name);
 
         ovs_mutex_lock(&ovsrcu_threads_mutex);
-        list_push_back(&ovsrcu_threads, &perthread->list_node);
+        ovs_list_push_back(&ovsrcu_threads, &perthread->list_node);
         ovs_mutex_unlock(&ovsrcu_threads_mutex);
 
         pthread_setspecific(perthread_key, perthread);
@@ -257,7 +257,7 @@ ovsrcu_call_postponed(void)
     struct ovs_list cbsets;
 
     guarded_list_pop_all(&flushed_cbsets, &cbsets);
-    if (list_is_empty(&cbsets)) {
+    if (ovs_list_is_empty(&cbsets)) {
         return false;
     }
 
@@ -312,7 +312,7 @@ ovsrcu_unregister__(struct ovsrcu_perthread *perthread)
     }
 
     ovs_mutex_lock(&ovsrcu_threads_mutex);
-    list_remove(&perthread->list_node);
+    ovs_list_remove(&perthread->list_node);
     ovs_mutex_unlock(&ovsrcu_threads_mutex);
 
     ovs_mutex_destroy(&perthread->mutex);
@@ -347,7 +347,7 @@ ovsrcu_init_module(void)
         global_seqno = seq_create();
         xpthread_key_create(&perthread_key, ovsrcu_thread_exit_cb);
         fatal_signal_add_hook(ovsrcu_cancel_thread_exit_cb, NULL, NULL, true);
-        list_init(&ovsrcu_threads);
+        ovs_list_init(&ovsrcu_threads);
         ovs_mutex_init(&ovsrcu_threads_mutex);
 
         guarded_list_init(&flushed_cbsets);

@@ -672,8 +672,8 @@ transact_noreply(struct vconn *vconn, struct ofpbuf *request)
 {
     struct ovs_list requests;
 
-    list_init(&requests);
-    list_push_back(&requests, &request->list_node);
+    ovs_list_init(&requests);
+    ovs_list_push_back(&requests, &request->list_node);
     transact_multiple_noreply(vconn, &requests);
 }
 
@@ -1351,7 +1351,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
     struct ovs_list requests;
     size_t i;
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
     /* Bundles need OpenFlow 1.3+. */
     usable_protocols &= OFPUTIL_P_OF13_UP;
@@ -1361,7 +1361,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
         struct ofputil_flow_mod *fm = &fms[i];
         struct ofpbuf *request = ofputil_encode_flow_mod(fm, protocol);
 
-        list_push_back(&requests, &request->list_node);
+        ovs_list_push_back(&requests, &request->list_node);
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
     }
 
@@ -3040,7 +3040,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     }
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
-    list_push_back(packets, &ofm->list_node);
+    ovs_list_push_back(packets, &ofm->list_node);
 }
 
 static void
@@ -3062,7 +3062,7 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 
     read_flows_from_switch(vconn, protocol, &tables, SWITCH_IDX);
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
     FOR_EACH_TABLE (cls, &tables) {
         /* Delete flows that exist on the switch but not in the file. */

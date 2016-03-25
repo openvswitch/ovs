@@ -313,7 +313,7 @@ ovsdb_monitor_add_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
 
     jm = xzalloc(sizeof *jm);
     jm->jsonrpc_monitor = jsonrpc_monitor;
-    list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
+    ovs_list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
 }
 
 struct ovsdb_monitor *
@@ -326,7 +326,7 @@ ovsdb_monitor_create(struct ovsdb *db,
 
     ovsdb_replica_init(&dbmon->replica, &ovsdb_jsonrpc_replica_class);
     ovsdb_add_replica(db, &dbmon->replica);
-    list_init(&dbmon->jsonrpc_monitors);
+    ovs_list_init(&dbmon->jsonrpc_monitors);
     dbmon->db = db;
     dbmon->n_transactions = 0;
     shash_init(&dbmon->tables);
@@ -964,7 +964,7 @@ ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
 {
     struct jsonrpc_monitor_node *jm;
 
-    if (list_is_empty(&dbmon->jsonrpc_monitors)) {
+    if (ovs_list_is_empty(&dbmon->jsonrpc_monitors)) {
         ovsdb_monitor_destroy(dbmon);
         return;
     }
@@ -978,11 +978,11 @@ ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
                 struct ovsdb_monitor_table *mt = node->data;
                 ovsdb_monitor_table_untrack_changes(mt, unflushed);
             }
-            list_remove(&jm->node);
+            ovs_list_remove(&jm->node);
             free(jm);
 
             /* Destroy ovsdb monitor if this is the last user.  */
-            if (list_is_empty(&dbmon->jsonrpc_monitors)) {
+            if (ovs_list_is_empty(&dbmon->jsonrpc_monitors)) {
                 ovsdb_monitor_destroy(dbmon);
             }
 
@@ -1076,7 +1076,7 @@ ovsdb_monitor_add(struct ovsdb_monitor *new_dbmon)
 
     /* New_dbmon should be associated with only one jsonrpc
      * connections.  */
-    ovs_assert(list_is_singleton(&new_dbmon->jsonrpc_monitors));
+    ovs_assert(ovs_list_is_singleton(&new_dbmon->jsonrpc_monitors));
 
     hash = ovsdb_monitor_hash(new_dbmon, 0);
     HMAP_FOR_EACH_WITH_HASH(dbmon, hmap_node, hash, &ovsdb_monitors) {
@@ -1094,7 +1094,7 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
 {
     struct shash_node *node;
 
-    list_remove(&dbmon->replica.node);
+    ovs_list_remove(&dbmon->replica.node);
 
     if (!hmap_node_is_null(&dbmon->hmap_node)) {
         hmap_remove(&ovsdb_monitors, &dbmon->hmap_node);

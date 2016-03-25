@@ -322,9 +322,9 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                struct ovs_list *both)
 {
     hmap_init(datapaths);
-    list_init(sb_only);
-    list_init(nb_only);
-    list_init(both);
+    ovs_list_init(sb_only);
+    ovs_list_init(nb_only);
+    ovs_list_init(both);
 
     const struct sbrec_datapath_binding *sb, *sb_next;
     SBREC_DATAPATH_BINDING_FOR_EACH_SAFE (sb, sb_next, ctx->ovnsb_idl) {
@@ -353,7 +353,7 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
 
         struct ovn_datapath *od = ovn_datapath_create(datapaths, &key,
                                                       NULL, NULL, sb);
-        list_push_back(sb_only, &od->list);
+        ovs_list_push_back(sb_only, &od->list);
     }
 
     const struct nbrec_logical_switch *nbs;
@@ -362,12 +362,12 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                                                     &nbs->header_.uuid);
         if (od) {
             od->nbs = nbs;
-            list_remove(&od->list);
-            list_push_back(both, &od->list);
+            ovs_list_remove(&od->list);
+            ovs_list_push_back(both, &od->list);
         } else {
             od = ovn_datapath_create(datapaths, &nbs->header_.uuid,
                                      nbs, NULL, NULL);
-            list_push_back(nb_only, &od->list);
+            ovs_list_push_back(nb_only, &od->list);
         }
     }
 
@@ -378,8 +378,8 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
         if (od) {
             if (!od->nbs) {
                 od->nbr = nbr;
-                list_remove(&od->list);
-                list_push_back(both, &od->list);
+                ovs_list_remove(&od->list);
+                ovs_list_push_back(both, &od->list);
             } else {
                 /* Can't happen! */
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -391,7 +391,7 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
         } else {
             od = ovn_datapath_create(datapaths, &nbr->header_.uuid,
                                      NULL, nbr, NULL);
-            list_push_back(nb_only, &od->list);
+            ovs_list_push_back(nb_only, &od->list);
         }
 
         od->gateway = 0;
@@ -430,7 +430,7 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
 
     join_datapaths(ctx, datapaths, &sb_only, &nb_only, &both);
 
-    if (!list_is_empty(&nb_only)) {
+    if (!ovs_list_is_empty(&nb_only)) {
         /* First index the in-use datapath tunnel IDs. */
         struct hmap dp_tnlids = HMAP_INITIALIZER(&dp_tnlids);
         struct ovn_datapath *od;
@@ -461,7 +461,7 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
     /* Delete southbound records without northbound matches. */
     struct ovn_datapath *od, *next;
     LIST_FOR_EACH_SAFE (od, next, list, &sb_only) {
-        list_remove(&od->list);
+        ovs_list_remove(&od->list);
         sbrec_datapath_binding_delete(od->sb);
         ovn_datapath_destroy(datapaths, od);
     }
@@ -549,15 +549,15 @@ join_logical_ports(struct northd_context *ctx,
                    struct ovs_list *both)
 {
     hmap_init(ports);
-    list_init(sb_only);
-    list_init(nb_only);
-    list_init(both);
+    ovs_list_init(sb_only);
+    ovs_list_init(nb_only);
+    ovs_list_init(both);
 
     const struct sbrec_port_binding *sb;
     SBREC_PORT_BINDING_FOR_EACH (sb, ctx->ovnsb_idl) {
         struct ovn_port *op = ovn_port_create(ports, sb->logical_port,
                                               NULL, NULL, sb);
-        list_push_back(sb_only, &op->list);
+        ovs_list_push_back(sb_only, &op->list);
     }
 
     struct ovn_datapath *od;
@@ -575,11 +575,11 @@ join_logical_ports(struct northd_context *ctx,
                         continue;
                     }
                     op->nbs = nbs;
-                    list_remove(&op->list);
-                    list_push_back(both, &op->list);
+                    ovs_list_remove(&op->list);
+                    ovs_list_push_back(both, &op->list);
                 } else {
                     op = ovn_port_create(ports, nbs->name, nbs, NULL, NULL);
-                    list_push_back(nb_only, &op->list);
+                    ovs_list_push_back(nb_only, &op->list);
                 }
 
                 op->od = od;
@@ -617,11 +617,11 @@ join_logical_ports(struct northd_context *ctx,
                         continue;
                     }
                     op->nbr = nbr;
-                    list_remove(&op->list);
-                    list_push_back(both, &op->list);
+                    ovs_list_remove(&op->list);
+                    ovs_list_push_back(both, &op->list);
                 } else {
                     op = ovn_port_create(ports, nbr->name, NULL, nbr, NULL);
-                    list_push_back(nb_only, &op->list);
+                    ovs_list_push_back(nb_only, &op->list);
                 }
 
                 op->ip = ip;
@@ -752,7 +752,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
 
     /* Delete southbound records without northbound matches. */
     LIST_FOR_EACH_SAFE(op, next, list, &sb_only) {
-        list_remove(&op->list);
+        ovs_list_remove(&op->list);
         sbrec_port_binding_delete(op->sb);
         ovn_port_destroy(ports, op);
     }

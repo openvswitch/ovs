@@ -127,7 +127,7 @@ discover_numa_and_core(void)
             struct dirent *subdir;
 
             hmap_insert(&all_numa_nodes, &n->hmap_node, hash_int(i, 0));
-            list_init(&n->cores);
+            ovs_list_init(&n->cores);
             n->numa_id = i;
 
             while ((subdir = readdir(dir)) != NULL) {
@@ -139,7 +139,7 @@ discover_numa_and_core(void)
                     core_id = strtoul(subdir->d_name + 3, NULL, 10);
                     hmap_insert(&all_cpu_cores, &c->hmap_node,
                                 hash_int(core_id, 0));
-                    list_insert(&n->cores, &c->list_node);
+                    ovs_list_insert(&n->cores, &c->list_node);
                     c->core_id = core_id;
                     c->numa = n;
                     c->available = true;
@@ -147,7 +147,7 @@ discover_numa_and_core(void)
                 }
             }
             VLOG_INFO("Discovered %"PRIuSIZE" CPU cores on NUMA node %d",
-                      list_size(&n->cores), n->numa_id);
+                      ovs_list_size(&n->cores), n->numa_id);
             closedir(dir);
         } else if (errno != ENOENT) {
             VLOG_WARN("opendir(%s) failed (%s)", path,
@@ -272,7 +272,7 @@ ovs_numa_get_n_cores_on_numa(int numa_id)
     struct numa_node *numa = get_numa_by_numa_id(numa_id);
 
     if (numa) {
-        return list_size(&numa->cores);
+        return ovs_list_size(&numa->cores);
     }
 
     return OVS_CORE_UNSPEC;
@@ -380,13 +380,13 @@ ovs_numa_dump_cores_on_numa(int numa_id)
         struct cpu_core *core;
 
         dump = xmalloc(sizeof *dump);
-        list_init(&dump->dump);
+        ovs_list_init(&dump->dump);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
             struct ovs_numa_info *info = xmalloc(sizeof *info);
 
             info->numa_id = numa->numa_id;
             info->core_id = core->core_id;
-            list_insert(&dump->dump, &info->list_node);
+            ovs_list_insert(&dump->dump, &info->list_node);
         }
     }
 

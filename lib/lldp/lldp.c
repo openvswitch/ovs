@@ -295,7 +295,7 @@ lldp_send(struct lldpd *global OVS_UNUSED,
         lldp_tlv_end(p, start);
     }
 
-    if (!list_is_empty(&port->p_isid_vlan_maps)) {
+    if (!ovs_list_is_empty(&port->p_isid_vlan_maps)) {
 
         memset(msg_auth_digest, 0, sizeof msg_auth_digest);
 
@@ -372,10 +372,10 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
     VLOG_DBG("receive LLDP PDU on %s", hardware->h_ifname);
 
     chassis = xzalloc(sizeof *chassis);
-    list_init(&chassis->c_mgmt);
+    ovs_list_init(&chassis->c_mgmt);
 
     port = xzalloc(sizeof *port);
-    list_init(&port->p_isid_vlan_maps);
+    ovs_list_init(&port->p_isid_vlan_maps);
 
     length = s;
     pos = (u_int8_t*) frame;
@@ -501,7 +501,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                 VLOG_WARN("unable to allocate memory for management address");
                 goto malformed;
             }
-            list_push_back(&chassis->c_mgmt, &mgmt->m_entries);
+            ovs_list_push_back(&chassis->c_mgmt, &mgmt->m_entries);
             break;
 
         case LLDP_TLV_ORG:
@@ -599,7 +599,7 @@ lldp_decode(struct lldpd *cfg OVS_UNUSED, char *frame, int s,
                         PEEK_BYTES(isid, 3);
                         isid_vlan_map->isid_vlan_data.isid =
                             (isid[0] << 16) | (isid[1] << 8) | isid[2];
-                        list_push_back(&port->p_isid_vlan_maps,
+                        ovs_list_push_back(&port->p_isid_vlan_maps,
                                        &isid_vlan_map->m_entries);
                         isid_vlan_map = NULL;
                     }
