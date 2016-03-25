@@ -21,6 +21,7 @@
 #include "Event.h"
 #include "Flow.h"
 #include "Gre.h"
+#include "Jhash.h"
 #include "Mpls.h"
 #include "NetProto.h"
 #include "Offload.h"
@@ -1573,6 +1574,27 @@ OvsExecuteRecirc(OvsForwardingContext *ovsFwdCtx,
 
 /*
  * --------------------------------------------------------------------------
+ * OvsExecuteHash --
+ *     The function updates datapath hash read from userspace.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsExecuteHash(OvsFlowKey *key,
+               const PNL_ATTR attr)
+{
+    struct ovs_action_hash *hash_act = NlAttrData(attr);
+    UINT32 hash = 0;
+
+    hash = (UINT32)OvsHashFlow(key);
+    hash = OvsJhashWords(&hash, 1, hash_act->hash_basis);
+    if (!hash)
+        hash = 1;
+
+    key->dpHash = hash;
+}
+
+/*
+ * --------------------------------------------------------------------------
  * OvsDoExecuteActions --
  *     Interpret and execute the specified 'actions' on the specified packet
  *     'curNbl'. The expectation is that if the packet needs to be dropped
@@ -1745,6 +1767,22 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
             }
             layers->l3Offset -= MPLS_HLEN;
             layers->l4Offset -= MPLS_HLEN;
+            break;
+        }
+
+        case OVS_ACTION_ATTR_HASH:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            OvsExecuteHash(key, (const PNL_ATTR)a);
+
             break;
         }
 
