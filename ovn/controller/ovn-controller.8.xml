@@ -78,6 +78,9 @@
       <dt><code>external_ids:system-id</code></dt>
       <dd>The chassis name to use in the Chassis table.</dd>
 
+      <dt><code>external_ids:hostname</code></dt>
+      <dd>The hostname to use in the Chassis table.</dd>
+
       <dt><code>external_ids:ovn-bridge</code></dt>
       <dd>
         The integration bridge to which logical ports are attached.  The
