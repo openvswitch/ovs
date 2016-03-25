@@ -383,6 +383,7 @@ _MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
     execute->actionsLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
 
     execute->inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    execute->keyAttrs = keyAttrs;
 }
 
 NTSTATUS
@@ -429,6 +430,11 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     }
     // XXX: Figure out if any of the other members of fwdDetail need to be set.
 
+    status = OvsGetFlowMetadata(&key, execute->keyAttrs);
+    if (status != STATUS_SUCCESS) {
+        goto dropit;
+    }
+
     ndisStatus = OvsExtractFlow(pNbl, fwdDetail->SourcePortId, &key, &layers,
                                 NULL);
     if (ndisStatus == NDIS_STATUS_SUCCESS) {
@@ -450,6 +456,7 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
         }
     }
 
+dropit:
     if (pNbl) {
         OvsCompleteNBL(gOvsSwitchContext, pNbl, TRUE);
     }
