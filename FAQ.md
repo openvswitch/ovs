@@ -227,7 +227,7 @@ MPLS                  |      3.19      |       YES      |    YES    |   YES   |
 UFID                  |      4.0       |       YES      |    YES    |   NO    |
 Megaflows             |      3.12      |       YES      |    YES    |   NO    |
 Masked set action     |      4.0       |       YES      |    YES    |   NO    |
-Recirculation         |      3.19      |       YES      |    YES    |   NO    |
+Recirculation         |      3.19      |       YES      |    YES    |   YES   |
 TCP flags matching    |      3.13      |       YES      |    YES    |   NO    |
 Validate flow actions |      YES       |       YES      |    N/A    |   NO    |
 Multiple datapaths    |      YES       |       YES      |    YES    |   NO    |
