@@ -746,6 +746,15 @@ icmp4 {
           <var>A</var></code> has actions <code>eth.dst = <var>E</var>;
           next;</code>.
         </p>
+
+        <p>
+          For each logical router port with an IP address <var>A</var> and
+          a mac address of <var>E</var> that is reachable via a different
+          logical router port <var>P</var>, a priority-100 flow with
+          match <code>outport === <var>P</var> &amp;&amp; reg0 ==
+          <var>A</var></code> has actions <code>eth.dst = <var>E</var>;
+          next;</code>.
+        </p>
       </li>
 
       <li>
