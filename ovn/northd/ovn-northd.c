@@ -669,7 +669,7 @@ join_logical_ports(struct northd_context *ctx,
                 sizeof *op->od->router_ports * (op->od->n_router_ports + 1));
             op->od->router_ports[op->od->n_router_ports++] = op;
         } else if (op->nbr && op->nbr->peer) {
-            op->peer = ovn_port_find(ports, op->nbr->name);
+            op->peer = ovn_port_find(ports, op->nbr->peer);
         }
     }
 }
@@ -1962,7 +1962,31 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
      * Ethernet address in eth.dst. */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (op->nbr) {
-            /* XXX ARP for neighboring router */
+            /* This is a logical router port. If next-hop IP address in 'reg0'
+             * matches ip address of this router port, then the packet is
+             * intended to eventually be sent to this logical port. Set the
+             * destination mac address using this port's mac address.
+             *
+             * The packet is still in peer's logical pipeline. So the match
+             * should be on peer's outport. */
+            if (op->nbr->peer) {
+                struct ovn_port *peer = ovn_port_find(ports, op->nbr->peer);
+                if (!peer) {
+                    continue;
+                }
+
+                if (!peer->ip || !op->ip) {
+                    continue;
+                }
+                char *match = xasprintf("outport == %s && reg0 == "IP_FMT,
+                                        peer->json_key, IP_ARGS(op->ip));
+                char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; "
+                                          "next;", ETH_ADDR_ARGS(op->mac));
+                ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
+                              100, match, actions);
+                free(actions);
+                free(match);
+            }
         } else if (op->od->n_router_ports) {
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
                 struct lport_addresses laddrs;
