@@ -1281,6 +1281,170 @@ for sim in hv1 hv2 hv3 vtep main; do
 done
 AT_CLEANUP
 
+# Similar test to "hardware GW"
+AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 software GW, 1 LS])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Configure the Northbound database
+ovn-nbctl ls-add lsw0
+
+ovn-nbctl lsp-add lsw0 lp1
+ovn-nbctl lsp-set-addresses lp1 f0:00:00:00:00:01
+
+ovn-nbctl lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp2 f0:00:00:00:00:02
+
+ovn-nbctl lsp-add lsw0 lp-gw
+ovn-nbctl lsp-set-type lp-gw l2gateway
+ovn-nbctl lsp-set-options lp-gw network_name=physnet1
+ovn-nbctl lsp-set-addresses lp-gw unknown
+
+net_add n1               # Network to connect hv1, hv2, and gw
+net_add n2               # Network to connect gw and hv3
+
+# Create hypervisor hv1 connected to n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1 options:tx_pcap=hv1/vif1-tx.pcap options:rxq_pcap=hv1/vif1-rx.pcap ofport-request=1
+
+# Create hypervisor hv2 connected to n1
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl add-port br-int vif2 -- set Interface vif2 external-ids:iface-id=lp2 options:tx_pcap=hv2/vif2-tx.pcap options:rxq_pcap=hv2/vif2-rx.pcap ofport-request=1
+
+# Create hypervisor hv_gw connected to n1 and n2
+# connect br-phys bridge to n1; connect hv-gw bridge to n2
+sim_add hv_gw
+as hv_gw
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+ovs-vsctl add-br br-phys2
+net_attach n2 br-phys2
+ovs-vsctl set open . external_ids:ovn-bridge-mappings="physnet1:br-phys2"
+
+# Bind our gateway port to the hv_gw chassis
+ovn-sbctl lport-bind lp-gw hv_gw
+
+# Add hv3 on the other side of the GW
+sim_add hv3
+as hv3
+ovs-vsctl add-br br-phys
+net_attach n2 br-phys
+ovs-vsctl add-port br-phys vif3 -- set Interface vif3 options:tx_pcap=hv3/vif3-tx.pcap options:rxq_pcap=hv3/vif3-rx.pcap ofport-request=1
+
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# test_packet INPORT DST SRC ETHTYPE OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as lport numbers, e.g. 1 for vif1.
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2 3; do
+    : > $i.expected
+done
+test_packet() {
+    local inport=$1 packet=$2$3$4; shift; shift; shift; shift
+    #hv=hv`echo $inport | sed 's/^\(.\).*/\1/'`
+    hv=hv$inport
+    vif=vif$inport
+    as $hv ovs-appctl netdev-dummy/receive $vif $packet
+    for outport; do
+        echo $packet | trim_zeros >> $outport.expected
+    done
+}
+
+# Send packets between all pairs of source and destination ports:
+#
+# 1. Unicast packets are delivered to exactly one lport (except that packets
+#    destined to their input ports are dropped).
+#
+# 2. Broadcast and multicast are delivered to all lports except the input port.
+#
+# 3. The lswitch delivers packets with an unknown destination to lports with
+#    "unknown" among their MAC addresses (and port security disabled).
+for s in 1 2 3 ; do
+    bcast=
+    unknown=
+    for d in 1 2 3 ; do
+        if test $d != $s; then unicast=$d; else unicast=; fi
+        test_packet $s f0000000000$d f0000000000$s 00$s$d $unicast       #1
+
+        # The vtep (vif3) is the only one configured for "unknown"
+        if test $d != $s && test $d = 3; then
+            unknown="$unknown $d"
+        fi
+        bcast="$bcast $unicast"
+    done
+
+    test_packet $s ffffffffffff f0000000000$s 0${s}ff $bcast             #2
+    test_packet $s 010000000000 f0000000000$s 0${s}ff $bcast             #3
+    test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #4
+done
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 3
+
+echo "------ ovn-nbctl show ------"
+ovn-nbctl show
+echo "------ ovn-sbctl show ------"
+ovn-sbctl show
+
+echo "------ hv1 ------"
+as hv1 ovs-vsctl show
+echo "------ hv1 br-int ------"
+as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
+echo "------ hv1 br-phys ------"
+as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-phys
+
+echo "------ hv2 ------"
+as hv2 ovs-vsctl show
+echo "------ hv2 br-int ------"
+as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
+echo "------ hv2 br-phys ------"
+as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-phys
+
+echo "------ hv_gw ------"
+as hv_gw ovs-vsctl show
+echo "------ hv_gw br-phys ------"
+as hv_gw ovs-ofctl -O OpenFlow13 dump-flows br-phys
+echo "------ hv_gw br-phys2 ------"
+as hv_gw ovs-ofctl -O OpenFlow13 dump-flows br-phys2
+
+echo "------ hv3 ------"
+as hv3 ovs-vsctl show
+echo "------ hv3 br-phys ------"
+as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-phys
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2 3; do
+    file=hv$i/vif$i-tx.pcap
+    echo $file
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
+    sort $i.expected > expout
+    AT_CHECK([sort $i.packets], [0], [expout])
+    echo
+done
+AT_CLEANUP
+
 # 3 hypervisors, 3 logical switches with 3 logical ports each, 1 logical router
 AT_SETUP([ovn -- 3 HVs, 3 LS, 3 lports/LS, 1 LR])
 AT_SKIP_IF([test $HAVE_PYTHON = no])

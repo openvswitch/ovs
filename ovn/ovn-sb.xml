@@ -1356,10 +1356,47 @@ tcp.flags = RST;
       </column>
 
       <column name="chassis">
-        The physical location of the logical port.  To successfully identify a
-        chassis, this column must be a <ref table="Chassis"/> record.  This is
-        populated by
-        <code>ovn-controller</code>/<code>ovn-controller-vtep</code>.
+        The meaning of this column depends on the value of the <ref column="type"/>
+        column.  This is the meaning for each <ref column="type"/>
+
+        <dl>
+          <dt>(empty string)</dt>
+          <dd>
+            The physical location of the logical port.  To successfully identify a
+            chassis, this column must be a <ref table="Chassis"/> record.  This is
+            populated by <code>ovn-controller</code>.
+          </dd>
+
+          <dt>vtep</dt>
+          <dd>
+            The physical location of the hardware_vtep gateway.  To successfully
+            identify a chassis, this column must be a <ref table="Chassis"/> record.
+            This is populated by <code>ovn-controller-vtep</code>.
+          </dd>
+
+          <dt>localnet</dt>
+          <dd>
+            Always empty.  A localnet port is realized on every chassis that has
+            connectivity to the corresponding physical network.
+          </dd>
+
+          <dt>gateway</dt>
+          <dd>
+            The physical location of the L3 gateway.  To successfully identify a
+            chassis, this column must be a <ref table="Chassis"/> record.  This is
+            populated by <code>ovn-controller</code> based on the value of
+            the <code>options:gateway-chassis</code> column in this table.
+          </dd>
+
+          <dt>l2gateway</dt>
+          <dd>
+            The physical location of this L2 gateway.  To successfully identify a
+            chassis, this column must be a <ref table="Chassis"/> record.
+            This is populated by an entity external to OVN, either manually or by
+            a CMS.
+          </dd>
+        </dl>
+
       </column>
 
       <column name="tunnel_key">
@@ -1423,6 +1460,14 @@ tcp.flags = RST;
             to model direct connectivity to an existing network.
           </dd>
 
+          <dt><code>l2gateway</code></dt>
+          <dd>
+            An L2 connection to a physical network.  The chassis this
+            <ref table="Port_Binding"/> is bound to will serve as
+            an L2 gateway to the network named by
+            <ref column="options" table="Port_Binding"/>:<code>network_name</code>.
+          </dd>
+
           <dt><code>vtep</code></dt>
           <dd>
             A port to a logical switch on a VTEP gateway chassis.  In order to
@@ -1453,7 +1498,7 @@ tcp.flags = RST;
       </column>
     </group>
 
-    <group title="Gateway Options">
+    <group title="L3 Gateway Options">
       <p>
         These options apply to logical ports with <ref column="type"/> of
         <code>gateway</code>.
@@ -1501,6 +1546,36 @@ tcp.flags = RST;
       <column name="tag">
         If set, indicates that the port represents a connection to a specific
         VLAN on a locally accessible network. The VLAN ID is used to match
+        incoming traffic and is also added to outgoing traffic.
+      </column>
+    </group>
+
+    <group title="L2 Gateway Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/> of
+        <code>l2gateway</code>.
+      </p>
+
+      <column name="options" key="network_name">
+        Required.  <code>ovn-controller</code> uses the configuration entry
+        <code>ovn-bridge-mappings</code> to determine how to connect to this
+        network.  <code>ovn-bridge-mappings</code> is a list of network names
+        mapped to a local OVS bridge that provides access to that network.  An
+        example of configuring <code>ovn-bridge-mappings</code> would be:
+
+        <pre>$ ovs-vsctl set open . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1</pre>
+
+        <p>
+          When a logical switch has a <code>l2gateway</code> port attached,
+          the chassis that the <code>l2gateway</code> port is bound to
+          must have a bridge mapping configured to reach the network
+          identified by <code>network_name</code>.
+        </p>
+      </column>
+
+      <column name="tag">
+        If set, indicates that the gateway is connected to a specific
+        VLAN on the physical network. The VLAN ID is used to match
         incoming traffic and is also added to outgoing traffic.
       </column>
     </group>
@@ -1562,7 +1637,8 @@ tcp.flags = RST;
 
         <p>
           This column is used for a different purpose when <ref column="type"/>
-          is <code>localnet</code> (see <code>Localnet Options</code>, above).
+          is <code>localnet</code> (see <code>Localnet Options</code>, above)
+          or <code>l2gateway</code> (see <code>L2 Gateway Options</code>, above).
         </p>
       </column>
     </group>

@@ -222,6 +222,16 @@ consider_local_datapath(struct controller_ctx *ctx, struct shash *lports,
             }
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         }
+    } else if (!strcmp(binding_rec->type, "l2gateway")
+               && binding_rec->chassis == chassis_rec) {
+        /* A locally bound L2 gateway port.
+         *
+         * ovn-controller does not bind gateway ports itself.
+         * Choosing a chassis for a gateway port is left
+         * up to an entity external to OVN. */
+        sset_add(&all_lports, binding_rec->logical_port);
+        add_local_datapath(local_datapaths, binding_rec,
+                           &binding_rec->header_.uuid);
     } else if (chassis_rec && binding_rec->chassis == chassis_rec
                && strcmp(binding_rec->type, "gateway")) {
         if (ctx->ovnsb_idl_txn) {

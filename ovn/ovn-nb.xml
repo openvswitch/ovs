@@ -134,6 +134,11 @@
             to model direct connectivity to an existing network.
           </dd>
 
+          <dt><code>l2gateway</code></dt>
+          <dd>
+            A connection to a physical network.
+          </dd>
+
           <dt><code>vtep</code></dt>
           <dd>
             A port to a logical switch on a VTEP gateway.
@@ -172,6 +177,20 @@
           port is connected.  Each hypervisor, via <code>ovn-controller</code>,
           uses its local configuration to determine exactly how to connect to
           this locally accessible network.
+        </column>
+      </group>
+
+      <group title="Options for l2gateway ports">
+        <p>
+          These options apply when <ref column="type"/> is
+          <code>l2gateway</code>.
+        </p>
+
+        <column name="options" key="network_name">
+          Required.  The name of the network to which the <code>l2gateway</code>
+          port is connected.  The L2 gateway, via <code>ovn-controller</code>,
+          uses its local configuration to determine exactly how to connect to
+          this network.
         </column>
       </group>
 
@@ -658,7 +677,7 @@
         </p>
       </column>
     </group>
-    
+
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.

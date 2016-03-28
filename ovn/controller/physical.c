@@ -169,6 +169,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         const char *localnet = smap_get(&port_rec->external_ids,
                                         "ovn-localnet-port");
+        const char *l2gateway = smap_get(&port_rec->external_ids,
+                                        "ovn-l2gateway-port");
         const char *logpatch = smap_get(&port_rec->external_ids,
                                         "ovn-logical-patch-port");
 
@@ -190,6 +192,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             if (is_patch && localnet) {
                 /* localnet patch ports can be handled just like VIFs. */
                 simap_put(&localvif_to_ofport, localnet, ofport);
+                break;
+            } else if (is_patch && l2gateway) {
+                /* L2 gateway patch ports can be handled just like VIFs. */
+                simap_put(&localvif_to_ofport, l2gateway, ofport);
                 break;
             } else if (is_patch && logpatch) {
                 /* Logical patch ports can be handled just like VIFs. */
@@ -269,13 +275,13 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          *       OpenFlow port for the VIF.  'tun' will be NULL.
          *
          *       The same logic handles logical patch ports, as well as
-         *       localnet patch ports.
+         *       localnet and L2 gateway patch ports.
          *
          *       For a container nested inside a VM and accessible via a VLAN,
          *       'tag' is the VLAN ID; otherwise 'tag' is 0.
          *
-         *       For a localnet patch port, if a VLAN ID was configured, 'tag'
-         *       is set to that VLAN ID; otherwise 'tag' is 0.
+         *       For a localnet or L2 gateway patch port, if a VLAN ID was
+         *       configured, 'tag' is set to that VLAN ID; otherwise 'tag' is 0.
          *
          *     - If the port is on a remote chassis, the OpenFlow port for a
          *       tunnel to the VIF's remote chassis.  'tun' identifies that
@@ -297,7 +303,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         } else {
             ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
                                           binding->logical_port));
-            if (!strcmp(binding->type, "localnet") && ofport && binding->tag) {
+            if ((!strcmp(binding->type, "localnet")
+                 || !strcmp(binding->type, "l2gateway"))
+                && ofport && binding->tag) {
                 tag = *binding->tag;
             }
         }
@@ -355,7 +363,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             /* Match a VLAN tag and strip it, including stripping priority tags
              * (e.g. VLAN ID 0).  In the latter case we'll add a second flow
              * for frames that lack any 802.1Q header later. */
-            if (tag || !strcmp(binding->type, "localnet")) {
+            if (tag || !strcmp(binding->type, "localnet")
+                || !strcmp(binding->type, "l2gateway")) {
                 match_set_dl_vlan(&match, htons(tag));
                 ofpact_put_STRIP_VLAN(&ofpacts);
             }
@@ -392,7 +401,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofctrl_add_flow(flow_table, OFTABLE_PHY_TO_LOG,
                             tag ? 150 : 100, &match, &ofpacts);
 
-            if (!tag && !strcmp(binding->type, "localnet")) {
+            if (!tag && (!strcmp(binding->type, "localnet")
+                         || !strcmp(binding->type, "l2gateway"))) {
                 /* Add a second flow for frames that lack any 802.1Q
                  * header.  For these, drop the OFPACT_STRIP_VLAN
                  * action. */

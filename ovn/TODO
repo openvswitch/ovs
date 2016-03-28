@@ -247,3 +247,14 @@ large.
 ** Support reject action.
 
 ** Support log option.
+
+* Software L2 gateway
+
+** Support "chassis" option in Logical_Switch_Port with type of "l2gateway".
+
+   Right now an "l2gateway" port is bound to a chassis by setting the "chassis"
+   column of the port binding in the southbound database directly.  We should
+   support a "chassis" option in the "options" column of the
+   "Logical_Switch_Port" in the northbound database.  This would bring
+   "l2gateway" into alignment with how chassis binding is done for L3 gateways
+   (a "chassis" option for Logical_Router).
