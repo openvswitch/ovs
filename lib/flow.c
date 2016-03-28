@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -197,7 +197,7 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 /* Data at 'valuep' may be unaligned. */
 #define miniflow_push_words_(MF, OFS, VALUEP, N_WORDS)          \
-{                                                               \
+if (N_WORDS) {                                                  \
     int ofs64 = (OFS) / 8;                                      \
                                                                         \
     MINIFLOW_ASSERT(MF.data + (N_WORDS) <= MF.end && (OFS) % 8 == 0     \
@@ -210,7 +210,7 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 
 /* Push 32-bit words padded to 64-bits. */
 #define miniflow_push_words_32_(MF, OFS, VALUEP, N_WORDS)               \
-{                                                                       \
+if (N_WORDS) {                                                          \
     int ofs64 = (OFS) / 8;                                              \
                                                                         \
     MINIFLOW_ASSERT(MF.data + DIV_ROUND_UP(N_WORDS, 2) <= MF.end        \
