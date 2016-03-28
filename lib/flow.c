@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,7 +159,7 @@ struct mf_ctx {
 
 /* Data at 'valuep' may be unaligned. */
 #define miniflow_push_words_(MF, OFS, VALUEP, N_WORDS)          \
-{                                                               \
+if (N_WORDS) {                                                  \
     int ofs32 = (OFS) / 4;                                      \
                                                                         \
     MINIFLOW_ASSERT(MF.data + (N_WORDS) <= MF.end && (OFS) % 4 == 0     \
@@ -210,7 +210,7 @@ parse_mpls(void **datap, size_t *sizep)
             break;
         }
     }
-    return MAX(count, FLOW_MAX_MPLS_LABELS);
+    return MIN(count, FLOW_MAX_MPLS_LABELS);
 }
 
 static inline ovs_be16
