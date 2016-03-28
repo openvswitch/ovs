@@ -196,13 +196,6 @@ parse_header(char *header, unsigned long int *length,
     return true;
 }
 
-struct ovsdb_log_read_cbdata {
-    char input[4096];
-    struct ovsdb_log *file;
-    int error;
-    unsigned long length;
-};
-
 static struct ovsdb_error *
 parse_body(struct ovsdb_log *file, off_t offset, unsigned long int length,
            uint8_t sha1[SHA1_DIGEST_SIZE], struct json **jsonp)
