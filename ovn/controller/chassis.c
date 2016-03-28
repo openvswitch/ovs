@@ -18,6 +18,7 @@
 
 #include "chassis.h"
 
+#include "lib/smap.h"
 #include "lib/vswitch-idl.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
@@ -53,6 +54,13 @@ pop_tunnel_name(uint32_t *type)
     }
 
     OVS_NOT_REACHED();
+}
+
+static const char *
+get_bridge_mappings(const struct smap *ext_ids)
+{
+    const char *bridge_mappings = smap_get(ext_ids, "ovn-bridge-mappings");
+    return bridge_mappings ? bridge_mappings : "";
 }
 
 void
@@ -102,12 +110,25 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
         hostname = hostname_;
     }
 
+    const char *bridge_mappings = get_bridge_mappings(&cfg->external_ids);
+
     const struct sbrec_chassis *chassis_rec
         = get_chassis(ctx->ovnsb_idl, chassis_id);
 
     if (chassis_rec) {
         if (strcmp(hostname, chassis_rec->hostname)) {
             sbrec_chassis_set_hostname(chassis_rec, hostname);
+        }
+
+        const char *chassis_bridge_mappings
+            = get_bridge_mappings(&chassis_rec->external_ids);
+        if (strcmp(bridge_mappings, chassis_bridge_mappings)) {
+            struct smap new_ids;
+            smap_clone(&new_ids, &chassis_rec->external_ids);
+            smap_replace(&new_ids, "ovn-bridge-mappings", bridge_mappings);
+            sbrec_chassis_verify_external_ids(chassis_rec);
+            sbrec_chassis_set_external_ids(chassis_rec, &new_ids);
+            smap_destroy(&new_ids);
         }
 
         /* Compare desired tunnels against those currently in the database. */
@@ -145,9 +166,12 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
                               chassis_id);
 
     if (!chassis_rec) {
+        struct smap ext_ids = SMAP_CONST1(&ext_ids, "ovn-bridge-mappings",
+                                          bridge_mappings);
         chassis_rec = sbrec_chassis_insert(ctx->ovnsb_idl_txn);
         sbrec_chassis_set_name(chassis_rec, chassis_id);
         sbrec_chassis_set_hostname(chassis_rec, hostname);
+        sbrec_chassis_set_external_ids(chassis_rec, &ext_ids);
     }
 
     int n_encaps = count_1bits(req_tunnels);
