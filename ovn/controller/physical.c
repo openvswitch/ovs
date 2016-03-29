@@ -416,6 +416,18 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100, &match,
                             &ofpacts);
 
+            /* Table 34, Priority 100.
+             * =======================
+             *
+             * Drop packets whose logical inport and outport are the same. */
+            match_init_catchall(&match);
+            ofpbuf_clear(&ofpacts);
+            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
+            match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, binding->tunnel_key);
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, binding->tunnel_key);
+            ofctrl_add_flow(flow_table, OFTABLE_DROP_LOOPBACK, 100,
+                            &match, &ofpacts);
+
             /* Table 64, Priority 100.
              * =======================
              *
@@ -501,18 +513,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 100,
                             &match, &ofpacts);
         }
-
-        /* Table 34, Priority 100.
-         * =======================
-         *
-         * Drop packets whose logical inport and outport are the same. */
-        match_init_catchall(&match);
-        ofpbuf_clear(&ofpacts);
-        match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
-        match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, binding->tunnel_key);
-        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, binding->tunnel_key);
-        ofctrl_add_flow(flow_table, OFTABLE_DROP_LOOPBACK, 100,
-                        &match, &ofpacts);
     }
 
     /* Handle output to multicast groups, in tables 32 and 33. */
