@@ -38,7 +38,6 @@ static struct sset monitored_tables = SSET_INITIALIZER(&monitored_tables);
 static struct sset tables_blacklist = SSET_INITIALIZER(&tables_blacklist);
 static bool reset_dbs = true;
 
-void replication_init(void);
 static struct jsonrpc *open_jsonrpc(const char *server);
 static struct ovsdb_error *check_jsonrpc_error(int error,
                                                struct jsonrpc_msg **reply_);
@@ -118,6 +117,12 @@ set_remote_ovsdb_server(const char *remote_server)
     remote_ovsdb_server = remote_server ? strdup(remote_server) : NULL;
 }
 
+const char *
+get_remote_ovsdb_server(void)
+{
+    return remote_ovsdb_server;
+}
+
 void
 set_tables_blacklist(const char *blacklist)
 {
@@ -135,6 +140,12 @@ set_tables_blacklist(const char *blacklist)
         }
         free(t_blacklist);
     }
+}
+
+struct sset
+get_tables_blacklist(void)
+{
+    return tables_blacklist;
 }
 
 void

@@ -77,6 +77,12 @@ static unixctl_cb_func ovsdb_server_reconnect;
 static unixctl_cb_func ovsdb_server_perf_counters_clear;
 static unixctl_cb_func ovsdb_server_perf_counters_show;
 static unixctl_cb_func ovsdb_server_disable_monitor2;
+static unixctl_cb_func ovsdb_server_set_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_get_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_connect_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_disconnect_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_set_sync_excluded_tables;
+static unixctl_cb_func ovsdb_server_get_sync_excluded_tables;
 
 struct server_config {
     struct sset *remotes;
@@ -332,6 +338,19 @@ main(int argc, char *argv[])
                              ovsdb_server_perf_counters_show, NULL);
     unixctl_command_register("ovsdb-server/perf-counters-clear", "", 0, 0,
                              ovsdb_server_perf_counters_clear, NULL);
+
+    unixctl_command_register("ovsdb-server/set-remote-ovsdb-server", "", 0, 1,
+                              ovsdb_server_set_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/get-remote-ovsdb-server", "", 0, 0,
+                              ovsdb_server_get_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/connect-remote-ovsdb-server", "", 0, 0,
+                              ovsdb_server_connect_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/disconnect-remote-ovsdb-server", "", 0, 0,
+                              ovsdb_server_disconnect_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/set-sync-excluded-tables", "", 0, 1,
+                              ovsdb_server_set_sync_excluded_tables, NULL);
+    unixctl_command_register("ovsdb-server/get-sync-excluded-tables", "", 0, 0,
+                              ovsdb_server_get_sync_excluded_tables, NULL);
 
     /* Simulate the behavior of OVS release prior to version 2.5 that
      * does not support the monitor2 method.  */
@@ -1015,6 +1034,84 @@ report_error_if_changed(char *error, char **last_errorp)
         free(*last_errorp);
         *last_errorp = NULL;
     }
+}
+
+static void
+ovsdb_server_set_remote_ovsdb_server(struct unixctl_conn *conn,
+                                     int argc OVS_UNUSED, const char *argv[],
+                                     void *arg_ OVS_UNUSED)
+{
+    set_remote_ovsdb_server(argv[1]);
+    connect_to_remote_server = false;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_get_remote_ovsdb_server(struct unixctl_conn *conn,
+                                     int argc OVS_UNUSED,
+                                     const char *argv[] OVS_UNUSED,
+                                     void *arg_ OVS_UNUSED)
+{
+    struct ds s;
+    ds_init(&s);
+
+    ds_put_format(&s, "%s\n", get_remote_ovsdb_server());
+
+    unixctl_command_reply(conn, ds_cstr(&s));
+    ds_destroy(&s);
+}
+
+static void
+ovsdb_server_connect_remote_ovsdb_server(struct unixctl_conn *conn,
+                                         int argc OVS_UNUSED,
+                                         const char *argv[] OVS_UNUSED,
+                                         void *arg_ OVS_UNUSED)
+{
+    if (!connect_to_remote_server) {
+	    replication_init();
+        connect_to_remote_server = true;
+    }
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_disconnect_remote_ovsdb_server(struct unixctl_conn *conn,
+                                            int argc OVS_UNUSED,
+                                            const char *argv[] OVS_UNUSED,
+                                            void *arg_ OVS_UNUSED)
+{
+    disconnect_remote_server();
+    connect_to_remote_server = false;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_set_sync_excluded_tables(struct unixctl_conn *conn,
+                                      int argc OVS_UNUSED,
+                                      const char *argv[],
+                                      void *arg_ OVS_UNUSED)
+{
+    set_tables_blacklist(argv[1]);
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_get_sync_excluded_tables(struct unixctl_conn *conn,
+                                 int argc OVS_UNUSED,
+                                 const char *argv[] OVS_UNUSED,
+                                 void *arg_ OVS_UNUSED)
+{
+    struct ds s;
+    const char *table_name;
+    struct sset table_blacklist = get_tables_blacklist();
+
+    ds_init(&s);
+
+    SSET_FOR_EACH(table_name, &table_blacklist) {
+        ds_put_format(&s, "%s\n", table_name);
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&s));
 }
 
 static void

@@ -188,6 +188,27 @@ again (with \fBovsdb\-server/add\-db\fR).
 Outputs a list of the currently configured databases added either through
 the command line or through the \fBovsdb\-server/add\-db\fR command.
 .
+.IP "\fBovsdb\-server/set\-remote\-ovsdb\-server \fIserver"
+Sets  the remote \fIserver\fR from which \fBovsdb\-server\fR connects through
+\fBovsdb\-server/connect\-remote\-ovsdb\-server\fR.
+.
+.IP "\fBovsdb\-server/get\-remote\-ovsdb\-server"
+Gets the remote server from which \fBovsdb\-server\fR is currently synchronizing
+its databases.
+.
+.IP "\fBovsdb\-server/connect\-remote\-ovsdb\-server"
+Causes \fBovsdb\-server\fR to synchronize its databases with the server
+specified by \fBovsdb\-server/set\-remote\-ovsdb\-server\fR.
+.
+.IP "\fBovsdb\-server/disconnect\-remote\-ovsdb\-server"
+Causes \fBovsdb\-server\fR to  stop  synchronizing  its  databases with a remote server.
+.
+.IP "\fBovsdb\-server/set\-sync\-excluded\-tables \fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]..."
+Sets the \fItable\fR whitin \fIdb\fR that will be excluded from synchronization.
+.
+.IP "\fBovsdb\-server/get\-sync\-excluded\-tables"
+Gets  the  tables  that are currently excluded from synchronization.
+.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
