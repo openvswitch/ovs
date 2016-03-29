@@ -24,6 +24,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/monitor.h \
 	ovsdb/query.c \
 	ovsdb/query.h \
+	ovsdb/replication.c \
+	ovsdb/replication.h \
 	ovsdb/row.c \
 	ovsdb/row.h \
 	ovsdb/server.c \
@@ -42,7 +44,9 @@ pkgconfig_DATA += \
 
 MAN_FRAGMENTS += \
 	ovsdb/remote-active.man \
-	ovsdb/remote-passive.man
+	ovsdb/remote-passive.man \
+	ovsdb/replication.man \
+	ovsdb/replication-syn.man
 
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool
