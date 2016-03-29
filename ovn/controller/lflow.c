@@ -198,6 +198,7 @@ static void
 add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct mcgroup_index *mcgroups,
                   const struct hmap *local_datapaths,
+                  const struct hmap *patched_datapaths,
                   const struct simap *ct_zones, struct hmap *flow_table)
 {
     uint32_t conj_id_ofs = 1;
@@ -211,17 +212,18 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         if (!ldp) {
             continue;
         }
-        if (!ingress && is_switch(ldp)) {
+        if (is_switch(ldp)) {
             /* For a logical switch datapath, local_datapaths tells us if there
-             * are any local ports for this datapath.  If not, processing
-             * logical flows for the egress pipeline of this datapath is
-             * unnecessary.
+             * are any local ports for this datapath.  If not, we can skip
+             * processing logical flows if the flow belongs to egress pipeline
+             * or if that logical switch datapath is not patched to any logical
+             * router.
              *
-             * We still need the ingress pipeline because even if there are no
-             * local ports, we still may need to execute the ingress pipeline
-             * after a packet leaves a logical router.  Further optimization
-             * is possible, but not based on what we know with local_datapaths
-             * right now.
+             * Otherwise, we still need the ingress pipeline because even if
+             * there are no local ports, we still may need to execute the ingress
+             * pipeline after a packet leaves a logical router.  Further
+             * optimization is possible, but not based on what we know with
+             * local_datapaths right now.
              *
              * A better approach would be a kind of "flood fill" algorithm:
              *
@@ -231,12 +233,25 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
              *   2. For each patch port P in a logical datapath in S, add the
              *      logical datapath of the remote end of P to S.  Iterate
              *      until S reaches a fixed point.
+             *
+             * This can be implemented in northd, which can generate the sets and
+             * save it on each port-binding record in SB, and ovn-controller can
+             * use the information directly. However, there can be update storms
+             * when a pair of patch ports are added/removed to connect/disconnect
+             * large lrouters and lswitches. This need to be studied further.
              */
 
             struct hmap_node *ld;
             ld = hmap_first_with_hash(local_datapaths, ldp->tunnel_key);
             if (!ld) {
-                continue;
+                if (!ingress) {
+                    continue;
+                }
+                struct hmap_node *pd;
+                pd = hmap_first_with_hash(patched_datapaths, ldp->tunnel_key);
+                if (!pd) {
+                    continue;
+                }
             }
         }
 
@@ -416,10 +431,11 @@ void
 lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct mcgroup_index *mcgroups,
           const struct hmap *local_datapaths,
+          const struct hmap *patched_datapaths,
           const struct simap *ct_zones, struct hmap *flow_table)
 {
     add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      ct_zones, flow_table);
+                      patched_datapaths, ct_zones, flow_table);
     add_neighbor_flows(ctx, lports, flow_table);
 }
 

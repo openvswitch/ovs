@@ -41,6 +41,12 @@ struct local_datapath {
     const struct sbrec_port_binding *localnet_port;
 };
 
+/* Contains hmap_node whose hash values are the tunnel_key of datapaths
+ * with at least one logical patch port binding. */
+struct patched_datapath {
+    struct hmap_node hmap_node;
+};
+
 const struct ovsrec_bridge *get_bridge(struct ovsdb_idl *,
                                        const char *br_name);
 

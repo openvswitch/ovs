@@ -148,7 +148,7 @@ void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
              const struct simap *ct_zones, struct hmap *flow_table,
-             struct hmap *local_datapaths)
+             struct hmap *local_datapaths, struct hmap *patched_datapaths)
 {
     struct simap localvif_to_ofport = SIMAP_INITIALIZER(&localvif_to_ofport);
     struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
@@ -232,6 +232,38 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+        /* Skip the port binding if the port is on a datapath that is neither
+         * local nor with any logical patch port connected, because local ports
+         * would never need to talk to those ports.
+         *
+         * Even with this approach there could still be unnecessary port
+         * bindings processed. A better approach would be a kind of "flood
+         * fill" algorithm:
+         *
+         *   1. Initialize set S to the logical datapaths that have a port
+         *      located on the hypervisor.
+         *
+         *   2. For each patch port P in a logical datapath in S, add the
+         *      logical datapath of the remote end of P to S.  Iterate
+         *      until S reaches a fixed point.
+         *
+         * This can be implemented in northd, which can generate the sets and
+         * save it on each port-binding record in SB, and ovn-controller can
+         * use the information directly. However, there can be update storms
+         * when a pair of patch ports are added/removed to connect/disconnect
+         * large lrouters and lswitches. This need to be studied further.
+         */
+        struct hmap_node *ld;
+        ld = hmap_first_with_hash(local_datapaths, binding->datapath->tunnel_key);
+        if (!ld) {
+            struct hmap_node *pd;
+            pd = hmap_first_with_hash(patched_datapaths,
+                                      binding->datapath->tunnel_key);
+            if (!pd) {
+                continue;
+            }
+        }
+
         /* Find the OpenFlow port for the logical port, as 'ofport'.  This is
          * one of:
          *
