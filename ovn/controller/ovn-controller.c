@@ -282,6 +282,8 @@ main(int argc, char *argv[])
          * tunnel_key of datapaths with at least one local port binding. */
         struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
 
+        struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
+
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
@@ -293,7 +295,7 @@ main(int argc, char *argv[])
         }
 
         if (br_int) {
-            patch_run(&ctx, br_int, &local_datapaths);
+            patch_run(&ctx, br_int, &local_datapaths, &patched_datapaths);
 
             struct lport_index lports;
             struct mcgroup_index mcgroups;
@@ -306,11 +308,11 @@ main(int argc, char *argv[])
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                      &ct_zones, &flow_table);
+                      &patched_datapaths, &ct_zones, &flow_table);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis_id, &ct_zones, &flow_table,
-                             &local_datapaths);
+                             &local_datapaths, &patched_datapaths);
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
@@ -324,6 +326,14 @@ main(int argc, char *argv[])
             free(cur_node);
         }
         hmap_destroy(&local_datapaths);
+
+        struct patched_datapath *pd_cur_node, *pd_next_node;
+        HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
+                &patched_datapaths) {
+            hmap_remove(&patched_datapaths, &pd_cur_node->hmap_node);
+            free(pd_cur_node);
+        }
+        hmap_destroy(&patched_datapaths);
 
         unixctl_server_run(unixctl);
 

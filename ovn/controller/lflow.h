@@ -61,7 +61,8 @@ struct uuid;
 void lflow_init(void);
 void lflow_run(struct controller_ctx *, const struct lport_index *,
                const struct mcgroup_index *,
-               const struct hmap *local_datapaths, 
+               const struct hmap *local_datapaths,
+               const struct hmap *patched_datapaths,
                const struct simap *ct_zones,
                struct hmap *flow_table);
 void lflow_destroy(void);
