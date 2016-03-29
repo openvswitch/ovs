@@ -35,8 +35,10 @@
 static char *remote_ovsdb_server;
 static struct jsonrpc *rpc;
 static struct sset monitored_tables = SSET_INITIALIZER(&monitored_tables);
+static struct sset tables_blacklist = SSET_INITIALIZER(&tables_blacklist);
 static bool reset_dbs = true;
 
+void replication_init(void);
 static struct jsonrpc *open_jsonrpc(const char *server);
 static struct ovsdb_error *check_jsonrpc_error(int error,
                                                struct jsonrpc_msg **reply_);
@@ -72,6 +74,14 @@ static struct ovsdb_error *execute_update(struct ovsdb_txn *txn,
                                           struct ovsdb_table *table,
                                           struct json *new);
 
+void
+replication_init(void)
+{
+    sset_init(&monitored_tables);
+    sset_init(&tables_blacklist);
+    reset_dbs = true;
+}
+
 void
 replication_run(struct shash *all_dbs)
 {
@@ -109,10 +119,30 @@ set_remote_ovsdb_server(const char *remote_server)
 }
 
 void
+set_tables_blacklist(const char *blacklist)
+{
+    char *save_ptr = NULL;
+    char *blacklist_item;
+
+    replication_init();
+
+    if (blacklist) {
+        char *t_blacklist = xstrdup(blacklist);
+        for (blacklist_item = strtok_r(t_blacklist, ",", &save_ptr);
+             blacklist_item != NULL;
+             blacklist_item = strtok_r(NULL, ",", &save_ptr)) {
+            sset_add(&tables_blacklist, blacklist_item);
+        }
+        free(t_blacklist);
+    }
+}
+
+void
 disconnect_remote_server(void)
 {
     jsonrpc_close(rpc);
     sset_destroy(&monitored_tables);
+    sset_destroy(&tables_blacklist);
 
     if (remote_ovsdb_server) {
         free(remote_ovsdb_server);
@@ -160,9 +190,15 @@ reset_database(struct ovsdb *db, struct ovsdb_txn *txn)
         struct ovsdb_table *table = table_node->data;
         struct ovsdb_row *row;
 
-        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
-            ovsdb_txn_row_delete(txn, row);
+        /* Do not reset if table is blacklisted. */
+        char *blacklist_item = xasprintf(
+            "%s%s%s", db->schema->name, ":", table_node->name);
+        if (!sset_contains(&tables_blacklist, blacklist_item)) {
+            HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+                ovsdb_txn_row_delete(txn, row);
+            }
         }
+        free(blacklist_item);
     }
 }
 
@@ -293,7 +329,14 @@ send_monitor_requests(struct shash *all_dbs)
 
                 for (int j = 0; j < n; j++) {
                     struct ovsdb_table_schema *table = nodes[j]->data;
-                    add_monitored_table(table, monitor_request);
+
+                    /* Check if table is not blacklisted. */
+                    char *blacklist_item = xasprintf(
+                        "%s%s%s", db_name, ":", table->name);
+                    if (!sset_contains(&tables_blacklist, blacklist_item)) {
+                        add_monitored_table(table, monitor_request);
+                    }
+                    free(blacklist_item);
                 }
                 free(nodes);
 
