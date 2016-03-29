@@ -250,6 +250,17 @@ Examples of common tags follow.
 
         git log -1 --pretty=format:"Fixes: %h (\"%s\")" --abbrev=12 COMMIT_REF
 
+    Vulnerability: CVE-2016-2074
+
+        Specifies that the patch fixes or is otherwise related to a
+        security vulnerability with the given CVE identifier.  Other
+        identifiers in public vulnerability databases are also
+        suitable.
+
+        If the vulnerability was reported publicly, then it is also
+        appropriate to cite the URL to the report in a Reported-at
+        tag.  Use a Reported-by tag to acknowledge the reporters.
+
 Developer's Certificate of Origin
 ---------------------------------
 
