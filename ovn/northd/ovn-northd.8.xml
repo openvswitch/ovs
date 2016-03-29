@@ -36,7 +36,7 @@
       </li>
       <li>
         <p>
-          <code>--ovsnb-db=<var>database</var></code>
+          <code>--ovnsb-db=<var>database</var></code>
         </p>
         <p>
           The database containing the OVN Southbound Database.
