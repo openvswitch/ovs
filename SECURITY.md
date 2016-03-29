@@ -101,15 +101,111 @@ determines that it is not a realistic vulnerability.
 Step 3a: Document
 ----------------
 
-The security team develops a security advisory document.  The document
-credits the reporter and describes the vulnerability, including all of
-the relevant information from the assessment in step 2.  The security
+The security team develops a security advisory document.  The security
 team may, at its discretion, include the reporter (via "CC") in
 developing the security advisory document, but in any case should
 accept feedback from the reporter before finalizing the document.
-
 When the document is final, the security team should obtain a CVE for
 the vulnerability from a CNA (https://cve.mitre.org/cve/cna.html).
+
+The document credits the reporter and describes the vulnerability,
+including all of the relevant information from the assessment in step
+2.  Suitable sections for the document include:
+
+    * Title: The CVE identifier, a short description of the
+      vulnerability.  The title should mention Open vSwitch.
+
+      In email, the title becomes the subject.  Pre-release advisories
+      are often passed around in encrypted email, which have plaintext
+      subjects, so the title should not be too specific.
+
+    * Description: A few paragraphs describing the general
+      characteristics of the vulnerability, including the versions of
+      Open vSwitch that are vulnerable, the kind of attack that
+      exposes the vulnerability, and potential consequences of the
+      attack.
+
+      The description should re-state the CVE identifier, in case the
+      subject is lost when an advisory is sent over email.
+
+    * Mitigation: How an Open vSwitch administrator can minimize the
+      potential for exploitation of the vulnerability, before applying
+      a fix.  If no mitigation is possible or recommended, explain
+      why, to reduce the chance that at-risk users believe they are
+      not at risk.
+
+    * Fix: Describe how to fix the vulnerability, perhaps in terms of
+      applying a source patch.  The patch or patches themselves, if
+      included in the email, should be at the very end of the advisory
+      to reduce the risk that a reader would stop reading at this
+      point.
+
+    * Recommendation: A concise description of the security team's
+      recommendation to users.
+
+    * Acknowledgments: Thank the reporters.
+
+    * Vulnerability Check: A step-by-step procedure by which a user
+      can determine whether an installed copy of Open vSwitch is
+      vulnerable.
+
+      The procedure should clearly describe how to interpret the
+      results, including expected results in vulnerable and
+      not-vulnerable cases.  Thus, procedures that produce clear and
+      easily distinguished results are preferred.
+
+      The procedure should assume as little understanding of Open
+      vSwitch as possible, to make it more likely that a competent
+      administrator who does not specialize in Open vSwitch can
+      perform it successfully.
+
+      The procedure should have minimal dependencies on tools that are
+      not widely installed.
+
+      Given a choice, the procedure should be one that takes at least
+      some work to turn into a useful exploit.  For example, a
+      procedure based on "ovs-appctl" commands, which require local
+      administrator access, is preferred to one that sends test
+      packets to a machine, which only requires network connectivity.
+
+      The section should say which operating systems it is designed
+      for.  If the procedure is likely to be specific to particular
+      architectures (e.g. x86-64, i386), it should state on which ones
+      it has been tested.
+
+      This section should state the risks of the procedure.  For
+      example, if it can crash Open vSwitch or disrupt packet
+      forwarding, say so.
+
+      It is more useful to explain how to check an installed and
+      running Open vSwitch than one built locally from source, but if
+      it is easy to use the procedure from a sandbox environment, it
+      can be helpful to explain how to do so.
+
+    * Patch: If a patch or patches are available, and it is practical
+      to include them in the email, put them at the end.  Format them
+      as described in CONTRIBUTING.md, that is, as output by "git
+      format-patch".
+
+      The patch subjects should include the version for which they are
+      suited, e.g. "[PATCH branch-2.3]" for a patch against Open
+      vSwitch 2.3.x.  If there are multiple patches for multiple
+      versions of Open vSwitch, put them in separate sections with
+      clear titles.
+
+      Multiple patches for a single version of Open vSwitch, that must
+      be stacked on top of each other to fix a single vulnerability,
+      are undesirable because users are less likely to apply all of
+      them correctly and in the correct order.
+
+      Each patch should include a Vulnerability tag with the CVE
+      identifier, a Reported-by tag or tags to credit the reporters,
+      and a Signed-off-by tag to acknowledge the Developer's
+      Certificate of Origin.  It should also include other appropriate
+      tags, such as Acked-by tags obtained during review.
+
+CVE-2016-2074 is an example advisory document, available at:
+	http://openvswitch.org/pipermail/announce/2016-March/000082.html
 
 
 Step 3b: Fix
