@@ -1265,6 +1265,7 @@ parse_options(int *argcp, char **argvp[],
         OPT_BOOTSTRAP_CA_CERT,
         OPT_PEER_CA_CERT,
         OPT_SYNC_FROM,
+        OPT_SYNC_EXCLUDE,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
@@ -1284,6 +1285,7 @@ parse_options(int *argcp, char **argvp[],
         {"certificate", required_argument, NULL, 'c'},
         {"ca-cert",     required_argument, NULL, 'C'},
         {"sync-from",   required_argument, NULL, OPT_SYNC_FROM},
+        {"sync-exclude-tables", required_argument, NULL, OPT_SYNC_EXCLUDE},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -1347,6 +1349,10 @@ parse_options(int *argcp, char **argvp[],
         case OPT_SYNC_FROM:
             set_remote_ovsdb_server(optarg);
             connect_to_remote_server = true;
+            break;
+
+        case OPT_SYNC_EXCLUDE:
+            set_tables_blacklist(optarg);
             break;
 
         case '?':

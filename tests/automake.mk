@@ -74,6 +74,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-execution.at \
 	tests/ovsdb-trigger.at \
 	tests/ovsdb-tool.at \
+	tests/ovsdb-replication.at \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
