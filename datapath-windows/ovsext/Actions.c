@@ -2015,7 +2015,7 @@ OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
         }
         status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
                                         vport, key, ovsFwdCtx.curNbl,
-                                        srcPortNo ==
+                                        vport->portId ==
                                         switchContext->virtualExternalPortId,
                                         &ovsFwdCtx.layers,
                                         ovsFwdCtx.switchContext,
