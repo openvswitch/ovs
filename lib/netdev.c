@@ -1882,12 +1882,14 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
     }
 
     for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
-        int family;
+        if (ifa->ifa_addr != NULL) {
+            int family;
 
-        family = ifa->ifa_addr->sa_family;
-        if (family == AF_INET || family == AF_INET6) {
-            if (!strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
-                cnt++;
+            family = ifa->ifa_addr->sa_family;
+            if (family == AF_INET || family == AF_INET6) {
+                if (!strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
+                    cnt++;
+                }
             }
         }
     }
@@ -1901,7 +1903,7 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
     for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
         int family;
 
-        if (strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
+        if (strncmp(ifa->ifa_name, dev, IFNAMSIZ) || ifa->ifa_addr == NULL) {
             continue;
         }
 
