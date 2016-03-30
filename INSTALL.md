@@ -171,11 +171,17 @@ usually invoke configure without any arguments.  For example:
 
       `% ./configure`
 
-By default all files are installed under /usr/local.  If you want
-to install into, e.g., /usr and /var instead of /usr/local and
-/usr/local/var, add options as shown here:
+By default all files are installed under /usr/local.  Open vSwitch also
+expects to find its database in /usr/local/etc/openvswitch by default.
+If you want to install all files into, e.g., /usr and /var instead of
+/usr/local and /usr/local/var and expect to use /etc/openvswitch as the default
+database directory, add options as shown here:
 
-      `% ./configure --prefix=/usr --localstatedir=/var`
+      `% ./configure --prefix=/usr --localstatedir=/var --sysconfdir=/etc`
+
+Note that the Open vSwitch installed with packages like .rpm (e.g. via 'yum
+install' or 'rpm -ivh') and .deb (e.g. via 'apt-get install' or 'dpkg -i') use
+the above configure options.
 
 By default, static libraries are built and linked against. If you
 want to use shared libraries instead:
@@ -376,7 +382,10 @@ also upgrade the database schema:
       % kill `cd /usr/local/var/run/openvswitch && cat ovsdb-server.pid ovs-vswitchd.pid`
       ```
 
-2. Install the new Open vSwitch release.
+2. Install the new Open vSwitch release by using the same configure options as
+was used for installing the previous version. If you do not use the same
+configure options, you can end up with two different versions of Open vSwitch
+executables installed in different locations.
 
 3. Upgrade the database, in one of the following two ways:
 
