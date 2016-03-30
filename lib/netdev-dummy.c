@@ -1155,7 +1155,10 @@ netdev_dummy_set_mtu(struct netdev *netdev, int mtu)
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    dev->mtu = mtu;
+    if (dev->mtu != mtu) {
+        dev->mtu = mtu;
+        netdev_change_seq_changed(netdev);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
