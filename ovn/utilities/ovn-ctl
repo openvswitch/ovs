@@ -52,7 +52,7 @@ start_ovsdb () {
 
         set ovsdb-server
 
-        set "$@" --detach $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE --remote=punix:$DB_NB_SOCK --remote=ptcp:$DB_NB_PORT --pidfile=$DB_NB_PID --unixctl=ovnnb_db.ctl
+        set "$@" --detach $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE --remote=punix:$DB_NB_SOCK --remote=ptcp:$DB_NB_ADDR:$DB_NB_PORT --pidfile=$DB_NB_PID --unixctl=ovnnb_db.ctl
 
         $@ $DB_NB_FILE
     fi
@@ -63,7 +63,7 @@ start_ovsdb () {
 
         set ovsdb-server
 
-        set "$@" --detach $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE --remote=punix:$DB_SB_SOCK --remote=ptcp:$DB_SB_PORT --pidfile=$DB_SB_PID --unixctl=ovnsb_db.ctl
+        set "$@" --detach $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE --remote=punix:$DB_SB_SOCK --remote=ptcp:$DB_SB_ADDR:$DB_SB_PORT --pidfile=$DB_SB_PID --unixctl=ovnsb_db.ctl
         $@ $DB_SB_FILE
     fi
 }
@@ -100,6 +100,9 @@ start_northd () {
       log_success_msg "ovn-northd is already running"
   else
       set ovn-northd
+      if test X"$OVN_NORTHD_LOGFILE" != X; then
+          set "$@" --log-file=$OVN_NORTHD_LOGFILE
+      fi
       set "$@" $OVN_NORTHD_LOG --ovnnb-db=unix:$DB_NB_SOCK --ovnsb-db=unix:$DB_SB_SOCK
       OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_NORTHD_PRIORITY" "$OVN_NORTHD_WRAPPER" "$@"
   fi
@@ -156,11 +159,13 @@ set_defaults () {
     DB_NB_SOCK=$rundir/ovnnb_db.sock
     DB_NB_PID=$rundir/ovnnb_db.pid
     DB_NB_FILE=$dbdir/ovnnb_db.db
+    DB_NB_ADDR=0.0.0.0
     DB_NB_PORT=6641
 
     DB_SB_SOCK=$rundir/ovnsb_db.sock
     DB_SB_PID=$rundir/ovnsb_db.pid
     DB_SB_FILE=$dbdir/ovnsb_db.db
+    DB_SB_ADDR=0.0.0.0
     DB_SB_PORT=6642
 
     DB_NB_SCHEMA=$datadir/ovn-nb.ovsschema
@@ -179,6 +184,7 @@ set_defaults () {
 
     OVN_CONTROLLER_LOG="-vconsole:emer -vsyslog:err -vfile:info"
     OVN_NORTHD_LOG="-vconsole:emer -vsyslog:err -vfile:info"
+    OVN_NORTHD_LOGFILE=""
     OVN_NB_LOG="-vconsole:off"
     OVN_SB_LOG="-vconsole:off"
     OVN_NB_LOGFILE="$logdir/ovsdb-server-nb.log"
@@ -231,6 +237,7 @@ Options:
                                    and stop the OVN databases.
   --ovn-controller-log=STRING        ovn controller process logging params (default: $OVN_CONTROLLER_LOG)
   --ovn-northd-log=STRING            ovn northd process logging params (default: $OVN_NORTHD_LOG)
+  --ovn-northd-logfile=STRING        ovn northd process log file (default: $OVN_NORTHD_LOGFILE)
   --ovn-nb-log=STRING             ovn NB ovsdb-server processes logging params (default: $OVN_NB_LOG)
   --ovn-sb-log=STRING             ovn SB ovsdb-server processes logging params (default: $OVN_SB_LOG)
   -h, --help                     display this help message
@@ -241,7 +248,9 @@ File location options:
   --db-sb-file=FILE    OVN_Southbound db file (default: $DB_SB_FILE)
   --db-nb-schema=FILE  OVN_Northbound db file (default: $DB_NB_SCHEMA)
   --db-sb-schema=FILE  OVN_Southbound db file (default: $DB_SB_SCHEMA)
+  --db-nb-addr=ADDR    OVN Northbound db ptcp address (default: $DB_NB_ADDR)
   --db-nb-port=PORT    OVN Northbound db ptcp port (default: $DB_NB_PORT)
+  --db-sb-addr=ADDR    OVN Southbound db ptcp address (default: $DB_SB_ADDR)
   --db-sb-port=PORT    OVN Southbound db ptcp port (default: $DB_SB_PORT)
   --ovn-nb-logfile=FILE OVN Northbound log file (default: $OVN_NB_LOGFILE)
   --ovn-sb-logfile=FILE OVN Southbound log file (default: $OVN_SB_LOGFILE)
