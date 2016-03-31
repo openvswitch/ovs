@@ -1066,9 +1066,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
 
         case IPPROTO_ICMP: {
             struct ovs_key_icmp icmpKey;
-            /* XXX: revisit to see if htons is needed */
-            icmpKey.icmp_type = (__u8)(ipv4FlowPutKey->l4.tpSrc);
-            icmpKey.icmp_code = (__u8)(ipv4FlowPutKey->l4.tpDst);
+            icmpKey.icmp_type = (__u8)ntohs(ipv4FlowPutKey->l4.tpSrc);
+            icmpKey.icmp_code = (__u8)ntohs(ipv4FlowPutKey->l4.tpDst);
 
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMP,
                                     (PCHAR)(&icmpKey),
@@ -1450,6 +1449,13 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                 sctpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_SCTP]);
                 ipv4FlowPutKey->l4.tpSrc = sctpKey->sctp_src;
                 ipv4FlowPutKey->l4.tpDst = sctpKey->sctp_dst;
+            }
+
+            if (keyAttrs[OVS_KEY_ATTR_ICMP]) {
+                const struct ovs_key_icmp *icmpKey;
+                icmpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ICMP]);
+                ipv4FlowPutKey->l4.tpSrc = htons(icmpKey->icmp_type);
+                ipv4FlowPutKey->l4.tpDst = htons(icmpKey->icmp_code);
             }
 
             destKey->l2.keyLen += OVS_IP_KEY_SIZE;
