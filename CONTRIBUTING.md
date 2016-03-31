@@ -358,6 +358,12 @@ Please follow the style used in the code that you are modifying.  The
 [CodingStyle.md] file describes the coding style used in most of Open
 vSwitch. Use Linux kernel coding style for Linux kernel code.
 
+If your code is non-datapath code, you may use the
+`utilities/checkpatch.py` utility as a quick check for certain commonly
+occuring mistakes (improper leading/trailing whitespace, missing signoffs,
+some improper formatted patch files).  For linux datapath code, it is
+a good idea to use the linux script `checkpatch.pl`.
+
 Example
 -------
 
