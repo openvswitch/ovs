@@ -4443,6 +4443,9 @@ nxt_resume(struct ofproto *ofproto_,
     dp_packet_init(&packet, pin->public.packet_len);
     dp_packet_put(&packet, pin->public.packet, pin->public.packet_len);
 
+    struct flow headers;
+    flow_extract(&packet, &headers);
+
     /* Execute the datapath actions on the packet. */
     struct dpif_execute execute = {
         .actions = odp_actions.data,
