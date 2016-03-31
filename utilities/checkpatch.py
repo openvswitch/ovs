@@ -185,6 +185,7 @@ def usage():
     print("-t|--skip-trailing-whitespace\t"
           "Skips the trailing whitespace test")
 
+
 def ovs_checkpatch_file(filename):
     try:
         mail = email.message_from_file(open(filename, 'r'))
