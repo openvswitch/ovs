@@ -1380,12 +1380,10 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 
     if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
         destKey->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
-        destKey->l2.keyLen += sizeof(destKey->recircId);
     }
 
     if (keyAttrs[OVS_KEY_ATTR_DP_HASH]) {
         destKey->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
-        destKey->l2.keyLen += sizeof(destKey->dpHash);
     }
 
     /* ===== L2 headers ===== */
@@ -1770,12 +1768,10 @@ OvsGetFlowMetadata(OvsFlowKey *key,
 
     if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
         key->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
-        key->l2.keyLen += sizeof(key->recircId);
     }
 
     if (keyAttrs[OVS_KEY_ATTR_DP_HASH]) {
         key->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
-        key->l2.keyLen += sizeof(key->dpHash);
     }
 
     return status;
@@ -2037,7 +2033,7 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
 }
 
 __inline BOOLEAN
-FlowEqual(UINT64 *src, UINT64 *dst, UINT32 size)
+FlowMemoryEqual(UINT64 *src, UINT64 *dst, UINT32 size)
 {
     UINT32 i;
     ASSERT((size & 0x7) == 0);
@@ -2051,6 +2047,22 @@ FlowEqual(UINT64 *src, UINT64 *dst, UINT32 size)
     return TRUE;
 }
 
+__inline BOOLEAN
+FlowEqual(OvsFlow *srcFlow,
+         const OvsFlowKey *dstKey,
+         UINT8 *dstStart,
+         UINT64 hash,
+         UINT32 offset,
+         UINT16 size)
+{
+    return (srcFlow->hash == hash &&
+            srcFlow->key.l2.val == dstKey->l2.val &&
+            srcFlow->key.recircId == dstKey->recircId &&
+            srcFlow->key.dpHash == dstKey->dpHash &&
+            FlowMemoryEqual((UINT64 *)((UINT8 *)&srcFlow->key + offset),
+                            (UINT64 *) dstStart,
+                            size));
+}
 
 /*
  * ----------------------------------------------------------------------------
@@ -2138,6 +2150,12 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
 
     if (!hashValid) {
         *hash = OvsJhashBytes(start, size, 0);
+        if (key->recircId) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->recircId);
+        }
+        if (key->dpHash) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->dpHash);
+        }
     }
 
     head = &datapath->flowTable[HASH_BUCKET(*hash)];
@@ -2145,10 +2163,7 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
     while (link != head) {
         OvsFlow *flow = CONTAINING_RECORD(link, OvsFlow, ListEntry);
 
-        if (flow->hash == *hash &&
-            flow->key.l2.val == key->l2.val &&
-            FlowEqual((UINT64 *)((uint8 *)&flow->key + offset),
-                         (UINT64 *)start, size)) {
+        if (FlowEqual(flow, key, start, *hash, offset, size)) {
             return flow;
         }
         link = link->Flink;
