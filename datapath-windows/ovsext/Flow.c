@@ -1162,9 +1162,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             struct ovs_key_icmpv6 icmpV6Key;
             struct ovs_key_nd ndKey;
 
-            /* XXX: revisit to see if htons is needed */
-            icmpV6Key.icmpv6_type = (__u8)(icmpv6FlowPutKey->l4.tpSrc);
-            icmpV6Key.icmpv6_code = (__u8)(icmpv6FlowPutKey->l4.tpDst);
+            icmpV6Key.icmpv6_type = (__u8)ntohs(icmpv6FlowPutKey->l4.tpSrc);
+            icmpV6Key.icmpv6_code = (__u8)ntohs(icmpv6FlowPutKey->l4.tpDst);
 
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMPV6,
                                     (PCHAR)(&icmpV6Key),
@@ -1504,8 +1503,8 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 
                 icmpv6Key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ICMPV6]);
 
-                icmp6FlowPutKey->l4.tpSrc = icmpv6Key->icmpv6_type;
-                icmp6FlowPutKey->l4.tpDst = icmpv6Key->icmpv6_code;
+                icmp6FlowPutKey->l4.tpSrc = htons(icmpv6Key->icmpv6_type);
+                icmp6FlowPutKey->l4.tpDst = htons(icmpv6Key->icmpv6_code);
 
                 if (keyAttrs[OVS_KEY_ATTR_ND]) {
                     const struct ovs_key_nd *ndKey;
