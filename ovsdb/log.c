@@ -114,7 +114,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
     fd = open(name, flags, 0666);
     if (fd < 0) {
         const char *op = open_mode == OVSDB_LOG_CREATE ? "create" : "open";
-        error = ovsdb_io_error(errno, "%s: %s failed", op, name);
+        error = ovsdb_io_error(errno, "%s: %s failed", name, op);
         goto error_unlock;
     }
 
