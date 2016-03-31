@@ -202,7 +202,7 @@ fi
 # Add a non-existing database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db3], 2, [], [stderr])
 AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
-  [I/O error: open: db3 failed (...)
+  [I/O error: db3: open failed (...)
 ovs-appctl: ovsdb-server: server returned an error
 ])
 
