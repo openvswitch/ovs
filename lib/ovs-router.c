@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,6 +192,7 @@ ovs_router_insert__(uint8_t priority, const struct in6_addr *ip6_dst,
     p->priority = priority;
     err = get_src_addr(ip6_dst, output_bridge, &p->src_addr);
     if (err) {
+        free(p);
         return err;
     }
     /* Longest prefix matches first. */
