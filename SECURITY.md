@@ -231,7 +231,7 @@ bug submitter as well as vendors.  However, the Open vSwitch security
 team holds the final say when setting a disclosure date.  The timeframe
 for disclosure is from immediate (esp. if it's already publicly known)
 to a few weeks.  As a basic default policy, we expect report date to
-disclosure date to be 3~5 business days.
+disclosure date to be 10 to 15 business days.
 
 Operating system vendors are obvious downstream stakeholders.  It may
 not be necessary to be too choosy about who to include: any major Open
