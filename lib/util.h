@@ -31,14 +31,6 @@
 #include "openvswitch/types.h"
 #include "openvswitch/util.h"
 
-#ifndef va_copy
-#ifdef __va_copy
-#define va_copy __va_copy
-#else
-#define va_copy(dst, src) ((dst) = (src))
-#endif
-#endif
-
 extern char *program_name;
 
 #define __ARRAY_SIZE_NOCHECK(ARRAY) (sizeof(ARRAY) / sizeof((ARRAY)[0]))
