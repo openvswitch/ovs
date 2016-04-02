@@ -3521,8 +3521,7 @@ port_get_lacp_stats(const struct ofport *ofport_, struct lacp_slave_stats *stats
 }
 
 struct port_dump_state {
-    uint32_t bucket;
-    uint32_t offset;
+    struct sset_position pos;
     bool ghost;
 
     struct ofproto_port port;
@@ -3550,7 +3549,7 @@ port_dump_next(const struct ofproto *ofproto_, void *state_,
         state->has_port = false;
     }
     sset = state->ghost ? &ofproto->ghost_ports : &ofproto->ports;
-    while ((node = sset_at_position(sset, &state->bucket, &state->offset))) {
+    while ((node = sset_at_position(sset, &state->pos))) {
         int error;
 
         error = port_query_by_name(ofproto_, node->name, &state->port);
@@ -3565,8 +3564,7 @@ port_dump_next(const struct ofproto *ofproto_, void *state_,
 
     if (!state->ghost) {
         state->ghost = true;
-        state->bucket = 0;
-        state->offset = 0;
+        memset(&state->pos, 0, sizeof state->pos);
         return port_dump_next(ofproto_, state_, port);
     }
 
