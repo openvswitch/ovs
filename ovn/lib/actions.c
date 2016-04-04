@@ -288,6 +288,7 @@ action_parse_field(struct action_context *ctx,
                              &prereqs);
     if (error) {
         action_error(ctx, "%s", error);
+        free(error);
         return false;
     }
 
