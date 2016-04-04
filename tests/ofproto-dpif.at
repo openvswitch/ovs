@@ -3876,10 +3876,13 @@ for frag in 4000 6000 6008 4010; do
   AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 003c 2e24 $frag 40 06 465d ac11370d ac11370b 828b 0016 751e267b 00000000 a002 16d0 1736 0000 02 04 05 b4 04 02 08 0a 2d 25 08 5f 00 00 00 00 01 03 03 07"])
 done
 
+dnl The set_field action only modifies 8 bits of the tcp_src, so both the flow
+dnl wildcard and the set_field action have a mask of 0xFF. Up to (including)
+dnl OVS-2.5, the wildcards and set_field mask are shared internally.
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
 ])
 
@@ -3893,8 +3896,8 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
 ])
 
@@ -3908,8 +3911,8 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
 ])
 

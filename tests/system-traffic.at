@@ -770,6 +770,41 @@ tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - ct_mark bit-fiddling])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow traffic between ns0<->ns1 using the ct_mark. Return traffic should
+dnl cause an additional bit to be set in the connection (and be allowed).
+AT_DATA([flows.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(table=1)
+table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x2/0x6->ct_mark))
+table=1,priority=100,in_port=1,ct_state=+new,tcp,action=ct(commit,exec(set_field:0x5/0x5->ct_mark)),2
+table=1,priority=100,in_port=1,ct_state=-new,tcp,action=2
+table=1,priority=100,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=3,protoinfo=(state=TIME_WAIT)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ct_mark from register])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -851,6 +886,41 @@ dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
 NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - ct_label bit-fiddling])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow traffic between ns0<->ns1 using the ct_labels. Return traffic should
+dnl cause an additional bit to be set in the connection labels (and be allowed)
+AT_DATA([flows.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(table=1)
+table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label))
+table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(commit,exec(set_field:0x5/0x5->ct_label)),2
+table=1,priority=100,in_port=1,tcp,ct_state=-new,action=2
+table=1,priority=100,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),labels=0x200000001,protoinfo=(state=TIME_WAIT)
+])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
