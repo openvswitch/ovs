@@ -412,7 +412,15 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
 {
-    mf_set_flow_value(mf, &exact_match_mask, &wc->masks);
+    mf_mask_field_and_prereqs__(mf, &exact_match_mask, wc);
+}
+
+void
+mf_mask_field_and_prereqs__(const struct mf_field *mf,
+                            const union mf_value *mask,
+                            struct flow_wildcards *wc)
+{
+    mf_set_flow_value_masked(mf, &exact_match_mask, mask, &wc->masks);
 
     switch (mf->prereqs) {
     case MFP_ND:
