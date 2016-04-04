@@ -1692,12 +1692,12 @@ fields are accepted within the \fBexec\fR action, and these fields may only be
 modified with this option. For example:
 .
 .RS
-.IP \fBset_field:\fIvalue\fR->ct_mark\fR
+.IP \fBset_field:\fIvalue\fR[\fB/\fImask\fR]->ct_mark\fR
 Store a 32-bit metadata value with the connection. If the connection is
 committed, then subsequent lookups for packets in this connection will
 populate the \fBct_mark\fR flow field when the packet is sent to the
 connection tracker with the \fBtable\fR specified.
-.IP \fBset_field:\fIvalue\fR->ct_label\fR
+.IP \fBset_field:\fIvalue\fR[\fB/\fImask\fR]->ct_label\fR
 Store a 128-bit metadata value with the connection.  If the connection is
 committed, then subsequent lookups for packets in this connection will
 populate the \fBct_label\fR flow field when the packet is sent to the
