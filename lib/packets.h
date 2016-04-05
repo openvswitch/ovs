@@ -19,11 +19,11 @@
 
 #include <inttypes.h>
 #include <sys/types.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
 #include "openvswitch/geneve.h"
+#include "openvswitch/packets.h"
 #include "openvswitch/types.h"
 #include "odp-netlink.h"
 #include "random.h"
@@ -34,39 +34,6 @@
 
 struct dp_packet;
 struct ds;
-
-/* Tunnel information used in flow key and metadata. */
-struct flow_tnl {
-    ovs_be32 ip_dst;
-    struct in6_addr ipv6_dst;
-    ovs_be32 ip_src;
-    struct in6_addr ipv6_src;
-    ovs_be64 tun_id;
-    uint16_t flags;
-    uint8_t ip_tos;
-    uint8_t ip_ttl;
-    ovs_be16 tp_src;
-    ovs_be16 tp_dst;
-    ovs_be16 gbp_id;
-    uint8_t  gbp_flags;
-    uint8_t  pad1[5];        /* Pad to 64 bits. */
-    struct tun_metadata metadata;
-};
-
-/* Some flags are exposed through OpenFlow while others are used only
- * internally. */
-
-/* Public flags */
-#define FLOW_TNL_F_OAM (1 << 0)
-
-#define FLOW_TNL_PUB_F_MASK ((1 << 1) - 1)
-
-/* Private flags */
-#define FLOW_TNL_F_DONT_FRAGMENT (1 << 1)
-#define FLOW_TNL_F_CSUM (1 << 2)
-#define FLOW_TNL_F_KEY (1 << 3)
-
-#define FLOW_TNL_F_MASK ((1 << 4) - 1)
 
 /* Purely internal to OVS userspace. These flags should never be exposed to
  * the outside world and so aren't included in the flags mask. */
@@ -122,14 +89,6 @@ flow_tnl_equal(const struct flow_tnl *a, const struct flow_tnl *b)
 
     return a_size == flow_tnl_size(b) && !memcmp(a, b, a_size);
 }
-
-/* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
- * numbers and other times datapath (dpif) port numbers.  This union allows
- * access to both. */
-union flow_in_port {
-    odp_port_t odp_port;
-    ofp_port_t ofp_port;
-};
 
 /* Datapath packet metadata */
 struct pkt_metadata {
