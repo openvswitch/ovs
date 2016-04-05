@@ -14,15 +14,17 @@
  */
 
 #include <config.h>
+#include "byte-order.h"
 #include "ofctrl.h"
 #include "dirs.h"
+#include "hash.h"
 #include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "openvswitch/match.h"
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/vlog.h"
@@ -30,6 +32,7 @@
 #include "physical.h"
 #include "rconn.h"
 #include "socket-util.h"
+#include "util.h"
 #include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctrl);

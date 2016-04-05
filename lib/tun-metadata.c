@@ -24,7 +24,7 @@
 #include "openvswitch/match.h"
 #include "nx-match.h"
 #include "odp-netlink.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
 #include "packets.h"

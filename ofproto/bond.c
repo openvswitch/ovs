@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofproto/ofproto-provider.h"

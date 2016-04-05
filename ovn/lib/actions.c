@@ -18,6 +18,7 @@
 #include "actions.h"
 #include <stdarg.h>
 #include <stdbool.h>
+#include "byte-order.h"
 #include "compiler.h"
 #include "openvswitch/dynamic-string.h"
 #include "expr.h"

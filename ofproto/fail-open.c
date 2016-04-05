@@ -25,7 +25,7 @@
 #include "odp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ofproto.h"
 #include "ofproto-provider.h"
 #include "pktbuf.h"

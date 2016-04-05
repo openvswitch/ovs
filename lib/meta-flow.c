@@ -26,7 +26,7 @@
 #include "classifier.h"
 #include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"

@@ -25,7 +25,7 @@
 #include "openvswitch/meta-flow.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "openvswitch/ofp-errors.h"

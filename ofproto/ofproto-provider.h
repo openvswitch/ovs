@@ -40,7 +40,7 @@
 #include "hindex.h"
 #include "openvswitch/list.h"
 #include "ofp-actions.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ofproto/ofproto.h"
 #include "openvswitch/ofp-errors.h"
 #include "ovs-atomic.h"

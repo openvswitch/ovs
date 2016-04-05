@@ -42,7 +42,7 @@
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-print.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofproto/bond.h"
 #include "ofproto/ofproto.h"

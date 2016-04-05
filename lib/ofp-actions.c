@@ -31,7 +31,7 @@
 #include "nx-match.h"
 #include "odp-netlink.h"
 #include "ofp-prop.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "unaligned.h"
 #include "util.h"

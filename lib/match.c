@@ -21,7 +21,7 @@
 #include "byte-order.h"
 #include "colors.h"
 #include "openvswitch/dynamic-string.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "tun-metadata.h"
 

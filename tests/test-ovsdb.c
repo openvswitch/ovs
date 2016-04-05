@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "byte-order.h"
 #include "command-line.h"
 #include "openvswitch/dynamic-string.h"
 #include "json.h"

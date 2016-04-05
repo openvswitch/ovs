@@ -15,6 +15,8 @@
 
 #include <config.h>
 #include "physical.h"
+#include "byte-order.h"
+#include "flow.h"
 #include "lflow.h"
 #include "openvswitch/match.h"
 #include "ofctrl.h"

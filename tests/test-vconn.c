@@ -26,7 +26,7 @@
 #include "command-line.h"
 #include "fatal-signal.h"
 #include "ofp-msgs.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovstest.h"

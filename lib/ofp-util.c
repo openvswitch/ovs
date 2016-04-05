@@ -36,7 +36,7 @@
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-prop.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/netronome-ext.h"
 #include "packets.h"

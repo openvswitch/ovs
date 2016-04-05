@@ -27,7 +27,7 @@
 #include "nx-match.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"

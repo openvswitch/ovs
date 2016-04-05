@@ -47,7 +47,7 @@
 #include "nx-match.h"
 #include "odp-util.h"
 #include "odp-execute.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-print.h"

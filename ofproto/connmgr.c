@@ -28,7 +28,7 @@
 #include "odp-util.h"
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofproto-provider.h"
 #include "pinsched.h"
