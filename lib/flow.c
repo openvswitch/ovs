@@ -32,7 +32,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "jhash.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "dp-packet.h"
 #include "openflow/openflow.h"
 #include "packets.h"

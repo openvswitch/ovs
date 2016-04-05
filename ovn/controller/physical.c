@@ -16,7 +16,7 @@
 #include <config.h>
 #include "physical.h"
 #include "lflow.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "ofctrl.h"
 #include "ofp-actions.h"
 #include "openvswitch/ofpbuf.h"

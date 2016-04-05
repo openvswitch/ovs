@@ -20,7 +20,7 @@
 #include "json.h"
 #include "lex.h"
 #include "logical-fields.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "ofp-actions.h"
 #include "shash.h"
 #include "simap.h"

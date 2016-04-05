@@ -45,7 +45,7 @@
 #include "hmapx.h"
 #include "latch.h"
 #include "openvswitch/list.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "netdev.h"
 #include "netdev-dpdk.h"
 #include "netdev-vport.h"

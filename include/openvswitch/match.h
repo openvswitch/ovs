@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef MATCH_H
-#define MATCH_H 1
+#ifndef OPENVSWITCH_MATCH_H
+#define OPENVSWITCH_MATCH_H 1
 
-#include "flow.h"
-#include "packets.h"
-#include "tun-metadata.h"
+#include "openvswitch/flow.h"
+#include "openvswitch/packets.h"
+#include "openvswitch/tun-metadata.h"
 
 struct ds;
 

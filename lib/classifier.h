@@ -299,7 +299,7 @@
  * parallel to the rule's removal. */
 
 #include "cmap.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "meta-flow.h"
 #include "pvector.h"
 #include "rculist.h"

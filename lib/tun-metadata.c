@@ -21,7 +21,7 @@
 #include "bitmap.h"
 #include "compiler.h"
 #include "hmap.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "nx-match.h"
 #include "odp-netlink.h"
 #include "ofp-util.h"

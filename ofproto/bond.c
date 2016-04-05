@@ -43,7 +43,7 @@
 #include "dp-packet.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "shash.h"
 #include "timeval.h"
 #include "unixctl.h"

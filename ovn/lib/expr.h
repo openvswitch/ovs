@@ -56,7 +56,7 @@
 #include "lex.h"
 #include "hmap.h"
 #include "openvswitch/list.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "meta-flow.h"
 
 struct ds;

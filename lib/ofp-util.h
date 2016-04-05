@@ -24,7 +24,7 @@
 #include "compiler.h"
 #include "flow.h"
 #include "openvswitch/list.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "meta-flow.h"
 #include "netdev.h"
 #include "openflow/netronome-ext.h"
