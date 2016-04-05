@@ -17,13 +17,14 @@
 #include <config.h>
 #include <errno.h>
 #include "byte-order.h"
+#include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
-#include "ofp-msgs.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
-#include "openflow/openflow.h"
-#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_errors);
 

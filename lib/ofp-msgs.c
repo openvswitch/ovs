@@ -15,16 +15,16 @@
  */
 
 #include <config.h>
-#include "ofp-msgs.h"
 #include "byte-order.h"
-#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
-#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "ovs-thread.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "ovs-thread.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 

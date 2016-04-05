@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef OFP_MSGS_H
-#define OFP_MSGS_H 1
+#ifndef OPENVSWITCH_OFP_MSGS_H
+#define OPENVSWITCH_OFP_MSGS_H 1
 
 /* OpenFlow message headers abstraction.
  *
