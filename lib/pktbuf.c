@@ -19,7 +19,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "coverage.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "dp-packet.h"
 #include "timeval.h"
 #include "util.h"

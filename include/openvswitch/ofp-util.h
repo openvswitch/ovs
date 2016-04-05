@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-#ifndef OFP_UTIL_H
-#define OFP_UTIL_H 1
+#ifndef OPENVSWITCH_OFP_UTIL_H
+#define OPENVSWITCH_OFP_UTIL_H 1
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "bitmap.h"
-#include "compiler.h"
 #include "openvswitch/flow.h"
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
 #include "openvswitch/meta-flow.h"
-#include "netdev.h"
+#include "openvswitch/netdev.h"
 #include "openflow/netronome-ext.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/types.h"
 #include "openvswitch/type-props.h"
-#include "uuid.h"
+#include "openvswitch/uuid.h"
 
 struct ofpbuf;
 union ofp_action;

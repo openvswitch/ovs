@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include "byte-order.h"
 #include "expr.h"
 #include "openvswitch/dynamic-string.h"
 #include "json.h"

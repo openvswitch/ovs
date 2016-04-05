@@ -20,7 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "openvswitch/meta-flow.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/ofp-errors.h"

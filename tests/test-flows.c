@@ -24,7 +24,7 @@
 #include "classifier.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofp-print.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openflow/openflow.h"
 #include "ovstest.h"
 #include "dp-packet.h"

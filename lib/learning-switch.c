@@ -33,7 +33,7 @@
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"

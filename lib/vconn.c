@@ -28,7 +28,7 @@
 #include "flow.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"

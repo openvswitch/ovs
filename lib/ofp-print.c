@@ -40,7 +40,7 @@
 #include "ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofp-msgs.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/ofp-errors.h"

@@ -21,7 +21,7 @@
 #include "hmap.h"
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ofproto.h"
 #include "ofproto-provider.h"
 #include "openflow/nicira-ext.h"
