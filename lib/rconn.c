@@ -21,16 +21,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "ofp-msgs.h"
+#include "openflow/openflow.h"
+#include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
-#include "openflow/openflow.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "poll-loop.h"
 #include "sat-math.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(rconn);
 

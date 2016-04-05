@@ -22,9 +22,9 @@
 #include <sys/types.h>
 
 #include "connmgr.h"
-#include "ofp-msgs.h"
-#include "openvswitch/ofp-util.h"
 #include "ofproto-provider.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-util.h"
 #include "util.h"
 
 #ifdef  __cplusplus

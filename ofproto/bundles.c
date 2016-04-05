@@ -23,10 +23,12 @@
 #include "in-band.h"
 #include "odp-util.h"
 #include "ofp-actions.h"
-#include "ofp-msgs.h"
+#include "ofproto-provider.h"
+#include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
-#include "ofproto-provider.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "pinsched.h"
 #include "poll-loop.h"
 #include "pktbuf.h"
@@ -35,8 +37,6 @@
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
 
 #include "bundles.h"
 

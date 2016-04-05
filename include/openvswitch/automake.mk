@@ -10,6 +10,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/meta-flow.h \
 	include/openvswitch/ofpbuf.h \
 	include/openvswitch/ofp-errors.h \
+	include/openvswitch/ofp-msgs.h \
 	include/openvswitch/ofp-parse.h \
 	include/openvswitch/ofp-util.h \
 	include/openvswitch/packets.h \
