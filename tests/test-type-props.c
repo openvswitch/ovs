@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>

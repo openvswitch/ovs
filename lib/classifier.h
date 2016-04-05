@@ -303,7 +303,7 @@
 #include "openvswitch/meta-flow.h"
 #include "pvector.h"
 #include "rculist.h"
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 
 #ifdef __cplusplus
 extern "C" {

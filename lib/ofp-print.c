@@ -46,7 +46,7 @@
 #include "openvswitch/ofp-errors.h"
 #include "packets.h"
 #include "dp-packet.h"
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include "unaligned.h"
 #include "odp-util.h"
 #include "util.h"

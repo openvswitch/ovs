@@ -30,7 +30,7 @@
 #include "openflow/netronome-ext.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include "uuid.h"
 
 struct ofpbuf;
